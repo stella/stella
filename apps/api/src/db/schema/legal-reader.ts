@@ -19,7 +19,6 @@ import {
   timestamptz,
   user,
 } from "./common";
-import type { AnyPgColumn } from "./common";
 
 const sqlValues = (values: readonly string[]) =>
   values.map((value) => sql.raw(`'${value}'`));
@@ -33,112 +32,6 @@ const READER_ANNOTATION_VISIBILITY_SQL_VALUES = sqlValues(
 );
 const READER_ANNOTATION_COLOR_SQL_VALUES = sqlValues(READER_ANNOTATION_COLORS);
 const READER_ANNOTATION_STYLE_SQL_VALUES = sqlValues(READER_ANNOTATION_STYLES);
-
-/**
- * What a reader's mark is, apart from the document it sits on: who left it,
- * what it looks like, which words it covers and what it says. Shared with
- * `caseLawDecisionAnnotations`, the table this one replaces, so the cutover
- * cannot leave the two shapes describing different things; both definitions
- * disappear into this one when the retiring table is dropped.
- */
-export const readerAnnotationColumns = () => ({
-  id: pUuid<"legalReaderAnnotation">().primaryKey(),
-  organizationId: safeOrganizationId("organization_id").notNull(),
-  userId: p.text("user_id").notNull(),
-  /**
-   * Ties the rows of one mark that spans several paragraphs; null for a
-   * mark inside one. A change to the mark reaches every row of the group.
-   */
-  groupId: p.uuid("group_id"),
-  kind: p.text("kind", { enum: READER_ANNOTATION_KINDS }).notNull(),
-  visibility: p
-    .text("visibility", { enum: READER_ANNOTATION_VISIBILITIES })
-    .notNull()
-    .default("private"),
-  color: p.text("color", { enum: READER_ANNOTATION_COLORS }),
-  style: p.text("style", { enum: READER_ANNOTATION_STYLES }),
-  blockAnchorId: p.varchar("block_anchor_id", { length: 64 }).notNull(),
-  startOffset: p.integer("start_offset").notNull(),
-  endOffset: p.integer("end_offset").notNull(),
-  quote: p.varchar({ length: READER_ANNOTATION_QUOTE_MAX_LENGTH }).notNull(),
-  body: p.varchar({ length: READER_ANNOTATION_BODY_MAX_LENGTH }),
-  createdAt: timestamptz("created_at").defaultNow().notNull(),
-  updatedAt: timestamptz("updated_at").defaultNow().notNull(),
-});
-
-type ReaderAnnotationColumns = Record<
-  | "blockAnchorId"
-  | "body"
-  | "color"
-  | "endOffset"
-  | "groupId"
-  | "kind"
-  | "organizationId"
-  | "quote"
-  | "startOffset"
-  | "style"
-  | "userId"
-  | "visibility",
-  AnyPgColumn
->;
-
-/**
- * Everything a reader-annotation table constrains about a mark itself: who
- * owns it, the closed value sets, and the two shape rules. Named from the
- * table so the retiring table keeps the constraint names it was created
- * with, which is what the migrations spell.
- */
-export const readerAnnotationConstraints = (
-  table: string,
-  t: ReaderAnnotationColumns,
-) => [
-  p
-    .foreignKey({
-      name: `${table}_organization_id_fk`,
-      columns: [t.organizationId],
-      foreignColumns: [organization.id],
-    })
-    .onDelete("cascade"),
-  p
-    .foreignKey({
-      name: `${table}_user_id_fk`,
-      columns: [t.userId],
-      foreignColumns: [user.id],
-    })
-    .onDelete("cascade"),
-  p
-    .index(`${table}_group_idx`)
-    .on(t.organizationId, t.groupId)
-    .where(isNotNull(t.groupId)),
-  p.check(
-    `${table}_kind_values`,
-    sql`${t.kind} IN (${sql.join(READER_ANNOTATION_KIND_SQL_VALUES, sql`, `)})`,
-  ),
-  p.check(
-    `${table}_visibility_values`,
-    sql`${t.visibility} IN (${sql.join(READER_ANNOTATION_VISIBILITY_SQL_VALUES, sql`, `)})`,
-  ),
-  p.check(
-    `${table}_color_values`,
-    sql`${t.color} IS NULL OR ${t.color} IN (${sql.join(READER_ANNOTATION_COLOR_SQL_VALUES, sql`, `)})`,
-  ),
-  p.check(
-    `${table}_style_values`,
-    sql`${t.style} IS NULL OR ${t.style} IN (${sql.join(READER_ANNOTATION_STYLE_SQL_VALUES, sql`, `)})`,
-  ),
-  // A highlight is a colour and a style on the text; a comment is words,
-  // carried by its first row when the passage spans paragraphs.
-  p.check(
-    `${table}_kind_shape`,
-    sql`(${t.kind} = 'highlight' AND ${t.color} IS NOT NULL AND ${t.style} IS NOT NULL AND ${t.body} IS NULL)
-        OR (${t.kind} = 'comment' AND ${t.style} IS NULL AND ((${t.body} IS NOT NULL AND ${t.body} <> '') OR ${t.groupId} IS NOT NULL))`,
-  ),
-  p.check(
-    `${table}_span_shape`,
-    sql`${t.startOffset} >= 0 AND ${t.endOffset} > ${t.startOffset} AND ${t.quote} <> ''`,
-  ),
-  ...authoredNotePolicies(),
-];
 
 const LEGAL_READER_ANNOTATIONS = "legal_reader_annotations";
 
@@ -163,11 +56,32 @@ const LEGAL_READER_ANNOTATIONS = "legal_reader_annotations";
 export const legalReaderAnnotations = p.pgTable(
   LEGAL_READER_ANNOTATIONS,
   {
-    ...readerAnnotationColumns(),
+    id: pUuid<"legalReaderAnnotation">().primaryKey(),
+    organizationId: safeOrganizationId("organization_id").notNull(),
+    userId: p.text("user_id").notNull(),
     targetType: p
       .text("target_type", { enum: READER_ANNOTATION_TARGET_TYPES })
       .notNull(),
     targetId: p.uuid("target_id").notNull(),
+    /**
+     * Ties the rows of one mark that spans several paragraphs; null for a
+     * mark inside one. A change to the mark reaches every row of the group.
+     */
+    groupId: p.uuid("group_id"),
+    kind: p.text("kind", { enum: READER_ANNOTATION_KINDS }).notNull(),
+    visibility: p
+      .text("visibility", { enum: READER_ANNOTATION_VISIBILITIES })
+      .notNull()
+      .default("private"),
+    color: p.text("color", { enum: READER_ANNOTATION_COLORS }),
+    style: p.text("style", { enum: READER_ANNOTATION_STYLES }),
+    blockAnchorId: p.varchar("block_anchor_id", { length: 64 }).notNull(),
+    startOffset: p.integer("start_offset").notNull(),
+    endOffset: p.integer("end_offset").notNull(),
+    quote: p.varchar({ length: READER_ANNOTATION_QUOTE_MAX_LENGTH }).notNull(),
+    body: p.varchar({ length: READER_ANNOTATION_BODY_MAX_LENGTH }),
+    createdAt: timestamptz("created_at").defaultNow().notNull(),
+    updatedAt: timestamptz("updated_at").defaultNow().notNull(),
   },
   (t) => [
     // A target id is a UUID, so it already names one document; the
@@ -180,6 +94,51 @@ export const legalReaderAnnotations = p.pgTable(
       `${LEGAL_READER_ANNOTATIONS}_target_type_values`,
       sql`${t.targetType} IN (${sql.join(READER_ANNOTATION_TARGET_TYPE_SQL_VALUES, sql`, `)})`,
     ),
-    ...readerAnnotationConstraints(LEGAL_READER_ANNOTATIONS, t),
+    p
+      .foreignKey({
+        name: `${LEGAL_READER_ANNOTATIONS}_organization_id_fk`,
+        columns: [t.organizationId],
+        foreignColumns: [organization.id],
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
+        name: `${LEGAL_READER_ANNOTATIONS}_user_id_fk`,
+        columns: [t.userId],
+        foreignColumns: [user.id],
+      })
+      .onDelete("cascade"),
+    p
+      .index(`${LEGAL_READER_ANNOTATIONS}_group_idx`)
+      .on(t.organizationId, t.groupId)
+      .where(isNotNull(t.groupId)),
+    p.check(
+      `${LEGAL_READER_ANNOTATIONS}_kind_values`,
+      sql`${t.kind} IN (${sql.join(READER_ANNOTATION_KIND_SQL_VALUES, sql`, `)})`,
+    ),
+    p.check(
+      `${LEGAL_READER_ANNOTATIONS}_visibility_values`,
+      sql`${t.visibility} IN (${sql.join(READER_ANNOTATION_VISIBILITY_SQL_VALUES, sql`, `)})`,
+    ),
+    p.check(
+      `${LEGAL_READER_ANNOTATIONS}_color_values`,
+      sql`${t.color} IS NULL OR ${t.color} IN (${sql.join(READER_ANNOTATION_COLOR_SQL_VALUES, sql`, `)})`,
+    ),
+    p.check(
+      `${LEGAL_READER_ANNOTATIONS}_style_values`,
+      sql`${t.style} IS NULL OR ${t.style} IN (${sql.join(READER_ANNOTATION_STYLE_SQL_VALUES, sql`, `)})`,
+    ),
+    // A highlight is a colour and a style on the text; a comment is words,
+    // carried by its first row when the passage spans paragraphs.
+    p.check(
+      `${LEGAL_READER_ANNOTATIONS}_kind_shape`,
+      sql`(${t.kind} = 'highlight' AND ${t.color} IS NOT NULL AND ${t.style} IS NOT NULL AND ${t.body} IS NULL)
+        OR (${t.kind} = 'comment' AND ${t.style} IS NULL AND ((${t.body} IS NOT NULL AND ${t.body} <> '') OR ${t.groupId} IS NOT NULL))`,
+    ),
+    p.check(
+      `${LEGAL_READER_ANNOTATIONS}_span_shape`,
+      sql`${t.startOffset} >= 0 AND ${t.endOffset} > ${t.startOffset} AND ${t.quote} <> ''`,
+    ),
+    ...authoredNotePolicies(),
   ],
 );

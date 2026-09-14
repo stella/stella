@@ -92,11 +92,6 @@ import type {
   CorpusIndexJobOperation,
   CorpusIndexJobStatus,
 } from "./corpus-index-jobs";
-import {
-  readerAnnotationColumns,
-  readerAnnotationConstraints,
-} from "./legal-reader";
-
 /** The declaration the column's `enum` and the CHECK both derive from. */
 const CASE_LAW_CORPUS_MIRROR_STATUSES = ["settled", "pending"] as const;
 
@@ -1833,33 +1828,6 @@ export const caseLawResearchAnswers = p.pgTable(
 // ---------------------------------------------------------------------------
 // Case Law — Search index (global, no tenant column)
 // ---------------------------------------------------------------------------
-
-const CASE_LAW_DECISION_ANNOTATIONS = "case_law_decision_annotations";
-
-/**
- * The reader's marks as they were stored before statutes could be marked too.
- * Superseded by `legalReaderAnnotations`, which the cutover migration copies
- * every row into; nothing reads this table any more. It stays declared so the
- * schema still describes the database the cutover leaves behind, and is
- * dropped by the follow-up migration once that deploy is out.
- *
- * Its shape is the shape it is being replaced by, minus the discriminator:
- * both tables take their columns and constraints from the same definitions,
- * so the cutover cannot be reading one shape and writing another.
- */
-export const caseLawDecisionAnnotations = p.pgTable(
-  CASE_LAW_DECISION_ANNOTATIONS,
-  {
-    ...readerAnnotationColumns(),
-    decisionId: safeUuid<"caseLawDecision">("decision_id").notNull(),
-  },
-  (t) => [
-    p
-      .index(`${CASE_LAW_DECISION_ANNOTATIONS}_decision_idx`)
-      .on(t.organizationId, t.decisionId, t.createdAt, t.id),
-    ...readerAnnotationConstraints(CASE_LAW_DECISION_ANNOTATIONS, t),
-  ],
-);
 
 export const caseLawCourtWeights = p.pgTable(
   "case_law_court_weights",
