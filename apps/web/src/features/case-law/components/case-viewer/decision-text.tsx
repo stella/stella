@@ -905,10 +905,12 @@ export const DecisionText = ({
     );
   })();
 
+  // `reader-case-law` caps the measure: the decision and the attribution line
+  // under it are read at a line length, not at the width of the pane.
   return (
-    <>
+    <div className="reader-case-law">
       {body}
       <DecisionSourceAttribution url={decision.sourceAttributionUrl} />
-    </>
+    </div>
   );
 };

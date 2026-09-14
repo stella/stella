@@ -7,7 +7,11 @@
   --reader-body-font: "Source Serif 4 Variable", serif;
   --reader-body-size: 15px;
   --reader-body-line-height: 1.65;
-  --reader-paragraph-gap: 0.65em;
+  /* Measure: the line length the running text is read at, independent of how
+     wide the pane happens to be. A decision opened in a wide inspector ran to
+     ~100 characters a line; ~70 is the length prose is read at. */
+  --reader-measure: 70ch;
+  --reader-paragraph-gap: 1em;
   --reader-section-gap-top: 2.5em;
   --reader-section-gap-bottom: 0.8em;
   --reader-anchor-offset: 88px;
@@ -52,14 +56,25 @@
   border-radius: 0.25rem;
 }
 
-/* Justified body on desktop only. No hyphenation:
-   the court's text must not be visually altered.
-   text-align-last: left prevents short/single-line
-   paragraphs from being stretched. */
+/* Hyphenation at every width, justification on desktop — how a law report is
+   set. Hyphenation is line breaking: it alters no character of the text, and
+   it is what keeps a justified column from opening rivers of white space. The
+   dictionary comes from the document's own language, which each reader puts
+   on its <article> as `lang`, so Czech, Slovak and Polish break at their own
+   points. The limits keep short words whole and leave at least three letters
+   on each side of a break.
+   text-align-last: start prevents short/single-line paragraphs from being
+   stretched. */
+.reader-justify {
+  -webkit-hyphens: auto;
+  hyphens: auto;
+  hyphenate-limit-chars: 7 3 3;
+}
+
 @media (min-width: 1024px) {
   .reader-justify {
     text-align: justify;
-    text-align-last: left;
+    text-align-last: start;
   }
 }
 
@@ -92,6 +107,16 @@
   [data-slot="reader-document-column"] {
     padding-inline: 0.75rem;
   }
+}
+
+/* The canvas keeps its width — margin notes, page markers and block
+   permalinks all hang off it — while the decision's text is capped at the
+   measure and centred in whatever pane it was opened in, rail or full page.
+   The statute reader is deliberately left at the full canvas: its provisions
+   carry their own indent ladder and centred designations. */
+.reader-case-law {
+  max-width: var(--reader-measure);
+  margin-inline: auto;
 }
 
 /* Collapse gap between consecutive h3 sub-headings

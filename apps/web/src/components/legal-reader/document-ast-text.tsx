@@ -1169,7 +1169,7 @@ export const FulltextFallback = ({
 
         return (
           <p
-            className="mb-[var(--reader-paragraph-gap)] last:mb-0"
+            className="reader-justify mb-[var(--reader-paragraph-gap)] last:mb-0"
             data-anchor={pieceId}
             id={pieceId}
             key={pieceId}

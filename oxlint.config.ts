@@ -543,6 +543,7 @@ const customCssClassNames = [
   "ray",
   "reader-apparatus",
   "reader-apparatus-summary",
+  "reader-case-law",
   "reader-justify",
   "reader-note-back",
   "reader-note-label",
