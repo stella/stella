@@ -1350,40 +1350,6 @@ jobs:
           persist-credentials: false
           submodules: true
 
-      # Deliberately do not restore the global Bun install cache here. Safe
-      # Chain's Bun integration scans registry downloads through a proxy, so
-      # cached tarballs would bypass this job's full dependency scan.
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version-file: "package.json"
-
-      - name: Install Safe Chain
-        if: needs.ci-plan.outputs.package_checks_required == 'true'
-        uses: ./.github/actions/safe-chain
-
-      - name: Turbo remote cache
-        if: needs.ci-plan.outputs.package_checks_required == 'true'
-        uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
-
-      - name: Install dependencies
-        if: needs.ci-plan.outputs.package_checks_required == 'true'
-        run: bash scripts/bun-ci-retry.sh --ignore-scripts
-        env:
-          # .npmrc references NPM_TOKEN, but PR installs must not expose
-          # the real npm token to dependency lifecycle scripts.
-          NPM_TOKEN: ""
-
-      - name: Prepare environment
-        if: needs.ci-plan.outputs.package_checks_required == 'true'
-        # `cp`, not `mv`: renaming the tracked .env.example would dirty the
-        # working tree in apps/api and apps/web. .env is gitignored.
-        run: |
-          cd ./apps/api
-          cp .env.example .env
-          cd ../web
-          cp .env.example .env
-
       - name: Check UI browser test scope
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         id: ui-browser-tests
@@ -1416,6 +1382,41 @@ jobs:
             exit 0
           fi
           echo "required=false" >> "$GITHUB_OUTPUT"
+
+      # Deliberately do not restore the global Bun install cache here. Safe
+      # Chain's Bun integration scans registry downloads through a proxy, so
+      # cached tarballs would bypass this job's full dependency scan.
+      - name: Setup Bun
+        if: steps.ui-browser-tests.outputs.required == 'true'
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: "package.json"
+
+      - name: Install Safe Chain
+        if: steps.ui-browser-tests.outputs.required == 'true'
+        uses: ./.github/actions/safe-chain
+
+      - name: Turbo remote cache
+        if: steps.ui-browser-tests.outputs.required == 'true'
+        uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
+
+      - name: Install dependencies
+        if: steps.ui-browser-tests.outputs.required == 'true'
+        run: bash scripts/bun-ci-retry.sh --ignore-scripts
+        env:
+          # .npmrc references NPM_TOKEN, but PR installs must not expose
+          # the real npm token to dependency lifecycle scripts.
+          NPM_TOKEN: ""
+
+      - name: Prepare environment
+        if: steps.ui-browser-tests.outputs.required == 'true'
+        # `cp`, not `mv`: renaming the tracked .env.example would dirty the
+        # working tree in apps/api and apps/web. .env is gitignored.
+        run: |
+          cd ./apps/api
+          cp .env.example .env
+          cd ../web
+          cp .env.example .env
 
       - name: Install UI browser test runtime
         if: steps.ui-browser-tests.outputs.required == 'true'

@@ -678,6 +678,27 @@ describe("detect-e2e-changes", () => {
     );
   });
 
+  test("scopes browser work before every dependency setup step", () => {
+    const job = workflowJob("ci-browser");
+    const scope = "Check UI browser test scope";
+    const setupSteps = [
+      "Setup Bun",
+      "Install Safe Chain",
+      "Turbo remote cache",
+      "Install dependencies",
+      "Prepare environment",
+      "Install UI browser test runtime",
+    ];
+    expect(job.indexOf(scope)).toBeGreaterThan(-1);
+    for (const name of setupSteps) {
+      expect(job.indexOf(scope)).toBeLessThan(job.indexOf(name));
+      expect(workflowStep(job, name)).toContain(
+        "if: steps.ui-browser-tests.outputs.required == 'true'",
+      );
+    }
+    expect(workflowStep(job, scope)).not.toContain("bun ");
+  });
+
   test("shares and launch-verifies a version-keyed browser cache", () => {
     expect(
       workflow.match(/uses: \.\/\.github\/actions\/setup-playwright/gu),
