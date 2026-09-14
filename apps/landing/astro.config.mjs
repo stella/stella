@@ -7,6 +7,7 @@ import { defineConfig } from "astro/config";
 import stllAnonymizeWasm from "@stll/anonymize-wasm/vite";
 import { UI_LOCALES } from "@stll/locales";
 
+import { internalLinks } from "./src/integrations/internal-links";
 import { ogCards } from "./src/integrations/og-cards";
 import { sitemapLastmod } from "./src/integrations/sitemap-lastmod";
 
@@ -40,6 +41,9 @@ const lastmod = sitemapLastmod({
 
 export default defineConfig({
   site: "https://stll.app",
+  // Pages build as `<path>/index.html`, so every page URL carries the slash;
+  // `internalLinks` fails the build on a link that does not.
+  trailingSlash: "always",
   // The live anonymization demo's wasm runtime is thread-capable
   // (napi-rs/emnapi WASI threads) and needs `SharedArrayBuffer`, which
   // browsers only expose to a cross-origin-isolated page. These headers
@@ -132,6 +136,7 @@ export default defineConfig({
       },
     }),
     react(),
+    internalLinks(),
     // Draws each page's social card from the title it just rendered; must run
     // after the pages exist, which `astro:build:done` guarantees.
     ogCards(),

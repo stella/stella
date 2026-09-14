@@ -90,7 +90,7 @@ const subtitle = requireLinkedSegment("hero.subtitle", t("hero.subtitle"));
           class="relative z-10 flex flex-1 flex-col items-center justify-center px-6 pb-10 sm:pb-12"
         >
           <a
-            href="/changelog"
+            href="/changelog/"
             data-reveal
             style="background: color-mix(in srgb, var(--card) 88%, transparent); border: 1px solid var(--border)"
             class="reveal-fast group mb-7 inline-flex max-w-[calc(100%-3rem)] items-center gap-2.5 rounded-full px-4 py-2 text-sm font-medium shadow-sm transition-transform hover:-translate-y-0.5"
@@ -235,7 +235,7 @@ const subtitle = requireLinkedSegment("hero.subtitle", t("hero.subtitle"));
                 class="release-col"
               >
                 <a
-                  href={`/changelog#${release.slug}`}
+                  href={`/changelog/#${release.slug}`}
                   class="group flex h-full flex-col gap-2"
                 >
                   <span
@@ -269,7 +269,7 @@ const subtitle = requireLinkedSegment("hero.subtitle", t("hero.subtitle"));
           }
         </ul>
         <a
-          href="/changelog"
+          href="/changelog/"
           data-reveal
           style="--reveal-delay: 300ms"
           class="group mt-2 inline-flex min-h-11 items-center gap-2 text-sm font-medium transition-opacity hover:opacity-70"

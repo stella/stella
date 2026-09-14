@@ -17,7 +17,7 @@ export const getStaticPaths = () =>
 
 const { page, release } = Astro.props;
 const changelogHref =
-  page === 1 ? `/changelog#${release.slug}` : `/changelog?page=${page}#${release.slug}`;
+  page === 1 ? `/changelog/#${release.slug}` : `/changelog/?page=${page}#${release.slug}`;
 const pageTitle = release.heading
   ? `${release.displayName}: ${release.heading}`
   : release.displayName;

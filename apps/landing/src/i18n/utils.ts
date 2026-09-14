@@ -100,14 +100,13 @@ export const requireLinkedSegment = (
 
 // --- URL helpers (locale routing + multilingual SEO) ---
 
-// Prefix a root-relative path with the locale segment ("" for the default).
+// Prefix a root-relative page path with the locale segment ("" for the
+// default) in the trailing-slash form the build writes and the sitemap declares.
 export const localizePath = (path: string, locale: Locale): string => {
   const segment = locales[locale].path;
-  const clean = path.startsWith("/") ? path : `/${path}`;
-  if (!segment) {
-    return clean;
-  }
-  return clean === "/" ? `/${segment}/` : `/${segment}${clean}`;
+  const rooted = path.startsWith("/") ? path : `/${path}`;
+  const clean = rooted.endsWith("/") ? rooted : `${rooted}/`;
+  return segment ? `/${segment}${clean}` : clean;
 };
 
 // Resolve the active locale from a URL pathname (first segment).

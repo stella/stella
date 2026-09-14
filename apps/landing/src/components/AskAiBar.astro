@@ -110,10 +110,10 @@ const t = getTranslations(locale);
     if (root) {
       // Canonical, first-party pages the model should read and cite.
       const SOURCES = [
-        "https://stll.app/ai-info",
+        "https://stll.app/ai-info/",
         "https://stll.app/llms-full.txt",
         "https://stll.app/",
-        "https://stll.app/security",
+        "https://stll.app/security/",
       ].join(", ");
 
       const PROMPT = `What is stella? Use these canonical sources: ${SOURCES}. Summarize in 4 sentences: (1) what it is, (2) who it is for, (3) pricing, (4) security. Cite the sources inline.`;

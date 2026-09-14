@@ -43,7 +43,7 @@ const dateFormatter = new Intl.DateTimeFormat("en", { dateStyle: "medium" });
         >
           <h1>
             <a
-              href="/blog"
+              href="/blog/"
               class="font-display text-5xl font-medium leading-[1.05] transition-opacity hover:opacity-80 sm:text-6xl lg:text-7xl"
             >
               Blog
@@ -72,7 +72,7 @@ const dateFormatter = new Intl.DateTimeFormat("en", { dateStyle: "medium" });
                 {posts.map((post) => (
                   <li>
                     <a
-                      href={`/blog/${post.id}`}
+                      href={`/blog/${post.id}/`}
                       class="block rounded-lg p-6 transition-opacity hover:opacity-90 sm:p-7"
                       style="background: var(--card); border: 1px solid var(--border)"
                     >
