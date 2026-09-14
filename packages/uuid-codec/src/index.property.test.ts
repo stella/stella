@@ -11,7 +11,7 @@ import fc from "fast-check";
 
 import { propertyConfig, propertyTestTimeout } from "@stll/property-testing";
 
-import { decodeCompactUuid, encodeCompactUuid } from "./compact-uuid";
+import { decodeCompactUuid, encodeCompactUuid } from "./index";
 
 setDefaultTimeout(propertyTestTimeout(20_000));
 
@@ -33,6 +33,18 @@ const uuidArbitrary = fc
       digits.slice(20),
     ].join("-");
   });
+
+// The generator's input space, not a mirror of the codec's own table: a
+// character it stopped accepting would land in the decode-fails branch below.
+const BASE64URL_CHARS =
+  "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_".split("");
+
+const compactSegmentArbitrary = fc
+  .array(fc.constantFrom(...BASE64URL_CHARS), {
+    minLength: COMPACT_UUID_LENGTH,
+    maxLength: COMPACT_UUID_LENGTH,
+  })
+  .map((chars) => chars.join(""));
 
 describe("compact uuid properties", () => {
   test("a compacted uuid decodes back to the uuid it was minted from", () => {
@@ -63,10 +75,26 @@ describe("compact uuid properties", () => {
           expect(decoded.error._tag).toBe("InvalidCompactUuidError");
           return;
         }
-        // The only strings that decode are the two spellings of a uuid, and
-        // re-encoding what came back has to reach the same 22 characters.
+        // Anything that decodes was already one of the two spellings, so
+        // re-encoding it reaches the segment it came from.
         const reencoded = Result.unwrap(encodeCompactUuid(decoded.value));
         expect(Result.unwrap(decodeCompactUuid(reencoded))).toBe(decoded.value);
+      }),
+      propertyConfig({ numRuns: 500 }),
+    );
+  });
+
+  test("a compact segment that decodes is the one the encoder would mint", () => {
+    // One id, one address. A segment whose bytes are an id's but whose four
+    // unused trailing bits are set is not a second spelling of that id: it
+    // does not decode at all, so a row is never reachable sixteen ways.
+    fc.assert(
+      fc.property(compactSegmentArbitrary, (segment) => {
+        const decoded = decodeCompactUuid(segment);
+        if (Result.isError(decoded)) {
+          return;
+        }
+        expect(Result.unwrap(encodeCompactUuid(decoded.value))).toBe(segment);
       }),
       propertyConfig({ numRuns: 500 }),
     );

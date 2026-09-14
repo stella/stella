@@ -67,8 +67,11 @@ export const extractStatuteDocumentIdFromRouteParam = (
     return null;
   }
 
+  // Trimmed because the param reaches here URL-decoded: a pasted address whose
+  // segment ended in an encoded space resolved before the codec moved out, and
+  // the decoder itself takes the segment exactly as it is spelled.
   const decoded = decodeCompactUuid(
-    param.slice(separator + ID_ROUTE_PARAM_SEPARATOR.length),
+    param.slice(separator + ID_ROUTE_PARAM_SEPARATOR.length).trim(),
   );
   return Result.isError(decoded) ? null : decoded.value;
 };

@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
-import { decodeCompactUuid, encodeCompactUuid, isUuid } from "./compact-uuid";
+import { decodeCompactUuid, encodeCompactUuid, isUuid } from "./index";
 
 // The pair the public case-law and statute URLs already carry: a change that
 // alters the encoding breaks every link minted before it.
@@ -45,6 +45,14 @@ describe("compact uuid", () => {
         expect(decoded.error._tag).toBe("InvalidCompactUuidError");
       }
     }
+  });
+
+  test("rejects a segment carrying bits the encoder never writes", () => {
+    // Same 16 bytes, last character's four unused bits set: one id must have
+    // one compact address, not sixteen.
+    const withResidual = `${COMPACT_UUID.slice(0, -1)}B`;
+    expect(Result.unwrap(decodeCompactUuid(COMPACT_UUID))).toBe(UUID);
+    expect(Result.isError(decodeCompactUuid(withResidual))).toBe(true);
   });
 
   test("distinguishes a uuid from a citation", () => {
