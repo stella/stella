@@ -41,13 +41,20 @@ const FONT_FAMILY_UTILITIES: ReadonlySet<string> = new Set([
   "font-mono",
 ]);
 
-/** A Tailwind token stripped of its variant prefixes and `!` modifier. */
+/**
+ * A Tailwind token stripped of its variant prefixes and `!` modifier.
+ *
+ * Sliced rather than matched: the important modifier is one character on
+ * either end, and a quantified pattern here would be a backtracking regex in
+ * a hot path.
+ */
 const baseClass = (token: string): string => {
-  const withoutImportant = token.replace(/^!+/u, "").replace(/!+$/u, "");
-  const lastVariant = withoutImportant.lastIndexOf(":");
-  return lastVariant === -1
-    ? withoutImportant
-    : withoutImportant.slice(lastVariant + 1);
+  const withoutPrefix = token.startsWith("!") ? token.slice(1) : token;
+  const bare = withoutPrefix.endsWith("!")
+    ? withoutPrefix.slice(0, -1)
+    : withoutPrefix;
+  const lastVariant = bare.lastIndexOf(":");
+  return lastVariant === -1 ? bare : bare.slice(lastVariant + 1);
 };
 
 const namesFontFamily = (value: string): boolean =>
