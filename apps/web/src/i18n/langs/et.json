@@ -1299,6 +1299,7 @@
     "currency": "Valuuta",
     "currentPage": "Praegune lehekülg",
     "date": "Kuupäev",
+    "decisions": "Lahendid",
     "decline": "Keeldu",
     "delete": "Kustuta",
     "deleteCategory": "Kustuta kategooria",
@@ -1404,6 +1405,7 @@
       "ZH-HANS": "Hiina (lihtsustatud)",
       "ZH-HANT": "Hiina (traditsiooniline)"
     },
+    "lastUpdated": "Viimati uuendatud",
     "legalDatabase": "Õigusandmebaas",
     "loadMore": "Laadi rohkem",
     "loading": "Laadimine",
@@ -3213,7 +3215,6 @@
     }
   },
   "lawHome": {
-    "databaseStatus": "{count} kirjet · uuendatud {date}",
     "databaseUpToDate": "Ajakohane",
     "enteringIntoForce": "Peagi jõustuv",
     "inForceFrom": "Jõustub {date}",
@@ -4891,7 +4892,6 @@
       "collapseAll": "Ahenda kõik kaustad",
       "expandAll": "Laienda kõik kaustad",
       "fileCount": "{count, plural, one {# fail} other {# faili}}",
-      "lastUpdated": "Viimati uuendatud",
       "matchingFileCount": "{count, plural, one {# vastav fail} other {# vastavat faili}}",
       "moveToRoot": "Lohistage siia, et liigutada juuretasemele",
       "newSubfolder": "Uus alamkaust",
@@ -5419,7 +5419,6 @@
         "noDates": "Kuupäeva omadust pole valitud",
         "showAdditionalDates": "Lisakuupäevad",
         "showBy": "Näita",
-        "updatedAt": "Viimati muudetud",
         "week": "Nädal",
         "year": "Aasta"
       },

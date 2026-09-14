@@ -72,7 +72,7 @@ export const useWorkspaceTableSchema = ({
           priority: t("tasks.priority"),
           dueDate: t("tasks.dueDate"),
           author: t("common.author"),
-          lastUpdated: t("workspaces.filesystem.lastUpdated"),
+          lastUpdated: t("common.lastUpdated"),
           version: t("common.version"),
         },
       }),

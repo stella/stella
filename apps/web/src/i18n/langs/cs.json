@@ -1299,6 +1299,7 @@
     "currency": "Měna",
     "currentPage": "Aktuální stránka",
     "date": "Datum",
+    "decisions": "Rozhodnutí",
     "decline": "Odmítnout",
     "delete": "Smazat",
     "deleteCategory": "Smazat kategorii",
@@ -1404,6 +1405,7 @@
       "ZH-HANS": "čínština (zjednodušená)",
       "ZH-HANT": "čínština (tradiční)"
     },
+    "lastUpdated": "Naposledy aktualizováno",
     "legalDatabase": "Právní databáze",
     "loadMore": "Načíst další",
     "loading": "Načítám",
@@ -3213,7 +3215,6 @@
     }
   },
   "lawHome": {
-    "databaseStatus": "{count} záznamů · aktualizováno {date}",
     "databaseUpToDate": "Aktuální",
     "enteringIntoForce": "Brzy nabude účinnosti",
     "inForceFrom": "Účinné od {date}",
@@ -4891,7 +4892,6 @@
       "collapseAll": "Sbalit všechny složky",
       "expandAll": "Rozbalit všechny složky",
       "fileCount": "{count, plural, one {# soubor} few {# soubory} other {# souborů}}",
-      "lastUpdated": "Naposledy aktualizováno",
       "matchingFileCount": "{count, plural, one {# odpovídající soubor} few {# odpovídající soubory} other {# odpovídajících souborů}}",
       "moveToRoot": "Přetáhněte sem pro přesun do kořenové úrovně",
       "newSubfolder": "Nová podsložka",
@@ -5419,7 +5419,6 @@
         "noDates": "Nevybrána žádná vlastnost data",
         "showAdditionalDates": "Další datumy",
         "showBy": "Zobrazit podle",
-        "updatedAt": "Naposledy aktualizováno",
         "week": "Týden",
         "year": "Rok"
       },

@@ -1299,6 +1299,7 @@
     "currency": "Moeda",
     "currentPage": "Página atual",
     "date": "Data",
+    "decisions": "Decisões",
     "decline": "Recusar",
     "delete": "Excluir",
     "deleteCategory": "Excluir categoria",
@@ -1404,6 +1405,7 @@
       "ZH-HANS": "Chinês (simplificado)",
       "ZH-HANT": "Chinês (tradicional)"
     },
+    "lastUpdated": "Última atualização",
     "legalDatabase": "Base de dados jurídica",
     "loadMore": "Carregar mais",
     "loading": "Carregando",
@@ -3213,7 +3215,6 @@
     }
   },
   "lawHome": {
-    "databaseStatus": "{count} registros · atualizado em {date}",
     "databaseUpToDate": "Atualizado",
     "enteringIntoForce": "Entrada em vigor em breve",
     "inForceFrom": "Em vigor a partir de {date}",
@@ -4891,7 +4892,6 @@
       "collapseAll": "Recolher todas as pastas",
       "expandAll": "Expandir todas as pastas",
       "fileCount": "{count, plural, one {# arquivo} other {# arquivos}}",
-      "lastUpdated": "Última atualização",
       "matchingFileCount": "{count, plural, one {# arquivo correspondente} other {# arquivos correspondentes}}",
       "moveToRoot": "Solte aqui para passar para o nível raiz",
       "newSubfolder": "Nova subpasta",
@@ -5419,7 +5419,6 @@
         "noDates": "Nenhuma propriedade de data selecionada",
         "showAdditionalDates": "Datas adicionais",
         "showBy": "Mostrar por",
-        "updatedAt": "Última atualização",
         "week": "Semana",
         "year": "Ano"
       },

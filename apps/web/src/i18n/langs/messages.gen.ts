@@ -1302,6 +1302,7 @@ type Messages = {
     "currency": "Currency";
     "currentPage": "Current page";
     "date": "Date";
+    "decisions": "Decisions";
     "decline": "Decline";
     "delete": "Delete";
     "deleteCategory": "Delete category";
@@ -1407,6 +1408,7 @@ type Messages = {
       "ZH-HANS": "Chinese (simplified)";
       "ZH-HANT": "Chinese (traditional)";
     };
+    "lastUpdated": "Last updated";
     "legalDatabase": "Legal database";
     "loadMore": "Load more";
     "loading": "Loading";
@@ -3216,7 +3218,6 @@ type Messages = {
     };
   };
   "lawHome": {
-    "databaseStatus": "{count} entries · updated {date}";
     "databaseUpToDate": "Up to date";
     "enteringIntoForce": "Entering into force";
     "inForceFrom": "In force from {date}";
@@ -4894,7 +4895,6 @@ type Messages = {
       "collapseAll": "Collapse all folders";
       "expandAll": "Expand all folders";
       "fileCount": "{count, plural, one {# file} other {# files}}";
-      "lastUpdated": "Last updated";
       "matchingFileCount": "{count, plural, one {# matching file} other {# matching files}}";
       "moveToRoot": "Drop here to move to root level";
       "newSubfolder": "New subfolder";
@@ -5422,7 +5422,6 @@ type Messages = {
         "noDates": "No date property selected";
         "showAdditionalDates": "Additional dates";
         "showBy": "Show by";
-        "updatedAt": "Last updated";
         "week": "Week";
         "year": "Year";
       };

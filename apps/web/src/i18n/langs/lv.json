@@ -1299,6 +1299,7 @@
     "currency": "Valūta",
     "currentPage": "Pašreizējā lapa",
     "date": "Datums",
+    "decisions": "Nolēmumi",
     "decline": "Noraidīt",
     "delete": "Dzēst",
     "deleteCategory": "Dzēst kategoriju",
@@ -1404,6 +1405,7 @@
       "ZH-HANS": "Ķīniešu (vienkāršotā)",
       "ZH-HANT": "Ķīniešu (tradicionālā)"
     },
+    "lastUpdated": "Pēdējoreiz atjaunināts",
     "legalDatabase": "Juridiskā datubāze",
     "loadMore": "Ielādēt vairāk",
     "loading": "Ielādē",
@@ -3213,7 +3215,6 @@
     }
   },
   "lawHome": {
-    "databaseStatus": "{count} ieraksti · atjaunināts {date}",
     "databaseUpToDate": "Aktuāls",
     "enteringIntoForce": "Drīzumā stāsies spēkā",
     "inForceFrom": "Stājas spēkā {date}",
@@ -4891,7 +4892,6 @@
       "collapseAll": "Sakļaut visas mapes",
       "expandAll": "Izvērst visas mapes",
       "fileCount": "{count, plural, zero {# failu} one {# fails} other {# faili}}",
-      "lastUpdated": "Pēdējoreiz atjaunināts",
       "matchingFileCount": "{count, plural, zero {# atbilstošu failu} one {# atbilstošs fails} other {# atbilstoši faili}}",
       "moveToRoot": "Nometiet šeit, lai pārvietotu uz saknes līmeni",
       "newSubfolder": "Jauna apakšmape",
@@ -5419,7 +5419,6 @@
         "noDates": "Nav izvēlēta datuma īpašība",
         "showAdditionalDates": "Papildu datumi",
         "showBy": "Rādīt pēc",
-        "updatedAt": "Pēdējoreiz atjaunināts",
         "week": "Nedēļa",
         "year": "Gads"
       },
