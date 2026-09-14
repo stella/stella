@@ -76,7 +76,7 @@ export const DECISIONS_SEARCH_STATE = {
   unavailable: "unavailable",
 } as const;
 
-export type DecisionsSearchState =
+type DecisionsSearchState =
   (typeof DECISIONS_SEARCH_STATE)[keyof typeof DECISIONS_SEARCH_STATE];
 
 type DecisionsSearchOutageInput = {
