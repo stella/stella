@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   extractPageHrefs,
+  extractSiteUrls,
   findLinkIssues,
   pageUrlPath,
 } from "./internal-links";
@@ -16,7 +17,7 @@ const files = new Set([
 ]);
 
 const issuesFor = (html: string, page = "index.html") =>
-  findLinkIssues({ site, files, pages: new Map([[page, html]]) });
+  findLinkIssues({ site, files, documents: new Map([[page, html]]) });
 
 describe("extractPageHrefs", () => {
   test("reads anchors and page-naming link relations, not loaded resources", () => {
@@ -25,6 +26,21 @@ describe("extractPageHrefs", () => {
         '<link rel="stylesheet" href="/_astro/a.css"><link rel="canonical" href="https://stll.app/docs/"><a class="x" href="/a?b=1&amp;c=2">x</a><a name="top">',
       ),
     ).toEqual(["https://stll.app/docs/", "/a?b=1&c=2"]);
+  });
+});
+
+describe("extractSiteUrls", () => {
+  test("reads same-site URLs out of Markdown and plain text", () => {
+    expect(
+      extractSiteUrls(
+        "- [Security](https://stll.app/security): posture.\nSee https://stll.app/llms.txt. App: https://my.stll.app <https://stll.app/>",
+        site,
+      ),
+    ).toEqual([
+      "https://stll.app/security",
+      "https://stll.app/llms.txt",
+      "https://stll.app/",
+    ]);
   });
 });
 
@@ -74,6 +90,18 @@ describe("findLinkIssues", () => {
         type: "missing-trailing-slash",
         page: "/cs/product/agent/",
         href: "../agent",
+      },
+    ]);
+  });
+
+  test("checks shipped text files by their absolute URLs", () => {
+    expect(
+      issuesFor("[Docs](https://stll.app/docs) and /press", "index.md"),
+    ).toEqual([
+      {
+        type: "missing-trailing-slash",
+        page: "/index.md",
+        href: "https://stll.app/docs",
       },
     ]);
   });

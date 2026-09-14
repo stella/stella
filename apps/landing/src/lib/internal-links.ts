@@ -33,6 +33,20 @@ export const extractPageHrefs = (html: string): string[] => {
   return hrefs;
 };
 
+/**
+ * Absolute same-site URLs in a shipped text file (`llms.txt`, `index.md`).
+ * These carry no markup, so a URL ends at whitespace, a Markdown or angle
+ * delimiter, or trailing sentence punctuation.
+ */
+export const extractSiteUrls = (text: string, site: URL): string[] => {
+  const origin = site.origin.replaceAll(/[.*+?^${}()|[\]\\/]/gu, "\\$&");
+  const pattern = new RegExp(
+    `${origin}(?:/(?:[^\\s()<>[\\]"'\`]*[^\\s()<>[\\]"'\`.,;:])?)?`,
+    "gu",
+  );
+  return Array.from(text.matchAll(pattern), ([url]) => url);
+};
+
 /** The URL a built file answers at: `a/index.html` is `/a/`. */
 export const pageUrlPath = (file: string): string =>
   `/${file}`.replace(/(^|\/)index\.html$/u, "$1");
@@ -41,20 +55,23 @@ type FindLinkIssuesOptions = {
   site: URL;
   /** Every file in the build output, relative to its root, `/`-separated. */
   files: ReadonlySet<string>;
-  /** Built HTML file path mapped to its markup. */
-  pages: ReadonlyMap<string, string>;
+  /** Built HTML, Markdown, and text files mapped to their contents. */
+  documents: ReadonlyMap<string, string>;
 };
 
 export const findLinkIssues = ({
   site,
   files,
-  pages,
+  documents,
 }: FindLinkIssuesOptions): LinkIssue[] => {
   const issues: LinkIssue[] = [];
-  for (const [file, html] of pages) {
+  for (const [file, contents] of documents) {
     const page = pageUrlPath(file);
     const base = new URL(page, site);
-    for (const href of extractPageHrefs(html)) {
+    const hrefs = file.endsWith(".html")
+      ? extractPageHrefs(contents)
+      : extractSiteUrls(contents, site);
+    for (const href of hrefs) {
       const target = new URL(href, base);
       if (target.origin !== site.origin) {
         continue;

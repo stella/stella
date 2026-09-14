@@ -27,5 +27,5 @@ stella is built for firms that need control. Matters, documents, and search are 
 
 ## Trust
 
-- [Security](https://stll.app/security): Security posture and deployment options.
-- [Imprint](https://stll.app/imprint): Company details and legal contact.
+- [Security](https://stll.app/security/): Security posture and deployment options.
+- [Imprint](https://stll.app/imprint/): Company details and legal contact.

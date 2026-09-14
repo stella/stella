@@ -1,6 +1,7 @@
-// Fails the build when a page links to a same-site URL the build did not
-// write, or to a page without its trailing slash. Reads the rendered HTML, so
-// hrefs from components, content collections, and Starlight are all covered.
+// Fails the build when a shipped file links to a same-site URL the build did
+// not write, or to a page without its trailing slash. Reads the rendered HTML
+// and the shipped Markdown and text files, so links from components, content
+// collections, Starlight, endpoints, and `public/` are all covered.
 import type { AstroIntegration } from "astro";
 import { panic } from "better-result";
 import { readdir, readFile } from "node:fs/promises";
@@ -23,10 +24,12 @@ export const internalLinks = (): AstroIntegration => {
             file.replaceAll("\\", "/"),
           ),
         );
-        const htmlFiles = [...files].filter((file) => file.endsWith(".html"));
-        const pages = new Map(
+        const linking = [...files].filter((file) =>
+          LINKING_EXTENSIONS.some((extension) => file.endsWith(extension)),
+        );
+        const documents = new Map(
           await Promise.all(
-            htmlFiles.map(
+            linking.map(
               async (file) =>
                 [file, await readFile(new URL(file, dir), "utf-8")] as const,
             ),
@@ -36,18 +39,20 @@ export const internalLinks = (): AstroIntegration => {
           site:
             site ?? panic("internal-links needs `site` in the Astro config"),
           files,
-          pages,
+          documents,
         });
         if (issues.length > 0) {
           panic(
             `${issues.length} internal link(s) do not resolve to a built page:\n${issues.map(describe).join("\n")}`,
           );
         }
-        logger.info(`checked internal links on ${pages.size} pages`);
+        logger.info(`checked internal links in ${documents.size} files`);
       },
     },
   };
 };
+
+const LINKING_EXTENSIONS = [".html", ".md", ".txt"];
 
 const describe = (issue: LinkIssue): string => {
   switch (issue.type) {
