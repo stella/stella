@@ -426,6 +426,60 @@ const containsWord = (
   return regex.test(haystack);
 };
 
+const CAPITALIZED_STELLA_PATTERN = /Stella/gu;
+const SENTENCE_OPENERS = new Set([
+  '"',
+  "'",
+  "(",
+  "[",
+  "{",
+  "“",
+  "”",
+  "‘",
+  "’",
+  "„",
+  "«",
+  "»",
+  "‹",
+  "›",
+  "¿",
+  "¡",
+]);
+const SENTENCE_ENDINGS = new Set([".", "!", "?", "…", "\n", "\r"]);
+
+const isSentenceStart = (value: string, index: number): boolean => {
+  let cursor = index - 1;
+  while (cursor >= 0) {
+    const character = value[cursor];
+    if (
+      character === " " ||
+      character === "\t" ||
+      character === "\u00a0" ||
+      (character !== undefined && SENTENCE_OPENERS.has(character))
+    ) {
+      cursor -= 1;
+      continue;
+    }
+    break;
+  }
+  if (cursor < 0) {
+    return true;
+  }
+  const previous = value[cursor];
+  return previous !== undefined && SENTENCE_ENDINGS.has(previous);
+};
+
+// Match the oxlint wordmark rule for locale JSON, which oxlint does not parse.
+// Prefix matching also catches declined mid-sentence forms such as `Stellai`.
+export const hasInvalidCapitalizedStella = (value: string): boolean => {
+  for (const match of value.matchAll(CAPITALIZED_STELLA_PATTERN)) {
+    if (!isSentenceStart(value, match.index)) {
+      return true;
+    }
+  }
+  return false;
+};
+
 export type ForbiddenRule = {
   concept: string;
   triggers: string[];
@@ -599,8 +653,9 @@ const findViolations = (
     if (targetValue === sourceValue) {
       if (
         locale === "en" &&
-        findForbiddenTerms(sourceValue, targetValue, "en", rules, key).length >
-          0
+        (findForbiddenTerms(sourceValue, targetValue, "en", rules, key).length >
+          0 ||
+          hasInvalidCapitalizedStella(targetValue))
       ) {
         result.terminology.push(key);
       }
@@ -622,7 +677,8 @@ const findViolations = (
     }
     if (
       findForbiddenTerms(sourceValue, targetValue, locale, rules, key).length >
-      0
+        0 ||
+      hasInvalidCapitalizedStella(targetValue)
     ) {
       result.terminology.push(key);
     }
