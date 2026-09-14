@@ -1,5 +1,4 @@
 import type { Block, HeadingBlock } from "@stll/legal-ast/document-ast";
-import { stripDiacritics } from "@stll/text-normalize";
 import type { OutlineItem } from "@stll/ui/outline-rail";
 
 import { inlinesToPlainText } from "@/components/legal-reader/document-ast-text";
@@ -14,12 +13,12 @@ import { inlinesToPlainText } from "@/components/legal-reader/document-ast-text"
  */
 
 /**
- * Depth from which a statute outline starts folded. The top two container
- * tiers stay open as the map of the act; everything under them is one entry
- * per section, which is thousands of rows for a code, so it unfolds along the
- * chain the reader is actually in.
+ * Depth from which a statute outline starts folded. Only the act's top tier
+ * (its parts) stays open, the way a printed table of contents opens: what is
+ * under it is thousands of rows for a code, and it unfolds along the chain
+ * the reader is actually in.
  */
-export const STATUTE_OUTLINE_COLLAPSE_LEVEL = 2;
+export const STATUTE_OUTLINE_COLLAPSE_LEVEL = 1;
 
 /**
  * The two lines a publisher states for one heading: the designation that
@@ -160,10 +159,6 @@ const PROVISION_DESIGNATION_RE = /^(§|[cč]l|art|par)\.?\s*(\d+[a-z]*)/iu;
 /** `par.` is the section sign spelled out, not an article. */
 const isSectionMarker = (marker: string): boolean =>
   marker.startsWith("§") || marker.toLowerCase().startsWith("par");
-
-/** Fold used for designation comparison and outline filtering. */
-const foldForMatch = (value: string): string =>
-  stripDiacritics(value).toLowerCase();
 
 /**
  * The provision a heading opens, or null when the heading is a container
@@ -315,105 +310,6 @@ const spanOf = (
   return first.number === last.number
     ? `${first.marker} ${first.number}`
     : `${first.marker} ${first.number}${RANGE_DASH}${last.number}`;
-};
-
-/**
- * What the reader typed into the rail's jump field.
- *
- * A designation is a jump (there is one place `§ 10` can mean), anything
- * else narrows the outline. Kept as a union rather than a string plus flags
- * so a caller has to handle the empty field it starts in.
- */
-export type OutlineJump =
-  | { type: "empty" }
-  | { type: "filter"; text: string }
-  | { type: "provision"; number: string; unit: ProvisionUnit };
-
-export const parseOutlineJump = (raw: string): OutlineJump => {
-  const trimmed = raw.trim();
-
-  if (trimmed.length === 0) {
-    return { type: "empty" };
-  }
-
-  const designation = parseProvisionDesignation(trimmed);
-
-  if (designation === null) {
-    return { type: "filter", text: trimmed };
-  }
-
-  return {
-    number: designation.number,
-    type: "provision",
-    unit: designation.unit,
-  };
-};
-
-/** The outline entry a designation addresses, or null when the act has none. */
-export const findProvisionAnchorId = (
-  items: readonly OutlineItem[],
-  jump: OutlineJump,
-): string | null => {
-  if (jump.type !== "provision") {
-    return null;
-  }
-
-  const match = items.find((item) => {
-    const designation = parseProvisionDesignation(item.label);
-
-    return (
-      designation !== null &&
-      designation.unit === jump.unit &&
-      foldForMatch(designation.number) === foldForMatch(jump.number)
-    );
-  });
-
-  return match?.id ?? null;
-};
-
-/**
- * Narrow the outline to the entries matching `text`, keeping the ancestors
- * of every match. The rail nests by the level of the entries it is handed,
- * so dropping a matched entry's parents would re-root it under whatever
- * shallower entry happened to survive.
- */
-export const filterOutlineItems = (
-  items: readonly OutlineItem[],
-  jump: OutlineJump,
-): OutlineItem[] => {
-  if (jump.type === "empty") {
-    return [...items];
-  }
-
-  const needle = foldForMatch(jump.type === "filter" ? jump.text : jump.number);
-  const kept = new Set<number>();
-
-  for (const [index, item] of items.entries()) {
-    const haystack = foldForMatch(
-      `${item.label} ${item.title ?? ""} ${item.meta ?? ""}`,
-    );
-
-    if (!haystack.includes(needle)) {
-      continue;
-    }
-
-    kept.add(index);
-
-    // Walk back to the root the same way the rail nests: a parent is the
-    // nearest preceding entry at a shallower level.
-    let level = item.level;
-
-    for (let ancestor = index - 1; ancestor >= 0 && level > 0; ancestor -= 1) {
-      const candidate = items[ancestor];
-
-      if (candidate !== undefined && candidate.level < level) {
-        kept.add(ancestor);
-        level = candidate.level;
-      }
-    }
-  }
-
-  return items.filter((_item, index) => kept.has(index));
 };
 
 /**
