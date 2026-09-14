@@ -462,7 +462,7 @@
     }
   },
   "/contacts/import": {
-    "depth": 6,
+    "depth": 7,
     "requests": [
       "GET /api/auth/get-session",
       "GET /api/auth/organization/get-active-member-role",
