@@ -469,9 +469,9 @@ export const Route = createFileRoute("/law/cases/")({
     ]);
 
     // The rows are one region of this page, so a search backend that cannot be
-    // reached is that region's failure and not the route's: the box, the rail
-    // and the filters are the URL's own and stay usable. Every other failure
-    // is still the error boundary's.
+    // reached is that region's failure and not the route's: the box and the
+    // filters are the URL's own and stay usable. Every other failure is still
+    // the error boundary's.
     if (decisionPages === null) {
       return { decisions: [], search: DECISIONS_SEARCH_STATE.unavailable };
     }
@@ -990,8 +990,8 @@ type SearchUnavailableProps = {
 
 /**
  * The results region when the search backend could not be reached. It stands
- * where the grid stands, so the box, the rail and the filters above it keep
- * working and the reader's query stays in the URL for the retry to use.
+ * where the grid stands, so the box and the filters above it keep working and
+ * the reader's query stays in the URL for the retry to use.
  *
  * The same shape the workspace tables and the citation panels use for a read
  * that failed, rather than the page-level `EmptyScreen`: this replaces one
