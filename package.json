@@ -129,7 +129,7 @@
     "oxc-transform-react": "catalog:",
     "oxfmt": "catalog:",
     "oxlint": "catalog:",
-    "oxlint-tailwindcss": "1.10.2",
+    "oxlint-tailwindcss": "1.11.0",
     "oxlint-tsgolint": "7.0.2001",
     "react": "catalog:react19",
     "scslre": "0.3.0",
