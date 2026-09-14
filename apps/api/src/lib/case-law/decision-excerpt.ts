@@ -95,6 +95,9 @@ const foldWhitespace = (text: string): string => text.replaceAll(/\s+/gu, " ");
 
 const WHITESPACE = /\s/u;
 
+/** Above this a code point is written as a surrogate pair, two units wide. */
+const LAST_SINGLE_UNIT_CODE_POINT = 0xff_ff;
+
 /** How `extractCorpusSnippet` joins the engine's fragments into one string. */
 export const CORPUS_FRAGMENT_JOIN = " … ";
 
@@ -113,9 +116,16 @@ const wordStartAtOrAfter = (
   limit: number,
 ): number => {
   for (let index = from; index < limit; index += 1) {
-    if (WHITESPACE.test(text.charAt(index))) {
-      return index + 1;
+    if (!WHITESPACE.test(text.charAt(index))) {
+      continue;
     }
+    // Past the whole run, not just its first character: a line break followed
+    // by a tab would otherwise leave the tab at the head of the excerpt.
+    let start = index + 1;
+    while (start < limit && WHITESPACE.test(text.charAt(start))) {
+      start += 1;
+    }
+    return start;
   }
   return from;
 };
@@ -127,11 +137,40 @@ const wordEndAtOrBefore = (
   limit: number,
 ): number => {
   for (let index = from; index > limit; index -= 1) {
-    if (WHITESPACE.test(text.charAt(index))) {
-      return index;
+    if (!WHITESPACE.test(text.charAt(index))) {
+      continue;
     }
+    // Back to where the run began, so none of it trails the excerpt.
+    let end = index;
+    while (end > limit && WHITESPACE.test(text.charAt(end - 1))) {
+      end -= 1;
+    }
+    return end;
   }
   return from;
+};
+
+/**
+ * `range`, moved off the inside of a surrogate pair.
+ *
+ * The edges are arithmetic offsets in UTF-16 units, and a word boundary is not
+ * always found to move them to, so either can land between the halves of one
+ * astral letter. Both move inwards, which keeps the window within the budget
+ * the caller allowed.
+ */
+const snapToCodePoints = (
+  text: string,
+  range: { end: number; start: number },
+): { end: number; start: number } => {
+  const splitsAt = (index: number): boolean => {
+    const before = index > 0 ? text.codePointAt(index - 1) : undefined;
+    return before !== undefined && before > LAST_SINGLE_UNIT_CODE_POINT;
+  };
+
+  return {
+    end: splitsAt(range.end) ? range.end - 1 : range.end,
+    start: splitsAt(range.start) ? range.start + 1 : range.start,
+  };
 };
 
 /**
@@ -220,13 +259,13 @@ const growAroundSnippet = (
     end = passage.length;
   }
 
-  return {
+  return snapToCodePoints(passage, {
     end:
       end === passage.length
         ? end
         : wordEndAtOrBefore(passage, end, anchor.end),
     start: start === 0 ? 0 : wordStartAtOrAfter(passage, start, anchor.start),
-  };
+  });
 };
 
 /** The engine's own marked runs, as ranges into the snippet's plain text. */
@@ -257,20 +296,30 @@ const engineMarkRanges = (
  * because the longest is the most distinctive and the least likely to land on
  * a repeated phrase.
  */
+type SnippetAnchor = {
+  end: number;
+  /** The anchored fragment as the engine marked it, not the joined snippet. */
+  fragment: string;
+  start: number;
+};
+
 const locateAnchor = (
   passage: string,
   engineSnippet: string,
-): { end: number; start: number } | null => {
-  const fragments = stripSearchHighlightMarkup(engineSnippet)
+): SnippetAnchor | null => {
+  // Split with the marks still on, so the fragment that is located keeps its
+  // own marks. Restoring the joined snippet's marks would place an earlier
+  // fragment's words over whatever text sits at this fragment's position.
+  const fragments = engineSnippet
     .split(CORPUS_FRAGMENT_JOIN)
     .map((fragment) => fragment.trim())
     .filter((fragment) => fragment.length > 0)
     .sort((a, b) => b.length - a.length);
 
   for (const fragment of fragments) {
-    const at = locateSnippet(passage, fragment);
+    const at = locateSnippet(passage, stripSearchHighlightMarkup(fragment));
     if (at !== null) {
-      return at;
+      return { end: at.end, fragment, start: at.start };
     }
   }
   return null;
@@ -320,7 +369,9 @@ const capToChars = (text: string, maxChars: number): string => {
   // Never between a surrogate pair: half a letter is not a character.
   const lastKept = text.codePointAt(maxChars - 1);
   const cut =
-    lastKept !== undefined && lastKept > 0xff_ff ? maxChars - 1 : maxChars;
+    lastKept !== undefined && lastKept > LAST_SINGLE_UNIT_CODE_POINT
+      ? maxChars - 1
+      : maxChars;
   return text.slice(0, cut);
 };
 
@@ -366,7 +417,7 @@ export const corpusExcerpt = ({
   // The matcher found none of the query's words — the engine matched through
   // an expansion it does not reproduce. Its own marks are the answer.
   return markAtSnippet({
-    engineSnippet: engineSnippet ?? "",
+    engineSnippet: anchor?.fragment ?? "",
     snippetStart: (anchor?.start ?? 0) - window.start,
     text,
   });

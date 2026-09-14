@@ -329,6 +329,78 @@ describe("the excerpt a corpus hit shows", () => {
     }
   });
 
+  // The mark offsets of a joined snippet are relative to the whole join. The
+  // fragment that gets anchored on is often not the first, so restoring the
+  // join's marks would paint an earlier fragment's words over whatever text
+  // happens to sit at this fragment's position.
+  test("only the anchored fragment's own marks are restored", () => {
+    const late = "Rozsah náhrady určuje soud";
+    expect(PASSAGE).toContain(late);
+
+    const widened =
+      corpusExcerpt({
+        // The first fragment is unlocatable and its mark sits at offset 0; the
+        // second is the one that anchors.
+        engineSnippet: `<mark>zcela</mark> jiná věta${CORPUS_FRAGMENT_JOIN}Rozsah <mark>náhrady</mark> určuje soud`,
+        excerpt: "medium",
+        language: null,
+        passage: PASSAGE,
+        tokens: tokenizeCorpusFreeText("bezdůvodné obohacení"),
+      }) ?? "";
+
+    // The mark landed on the word the anchored fragment marked, not on some
+    // other text five characters into it.
+    expect(widened).toContain("<mark>náhrady</mark>");
+    expect(widened).not.toContain("<mark>zcela</mark>");
+    expect(stripSearchHighlightMarkup(widened)).toContain(late);
+  });
+
+  // An edge meeting two whitespace characters used to keep the second one.
+  test("a run of whitespace at an edge is consumed whole", () => {
+    const passage = [
+      "Nejvyšší soud rozhodl takto:",
+      "",
+      "\tnáhrada škody přísluší poškozenému v plném rozsahu podle zákona",
+      "",
+      "\tOdůvodnění následuje.",
+    ].join("\n");
+    const widened = stripSearchHighlightMarkup(
+      corpusExcerpt({
+        engineSnippet: "<mark>náhrada</mark> škody",
+        excerpt: "medium",
+        language: null,
+        passage,
+        tokens,
+      }) ?? "",
+    );
+
+    expect(passage).toContain(widened);
+    expect(widened).toBe(widened.trim());
+  });
+
+  // The window's edges are arithmetic offsets, so without snapping one can
+  // land between the halves of an astral letter even when the window is
+  // already inside the budget and the cap never runs.
+  test("an anchored window never splits an astral letter", () => {
+    const astral = "\u{10348}".repeat(200);
+    const passage = `${astral} náhrada škody přísluší ${astral}`;
+    const widened =
+      corpusExcerpt({
+        engineSnippet: "<mark>náhrada</mark> škody",
+        excerpt: "medium",
+        language: null,
+        passage,
+        tokens,
+      }) ?? "";
+
+    expect(
+      /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/u.test(
+        widened,
+      ),
+    ).toBe(false);
+    expect(widened).toContain("<mark>");
+  });
+
   // A reader who asked for more text is answered with the text there was,
   // never with an empty cell.
   test.each([
