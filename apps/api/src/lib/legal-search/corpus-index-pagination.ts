@@ -229,6 +229,7 @@ type ReadPageSnippetsOptions = {
   extractId: (hit: CorpusIndexHit) => string | null;
   extractSnippet: (
     snippet: Record<string, unknown> | undefined,
+    hit: CorpusIndexHit,
   ) => string | null;
   indexId: string;
   query: string;

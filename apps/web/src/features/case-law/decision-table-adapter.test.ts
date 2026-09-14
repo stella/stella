@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { DEFAULT_SEARCH_EXCERPT } from "@stll/api-contract/search";
+
 import { decisionTableAdapter } from "@/features/case-law/decision-table-adapter";
 import type { DecisionTableAdapterKeys } from "@/features/case-law/decision-table-adapter";
 import type { WorkspaceTableAdapter } from "@/lib/workspaces/table-adapter";
@@ -39,7 +41,11 @@ describe("where the decision table's rows come from", () => {
    * identity or page 3 of one would be served from the other.
    */
   test("the page size is part of the window's identity", () => {
-    const filters = { country: "CZE", search: "výpověď" };
+    const filters = {
+      country: "CZE",
+      excerpt: DEFAULT_SEARCH_EXCERPT,
+      search: "výpověď",
+    };
     const twentyFive = decisionTableAdapter.useListPage(filters, 25);
     const hundred = decisionTableAdapter.useListPage(filters, 100);
 
@@ -47,20 +53,44 @@ describe("where the decision table's rows come from", () => {
   });
 
   test("the same page of the same search is the same window", () => {
-    const filters = { country: "CZE", search: "výpověď" };
+    const filters = {
+      country: "CZE",
+      excerpt: DEFAULT_SEARCH_EXCERPT,
+      search: "výpověď",
+    };
 
     expect(decisionTableAdapter.useListPage(filters, 25).queryKey).toEqual(
       decisionTableAdapter.useListPage({ ...filters }, 25).queryKey,
     );
   });
 
-  test("a different search is a different window", () => {
+  // The excerpt length is answered by the search, not trimmed afterwards, so
+  // the same words read at two lengths are two result sets. Sharing a cache
+  // identity would leave a reader who asked for more text looking at the rows
+  // that answered the shorter question.
+  test("a different excerpt length is a different window", () => {
+    const filters = { country: "CZE", search: "výpověď" };
+
     expect(
-      decisionTableAdapter.useListPage({ country: "CZE", search: "a" }, 25)
+      decisionTableAdapter.useListPage({ ...filters, excerpt: "short" }, 25)
         .queryKey,
     ).not.toEqual(
-      decisionTableAdapter.useListPage({ country: "CZE", search: "b" }, 25)
+      decisionTableAdapter.useListPage({ ...filters, excerpt: "long" }, 25)
         .queryKey,
+    );
+  });
+
+  test("a different search is a different window", () => {
+    expect(
+      decisionTableAdapter.useListPage(
+        { country: "CZE", excerpt: DEFAULT_SEARCH_EXCERPT, search: "a" },
+        25,
+      ).queryKey,
+    ).not.toEqual(
+      decisionTableAdapter.useListPage(
+        { country: "CZE", excerpt: DEFAULT_SEARCH_EXCERPT, search: "b" },
+        25,
+      ).queryKey,
     );
   });
 

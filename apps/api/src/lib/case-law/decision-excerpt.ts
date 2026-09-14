@@ -1,9 +1,17 @@
 import { SEARCH_EXCERPTS, type SearchExcerpt } from "@stll/api-contract/search";
 
-import { highlightCorpusPassage } from "@/api/lib/legal-search/corpus-passage-highlight";
+import {
+  highlightCorpusPassage,
+  markCorpusFragment,
+} from "@/api/lib/legal-search/corpus-passage-highlight";
 import type { CorpusQueryToken } from "@/api/lib/legal-search/corpus-query";
 import type { MorphologyLanguage } from "@/api/lib/legal-search/morphology/stem";
-import { HIGHLIGHT_START, HIGHLIGHT_STOP } from "@/api/lib/search/highlight";
+import {
+  escapeSearchHtml,
+  HIGHLIGHT_START,
+  HIGHLIGHT_STOP,
+  stripSearchHighlightMarkup,
+} from "@/api/lib/search/highlight";
 
 /**
  * How much of the matched passage each excerpt length shows.
@@ -82,6 +90,123 @@ export const decisionHeadlineConfig = (excerpt: SearchExcerpt): string => {
 export const usesEngineSnippet = (excerpt: SearchExcerpt): boolean =>
   excerpt === SEARCH_EXCERPTS[0];
 
+/** Whitespace folded to one space, so a snippet re-wrapped by the engine still matches. */
+const foldWhitespace = (text: string): string => text.replaceAll(/\s+/gu, " ");
+
+/**
+ * Where the engine's snippet sits in the passage, or null when it cannot be
+ * placed.
+ *
+ * Exact first, because that is what an untouched snippet is. Failing that the
+ * two sides are compared with their whitespace folded: the engine returns the
+ * passage's words but not always the passage's line breaks, and a fold is the
+ * one difference that makes an otherwise identical run miss.
+ */
+const locateSnippet = (
+  passage: string,
+  snippetText: string,
+): { end: number; start: number } | null => {
+  if (snippetText.length === 0) {
+    return null;
+  }
+
+  const exact = passage.indexOf(snippetText);
+  if (exact !== -1) {
+    return { end: exact + snippetText.length, start: exact };
+  }
+
+  // The folded passage keeps one position per source position except where a
+  // run collapsed, so the fold is walked alongside the source to map back.
+  const folded = foldWhitespace(passage);
+  const at = folded.indexOf(foldWhitespace(snippetText));
+  if (at === -1) {
+    return null;
+  }
+
+  // Walked in UTF-16 units, not code points: every index here is handed back
+  // as an offset into `passage`, and a code-point index would address the
+  // wrong character of it from the first astral letter onwards. A surrogate
+  // half is not whitespace, so a pair keeps both of its units and stays
+  // aligned with the fold, which preserves it whole.
+  const sourceIndexOfFolded: number[] = [];
+  let previousWasSpace = false;
+  for (let index = 0; index < passage.length; index += 1) {
+    const isSpace = /\s/u.test(passage.charAt(index));
+    if (isSpace && previousWasSpace) {
+      continue;
+    }
+    sourceIndexOfFolded.push(index);
+    previousWasSpace = isSpace;
+  }
+
+  const start = sourceIndexOfFolded[at];
+  const endFolded = at + foldWhitespace(snippetText).length;
+  const end = sourceIndexOfFolded[endFolded] ?? passage.length;
+  return start === undefined ? null : { end, start };
+};
+
+/**
+ * A window of `maxChars` grown symmetrically around the snippet, on word
+ * boundaries.
+ *
+ * Symmetric because the reader wants the sentence the match sits in, not the
+ * text that happens to follow it; the edges move to whitespace so no word is
+ * cut, and a window that reaches one end of the passage spends what is left at
+ * the other.
+ */
+const growAroundSnippet = (
+  passage: string,
+  anchor: { end: number; start: number },
+  maxChars: number,
+): { end: number; start: number } => {
+  const spare = maxChars - (anchor.end - anchor.start);
+  if (spare <= 0) {
+    return anchor;
+  }
+
+  const half = Math.floor(spare / 2);
+  const wantedStart = Math.max(0, anchor.start - half);
+  const wantedEnd = Math.min(passage.length, anchor.end + (spare - half));
+
+  const atWordStart =
+    wantedStart === 0
+      ? 0
+      : (() => {
+          const boundary = passage.indexOf(" ", wantedStart);
+          return boundary === -1 || boundary >= anchor.start
+            ? wantedStart
+            : boundary + 1;
+        })();
+  const atWordEnd =
+    wantedEnd === passage.length
+      ? passage.length
+      : (() => {
+          const boundary = passage.lastIndexOf(" ", wantedEnd);
+          return boundary <= anchor.end ? wantedEnd : boundary;
+        })();
+
+  return { end: atWordEnd, start: atWordStart };
+};
+
+/** The engine's own marked runs, as ranges into the snippet's plain text. */
+const engineMarkRanges = (
+  snippet: string,
+): readonly { end: number; start: number }[] => {
+  const ranges: { end: number; start: number }[] = [];
+  let plainLength = 0;
+  for (const part of snippet.split(/(<mark>[^<]*<\/mark>)/gu)) {
+    const marked = /^<mark>(?<text>[^<]*)<\/mark>$/u.exec(part)?.groups?.[
+      "text"
+    ];
+    const text = stripSearchHighlightMarkup(marked ?? part);
+    if (marked !== undefined && text.length > 0) {
+      ranges.push({ end: plainLength + text.length, start: plainLength });
+    }
+    plainLength += text.length;
+  }
+  return ranges;
+};
+
 type CorpusExcerptOptions = {
   /** What the engine itself returned for this hit, if anything. */
   engineSnippet: string | null;
@@ -100,10 +225,14 @@ type CorpusExcerptOptions = {
  * page exactly what it was. A wider length is cut from the passage the hit
  * already carries, which costs no further read because `text` is stored.
  *
- * The engine's snippet is the fallback rather than an empty cell whenever the
- * wider cut cannot be made — a hit carrying no passage, or a passage the
- * query's words cannot be located in. A reader who asked for more text is
- * still answered with the text there was.
+ * The window is anchored on the engine's snippet rather than on the query's
+ * words. The snippet is the engine's own account of why this hit matched —
+ * after stemming and expansion, which nothing here reproduces — so anchoring
+ * on it is what keeps a wider excerpt centred on the match instead of on
+ * whichever word the client-side matcher could find. The wider text is then
+ * marked with the same stemming matcher the passage highlighter uses, and
+ * where that finds nothing the engine's own marks are placed back at the
+ * snippet's position, so the column always says why the row is there.
  */
 export const corpusExcerpt = ({
   engineSnippet,
@@ -119,12 +248,64 @@ export const corpusExcerpt = ({
     return engineSnippet;
   }
 
-  const { html } = highlightCorpusPassage({
-    passage,
-    tokens,
-    language,
-    maxChars: decisionExcerptWindow(excerpt).maxChars,
-  });
+  const { maxChars } = decisionExcerptWindow(excerpt);
+  const anchor =
+    engineSnippet === null
+      ? null
+      : locateSnippet(passage, stripSearchHighlightMarkup(engineSnippet));
 
-  return html.length === 0 ? engineSnippet : html;
+  if (anchor === null) {
+    // Nothing to anchor on: fall back to the window the query's own words
+    // find, which is unmarked when they are not in the passage either.
+    const { html } = highlightCorpusPassage({
+      passage,
+      tokens,
+      language,
+      maxChars,
+    });
+    return html.length === 0 ? engineSnippet : html;
+  }
+
+  const window = growAroundSnippet(passage, anchor, maxChars);
+  const text = passage.slice(window.start, window.end);
+  const marked = markCorpusFragment({ text, tokens, language });
+  if (marked.includes("<mark>")) {
+    return marked;
+  }
+
+  // The matcher found none of the query's words — the engine matched through
+  // an expansion it does not reproduce. Its own marks are the answer.
+  return markAtSnippet({
+    engineSnippet: engineSnippet ?? "",
+    snippetStart: anchor.start - window.start,
+    text,
+  });
+};
+
+type MarkAtSnippetOptions = {
+  engineSnippet: string;
+  /** Where the snippet's text begins inside `text`. */
+  snippetStart: number;
+  text: string;
+};
+
+/** `text`, escaped, carrying the engine's marks at the snippet's position. */
+const markAtSnippet = ({
+  engineSnippet,
+  snippetStart,
+  text,
+}: MarkAtSnippetOptions): string => {
+  let html = "";
+  let cursor = 0;
+  for (const range of engineMarkRanges(engineSnippet)) {
+    const start = snippetStart + range.start;
+    const end = snippetStart + range.end;
+    if (start < cursor || end > text.length) {
+      continue;
+    }
+    html += escapeSearchHtml(text.slice(cursor, start));
+    html += `<mark>${escapeSearchHtml(text.slice(start, end))}</mark>`;
+    cursor = end;
+  }
+  return html + escapeSearchHtml(text.slice(cursor));
 };

@@ -1647,7 +1647,7 @@ export const searchCorpusIndexDecisions = async (
         corpusExcerpt({
           engineSnippet: extractCorpusSnippet(snippet),
           excerpt,
-          language: excerptFields.stemming,
+          language: excerptFields.stemming?.language ?? null,
           passage: hit["text"],
           tokens: excerptTokens,
         }),

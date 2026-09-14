@@ -10,7 +10,10 @@ import {
   usesEngineSnippet,
 } from "@/api/lib/case-law/decision-excerpt";
 import { tokenizeCorpusFreeText } from "@/api/lib/legal-search/corpus-query";
-import { TS_HEADLINE_CONFIG } from "@/api/lib/search/highlight";
+import {
+  stripSearchHighlightMarkup,
+  TS_HEADLINE_CONFIG,
+} from "@/api/lib/search/highlight";
 
 describe("how much of a passage each excerpt length shows", () => {
   // The reader asked for a longer excerpt, so every step has to actually be
@@ -78,17 +81,22 @@ describe("the excerpt a corpus hit shows", () => {
     "povinnost porušena z nedbalosti. Rozsah náhrady určuje soud podle " +
     "okolností případu, přičemž přihlíží k míře zavinění na straně škůdce i " +
     "poškozeného. Nárok na náhradu škody se promlčuje v obecné promlčecí " +
-    "lhůtě, která počíná běžet ode dne, kdy se poškozený dozvěděl o škodě a " +
-    "o tom, kdo za ni odpovídá.";
-  const ENGINE = "<mark>náhrada</mark> škody přísluší";
-  const cut = (excerpt: Parameters<typeof corpusExcerpt>[0]["excerpt"]) =>
+    "lhůtě, která počíná běžet ode dne, kdy se poškozený dozvěděl o škodě.";
+  // A run the engine returned, marked as the engine marks it.
+  const ENGINE = "<mark>náhrada</mark> škody přísluší poškozenému";
+  const tokens = tokenizeCorpusFreeText("náhrada škody");
+  const cut = (
+    excerpt: Parameters<typeof corpusExcerpt>[0]["excerpt"],
+    over: Partial<Parameters<typeof corpusExcerpt>[0]> = {},
+  ) =>
     corpusExcerpt({
       engineSnippet: ENGINE,
       excerpt,
       language: null,
       passage: PASSAGE,
-      tokens: tokenizeCorpusFreeText("náhrada škody"),
-    });
+      tokens,
+      ...over,
+    }) ?? "";
 
   // The default page is the one every reader already sees; a cut of our own
   // there would redraw the whole corpus to fix nothing.
@@ -96,14 +104,93 @@ describe("the excerpt a corpus hit shows", () => {
     expect(cut("short")).toBe(ENGINE);
   });
 
-  test("a longer length is cut wider and still marks the query's words", () => {
-    const medium = cut("medium") ?? "";
-    const long = cut("long") ?? "";
+  test("a longer length is wider and still marks the query's words", () => {
+    const medium = cut("medium");
+    const long = cut("long");
 
     expect(medium).not.toBe(ENGINE);
     expect(medium).toContain("<mark>");
     expect(long).toContain("<mark>");
     expect(long.length).toBeGreaterThan(medium.length);
+  });
+
+  // The window is the engine's account of the match with more around it, not
+  // a window the client-side matcher chose for itself.
+  test("the wider window is anchored on what the engine matched", () => {
+    const widened = stripSearchHighlightMarkup(cut("long"));
+
+    expect(widened).toContain(stripSearchHighlightMarkup(ENGINE));
+    // Grown on both sides: the sentence the match sits in, not the text that
+    // merely follows it.
+    expect(widened.indexOf("náhrada škody přísluší")).toBeGreaterThan(0);
+  });
+
+  test("the window is cut on word boundaries", () => {
+    const widened = stripSearchHighlightMarkup(cut("medium"));
+
+    expect(PASSAGE).toContain(widened);
+    for (const edge of [widened.slice(0, 1), widened.slice(-1)]) {
+      expect(edge).not.toBe(" ");
+    }
+  });
+
+  // The engine matched through stemming and expansion the client-side matcher
+  // does not reproduce. Its own marks are then the only account of why the row
+  // is there, and the column exists to give that account.
+  test("a match the matcher cannot re-find keeps the engine's marks", () => {
+    const widened = cut("long", {
+      engineSnippet: "v obecné <mark>promlčecí</mark> lhůtě",
+      tokens: tokenizeCorpusFreeText("promlčení"),
+    });
+
+    expect(widened).toContain("<mark>promlčecí</mark>");
+    expect(widened.length).toBeGreaterThan(
+      "v obecné <mark>promlčecí</mark> lhůtě".length,
+    );
+  });
+
+  // The engine returns the passage's words but not always its line breaks.
+  test("a snippet the engine re-wrapped is still located", () => {
+    const widened = cut("medium", {
+      engineSnippet: "<mark>náhrada</mark>  škody\n přísluší poškozenému",
+    });
+
+    expect(widened).toContain("<mark>");
+    expect(PASSAGE).toContain(stripSearchHighlightMarkup(widened));
+  });
+
+  // The counted case: nothing to anchor on and nothing the matcher can find,
+  // so the reader gets more of the passage without marks rather than being
+  // dropped back to the short window they were trying to leave.
+  test("a snippet absent from the passage leaves the wider window unmarked", () => {
+    const widened = cut("long", {
+      engineSnippet: "<mark>zcela</mark> jiná věta, která tam není",
+      tokens: tokenizeCorpusFreeText("bezdůvodné obohacení"),
+    });
+
+    expect(widened).not.toContain("<mark>");
+    expect(widened.length).toBeGreaterThan(0);
+    expect(PASSAGE).toContain(widened);
+  });
+
+  // The fold maps folded positions back onto the passage. Walked in code
+  // points rather than UTF-16 units, every offset past the first astral
+  // character would address the wrong place, and the window would be cut off
+  // by one unit per pair seen so far.
+  test("a re-wrapped snippet is located past an astral character", () => {
+    const passage =
+      "\u{10348} Soud dovodil, že náhrada škody přísluší poškozenému v rozsahu, " +
+      "v jakém byla škoda způsobena porušením právní povinnosti podle zákona.";
+    const widened = corpusExcerpt({
+      engineSnippet: "<mark>náhrada</mark>  škody\n přísluší",
+      excerpt: "medium",
+      language: null,
+      passage,
+      tokens,
+    });
+
+    expect(passage).toContain(stripSearchHighlightMarkup(widened ?? ""));
+    expect(widened).toContain("<mark>");
   });
 
   // A reader who asked for more text is answered with the text there was,
@@ -113,33 +200,6 @@ describe("the excerpt a corpus hit shows", () => {
     ["a passage the index stored empty", ""],
     ["a passage of the wrong shape", 42],
   ])("falls back to the engine's snippet for %s", (_label, passage) => {
-    expect(
-      corpusExcerpt({
-        engineSnippet: ENGINE,
-        excerpt: "long",
-        language: null,
-        passage,
-        tokens: tokenizeCorpusFreeText("náhrada škody"),
-      }),
-    ).toBe(ENGINE);
-  });
-
-  // The engine matched this passage through stemming and expansion, which the
-  // cutter does not reproduce, so it can fail to locate the words here. The
-  // passage is still the one that matched: the reader asked for more of it and
-  // gets more of it, unmarked, rather than being dropped back to the short
-  // window they were trying to leave.
-  test("a passage whose words cannot be located is still widened", () => {
-    const widened =
-      corpusExcerpt({
-        engineSnippet: ENGINE,
-        excerpt: "long",
-        language: null,
-        passage: PASSAGE,
-        tokens: tokenizeCorpusFreeText("promlčení"),
-      }) ?? "";
-
-    expect(widened).not.toBe(ENGINE);
-    expect(widened.length).toBeGreaterThan(ENGINE.length);
+    expect(cut("long", { passage })).toBe(ENGINE);
   });
 });
