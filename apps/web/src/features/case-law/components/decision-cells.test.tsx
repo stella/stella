@@ -89,6 +89,19 @@ describe("a cut headnote can be read whole", () => {
     expect(markup.slice(markup.indexOf("</p>"))).not.toContain(CLAMP);
   });
 
+  test("the publisher's numbered points keep their own lines", () => {
+    // A headnote written as points is three statements, not one sentence
+    // saying three things; the cell has to draw the breaks the API kept.
+    const points = "I. Prvni bod.\nII. Druhy bod.\nIII. Treti bod.";
+    const markup = prose({
+      truncated: false,
+      view: { text: points, type: HEADNOTE_VIEW.WHOLE },
+    });
+
+    expect(markup).toContain("whitespace-pre-line");
+    expect(markup).toContain(points);
+  });
+
   test("a read that failed says so and offers another try", () => {
     const markup = prose({
       truncated: true,

@@ -541,6 +541,11 @@ export const HeadnoteProse = ({
         as="p"
         className={cn(
           SUMMARY_TEXT_CLASS_NAME,
+          // The publisher's own line breaks: a headnote written as numbered
+          // points reads as one self-contradicting sentence without them. The
+          // clamp still counts rendered lines, so a break costs one of the
+          // two a compact row shows.
+          "whitespace-pre-line",
           // A row the reader opened is read, not scanned: the density control
           // still governs every other row on the page.
           showingWhole ? "" : decisionClampClassName(contentMode),

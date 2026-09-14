@@ -179,6 +179,18 @@ test("both readings still strip the whitespace the set does cover", async () => 
   expect(await readMetadataSummary(metadata)).toBe("Právní věta");
 });
 
+test("both readings hand on the publisher's own line breaks", async () => {
+  // Neither reading collapses the inside of a value: the trim is at the ends
+  // only, and the breaks between a headnote's numbered points travel to
+  // `normalizeDecisionHeadnote`, which is the one place that decides how they
+  // read. A reading that flattened them here would take that decision away.
+  const metadata = { legalSentence: " I. Prvni bod.\n\nII. Druhy bod. " };
+  const expected = "I. Prvni bod.\n\nII. Druhy bod.";
+
+  expect(publisherSummaryOf({ documentAst: null, metadata })).toBe(expected);
+  expect(await readMetadataSummary(metadata)).toBe(expected);
+});
+
 test("both readings preserve whitespace outside the shared trim set", async () => {
   const metadata = { legalSentence: "\u00a0" };
 

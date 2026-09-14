@@ -76,7 +76,9 @@ export const decisionHeadnoteLine = (
 ): string => {
   switch (headnote.type) {
     case TEXT_FIELD_TYPE.PRESENT:
-      return headnote.text;
+      // The publisher's own breaks are a rendering: a consumer that has only
+      // one line reads the points as a sentence rather than losing them.
+      return headnote.text.replaceAll("\n", " ");
     case DECISION_HEADNOTE_KEYWORDS:
       return headnote.items.join(DECISION_KEYWORD_SEPARATOR);
     case TEXT_FIELD_TYPE.ABSENT:
