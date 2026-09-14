@@ -10,6 +10,7 @@ import {
   stripStamp,
 } from "@/api/lib/docx-stamp";
 import { scrubDocumentProperties } from "@/api/lib/files/document-properties";
+import { LIMITS } from "@/api/lib/limits";
 
 // ── Helpers ─────────────────────────────────────────────
 
@@ -280,6 +281,8 @@ describe("injectStamp", () => {
     });
 
     const stamped = await injectStamp(docx, stamp, code, baseUrl);
+    const bookmarkIds = new Set<string>();
+    const bookmarkNames = new Set<string>();
 
     for (const footerNumber of [1, 2, 3, 4]) {
       const footer = await readZipFile(
@@ -289,7 +292,58 @@ describe("injectStamp", () => {
       expect(footer).toContain(stamp);
       expect(footer).toContain(`stl:${code}`);
       expect(footer?.match(/stella_dms_ref/gu)).toHaveLength(1);
+      const bookmarkId = /<w:bookmarkStart\b[^>]*w:id="(?<id>\d+)"/u.exec(
+        footer ?? "",
+      )?.groups?.["id"];
+      const bookmarkName =
+        /<w:bookmarkStart\b[^>]*w:name="(?<name>stella_dms_ref_\d+)"/u.exec(
+          footer ?? "",
+        )?.groups?.["name"];
+      expect(bookmarkId).toBeDefined();
+      expect(bookmarkName).toBeDefined();
+      if (bookmarkId !== undefined) {
+        bookmarkIds.add(bookmarkId);
+      }
+      if (bookmarkName !== undefined) {
+        bookmarkNames.add(bookmarkName);
+      }
     }
+    expect(bookmarkIds).toHaveLength(4);
+    expect(bookmarkNames).toHaveLength(4);
+  });
+
+  test("rejects an unbounded number of referenced footer parts", async () => {
+    const footerCount = LIMITS.docxStampFooterPartsMax + 1;
+    const footerRelType =
+      "http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer";
+    const footerReferences = Array.from(
+      { length: footerCount },
+      (_, index) =>
+        `<w:footerReference w:type="default" r:id="rId${String(index)}"/>`,
+    );
+    const relationships = Array.from(
+      { length: footerCount },
+      (_, index) =>
+        `<Relationship Id="rId${String(index)}" Type="${footerRelType}" Target="footer${String(index)}.xml"/>`,
+    );
+    const docx = await makeDocx({
+      documentXml: [
+        `<w:document xmlns:w="${W_NS}" xmlns:r="${R_NS}">`,
+        "<w:body><w:sectPr>",
+        ...footerReferences,
+        "</w:sectPr></w:body></w:document>",
+      ].join("\n"),
+      docRels: [
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">',
+        ...relationships,
+        "</Relationships>",
+      ].join("\n"),
+    });
+
+    expect(injectStamp(docx, stamp, code, baseUrl)).rejects.toMatchObject({
+      _tag: "DocxStampError",
+      reason: "too-many-footer-parts",
+    });
   });
 
   test("idempotent: updates existing stella stamp", async () => {

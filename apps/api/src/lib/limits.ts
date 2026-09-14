@@ -568,6 +568,8 @@ export const LIMITS = {
   chatSendHistoryWindowMax: 500,
   /** Max DOCX size for stamp injection (bytes). */
   docxStampMaxBytes: 50 * 1024 * 1024,
+  /** Max distinct footer parts one DOCX stamp operation may update. */
+  docxStampFooterPartsMax: 64,
   /** Max org-wide custom blacklist terms for anonymization. */
   anonymizationBlacklistEntriesPerOrganization: 1000,
   /** Max workspace-scoped custom blacklist terms for anonymization. */
