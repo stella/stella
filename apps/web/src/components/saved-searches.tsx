@@ -36,6 +36,7 @@ import { Input } from "@stll/ui/input";
 import type { OverlayLayer } from "@stll/ui/overlay-layer";
 import { stellaToast } from "@stll/ui/toast";
 import { contentDir } from "@stll/ui/use-content-dir";
+import { cn } from "@stll/ui/utils";
 
 import {
   canSaveSearch,
@@ -43,6 +44,12 @@ import {
   shouldShowSavedSearchList,
   toSavedSearchCriteria,
 } from "@/components/saved-searches.logic";
+import {
+  SEARCH_MENU_HEADING_CLASS_NAME,
+  SEARCH_MENU_LIST_CLASS_NAME,
+  SEARCH_MENU_ROW_CLASS_NAME,
+  SEARCH_MENU_SECTION_CLASS_NAME,
+} from "@/components/search-dialog.shared";
 import type { SearchFilters } from "@/components/search-filters.logic";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useAnalytics } from "@/lib/analytics/provider";
@@ -254,11 +261,11 @@ export const SavedSearches = ({
       )}
 
       {shouldShowList && (
-        <section className="px-4 pt-4">
-          <h3 className="text-muted-foreground mb-2 text-xs font-medium">
+        <section className={SEARCH_MENU_SECTION_CLASS_NAME}>
+          <h3 className={SEARCH_MENU_HEADING_CLASS_NAME}>
             {t("search.savedSearches")}
           </h3>
-          <div className="space-y-1">
+          <div className={SEARCH_MENU_LIST_CLASS_NAME}>
             {savedSearchesQuery.isPending && (
               <div className="flex h-11 items-center px-2">
                 <LoaderIcon className="text-muted-foreground size-4 animate-spin" />
@@ -281,7 +288,7 @@ export const SavedSearches = ({
             {savedSearches?.map((savedSearch) => (
               <div className="flex min-w-0 items-center" key={savedSearch.id}>
                 <Button
-                  className="h-11 min-w-0 flex-1 justify-start gap-2 px-2 text-start text-sm"
+                  className={cn(SEARCH_MENU_ROW_CLASS_NAME, "w-auto flex-1")}
                   data-search-empty-row=""
                   onClick={() => onApply(savedSearch.criteria)}
                   variant="ghost"

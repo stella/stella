@@ -21,6 +21,10 @@ import { CommandItem } from "@stll/ui/command";
 import { DocumentIcon } from "@/components/document-icon";
 import { MatterIcon } from "@/components/matter-icon";
 import {
+  SEARCH_MENU_HEADING_CLASS_NAME,
+  SEARCH_MENU_LIST_CLASS_NAME,
+  SEARCH_MENU_ROW_CLASS_NAME,
+  SEARCH_MENU_SECTION_CLASS_NAME,
   compactMeta,
   KIND_TRANSLATION_KEYS,
 } from "@/components/search-dialog.shared";
@@ -87,7 +91,7 @@ export const CommandActionItem = ({
     case "command":
       return (
         <CommandItem
-          className="min-h-11 w-full gap-2 px-2 py-2 text-start text-sm"
+          className={SEARCH_MENU_ROW_CLASS_NAME}
           data-command-action-id={action.id}
           data-command-action-index={navigation.index}
           index={navigation.index}
@@ -100,7 +104,7 @@ export const CommandActionItem = ({
     case "button":
       return (
         <Button
-          className="h-auto min-h-11 w-full justify-start gap-2 px-2 py-2 text-start text-sm"
+          className={SEARCH_MENU_ROW_CLASS_NAME}
           data-command-action-id={action.id}
           data-search-empty-row=""
           onClick={() => onSelect(action.id)}
@@ -285,16 +289,16 @@ export const SearchRecents = ({
     );
   }
   return (
-    <div className="space-y-5 px-4 py-4">
+    <>
       {recentSearches.length > 0 && (
-        <section>
-          <h3 className="text-muted-foreground mb-2 text-xs font-medium">
+        <section className={SEARCH_MENU_SECTION_CLASS_NAME}>
+          <h3 className={SEARCH_MENU_HEADING_CLASS_NAME}>
             {t("search.recentSearches")}
           </h3>
-          <div className="space-y-1">
+          <div className={SEARCH_MENU_LIST_CLASS_NAME}>
             {recentSearches.map((recent) => (
               <Button
-                className="h-auto w-full justify-start gap-2 px-2 py-2 text-start text-sm"
+                className={SEARCH_MENU_ROW_CLASS_NAME}
                 data-search-empty-row=""
                 key={recent.query}
                 onClick={() => onSearchClick(recent)}
@@ -308,17 +312,17 @@ export const SearchRecents = ({
         </section>
       )}
       {recentFiles.length > 0 && (
-        <section>
-          <h3 className="text-muted-foreground mb-2 text-xs font-medium">
+        <section className={SEARCH_MENU_SECTION_CLASS_NAME}>
+          <h3 className={SEARCH_MENU_HEADING_CLASS_NAME}>
             {t("search.recentlyOpenedFiles")}
           </h3>
-          <div className="flex flex-col gap-y-1">
+          <div className={SEARCH_MENU_LIST_CLASS_NAME}>
             {recentFiles.map((file) => (
               <Button
                 aria-current={
                   previewedFileId === file.entityId ? "true" : undefined
                 }
-                className="h-auto! w-full justify-start gap-2 py-1 text-start text-sm"
+                className={SEARCH_MENU_ROW_CLASS_NAME}
                 data-previewing={previewedFileId === file.entityId}
                 data-search-empty-row=""
                 key={file.entityId}
@@ -355,7 +359,7 @@ export const SearchRecents = ({
           </div>
         </section>
       )}
-    </div>
+    </>
   );
 };
 

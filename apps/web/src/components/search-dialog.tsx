@@ -109,6 +109,9 @@ import {
   KIND_TRANSLATION_KEYS,
   mergeSelectedBuckets,
   SEARCH_PREVIEW_COLUMN_CLASS_NAME,
+  SEARCH_MENU_HEADING_CLASS_NAME,
+  SEARCH_MENU_LIST_CLASS_NAME,
+  SEARCH_MENU_SECTION_CLASS_NAME,
 } from "@/components/search-dialog.shared";
 import {
   canShowSearchSummary,
@@ -1870,11 +1873,11 @@ export const SearchDialog = ({
                       </div>
                       {scopeVisibility.actions &&
                         filteredActions.length > 0 && (
-                          <section className="shrink-0 px-4 py-4">
-                            <h3 className="text-muted-foreground mb-2 text-xs font-medium">
+                          <section className={SEARCH_MENU_SECTION_CLASS_NAME}>
+                            <h3 className={SEARCH_MENU_HEADING_CLASS_NAME}>
                               {t("common.actions")}
                             </h3>
-                            <div className="space-y-1">
+                            <div className={SEARCH_MENU_LIST_CLASS_NAME}>
                               {actionEntries.map((entry, index) => (
                                 <CommandActionItem
                                   entry={entry}
