@@ -84,6 +84,7 @@ import {
   decisionRowsPhase,
   decisionsLoadMode,
   decisionsSearchOutage,
+  queryAnsweredByRows,
 } from "@/features/case-law/decisions-load-mode.logic";
 import type { DecisionRouteState } from "@/features/case-law/decisions-load-mode.logic";
 import {
@@ -663,6 +664,20 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
   const rows = decisionRowsPhase({ isLoading, isPlaceholderData, routeState });
   const isRefreshing = rows === "stale";
 
+  // The search the rows on screen answer, which lags the URL while their
+  // replacements are in flight. Held once here and handed to everything that
+  // reads a row, so a faded row's marks, its link and the source chip beside
+  // it cannot describe three different searches.
+  const [shownQuery, setShownQuery] = useState(search.q);
+  const rowsQuery = queryAnsweredByRows({
+    phase: rows,
+    requested: search.q,
+    shown: shownQuery,
+  });
+  if (shownQuery !== rowsQuery) {
+    setShownQuery(rowsQuery);
+  }
+
   // One page of the chain is on screen, never the chain itself: the pages
   // behind the reader are cursors kept for the links, not rows to draw.
   const walkedPageCount = data?.pages.length ?? 0;
@@ -737,7 +752,7 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
 
   // Picked rows narrow a run to them; the page they belong to is the only
   // page they mean anything on, so a step forward clears them.
-  const openDecision = useOpenDecisionInspector();
+  const openDecision = useOpenDecisionInspector(rowsQuery);
   const [selectedIds, setSelectedIds] =
     useState<readonly string[]>(EMPTY_SELECTION);
   const [selectionPage, setSelectionPage] = useState(pager.currentPage);
@@ -966,7 +981,7 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
               layout={layout}
               onLayoutChange={setLayout}
               onSelectedIdsChange={setSelectedIds}
-              query={search.q}
+              query={rowsQuery}
               questions={questions.surface}
               selectedIds={selectedIds}
             />

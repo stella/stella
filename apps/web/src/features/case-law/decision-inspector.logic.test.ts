@@ -51,7 +51,7 @@ describe("opening a results row in the inspector", () => {
   // A cited passage opens the same tab as the row, scrolled to the anchor,
   // rather than a second tab for the same decision.
   test("a cited passage names the anchor and nothing else changes", () => {
-    const target = decisionTabTarget(decision, "p-12");
+    const target = decisionTabTarget(decision, { anchorId: "p-12" });
 
     expect(target.anchorId).toBe("p-12");
     expect(createCaseDecisionViewTab(target).id).toBe(

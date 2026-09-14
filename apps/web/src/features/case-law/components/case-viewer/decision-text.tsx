@@ -32,6 +32,7 @@ import {
   InlineContent,
   buildDocumentAstSearchPieces,
   buildFulltextSearchPieces,
+  firstMatchIndexInPassage,
   rangesForPiece,
 } from "@/components/legal-reader/document-ast-text";
 import type { TextAnchor } from "@/components/legal-reader/document-ast-text";
@@ -79,6 +80,12 @@ type DecisionTextProps = {
   /** Resolved citations whose mentions in the text become links. */
   citationAnchors?: readonly CitationAnchorSource[] | undefined;
   decision: Decision;
+  /**
+   * The block the reader was sent to, from a results row or a citation. It
+   * keeps a marker while the reader is on it, and the find lands on its first
+   * match rather than on the document's first.
+   */
+  landingAnchorId?: string | undefined;
   onAnnotationActivate?: ((annotationId: string) => void) | undefined;
   onMatchCountChange?: ((count: number) => void) | undefined;
   /** Applied provisions whose statute is held, for inline links. */
@@ -88,6 +95,9 @@ type DecisionTextProps = {
   /** Work citations, including references with no provision locator. */
   statuteCitationAnchors?: readonly DecisionStatuteCitationAnchor[] | undefined;
 };
+
+/** No match is the find's own: nothing carries the active mark. */
+const NO_ACTIVE_MATCH = -1;
 
 const SUPPLEMENT_LEGAL_SENTENCE_ID = "supplement-legal-sentence";
 const SUPPLEMENT_ABSTRACT_ID = "supplement-abstract";
@@ -567,6 +577,7 @@ const renderBlocksWithHoldingZone = ({
   anchorsByPieceId,
   apparatusLabel,
   blocks,
+  landingAnchorId,
   rangesByPieceId,
   sectionMap,
 }: {
@@ -575,6 +586,7 @@ const renderBlocksWithHoldingZone = ({
   /** Translated label for the folded reporter-apparatus disclosure. */
   apparatusLabel: string;
   blocks: Block[];
+  landingAnchorId: string | undefined;
   rangesByPieceId: Record<string, SearchMatchRange[]>;
   sectionMap?: Map<string, { cssVar: string; headingId: string }> | undefined;
 }): ReactNode[] => {
@@ -645,6 +657,7 @@ const renderBlocksWithHoldingZone = ({
                 anchorsByPieceId={anchorsByPieceId}
                 block={block}
                 key={block.id}
+                landing={block.anchorId === landingAnchorId}
                 noteBackJumpTo={backJumpAnchorByLastId.get(block.id)}
                 noteHead={footnoteHeadIds.has(block.id)}
                 rangesByPieceId={rangesByPieceId}
@@ -678,6 +691,7 @@ export const DecisionText = ({
   annotationAnchors = NO_ANNOTATION_ANCHORS,
   citationAnchors = NO_CITATION_ANCHORS,
   decision,
+  landingAnchorId,
   onAnnotationActivate,
   onMatchCountChange,
   provisionAnchors = NO_PROVISION_ANCHORS,
@@ -755,19 +769,55 @@ export const DecisionText = ({
     query: searchQuery,
   });
 
+  // Where the reader is sent: the landing passage's own first match while
+  // they are still on it, the find's position once they move. The two can
+  // never disagree, because the caller drops the landing the moment the
+  // reader jumps anywhere else.
+  //
+  // A landing passage the query does not reach activates nothing rather than
+  // falling back to the find's position. The anchor a question's source chip
+  // carries was chosen by the answer, not by the query, so the query may well
+  // match somewhere else entirely; pulling the reader there would answer a
+  // question they did not ask.
+  const landingMatchIndex =
+    landingAnchorId === undefined
+      ? null
+      : firstMatchIndexInPassage({
+          anchorId: landingAnchorId,
+          blocks: visibleBlocks,
+          rangesByPieceId: searchResults.rangesByPieceId,
+        });
+  const shownMatchIndex =
+    landingAnchorId === undefined
+      ? activeMatchIndex
+      : (landingMatchIndex ?? NO_ACTIVE_MATCH);
+
   useExternalSyncEffect(() => {
     onMatchCountChange?.(searchResults.matchCount);
   }, [onMatchCountChange, searchResults.matchCount]);
 
   useExternalSyncEffect(() => {
-    if (searchQuery.trim().length === 0 || searchResults.matchCount === 0) {
+    const article = articleRef.current;
+    if (!article) {
       return;
     }
 
-    const activeMatch = articleRef.current?.querySelector<HTMLElement>(
-      `[data-reader-match-index="${activeMatchIndex}"]`,
-    );
-    if (!activeMatch) {
+    // The match wins where there is one; a landing passage the query does not
+    // reach is still where the reader asked to be.
+    const match =
+      shownMatchIndex === NO_ACTIVE_MATCH
+        ? null
+        : article.querySelector<HTMLElement>(
+            `[data-reader-match-index="${String(shownMatchIndex)}"]`,
+          );
+    const target =
+      match ??
+      (landingAnchorId === undefined
+        ? null
+        : article.querySelector<HTMLElement>(
+            `[data-anchor="${CSS.escape(landingAnchorId)}"]`,
+          ));
+    if (!target) {
       return;
     }
 
@@ -775,19 +825,19 @@ export const DecisionText = ({
     // <details> stays closed, and scrolling to a hidden descendant reveals
     // nothing: open every enclosing disclosure first.
     for (
-      let disclosure = activeMatch.closest("details");
+      let disclosure = target.closest("details");
       disclosure !== null;
       disclosure = disclosure.parentElement?.closest("details") ?? null
     ) {
       disclosure.open = true;
     }
 
-    activeMatch.scrollIntoView({
+    target.scrollIntoView({
       behavior: "smooth",
       block: "center",
       inline: "nearest",
     });
-  }, [activeMatchIndex, searchQuery, searchResults.matchCount]);
+  }, [landingAnchorId, searchQuery, searchResults.matchCount, shownMatchIndex]);
 
   // One return, so the attribution line cannot be forgotten on the branch
   // somebody adds next: it is required wherever a decision is rendered,
@@ -821,7 +871,7 @@ export const DecisionText = ({
             </div>
           )}
           <DecisionReference
-            activeMatchIndex={activeMatchIndex}
+            activeMatchIndex={shownMatchIndex}
             ranges={rangesForPiece(
               searchResults.rangesByPieceId,
               DECISION_REFERENCE_ID,
@@ -829,7 +879,7 @@ export const DecisionText = ({
             text={`${decision.court}, ${displayRef}`}
           />
           <EditorialSupplement
-            activeMatchIndex={activeMatchIndex}
+            activeMatchIndex={shownMatchIndex}
             annotationAnchors={
               hydrated ? annotationAnchors : NO_ANNOTATION_ANCHORS
             }
@@ -837,7 +887,7 @@ export const DecisionText = ({
             textFields={decision.textFields}
           />
           {renderBlocksWithHoldingZone({
-            activeMatchIndex,
+            activeMatchIndex: shownMatchIndex,
             apparatusLabel: t("caseLaw.reader.headMatter"),
             anchorsByPieceId: buildAnchorsByPieceId({
               annotations: hydrated ? annotationAnchors : NO_ANNOTATION_ANCHORS,
@@ -849,6 +899,7 @@ export const DecisionText = ({
                 : NO_STATUTE_CITATION_ANCHORS,
             }),
             blocks: visibleBlocks,
+            landingAnchorId,
             rangesByPieceId: searchResults.rangesByPieceId,
             sectionMap,
           })}
@@ -869,7 +920,7 @@ export const DecisionText = ({
           }}
         >
           <DecisionReference
-            activeMatchIndex={activeMatchIndex}
+            activeMatchIndex={shownMatchIndex}
             ranges={rangesForPiece(
               searchResults.rangesByPieceId,
               DECISION_REFERENCE_ID,
@@ -877,7 +928,7 @@ export const DecisionText = ({
             text={`${decision.court}, ${displayRef}`}
           />
           <EditorialSupplement
-            activeMatchIndex={activeMatchIndex}
+            activeMatchIndex={shownMatchIndex}
             annotationAnchors={
               hydrated ? annotationAnchors : NO_ANNOTATION_ANCHORS
             }
@@ -885,7 +936,7 @@ export const DecisionText = ({
             textFields={decision.textFields}
           />
           <FulltextFallback
-            activeMatchIndex={activeMatchIndex}
+            activeMatchIndex={shownMatchIndex}
             anchorsByPieceId={buildAnnotationAnchors(
               hydrated ? annotationAnchors : NO_ANNOTATION_ANCHORS,
             )}

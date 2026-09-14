@@ -31,6 +31,7 @@ import type { SafeId } from "@/lib/safe-id";
 type AuthenticatedCaseLawWorkspaceProps = {
   decision: ComponentProps<typeof DecisionWorkspace>["decision"];
   decisionId: SafeId<"caseLawDecision">;
+  initialAnchorId?: string | undefined;
   initialSearchQuery?: string | undefined;
   user: AuthenticatedUser;
 };
@@ -38,6 +39,7 @@ type AuthenticatedCaseLawWorkspaceProps = {
 export const AuthenticatedCaseLawWorkspace = ({
   decision,
   decisionId,
+  initialAnchorId,
   initialSearchQuery,
   user,
 }: AuthenticatedCaseLawWorkspaceProps) => (
@@ -49,6 +51,7 @@ export const AuthenticatedCaseLawWorkspace = ({
             <AuthenticatedDecisionWorkspace
               decision={decision}
               decisionId={decisionId}
+              initialAnchorId={initialAnchorId}
               initialSearchQuery={initialSearchQuery}
             />
           </div>
@@ -62,10 +65,11 @@ export const AuthenticatedCaseLawWorkspace = ({
 const AuthenticatedDecisionWorkspace = ({
   decision,
   decisionId,
+  initialAnchorId,
   initialSearchQuery,
 }: Pick<
   AuthenticatedCaseLawWorkspaceProps,
-  "decision" | "decisionId" | "initialSearchQuery"
+  "decision" | "decisionId" | "initialAnchorId" | "initialSearchQuery"
 >) => {
   const { ensureAIAvailable } = useAIKeyGate();
 
@@ -75,6 +79,7 @@ const AuthenticatedDecisionWorkspace = ({
       decision={decision}
       decisionId={decisionId}
       ensureAIAvailable={ensureAIAvailable}
+      initialAnchorId={initialAnchorId}
       initialSearchQuery={initialSearchQuery}
     />
   );

@@ -106,3 +106,29 @@ export const decisionsSearchOutage = ({
   loaded,
 }: DecisionsSearchOutageInput): boolean =>
   isQueryOutage || (!hasPages && loaded === DECISIONS_SEARCH_STATE.unavailable);
+
+type QueryAnsweredByRowsInput = {
+  phase: DecisionRowsPhase;
+  /** What the URL asks for now. */
+  requested: string | undefined;
+  /** The term the rows currently on screen were drawn for. */
+  shown: string | undefined;
+};
+
+/**
+ * The query the rows on screen answer.
+ *
+ * Stale rows were drawn for the search before this one while the URL has
+ * already moved on, so the term stays with the rows rather than with the URL:
+ * marking a row with words that did not find it, or opening it on them,
+ * describes a search the reader is not looking at yet. Every surface that
+ * reads a row takes this one value — the marks in its cells, the decision its
+ * link opens, the passage a question's source chip jumps to — so none of them
+ * can answer a different search than the row beside it.
+ */
+export const queryAnsweredByRows = ({
+  phase,
+  requested,
+  shown,
+}: QueryAnsweredByRowsInput): string | undefined =>
+  phase === "stale" ? shown : requested;

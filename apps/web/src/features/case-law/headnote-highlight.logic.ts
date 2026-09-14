@@ -11,52 +11,13 @@
  * headnote is publisher text: the one place an escaping mistake becomes an
  * injection. Segments cannot carry markup at all, because the renderer hands
  * every `text` to React as a child and React escapes it.
+ *
+ * Which words are marked, and where a token may match, is not decided here:
+ * the reader marks the same words inside the decision this row opens, so both
+ * read it from `@/components/legal-reader/query-marks`.
  */
 
-/**
- * Below this a token matches too much to mean anything: in an inflected
- * language two letters are a preposition or a case ending, and marking every
- * occurrence of one reads as noise rather than as an answer.
- */
-export const MIN_HIGHLIGHT_TOKEN_LENGTH = 3;
-
-const WORD_CHARACTER = /[\p{L}\p{N}_]/u;
-
-const NON_WORD_RUN = /[^\p{L}\p{N}_]+/gu;
-
-/**
- * The character at an index, or nothing past either end. Not `.at()`: a
- * negative index there wraps to the end of the string, which would read the
- * last character of the text as the one before its first and refuse every
- * match at position zero.
- */
-const characterAt = (text: string, index: number): string | undefined =>
-  index < 0 || index >= text.length ? undefined : text.charAt(index);
-
-const isWordCharacter = (character: string | undefined): boolean =>
-  character !== undefined && WORD_CHARACTER.test(character);
-
-/**
- * The words of a query worth marking, lowercased and without repeats.
- * Punctuation is a separator, so the quotes a reader types around a phrase
- * never become part of a token.
- */
-export const queryHighlightTokens = (
-  query: string | undefined,
-): readonly string[] => {
-  if (query === undefined) {
-    return [];
-  }
-  const tokens: string[] = [];
-  for (const word of query.replace(NON_WORD_RUN, " ").split(" ")) {
-    const token = word.toLowerCase();
-    if (token.length < MIN_HIGHLIGHT_TOKEN_LENGTH || tokens.includes(token)) {
-      continue;
-    }
-    tokens.push(token);
-  }
-  return tokens;
-};
+import { wordPrefixMatchEnd } from "@/components/legal-reader/query-marks";
 
 /**
  * A run of the original text, and whether the query asked for it. `start` is
@@ -67,35 +28,6 @@ export type HighlightSegment = {
   start: number;
   text: string;
   match: boolean;
-};
-
-/**
- * Where a token matches, as an index into the lowercased text: at the start of
- * a word only.
- *
- * A word-start rule is what keeps a three-letter token from lighting up the
- * middle of unrelated words, and letting the match run to the end of the word
- * is what makes it useful in an inflected language: "odpovědnost" marks
- * "odpovědnosti" whole, rather than marking a fragment and leaving a stray
- * ending behind. Prefix, not substring.
- */
-const matchEnd = (
-  lowered: string,
-  index: number,
-  tokens: readonly string[],
-): number | null => {
-  if (isWordCharacter(characterAt(lowered, index - 1))) {
-    return null;
-  }
-  const matched = tokens.some((token) => lowered.startsWith(token, index));
-  if (!matched) {
-    return null;
-  }
-  let end = index;
-  while (isWordCharacter(characterAt(lowered, end))) {
-    end += 1;
-  }
-  return end;
 };
 
 /**
@@ -127,7 +59,7 @@ export const highlightSegments = (
   let plainFrom = 0;
   let index = 0;
   while (index < text.length) {
-    const end = matchEnd(lowered, index, tokens);
+    const end = wordPrefixMatchEnd(lowered, index, tokens);
     if (end === null || end === index) {
       index += 1;
       continue;

@@ -70,6 +70,8 @@ type DecisionWorkspaceDecision = {
 type DecisionWorkspaceBaseProps = {
   decision: DecisionWorkspaceDecision;
   decisionId: SafeId<"caseLawDecision">;
+  /** The block the URL names, which the reader arrived at from a result row. */
+  initialAnchorId?: string | undefined;
   initialSearchQuery?: string | undefined;
 };
 
@@ -120,7 +122,7 @@ const NotesFilterAllIcon = ({ className }: { className?: string }) => (
 );
 
 export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
-  const { decision, decisionId, initialSearchQuery } = props;
+  const { decision, decisionId, initialAnchorId, initialSearchQuery } = props;
   const t = useTranslations();
   const ast = parseDocumentAst(decision.documentAst);
   // The case's citable name and year, for the legal copy modes. The title
@@ -306,7 +308,21 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
       ? analysisState.analysis
       : null;
 
+  // The passage the reader was sent to, marked for as long as they are on it.
+  // A jump anywhere else in the document is them leaving it, so the marker
+  // goes. A new decision starts the question over, and so does a new fragment
+  // on the same one: stepping back to `#p-1` from `#p-2` keeps this component
+  // mounted, so the decision alone cannot tell the two landings apart.
+  const landingRoute = `${decisionId}#${initialAnchorId ?? ""}`;
+  const [landingAnchorId, setLandingAnchorId] = useState(initialAnchorId);
+  const [landingFor, setLandingFor] = useState(landingRoute);
+  if (landingFor !== landingRoute) {
+    setLandingFor(landingRoute);
+    setLandingAnchorId(initialAnchorId);
+  }
+
   const jumpToAnchor = (anchorId: string) => {
+    setLandingAnchorId(undefined);
     const container = mainRef.current;
     const el = container?.querySelector<HTMLElement>(
       `#${CSS.escape(anchorId)}`,
@@ -465,6 +481,7 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
               if (anchorId === undefined) {
                 return;
               }
+              setLandingAnchorId(undefined);
               const el = container.querySelector<HTMLElement>(
                 `#${CSS.escape(anchorId)}`,
               );
@@ -608,6 +625,7 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
                 annotationAnchors={annotationAnchors}
                 citationAnchors={citationAnchors}
                 decision={decision}
+                landingAnchorId={landingAnchorId}
                 onAnnotationActivate={setActiveAnnotationId}
                 onMatchCountChange={setMatchCount}
                 provisionAnchors={provisionAnchors}

@@ -1,10 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
+import { queryHighlightTokens } from "@/components/legal-reader/query-marks";
 import {
   hasHighlight,
   highlightSegments,
-  MIN_HIGHLIGHT_TOKEN_LENGTH,
-  queryHighlightTokens,
 } from "@/features/case-law/headnote-highlight.logic";
 
 const marked = (text: string, query: string): readonly string[] =>
@@ -16,32 +15,6 @@ const joined = (text: string, query: string): string =>
   highlightSegments(text, queryHighlightTokens(query))
     .map((segment) => segment.text)
     .join("");
-
-describe("the words of a query worth marking", () => {
-  test("drops words shorter than the floor, which match too much to mean anything", () => {
-    expect(queryHighlightTokens("za to je odpovědnost")).toEqual([
-      "odpovědnost",
-    ]);
-    expect(MIN_HIGHLIGHT_TOKEN_LENGTH).toBe(3);
-  });
-
-  test("treats punctuation as a separator, so a refinement's quotes are not part of a token", () => {
-    expect(queryHighlightTokens('náhrada "dobré mravy"')).toEqual([
-      "náhrada",
-      "dobré",
-      "mravy",
-    ]);
-  });
-
-  test("reports each word once", () => {
-    expect(queryHighlightTokens("škoda Škoda ŠKODA")).toEqual(["škoda"]);
-  });
-
-  test("has nothing to mark for a query that is not there", () => {
-    expect(queryHighlightTokens(undefined)).toEqual([]);
-    expect(queryHighlightTokens("  ")).toEqual([]);
-  });
-});
 
 describe("marking the query's words inside a headnote", () => {
   test("marks the word the reader asked for", () => {
