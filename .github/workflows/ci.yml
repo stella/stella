@@ -713,6 +713,14 @@ jobs:
           BASE_REF: ${{ github.base_ref || 'main' }}
         run: bun scripts/check-cli-release-coupling.ts --base "origin/$BASE_REF"
 
+      - name: CLI contract changeset guard
+        if: >-
+          github.event_name == 'pull_request'
+          || github.event_name == 'merge_group'
+        env:
+          BASE_REF: ${{ github.base_ref || 'main' }}
+        run: bun scripts/check-cli-contract-changeset.ts --base "origin/$BASE_REF"
+
       - name: Release marketing freshness warning
         if: >-
           github.event_name == 'pull_request'
@@ -1217,6 +1225,10 @@ jobs:
       - name: Test CLI release coupling gate
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         run: bun test scripts/check-cli-release-coupling.test.ts
+
+      - name: Test CLI contract changeset guard
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        run: bun test scripts/check-cli-contract-changeset.test.ts
 
       - name: Test package scaffolder
         if: needs.ci-plan.outputs.package_checks_required == 'true'

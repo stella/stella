@@ -40,6 +40,8 @@ pre-push:
     # diffs. Skips silently on a branch that touches no released package.
     changeset:
       run: bun scripts/changeset-guard.ts --base origin/main
+    cli-contract:
+      run: bun scripts/check-cli-contract-changeset.ts --base origin/main
     secrets:
       # The hook's stdin carries the ref updates the push would publish; the
       # scanner scopes each gitleaks run to exactly those commits.
