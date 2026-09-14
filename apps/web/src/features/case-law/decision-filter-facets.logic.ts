@@ -127,7 +127,8 @@ export type DecisionFilterFacets = {
   language: readonly FacetSourceBucket[];
 };
 
-const isCourtTier = (value: string): value is CourtTier =>
+/** Whether a stored tier label is one the UI has a heading and a chip for. */
+export const isCourtTier = (value: string): value is CourtTier =>
   COURT_TIER_ORDER.some((tier) => tier === value);
 
 /**

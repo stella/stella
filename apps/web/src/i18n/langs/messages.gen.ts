@@ -601,6 +601,11 @@ type Messages = {
       "headnote": "Headnote";
       "summary": "Headnote / match";
     };
+    "corpusStatus": {
+      "courtCount": "{count, plural, one {# court} other {# courts}}";
+      "newLast24Hours": "{count} in the last 24 h";
+      "newLast7Days": "New in the last 7 days";
+    };
     "courtTiers": {
       "constitutional": "Constitutional courts";
       "other": "Other courts";
@@ -3233,10 +3238,6 @@ type Messages = {
     "searchLabel": "Search the legal database";
     "searchPlaceholder": "Case number, act number, ECLI or keywords";
     "signals": "Signals";
-    "tier": {
-      "constitutional": "Constitutional review";
-      "supreme": "Highest instance";
-    };
     "topCourts": "From the top courts";
     "tryIdentifier": "Try an identifier";
   };

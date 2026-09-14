@@ -598,6 +598,11 @@
       "headnote": "Sommaire",
       "summary": "Sommaire / passage trouvé"
     },
+    "corpusStatus": {
+      "courtCount": "{count, plural, one {# juridiction} other {# juridictions}}",
+      "newLast24Hours": "{count} depuis 24 h",
+      "newLast7Days": "Nouvelles depuis 7 jours"
+    },
     "courtTiers": {
       "constitutional": "Juridictions constitutionnelles",
       "other": "Autres juridictions",
@@ -3230,10 +3235,6 @@
     "searchLabel": "Rechercher dans la base juridique",
     "searchPlaceholder": "Numéro d'affaire, numéro de texte, ECLI ou mots-clés",
     "signals": "Signaux",
-    "tier": {
-      "constitutional": "Contrôle de constitutionnalité",
-      "supreme": "Dernière instance"
-    },
     "topCourts": "Des juridictions suprêmes",
     "tryIdentifier": "Essayez un identifiant"
   },

@@ -19,6 +19,7 @@ import { cn } from "@stll/ui/utils";
 
 import { HighlightedText } from "@/components/workspaces/table/find-highlight";
 import { parseDecisionDate } from "@/features/case-law/citation-format";
+import { CourtName } from "@/features/case-law/components/court-name";
 import { languageLabel } from "@/features/case-law/components/decision-language-select";
 import { preferredDecisionTarget } from "@/features/case-law/decision-cell-target.logic";
 import { decisionClampClassName } from "@/features/case-law/decision-columns.logic";
@@ -27,6 +28,7 @@ import type {
   DecisionContentMode,
   DecisionIdentityLineField,
 } from "@/features/case-law/decision-columns.logic";
+import type { CourtTier } from "@/features/case-law/decision-filter-facets.logic";
 import { decisionTabTarget } from "@/features/case-law/decision-inspector.logic";
 import type { DecisionTabTarget } from "@/features/case-law/decision-inspector.logic";
 import {
@@ -60,6 +62,13 @@ export type Decision = {
   slug?: string | null;
   ecli: string | null;
   court: string;
+  /**
+   * The court's short form, where the surface that built the row carries one;
+   * derived by the API, never here. Absent on a row that predates it.
+   */
+  courtAbbreviation?: string | null | undefined;
+  /** Where the court stands, which is how its abbreviation is drawn. */
+  courtTier?: CourtTier | undefined;
   country: string;
   /** The version this row stands for: the one that matched, for a search. */
   language: string;
@@ -125,8 +134,11 @@ export const CaseNumberCell = ({
   const matchedLanguage = normalizeCaseLawLanguageSegment(decision.language);
   const multilingual = languageAlternates.length > 1;
   const identity = context.identityLineFields
-    .map((field) => identityLineValue(field, decision, format))
-    .filter((value) => value !== null);
+    .map((field) => ({
+      field,
+      value: identityLineValue(field, decision, format),
+    }))
+    .filter(({ value }) => value !== null);
 
   return (
     <div>
@@ -150,8 +162,13 @@ export const CaseNumberCell = ({
       {identity.length > 0 && (
         // One line, always: identity is scanned down the column, and a court
         // name long enough to wrap would set the width of every row.
-        <p className="text-muted-foreground mt-0.5 max-w-80 truncate text-xs">
-          {identity.join(" · ")}
+        <p className="text-muted-foreground mt-0.5 flex max-w-80 items-center gap-x-1.5 truncate text-xs">
+          {identity.map(({ field, value }, index) => (
+            <Fragment key={field}>
+              {index > 0 && <span aria-hidden="true">·</span>}
+              {value}
+            </Fragment>
+          ))}
         </p>
       )}
       {multilingual &&
@@ -172,10 +189,16 @@ const identityLineValue = (
   field: DecisionIdentityLineField,
   decision: Decision,
   format: IntlFormatter,
-): string | null => {
+): ReactNode => {
   switch (field) {
     case "court":
-      return decision.court;
+      return (
+        <CourtName
+          abbreviation={decision.courtAbbreviation}
+          court={decision.court}
+          tier={decision.courtTier}
+        />
+      );
     case "date": {
       const date = formatDecisionDate(decision.decisionDate, format);
       return date === EMPTY_VALUE ? null : date;

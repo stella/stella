@@ -598,6 +598,11 @@
       "headnote": "خلاصة الحكم",
       "summary": "المبدأ القانوني / الموضع المطابق"
     },
+    "corpusStatus": {
+      "courtCount": "{count, plural, zero {لا محاكم} one {محكمة واحدة} two {محكمتان} few {# محاكم} many {# محكمة} other {# محكمة}}",
+      "newLast24Hours": "{count} خلال آخر 24 ساعة",
+      "newLast7Days": "الجديد خلال آخر 7 أيام"
+    },
     "courtTiers": {
       "constitutional": "المحاكم الدستورية",
       "other": "المحاكم الأخرى",
@@ -3230,10 +3235,6 @@
     "searchLabel": "البحث في قاعدة البيانات القانونية",
     "searchPlaceholder": "رقم القضية أو رقم التشريع أو ECLI أو كلمات مفتاحية",
     "signals": "إشارات",
-    "tier": {
-      "constitutional": "الرقابة الدستورية",
-      "supreme": "أعلى درجة"
-    },
     "topCourts": "من المحاكم العليا",
     "tryIdentifier": "جرّب معرّفًا"
   },

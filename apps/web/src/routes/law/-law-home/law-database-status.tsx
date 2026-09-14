@@ -11,6 +11,12 @@ import {
 import { cn } from "@stll/ui/utils";
 
 import { caseLawCountryName } from "@/features/case-law/components/case-law-search";
+import { CourtName } from "@/features/case-law/components/court-name";
+import {
+  COURT_TIER_LABEL_KEYS,
+  type CourtTier,
+  isCourtTier,
+} from "@/features/case-law/decision-filter-facets.logic";
 import { caseLawCorpusStatusOptions } from "@/features/case-law/queries/decisions";
 import { useFormatter } from "@/i18n/formatting-context";
 import {
@@ -26,15 +32,23 @@ import {
  */
 const UP_TO_DATE_WINDOW_SECONDS = 7 * 24 * 60 * 60;
 
+type CorpusStatus = Awaited<
+  ReturnType<
+    NonNullable<ReturnType<typeof caseLawCorpusStatusOptions>["queryFn"]>
+  >
+>;
+/** One line of the breakdown: a named court, or a whole tier of them. */
+type CourtRow = CorpusStatus["courts"][number];
+
 /**
  * The corpus's freshness, where the chat's status row keeps its meter: a
  * dot and one phrase. Pressing it opens the numbers the phrase stands for:
- * how much of this jurisdiction the corpus holds, and when it last changed.
- * They were a hover tooltip, which a touch reader never sees. The dot is
- * green only while the newest change is inside the window; a stale corpus
- * says when it last changed instead of claiming to be current. Nothing is
- * shown until the status is known; a dot that cannot say when would be a
- * decoration.
+ * how much of this jurisdiction the corpus holds, when it last changed, and
+ * which courts that is. They were a hover tooltip, which a touch reader never
+ * sees. The dot is green only while the newest change is inside the window; a
+ * stale corpus says when it last changed instead of claiming to be current.
+ * Nothing is shown until the status is known; a dot that cannot say when
+ * would be a decoration.
  */
 export const LawDatabaseStatus = ({ country }: { country: string }) => {
   const t = useTranslations();
@@ -70,7 +84,11 @@ export const LawDatabaseStatus = ({ country }: { country: string }) => {
               date: formatRelativeTime(updatedAt),
             })}
       </PopoverTrigger>
-      <PopoverPanel align="end" side="bottom">
+      <PopoverPanel
+        align="end"
+        className="max-w-[min(28rem,90vw)]"
+        side="bottom"
+      >
         <PopoverTitle className="text-sm font-medium">
           {caseLawCountryName(format, country)}
         </PopoverTitle>
@@ -87,7 +105,144 @@ export const LawDatabaseStatus = ({ country }: { country: string }) => {
             </span>
           </dd>
         </dl>
+        {status.courts.length > 0 && <CourtBreakdown courts={status.courts} />}
       </PopoverPanel>
     </Popover>
   );
+};
+
+/**
+ * The same corpus court by court, grouped under the tier headings the facet
+ * rail already uses, so the two read as one classification of the same courts.
+ * Apex courts arrive by name; the API groups the wide tiers into one row each,
+ * because a jurisdiction has dozens of regional and district courts and a list
+ * of them is not what a reader came to the badge for.
+ */
+const CourtBreakdown = ({ courts }: { courts: readonly CourtRow[] }) => {
+  const t = useTranslations();
+  const byTier = groupByTier(courts);
+
+  return (
+    <div className="-mx-1 mt-3 overflow-x-auto">
+      <table className="w-full border-separate border-spacing-0 text-xs">
+        <thead>
+          <tr className="text-muted-foreground">
+            <th className="px-1 pb-1 text-start font-normal" scope="col">
+              {t("common.court")}
+            </th>
+            <th className="px-1 pb-1 text-end font-normal" scope="col">
+              {t("common.decisions")}
+            </th>
+            <th className="px-1 pb-1 text-end font-normal" scope="col">
+              {t("caseLaw.corpusStatus.newLast7Days")}
+            </th>
+            <th className="px-1 pb-1 text-end font-normal" scope="col">
+              {t("common.lastUpdated")}
+            </th>
+          </tr>
+        </thead>
+        {byTier.map(({ rows, tier }) => (
+          <tbody key={tier}>
+            <tr>
+              {/* `rowgroup`, not `colgroup`: the heading labels the court rows
+                  of its own `<tbody>`, and the table declares no column
+                  groups for a `colgroup` header to name. */}
+              <th
+                className="text-muted-foreground border-border border-t px-1 pt-2 pb-1 text-start font-medium"
+                colSpan={4}
+                scope="rowgroup"
+              >
+                {t(COURT_TIER_LABEL_KEYS[tier])}
+              </th>
+            </tr>
+            {rows.map((row) => (
+              <CourtRowCells key={rowKey(row)} row={row} tier={tier} />
+            ))}
+          </tbody>
+        ))}
+      </table>
+    </div>
+  );
+};
+
+const CourtRowCells = ({ row, tier }: { row: CourtRow; tier: CourtTier }) => {
+  const t = useTranslations();
+  const format = useFormatter();
+
+  return (
+    <tr>
+      <th className="max-w-56 px-1 py-0.5 text-start font-normal" scope="row">
+        {row.type === "court" ? (
+          <CourtName
+            abbreviation={row.courtAbbreviation}
+            court={row.court}
+            tier={tier}
+          />
+        ) : (
+          <span className="text-muted-foreground">
+            {t("caseLaw.corpusStatus.courtCount", { count: row.courts })}
+          </span>
+        )}
+      </th>
+      <td className="px-1 py-0.5 text-end tabular-nums">
+        {format.number(row.decisions)}
+      </td>
+      <td
+        className={cn(
+          "px-1 py-0.5 text-end tabular-nums",
+          // A quiet week is a fact, not an absence, so the zero stays on the
+          // row; it recedes instead of competing with the courts that moved.
+          row.addedLastWeek === 0 && "text-muted-foreground",
+        )}
+      >
+        {/* Signed, so the column reads as a delta rather than a second
+            total; a quiet week shows a plain 0 rather than "+0". */}
+        {format.number(row.addedLastWeek, { signDisplay: "exceptZero" })}
+        {row.addedLastDay > 0 && (
+          <span className="text-muted-foreground block">
+            {t("caseLaw.corpusStatus.newLast24Hours", {
+              count: format.number(row.addedLastDay),
+            })}
+          </span>
+        )}
+      </td>
+      <td className="text-muted-foreground px-1 py-0.5 text-end whitespace-nowrap">
+        {row.updatedAt === null ? "—" : formatRelativeTime(row.updatedAt)}
+      </td>
+    </tr>
+  );
+};
+
+/** A row's identity within the breakdown; a tier row stands for its whole tier. */
+const rowKey = (row: CourtRow): string =>
+  row.type === "court" ? row.court : row.tier;
+
+/**
+ * A tier the UI has a heading for. A label it does not know folds into the
+ * catch-all, exactly as the facet rail folds one: a court the reader cannot
+ * see is a court they cannot account for.
+ */
+const uiTier = (tier: string): CourtTier =>
+  isCourtTier(tier) ? tier : "other";
+
+type TierGroup = { tier: CourtTier; rows: CourtRow[] };
+
+/**
+ * The API returns the rows already ordered apex first, and a Map keeps the
+ * order its keys arrived in, so the headings come out in that order without a
+ * second sort here: re-ordering would be a second ranking of the same courts,
+ * and the two would drift.
+ */
+const groupByTier = (courts: readonly CourtRow[]): readonly TierGroup[] => {
+  const rowsByTier = new Map<CourtTier, CourtRow[]>();
+  for (const row of courts) {
+    const tier = uiTier(row.tier);
+    const open = rowsByTier.get(tier);
+    if (open === undefined) {
+      rowsByTier.set(tier, [row]);
+      continue;
+    }
+    open.push(row);
+  }
+  return [...rowsByTier].map(([tier, rows]) => ({ rows, tier }));
 };

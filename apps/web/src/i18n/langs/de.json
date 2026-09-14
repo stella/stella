@@ -598,6 +598,11 @@
       "headnote": "Leitsatz",
       "summary": "Leitsatz / Fundstelle"
     },
+    "corpusStatus": {
+      "courtCount": "{count, plural, one {# Gericht} other {# Gerichte}}",
+      "newLast24Hours": "{count} in den letzten 24 h",
+      "newLast7Days": "Neu in den letzten 7 Tagen"
+    },
     "courtTiers": {
       "constitutional": "Verfassungsgerichte",
       "other": "Übrige Gerichte",
@@ -3230,10 +3235,6 @@
     "searchLabel": "Rechtsdatenbank durchsuchen",
     "searchPlaceholder": "Aktenzeichen, Gesetzesnummer, ECLI oder Stichwörter",
     "signals": "Signale",
-    "tier": {
-      "constitutional": "Verfassungskontrolle",
-      "supreme": "Höchste Instanz"
-    },
     "topCourts": "Von den Höchstgerichten",
     "tryIdentifier": "Kennung ausprobieren"
   },
