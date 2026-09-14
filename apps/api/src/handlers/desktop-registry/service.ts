@@ -4,6 +4,7 @@ import { and, desc, eq } from "drizzle-orm";
 import type { BusinessRegistrySlug } from "@stll/api-contract";
 import type {
   DesktopRegistryConfig,
+  DesktopRegistryDefaultFormat,
   DesktopRegistrySearchResponse,
   DesktopRegistrySearchResult,
 } from "@stll/api-contract/desktop-registry";
@@ -12,11 +13,14 @@ import { mapWithConcurrency } from "@stll/concurrency";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { templateLookupFormats } from "@/api/db/schema";
+import { resolveLookupFormatDefault } from "@/api/handlers/templates/lookup-formats/resolve-default";
+import { setLookupFormatUserDefault } from "@/api/handlers/templates/lookup-formats/set-user-default";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   getOrganizationRegistryDispatch,
   getOrganizationRegistryHandler,
 } from "@/api/lib/business-registries/credentials";
+import type { BusinessRegistryHit } from "@/api/lib/business-registries/dispatch";
 import {
   BUSINESS_REGISTRY_SLUGS,
   executeRegistryLookup,
@@ -37,6 +41,7 @@ const DETAIL_CONCURRENCY = 3;
 
 export type DesktopRegistryContext = {
   organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
   scopedDb: ScopedDb;
 };
 
@@ -64,16 +69,15 @@ const loadPracticeJurisdictions = async ({
 };
 
 const loadFormats = async (
-  { organizationId, scopedDb }: DesktopRegistryContext,
+  { organizationId, scopedDb, userId }: DesktopRegistryContext,
   registry: BusinessRegistrySlug,
 ) => {
-  const [rows, defaults] = await Promise.all([
+  const [rows, defaultRow] = await Promise.all([
     scopedDb((tx) =>
       tx
         .select({
           id: templateLookupFormats.id,
           name: templateLookupFormats.name,
-          preference: templateLookupFormats.preference,
         })
         .from(templateLookupFormats)
         .where(
@@ -85,25 +89,19 @@ const loadFormats = async (
         .orderBy(desc(templateLookupFormats.id))
         .limit(FORMAT_LIMIT),
     ),
-    scopedDb((tx) =>
-      tx
-        .select({
-          id: templateLookupFormats.id,
-          name: templateLookupFormats.name,
-          format: templateLookupFormats.format,
+    // The member's own choice wins over the firm's; the resolver owns that
+    // order for every surface that renders a lookup.
+    scopedDb(async (tx) =>
+      (
+        await resolveLookupFormatDefault({
+          tx,
+          organizationId,
+          registry,
+          userId,
         })
-        .from(templateLookupFormats)
-        .where(
-          and(
-            eq(templateLookupFormats.organizationId, organizationId),
-            eq(templateLookupFormats.registry, registry),
-            eq(templateLookupFormats.preference, "default"),
-          ),
-        )
-        .limit(1),
+      ).unwrap("A resolver given an open transaction fails by throwing"),
     ),
   ]);
-  const defaultRow = defaults.at(0);
   const formatRows =
     defaultRow && !rows.some((row) => row.id === defaultRow.id)
       ? [defaultRow, ...rows.slice(0, FORMAT_LIMIT - 1)]
@@ -111,6 +109,7 @@ const loadFormats = async (
   return {
     formats: formatRows.map(({ id, name }) => ({ id, name })),
     defaultFormatId: defaultRow?.id ?? null,
+    defaultFormatSource: defaultRow?.source ?? null,
     defaultFormat: defaultRow?.format ?? null,
   };
 };
@@ -194,15 +193,18 @@ export const searchDesktopRegistry = async (
   }
   const formats = await loadFormats(context, registry);
   const results: DesktopRegistrySearchResult[] = [];
+  const toResult = (hit: BusinessRegistryHit): DesktopRegistrySearchResult => {
+    const rendered = renderLookupOutput(formats.defaultFormat, hit);
+    return {
+      id: hit.id,
+      name: hit.name,
+      text: stripLookupMarkdown(rendered),
+      rendered,
+    };
+  };
   if (lookup.type === "lookup") {
     if (lookup.hit !== null) {
-      results.push({
-        id: lookup.hit.id,
-        name: lookup.hit.name,
-        text: stripLookupMarkdown(
-          renderLookupOutput(formats.defaultFormat, lookup.hit),
-        ),
-      });
+      results.push(toResult(lookup.hit));
     }
   } else {
     const detailed = await mapWithConcurrency({
@@ -238,21 +240,65 @@ export const searchDesktopRegistry = async (
       if (result.isErr()) {
         return Result.err(result.error);
       }
-      results.push({
-        id: result.value.id,
-        name: result.value.name,
-        text: stripLookupMarkdown(
-          renderLookupOutput(formats.defaultFormat, result.value),
-        ),
-      });
+      results.push(toResult(result.value));
     }
   }
   return Result.ok({
     formats: formats.formats,
     defaultFormatId: formats.defaultFormatId,
+    defaultFormatSource: formats.defaultFormatSource,
     results,
   });
 };
+
+type DesktopRegistrySetDefaultFormat = {
+  registry: BusinessRegistrySlug;
+  formatId: SafeId<"templateLookupFormat"> | null;
+};
+
+/**
+ * Save or clear the caller's own default format and answer with the default
+ * they now resolve to. Clearing a personal choice is not "no default": the
+ * organization's default takes over, and the desktop has to show that one
+ * rather than wait for the next search to contradict it.
+ */
+export const setDesktopRegistryDefaultFormat = async (
+  { organizationId, scopedDb, userId }: DesktopRegistryContext,
+  { registry, formatId }: DesktopRegistrySetDefaultFormat,
+): Promise<Result<DesktopRegistryDefaultFormat, HandlerError>> =>
+  (
+    await Result.tryPromise({
+      try: async () =>
+        await scopedDb(async (tx) => {
+          await setLookupFormatUserDefault({
+            tx,
+            organizationId,
+            userId,
+            registry,
+            formatId,
+          });
+          return (
+            await resolveLookupFormatDefault({
+              tx,
+              organizationId,
+              registry,
+              userId,
+            })
+          ).unwrap("A resolver given an open transaction fails by throwing");
+        }),
+      catch: (cause) =>
+        HandlerError.is(cause)
+          ? cause
+          : new HandlerError({
+              status: 503,
+              message: "Could not save the default format",
+              cause,
+            }),
+    })
+  ).map((resolved) => ({
+    defaultFormatId: resolved?.id ?? null,
+    defaultFormatSource: resolved?.source ?? null,
+  }));
 
 type DesktopRegistryFormat = {
   registry: BusinessRegistrySlug;
@@ -263,7 +309,7 @@ type DesktopRegistryFormat = {
 export const formatDesktopRegistry = async (
   context: DesktopRegistryContext,
   { registry, id: rawId, formatId }: DesktopRegistryFormat,
-): Promise<Result<{ text: string }, HandlerError>> => {
+): Promise<Result<{ text: string; rendered: string }, HandlerError>> => {
   const id = rawId.trim();
   if (
     id.length === 0 ||
@@ -335,9 +381,6 @@ export const formatDesktopRegistry = async (
       new HandlerError({ status: 404, message: "Company not found" }),
     );
   }
-  return Result.ok({
-    text: stripLookupMarkdown(
-      renderLookupOutput(format?.format ?? null, lookup.hit),
-    ),
-  });
+  const rendered = renderLookupOutput(format?.format ?? null, lookup.hit);
+  return Result.ok({ text: stripLookupMarkdown(rendered), rendered });
 };

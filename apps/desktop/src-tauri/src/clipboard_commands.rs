@@ -29,6 +29,7 @@ pub type ClipboardEditorState = Arc<Mutex<Option<String>>>;
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ClipboardEditorContext {
+  group_limit: usize,
   groups: Vec<ClipboardGroup>,
   item: ClipboardItem,
   source_app_visual: Option<ClipboardSourceAppVisual>,
@@ -331,6 +332,7 @@ pub fn clipboard_get_editor_context(
     .ok_or_else(|| ITEM_NOT_FOUND_ERROR.to_string())?;
   let source_app_visual = manager.source_app_visual(&item);
   Ok(ClipboardEditorContext {
+    group_limit: manager.group_limit(),
     groups: manager.groups().to_vec(),
     item,
     source_app_visual,

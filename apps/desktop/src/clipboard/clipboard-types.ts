@@ -230,7 +230,12 @@ export const isClipboardCopyError = (
   CLIPBOARD_COPY_ERROR_KINDS.some((kind) => kind === value["kind"]) &&
   typeof value["message"] === "string";
 
+/** The group ceiling both the timeline and the editor read from the native side. */
+const isGroupLimit = (value: unknown): value is number =>
+  typeof value === "number" && Number.isSafeInteger(value) && value > 0;
+
 export type ClipboardEditorContext = {
+  groupLimit: number;
   groups: ClipboardGroup[];
   item: ClipboardItem;
   sourceAppVisual: ClipboardSourceAppVisual | null;
@@ -240,6 +245,7 @@ export const isClipboardEditorContext = (
   value: unknown,
 ): value is ClipboardEditorContext =>
   isRecord(value) &&
+  isGroupLimit(value["groupLimit"]) &&
   Array.isArray(value["groups"]) &&
   value["groups"].every(isClipboardGroup) &&
   (value["sourceAppVisual"] === null ||
@@ -253,12 +259,9 @@ export const isClipboardSnapshot = (
     return false;
   }
   const captureStatus = value["captureStatus"];
-  const groupLimit = value["groupLimit"];
   return (
     (captureStatus === "active" || captureStatus === "paused") &&
-    typeof groupLimit === "number" &&
-    Number.isSafeInteger(groupLimit) &&
-    groupLimit > 0 &&
+    isGroupLimit(value["groupLimit"]) &&
     Array.isArray(value["groups"]) &&
     value["groups"].every(isClipboardGroup) &&
     Array.isArray(value["items"]) &&

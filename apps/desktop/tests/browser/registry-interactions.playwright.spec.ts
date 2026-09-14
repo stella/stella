@@ -22,20 +22,47 @@ const REGISTRIES = [
     formatType: "company-specification",
   },
 ] as const satisfies DesktopRegistryConfig["registries"];
+// A company specification carries emphasis markers: the card renders them and
+// the copy keeps both the rich and the stripped representation.
+const RESULT_TEXT = "Registry result for ACME PLC";
+const RESULT_RENDERED = "Registry result for **ACME PLC**";
+const RESULT_HTML = "Registry result for <strong>ACME PLC</strong>";
+const FORMATTED_TEXT = "Saved detailed registry output for ACME PLC";
+const FORMATTED_RENDERED = "Saved detailed registry output for **ACME PLC**";
+const FORMATTED_HTML =
+  "Saved detailed registry output for <strong>ACME PLC</strong>";
 const SEARCH_RESPONSE = {
   defaultFormatId: "11111111-1111-4111-8111-111111111111",
+  // The firm's default until the member pins one of their own.
+  defaultFormatSource: "organization",
   formats: [
     { id: "11111111-1111-4111-8111-111111111111", name: "Saved compact" },
     { id: "22222222-2222-4222-8222-222222222222", name: "Saved detailed" },
   ],
   results: [
-    { id: "company-1", name: "Stella Example s.r.o.", text: "Registry result" },
+    {
+      id: "company-1",
+      name: "Stella Example s.r.o.",
+      rendered: RESULT_RENDERED,
+      text: RESULT_TEXT,
+    },
   ],
 } as const satisfies DesktopRegistrySearchResponse;
 const SECOND_RESPONSE = {
   ...SEARCH_RESPONSE,
-  results: [{ id: "company-2", name: "Latest Company", text: "Latest result" }],
+  results: [
+    {
+      id: "company-2",
+      name: "Latest Company",
+      rendered: "Latest result",
+      text: "Latest result",
+    },
+  ],
 } as const satisfies DesktopRegistrySearchResponse;
+const FORMAT_RESPONSE = {
+  rendered: FORMATTED_RENDERED,
+  text: FORMATTED_TEXT,
+} as const;
 const PRIVATE_CLIPBOARD_TEXT =
   "Privileged synthetic clipboard text must stay local";
 const CONNECTED_EXPIRES_AT = new Date(Date.now() + 86_400_000).toISOString();
@@ -143,6 +170,7 @@ const installNativeBoundary = async (
     ({
       initialConnection,
       initialMode,
+      formatResponse,
       searchResponse,
       secondResponse,
       clipboardSnapshot,
@@ -217,7 +245,19 @@ const installNativeBoundary = async (
                 : secondResponse;
             }
             case "registry_format":
-              return { text: "Saved detailed registry output" };
+              return formatResponse;
+            case "registry_set_default_format": {
+              // The API answers with the default the member now resolves to.
+              // Clearing falls back to the firm's default, which this fixture
+              // has: the same format the first search arrived with.
+              const formatId = args["formatId"];
+              return formatId === null
+                ? {
+                    defaultFormatId: searchResponse.defaultFormatId,
+                    defaultFormatSource: searchResponse.defaultFormatSource,
+                  }
+                : { defaultFormatId: formatId, defaultFormatSource: "user" };
+            }
             default:
               unexpected.push(command);
               throw new TypeError(`Unexpected native command: ${command}`);
@@ -248,6 +288,7 @@ const installNativeBoundary = async (
     {
       initialConnection: connection,
       initialMode: mode,
+      formatResponse: FORMAT_RESPONSE,
       searchResponse: SEARCH_RESPONSE,
       secondResponse: SECOND_RESPONSE,
       clipboardSnapshot: SNAPSHOT,
@@ -394,6 +435,7 @@ test("highlights the first registry result and copies it with Enter from the sea
   await activateRegistry(page, "Privileged");
   const result = page.locator('[data-registry-result="company-1"]');
   await expect(result).toHaveAttribute("aria-current", "true");
+  await expect(result.locator("strong")).toHaveText("ACME PLC");
   await expect(searchBox(page)).toBeFocused();
   await searchBox(page).press("Enter");
   await expect
@@ -402,7 +444,12 @@ test("highlights the first registry result and copies it with Enter from the sea
         ({ command }) => command === "registry_copy",
       ),
     )
-    .toEqual([{ command: "registry_copy", args: { text: "Registry result" } }]);
+    .toEqual([
+      {
+        command: "registry_copy",
+        args: { html: RESULT_HTML, text: RESULT_TEXT },
+      },
+    ]);
   await expect(searchBox(page)).toBeFocused();
   // ArrowUp lands on the highlighted card; ArrowDown returns to the field.
   await searchBox(page).press("ArrowUp");
@@ -755,6 +802,7 @@ test("applies saved formatting and copies only the selected registry output", as
   await page.getByRole("button", { name: "Format", exact: true }).click();
   await page.getByRole("menuitemradio", { name: "Saved detailed" }).click();
   await expect(card).toContainText("Saved detailed registry output");
+  await expect(card.locator("strong")).toHaveText("ACME PLC");
   await card.click();
   const calls = await readInvocations(page);
   expect(calls).toContainEqual({
@@ -767,8 +815,77 @@ test("applies saved formatting and copies only the selected registry output", as
   });
   expect(calls).toContainEqual({
     command: "registry_copy",
-    args: { text: "Saved detailed registry output" },
+    args: { html: FORMATTED_HTML, text: FORMATTED_TEXT },
   });
+});
+
+test("makes the selected format the member's default and hands the choice back", async ({
+  page,
+}) => {
+  await openClipboard(page);
+  await activateRegistry(page);
+  const formatMenu = page.getByRole("button", { name: "Format", exact: true });
+  await expect(formatMenu).toHaveText(/Saved compact/u);
+  await formatMenu.click();
+  await page.getByRole("menuitemradio", { name: "Saved detailed" }).click();
+  await expect(formatMenu).toHaveText(/Saved detailed/u);
+
+  await formatMenu.click();
+  await page
+    .getByRole("menuitem", {
+      name: enMessages.clipboard.registryUseAsDefaultFormat,
+    })
+    .click();
+  await expect
+    .poll(async () => await readInvocations(page))
+    .toContainEqual({
+      command: "registry_set_default_format",
+      args: {
+        formatId: "22222222-2222-4222-8222-222222222222",
+        registry: "ares",
+      },
+    });
+
+  // The card now renders the default, so there is nothing left to pin; the
+  // built-in format offers the clear instead, because the default is theirs.
+  await formatMenu.click();
+  await expect(
+    page.getByRole("menuitem", {
+      name: enMessages.clipboard.registryUseAsDefaultFormat,
+    }),
+  ).toBeHidden();
+  await page
+    .getByRole("menuitemradio", {
+      name: enMessages.clipboard.registryDefaultFormat,
+      exact: true,
+    })
+    .click();
+  await formatMenu.click();
+  await page
+    .getByRole("menuitem", {
+      name: enMessages.clipboard.registryClearDefaultFormat,
+    })
+    .click();
+  await expect
+    .poll(async () => await readInvocations(page))
+    .toContainEqual({
+      command: "registry_set_default_format",
+      args: { formatId: null, registry: "ares" },
+    });
+
+  // The firm's default took over, and a firm default is not the member's to
+  // clear: on the built-in format the menu now offers neither action.
+  await formatMenu.click();
+  await expect(
+    page.getByRole("menuitem", {
+      name: enMessages.clipboard.registryClearDefaultFormat,
+    }),
+  ).toBeHidden();
+  await expect(
+    page.getByRole("menuitem", {
+      name: enMessages.clipboard.registryUseAsDefaultFormat,
+    }),
+  ).toBeHidden();
 });
 
 test("opens the selected company's specification formats from the format menu", async ({

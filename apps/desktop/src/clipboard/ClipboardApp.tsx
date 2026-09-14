@@ -60,7 +60,6 @@ import { getUiLocaleDirection, isUiLocale } from "@stll/locales";
 import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
-import { ColorPickerContent } from "@stll/ui/color-picker";
 import { ContextMenu } from "@stll/ui/context-menu";
 import {
   Dialog,
@@ -146,13 +145,8 @@ import {
   observeClipboardReopens,
 } from "./clipboard-startup-timing";
 import {
-  CLIPBOARD_GROUP_COLOR_PRESETS,
-  DEFAULT_CLIPBOARD_GROUP_COLOR,
-} from "./clipboard-style";
-import {
   CLIPBOARD_RETENTIONS,
   isClipboardCopyError,
-  isClipboardGroupColor,
   isClipboardSnapshot,
 } from "./clipboard-types";
 import type {
@@ -165,13 +159,16 @@ import type {
   ClipboardSnapshot,
   ClipboardSourceAppVisual,
 } from "./clipboard-types";
+import {
+  ClipboardGroupFields,
+  nextClipboardGroupColor,
+} from "./ClipboardGroupFields";
 import { ClipboardImagePreview } from "./ClipboardImagePreview";
 import type { ClipboardImagePreviewStatus } from "./ClipboardImagePreview";
 import { ClipboardSourceIcon } from "./ClipboardSourceIcon";
 import { useRailViewport } from "./use-rail-viewport";
 
 const STELLA_WEB_APP_URL = "https://my.stll.app";
-const MAX_GROUP_NAME_CHARACTERS = 64;
 const MAX_ITEM_NAME_CHARACTERS = 80;
 const RETENTION_LABEL_KEYS = {
   week: "retentionWeek",
@@ -380,6 +377,9 @@ const ClipboardCard = ({
   }).format(age.value);
   const relativeTime =
     age.type === "lessThan" ? `<${formattedAge}` : formattedAge;
+  // Code points, the count a reader would get from the text itself.
+  const characterCount =
+    item.type === "image" ? null : Array.from(item.plainText).length;
   const copiedAtLabel = format.dateTime(
     Temporal.Instant.from(item.copiedAt).epochMilliseconds,
     {
@@ -617,6 +617,11 @@ const ClipboardCard = ({
             />
           </button>
         )}
+        {active && characterCount !== null ? (
+          <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
+            {t("characterCount", { count: characterCount })}
+          </span>
+        ) : null}
         <time
           className="text-muted-foreground shrink-0 text-xs tabular-nums"
           dateTime={item.copiedAt}
@@ -738,72 +743,6 @@ const DialogShell = ({
         </form>
       </DialogPopup>
     </Dialog>
-  );
-};
-
-type ClipboardGroupDraft = {
-  color: ClipboardGroupColor;
-  name: string;
-};
-
-type ClipboardGroupFieldsProps = ClipboardGroupDraft & {
-  autoFocus: boolean;
-  onChange: (fields: ClipboardGroupDraft) => void;
-};
-
-const ClipboardGroupFields = ({
-  autoFocus,
-  color,
-  name,
-  onChange,
-}: ClipboardGroupFieldsProps) => {
-  const t = useTranslations("clipboard");
-  return (
-    <>
-      <label className="block">
-        <span className="text-muted-foreground text-sm">{t("groupName")}</span>
-        <Input
-          autoFocus={autoFocus}
-          className="mt-2 h-11 rounded-2xl text-base sm:text-base **:[input]:h-full **:[input]:px-4"
-          dir="auto"
-          onChange={(event) => {
-            if (
-              Array.from(event.target.value).length > MAX_GROUP_NAME_CHARACTERS
-            ) {
-              return;
-            }
-            onChange({ color, name: event.target.value });
-          }}
-          value={name}
-        />
-      </label>
-      <fieldset className="mt-4">
-        <legend className="text-muted-foreground text-sm">
-          {t("groupColor")}
-        </legend>
-        <div className="mt-2 overflow-visible px-0.5 py-1">
-          <ColorPickerContent
-            moreLabel={t("customColor")}
-            onSelect={(value) => {
-              const picked = `#${value.toLowerCase()}`;
-              if (!isClipboardGroupColor(picked)) {
-                panic(
-                  "Color picker returned an invalid clipboard group color.",
-                );
-              }
-              onChange({ color: picked, name });
-            }}
-            presets={CLIPBOARD_GROUP_COLOR_PRESETS.map((preset) => ({
-              color: preset,
-              label: preset.toUpperCase(),
-              value: preset.slice(1).toUpperCase(),
-            }))}
-            presentation="inline"
-            value={color.slice(1).toUpperCase()}
-          />
-        </div>
-      </fieldset>
-    </>
   );
 };
 
@@ -1513,11 +1452,9 @@ const ClipboardApp = () => {
     };
   }, [errorReadHistory]);
 
-  const activeGroupId = snapshot.groups.some(
-    (group) => group.id === selectedGroupId,
-  )
-    ? selectedGroupId
-    : null;
+  const activeGroup =
+    snapshot.groups.find((group) => group.id === selectedGroupId) ?? null;
+  const activeGroupId = activeGroup?.id ?? null;
   // Typing must never wait on filtering and card re-render: the rail catches
   // up in a deferred render that further keystrokes interrupt. Clearing stays
   // synchronous (the empty filter is free) so the reopen reset can focus the
@@ -1681,10 +1618,7 @@ const ClipboardApp = () => {
     return () => window.removeEventListener("focus", handleWindowFocus);
   }, [activeGroupId, activeItemId, snapshot.items, welcomeOpen]);
 
-  const nextGroupColor =
-    CLIPBOARD_GROUP_COLOR_PRESETS.at(
-      snapshot.groups.length % CLIPBOARD_GROUP_COLOR_PRESETS.length,
-    ) ?? DEFAULT_CLIPBOARD_GROUP_COLOR;
+  const nextGroupColor = nextClipboardGroupColor(snapshot.groups);
   let emptyStateTitle = t("emptyTitle");
   if (filterQuery) {
     emptyStateTitle = t("noResults");
@@ -2269,15 +2203,21 @@ const ClipboardApp = () => {
     );
   }
 
+  const windowStyle: ClipboardGroupStyle | undefined = activeGroup
+    ? { "--clipboard-group-accent": activeGroup.color }
+    : undefined;
+
   return (
     <div
       className={`${CLIPBOARD_WINDOW_CLASS} text-foreground relative flex min-h-dvh flex-col overflow-hidden outline-none`}
       aria-label={t("timeline")}
+      data-active-group={activeGroup ? "" : undefined}
       ref={(node) => {
         timelineRef.current = node;
         focusTimeline(node);
       }}
       role="application"
+      style={windowStyle}
       tabIndex={-1}
     >
       <ClipboardDialog

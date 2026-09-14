@@ -16,11 +16,27 @@ export type DesktopRegistryConfig = {
 export type DesktopRegistrySearchResult = {
   id: string;
   name: string;
+  /** Markers stripped, for desktops older than `rendered`; remove once those are unsupported. */
   text: string;
+  /** Rendered output with its `**bold**` / `*italic*` markers intact. */
+  rendered: string;
 };
 
-export type DesktopRegistrySearchResponse = {
+/** Whose default `defaultFormatId` is; `null` when there is none to own. */
+export const DESKTOP_REGISTRY_DEFAULT_FORMAT_SOURCE = {
+  user: "user",
+  organization: "organization",
+} as const;
+
+export type DesktopRegistryDefaultFormatSource =
+  (typeof DESKTOP_REGISTRY_DEFAULT_FORMAT_SOURCE)[keyof typeof DESKTOP_REGISTRY_DEFAULT_FORMAT_SOURCE];
+
+export type DesktopRegistryDefaultFormat = {
+  defaultFormatId: string | null;
+  defaultFormatSource: DesktopRegistryDefaultFormatSource | null;
+};
+
+export type DesktopRegistrySearchResponse = DesktopRegistryDefaultFormat & {
   results: DesktopRegistrySearchResult[];
   formats: { id: string; name: string }[];
-  defaultFormatId: string | null;
 };

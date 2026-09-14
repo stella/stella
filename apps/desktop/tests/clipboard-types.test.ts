@@ -177,10 +177,20 @@ describe("clipboard image items", () => {
     expect(isClipboardItem({ ...image, width: 1.5 })).toBe(false);
   });
 
-  test("requires the editor source visual field", () => {
-    expect(isClipboardEditorContext({ groups: [], item: image })).toBe(false);
+  test("requires the editor source visual and group limit fields", () => {
+    expect(
+      isClipboardEditorContext({ groupLimit: 24, groups: [], item: image }),
+    ).toBe(false);
     expect(
       isClipboardEditorContext({
+        groups: [],
+        item: image,
+        sourceAppVisual: null,
+      }),
+    ).toBe(false);
+    expect(
+      isClipboardEditorContext({
+        groupLimit: 24,
         groups: [],
         item: image,
         sourceAppVisual: null,

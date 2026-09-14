@@ -8,6 +8,7 @@
     "allow-registry-get-state",
     "allow-registry-search",
     "allow-registry-format",
+    "allow-registry-set-default-format",
     "allow-registry-open-company-format",
     "allow-registry-copy",
     "core:event:allow-listen",

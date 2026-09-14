@@ -7,13 +7,21 @@ import {
   ChevronDownIcon,
   CircleAlertIcon,
   PlusIcon,
+  StarIcon,
+  StarOffIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { DESKTOP_REGISTRY_DEFAULT_FORMAT_SOURCE } from "@stll/api-contract/desktop-registry";
 import type {
   DesktopRegistryConfig,
+  DesktopRegistryDefaultFormat,
   DesktopRegistrySearchResponse,
 } from "@stll/api-contract/desktop-registry";
+import {
+  parseRegistryFormatMarkdown,
+  stripRegistryFormatMarkdown,
+} from "@stll/business-registries/default-formats";
 import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import {
@@ -35,6 +43,7 @@ import {
   describeError,
   reportDesktopError,
 } from "../telemetry/desktop-telemetry";
+import { registryFormatHtml } from "./registry-format";
 
 const SEARCH_DEBOUNCE_MS = 300;
 // Emitted by the native bridge once a browser handoff stored a credential;
@@ -52,12 +61,12 @@ type ResultCard = DesktopRegistrySearchResponse["results"][number] & {
 type SearchState =
   | { status: "idle" }
   | { status: "loading"; scope: string }
-  | {
+  | ({
       status: "ready";
       scope: string;
       results: ResultCard[];
       formats: DesktopRegistrySearchResponse["formats"];
-    };
+    } & DesktopRegistryDefaultFormat);
 
 type RegistrySearchProps = {
   query: string;
@@ -234,6 +243,8 @@ export const RegistrySearch = ({
             status: "ready",
             scope,
             formats: response.formats,
+            defaultFormatId: response.defaultFormatId,
+            defaultFormatSource: response.defaultFormatSource,
             results: response.results.map((result) => ({
               ...result,
               formatId: response.defaultFormatId,
@@ -304,9 +315,12 @@ export const RegistrySearch = ({
     if (card.status !== "ready" || currentSearch.status !== "ready") {
       return;
     }
-    void invoke("registry_copy", { text: card.text }).catch(() =>
-      setError(t("registryErrorCopy")),
-    );
+    // Both representations come from the same rendered output, so the rich
+    // and plain pasteboard flavours can never describe different companies.
+    void invoke("registry_copy", {
+      text: stripRegistryFormatMarkdown(card.rendered),
+      html: registryFormatHtml(card.rendered),
+    }).catch(() => setError(t("registryErrorCopy")));
   };
   const format = (card: ResultCard, formatId: string | null) => {
     if (
@@ -332,12 +346,12 @@ export const RegistrySearch = ({
           }
         : current,
     );
-    void invoke<{ text: string }>("registry_format", {
+    void invoke<{ text: string; rendered: string }>("registry_format", {
       registry: registryId,
       id: card.id,
       formatId,
     })
-      .then(({ text }) => {
+      .then(({ text, rendered }) => {
         if (
           request !== generation.current ||
           formatRequests.current.get(card.id) !== operation
@@ -350,7 +364,7 @@ export const RegistrySearch = ({
                 ...current,
                 results: current.results.map((result) =>
                   result.id === card.id
-                    ? { ...result, text, formatId, status: "ready" }
+                    ? { ...result, text, rendered, formatId, status: "ready" }
                     : result,
                 ),
               }
@@ -379,6 +393,28 @@ export const RegistrySearch = ({
         );
         setError(t("registryErrorFormat"));
       });
+  };
+  // The reply carries the default the member now resolves to: clearing a
+  // personal choice hands them back the organization's, which is not `null`.
+  const setDefaultFormat = (formatId: string | null) => {
+    const request = generation.current;
+    setError(null);
+    void invoke<DesktopRegistryDefaultFormat>("registry_set_default_format", {
+      registry: registryId,
+      formatId,
+    })
+      .then(({ defaultFormatId, defaultFormatSource }) => {
+        if (request !== generation.current) {
+          return;
+        }
+        setSearchState((current) =>
+          current.status === "ready"
+            ? { ...current, defaultFormatId, defaultFormatSource }
+            : current,
+        );
+        return;
+      })
+      .catch(() => setError(t("registryErrorSetDefaultFormat")));
   };
   const openCompanyFormat = (card: ResultCard) => {
     setError(null);
@@ -585,7 +621,17 @@ export const RegistrySearch = ({
                   className="text-foreground-muted mt-2 text-xs whitespace-pre-wrap"
                   dir="auto"
                 >
-                  {card.text}
+                  {parseRegistryFormatMarkdown(card.rendered).map(
+                    ({ text: runText, style, start }) => {
+                      if (style === "bold") {
+                        return <strong key={start}>{runText}</strong>;
+                      }
+                      if (style === "italic") {
+                        return <em key={start}>{runText}</em>;
+                      }
+                      return <span key={start}>{runText}</span>;
+                    },
+                  )}
                 </p>
               </button>
               <footer className="clipboard-card-footer flex h-12 shrink-0 items-center px-2">
@@ -628,6 +674,12 @@ export const RegistrySearch = ({
                       ))}
                     </MenuRadioGroup>
                     <MenuSeparator />
+                    <DefaultFormatItem
+                      formatId={card.formatId}
+                      defaultFormatId={currentSearch.defaultFormatId}
+                      defaultFormatSource={currentSearch.defaultFormatSource}
+                      onSelect={setDefaultFormat}
+                    />
                     <MenuItem
                       closeOnClick
                       onClick={() => openCompanyFormat(card)}
@@ -684,4 +736,45 @@ export const RegistrySearch = ({
     </div>
   );
   return children({ controls, results, feedback });
+};
+
+type DefaultFormatItemProps = DesktopRegistryDefaultFormat & {
+  /** The format this card currently renders with. */
+  formatId: string | null;
+  onSelect: (formatId: string | null) => void;
+};
+
+/**
+ * Pin the card's format as the member's default, or, on the built-in format,
+ * give the choice back to the organization's default. Nothing is offered for a
+ * selection that already is the default, nor a clear with no personal choice
+ * to clear.
+ */
+const DefaultFormatItem = ({
+  defaultFormatId,
+  defaultFormatSource,
+  formatId,
+  onSelect,
+}: DefaultFormatItemProps) => {
+  const t = useTranslations("clipboard");
+  if (formatId === defaultFormatId) {
+    return null;
+  }
+  if (formatId === null) {
+    if (defaultFormatSource !== DESKTOP_REGISTRY_DEFAULT_FORMAT_SOURCE.user) {
+      return null;
+    }
+    return (
+      <MenuItem closeOnClick onClick={() => onSelect(null)}>
+        <StarOffIcon aria-hidden="true" />
+        {t("registryClearDefaultFormat")}
+      </MenuItem>
+    );
+  }
+  return (
+    <MenuItem closeOnClick onClick={() => onSelect(formatId)}>
+      <StarIcon aria-hidden="true" />
+      {t("registryUseAsDefaultFormat")}
+    </MenuItem>
+  );
 };

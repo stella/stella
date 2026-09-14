@@ -1,13 +1,13 @@
 use std::sync::OnceLock;
 use std::time::Duration;
-use tauri::{AppHandle, State, WebviewWindow};
-use tauri_plugin_clipboard_manager::ClipboardExt;
+use tauri::{State, WebviewWindow};
 use tauri_plugin_opener::OpenerExt;
 
 use crate::account::{self, AccountState, LinkedAccount};
 use crate::http_client::{DesktopHttpClient, HttpClientOptions};
 
 const MAX_RESPONSE_BYTES: usize = 512 * 1024;
+const MAX_COPY_BYTES: usize = 32_768;
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 // One client keeps the connection pool alive across interactive searches.
 fn registry_client() -> Result<&'static DesktopHttpClient, String> {
@@ -49,17 +49,19 @@ fn require_registry(window: &WebviewWindow) -> Result<(), String> {
 
 #[tauri::command]
 pub fn registry_copy(
-  app: AppHandle,
   window: WebviewWindow,
   text: String,
+  html: String,
 ) -> Result<(), String> {
   require_registry(&window)?;
-  if text.is_empty() || text.len() > 32_768 {
+  if text.is_empty()
+    || text.len() > MAX_COPY_BYTES
+    || html.is_empty()
+    || html.len() > MAX_COPY_BYTES
+  {
     return Err("Registry result is too large to copy".into());
   }
-  app
-    .clipboard()
-    .write_text(text)
+  crate::clipboard::write_text_and_html(text, html)
     .map_err(|_| "Could not copy registry result")?;
   crate::clipboard_window::hide(&window)
 }
@@ -220,6 +222,30 @@ pub async fn registry_format(
   request_current(&app, &state, &saved, serde_json::json!({"type":"format", "registry":registry, "id":id, "formatId":format_id})).await
 }
 
+// The member's own default rather than the firm's. An absent `format_id`
+// clears it, so the organization default applies to this member again.
+#[tauri::command]
+pub async fn registry_set_default_format(
+  app: tauri::AppHandle,
+  state: State<'_, AccountState>,
+  window: WebviewWindow,
+  registry: String,
+  format_id: Option<String>,
+) -> Result<serde_json::Value, String> {
+  require_registry(&window)?;
+  if registry.len() > 64 || format_id.as_ref().is_some_and(|id| id.len() > 64) {
+    return Err("Invalid default format request".into());
+  }
+  let saved = account::current(&state).await?.ok_or_else(not_connected)?;
+  request_current(
+    &app,
+    &state,
+    &saved,
+    serde_json::json!({"type":"setDefaultFormat", "registry":registry, "formatId":format_id}),
+  )
+  .await
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;
@@ -299,6 +325,8 @@ mod tests {
       serde_json::json!({"type":"config"}),
       serde_json::json!({"type":"search", "registry":"ares", "query":"fixture"}),
       serde_json::json!({"type":"format", "registry":"ares", "id":"fixture"}),
+      serde_json::json!({"type":"setDefaultFormat", "registry":"ares", "formatId":"fixture"}),
+      serde_json::json!({"type":"setDefaultFormat", "registry":"ares", "formatId":null}),
       serde_json::json!({"type":"revoke"}),
     ] {
       assert_eq!(
