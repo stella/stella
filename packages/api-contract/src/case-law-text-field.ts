@@ -66,19 +66,17 @@ export type DecisionHeadnotePreview =
 export const DECISION_KEYWORD_SEPARATOR = " · ";
 
 /**
- * A row's publisher summary as one line, whichever kind it is, and empty
- * where the publisher supplied none. For the consumers that cannot draw terms
- * as terms — a find over a cell, a prompt grounding a suggestion — so that
- * what they read is never a kind poorer than what the row shows.
+ * A row's publisher summary as the cell draws it: the sentence with the
+ * publisher's own breaks, the terms as one line, and empty where they
+ * supplied none. A find reads this one, because it may only keep a row whose
+ * match the reader can then see marked in the cell.
  */
-export const decisionHeadnoteLine = (
+export const decisionHeadnoteText = (
   headnote: DecisionHeadnotePreview,
 ): string => {
   switch (headnote.type) {
     case TEXT_FIELD_TYPE.PRESENT:
-      // The publisher's own breaks are a rendering: a consumer that has only
-      // one line reads the points as a sentence rather than losing them.
-      return headnote.text.replaceAll("\n", " ");
+      return headnote.text;
     case DECISION_HEADNOTE_KEYWORDS:
       return headnote.items.join(DECISION_KEYWORD_SEPARATOR);
     case TEXT_FIELD_TYPE.ABSENT:
@@ -88,6 +86,16 @@ export const decisionHeadnoteLine = (
       return panic(`Unhandled decision headnote: ${String(headnote)}`);
   }
 };
+
+/**
+ * The same summary where only one line will do: a prompt that grounds a
+ * suggestion gives the model one decision per line, and a break inside one
+ * would read as the next decision. Derived from the reading above rather than
+ * written beside it.
+ */
+export const decisionHeadnoteLine = (
+  headnote: DecisionHeadnotePreview,
+): string => decisionHeadnoteText(headnote).replaceAll("\n", " ");
 
 export const DECISION_TEXT_FIELD = {
   ABSTRACT: "abstract",

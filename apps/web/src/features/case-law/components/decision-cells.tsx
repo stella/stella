@@ -8,7 +8,7 @@ import { useTranslations } from "use-intl";
 
 import {
   DECISION_HEADNOTE_KEYWORDS,
-  decisionHeadnoteLine,
+  decisionHeadnoteText,
   TEXT_FIELD_TYPE,
   type DecisionHeadnotePreview,
   type TextField,
@@ -206,16 +206,16 @@ export const SummaryCell = ({
 }) => {
   const openDecision = useOpenDecisionTab();
   const { headline } = decision;
-  // Both kinds are judged as one line, because the question here is whether
+  // Both kinds are judged as one string, because the question here is whether
   // what the publisher supplied is about the search at all.
-  const summaryLine = decisionHeadnoteLine(decision.headnote);
+  const summaryText = decisionHeadnoteText(decision.headnote);
 
-  if (summaryLine.length > 0) {
+  if (summaryText.length > 0) {
     // With nothing to look for, a headnote is still the better hook; a browse
     // listing and a saved research table both arrive here with no tokens.
     const answersTheQuery =
       context.queryTokens.length === 0 ||
-      hasHighlight(highlightSegments(summaryLine, context.queryTokens)) ||
+      hasHighlight(highlightSegments(summaryText, context.queryTokens)) ||
       !headline;
     if (answersTheQuery) {
       return (

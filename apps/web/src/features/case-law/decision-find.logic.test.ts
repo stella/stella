@@ -145,9 +145,10 @@ describe("what a decision row shows a find", () => {
     expect(classified.get("headnote")).toBe("Nájem bytu · Výpověď");
   });
 
-  test("carries a headnote's points as one line a find can match across", () => {
-    // The cell draws the publisher's breaks; a find reads one line, so a
-    // phrase running from one point into the next is still findable.
+  test("carries a headnote's points as the cell draws them", () => {
+    // The cell draws the publisher's breaks, so the find reads them too: a
+    // flattened reading would keep a row for a phrase spanning the break and
+    // then mark nothing in it.
     const points = decisionFindRowText({
       answersByKey: ANSWERS,
       decision: {
@@ -162,7 +163,7 @@ describe("what a decision row shows a find", () => {
     });
 
     expect(points.get("headnote")).toBe(
-      "I. Vypoved z najmu. II. Pisemna forma.",
+      "I. Vypoved z najmu.\nII. Pisemna forma.",
     );
   });
 
