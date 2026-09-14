@@ -1,11 +1,23 @@
+import type {
+  GuideProgressStatus,
+  GuideProgressTourId,
+} from "@stll/api-contract";
+
 import type { GuideAnchorId } from "@/features/guides/guide-anchors";
 import type { TranslationKey } from "@/i18n/types";
 import type { FileRouteTypes } from "@/routeTree.gen";
 
-// Only param-less routes are navigable by a guide step: a removed route drops
-// from this union and turns the referencing step into a typecheck error. Routes
-// with a `$param` segment are excluded because a step cannot supply params.
-export type GuideRoute = Exclude<FileRouteTypes["to"], `${string}$${string}`>;
+// Static guide destinations stay bound to the generated route tree. Matter
+// tours use a semantic view target instead of storing workspace/view ids in
+// the registry; the runner resolves those ids from the user's authorized
+// workspace data when the guide starts.
+type GuideStaticRoute = Exclude<FileRouteTypes["to"], `${string}$${string}`>;
+
+export type GuideRoute =
+  | { type: "static"; to: GuideStaticRoute }
+  | { type: "workspace-unfiltered-table" };
+
+export type GuidePlacement = "top" | "right" | "bottom" | "left";
 
 // Guide copy lives under `guides.tours.*` and takes no ICU arguments, so these
 // keys are safe to pass to `t(key)` with a single argument. Narrowing to the
@@ -19,16 +31,19 @@ export type GuideSeed =
   | { kind: "fill-input"; anchor: GuideAnchorId; valueKey: GuideMessageKey }
   | { kind: "none" };
 
-// A step may reveal transient UI before explaining it, so a tour can teach a
-// menu's contents instead of only pointing at the control that opens it.
+// A step may reveal UI before explaining what is inside it. `open` is for a
+// transient disclosure surface; `transition` enters a reversible local editor
+// state without creating or changing persisted data.
 //
-// SAFETY: `open` may only ever target a non-destructive disclosure control —
-// a menu, submenu, or popover trigger. The runner clicks that anchor on the
-// user's behalf, so the click must have no effect beyond showing UI. Never put
-// it on a control that mutates data, sends, deletes, uploads, or navigates
-// away. Whatever a step opens is closed again when the tour ends, is
-// dismissed, or moves on to a step outside the revealed surface.
-export type GuideInteraction = { kind: "open" } | { kind: "none" };
+// SAFETY: the runner clicks interaction anchors on the user's behalf. Never
+// put either kind on a control that mutates data, sends, deletes, uploads, or
+// leaves the current route. `open` must only disclose a menu, popover, or
+// dialog. `transition` must only swap local view state and must name the real
+// control that reverses it so Back can restore the previous step.
+export type GuideInteraction =
+  | { kind: "open" }
+  | { kind: "transition"; reverseAnchor: GuideAnchorId }
+  | { kind: "none" };
 
 export type GuideStep = {
   anchor: GuideAnchorId;
@@ -39,19 +54,28 @@ export type GuideStep = {
   // it over its neighbours. Rendered under the body as a muted, labelled
   // secondary line. Omit it on steps where there is no real choice to make.
   whenKey?: GuideMessageKey;
-  // No placement field: the popover is pinned to one fixed, centred position
-  // for the whole run, so a step has nothing to say about where it appears.
+  placement: GuidePlacement;
   seed?: GuideSeed;
   interaction?: GuideInteraction;
 };
 
+// `kebab-case` wire id to the camelCase registry key, so the mapped checks
+// below name every contract member and nothing else.
+type CamelCase<S extends string> = S extends `${infer Head}-${infer Tail}`
+  ? `${Head}${Capitalize<CamelCase<Tail>>}`
+  : S;
+
+// Both maps satisfy a type mapped over the contract union: a tour id the API
+// does not accept, or a contract id with no registry entry, fails typecheck
+// here instead of at the first progress write.
 export const GUIDE_TOUR_IDS = {
   chat: "chat",
+  chatPower: "chat-power",
   documents: "documents",
   playbooks: "playbooks",
   workflows: "workflows",
   tabularReview: "tabular-review",
-} as const;
+} as const satisfies { [K in GuideProgressTourId as CamelCase<K>]: K };
 
 export type GuideTourId = (typeof GUIDE_TOUR_IDS)[keyof typeof GUIDE_TOUR_IDS];
 
@@ -67,7 +91,7 @@ export const GUIDE_TOUR_STATUSES = {
   notStarted: "not-started",
   completed: "completed",
   skipped: "skipped",
-} as const;
+} as const satisfies { [K in GuideProgressStatus as CamelCase<K>]: K };
 
 export type GuideTourStatus =
   (typeof GUIDE_TOUR_STATUSES)[keyof typeof GUIDE_TOUR_STATUSES];

@@ -2347,7 +2347,7 @@
   },
   "guides": {
     "action": {
-      "replay": "Prehrať znova",
+      "replay": "Spustiť znova",
       "skip": "Preskočiť",
       "start": "Začať"
     },
@@ -2355,32 +2355,28 @@
       "progress": "{completed} z {total} dokončených"
     },
     "community": {
-      "body": "Získajte pomoc od ostatných používateľov a vývojárov v našom komunitnom chate.",
-      "directLinkLabel": "Ozvite sa nám",
-      "directPrompt": "Chcete sa porozprávať priamo s tímom?",
-      "linkLabel": "Otvoriť komunitné fórum"
+      "personalSupport": "Osobná podpora"
     },
     "help": {
-      "buttonLabel": "Pomocník a sprievodca",
-      "subtitle": "Interaktívne prehliadky pracovného priestoru",
-      "tabs": {
-        "community": "Komunita",
-        "guides": "Sprievodca"
-      },
-      "title": "Pomocník a sprievodca"
+      "buttonLabel": "Pomoc a spätná väzba",
+      "title": "Pomoc a spätná väzba"
     },
     "leave": "Ukončiť sprievodcu",
     "minutes": "{count} min.",
+    "nudge": {
+      "action": "Otvoriť sprievodcov",
+      "body": "Ste tu nový? Niekoľko krátkych prehliadok vás prevedie."
+    },
     "status": {
       "skipped": "Preskočené"
     },
     "tours": {
       "chat": {
-        "description": "Čo sa skrýva pod tlačidlom + a kedy siahnuť po ktorej možnosti",
+        "description": "Pridajte kontext pre AI a otázku bezpečne odošlite",
         "examplePrompt": "Zhrňte kľúčové povinnosti v tejto zmluve",
         "steps": {
           "anonymize": {
-            "body": "Nahradí mená, identifikátory a ďalšie osobné údaje zástupnými hodnotami skôr, než dopyt opustí váš pracovný priestor, a v odpovedi, ktorú čítate, ich zase doplní späť.",
+            "body": "Pred odoslaním skryje osobné údaje a v odpovedi ich zasa doplní.",
             "title": "Odoslať anonymizovane",
             "when": "Zapnite, keď text obsahuje osobné údaje a otázka nestojí na tom, kto sú strany. Nechajte vypnuté, keď ide práve o totožnosť, napríklad pri kontrole konfliktu záujmov: zástupné hodnoty odoberú presne to, na čo sa pýtate."
           },
@@ -2394,10 +2390,26 @@
             "title": "Začnite zadaním"
           },
           "context": {
-            "body": "Nasmeruje dopyt na materiál, ktorý je už založený: na celý spis alebo na jediný súbor v ňom. Nič sa nenahráva ani nekopíruje; odkaz vedie tam, kde materiál už leží.",
+            "body": "Použije ako kontext už uložený spis alebo súbor. Nič sa znova nenahráva ani nekopíruje.",
             "title": "Odkázať na spis alebo súbor",
             "when": "Použite namiesto priloženia súboru vždy, keď je dokument už založený. Odkážte na spis, ak sa má asistent pozrieť naprieč ním; na jeden súbor, keď presne viete, ktorý má čítať. Napísaním @ v prázdnom editore otvoríte tento zoznam priamo."
           },
+          "plusMenu": {
+            "body": "Cez + priložíte súbor alebo odkážete na spis.",
+            "title": "Pridajte podklady cez +",
+            "when": "Keď potrebné podklady ešte nie sú súčasťou chatu."
+          },
+          "send": {
+            "body": "Odošle správu so všetkým, čo ste vyššie priložili, na čo ste odkázali alebo čo ste zapli. Editor zostane na mieste, takže nadväzujúcim dopytom doplníte to, čo v prvej odpovedi chýbalo.",
+            "title": "Odošlite správu",
+            "when": "Prvá odpoveď ukáže, čo ešte chýba."
+          }
+        },
+        "title": "Začnite v chate"
+      },
+      "chatPower": {
+        "description": "Použite zručnosti alebo pripojte ďalšie užitočné nástroje",
+        "steps": {
           "mcp": {
             "body": "Zapína a vypína nástroje pripojeného servera pre vaše chaty: obchodné registre, interné systémy, čokoľvek, čo váš tím pripojil.",
             "title": "Pripojené servery nástrojov",
@@ -2405,18 +2417,11 @@
           },
           "models": {
             "body": "Prepne model len pre túto konverzáciu. Ostatné vlákna si ponechajú predvolený model nastavený pre váš pracovný priestor.",
-            "title": "Ktorý model",
-            "when": "Silnejší model zvoľte na pozorné čítanie, koncipovanie a všade, kde je nesprávna odpoveď drahá. Pri vyhľadávaní, zhrnutiach a rýchlych prepisoch zostaňte pri predvolenom: hĺbka navyše zmení len čas čakania."
+            "title": "Ktorý model"
           },
           "plusMenu": {
-            "body": "Tlačidlo + otvorí ponuku editora: priložiť súbor, prepnúť model, spustiť zručnosť, odkázať na spis alebo zapnúť pripojený server nástrojov. Nasledujúce kroky ju otvoria a prejdú možnosť po možnosti.",
-            "title": "Všetko, čo sa dá pridať, je pod +",
-            "when": "Siahnite po +, kedykoľvek odpoveď závisí od niečoho, čo asistent zatiaľ nevidí: od súboru, spisu, interného pravidla alebo živého externého zdroja."
-          },
-          "send": {
-            "body": "Odošle správu so všetkým, čo ste vyššie priložili, na čo ste odkázali alebo čo ste zapli. Editor zostane na mieste, takže nadväzujúcim dopytom doplníte to, čo v prvej odpovedi chýbalo.",
-            "title": "Odošlite správu",
-            "when": "Odosielajte skoro. Krátka prvá odpoveď ukáže, aký kontext ešte chýba, rýchlejšie než dokonale vymyslené prvé zadanie."
+            "body": "Rovnaká ponuka obsahuje aj prepínanie modelu, zručnosti a pripojené servery nástrojov. Ďalšie kroky ju otvoria a preberú každú možnosť zvlášť.",
+            "title": "Čo ďalšie skrýva tlačidlo +"
           },
           "skills": {
             "body": "Vloží uložené zadanie alebo zručnosť, ktorú napísal váš tím: schválený súbor pokynov, vďaka ktorému sa tá istá úloha zakaždým spracuje rovnako.",
@@ -2424,38 +2429,62 @@
             "when": "Použite ich, keď sa úloha opakuje a záleží na formulácii, napríklad pri štandardnej revízii zmluvy alebo zhrnutí zadania zákazky. Napísaním / v prázdnom editore otvoríte tento zoznam priamo."
           }
         },
-        "title": "Pýtajte sa so správnym kontextom"
+        "title": "Využite chat naplno"
       },
       "documents": {
-        "description": "Nahrajte súbor a otvorte ho",
+        "description": "Zaraďte dokument do spisu a neskôr ho znova nájdite",
         "steps": {
           "browse": {
-            "body": "Nájdite a otvorte ľubovoľný pridaný dokument.",
-            "title": "Prehľadávať dokumenty"
+            "body": "Táto tabuľka je zoznamom dokumentov v spise. Nahrané súbory sa tu zobrazujú ako riadky. Ak sa sem chcete vrátiť neskôr, otvorte spis z bočného panela, vyberte jeho tabuľkové zobrazenie a potom riadok dokumentu.",
+            "title": "Znova nájsť dokument"
           },
           "upload": {
-            "body": "Pridajte súbor a preneste ho do pracovného priestoru.",
-            "title": "Nahrať dokument"
+            "body": "Možnosť Nahrať otvorí výber súborov; súbory môžete tiež presunúť myšou do spisu. Každý súbor sa stane dokumentom v tomto spise, takže ho váš tím môže nájsť a stella ho môže použiť pri revízii.",
+            "title": "Zaradiť dokument do spisu",
+            "when": "Súbor nahrajte sem, keď patrí do spisu a má zostať k dispozícii. Priamo v čete ho priložte iba vtedy, keď slúži ako dočasný kontext pre jednu konverzáciu."
           }
         },
         "title": "Práca s dokumentmi"
       },
       "playbooks": {
-        "description": "Premeňte znalosti z revízie na opakovane použiteľný playbook",
+        "description": "Uložte si postup kontroly dokumentov na nabudúce",
         "steps": {
+          "basics": {
+            "body": "Pridajte názov a opis. Podľa potreby ho obmedzte na určitý typ dokumentu.",
+            "title": "Pomenujte playbook"
+          },
           "create": {
-            "body": "Založte playbook a zachyťte, ako má revízia prebiehať.",
-            "title": "Vytvoriť playbook"
+            "body": "Začnite s prázdnym playbookom.",
+            "title": "Vytvorte playbook"
+          },
+          "overview": {
+            "body": "Playbook uchová otázky a pravidlá pre ďalšie dokumenty.",
+            "title": "Uložte postup kontroly"
+          },
+          "positions": {
+            "body": "Pri každom pravidle vyberte, či má stella text posúdiť, alebo z neho získať údaj.",
+            "title": "Pridajte pravidlá kontroly"
           }
         },
-        "title": "Zostaviť playbook"
+        "title": "Vytvorte playbook"
       },
       "tabularReview": {
         "description": "Získajte odpovede naprieč mnohými súbormi naraz",
         "steps": {
           "addColumn": {
-            "body": "Pridajte otázku, na ktorú sa odpovie v každom riadku.",
-            "title": "Pridať stĺpec"
+            "body": "Nový stĺpec otvorí editor stĺpca. Stĺpec pomenujte jasnou otázkou a presne povedzte Stelle, čo má hľadať; rovnaký pokyn sa spustí pre každý riadok dokumentu.",
+            "title": "Položiť jednu otázku ku každému dokumentu",
+            "when": "Pre každú odpoveď, ktorú potrebujete porovnať, filtrovať, zoradiť alebo exportovať, vytvorte samostatný stĺpec. Súvisiaci kontext uveďte v zadaní namiesto spájania viacerých odpovedí do jednej bunky."
+          },
+          "answerType": {
+            "body": "Pole Vráti určuje formát každej odpovede. Ak má výsledok štruktúru, vyberte číslo, dátum, jeden výber alebo viacnásobný výber; stella zachová konzistentnosť stĺpca namiesto toho, aby vracala ľubovoľný text.",
+            "title": "Vybrať typ odpovede",
+            "when": "Pre pevnú množinu výsledkov použite výber, na zoraďovanie a výpočty číslo alebo dátum a text iba vtedy, keď si odpoveď skutočne vyžaduje podrobný opis."
+          },
+          "table": {
+            "body": "Každý riadok je dokument a každý vlastný stĺpec je jedna otázka položená naraz ku všetkým dokumentom. Priečinok súborov sa tak zmení na porovnateľné odpovede bez toho, aby ste ich museli otvárať po jednom.",
+            "title": "Revidovať všetky dokumenty, nie iba jeden",
+            "when": "Tabuľku použite, keď potrebujete rovnaké fakty alebo rozhodnutia z viacerých dokumentov. Dokument otvorte priamo, keď sú rozloženie, formulácia alebo okolitý kontext dôležitejšie než porovnanie."
           }
         },
         "title": "Revízia v tabuľke"
@@ -2464,8 +2493,27 @@
         "description": "Zreťazte kroky do opakovateľného pracovného postupu",
         "steps": {
           "create": {
-            "body": "Skombinujte kroky, ktoré sa na požiadanie spustia spoločne.",
-            "title": "Vytvoriť pracovný postup"
+            "body": "Možnosť Vytvoriť otvorí neuložený koncept pracovného postupu. Ďalšie kroky určia, kedy sa spustí, čo vykoná a kde musí človek rozhodnúť, či môže pokračovať.",
+            "title": "Začať s konceptom pracovného postupu"
+          },
+          "overview": {
+            "body": "Pracovný postup spája spúšťač so sledom úkonov, takže rutinný proces zakaždým prebehne rovnako. Môže automaticky pripraviť prácu, pričom v prípade potreby ponechá rozhodnutie na revízorovi.",
+            "title": "Automatizovať opakovateľný proces",
+            "when": "Automatizujte prácu, ktorá má stabilný spúšťač, opakovateľné kroky a jasne určeného zodpovedného za výnimky. Meniacu sa prácu alebo prácu náročnú na úsudok vykonávajte manuálne, kým sa samotný proces neustáli."
+          },
+          "reviewGate": {
+            "body": "Kontrolný bod revízie pozastaví vykonávanie, kým ho človek neschváli alebo nezamietne. Umiestnite ho pred prvý úkon, ktorý sa nemá vykonať iba na základe automatizovaného výsledku.",
+            "title": "Ponechať rozhodnutie na revízorovi",
+            "when": "Kontrolný bod použite pred odoslaním, zaradením do spisu, eskaláciou alebo iným konečným potvrdením výsledku so závažnými dôsledkami. Vynechajte ho iba vtedy, keď je ďalší krok bezpečne vratný a nevyžaduje ľudský úsudok."
+          },
+          "steps": {
+            "body": "Kroky sa vykonávajú v tomto poradí a odovzdávajú výsledky práce ďalej. Každý krok nech zodpovedá za jeden jasný úkon, aby boli zlyhania zrozumiteľné a poradie sa dalo ľahko meniť.",
+            "title": "Zostaviť poradie krokov"
+          },
+          "trigger": {
+            "body": "Spúšťač určuje, kedy sa začne vykonávanie: manuálne, podľa harmonogramu alebo po nahraní zodpovedajúcich súborov. Zúžte podmienky spisu a súborov, aby nesúvisiaca práca nikdy nespustila pracovný postup.",
+            "title": "Vybrať, čo spustí pracovný postup",
+            "when": "Kým je proces nový, používajte manuálne spustenie; pre časovo určené rutinné úlohy použite harmonogram a nahranie súboru iba vtedy, keď je prijatý dokument spoľahlivým signálom na začatie."
           }
         },
         "title": "Automatizovať pracovný postup"
@@ -2972,7 +3020,6 @@
       "addPosition": "Pridať pozíciu",
       "addRule": "Pravidlo",
       "adoptAsIdeal": "Prijať ako ideálne znenie",
-      "advanced": "Zmeniť, ako to funguje",
       "all": "Všetky playbooky",
       "approval": {
         "approve": "Schváliť",
@@ -4121,7 +4168,7 @@
     "description": "Opakovane použiteľné formátovanie dokumentov pre vzory a nové dokumenty",
     "editor": {
       "bodyText": "Základný text",
-      "createFromStella": "Vytvoriť variant zo Stella Style",
+      "createFromStella": "Vytvoriť variant zo stella Style",
       "createTitle": "Vytvoriť sadu štýlov",
       "description": "Upravte systém formátovania dokumentu a pred uložením skontrolujte výsledok.",
       "double": "Dvojité",
@@ -4192,7 +4239,7 @@
     "saveFailed": "Sadu štýlov sa nepodarilo uložiť",
     "savedDescription": "Uložená sada štýlov",
     "sourceDocument": "Zdrojový DOCX",
-    "stellaDescription": "Kompletné neutrálne formátovanie právnych dokumentov Stella",
+    "stellaDescription": "Kompletné neutrálne formátovanie právnych dokumentov stella",
     "stellaStyle": "Stella Style",
     "title": "Sady štýlov",
     "untitledDocument": "Dokument bez názvu"

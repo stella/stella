@@ -1636,7 +1636,7 @@
     "extractProcuracao": {
       "dropZone": "Solte a procuração (.docx) aqui ou clique para escolher um arquivo",
       "extracting": "Extraindo outorgante(s)…",
-      "fileHint": "A Stella lê o documento e localiza o(s) outorgante(s) (quem concede a procuração, não o advogado) automaticamente. Revise o resultado antes de confirmar.",
+      "fileHint": "A stella lê o documento e localiza o(s) outorgante(s) (quem concede a procuração, não o advogado) automaticamente. Revise o resultado antes de confirmar.",
       "fileTooLarge": "O arquivo da procuração deve ter no máximo 50 MB.",
       "invalidFileType": "Selecione um arquivo .docx.",
       "noOutorganteFound": "Não foi possível identificar nenhum outorgante neste documento.",
@@ -2347,7 +2347,7 @@
   },
   "guides": {
     "action": {
-      "replay": "Repetir",
+      "replay": "Começar de novo",
       "skip": "Pular",
       "start": "Começar"
     },
@@ -2355,32 +2355,28 @@
       "progress": "{completed} de {total} concluídos"
     },
     "community": {
-      "body": "Obtenha ajuda de outros usuários e dos desenvolvedores no nosso chat da comunidade.",
-      "directLinkLabel": "Fale com a gente",
-      "directPrompt": "Quer falar diretamente com a equipe?",
-      "linkLabel": "Abrir o fórum da comunidade"
+      "personalSupport": "Suporte pessoal"
     },
     "help": {
-      "buttonLabel": "Ajuda e guias",
-      "subtitle": "Tours interativos do espaço de trabalho",
-      "tabs": {
-        "community": "Comunidade",
-        "guides": "Guias"
-      },
-      "title": "Ajuda e guias"
+      "buttonLabel": "Ajuda e feedback",
+      "title": "Ajuda e feedback"
     },
     "leave": "Sair do guia",
     "minutes": "{count} min.",
+    "nudge": {
+      "action": "Abrir guias",
+      "body": "Novo por aqui? Alguns tours rápidos mostram tudo."
+    },
     "status": {
       "skipped": "Ignorado"
     },
     "tours": {
       "chat": {
-        "description": "O que está por trás do botão + e quando recorrer a cada opção",
+        "description": "Adicione contexto para a IA e envie sua solicitação com segurança",
         "examplePrompt": "Resuma as principais obrigações deste contrato",
         "steps": {
           "anonymize": {
-            "body": "Substitui nomes, identificadores e outros dados pessoais por marcadores antes de o pedido sair do seu espaço de trabalho e repõe os valores reais na resposta que você lê.",
+            "body": "Oculta os dados pessoais antes do envio e volta a exibi-los na resposta.",
             "title": "Enviar anonimizado",
             "when": "Ligue quando o texto trouxer dados pessoais e a pergunta não depender de quem são as partes. Deixe desligado quando a identidade for justamente o ponto, como em uma checagem de conflito: os marcadores tiram exatamente aquilo que você está perguntando."
           },
@@ -2394,10 +2390,26 @@
             "title": "Comece pelo pedido"
           },
           "context": {
-            "body": "Aponta o pedido para material já arquivado: um caso inteiro ou um único arquivo dentro dele. Nada é enviado nem copiado; a referência é um link para onde o material já está.",
+            "body": "Adiciona um caso ou arquivo existente como contexto. Nada é enviado nem copiado.",
             "title": "Referenciar um caso ou um arquivo",
             "when": "Use no lugar do anexo sempre que o documento já estiver arquivado. Referencie o caso para o assistente percorrer tudo; um único arquivo quando você sabe exatamente qual ele deve ler. Digitar @ no editor vazio abre essa lista direto."
           },
+          "plusMenu": {
+            "body": "Com +, você pode anexar um arquivo ou referenciar um caso.",
+            "title": "Adicione contexto com +",
+            "when": "Quando o contexto necessário ainda não estiver no chat."
+          },
+          "send": {
+            "body": "Envia a mensagem junto com tudo o que você anexou, referenciou ou ligou acima. O editor continua no lugar, então uma pergunta seguinte acrescenta o que faltou na primeira resposta.",
+            "title": "Envie a mensagem",
+            "when": "A primeira resposta mostra o que ainda falta."
+          }
+        },
+        "title": "Comece pelo chat"
+      },
+      "chatPower": {
+        "description": "Use habilidades ou conecte outras ferramentas úteis",
+        "steps": {
           "mcp": {
             "body": "Liga e desliga as ferramentas de um servidor conectado nos seus chats: cadastros de empresas, sistemas internos, tudo o que sua equipe conectou.",
             "title": "Servidores de ferramentas conectados",
@@ -2405,18 +2417,11 @@
           },
           "models": {
             "body": "Troca o modelo apenas nesta conversa. As demais conversas mantêm o modelo padrão do seu espaço de trabalho.",
-            "title": "Qual modelo",
-            "when": "Suba para um modelo mais forte na leitura atenta, na redação e em tudo onde uma resposta errada sai cara. Fique no padrão para consultas, resumos e reescritas rápidas: ali a profundidade extra só muda a espera."
+            "title": "Qual modelo"
           },
           "plusMenu": {
-            "body": "O botão + abre o menu do editor: anexar um arquivo, trocar de modelo, executar uma habilidade, referenciar um caso ou ligar um servidor de ferramentas conectado. Os próximos passos abrem o menu e percorrem cada opção.",
-            "title": "Tudo o que dá para acrescentar está atrás do +",
-            "when": "Recorra ao + sempre que a resposta depender de algo que o assistente ainda não enxerga: um arquivo, um caso, uma regra interna ou uma fonte externa atualizada."
-          },
-          "send": {
-            "body": "Envia a mensagem junto com tudo o que você anexou, referenciou ou ligou acima. O editor continua no lugar, então uma pergunta seguinte acrescenta o que faltou na primeira resposta.",
-            "title": "Envie a mensagem",
-            "when": "Envie cedo. Uma primeira resposta curta mostra mais rápido qual contexto ainda falta do que um primeiro prompt perfeito."
+            "body": "O mesmo menu também traz a troca de modelo, as habilidades e os servidores de ferramentas conectados. Os próximos passos o abrem e percorrem cada opção.",
+            "title": "Mais por trás do botão +"
           },
           "skills": {
             "body": "Insere um prompt salvo ou uma habilidade escrita pela sua equipe: um conjunto de instruções revisado que trata a mesma tarefa do mesmo jeito toda vez.",
@@ -2424,38 +2429,62 @@
             "when": "Use quando a tarefa se repete e a formulação importa, por exemplo uma revisão de contrato padrão ou um resumo de abertura. Digitar / no editor vazio abre essa lista direto."
           }
         },
-        "title": "Perguntar com o contexto certo"
+        "title": "Faça mais no chat"
       },
       "documents": {
-        "description": "Envie um arquivo e abra-o",
+        "description": "Adicione um documento ao caso e encontre-o depois",
         "steps": {
           "browse": {
-            "body": "Encontre e abra qualquer documento que você adicionou.",
-            "title": "Navegue pelos seus documentos"
+            "body": "Esta tabela é a lista de documentos do caso. Os arquivos enviados aparecem aqui como linhas. Para voltar depois, abra o caso pela barra lateral, escolha a visualização em tabela e selecione a linha do documento.",
+            "title": "Encontrar o documento novamente"
           },
           "upload": {
-            "body": "Adicione um arquivo para trazê-lo ao seu espaço de trabalho.",
-            "title": "Enviar um documento"
+            "body": "A opção Enviar abre o seletor de arquivos; você também pode arrastar arquivos para o caso. Cada arquivo se torna um documento deste caso, onde sua equipe pode encontrá-lo e a stella pode usá-lo na revisão.",
+            "title": "Adicionar um documento ao caso",
+            "when": "Envie o arquivo aqui quando ele pertencer ao caso e precisar continuar disponível. Anexe-o diretamente no chat somente quando ele servir de contexto temporário para uma única conversa."
           }
         },
         "title": "Trabalhe com documentos"
       },
       "playbooks": {
-        "description": "Transforme o conhecimento de revisão em um playbook reutilizável",
+        "description": "Salve um processo de revisão de documentos para a próxima vez",
         "steps": {
+          "basics": {
+            "body": "Adicione um nome e uma descrição. Se necessário, limite-o a um tipo de documento.",
+            "title": "Dê um nome ao playbook"
+          },
           "create": {
-            "body": "Inicie um playbook para registrar como uma revisão deve ocorrer.",
-            "title": "Criar um playbook"
+            "body": "Comece com um playbook em branco.",
+            "title": "Crie um playbook"
+          },
+          "overview": {
+            "body": "Um playbook guarda perguntas e regras para outros documentos.",
+            "title": "Salve o processo de revisão"
+          },
+          "positions": {
+            "body": "Para cada regra, escolha entre avaliar o texto ou extrair uma informação.",
+            "title": "Adicione regras de revisão"
           }
         },
-        "title": "Monte um playbook"
+        "title": "Crie um playbook"
       },
       "tabularReview": {
         "description": "Extraia respostas de muitos arquivos de uma só vez",
         "steps": {
           "addColumn": {
-            "body": "Adicione uma pergunta a ser respondida em cada linha.",
-            "title": "Adicionar uma coluna"
+            "body": "Nova coluna abre o editor de colunas. Dê à coluna um nome claro em forma de pergunta e diga à stella exatamente o que procurar; a mesma instrução será executada em cada linha de documento.",
+            "title": "Fazer uma pergunta sobre cada documento",
+            "when": "Crie uma coluna separada para cada resposta que você precise comparar, filtrar, ordenar ou exportar. Inclua o contexto relacionado no prompt em vez de combinar várias respostas em uma só célula."
+          },
+          "answerType": {
+            "body": "O campo Retorna controla o formato de cada resposta. Escolha número, data, seleção única ou seleção múltipla quando o resultado tiver uma estrutura; a stella manterá a coluna consistente em vez de retornar um texto qualquer.",
+            "title": "Escolher o tipo de resposta",
+            "when": "Use seleção para um conjunto fixo de resultados, número ou data para ordenação e cálculos, e texto somente quando a resposta realmente precisar de detalhes narrativos."
+          },
+          "table": {
+            "body": "Cada linha é um documento, e cada coluna personalizada é uma pergunta feita sobre todos os documentos ao mesmo tempo. Isso transforma uma pasta de arquivos em respostas comparáveis sem precisar abrir os arquivos um por um.",
+            "title": "Revisar o conjunto, não apenas um arquivo",
+            "when": "Use a tabela quando precisar dos mesmos fatos ou decisões em vários documentos. Abra um documento diretamente quando o layout, o texto ou o contexto ao redor for mais importante do que a comparação."
           }
         },
         "title": "Revise em uma tabela"
@@ -2464,8 +2493,27 @@
         "description": "Encadeie etapas em um fluxo de trabalho repetível",
         "steps": {
           "create": {
-            "body": "Combine etapas que são executadas juntas sob demanda.",
-            "title": "Criar um fluxo de trabalho"
+            "body": "A opção Criar abre um rascunho de fluxo de trabalho que ainda não foi salvo. As próximas etapas definem quando ele começa, o que faz e em que ponto uma pessoa precisa decidir se ele pode continuar.",
+            "title": "Iniciar um rascunho de fluxo de trabalho"
+          },
+          "overview": {
+            "body": "Um fluxo de trabalho conecta um gatilho a uma sequência de ações para que um processo rotineiro seja executado sempre da mesma forma. Ele pode preparar o trabalho automaticamente e manter a decisão com um revisor quando necessário.",
+            "title": "Automatizar um processo repetível",
+            "when": "Automatize o trabalho que tenha um gatilho estável, etapas repetíveis e uma pessoa claramente responsável pelas exceções. Mantenha manual o trabalho variável ou que exija muito julgamento até que o processo esteja bem definido."
+          },
+          "reviewGate": {
+            "body": "Uma aprovação de revisão pausa a execução até que uma pessoa a aprove ou rejeite. Coloque a aprovação antes da primeira ação que não deva ocorrer apenas com base em um resultado automatizado.",
+            "title": "Manter a decisão com um revisor",
+            "when": "Use uma aprovação antes de enviar, protocolar, escalar ou confirmar de outra forma um resultado com consequências importantes. Ignore-a somente quando a próxima etapa puder ser revertida com segurança e não exigir análise humana."
+          },
+          "steps": {
+            "body": "As etapas são executadas nesta ordem e repassam o trabalho adiante. Mantenha cada etapa responsável por uma única ação clara para que as falhas sejam compreensíveis e a sequência seja fácil de alterar.",
+            "title": "Montar a sequência"
+          },
+          "trigger": {
+            "body": "O gatilho determina quando uma execução começa: manualmente, conforme um agendamento ou quando arquivos correspondentes são enviados. Restrinja as condições de caso e arquivo para que trabalhos não relacionados nunca iniciem o fluxo.",
+            "title": "Escolher o que inicia o fluxo de trabalho",
+            "when": "Use o início manual enquanto o processo for novo, um agendamento para rotinas baseadas em tempo e o envio de arquivo somente quando a chegada de um documento for um sinal confiável para começar."
           }
         },
         "title": "Automatize um fluxo de trabalho"
@@ -2972,7 +3020,6 @@
       "addPosition": "Adicionar posição",
       "addRule": "Regra",
       "adoptAsIdeal": "Adotar como redação ideal",
-      "advanced": "Alterar funcionamento",
       "all": "Todos os playbooks",
       "approval": {
         "approve": "Aprovar",
@@ -4121,7 +4168,7 @@
     "description": "Formatação reutilizável para modelos e novos documentos",
     "editor": {
       "bodyText": "Corpo do texto",
-      "createFromStella": "Criar uma variante do Stella Style",
+      "createFromStella": "Criar uma variante do stella Style",
       "createTitle": "Criar conjunto de estilos",
       "description": "Ajuste o sistema de formatação do documento e confira o resultado antes de salvar.",
       "double": "Duplo",
@@ -4192,7 +4239,7 @@
     "saveFailed": "Não foi possível salvar o conjunto de estilos",
     "savedDescription": "Conjunto de estilos salvo",
     "sourceDocument": "DOCX de origem",
-    "stellaDescription": "Formatação jurídica completa e neutra da Stella",
+    "stellaDescription": "Formatação jurídica completa e neutra da stella",
     "stellaStyle": "Stella Style",
     "title": "Conjuntos de estilos",
     "untitledDocument": "Documento sem título"

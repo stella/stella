@@ -7,6 +7,7 @@ import {
   findDroppedExactSelectors,
   findDroppedPlurals,
   findForbiddenTerms,
+  hasInvalidCapitalizedStella,
   findIcuError,
   findMissingPluralCategories,
   findPlaceholderMismatch,
@@ -48,6 +49,24 @@ describe("findPlaceholderMismatch", () => {
         "{count, plural, one {# položka} few {# položky} other {# položek}}",
       ),
     ).toBeNull();
+  });
+});
+
+describe("stella wordmark casing", () => {
+  test("allows sentence starts but rejects capitalized mid-sentence forms", () => {
+    const midSentence = ["Ask", "Stella to review the document"].join(" ");
+    const declinedMidSentence = ["Nurodykite", "Stellai, ko ieškoti"].join(" ");
+    expect(hasInvalidCapitalizedStella("Stella reviews the document")).toBe(
+      false,
+    );
+    expect(
+      hasInvalidCapitalizedStella("Ready. Stella reviews the document"),
+    ).toBe(false);
+    expect(hasInvalidCapitalizedStella(midSentence)).toBe(true);
+    expect(hasInvalidCapitalizedStella(declinedMidSentence)).toBe(true);
+    expect(hasInvalidCapitalizedStella("stella reviews the document")).toBe(
+      false,
+    );
   });
 });
 

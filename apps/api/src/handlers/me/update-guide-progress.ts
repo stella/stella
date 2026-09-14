@@ -1,14 +1,15 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
-import { createSafeSessionHandler } from "@/api/lib/api-handlers";
-import type { SessionHandlerConfig } from "@/api/lib/api-handlers";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   GUIDE_PROGRESS_STATUSES,
   GUIDE_PROGRESS_TOUR_IDS,
-  patchUserGuideProgress,
-} from "@/api/lib/guide-progress";
+} from "@stll/api-contract";
+
+import { createSafeSessionHandler } from "@/api/lib/api-handlers";
+import type { SessionHandlerConfig } from "@/api/lib/api-handlers";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { patchUserGuideProgress } from "@/api/lib/guide-progress";
 
 const requestBody = t.Object(
   {

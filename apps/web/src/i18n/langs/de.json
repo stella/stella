@@ -2347,7 +2347,7 @@
   },
   "guides": {
     "action": {
-      "replay": "Wiederholen",
+      "replay": "Neu starten",
       "skip": "Überspringen",
       "start": "Starten"
     },
@@ -2355,32 +2355,28 @@
       "progress": "{completed} von {total} abgeschlossen"
     },
     "community": {
-      "body": "Holen Sie sich Hilfe von anderen Nutzern und den Entwicklern in unserem Community-Chat.",
-      "directLinkLabel": "Sprechen Sie uns an",
-      "directPrompt": "Möchten Sie direkt mit dem Team sprechen?",
-      "linkLabel": "Community-Forum öffnen"
+      "personalSupport": "Persönlicher Support"
     },
     "help": {
-      "buttonLabel": "Hilfe und Anleitungen",
-      "subtitle": "Interaktive Touren durch den Arbeitsbereich",
-      "tabs": {
-        "community": "Community-Forum",
-        "guides": "Anleitungen"
-      },
-      "title": "Hilfe und Anleitungen"
+      "buttonLabel": "Hilfe und Feedback",
+      "title": "Hilfe und Feedback"
     },
     "leave": "Anleitung beenden",
     "minutes": "{count} Min.",
+    "nudge": {
+      "action": "Anleitungen öffnen",
+      "body": "Neu hier? Ein paar kurze Touren zeigen Ihnen alles."
+    },
     "status": {
       "skipped": "Übersprungen"
     },
     "tours": {
       "chat": {
-        "description": "Was hinter der Schaltfläche + steckt und wann Sie zu welcher Option greifen",
+        "description": "Kontext für die KI hinzufügen und die Anfrage sicher senden",
         "examplePrompt": "Fassen Sie die wichtigsten Pflichten in diesem Vertrag zusammen",
         "steps": {
           "anonymize": {
-            "body": "Ersetzt Namen, Kennzeichen und andere personenbezogene Daten durch Platzhalter, bevor die Anfrage Ihren Arbeitsbereich verlässt, und setzt die echten Werte in der Antwort, die Sie lesen, wieder ein.",
+            "body": "Verbirgt persönliche Daten vor dem Senden und zeigt sie in der Antwort wieder an.",
             "title": "Anonymisiert senden",
             "when": "Schalten Sie es an, wenn der Text personenbezogene Daten enthält und die Frage nicht davon abhängt, wer die Parteien sind. Lassen Sie es aus, wenn es gerade um die Identität geht, etwa bei einer Interessenkollisionsprüfung: Platzhalter nehmen genau das weg, wonach Sie fragen."
           },
@@ -2394,10 +2390,26 @@
             "title": "Mit der Anfrage beginnen"
           },
           "context": {
-            "body": "Richtet die Anfrage auf Material, das bereits abgelegt ist: eine ganze Akte oder eine einzelne Datei darin. Nichts wird hochgeladen und nichts kopiert; der Verweis ist ein Link auf den Ort, an dem das Material schon liegt.",
+            "body": "Fügt eine vorhandene Akte oder Datei als Kontext hinzu. Nichts wird hochgeladen oder kopiert.",
             "title": "Auf eine Akte oder Datei verweisen",
             "when": "Nutzen Sie das statt eines Anhangs, sobald das Dokument bereits abgelegt ist. Verweisen Sie auf die Akte, wenn der Assistent sie insgesamt durchsehen soll; auf eine einzelne Datei, wenn Sie genau wissen, welche zu lesen ist. Ein @ im leeren Editor öffnet diese Liste direkt."
           },
+          "plusMenu": {
+            "body": "Mit + hängen Sie eine Datei an oder verweisen auf eine Akte.",
+            "title": "Kontext über + hinzufügen",
+            "when": "Wenn der benötigte Kontext noch nicht im Chat ist."
+          },
+          "send": {
+            "body": "Sendet die Nachricht mit allem, was Sie oben angehängt, referenziert oder eingeschaltet haben. Der Editor bleibt stehen, sodass eine Rückfrage nachreichen kann, was in der ersten Antwort fehlte.",
+            "title": "Absenden",
+            "when": "Die erste Antwort zeigt, was noch fehlt."
+          }
+        },
+        "title": "Im Chat loslegen"
+      },
+      "chatPower": {
+        "description": "Skills nutzen oder weitere nützliche Werkzeuge verbinden",
+        "steps": {
           "mcp": {
             "body": "Schaltet die Werkzeuge eines verbundenen Servers für Ihre Chats an oder aus: Handelsregister, interne Systeme, alles, was Ihr Team verbunden hat.",
             "title": "Verbundene Werkzeugserver",
@@ -2405,18 +2417,11 @@
           },
           "models": {
             "body": "Wechselt das Modell nur für dieses Gespräch. Alle anderen Verläufe behalten die Voreinstellung Ihres Arbeitsbereichs.",
-            "title": "Welches Modell",
-            "when": "Wechseln Sie hoch für genaues Lesen, Entwürfe und alles, wo eine falsche Antwort teuer wird. Bei Nachschlagen, Zusammenfassungen und schnellen Umformulierungen bleiben Sie bei der Voreinstellung: Mehr Tiefe ändert dort nur die Wartezeit."
+            "title": "Welches Modell"
           },
           "plusMenu": {
-            "body": "Die Schaltfläche + öffnet das Editor-Menü: Datei anhängen, Modell wechseln, Fähigkeit ausführen, auf eine Akte verweisen oder einen verbundenen Werkzeugserver aktivieren. Die nächsten Schritte öffnen es und gehen jede Option durch.",
-            "title": "Alles Ergänzbare steckt hinter +",
-            "when": "Greifen Sie zu +, sobald die Antwort von etwas abhängt, das der Assistent noch nicht sieht: einer Datei, einer Akte, einer internen Regel oder einer aktuellen externen Quelle."
-          },
-          "send": {
-            "body": "Sendet die Nachricht mit allem, was Sie oben angehängt, referenziert oder eingeschaltet haben. Der Editor bleibt stehen, sodass eine Rückfrage nachreichen kann, was in der ersten Antwort fehlte.",
-            "title": "Absenden",
-            "when": "Senden Sie früh. Eine kurze erste Antwort zeigt schneller, welcher Kontext noch fehlt, als ein perfekt formulierter erster Prompt."
+            "body": "Dasselbe Menü enthält auch den Modellwechsel, Skills und verbundene Tool-Server. Die nächsten Schritte öffnen es und gehen jede Option durch.",
+            "title": "Mehr hinter der Schaltfläche +"
           },
           "skills": {
             "body": "Fügt einen gespeicherten Prompt oder eine von Ihrem Team geschriebene Fähigkeit ein: ein geprüftes Anweisungspaket, das dieselbe Aufgabe jedes Mal gleich behandelt.",
@@ -2424,38 +2429,62 @@
             "when": "Nutzen Sie eine, wenn die Aufgabe wiederkehrt und die Formulierung zählt, etwa bei einer Standardvertragsprüfung oder einer Erstaufnahme. Ein / im leeren Editor öffnet diese Liste direkt."
           }
         },
-        "title": "Mit dem richtigen Kontext fragen"
+        "title": "Mehr im Chat erledigen"
       },
       "documents": {
-        "description": "Laden Sie eine Datei hoch und öffnen Sie sie",
+        "description": "Legen Sie ein Dokument ab und finden Sie es später wieder",
         "steps": {
           "browse": {
-            "body": "Finden und öffnen Sie ein beliebiges hinzugefügtes Dokument.",
-            "title": "Dokumente durchsuchen"
+            "body": "Diese Tabelle ist die Dokumentenliste der Akte. Hochgeladene Dateien erscheinen hier als Zeilen. Um später zurückzukehren, öffnen Sie die Akte über die Seitenleiste, wählen Sie die Tabellenansicht und anschließend die Dokumentzeile aus.",
+            "title": "Dokument wiederfinden"
           },
           "upload": {
-            "body": "Fügen Sie eine Datei hinzu, um sie in Ihren Arbeitsbereich zu holen.",
-            "title": "Dokument hochladen"
+            "body": "Über „Hochladen“ öffnen Sie die Dateiauswahl; Sie können Dateien auch auf die Akte ziehen. Jede Datei wird zu einem Dokument in dieser Akte, das Ihr Team wiederfinden und stella für die Prüfung verwenden kann.",
+            "title": "Dokument in der Akte ablegen",
+            "when": "Laden Sie eine Datei hier hoch, wenn sie zur Akte gehört und dauerhaft verfügbar bleiben soll. Hängen Sie sie nur dann direkt an einen Chat an, wenn sie als vorübergehender Kontext für ein einzelnes Gespräch dient."
           }
         },
         "title": "Mit Dokumenten arbeiten"
       },
       "playbooks": {
-        "description": "Verwandeln Sie Prüfungswissen in ein wiederverwendbares Playbook",
+        "description": "Den Ablauf einer Dokumentenprüfung für später speichern",
         "steps": {
+          "basics": {
+            "body": "Fügen Sie einen Namen und eine Beschreibung hinzu. Beschränken Sie es bei Bedarf auf einen Dokumenttyp.",
+            "title": "Playbook benennen"
+          },
           "create": {
-            "body": "Beginnen Sie ein Playbook, um festzuhalten, wie eine Prüfung ablaufen soll.",
+            "body": "Beginnen Sie mit einem leeren Playbook.",
             "title": "Playbook erstellen"
+          },
+          "overview": {
+            "body": "Ein Playbook hält Fragen und Regeln für weitere Dokumente fest.",
+            "title": "Prüfablauf speichern"
+          },
+          "positions": {
+            "body": "Legen Sie für jede Regel fest, ob der Text geprüft oder eine Angabe extrahiert wird.",
+            "title": "Prüfregeln hinzufügen"
           }
         },
-        "title": "Playbook aufbauen"
+        "title": "Playbook erstellen"
       },
       "tabularReview": {
         "description": "Extrahieren Sie Antworten über viele Dateien gleichzeitig",
         "steps": {
           "addColumn": {
-            "body": "Fügen Sie eine Frage hinzu, die in jeder Zeile beantwortet wird.",
-            "title": "Spalte hinzufügen"
+            "body": "Mit „Neue Spalte“ öffnen Sie den Spalteneditor. Geben Sie der Spalte einen eindeutigen, als Frage formulierten Namen und teilen Sie stella genau mit, wonach gesucht werden soll; dieselbe Anweisung wird auf jede Dokumentzeile angewendet.",
+            "title": "Jedem Dokument dieselbe Frage stellen",
+            "when": "Erstellen Sie für jede Antwort, die Sie vergleichen, filtern, sortieren oder exportieren möchten, eine eigene Spalte. Nehmen Sie zusammengehörigen Kontext in die Anweisung auf, statt mehrere Antworten in einer Zelle zu bündeln."
+          },
+          "answerType": {
+            "body": "Die Einstellung „Format“ bestimmt die Form jeder Antwort. Wählen Sie Zahl, Datum, Einfachauswahl oder Mehrfachauswahl, wenn das Ergebnis strukturiert ist; stella hält die Spalte dadurch einheitlich, statt beliebigen Freitext zurückzugeben.",
+            "title": "Antworttyp auswählen",
+            "when": "Verwenden Sie eine Auswahl für eine feste Ergebnismenge, eine Zahl oder ein Datum zum Sortieren und Berechnen und Text nur dann, wenn die Antwort tatsächlich eine ausführliche Beschreibung erfordert."
+          },
+          "table": {
+            "body": "Jede Zeile steht für ein Dokument, jede benutzerdefinierte Spalte für eine Frage, die allen Dokumenten gleichzeitig gestellt wird. So wird aus einem Ordner voller Dateien eine Sammlung vergleichbarer Antworten, ohne jedes Dokument einzeln zu öffnen.",
+            "title": "Den Bestand prüfen, nicht nur eine Datei",
+            "when": "Verwenden Sie die Tabelle, wenn Sie dieselben Angaben oder Entscheidungen aus mehreren Dokumenten benötigen. Öffnen Sie ein Dokument direkt, wenn Layout, Wortlaut oder Kontext wichtiger sind als der Vergleich."
           }
         },
         "title": "In einer Tabelle prüfen"
@@ -2464,8 +2493,27 @@
         "description": "Verketten Sie Schritte zu einem wiederholbaren Arbeitsablauf",
         "steps": {
           "create": {
-            "body": "Kombinieren Sie Schritte, die bei Bedarf gemeinsam ausgeführt werden.",
-            "title": "Arbeitsablauf erstellen"
+            "body": "Mit „Erstellen“ öffnen Sie einen noch nicht gespeicherten Arbeitsablaufentwurf. In den nächsten Schritten legen Sie fest, wann er startet, was er ausführt und an welcher Stelle eine Person über die Fortsetzung entscheiden muss.",
+            "title": "Arbeitsablaufentwurf anlegen"
+          },
+          "overview": {
+            "body": "Ein Arbeitsablauf verbindet einen Auslöser mit einer Abfolge von Aktionen, damit ein Routineprozess jedes Mal gleich abläuft. Er kann Arbeit automatisch vorbereiten und Entscheidungen bei Bedarf weiterhin einer prüfenden Person überlassen.",
+            "title": "Wiederholbaren Prozess automatisieren",
+            "when": "Automatisieren Sie Aufgaben mit einem stabilen Auslöser, wiederholbaren Schritten und klarer Verantwortung für Ausnahmen. Lassen Sie wechselnde oder stark ermessensabhängige Aufgaben manuell, bis der Prozess selbst gefestigt ist."
+          },
+          "reviewGate": {
+            "body": "Ein Prüfpunkt hält die Ausführung an, bis eine Person sie genehmigt oder ablehnt. Setzen Sie ihn vor die erste Aktion, die nicht allein aufgrund eines automatisierten Ergebnisses erfolgen darf.",
+            "title": "Entscheidung bei einer prüfenden Person belassen",
+            "when": "Verwenden Sie einen Prüfpunkt vor dem Versenden, Ablegen, Eskalieren oder einer anderen verbindlichen Übernahme eines folgenreichen Ergebnisses. Überspringen Sie ihn nur, wenn der nächste Schritt sicher rückgängig zu machen ist und kein menschliches Urteilsvermögen erfordert."
+          },
+          "steps": {
+            "body": "Die Schritte werden in dieser Reihenfolge ausgeführt und geben ihre Arbeit weiter. Jeder Schritt sollte für eine klar abgegrenzte Aktion zuständig sein, damit Fehler nachvollziehbar bleiben und sich die Abfolge leicht ändern lässt.",
+            "title": "Abfolge aufbauen"
+          },
+          "trigger": {
+            "body": "Der Auslöser bestimmt, wann eine Ausführung beginnt: manuell, nach Zeitplan oder beim Hochladen passender Dateien. Grenzen Sie die Bedingungen für Akte und Dateien so ein, dass sachfremde Vorgänge den Arbeitsablauf niemals starten.",
+            "title": "Auslöser für den Arbeitsablauf auswählen",
+            "when": "Verwenden Sie den manuellen Start, solange der Prozess neu ist, einen Zeitplan für zeitgesteuerte Routinen und den Datei-Upload nur dann, wenn ein eingehendes Dokument ein verlässliches Startsignal darstellt."
           }
         },
         "title": "Arbeitsablauf automatisieren"
@@ -2972,7 +3020,6 @@
       "addPosition": "Standpunkt hinzufügen",
       "addRule": "Regel",
       "adoptAsIdeal": "Als ideale Formulierung übernehmen",
-      "advanced": "Funktionsweise ändern",
       "all": "Alle Playbooks",
       "approval": {
         "approve": "Genehmigen",
@@ -4121,7 +4168,7 @@
     "description": "Wiederverwendbare Dokumentformatierung für Vorlagen und neue Dokumente",
     "editor": {
       "bodyText": "Fließtext",
-      "createFromStella": "Variante aus Stella Style erstellen",
+      "createFromStella": "Variante aus stella Style erstellen",
       "createTitle": "Stilset erstellen",
       "description": "Passen Sie das Dokumentsystem an und prüfen Sie das Ergebnis vor dem Speichern.",
       "double": "Doppelt",
@@ -4192,7 +4239,7 @@
     "saveFailed": "Stilset konnte nicht gespeichert werden",
     "savedDescription": "Gespeichertes Stilset",
     "sourceDocument": "Quell-DOCX",
-    "stellaDescription": "Vollständige, neutrale Formatierung für Rechtsdokumente von Stella",
+    "stellaDescription": "Vollständige, neutrale Formatierung für Rechtsdokumente von stella",
     "stellaStyle": "Stella Style",
     "title": "Stilsets",
     "untitledDocument": "Unbenanntes Dokument"

@@ -1420,7 +1420,7 @@ const GradedFooter = ({
         <MenuTrigger
           render={<Button size="xs" type="button" variant="ghost" />}
         >
-          {t("knowledge.playbooks.advanced")}
+          {t("common.settings")}
         </MenuTrigger>
         <MenuPopup align="start" className="w-72">
           <MenuItem
@@ -1801,7 +1801,7 @@ const ExtractBody = ({
           <MenuTrigger
             render={<Button size="xs" type="button" variant="ghost" />}
           >
-            {t("knowledge.playbooks.advanced")}
+            {t("common.settings")}
           </MenuTrigger>
           <MenuPopup align="start" className="w-72">
             <MenuItem

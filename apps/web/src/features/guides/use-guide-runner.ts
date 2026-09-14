@@ -1,32 +1,43 @@
 import { useRef, useState } from "react";
 
-import { useNavigate } from "@tanstack/react-router";
-import { panic } from "better-result";
+import { useQueryClient } from "@tanstack/react-query";
+import { useNavigate, useRouter } from "@tanstack/react-router";
+import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { Temporal } from "@stll/time";
 import { stellaToast } from "@stll/ui/toast";
 
-import { guideAnchorSelector } from "@/features/guides/guide-anchor";
+import {
+  GUIDE_REVERSE_BLOCKED_ATTRIBUTE,
+  guideAnchorSelector,
+} from "@/features/guides/guide-anchor";
 import {
   type GuideAnchorId,
   PENDING_GUIDE_ANCHOR_IDS,
 } from "@/features/guides/guide-anchors";
 import type { GuideEngine } from "@/features/guides/guide-engine";
+import { resolveGuideWorkspaceViewId } from "@/features/guides/guide-route";
 import type {
   GuideSeed,
+  GuideInteraction,
+  GuideRoute,
   GuideStep,
   GuideTour,
   GuideTourId,
 } from "@/features/guides/guide-types";
 import { useMountEffect } from "@/hooks/use-effect";
+import { useFormatter } from "@/i18n/formatting-context";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
+import { transformUnknownError } from "@/lib/errors/utils";
+import { viewsOptions } from "@/lib/workspaces/queries/views";
 
 // Bounded wait so a mid-load, flag-gated, or removed anchor never blocks the
 // tour: after the timeout the step is skipped and the run moves on.
-const STEP_POLL_TIMEOUT_MS = 2000;
+const STEP_POLL_TIMEOUT_MS = 10_000;
 const STEP_POLL_INTERVAL_MS = 100;
+const ROUTE_RENDER_TIMEOUT_MS = 45_000;
 
 // Anchors the registry already declares unwired. Waiting the full deadline on
 // each of these would make a not-yet-wired tour sit on a frozen popover for
@@ -55,6 +66,28 @@ const delay = async (ms: number, signal: AbortSignal): Promise<boolean> =>
     }, ms);
     signal.addEventListener("abort", handleAbort, { once: true });
   });
+
+// Races this consumer's await against the run's abort signal. The query
+// itself is left alone: `viewsOptions` is shared with `useQuery` readers, so
+// cancelling it would disturb them.
+const raceWithAbort = async <T>(
+  promise: Promise<T>,
+  signal: AbortSignal,
+): Promise<T | null> => {
+  if (signal.aborted) {
+    return null;
+  }
+  let handleAbort = (): void => undefined;
+  const aborted = new Promise<null>((resolve) => {
+    handleAbort = () => resolve(null);
+  });
+  signal.addEventListener("abort", handleAbort, { once: true });
+  try {
+    return await Promise.race([promise, aborted]);
+  } finally {
+    signal.removeEventListener("abort", handleAbort);
+  }
+};
 
 const waitForAnchor = async (
   anchorId: GuideAnchorId,
@@ -119,6 +152,9 @@ type GuideRunExit =
 type UseGuideRunnerOptions = {
   // Invoked once a tour reaches its final step (not when the user leaves).
   onCompleted: (tourId: GuideTourId) => void;
+  // The active matter, or the first authorized matter from the already-loaded
+  // sidebar list. Matter tours resolve a matching view only when started.
+  workspaceId: string | undefined;
 };
 
 export type GuideRunner = {
@@ -129,9 +165,13 @@ export type GuideRunner = {
 
 export const useGuideRunner = ({
   onCompleted,
+  workspaceId,
 }: UseGuideRunnerOptions): GuideRunner => {
   const navigate = useNavigate();
+  const router = useRouter();
+  const queryClient = useQueryClient();
   const t = useTranslations();
+  const format = useFormatter();
   const analytics = useAnalytics();
   const [state, setState] = useState<GuideRunnerState>({ status: "idle" });
   const engineRef = useRef<GuideEngine | null>(null);
@@ -142,6 +182,117 @@ export const useGuideRunner = ({
   // would let a second start slip through the import window and stack two
   // overlays over the app.
   const runActiveRef = useRef(false);
+
+  type NavigateAndWaitForRouteOptions = {
+    pathname: string;
+    signal: AbortSignal;
+    startNavigation: () => Promise<void>;
+  };
+
+  const navigateAndWaitForRoute = async ({
+    pathname,
+    signal,
+    startNavigation,
+  }: NavigateAndWaitForRouteOptions): Promise<boolean> => {
+    const renderedPathname =
+      router.state.resolvedLocation?.pathname ?? router.state.location.pathname;
+    if (renderedPathname === pathname) {
+      await startNavigation();
+      return !signal.aborted;
+    }
+
+    return await new Promise<boolean>((resolve, reject) => {
+      let settled = false;
+      const settle = (rendered: boolean) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        clearTimeout(timeout);
+        unsubscribe();
+        signal.removeEventListener("abort", handleAbort);
+        resolve(rendered);
+      };
+      const handleAbort = () => settle(false);
+      const unsubscribe = router.subscribe("onRendered", ({ toLocation }) => {
+        settle(toLocation.pathname === pathname);
+      });
+      const timeout = setTimeout(() => {
+        settle(false);
+      }, ROUTE_RENDER_TIMEOUT_MS);
+      signal.addEventListener("abort", handleAbort, { once: true });
+
+      if (signal.aborted) {
+        settle(false);
+        return;
+      }
+      startNavigation().catch((error: unknown) => {
+        if (settled) {
+          return;
+        }
+        clearTimeout(timeout);
+        unsubscribe();
+        signal.removeEventListener("abort", handleAbort);
+        settled = true;
+        reject(transformUnknownError(error));
+      });
+    });
+  };
+
+  const navigateToGuideRoute = async (
+    route: GuideRoute,
+    signal: AbortSignal,
+  ): Promise<boolean> => {
+    const result = await Result.tryPromise(async () => {
+      switch (route.type) {
+        case "static":
+          return await navigateAndWaitForRoute({
+            pathname: route.to,
+            signal,
+            startNavigation: async () => {
+              await navigate({ to: route.to });
+            },
+          });
+        case "workspace-unfiltered-table": {
+          if (!workspaceId) {
+            return false;
+          }
+          const views = await raceWithAbort(
+            queryClient.query({
+              ...viewsOptions(workspaceId),
+              staleTime: "static",
+            }),
+            signal,
+          );
+          if (views === null) {
+            return false;
+          }
+          const viewId = resolveGuideWorkspaceViewId(views);
+          if (!viewId) {
+            return false;
+          }
+          return await navigateAndWaitForRoute({
+            pathname: `/workspaces/${workspaceId}/${viewId}`,
+            signal,
+            startNavigation: async () => {
+              await navigate({
+                to: "/workspaces/$workspaceId/$viewId",
+                params: { workspaceId, viewId },
+              });
+            },
+          });
+        }
+        default:
+          route satisfies never;
+          return panic(`Unknown guide route: ${String(route)}`);
+      }
+    });
+    if (Result.isError(result)) {
+      analytics.captureError(result.error);
+      return false;
+    }
+    return result.value;
+  };
 
   useMountEffect(() => {
     mountedRef.current = true;
@@ -211,32 +362,44 @@ export const useGuideRunner = ({
       );
     };
 
-    // The trigger that reveals the surface a step at `index` lives in: the
-    // nearest earlier step marked `interaction: { kind: "open" }`. Derived from
-    // the tour on every resolve rather than remembered from the forward walk,
-    // so walking *back* into a menu re-opens it instead of spending the anchor
-    // deadline once per option it can no longer see.
-    const revealingAnchorFor = (index: number): GuideAnchorId | undefined => {
+    type RevealingInteraction = Exclude<GuideInteraction, { kind: "none" }> & {
+      anchor: GuideAnchorId;
+    };
+
+    // The interaction that reveals the surface a step at `index` lives in: the
+    // nearest earlier step marked `open` or `transition`. Derived from the tour
+    // on every resolve rather than remembered from the forward walk, so Back
+    // can reconstruct a dismissed menu or local editor state.
+    const revealingInteractionFor = (
+      index: number,
+    ): RevealingInteraction | undefined => {
       for (let earlier = index - 1; earlier >= 0; earlier -= 1) {
         const candidate = tour.steps.at(earlier);
-        if (candidate?.interaction?.kind === "open") {
-          return candidate.anchor;
+        if (candidate?.interaction && candidate.interaction.kind !== "none") {
+          return { ...candidate.interaction, anchor: candidate.anchor };
         }
       }
       return undefined;
     };
 
-    // Presses a disclosure trigger on the user's behalf. Safe by the contract
-    // on `GuideInteraction`: `open` may only ever mark a control whose click
-    // does nothing but show UI.
-    const revealSurface = (anchorId: GuideAnchorId): boolean => {
+    const activateAnchor = (anchorId: GuideAnchorId): boolean => {
       const trigger = document.querySelector(guideAnchorSelector(anchorId));
       if (!(trigger instanceof HTMLElement)) {
         return false;
       }
       trigger.click();
-      surfaceOpen = true;
       return true;
+    };
+
+    // Presses a safe reveal control on the user's behalf. Transient disclosure
+    // surfaces are tracked so they can be closed; local view transitions stay
+    // in place until the user walks Back through their reversing control.
+    const revealInteraction = (interaction: RevealingInteraction): boolean => {
+      const revealed = activateAnchor(interaction.anchor);
+      if (revealed && interaction.kind === "open") {
+        surfaceOpen = true;
+      }
+      return revealed;
     };
 
     // Resolves a step's anchor, re-opening the surface it lives in first when
@@ -247,6 +410,7 @@ export const useGuideRunner = ({
       index: number,
       anchorId: GuideAnchorId,
       deadline: number,
+      direction: GuideDirection,
     ): Promise<Element | null> => {
       if (isRunAborted()) {
         return null;
@@ -255,14 +419,40 @@ export const useGuideRunner = ({
       if (mounted) {
         return mounted;
       }
-      const revealingAnchor = revealingAnchorFor(index);
+
+      // A local transition unmounts its trigger. When walking backwards onto
+      // that trigger, press the editor's real Back control first, then resolve
+      // the trigger against the restored list.
+      const targetStep = tour.steps.at(index);
+      if (
+        direction === -1 &&
+        targetStep?.interaction?.kind === "transition" &&
+        activateAnchor(targetStep.interaction.reverseAnchor)
+      ) {
+        return await waitForAnchor(anchorId, deadline, runAbort.signal);
+      }
+
+      const revealingInteraction = revealingInteractionFor(index);
       const revealed =
-        revealingAnchor !== undefined && revealSurface(revealingAnchor);
+        revealingInteraction !== undefined &&
+        revealInteraction(revealingInteraction);
       const element = await waitForAnchor(anchorId, deadline, runAbort.signal);
       if (!element && revealed) {
-        // The reveal did not produce this anchor after all, so put the surface
-        // back rather than leave a menu open that no step is explaining.
-        closeRevealedSurface();
+        // The reveal did not produce this anchor after all, so put the UI back
+        // rather than leave a menu or empty editor open with no guide step.
+        switch (revealingInteraction.kind) {
+          case "open":
+            closeRevealedSurface();
+            break;
+          case "transition":
+            activateAnchor(revealingInteraction.reverseAnchor);
+            break;
+          default:
+            revealingInteraction satisfies never;
+            return panic(
+              `Unknown revealing interaction: ${String(revealingInteraction)}`,
+            );
+        }
       }
       return element;
     };
@@ -279,16 +469,38 @@ export const useGuideRunner = ({
     // click starts a new walk, and each walk moves the run strictly one way,
     // two unresolvable steps can never bounce the run back and forth between
     // them.
+    let entryIndex = 0;
+
+    // A transition step whose editor has unsaved edits: its Back control
+    // carries the blocked marker, so walking back onto the trigger would open
+    // a leave-confirm dialog under the spotlight.
+    const isReverseBlocked = (step: GuideStep): boolean => {
+      if (step.interaction?.kind !== "transition") {
+        return false;
+      }
+      const reverse = document.querySelector(
+        guideAnchorSelector(step.interaction.reverseAnchor),
+      );
+      return (
+        reverse instanceof HTMLElement &&
+        reverse.hasAttribute(GUIDE_REVERSE_BLOCKED_ATTRIBUTE)
+      );
+    };
+
     const resolveFrom = async (
       from: number,
       direction: GuideDirection,
     ): Promise<ResolvedGuideStep | null> => {
-      // One navigation attempt gets one bounded resolution budget. Without a
-      // shared deadline, a diverged tour could spend the full timeout on every
-      // remaining step and hold the user in a frozen run for minutes.
-      const deadline =
+      // Route rendering and anchor divergence have independent budgets. A
+      // code-split route can legitimately show its pending component for
+      // longer than an anchor should take to mount once that route commits.
+      let deadline =
         Temporal.Now.instant().epochMilliseconds + STEP_POLL_TIMEOUT_MS;
-      for (let index = from; index >= 0 && index < total; index += direction) {
+      for (
+        let index = from;
+        index >= entryIndex && index < total;
+        index += direction
+      ) {
         if (
           isRunAborted() ||
           Temporal.Now.instant().epochMilliseconds >= deadline
@@ -298,6 +510,11 @@ export const useGuideRunner = ({
         const step = tour.steps.at(index);
         if (!step) {
           continue;
+        }
+        if (direction === -1 && isReverseBlocked(step)) {
+          // Stop the walk here rather than skipping past the editor: the
+          // caller keeps the current step, and the user's draft stays put.
+          return null;
         }
         if (isPendingAnchor(step.anchor)) {
           // Declared unwired in the registry: skipping it costs nothing, so
@@ -310,12 +527,33 @@ export const useGuideRunner = ({
           continue;
         }
         if (step.route) {
-          await navigate({ to: step.route });
+          const routeAvailable = await navigateToGuideRoute(
+            step.route,
+            runAbort.signal,
+          );
           if (isRunAborted()) {
             return null;
           }
+          if (!routeAvailable) {
+            analytics.captureGuideStepSkipped({
+              reason: "route-unavailable",
+              tourId: tour.id,
+              anchorId: step.anchor,
+            });
+            continue;
+          }
+          // One navigation attempt gets one bounded DOM resolution budget.
+          // Without a shared deadline, a diverged tour could spend the full
+          // timeout on every remaining step and freeze for minutes.
+          deadline =
+            Temporal.Now.instant().epochMilliseconds + STEP_POLL_TIMEOUT_MS;
         }
-        const element = await resolveStepElement(index, step.anchor, deadline);
+        const element = await resolveStepElement(
+          index,
+          step.anchor,
+          deadline,
+          direction,
+        );
         if (isRunAborted()) {
           return null;
         }
@@ -369,11 +607,12 @@ export const useGuideRunner = ({
             step.whenKey === undefined
               ? undefined
               : { label: t("guides.whenLabel"), text: t(step.whenKey) },
+          placement: step.placement,
           // Numbered by position in the tour, so the count reads the same
           // whichever direction the user arrived from.
           progressText: t("common.stepProgress", {
-            current: String(index + 1),
-            total: String(total),
+            current: format.number(index + 1),
+            total: format.number(total),
           }),
           // Everything before the earliest step this run could resolve has
           // already been probed and skipped, so back is genuinely dead there
@@ -392,17 +631,25 @@ export const useGuideRunner = ({
     };
 
     const drive = async (engine: GuideEngine): Promise<GuideRunExit> => {
-      const first = await resolveFrom(0, 1);
+      // A route-local editor can already be open on the tour's pathname. Start
+      // at its earliest visible step instead of waiting for an unmounted list
+      // anchor or implicitly discarding the user's unsaved work.
+      const mountedStepIndex = tour.steps.findIndex((step) =>
+        document.querySelector(guideAnchorSelector(step.anchor)),
+      );
+      const mountedStep =
+        mountedStepIndex === -1 ? null : await resolveFrom(mountedStepIndex, 1);
+      const first = mountedStep ?? (await resolveFrom(0, 1));
       if (!first) {
         return isRunAborted() ? { type: "cancelled" } : { type: "tour-empty" };
       }
       let current = first;
-      // The earliest step this run has shown. Tracked so the back control is
-      // disabled where there is provably nothing behind it.
-      let firstIndex = first.index;
+      // Steps before entry belong to the user's existing UI state. Back must
+      // never cross this boundary and reverse an editor this run did not open.
+      const firstIndex = first.index;
+      entryIndex = firstIndex;
 
       for (;;) {
-        firstIndex = Math.min(firstIndex, current.index);
         const outcome = await showStep(engine, current, firstIndex);
 
         switch (outcome) {
@@ -411,6 +658,9 @@ export const useGuideRunner = ({
           case "leave":
             return { type: "left" };
           case "back": {
+            if (current.index <= firstIndex) {
+              break;
+            }
             const previous = await resolveFrom(current.index - 1, -1);
             // Nothing earlier resolves: stay on this step rather than dropping
             // the user out of the tour on a back press. Re-resolving forwards

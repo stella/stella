@@ -7,6 +7,8 @@ import { useTranslations } from "use-intl";
 import { Skeleton } from "@stll/ui/skeleton";
 import { stellaToast } from "@stll/ui/toast";
 
+import { guideAnchor } from "@/features/guides/guide-anchor";
+import { GUIDE_ANCHORS } from "@/features/guides/guide-anchors";
 import { workflowsRouteAvailable } from "@/hooks/use-workflows-preview";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -204,28 +206,33 @@ function RouteComponent() {
   }
 
   return (
-    <FlowList
-      flows={flows}
-      onNewFlow={() => setView({ kind: "editor", flowId: null })}
-      onRefresh={() => {
-        detached(
-          queryClient.invalidateQueries({
-            queryKey: knowledgeKeys.flows.all(organizationId),
-          }),
-          "knowledge-workflows.invalidate",
-        );
-      }}
-      onSelect={(flow) => setView({ kind: "editor", flowId: flow.id })}
-      onStartExample={(example) =>
-        setView({ kind: "editor", flowId: null, example })
-      }
-      onToggleEnabled={(flow, enabled) => {
-        detached(
-          handleToggleEnabled(flow, enabled),
-          "knowledge-workflows.toggle-enabled",
-        );
-      }}
-      togglingId={togglingId}
-    />
+    <div
+      className="flex min-h-0 flex-1 flex-col"
+      {...guideAnchor(GUIDE_ANCHORS.workflowsOverview)}
+    >
+      <FlowList
+        flows={flows}
+        onNewFlow={() => setView({ kind: "editor", flowId: null })}
+        onRefresh={() => {
+          detached(
+            queryClient.invalidateQueries({
+              queryKey: knowledgeKeys.flows.all(organizationId),
+            }),
+            "knowledge-workflows.invalidate",
+          );
+        }}
+        onSelect={(flow) => setView({ kind: "editor", flowId: flow.id })}
+        onStartExample={(example) =>
+          setView({ kind: "editor", flowId: null, example })
+        }
+        onToggleEnabled={(flow, enabled) => {
+          detached(
+            handleToggleEnabled(flow, enabled),
+            "knowledge-workflows.toggle-enabled",
+          );
+        }}
+        togglingId={togglingId}
+      />
+    </div>
   );
 }

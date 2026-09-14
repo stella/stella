@@ -123,6 +123,11 @@ export const STALE_TIME = {
  *  that links it (the feedback menu, the help drawer's Community tab). */
 export const COMMUNITY_FORUM_URL = "https://discord.gg/8dZjmVFjTK" as const;
 
+export const GITHUB_FEEDBACK_URL =
+  "https://github.com/stella/stella/issues/new/choose" as const;
+
+export const TECHNICAL_DOCS_URL = "https://stll.app/docs/" as const;
+
 /** General contact address. Used where someone wants to reach the team directly
  *  rather than ask the community: it opens a conversation, so surfaces linking
  *  it must not imply a committed response time. */

@@ -64,6 +64,7 @@ import {
   chatThreadSuggestedPromptsOptions,
   invalidateChatThreadAcrossScopes,
 } from "@/features/chat/queries";
+import { GuideNudge } from "@/features/guides/guide-nudge";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useAnalytics } from "@/lib/analytics/provider";
@@ -656,11 +657,12 @@ export const ChatThreadPage = ({
               >
                 <ConversationContent className="mx-auto w-full max-w-5xl gap-3 px-4 pb-[calc(var(--composer-block-h,7rem)+1.5rem)]">
                   {messages.length === 0 && !isGenerating && !error ? (
-                    <div className="m-auto w-full max-w-md px-4">
+                    <div className="m-auto flex w-full max-w-md flex-col gap-6 px-4">
                       <PromptSuggestions
                         onSelect={selectPrompt}
                         prompts={prompts}
                       />
+                      <GuideNudge />
                     </div>
                   ) : (
                     <>

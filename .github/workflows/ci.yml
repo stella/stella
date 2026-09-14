@@ -2139,6 +2139,29 @@ jobs:
           tail -200 /tmp/web-production.log || true
           exit 1
 
+      # Keep fixture cardinality equal to baseline generation and prevent other
+      # specs' workspace events from refetching queries during measurement.
+      # continue-on-error keeps the shard and the diagnostic uploads running
+      # after a regression; the step's outcome fails the job at the end.
+      - name: Check route network baseline
+        id: network-baseline
+        if: steps.e2e-stack.outputs.status == 'ready' && matrix.shard == 1
+        continue-on-error: true
+        env:
+          E2E_EXECUTION_PROFILE: network-baseline
+          E2E_EXPECT_DEV_ROUTES: "false"
+          PLAYWRIGHT_BLOB_OUTPUT_NAME: report-network-baseline.zip
+        run: bun --filter @stll/web test:e2e -- route-smoke.spec.ts
+
+      # Playwright clears its report directory at the next invocation.
+      - name: Upload network baseline blob report
+        if: always() && steps.e2e-stack.outputs.status == 'ready' && matrix.shard == 1
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: network-baseline-blob
+          path: apps/web/e2e/test-results/blob-report/
+          retention-days: 7
+
       - name: Run Playwright shard
         if: steps.e2e-stack.outputs.status == 'ready'
         env:
@@ -2162,6 +2185,7 @@ jobs:
           bun --filter @stll/web test:e2e --
           --project=route-smoke
           --shard=${{ matrix.shard }}/2
+          --grep-invert="route-smoke.spec.ts"
 
       - name: Upload Playwright blob report
         if: always() && steps.e2e-stack.outputs.status == 'ready'
@@ -2188,6 +2212,12 @@ jobs:
             /tmp/api.log
             /tmp/web-production.log
           retention-days: 7
+
+      - name: Fail on route network baseline regression
+        if: steps.network-baseline.outcome == 'failure'
+        run: |
+          echo "Route network baseline regressed; see the network-baseline-blob artifact."
+          exit 1
 
   stack-redaction-browsers:
     needs: ci-plan
@@ -2328,10 +2358,15 @@ jobs:
           e2e/specs/vite-dependency-canary.spec.ts
           --project chromium
 
+      # Own output dir, not uploaded: the blob reporter clears its directory
+      # per invocation, so sharing it would drop the canary blob, and a collab
+      # blob (testDir e2e/collab) breaks the merged specs report. Its failures
+      # are read from this job's log.
       - name: Run lockless collaboration browser suite
         if: steps.e2e-stack.outputs.status == 'ready'
         env:
           E2E_EXPECT_DEV_ROUTES: "true"
+          E2E_OUTPUT_DIR: test-results-collab
         run: bun --filter @stll/web test:e2e:collab -- --project chromium
 
       - name: Show API errors after a Vite canary failure

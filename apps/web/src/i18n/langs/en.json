@@ -2347,7 +2347,7 @@
   },
   "guides": {
     "action": {
-      "replay": "Replay",
+      "replay": "Start again",
       "skip": "Skip",
       "start": "Start"
     },
@@ -2355,32 +2355,28 @@
       "progress": "{completed} of {total} complete"
     },
     "community": {
-      "body": "Get help from other users and the developers in our community chat.",
-      "directLinkLabel": "Talk to us",
-      "directPrompt": "Want to talk directly with the team?",
-      "linkLabel": "Open the community forum"
+      "personalSupport": "Personal support"
     },
     "help": {
-      "buttonLabel": "Help and guides",
-      "subtitle": "Interactive tours of the workspace",
-      "tabs": {
-        "community": "Community",
-        "guides": "Guides"
-      },
-      "title": "Help and guides"
+      "buttonLabel": "Help and feedback",
+      "title": "Help and feedback"
     },
     "leave": "Leave guide",
     "minutes": "{count} min",
+    "nudge": {
+      "action": "Open guides",
+      "body": "New here? A few short tours show you around."
+    },
     "status": {
       "skipped": "Skipped"
     },
     "tours": {
       "chat": {
-        "description": "What sits behind the + button, and when to reach for each option",
+        "description": "Add context for AI and send your request securely",
         "examplePrompt": "Summarize the key obligations in this contract",
         "steps": {
           "anonymize": {
-            "body": "Replaces names, identifiers, and other personal data with placeholders before the request leaves your workspace, then restores the real values in the answer you read.",
+            "body": "Hides personal data before sending, then restores it in the answer.",
             "title": "Send anonymized",
             "when": "Turn it on when the text carries personal data and the question does not turn on who the parties are. Leave it off when identity is the point, such as a conflict check, because placeholders take away exactly what you are asking about."
           },
@@ -2394,10 +2390,26 @@
             "title": "Start with the request"
           },
           "context": {
-            "body": "Points the request at material that is already filed here: a whole matter, or a single file inside it. Nothing is uploaded and nothing is copied; the reference is a link to where the material already lives.",
+            "body": "Adds an existing matter or file as context. Nothing is uploaded or copied.",
             "title": "Reference a matter or a file",
             "when": "Use this instead of attaching whenever the document is already filed. Reference the matter to let the assistant look across it; reference one file when you know exactly which one to read. Typing @ in an empty composer opens this list directly."
           },
+          "plusMenu": {
+            "body": "Use + to attach a file or reference a matter.",
+            "title": "Add context with +",
+            "when": "When the context you need is not yet in the chat."
+          },
+          "send": {
+            "body": "Sends the message together with everything you attached, referenced, or switched on above. The composer stays put, so a follow-up can add whatever the first answer showed was missing.",
+            "title": "Send it",
+            "when": "The first answer shows what is still missing."
+          }
+        },
+        "title": "Start with chat"
+      },
+      "chatPower": {
+        "description": "Use skills or connect other useful tools",
+        "steps": {
           "mcp": {
             "body": "Turns a connected server's tools on or off for your chats: business registries, internal systems, anything your team has connected.",
             "title": "Connected tool servers",
@@ -2405,18 +2417,11 @@
           },
           "models": {
             "body": "Switches the model for this conversation only. Every other thread keeps the default set for your workspace.",
-            "title": "Which model",
-            "when": "Switch up for close reading, drafting, and anything where a wrong answer is expensive. Stay on the default for lookups, summaries, and quick rewrites, where the extra depth changes nothing but the wait."
+            "title": "Which model"
           },
           "plusMenu": {
-            "body": "The + button opens the composer menu: attach a file, switch model, run a skill, reference a matter, or enable a connected tool server. The next steps open it and take each option in turn.",
-            "title": "Everything you can add sits behind +",
-            "when": "Reach for + whenever the answer depends on something the assistant cannot see yet: a file, a matter, an internal rule, or a live external source."
-          },
-          "send": {
-            "body": "Sends the message together with everything you attached, referenced, or switched on above. The composer stays put, so a follow-up can add whatever the first answer showed was missing.",
-            "title": "Send it",
-            "when": "Send early. A short first answer tells you which context is still missing faster than a perfect first prompt does."
+            "body": "The same menu also holds the model switch, skills, and connected tool servers. The next steps open it and take each in turn.",
+            "title": "More behind the + button"
           },
           "skills": {
             "body": "Inserts a saved prompt or a skill your team has written: a reviewed set of instructions that handles the same task the same way every time.",
@@ -2424,38 +2429,62 @@
             "when": "Use one when the task repeats and the wording matters, such as a standard contract review or an intake summary. Typing / in an empty composer opens this list directly."
           }
         },
-        "title": "Ask with the right context"
+        "title": "Do more in chat"
       },
       "documents": {
-        "description": "Upload a file and open it",
+        "description": "File a document, then find it again",
         "steps": {
           "browse": {
-            "body": "Find and open any document you have added.",
-            "title": "Browse your documents"
+            "body": "This table is the matter's document list. Uploaded files land here as rows. To return later, open the matter from the sidebar, choose its table view, then select the document row.",
+            "title": "Find the document again"
           },
           "upload": {
-            "body": "Add a file to bring it into your workspace.",
-            "title": "Upload a document"
+            "body": "Upload opens the file picker; you can also drag files onto the matter. Each file becomes a document in this matter, where your team can find it and stella can use it in review.",
+            "title": "File a document in the matter",
+            "when": "Upload here when the file belongs to the matter and should remain available. Attach it directly in chat only when it is temporary context for one conversation."
           }
         },
         "title": "Work with documents"
       },
       "playbooks": {
-        "description": "Turn review know-how into a reusable playbook",
+        "description": "Save a document review process for next time",
         "steps": {
+          "basics": {
+            "body": "Add a name and description. Limit it to a document type if needed.",
+            "title": "Name the playbook"
+          },
           "create": {
-            "body": "Start a playbook to capture how a review should run.",
+            "body": "Start with a blank playbook.",
             "title": "Create a playbook"
+          },
+          "overview": {
+            "body": "A playbook keeps questions and rules for other documents.",
+            "title": "Save the review process"
+          },
+          "positions": {
+            "body": "For each rule, choose whether to assess the text or extract a detail.",
+            "title": "Add review rules"
           }
         },
-        "title": "Build a playbook"
+        "title": "Create a playbook"
       },
       "tabularReview": {
         "description": "Extract answers across many files at once",
         "steps": {
           "addColumn": {
-            "body": "Add a question to answer across every row.",
-            "title": "Add a column"
+            "body": "New column opens the column composer. Give the column a clear question-shaped name and tell stella exactly what to read for; the same instruction runs against every document row.",
+            "title": "Ask one question of every document",
+            "when": "Create a separate column for each answer you need to compare, filter, sort, or export. Keep related context in the prompt instead of combining several answers in one cell."
+          },
+          "answerType": {
+            "body": "Returns controls the shape of every answer. Choose a number, date, single select, or multi-select when the result has structure; stella will keep the column consistent instead of returning arbitrary prose.",
+            "title": "Choose the answer type",
+            "when": "Use select for a fixed set of outcomes, number or date for sorting and calculations, and text only when the answer genuinely needs narrative detail."
+          },
+          "table": {
+            "body": "Each row is a document; each custom column is one question asked of every document at once. That turns a folder of files into comparable answers without opening them one by one.",
+            "title": "Review the set, not one file",
+            "when": "Use the table when you need the same facts or decisions across several documents. Open a document directly when layout, wording, or surrounding context matters more than comparison."
           }
         },
         "title": "Review in a table"
@@ -2464,8 +2493,27 @@
         "description": "Chain steps into a repeatable workflow",
         "steps": {
           "create": {
-            "body": "Combine steps that run together on demand.",
-            "title": "Create a workflow"
+            "body": "Create opens an unsaved workflow draft. The next steps define when it starts, what it does, and where a person must decide whether it continues.",
+            "title": "Start a workflow draft"
+          },
+          "overview": {
+            "body": "A workflow connects a trigger to a sequence of actions, so a routine process runs the same way each time. It can prepare work automatically while keeping judgment with a reviewer where needed.",
+            "title": "Automate a repeatable process",
+            "when": "Automate work that has a stable trigger, repeatable steps, and a clear owner for exceptions. Keep changing or judgment-heavy work manual until the process itself is settled."
+          },
+          "reviewGate": {
+            "body": "A review gate pauses the run until a person approves or rejects it. Put the gate before the first action that should not happen solely on an automated result.",
+            "title": "Keep judgment with a reviewer",
+            "when": "Use a gate before sending, filing, escalating, or otherwise committing a consequential result. Skip it only when the next step is safely reversible and needs no human judgment."
+          },
+          "steps": {
+            "body": "Steps run in this order and pass their work forward. Keep each step responsible for one clear action so failures are understandable and the sequence is easy to change.",
+            "title": "Build the sequence"
+          },
+          "trigger": {
+            "body": "The trigger decides when a run begins: manually, on a schedule, or when matching files are uploaded. Narrow its matter and file conditions so unrelated work never starts the workflow.",
+            "title": "Choose what starts the workflow",
+            "when": "Use manual while the process is new, a schedule for time-based routines, and file upload only when an arriving document is the reliable signal to begin."
           }
         },
         "title": "Automate a workflow"
@@ -2972,7 +3020,6 @@
       "addPosition": "Add position",
       "addRule": "Rule",
       "adoptAsIdeal": "Adopt as ideal language",
-      "advanced": "Change how this works",
       "all": "All playbooks",
       "approval": {
         "approve": "Approve",

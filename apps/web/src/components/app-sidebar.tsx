@@ -28,6 +28,7 @@ import {
 } from "@tanstack/react-router";
 import {
   ChevronRightIcon,
+  CircleHelpIcon,
   EllipsisVerticalIcon,
   MessageSquareIcon,
   PanelLeftIcon,
@@ -72,7 +73,6 @@ import {
   withDragAnnouncementData,
   withDropAnnouncementData,
 } from "@/components/drag-and-drop-live-region.logic";
-import { FeedbackDialog } from "@/components/feedback-dialog";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { MatterActivityRow } from "@/components/matter-activity-row";
 import { MatterIcon } from "@/components/matter-icon";
@@ -115,9 +115,13 @@ import {
   groupedChatThreadsOptions,
   mergeGroupedChatThreadPages,
 } from "@/features/chat/queries";
+import {
+  GUIDE_DRAWER_STATES,
+  useGuideDrawerStore,
+} from "@/features/guides/guide-drawer-store";
+import type { GuideWorkspaceListState } from "@/features/guides/guide-help-drawer";
 import { useChromeQuery, useHasMounted } from "@/hooks/use-chrome-query";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { useGuidesPreviewEnabled } from "@/hooks/use-guides-preview";
 import { useHydrationSafeHotkeyPlatform } from "@/hooks/use-hydration-safe-hotkey-platform";
 import { useInboxPreviewEnabled } from "@/hooks/use-inbox-preview";
 import { useInlineRename } from "@/hooks/use-inline-rename";
@@ -151,8 +155,8 @@ import {
 const SCROLLABLE_GROUP_CONTENT =
   "overflow-x-hidden overflow-y-auto group-data-[collapsible=icon]:[scrollbar-width:none] group-data-[collapsible=icon]:[&::-webkit-scrollbar]:hidden";
 
-// Lazy so the guides feature (and its spotlight engine) stays out of the shell
-// bundle; it loads only when the preview flag renders the entry.
+// Lazy so the guides feature stays out of the shell bundle until the user
+// opens Help. The spotlight engine remains a second, runner-owned lazy chunk.
 const GuideHelpDrawer = lazy(async () => {
   const module = await import("@/features/guides/guide-help-drawer");
   return { default: module.GuideHelpDrawer };
@@ -170,7 +174,6 @@ export const AppSidebar = (props: AppSidebarProps) => {
   const isCollapsed = state === "collapsed" && !isMobile;
   const publicLawPreviewEnabled = usePublicLawPreviewEnabled();
   const workflowsPreviewEnabled = useWorkflowsPreviewEnabled();
-  const guidesPreviewEnabled = useGuidesPreviewEnabled();
   const inboxPreviewEnabled = useInboxPreviewEnabled();
   const primaryNavItems = getWorkspacePrimaryNavItems({
     includeInbox: inboxPreviewEnabled,
@@ -182,6 +185,9 @@ export const AppSidebar = (props: AppSidebarProps) => {
   const user = useAuthenticatedUser();
 
   const [searchOpen, setSearchOpen] = useState(false);
+  const guideDrawerState = useGuideDrawerStore((store) => store.state);
+  const openGuideDrawer = useGuideDrawerStore((store) => store.open);
+  const setGuideDrawerOpen = useGuideDrawerStore((store) => store.setOpen);
   const [pendingEntityDrop, setPendingEntityDrop] =
     useState<PendingEntityDrop | null>(null);
   const { pinnedOrder, pinnedIds, togglePin, reorderPinned } = usePinnedStore(
@@ -192,9 +198,13 @@ export const AppSidebar = (props: AppSidebarProps) => {
       reorderPinned: s.reorder,
     })),
   );
-  const { data: workspacesData } = useChromeQuery(
-    workspacesNavigationOptions(user.activeOrganizationId),
-  );
+  const {
+    data: workspacesData,
+    isPending: workspacesPending,
+    isError: workspacesFailed,
+    isFetching: workspacesFetching,
+    refetch: refetchWorkspaces,
+  } = useChromeQuery(workspacesNavigationOptions(user.activeOrganizationId));
   const { data: inboxCount } = useChromeQuery({
     ...inboxCountOptions(user.activeOrganizationId),
     enabled: inboxPreviewEnabled,
@@ -217,6 +227,21 @@ export const AppSidebar = (props: AppSidebarProps) => {
     }),
   );
   const workspaces = workspacesData?.workspaces;
+  const guideWorkspaceList = ((): GuideWorkspaceListState => {
+    if (workspacesPending) {
+      return { status: "pending" };
+    }
+    if (workspacesFailed) {
+      return {
+        status: "failed",
+        isRetrying: workspacesFetching,
+        retry: () => {
+          detached(refetchWorkspaces(), "app-sidebar.retry-workspaces");
+        },
+      };
+    }
+    return { status: "ready" };
+  })();
 
   const workspaceMatch = useMatch({
     from: "/_protected/workspaces/$workspaceId",
@@ -735,12 +760,28 @@ export const AppSidebar = (props: AppSidebarProps) => {
       {/* User avatar at bottom */}
       <SidebarFooter>
         <SidebarMenu>
-          {guidesPreviewEnabled && (
-            <Suspense fallback={null}>
-              <GuideHelpDrawer />
-            </Suspense>
-          )}
-          <FeedbackDialog userEmail={user.email} />
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              aria-expanded={guideDrawerState === GUIDE_DRAWER_STATES.open}
+              aria-haspopup="dialog"
+              onClick={openGuideDrawer}
+              size="sm"
+              tooltip={t("guides.help.buttonLabel")}
+            >
+              <CircleHelpIcon className="size-4" />
+              <span>{t("guides.help.buttonLabel")}</span>
+            </SidebarMenuButton>
+            {guideDrawerState !== GUIDE_DRAWER_STATES.idle && (
+              <Suspense fallback={null}>
+                <GuideHelpDrawer
+                  onOpenChange={setGuideDrawerOpen}
+                  open={guideDrawerState === GUIDE_DRAWER_STATES.open}
+                  workspaceId={activeWorkspaceId ?? workspaces?.at(0)?.id}
+                  workspaceList={guideWorkspaceList}
+                />
+              </Suspense>
+            )}
+          </SidebarMenuItem>
           <SidebarUserMenu user={user} />
         </SidebarMenu>
       </SidebarFooter>

@@ -40,6 +40,8 @@ const GuideTourCanvas = ({ tourId }: { tourId: GuideTourId }) => {
   switch (tourId) {
     case GUIDE_TOUR_IDS.chat:
       return <ChatPreview />;
+    case GUIDE_TOUR_IDS.chatPower:
+      return <ChatPowerPreview />;
     case GUIDE_TOUR_IDS.documents:
       return <DocumentsPreview />;
     case GUIDE_TOUR_IDS.playbooks:
@@ -63,6 +65,22 @@ const ChatPreview = () => (
     <div className="bg-muted mb-1 h-1.5 w-3/5 rounded-full" />
     <div className="bg-card flex items-center gap-1 rounded-sm border p-1">
       <PlusIcon className="text-muted-foreground size-3 shrink-0" />
+      <div className="bg-muted h-1 flex-1 rounded-full" />
+      <ArrowUpIcon className="text-muted-foreground size-3 shrink-0" />
+    </div>
+  </div>
+);
+
+// The (+) menu unfolded above the composer: three options, one highlighted.
+const ChatPowerPreview = () => (
+  <div className="flex h-full flex-col justify-end gap-1">
+    <div className="bg-card flex flex-col gap-1.5 rounded-sm border p-1.5">
+      <div className="bg-muted-foreground/30 h-1 w-3/4 rounded-full" />
+      <div className="bg-muted h-1 w-2/3 rounded-full" />
+      <div className="bg-muted h-1 w-1/2 rounded-full" />
+    </div>
+    <div className="bg-card flex items-center gap-1 rounded-sm border p-1">
+      <PlusIcon className="text-foreground size-3 shrink-0" />
       <div className="bg-muted h-1 flex-1 rounded-full" />
       <ArrowUpIcon className="text-muted-foreground size-3 shrink-0" />
     </div>

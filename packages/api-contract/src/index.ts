@@ -208,6 +208,14 @@ export {
 } from "./entity-options";
 export type { EntityPriority, TaskStatus } from "./entity-options";
 export {
+  GUIDE_PROGRESS_STATUSES,
+  GUIDE_PROGRESS_TOUR_IDS,
+} from "./guide-progress";
+export type {
+  GuideProgressStatus,
+  GuideProgressTourId,
+} from "./guide-progress";
+export {
   API_FILE_SECURITY_REJECTED_ERROR_CODE,
   API_VALIDATION_ERROR_CODE,
   API_VERSION_CONFLICT_ERROR_CODE,

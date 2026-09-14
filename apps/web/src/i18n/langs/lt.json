@@ -2347,7 +2347,7 @@
   },
   "guides": {
     "action": {
-      "replay": "Kartoti",
+      "replay": "Pradėti iš naujo",
       "skip": "Praleisti",
       "start": "Pradėti"
     },
@@ -2355,32 +2355,28 @@
       "progress": "Atlikta {completed} iš {total}"
     },
     "community": {
-      "body": "Gaukite pagalbos iš kitų naudotojų ir kūrėjų mūsų bendruomenės pokalbiuose.",
-      "directLinkLabel": "Susisiekite su mumis",
-      "directPrompt": "Norite tiesiogiai pasikalbėti su komanda?",
-      "linkLabel": "Atverti bendruomenės forumą"
+      "personalSupport": "Asmeninė pagalba"
     },
     "help": {
-      "buttonLabel": "Pagalba ir vadovai",
-      "subtitle": "Interaktyvios darbo srities apžvalgos",
-      "tabs": {
-        "community": "Bendruomenė",
-        "guides": "Vadovai"
-      },
-      "title": "Pagalba ir vadovai"
+      "buttonLabel": "Pagalba ir atsiliepimai",
+      "title": "Pagalba ir atsiliepimai"
     },
     "leave": "Išeiti iš vadovo",
     "minutes": "{count} min.",
+    "nudge": {
+      "action": "Atverti vadovus",
+      "body": "Naujokas? Keli trumpi turai viską parodys."
+    },
     "status": {
       "skipped": "Praleista"
     },
     "tours": {
       "chat": {
-        "description": "Kas slypi po mygtuku + ir kada rinktis kurią parinktį",
+        "description": "Suteikite DI kontekstą ir saugiai išsiųskite užklausą",
         "examplePrompt": "Apibendrinkite pagrindines šios sutarties prievoles",
         "steps": {
           "anonymize": {
-            "body": "Prieš užklausai paliekant jūsų darbo sritį pakeičia vardus, identifikatorius ir kitus asmens duomenis vietaženkliais, o jūsų skaitomame atsakyme grąžina tikrąsias reikšmes.",
+            "body": "Prieš siunčiant paslepia asmens duomenis, o atsakyme juos atkuria.",
             "title": "Siųsti nuasmenintai",
             "when": "Įjunkite, kai tekste yra asmens duomenų, o klausimas nepriklauso nuo to, kas yra šalys. Palikite išjungtą, kai svarbiausia būtent tapatybė, pavyzdžiui, tikrinant interesų konfliktą: vietaženkliai pašalina būtent tai, ko klausiate."
           },
@@ -2394,10 +2390,26 @@
             "title": "Pradėkite nuo užklausos"
           },
           "context": {
-            "body": "Nukreipia užklausą į jau įsegtą medžiagą: į visą bylą arba į vieną joje esantį failą. Niekas neįkeliama ir nekopijuojama; nuoroda veda ten, kur medžiaga jau yra.",
+            "body": "Prideda esamą bylą arba failą kaip kontekstą. Nieko neįkelia ir nekopijuoja.",
             "title": "Nurodyti bylą arba failą",
             "when": "Naudokite vietoj failo prisegimo visada, kai dokumentas jau įsegtas. Nurodykite bylą, kai asistentas turi peržvelgti ją visą; vieną failą, kai tiksliai žinote, kurį skaityti. Įvedus @ tuščiame redaktoriuje šis sąrašas atsiveria iš karto."
           },
+          "plusMenu": {
+            "body": "Naudokite + failui prisegti arba bylai nurodyti.",
+            "title": "Pridėkite kontekstą naudodami +",
+            "when": "Kai pokalbyje dar nėra reikiamo konteksto."
+          },
+          "send": {
+            "body": "Išsiunčia žinutę su viskuo, ką aukščiau prisegėte, nurodėte ar įjungėte. Redaktorius lieka vietoje, todėl tolesniu klausimu galėsite pridėti tai, ko trūko pirmame atsakyme.",
+            "title": "Išsiųskite žinutę",
+            "when": "Pirmas atsakymas parodo, ko dar trūksta."
+          }
+        },
+        "title": "Pradėkite nuo pokalbio"
+      },
+      "chatPower": {
+        "description": "Naudokite įgūdžius arba prijunkite kitus naudingus įrankius",
+        "steps": {
           "mcp": {
             "body": "Įjungia arba išjungia prijungto serverio įrankius jūsų pokalbiuose: įmonių registrus, vidines sistemas, visa, ką prijungė jūsų komanda.",
             "title": "Prijungti įrankių serveriai",
@@ -2405,18 +2417,11 @@
           },
           "models": {
             "body": "Pakeičia modelį tik šiame pokalbyje. Visos kitos gijos lieka su jūsų darbo srities numatytuoju modeliu.",
-            "title": "Kuris modelis",
-            "when": "Į stipresnį modelį pereikite atidžiam skaitymui, rengimui ir visur, kur klaidingas atsakymas brangiai kainuoja. Paieškoms, santraukoms ir greitiems perrašymams likite prie numatytojo: papildomas gylis ten pakeičia tik laukimo laiką."
+            "title": "Kuris modelis"
           },
           "plusMenu": {
-            "body": "Mygtukas + atveria redaktoriaus meniu: prisegti failą, pakeisti modelį, paleisti įgūdį, nurodyti bylą arba įjungti prijungtą įrankių serverį. Kiti žingsniai jį atveria ir aptaria kiekvieną parinktį iš eilės.",
-            "title": "Viskas, ką galima pridėti, slypi po +",
-            "when": "Naudokite +, kai atsakymas priklauso nuo to, ko asistentas dar nemato: failo, bylos, vidinės taisyklės ar gyvo išorinio šaltinio."
-          },
-          "send": {
-            "body": "Išsiunčia žinutę su viskuo, ką aukščiau prisegėte, nurodėte ar įjungėte. Redaktorius lieka vietoje, todėl tolesniu klausimu galėsite pridėti tai, ko trūko pirmame atsakyme.",
-            "title": "Išsiųskite žinutę",
-            "when": "Siųskite anksti. Trumpas pirmas atsakymas greičiau parodo, kokio konteksto dar trūksta, nei tobulai nušlifuota pirma užklausa."
+            "body": "Tame pačiame meniu taip pat yra modelio keitimas, įgūdžiai ir prijungti įrankių serveriai. Kiti žingsniai jį atvers ir aptars kiekvieną parinktį.",
+            "title": "Daugiau už mygtuko +"
           },
           "skills": {
             "body": "Įterpia įrašytą užklausą arba jūsų komandos parašytą įgūdį: peržiūrėtą nurodymų rinkinį, kuris tą pačią užduotį kaskart atlieka vienodai.",
@@ -2424,38 +2429,62 @@
             "when": "Naudokite, kai užduotis kartojasi ir svarbi formuluotė, pavyzdžiui, tikrinant tipinę sutartį ar rengiant priėmimo santrauką. Įvedus / tuščiame redaktoriuje šis sąrašas atsiveria iš karto."
           }
         },
-        "title": "Klauskite su tinkamu kontekstu"
+        "title": "Nuveikite daugiau pokalbyje"
       },
       "documents": {
-        "description": "Įkelkite failą ir jį atidarykite",
+        "description": "Įtraukite dokumentą į bylą ir vėliau jį raskite",
         "steps": {
           "browse": {
-            "body": "Raskite ir atidarykite bet kurį pridėtą dokumentą.",
-            "title": "Naršyti dokumentus"
+            "body": "Ši lentelė yra bylos dokumentų sąrašas. Įkelti failai čia rodomi kaip eilutės. Norėdami grįžti vėliau, šoninėje juostoje atidarykite bylą, pasirinkite jos lentelės rodinį, tada pasirinkite dokumento eilutę.",
+            "title": "Vėl rasti dokumentą"
           },
           "upload": {
-            "body": "Pridėkite failą, kad įtrauktumėte jį į savo darbo sritį.",
-            "title": "Įkelti dokumentą"
+            "body": "Spustelėjus Įkelti atidaromas failų parinkiklis; failus taip pat galite nuvilkti į bylą. Kiekvienas failas tampa šios bylos dokumentu, kurį gali rasti jūsų komanda, o stella gali naudoti peržiūroje.",
+            "title": "Įtraukti dokumentą į bylą",
+            "when": "Įkelkite čia, kai failas priklauso bylai ir turi likti pasiekiamas. Tiesiogiai pokalbyje jį pridėkite tik tada, kai tai yra laikinas vieno pokalbio kontekstas."
           }
         },
         "title": "Darbas su dokumentais"
       },
       "playbooks": {
-        "description": "Paverskite peržiūros patirtį pakartotinai naudojamu planu",
+        "description": "Išsaugokite dokumentų peržiūros procesą kitam kartui",
         "steps": {
+          "basics": {
+            "body": "Pridėkite pavadinimą ir aprašą. Jei reikia, apribokite vienu dokumento tipu.",
+            "title": "Pavadinkite planą"
+          },
           "create": {
-            "body": "Pradėkite planą, kad užfiksuotumėte, kaip turėtų vykti peržiūra.",
-            "title": "Sukurti planą"
+            "body": "Pradėkite nuo tuščio plano.",
+            "title": "Sukurkite planą"
+          },
+          "overview": {
+            "body": "Plane išsaugomi klausimai ir taisyklės kitiems dokumentams.",
+            "title": "Išsaugokite peržiūros procesą"
+          },
+          "positions": {
+            "body": "Kiekvienai taisyklei pasirinkite: vertinti tekstą ar išgauti detalę.",
+            "title": "Pridėkite peržiūros taisykles"
           }
         },
-        "title": "Sudaryti planą"
+        "title": "Sukurkite planą"
       },
       "tabularReview": {
         "description": "Išgaukite atsakymus iš daugelio failų vienu metu",
         "steps": {
           "addColumn": {
-            "body": "Pridėkite klausimą, į kurį bus atsakyta kiekvienoje eilutėje.",
-            "title": "Pridėti stulpelį"
+            "body": "Naujas stulpelis atidaro stulpelio rengyklę. Suteikite stulpeliui aiškų klausimo formos pavadinimą ir tiksliai nurodykite stellai, ko ieškoti; ta pati instrukcija taikoma kiekvienai dokumento eilutei.",
+            "title": "Užduoti vieną klausimą apie kiekvieną dokumentą",
+            "when": "Kiekvienam atsakymui, kurį reikia palyginti, filtruoti, rikiuoti ar eksportuoti, sukurkite atskirą stulpelį. Susijusį kontekstą pateikite užklausoje, užuot jungę kelis atsakymus viename langelyje."
+          },
+          "answerType": {
+            "body": "Laukas Grąžina nustato kiekvieno atsakymo formatą. Kai rezultatas yra struktūrinis, pasirinkite skaičių, datą, vieną arba kelias parinktis; stella išlaikys stulpelio nuoseklumą, užuot pateikusi bet kokį tekstą.",
+            "title": "Pasirinkti atsakymo tipą",
+            "when": "Fiksuotam rezultatų rinkiniui naudokite pasirinkimą, rikiavimui ir skaičiavimams – skaičių arba datą, o tekstą tik tada, kai atsakymui tikrai reikia išsamaus paaiškinimo."
+          },
+          "table": {
+            "body": "Kiekviena eilutė yra dokumentas, o kiekvienas pasirinktinis stulpelis – vienas klausimas, vienu metu užduodamas apie visus dokumentus. Taip failų aplankas paverčiamas palyginamais atsakymais neatidarant kiekvieno failo atskirai.",
+            "title": "Peržiūrėti visą rinkinį, o ne vieną failą",
+            "when": "Naudokite lentelę, kai reikia tų pačių faktų ar sprendimų iš kelių dokumentų. Atidarykite dokumentą tiesiogiai, kai išdėstymas, formuluotė ar aplinkinis kontekstas yra svarbesni už palyginimą."
           }
         },
         "title": "Peržiūra lentelėje"
@@ -2464,8 +2493,27 @@
         "description": "Sujunkite veiksmus į pakartojamą darbo eigą",
         "steps": {
           "create": {
-            "body": "Derinkite veiksmus, kurie pagal poreikį vykdomi kartu.",
-            "title": "Sukurti darbo eigą"
+            "body": "Pasirinkus Kurti atidaromas neišsaugotas darbo eigos juodraštis. Tolesniuose veiksmuose nustatoma, kada ji paleidžiama, ką ji atlieka ir kur žmogus turi nuspręsti, ar ji gali tęstis.",
+            "title": "Pradėti darbo eigos juodraštį"
+          },
+          "overview": {
+            "body": "Darbo eiga susieja paleidiklį su veiksmų seka, todėl įprastas procesas kiekvieną kartą vyksta vienodai. Ji gali automatiškai paruošti darbą ir prireikus palikti sprendimą peržiūrą atliekančiam žmogui.",
+            "title": "Automatizuoti pakartojamą procesą",
+            "when": "Automatizuokite darbą, kurio paleidiklis yra pastovus, veiksmai kartojami, o už išimtis atsakingas aiškiai nustatytas asmuo. Kintantį ar daug vertinimo reikalaujantį darbą atlikite rankiniu būdu, kol pats procesas nusistovės."
+          },
+          "reviewGate": {
+            "body": "Peržiūros patvirtinimas sustabdo vykdymą, kol žmogus jį patvirtina arba atmeta. Įterpkite patvirtinimą prieš pirmą veiksmą, kurio negalima atlikti remiantis vien automatiniu rezultatu.",
+            "title": "Palikti sprendimą peržiūrą atliekančiam žmogui",
+            "when": "Naudokite patvirtinimą prieš išsiųsdami, įtraukdami į bylą, perduodami spręsti toliau ar kitaip galutinai patvirtindami svarbių pasekmių turintį rezultatą. Praleiskite jį tik tada, kai kitą veiksmą galima saugiai atšaukti ir jam nereikia žmogaus vertinimo."
+          },
+          "steps": {
+            "body": "Veiksmai vykdomi šia tvarka ir perduoda darbo rezultatus toliau. Kiekvienam veiksmui priskirkite vieną aiškią užduotį, kad klaidos būtų suprantamos, o seką būtų lengva pakeisti.",
+            "title": "Sudaryti veiksmų seką"
+          },
+          "trigger": {
+            "body": "Paleidiklis nustato, kada pradedamas vykdymas: rankiniu būdu, pagal tvarkaraštį arba įkėlus atitinkančius failus. Susiaurinkite bylos ir failų sąlygas, kad nesusijęs darbas niekada nepaleistų darbo eigos.",
+            "title": "Pasirinkti, kas paleidžia darbo eigą",
+            "when": "Kol procesas naujas, naudokite rankinį paleidimą; pagal laiką vykdomoms įprastoms užduotims naudokite tvarkaraštį, o failo įkėlimą – tik tada, kai gautas dokumentas yra patikimas signalas pradėti."
           }
         },
         "title": "Automatizuoti darbo eigą"
@@ -2972,7 +3020,6 @@
       "addPosition": "Pridėti poziciją",
       "addRule": "Taisyklė",
       "adoptAsIdeal": "Priimti kaip idealią formuluotę",
-      "advanced": "Keisti veikimą",
       "all": "Visi peržiūros vadovai",
       "approval": {
         "approve": "Patvirtinti",
@@ -4121,7 +4168,7 @@
     "description": "Pakartotinai naudojamas dokumentų formatavimas šablonams ir naujiems dokumentams",
     "editor": {
       "bodyText": "Pagrindinis tekstas",
-      "createFromStella": "Kurti variantą pagal „Stella Style“",
+      "createFromStella": "Kurti variantą pagal „stella Style“",
       "createTitle": "Kurti stilių rinkinį",
       "description": "Keiskite dokumento formatavimo sistemą ir prieš išsaugodami peržiūrėkite rezultatą.",
       "double": "Dvigubas",
@@ -4192,7 +4239,7 @@
     "saveFailed": "Nepavyko išsaugoti stilių rinkinio",
     "savedDescription": "Išsaugotas stilių rinkinys",
     "sourceDocument": "Šaltinio DOCX",
-    "stellaDescription": "Išsamus neutralus Stella teisinių dokumentų formatavimas",
+    "stellaDescription": "Išsamus neutralus stella teisinių dokumentų formatavimas",
     "stellaStyle": "Stella Style",
     "title": "Stilių rinkiniai",
     "untitledDocument": "Dokumentas be pavadinimo"
