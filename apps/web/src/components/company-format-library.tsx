@@ -22,7 +22,6 @@ import { stellaToast } from "@stll/ui/toast";
 import { REGISTRY_DEFAULT_FORMAT } from "@/components/templates/registry-format-config";
 import type { LookupRegistryOption } from "@/components/templates/registry-options";
 import { usePermissions } from "@/hooks/use-permissions";
-import type { TranslationKey } from "@/i18n/types";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -265,13 +264,14 @@ export const CompanyFormatLibrary = ({
     library.selected !== undefined &&
     library.selected.id === library.userDefaultFormat?.id;
   const clearsMyDefault = library.builtIn;
-  const myDefaultLabel = ((): TranslationKey => {
+  // Translated per branch: a key union handed to `t` is too wide to type.
+  const myDefaultLabel = (() => {
     if (isMyDefault) {
-      return "templates.myDefaultLookupFormat";
+      return t("templates.myDefaultLookupFormat");
     }
     return clearsMyDefault
-      ? "templates.clearMyLookupFormatDefault"
-      : "templates.useAsMyLookupFormatDefault";
+      ? t("templates.clearMyLookupFormatDefault")
+      : t("templates.useAsMyLookupFormatDefault");
   })();
   const choosable = library.selected !== undefined || library.builtIn;
   return (
@@ -308,7 +308,7 @@ export const CompanyFormatLibrary = ({
               library.setMyDefault.mutate(library.selected?.id ?? null)
             }
           >
-            {t(myDefaultLabel)}
+            {myDefaultLabel}
           </Button>
         </div>
       )}

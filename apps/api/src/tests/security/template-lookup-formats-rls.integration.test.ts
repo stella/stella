@@ -18,6 +18,7 @@ import {
   resolveLookupFormatDefault,
 } from "@/api/handlers/templates/lookup-formats/resolve-default";
 import { createSafeId } from "@/api/lib/branded-types";
+import type { SafeId } from "@/api/lib/branded-types";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
@@ -240,9 +241,14 @@ describe("organization company format isolation", () => {
 });
 
 describe("personal company format defaults", () => {
-  const scopedFor = (organizationId: string, userId: string) =>
-    asTestRaw<ScopedDb>(createScopedDb(testDb, [], organizationId, userId));
-  const contextFor = (organizationId: string, userId: string) => {
+  const scopedFor = (
+    organizationId: SafeId<"organization">,
+    userId: SafeId<"user">,
+  ) => asTestRaw<ScopedDb>(createScopedDb(testDb, [], organizationId, userId));
+  const contextFor = (
+    organizationId: SafeId<"organization">,
+    userId: SafeId<"user">,
+  ) => {
     const scopedDb = scopedFor(organizationId, userId);
     return {
       scopedDb,
@@ -252,14 +258,14 @@ describe("personal company format defaults", () => {
     };
   };
   const resolveFor = async (
-    organizationId: string,
-    userId: string,
+    organizationId: SafeId<"organization">,
+    userId: SafeId<"user">,
     registry: "ares" | "krs" = "ares",
   ) => {
     const resolved = await resolveLookupFormatDefault({
       safeDb: contextFor(organizationId, userId).safeDb,
-      organizationId: asTestRaw(organizationId),
-      userId: asTestRaw(userId),
+      organizationId,
+      userId,
       registry,
     });
     if (Result.isError(resolved)) {
@@ -268,8 +274,8 @@ describe("personal company format defaults", () => {
     return resolved.value;
   };
   const setMyDefault = async (
-    organizationId: string,
-    userId: string,
+    organizationId: SafeId<"organization">,
+    userId: SafeId<"user">,
     formatId: string | null,
     registry: "ares" | "krs" = "ares",
   ) =>
@@ -281,7 +287,10 @@ describe("personal company format defaults", () => {
         body: { registry, formatId: asTestRaw(formatId) },
       }),
     );
-  const listFor = async (organizationId: string, userId: string) =>
+  const listFor = async (
+    organizationId: SafeId<"organization">,
+    userId: SafeId<"user">,
+  ) =>
     await listLookupFormats.handler(
       createTestHandlerContext<Parameters<typeof listLookupFormats.handler>[0]>(
         {
