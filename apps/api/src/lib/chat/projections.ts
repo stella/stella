@@ -1341,6 +1341,11 @@ export const SEARCH_CASE_LAW_PROJECTION = v.strictObject({
       citationCount: v.number(),
       country: v.string(),
       court: v.string(),
+      // The court's short form as a lawyer writes it (ÚS, NS, NSS, SN, CJEU),
+      // derived from the decision's ECLI or the jurisdiction's apex-court
+      // names. Null where nothing states one: it is never guessed, so a
+      // caller quoting it is quoting the court's own abbreviation.
+      courtAbbreviation: v.nullable(v.string()),
       decisionDate: v.nullable(v.string()),
       decisionId: passthroughId(),
       resourceName: passthroughId(),
@@ -1411,6 +1416,11 @@ export const READ_CASE_LAW_DECISION_PROJECTION = v.strictObject({
     ),
     country: v.string(),
     court: v.string(),
+    // The court's short form as a lawyer writes it (ÚS, NS, NSS, SN, CJEU),
+    // derived from the decision's ECLI or the jurisdiction's apex-court
+    // names. Null where nothing states one: it is never guessed, so a
+    // caller quoting it is quoting the court's own abbreviation.
+    courtAbbreviation: v.nullable(v.string()),
     decisionDate: v.nullable(v.string()),
     decisionId: passthroughId(),
     resourceName: passthroughId(),

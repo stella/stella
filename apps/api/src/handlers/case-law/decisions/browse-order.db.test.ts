@@ -3,7 +3,10 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { drizzle } from "drizzle-orm/pglite";
 
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
-import { seededCourtWeightEntries } from "@/api/handlers/case-law/court-weight-seed";
+import {
+  courtWeightMapFromSeed,
+  seededCourtWeightEntries,
+} from "@/api/handlers/case-law/court-weight-seed";
 import { readLatestDecisionsByCourt } from "@/api/handlers/case-law/decisions/latest";
 import { listDecisionsHandler } from "@/api/handlers/case-law/decisions/list";
 import { readShelfCourts } from "@/api/handlers/case-law/decisions/shelf-courts";
@@ -148,6 +151,9 @@ const walk = async (limit: number) => {
     const result = await listDecisionsHandler(
       { country: "CZE", limit, ...(cursor === undefined ? {} : { cursor }) },
       caseLawDb,
+      // The registry as the seed migration writes it: this harness holds the
+      // public reader alone, and the loader reads the root pool.
+      async () => courtWeightMapFromSeed(),
     );
     if (!("items" in result)) {
       throw new Error("list failed");
@@ -222,6 +228,7 @@ test(
     const result = await listDecisionsHandler(
       { country: "CZE", cursor: "not-a-cursor" },
       caseLawDb,
+      async () => courtWeightMapFromSeed(),
     );
     expect("items" in result).toBe(false);
   },

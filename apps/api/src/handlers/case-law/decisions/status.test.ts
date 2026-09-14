@@ -34,6 +34,7 @@ const load = async (
       return await readFacets(country);
     },
     readUpdatedAt: async () => UPDATED_AT,
+    readCourts: async () => [],
   });
   return { result, scopes };
 };
@@ -57,6 +58,7 @@ test("counts the bucket of the jurisdiction it was scoped to", async () => {
   expect(result.value).toEqual({
     decisions: 1_034_211,
     updatedAt: UPDATED_AT,
+    courts: [],
   });
 });
 
@@ -66,7 +68,11 @@ test("reports nothing for a jurisdiction the corpus has no bucket for", async ()
   if (Result.isError(result)) {
     throw result.error;
   }
-  expect(result.value).toEqual({ decisions: 0, updatedAt: UPDATED_AT });
+  expect(result.value).toEqual({
+    decisions: 0,
+    updatedAt: UPDATED_AT,
+    courts: [],
+  });
 });
 
 test("a failed facets read fails the status instead of reporting zero", async () => {
@@ -92,10 +98,34 @@ test("a facets read that rejects fails the status as a value", async () => {
       throw new TypeError("provider crashed");
     },
     readUpdatedAt: async () => UPDATED_AT,
+    readCourts: async () => [],
   });
 
   if (!Result.isError(result)) {
     throw new TypeError("expected the rejection to become an error value");
   }
   expect(result.error.message).toBe("provider crashed");
+});
+
+test("a failing per-court breakdown leaves the status standing", async () => {
+  // The count and the timestamp are what the badge says; the breakdown is
+  // detail behind it, and losing the detail must not blank the badge.
+  const result = await loadCaseLawCorpusStatus({
+    country: COUNTRY,
+    excludedSourceIds: [],
+    readFacets: async () => Result.ok(facetsOf([{ value: "CZE", count: 12 }])),
+    readUpdatedAt: async () => UPDATED_AT,
+    readCourts: async () => {
+      throw new TypeError("reader pool exhausted");
+    },
+  });
+
+  if (Result.isError(result)) {
+    throw result.error;
+  }
+  expect(result.value).toEqual({
+    decisions: 12,
+    updatedAt: UPDATED_AT,
+    courts: [],
+  });
 });

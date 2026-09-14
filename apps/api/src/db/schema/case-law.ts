@@ -561,6 +561,13 @@ export const caseLawDecisions = p.pgTable(
     p
       .index("case_law_decisions_country_updated_idx")
       .on(t.country, t.updatedAt.desc(), t.id.desc()),
+    // The same status broken down by court. Two reads ride this one index:
+    // the newest row of a named court, and that court's rows touched since
+    // the "added recently" window opened. `created_at` is a trailing key so
+    // the counts are answered without a heap fetch; it is never ranged on.
+    p
+      .index("case_law_decisions_country_court_updated_idx")
+      .on(t.country, t.court, t.updatedAt.desc(), t.createdAt),
     p
       .index("case_law_decisions_citation_authority_idx")
       .on(t.citationAuthority),

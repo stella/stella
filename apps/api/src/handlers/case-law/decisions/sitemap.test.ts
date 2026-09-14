@@ -9,6 +9,7 @@ import {
 } from "@stll/api-contract/case-law-launch-readiness";
 
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
+import { courtWeightMapFromSeed } from "@/api/handlers/case-law/court-weight-seed";
 import { listDecisionsHandler } from "@/api/handlers/case-law/decisions/list";
 import {
   decisionBucketSql,
@@ -210,7 +211,13 @@ test("sitemap shards reject countries outside the public list", async () => {
 test("the public list read stays inside the country boundary", async () => {
   const country =
     publicCaseLawCountry("CZE") ?? panic("Expected a public test country.");
-  const listed = await listDecisionsHandler({ country, limit: 10 }, caseLawDb);
+  const listed = await listDecisionsHandler(
+    { country, limit: 10 },
+    caseLawDb,
+    // The registry as the seed migration writes it: this harness holds the
+    // public reader alone, and the loader reads the root pool.
+    async () => courtWeightMapFromSeed(),
+  );
   expect("items" in listed).toBe(true);
   if ("items" in listed) {
     expect(listed.items).toHaveLength(4);

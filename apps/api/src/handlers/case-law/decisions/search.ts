@@ -43,6 +43,7 @@ import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
+import { courtPresentation } from "@/api/lib/case-law/court-presentation";
 import {
   courtTierSqlFromMap,
   courtWeightFromMap,
@@ -575,6 +576,11 @@ const searchPostgresDecisions = async (
   const hits = resultRows.map((row) => {
     const languageGroupKey = toNullableString(row["language_group_key"]);
     const headline = toNullableString(row["headline"]);
+    const presentation = courtPresentation(courtWeights, {
+      country: String(row["country"]),
+      court: String(row["court"]),
+      ecli: toNullableString(row["ecli"]),
+    });
 
     return {
       decisionId: String(row["decision_id"]),
@@ -586,6 +592,8 @@ const searchPostgresDecisions = async (
         ecli: toNullableString(row["ecli"]),
       }),
       court: String(row["court"]),
+      courtAbbreviation: presentation.courtAbbreviation,
+      courtTier: presentation.courtTier,
       country: String(row["country"]),
       language: String(row["language"]),
       languageAlternates: alternatesByGroupKey.alternatesFor(languageGroupKey),
@@ -1231,6 +1239,8 @@ type DecisionHitsPageOptions = {
   >;
   anchorIdById: ReadonlyMap<string, string>;
   byId: ReadonlyMap<string, PageDecisionRow>;
+  /** The registry the chip beside each court name is drawn from. */
+  courtWeights: CourtWeightMap;
   facets: DecisionSearchFacets | null;
   nextCursor: string | null;
   pageRanked: readonly RankedHit[];
@@ -1243,6 +1253,7 @@ const decisionHitsPage = ({
   alternatesByGroupKey,
   anchorIdById,
   byId,
+  courtWeights,
   facets,
   nextCursor,
   pageRanked,
@@ -1255,6 +1266,11 @@ const decisionHitsPage = ({
       return [];
     }
 
+    const presentation = courtPresentation(courtWeights, {
+      country: row.country,
+      court: row.court,
+      ecli: row.ecli,
+    });
     return [
       {
         decisionId: row.id,
@@ -1266,6 +1282,8 @@ const decisionHitsPage = ({
           ecli: row.ecli,
         }),
         court: row.court,
+        courtAbbreviation: presentation.courtAbbreviation,
+        courtTier: presentation.courtTier,
         country: row.country,
         language: row.language,
         languageAlternates: alternatesByGroupKey.alternatesFor(
@@ -1536,6 +1554,7 @@ export const searchCorpusIndexDecisions = async (
           alternatesByGroupKey: identityAlternates,
           anchorIdById: new Map(),
           byId,
+          courtWeights,
           facets: null,
           nextCursor: null,
           pageRanked: identityPage,
@@ -1667,6 +1686,7 @@ export const searchCorpusIndexDecisions = async (
     alternatesByGroupKey,
     anchorIdById,
     byId,
+    courtWeights,
     facets: facetsAndTotal?.facets ?? null,
     nextCursor,
     pageRanked,

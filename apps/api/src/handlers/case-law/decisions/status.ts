@@ -10,20 +10,28 @@ import {
 
 import { caseLawDecisions } from "@/api/db/schema";
 import { readBrowseFacetsUnderPolicy } from "@/api/handlers/case-law/decisions/facets";
+import {
+  type CaseLawCourtStatusRow,
+  caseLawCourtStatusRows,
+  readCaseLawCourtActivityQuery,
+} from "@/api/handlers/case-law/decisions/status-courts";
 import type { SafeId } from "@/api/lib/branded-types";
 import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
+import { loadCourtWeights } from "@/api/lib/case-law/court-weights";
 import { readNonRedistributableCaseLawSourceIds } from "@/api/lib/case-law/non-redistributable-sources";
 import { errorTag } from "@/api/lib/errors/utils";
 import { createTtlResultCache } from "@/api/lib/legal-search/browse-facets-cache";
 import type { LegalBrowseFacets } from "@/api/lib/legal-search/types";
+import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
 import {
   definePublicLawSharedQuery,
   PUBLIC_LAW_SHARED_QUERY,
 } from "@/api/lib/public-law-shared-query";
+import type { FacetBucket } from "@/api/lib/search/types";
 
 /** How much public case law the corpus serves and when it last changed. */
 export type CaseLawCorpusStatus = {
@@ -35,6 +43,11 @@ export type CaseLawCorpusStatus = {
   decisions: number;
   /** ISO 8601, or null while the public table is empty. */
   updatedAt: string | null;
+  /**
+   * The same corpus by court, apex tiers named and the rest grouped. Empty
+   * while the facets hold no court buckets for the jurisdiction.
+   */
+  courts: readonly CaseLawCourtStatusRow[];
 };
 
 class CorpusStatusError extends TaggedError("CorpusStatusError")<{
@@ -106,6 +119,16 @@ type CorpusStatusLoad = CorpusUpdatedAtRead & {
     read: CorpusUpdatedAtRead,
   ) => Promise<Result<LegalBrowseFacets, { message: string }>>;
   readUpdatedAt: (read: CorpusUpdatedAtRead) => Promise<string | null>;
+  /**
+   * The same facets read court by court. Its failure degrades to no
+   * breakdown rather than failing the status: the count and the timestamp
+   * are the answer beside the search box, and the courts are detail under
+   * it. The whole load is cached, so a degraded breakdown is held for the
+   * window like any other answer.
+   */
+  readCourts: (
+    read: CorpusUpdatedAtRead & { buckets: readonly FacetBucket[] },
+  ) => Promise<readonly CaseLawCourtStatusRow[]>;
 };
 
 const corpusStatusError = (fallback: string) => (cause: unknown) =>
@@ -123,6 +146,7 @@ const corpusStatusError = (fallback: string) => (cause: unknown) =>
 export const loadCaseLawCorpusStatus = async ({
   country,
   excludedSourceIds,
+  readCourts,
   readFacets,
   readUpdatedAt,
 }: CorpusStatusLoad): Promise<
@@ -153,14 +177,23 @@ export const loadCaseLawCorpusStatus = async ({
   if (Result.isError(updatedAt)) {
     return updatedAt;
   }
+  const browseFacets = facets.value.value;
   // A jurisdiction the corpus holds nothing for has no bucket at all: that is
   // the empty corpus, not a missed lookup.
-  const bucket = facets.value.value.country.find(
-    ({ value }) => value === country,
-  );
+  const bucket = browseFacets.country.find(({ value }) => value === country);
+  const courts = await Result.tryPromise({
+    try: async () => await readCourts({ ...read, buckets: browseFacets.court }),
+    catch: corpusStatusError("reading the per-court breakdown failed"),
+  });
+  if (Result.isError(courts)) {
+    logger.warn("case_law.corpus_status.courts_unavailable", {
+      "error.type": errorTag(courts.error),
+    });
+  }
   return Result.ok({
     decisions: bucket?.count ?? 0,
     updatedAt: updatedAt.value,
+    courts: Result.isError(courts) ? [] : courts.value,
   });
 };
 
@@ -184,7 +217,11 @@ const corpusStatus = createTtlResultCache({
   maxEntries: STATUS_CACHE_MAX_ENTRIES,
 });
 
-const EMPTY_STATUS: CaseLawCorpusStatus = { decisions: 0, updatedAt: null };
+const EMPTY_STATUS: CaseLawCorpusStatus = {
+  decisions: 0,
+  updatedAt: null,
+  courts: [],
+};
 
 export const readCaseLawCorpusStatusHandler = async (
   { country }: ReadCaseLawCorpusStatusQuery,
@@ -212,6 +249,29 @@ export const readCaseLawCorpusStatusHandler = async (
       await caseLawDb(
         async (tx) => await readCaseLawCorpusStatusQuery(tx, read),
       ),
+    readCourts: async ({ buckets, ...read }) => {
+      // The facet limit again, defensively: the statement's cost is one pair
+      // of index probes per court, and the provider decides how many buckets
+      // it returns.
+      const named = buckets.slice(0, LIMITS.caseLawFacetLimit);
+      const [courtWeights, activity] = await Promise.all([
+        loadCourtWeights(),
+        caseLawDb(
+          async (tx) =>
+            await readCaseLawCourtActivityQuery(tx, {
+              ...read,
+              courts: named.map(({ value }) => value),
+              now: new Date(),
+            }),
+        ),
+      ]);
+      return caseLawCourtStatusRows({
+        activity,
+        buckets: named,
+        country: read.country,
+        courtWeights,
+      });
+    },
   });
   if (Result.isError(result)) {
     // The status is a hint beside the box, not the page: degrade to "unknown".

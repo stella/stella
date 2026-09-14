@@ -11,6 +11,14 @@ import { isUuid } from "@stll/uuid-codec";
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+import {
+  courtPresentation,
+  readCourtRegistry,
+} from "@/api/lib/case-law/court-presentation";
+import {
+  type CourtWeightMap,
+  loadCourtWeights,
+} from "@/api/lib/case-law/court-weights";
 import { publicDecisionRowColumns } from "@/api/lib/case-law/decision-row-columns";
 import { readDecisionHeadnote } from "@/api/lib/case-law/decision-text";
 import { readPublicDecisionLanguageAlternatesByGroup } from "@/api/lib/case-law/language-alternates";
@@ -145,6 +153,12 @@ const decisionFilterConditions = (
 export const listDecisionsHandler = async (
   query: ListDecisionsQuery,
   caseLawDb: CaseLawPublicReadDb,
+  /**
+   * The court registry the chip beside each court name is drawn from. It lives
+   * on the root pool rather than the public reader's, so a harness holding
+   * only the reader supplies its own; the route takes the default.
+   */
+  readCourtWeights: () => Promise<CourtWeightMap> = loadCourtWeights,
 ) => {
   const country = publicCaseLawCountry(query.country);
   if (country === null) {
@@ -222,34 +236,50 @@ export const listDecisionsHandler = async (
         .filter((value): value is string => value !== null),
     ),
   ];
-  const alternatesByGroupKey =
-    await readPublicDecisionLanguageAlternatesByGroup({
+  // Two independent reads of the page's context: the alternates come from
+  // Postgres, the court registry from a loader that caches for a minute.
+  const [alternatesByGroupKey, courtWeights] = await Promise.all([
+    readPublicDecisionLanguageAlternatesByGroup({
       caseLawDb,
       languageGroupKeys,
-    });
+    }),
+    // Bounded and degraded to no badge: the registry is on the root pool,
+    // which this read otherwise never touches, and a court chip is not worth
+    // failing a page of decisions over.
+    readCourtRegistry(readCourtWeights),
+  ]);
 
   return createCursorPage({
-    rows: decisions.map((decision) => ({
-      id: decision.id,
-      caseNumber: decision.caseNumber,
-      slug: decision.slug,
-      ecli: decision.ecli,
-      court: decision.court,
-      country: decision.country,
-      language: decision.language,
-      languageAlternates: alternatesByGroupKey.alternatesFor(
-        decision.languageGroupKey,
-      ),
-      decisionDate: decision.decisionDate,
-      decisionType: decision.decisionType,
-      sourceUrl: decision.sourceUrl,
-      headnote: readDecisionHeadnote({
-        headnote: decision.headnote,
-        keywords: decision.keywords,
-      }),
-      citationCount: decision.citationCount,
-      createdAt: decision.createdAt,
-    })),
+    rows: decisions.map((decision) => {
+      const presentation = courtPresentation(courtWeights, {
+        country: decision.country,
+        court: decision.court,
+        ecli: decision.ecli,
+      });
+      return {
+        id: decision.id,
+        caseNumber: decision.caseNumber,
+        slug: decision.slug,
+        ecli: decision.ecli,
+        court: decision.court,
+        courtAbbreviation: presentation.courtAbbreviation,
+        courtTier: presentation.courtTier,
+        country: decision.country,
+        language: decision.language,
+        languageAlternates: alternatesByGroupKey.alternatesFor(
+          decision.languageGroupKey,
+        ),
+        decisionDate: decision.decisionDate,
+        decisionType: decision.decisionType,
+        sourceUrl: decision.sourceUrl,
+        headnote: readDecisionHeadnote({
+          headnote: decision.headnote,
+          keywords: decision.keywords,
+        }),
+        citationCount: decision.citationCount,
+        createdAt: decision.createdAt,
+      };
+    }),
     limit,
     cursorForItem: (item) =>
       encodeDecisionDateCursor({
