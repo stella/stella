@@ -25,6 +25,15 @@ describe("decision headnote preview response schema", () => {
       truncated: true,
     },
     { type: "absent", reason: "not_published" },
+    { type: "keywords", items: ["Nájem", "Výpověď"], truncated: false },
+    {
+      type: "keywords",
+      items: Array.from(
+        { length: LIMITS.caseLawHeadnoteKeywords },
+        (_, index) => `Term ${String(index)}`,
+      ),
+      truncated: true,
+    },
   ])("accepts a declared branch", (headnote) => {
     expect(Value.Check(decisionHeadnotePreviewSchema, headnote)).toBe(true);
   });
@@ -47,6 +56,17 @@ describe("decision headnote preview response schema", () => {
     },
     { type: "absent", reason: "not_published", truncated: false },
     { type: "absent", reason: "unknown" },
+    { type: "keywords", items: [], truncated: false },
+    { type: "keywords", items: ["Nájem"] },
+    { type: "keywords", items: "Nájem", truncated: false },
+    {
+      type: "keywords",
+      items: Array.from(
+        { length: LIMITS.caseLawHeadnoteKeywords + 1 },
+        (_, index) => `Term ${String(index)}`,
+      ),
+      truncated: true,
+    },
   ])("rejects an ambiguous or invalid preview", (headnote) => {
     expect(Value.Check(decisionHeadnotePreviewSchema, headnote)).toBe(false);
   });

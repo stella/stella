@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 export const TEXT_FIELD_TYPE = {
   ABSENT: "absent",
   PRESENT: "present",
@@ -32,6 +34,14 @@ export type TextField =
 export const DECISION_HEADNOTE_TRUNCATION_MARK = "…";
 
 /**
+ * What a publisher filed a decision under, where they wrote no headnote: a
+ * subject index or an area of law. Its own branch rather than one more string,
+ * because a classification is a list of terms and a headnote is a sentence,
+ * and a row that draws them the same way reads the tags as prose.
+ */
+export const DECISION_HEADNOTE_KEYWORDS = "keywords";
+
+/**
  * A bounded publisher-summary preview returned for a public decision row.
  * Truncated text retains its terminal mark for clients that do not yet read
  * the explicit flag.
@@ -40,7 +50,38 @@ export type DecisionHeadnotePreview =
   | Extract<TextField, { readonly type: typeof TEXT_FIELD_TYPE.ABSENT }>
   | (Extract<TextField, { readonly type: typeof TEXT_FIELD_TYPE.PRESENT }> & {
       readonly truncated: boolean;
-    });
+    })
+  | {
+      readonly type: typeof DECISION_HEADNOTE_KEYWORDS;
+      readonly items: readonly string[];
+      /** Whether the row's budget dropped terms the publisher filed. */
+      readonly truncated: boolean;
+    };
+
+/** How a classification reads where only one line of text will do. */
+export const DECISION_KEYWORD_SEPARATOR = " · ";
+
+/**
+ * A row's publisher summary as one line, whichever kind it is, and empty
+ * where the publisher supplied none. For the consumers that cannot draw terms
+ * as terms — a find over a cell, a prompt grounding a suggestion — so that
+ * what they read is never a kind poorer than what the row shows.
+ */
+export const decisionHeadnoteLine = (
+  headnote: DecisionHeadnotePreview,
+): string => {
+  switch (headnote.type) {
+    case TEXT_FIELD_TYPE.PRESENT:
+      return headnote.text;
+    case DECISION_HEADNOTE_KEYWORDS:
+      return headnote.items.join(DECISION_KEYWORD_SEPARATOR);
+    case TEXT_FIELD_TYPE.ABSENT:
+      return "";
+    default:
+      headnote satisfies never;
+      return panic(`Unhandled decision headnote: ${String(headnote)}`);
+  }
+};
 
 export const DECISION_TEXT_FIELD = {
   ABSTRACT: "abstract",

@@ -7,6 +7,8 @@ import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import {
+  DECISION_HEADNOTE_KEYWORDS,
+  decisionHeadnoteLine,
   TEXT_FIELD_TYPE,
   type DecisionHeadnotePreview,
   type TextField,
@@ -203,23 +205,24 @@ export const SummaryCell = ({
   decision: Decision;
 }) => {
   const openDecision = useOpenDecisionTab();
-  const headnote = presentHeadnote(decision.headnote);
   const { headline } = decision;
+  // Both kinds are judged as one line, because the question here is whether
+  // what the publisher supplied is about the search at all.
+  const summaryLine = decisionHeadnoteLine(decision.headnote);
 
-  if (headnote !== null) {
+  if (summaryLine.length > 0) {
     // With nothing to look for, a headnote is still the better hook; a browse
     // listing and a saved research table both arrive here with no tokens.
     const answersTheQuery =
       context.queryTokens.length === 0 ||
-      hasHighlight(highlightSegments(headnote.text, context.queryTokens)) ||
+      hasHighlight(highlightSegments(summaryLine, context.queryTokens)) ||
       !headline;
     if (answersTheQuery) {
       return (
-        <DecisionHeadnote
+        <HeadnotePreviewCell
           columnId="summary"
           context={context}
           decision={decision}
-          headnote={headnote}
           queryTokens={context.queryTokens}
         />
       );
@@ -267,20 +270,123 @@ type PresentHeadnote = Extract<
   { type: typeof TEXT_FIELD_TYPE.PRESENT }
 >;
 
-/** What the row has to show, or null where the source published nothing. */
-const presentHeadnote = (
-  headnote: DecisionHeadnotePreview,
-): PresentHeadnote | null => {
+type HeadnotePreviewCellProps = {
+  columnId: DecisionColumnId;
+  context: DecisionRenderContext;
+  decision: Decision;
+  /** The search's words, marked inside whatever the publisher supplied. */
+  queryTokens: readonly string[];
+};
+
+/**
+ * What the publisher supplied, drawn as the kind it is: their sentence as
+ * prose, their filing terms as tags. One switch, so a third kind cannot reach
+ * a cell without a decision about how it looks.
+ */
+const HeadnotePreviewCell = ({
+  columnId,
+  context,
+  decision,
+  queryTokens,
+}: HeadnotePreviewCellProps) => {
+  const { headnote } = decision;
   switch (headnote.type) {
-    case TEXT_FIELD_TYPE.PRESENT:
-      return headnote;
     case TEXT_FIELD_TYPE.ABSENT:
-      return null;
+      return EMPTY_VALUE;
+    case DECISION_HEADNOTE_KEYWORDS:
+      return (
+        <DecisionKeywords
+          columnId={columnId}
+          contentMode={context.contentMode}
+          items={headnote.items}
+          queryTokens={queryTokens}
+        />
+      );
+    case TEXT_FIELD_TYPE.PRESENT:
+      return (
+        <DecisionHeadnote
+          columnId={columnId}
+          context={context}
+          decision={decision}
+          headnote={headnote}
+          queryTokens={queryTokens}
+        />
+      );
     default:
       headnote satisfies never;
-      return panic(`Unhandled decision text field: ${String(headnote)}`);
+      return panic(`Unhandled decision headnote: ${String(headnote)}`);
   }
 };
+
+/**
+ * The terms a publisher filed the decision under, as terms. A classification
+ * set as prose reads like an argument the court never made, so it is drawn the
+ * way the rest of the table draws a value from a fixed set: one tag each.
+ */
+export const DecisionKeywords = ({
+  columnId,
+  contentMode,
+  items,
+  queryTokens,
+}: {
+  columnId: DecisionColumnId;
+  contentMode: DecisionContentMode;
+  items: readonly string[];
+  queryTokens: readonly string[];
+}) => (
+  <ul
+    className={cn(
+      "flex items-center gap-1",
+      // The density control decides here too: a page being scanned keeps
+      // every row one line tall, and the terms past it are cut the way a
+      // sentence is; a row being read shows the whole filing.
+      contentMode === "tight" ? "flex-nowrap overflow-hidden" : "flex-wrap",
+    )}
+  >
+    {items.map((item) => (
+      <li
+        className="bg-muted text-muted-foreground shrink-0 rounded px-1.5 py-0.5 text-xs"
+        key={item}
+      >
+        <BidiText as="span">
+          <HighlightedProse
+            columnId={columnId}
+            queryTokens={queryTokens}
+            text={item}
+          />
+        </BidiText>
+      </li>
+    ))}
+  </ul>
+);
+
+/**
+ * Two highlighters over one string: the search's words, and the reader's find
+ * inside the runs the search did not claim.
+ */
+const HighlightedProse = ({
+  columnId,
+  queryTokens,
+  text,
+}: {
+  columnId: DecisionColumnId;
+  queryTokens: readonly string[];
+  text: string;
+}) => (
+  <>
+    {highlightSegments(text, queryTokens).map((segment) =>
+      segment.match ? (
+        <mark className={MARK_CLASS_NAME} key={segment.start}>
+          {segment.text}
+        </mark>
+      ) : (
+        <Fragment key={segment.start}>
+          <HighlightedText columnId={columnId} text={segment.text} />
+        </Fragment>
+      ),
+    )}
+  </>
+);
 
 /** How much of a decision's headnote a row is showing, and why that much. */
 export const HEADNOTE_VIEW = {
@@ -416,10 +522,6 @@ export const HeadnoteProse = ({
 }: HeadnoteProseProps) => {
   const t = useTranslations();
   const showingWhole = view.type === HEADNOTE_VIEW.WHOLE;
-  const segments = highlightSegments(
-    view.type === HEADNOTE_VIEW.WHOLE ? view.text : preview.text,
-    queryTokens,
-  );
 
   return (
     <div>
@@ -432,20 +534,11 @@ export const HeadnoteProse = ({
           showingWhole ? "" : decisionClampClassName(contentMode),
         )}
       >
-        {/* Two highlighters over one string: the search's words, already
-            split into segments, and the reader's find inside the runs the
-            search did not claim. */}
-        {segments.map((segment) =>
-          segment.match ? (
-            <mark className={MARK_CLASS_NAME} key={segment.start}>
-              {segment.text}
-            </mark>
-          ) : (
-            <Fragment key={segment.start}>
-              <HighlightedText columnId={columnId} text={segment.text} />
-            </Fragment>
-          ),
-        )}
+        <HighlightedProse
+          columnId={columnId}
+          queryTokens={queryTokens}
+          text={showingWhole ? view.text : preview.text}
+        />
       </BidiText>
       {preview.truncated && (
         <div className="mt-1 flex flex-wrap items-center gap-x-2 text-xs">
@@ -647,24 +740,16 @@ export const HeadnoteCell = ({
 }: {
   context: DecisionRenderContext;
   decision: Decision;
-}) => {
-  const headnote = presentHeadnote(decision.headnote);
-  if (headnote === null) {
-    return EMPTY_VALUE;
-  }
-
-  return (
-    <DecisionHeadnote
-      columnId="headnote"
-      context={context}
-      decision={decision}
-      headnote={headnote}
-      // This column is the publisher's sentence, not the row's match: only
-      // the reader's find marks it, the way every metadata column is marked.
-      queryTokens={NO_QUERY_TOKENS}
-    />
-  );
-};
+}) => (
+  <HeadnotePreviewCell
+    columnId="headnote"
+    context={context}
+    decision={decision}
+    // This column is what the publisher supplied, not the row's match: only
+    // the reader's find marks it, the way every metadata column is marked.
+    queryTokens={NO_QUERY_TOKENS}
+  />
+);
 
 export const CitedByCell = ({ decision }: { decision: Decision }) => {
   const format = useFormatter();

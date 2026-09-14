@@ -7,6 +7,7 @@ import { IntlProvider } from "use-intl";
 import { TEXT_FIELD_TYPE } from "@stll/api-contract/case-law-text-field";
 
 import {
+  DecisionKeywords,
   HEADNOTE_VIEW,
   HeadnoteProse,
 } from "@/features/case-law/components/decision-cells";
@@ -84,5 +85,24 @@ describe("a cut headnote can be read whole", () => {
     expect(markup).toContain("Retry");
     // The preview is still the text on screen: a failed read loses nothing.
     expect(markup).toContain("Nájemní smlouva");
+  });
+});
+
+describe("a classification is drawn as what it is", () => {
+  test("each term is its own tag, with the search's words marked inside one", () => {
+    const markup = render(
+      <DecisionKeywords
+        columnId="summary"
+        contentMode="fit-content"
+        items={["Nájem bytu", "Výpověď"]}
+        queryTokens={["výpověď"]}
+      />,
+    );
+
+    // One tag per term, never one line of prose joining them.
+    expect(markup.match(/<li/gu)?.length).toBe(2);
+    expect(markup).toContain("Nájem bytu");
+    expect(markup).toContain("<mark");
+    expect(markup).not.toContain("Nájem bytu · Výpověď");
   });
 });

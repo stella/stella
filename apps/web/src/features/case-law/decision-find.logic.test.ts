@@ -126,6 +126,25 @@ describe("what a decision row shows a find", () => {
     expect(text.get("summary")).toBe(text.get("headnote"));
   });
 
+  test("carries the terms of a row that carries no sentence", () => {
+    // A classification is drawn as tags and must still be findable; reading
+    // only the prose branch would make those rows silently unsearchable.
+    const classified = decisionFindRowText({
+      answersByKey: ANSWERS,
+      decision: {
+        ...TERMINATION,
+        headnote: {
+          type: "keywords",
+          items: ["Nájem bytu", "Výpověď"],
+          truncated: false,
+        },
+      },
+      questionColumns: [],
+    });
+
+    expect(classified.get("headnote")).toBe("Nájem bytu · Výpověď");
+  });
+
   test("carries the answer a question column holds", () => {
     expect(text.get(questionColumnId("outcome"))).toBe("Odvolání zamítnuto");
   });

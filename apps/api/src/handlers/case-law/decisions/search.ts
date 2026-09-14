@@ -51,6 +51,7 @@ import {
 } from "@/api/lib/case-law/court-weights";
 import type { CourtWeightMap } from "@/api/lib/case-law/court-weights";
 import { decisionIdentifierProjection } from "@/api/lib/case-law/decision-identifiers";
+import { publicDecisionRowColumns } from "@/api/lib/case-law/decision-row-columns";
 import {
   decodeDecisionSearchCursor,
   type DecisionSearchCursor,
@@ -72,7 +73,10 @@ import {
 import { readDecisionHeadnote } from "@/api/lib/case-law/decision-text";
 import { readPublicDecisionLanguageAlternatesByGroup } from "@/api/lib/case-law/language-alternates";
 import { readCaseLawSourceRegistry } from "@/api/lib/case-law/non-redistributable-sources";
-import { publisherSummaryMetadataSql } from "@/api/lib/case-law/publisher-summary";
+import {
+  publisherHeadnoteMetadataSql,
+  publisherKeywordsMetadataSql,
+} from "@/api/lib/case-law/publisher-summary";
 import {
   redistributableCaseLawSource,
   redistributableCaseLawSourceSqlFor,
@@ -383,7 +387,8 @@ const searchPostgresDecisions = async (
       d.decision_date,
       d.decision_type,
       d.source_url,
-      ${publisherSummaryMetadataSql(sql.raw("d.metadata"))} AS headnote,
+      ${publisherHeadnoteMetadataSql(sql.raw("d.metadata"))} AS headnote,
+      ${publisherKeywordsMetadataSql(sql.raw("d.metadata"))} AS keywords,
       ts_headline(
         ${headlineRegconfig},
         left(
@@ -587,7 +592,10 @@ const searchPostgresDecisions = async (
       decisionDate: toNullableString(row["decision_date"]),
       decisionType: toNullableString(row["decision_type"]),
       sourceUrl: toNullableString(row["source_url"]),
-      headnote: readDecisionHeadnote(row["headnote"]),
+      headnote: readDecisionHeadnote({
+        headnote: row["headnote"],
+        keywords: row["keywords"],
+      }),
       headline: headline ? escapeAndHighlight(headline) : null,
       // Postgres FTS scores whole decisions, so there is no passage to anchor
       // the hit to. Kept on both paths so the response shape does not depend
@@ -856,10 +864,9 @@ const pageDecisionRowsQuery = (
 ) =>
   tx
     .select({
-      id: caseLawDecisions.id,
-      caseNumber: caseLawDecisions.caseNumber,
-      slug: caseLawDecisions.slug,
-      ecli: caseLawDecisions.ecli,
+      ...publicDecisionRowColumns(),
+      // The hit carries every identifier the publisher supplied; a list row
+      // does not, so this one column is the search's own.
       identifiers: sql<unknown>`coalesce((
         SELECT jsonb_agg(
           jsonb_build_object(
@@ -871,16 +878,6 @@ const pageDecisionRowsQuery = (
         FROM ${caseLawDecisionIdentifiers} identifier
         WHERE identifier.decision_id = ${caseLawDecisions.id}
       ), '[]'::jsonb)`,
-      court: caseLawDecisions.court,
-      country: caseLawDecisions.country,
-      language: caseLawDecisions.language,
-      languageGroupKey: caseLawDecisions.languageGroupKey,
-      decisionDate: caseLawDecisions.decisionDate,
-      decisionType: caseLawDecisions.decisionType,
-      sourceUrl: caseLawDecisions.sourceUrl,
-      headnote: publisherSummaryMetadataSql(caseLawDecisions.metadata),
-      citationCount: caseLawDecisions.citationCount,
-      createdAt: caseLawDecisions.createdAt,
     })
     .from(caseLawDecisions)
     .innerJoin(caseLawSources, eq(caseLawSources.id, caseLawDecisions.sourceId))
@@ -1277,7 +1274,10 @@ const decisionHitsPage = ({
         decisionDate: row.decisionDate,
         decisionType: row.decisionType,
         sourceUrl: row.sourceUrl,
-        headnote: readDecisionHeadnote(row.headnote),
+        headnote: readDecisionHeadnote({
+          headnote: row.headnote,
+          keywords: row.keywords,
+        }),
         headline: snippetById.get(hit.id) ?? null,
         // Additive: the anchor of the passage the snippet came from, so a
         // result can open the decision scrolled to what matched. Null on a

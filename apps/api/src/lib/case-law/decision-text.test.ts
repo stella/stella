@@ -340,9 +340,31 @@ describe("decision text fields", () => {
       type: "absent",
       reason: TEXT_ABSENCE_REASON.PARSE_FAILED,
     });
-    expect(readDecisionHeadnote("  ")).toEqual({
+    expect(readDecisionHeadnote({ headnote: "  ", keywords: null })).toEqual({
       type: "absent",
       reason: TEXT_ABSENCE_REASON.PARSE_FAILED,
     });
+  });
+
+  test("a decision with no sentence shows what it was filed under", () => {
+    expect(
+      readDecisionHeadnote({
+        headnote: null,
+        keywords: ["  Nájem ", "", "Výpověď", "Nájem"],
+      }),
+    ).toEqual({
+      type: "keywords",
+      items: ["Nájem", "Výpověď"],
+      truncated: false,
+    });
+  });
+
+  test("a sentence wins over the terms beside it", () => {
+    expect(
+      readDecisionHeadnote({
+        headnote: "Právní věta.",
+        keywords: ["Nájem"],
+      }),
+    ).toEqual({ type: "present", text: "Právní věta.", truncated: false });
   });
 });

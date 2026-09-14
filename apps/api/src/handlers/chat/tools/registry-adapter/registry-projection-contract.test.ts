@@ -1245,6 +1245,7 @@ const CONTRACT_CORPUS = {
             },
           ],
           fulltext: "Full decision text.",
+          headnote: { type: "absent", reason: "not_published" },
           sections: null,
           language: "cs",
           languageGroupKey: null,

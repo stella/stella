@@ -123,6 +123,10 @@ const DecisionRenderScopeContext = createContext<DecisionRenderScopeValue>({
 
 export const DecisionRenderScope = DecisionRenderScopeContext.Provider;
 
+/** What the table is showing, for the parts of a row that are not a cell. */
+export const useDecisionRenderScope = (): DecisionRenderScopeValue =>
+  use(DecisionRenderScopeContext);
+
 type UseDecisionTableColumnsOptions = {
   /** Columns only the calling screen has; none on the results page. */
   extraColumns?: readonly DecisionExtraColumn[] | undefined;

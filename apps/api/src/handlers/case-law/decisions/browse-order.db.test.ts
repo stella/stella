@@ -189,7 +189,7 @@ test(
 );
 
 test(
-  "the headnote is the legal sentence first, else the keywords, whitespace collapsed",
+  "the headnote is the legal sentence first, else the terms it was filed under",
   async () => {
     const all = await walk(50);
     const first = all.find((item) => item.caseNumber === "1 Cdo 1/2024");
@@ -201,9 +201,11 @@ test(
       text: "Právní věta.",
       truncated: false,
     });
+    // A classification stays a list of terms all the way to the row, so the
+    // cell can draw tags rather than a sentence the court never wrote.
     expect(second?.headnote).toEqual({
-      type: "present",
-      text: "smlouva",
+      type: "keywords",
+      items: ["smlouva"],
       truncated: false,
     });
     expect(undated?.headnote).toEqual({

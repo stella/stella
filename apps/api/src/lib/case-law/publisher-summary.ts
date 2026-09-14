@@ -3,6 +3,7 @@ import { sql } from "drizzle-orm";
 import type { SQL, SQLWrapper } from "drizzle-orm";
 
 import {
+  DECISION_KEYWORD_SEPARATOR,
   DECISION_TEXT_FIELD,
   type DecisionTextFieldKey,
 } from "@stll/api-contract/case-law-text-field";
@@ -123,8 +124,12 @@ export const PUBLISHER_SUMMARY_SOURCES = [
   ...PUBLISHER_KEYWORD_SOURCES,
 ] as const;
 
-/** Items of a list-shaped source, as one line. */
-const LIST_SEPARATOR = " · ";
+/**
+ * Items of a list-shaped source, as one line. The same separator a client
+ * draws between terms it cannot draw as tags, so one classification reads the
+ * same wherever it is flattened.
+ */
+const LIST_SEPARATOR = DECISION_KEYWORD_SEPARATOR;
 
 /** Publisher paragraphs, kept as paragraphs. */
 const PARAGRAPH_SEPARATOR = "\n\n";
@@ -159,8 +164,17 @@ const trimmed = (value: string): string | null => {
   return text.length === 0 ? null : text;
 };
 
-const READ_METADATA_VALUE = {
-  text: (value) => (typeof value === "string" ? trimmed(value) : null),
+/**
+ * Each shape as the terms it carries, in order. The joined reading below is
+ * derived from this one rather than written beside it: a classification is a
+ * list to a client that draws tags and one line to a client that draws prose,
+ * and the two must never disagree about which terms those are.
+ */
+const READ_METADATA_ITEMS = {
+  text: (value) => {
+    const text = typeof value === "string" ? trimmed(value) : null;
+    return text === null ? null : [text];
+  },
   list: (value) => {
     if (!Array.isArray(value)) {
       return null;
@@ -172,8 +186,18 @@ const READ_METADATA_VALUE = {
         items.push(text);
       }
     }
-    return items.length === 0 ? null : items.join(LIST_SEPARATOR);
+    return items.length === 0 ? null : items;
   },
+} as const satisfies Record<
+  PublisherSummaryValueShape,
+  (value: unknown) => readonly string[] | null
+>;
+
+const READ_METADATA_VALUE = {
+  text: (value) =>
+    READ_METADATA_ITEMS.text(value)?.join(LIST_SEPARATOR) ?? null,
+  list: (value) =>
+    READ_METADATA_ITEMS.list(value)?.join(LIST_SEPARATOR) ?? null,
 } as const satisfies Record<
   PublisherSummaryValueShape,
   (value: unknown) => string | null
@@ -189,36 +213,51 @@ const jsonKey = (key: string): SQL => sql.raw(`'${key.replaceAll("'", "''")}'`);
 const trimSql = (value: SQL): SQL =>
   sql`nullif(btrim(${value}, ${sql.raw(TRIMMED_WHITESPACE_SQL)}), '')`;
 
+/** `array_to_string` renders no array as no line, which is what NULL means here. */
+const joinedItemsSql = (items: SQL): SQL =>
+  sql`array_to_string(${items}, ${LIST_SEPARATOR})`;
+
 /**
  * Each shape as SQL, reading exactly what its TypeScript reading reads: a
  * JSON string for `text`, the string items of a JSON array for `list`. The
  * type guards are not defensive — an untyped `->>` would render a number as
  * text where TypeScript skips it, and the two would disagree.
  */
-const METADATA_VALUE_SQL = {
+const METADATA_ITEMS_SQL = {
   text: (metadata, key) =>
     sql`CASE jsonb_typeof(${metadata} -> ${jsonKey(key)})
-          WHEN 'string' THEN ${trimSql(sql`${metadata} ->> ${jsonKey(key)}`)}
+          WHEN 'string' THEN (
+            SELECT ARRAY[term.value]
+              FROM (SELECT ${trimSql(sql`${metadata} ->> ${jsonKey(key)}`)}) AS term(value)
+             WHERE term.value IS NOT NULL
+          )
         END`,
   list: (metadata, key) =>
-    sql`nullif(
-      (
-        SELECT string_agg(
-                 btrim(item.value #>> '{}', ${sql.raw(TRIMMED_WHITESPACE_SQL)}),
-                 ${LIST_SEPARATOR}
-                 ORDER BY item.ordinality
-               )
+    sql`(
+      SELECT array_agg(
+               btrim(item.value #>> '{}', ${sql.raw(TRIMMED_WHITESPACE_SQL)})
+               ORDER BY item.ordinality
+             )
         FROM jsonb_array_elements(
           CASE jsonb_typeof(${metadata} -> ${jsonKey(key)})
             WHEN 'array' THEN ${metadata} -> ${jsonKey(key)}
             ELSE '[]'::jsonb
           END
         ) WITH ORDINALITY AS item(value, ordinality)
-        WHERE jsonb_typeof(item.value) = 'string'
-          AND btrim(item.value #>> '{}', ${sql.raw(TRIMMED_WHITESPACE_SQL)}) <> ''
-      ),
-      ''
+       WHERE jsonb_typeof(item.value) = 'string'
+         AND btrim(item.value #>> '{}', ${sql.raw(TRIMMED_WHITESPACE_SQL)}) <> ''
     )`,
+} as const satisfies Record<
+  PublisherSummaryValueShape,
+  (metadata: SQLWrapper, key: string) => SQL
+>;
+
+/** The same terms as one line, derived from the reading above, never beside it. */
+const METADATA_VALUE_SQL = {
+  text: (metadata, key) =>
+    joinedItemsSql(METADATA_ITEMS_SQL.text(metadata, key)),
+  list: (metadata, key) =>
+    joinedItemsSql(METADATA_ITEMS_SQL.list(metadata, key)),
 } as const satisfies Record<
   PublisherSummaryValueShape,
   (metadata: SQLWrapper, key: string) => SQL
@@ -343,6 +382,23 @@ export const publisherKeywordsOf = (
 ): string | null => firstSourceText(PUBLISHER_KEYWORD_SOURCES, input);
 
 /**
+ * The same classification as the terms it is made of, for a surface that draws
+ * one tag each. Same list, same order, same first-source-that-has-something
+ * rule as the line above.
+ */
+export const publisherKeywordItemsOf = ({
+  metadata,
+}: PublisherSummaryInput): readonly string[] | null => {
+  for (const source of PUBLISHER_KEYWORD_SOURCES) {
+    const items = READ_METADATA_ITEMS[source.shape](metadata?.[source.key]);
+    if (items !== null) {
+      return items;
+    }
+  }
+  return null;
+};
+
+/**
  * One line for a reader: the headnote, or the classification where there is no
  * headnote. Null when the publisher supplied neither, so a consumer omits the
  * line rather than rendering an empty one.
@@ -362,23 +418,24 @@ export const publisherSummaryOf = (
  */
 export const publisherSummaryMetadataSql = (
   metadata: SQLWrapper,
+): SQL<string | null> =>
+  sql<string | null>`coalesce(
+    ${publisherHeadnoteMetadataSql(metadata)},
+    ${joinedItemsSql(publisherKeywordsMetadataSql(metadata))}
+  )`;
+
+/**
+ * The publisher's sentence alone, for a row that draws the two kinds
+ * differently. The stored-absence gate travels with it: a field the ingest
+ * marked absent is not a headnote this decision has.
+ */
+export const publisherHeadnoteMetadataSql = (
+  metadata: SQLWrapper,
 ): SQL<string | null> => {
   const arms: SQL[] = [];
-  for (const source of PUBLISHER_SUMMARY_SOURCES) {
-    if (source.origin !== "metadata") {
-      continue;
-    }
-    switch (source.kind) {
-      case "headnote":
-        arms.push(storedDecisionTextSql(metadata, source.key));
-        break;
-      case "keywords":
-        arms.push(METADATA_VALUE_SQL[source.shape](metadata, source.key));
-        break;
-      default: {
-        source satisfies never;
-        return panic(`Unhandled summary source: ${String(source)}`);
-      }
+  for (const source of PUBLISHER_HEADNOTE_SOURCES) {
+    if (source.origin === "metadata") {
+      arms.push(storedDecisionTextSql(metadata, source.key));
     }
   }
   const entries = sql.raw("absence_entries.entries");
@@ -392,4 +449,19 @@ export const publisherSummaryMetadataSql = (
           ) AS absence_entries
       ) AS decision_text_absence
   )`;
+};
+
+/**
+ * The publisher's classification alone, as its terms rather than as one line:
+ * the SQL twin of `publisherKeywordItemsOf`, for the rows that draw one tag
+ * each. No absence gate — a classification is the publisher's filing, not text
+ * the ingest can mark unpublished.
+ */
+export const publisherKeywordsMetadataSql = (
+  metadata: SQLWrapper,
+): SQL<string[] | null> => {
+  const arms = PUBLISHER_KEYWORD_SOURCES.map((source) =>
+    METADATA_ITEMS_SQL[source.shape](metadata, source.key),
+  );
+  return sql<string[] | null>`coalesce(${sql.join(arms, sql`, `)})`;
 };

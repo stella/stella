@@ -12,7 +12,7 @@
 import { panic } from "better-result";
 
 import { PROPERTY_FIND_SUPPORT } from "@stll/api-contract";
-import { TEXT_FIELD_TYPE } from "@stll/api-contract/case-law-text-field";
+import { decisionHeadnoteLine } from "@stll/api-contract/case-law-text-field";
 
 import { tableFindMatches } from "@/components/workspaces/table/table-find.logic";
 import type { Decision } from "@/features/case-law/components/decision-cells";
@@ -38,9 +38,7 @@ type DecisionFindText = (decision: Decision) => string;
  * than the decision's text, and it carries the search's marks already.
  */
 const headnoteFindText = (decision: Decision): string =>
-  decision.headnote.type === TEXT_FIELD_TYPE.PRESENT
-    ? decision.headnote.text
-    : "";
+  decisionHeadnoteLine(decision.headnote);
 
 /**
  * The text each decision column shows a find, or null for a column a find

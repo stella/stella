@@ -11,6 +11,8 @@ import { propertyConfig, propertyTestTimeout } from "@stll/property-testing";
 
 import {
   PUBLISHER_SUMMARY_SOURCES,
+  publisherKeywordItemsOf,
+  publisherKeywordsMetadataSql,
   publisherSummaryMetadataSql,
   publisherSummaryOf,
 } from "@/api/lib/case-law/publisher-summary";
@@ -296,4 +298,51 @@ test("both readings agree for arbitrary stored absence shapes", async () => {
     }),
     propertyConfig({ numRuns: 100 }),
   );
+});
+
+/** The classification as its terms, under whichever driver shape `execute` returns. */
+const readKeywords = (row: unknown): readonly string[] | null => {
+  const value = isRecord(row) ? row["keywords"] : undefined;
+  if (value === null || value === undefined) {
+    return null;
+  }
+  if (Array.isArray(value) && value.every((item) => typeof item === "string")) {
+    return value;
+  }
+  throw new TypeError("keywords did not render as text[]");
+};
+
+const readMetadataKeywords = async (
+  metadata: Record<string, unknown>,
+): Promise<readonly string[] | null> => {
+  const rows = executedRows(
+    await db.execute(sql`
+      SELECT ${publisherKeywordsMetadataSql(sql.raw("f.metadata"))} AS "keywords"
+        FROM (VALUES (${JSON.stringify(metadata)}::text::jsonb)) AS f(metadata)
+    `),
+  );
+  return readKeywords(rows.at(0));
+};
+
+/**
+ * The classification has the same two implementations as the line, and a row
+ * that draws tags reads this one: the terms, in order, never a joined string
+ * split back apart.
+ */
+test("both readings of the classification agree, term by term", async () => {
+  const fixtures: readonly Record<string, unknown>[] = [
+    { keywords: ["  alfa ", "  ", 7, "beta"] },
+    { keywords: [], legalAreas: ["gamma"] },
+    { legalArea: " delta " },
+    { keywords: ["epsilon"], legalSentence: "Právní věta." },
+    { unrelated: "not a classification" },
+  ];
+
+  for (const metadata of fixtures) {
+    const expected = publisherKeywordItemsOf({ documentAst: null, metadata });
+    expect([metadata, await readMetadataKeywords(metadata)]).toEqual([
+      metadata,
+      expected,
+    ]);
+  }
 });

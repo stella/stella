@@ -40,7 +40,8 @@ import {
 } from "@/components/workspaces/table/workspace-table/internals-helpers";
 import type { Decision } from "@/features/case-law/components/decision-cells";
 import { isDecisionRowActive } from "@/features/case-law/decision-inspector.logic";
-import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
+import { useDecisionRenderScope } from "@/features/case-law/decision-table-columns";
+import { TOOLBAR_ROW_HEIGHT, TOOLBAR_ROW_MIN_HEIGHT } from "@/lib/consts";
 
 /**
  * A gesture that already means something else: the case-number link, the
@@ -96,6 +97,13 @@ export const DecisionRow = ({
         .find((cell) => cell.column.id === addPropertyColumn.id)
     : undefined;
   const isActive = isDecisionRowActive(activeTabId, decision);
+  // A compact row is one fixed height, which is what makes a page of them
+  // scannable; the one row a reader asked to read whole is the exception, and
+  // it grows to the text rather than clipping it.
+  const { expandedHeadnoteIds } = useDecisionRenderScope();
+  const tightRowHeight = expandedHeadnoteIds.has(decision.id)
+    ? TOOLBAR_ROW_MIN_HEIGHT
+    : TOOLBAR_ROW_HEIGHT;
 
   const open = () => onOpen(decision);
   const handleClick = (event: React.MouseEvent) => {
@@ -119,7 +127,7 @@ export const DecisionRow = ({
       aria-selected={row_getIsSelected(row)}
       className={cn(
         "cursor-pointer transition-opacity duration-150",
-        contentMode === "tight" && TOOLBAR_ROW_HEIGHT,
+        contentMode === "tight" && tightRowHeight,
       )}
       data-active={isActive || undefined}
       data-index={index}

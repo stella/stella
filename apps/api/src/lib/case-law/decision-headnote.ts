@@ -53,3 +53,41 @@ export const normalizeDecisionHeadnote = (raw: unknown) => {
   const collapsed = collapseDecisionHeadnote(raw);
   return collapsed === null ? null : truncateDecisionHeadnote(collapsed);
 };
+
+/**
+ * A publisher's classification as the terms a row draws, fitted to the same
+ * row the prose preview gets: at most `caseLawHeadnoteKeywords` terms, and no
+ * more of them than the character budget holds. Null means the publisher filed
+ * the decision under nothing.
+ */
+export const normalizeDecisionKeywords = (raw: unknown) => {
+  if (!Array.isArray(raw)) {
+    return null;
+  }
+  const items: string[] = [];
+  let budget = LIMITS.caseLawHeadnoteMaxChars;
+  let truncated = false;
+  for (const value of raw) {
+    const term = collapseDecisionHeadnote(value);
+    // A repeated term is a publisher's bookkeeping, not a second tag.
+    if (term === null || items.includes(term)) {
+      continue;
+    }
+    // A term is a term: the row drops the ones past its budget rather than
+    // drawing a tag cut in half. The exception is a single term over the
+    // whole budget, which is still the only hook the row has.
+    if (
+      term.length > budget ||
+      items.length >= LIMITS.caseLawHeadnoteKeywords
+    ) {
+      truncated = true;
+      if (items.length === 0) {
+        items.push(truncateDecisionHeadnote(term).text);
+      }
+      break;
+    }
+    budget -= term.length;
+    items.push(term);
+  }
+  return items.length === 0 ? null : { items, truncated };
+};

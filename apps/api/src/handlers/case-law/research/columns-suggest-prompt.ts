@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 
-import { TEXT_FIELD_TYPE } from "@stll/api-contract/case-law-text-field";
+import { decisionHeadnoteLine } from "@stll/api-contract/case-law-text-field";
 
 import { suggestResearchColumnPromptBodySchema } from "@/api/handlers/case-law/research/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -54,10 +54,9 @@ const suggestResearchColumnPrompt = createSafeRootHandler(
       caseNumber: decision.caseNumber,
       court: decision.court,
       decisionDate: decision.decisionDate,
-      headnote:
-        decision.headnote.type === TEXT_FIELD_TYPE.PRESENT
-          ? decision.headnote.text
-          : null,
+      // A classification grounds a suggestion as well as a sentence does;
+      // what it must not do is arrive as nothing.
+      headnote: decisionHeadnoteLine(decision.headnote) || null,
     }));
 
     return await suggestColumnPrompt({
