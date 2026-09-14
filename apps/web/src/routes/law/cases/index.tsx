@@ -80,8 +80,10 @@ import {
 import type { DecisionPageSize } from "@/features/case-law/decision-pagination.logic";
 import { useOpenDecisionInspector } from "@/features/case-law/decision-row-host";
 import {
+  DECISIONS_SEARCH_STATE,
   decisionRowsPhase,
   decisionsLoadMode,
+  decisionsSearchOutage,
 } from "@/features/case-law/decisions-load-mode.logic";
 import type { DecisionRouteState } from "@/features/case-law/decisions-load-mode.logic";
 import {
@@ -127,16 +129,6 @@ import { ssrStatusHeaders } from "@/ssr-response-status";
 
 /** What the route accepts in `q`, and therefore what the field may hold. */
 const MAX_QUERY_LENGTH = 256;
-
-/**
- * What this document can say about the search behind its results: the backend
- * answered it, or could not be reached at all. A background load is neither
- * yet, and reports the page it left on screen.
- */
-const SEARCH_STATE = {
-  answered: "answered",
-  unavailable: "unavailable",
-} as const;
 
 /** Stable empties, so an unchanged page does not hand the table new arrays. */
 const EMPTY_SELECTION: readonly string[] = [];
@@ -411,7 +403,9 @@ export const Route = createFileRoute("/law/cases/")({
       // An outage proves nothing about which pages exist, so the walk stops
       // where it is and the URL keeps the page the reader linked to: the
       // results region says the search is down, and correcting them to page
-      // one would lose the link to a failure that passes.
+      // one would lose the link to a failure that passes. The loader walks the
+      // same chain, so a backend that recovers in between still answers for
+      // the page this URL names rather than serving page one under it.
       reached = chain === null ? wanted : chain.pages.length;
     }
     const page = decisionPageSearchValue(
@@ -449,15 +443,27 @@ export const Route = createFileRoute("/law/cases/")({
           queryClient.getQueryData(decisionsOptions.queryKey),
           deps.page,
         ),
-        search: SEARCH_STATE.answered,
+        search: DECISIONS_SEARCH_STATE.answered,
       };
     }
 
     // `beforeLoad` has already walked the chain to the page a deep link named,
-    // so this is a cache read for that case and the first fetch otherwise.
+    // so this is a cache read for that case and the first fetch otherwise —
+    // except when its walk hit an outage, which leaves the chain unwalked
+    // behind a URL that still names a later page. Asking for the pages this
+    // page needs is what keeps the rows and the URL the same page.
+    const walked =
+      queryClient.getQueryData(decisionsOptions.queryKey)?.pages.length ?? 0;
+    const wanted = decisionPageNumber(deps.page);
     const [decisionPages] = await Promise.all([
       resultsOrOutage(
-        ensureRouteInfiniteQueryData(queryClient, decisionsOptions),
+        ensureRouteInfiniteQueryData(queryClient, {
+          ...decisionsOptions,
+          ...(wanted > 1 &&
+            wanted > walked && {
+              pages: decisionPagesToWalk(wanted, walked),
+            }),
+        }),
       ),
       ensureRouteQueryData(queryClient, decisionFacetsOptions(scope)),
     ]);
@@ -467,19 +473,19 @@ export const Route = createFileRoute("/law/cases/")({
     // and the filters are the URL's own and stay usable. Every other failure
     // is still the error boundary's.
     if (decisionPages === null) {
-      return { decisions: [], search: SEARCH_STATE.unavailable };
+      return { decisions: [], search: DECISIONS_SEARCH_STATE.unavailable };
     }
 
     return {
       decisions: shownDecisions(decisionPages, deps.page),
-      search: SEARCH_STATE.answered,
+      search: DECISIONS_SEARCH_STATE.answered,
     };
   },
   // The document is drawn, but it lists nothing and the results it stands for
   // are still out there. 503 tells a crawler to come back for them instead of
   // recording this page as empty.
   headers: ({ loaderData }) =>
-    loaderData?.search === SEARCH_STATE.unavailable
+    loaderData?.search === DECISIONS_SEARCH_STATE.unavailable
       ? ssrStatusHeaders(SEARCH_UNAVAILABLE_STATUS)
       : undefined,
   head: ({ loaderData, match }) => {
@@ -643,7 +649,14 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
   // A backend that cannot be reached is this region's failure, not the page's.
   // The loader lets it through for the same reason, so both the first render
   // and a filter applied to a drawn page arrive here.
-  const isSearchUnavailable = isSearchUnavailableError(error);
+  const loadedSearch = Route.useMatch({
+    select: (match) => match.loaderData?.search,
+  });
+  const isSearchUnavailable = decisionsSearchOutage({
+    hasPages: data !== undefined,
+    isQueryOutage: isSearchUnavailableError(error),
+    loaded: loadedSearch,
+  });
   // The rows are the only region that waits: either they are not there yet,
   // or they answer the search before this one and say so themselves rather
   // than the page being replaced.

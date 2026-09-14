@@ -66,3 +66,43 @@ export const decisionRowsPhase = ({
 
   return isPlaceholderData ? "stale" : "rows";
 };
+
+/**
+ * What a load can say about the search behind its results: the backend
+ * answered it, or could not be reached at all.
+ */
+export const DECISIONS_SEARCH_STATE = {
+  answered: "answered",
+  unavailable: "unavailable",
+} as const;
+
+export type DecisionsSearchState =
+  (typeof DECISIONS_SEARCH_STATE)[keyof typeof DECISIONS_SEARCH_STATE];
+
+type DecisionsSearchOutageInput = {
+  /** Whether the row query itself reports the backend as unreachable. */
+  isQueryOutage: boolean;
+  /** Whether the row query holds any page at all, this search's or the last. */
+  hasPages: boolean;
+  /** What the load that drew this page concluded, once one has. */
+  loaded: DecisionsSearchState | undefined;
+};
+
+/**
+ * Whether the results region stands in for the rows because the search backend
+ * could not be reached.
+ *
+ * A hydrating render reads the load's own conclusion, because the query's
+ * failure does not survive the trip from the server: the router's SSR
+ * serializer keeps an `Error`'s message and nothing else, so the rehydrated
+ * failure is no longer the typed error `isQueryOutage` is read from, and a
+ * render trusting the query alone would replace the server's outage with an
+ * empty table. A query that answers for itself (a page, or a failure raised in
+ * this browser) decides from then on.
+ */
+export const decisionsSearchOutage = ({
+  hasPages,
+  isQueryOutage,
+  loaded,
+}: DecisionsSearchOutageInput): boolean =>
+  isQueryOutage || (!hasPages && loaded === DECISIONS_SEARCH_STATE.unavailable);
