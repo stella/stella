@@ -2858,6 +2858,7 @@ export default defineConfig({
         "apps/web/src/routes/sitemap[.]xml.ts",
         "apps/web/src/routes/sitemaps/**/*.{ts,tsx}",
         "apps/web/src/lib/public-law-sitemap.ts",
+        "apps/web/src/features/statutes/statute-sitemap.ts",
       ],
       rules: {
         "no-restricted-imports": [

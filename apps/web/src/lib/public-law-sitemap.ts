@@ -2,6 +2,10 @@ import * as v from "valibot";
 
 import { env } from "@/env";
 import { publicCaseLawCountryFromParam } from "@/features/case-law/case-law-jurisdiction";
+import {
+  createStatuteSitemapShardPath,
+  type StatuteSitemapShard,
+} from "@/features/statutes/statute-sitemap";
 import { apiUrl } from "@/lib/api-url";
 import {
   type CaseLawLanguageAlternateLink,
@@ -27,6 +31,7 @@ import {
   isPublicToolsCrawlAllowed,
   isPublicToolsSitemapEnabled,
 } from "@/lib/public-tools-launch";
+import { isStatuteCountry } from "@/lib/statute-route";
 
 const LAW_SITEMAP_PATH = "/sitemaps/law.xml";
 const LAW_CASES_SITEMAP_BASE_PATH = "/sitemaps/law-cases";
@@ -98,6 +103,8 @@ type PublicLawSitemapIndexOptions = {
   maxBytes?: number;
   publicLawIndexingEnabled?: boolean;
   publicToolsIndexingEnabled?: boolean;
+  /** Statute shards, which have their own shard family and API route. */
+  statuteShards?: readonly StatuteSitemapShard[];
 };
 
 type PublicLawIndexingOptions = {
@@ -228,23 +235,20 @@ export const createPublicLawSitemapIndexXml = (
   shards: readonly SitemapShard[],
   options: number | PublicLawSitemapIndexOptions = {},
 ): string => {
-  const { maxBytes, publicLawIndexingEnabled, publicToolsIndexingEnabled } =
-    typeof options === "number"
-      ? {
-          maxBytes: options,
-          publicLawIndexingEnabled: isPublicLawSitemapEnabled(),
-          publicToolsIndexingEnabled: isPublicToolsSitemapEnabled(),
-        }
-      : {
-          maxBytes: options.maxBytes,
-          publicLawIndexingEnabled:
-            options.publicLawIndexingEnabled ?? isPublicLawSitemapEnabled(),
-          publicToolsIndexingEnabled:
-            options.publicToolsIndexingEnabled ?? isPublicToolsSitemapEnabled(),
-        };
+  const resolvedOptions: PublicLawSitemapIndexOptions =
+    typeof options === "number" ? { maxBytes: options } : options;
+  const {
+    maxBytes,
+    publicLawIndexingEnabled = isPublicLawSitemapEnabled(),
+    publicToolsIndexingEnabled = isPublicToolsSitemapEnabled(),
+    statuteShards = [],
+  } = resolvedOptions;
 
   const publicShards = shards.filter(
     ({ country }) => publicCaseLawCountryFromParam(country) !== null,
+  );
+  const publicStatuteShards = statuteShards.filter(({ country }) =>
+    isStatuteCountry(country),
   );
   const lawEntries = publicLawIndexingEnabled
     ? [
@@ -254,6 +258,12 @@ export const createPublicLawSitemapIndexXml = (
         },
         ...publicShards.map((shard) => ({
           loc: createPublicLawCanonicalUrl(createCaseLawShardPath(shard)),
+          lastmod: shard.lastmod,
+        })),
+        ...publicStatuteShards.map((shard) => ({
+          loc: createPublicLawCanonicalUrl(
+            createStatuteSitemapShardPath(shard),
+          ),
           lastmod: shard.lastmod,
         })),
       ]

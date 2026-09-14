@@ -48,6 +48,24 @@ const LEGISLATION_DOCUMENT_STATUS_SQL_VALUES =
  */
 export const STATUTE_SLUG_SQL_PATTERN = "^[a-z0-9]+(-[a-z0-9]+)*$";
 
+/** Sitemap shards a jurisdiction splits into once it outgrows one file. */
+export const STATUTE_SITEMAP_BUCKET_COUNT = 64;
+const STATUTE_SITEMAP_BUCKET_WIDTH = 2;
+
+/**
+ * The sitemap shard a statute belongs to, hashed on the ELI.
+ *
+ * The ELI is the Work key: every consolidation carries it, and it survives a
+ * title repair that changes the Work's slug. Hashing the slug instead would
+ * scatter one Work's consolidations across shards, so the shard reading them
+ * could not tell which slug is canonical.
+ *
+ * The sitemap predicate and the index below are this one expression, so the
+ * predicate stays seekable instead of hashing every row of a jurisdiction.
+ */
+export const statuteSitemapBucket = (eli: SQLWrapper) =>
+  sql<string>`lpad(mod(hashtext(${eli})::bigint + ${sql.raw("2147483648")}, ${sql.raw(String(STATUTE_SITEMAP_BUCKET_COUNT))})::text, ${sql.raw(String(STATUTE_SITEMAP_BUCKET_WIDTH))}, '0')`;
+
 /** Bounded prefix that owns stable public-list ordering. */
 export const LEGISLATION_TITLE_SORT_KEY_CHARS = 52;
 
@@ -185,6 +203,13 @@ export const legislationDocuments = p.pgTable(
     p
       .index("legislation_documents_country_slug_idx")
       .on(t.country, t.slug)
+      .where(isNotNull(t.slug)),
+    // A sitemap shard seeks its bucket and walks the Works in it; without the
+    // bucket in the index the predicate is computed per row and every shard
+    // request scans the jurisdiction's whole slug range.
+    p
+      .index("legislation_documents_sitemap_bucket_idx")
+      .on(t.country, statuteSitemapBucket(t.eli), t.eli)
       .where(isNotNull(t.slug)),
     // The point-in-time read seeks a Work by its identifier and takes the
     // latest window that opened on or before the requested date, so the
