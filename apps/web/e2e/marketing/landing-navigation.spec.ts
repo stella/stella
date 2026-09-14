@@ -257,8 +257,8 @@ test("opening scene stays healthy after a navigation round-trip", async ({
     "open",
     "",
   );
-  await page.locator('.nav-mega a[href="/product/workspace"]').first().click();
-  await page.waitForURL("**/product/workspace");
+  await page.locator('.nav-mega a[href="/product/workspace/"]').first().click();
+  await page.waitForURL("**/product/workspace/");
   await expect(page.locator("main").first()).toBeVisible();
 
   await page.goBack({ waitUntil: "domcontentloaded" });
@@ -288,7 +288,7 @@ for (const theme of ["light", "dark"] as const) {
     await page.addInitScript((initialTheme) => {
       localStorage.setItem("theme", initialTheme);
     }, theme);
-    await page.goto("/product/templates", { waitUntil: "domcontentloaded" });
+    await page.goto("/product/templates/", { waitUntil: "domcontentloaded" });
     await page.evaluate(() =>
       window.scrollTo({ top: document.body.scrollHeight, behavior: "instant" }),
     );

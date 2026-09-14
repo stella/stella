@@ -67,7 +67,7 @@ const formatReleaseDate = (publishedAt: string) =>
         >
           <h1>
             <a
-              href="/changelog"
+              href="/changelog/"
               class="font-display text-5xl font-medium leading-[1.05] transition-opacity hover:opacity-80 sm:text-6xl lg:text-7xl"
             >
               Changelog
@@ -829,7 +829,7 @@ const formatReleaseDate = (publishedAt: string) =>
       const title = document.createElement("h2");
       const titleLink = document.createElement("a");
       const hasPreviewPage = previewReleaseSlugs.has(article.id);
-      titleLink.href = hasPreviewPage ? `/changelog/${article.id}` : `#${article.id}`;
+      titleLink.href = hasPreviewPage ? `/changelog/${article.id}/` : `#${article.id}`;
       titleLink.className =
         "font-display text-3xl font-medium transition-opacity hover:opacity-70 sm:text-4xl";
       titleLink.style.color = "var(--foreground)";
@@ -1099,7 +1099,7 @@ const formatReleaseDate = (publishedAt: string) =>
         return;
       }
       const url = new URL(window.location.href);
-      url.pathname = "/changelog";
+      url.pathname = "/changelog/";
       if (currentPage === 1) {
         url.searchParams.delete("page");
       } else {

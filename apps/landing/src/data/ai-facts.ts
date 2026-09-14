@@ -68,11 +68,3 @@ export const aiFaqs = [
       "Yes. stella supports the Model Context Protocol (MCP) and a CLI, plus anonymization so agents can work with material without exposing names or identifying details. AI outputs are grounded by citations traceable back to the source text.",
   },
 ] as const;
-
-// Canonical first-party pages worth pointing crawlers and assistants at.
-export const aiCanonicalSources = [
-  { label: "AI fact sheet", path: "/ai-info" },
-  { label: "Full content (llms-full.txt)", path: "/llms-full.txt" },
-  { label: "Index (llms.txt)", path: "/llms.txt" },
-  { label: "Security", path: "/security" },
-] as const;

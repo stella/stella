@@ -52,13 +52,13 @@ export const resolveProductLink = (
       };
     case "ai-info":
       return {
-        href: "/ai-info",
+        href: "/ai-info/",
         titleKey: "nav.aiFactSheet",
         hreflang: "en",
       };
     case "docx-editor":
       return {
-        href: "/docx-editor",
+        href: "/docx-editor/",
         titleKey: "nav.docxEditor",
         hreflang: "en",
       };

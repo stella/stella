@@ -19,7 +19,7 @@ const DEMO_SELECTORS = {
   legendItem: "li",
 } as const;
 
-const DEMO_URL = "/product/anonymization";
+const DEMO_URL = "/product/anonymization/";
 
 // A city only a loaded city dictionary can resolve (CZ list), in a sentence
 // that carries no other entity, so the expected result is exactly one
