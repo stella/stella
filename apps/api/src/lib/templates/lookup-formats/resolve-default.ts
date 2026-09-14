@@ -23,7 +23,7 @@ export const LOOKUP_FORMAT_DEFAULT_SOURCE = {
 } as const;
 
 /** Who the resolved default belongs to: the member, or the organization. */
-export type LookupFormatDefaultSource =
+type LookupFormatDefaultSource =
   (typeof LOOKUP_FORMAT_DEFAULT_SOURCE)[keyof typeof LOOKUP_FORMAT_DEFAULT_SOURCE];
 
 type ResolvedLookupFormatDefault = {
