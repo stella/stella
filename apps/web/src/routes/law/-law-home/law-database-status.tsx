@@ -63,7 +63,7 @@ export const LawDatabaseStatus = ({ country }: { country: string }) => {
               date: formatRelativeTime(updatedAt),
             })}
       </PopoverTrigger>
-      <PopoverPanel align="end" side="top">
+      <PopoverPanel align="end" side="bottom">
         <PopoverTitle className="text-sm font-medium">
           {caseLawCountryName(format, country)}
         </PopoverTitle>
