@@ -1,9 +1,21 @@
+import { panic } from "better-result";
+
+import {
+  DECISION_TEXT_FIELD,
+  TEXT_FIELD_TYPE,
+  type ReadDecisionTextFields,
+  type TextField,
+} from "@stll/api-contract/case-law-text-field";
 import { caseLawSectionHeading } from "@stll/legal-ast/case-law-heading";
-import { isApparatusRole } from "@stll/legal-ast/document-ast";
+import {
+  PUBLISHER_SUMMARY_ROLES,
+  isApparatusRole,
+} from "@stll/legal-ast/document-ast";
 import type {
   Block,
   DocumentAst,
   ParagraphBlock,
+  PublisherSummaryRole,
 } from "@stll/legal-ast/document-ast";
 
 export type EditorialSupplementBlock = {
@@ -170,6 +182,157 @@ export const visibleDecisionBlocks = (ast: DocumentAst | null): Block[] => {
   }
   return visible;
 };
+
+/** Search-piece ids for publisher text the reader renders from a field. */
+const SUPPLEMENT_LEGAL_SENTENCE_ID = "supplement-legal-sentence";
+const SUPPLEMENT_ABSTRACT_ID = "supplement-abstract";
+const SUPPLEMENT_SUMMARY_ID = "supplement-summary";
+
+/** The two named sections the reader opens a decision with. */
+type TopMatterSection = "abstract" | "legalSentence";
+
+/**
+ * Which section each publisher-summary role opens the decision in.
+ *
+ * The roles are the AST package's own list, the one the API resolves a
+ * result row's headnote over before it reads any metadata key: a parser that
+ * marked the paragraph beats a copied-out field, because the text is the
+ * publisher's own, in document order, and it keeps its block ids — so search
+ * ranges, annotation anchors and permalinks go on working. The map is total
+ * over that list, so a role added there cannot reach the reader without a
+ * decision about where it belongs.
+ */
+const TOP_MATTER_SECTION_BY_ROLE = {
+  headnotes: "legalSentence",
+  summary: "abstract",
+  syllabus: "abstract",
+} as const satisfies Record<PublisherSummaryRole, TopMatterSection>;
+
+const rolesForSection = (
+  section: TopMatterSection,
+): readonly PublisherSummaryRole[] =>
+  PUBLISHER_SUMMARY_ROLES.filter(
+    (role) => TOP_MATTER_SECTION_BY_ROLE[role] === section,
+  );
+
+/** Where a section's text comes from: the document itself, or a field. */
+export type TopMatterSource =
+  | { type: "blocks"; blocks: ParagraphBlock[] }
+  | { type: "text"; pieceId: string; text: string };
+
+export type DecisionTopMatter = {
+  abstract: TopMatterSource | null;
+  legalSentence: TopMatterSource | null;
+  /**
+   * The blocks the top matter took out of the body. The document must not
+   * render them a second time, and the apparatus disclosure below is left
+   * with what is neither headnote nor abstract: counsel, and unnamed
+   * publisher matter.
+   */
+  liftedBlockIds: ReadonlySet<string>;
+};
+
+/** A present field's text, or null when the publisher filed none. */
+const decisionTextFieldText = (field: TextField): string | null => {
+  switch (field.type) {
+    case TEXT_FIELD_TYPE.ABSENT:
+      return null;
+    case TEXT_FIELD_TYPE.PRESENT:
+      return field.text;
+    default: {
+      field satisfies never;
+      return panic(`Unhandled decision text field: ${String(field)}`);
+    }
+  }
+};
+
+const paragraphsWithRole = (
+  blocks: readonly Block[],
+  roles: readonly PublisherSummaryRole[],
+): ParagraphBlock[] => {
+  const wanted = new Set<string>(roles);
+  return blocks.filter(
+    (block): block is ParagraphBlock =>
+      block.type === "paragraph" &&
+      block.role !== undefined &&
+      wanted.has(block.role),
+  );
+};
+
+const blockSource = (blocks: ParagraphBlock[]): TopMatterSource | null =>
+  blocks.length === 0 ? null : { blocks, type: "blocks" };
+
+const textSource = (
+  pieceId: string,
+  field: TextField,
+): TopMatterSource | null => {
+  const text = decisionTextFieldText(field);
+  return text === null ? null : { pieceId, text, type: "text" };
+};
+
+const firstAvailable = (
+  candidates: readonly (TopMatterSource | null)[],
+): TopMatterSource | null =>
+  candidates.find((candidate) => candidate !== null) ?? null;
+
+/**
+ * What the reader shows above the decision: the headnote it is cited by, and
+ * the publisher's abstract of it.
+ *
+ * The sources, best first, are the ones the results table's headnote resolves
+ * over, so a decision that shows a headnote in the table shows one here too.
+ * Within a section the marked-up paragraphs win over the fields copied out of
+ * the same publisher payload, and a field is read only where the parser marked
+ * nothing.
+ */
+export const decisionTopMatter = ({
+  blocks,
+  textFields,
+}: {
+  blocks: readonly Block[];
+  textFields: ReadDecisionTextFields;
+}): DecisionTopMatter => {
+  const legalSentence = firstAvailable([
+    blockSource(paragraphsWithRole(blocks, rolesForSection("legalSentence"))),
+    textSource(
+      SUPPLEMENT_LEGAL_SENTENCE_ID,
+      textFields[DECISION_TEXT_FIELD.LEGAL_SENTENCE],
+    ),
+    textSource(SUPPLEMENT_SUMMARY_ID, textFields[DECISION_TEXT_FIELD.SUMMARY]),
+  ]);
+  const abstract = firstAvailable([
+    blockSource(paragraphsWithRole(blocks, rolesForSection("abstract"))),
+    textSource(
+      SUPPLEMENT_ABSTRACT_ID,
+      textFields[DECISION_TEXT_FIELD.ABSTRACT],
+    ),
+  ]);
+
+  const liftedBlockIds = new Set<string>();
+  for (const source of [legalSentence, abstract]) {
+    if (source?.type !== "blocks") {
+      continue;
+    }
+    for (const block of source.blocks) {
+      liftedBlockIds.add(block.id);
+    }
+  }
+
+  return { abstract, legalSentence, liftedBlockIds };
+};
+
+/**
+ * The blocks the top matter draws, in the order it draws them: the headnote,
+ * then the abstract. Whatever counts positions — match numbering, note
+ * grouping, the landing passage — reads the decision through this order
+ * followed by the body, which is what the page actually shows.
+ */
+export const topMatterBlocks = (
+  topMatter: DecisionTopMatter,
+): ParagraphBlock[] =>
+  [topMatter.legalSentence, topMatter.abstract].flatMap((source) =>
+    source?.type === "blocks" ? source.blocks : [],
+  );
 
 /** The blocks the reader folds behind the head-matter disclosure. */
 export const apparatusBlockIds = (

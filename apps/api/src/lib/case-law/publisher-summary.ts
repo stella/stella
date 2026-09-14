@@ -7,6 +7,7 @@ import {
   DECISION_TEXT_FIELD,
   type DecisionTextFieldKey,
 } from "@stll/api-contract/case-law-text-field";
+import { PUBLISHER_SUMMARY_ROLES } from "@stll/legal-ast/document-ast";
 import type { ApparatusRole, DocumentAst } from "@stll/legal-ast/document-ast";
 
 import { readStoredDecisionTextAbsence } from "@/api/lib/case-law/decision-text";
@@ -33,16 +34,10 @@ import {
  * Publisher-authored paragraphs a parser can already recognise structurally.
  * A parser that marks these roles beats any metadata key: the text is the
  * publisher's own, in document order, with no key naming convention in
- * between.
- *
- * `apparatus` and `counsel` are apparatus too but are not headnotes: the
- * first is unnamed publisher matter, the second is who appeared.
+ * between. The roles themselves are the AST package's
+ * `PUBLISHER_SUMMARY_ROLES`, so the reader that opens a decision with them
+ * cannot drift from the resolution behind a result row.
  */
-const PUBLISHER_HEADNOTE_AST_ROLES = [
-  "headnotes",
-  "syllabus",
-  "summary",
-] as const satisfies readonly ApparatusRole[];
 
 /** How one metadata value is read into text. */
 type PublisherSummaryValueShape = "text" | "list";
@@ -84,7 +79,7 @@ type PublisherSummarySource = PublisherHeadnoteSource | PublisherKeywordSource;
  * adapter that writes it, never before one.
  */
 const PUBLISHER_HEADNOTE_SOURCES = [
-  { kind: "headnote", origin: "ast", roles: PUBLISHER_HEADNOTE_AST_ROLES },
+  { kind: "headnote", origin: "ast", roles: PUBLISHER_SUMMARY_ROLES },
   {
     kind: "headnote",
     origin: "metadata",
