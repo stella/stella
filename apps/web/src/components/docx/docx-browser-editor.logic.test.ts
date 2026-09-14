@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   getDocxEditBlockReason,
+  getDocxLeaveAction,
   selectDocxBrowserEditorBuffer,
   selectEditorBuffer,
   selectPreviewFile,
@@ -217,6 +218,40 @@ describe("DOCX edit finalization", () => {
         hasPendingEditorChanges: false,
       }),
     ).toBe(false);
+  });
+});
+
+describe("DOCX route leave policy", () => {
+  test("retries a failed finalization and blocks other in-flight or failed saves", () => {
+    expect(
+      getDocxLeaveAction({
+        status: "error",
+        reason: "unknown",
+        source: "finalize",
+      }),
+    ).toBe("retryFinalize");
+    expect(getDocxLeaveAction({ status: "saving" })).toBe("block");
+    expect(
+      getDocxLeaveAction({
+        status: "error",
+        reason: "takenOver",
+        source: "checkpoint",
+      }),
+    ).toBe("block");
+  });
+
+  test("finalizes active edits and allows sessions without an acquired lock", () => {
+    expect(
+      getDocxLeaveAction({
+        status: "editing",
+        sessionId: "session-1",
+        sessionToken: "token-1",
+        buffer: bufferFrom([1]),
+        fileName: "Contract.docx",
+      }),
+    ).toBe("finalize");
+    expect(getDocxLeaveAction({ status: "idle" })).toBe("allow");
+    expect(getDocxLeaveAction({ status: "opening" })).toBe("allow");
   });
 });
 

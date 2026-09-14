@@ -167,7 +167,7 @@ export const EvidenceReferencesDialog = ({
               ))}
             </ol>
           )}
-          {editable && view !== null && (
+          {canInsert && editable && view !== null && (
             <EvidenceFilePicker
               entityId={entityId}
               fieldId={fieldId}

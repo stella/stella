@@ -129,6 +129,26 @@ export const shouldFinalizeEditSession = ({
 }: ShouldFinalizeEditSessionOptions) =>
   isDirty || hasSessionChanges || hasPendingEditorChanges;
 
+export type DocxLeaveAction = "allow" | "block" | "finalize" | "retryFinalize";
+
+export const getDocxLeaveAction = (
+  state: EditSessionState,
+): DocxLeaveAction => {
+  switch (state.status) {
+    case "idle":
+    case "opening":
+      return "allow";
+    case "editing":
+      return "finalize";
+    case "saving":
+      return "block";
+    case "error":
+      return state.source === "finalize" ? "retryFinalize" : "block";
+    default:
+      return panic("Unsupported DOCX edit-session state");
+  }
+};
+
 type CollaborationPublicationCut = {
   documentMutationRevision: number;
   generation: number;

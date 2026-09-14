@@ -362,9 +362,6 @@ export const useEditSession = ({
       sessionToken: session.sessionToken,
     });
 
-    sessionRef.current = null;
-    setIsDirty(false);
-
     if (response.error) {
       setState({
         detail: userErrorMessage(response.error, "Failed to save DOCX."),
@@ -374,6 +371,9 @@ export const useEditSession = ({
       });
       return false;
     }
+
+    sessionRef.current = null;
+    setIsDirty(false);
 
     const finalizedFieldId =
       response.data.outcome === "finalized" ? response.data.fieldId : fieldId;

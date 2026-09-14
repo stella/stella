@@ -115,6 +115,7 @@ import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 
 import {
   getDocxEditBlockReason,
+  getDocxLeaveAction,
   getDocxEditSafety,
   selectDocxBrowserEditorBuffer,
   selectPreviewFile,
@@ -1334,7 +1335,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
       isPublishingCollaborationVersion ||
       isPublishingCollaborationVersionRef.current
     ) {
-      return;
+      return false;
     }
 
     isPublishingCollaborationVersionRef.current = true;
@@ -1371,7 +1372,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
           title: t("folio.createVersionFailedTitle"),
           type: "error",
         });
-        return;
+        return false;
       }
       const checkpointResult = await Result.tryPromise(async () =>
         api
@@ -1390,7 +1391,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
           title: t("folio.createVersionFailedTitle"),
           type: "error",
         });
-        return;
+        return false;
       }
       if (checkpointResult.value.error) {
         getAnalytics().captureError(toAPIError(checkpointResult.value.error));
@@ -1400,7 +1401,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
           title: t("folio.createVersionFailedTitle"),
           type: "error",
         });
-        return;
+        return false;
       }
 
       const checkpoint = checkpointResult.value.data;
@@ -1432,7 +1433,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
         title: t("folio.createVersionFailedTitle"),
         type: "error",
       });
-      return;
+      return false;
     }
     if (publishResult.value.error) {
       const apiError = toAPIError(publishResult.value.error);
@@ -1450,7 +1451,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
           title: t("folio.versionConflictTitle"),
           type: "warning",
         });
-        return;
+        return false;
       }
       if (
         apiError.code === "folio_collab_checkpoint_changed" ||
@@ -1463,7 +1464,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
         title: t("folio.createVersionFailedTitle"),
         type: "error",
       });
-      return;
+      return false;
     }
 
     pendingCollaborationPublicationRef.current = null;
@@ -1478,6 +1479,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
       title: t("folio.versionCreatedTitle"),
       type: "success",
     });
+    return true;
   }, [
     collaborationSession,
     collaborationState.status,
@@ -1507,8 +1509,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
 
     if (isCollaborativeEditing) {
       clearQueuedChangeCheckpoint();
-      await handlePublishCollaborationVersion();
-      return true;
+      return await handlePublishCollaborationVersion();
     }
 
     // Save the final version before finalizing
@@ -1706,15 +1707,30 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
     [actionsKey, actionsMapRef, actionsRef],
   );
 
+  const handleDesktopSessionExit = useCallback(async () => {
+    switch (getDocxLeaveAction(state)) {
+      case "allow":
+        return true;
+      case "block":
+        return false;
+      case "finalize":
+        return await handleFinalize();
+      case "retryFinalize":
+        return await finalizeActiveSession();
+      default:
+        return panic("Unsupported DOCX exit action");
+    }
+  }, [finalizeActiveSession, handleFinalize, state]);
+
   useImperativeHandle(
     registerActions,
     () => ({
       cancel: handleCancel,
       finalize: async () => {
-        if (isCollaborativeEditing || state.status === "editing") {
+        if (isCollaborativeEditing) {
           return await handleFinalize();
         }
-        return true;
+        return await handleDesktopSessionExit();
       },
       flushPendingChanges,
       leave: async () => {
@@ -1723,10 +1739,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
           // route blocker races the room cleanup against its final flush.
           return true;
         }
-        if (state.status === "editing") {
-          return await handleFinalize();
-        }
-        return true;
+        return await handleDesktopSessionExit();
       },
       print: () => {
         editorRef.current?.print();
@@ -1738,10 +1751,10 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
     [
       flushPendingChanges,
       handleCancel,
+      handleDesktopSessionExit,
       handleFinalize,
       isCollaborativeEditing,
       requestEditMode,
-      state.status,
     ],
   );
 
