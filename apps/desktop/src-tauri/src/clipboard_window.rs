@@ -249,13 +249,25 @@ fn show_as(app: &AppHandle, created_kind: ClipboardOpenKind) {
     trace.begin(requested, created_kind);
   }
 
+  // Created at its docked frame: resizing the webview while the window is
+  // hidden leaves WebKit's scrolling layers at the old size until a later
+  // layout, which clips the rail on the first open.
+  let initial_frame = window_placement::target_work_area(app).map(docked_frame);
   let builder = tauri::WebviewWindowBuilder::new(
     app,
     CLIPBOARD_WINDOW_LABEL,
     tauri::WebviewUrl::App("index.html".into()),
   )
   .title("stella clipboard")
-  .inner_size(1440.0, CLIPBOARD_WINDOW_HEIGHT)
+  .inner_size(
+    initial_frame.map_or(1440.0, |frame| frame.width),
+    initial_frame.map_or(CLIPBOARD_WINDOW_HEIGHT, |frame| frame.height),
+  );
+  let builder = match initial_frame {
+    Some(frame) => builder.position(frame.x, frame.y),
+    None => builder,
+  };
+  let builder = builder
   .always_on_top(true)
   .content_protected(content_protected(app))
   .decorations(false)
