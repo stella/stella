@@ -84,9 +84,11 @@ type WorkspaceTableProps<TRow extends TableRowData> = {
   // and a second sticky header in each section's own scroll box collides
   // with it on scroll.
   stickyColumnHeader?: boolean;
-  // The end-filler grows to fill leftover height (and hosts the add-property
-  // rail) in the full-height flat table. Grouped sections size to content, so
-  // a growing filler just shows as an empty trailing row.
+  // The end-filler grows to fill leftover height (and carries the
+  // add-property surface down the page) in the full-height flat table. A table
+  // that sizes to its content draws it as one empty bordered row under the
+  // last result instead, so grouped sections and the public results list opt
+  // out. The add-column rail is drawn beside the table either way.
   fillHeight?: boolean;
   // When set, the table flows inside this shared scroll container instead of
   // owning its own scroll box. Grouped sections pass the single grouped-view
@@ -437,19 +439,21 @@ export const WorkspaceTable = <TRow extends TableRowData = TableTreeNode>({
     }
 
     return combine(
-      // Horizontal auto-scroll only when this table owns its scroll (flat
-      // layout). In the grouped layout the table shares the outer scroller, so
-      // this element is not scrollable; Atlaskit then warns on every drag tick
-      // and Vite serializes the whole element into the terminal, ballooning the
-      // dev log to gigabytes and OOM-killing the dev server.
-      ...(fillHeight
-        ? [
+      // Horizontal auto-scroll only when this table owns its scroll. In the
+      // grouped layout the table shares the outer scroller, so this element is
+      // not scrollable; Atlaskit then warns on every drag tick and Vite
+      // serializes the whole element into the terminal, ballooning the dev log
+      // to gigabytes and OOM-killing the dev server. Owning the scroll is what
+      // `outerScrollRef` answers; a table that merely draws no end filler
+      // still scrolls itself.
+      ...(inlineFlow
+        ? []
+        : [
             autoScrollForElements({
               element,
               getAllowedAxis: () => "horizontal",
             }),
-          ]
-        : []),
+          ]),
       monitorForElements({
         canMonitor: ({ source }) =>
           source.data["type"] === TABLE_COLUMN_DRAG_TYPE,
@@ -492,7 +496,7 @@ export const WorkspaceTable = <TRow extends TableRowData = TableTreeNode>({
         },
       }),
     );
-  }, [handleColumnReorder, fillHeight]);
+  }, [handleColumnReorder, inlineFlow]);
 
   useExternalSyncEffect(() => {
     const element = tableWrapperRef.current;

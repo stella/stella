@@ -214,6 +214,10 @@ export const DecisionTable = ({
           <FindHighlightScope highlight={findHighlight}>
             <WorkspaceTable
               contentMode={layout.contentMode}
+              // A results list is as tall as its results. The end filler has
+              // nothing to fill here and nothing to add at the end of, so it
+              // would draw as one empty bordered row under the last decision.
+              fillHeight={false}
               rowHost={rowHost}
               skeletonRowCount={
                 isLoading ? tableSkeletonRowCount(expectedRowCount) : 0

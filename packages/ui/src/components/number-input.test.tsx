@@ -10,7 +10,9 @@ describe("NumberInput", () => {
 
     expect(markup).toContain('dir="ltr"');
     expect(markup).toContain("pointer-coarse:min-h-11");
-    expect(markup).toContain("pointer-coarse:h-full");
+    // The element fills the control it is given, so the coarse-pointer target
+    // above is the whole typing surface and not a band at the top of it.
+    expect(markup).toContain("h-full");
   });
 
   test("allows an explicit direction override", () => {
