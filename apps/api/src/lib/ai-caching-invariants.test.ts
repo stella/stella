@@ -4,35 +4,16 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 
 /**
- * TanStack AI boundary enforcement: live app code must not reintroduce
- * legacy provider SDK imports, and provider adapter construction stays centralized
- * in tanstack-ai-models.ts so caching, service tiers, BYOK routing, and
- * unsupported-provider failures cannot drift by call site.
+ * TanStack AI boundary enforcement: provider adapter construction stays
+ * centralized in tanstack-ai-models.ts so caching, service tiers, BYOK routing,
+ * and unsupported-provider failures cannot drift by call site.
+ *
+ * The cross-app half — no app source imports a legacy provider SDK — reads
+ * apps/web as well, so it lives in
+ * packages/scripts/src/app-provider-sdk-boundary.test.ts, whose package
+ * declares the whole tree as a test input.
  */
 describe("TanStack AI is the only live app provider SDK boundary", () => {
-  test("app source has no direct legacy provider SDK imports", async () => {
-    const repoRoot = path.resolve(import.meta.dir, "../../../..");
-    const glob = new Glob("apps/{api,web}/{src,scripts}/**/*.{ts,tsx}");
-    const forbiddenImport =
-      /\bfrom\s+["'](?:@ai-sdk\/[^"']+|ai|ai\/[^"']+|@openrouter\/ai-sdk-provider)["']/u;
-    const offenders: string[] = [];
-
-    for await (const relative of glob.scan({
-      cwd: repoRoot,
-      onlyFiles: true,
-    })) {
-      const contents = await readFile(
-        path.resolve(repoRoot, relative),
-        "utf-8",
-      );
-      if (forbiddenImport.test(contents)) {
-        offenders.push(relative);
-      }
-    }
-
-    expect(offenders).toEqual([]);
-  });
-
   test("TanStack provider adapter factories stay at explicit boundaries", async () => {
     const apiSrc = path.resolve(import.meta.dir, "..");
     const glob = new Glob("**/*.ts");

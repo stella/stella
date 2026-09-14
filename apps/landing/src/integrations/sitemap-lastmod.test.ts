@@ -104,7 +104,7 @@ describe("parseGitLog", () => {
       "2026-08-30T12:00:00+02:00",
       "",
       "apps/landing/src/pages/press.astro",
-      "docs/changelog/v0.7.31.md",
+      "docs/changelog/v0.0.0.md",
       "",
       "2026-08-01T12:00:00+02:00",
       "",

@@ -644,6 +644,9 @@ jobs:
       - name: Compute affected flag
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         id: affected
+        # The flag scopes the format run and, empty, marks the workflow_dispatch
+        # full run for every step that reads it. The test run scopes itself
+        # through scripts/test-scope.ts, which has to widen the affected set.
         env:
           BASE_REF: ${{ github.base_ref || 'main' }}
           EVENT_NAME: ${{ github.event_name }}
@@ -797,6 +800,20 @@ jobs:
         run: |
           bun test scripts/check-result-boundary-enrolment.test.ts
           bun run check:result-boundary-enrolment
+
+      - name: Test input coverage
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        # Turbo selects and caches a package's tests on that package's own
+        # files, so a suite that reads another package's source runs only when
+        # its own package happens to change. turbo.json declares those reads as
+        # $TURBO_ROOT$ inputs of the package's test task, which both selects the
+        # package (scripts/test-scope.ts) and joins the cache key. An undeclared
+        # read fails; so does a declared input no test reads any more, so the
+        # lists can only shrink. The fixture tests run first so a broken guard
+        # cannot pass silently.
+        run: |
+          bun test scripts/check-test-input-coverage.test.ts
+          bun run check:test-input-coverage
 
       - name: Module ownership
         if: needs.ci-plan.outputs.package_checks_required == 'true'
@@ -1015,10 +1032,20 @@ jobs:
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         env:
           AFFECTED_FLAG: ${{ steps.affected.outputs.flag }}
+          BASE_REF: ${{ github.base_ref || 'main' }}
+        # Not --affected: a suite that reads files outside its own package also
+        # needs the packages its turbo.json test inputs name, and
+        # `--affected --filter=X` intersects instead of widening.
+        # scripts/test-scope.ts prints the affected set and those packages as
+        # explicit filters, which union. A workflow_dispatch run still tests
+        # everything, exactly as the empty affected flag did.
         run: |
           bun --cwd .claude/mcp test
           args=()
-          [[ -z "$AFFECTED_FLAG" ]] || args+=("$AFFECTED_FLAG")
+          if [[ -n "$AFFECTED_FLAG" ]]; then
+            scope=$(bun scripts/test-scope.ts --base "origin/$BASE_REF")
+            read -r -a args <<<"$scope"
+          fi
           bun run test -- --concurrency=2 "${args[@]}"
 
       - name: Install UI browser test runtime

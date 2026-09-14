@@ -303,6 +303,13 @@ service-backed checks, and separate build/e2e jobs run in CI. Confirm
 `ci-result` succeeds on the current PR head before merging.
 `--all` checks every package instead of only those affected vs `origin/main`.
 
+The scoped test run is filtered by `scripts/test-scope.ts`, not `--affected`: a
+suite that reads files outside its own package declares them as
+`$TURBO_ROOT$` inputs of its `<name>#test` task in `turbo.json`, and those
+declarations both select the package and enter its cache key.
+`bun run check:test-input-coverage` fails on an undeclared cross-package read
+and on a declared input no test reads any more.
+
 ## Merging
 
 Merges go through `bun scripts/merge-bar.ts <pr>`: it re-reads PR state,
