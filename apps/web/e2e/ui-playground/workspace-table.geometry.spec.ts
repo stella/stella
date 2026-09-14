@@ -160,6 +160,59 @@ test("the table scrolls inside the height its host gives it", async ({
   expect(geometry.renderedRowCount).toBeLessThan(40);
 });
 
+test("a viewport too short for the table keeps what is below it reachable", async ({
+  page,
+}) => {
+  // Short enough that the table's own minimum no longer fits beside the rest of
+  // the stack. The bench's chrome is lighter than the results page's, so the
+  // height at which that bites is lower here; the assertion below checks the
+  // page really did overflow rather than trusting the number.
+  await page.setViewportSize({ width: 1440, height: 300 });
+  const belowTable = page.locator(`${SECTION} > div:last-child`);
+  await expect(belowTable).toBeVisible();
+
+  const readReach = async () =>
+    page.evaluate(
+      ([sectionSelector]) => {
+        const section = document.querySelector(sectionSelector);
+        const pageScroller = section?.closest("main");
+        const below = section?.lastElementChild;
+        if (
+          !(pageScroller instanceof HTMLElement) ||
+          !(below instanceof HTMLElement)
+        ) {
+          throw new Error("workspace table bench is not mounted");
+        }
+        const scrollerBox = pageScroller.getBoundingClientRect();
+        const belowBox = below.getBoundingClientRect();
+        return {
+          overflows: pageScroller.scrollHeight > pageScroller.clientHeight + 1,
+          bottomWithinScroller: Math.round(
+            scrollerBox.bottom - belowBox.bottom,
+          ),
+          height: Math.round(belowBox.height),
+        };
+      },
+      [SECTION] as const,
+    );
+
+  const before = await readReach();
+  // The premise: the stack genuinely does not fit, so a fallback scroller is
+  // the only thing that can bring what is under the table back into view.
+  expect(before.overflows).toBe(true);
+  expect(before.height).toBeGreaterThan(0);
+  expect(before.bottomWithinScroller).toBeLessThan(0);
+
+  // A wheel over the chrome above the table, not over the table's own scroll
+  // box. `overflow: hidden` is still scriptable, so only a real gesture tells a
+  // page that scrolls apart from one that merely clips.
+  await page.mouse.move(720, 24);
+  await page.mouse.wheel(0, 2000);
+  await expect
+    .poll(async () => (await readReach()).bottomWithinScroller)
+    .toBeGreaterThanOrEqual(0);
+});
+
 test("the header stays frozen while the body scrolls under it", async ({
   page,
 }) => {
@@ -229,38 +282,45 @@ test("a column is one width in the header and in the body", async ({
 
 test("a row shown whole is as tall as what it holds", async ({ page }) => {
   await page.locator('[data-playground-content-mode="fit-content"]').click();
-  // The rows regrow and the virtualizer re-measures them; wait for the first
-  // row to exceed the clamped height rather than for a fixed delay.
+
+  // Rows regrow and the virtualizer re-measures them, so the whole verdict is
+  // polled rather than read once after a separate wait: reading the row's box
+  // and its cells in two steps can catch a row mid-reflow.
   await expect
-    .poll(async () => {
-      const geometry = await readGeometry(page);
-      return geometry.firstRowCells.at(0)?.height ?? 0;
-    })
-    .toBeGreaterThan(48);
-
-  const clipped = await page.evaluate(
-    ([bodyRowSelector]) => {
-      const row = document.querySelector(`${bodyRowSelector}[data-index="0"]`);
-      if (!(row instanceof HTMLElement)) {
-        throw new Error("first row is not mounted");
-      }
-      const cells = [
-        ...row.querySelectorAll('[data-slot="workspace-grid-cell"]'),
-      ].filter((cell): cell is HTMLElement => cell instanceof HTMLElement);
-      return {
-        rowHeight: Math.round(row.getBoundingClientRect().height),
-        tallestContent: Math.max(...cells.map((cell) => cell.scrollHeight)),
-        overflowing: cells
-          .filter((cell) => cell.scrollHeight > cell.clientHeight + 1)
-          .map((cell) => cell.getAttribute("aria-colindex")),
-      };
-    },
-    [BODY_ROW] as const,
-  );
-
-  // The row's box is its content, not a clamp its cells scroll inside.
-  expect(clipped.overflowing).toEqual([]);
-  expect(
-    Math.abs(clipped.rowHeight - clipped.tallestContent),
-  ).toBeLessThanOrEqual(BOX_TOLERANCE_PX);
+    .poll(async () =>
+      page.evaluate(
+        ([bodyRowSelector, tolerance]) => {
+          const row = document.querySelector(
+            `${bodyRowSelector}[data-index="0"]`,
+          );
+          if (!(row instanceof HTMLElement)) {
+            return "row not mounted";
+          }
+          const cells = [
+            ...row.querySelectorAll<HTMLElement>(
+              '[data-slot="workspace-grid-cell"]',
+            ),
+          ];
+          const rowHeight = Math.round(row.getBoundingClientRect().height);
+          const tallestContent = Math.max(
+            ...cells.map((cell) => cell.scrollHeight),
+          );
+          const overflowing = cells
+            .filter((cell) => cell.scrollHeight > cell.clientHeight + tolerance)
+            .map((cell) => cell.dataset["slot"] ?? "cell");
+          if (rowHeight <= 48) {
+            return `row still clamped at ${rowHeight}px`;
+          }
+          if (overflowing.length > 0) {
+            return `${overflowing.length} cell(s) clipped`;
+          }
+          if (Math.abs(rowHeight - tallestContent) > tolerance) {
+            return `row ${rowHeight}px vs content ${tallestContent}px`;
+          }
+          return "row is as tall as what it holds";
+        },
+        [BODY_ROW, BOX_TOLERANCE_PX] as const,
+      ),
+    )
+    .toBe("row is as tall as what it holds");
 });

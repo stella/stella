@@ -894,8 +894,12 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
     ? decisionSortOrder(search.sort)
     : null;
 
+  // The pane below claims the page's height, so on a normal viewport nothing
+  // overflows here and the table owns the only scroll. The page scroller stays
+  // as the fallback for a viewport too short to hold the table's own minimum:
+  // without it the stack would be clipped and the pager unreachable.
   return (
-    <main className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden p-4">
+    <main className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
       {/*
         The breadcrumb already names the screen, so the heading is for the
         document outline and for a screen reader, not for the eye.

@@ -76,11 +76,12 @@ function DevRouteComponent() {
       return null;
     }
 
-    // No page scroll and no reading column: the table's own scroll box has to
-    // be the only scroller for its header and pinned columns to be measurable.
+    // The results page's chrome, so the bench measures the table in the shape
+    // the product gives it: a bounded column, and a page scroller that only
+    // engages when the viewport is too short to hold the table's minimum.
     return (
       <React.Suspense fallback={null}>
-        <main className="bg-background flex min-h-0 flex-1 flex-col overflow-hidden p-4">
+        <main className="bg-background flex min-h-0 flex-1 flex-col overflow-y-auto p-4">
           <WorkspaceTablePlayground />
         </main>
       </React.Suspense>
