@@ -123,18 +123,28 @@ const docxEditSnapshotSchema = t.Object({
   ),
 });
 
-export const activeFileSchema = t.Object(
-  {
-    entityId: tSafeId("entity"),
-    fileFieldId: t.Optional(tSafeId("field")),
-    fileName: t.String(),
-    supportsDocxEdits: t.Optional(t.Boolean()),
-    docxEditSnapshot: t.Optional(docxEditSnapshotSchema),
-  },
-  { additionalProperties: false },
-);
+/**
+ * One active document the chat can be bound to.
+ *
+ * Closed, always: what each kind means is resolved server-side from the ids it
+ * carries, so an unknown property is a client trying to tell the model
+ * something the server never looked up — a fabricated email citation, wording
+ * an act does not have. Going through this constructor is what makes a new
+ * kind closed by construction instead of by remembering the option.
+ */
+const activeContextSchema = <TShape extends Parameters<typeof t.Object>[0]>(
+  properties: TShape,
+) => t.Object(properties, { additionalProperties: false });
 
-export const activeDraftSchema = t.Object({
+export const activeFileSchema = activeContextSchema({
+  entityId: tSafeId("entity"),
+  fileFieldId: t.Optional(tSafeId("field")),
+  fileName: t.String(),
+  supportsDocxEdits: t.Optional(t.Boolean()),
+  docxEditSnapshot: t.Optional(docxEditSnapshotSchema),
+});
+
+export const activeDraftSchema = activeContextSchema({
   originChatMessageId: tSafeId("chatMessage"),
   originChatThreadId: tSafeId("chatThread"),
   toolCallId: t.String(),
@@ -149,13 +159,13 @@ export const activeDraftSchema = t.Object({
  * block-id space; the Studio client converts queued operations into
  * in-document suggestions.
  */
-export const activeTemplateSchema = t.Object({
+export const activeTemplateSchema = activeContextSchema({
   templateId: tSafeId("template"),
   fileName: t.String(),
   docxEditSnapshot: t.Optional(docxEditSnapshotSchema),
 });
 
-export const activeDecisionSchema = t.Object({
+export const activeDecisionSchema = activeContextSchema({
   decisionId: tSafeId("caseLawDecision"),
 });
 
@@ -165,14 +175,11 @@ export const activeDecisionSchema = t.Object({
  * server-side from the corpus, so a client cannot dictate what the model is
  * told an act says.
  */
-export const activeStatuteSchema = t.Object(
-  { documentId: tSafeId("legislationDocument") },
-  // `activeFileSchema`'s posture: a closed object, so a client cannot smuggle
-  // wording or metadata alongside the id and have a later reader trust it.
-  { additionalProperties: false },
-);
+export const activeStatuteSchema = activeContextSchema({
+  documentId: tSafeId("legislationDocument"),
+});
 
-export const activeExternalSchema = t.Object({
+export const activeExternalSchema = activeContextSchema({
   connectorSlug: t.Optional(t.String()),
   provider: t.Optional(t.String()),
   snippet: t.Optional(t.String()),
@@ -182,7 +189,7 @@ export const activeExternalSchema = t.Object({
   url: t.String(),
 });
 
-export const activeSkillSchema = t.Object({
+export const activeSkillSchema = activeContextSchema({
   skillId: t.Optional(tSafeId("agentSkill")),
   skillName: t.String({ minLength: 1, maxLength: 64 }),
 });

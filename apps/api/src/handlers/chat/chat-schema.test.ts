@@ -20,9 +20,13 @@ import {
 } from "@/api/handlers/chat/chat-message-parts";
 import {
   ACTIVE_CONTEXT_SCHEMAS,
+  activeDecisionSchema,
+  activeExternalSchema,
   activeFileSchema,
   activeDraftSchema,
+  activeSkillSchema,
   activeStatuteSchema,
+  activeTemplateSchema,
   agUiSendMessageBodySchema,
   parseMessage,
   sendMessageBodySchema,
@@ -137,19 +141,6 @@ const createUserFilePart = ({
     }),
   ] satisfies ChatParts;
 
-test("active file context rejects client-supplied email citation text", () => {
-  expect(
-    Value.Check(activeFileSchema, {
-      entityId: "019fc771-8b17-7000-b85e-559afc54cfe5",
-      fileFieldId: "019fc771-8b17-7000-b85e-559afc54cfe6",
-      fileName: "message.eml",
-      emailCitationSnapshot: {
-        blocks: [{ id: "body-0001", text: "fabricated source text" }],
-      },
-    }),
-  ).toBe(false);
-});
-
 describe("active draft request context", () => {
   const identity = {
     fileName: "Agreement.docx",
@@ -222,6 +213,98 @@ describe("active statute request context", () => {
         .toSorted();
       expect(onBody).toEqual(declared);
     }
+  });
+});
+
+type ActiveContextSchema =
+  (typeof ACTIVE_CONTEXT_SCHEMAS)[keyof typeof ACTIVE_CONTEXT_SCHEMAS];
+
+/**
+ * One valid body per active document, and the schema the send body validates
+ * it with. Total over `ACTIVE_CONTEXT_SCHEMAS`, so a new kind arrives as a type
+ * error here rather than as a schema nothing exercises.
+ *
+ * The sample has to be accepted on its own, or the closure assertion proves
+ * nothing: a body rejected for being invalid looks exactly like a body
+ * rejected for carrying an extra property.
+ */
+const ACTIVE_CONTEXT_CASES = {
+  activeDecision: {
+    schema: activeDecisionSchema,
+    sample: { decisionId: "019fc771-8b17-7000-b85e-559afc54cfe5" },
+  },
+  activeDraft: {
+    schema: activeDraftSchema,
+    sample: {
+      docxEditSnapshot: {
+        blocks: [{ id: "block-1", kind: "paragraph", text: "Clause" }],
+      },
+      fileName: "Agreement.docx",
+      originChatMessageId: "019fc771-8b17-7000-b85e-559afc54cfe5",
+      originChatThreadId: "019fc771-8b17-74bf-b85e-559afc54cfe5",
+      toolCallId: "create-document-1",
+    },
+  },
+  activeExternal: {
+    schema: activeExternalSchema,
+    sample: { title: "Source", url: "https://example.com" },
+  },
+  activeFile: {
+    schema: activeFileSchema,
+    sample: {
+      entityId: "019fc771-8b17-7000-b85e-559afc54cfe5",
+      fileFieldId: "019fc771-8b17-7000-b85e-559afc54cfe6",
+      fileName: "message.eml",
+    },
+  },
+  activeSkill: {
+    schema: activeSkillSchema,
+    sample: { skillName: "Review" },
+  },
+  activeStatute: {
+    schema: activeStatuteSchema,
+    sample: { documentId: "019fc771-8b17-7000-b85e-559afc54cfe5" },
+  },
+  activeTemplate: {
+    schema: activeTemplateSchema,
+    sample: {
+      fileName: "Template.docx",
+      templateId: "019fc771-8b17-7000-b85e-559afc54cfe5",
+    },
+  },
+} as const satisfies Record<
+  keyof typeof ACTIVE_CONTEXT_SCHEMAS,
+  { schema: ActiveContextSchema; sample: Record<string, unknown> }
+>;
+
+describe("active document schemas", () => {
+  for (const [kind, { schema, sample }] of Object.entries(
+    ACTIVE_CONTEXT_CASES,
+  )) {
+    test(`${kind} rejects content the client made up`, () => {
+      expect(Value.Check(schema, sample)).toBe(true);
+
+      // Every kind is resolved server-side from the ids it carries, so an
+      // extra property is the client telling the model something the server
+      // never looked up: a fabricated email citation, wording of its own.
+      expect(
+        Value.Check(schema, {
+          ...sample,
+          emailCitationSnapshot: {
+            blocks: [{ id: "body-0001", text: "fabricated source text" }],
+          },
+        }),
+      ).toBe(false);
+    });
+  }
+
+  test("the cases and the send body's schemas are the same set", () => {
+    expect(Object.keys(ACTIVE_CONTEXT_CASES).toSorted()).toEqual(
+      Object.keys(ACTIVE_CONTEXT_SCHEMAS).toSorted(),
+    );
+    expect(
+      new Set(Object.values(ACTIVE_CONTEXT_CASES).map(({ schema }) => schema)),
+    ).toEqual(new Set(Object.values(ACTIVE_CONTEXT_SCHEMAS)));
   });
 });
 
