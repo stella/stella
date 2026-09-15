@@ -47,6 +47,19 @@ type WriteDocxSuggestionsCacheOptions = {
   write: DocxSuggestionCacheWrite;
 };
 
+// The list endpoint's order (created_at, then id, ascending), so hydration
+// after a cache write sees the rows as a fresh fetch would return them.
+const inServerOrder = (a: DocxSuggestionRow, b: DocxSuggestionRow): number => {
+  const byCreatedAt = a.createdAt.getTime() - b.createdAt.getTime();
+  if (byCreatedAt !== 0) {
+    return byCreatedAt;
+  }
+  if (a.id === b.id) {
+    return 0;
+  }
+  return a.id < b.id ? -1 : 1;
+};
+
 /**
  * Apply one pending-state change to the cached list. A list that has not
  * loaded yet is left alone: its first fetch reads the server directly.
@@ -82,7 +95,10 @@ export const writeDocxSuggestionsCache = async ({
         const entering = write.rows.filter((row) => !present.has(row.id));
         return entering.length === 0
           ? current
-          : { ...current, items: [...current.items, ...entering] };
+          : {
+              ...current,
+              items: [...current.items, ...entering].toSorted(inServerOrder),
+            };
       }
       default: {
         write satisfies never;

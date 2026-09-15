@@ -161,6 +161,31 @@ describe("docx suggestion hydration cache", () => {
     expect(sessionIds()).toEqual(["s1", "s2"]);
   });
 
+  test("rows entering the pending list land in the server's order", async () => {
+    const queryClient = new QueryClient();
+    const earlier = new Date("2026-09-15T09:00:00.000Z");
+    const later = new Date("2026-09-15T12:00:00.000Z");
+    const rowAt = (id: string, createdAt: Date) =>
+      createdDocxSuggestionRows({
+        suggestions: [suggestion(id)],
+        created: [{ ref: id, id: toSafeId<"docxSuggestion">(id) }],
+        createdAt,
+      }).at(0) ?? panic("A suggestion with an operation always has a row");
+    queryClient.setQueryData(listQueryKey(), { items: [rowAt("s3", later)] });
+
+    await writeDocxSuggestionsCache({
+      ...target(queryClient),
+      write: {
+        type: DOCX_SUGGESTION_CACHE_WRITE.enterPending,
+        rows: [rowAt("s2", earlier), rowAt("s1", earlier)],
+      },
+    });
+
+    expect(
+      queryClient.getQueryData(listQueryKey())?.items.map((item) => item.id),
+    ).toEqual(["s1", "s2", "s3"].map((id) => toSafeId<"docxSuggestion">(id)));
+  });
+
   test("a created batch shares the server createdAt, and a revert keeps it", async () => {
     const queryClient = new QueryClient();
     seedCache(queryClient, []);
