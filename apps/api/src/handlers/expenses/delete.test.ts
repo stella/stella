@@ -18,6 +18,10 @@ const createContext = ({
 }): DeleteExpenseCtx =>
   asTestRaw<DeleteExpenseCtx>({
     body: { id: toSafeId<"expense">("expense_test") },
+    request: new Request("https://example.test/v1/expenses/workspace_test", {
+      method: "DELETE",
+    }),
+    route: "/v1/expenses/:workspaceId",
     safeDb,
     scopedDb,
     workspaceId: toSafeId<"workspace">("workspace_test"),

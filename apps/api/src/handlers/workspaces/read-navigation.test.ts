@@ -82,6 +82,8 @@ const createContext = ({
       memberRole: { role: "owner" },
       orgAIConfig: null,
       query,
+      request: new Request("https://example.test/v1/workspaces/navigation"),
+      route: "/v1/workspaces/navigation",
       safeDb,
       scopedDb,
       session: {

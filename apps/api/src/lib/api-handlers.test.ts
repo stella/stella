@@ -339,7 +339,7 @@ describe("createSafeRootHandler permission gate", () => {
 });
 
 describe("request.failed severity", () => {
-  const runFailingHandler = async (error: SafeDbError) => {
+  const runFailingHandler = async (error: SafeDbError | HandlerError) => {
     const analytics = installRecordingAnalytics();
     const recordingLogger = installRecordingLogger();
     try {
@@ -386,6 +386,27 @@ describe("request.failed severity", () => {
     expect(failures[0]?.attributes?.["http.status_code"]).toBe(400);
     // The grade changes, the report does not: a denial still reaches capture.
     expect(exceptions).toHaveLength(1);
+  });
+
+  test("names the rejecting frame on a handler-returned client error", async () => {
+    const { response, failures, exceptions } = await runFailingHandler(
+      new HandlerError({ status: 400, message: "Invalid chat tool arguments" }),
+    );
+
+    if (!("code" in response)) {
+      throw new Error("expected a status response");
+    }
+    expect(response.code).toBe(400);
+    expect(failures).toHaveLength(1);
+    expect(failures[0]?.severityText).toBe("WARN");
+    expect(failures[0]?.attributes?.["http.status_code"]).toBe(400);
+    // `error.type` reads `HandlerError` at every site that rejects a request
+    // payload, so the frame is the only attribute that says which one fired.
+    expect(failures[0]?.attributes?.["error.frame"]).toContain(
+      "api-handlers.test.ts",
+    );
+    // An answered client outcome is logged, not reported.
+    expect(exceptions).toHaveLength(0);
   });
 
   test("grades a database failure as a server fault", async () => {

@@ -158,6 +158,9 @@ export const RESULT_BOUNDARY_GLOBS = [
   // to load; the listener is a framework hook, and its single-reload guard
   // reads `sessionStorage`, which throws by contract when storage is blocked.
   "apps/web/src/lib/preload-error-recovery.ts",
+  // Handed to TanStack's connection adapter, which consumes rejections: a
+  // refused response travels back as a thrown `APIError`, not as a `Result`.
+  "apps/web/src/features/chat/chat-fetch.ts",
   // These packages are boundary adapters by design: the runtime turns
   // invalid startup state into fatal exceptions, while the testkit exposes
   // assertion failures to test runners.

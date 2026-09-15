@@ -697,14 +697,13 @@ const runSafeHandler = async <
     if (handlerError !== null) {
       const statusCode = handlerError.status;
 
-      if (statusCode >= 500) {
-        logAndCaptureSafeError({
-          request: ctx.request,
-          route: ctx.route,
-          error: handlerError,
-          statusCode,
-        });
-      }
+      logAndCaptureSafeError({
+        request: ctx.request,
+        route: ctx.route,
+        error: handlerError,
+        statusCode,
+        telemetry: safeErrorTelemetryDisposition(statusCode),
+      });
 
       return toSafeStatusResponse(statusCode, safeErrorBody(handlerError));
     }
@@ -715,6 +714,7 @@ const runSafeHandler = async <
         route: ctx.route,
         error,
         statusCode: 500,
+        telemetry: "capture",
       });
 
       return toSafeStatusResponse(500, {
@@ -729,6 +729,10 @@ const runSafeHandler = async <
         route: ctx.route,
         error,
         statusCode: 400,
+        // A denial is answered as a client outcome but reported as a fault:
+        // RLS is the last isolation guard, so a request that reaches it is a
+        // defect in the query above it.
+        telemetry: "capture",
       });
 
       return toSafeStatusResponse(400, {
@@ -742,6 +746,7 @@ const runSafeHandler = async <
       route: ctx.route,
       error,
       statusCode: 500,
+      telemetry: "capture",
     });
 
     return toSafeStatusResponse(500, {
@@ -758,14 +763,13 @@ const runSafeHandler = async <
     // server error" with no actionable detail.
     const handlerError = resolveHandlerError(error);
     if (handlerError !== null) {
-      if (handlerError.status >= 500) {
-        logAndCaptureSafeError({
-          request: ctx.request,
-          route: ctx.route,
-          error: handlerError,
-          statusCode: handlerError.status,
-        });
-      }
+      logAndCaptureSafeError({
+        request: ctx.request,
+        route: ctx.route,
+        error: handlerError,
+        statusCode: handlerError.status,
+        telemetry: safeErrorTelemetryDisposition(handlerError.status),
+      });
       return toSafeStatusResponse(
         handlerError.status,
         safeErrorBody(handlerError),
@@ -777,6 +781,7 @@ const runSafeHandler = async <
       route: ctx.route,
       error,
       statusCode: 500,
+      telemetry: "capture",
     });
 
     return toSafeStatusResponse(500, {
@@ -963,6 +968,7 @@ const runUsagePreflight = async ({
       route: ctx.route,
       error: checkResult.error,
       statusCode: 500,
+      telemetry: "capture",
     });
     return {
       kind: "blocked",
@@ -1325,11 +1331,28 @@ export const createSafePublicHandler = <
   return definition;
 };
 
+/**
+ * Whether a failure also reaches the exception reporter.
+ *
+ * `"capture"` is for faults the team must act on: a panic, a database
+ * failure, a security denial. `"log-only"` is for outcomes a handler
+ * deliberately answered — a rejected payload, a missing entity — whose
+ * volume follows client behaviour and whose detail is already in the
+ * structured record. Every call site states one; there is no default, so a
+ * new branch cannot silently pick the noisy side.
+ */
+type SafeErrorTelemetry = "capture" | "log-only";
+
+const safeErrorTelemetryDisposition = (
+  statusCode: number,
+): SafeErrorTelemetry => (statusCode >= 500 ? "capture" : "log-only");
+
 type LogAndCaptureSafeErrorProps = {
   request: Request;
   route: string;
   error: unknown;
   statusCode: number;
+  telemetry: SafeErrorTelemetry;
 };
 
 const getErrorStatusCode = (error: Error): number | undefined => {
@@ -1402,6 +1425,7 @@ const logAndCaptureSafeError = ({
   route,
   error,
   statusCode,
+  telemetry,
 }: LogAndCaptureSafeErrorProps) => {
   const reqCtx = getRequestContext(request);
 
@@ -1423,17 +1447,18 @@ const logAndCaptureSafeError = ({
     Object.assign(attributes, errorCauseChainAttributes(error));
   }
 
-  // 5xx are the un-diagnosable class: the message and stack are
-  // redacted from every sink, leaving only `error.type`. Attach a
-  // non-PII structural fingerprint (class, stable code, top
-  // `file:line:col` frames) under keys that survive the logger's PII
-  // redaction so a panic always carries a code location.
-  if (statusCode >= 500) {
-    Object.assign(attributes, errorFingerprint(error));
+  // Every answered failure is un-diagnosable without this: the message and
+  // stack are redacted from every sink, leaving only `error.type`. The
+  // fingerprint (class, stable code, top `file:line:col` frames) is non-PII
+  // and uses keys that survive the logger's redaction, so a failure always
+  // carries a code location. A 4xx needs it at least as much as a panic —
+  // `error.type` reads `HandlerError` at every one of the dozens of sites
+  // that reject a request payload, so the frame is the only thing that says
+  // which rejection fired.
+  Object.assign(attributes, errorFingerprint(error));
 
-    if (env.isDev && env.DEBUG_UNREDACTED_ERRORS) {
-      Object.assign(attributes, unredactedErrorFields(error));
-    }
+  if (env.isDev && env.DEBUG_UNREDACTED_ERRORS) {
+    Object.assign(attributes, unredactedErrorFields(error));
   }
 
   if (reqCtx?.requestId) {
@@ -1455,19 +1480,24 @@ const logAndCaptureSafeError = ({
   // Severity follows the status class, as it does at the request-level
   // `onError` sink that emits this same `request.failed` event. A 5xx is a
   // server fault; a 4xx is an answered client outcome, and an access denial
-  // graded ERROR would sit in the same class as a panic. The capture below
-  // is unconditional either way, so the detail is kept regardless of grade.
+  // graded ERROR would sit in the same class as a panic.
   if (statusCode >= 500) {
     logger.error("request.failed", attributes);
   } else {
     logger.warn("request.failed", attributes);
   }
 
-  captureRequestError(error, {
-    request,
-    context: {
-      method: request.method,
-      route,
-    },
-  });
+  // Reporting is a separate decision from grading: a rejected payload is a
+  // client outcome the handler answered, and routing it to `$exception`
+  // would drown real faults in traffic the client controls. The record above
+  // already carries the rejecting frame.
+  if (telemetry === "capture") {
+    captureRequestError(error, {
+      request,
+      context: {
+        method: request.method,
+        route,
+      },
+    });
+  }
 };
