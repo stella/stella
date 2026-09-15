@@ -52,6 +52,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import type { ChatToolMap } from "@/api/lib/chat/chat-tool-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { withNullsOmitted } from "@/api/lib/json-value";
 import { normalizeChatMessageHtml } from "@/api/lib/markdown/chat-message";
 import {
   brandPersistedEntityId,
@@ -667,15 +668,12 @@ const applyValidatedContinuationTransitions = ({
     }
     const incomingCall = incomingCalls.get(part.id);
     if (incomingCall === undefined) {
-      return normalizeContinuationToolArguments({
-        call: part,
-        canonicalCall: part,
-      });
+      return restoreCanonicalToolCallInput({ call: part, canonicalCall: part });
     }
     if (incomingCall.state !== part.state) {
       transitionedCallIds.add(part.id);
     }
-    return normalizeContinuationToolArguments({
+    return restoreCanonicalToolCallInput({
       call: incomingCall,
       canonicalCall: part,
     });
@@ -715,9 +713,17 @@ const applyValidatedContinuationTransitions = ({
 };
 
 /**
- * A client continuation may supply the result of an awaited interaction, but
- * it must not change the canonical call that requested it. In particular, the
- * provider-visible name, arguments, and input remain server-authored.
+ * A client continuation may supply the result of an awaited interaction, but it
+ * must not change which call was made or with what input: id, name, and input
+ * value stay server-authored, and only output, state, and the approval response
+ * may move.
+ *
+ * How the input is spelled is not part of that property. The persisted v3 part
+ * keeps only the adapter-normalized input and recomputes `arguments` from it,
+ * while the client echoes the raw provider text, which strict tool schemas widen
+ * with nulls for absent optionals. Both are the same call, so `input` is
+ * compared by value with that null-widening folded on both sides, and the server
+ * copy is restored onto the accepted call.
  */
 const validateContinuationToolCallIntegrity = ({
   incomingParts,
@@ -844,38 +850,54 @@ const APPROVAL_RESPONSE_MUTABLE_TOOL_CALL_PROPERTIES = new Set([
   "state",
 ]);
 const TOOL_OUTPUT_MUTABLE_TOOL_CALL_PROPERTIES = new Set(["output", "state"]);
+const NO_MUTABLE_TOOL_CALL_PROPERTIES: ReadonlySet<string> = new Set();
 
-// Persisted tool input uses durable IDs while provider-facing `arguments`
-// retain model refs. A client snapshot rebuilds both fields from visible input;
-// derive that second accepted representation from the server-owned input.
-const toClientVisibleCanonicalToolCall = (
-  canonicalCall: ChatToolCallPart,
-): ChatToolCallPart => {
-  if (canonicalCall.input === undefined) {
-    return canonicalCall;
-  }
-  const argumentsText = JSON.stringify(canonicalCall.input);
-  return typeof argumentsText === "string"
-    ? { ...canonicalCall, arguments: argumentsText }
-    : canonicalCall;
-};
+// Two spellings of one value: `arguments` is derived from `input`, and the
+// client's spelling of both is discarded in favour of the server's. They are
+// compared by value (`hasEqualToolCallInput`) instead of as immutable bytes.
+const CONTINUATION_DERIVED_TOOL_CALL_PROPERTIES = new Set([
+  "arguments",
+  "input",
+]);
 
-const normalizeContinuationToolArguments = ({
+/**
+ * The persisted call is authoritative: its `input` is the server's copy and
+ * `arguments` is derived from that input the same way v3 read-back derives it,
+ * so a persisted v2 call whose `arguments` still carry model refs keeps
+ * agreeing with the input that tool validation checks it against.
+ */
+const restoreCanonicalToolCallInput = ({
   call,
   canonicalCall,
 }: {
   call: ChatToolCallPart;
   canonicalCall: ChatToolCallPart;
 }): ChatToolCallPart => {
-  const clientCanonicalCall = toClientVisibleCanonicalToolCall(canonicalCall);
-  if (clientCanonicalCall === canonicalCall) {
-    return call;
+  if (canonicalCall.input === undefined) {
+    return { ...call, arguments: canonicalCall.arguments, input: undefined };
   }
+  const argumentsText = JSON.stringify(canonicalCall.input);
   return {
     ...call,
-    arguments: clientCanonicalCall.arguments,
+    arguments:
+      typeof argumentsText === "string"
+        ? argumentsText
+        : canonicalCall.arguments,
+    input: canonicalCall.input,
   };
 };
+
+const hasEqualToolCallInput = ({
+  canonicalCall,
+  incomingCall,
+}: {
+  canonicalCall: ChatToolCallPart;
+  incomingCall: ChatToolCallPart;
+}): boolean =>
+  deepEquals(
+    withNullsOmitted(incomingCall.input),
+    withNullsOmitted(canonicalCall.input),
+  );
 
 const hasOnlyPermittedToolCallChanges = ({
   canonicalCall,
@@ -888,7 +910,11 @@ const hasOnlyPermittedToolCallChanges = ({
 }): boolean => {
   const immutableProperties = (call: ChatToolCallPart) =>
     Object.fromEntries(
-      Object.entries(call).filter(([key]) => !mutableProperties.has(key)),
+      Object.entries(call).filter(
+        ([key]) =>
+          !mutableProperties.has(key) &&
+          !CONTINUATION_DERIVED_TOOL_CALL_PROPERTIES.has(key),
+      ),
     );
   return deepEquals(
     immutableProperties(incomingCall),
@@ -903,14 +929,6 @@ const isPermittedContinuationToolCallTransition = ({
   canonicalCall: ChatToolCallPart;
   incomingCall: ChatToolCallPart;
 }): boolean => {
-  const clientCanonicalCall = toClientVisibleCanonicalToolCall(canonicalCall);
-  let comparableCanonicalCall = canonicalCall;
-  if (incomingCall.arguments !== canonicalCall.arguments) {
-    if (incomingCall.arguments !== clientCanonicalCall.arguments) {
-      return false;
-    }
-    comparableCanonicalCall = clientCanonicalCall;
-  }
   let stateTransitionAllowed = false;
   for (const allowedState of CONTINUATION_TOOL_CALL_TRANSITIONS[
     canonicalCall.state
@@ -923,13 +941,17 @@ const isPermittedContinuationToolCallTransition = ({
   if (
     !stateTransitionAllowed ||
     incomingCall.name !== canonicalCall.name ||
-    !deepEquals(incomingCall.input, canonicalCall.input)
+    !hasEqualToolCallInput({ canonicalCall, incomingCall })
   ) {
     return false;
   }
 
   if (incomingCall.state === canonicalCall.state) {
-    return deepEquals(incomingCall, comparableCanonicalCall);
+    return hasOnlyPermittedToolCallChanges({
+      canonicalCall,
+      incomingCall,
+      mutableProperties: NO_MUTABLE_TOOL_CALL_PROPERTIES,
+    });
   }
   if (
     canonicalCall.state === "approval-requested" &&
@@ -940,7 +962,7 @@ const isPermittedContinuationToolCallTransition = ({
     }
     return (
       hasOnlyPermittedToolCallChanges({
-        canonicalCall: comparableCanonicalCall,
+        canonicalCall,
         incomingCall,
         mutableProperties: APPROVAL_RESPONSE_MUTABLE_TOOL_CALL_PROPERTIES,
       }) &&
@@ -957,7 +979,7 @@ const isPermittedContinuationToolCallTransition = ({
     (incomingCall.state === "complete" || incomingCall.state === "error")
   ) {
     return hasOnlyPermittedToolCallChanges({
-      canonicalCall: comparableCanonicalCall,
+      canonicalCall,
       incomingCall,
       mutableProperties: TOOL_OUTPUT_MUTABLE_TOOL_CALL_PROPERTIES,
     });

@@ -108,6 +108,17 @@ const askUserTools = {
     description: "Ask a user for missing information",
   },
 } satisfies ChatToolMap;
+const suggestChangesTools = {
+  suggest_changes: {
+    name: "suggest_changes",
+    description: "Propose document edits for review",
+    inputSchema: toTanStackToolSchema(
+      v.looseObject({
+        operations: v.array(v.looseObject({ type: v.string() })),
+      }),
+    ),
+  },
+} satisfies ChatToolMap;
 
 const createUserFilePart = ({
   fileId,
@@ -894,6 +905,107 @@ describe("validateMessage", () => {
     expect(result.error.message).toBe(
       "Chat continuation does not match its awaited interaction",
     );
+  });
+
+  test("accepts a client-tool continuation that echoes the provider's raw arguments", async () => {
+    const id = chatMessageId("msg_suggest_changes_continuation");
+    const callId = "call_suggest_changes";
+    // OpenAI-style strict tool schemas force every property into `required`
+    // and widen optionals with `null`, so this is what the model streams.
+    const rawArguments = JSON.stringify({
+      documentVersion: null,
+      operations: [
+        {
+          type: "deleteBlock",
+          blockId: "b_42",
+          severity: "medium",
+          area: "Profiling",
+          comment: null,
+          moveId: null,
+          precondition: null,
+        },
+      ],
+    });
+    // What the adapter hands the server on TOOL_CALL_END: the same call with
+    // the provider-synthesized nulls undone.
+    const canonicalInput = {
+      operations: [
+        {
+          type: "deleteBlock",
+          blockId: "b_42",
+          severity: "medium",
+          area: "Profiling",
+        },
+      ],
+    };
+    const output = {
+      ok: true,
+      result: {
+        version: 1,
+        applied: [],
+        queued: [{ id: "op-1" }],
+        skipped: [],
+        issues: [],
+        receipts: [],
+        normalizations: [],
+      },
+    };
+    const persistedContent = chatMessageContentFromMessage(
+      toPersistableChatMessage({
+        id,
+        role: "assistant",
+        parts: [
+          {
+            type: "tool-call",
+            id: callId,
+            name: "suggest_changes",
+            arguments: rawArguments,
+            input: canonicalInput,
+            state: "input-complete",
+          },
+        ],
+      }),
+    );
+
+    const result = await validateMessageWithPersistence({
+      message: {
+        id,
+        role: "assistant",
+        // TanStack rebuilds the call from MESSAGES_SNAPSHOT, which carries the
+        // provider's raw `arguments` string and re-parses `input` from it.
+        parts: [
+          {
+            type: "tool-call",
+            id: callId,
+            name: "suggest_changes",
+            arguments: rawArguments,
+            input: JSON.parse(rawArguments),
+            output,
+            state: "complete",
+          },
+          {
+            type: "tool-result",
+            toolCallId: callId,
+            content: JSON.stringify(output),
+            state: "complete",
+          },
+        ],
+      },
+      persistedMessage: { role: "assistant", content: persistedContent },
+      resume: [
+        {
+          interruptId: `client_tool_${callId}`,
+          payload: output,
+          status: "resolved",
+        },
+      ],
+      safeDb: noDbReads,
+      threadId: chatThreadId("thread_suggest_changes_continuation"),
+      tools: suggestChangesTools,
+      userId: userId("user_suggest_changes_continuation"),
+    });
+
+    expect(Result.isOk(result)).toBe(true);
   });
 
   test("allows only an unchanged second pending approval to continue", async () => {
