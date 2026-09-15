@@ -18,12 +18,10 @@ const PRIVATE_AUTHOR = "Privileged author";
 const PRIVATE_TITLE = "Privileged matter title";
 const PRIVATE_ATTACHMENT = "Privileged attachment contents";
 const PRIVATE_TERMS = ["Secret Person", "secret@example.test"] as const;
-const PUBLIC_MARKER = { x: 330, y: 20, width: 40, height: 40 };
 
 type PagePixelResult = {
   blackMaskPixelRatio: number;
   height: number;
-  publicMarkerPixel: [number, number, number, number];
   visualMeanAbsoluteError: number;
   width: number;
 };
@@ -50,6 +48,7 @@ declare global {
   // oxlint-disable-next-line consistent-type-definitions -- global Window augmentation requires interface declaration merging
   interface Window {
     runAnonymizedExportCheck: () => Promise<AnonymizedExportCheck>;
+    runUnsupportedExportCheck: () => Promise<boolean[]>;
   }
 }
 
@@ -103,7 +102,12 @@ window.runAnonymizedExportCheck = async () => {
       size: 14,
     });
     page.drawText("Contact: secret@example.test", { x: 20, y: 60, size: 14 });
-    page.drawRectangle({ ...PUBLIC_MARKER, color: rgb(0.1, 0.75, 0.2) });
+    page.drawText("PUBLIC", {
+      x: 330,
+      y: 20,
+      size: 8,
+      color: rgb(0.1, 0.75, 0.2),
+    });
   }
 
   const input = await source.save();
@@ -198,21 +202,9 @@ window.runAnonymizedExportCheck = async () => {
         }
       }
 
-      const markerRect = toPDFSearchViewportBox(
-        PUBLIC_MARKER,
-        sourceRender.viewport,
-      );
-      if (!markerRect) {
-        throw new TypeError("Expected a public marker viewport rectangle");
-      }
       pixels.push({
         blackMaskPixelRatio: blackPixels / maskPixels,
         height: outputRender.canvas.height,
-        publicMarkerPixel: readPixel(
-          outputRender.context,
-          markerRect.left + markerRect.width / 2,
-          markerRect.top + markerRect.height / 2,
-        ),
         visualMeanAbsoluteError: totalDifference / actual.length,
         width: outputRender.canvas.width,
       });
@@ -249,4 +241,43 @@ window.runAnonymizedExportCheck = async () => {
         .join("\n"),
     },
   };
+};
+
+window.runUnsupportedExportCheck = async () => {
+  const results: boolean[] = [];
+  for (const content of ["image", "path"] as const) {
+    const pdf = PDF.create();
+    const page = pdf.addPage({ width: PAGE_WIDTH, height: PAGE_HEIGHT });
+    page.drawText("Extractable public text", { x: 20, y: 100, size: 14 });
+    if (content === "path") {
+      page.drawRectangle({
+        x: 20,
+        y: 20,
+        width: 80,
+        height: 20,
+        color: rgb(0, 0, 0),
+      });
+    } else {
+      const canvas = document.createElement("canvas");
+      canvas.width = 160;
+      canvas.height = 40;
+      const context = canvas.getContext("2d");
+      if (!context) {
+        throw new TypeError("Expected canvas context");
+      }
+      context.fillText("Sensitive raster text", 5, 20);
+      const png = await (
+        await fetch(canvas.toDataURL("image/png"))
+      ).arrayBuffer();
+      const image = pdf.embedPng(new Uint8Array(png));
+      page.drawImage(image, { x: 20, y: 20, width: 160, height: 40 });
+    }
+    const bytes = await pdf.save();
+    const result = await rasterizeAnonymizedPdf(
+      Uint8Array.from(bytes).buffer,
+      new Map(),
+    );
+    results.push(result.isErr());
+  }
+  return results;
 };

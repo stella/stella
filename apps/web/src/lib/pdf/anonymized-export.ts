@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 
 import { ClientOperationError } from "@/lib/errors/client";
+import { hasUnsupportedAnonymizationContent } from "@/lib/pdf/anonymized-export-content.logic";
+import { UnsupportedAnonymizedExportError } from "@/lib/pdf/anonymized-export-errors";
 import type { PDFSearchBox } from "@/lib/pdf/pdf-search";
 import { toPDFSearchViewportBox } from "@/lib/pdf/pdf-search";
 import { loadPdfjs } from "@/lib/pdf/pdfjs-loader";
@@ -32,6 +34,19 @@ export const rasterizeAnonymizedPdf = async (
           pageNumber += 1
         ) {
           const page = await pdfDocument.getPage(pageNumber);
+          const operators = await page.getOperatorList({
+            annotationMode: pdfjs.AnnotationMode.DISABLE,
+          });
+          if (
+            hasUnsupportedAnonymizationContent(operators.fnArray, pdfjs.OPS)
+          ) {
+            return Result.err(
+              new UnsupportedAnonymizedExportError({
+                message:
+                  "The file contains visual content that cannot be checked for sensitive text",
+              }),
+            );
+          }
           const viewport = page.getViewport({ scale: EXPORT_SCALE });
           if (viewport.width * viewport.height > MAX_PAGE_PIXELS) {
             return Result.err(

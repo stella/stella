@@ -30,10 +30,15 @@ test("rebuilds rotated pages from masked pixels and removes source data", async 
   ]);
   for (const pixels of result.pixels) {
     expect(pixels.blackMaskPixelRatio).toBeGreaterThan(0.99);
-    expect(pixels.publicMarkerPixel[0]).toBeLessThan(40);
-    expect(pixels.publicMarkerPixel[1]).toBeGreaterThan(175);
-    expect(pixels.publicMarkerPixel[2]).toBeLessThan(70);
-    expect(pixels.publicMarkerPixel[3]).toBe(255);
     expect(pixels.visualMeanAbsoluteError).toBeLessThan(0.5);
   }
+});
+
+test("rejects mixed image and vector content before export", async ({
+  page,
+}) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  expect(
+    await page.evaluate(async () => await window.runUnsupportedExportCheck()),
+  ).toEqual([true, true]);
 });

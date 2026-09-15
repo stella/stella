@@ -44,7 +44,20 @@ export const buildAnonymizedExportMasks = ({
       normalizedExtraction,
       term,
     )) {
-      for (const glyph of extraction.glyphs.slice(start, end)) {
+      for (const [index, glyph] of extraction.glyphs
+        .slice(start, end)
+        .entries()) {
+        if (
+          glyph === null &&
+          !/\s/u.test(extraction.text.charAt(start + index))
+        ) {
+          return Result.err(
+            new ClientOperationError({
+              action: "anonymized-export",
+              message: "A matched character has no page coordinates",
+            }),
+          );
+        }
         if (glyph !== null) {
           selected.add(glyph);
         }
@@ -55,7 +68,7 @@ export const buildAnonymizedExportMasks = ({
   for (const { pageIndex, box } of selected) {
     if (
       ![box.x, box.y, box.width, box.height].every(Number.isFinite) ||
-      box.width < 0 ||
+      box.width <= 0 ||
       box.height <= 0
     ) {
       return Result.err(

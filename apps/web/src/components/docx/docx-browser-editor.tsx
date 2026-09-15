@@ -596,7 +596,12 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
         .getState()
         .markAnonymizationPipelineFailed(fieldId);
     }
-  }, [editorViewForAnonymization, mergedAnonymizationTerms, fieldId]);
+  }, [
+    editorViewForAnonymization,
+    mergedAnonymizationTerms,
+    fieldId,
+    detectionRetry,
+  ]);
   // Publish the plugin's live match list to the inspector facet
   // so it can show counts and filter the workspace vocabulary
   // list. Polls once a second — cheap, and necessary because the

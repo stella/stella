@@ -101,7 +101,7 @@ describe("anonymized PDF export masks", () => {
     expect(masks.get(0)).toHaveLength(125);
   });
 
-  test("returns no masks when a term has no source glyph", async () => {
+  test("rejects a matched term without source glyph coordinates", async () => {
     const pdf = PDF.create();
     const page = pdf.addPage({ size: "letter" });
     page.drawText("source", { x: 50, y: 700, size: 18 });
@@ -109,8 +109,24 @@ describe("anonymized PDF export masks", () => {
     extraction.glyphs.fill(null);
 
     expect(
-      buildAnonymizedExportMasks({ extraction, terms: ["source"] }).unwrap(),
-    ).toEqual(new Map());
+      buildAnonymizedExportMasks({ extraction, terms: ["source"] }).isErr(),
+    ).toBe(true);
+  });
+
+  test("rejects zero-width matched glyphs", async () => {
+    const pdf = PDF.create();
+    pdf
+      .addPage({ size: "letter" })
+      .drawText("source", { x: 50, y: 700, size: 18 });
+    const extraction = extractAnonymizedExportText(await loadPages(pdf));
+    for (const glyph of extraction.glyphs) {
+      if (glyph !== null) {
+        glyph.box.width = 0;
+      }
+    }
+    expect(
+      buildAnonymizedExportMasks({ extraction, terms: ["source"] }).isErr(),
+    ).toBe(true);
   });
 
   test("does not mutate the source PDF while building masks", async () => {
