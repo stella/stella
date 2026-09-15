@@ -1345,6 +1345,9 @@ describe("statute country publication", () => {
       expect(
         await readPublicLegislationHandler(id, legislationDb),
       ).toMatchObject({ code: 404 });
+      expect(await readLegislationHandler(id, workspaceDb)).toMatchObject({
+        code: 404,
+      });
       expect(
         await readStatuteByEliHandler({ eli }, legislationDb),
       ).toMatchObject({ code: 404 });
