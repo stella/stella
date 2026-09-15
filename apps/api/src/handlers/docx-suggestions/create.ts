@@ -1,16 +1,16 @@
 import { Result } from "better-result";
-import { and, count, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
-import {
-  DOCX_SUGGESTIONS_PENDING_LIMIT_ERROR_CODE,
-  DOCX_SUGGESTIONS_PENDING_MAX,
-} from "@stll/api-contract";
-
-import { chatThreads, docxSuggestions, entities } from "@/api/db/schema";
+import { chatThreads, docxSuggestions } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import {
+  DOCX_PENDING_CAPACITY,
+  docxSuggestionsPendingLimitError,
+  lockDocxSuggestionPendingCapacity,
+} from "@/api/lib/docx/suggestion-pending-capacity";
 import { HandlerError, unreachable } from "@/api/lib/errors/tagged-errors";
 import { validateDocxSuggestionOperations } from "@/api/lib/folio-operation-validation";
 
@@ -127,34 +127,15 @@ const createDocxSuggestions = createSafeHandler(
 
     const outcome = yield* Result.await(
       safeDb(async (tx) => {
-        // Locking the document row serializes concurrent creates for it, so
-        // the pending count below cannot be raced past the cap.
-        const lockedEntities = await tx
-          .select({ id: entities.id })
-          .from(entities)
-          .where(
-            and(
-              eq(entities.id, params.entityId),
-              eq(entities.workspaceId, workspaceId),
-            ),
-          )
-          .for("update");
-        if (lockedEntities.length === 0) {
+        const capacity = await lockDocxSuggestionPendingCapacity({
+          tx,
+          workspaceId,
+          entityId: params.entityId,
+        });
+        if (capacity.type === DOCX_PENDING_CAPACITY.entityNotFound) {
           return { type: CREATE_OUTCOME.entityNotFound };
         }
-        const pendingRows = await tx
-          .select({ pending: count() })
-          .from(docxSuggestions)
-          .where(
-            and(
-              eq(docxSuggestions.workspaceId, workspaceId),
-              eq(docxSuggestions.entityId, params.entityId),
-              eq(docxSuggestions.status, "pending"),
-            ),
-          )
-          .limit(1);
-        const pending = pendingRows.at(0)?.pending ?? 0;
-        if (pending + prepared.length > DOCX_SUGGESTIONS_PENDING_MAX) {
+        if (prepared.length > capacity.remaining) {
           return { type: CREATE_OUTCOME.pendingLimit };
         }
         // audit: skip — review-flow bookkeeping. Suggestions are proposals,
@@ -180,13 +161,7 @@ const createDocxSuggestions = createSafeHandler(
           new HandlerError({ status: 404, message: "Document not found." }),
         );
       case CREATE_OUTCOME.pendingLimit:
-        return Result.err(
-          new HandlerError({
-            status: 409,
-            code: DOCX_SUGGESTIONS_PENDING_LIMIT_ERROR_CODE,
-            message: `A document can hold at most ${DOCX_SUGGESTIONS_PENDING_MAX} pending suggestions.`,
-          }),
-        );
+        return Result.err(docxSuggestionsPendingLimitError());
       case CREATE_OUTCOME.created: {
         const items: CreatedSuggestion[] = prepared.map((item) => ({
           ref: item.ref,

@@ -13,7 +13,7 @@
  */
 
 import { panic } from "better-result";
-import { and, eq, isNotNull } from "drizzle-orm";
+import { and, eq, inArray, isNotNull } from "drizzle-orm";
 
 import type { FolioAIEditOperation } from "@stll/folio-core/ai-edits";
 
@@ -31,6 +31,10 @@ import {
   DOCUMENT_REVIEW_DECISION,
   DOCUMENT_REVIEW_FINDINGS_PER_RUN_MAX,
 } from "@/api/lib/document-review/run-contract";
+import {
+  DOCX_PENDING_CAPACITY,
+  lockDocxSuggestionPendingCapacity,
+} from "@/api/lib/docx/suggestion-pending-capacity";
 import { validateDocxSuggestionOperations } from "@/api/lib/folio-operation-validation";
 import type { GroundedReviewFix } from "@/api/lib/grounded-review-fix";
 import type { PositionSeverity } from "@/api/lib/workflow/playbook-positions";
@@ -94,9 +98,20 @@ export type StageReviewFixSuggestionsArgs = {
   runId: SafeId<"documentReviewRun">;
 };
 
+export type StagedReviewFixSuggestions = {
+  /** Rows this call inserted; zero on a replay. */
+  staged: number;
+  /** New fixes left unstaged because the document is at its pending cap. */
+  skippedForPendingLimit: number;
+};
+
 /**
- * Stage one suggestion per undecided finding that carries a fix. Returns how
- * many rows this call actually inserted, which is zero on a replay.
+ * Stage one suggestion per undecided finding that carries a fix.
+ *
+ * Staging holds the document's pending cap like any other writer, but it does
+ * not refuse: it runs while a review run completes, and a document crowded
+ * with chat suggestions must not fail the review. Fixes past the cap stay
+ * unstaged and are reported; the findings themselves are unaffected.
  *
  * Only `open` findings are staged: this runs after decision carry-over, so a
  * finding the reviewer already accepted or dismissed in the previous review of
@@ -107,7 +122,7 @@ export const stageReviewFixSuggestions = async ({
   workspaceId,
   entityId,
   runId,
-}: StageReviewFixSuggestionsArgs): Promise<number> => {
+}: StageReviewFixSuggestionsArgs): Promise<StagedReviewFixSuggestions> => {
   // A review-origin suggestion restates the reviewed document plus the run's
   // pinned references, which may live in other matters. Those are its data
   // scope, so the row records them the way a chat-origin suggestion records
@@ -166,7 +181,7 @@ export const stageReviewFixSuggestions = async ({
     staged.push({ findingId: row.id, issue, severity });
   }
   if (staged.length === 0) {
-    return 0;
+    return { staged: 0, skippedForPendingLimit: 0 };
   }
 
   // The engine built these, so a rejection is a bug in the fix derivation, not
@@ -196,17 +211,51 @@ export const stageReviewFixSuggestions = async ({
     status: "pending" as const,
   }));
 
+  const capacity = await lockDocxSuggestionPendingCapacity({
+    tx,
+    workspaceId,
+    entityId,
+  });
+  if (capacity.type === DOCX_PENDING_CAPACITY.entityNotFound) {
+    // Finalization reviews a document it already holds.
+    return panic("Staging review fixes for a document that does not exist");
+  }
+  // A finding already staged inserts nothing (its unique key converges), so
+  // only the fixes that would actually insert need pending room.
+  const alreadyStaged = await tx
+    .select({ findingId: docxSuggestions.originReviewFindingId })
+    .from(docxSuggestions)
+    .where(
+      and(
+        eq(docxSuggestions.workspaceId, workspaceId),
+        inArray(
+          docxSuggestions.originReviewFindingId,
+          rows.map((row) => row.originReviewFindingId),
+        ),
+      ),
+    )
+    .limit(rows.length);
+  const alreadyStagedIds = new Set(alreadyStaged.map((row) => row.findingId));
+  const fresh = rows.filter(
+    (row) => !alreadyStagedIds.has(row.originReviewFindingId),
+  );
+  const insertable = fresh.slice(0, capacity.remaining);
+  const skippedForPendingLimit = fresh.length - insertable.length;
+  if (insertable.length === 0) {
+    return { staged: 0, skippedForPendingLimit };
+  }
+
   // audit: skip — proposals, not document mutations, exactly as the batch
   // create endpoint treats them. The durable trail is written when a reviewer
   // resolves one (resolvedByUserId / resolvedAt, plus the linked finding).
   const inserted = await tx
     .insert(docxSuggestions)
-    .values(rows)
+    .values(insertable)
     .onConflictDoNothing({
       target: docxSuggestions.originReviewFindingId,
       where: isNotNull(docxSuggestions.originReviewFindingId),
     })
     .returning({ id: docxSuggestions.id });
 
-  return inserted.length;
+  return { staged: inserted.length, skippedForPendingLimit };
 };

@@ -213,6 +213,12 @@ type RevertDocxSuggestionRequestArgs = DocxSuggestionTarget & {
 };
 
 /**
+ * A revert adds a pending row, so beyond the resolve outcomes it can be
+ * refused because the document is at its pending cap.
+ */
+type DocxRevertResult = DocxResolveResult | "pending-limit";
+
+/**
  * Revert a resolved suggestion back to pending server-side.
  */
 export const revertDocxSuggestionRequest = async ({
@@ -220,16 +226,23 @@ export const revertDocxSuggestionRequest = async ({
   workspaceId,
   entityId,
   suggestion,
-}: RevertDocxSuggestionRequestArgs): Promise<DocxResolveResult> => {
-  const result = await Result.tryPromise(async () => {
-    const response = await api["docx-suggestions"]({ workspaceId })
-      .entity({ entityId })
-      .suggestion({ suggestionId: suggestion.id })
-      .revert.patch();
-    return unwrapEden(response);
+}: RevertDocxSuggestionRequestArgs): Promise<DocxRevertResult> => {
+  const result = await Result.tryPromise({
+    try: async () => {
+      const response = await api["docx-suggestions"]({ workspaceId })
+        .entity({ entityId })
+        .suggestion({ suggestionId: suggestion.id })
+        .revert.patch();
+      return unwrapEden(response);
+    },
+    catch: (cause) => cause,
   });
   if (Result.isError(result)) {
-    return "failed";
+    // Reopening the row would take the document past its pending cap.
+    return APIError.is(result.error) &&
+      result.error.code === DOCX_SUGGESTIONS_PENDING_LIMIT_ERROR_CODE
+      ? "pending-limit"
+      : "failed";
   }
   if (!result.value.updated) {
     // Nothing reverted: the row was already pending, or no longer matches.

@@ -650,25 +650,30 @@ export const useReviewActions = ({
       trackReviewSessionWrite(
         entityId,
         (async () => {
-          const result = await runSerialized(
-            item.id,
-            async () =>
+          const result = await serializeSuggestionWrite({
+            reviewSessionId: entityId,
+            suggestionId: item.id,
+            write: async () =>
               await revertDocxSuggestionRequest({
                 queryClient,
                 workspaceId: persistedWorkspaceId(),
                 entityId,
                 suggestion: item,
               }),
-          );
-          // "stale" means the server row was still pending — the same state we
-          // just moved the local suggestion to, so nothing to reconcile and no
+          });
+          // "stale" means the server reverted nothing: the row was already
+          // pending (the state we just moved the local suggestion to), so no
           // toast. "synced" is the happy path.
           if (result === "synced" || result === "stale") {
             return;
           }
-          // "failed": the server row is still terminal, but the local revert
-          // already ran. Restore the prior resolution so they agree again.
-          captureResolveFailure("revert");
+          // "failed" or "pending-limit": the server row is still terminal, but
+          // the local revert already ran. Restore the prior resolution so they
+          // agree again. The document being at its pending cap is an expected
+          // refusal, not a transport failure to capture.
+          if (result === "failed") {
+            captureResolveFailure("revert");
+          }
           if (prev.status === "accepted") {
             // Re-apply to restore the accepted change with fresh identifiers:
             // the local revert already removed it (the tracked marks were
@@ -687,7 +692,14 @@ export const useReviewActions = ({
               applyMode: prev.applyMode,
             });
           }
-          toastPersistFailed();
+          if (result === "pending-limit") {
+            stellaToast.add({
+              title: t("docxReview.pendingLimitReached"),
+              type: "error",
+            });
+          } else {
+            toastPersistFailed();
+          }
         })(),
       ),
       "use-review-actions.run-serialized",
