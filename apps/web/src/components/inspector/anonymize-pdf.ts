@@ -1,8 +1,4 @@
-import {
-  useQuery,
-  useQueryClient,
-  type QueryClient,
-} from "@tanstack/react-query";
+import { useQuery, type QueryClient } from "@tanstack/react-query";
 import { Result } from "better-result";
 
 import { useInspectorAnonymizationStore } from "@/components/inspector/inspector-anonymization-store";
@@ -92,7 +88,6 @@ export const useFileAnonymizationPipeline = ({
   workspaceId: string;
   entityId: string | null;
 }): void => {
-  const queryClient = useQueryClient();
   const retry = useInspectorAnonymizationStore(
     (state) => state.anonymizationRetryByFieldId[fieldId] ?? 0,
   );
@@ -114,7 +109,7 @@ export const useFileAnonymizationPipeline = ({
       pipelineStatus !== "error" &&
       !vocabularyQuery.isPending &&
       !allowlistQuery.isPending,
-    queryFn: async () => {
+    queryFn: async ({ client: queryClient }) => {
       const result = await Result.tryPromise(async () => {
         await anonymizePdf({
           workspaceId,
