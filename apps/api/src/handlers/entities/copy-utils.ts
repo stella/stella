@@ -1,10 +1,7 @@
 import { panic, Result, TaggedError } from "better-result";
 import { and, eq, isNull, like } from "drizzle-orm";
 
-import {
-  ENTITY_NAME_MAX_LENGTH,
-  truncateEntityName,
-} from "@stll/api-contract";
+import { ENTITY_NAME_MAX_LENGTH, truncateEntityName } from "@stll/api-contract";
 
 import type { Transaction } from "@/api/db/root";
 import { entities, fields, workspaces } from "@/api/db/schema";
@@ -546,10 +543,7 @@ export const resolveEntityName = async ({
   const longestSuffix = `_${LIMITS.entitiesCount}`;
   const searchPrefix = truncateEntityName(
     base,
-    Math.max(
-      ENTITY_NAME_MAX_LENGTH - ext.length - longestSuffix.length,
-      0,
-    ),
+    Math.max(ENTITY_NAME_MAX_LENGTH - ext.length - longestSuffix.length, 0),
   );
   const pattern = `${escapeLike(searchPrefix)}%`;
   const parentCondition = parentId
@@ -1041,8 +1035,7 @@ export const copyEntities = async ({
         }
 
         const content =
-          field.id === renamedRootFileFieldId &&
-          field.content.type === "file"
+          field.id === renamedRootFileFieldId && field.content.type === "file"
             ? {
                 ...field.content,
                 fileName: sanitizeFilename(copyName),

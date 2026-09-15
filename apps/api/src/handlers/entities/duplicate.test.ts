@@ -1,5 +1,5 @@
-import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import { Result } from "better-result";
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -517,9 +517,9 @@ describe("duplicate entity", () => {
       fieldId: replayFieldId,
       name: "Child (Copy).docx",
     });
-    expect(fake.requests.filter(({ method }) => method === "COPY")).toHaveLength(
-      1,
-    );
+    expect(
+      fake.requests.filter(({ method }) => method === "COPY"),
+    ).toHaveLength(1);
     expect(fake.requests.filter(({ method }) => method === "DELETE")).toEqual(
       [],
     );
