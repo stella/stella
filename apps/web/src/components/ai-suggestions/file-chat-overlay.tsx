@@ -193,7 +193,10 @@ import {
 } from "@/lib/chat-thread-ref";
 import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
 import { detached } from "@/lib/detached";
-import { runReservedChatCommand } from "@/lib/reserved-chat-commands";
+import {
+  matchReservedChatCommand,
+  runReservedChatCommand,
+} from "@/lib/reserved-chat-commands";
 import { toSafeId } from "@/lib/safe-id";
 
 type ActiveFile = {
@@ -1038,24 +1041,25 @@ const NEW_THREAD_INTENT = {
   handoff: "handoff",
 } as const;
 
-type NewThreadHandoff = {
-  html: string;
-  files: ChatDraftAttachment[];
-};
-
-/** What the user asked for when they started a new thread. */
+/**
+ * What the user asked for when they started a new thread. A `/new <message>`
+ * handoff keeps its draft in the composer while the choice is open, so the
+ * intent carries no copy of it.
+ */
 type NewThreadIntent =
   | { type: typeof NEW_THREAD_INTENT.rotate }
-  | ({ type: typeof NEW_THREAD_INTENT.handoff } & NewThreadHandoff);
+  | { type: typeof NEW_THREAD_INTENT.handoff };
 
 const NEW_THREAD_CHOICE_STATUS = {
   idle: "idle",
   ...PENDING_REVIEW_PROMPT_STATUS,
+  committing: "committing",
 } as const;
 
 /**
  * A new thread requested over pending suggestions waits here for the
- * reviewer's choice, then resumes the held intent.
+ * reviewer's choice, then resumes the held intent. `committing` covers a
+ * rotation already under way, when the dock offers no new thread.
  */
 type NewThreadChoiceState =
   | { status: typeof NEW_THREAD_CHOICE_STATUS.idle }
@@ -1064,7 +1068,15 @@ type NewThreadChoiceState =
         | typeof NEW_THREAD_CHOICE_STATUS.choosing
         | typeof NEW_THREAD_CHOICE_STATUS.dismissing;
       intent: NewThreadIntent;
-    };
+    }
+  | { status: typeof NEW_THREAD_CHOICE_STATUS.committing };
+
+const readNewThreadCommandMessage = (html: string): string | null => {
+  const command = matchReservedChatCommand(html);
+  return command?.command.id === "new" && command.args.length > 0
+    ? command.args
+    : null;
+};
 
 const useFileChatDocxLifecycle = ({
   activeDraft,
@@ -2167,48 +2179,78 @@ const FileChatOverlayInner = ({
   const [newThreadChoice, setNewThreadChoice] = useState<NewThreadChoiceState>({
     status: NEW_THREAD_CHOICE_STATUS.idle,
   });
-  // Read from the store, not the render: callers read it again after awaiting
-  // in-flight persists, which can reconcile or roll rows back to pending.
+  // Latches one new-thread commit at a time across its awaits. The choice
+  // state only drives the dock and trails a render behind the latch.
+  const newThreadCommitRef = useRef(false);
+  // Read from the store, not the render: callers read it again after settling
+  // the session's writes, which can reconcile or roll rows back to pending.
   const readPendingReviewCount = () =>
     reviewEntityId === undefined
       ? 0
       : countPendingReviewSuggestions(
           useReviewStore.getState().sessions[reviewEntityId],
         );
-  const settleReviewPersists = async () => {
+  const settleReviewWrites = async () => {
     if (reviewEntityId !== undefined) {
       await settleReviewSessionWrites(reviewEntityId);
     }
   };
-  // Every rotation ends here. A choice that resets the session first lets
-  // in-flight creates reconcile and replay into it, so no outcome is lost.
+  // The user committed to leaving this thread. Stop the old chat first, so a
+  // late `suggest_changes` call cannot queue rows after the session is read.
+  const beginNewThreadCommit = (): boolean => {
+    if (newThreadCommitRef.current) {
+      return false;
+    }
+    newThreadCommitRef.current = true;
+    stop();
+    return true;
+  };
+  const endNewThreadCommit = (next: NewThreadChoiceState) => {
+    newThreadCommitRef.current = false;
+    setNewThreadChoice(next);
+  };
+  // Every rotation ends here. A choice that resets the session first lets its
+  // in-flight writes reconcile into it, so no outcome is lost.
   const commitNewThread = async (
     threadId: ChatThreadId,
     pendingReview: PendingReviewChoice,
   ) => {
     if (pendingReview !== PENDING_REVIEW_CHOICE.keep) {
-      await settleReviewPersists();
+      await settleReviewWrites();
     }
     onNewThread(threadId, pendingReview);
   };
-  // One rotation for every new-thread entry point (dock icon and the bare
-  // `/new` reserved command): abort any live stream first — the
-  // rotation remount only swaps the surface, while the old Chat
-  // instance would keep streaming inside the query cache.
+  // The rotation remount only swaps the surface; `beginNewThreadCommit`
+  // already stopped the old Chat instance, which would otherwise keep
+  // streaming inside the query cache.
   const rotateThread = async (pendingReview: PendingReviewChoice) => {
     if (isDraftChatFrozen()) {
       return;
     }
-    stop();
     shouldFocusComposerAfterNewThreadRef.current = true;
     setPanelOpen(false);
     await commitNewThread(createChatThreadId(), pendingReview);
   };
-  const handoffNewThread = async ({
-    html,
+  // `/new <message>`: start the message on a fresh thread before its surface
+  // mounts. Runs inside the composer's submit, which restores the draft when
+  // this throws.
+  const sendNewThreadCommand = async ({
+    message,
     files,
     pendingReview,
-  }: NewThreadHandoff & { pendingReview: PendingReviewChoice }) => {
+  }: {
+    message: string;
+    files: ChatDraftAttachment[];
+    pendingReview: PendingReviewChoice;
+  }) => {
+    if (!(await ensureAIAvailable())) {
+      throw new ChatSubmitPreservedError({ message: "AI is unavailable" });
+    }
+    if (Result.isError(await modelSelection.awaitPendingSelection())) {
+      throw new ChatSubmitPreservedError({
+        message: "Model selection failed",
+      });
+    }
     const newThreadRef: ChatThreadRef =
       workspaceId === undefined
         ? { scope: "global", threadId: createChatThreadId() }
@@ -2224,33 +2266,43 @@ const FileChatOverlayInner = ({
         getSendMode: () => getChatSendMode(newThreadRef),
       },
       files,
-      html,
+      html: message,
       queryClient,
       threadRef: newThreadRef,
     });
-    stop();
     await commitNewThread(newThreadRef.threadId, pendingReview);
   };
-  // With nothing pending, in-flight creates settle before deciding: a failed
-  // replay rolls rows back to pending, and those then need the choice.
-  const needsPendingReviewChoice = async (): Promise<boolean> => {
-    if (readPendingReviewCount() === 0) {
-      await settleReviewPersists();
-    }
-    return readPendingReviewCount() > 0;
+  const readComposerHtml = (): string => {
+    const { editor } = editorController;
+    return editor === null || editor.isDestroyed ? "" : editor.getHTML();
   };
   const requestNewThreadRotation = useLatestCallback(async () => {
-    if (isDraftChatFrozen()) {
+    if (isDraftChatFrozen() || newThreadCommitRef.current) {
       return;
     }
-    if (await needsPendingReviewChoice()) {
+    if (readPendingReviewCount() > 0) {
       setNewThreadChoice({
         status: NEW_THREAD_CHOICE_STATUS.choosing,
         intent: { type: NEW_THREAD_INTENT.rotate },
       });
       return;
     }
+    if (!beginNewThreadCommit()) {
+      return;
+    }
+    setNewThreadChoice({ status: NEW_THREAD_CHOICE_STATUS.committing });
+    await settleReviewWrites();
+    if (readPendingReviewCount() > 0) {
+      // Settling put rows back to pending (the server refused an accept or a
+      // replay), so they need the choice after all.
+      endNewThreadCommit({
+        status: NEW_THREAD_CHOICE_STATUS.choosing,
+        intent: { type: NEW_THREAD_INTENT.rotate },
+      });
+      return;
+    }
     await rotateThread(PENDING_REVIEW_CHOICE.none);
+    endNewThreadCommit({ status: NEW_THREAD_CHOICE_STATUS.idle });
   });
   const resumeNewThread = useLatestCallback(
     async (intent: NewThreadIntent, pendingReview: PendingReviewChoice) => {
@@ -2259,24 +2311,25 @@ const FileChatOverlayInner = ({
           await rotateThread(pendingReview);
           return;
         case NEW_THREAD_INTENT.handoff: {
-          const handoff = await Result.tryPromise({
-            try: async () =>
-              await handoffNewThread({
-                html: intent.html,
-                files: intent.files,
-                pendingReview,
-              }),
-            catch: (cause) => cause,
-          });
-          if (Result.isError(handoff)) {
-            capturePromptSubmitError(handoff.error);
+          // The draft is no longer a `/new <message>`: rotate without
+          // sending, and leave the draft to the user.
+          if (readNewThreadCommandMessage(readComposerHtml()) === null) {
+            await rotateThread(pendingReview);
             return;
           }
-          // The composer restored this draft when the choice opened; it has
-          // been sent to the new thread now.
-          editorController.setContent("");
-          for (const attachment of editorController.attachments) {
-            editorController.removeFile(attachment.id);
+          const sent = await Result.tryPromise({
+            try: async () => {
+              await editorController.submit(async ({ html, files }) => {
+                const message = readNewThreadCommandMessage(html);
+                if (message !== null) {
+                  await sendNewThreadCommand({ message, files, pendingReview });
+                }
+              });
+            },
+            catch: (cause) => cause,
+          });
+          if (Result.isError(sent)) {
+            capturePromptSubmitError(sent.error);
           }
           return;
         }
@@ -2287,29 +2340,35 @@ const FileChatOverlayInner = ({
     },
   );
   const keepPendingReview = () => {
-    if (newThreadChoice.status !== NEW_THREAD_CHOICE_STATUS.choosing) {
-      return;
-    }
-    setNewThreadChoice({ status: NEW_THREAD_CHOICE_STATUS.idle });
-    detached(
-      resumeNewThread(newThreadChoice.intent, PENDING_REVIEW_CHOICE.keep),
-      "file-chat-overlay.keep-pending-review",
-    );
-  };
-  const dismissPendingReview = useLatestCallback(async () => {
-    if (newThreadChoice.status !== NEW_THREAD_CHOICE_STATUS.choosing) {
+    if (
+      newThreadChoice.status !== NEW_THREAD_CHOICE_STATUS.choosing ||
+      !beginNewThreadCommit()
+    ) {
       return;
     }
     const { intent } = newThreadChoice;
-    setNewThreadChoice({ status: NEW_THREAD_CHOICE_STATUS.dismissing, intent });
-    // Rows whose create is still in flight become persisted once it lands;
-    // read the session only after that, so they are rejected too.
-    await settleReviewPersists();
-    const pendingItems = (
-      reviewEntityId === undefined
-        ? []
-        : (useReviewStore.getState().sessions[reviewEntityId] ?? [])
-    ).filter((item) => item.status === "pending");
+    setNewThreadChoice({ status: NEW_THREAD_CHOICE_STATUS.committing });
+    detached(
+      resumeNewThread(intent, PENDING_REVIEW_CHOICE.keep).finally(() => {
+        endNewThreadCommit({ status: NEW_THREAD_CHOICE_STATUS.idle });
+      }),
+      "file-chat-overlay.keep-pending-review",
+    );
+  };
+  // Reject every row still pending once the session's writes settle, and
+  // repeat until a pass rejects nothing: settling can persist rows (a create
+  // lands) or put rows back to pending (the server refused an accept).
+  // Returns false when the server refused the reject.
+  const rejectPendingReviewRows = async (): Promise<boolean> => {
+    if (reviewEntityId === undefined) {
+      return true;
+    }
+    await settleReviewWrites();
+    const session = useReviewStore.getState().sessions[reviewEntityId];
+    if (session === undefined) {
+      return true;
+    }
+    const pendingItems = session.filter((item) => item.status === "pending");
     const persistedIds = pendingItems.flatMap((item) =>
       item.persisted === true ? [item.id] : [],
     );
@@ -2329,24 +2388,37 @@ const FileChatOverlayInner = ({
           title: t("docxReview.persistFailed"),
           type: "error",
         });
-        setNewThreadChoice({
-          status: NEW_THREAD_CHOICE_STATUS.choosing,
-          intent,
-        });
-        return;
+        return false;
       }
     }
-    // Mirror the server before the rotation resets the session, so a
-    // handoff that fails afterwards leaves no rejected row actionable.
-    if (reviewEntityId !== undefined) {
-      useReviewStore.getState().setStatusBatch(
-        reviewEntityId,
-        pendingItems.map((item) => item.id),
-        "rejected",
-      );
+    // Mirror the server before the rotation resets the session, so a handoff
+    // that fails afterwards leaves no rejected row actionable. Unpersisted
+    // rows never reached the server and are dropped with the session.
+    useReviewStore.getState().setStatusBatch(
+      reviewEntityId,
+      pendingItems.map((item) => item.id),
+      "rejected",
+    );
+    if (persistedIds.length === 0) {
+      return true;
     }
-    setNewThreadChoice({ status: NEW_THREAD_CHOICE_STATUS.idle });
+    return await rejectPendingReviewRows();
+  };
+  const dismissPendingReview = useLatestCallback(async () => {
+    if (
+      newThreadChoice.status !== NEW_THREAD_CHOICE_STATUS.choosing ||
+      !beginNewThreadCommit()
+    ) {
+      return;
+    }
+    const { intent } = newThreadChoice;
+    setNewThreadChoice({ status: NEW_THREAD_CHOICE_STATUS.dismissing, intent });
+    if (!(await rejectPendingReviewRows())) {
+      endNewThreadCommit({ status: NEW_THREAD_CHOICE_STATUS.choosing, intent });
+      return;
+    }
     await resumeNewThread(intent, PENDING_REVIEW_CHOICE.dismiss);
+    endNewThreadCommit({ status: NEW_THREAD_CHOICE_STATUS.idle });
   });
   const cancelNewThreadChoice = () => {
     if (newThreadChoice.status !== NEW_THREAD_CHOICE_STATUS.choosing) {
@@ -2354,6 +2426,24 @@ const FileChatOverlayInner = ({
     }
     setNewThreadChoice({ status: NEW_THREAD_CHOICE_STATUS.idle });
   };
+  // `/new <message>` is decided before the composer clears the draft: while
+  // suggestions are pending the choice opens and the draft stays in place, and
+  // while another new thread is starting the submit does not go through.
+  const canSubmitComposerDraft = useLatestCallback((): boolean => {
+    if (readNewThreadCommandMessage(readComposerHtml()) !== null) {
+      if (newThreadCommitRef.current) {
+        return false;
+      }
+      if (readPendingReviewCount() > 0) {
+        setNewThreadChoice({
+          status: NEW_THREAD_CHOICE_STATUS.choosing,
+          intent: { type: NEW_THREAD_INTENT.handoff },
+        });
+        return false;
+      }
+    }
+    return canSubmitWithCurrentDocxSnapshot();
+  });
   const handleComposerSubmit = useLatestCallback(
     async ({
       prompt,
@@ -2400,29 +2490,25 @@ const FileChatOverlayInner = ({
       if (newThreadMessage === undefined) {
         return;
       }
-      if (!(await ensureAIAvailable())) {
-        throw new ChatSubmitPreservedError({ message: "AI is unavailable" });
+      // The submit guard opens the choice instead while suggestions are
+      // pending, and holds `/new` while another new thread is starting.
+      if (!beginNewThreadCommit()) {
+        return;
       }
-      if (Result.isError(await modelSelection.awaitPendingSelection())) {
-        throw new ChatSubmitPreservedError({
-          message: "Model selection failed",
-        });
-      }
-      const handoff: NewThreadHandoff = { html: newThreadMessage, files };
-      if (await needsPendingReviewChoice()) {
-        setNewThreadChoice({
-          status: NEW_THREAD_CHOICE_STATUS.choosing,
-          intent: { type: NEW_THREAD_INTENT.handoff, ...handoff },
-        });
-        // Hand the draft back to the composer while the reviewer chooses;
-        // resuming the intent sends it.
-        throw new ChatSubmitPreservedError({
-          message: "New thread waits for a pending review choice",
-        });
-      }
-      await handoffNewThread({
-        ...handoff,
-        pendingReview: PENDING_REVIEW_CHOICE.none,
+      setNewThreadChoice({ status: NEW_THREAD_CHOICE_STATUS.committing });
+      await settleReviewWrites();
+      // Rows that settling put back to pending stay in review: the message is
+      // already on its way, so there is no draft left to hold for a choice.
+      const pendingReview =
+        readPendingReviewCount() > 0
+          ? PENDING_REVIEW_CHOICE.keep
+          : PENDING_REVIEW_CHOICE.none;
+      await sendNewThreadCommand({
+        message: newThreadMessage,
+        files,
+        pendingReview,
+      }).finally(() => {
+        endNewThreadCommit({ status: NEW_THREAD_CHOICE_STATUS.idle });
       });
     },
   );
@@ -2601,7 +2687,7 @@ const FileChatOverlayInner = ({
           anonymized={anonymized}
           attachmentsEnabled
           attentionPulseSeq={attentionPulseSeq}
-          canSubmitNow={canSubmitWithCurrentDocxSnapshot}
+          canSubmitNow={canSubmitComposerDraft}
           context={{ activeOrganizationId, threadRef }}
           editorController={editorController}
           mcpOrganizationId={activeOrganizationId}
@@ -2662,11 +2748,10 @@ const FileChatOverlayInner = ({
                 selectModel: modelSelection.selectModel,
               }}
               onNewThread={
-                // An open choice keeps the button that anchors it, even
-                // when `/new` was typed into a thread without messages.
-                (hasMessages ||
-                  newThreadChoice.status !== NEW_THREAD_CHOICE_STATUS.idle) &&
-                draftPersistence.status !== "saving"
+                hasMessages &&
+                draftPersistence.status !== "saving" &&
+                (newThreadChoice.status === NEW_THREAD_CHOICE_STATUS.idle ||
+                  newThreadChoice.status === NEW_THREAD_CHOICE_STATUS.choosing)
                   ? () => {
                       detached(
                         requestNewThreadRotation(),
@@ -2676,9 +2761,9 @@ const FileChatOverlayInner = ({
                   : null
               }
               newThreadPrompt={
-                newThreadChoice.status === NEW_THREAD_CHOICE_STATUS.idle
-                  ? undefined
-                  : {
+                newThreadChoice.status === NEW_THREAD_CHOICE_STATUS.choosing ||
+                newThreadChoice.status === NEW_THREAD_CHOICE_STATUS.dismissing
+                  ? {
                       content: (
                         <PendingReviewNewThreadPrompt
                           onDismiss={() => {
@@ -2694,6 +2779,7 @@ const FileChatOverlayInner = ({
                       ),
                       onCancel: cancelNewThreadChoice,
                     }
+                  : undefined
               }
               leadingContext={
                 // The matter control is a real picker on every surface, so

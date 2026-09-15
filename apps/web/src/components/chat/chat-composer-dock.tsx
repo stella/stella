@@ -15,7 +15,6 @@ import {
 } from "@/components/chat/chat-context-meter";
 import type { ComposerModelsMenuProps } from "@/components/chat/chat-model-options-menu";
 import { ChatModelSelector } from "@/components/chat/chat-model-selector";
-import Tooltip from "@/components/tooltip";
 import { ChatAnonymizedToggle } from "@/features/chat/components/chat-anonymized-toggle";
 import { ChatWebSearchToggle } from "@/features/chat/components/chat-web-search-toggle";
 import { guideAnchor } from "@/features/guides/guide-anchor";
@@ -151,25 +150,24 @@ export const ChatComposerDock = (props: ChatComposerDockProps) => {
           aria-hidden={disabled ? true : undefined}
           className="flex shrink-0 items-center gap-0.5"
         >
-          {onNewThread !== null && (
+          {/* An open prompt keeps the button that anchors it, disabled while
+              the surface offers no new thread (a rotation is under way). */}
+          {(onNewThread !== null || newThreadPrompt !== undefined) && (
             <>
               {/* The anchor wraps the button rather than tracking it, so the
                   button's own click handler stays a plain handler. */}
               <span className="inline-flex" ref={newThreadAnchorRef}>
-                <Tooltip
-                  content={t("chat.newChat")}
-                  render={
-                    <Button
-                      aria-label={t("chat.newChat")}
-                      className="text-muted-foreground hover:text-foreground"
-                      onClick={onNewThread}
-                      size="icon-xs"
-                      variant="ghost"
-                    >
-                      <MessageSquarePlusIcon className="size-3.5" />
-                    </Button>
-                  }
-                />
+                <Button
+                  aria-label={t("chat.newChat")}
+                  className="text-muted-foreground hover:text-foreground"
+                  disabled={onNewThread === null}
+                  onClick={onNewThread ?? undefined}
+                  size="icon-xs"
+                  tooltip={t("chat.newChat")}
+                  variant="ghost"
+                >
+                  <MessageSquarePlusIcon className="size-3.5" />
+                </Button>
               </span>
               <Popover
                 onOpenChange={(open) => {
