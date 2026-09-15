@@ -33,7 +33,7 @@ export const CourtTierBadge = ({
 }: CourtTierBadgeProps) => (
   <CourtBadge
     abbreviation={abbreviation}
-    className={className}
+    className={cn(className)}
     weight={TIER_BADGE_WEIGHT[tier]}
   />
 );
