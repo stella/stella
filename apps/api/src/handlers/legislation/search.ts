@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
-import { status, t } from "elysia";
+import { status } from "elysia";
 import type { Static } from "elysia";
 
 import {
@@ -14,18 +14,16 @@ import { isUuid } from "@stll/uuid-codec";
 import { legislationDocuments, legislationSources } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
 import {
+  PUBLIC_JURISDICTIONS_DESCRIPTION,
+  searchLegislationBodySchema,
   searchLegislationResponseSchema,
+  type SearchLegislationBody,
   type searchLegislationSuccessResponseSchema,
 } from "@/api/handlers/legislation/search-schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 // eslint-disable-next-line no-restricted-imports -- search boundary: brands document ids returned by the corpus index before re-hydrating from Postgres
 import { toSafeId } from "@/api/lib/branded-types";
-import {
-  tPaginationCursor,
-  tPaginationLimit,
-  tSafeId,
-} from "@/api/lib/custom-schema";
 import {
   blendedRankSql,
   noCourtTierSql,
@@ -75,23 +73,6 @@ import {
   escapeAndHighlight,
   TS_HEADLINE_CONFIG,
 } from "@/api/lib/search/highlight";
-
-/** Search the public legislation corpus and return legislation-shaped items. */
-
-export const searchLegislationBodySchema = t.Object({
-  query: t.String({ minLength: 1, maxLength: LIMITS.searchQueryMaxLength }),
-  limit: t.Optional(tPaginationLimit(LIMITS.caseLawSearchPageSizeMax)),
-  cursor: t.Optional(tPaginationCursor()),
-  jurisdiction: t.Optional(t.String({ maxLength: 3 })),
-  documentType: t.Optional(t.String({ maxLength: 128 })),
-  status: t.Optional(t.String({ maxLength: 32 })),
-  source: t.Optional(tSafeId("legislationSource")),
-  language: t.Optional(t.String({ maxLength: 8 })),
-  dateFrom: t.Optional(t.String({ format: "date" })),
-  dateTo: t.Optional(t.String({ format: "date" })),
-});
-
-export type SearchLegislationBody = Static<typeof searchLegislationBodySchema>;
 
 type LegislationHit = {
   documentId: string;
@@ -489,7 +470,9 @@ export const searchLegislationHandler = async (
     (!isCorpusIndexJurisdiction(body.jurisdiction) ||
       !isPublicLegislationCountry(body.jurisdiction))
   ) {
-    return status(400, { message: "Invalid jurisdiction" });
+    return status(400, {
+      message: `Invalid jurisdiction. ${PUBLIC_JURISDICTIONS_DESCRIPTION}`,
+    });
   }
 
   // One rejection for every way a cursor can fail to name a page of this
@@ -532,7 +515,7 @@ const config = {
     "with a highlighted snippet and each document's ELI, title, country, " +
     "language, type, status, and effective date. Filter by jurisdiction, " +
     "document type, status, source, language, and effective-date range; " +
-    "paginate with limit and cursor. Only sources cleared for redistribution " +
+    `paginate with limit and cursor. ${PUBLIC_JURISDICTIONS_DESCRIPTION} Only admitted jurisdictions and sources cleared for redistribution ` +
     "are searched. Read a hit in full with legislation.get; use " +
     "legislation.boe-search to query the Spanish BOE service directly " +
     "instead.",

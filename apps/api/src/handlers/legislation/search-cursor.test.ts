@@ -1,6 +1,8 @@
 import { expect, test } from "bun:test";
 import nodePath from "node:path";
 
+import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
+
 import { searchLegislationHandler } from "@/api/handlers/legislation/search";
 import { encodeCorpusSearchCursor } from "@/api/lib/legal-search/corpus-search-cursor";
 import type { LegislationReadDb } from "@/api/lib/legislation-public-read-db";
@@ -29,6 +31,27 @@ const CASE_LAW_CURSOR = encodeCorpusSearchCursor({
   sort: "relevance",
   windowStart: 0,
 });
+
+test.each(["SVK", "POL", "DEU", "cze", "cz", "*"])(
+  "jurisdiction %s is refused with the admitted codes before reading",
+  async (jurisdiction) => {
+    const { db, reads } = unreachableDb();
+    const result = await searchLegislationHandler(
+      { jurisdiction, query: "nájemné" },
+      db,
+    );
+
+    expect(result).toMatchObject({
+      code: 400,
+      response: {
+        message: expect.stringContaining(
+          `Admitted jurisdiction codes (uppercase): ${PUBLIC_LEGISLATION_COUNTRIES.join(", ")}`,
+        ),
+      },
+    });
+    expect(reads()).toBe(0);
+  },
+);
 
 // The legislation corpus is never expanded, so a cursor naming a dictionary
 // came from an expanded case-law search: its score, id and window bound a
