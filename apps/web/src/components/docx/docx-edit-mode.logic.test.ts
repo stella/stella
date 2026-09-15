@@ -9,6 +9,7 @@ import {
   dedupeDetectedAnonymizationTerms,
   mergeAnonymizationTerms,
   resolveCheckpointAutosaveStatus,
+  shouldCommitAnonymizationDetectionResult,
 } from "./docx-edit-mode.logic";
 
 /** Resolve every queued microtask (and the current macrotask). */
@@ -121,8 +122,7 @@ describe("anonymization detection decision", () => {
         text: "Acme",
         cacheKey: "k",
         lastDeliveredKey: null,
-        inFlightUntil: 1000,
-        now: 500,
+        requestStatus: "running",
       }),
     ).toEqual({ action: "skip" });
   });
@@ -133,22 +133,7 @@ describe("anonymization detection decision", () => {
         text: "",
         cacheKey: "~",
         lastDeliveredKey: null,
-        inFlightUntil: 0,
-        now: 500,
-      }),
-    ).toEqual({ action: "markRan" });
-  });
-
-  test("treats an empty doc as ran even with a stale in-flight window", () => {
-    // The in-flight check fires first only while the window is
-    // open; once it has elapsed, an empty doc releases the lock.
-    expect(
-      decideAnonymizationDetectionRun({
-        text: "",
-        cacheKey: "~",
-        lastDeliveredKey: null,
-        inFlightUntil: 100,
-        now: 500,
+        requestStatus: "idle",
       }),
     ).toEqual({ action: "markRan" });
   });
@@ -159,20 +144,18 @@ describe("anonymization detection decision", () => {
         text: "Acme",
         cacheKey: "k",
         lastDeliveredKey: "k",
-        inFlightUntil: 0,
-        now: 500,
+        requestStatus: "idle",
       }),
     ).toEqual({ action: "alreadyDelivered" });
   });
 
-  test("runs for fresh text past the in-flight window", () => {
+  test("runs for fresh text while idle", () => {
     expect(
       decideAnonymizationDetectionRun({
         text: "Acme",
         cacheKey: "k",
         lastDeliveredKey: "previous",
-        inFlightUntil: 100,
-        now: 500,
+        requestStatus: "idle",
       }),
     ).toEqual({ action: "run" });
   });
@@ -183,10 +166,38 @@ describe("anonymization detection decision", () => {
         text: "Acme",
         cacheKey: "k",
         lastDeliveredKey: "k",
-        inFlightUntil: 1000,
-        now: 500,
+        requestStatus: "running",
       }),
     ).toEqual({ action: "skip" });
+  });
+
+  test("a pending request stays blocked without a clock-based expiry", () => {
+    const decision = decideAnonymizationDetectionRun({
+      text: "Changed long after dispatch",
+      cacheKey: "changed",
+      lastDeliveredKey: "previous",
+      requestStatus: "running",
+    });
+
+    expect(decision).toEqual({ action: "skip" });
+  });
+});
+
+describe("anonymization detection settlement", () => {
+  test("rejects a worker result when the document changed while it was pending", () => {
+    const requestKey = buildAnonymizationDetectionKey({
+      text: "Jan Novák",
+      excludedCanonicals: [],
+    });
+    const currentKey = buildAnonymizationDetectionKey({
+      text: "Jan Novák and Eva Nováková",
+      excludedCanonicals: [],
+    });
+
+    expect(currentKey).not.toBe(requestKey);
+    expect(
+      shouldCommitAnonymizationDetectionResult({ currentKey, requestKey }),
+    ).toBe(false);
   });
 });
 

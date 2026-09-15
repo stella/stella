@@ -39,9 +39,9 @@ export const useAnonymizationMatches = (
       EMPTY_ANONYMIZATION_MATCH_SNAPSHOT,
   );
 
-export const useAnonymizationMatchesReady = (fieldId: string | null): boolean =>
+export const useAnonymizationPipelineStatus = (fieldId: string | null) =>
   useInspectorAnonymizationStore((state) =>
     fieldId === null
-      ? false
-      : !state.anonymizationPipelineStartedFieldIds.has(fieldId),
+      ? "idle"
+      : (state.anonymizationPipelineStatusByFieldId[fieldId] ?? "idle"),
   );

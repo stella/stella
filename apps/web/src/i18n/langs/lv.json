@@ -2602,6 +2602,8 @@
       "deleteAction": "Dzēst terminu",
       "detectedHeading": "Atrasts šajā dokumentā ({count})",
       "detectingMatches": "Šajā dokumentā tiek meklētas atbilstības…",
+      "downloadAction": "Lejupielādēt anonimizētu PDF",
+      "downloadHint": "Eksportē saglabāto versiju kā PDF failu ar tekstu, ko nevar atlasīt.",
       "emptyState": "Vēl nav darba telpai specifisku terminu. Pievienojiet vienu augstāk.",
       "ignoreAction": "Ignorēt šajā dokumentā",
       "ignoreScopeAlways": "Vienmēr ignorēt",
@@ -2615,9 +2617,11 @@
       "noMatchesInDocument": "Neviens darba telpas termins šajā dokumentā neparādās.",
       "openFullViewHint": "Atveriet failu pilnskata režīmā, lai redzētu anonimizācijas izceltos un katra dokumenta atbilstību skaitu.",
       "restoreAction": "Atjaunot šajā dokumentā",
+      "scanFailed": "Skenēšana neizdevās. Mēģiniet vēlreiz, lai noteiktu atbilstības.",
       "termAddedToast": "\"{value}\" pievienots darba telpas anonimizācijas terminiem.",
       "termMatchCountAriaLabel": "Šajā dokumentā atrasts {count} reizes.",
       "title": "Anonimizācijas vārdnīca",
+      "unsupportedVisualContent": "Šajā failā ir attēli vai vektorgrafika, ko nevar pārbaudīt, vai tajā nav sensitīva teksta. Eksportēšana nav pieejama.",
       "workspaceTermsHeading": "Darba telpas termini ({count})"
     },
     "external": {

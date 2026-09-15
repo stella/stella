@@ -2602,6 +2602,8 @@
       "deleteAction": "Vymazať výraz",
       "detectedHeading": "Nájdené v dokumente ({count})",
       "detectingMatches": "Vyhľadávajú sa údaje v tomto dokumente…",
+      "downloadAction": "Stiahnuť anonymizované PDF",
+      "downloadHint": "Exportuje uloženú verziu ako PDF s textom, ktorý sa nedá označiť.",
       "emptyState": "Zatiaľ žiadne výrazy pre tento pracovný priestor. Pridajte niektorý vyššie.",
       "ignoreAction": "Ignorovať v tomto dokumente",
       "ignoreScopeAlways": "Vždy ignorovať",
@@ -2615,9 +2617,11 @@
       "noMatchesInDocument": "Žiadny z výrazov vášho pracovného priestoru sa v tomto dokumente nevyskytuje.",
       "openFullViewHint": "Otvorte súbor v plnom zobrazení, aby ste videli anonymizačné zvýraznenie a počty nájdených pojmov v dokumente.",
       "restoreAction": "Obnoviť v tomto dokumente",
+      "scanFailed": "Kontrola zlyhala. Skúste ju znova a vyhľadajte zhody.",
       "termAddedToast": "Výraz „{value}“ bol pridaný medzi anonymizačné výrazy pracovného priestoru.",
       "termMatchCountAriaLabel": "Zhoda {count}-krát v tomto dokumente.",
       "title": "Anonymizačný slovník",
+      "unsupportedVisualContent": "Tento súbor obsahuje obrázky alebo vektorovú grafiku, pri ktorých nemožno overiť citlivý text. Export nie je k dispozícii.",
       "workspaceTermsHeading": "Výrazy pracovného priestoru ({count})"
     },
     "external": {
