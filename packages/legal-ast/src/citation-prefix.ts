@@ -15,10 +15,15 @@
  * Every source below is case-insensitive by the caller's flag, not by its
  * own spelling: "Sygn. akt" opens a Polish document header and "sygn. akt"
  * runs in its prose.
+ *
+ * `č` is written `[čc]\p{Mn}*` because publishers serve it both precomposed
+ * (U+010D) and decomposed (U+0063 U+030C), and nothing normalizes a
+ * decision's text: without the mark the class reads a decomposed "č" as a
+ * bare "c" and the prefix stops matching at the caron.
  */
 
 /** Czech/Slovak file number: `č. j.`, `č.j.`, the contracted `čj.`. */
-export const CZ_FILE_NUMBER_PREFIX_SOURCE = String.raw`[čc]\.?\s*j\.:?\s*`;
+export const CZ_FILE_NUMBER_PREFIX_SOURCE = String.raw`[čc]\p{Mn}*\.?\s*j\.:?\s*`;
 
 /** Czech/Slovak docket reference: `sp. zn.`, `sp.zn.:`, `sp. zn` (no dot). */
 const CZ_DOCKET_PREFIX_SOURCE = String.raw`sp\.\s*zn\.?:?\s*`;
@@ -27,7 +32,7 @@ const CZ_DOCKET_PREFIX_SOURCE = String.raw`sp\.\s*zn\.?:?\s*`;
 const CZ_SENATE_PREFIX_SOURCE = String.raw`sen\.\s*zn\.:?\s*`;
 
 /** Slovak file number (číslo konania): `č. k.`, `č.k.`. */
-const SK_FILE_NUMBER_PREFIX_SOURCE = String.raw`[čc]\.\s*k\.:?\s*`;
+const SK_FILE_NUMBER_PREFIX_SOURCE = String.raw`[čc]\p{Mn}*\.\s*k\.:?\s*`;
 
 /** Polish docket reference: `sygn.`, `sygn. akt`, `sygn.: `, `sygn. akt:`. */
 const PL_DOCKET_PREFIX_SOURCE = String.raw`sygn\.\s*(?::\s*)?(?:akt\.?:?\s*)?`;

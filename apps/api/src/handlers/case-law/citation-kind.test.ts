@@ -140,6 +140,24 @@ describe("context decides when it speaks", () => {
     ).toBe(CITATION_KIND.PRECEDENT);
   });
 
+  test("pointing at a decision marks precedent past the noun it points through", () => {
+    // Also from 4 Tdo 348/2023. Two things a stem spelled "poukaz na
+    // usnesení" misses: the accent the past tense puts on the stem, and the
+    // noun the sentence points through on its way to the decision.
+    // The verdict names the tier, because this court's registry would reach
+    // the same answer on its own and hide whether the cue fired at all.
+    expect(
+      classifyCitationVerdict({
+        citationText: "III. ÚS 2899/19",
+        context:
+          "namítal jejich podjatost, a to z důvodu existence důvodných pochybností. Poukázal na závěry usnesení Ústavního soudu sp. zn. III. ÚS 2899/19 ze dne 30. 9. 2019. Z důvodů uvedených v poukazovaném usnesení nenapadal pak usnesení Vrchního soudu v Olomouci",
+      }),
+    ).toEqual({
+      kind: CITATION_KIND.PRECEDENT,
+      evidence: CITATION_KIND_EVIDENCE.CONTEXT,
+    });
+  });
+
   test("pointing at a decision marks precedent on its own", () => {
     expect(
       classifyCitationVerdict({

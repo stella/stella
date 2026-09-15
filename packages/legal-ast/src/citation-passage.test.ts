@@ -153,6 +153,50 @@ describe("locateCitationSpans", () => {
     ).toEqual(["č. j. 4 Tdo 1323/2020"]);
   });
 
+  test("marks a mention printed in the other Unicode normalization form", () => {
+    // 4 Tdo 348/2023 prints I. ÚS 670/05 with "Ú" decomposed in one
+    // paragraph and precomposed in another. One case, so both are marked.
+    const composed = "I. ÚS 670/05";
+    const decomposed = composed.normalize("NFD");
+    expect(decomposed).not.toBe(composed);
+    const blocks = [
+      paragraph("a", `nález Ústavního soudu sp. zn. ${decomposed} je v tomto`),
+      paragraph("b", `srov. nález sp. zn. ${composed} a dále.`),
+    ];
+    const citation = source("1", composed);
+    expect(blocks.at(0)?.plainText.includes(composed)).toBe(false);
+
+    const located = locateCitationSpans({ blocks, citations: [citation] });
+
+    expect(Object.keys(located).toSorted()).toEqual(["a", "b"]);
+    const first = blocks.at(0)?.plainText ?? "";
+    expect(
+      located["a"]?.map((span) => first.slice(span.start, span.end)),
+    ).toEqual([`sp. zn. ${decomposed}`]);
+  });
+
+  test("marks a mention behind a decomposed file-number prefix", () => {
+    // The same decision writes "č. j." with the caron decomposed.
+    const blocks = [
+      paragraph(
+        "a",
+        "usnesením Nejvyššího soudu ČR ze dne 30. 6. 2021, č. j. 4 Tdo 1323/2020-906, a to toliko".normalize(
+          "NFD",
+        ),
+      ),
+    ];
+
+    const located = locateCitationSpans({
+      blocks,
+      citations: [source("1", "sp. zn. 4 Tdo 1323/2020")],
+    });
+
+    const text = blocks.at(0)?.plainText ?? "";
+    expect(
+      located["a"]?.map((span) => text.slice(span.start, span.end)),
+    ).toEqual(["č. j. 4 Tdo 1323/2020".normalize("NFD")]);
+  });
+
   test("regex metacharacters in a citation are literal", () => {
     const blocks = [paragraph("a", "C-837/24 (EU:C:2026:93) and C-837/24.")];
     const located = locateCitationSpans({

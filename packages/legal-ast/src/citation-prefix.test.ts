@@ -18,6 +18,13 @@ describe("the bare case number behind a citation prefix", () => {
     expect(stripCitationPrefix(citationText)).toBe(bare);
   });
 
+  test("strips a prefix whose caron is decomposed", () => {
+    // The spelling 4 Tdo 348/2023 actually carries: "č" as U+0063 U+030C.
+    const decomposed = "č. j. 4 Tdo 1323/2020-906".normalize("NFD");
+    expect(decomposed).not.toBe("č. j. 4 Tdo 1323/2020-906");
+    expect(stripCitationPrefix(decomposed)).toBe("4 Tdo 1323/2020-906");
+  });
+
   test("keeps a number that carries no prefix", () => {
     expect(stripCitationPrefix("I. ÚS 1135/17")).toBe("I. ÚS 1135/17");
   });

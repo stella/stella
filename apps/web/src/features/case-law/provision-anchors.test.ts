@@ -94,6 +94,34 @@ describe("locateProvisionAnchors", () => {
     );
   });
 
+  test("anchors the Slovak spelling of a spelled-out subsection", () => {
+    // Slovak writes "odsek" where Czech writes "odstavec"; both abbreviate
+    // to a form the matcher already read, so only the long words differ.
+    const slovak = paragraph(
+      "b5",
+      "5. Súd postupoval podľa § 273 odsek 1 Trestného zákona.",
+    );
+    const located = locateProvisionAnchors({
+      blocks: [slovak],
+      provisions: [
+        {
+          id: "a",
+          reference: reference(273, "1"),
+          sentenceText:
+            "5. Súd postupoval podľa § 273 odsek 1 Trestného zákona.",
+          spanStart: 22,
+          target: "tr-zakon",
+        },
+      ],
+    });
+
+    const span = located["b5"]?.at(0);
+    expect(span).toBeDefined();
+    expect(slovak.plainText.slice(span?.start, span?.end)).toBe(
+      "§ 273 odsek 1",
+    );
+  });
+
   test("distinct occurrences of one provision in a sentence each get an anchor", () => {
     const located = locateProvisionAnchors({
       blocks,

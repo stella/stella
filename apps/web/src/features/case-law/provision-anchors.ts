@@ -74,7 +74,7 @@ const referencePattern = ({
   const parts = [String.raw`${head}\s*${number}(?![\p{N}\p{L}])`];
   if (subsection !== null) {
     parts.push(
-      String.raw`(?:\s*(?:odst\.|odstav\p{Ll}*|ods\.|ust\.|para\.)\s*${escapeRegExp(subsection)}(?![\p{N}\p{L}]))?`,
+      String.raw`(?:\s*(?:odst\.|odstav\p{Ll}*|odsek\p{Ll}*|ods\.|ust\.|para\.)\s*${escapeRegExp(subsection)}(?![\p{N}\p{L}]))?`,
     );
   }
   if (letter !== null) {

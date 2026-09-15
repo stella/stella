@@ -36,6 +36,27 @@ export type CitationSpan<Source extends CitationSource> = {
 const MIN_ANCHOR_TEXT_LENGTH = 5;
 
 /**
+ * A source matching this literal in either Unicode normalization form.
+ *
+ * Nothing normalizes a decision's text, and a publisher is not consistent
+ * within one: `4 Tdo 348/2023` prints `I. ÚS 670/05` with a decomposed "Ú"
+ * (U+0055 U+0301) in one paragraph and a precomposed one (U+00DA) in
+ * another. The extractor stores one of them, so an escaped literal marks
+ * that paragraph and leaves the other as plain text, and a case-insensitive
+ * flag does not help: JavaScript regular expressions have no canonical
+ * equivalence. Composing the text instead would move every offset after the
+ * first accent, and offsets are what the renderer marks, so the pattern
+ * carries both spellings and the text is left exactly as it is.
+ */
+const eitherNormalization = (literal: string): string =>
+  Array.from(literal.normalize("NFC"), (character) => {
+    const decomposed = character.normalize("NFD");
+    return decomposed === character
+      ? escapeRegExp(character)
+      : `(?:${escapeRegExp(character)}|${escapeRegExp(decomposed)})`;
+  }).join("");
+
+/**
  * A pattern for the citation as the text may print it: the extractor stored
  * the verbatim match, which can carry a wrapped line or a double space where
  * the rendered paragraph has one, so whitespace runs match any whitespace.
@@ -49,14 +70,13 @@ const MIN_ANCHOR_TEXT_LENGTH = 5;
  * of the number so the mark still covers it where the text prints it.
  */
 const patternFor = (citationText: string): RegExp | null => {
+  // Composed for the length test, so the same number does not clear the
+  // threshold in one normalization form and fail it in the other.
   const bare = stripCitationPrefix(citationText);
-  if (bare.length < MIN_ANCHOR_TEXT_LENGTH) {
+  if (bare.normalize("NFC").length < MIN_ANCHOR_TEXT_LENGTH) {
     return null;
   }
-  const source = bare
-    .split(/\s+/u)
-    .map((part) => escapeRegExp(part))
-    .join("\\s+");
+  const source = bare.split(/\s+/u).map(eitherNormalization).join("\\s+");
   // Citation-safe boundaries, not `\b`: a case number ends in a digit and
   // may be followed by a page suffix ("-493") or a period, both fine, but
   // "II CSK 123/20" must not match inside "II CSK 123/201", and a number
