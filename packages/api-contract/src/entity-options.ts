@@ -1,3 +1,5 @@
+export const ENTITY_NAME_MAX_LENGTH = 255;
+
 /**
  * The option sets an entity's own columns range over, declared once.
  *

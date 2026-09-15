@@ -1,9 +1,10 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { transactionAbortError } from "@/api/db/safe-db";
+import type { FieldContent } from "@/api/db/schema-validators";
 import {
   collectFileCopySources,
   copyEntities,
@@ -43,6 +44,10 @@ import {
 
 const duplicateEntityBodySchema = t.Object({
   entityId: tSafeId("entity"),
+  name: t.Optional(
+    t.String({ minLength: 1, maxLength: LIMITS.entityNameMaxLength }),
+  ),
+  targetEntityId: t.Optional(tSafeId("entity")),
 });
 
 type DuplicateEntityHandlerProps = {
@@ -53,6 +58,26 @@ type DuplicateEntityHandlerProps = {
   recordAuditEvent: AuditRecorder;
   body: Static<typeof duplicateEntityBodySchema>;
   dependencies: DuplicateEntityDependencies;
+};
+
+type DuplicateReplay = {
+  id: SafeId<"entity">;
+  name: string;
+  currentVersion: {
+    fields: { id: SafeId<"field">; content: FieldContent }[];
+  } | null;
+};
+
+const duplicateReplayPayload = ({
+  id,
+  name,
+  currentVersion,
+}: DuplicateReplay) => {
+  const version = currentVersion ?? panic("Duplicate has no current version");
+  const fileField = version.fields.find(
+    ({ content }) => content.type === "file",
+  );
+  return { entityId: id, fieldId: fileField?.id ?? null, name };
 };
 
 export type DuplicateEntityDependencies = CopyEntitiesDependencies & {
@@ -73,7 +98,7 @@ const duplicateEntityHandler = async function* ({
   workspaceId,
   userId,
   recordAuditEvent,
-  body: { entityId: sourceEntityId },
+  body: { entityId: sourceEntityId, name, targetEntityId },
   dependencies,
 }: DuplicateEntityHandlerProps) {
   const source = yield* Result.await(
@@ -91,6 +116,37 @@ const duplicateEntityHandler = async function* ({
     return Result.err(
       new HandlerError({ status: 404, message: "Entity not found" }),
     );
+  }
+
+  const findReplay = async (replayTargetEntityId: SafeId<"entity">) =>
+    await safeDb(
+      async (tx) =>
+        await tx.query.entities.findFirst({
+          where: {
+            id: { eq: replayTargetEntityId },
+            workspaceId: { eq: workspaceId },
+            createdBy: { eq: userId },
+            duplicateSourceEntityId: { eq: sourceEntityId },
+          },
+          columns: { id: true, name: true },
+          with: {
+            currentVersion: {
+              columns: { id: true },
+              with: {
+                fields: {
+                  columns: { id: true, content: true },
+                  limit: LIMITS.propertiesCount,
+                },
+              },
+            },
+          },
+        }),
+    );
+  if (targetEntityId) {
+    const replayed = yield* Result.await(findReplay(targetEntityId));
+    if (replayed) {
+      return Result.ok(duplicateReplayPayload(replayed));
+    }
   }
 
   let sourceEntities: EntitySnapshot[] = [source];
@@ -154,6 +210,8 @@ const duplicateEntityHandler = async function* ({
         recordAuditEvent,
         sourceEntityId,
         sourceEntities: remappedEntities,
+        targetRootEntityId: targetEntityId,
+        targetRootName: name,
         // A duplicate is a new document in the same matter: its own
         // version 1, its own stamp and code.
         transfer: { type: "copy" },
@@ -166,6 +224,12 @@ const duplicateEntityHandler = async function* ({
   // orphan and the whole set goes back.
   if (Result.isError(txResultResult)) {
     await rollbackS3Copies(copiedS3Keys);
+    if (targetEntityId) {
+      const replayed = await findReplay(targetEntityId);
+      if (!Result.isError(replayed) && replayed.value) {
+        return Result.ok(duplicateReplayPayload(replayed.value));
+      }
+    }
     return Result.err(transactionAbortError(txResultResult.error));
   }
 
@@ -207,7 +271,16 @@ const duplicateEntityHandler = async function* ({
     }).catch(captureError);
   }
 
-  return Result.ok({ entityId: txResult.entityId });
+  return Result.ok({
+    entityId: txResult.entityId,
+    fieldId:
+      txResult.fileFields.find(({ entityId }) => entityId === txResult.entityId)
+        ?.fieldId ?? null,
+    name:
+      txResult.copiedEntities.find(
+        ({ entityId }) => entityId === txResult.entityId,
+      )?.name ?? panic("Duplicate root was not returned"),
+  });
 };
 
 const config = {

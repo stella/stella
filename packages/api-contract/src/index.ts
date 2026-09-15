@@ -199,6 +199,7 @@ export type {
   OfficeCitationLocator,
 } from "./office-citations";
 export {
+  ENTITY_NAME_MAX_LENGTH,
   ENTITY_PRIORITIES,
   ENTITY_PRIORITY,
   isEntityPriority,

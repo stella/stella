@@ -1350,6 +1350,7 @@ type Messages = {
     };
     "duplicate": "Duplicate";
     "duplicated": "Duplicated";
+    "duplicating": "Duplicating…";
     "edit": "Edit";
     "editCategory": "Edit category";
     "edited": "Edited";

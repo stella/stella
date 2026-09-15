@@ -30,6 +30,7 @@ import { createFileKey } from "@/api/lib/files/utils";
 import { LIMITS } from "@/api/lib/limits";
 import { getS3 } from "@/api/lib/s3";
 import { copyObject } from "@/api/lib/s3-presign";
+import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import {
   nativeExtractionRunRequestForFields,
   requestNativeExtractionRuns,
@@ -670,6 +671,10 @@ type CopyEntitiesProps = {
   recordAuditEvent: AuditRecorder;
   sourceEntityId: SafeId<"entity">;
   sourceEntities: WritableEntitySnapshot[];
+  /** Stable root identity supplied by a replay-safe same-matter duplicate. */
+  targetRootEntityId?: SafeId<"entity"> | undefined;
+  /** Caller-selected name for the root copy; descendants retain their names. */
+  targetRootName?: string | undefined;
   /** Source workspace ID for audit log (cross-workspace only). */
   sourceWorkspaceId?: SafeId<"workspace">;
   /**
@@ -785,6 +790,8 @@ export const copyEntities = async ({
   sourceEntityId,
   sourceEntities,
   sourceWorkspaceId,
+  targetRootEntityId,
+  targetRootName,
   transfer,
   fieldMapping,
   dependencies = defaultCopyEntitiesDependencies,
@@ -882,7 +889,10 @@ export const copyEntities = async ({
       });
     }
 
-    const newEntityId = createSafeId<"entity">();
+    const newEntityId =
+      source.id === sourceEntityId && targetRootEntityId
+        ? targetRootEntityId
+        : createSafeId<"entity">();
     const mappedParentId = source.parentId
       ? idMap.get(source.parentId)
       : undefined;
@@ -906,7 +916,7 @@ export const copyEntities = async ({
             tx,
             workspaceId: targetWorkspaceId,
             parentId: newParentId ?? null,
-            name: source.name,
+            name: targetRootName ?? source.name,
           })
         : source.name;
 
@@ -923,6 +933,10 @@ export const copyEntities = async ({
       kind: source.kind,
       parentId: newParentId ?? null,
       name: copyName,
+      duplicateSourceEntityId:
+        source.id === sourceEntityId && targetRootEntityId
+          ? sourceEntityId
+          : null,
       createdBy: userId,
       docSequence: entityStamp?.docSequence ?? null,
     });
@@ -999,12 +1013,21 @@ export const copyEntities = async ({
           });
         }
 
+        const content =
+          source.id === sourceEntityId &&
+          targetRootName !== undefined &&
+          field.content.type === "file"
+            ? {
+                ...field.content,
+                fileName: sanitizeFilename(copyName),
+              }
+            : field.content;
         const fieldInsert = {
           id: fieldId,
           workspaceId: targetWorkspaceId,
           propertyId: field.propertyId,
           entityVersionId,
-          content: field.content,
+          content,
         };
         carriedFieldInserts.push(fieldInsert);
         if (isCurrentVersion) {

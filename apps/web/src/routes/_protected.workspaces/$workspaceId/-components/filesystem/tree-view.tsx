@@ -134,7 +134,7 @@ type ExtraColumn =
       label: string;
     };
 
-const ACTIONS_COL_RE = / 2rem$/u;
+const ACTIONS_COL_RE = / 4rem$/u;
 
 const isFilesystemMetadataId = (id: string): id is FilesystemMetadataId =>
   FILESYSTEM_METADATA_IDS.some((metadataId) => metadataId === id);
@@ -232,7 +232,7 @@ const buildGridTemplate = (
   const extraTracks = extraColumns
     .map((col) => `${widths[col.id] ?? DEFAULT_EXTRA_WIDTH_PX}px`)
     .join(" ");
-  return `${nameTrack}${extraTracks ? ` ${extraTracks}` : ""} 2rem`;
+  return `${nameTrack}${extraTracks ? ` ${extraTracks}` : ""} 4rem`;
 };
 
 type ColumnWidthsApi = {
@@ -1652,6 +1652,7 @@ const FilesystemRow = ({
     <span className="flex justify-end">
       <RowActions
         anchor={contextAnchor}
+        duplicatePresentation="primary"
         entity={node}
         getAncestorIds={getAncestorIds}
         onOpenChange={(o) => {

@@ -51,6 +51,7 @@ const organizationId = toSafeId<"organization">("organization_1");
 const rootFolderId = toSafeId<"entity">("root_folder");
 const documentId = toSafeId<"entity">("document_child");
 const nestedFolderId = toSafeId<"entity">("nested_folder");
+const requestedDuplicateId = toSafeId<"entity">("requested_duplicate");
 const propertyId = toSafeId<"property">("property_1");
 
 const fileContent = {
@@ -179,8 +180,10 @@ const sourceEntities = [
 ];
 
 const createContext = ({
+  body = { entityId: rootFolderId },
   safeDb,
 }: {
+  body?: Parameters<typeof duplicateEntity.handler>[0]["body"];
   safeDb: Parameters<typeof duplicateEntity.handler>[0]["safeDb"];
 }): Parameters<typeof duplicateEntity.handler>[0] => {
   const recorderBindings = {
@@ -197,7 +200,7 @@ const createContext = ({
     user: { id: userId },
     session: { activeOrganizationId: organizationId },
     memberRole: { role: "owner" },
-    body: { entityId: rootFolderId },
+    body,
     request: recorderBindings.request,
     route: "/v1/entities/:workspaceId/duplicate",
     safeDb,
@@ -207,6 +210,152 @@ const createContext = ({
 };
 
 describe("duplicate entity", () => {
+  test("uses the requested identity and keeps a custom file name in sync", async () => {
+    const insertedEntities: InsertedEntity[] = [];
+    const insertedFields: InsertedField[] = [];
+
+    const sourceDocument = sourceEntities.at(1);
+    let entityLookupCount = 0;
+    const tx = {
+      query: {
+        entities: {
+          findFirst: async () => {
+            entityLookupCount++;
+            return entityLookupCount === 1 ? sourceDocument : undefined;
+          },
+        },
+        workspaces: { findFirst: async () => ({ reference: null }) },
+      },
+      $count: async () => 1,
+      select: () => ({
+        from: () => ({ where: async () => [{ name: sourceDocument?.name }] }),
+      }),
+      insert: (table: unknown) => ({
+        values: (value: unknown) => {
+          if (table === documentCounters) {
+            return {
+              onConflictDoUpdate: () => ({
+                returning: async () => [{ lastValue: 1 }],
+              }),
+            };
+          }
+          if (table === entities && isInsertedEntity(value)) {
+            insertedEntities.push(value);
+          } else if (table === entityVersions) {
+            return entityVersionInsertResult(value);
+          } else if (table === fields && Array.isArray(value)) {
+            insertedFields.push(...value.filter(isInsertedField));
+          }
+          return undefined;
+        },
+      }),
+      update: () => ({ set: () => ({ where: async () => {} }) }),
+    };
+    const { safeDb } = createScopedDbMock(tx);
+
+    const result = await duplicateEntity.handler(
+      createContext({
+        body: {
+          entityId: documentId,
+          name: "Child (copy).docx",
+          targetEntityId: requestedDuplicateId,
+        },
+        safeDb,
+      }),
+    );
+
+    expect(result).toEqual({
+      entityId: requestedDuplicateId,
+      fieldId: expect.any(String),
+      name: "Child (copy).docx",
+    });
+    expect(insertedEntities.at(0)?.name).toBe("Child (copy).docx");
+    const content = insertedFields.at(0)?.content;
+    expect(content?.type).toBe("file");
+    if (content?.type === "file") {
+      expect(content.fileName).toBe("Child (copy).docx");
+    }
+  });
+
+  test("returns the committed target when the same request is replayed", async () => {
+    const sourceDocument = sourceEntities.at(1);
+    let entityLookupCount = 0;
+    const tx = {
+      query: {
+        entities: {
+          findFirst: async () => {
+            entityLookupCount++;
+            if (entityLookupCount === 1) {
+              return sourceDocument;
+            }
+            return {
+              id: requestedDuplicateId,
+              name: "Child (Copy).docx",
+              currentVersion: {
+                fields: [
+                  {
+                    id: toSafeId<"field">("existing_copy_field"),
+                    content: fileContent,
+                  },
+                ],
+              },
+            };
+          },
+        },
+        workspaces: { findFirst: async () => ({ reference: null }) },
+      },
+      $count: async () => 1,
+      select: () => ({
+        from: () => ({ where: async () => [{ name: sourceDocument?.name }] }),
+      }),
+      insert: (table: unknown) => ({
+        values: (value: unknown) => {
+          if (table === documentCounters) {
+            return {
+              onConflictDoUpdate: () => ({
+                returning: async () => [{ lastValue: 1 }],
+              }),
+            };
+          }
+          if (table === entities) {
+            throw new Error("duplicate key value violates primary key");
+          }
+          return table === entityVersions
+            ? entityVersionInsertResult(value)
+            : undefined;
+        },
+      }),
+      update: () => ({ set: () => ({ where: async () => {} }) }),
+    };
+    const { safeDb } = createScopedDbMock(tx);
+
+    const result = await duplicateEntity.handler(
+      createContext({
+        body: {
+          entityId: documentId,
+          name: "Child (Copy).docx",
+          targetEntityId: requestedDuplicateId,
+        },
+        safeDb,
+      }),
+    );
+
+    expect(result).toEqual({
+      entityId: requestedDuplicateId,
+      fieldId: toSafeId<"field">("existing_copy_field"),
+      name: "Child (Copy).docx",
+    });
+    const copiedKeys = fake.requests
+      .filter(({ method }) => method === "COPY")
+      .map(({ key }) => key);
+    expect(copiedKeys).toHaveLength(0);
+    expect(
+      fake.requests
+        .filter(({ method }) => method === "DELETE")
+        .map(({ key }) => key),
+    ).toEqual([]);
+  });
+
   test("duplicates folder trees instead of rejecting folders", async () => {
     requestNativeExtractionRunsMock.mockClear();
     enqueueDocumentProcessingRunMock.mockClear();
@@ -278,6 +427,8 @@ describe("duplicate entity", () => {
 
     expect(result).toEqual({
       entityId: expect.any(String),
+      fieldId: null,
+      name: "Root_1",
     });
     expect(insertedEntities).toHaveLength(3);
     expect(insertedVersions).toHaveLength(3);
