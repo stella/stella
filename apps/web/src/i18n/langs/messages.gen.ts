@@ -885,8 +885,6 @@ type Messages = {
     "editorLoading": "Loading editor…";
     "emptyThreadDescription": "Ask about this matter, draft text, or request a short research note.";
     "emptyThreadTitle": "Start a conversation";
-    "externalSourcePlaceholder": "Chat about {title}";
-    "externalSourcePlaceholderAction": "Chat about";
     "extractingContent": "Extracting content...";
     "filePlaceholder": "Chat about {fileName}";
     "filePlaceholderAction": "Chat about";
@@ -1017,6 +1015,8 @@ type Messages = {
         "team": "Team skills";
       };
     };
+    "sourcePlaceholder": "Chat about {title}";
+    "sourcePlaceholderAction": "Chat about";
     "sources": "Sources:";
     "spawnSubagents": {
       "failed": "Failed";
@@ -4129,6 +4129,7 @@ type Messages = {
     "leadingDecisions": "Leading decisions";
     "noVersionInForce": "No version of this act was in force on the selected date.";
     "openEnded": "present";
+    "openProvision": "Open provision";
     "outline": "Contents";
     "outlineJumpLabel": "Jump to a provision";
     "outlineJumpPlaceholder": "§ 10 or a heading";

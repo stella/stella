@@ -43,6 +43,7 @@ import { cn } from "@stll/ui/utils";
 import { WorkspaceEndRail } from "@stll/ui/workspace-shell";
 import { WorkspaceFrame } from "@stll/workspace-ui/workspace-frame";
 
+import "@/features/case-law/case-decision-details-inspector-registration";
 import "@/features/case-law/case-decision-inspector-registration";
 import "@/features/inbox/signal-inspector-registration";
 import "@/features/statutes/provision-inspector-registration";

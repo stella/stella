@@ -27,6 +27,8 @@ import {
   getInspectorPersistenceReference,
   getInspectorView,
 } from "@/components/inspector/view-registry";
+import { adoptRestoredDecisionChatThreads } from "@/features/chat/decision-chat-threads";
+import type { RestoredDecisionChatThread } from "@/features/chat/decision-chat-threads";
 import { getTranslator } from "@/i18n/i18n-store";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { readStoredJson } from "@/lib/stored-json";
@@ -170,6 +172,22 @@ export const getInspectorTabsBroadcastChannelName = ({
 }: InspectorBroadcastScope) =>
   `${INSPECTOR_TABS_CHANNEL_PREFIX}:${organizationId}:${userId}`;
 
+/**
+ * The conversations a tab set carries: a chat tab opened about a decision is
+ * that decision's conversation, wherever the tab came from.
+ */
+const decisionChatThreadsIn = (
+  tabs: readonly InspectorTab[],
+): RestoredDecisionChatThread[] => {
+  const threads: RestoredDecisionChatThread[] = [];
+  for (const tab of tabs) {
+    if (tab.type === "chat" && tab.activeDecisionId !== undefined) {
+      threads.push({ decisionId: tab.activeDecisionId, threadId: tab.id });
+    }
+  }
+  return threads;
+};
+
 const applySharedInspectorTabs = (
   store: StoreApi<InspectorTabsStore>,
   tabs: InspectorTab[],
@@ -183,6 +201,7 @@ const applySharedInspectorTabs = (
     groupAssignments,
   );
   store.setState(next);
+  adoptRestoredDecisionChatThreads(decisionChatThreadsIn(next.tabs));
   useInspectorCommandStore
     .getState()
     .clearCommandsForMissingTabs(new Set(next.tabs.map((tab) => tab.id)));
@@ -748,6 +767,7 @@ export const initializeInspectorTabBroadcast = (
     const persisted = readPersistedInspectorState(scope);
     if (persisted !== null) {
       const tabs = persisted.tabs.map(normalizeInspectorBroadcastTab);
+      adoptRestoredDecisionChatThreads(decisionChatThreadsIn(tabs));
       store.setState({
         tabs,
         groups: persisted.groups,

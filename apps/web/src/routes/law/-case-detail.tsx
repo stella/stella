@@ -214,18 +214,16 @@ const GuestDecisionWorkspace = ({
 
 /**
  * The facts of the decision on screen live in the inspector, not above the
- * text. The tab opens with the page and leaves with it; it never takes the
- * focus away from a decision the reader had open on the side, so a swap
- * lands on the decision, not on its facts.
+ * text. The tab opens with the page and then belongs to the decision, not to
+ * the page: leaving takes the text away, and the tab keeps offering to bring
+ * it back. It never takes the focus away from a decision the reader had open
+ * on the side, so a swap lands on the decision, not on its facts.
  */
 const DecisionDetailsTab = ({
   decision,
 }: {
   decision: PublicCaseLawDecision;
 }) => {
-  const routeId = useRouterState({
-    select: (state) => state.matches.at(-1)?.routeId ?? "/law",
-  });
   useMountEffect(() => {
     const store = useInspectorTabsStore.getState();
     const activeTab = store.tabs.find((tab) => tab.id === store.activeId);
@@ -233,8 +231,8 @@ const DecisionDetailsTab = ({
       activeTab !== undefined && isCaseDecisionGenericTab(activeTab)
         ? activeTab.id
         : null;
-    const tab = createCaseDecisionDetailsTab(
-      {
+    store.openView(
+      createCaseDecisionDetailsTab({
         caseNumber: decision.caseNumber,
         country: decision.country,
         court: decision.court,
@@ -242,16 +240,11 @@ const DecisionDetailsTab = ({
         language: decision.language,
         languageAlternates: decision.languageAlternates,
         slug: decision.slug,
-      },
-      routeId,
+      }),
     );
-    store.openView(tab);
     if (keepActive !== null) {
       store.setActive(keepActive);
     }
-    return () => {
-      useInspectorTabsStore.getState().closeTab(tab.id);
-    };
   });
   return null;
 };

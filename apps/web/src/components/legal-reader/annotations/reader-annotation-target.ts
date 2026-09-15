@@ -10,12 +10,13 @@ import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-sto
 import type { SelectionAnchor } from "@/components/legal-reader/annotations/selection-anchor";
 import { openPublicLawChat } from "@/components/public-law-ask";
 import { formatDecisionCitation } from "@/features/case-law/citation-format";
+import { ensureDecisionChatThread } from "@/features/chat/decision-chat-threads";
 import { formatStatuteCitation } from "@/features/statutes/statute-format";
 import {
   createChatDraftState,
   useChatDraftStore,
 } from "@/lib/chat-draft-store";
-import { createChatThreadId, getChatThreadKey } from "@/lib/chat-thread-ref";
+import { getChatThreadKey } from "@/lib/chat-thread-ref";
 
 /**
  * The document a reader is marking, in the terms a citation and a chat
@@ -175,7 +176,12 @@ export const askAboutReaderPassage = ({
 }): void => {
   switch (target.type) {
     case "decision": {
-      const threadId = createChatThreadId();
+      // The decision has one conversation, so the passage joins it instead of
+      // opening a rival thread beside it. The draft this writes replaces
+      // whatever was unsent in that composer: losing a half-typed line is the
+      // lesser harm against asking the question away from the history it
+      // belongs to.
+      const threadId = ensureDecisionChatThread({ decisionId: target.id });
       useChatDraftStore.getState().setDraft(
         getChatThreadKey({ scope: "global", threadId }),
         createChatDraftState({

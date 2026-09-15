@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, spyOn, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 
 import { Temporal } from "@stll/time";
 import { stellaToast } from "@stll/ui/toast";
@@ -12,6 +12,11 @@ import {
   useInspectorTabsStore,
 } from "@/components/inspector/inspector-tabs-store";
 import { registerInspectorView } from "@/components/inspector/view-registry";
+import {
+  ensureDecisionChatThread,
+  lookupDecisionChatThread,
+  useDecisionChatThreads,
+} from "@/features/chat/decision-chat-threads";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 
@@ -1806,5 +1811,109 @@ describe("Inspector tab broadcast", () => {
       .openChat({ id: toChatThreadId("thread-1") });
 
     expect(received).toEqual([]);
+  });
+});
+
+describe("a decision's chat tab and the reader's composer", () => {
+  beforeEach(() => {
+    useDecisionChatThreads.setState({ threadIdByDecisionId: {} });
+  });
+
+  test("open the same thread every time the decision is asked about", () => {
+    const store = useInspectorTabsStore.getState();
+    store.openChat({ activeDecisionId: "decision-1" });
+    const first = useInspectorTabsStore.getState().tabs.at(0);
+    store.openChat({ activeDecisionId: "decision-1" });
+    const tabs = useInspectorTabsStore.getState().tabs;
+
+    expect(tabs).toHaveLength(1);
+    expect(tabs.at(0)?.id).toBe(first?.id ?? "");
+  });
+
+  test("keep separate threads for separate decisions", () => {
+    const store = useInspectorTabsStore.getState();
+    store.openChat({ activeDecisionId: "decision-1" });
+    store.openChat({ activeDecisionId: "decision-2" });
+    const tabs = useInspectorTabsStore.getState().tabs;
+
+    expect(tabs).toHaveLength(2);
+    expect(tabs.at(0)?.id).not.toBe(tabs.at(1)?.id ?? "");
+  });
+
+  test("follow a thread the caller names, so the reader binds to it too", () => {
+    const named = toChatThreadId("thread-named");
+    useInspectorTabsStore
+      .getState()
+      .openChat({ activeDecisionId: "decision-1", id: named });
+
+    expect(lookupDecisionChatThread("decision-1")).toEqual({
+      status: "thread",
+      threadId: named,
+    });
+  });
+
+  test("follow the tab when a reserved /new command rotates its thread", () => {
+    const store = useInspectorTabsStore.getState();
+    store.openChat({ activeDecisionId: "decision-1" });
+    const opened = useInspectorTabsStore.getState().tabs.at(0);
+    if (opened?.type !== "chat") {
+      throw new Error("expected chat tab");
+    }
+    const rotated = toChatThreadId("thread-rotated");
+    store.resetChatTabId(opened.id, rotated);
+
+    expect(lookupDecisionChatThread("decision-1")).toEqual({
+      status: "thread",
+      threadId: rotated,
+    });
+  });
+
+  // The tab set is restored after the page has painted, so a reader on the
+  // decision has already minted an id nothing would otherwise take back.
+  test("follow the restored tab rather than an id minted before it arrived", () => {
+    installFakeBroadcastChannel();
+    const scope = {
+      organizationId: "org-restore",
+      userId: "user-restore",
+    };
+    const restored = toChatThreadId("thread-restored");
+    window.localStorage.setItem(
+      `stella:inspector-state:v1:${scope.organizationId}:${scope.userId}`,
+      JSON.stringify({
+        activeId: restored,
+        collapsedGroupIds: [],
+        groupAssignments: {},
+        groups: [],
+        tabs: [
+          {
+            activeDecisionId: "decision-1",
+            contextMatterIds: [],
+            id: restored,
+            label: "Decision chat",
+            type: "chat",
+          },
+        ],
+      }),
+    );
+    const minted = ensureDecisionChatThread({ decisionId: "decision-1" });
+
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+
+    expect(minted).not.toBe(restored);
+    expect(lookupDecisionChatThread("decision-1")).toEqual({
+      status: "thread",
+      threadId: restored,
+    });
+  });
+
+  test("leave the owner alone when a chat about nothing rotates", () => {
+    const store = useInspectorTabsStore.getState();
+    store.openChat({ id: toChatThreadId("thread-plain") });
+    store.resetChatTabId(
+      toChatThreadId("thread-plain"),
+      toChatThreadId("thread-plain-2"),
+    );
+
+    expect(useDecisionChatThreads.getState().threadIdByDecisionId).toEqual({});
   });
 });

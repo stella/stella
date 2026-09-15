@@ -1,6 +1,5 @@
 import { useCallback, useRef, useState } from "react";
 
-import { panic } from "better-result";
 import { SparklesIcon, UserRoundIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/react/shallow";
@@ -16,33 +15,34 @@ import type { OutlineItem } from "@stll/ui/outline-rail";
 import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
 
-import type { AnnotationAnchorSource } from "@/components/legal-reader/annotations/annotation-anchors";
 import { AnnotationToolbar } from "@/components/legal-reader/annotations/annotation-toolbar";
 import { GuestAnnotationPrompt } from "@/components/legal-reader/annotations/guest-annotation-prompt";
 import type { ReaderAnnotationTarget } from "@/components/legal-reader/annotations/reader-annotation-target";
-import type { ReaderAnnotation } from "@/components/legal-reader/annotations/reader-annotations-query";
-import type { SelectionAnchor } from "@/components/legal-reader/annotations/selection-anchor";
-import { useActiveReaderAnnotation } from "@/components/legal-reader/annotations/use-active-reader-annotation";
-import { useReaderAnnotations } from "@/components/legal-reader/annotations/use-reader-annotations";
+import { LegalReaderAIChat } from "@/components/legal-reader/legal-reader-ai-chat";
 import { MatterIcon } from "@/components/matter-icon";
 import Tooltip from "@/components/tooltip";
+import {
+  AiHeadnotes,
+  hasAiHeadnotes,
+} from "@/features/case-law/components/case-viewer/analysis/ai-headnotes";
 import { AnalysisLayers } from "@/features/case-law/components/case-viewer/analysis/analysis-layers";
 import { CurrentSection } from "@/features/case-law/components/case-viewer/analysis/current-section";
 import { MarginNotes } from "@/features/case-law/components/case-viewer/analysis/margin-notes";
-import type {
-  AnalysisMarginItem,
-  CommentMarginItem,
-  ComposerMarginItem,
-} from "@/features/case-law/components/case-viewer/analysis/margin-notes";
+import type { AnalysisMarginItem } from "@/features/case-law/components/case-viewer/analysis/margin-notes";
 import {
   buildSectionMap,
   flattenAnalysisHeadings,
   getCategoryVar,
 } from "@/features/case-law/components/case-viewer/analysis/types";
 import { useDecisionAnalysis } from "@/features/case-law/components/case-viewer/analysis/use-decision-analysis";
+import type { ReaderMarksFilter } from "@/features/case-law/components/case-viewer/decision-annotation-surface.logic";
 import type { DecisionDocumentState } from "@/features/case-law/components/case-viewer/decision-body-state.logic";
 import { DecisionText } from "@/features/case-law/components/case-viewer/decision-text";
-import { visibleDecisionBlocks } from "@/features/case-law/components/case-viewer/decision-text.logic";
+import {
+  decisionCaseName,
+  visibleDecisionBlocks,
+} from "@/features/case-law/components/case-viewer/decision-text.logic";
+import { useDecisionAnnotationSurface } from "@/features/case-law/components/case-viewer/use-decision-annotation-surface";
 import { useDecisionCitationAnchors } from "@/features/case-law/components/case-viewer/use-decision-citation-anchors";
 import { useDecisionProvisionAnchors } from "@/features/case-law/components/case-viewer/use-decision-provision-anchors";
 import { useDecisionStatuteCitationAnchors } from "@/features/case-law/components/case-viewer/use-decision-statute-citation-anchors";
@@ -57,6 +57,9 @@ type DecisionWorkspaceDecision = DecisionDocumentState & {
   caseNumber: string;
   country: string;
   court: string;
+  /** The court's chip, as the read derived it; absent where it states none. */
+  courtAbbreviation?: string | null | undefined;
+  courtTier?: string | null | undefined;
   decisionDate: Date | string | null;
   decisionType?: string | null;
   documentAst: unknown;
@@ -102,22 +105,12 @@ const getHeadingDisplayAnchorId = ({
 /** The notes margin's mutually exclusive source filter. */
 type NotesFilter = "all" | "ai" | "mine";
 
-const annotationsForFilter = (
-  annotations: readonly ReaderAnnotation[],
-  filter: NotesFilter,
-): readonly ReaderAnnotation[] => {
-  switch (filter) {
-    case "all":
-      return annotations;
-    case "ai":
-      return [];
-    case "mine":
-      return annotations.filter((annotation) => annotation.mine);
-    default:
-      filter satisfies never;
-      return panic(`Unhandled notes filter: ${String(filter)}`);
-  }
-};
+/** What the margin's source filter means for the reader's own marks. */
+const MARKS_FOR_NOTES_FILTER = {
+  ai: "none",
+  all: "all",
+  mine: "mine",
+} as const satisfies Record<NotesFilter, ReaderMarksFilter>;
 
 const NotesFilterAllIcon = ({ className }: { className?: string }) => (
   <MatterIcon className={className} variant="all" />
@@ -127,20 +120,11 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
   const { decision, decisionId, initialAnchorId, initialSearchQuery } = props;
   const t = useTranslations();
   const ast = parseDocumentAst(decision.documentAst);
-  // The case's citable name and year, for the legal copy modes. The title
-  // heading carries "Name, Cite"; the cite suffix is stripped when present.
-  const decisionTitle =
-    ast?.blocks.find(
-      (block) => block.type === "heading" && block.role === "decision-title",
-    )?.plainText ?? null;
-  // Only a title of the "Name, Cite" shape yields a citable name; a
-  // generic heading ("JUDGMENT OF THE COURT (Grand Chamber)", a bare case
-  // number) must not masquerade as one.
-  const citeSuffix = `, ${decision.caseNumber}`;
-  const caseName =
-    (decisionTitle?.endsWith(citeSuffix) ?? false)
-      ? (decisionTitle ?? "").slice(0, -citeSuffix.length)
-      : null;
+  // The case's citable name, for the legal copy modes.
+  const caseName = decisionCaseName({
+    ast,
+    caseNumber: decision.caseNumber,
+  });
   const annotationTarget = {
     type: "decision",
     caseNumber: decision.caseNumber,
@@ -152,85 +136,14 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
     id: decisionId,
     name: caseName,
   } as const satisfies ReaderAnnotationTarget;
-  const annotations = useReaderAnnotations(annotationTarget);
   const mainRef = useRef<HTMLDivElement>(null);
   const [notesFilter, setNotesFilter] = useState<NotesFilter>("all");
   const showAiNotes = notesFilter === "all" || notesFilter === "ai";
-  // The comment being written: its paragraphs, so the margin can sit the
-  // composer beside the first and the saved comment covers them all.
-  const [composing, setComposing] = useState<SelectionAnchor[] | null>(null);
-  const composerItem: ComposerMarginItem[] =
-    composing?.[0] === undefined
-      ? []
-      : [
-          {
-            id: "composer",
-            kind: "composer",
-            onCancel: () => setComposing(null),
-            onSubmit: (body, visibility) => {
-              detached(
-                annotations.controller.create({
-                  body,
-                  kind: "comment",
-                  spans: composing,
-                  visibility,
-                }),
-                "legal-reader.annotation-comment",
-              );
-              setComposing(null);
-            },
-            startAnchorId: composing[0].blockAnchorId,
-          },
-        ];
-  const visibleAnnotationRows = annotationsForFilter(
-    annotations.annotations,
-    notesFilter,
-  );
-  const { activeAnnotation, activeSpans, clearActive, setActiveAnnotationId } =
-    useActiveReaderAnnotation({
-      annotations: visibleAnnotationRows,
-      scrollContainerRef: mainRef,
-    });
-  const annotationAnchors: AnnotationAnchorSource[] = visibleAnnotationRows.map(
-    (item) => ({
-      blockAnchorId: item.blockAnchorId,
-      color: item.color,
-      endOffset: item.endOffset,
-      id: item.id,
-      kind: item.kind,
-      startOffset: item.startOffset,
-      style: item.style,
-    }),
-  );
-  // A comment over several paragraphs is several rows; its words sit on the
-  // first, and that is the one the margin shows.
-  const commentItems: CommentMarginItem[] = visibleAnnotationRows
-    .filter((item) => item.kind === "comment" && item.body !== null)
-    .map((item) => ({
-      author: { image: item.authorImage, name: item.authorName },
-      id: item.id,
-      kind: "comment",
-      mine: item.mine,
-      onDelete: () => {
-        detached(
-          annotations.controller.remove(item.id),
-          "legal-reader.annotation-remove",
-        );
-      },
-      onToggleVisibility: () => {
-        detached(
-          annotations.controller.update({
-            change: "visibility",
-            id: item.id,
-            visibility: item.visibility === "shared" ? "private" : "shared",
-          }),
-          "legal-reader.annotation-visibility",
-        );
-      },
-      startAnchorId: item.blockAnchorId,
-      text: item.body ?? "",
-      visibility: item.visibility,
-    }));
+  const annotations = useDecisionAnnotationSurface({
+    marks: MARKS_FOR_NOTES_FILTER[notesFilter],
+    scrollContainerRef: mainRef,
+    target: annotationTarget,
+  });
   const aiEnabled = props.aiMode === "enabled";
   const ensureAIAvailable =
     props.aiMode === "enabled" ? props.ensureAIAvailable : null;
@@ -344,6 +257,17 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
     el.dataset["highlight"] = "";
   };
 
+  // The model's headnote and abstract open the decision, under the court's
+  // own and drawn the same way: they are what a reader wants before the text,
+  // and the margin column that used to hold them is not there below the lg
+  // width.
+  const aiHeadnotes =
+    completeAnalysis !== null &&
+    showAiNotes &&
+    hasAiHeadnotes(completeAnalysis) ? (
+      <AiHeadnotes analysis={completeAnalysis} onAnchorClick={jumpToAnchor} />
+    ) : null;
+
   const sectionMap = (() => {
     if (analysisTree.length === 0 || !ast) {
       return undefined;
@@ -398,11 +322,9 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
     return items;
   });
 
-  // The composer is never filtered away: the reader is mid-sentence in it.
   const visibleMarginItems = [
     ...(hasAnalysis && showAiNotes ? marginItems : []),
-    ...commentItems,
-    ...composerItem,
+    ...annotations.notes,
   ];
 
   useExternalSyncEffect(() => {
@@ -464,7 +386,7 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
                       isActive && "bg-muted text-foreground",
                     )}
                     onClick={() => {
-                      clearActive();
+                      annotations.clearActive();
                       setNotesFilter(option.value);
                     }}
                   />
@@ -525,128 +447,135 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
           />
         )}
 
-        <div className="reader-scroll h-full overflow-y-auto" ref={mainRef}>
-          <div
-            className="grid max-lg:!grid-cols-[1fr]"
-            style={{ gridTemplateColumns: `${panelWidth}px minmax(0, 1fr)` }}
-          >
-            <aside className="relative flex flex-col max-lg:hidden">
-              {completeAnalysis !== null && showAiNotes && (
-                <AnalysisLayers
-                  analysis={completeAnalysis}
-                  onAnchorClick={jumpToAnchor}
-                />
-              )}
-              {hasAnalysis &&
-                showAiNotes &&
-                flatAnalysisHeadings.length > 0 && (
-                  <CurrentSection
-                    anchorById={analysisOutline.anchorById}
-                    headings={flatAnalysisHeadings}
-                    scrollContainerRef={mainRef}
-                  />
-                )}
-              {showAiNotes && isAnalyzing && (
-                <div className="px-2 pt-8">
-                  <AnalysisLoader />
-                </div>
-              )}
-              {showAiNotes && aiEnabled && analysisState.status === "error" && (
-                <div
-                  className="bg-background/75 supports-[backdrop-filter]:bg-background/55 mx-2 mt-8 flex flex-col items-center gap-2 rounded-lg border px-3 py-4 text-center shadow-sm backdrop-blur-xl"
-                  role="alert"
-                >
-                  <p className="text-muted-foreground text-xs leading-snug">
-                    {t("errors.api.server")}
-                  </p>
-                  <Button
-                    className="text-muted-foreground hover:text-foreground hover:bg-muted flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs transition-colors"
-                    onClick={() => {
-                      detached(generate(), "decision-workspace.generate");
-                    }}
-                    size="sm"
-                    variant="ghost"
-                  >
-                    <SparklesIcon className="size-3" />
-                    {t("common.retry")}
-                  </Button>
-                </div>
-              )}
-
-              {/* The notes are painted absolutely inside this region, so they
-                  are measured against the space the layers above them leave
-                  free instead of against the whole column. */}
-              <div className="relative flex-1">
-                {visibleMarginItems.length > 0 && (
-                  <MarginNotes
-                    items={visibleMarginItems}
-                    scrollContainerRef={mainRef}
-                  />
-                )}
-              </div>
-
-              <div
-                className="group hover:bg-border/50 active:bg-border absolute inset-y-0 -end-px z-10 flex w-2 cursor-col-resize items-center justify-center"
-                onPointerDown={(event) => {
-                  event.preventDefault();
-                  isDragging.current = true;
-                  event.currentTarget.setPointerCapture(event.pointerId);
-                }}
-                onPointerMove={(event) => {
-                  if (!isDragging.current) {
-                    return;
-                  }
-
-                  const aside = event.currentTarget.parentElement;
-                  if (!aside) {
-                    return;
-                  }
-
-                  const newWidth =
-                    event.clientX - aside.getBoundingClientRect().left;
-                  setPanelWidth(Math.min(400, Math.max(120, newWidth)));
-                }}
-                onPointerUp={() => {
-                  isDragging.current = false;
-                }}
-              >
-                <div className="flex flex-col gap-[3px] opacity-0 transition-opacity group-hover:opacity-40">
-                  <div className="bg-foreground h-[3px] w-[3px] rounded-full" />
-                  <div className="bg-foreground h-[3px] w-[3px] rounded-full" />
-                  <div className="bg-foreground h-[3px] w-[3px] rounded-full" />
-                </div>
-              </div>
-            </aside>
-
-            <main
-              className="reader-paper min-w-0 py-8"
-              data-slot="reader-document-column"
+        {/* The composer floats over the text here as it does in the inspector's
+            reader, bound to the same decision and so to the same conversation.
+            The annotation toolbar stays outside it: it belongs to the marks on
+            the text, not to the chat. */}
+        <LegalReaderAIChat className="h-full" target={annotationTarget}>
+          <div className="reader-scroll h-full overflow-y-auto" ref={mainRef}>
+            <div
+              className="grid max-lg:!grid-cols-[1fr]"
+              style={{ gridTemplateColumns: `${panelWidth}px minmax(0, 1fr)` }}
             >
-              <DecisionText
-                activeMatchIndex={activeMatchIndex}
-                annotationAnchors={annotationAnchors}
-                citationAnchors={citationAnchors}
-                decision={decision}
-                decisionId={decisionId}
-                landingAnchorId={landingAnchorId}
-                onAnnotationActivate={setActiveAnnotationId}
-                onMatchCountChange={setMatchCount}
-                provisionAnchors={provisionAnchors}
-                searchQuery={searchOpen ? searchQuery : ""}
-                sectionMap={showAiNotes ? sectionMap : undefined}
-                statuteCitationAnchors={statuteCitationAnchors}
-              />
-            </main>
+              <aside className="relative flex flex-col max-lg:hidden">
+                {completeAnalysis !== null && showAiNotes && (
+                  <AnalysisLayers analysis={completeAnalysis} />
+                )}
+                {hasAnalysis &&
+                  showAiNotes &&
+                  flatAnalysisHeadings.length > 0 && (
+                    <CurrentSection
+                      anchorById={analysisOutline.anchorById}
+                      headings={flatAnalysisHeadings}
+                      scrollContainerRef={mainRef}
+                    />
+                  )}
+                {showAiNotes && isAnalyzing && (
+                  <div className="px-2 pt-8">
+                    <AnalysisLoader />
+                  </div>
+                )}
+                {showAiNotes &&
+                  aiEnabled &&
+                  analysisState.status === "error" && (
+                    <div
+                      className="bg-background/75 supports-[backdrop-filter]:bg-background/55 mx-2 mt-8 flex flex-col items-center gap-2 rounded-lg border px-3 py-4 text-center shadow-sm backdrop-blur-xl"
+                      role="alert"
+                    >
+                      <p className="text-muted-foreground text-xs leading-snug">
+                        {t("errors.api.server")}
+                      </p>
+                      <Button
+                        className="text-muted-foreground hover:text-foreground hover:bg-muted flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs transition-colors"
+                        onClick={() => {
+                          detached(generate(), "decision-workspace.generate");
+                        }}
+                        size="sm"
+                        variant="ghost"
+                      >
+                        <SparklesIcon className="size-3" />
+                        {t("common.retry")}
+                      </Button>
+                    </div>
+                  )}
+
+                {/* The notes are painted absolutely inside this region, so they
+                    are measured against the space the layers above them leave
+                    free instead of against the whole column. */}
+                <div className="relative flex-1">
+                  {visibleMarginItems.length > 0 && (
+                    <MarginNotes
+                      items={visibleMarginItems}
+                      placement="gutter"
+                      scrollContainerRef={mainRef}
+                    />
+                  )}
+                </div>
+
+                <div
+                  className="group hover:bg-border/50 active:bg-border absolute inset-y-0 -end-px z-10 flex w-2 cursor-col-resize items-center justify-center"
+                  onPointerDown={(event) => {
+                    event.preventDefault();
+                    isDragging.current = true;
+                    event.currentTarget.setPointerCapture(event.pointerId);
+                  }}
+                  onPointerMove={(event) => {
+                    if (!isDragging.current) {
+                      return;
+                    }
+
+                    const aside = event.currentTarget.parentElement;
+                    if (!aside) {
+                      return;
+                    }
+
+                    const newWidth =
+                      event.clientX - aside.getBoundingClientRect().left;
+                    setPanelWidth(Math.min(400, Math.max(120, newWidth)));
+                  }}
+                  onPointerUp={() => {
+                    isDragging.current = false;
+                  }}
+                >
+                  <div className="flex flex-col gap-[3px] opacity-0 transition-opacity group-hover:opacity-40">
+                    <div className="bg-foreground h-[3px] w-[3px] rounded-full" />
+                    <div className="bg-foreground h-[3px] w-[3px] rounded-full" />
+                    <div className="bg-foreground h-[3px] w-[3px] rounded-full" />
+                  </div>
+                </div>
+              </aside>
+
+              <main
+                className="reader-paper min-w-0 py-8"
+                data-slot="reader-document-column"
+              >
+                <DecisionText
+                  activeMatchIndex={activeMatchIndex}
+                  aiHeadnotes={aiHeadnotes}
+                  annotationAnchors={annotations.anchors}
+                  citationAnchors={citationAnchors}
+                  decision={decision}
+                  decisionId={decisionId}
+                  landingAnchorId={landingAnchorId}
+                  onAnnotationActivate={annotations.setActiveAnnotationId}
+                  onMatchCountChange={setMatchCount}
+                  provisionAnchors={provisionAnchors}
+                  searchQuery={searchOpen ? searchQuery : ""}
+                  sectionMap={showAiNotes ? sectionMap : undefined}
+                  statuteCitationAnchors={statuteCitationAnchors}
+                />
+              </main>
+            </div>
           </div>
-        </div>
+        </LegalReaderAIChat>
         <AnnotationToolbar
-          activeAnnotation={activeAnnotation}
-          activeSpans={activeSpans}
+          activeAnnotation={annotations.activeAnnotation}
+          activeSpans={annotations.activeSpans}
           controller={annotations.controller}
           mode={annotations.mode}
-          onActivateAnnotation={setActiveAnnotationId}
-          onClearActive={clearActive}
-          onCompose={setComposing}
+          onActivateAnnotation={annotations.setActiveAnnotationId}
+          onClearActive={annotations.clearActive}
+          onCompose={annotations.startComposing}
           scrollContainerRef={mainRef}
           target={annotationTarget}
         />

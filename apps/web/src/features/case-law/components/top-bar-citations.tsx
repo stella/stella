@@ -1,5 +1,4 @@
 import { useQuery } from "@tanstack/react-query";
-import { useRouterState } from "@tanstack/react-router";
 import { useNow, useTranslations } from "use-intl";
 
 import { Temporal } from "@stll/time";
@@ -10,6 +9,7 @@ import { decisionYear } from "@/features/case-law/citation-format";
 import { totalCitations } from "@/features/case-law/citation-treatment";
 import { citationStripFromYear } from "@/features/case-law/components/case-viewer/citation-header";
 import { CitationYearStrip } from "@/features/case-law/components/citation-year-strip";
+import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
 import { decisionCitationSummaryOptions } from "@/features/case-law/queries/citations";
 import { useMainCaseLawDecision } from "@/features/case-law/use-main-decision";
 import { useHydrated } from "@/hooks/use-hydrated";
@@ -23,21 +23,16 @@ import { useFormatter } from "@/i18n/formatting-context";
  */
 export const TopBarCitations = () => {
   const decision = useMainCaseLawDecision();
-  const routeId = useRouterState({
-    select: (state) => state.matches.at(-1)?.routeId ?? null,
-  });
-  if (decision === undefined || routeId === null) {
+  if (decision === undefined) {
     return null;
   }
-  return <TopBarCitationsFor decision={decision} routeId={routeId} />;
+  return <TopBarCitationsFor decision={decision} />;
 };
 
 const TopBarCitationsFor = ({
   decision,
-  routeId,
 }: {
-  decision: NonNullable<ReturnType<typeof useMainCaseLawDecision>>;
-  routeId: string;
+  decision: PublicCaseLawDecision;
 }) => {
   const t = useTranslations();
   const format = useFormatter();
@@ -78,18 +73,15 @@ const TopBarCitationsFor = ({
     .join(" · ");
   const openDetails = () => {
     useInspectorTabsStore.getState().openView(
-      createCaseDecisionDetailsTab(
-        {
-          caseNumber: decision.caseNumber,
-          country: decision.country,
-          court: decision.court,
-          decisionId: decision.id,
-          language: decision.language,
-          languageAlternates: decision.languageAlternates,
-          slug: decision.slug,
-        },
-        routeId,
-      ),
+      createCaseDecisionDetailsTab({
+        caseNumber: decision.caseNumber,
+        country: decision.country,
+        court: decision.court,
+        decisionId: decision.id,
+        language: decision.language,
+        languageAlternates: decision.languageAlternates,
+        slug: decision.slug,
+      }),
     );
   };
 

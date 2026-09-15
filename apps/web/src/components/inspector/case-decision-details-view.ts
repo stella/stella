@@ -2,9 +2,10 @@ import type { CaseDecisionViewPayload } from "@/components/inspector/case-decisi
 import { createCaseDecisionViewTab } from "@/components/inspector/case-decision-view";
 
 /**
- * Registered inspector view kind for the facts of the decision the main view
- * shows: court, date, area of law, rapporteur, source. Route-owned, so it
- * leaves with the page.
+ * Registered inspector view kind for the facts of one decision: court, date,
+ * area of law, rapporteur, source, and who cites it. A second tab of the same
+ * decision the text tab holds, so it is named and drawn like it and stays
+ * open until it is closed.
  */
 export const CASE_DECISION_DETAILS_VIEW = "case-law-decision-details";
 
@@ -16,19 +17,18 @@ export type CaseDecisionDetailsViewTab = {
   id: string;
   label: string;
   payload: CaseDecisionViewPayload;
-  ownerRouteId: string;
 };
 
 export const createCaseDecisionDetailsTab = (
   target: Parameters<typeof createCaseDecisionViewTab>[0],
-  ownerRouteId: string,
 ): CaseDecisionDetailsViewTab => {
+  // Label and payload come from the text tab's factory, so the two tabs of
+  // one decision cannot come to name it differently.
   const { label, payload } = createCaseDecisionViewTab(target);
   return {
     type: CASE_DECISION_DETAILS_VIEW,
     id: caseDecisionDetailsTabId(target.decisionId),
     label,
     payload,
-    ownerRouteId,
   };
 };

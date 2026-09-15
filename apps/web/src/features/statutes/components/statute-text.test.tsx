@@ -149,6 +149,27 @@ const designationOf = (section: { plainText: string }): string => {
 /** The fixture headings that are citable units; every other one is a container. */
 const PROVISION_HEADINGS = new Set(["§ 47"]);
 
+/**
+ * The row that opens a section: the designation, and the details action that
+ * hangs off it. The size the designation is set in is read out rather than
+ * spelled out, so the reader's text scale can restate it without the test
+ * losing sight of the row.
+ */
+const DESIGNATION_ROW =
+  /<span class="(?<size>[^"]*)">(?<designation>[^<]*)<\/span><span class="[^"]*"><button aria-label="(?<action>[^"]*)"/u;
+
+const designationRowOf = (markup: string, anchorId: string) => {
+  const opening = markup.indexOf(`id="${anchorId}"`);
+  const heading = markup.slice(opening, markup.indexOf("</h", opening));
+  const row = DESIGNATION_ROW.exec(heading)?.groups;
+
+  if (row === undefined) {
+    throw new Error(`section ${anchorId} states no designation row`);
+  }
+
+  return row;
+};
+
 /** The action's own accessible name, derived from the message it renders. */
 const detailsActionFor = (provision: string) =>
   messages.statutes.provisionDetailsFor.replace("{provision}", () => provision);
@@ -230,14 +251,20 @@ describe("StatuteText", () => {
       citationWork: CITATION_WORK,
     });
 
-    for (const section of sections) {
+    // One row: the designation, the action beside it, at one size for all
+    // three orders. A designation that changed size or lost its action when
+    // the title moved would state the same unit two different ways.
+    const sizes = sections.map((section) => {
       const designation = designationOf(section);
+      const row = designationRowOf(markup, section.anchorId);
 
-      // One row: the designation at reading size, the action beside it.
-      expect(markup).toContain(
-        `>${designation}</span><button aria-label="${detailsActionFor(designation)}"`,
-      );
-    }
+      expect(row["designation"]).toBe(designation);
+      expect(row["action"]).toBe(detailsActionFor(designation));
+
+      return row["size"];
+    });
+
+    expect(new Set(sizes).size).toBe(1);
   });
 
   test("a title the publisher printed above the designation stays above it", () => {

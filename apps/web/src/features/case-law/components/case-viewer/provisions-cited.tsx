@@ -208,8 +208,17 @@ const WorkReferences = ({
 
   return (
     <div className="flex flex-col gap-1">
-      <p className="text-muted-foreground text-[0.7rem] tracking-wide">
-        <BidiText as="span">{group.title}</BidiText>
+      <p className="text-muted-foreground flex min-w-0 items-baseline gap-1.5 text-[calc(0.7rem*var(--reader-text-scale))] tracking-wide">
+        <BidiText as="span" className="shrink-0">
+          {group.title}
+        </BidiText>
+        {/* The act's name once its record is in: a number alone asks the
+            reader to know that 89/2012 Sb. is the civil code. */}
+        {statute !== undefined && statute !== null && (
+          <BidiText as="span" className="truncate" title={statute.title}>
+            {statute.title}
+          </BidiText>
+        )}
       </p>
       {/* References flow like prose: a code's thirty sections read on three
           lines, not thirty. A reference showing its passages takes the row. */}
@@ -282,7 +291,7 @@ const ProvisionRowItem = ({
             // Coarse pointers get the same 44px box the shared button
             // primitive draws, without the chrome a button would put in a
             // dense list of references.
-            className="text-muted-foreground hover:text-foreground relative text-[0.7rem] tabular-nums pointer-coarse:after:absolute pointer-coarse:after:size-full pointer-coarse:after:min-h-11 pointer-coarse:after:min-w-11"
+            className="text-muted-foreground hover:text-foreground relative text-[calc(0.7rem*var(--reader-text-scale))] tabular-nums pointer-coarse:after:absolute pointer-coarse:after:size-full pointer-coarse:after:min-h-11 pointer-coarse:after:min-w-11"
             onClick={() => setShowPassages(!showPassages)}
             type="button"
           >
@@ -294,7 +303,7 @@ const ProvisionRowItem = ({
         <ul className="border-border/60 m-0 flex list-none flex-col gap-1 border-s ps-2 pt-1 pb-1">
           {provision.occurrences.map((occurrence) => (
             <li
-              className="text-muted-foreground text-[0.7rem] leading-snug"
+              className="text-muted-foreground text-[calc(0.7rem*var(--reader-text-scale))] leading-snug"
               key={occurrence.spanStart}
             >
               <BidiText as="span">{occurrence.sentenceText}</BidiText>

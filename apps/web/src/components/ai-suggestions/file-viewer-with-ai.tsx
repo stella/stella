@@ -33,6 +33,7 @@ export const FileViewerWithAI = ({
   activeFile,
   activeDraft,
   activeExternal,
+  activeLegal,
   className,
   docxEditable,
   docxEditSafety,
@@ -40,6 +41,7 @@ export const FileViewerWithAI = ({
   docxComments,
   onDocxCommentsChange,
   requestDocxEditMode,
+  threadPresentation,
   children,
 }: FileViewerWithAIProps) => {
   const overlayIsActive =
@@ -51,6 +53,7 @@ export const FileViewerWithAI = ({
     activeFile?.fileFieldId ?? "",
     activeDraft?.toolCallId ?? "",
     activeExternal?.url ?? "",
+    activeLegal?.decisionId ?? "",
   ].join(":");
   const [LazyFileChatOverlayHost, setLazyFileChatOverlayHost] = useState(
     createLazyFileChatOverlayHost,
@@ -94,6 +97,7 @@ export const FileViewerWithAI = ({
             activeExternal={activeExternal}
             activeDraft={activeDraft}
             activeFile={activeFile}
+            activeLegal={activeLegal}
             chatThreadId={activeChatThreadId}
             docxComments={docxComments}
             docxEditable={docxEditable}
@@ -107,6 +111,7 @@ export const FileViewerWithAI = ({
             onActiveDraftChatBound={onActiveDraftChatBound}
             onDocxCommentsChange={onDocxCommentsChange}
             requestDocxEditMode={requestDocxEditMode}
+            threadPresentation={threadPresentation}
             workspaceId={workspaceId}
           />
         </QuerySuspenseBoundary>

@@ -882,8 +882,6 @@
     "editorLoading": "Chargement de l’éditeur…",
     "emptyThreadDescription": "Posez une question sur ce dossier, rédigez du texte ou demandez une courte note de recherche.",
     "emptyThreadTitle": "Démarrer une conversation",
-    "externalSourcePlaceholder": "Discuter de {title}",
-    "externalSourcePlaceholderAction": "Discuter de",
     "extractingContent": "Extraction du contenu...",
     "filePlaceholder": "Discuter de {fileName}",
     "filePlaceholderAction": "Discuter de",
@@ -1014,6 +1012,8 @@
         "team": "Skills IA d'équipe"
       }
     },
+    "sourcePlaceholder": "Discuter de {title}",
+    "sourcePlaceholderAction": "Discuter de",
     "sources": "Sources :",
     "spawnSubagents": {
       "failed": "Échec"
@@ -4126,6 +4126,7 @@
     "leadingDecisions": "Décisions de principe",
     "noVersionInForce": "Aucune version de ce texte n'était en vigueur à la date choisie.",
     "openEnded": "aujourd’hui",
+    "openProvision": "Ouvrir la disposition",
     "outline": "Sommaire",
     "outlineJumpLabel": "Aller à une disposition",
     "outlineJumpPlaceholder": "§ 10 ou un intitulé",

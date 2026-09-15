@@ -77,6 +77,7 @@ import type { FileTab } from "@/components/inspector/inspector-tabs-store";
 import { MeasuredPdfProvider } from "@/components/inspector/measured-pdf-provider";
 import { PlaybookFacet } from "@/components/inspector/playbook-facet";
 import { VersionsFacet } from "@/components/inspector/versions-facet";
+import { ViewerOverlayBar } from "@/components/inspector/viewer-overlay-bar";
 import { MarkdownHybridEditor } from "@/components/markdown/markdown-hybrid-editor";
 import {
   PeekPdfControls,
@@ -226,7 +227,6 @@ const getFileTabDisplayState = ({
   const storedScaleOffset = scaleOffsets.get(tab.id);
   const scaleOffset = storedScaleOffset ?? 0;
   return {
-    canResetZoom: scaleOffset !== 0,
     desktopEditFileType: getDesktopEditFileType({
       fileName: tab.fileName,
       mimeType: tab.mimeType,
@@ -481,7 +481,6 @@ export const FileTabPanel = ({
   const replaceFileFieldId = useInspectorTabsStore((s) => s.replaceFileFieldId);
   const setFileFacet = useInspectorTabsStore((s) => s.setFileFacet);
   const {
-    canResetZoom,
     desktopEditFileType,
     isActive,
     isEmailDisplay,
@@ -834,16 +833,14 @@ export const FileTabPanel = ({
   // (Save / Create version) lives in the tab header
   // (`fileActions` above).
   const previewOverlay = isPreviewOverlayVisible ? (
-    <div className="bg-background/80 supports-[backdrop-filter]:bg-background/65 absolute end-2 top-2 z-10 flex items-center gap-1 rounded-md border p-0.5 shadow-sm backdrop-blur">
+    <ViewerOverlayBar>
       <PeekPdfControls
-        canResetZoom={canResetZoom}
-        onResetZoom={() => handleResetZoom(tab.id)}
-        onZoomIn={() => handleZoom(tab.id, "in")}
-        onZoomOut={() => handleZoom(tab.id, "out")}
+        onReset={() => handleResetZoom(tab.id)}
+        onZoom={(direction) => handleZoom(tab.id, direction)}
         pdfColorControl={pdfColorControl}
         scaleOffset={scaleOffset}
       />
-    </div>
+    </ViewerOverlayBar>
   ) : null;
 
   const contextBar = (
@@ -1267,8 +1264,7 @@ export const FileTabPanel = ({
               fileName={tab.fileName}
               onResetZoom={resetEmailAttachmentZoom}
               onSelectedIdChange={setSelectedEmailAttachmentId}
-              onZoomIn={() => zoomEmailAttachment("in")}
-              onZoomOut={() => zoomEmailAttachment("out")}
+              onZoom={zoomEmailAttachment}
               overlayActivation={emailAttachmentOverlayActivation}
               scaleOffset={emailAttachmentScaleOffset}
               selectedId={selectedEmailAttachmentId}
@@ -1396,8 +1392,7 @@ export const FileTabPanel = ({
               fileName={tab.fileName}
               onResetZoom={resetEmailAttachmentZoom}
               onSelectedIdChange={setSelectedEmailAttachmentId}
-              onZoomIn={() => zoomEmailAttachment("in")}
-              onZoomOut={() => zoomEmailAttachment("out")}
+              onZoom={zoomEmailAttachment}
               overlayActivation={emailAttachmentOverlayActivation}
               scaleOffset={emailAttachmentScaleOffset}
               selectedId={selectedEmailAttachmentId}

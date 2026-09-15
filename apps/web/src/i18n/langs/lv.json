@@ -882,8 +882,6 @@
     "editorLoading": "Ielādē redaktoru…",
     "emptyThreadDescription": "Jautājiet par šo lietu, sagatavojiet tekstu vai pieprasiet īsu izpētes piezīmi.",
     "emptyThreadTitle": "Sākt sarunu",
-    "externalSourcePlaceholder": "Tērzēt par {title}",
-    "externalSourcePlaceholderAction": "Tērzēt par",
     "extractingContent": "Satura izgūšana...",
     "filePlaceholder": "Tērzēt par {fileName}",
     "filePlaceholderAction": "Tērzēt par",
@@ -1014,6 +1012,8 @@
         "team": "Komandas MI prasmes"
       }
     },
+    "sourcePlaceholder": "Tērzēt par {title}",
+    "sourcePlaceholderAction": "Tērzēt par",
     "sources": "Avoti:",
     "spawnSubagents": {
       "failed": "Neizdevās"
@@ -4126,6 +4126,7 @@
     "leadingDecisions": "Vadošie nolēmumi",
     "noVersionInForce": "Izvēlētajā dienā neviena šā akta redakcija nebija spēkā.",
     "openEnded": "šobrīd",
+    "openProvision": "Atvērt normu",
     "outline": "Saturs",
     "outlineJumpLabel": "Pāriet uz normu",
     "outlineJumpPlaceholder": "§ 10 vai virsraksts",

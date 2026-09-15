@@ -49,6 +49,7 @@ import {
   type EmailChatMode,
 } from "@/components/inspector/email-html-viewer.logic";
 import { MeasuredPdfProvider } from "@/components/inspector/measured-pdf-provider";
+import type { ZoomDirection } from "@/components/inspector/zoom-controls";
 import {
   MatterTargetPicker,
   useResolveMatterTarget,
@@ -76,8 +77,7 @@ type EmailAttachmentsFacetProps = {
   fileName: string;
   onResetZoom: () => void;
   onSelectedIdChange: (attachmentId: string | null) => void;
-  onZoomIn: () => void;
-  onZoomOut: () => void;
+  onZoom: (direction: ZoomDirection) => void;
   overlayActivation: FileChatOverlayActivation;
   scaleOffset: number;
   selectedId: string | null;
@@ -107,8 +107,7 @@ export const EmailAttachmentsFacet = ({
   fileName,
   onResetZoom,
   onSelectedIdChange,
-  onZoomIn,
-  onZoomOut,
+  onZoom,
   overlayActivation,
   scaleOffset,
   selectedId,
@@ -241,8 +240,7 @@ export const EmailAttachmentsFacet = ({
         }
         saving={saving}
         onResetZoom={onResetZoom}
-        onZoomIn={onZoomIn}
-        onZoomOut={onZoomOut}
+        onZoom={onZoom}
         scaleOffset={scaleOffset}
         chatMode={chatMode}
         workspaceId={workspaceId}
@@ -341,8 +339,7 @@ const AttachmentPreview = ({
   onChooseMatter,
   onResetZoom,
   onSave,
-  onZoomIn,
-  onZoomOut,
+  onZoom,
   scaleOffset,
   saving,
   workspaceId,
@@ -355,8 +352,7 @@ const AttachmentPreview = ({
   onChooseMatter: () => void;
   onResetZoom: () => void;
   onSave: () => void;
-  onZoomIn: () => void;
-  onZoomOut: () => void;
+  onZoom: (direction: ZoomDirection) => void;
   scaleOffset: number;
   saving: boolean;
   workspaceId: string;
@@ -421,10 +417,8 @@ const AttachmentPreview = ({
         {previewKind === EMAIL_ATTACHMENT_PREVIEW_KIND.pdf ? (
           <div className="flex shrink-0 items-center gap-1">
             <PeekPdfControls
-              canResetZoom={scaleOffset !== 0}
-              onResetZoom={onResetZoom}
-              onZoomIn={onZoomIn}
-              onZoomOut={onZoomOut}
+              onReset={onResetZoom}
+              onZoom={onZoom}
               scaleOffset={scaleOffset}
             />
           </div>

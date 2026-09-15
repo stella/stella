@@ -104,7 +104,7 @@ export const CitedDecisionPreview = ({
         </span>
       </span>
       {treatment !== undefined && (
-        <span className="text-muted-foreground flex items-center gap-1.5 text-[0.7rem]">
+        <span className="text-muted-foreground flex items-center gap-1.5 text-[calc(0.7rem*var(--reader-text-scale))]">
           <span
             aria-hidden="true"
             className={cn(

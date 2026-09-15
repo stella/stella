@@ -155,23 +155,18 @@ export const PdfViewerControls = ({
     <div className="flex items-center gap-1">
       <div className="flex items-center rounded-md border p-0.5">
         <PeekPdfControls
-          canResetZoom={scaleOffset !== 0}
-          onResetZoom={() => navigateToScale(0)}
-          onZoomIn={
-            scaleOffset >= PDF_MAX_SCALE_OFFSET
-              ? undefined
-              : () =>
-                  navigateToScale(
-                    getPDFScaleOffset(scaleOffset, PDF_SCALE_OFFSET_STEP),
-                  )
-          }
-          onZoomOut={
-            scaleOffset <= PDF_MIN_SCALE_OFFSET
-              ? undefined
-              : () =>
-                  navigateToScale(
-                    getPDFScaleOffset(scaleOffset, -PDF_SCALE_OFFSET_STEP),
-                  )
+          atMax={scaleOffset >= PDF_MAX_SCALE_OFFSET}
+          atMin={scaleOffset <= PDF_MIN_SCALE_OFFSET}
+          onReset={() => navigateToScale(0)}
+          onZoom={(direction) =>
+            navigateToScale(
+              getPDFScaleOffset(
+                scaleOffset,
+                direction === "in"
+                  ? PDF_SCALE_OFFSET_STEP
+                  : -PDF_SCALE_OFFSET_STEP,
+              ),
+            )
           }
           pdfColorControl={
             canAdjustPDFColor

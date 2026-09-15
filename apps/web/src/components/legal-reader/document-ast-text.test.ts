@@ -31,18 +31,41 @@ const FONT_WEIGHT = {
   "font-bold": 700,
 } as const;
 
+// The reader states a size in one of two scale-aware ways: a size token,
+// which `reader.css` redefines against `--reader-text-scale`, or an
+// arbitrary value that multiplies its own rem by that same scale. Both read
+// as a rem at scale 1. A bare `text-[1.35rem]` is neither: it looks right at
+// rest and silently drops out of the reader's zoom, so `remOf` refuses it
+// instead of measuring it.
+const READER_SIZE_TOKEN_REM = {
+  // `text-base` is the body size the reading column is set in.
+  "text-sm": 0.875,
+  "text-base": 1,
+  "text-lg": 1.125,
+} as const;
+
+const SCALED_REM =
+  /text-\[calc\((?<rem>\d+(?:\.\d+)?)rem\*var\(--reader-text-scale\)\)\]/u;
+
 const remOf = (level: HeadingLevel): number => {
   const classes = HEADING_CLASS.statute[level];
-  const arbitrary = /text-\[(?<rem>\d+(?:\.\d+)?)rem\]/u.exec(classes)
-    ?.groups?.["rem"];
+  const scaled = SCALED_REM.exec(classes)?.groups?.["rem"];
 
-  if (arbitrary !== undefined) {
-    return Number(arbitrary);
+  if (scaled !== undefined) {
+    return Number(scaled);
   }
 
-  // `text-base` is the body size the reading column is set in.
-  expect(classes).toContain("text-base");
-  return 1;
+  const token = Object.entries(READER_SIZE_TOKEN_REM).find(([name]) =>
+    classes.includes(name),
+  );
+
+  if (token === undefined) {
+    throw new Error(
+      `statute heading level ${String(level)} states no scale-aware size`,
+    );
+  }
+
+  return token[1];
 };
 
 const weightOf = (level: HeadingLevel): number => {

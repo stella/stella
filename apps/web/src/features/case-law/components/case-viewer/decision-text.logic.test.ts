@@ -10,10 +10,65 @@ import type {
 import {
   annotationsOverlappingTextSpan,
   apparatusBlockIds,
+  courtHeadnoteOrigin,
+  decisionCaseName,
   editorialSupplementBlocks,
   footnoteParts,
   visibleDecisionBlocks,
 } from "@/features/case-law/components/case-viewer/decision-text.logic";
+import type { HeadnoteOrigin } from "@/features/case-law/components/case-viewer/headnote-block";
+
+const titleBlock = (plainText: string): Block => ({
+  anchorId: "title",
+  id: "title",
+  inlines: [{ text: plainText, type: "text" }],
+  level: 1,
+  plainText,
+  role: "decision-title",
+  type: "heading",
+});
+
+const astOf = (blocks: Block[]): DocumentAst => ({
+  version: 1,
+  source: { system: "test", documentId: "1", webUrl: "", printUrl: "" },
+  metadata: {
+    caseNumber: "347 U.S. 483",
+    ecli: null,
+    court: "Supreme Court",
+    decisionDate: null,
+    decisionType: null,
+    keywords: [],
+    statutes: [],
+  },
+  blocks,
+});
+
+describe("citable case name", () => {
+  test("takes the name off a title of the “Name, Cite” shape", () => {
+    expect(
+      decisionCaseName({
+        ast: astOf([titleBlock("Brown v. Board of Education, 347 U.S. 483")]),
+        caseNumber: "347 U.S. 483",
+      }),
+    ).toBe("Brown v. Board of Education");
+  });
+
+  test("a heading that only names the court is not a case name", () => {
+    expect(
+      decisionCaseName({
+        ast: astOf([titleBlock("JUDGMENT OF THE COURT (Grand Chamber)")]),
+        caseNumber: "C-311/18",
+      }),
+    ).toBeNull();
+    expect(
+      decisionCaseName({ ast: astOf([]), caseNumber: "C-311/18" }),
+    ).toBeNull();
+  });
+
+  test("an unparsed document has no case name", () => {
+    expect(decisionCaseName({ ast: null, caseNumber: "C-311/18" })).toBeNull();
+  });
+});
 
 describe("annotations crossing links", () => {
   test("keeps every intersecting mark over the linked text", () => {
@@ -322,5 +377,31 @@ describe("apparatus block ids", () => {
         ]),
       ),
     ]).toEqual(["apparatus", "syllabus", "headnotes", "summary", "counsel"]);
+  });
+});
+
+// The chip is drawn from the tier, so one drawn without a tier would show a
+// rank nobody stated. Everything the read left open is the same answer: no
+// chip, and the court named in words instead.
+describe("the mark on the court's own headnote", () => {
+  test("carries the chip only where the read stated both halves of it", () => {
+    expect(
+      courtHeadnoteOrigin({ courtAbbreviation: "NS", courtTier: "supreme" }),
+    ).toEqual({ type: "court", chip: { abbreviation: "NS", tier: "supreme" } });
+  });
+
+  test("invents no chip for a court the read did not resolve", () => {
+    const unmarked: HeadnoteOrigin = { type: "court", chip: null };
+
+    expect(courtHeadnoteOrigin({})).toEqual(unmarked);
+    expect(courtHeadnoteOrigin({ courtAbbreviation: "NS" })).toEqual(unmarked);
+    expect(courtHeadnoteOrigin({ courtTier: "supreme" })).toEqual(unmarked);
+    expect(
+      courtHeadnoteOrigin({ courtAbbreviation: "", courtTier: "supreme" }),
+    ).toEqual(unmarked);
+    // A tier the client does not know is a registry the client cannot read.
+    expect(
+      courtHeadnoteOrigin({ courtAbbreviation: "NS", courtTier: "district" }),
+    ).toEqual(unmarked);
   });
 });

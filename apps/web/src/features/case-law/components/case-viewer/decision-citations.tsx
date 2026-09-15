@@ -175,7 +175,7 @@ const TreatmentRollup = ({ counts }: { counts: CitationTreatmentCounts }) => {
     <ul className="m-0 flex list-none flex-wrap gap-x-3 gap-y-1 px-3 ps-8 pb-2">
       {present.map((treatment) => (
         <li
-          className="text-muted-foreground flex items-center gap-1.5 text-[0.7rem]"
+          className="text-muted-foreground flex items-center gap-1.5 text-[calc(0.7rem*var(--reader-text-scale))]"
           key={treatment}
         >
           <span
@@ -263,7 +263,7 @@ export const CitationList = ({
       )}
       {groups.map((group) => (
         <div className="flex flex-col gap-1" key={group.treatment}>
-          <p className="text-muted-foreground flex items-center gap-1.5 text-[0.7rem] tracking-wide uppercase">
+          <p className="text-muted-foreground flex items-center gap-1.5 text-[calc(0.7rem*var(--reader-text-scale))] tracking-wide uppercase">
             <span
               aria-hidden="true"
               className={cn(
@@ -318,7 +318,7 @@ const CitationRow = ({
     return (
       <li className="text-foreground-strong-muted flex items-baseline gap-2 text-xs">
         <BidiText as="span">{item.citationText}</BidiText>
-        <span className="text-muted-foreground text-[0.7rem]">
+        <span className="text-muted-foreground text-[calc(0.7rem*var(--reader-text-scale))]">
           {t("caseLaw.citation.unresolved")}
         </span>
       </li>
@@ -350,7 +350,7 @@ const CitationRow = ({
       >
         <BidiText as="span">{citedDecisionLabel(item.decision)}</BidiText>
       </CitedDecisionLink>
-      <span className="text-muted-foreground text-[0.7rem]">
+      <span className="text-muted-foreground text-[calc(0.7rem*var(--reader-text-scale))]">
         {decided === null
           ? item.decision.court
           : `${item.decision.court} · ${decided}`}

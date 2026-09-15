@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   buildDecisionFacts,
   DECISION_FACT_KEYWORD_LIMIT,
+  DECISION_FACT_KINDS,
   hasDecisionFacts,
 } from "@/features/case-law/components/case-viewer/decision-facts.logic";
 
@@ -32,7 +33,38 @@ describe("decision facts", () => {
       },
       subject: "Územní řízení",
     });
-    expect(hasDecisionFacts(facts)).toBe(true);
+    expect(hasDecisionFacts({ facts, kinds: DECISION_FACT_KINDS })).toBe(true);
+  });
+
+  test("the reader's fact order covers every fact it can build", () => {
+    const facts = buildDecisionFacts({
+      decisionType: "rozsudek",
+      metadata: {},
+      source: null,
+      sourceUrl: null,
+    });
+
+    const orderedKinds: string[] = [...DECISION_FACT_KINDS];
+    expect(orderedKinds.sort()).toEqual(Object.keys(facts).sort());
+  });
+
+  test("a selection answers only for the facts it names", () => {
+    const facts = buildDecisionFacts({
+      decisionType: "rozsudek",
+      metadata: { keywords: ["a"] },
+      source: { name: "x" },
+      sourceUrl: "https://example.org/decision",
+    });
+
+    // The inspector header takes the type and the source; its body must not
+    // print them a second time, and says so by reporting nothing to draw.
+    expect(hasDecisionFacts({ facts, kinds: ["decisionType", "source"] })).toBe(
+      true,
+    );
+    expect(hasDecisionFacts({ facts, kinds: ["subject", "judge"] })).toBe(
+      false,
+    );
+    expect(hasDecisionFacts({ facts, kinds: [] })).toBe(false);
   });
 
   test("caps keywords and refuses non-http sources", () => {
@@ -51,14 +83,15 @@ describe("decision facts", () => {
 
   test("is empty without metadata or source", () => {
     expect(
-      hasDecisionFacts(
-        buildDecisionFacts({
+      hasDecisionFacts({
+        facts: buildDecisionFacts({
           decisionType: null,
           metadata: null,
           source: null,
           sourceUrl: null,
         }),
-      ),
+        kinds: DECISION_FACT_KINDS,
+      }),
     ).toBe(false);
   });
 });

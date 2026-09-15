@@ -9,6 +9,7 @@ import {
   resolveDocumentAnchor,
 } from "@stll/legal-ast/document-ast";
 import { OutlineRail, outlineEntryText } from "@stll/ui/outline-rail";
+import { Separator } from "@stll/ui/separator";
 
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import { OpenOriginalButton } from "@/components/legal-reader/open-original-button";
@@ -252,6 +253,10 @@ export const PublicStatuteViewer = ({
               placeholderLabel={t("common.today")}
               value={asOf ?? statute?.versionValidFrom ?? null}
             />
+            {/* Two dates side by side read as one range without a rule
+                between them: the date the reader asked for, then the
+                version that answers it. */}
+            <Separator className="mx-1 h-4" orientation="vertical" />
           </div>
         )}
         <StatuteVersionMenu

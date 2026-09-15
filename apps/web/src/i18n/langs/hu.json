@@ -882,8 +882,6 @@
     "editorLoading": "Szerkesztő betöltése…",
     "emptyThreadDescription": "Kérdezzen erről az ügyről, fogalmazzon szöveget, vagy kérjen rövid kutatási jegyzetet.",
     "emptyThreadTitle": "Beszélgetés indítása",
-    "externalSourcePlaceholder": "Csevegés erről: {title}",
-    "externalSourcePlaceholderAction": "Csevegés erről:",
     "extractingContent": "Tartalom kinyerése...",
     "filePlaceholder": "Csevegés erről: {fileName}",
     "filePlaceholderAction": "Csevegés erről:",
@@ -1014,6 +1012,8 @@
         "team": "Csapat AI skillek"
       }
     },
+    "sourcePlaceholder": "Csevegés erről: {title}",
+    "sourcePlaceholderAction": "Csevegés erről:",
     "sources": "Források:",
     "spawnSubagents": {
       "failed": "Sikertelen"
@@ -4126,6 +4126,7 @@
     "leadingDecisions": "Irányadó határozatok",
     "noVersionInForce": "A kiválasztott napon a jogszabály egyetlen változata sem volt hatályban.",
     "openEnded": "jelenleg is",
+    "openProvision": "Rendelkezés megnyitása",
     "outline": "Tartalom",
     "outlineJumpLabel": "Ugrás rendelkezéshez",
     "outlineJumpPlaceholder": "§ 10 vagy cím",

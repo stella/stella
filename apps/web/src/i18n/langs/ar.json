@@ -882,8 +882,6 @@
     "editorLoading": "جارٍ تحميل المحرّر…",
     "emptyThreadDescription": "اسأل عن هذا الملف القانوني، أو صُغ نصاً، أو اطلب مذكّرة بحثية موجزة.",
     "emptyThreadTitle": "ابدأ محادثة",
-    "externalSourcePlaceholder": "تحدّث عن {title}",
-    "externalSourcePlaceholderAction": "تحدّث عن",
     "extractingContent": "جارٍ استخراج المحتوى...",
     "filePlaceholder": "تحدّث عن {fileName}",
     "filePlaceholderAction": "تحدّث عن",
@@ -1014,6 +1012,8 @@
         "team": "مهارات الفريق"
       }
     },
+    "sourcePlaceholder": "تحدّث عن {title}",
+    "sourcePlaceholderAction": "تحدّث عن",
     "sources": "المصادر:",
     "spawnSubagents": {
       "failed": "فشل"
@@ -4126,6 +4126,7 @@
     "leadingDecisions": "القرارات الرائدة",
     "noVersionInForce": "لم تكن أي نسخة من هذا النص نافذة في التاريخ المحدد.",
     "openEnded": "الآن",
+    "openProvision": "فتح الحكم",
     "outline": "المحتويات",
     "outlineJumpLabel": "الانتقال إلى حكم",
     "outlineJumpPlaceholder": "§ 10 أو عنوان",

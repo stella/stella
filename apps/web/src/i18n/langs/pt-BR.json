@@ -882,8 +882,6 @@
     "editorLoading": "Carregando editor…",
     "emptyThreadDescription": "Pergunte sobre este caso, redija um texto ou peça uma nota breve de pesquisa.",
     "emptyThreadTitle": "Iniciar conversa",
-    "externalSourcePlaceholder": "Converse sobre {title}",
-    "externalSourcePlaceholderAction": "Conversar sobre",
     "extractingContent": "Extraindo conteúdo...",
     "filePlaceholder": "Conversar sobre {fileName}",
     "filePlaceholderAction": "Conversar sobre",
@@ -1014,6 +1012,8 @@
         "team": "Habilidades de IA da equipe"
       }
     },
+    "sourcePlaceholder": "Converse sobre {title}",
+    "sourcePlaceholderAction": "Conversar sobre",
     "sources": "Fontes:",
     "spawnSubagents": {
       "failed": "Falhou"
@@ -4126,6 +4126,7 @@
     "leadingDecisions": "Decisões de referência",
     "noVersionInForce": "Nenhuma versão desta norma estava em vigor na data escolhida.",
     "openEnded": "hoje",
+    "openProvision": "Abrir o dispositivo",
     "outline": "Sumário",
     "outlineJumpLabel": "Ir para um dispositivo",
     "outlineJumpPlaceholder": "§ 10 ou um título",

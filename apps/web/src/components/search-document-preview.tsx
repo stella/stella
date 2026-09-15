@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 
 import { MeasuredPdfProvider } from "@/components/inspector/measured-pdf-provider";
 import { usePdfTabZoom } from "@/components/inspector/use-pdf-tab-zoom";
+import { ViewerOverlayBar } from "@/components/inspector/viewer-overlay-bar";
 import {
   PeekPdfControls,
   PeekPdfViewer,
@@ -114,7 +115,7 @@ export const SearchDocumentPreview = ({
         </div>
       )}
       {!showNoMatchFallback && (
-        <div className="bg-background/80 supports-[backdrop-filter]:bg-background/65 absolute end-2 top-2 z-10 flex items-center gap-1 rounded-md border p-0.5 shadow-sm backdrop-blur">
+        <ViewerOverlayBar>
           {searchMatchSummary.count > 0 && (
             <SearchMatchControls
               activeIndex={activeSearchMatchIndex}
@@ -125,14 +126,12 @@ export const SearchDocumentPreview = ({
             />
           )}
           <PeekPdfControls
-            canResetZoom={scaleOffset !== 0}
-            onResetZoom={() => handleResetZoom(target.fieldId)}
-            onZoomIn={() => handleZoom(target.fieldId, "in")}
-            onZoomOut={() => handleZoom(target.fieldId, "out")}
+            onReset={() => handleResetZoom(target.fieldId)}
+            onZoom={(direction) => handleZoom(target.fieldId, direction)}
             scaleOffset={scaleOffset}
             tooltipLayer="search-child"
           />
-        </div>
+        </ViewerOverlayBar>
       )}
     </div>
   );

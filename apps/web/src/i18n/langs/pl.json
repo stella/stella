@@ -882,8 +882,6 @@
     "editorLoading": "Wczytywanie edytora…",
     "emptyThreadDescription": "Zapytaj o tę sprawę, przygotuj tekst albo poproś o krótką notatkę z researchu.",
     "emptyThreadTitle": "Rozpocznij rozmowę",
-    "externalSourcePlaceholder": "Czat o {title}",
-    "externalSourcePlaceholderAction": "Czat o",
     "extractingContent": "Wyodrębnianie treści...",
     "filePlaceholder": "Czat o {fileName}",
     "filePlaceholderAction": "Czat o",
@@ -1014,6 +1012,8 @@
         "team": "Umiejętności AI zespołu"
       }
     },
+    "sourcePlaceholder": "Czat o {title}",
+    "sourcePlaceholderAction": "Czat o",
     "sources": "Źródła:",
     "spawnSubagents": {
       "failed": "Niepowodzenie"
@@ -4126,6 +4126,7 @@
     "leadingDecisions": "Orzeczenia wiodące",
     "noVersionInForce": "W wybranym dniu nie obowiązywała żadna wersja tego aktu.",
     "openEnded": "nadal",
+    "openProvision": "Otwórz przepis",
     "outline": "Spis treści",
     "outlineJumpLabel": "Przejdź do przepisu",
     "outlineJumpPlaceholder": "§ 10 lub tytuł",

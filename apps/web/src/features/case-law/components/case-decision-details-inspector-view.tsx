@@ -11,7 +11,9 @@ import type { CaseDecisionViewPayload } from "@/components/inspector/case-decisi
 import { InspectorTabHeader } from "@/components/inspector/inspector-tab-header";
 import type { InspectorViewRenderProps } from "@/components/inspector/view-registry";
 import { DecisionFacts } from "@/features/case-law/components/case-viewer/decision-facts";
+import { DECISION_FACT_KINDS } from "@/features/case-law/components/case-viewer/decision-facts.logic";
 import { LeadingCitations } from "@/features/case-law/components/case-viewer/leading-citations";
+import { DecisionMainViewAction } from "@/features/case-law/components/decision-main-view-action";
 import { decisionOptions } from "@/features/case-law/queries/decisions";
 import { useFormatter } from "@/i18n/formatting-context";
 import { parseDeterministicDate } from "@/lib/deterministic-date";
@@ -33,12 +35,18 @@ export const CaseDecisionDetailsInspectorView = ({
 
   return (
     <div className="bg-background flex min-h-0 flex-1 flex-col overflow-hidden">
-      <InspectorTabHeader label={t("common.details")} onClose={onClose} />
+      <InspectorTabHeader
+        actions={<DecisionMainViewAction payload={tab.payload} />}
+        label={tab.label}
+        onClose={onClose}
+      />
       <ScrollArea className="min-h-0 flex-1">
         <div className="px-4 py-4 font-sans">
-          <h2 className="text-foreground mb-4 text-sm font-medium">
+          {/* The header names the decision; repeating it above the facts
+              would say the same thing twice on a bounded width. */}
+          <h1 className="sr-only">
             <BidiText as="span">{tab.payload.caseNumber}</BidiText>
-          </h2>
+          </h1>
           {isPending && <DetailsLoader />}
           {decision !== undefined && (
             <>
@@ -60,6 +68,7 @@ export const CaseDecisionDetailsInspectorView = ({
               </dl>
               <DecisionFacts
                 decisionType={decision.decisionType}
+                facts={DECISION_FACT_KINDS}
                 metadata={decision.metadata}
                 source={decision.source}
                 sourceUrl={decision.sourceUrl}

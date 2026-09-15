@@ -18,6 +18,37 @@ import type {
   PublisherSummaryRole,
 } from "@stll/legal-ast/document-ast";
 
+import type { HeadnoteOrigin } from "@/features/case-law/components/case-viewer/headnote-block";
+import { isCourtTier } from "@/features/case-law/decision-filter-facets.logic";
+
+/**
+ * The mark the court's own top matter carries: the court's chip where the
+ * read both abbreviated and ranked it, and its name in words everywhere else.
+ *
+ * No chip is invented for a court the registry did not answer for. The chip
+ * is drawn from the tier, so a guessed one would show a rank nobody stated —
+ * and the alternative costs the reader nothing, because the court's name
+ * stands in the reference line above either way.
+ */
+export const courtHeadnoteOrigin = ({
+  courtAbbreviation,
+  courtTier,
+}: {
+  courtAbbreviation?: string | null | undefined;
+  courtTier?: string | null | undefined;
+}): HeadnoteOrigin =>
+  courtAbbreviation !== null &&
+  courtAbbreviation !== undefined &&
+  courtAbbreviation !== "" &&
+  courtTier !== null &&
+  courtTier !== undefined &&
+  isCourtTier(courtTier)
+    ? {
+        type: "court",
+        chip: { abbreviation: courtAbbreviation, tier: courtTier },
+      }
+    : { type: "court", chip: null };
+
 export type EditorialSupplementBlock = {
   end: number;
   start: number;
@@ -137,6 +168,28 @@ export const editorialSupplementBlocks = (
     blockStart = boundary;
   }
   return blocks;
+};
+
+/**
+ * The case's citable name, for the citation a copied passage carries. Only a
+ * title of the "Name, Cite" shape yields one: a generic heading ("JUDGMENT OF
+ * THE COURT (Grand Chamber)", a bare case number) must not masquerade as a
+ * case name.
+ */
+export const decisionCaseName = ({
+  ast,
+  caseNumber,
+}: {
+  ast: DocumentAst | null;
+  caseNumber: string;
+}): string | null => {
+  const title = ast?.blocks.find(
+    (block) => block.type === "heading" && block.role === "decision-title",
+  )?.plainText;
+  const citeSuffix = `, ${caseNumber}`;
+  return title?.endsWith(citeSuffix) === true
+    ? title.slice(0, -citeSuffix.length)
+    : null;
 };
 
 /**

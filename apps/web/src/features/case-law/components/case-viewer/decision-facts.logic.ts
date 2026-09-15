@@ -77,10 +77,46 @@ export const buildDecisionFacts = ({
   };
 };
 
-export const hasDecisionFacts = (facts: DecisionFacts): boolean =>
-  facts.decisionType !== null ||
-  facts.judge !== null ||
-  facts.keywords.length > 0 ||
-  facts.legalAreas.length > 0 ||
-  facts.source !== null ||
-  facts.subject !== null;
+/**
+ * Whether each fact was supplied, one entry per field of `DecisionFacts`: a
+ * new fact cannot be added to the shape without deciding what makes it
+ * present, and the surfaces below select from these keys rather than from
+ * strings of their own.
+ */
+const FACT_IS_PRESENT = {
+  decisionType: (facts) => facts.decisionType !== null,
+  judge: (facts) => facts.judge !== null,
+  keywords: (facts) => facts.keywords.length > 0,
+  legalAreas: (facts) => facts.legalAreas.length > 0,
+  source: (facts) => facts.source !== null,
+  subject: (facts) => facts.subject !== null,
+} as const satisfies Record<
+  keyof DecisionFacts,
+  (facts: DecisionFacts) => boolean
+>;
+
+export type DecisionFactKind = keyof typeof FACT_IS_PRESENT;
+
+/** Every fact, in the order a reader reads them. */
+export const DECISION_FACT_KINDS = [
+  "decisionType",
+  "legalAreas",
+  "subject",
+  "keywords",
+  "judge",
+  "source",
+] as const satisfies readonly DecisionFactKind[];
+
+export const decisionFactIsPresent = (
+  facts: DecisionFacts,
+  kind: DecisionFactKind,
+): boolean => FACT_IS_PRESENT[kind](facts);
+
+/** Whether the selected part of the facts has anything to print. */
+export const hasDecisionFacts = ({
+  facts,
+  kinds,
+}: {
+  facts: DecisionFacts;
+  kinds: readonly DecisionFactKind[];
+}): boolean => kinds.some((kind) => decisionFactIsPresent(facts, kind));

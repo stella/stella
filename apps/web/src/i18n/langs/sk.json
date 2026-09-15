@@ -882,8 +882,6 @@
     "editorLoading": "Načítava sa editor…",
     "emptyThreadDescription": "Opýtajte sa na tento spis, pripravte text alebo požiadajte o krátku rešeršnú poznámku.",
     "emptyThreadTitle": "Začať konverzáciu",
-    "externalSourcePlaceholder": "Chatovať o {title}",
-    "externalSourcePlaceholderAction": "Chatovať o",
     "extractingContent": "Extrahovanie obsahu...",
     "filePlaceholder": "Chatovať o {fileName}",
     "filePlaceholderAction": "Chatovať o",
@@ -1014,6 +1012,8 @@
         "team": "Tímové AI zručnosti"
       }
     },
+    "sourcePlaceholder": "Chatovať o {title}",
+    "sourcePlaceholderAction": "Chatovať o",
     "sources": "Zdroje:",
     "spawnSubagents": {
       "failed": "Zlyhalo"
@@ -4126,6 +4126,7 @@
     "leadingDecisions": "Kľúčové rozhodnutia",
     "noVersionInForce": "K vybranému dňu nebolo účinné žiadne znenie tohto predpisu.",
     "openEnded": "súčasnosť",
+    "openProvision": "Otvoriť ustanovenie",
     "outline": "Obsah",
     "outlineJumpLabel": "Prejsť na ustanovenie",
     "outlineJumpPlaceholder": "§ 10 alebo názov",

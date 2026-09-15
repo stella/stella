@@ -14,6 +14,13 @@ export type PublicCaseLawDecision = {
   caseNumber: string;
   country: string;
   court: string;
+  /**
+   * The court's chip, as the read derived it from the court registry: both
+   * fields together or neither, since the chip is weighted by the tier. A
+   * read that could not reach the registry states no abbreviation.
+   */
+  courtAbbreviation?: string | null | undefined;
+  courtTier?: string | null | undefined;
   decisionDate: Date | string | null;
   decisionType: string | null;
   documentAst: unknown;
