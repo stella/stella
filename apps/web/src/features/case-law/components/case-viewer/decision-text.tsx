@@ -314,6 +314,7 @@ const TopMatterBody = ({
   anchorsByPieceId,
   annotationAnchors,
   footnotes,
+  notesByAnchorId,
   rangesByPieceId,
   source,
   variant,
@@ -322,6 +323,7 @@ const TopMatterBody = ({
   anchorsByPieceId: Record<string, TextAnchor[]>;
   annotationAnchors: readonly AnnotationAnchorSource[];
   footnotes: FootnoteParts;
+  notesByAnchorId: ReadonlyMap<string, ReactNode> | undefined;
   rangesByPieceId: Record<string, SearchMatchRange[]>;
   source: TopMatterSource;
   variant: "abstract" | "legal-sentence";
@@ -342,16 +344,18 @@ const TopMatterBody = ({
   return (
     <div className="space-y-3">
       {source.blocks.map((block) => (
-        <BlockRenderer
-          activeMatchIndex={activeMatchIndex}
-          anchorsByPieceId={anchorsByPieceId}
-          block={block}
-          key={block.id}
-          noteBackJumpTo={footnotes.backJumpAnchorByLastId.get(block.id)}
-          noteHead={footnotes.headIds.has(block.id)}
-          rangesByPieceId={rangesByPieceId}
-          variant="case-law"
-        />
+        <Fragment key={block.id}>
+          <BlockRenderer
+            activeMatchIndex={activeMatchIndex}
+            anchorsByPieceId={anchorsByPieceId}
+            block={block}
+            noteBackJumpTo={footnotes.backJumpAnchorByLastId.get(block.id)}
+            noteHead={footnotes.headIds.has(block.id)}
+            rangesByPieceId={rangesByPieceId}
+            variant="case-law"
+          />
+          {notesByAnchorId?.get(block.anchorId)}
+        </Fragment>
       ))}
     </div>
   );
@@ -393,6 +397,7 @@ const DecisionTopMatterSections = ({
   annotationAnchors,
   courtOrigin,
   footnotes,
+  notesByAnchorId,
   rangesByPieceId,
   topMatter,
 }: {
@@ -402,6 +407,7 @@ const DecisionTopMatterSections = ({
   annotationAnchors: readonly AnnotationAnchorSource[];
   courtOrigin: HeadnoteOrigin;
   footnotes: FootnoteParts;
+  notesByAnchorId: ReadonlyMap<string, ReactNode> | undefined;
   rangesByPieceId: Record<string, SearchMatchRange[]>;
   topMatter: DecisionTopMatter;
 }) => {
@@ -429,6 +435,7 @@ const DecisionTopMatterSections = ({
             anchorsByPieceId={anchorsByPieceId}
             annotationAnchors={annotationAnchors}
             footnotes={footnotes}
+            notesByAnchorId={notesByAnchorId}
             rangesByPieceId={rangesByPieceId}
             source={legalSentence}
             variant="legal-sentence"
@@ -447,6 +454,7 @@ const DecisionTopMatterSections = ({
             anchorsByPieceId={anchorsByPieceId}
             annotationAnchors={annotationAnchors}
             footnotes={footnotes}
+            notesByAnchorId={notesByAnchorId}
             rangesByPieceId={rangesByPieceId}
             source={abstract}
             variant="abstract"
@@ -1014,6 +1022,7 @@ export const DecisionText = ({
             }
             footnotes={footnotes}
             key={decisionId}
+            notesByAnchorId={notesByAnchorId}
             rangesByPieceId={searchResults.rangesByPieceId}
             topMatter={topMatter}
           />
@@ -1062,6 +1071,7 @@ export const DecisionText = ({
             }
             footnotes={footnotes}
             key={decisionId}
+            notesByAnchorId={notesByAnchorId}
             rangesByPieceId={searchResults.rangesByPieceId}
             topMatter={topMatter}
           />
@@ -1103,6 +1113,7 @@ export const DecisionText = ({
           }
           footnotes={footnotes}
           key={decisionId}
+          notesByAnchorId={notesByAnchorId}
           rangesByPieceId={searchResults.rangesByPieceId}
           topMatter={topMatter}
         />
@@ -1114,10 +1125,12 @@ export const DecisionText = ({
     );
   })();
 
-  // A note whose paragraph the flow above did not draw — anchored in the top
-  // matter, or in a decision that only resolved to fulltext — follows the
-  // text rather than going with its anchor.
-  const drawnAnchorIds = new Set(bodyBlocks.map((block) => block.anchorId));
+  // A note whose paragraph the flow above did not draw — a decision that only
+  // resolved to fulltext, or an anchor the text no longer carries — follows
+  // the text rather than going with its anchor. Counted over the blocks the
+  // page renders, top matter included, so a note on a lifted headnote draws
+  // under it instead of at the end.
+  const drawnAnchorIds = new Set(renderedBlocks.map((block) => block.anchorId));
   const trailingNotes =
     notesByAnchorId === undefined
       ? []

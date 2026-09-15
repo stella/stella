@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -313,6 +314,7 @@ const renderTopMatter = ({
   courtTier,
   documentAst = ast,
   fields = {},
+  notesByAnchorId,
   searchQuery = "",
 }: {
   analysis?: DecisionAnalysis;
@@ -320,6 +322,7 @@ const renderTopMatter = ({
   courtTier?: string;
   documentAst?: unknown;
   fields?: TextFieldOverrides;
+  notesByAnchorId?: ReadonlyMap<string, ReactNode>;
   searchQuery?: string;
 } = {}): string =>
   renderToStaticMarkup(
@@ -352,6 +355,7 @@ const renderTopMatter = ({
           },
         }}
         decisionId="dec-1"
+        notesByAnchorId={notesByAnchorId}
         searchQuery={searchQuery}
       />
     </IntlProvider>,
@@ -440,6 +444,19 @@ describe("what a decision opens with", () => {
     expect(markup).toContain('id="p-h"');
     // Nothing is left for the head-matter disclosure to fold.
     expect(markup).not.toContain("reader-apparatus");
+  });
+
+  // The paragraph moved, so its comment moves with it. Left behind, the note
+  // would be drawn after the whole decision, under text it is not about.
+  test("draws a note on a lifted paragraph under the paragraph", () => {
+    const note = "Reader note.";
+    const markup = renderTopMatter({
+      documentAst: astWith([publisherParagraph("p-h", "headnotes", headnote)]),
+      notesByAnchorId: new Map([["p-h", <span key="note">{note}</span>]]),
+    });
+
+    expect(occurrences(markup, note)).toBe(1);
+    expect(markup.indexOf(note)).toBeLessThan(markup.indexOf(BODY_TEXT));
   });
 
   test("falls back to the legal-sentence field, then to the summary field", () => {
