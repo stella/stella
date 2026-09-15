@@ -26,7 +26,6 @@ import {
   hasAiHeadnotes,
 } from "@/features/case-law/components/case-viewer/analysis/ai-headnotes";
 import { AnalysisLayers } from "@/features/case-law/components/case-viewer/analysis/analysis-layers";
-import type { AnalysisLayerKind } from "@/features/case-law/components/case-viewer/analysis/analysis-layers";
 import { CurrentSection } from "@/features/case-law/components/case-viewer/analysis/current-section";
 import { MarginNotes } from "@/features/case-law/components/case-viewer/analysis/margin-notes";
 import type { AnalysisMarginItem } from "@/features/case-law/components/case-viewer/analysis/margin-notes";
@@ -52,12 +51,6 @@ import { useCaseSearchStore } from "@/lib/case-search-store";
 import { detached } from "@/lib/detached";
 import type { SafeId } from "@/lib/safe-id";
 import { forceReflow } from "@/lib/utils";
-
-/** What the margin column draws, beside the text. */
-const MARGIN_ANALYSIS_LAYERS = [
-  "topics",
-  "significance",
-] as const satisfies readonly AnalysisLayerKind[];
 
 type DecisionWorkspaceDecision = DecisionDocumentState & {
   analysis?: unknown;
@@ -466,10 +459,7 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
             >
               <aside className="relative flex flex-col max-lg:hidden">
                 {completeAnalysis !== null && showAiNotes && (
-                  <AnalysisLayers
-                    analysis={completeAnalysis}
-                    layers={MARGIN_ANALYSIS_LAYERS}
-                  />
+                  <AnalysisLayers analysis={completeAnalysis} />
                 )}
                 {hasAnalysis &&
                   showAiNotes &&

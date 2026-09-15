@@ -6,18 +6,9 @@ import { useTranslations } from "use-intl";
 import type { DecisionAnalysis } from "@stll/legal-ast/analysis";
 import { analysisLayersOf } from "@stll/legal-ast/analysis";
 import { BidiText } from "@stll/ui/bidi-text";
-import { cn } from "@stll/ui/utils";
-
-/** The margin's written layers, in the order they are drawn. */
-export const ANALYSIS_LAYER_KINDS = ["topics", "significance"] as const;
-
-export type AnalysisLayerKind = (typeof ANALYSIS_LAYER_KINDS)[number];
 
 type AnalysisLayersProps = {
   analysis: DecisionAnalysis;
-  className?: string | undefined;
-  /** Which layers this place draws. */
-  layers: readonly AnalysisLayerKind[];
 };
 
 /**
@@ -55,23 +46,16 @@ const Layer = ({
  * A stored analysis from before these layers existed carries none of them,
  * and then nothing renders: an absent layer is absent, never an empty box.
  */
-export const AnalysisLayers = ({
-  analysis,
-  className,
-  layers,
-}: AnalysisLayersProps) => {
+export const AnalysisLayers = ({ analysis }: AnalysisLayersProps) => {
   const t = useTranslations();
-  const all = analysisLayersOf(analysis);
-  const shows = (kind: AnalysisLayerKind): boolean => layers.includes(kind);
-  const significance = shows("significance") ? all.significance : null;
-  const topics = shows("topics") ? all.topics : [];
+  const { significance, topics } = analysisLayersOf(analysis);
 
   if (significance === null && topics.length === 0) {
     return null;
   }
 
   return (
-    <div className={cn("border-border/60 border-b pb-3", className)}>
+    <div className="border-border/60 border-b pb-3">
       {topics.length > 0 && (
         <Layer label={t("caseLaw.analysis.topics")}>
           <ul className="flex flex-wrap gap-1">
