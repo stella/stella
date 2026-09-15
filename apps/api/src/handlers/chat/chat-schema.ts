@@ -159,6 +159,19 @@ export const activeDecisionSchema = t.Object({
   decisionId: tSafeId("caseLawDecision"),
 });
 
+/**
+ * The statute consolidation open in the legal reader. Only the id travels:
+ * the act's identity, its text and the reader's marks on it are resolved
+ * server-side from the corpus, so a client cannot dictate what the model is
+ * told an act says.
+ */
+export const activeStatuteSchema = t.Object(
+  { documentId: tSafeId("legislationDocument") },
+  // `activeFileSchema`'s posture: a closed object, so a client cannot smuggle
+  // wording or metadata alongside the id and have a later reader trust it.
+  { additionalProperties: false },
+);
+
 export const activeExternalSchema = t.Object({
   connectorSlug: t.Optional(t.String()),
   provider: t.Optional(t.String()),
@@ -235,6 +248,7 @@ const sendMessageCommonProperties = {
   activeDecision: t.Optional(activeDecisionSchema),
   activeExternal: t.Optional(activeExternalSchema),
   activeSkill: t.Optional(activeSkillSchema),
+  activeStatute: t.Optional(activeStatuteSchema),
   /**
    * Which DOCX-edit review mode this turn uses; omitted means
    * `DEFAULT_CHAT_EDIT_APPLY_MODE`. Threaded into `getChatTools`, which
@@ -379,6 +393,42 @@ export type IncomingActiveTemplate = Static<typeof activeTemplateSchema>;
 export type IncomingActiveDecision = Static<typeof activeDecisionSchema>;
 export type IncomingActiveExternal = Static<typeof activeExternalSchema>;
 export type IncomingActiveSkill = Static<typeof activeSkillSchema>;
+export type IncomingActiveStatute = Static<typeof activeStatuteSchema>;
+
+/**
+ * Every active document a turn may carry, by the body field that carries it.
+ *
+ * The send body below is the source of truth; this map is held equal to its
+ * `active*` fields at compile time, so a new active document is a type error
+ * here until it is declared, and the schema test enumerates this map rather
+ * than a hand-written list that could go stale.
+ */
+export const ACTIVE_CONTEXT_SCHEMAS = {
+  activeDecision: activeDecisionSchema,
+  activeDraft: activeDraftSchema,
+  activeExternal: activeExternalSchema,
+  activeFile: activeFileSchema,
+  activeSkill: activeSkillSchema,
+  activeStatute: activeStatuteSchema,
+  activeTemplate: activeTemplateSchema,
+} as const;
+
+type ActiveContextBodyKey = Extract<
+  keyof typeof sendMessageCommonProperties,
+  `active${string}`
+>;
+
+type UndeclaredActiveContextKey = Exclude<
+  ActiveContextBodyKey,
+  keyof typeof ACTIVE_CONTEXT_SCHEMAS
+>;
+type UnusedActiveContextSchema = Exclude<
+  keyof typeof ACTIVE_CONTEXT_SCHEMAS,
+  ActiveContextBodyKey
+>;
+
+true satisfies UndeclaredActiveContextKey extends never ? true : never;
+true satisfies UnusedActiveContextSchema extends never ? true : never;
 
 type ValidateMessageInput = {
   message: RawIncomingMessage;

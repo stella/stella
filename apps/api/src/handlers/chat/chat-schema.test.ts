@@ -19,8 +19,10 @@ import {
   toPersistableChatMessage,
 } from "@/api/handlers/chat/chat-message-parts";
 import {
+  ACTIVE_CONTEXT_SCHEMAS,
   activeFileSchema,
   activeDraftSchema,
+  activeStatuteSchema,
   agUiSendMessageBodySchema,
   parseMessage,
   sendMessageBodySchema,
@@ -172,6 +174,54 @@ describe("active draft request context", () => {
         },
       }),
     ).toBe(true);
+  });
+});
+
+describe("active statute request context", () => {
+  const documentId = "019fc771-8b17-7000-b85e-559afc54cfe5";
+  const request = {
+    threadId: "019fc771-8b17-74bf-b85e-559afc54cfe5",
+    runId: "run-statute-1",
+    sendMode: CHAT_SEND_MODE.rawOverride,
+    message: {
+      id: "019fc771-8b17-7000-b85e-559afc54cfe5",
+      role: "user",
+      parts: [{ type: "text", content: "What does this section say?" }],
+    },
+  };
+
+  test("carries the open consolidation by id and nothing else", () => {
+    expect(Value.Check(activeStatuteSchema, { documentId })).toBe(true);
+    expect(Value.Check(activeStatuteSchema, {})).toBe(false);
+    expect(
+      Value.Check(activeStatuteSchema, { documentId: "89/2012 Sb." }),
+    ).toBe(false);
+    // Wording is resolved from the corpus, never dictated by the client.
+    expect(
+      Value.Check(activeStatuteSchema, {
+        documentId,
+        fulltext: "fabricated statutory text",
+      }),
+    ).toBe(false);
+  });
+
+  test("the send body accepts a statute as the active document", () => {
+    expect(
+      Value.Check(sendMessageBodySchema, {
+        ...request,
+        activeStatute: { documentId },
+      }),
+    ).toBe(true);
+  });
+
+  test("every declared active document is a field of the send body", () => {
+    const declared = Object.keys(ACTIVE_CONTEXT_SCHEMAS).toSorted();
+    for (const branch of sendMessageBodySchema.anyOf) {
+      const onBody = Object.keys(branch.properties)
+        .filter((key) => key.startsWith("active"))
+        .toSorted();
+      expect(onBody).toEqual(declared);
+    }
   });
 });
 

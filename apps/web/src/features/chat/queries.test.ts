@@ -14,7 +14,9 @@ import { CHAT_TURN_INTENT } from "@stll/api-contract";
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
 import { selectCreateDocumentDrafts } from "@/components/chat/create-document-draft.logic";
 import { chatKeys } from "@/features/chat/chat-query-contract";
+import type { ChatThreadOptionsContext } from "@/features/chat/chat-query-contract";
 import {
+  ACTIVE_DOCUMENT_SEND_FIELD,
   buildSendRequestBody,
   createChatRuntime,
   sendThreadChatMessage,
@@ -699,6 +701,55 @@ describe("buildSendRequestBody", () => {
     expect(body.resume?.[1]).not.toHaveProperty("payload");
   });
 
+  test("sends every active document a context can carry", () => {
+    const threadId = toChatThreadId("thread-active-documents");
+    const context = {
+      getActiveDecision: () => ({ decisionId: "decision-A" }),
+      getActiveDraft: () => ({
+        docxEditSnapshot: {
+          blocks: [{ id: "draft-block", kind: "heading", text: "Draft" }],
+        },
+        fileName: "draft.docx",
+        originChatMessageId: "message-origin",
+        originChatThreadId: threadId,
+        toolCallId: "tool-draft",
+      }),
+      getActiveExternal: () => ({
+        title: "Source",
+        url: "https://example.com",
+      }),
+      getActiveFile: () => ({
+        entityId: "entity-A",
+        fileName: "document.docx",
+      }),
+      getActiveSkill: () => ({ skillName: "Review" }),
+      getActiveStatute: () => ({ documentId: "statute-A" }),
+      getActiveTemplate: () => ({
+        fileName: "template.docx",
+        templateId: "template-A",
+      }),
+    } as const satisfies ChatThreadOptionsContext;
+
+    const body = buildSendRequestBody({
+      context,
+      key: { scope: "global", threadId },
+      messages: [createMessage("message-A")],
+      run: { runId: "run-A", threadId },
+    });
+
+    // Declared and sent are the same set, in both directions: a getter the
+    // send path forgets to copy fails here rather than going out silently.
+    expect(Object.keys(ACTIVE_DOCUMENT_SEND_FIELD).toSorted()).toEqual(
+      Object.keys(context).toSorted(),
+    );
+    const declared = Object.values(ACTIVE_DOCUMENT_SEND_FIELD).toSorted();
+    expect(
+      Object.values(ACTIVE_DOCUMENT_SEND_FIELD)
+        .filter((field) => body[field] !== undefined)
+        .toSorted(),
+    ).toEqual(declared);
+  });
+
   test("normalizes context values at the transport boundary", () => {
     const threadId = toChatThreadId("thread-A");
     const body = buildSendRequestBody({
@@ -742,6 +793,7 @@ describe("buildSendRequestBody", () => {
           skillId: undefined,
           skillName: "Review",
         }),
+        getActiveStatute: () => ({ documentId: "statute-A" }),
         getSendMode: () => CHAT_SEND_MODE.anonymized,
       },
       key: { scope: "global", threadId },
@@ -751,6 +803,7 @@ describe("buildSendRequestBody", () => {
 
     expect(body).toMatchObject({
       activeDecision: { decisionId: "decision-A" },
+      activeStatute: { documentId: "statute-A" },
       activeExternal: {
         title: "Source",
         url: "https://example.com",

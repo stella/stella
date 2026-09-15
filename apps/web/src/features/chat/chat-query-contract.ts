@@ -49,6 +49,15 @@ type ActiveDecisionContext = {
   decisionId: string;
 };
 
+/**
+ * The statute consolidation the reader has open. Only the id travels: the
+ * act's identity, its wording and the reader's marks on it are resolved
+ * server-side from the corpus.
+ */
+type ActiveStatuteContext = {
+  documentId: string;
+};
+
 type ActiveExternalContext = {
   connectorSlug?: string | undefined;
   provider?: string | undefined;
@@ -96,6 +105,7 @@ export type ChatThreadOptionsContext = {
   getActiveExternal?: (() => ActiveExternalContext | undefined) | undefined;
   getActiveFile?: (() => ActiveFileContext | undefined) | undefined;
   getActiveSkill?: (() => ActiveSkillContext | undefined) | undefined;
+  getActiveStatute?: (() => ActiveStatuteContext | undefined) | undefined;
   getActiveTemplate?: (() => ActiveTemplateContext | undefined) | undefined;
   getContextMatterIds?: (() => string[]) | undefined;
   getEditApplyMode?: (() => ChatEditApplyMode) | undefined;
