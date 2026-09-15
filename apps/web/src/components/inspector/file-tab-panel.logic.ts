@@ -1,7 +1,6 @@
 import {
   FILE_FACETS,
   type FileFacet as Facet,
-  type InspectorAnonymizationState,
 } from "@/components/inspector/inspector-store-types";
 import {
   getNativeOfficeViewerFormat,
@@ -20,9 +19,6 @@ export const FULLVIEW_FACETS: readonly Facet[] = FILE_FACETS.filter(
   (facet) => facet !== "preview",
 );
 
-type AnonymizationPipelineStatus =
-  InspectorAnonymizationState["anonymizationPipelineStatusByFieldId"][string];
-
 export const shouldRunFileAnonymizationPipeline = ({
   facet,
   isActive,
@@ -30,7 +26,6 @@ export const shouldRunFileAnonymizationPipeline = ({
   isMinimized,
   isMounted,
   isNativeDocxDisplay,
-  pipelineStatus,
 }: {
   facet: Facet;
   isActive: boolean;
@@ -38,15 +33,13 @@ export const shouldRunFileAnonymizationPipeline = ({
   isMinimized: boolean;
   isMounted: boolean;
   isNativeDocxDisplay: boolean;
-  pipelineStatus: AnonymizationPipelineStatus;
 }): boolean =>
   facet === "anonymization" &&
   isActive &&
   isFullView &&
   !isMinimized &&
   isMounted &&
-  !isNativeDocxDisplay &&
-  pipelineStatus === "idle";
+  !isNativeDocxDisplay;
 
 export type FileTabNativePreviewKind = "email" | "markdown" | "office" | "pdf";
 

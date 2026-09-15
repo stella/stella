@@ -15,7 +15,6 @@ describe("file anonymization producer", () => {
     isMinimized: false,
     isMounted: true,
     isNativeDocxDisplay: false,
-    pipelineStatus: "idle",
   } as const;
 
   test("starts the PDF pipeline for an active fullscreen idle facet", () => {
@@ -31,22 +30,7 @@ describe("file anonymization producer", () => {
     ).toBe(false);
   });
 
-  test("waits for explicit retry after a failure", () => {
-    expect(
-      shouldRunFileAnonymizationPipeline({
-        ...runnable,
-        pipelineStatus: "error",
-      }),
-    ).toBe(false);
-    expect(
-      shouldRunFileAnonymizationPipeline({
-        ...runnable,
-        pipelineStatus: "idle",
-      }),
-    ).toBe(true);
-  });
-
-  test("does not run for hidden, side-peek, unmounted, or completed facets", () => {
+  test("does not run for hidden, side-peek, or unmounted facets", () => {
     expect(
       (
         [
@@ -55,8 +39,6 @@ describe("file anonymization producer", () => {
           { ...runnable, isMinimized: true },
           { ...runnable, isMounted: false },
           { ...runnable, facet: "metadata" },
-          { ...runnable, pipelineStatus: "running" },
-          { ...runnable, pipelineStatus: "ready" },
         ] as const
       ).every((input) => !shouldRunFileAnonymizationPipeline(input)),
     ).toBe(true);
