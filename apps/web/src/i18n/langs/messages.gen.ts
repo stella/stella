@@ -1788,6 +1788,7 @@ type Messages = {
     "countUnspecified": "{count, plural, one {# unspecified} other {# unspecified}}";
     "finalizePendingNote": "{count, plural, one {# suggestion is still pending review.} other {# suggestions are still pending review.}}";
     "hideAccepted": "Hide accepted suggestions";
+    "keepInReview": "Keep in review";
     "persistFailed": "Couldn't save your review change";
     "reject": "Reject";
     "rejectAll": "Reject all";

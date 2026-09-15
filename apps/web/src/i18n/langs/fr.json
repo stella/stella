@@ -1785,6 +1785,7 @@
     "countUnspecified": "{count, plural, one {# non précisée} other {# non précisées}}",
     "finalizePendingNote": "{count, plural, one {# suggestion est encore en attente de révision.} other {# suggestions sont encore en attente de révision.}}",
     "hideAccepted": "Masquer les suggestions acceptées",
+    "keepInReview": "Garder en révision",
     "persistFailed": "Impossible d'enregistrer votre modification de révision",
     "reject": "Rejeter",
     "rejectAll": "Tout rejeter",

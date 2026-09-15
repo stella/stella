@@ -1,12 +1,14 @@
 /**
  * DOCX-suggestion persistence transport.
  *
- * A single, shared entry point for writing a suggestion's resolution
- * (accepted / rejected) or a revert to the server, used by every surface
- * that resolves suggestions so they classify the outcome identically.
+ * The single entry point for every server write to a suggestion row: create,
+ * resolve (accepted / rejected), revert, and the bulk reject a new chat thread
+ * can issue. Each successful write that moves a row into or out of `pending`
+ * also updates the hydration cache here, so no caller can write the server and
+ * leave the cache listing a stale pending set.
  *
- * The classification is the important part. Both endpoints only mutate a
- * row when its server-side precondition holds (resolve requires
+ * Resolve and revert classify the outcome. Both endpoints only mutate a row
+ * when its server-side precondition holds (resolve requires
  * status='pending'; revert requires status<>'pending') and report the
  * affected-row count as `{ updated }`. So the caller can tell three cases
  * apart and reconcile local/editor state accordingly:
@@ -22,18 +24,103 @@
  * per-item results.
  */
 
+import type { QueryClient } from "@tanstack/react-query";
 import { Result } from "better-result";
+import type { UnhandledException } from "better-result";
 
+import { DOCX_SUGGESTIONS_PENDING_MAX } from "@stll/api-contract";
 import type { FolioAIEditApplyMode } from "@stll/folio-react";
 
+import {
+  DOCX_SUGGESTION_CACHE_WRITE,
+  pendingDocxSuggestionRow,
+  writeDocxSuggestionsCache,
+} from "@/components/ai-suggestions/docx-suggestion-cache";
+import type { ReviewSuggestion } from "@/components/ai-suggestions/review-store";
 import { api } from "@/lib/api";
+import type { ChatThreadId } from "@/lib/chat-thread-ref";
 import { unwrapEden } from "@/lib/errors/api";
+import { toSafeId } from "@/lib/safe-id";
 
 export type DocxResolveResult = "synced" | "stale" | "failed";
 
-type ResolveDocxSuggestionRequestArgs = {
+type DocxSuggestionTarget = {
+  queryClient: QueryClient;
   workspaceId: string;
   entityId: string;
+};
+
+type CreateDocxSuggestionsRequestArgs = DocxSuggestionTarget & {
+  chatThreadId: ChatThreadId | undefined;
+  suggestions: readonly ReviewSuggestion[];
+};
+
+type CreateDocxSuggestionsResult = Result<
+  Record<string, string>,
+  UnhandledException
+>;
+
+/**
+ * Persist just-queued suggestions and return the server id for each client
+ * ref. Suggestions without an operation have nothing to persist and are
+ * skipped.
+ */
+export const createDocxSuggestionsRequest = async ({
+  queryClient,
+  workspaceId,
+  entityId,
+  chatThreadId,
+  suggestions,
+}: CreateDocxSuggestionsRequestArgs): Promise<CreateDocxSuggestionsResult> => {
+  const body = suggestions.flatMap((item) =>
+    item.pendingOperation === null
+      ? []
+      : [
+          {
+            ref: item.id,
+            opPayload: item.pendingOperation,
+            comment: item.comment ?? null,
+            severity: item.severity,
+            area: item.area,
+          },
+        ],
+  );
+  if (body.length === 0) {
+    return Result.ok({});
+  }
+
+  const result = await Result.tryPromise(async () => {
+    const response = await api["docx-suggestions"]({ workspaceId })
+      .entity({ entityId })
+      .put({ suggestions: body, originThreadId: chatThreadId ?? null });
+    return unwrapEden(response);
+  });
+  if (Result.isError(result)) {
+    return result;
+  }
+
+  const suggestionsByRef = new Map(suggestions.map((item) => [item.id, item]));
+  const rows = result.value.items.flatMap(({ ref, id }) => {
+    const suggestion = suggestionsByRef.get(ref);
+    const row =
+      suggestion === undefined
+        ? null
+        : pendingDocxSuggestionRow(suggestion, id);
+    return row === null ? [] : [row];
+  });
+  writeDocxSuggestionsCache({
+    queryClient,
+    workspaceId,
+    entityId,
+    write: { type: DOCX_SUGGESTION_CACHE_WRITE.enterPending, rows },
+  });
+
+  return Result.ok(
+    Object.fromEntries(result.value.items.map(({ ref, id }) => [ref, id])),
+  );
+};
+
+type ResolveDocxSuggestionRequestArgs = DocxSuggestionTarget & {
   suggestionId: string;
   status: "accepted" | "rejected";
   /**
@@ -43,18 +130,13 @@ type ResolveDocxSuggestionRequestArgs = {
   appliedMode: FolioAIEditApplyMode | null;
 };
 
-type RevertDocxSuggestionRequestArgs = {
-  workspaceId: string;
-  entityId: string;
-  suggestionId: string;
-};
-
 /**
  * Resolve a suggestion server-side as accepted or rejected. Builds the
  * discriminated body the endpoint expects (an accept carries its
  * `appliedMode`; a reject carries none).
  */
 export const resolveDocxSuggestionRequest = async ({
+  queryClient,
   workspaceId,
   entityId,
   suggestionId,
@@ -75,26 +157,114 @@ export const resolveDocxSuggestionRequest = async ({
   if (Result.isError(result)) {
     return "failed";
   }
+  // Either way the server row is no longer pending: this call resolved it, or
+  // another write already had.
+  writeDocxSuggestionsCache({
+    queryClient,
+    workspaceId,
+    entityId,
+    write: {
+      type: DOCX_SUGGESTION_CACHE_WRITE.leavePending,
+      suggestionIds: [suggestionId],
+    },
+  });
   return result.value.updated ? "synced" : "stale";
+};
+
+type RevertDocxSuggestionRequestArgs = DocxSuggestionTarget & {
+  suggestion: ReviewSuggestion;
 };
 
 /**
  * Revert a resolved suggestion back to pending server-side.
  */
 export const revertDocxSuggestionRequest = async ({
+  queryClient,
   workspaceId,
   entityId,
-  suggestionId,
+  suggestion,
 }: RevertDocxSuggestionRequestArgs): Promise<DocxResolveResult> => {
   const result = await Result.tryPromise(async () => {
     const response = await api["docx-suggestions"]({ workspaceId })
       .entity({ entityId })
-      .suggestion({ suggestionId })
+      .suggestion({ suggestionId: suggestion.id })
       .revert.patch();
     return unwrapEden(response);
   });
   if (Result.isError(result)) {
     return "failed";
   }
+  // Either way the server row is pending now: this call reverted it, or it
+  // already was.
+  const row = pendingDocxSuggestionRow(
+    suggestion,
+    toSafeId<"docxSuggestion">(suggestion.id),
+  );
+  if (row !== null) {
+    writeDocxSuggestionsCache({
+      queryClient,
+      workspaceId,
+      entityId,
+      write: { type: DOCX_SUGGESTION_CACHE_WRITE.enterPending, rows: [row] },
+    });
+  }
   return result.value.updated ? "synced" : "stale";
+};
+
+type RejectPendingDocxSuggestionsRequestArgs = DocxSuggestionTarget & {
+  suggestionIds: readonly string[];
+};
+
+/**
+ * Reject every listed suggestion that is still pending server-side. Ids that
+ * are already resolved are skipped by the server and leave the pending cache
+ * all the same, since none of them is pending afterwards.
+ */
+export const rejectPendingDocxSuggestionsRequest = async ({
+  queryClient,
+  workspaceId,
+  entityId,
+  suggestionIds,
+}: RejectPendingDocxSuggestionsRequestArgs): Promise<
+  Result<void, UnhandledException>
+> => {
+  const chunks: string[][] = [];
+  for (
+    let start = 0;
+    start < suggestionIds.length;
+    start += DOCX_SUGGESTIONS_PENDING_MAX
+  ) {
+    chunks.push(
+      suggestionIds.slice(start, start + DOCX_SUGGESTIONS_PENDING_MAX),
+    );
+  }
+  const results = await Promise.all(
+    chunks.map(async (chunk) => {
+      const result = await Result.tryPromise(async () => {
+        const response = await api["docx-suggestions"]({ workspaceId })
+          .entity({ entityId })
+          ["reject-pending"].patch({
+            suggestionIds: chunk.map((id) => toSafeId<"docxSuggestion">(id)),
+          });
+        return unwrapEden(response);
+      });
+      if (Result.isOk(result)) {
+        writeDocxSuggestionsCache({
+          queryClient,
+          workspaceId,
+          entityId,
+          write: {
+            type: DOCX_SUGGESTION_CACHE_WRITE.leavePending,
+            suggestionIds: chunk,
+          },
+        });
+      }
+      return result;
+    }),
+  );
+  const failure = results.find((result) => Result.isError(result));
+  if (failure !== undefined && Result.isError(failure)) {
+    return failure;
+  }
+  return Result.ok(undefined);
 };

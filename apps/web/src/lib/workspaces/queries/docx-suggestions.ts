@@ -1,6 +1,9 @@
 import { queryOptions } from "@tanstack/react-query";
 
-import { DOCX_SUGGESTIONS_PAGE_SIZE_MAX } from "@stll/api-contract";
+import {
+  DOCX_SUGGESTIONS_PAGE_SIZE_MAX,
+  DOCX_SUGGESTIONS_PENDING_MAX,
+} from "@stll/api-contract";
 
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -9,11 +12,10 @@ import { unwrapEden } from "@/lib/errors/api";
 import { entitiesKeys } from "./entities";
 
 // Each hydration fetch requests a full page.
-// Page ALL pending rows up to this safety cap: pending drives the actionable
-// panel and must never be crowded out of hydration by resolved history. Well
-// past any realistic pending set for one entity; a capped pending hydration is
-// reported (never silently truncated) so the missing tail is observable.
-const DOCX_SUGGESTIONS_PENDING_MAX = 1000;
+// Page ALL pending rows up to DOCX_SUGGESTIONS_PENDING_MAX: pending drives the
+// actionable panel and must never be crowded out of hydration by resolved
+// history. A capped pending hydration is reported (never silently truncated)
+// so the missing tail is observable.
 
 type DocxSuggestionsKey = {
   workspaceId: string;

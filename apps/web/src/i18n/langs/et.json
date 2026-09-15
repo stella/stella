@@ -1785,6 +1785,7 @@
     "countUnspecified": "{count, plural, one {# määramata} other {# määramata}}",
     "finalizePendingNote": "{count, plural, one {# soovitus ootab veel ülevaatust.} other {# soovitust ootab veel ülevaatust.}}",
     "hideAccepted": "Peida nõustutud soovitused",
+    "keepInReview": "Jäta ülevaatusse",
     "persistFailed": "Teie ülevaatusmuudatust ei õnnestunud salvestada",
     "reject": "Lükka tagasi",
     "rejectAll": "Lükka kõik tagasi",

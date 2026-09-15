@@ -1,5 +1,7 @@
 import { t } from "elysia";
 
+import { DOCX_SUGGESTIONS_PENDING_MAX } from "@stll/api-contract";
+
 import { tSafeId } from "@/api/lib/custom-schema";
 
 /** Ceiling on one persist batch; mirrors the edit tool's operation cap. */
@@ -37,6 +39,13 @@ export const tResolveDocxSuggestionBody = t.Union([
     status: t.Literal("rejected"),
   }),
 ]);
+
+export const tRejectPendingDocxSuggestionsBody = t.Object({
+  suggestionIds: t.Array(tSafeId("docxSuggestion"), {
+    minItems: 1,
+    maxItems: DOCX_SUGGESTIONS_PENDING_MAX,
+  }),
+});
 
 /**
  * One suggestion in a persist batch. `opPayload` is the client-prepared

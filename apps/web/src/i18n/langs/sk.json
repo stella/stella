@@ -1785,6 +1785,7 @@
     "countUnspecified": "{count, plural, one {# neurčená} few {# neurčené} other {# neurčených}}",
     "finalizePendingNote": "{count, plural, one {# návrh stále čaká na revíziu.} few {# návrhy stále čakajú na revíziu.} other {# návrhov stále čaká na revíziu.}}",
     "hideAccepted": "Skryť prijaté návrhy",
+    "keepInReview": "Ponechať v revízii",
     "persistFailed": "Nepodarilo sa uložiť vašu zmenu revízie",
     "reject": "Odmietnuť",
     "rejectAll": "Odmietnuť všetky",

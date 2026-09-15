@@ -22,6 +22,13 @@ export const AGENT_SKILLS_CHAT_METADATA_MAX = 200;
 export const DOCX_SUGGESTIONS_PAGE_SIZE_MAX = 200;
 
 /**
+ * Max pending DOCX suggestions for one entity: the client's pending hydration
+ * cap and the most ids one bulk reject accepts, so a hydrated pending set can
+ * be dismissed in a single request.
+ */
+export const DOCX_SUGGESTIONS_PENDING_MAX = 1000;
+
+/**
  * Per-organization cap on matters (workspaces), enforced on create. The client
  * hides "new matter" surfaces at the cap.
  */

@@ -10,6 +10,7 @@
 
 import type { RefObject } from "react";
 
+import { useQueryClient } from "@tanstack/react-query";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
@@ -102,6 +103,7 @@ export const useReviewActions = ({
   requestDocxEditMode,
 }: UseReviewActionsOptions): ReviewActions => {
   const t = useTranslations();
+  const queryClient = useQueryClient();
   const applyMode = useReviewStore((state) =>
     getReviewApplyMode(state, entityId),
   );
@@ -510,6 +512,7 @@ export const useReviewActions = ({
             live.id,
             async () =>
               await resolveDocxSuggestionRequest({
+                queryClient,
                 workspaceId: persistedWorkspaceId(),
                 entityId,
                 suggestionId: live.id,
@@ -569,6 +572,7 @@ export const useReviewActions = ({
             claimed.id,
             async () =>
               await resolveDocxSuggestionRequest({
+                queryClient,
                 workspaceId: persistedWorkspaceId(),
                 entityId,
                 suggestionId: claimed.id,
@@ -651,9 +655,10 @@ export const useReviewActions = ({
           item.id,
           async () =>
             await revertDocxSuggestionRequest({
+              queryClient,
               workspaceId: persistedWorkspaceId(),
               entityId,
-              suggestionId: item.id,
+              suggestion: item,
             }),
         );
         // "stale" means the server row was still pending — the same state we
@@ -737,6 +742,7 @@ export const useReviewActions = ({
                 item.id,
                 async () =>
                   await resolveDocxSuggestionRequest({
+                    queryClient,
                     workspaceId: persistedWorkspaceId(),
                     entityId,
                     suggestionId: item.id,
@@ -799,6 +805,7 @@ export const useReviewActions = ({
               item.id,
               async () =>
                 await resolveDocxSuggestionRequest({
+                  queryClient,
                   workspaceId: persistedWorkspaceId(),
                   entityId,
                   suggestionId: item.id,

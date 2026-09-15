@@ -1785,6 +1785,7 @@
     "countUnspecified": "{count, plural, one {# nincs megadva} other {# nincs megadva}}",
     "finalizePendingNote": "{count, plural, one {# javaslat még felülvizsgálatra vár.} other {# javaslat még felülvizsgálatra vár.}}",
     "hideAccepted": "Elfogadott javaslatok elrejtése",
+    "keepInReview": "Felülvizsgálatban hagyás",
     "persistFailed": "Nem sikerült menteni a felülvizsgálati módosítást",
     "reject": "Elutasítás",
     "rejectAll": "Összes elutasítása",

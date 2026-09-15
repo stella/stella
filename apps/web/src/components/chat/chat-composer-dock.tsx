@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useRef } from "react";
 
 import { panic } from "better-result";
 import { MessageSquarePlusIcon } from "lucide-react";
@@ -6,6 +7,7 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { ComposerStatusRow } from "@stll/ui/composer";
+import { Popover, PopoverPanel } from "@stll/ui/popover";
 
 import {
   ChatContextMeter,
@@ -23,6 +25,15 @@ import {
   useSetChatAnonymized,
 } from "@/lib/chat-anonymized-store";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
+
+/**
+ * A question the surface asks before a new thread starts, anchored to the
+ * new-chat button. Closing it (Escape, a click outside) calls `onCancel`.
+ */
+export type ChatComposerNewThreadPrompt = {
+  content: ReactNode;
+  onCancel: () => void;
+};
 
 type ChatComposerDockCommonProps = {
   threadRef: ChatThreadRef;
@@ -50,6 +61,7 @@ type ChatComposerDockProps = ChatComposerDockCommonProps &
           context: ChatContextUsage | null;
         };
         onNewThread: (() => void) | null;
+        newThreadPrompt?: ChatComposerNewThreadPrompt | undefined;
         endExtras?: ReactNode | undefined;
       }
   );
@@ -59,6 +71,7 @@ type ChatComposerDockRenderState = {
   endExtras: ReactNode | undefined;
   models?: ComposerModelsMenuProps | undefined;
   onNewThread: (() => void) | null;
+  newThreadPrompt: ChatComposerNewThreadPrompt | undefined;
 } & (
   | { status: "pending" }
   | {
@@ -81,6 +94,7 @@ const resolveChatComposerDockRenderState = (
         endExtras: undefined,
         models: props.models,
         onNewThread: null,
+        newThreadPrompt: undefined,
         status: "pending",
       };
     case "ready":
@@ -90,6 +104,7 @@ const resolveChatComposerDockRenderState = (
         endExtras: props.endExtras,
         models: props.models,
         onNewThread: props.onNewThread,
+        newThreadPrompt: props.newThreadPrompt,
         status: "ready",
       };
     default: {
@@ -118,7 +133,8 @@ export const ChatComposerDock = (props: ChatComposerDockProps) => {
     threadRef,
   } = props;
   const renderState = resolveChatComposerDockRenderState(props);
-  const { disabled, endExtras, models, onNewThread } = renderState;
+  const { disabled, endExtras, models, newThreadPrompt, onNewThread } =
+    renderState;
   const showWebSearch =
     renderState.status === "pending" || renderState.data.webSearchAvailable;
   const webSearchEnabled =
@@ -126,6 +142,7 @@ export const ChatComposerDock = (props: ChatComposerDockProps) => {
   const t = useTranslations();
   const anonymized = useChatAnonymized(threadRef);
   const setAnonymized = useSetChatAnonymized(threadRef);
+  const newThreadAnchorRef = useRef<HTMLSpanElement>(null);
   return (
     <ComposerStatusRow
       className={className}
@@ -135,20 +152,43 @@ export const ChatComposerDock = (props: ChatComposerDockProps) => {
           className="flex shrink-0 items-center gap-0.5"
         >
           {onNewThread !== null && (
-            <Tooltip
-              content={t("chat.newChat")}
-              render={
-                <Button
-                  aria-label={t("chat.newChat")}
-                  className="text-muted-foreground hover:text-foreground"
-                  onClick={onNewThread}
-                  size="icon-xs"
-                  variant="ghost"
+            <>
+              {/* The anchor wraps the button rather than tracking it, so the
+                  button's own click handler stays a plain handler. */}
+              <span className="inline-flex" ref={newThreadAnchorRef}>
+                <Tooltip
+                  content={t("chat.newChat")}
+                  render={
+                    <Button
+                      aria-label={t("chat.newChat")}
+                      className="text-muted-foreground hover:text-foreground"
+                      onClick={onNewThread}
+                      size="icon-xs"
+                      variant="ghost"
+                    >
+                      <MessageSquarePlusIcon className="size-3.5" />
+                    </Button>
+                  }
+                />
+              </span>
+              <Popover
+                onOpenChange={(open) => {
+                  if (!open) {
+                    newThreadPrompt?.onCancel();
+                  }
+                }}
+                open={newThreadPrompt !== undefined}
+              >
+                <PopoverPanel
+                  align="end"
+                  anchor={newThreadAnchorRef}
+                  className="w-72"
+                  side="top"
                 >
-                  <MessageSquarePlusIcon className="size-3.5" />
-                </Button>
-              }
-            />
+                  {newThreadPrompt?.content}
+                </PopoverPanel>
+              </Popover>
+            </>
           )}
           {models && <ChatModelSelector models={models} />}
           {/* The meter renders on every surface: it shows an empty ring
