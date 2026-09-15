@@ -126,8 +126,10 @@ export const ProvisionInspectorView = ({
           the scroll area below it moves, the corner does not. */}
       <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
         <ScrollArea className="h-full">
+          {/* The floating bar owns the top corner, so the first row starts
+              below it rather than under the zoom controls. */}
           <div
-            className="flex flex-col gap-6 p-4"
+            className="flex flex-col gap-6 px-4 pt-12 pb-4"
             ref={contentRef}
             {...textScale.rootProps}
           >
