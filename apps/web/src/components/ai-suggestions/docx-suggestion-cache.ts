@@ -116,6 +116,22 @@ export const writeDocxSuggestionsCache = async ({
   }
 };
 
+/**
+ * Read the pending list from the server again, for a write whose effect on
+ * the list is not known. Mounted readers refetch; a list nobody reads is marked
+ * stale, so its next reader fetches.
+ */
+export const refetchDocxSuggestionsList = async ({
+  queryClient,
+  workspaceId,
+  entityId,
+}: Omit<WriteDocxSuggestionsCacheOptions, "write">): Promise<void> => {
+  await queryClient.invalidateQueries({
+    queryKey: docxSuggestionsOptions({ workspaceId, entityId }).queryKey,
+    exact: true,
+  });
+};
+
 type ServerSuggestionIdentity = {
   id: DocxSuggestionRow["id"];
   createdAt: Date;

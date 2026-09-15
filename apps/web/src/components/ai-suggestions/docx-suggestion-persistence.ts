@@ -34,6 +34,7 @@ import type { FolioAIEditApplyMode } from "@stll/folio-react";
 import {
   createdDocxSuggestionRows,
   DOCX_SUGGESTION_CACHE_WRITE,
+  refetchDocxSuggestionsList,
   revertedDocxSuggestionRow,
   writeDocxSuggestionsCache,
 } from "@/components/ai-suggestions/docx-suggestion-cache";
@@ -230,8 +231,13 @@ export const revertDocxSuggestionRequest = async ({
   if (Result.isError(result)) {
     return "failed";
   }
-  // Either way the server row is pending now: this call reverted it, or it
-  // already was.
+  if (!result.value.updated) {
+    // Nothing reverted: the row was already pending, or no longer matches.
+    // The response cannot tell which, so the list is read from the server
+    // again rather than assuming a pending row.
+    await refetchDocxSuggestionsList({ queryClient, workspaceId, entityId });
+    return "stale";
+  }
   const row = revertedDocxSuggestionRow(suggestion);
   if (row !== null) {
     await writeDocxSuggestionsCache({
@@ -241,7 +247,7 @@ export const revertDocxSuggestionRequest = async ({
       write: { type: DOCX_SUGGESTION_CACHE_WRITE.enterPending, rows: [row] },
     });
   }
-  return result.value.updated ? "synced" : "stale";
+  return "synced";
 };
 
 type RejectPendingDocxSuggestionsRequestArgs = DocxSuggestionTarget & {
