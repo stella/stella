@@ -94,6 +94,11 @@ export const HeadnoteBlock = ({
       className="mt-4 first:mt-0"
       data-reader-chrome={origin.type === "court" ? undefined : ""}
       onToggle={(event) => {
+        // Held open by a find match, not by the reader: recording it as their
+        // choice would leave the section open once the match moves on.
+        if (forceOpen) {
+          return;
+        }
         setOpenedByReader(event.currentTarget.open);
       }}
       open={openedByReader || forceOpen}
