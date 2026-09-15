@@ -239,8 +239,13 @@ export const selectRuleMatch = (
  * Pass a `cache` map to reuse compiled rules within a batch run.
  * Without a cache, rules are fetched from the database on every
  * call (stateless for the API server).
+ *
+ * Exported so a caller classifying a batch of citations against one
+ * language pays the read once and then matches in memory with
+ * {@link selectRuleMatch}, instead of going through {@link matchRule} per
+ * citation and relying on a cache to hide the difference.
  */
-const loadRules = async (
+export const loadRules = async (
   language: string,
   scopedDb: ScopedDb,
   cache?: RuleCache,
