@@ -37,6 +37,7 @@ const suggestion = (
   status,
   summary: id,
   type: "commentOnBlock",
+  proposalBatchId: "proposal-1",
   undoHandle: null,
 });
 
@@ -330,6 +331,30 @@ describe("a section deleted paragraph by paragraph is one change", () => {
     expect(memberIds(changes)).toEqual([["heading"], ["body"]]);
   });
 
+  test("adjacent deletions from separate proposals stay separate", () => {
+    const changes = groupReviewChanges(
+      [
+        onBlock("heading", "heading"),
+        onBlock("body", "body", { proposalBatchId: "proposal-2" }),
+      ],
+      section,
+    );
+
+    expect(memberIds(changes)).toEqual([["heading"], ["body"]]);
+  });
+
+  test("adjacent deletions of different severity stay separate", () => {
+    const changes = groupReviewChanges(
+      [
+        onBlock("heading", "heading"),
+        onBlock("body", "body", { severity: "high" }),
+      ],
+      section,
+    );
+
+    expect(memberIds(changes)).toEqual([["heading"], ["body"]]);
+  });
+
   test("nothing groups while the document is unreadable", () => {
     const changes = groupReviewChanges(
       [onBlock("heading", "heading"), onBlock("body", "body")],
@@ -468,6 +493,8 @@ const generatedSession = fc
           origin: fc.constantFrom("chat", "review"),
           kind: fc.constantFrom("delete", "replace"),
           status: fc.constantFrom(...STATUSES),
+          proposalBatchId: fc.constantFrom("proposal-1", "proposal-2"),
+          severity: fc.constantFrom("high", "low"),
           snapshot: fc.constantFrom(
             PROPOSAL_SNAPSHOT,
             LATER_PROPOSAL_SNAPSHOT,
@@ -492,6 +519,8 @@ const generatedSession = fc
         origin: spec.origin,
         status: spec.status,
         snapshot: spec.snapshot,
+        proposalBatchId: spec.proposalBatchId,
+        severity: spec.severity,
       };
     }),
   }));
@@ -546,6 +575,8 @@ describe("grouping the review queue into changes", () => {
             expect(member.pendingOperation?.type).toBe("deleteBlock");
             expect(member.status).toBe(first.status);
             expect(member.snapshot).toBe(first.snapshot);
+            expect(member.proposalBatchId).toBe(first.proposalBatchId);
+            expect(member.severity).toBe(first.severity);
           }
           expect(first.snapshot).not.toBeNull();
           expect(previousIndex).toBeGreaterThanOrEqual(0);

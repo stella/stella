@@ -134,6 +134,7 @@ export const useSyncDocxSuggestions = ({
       const item: ReviewSuggestion = {
         id: row.id,
         origin: row.origin,
+        proposalBatchId: row.createdAt.toISOString(),
         blockId,
         type: op.type,
         summary: summarizeOperation(op, blockLabel),

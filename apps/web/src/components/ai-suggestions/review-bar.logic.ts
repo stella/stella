@@ -368,7 +368,10 @@ const isChatDeletion = (suggestion: ReviewSuggestion): boolean =>
  * A run is applied as one batch against one snapshot, and an operation's
  * block id only means something against the snapshot it was proposed on, so
  * members must share the same snapshot object. One tool call, or one hydration
- * pass, hands all of its suggestions the same reference.
+ * pass, hands all of its suggestions the same reference. Hydration hands one
+ * snapshot to every row it reads, so the proposal batch is compared as well:
+ * one reload must not merge deletions that separate proposals made. Equal
+ * severity keeps a change's severity one value wherever it is read.
  */
 const continuesDeletionRun = (
   previous: PlacedSuggestion,
@@ -377,6 +380,8 @@ const continuesDeletionRun = (
   isChatDeletion(previous.suggestion) &&
   isChatDeletion(next.suggestion) &&
   previous.suggestion.status === next.suggestion.status &&
+  previous.suggestion.proposalBatchId === next.suggestion.proposalBatchId &&
+  previous.suggestion.severity === next.suggestion.severity &&
   previous.suggestion.snapshot !== null &&
   previous.suggestion.snapshot === next.suggestion.snapshot &&
   Number.isFinite(previous.position) &&

@@ -27,6 +27,7 @@ const suggestion = (id: string): ReviewSuggestion => ({
   status: "pending",
   summary: "Replace party",
   type: "replaceBlock",
+  proposalBatchId: "proposal-1",
   undoHandle: null,
 });
 

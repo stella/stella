@@ -34,6 +34,7 @@ const stub = (
   status,
   applyMode: null,
   revisionIds: null,
+  proposalBatchId: "proposal-1",
   undoHandle: null,
   pendingOperation: null,
   snapshot: null,

@@ -23,6 +23,7 @@ const deletion = (id: string, blockId: string): ReviewSuggestion => ({
   status: "applying",
   summary: `Delete ${id}`,
   type: "deleteBlock",
+  proposalBatchId: "proposal-1",
   undoHandle: null,
 });
 

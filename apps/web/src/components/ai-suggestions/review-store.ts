@@ -117,6 +117,12 @@ export type ReviewSuggestion = {
   operationId?: string | undefined;
   /** Which surface proposed this change. */
   origin: ReviewSuggestionOrigin;
+  /**
+   * The proposal this suggestion arrived in: one `suggest_changes` call while
+   * queued live, one server insert once hydrated (the rows of one insert share
+   * its `created_at`). Only suggestions of one proposal are decided together.
+   */
+  proposalBatchId: string;
   /** Block id the suggestion targets. */
   blockId: string;
   /**

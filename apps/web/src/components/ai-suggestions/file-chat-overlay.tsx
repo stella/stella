@@ -447,6 +447,7 @@ const queueReviewSuggestions = ({
   const queuedIds: string[] = [];
   const skipped: { id: string; reason: "noopOperation" | "missingBlock" }[] =
     [];
+  const proposalBatchId = uuidv7();
   const items: ReviewSuggestion[] = prepared.flatMap(
     ({ id, reportId, folio }) => {
       // Drop true no-ops before they ever reach the panel: the model
@@ -468,6 +469,7 @@ const queueReviewSuggestions = ({
         id,
         operationId: reportId,
         origin: REVIEW_SUGGESTION_ORIGIN.chat,
+        proposalBatchId,
         blockId: folioOperationBlockId(folio),
         type: folio.type,
         summary: summarizeOperation(folio, blockLabel),
