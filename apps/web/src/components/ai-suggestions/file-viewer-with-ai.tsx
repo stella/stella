@@ -5,6 +5,7 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import { cn } from "@stll/ui/utils";
 
+import { activeLegalDocumentRef } from "@/components/ai-suggestions/active-legal-document";
 import { QuerySuspenseBoundary } from "@/components/query-suspense-boundary";
 import type { ChatThreadId } from "@/lib/chat-thread-ref";
 
@@ -53,7 +54,7 @@ export const FileViewerWithAI = ({
     activeFile?.fileFieldId ?? "",
     activeDraft?.toolCallId ?? "",
     activeExternal?.url ?? "",
-    activeLegal?.decisionId ?? "",
+    activeLegal === undefined ? "" : activeLegalDocumentRef(activeLegal).key,
   ].join(":");
   const [LazyFileChatOverlayHost, setLazyFileChatOverlayHost] = useState(
     createLazyFileChatOverlayHost,

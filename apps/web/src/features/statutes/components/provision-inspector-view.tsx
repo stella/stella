@@ -9,6 +9,7 @@ import { Button } from "@stll/ui/button";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Skeleton } from "@stll/ui/skeleton";
 
+import type { ActiveLegalDocument } from "@/components/ai-suggestions/active-legal-document";
 import {
   InspectorFindBar,
   useInspectorFind,
@@ -18,6 +19,7 @@ import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-sto
 import type { InspectorViewRenderProps } from "@/components/inspector/view-registry";
 import { ViewerOverlayBar } from "@/components/inspector/viewer-overlay-bar";
 import { ZoomControls } from "@/components/inspector/zoom-controls";
+import { LegalReaderAIChat } from "@/components/legal-reader/legal-reader-ai-chat";
 import { OpenOriginalButton } from "@/components/legal-reader/open-original-button";
 import { useReaderTextScale } from "@/components/legal-reader/use-reader-text-scale";
 import { usePublicSignInRequest } from "@/components/public-sign-in-request";
@@ -114,6 +116,15 @@ export const ProvisionInspectorView = ({
     highlightKey: tab.id,
     panelRef,
   });
+  // The chat is bound to the consolidation the provision belongs to: the send
+  // endpoint selects provisions from the act, and the tab's own payload names
+  // both. The act is the same document the full reader binds, so a question
+  // asked here and one asked there are one conversation.
+  const activeLegal = {
+    type: "statute",
+    documentId: payload.documentId,
+    title: payload.statuteTitle,
+  } as const satisfies ActiveLegalDocument;
 
   return (
     <div
@@ -124,91 +135,99 @@ export const ProvisionInspectorView = ({
       <InspectorFindBar find={find} />
       {/* The bar floats over the provision the way it floats over a PDF page;
           the scroll area below it moves, the corner does not. */}
-      <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+      <LegalReaderAIChat activeLegal={activeLegal} className="min-h-0 flex-1">
         <ScrollArea className="h-full">
-          {/* The floating bar owns the top corner, so the first row starts
-              below it rather than under the zoom controls. */}
-          <div
-            className="flex flex-col gap-6 px-4 pt-12 pb-4"
-            ref={contentRef}
-            {...textScale.rootProps}
-          >
-            {selectedVersion !== undefined && (
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <StatuteValidityIndicator
-                  status={selectedVersion.status}
-                  validFrom={selectedVersion.versionValidFrom}
-                  validTo={selectedVersion.versionValidTo}
-                />
-                <OpenOriginalButton
-                  href={
-                    selectedVersion.documentUrl ?? selectedVersion.sourceUrl
-                  }
-                />
-              </div>
-            )}
+          {/* The gutter and the trailing room the composer needs belong to the
+              column; the text root inside it carries the reader's own scale. */}
+          <div data-slot="reader-document-column">
+            {/* The floating bar owns the top corner, so the first row starts
+                below it rather than under the zoom controls. */}
+            <div
+              className="flex flex-col gap-6 pt-12 pb-4"
+              ref={contentRef}
+              {...textScale.rootProps}
+            >
+              {selectedVersion !== undefined && (
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <StatuteValidityIndicator
+                    status={selectedVersion.status}
+                    validFrom={selectedVersion.versionValidFrom}
+                    validTo={selectedVersion.versionValidTo}
+                  />
+                  <OpenOriginalButton
+                    href={
+                      selectedVersion.documentUrl ?? selectedVersion.sourceUrl
+                    }
+                  />
+                </div>
+              )}
 
-            {/* The tab header already names the provision and the act; this
+              {/* The tab header already names the provision and the act; this
               row offers the consolidation to read and the way out. */}
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <StatuteVersionSwitcher
-                currentVersionId={payload.documentId}
-                onVersionChange={switchVersion}
-                versions={availableVersions}
-              />
-              <Link
-                className="text-muted-foreground hover:text-foreground text-xs underline underline-offset-2"
-                hash={payload.highlightAnchorId ?? payload.anchorId}
-                {...createStatuteLinkTarget({
-                  country: selectedVersion?.country ?? payload.jurisdiction,
-                  documentId: payload.documentId,
-                  eli: selectedVersion?.eli,
-                  slug: selectedVersion?.slug,
-                  versionValidFrom: selectedVersion?.versionValidFrom,
-                })}
-              >
-                {t("statutes.showInText")}
-              </Link>
-            </div>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <StatuteVersionSwitcher
+                  currentVersionId={payload.documentId}
+                  onVersionChange={switchVersion}
+                  versions={availableVersions}
+                />
+                <Link
+                  className="text-muted-foreground hover:text-foreground text-xs underline underline-offset-2"
+                  hash={payload.highlightAnchorId ?? payload.anchorId}
+                  {...createStatuteLinkTarget({
+                    country: selectedVersion?.country ?? payload.jurisdiction,
+                    documentId: payload.documentId,
+                    eli: selectedVersion?.eli,
+                    slug: selectedVersion?.slug,
+                    versionValidFrom: selectedVersion?.versionValidFrom,
+                  })}
+                >
+                  {t("statutes.showInText")}
+                </Link>
+              </div>
 
-            <ProvisionWording
-              anchorId={payload.anchorId}
-              documentId={payload.documentId}
-              highlightAnchorId={payload.highlightAnchorId}
-            />
-
-            {leadingDecisions.length > 0 && (
-              <ProvisionSection title={t("statutes.leadingDecisions")}>
-                <ul className="m-0 flex list-none flex-col p-0">
-                  {leadingDecisions.map((decision) => (
-                    <li key={decision.decisionId}>
-                      <CitingDecisionItem decision={decision} />
-                    </li>
-                  ))}
-                </ul>
-              </ProvisionSection>
-            )}
-
-            <ProvisionSection title={t("caseLaw.viewer.citedBy")}>
-              <ProvisionCitingDecisions
+              <ProvisionWording
                 anchorId={payload.anchorId}
-                eli={payload.eli}
-                jurisdiction={payload.jurisdiction}
+                documentId={payload.documentId}
+                highlightAnchorId={payload.highlightAnchorId}
               />
-            </ProvisionSection>
 
-            {versionCount > 1 && (
-              <ProvisionSection title={t("common.history")}>
-                <ProvisionHistory
+              {leadingDecisions.length > 0 && (
+                <ProvisionSection title={t("statutes.leadingDecisions")}>
+                  <ul className="m-0 flex list-none flex-col p-0">
+                    {leadingDecisions.map((decision) => (
+                      <li key={decision.decisionId}>
+                        <CitingDecisionItem decision={decision} />
+                      </li>
+                    ))}
+                  </ul>
+                </ProvisionSection>
+              )}
+
+              <ProvisionSection title={t("caseLaw.viewer.citedBy")}>
+                <ProvisionCitingDecisions
                   anchorId={payload.anchorId}
-                  documentId={payload.documentId}
+                  eli={payload.eli}
+                  jurisdiction={payload.jurisdiction}
                 />
               </ProvisionSection>
-            )}
 
-            <ProvisionSection title={t("common.askAI")}>
-              <ProvisionAsk passages={leadingDecisions} payload={payload} />
-            </ProvisionSection>
+              {versionCount > 1 && (
+                <ProvisionSection title={t("common.history")}>
+                  <ProvisionHistory
+                    anchorId={payload.anchorId}
+                    documentId={payload.documentId}
+                  />
+                </ProvisionSection>
+              )}
+
+              <ProvisionSection title={t("common.askAI")}>
+                <ProvisionAsk
+                  activeLegal={activeLegal}
+                  passages={leadingDecisions}
+                  payload={payload}
+                />
+              </ProvisionSection>
+            </div>
           </div>
         </ScrollArea>
         <ViewerOverlayBar>
@@ -220,7 +239,7 @@ export const ProvisionInspectorView = ({
             onZoom={textScale.zoom}
           />
         </ViewerOverlayBar>
-      </div>
+      </LegalReaderAIChat>
     </div>
   );
 };
@@ -261,9 +280,11 @@ const ProvisionSection = ({
  * offered the sign-in instead, and keeps the wording, citations and history.
  */
 const ProvisionAsk = ({
+  activeLegal,
   passages,
   payload,
 }: {
+  activeLegal: ActiveLegalDocument;
   passages: readonly CitingDecisionRow[];
   payload: ProvisionViewPayload;
 }) => {
@@ -277,7 +298,11 @@ const ProvisionAsk = ({
   if (user !== null) {
     return (
       <Suspense fallback={<Skeleton className="h-16 w-full" />}>
-        <LazyProvisionAskActions passages={passages} payload={payload} />
+        <LazyProvisionAskActions
+          activeLegal={activeLegal}
+          passages={passages}
+          payload={payload}
+        />
       </Suspense>
     );
   }

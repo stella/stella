@@ -70,6 +70,7 @@ import { COMPOSER_TEXT_CLASS } from "@stll/ui/composer";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
+import { activeLegalDocumentRef } from "@/components/ai-suggestions/active-legal-document";
 import type { ActiveLegalDocument } from "@/components/ai-suggestions/active-legal-document";
 import { resolveDocxSuggestionRequest } from "@/components/ai-suggestions/docx-suggestion-persistence";
 import { resolveFileReviewSessionId } from "@/components/ai-suggestions/file-review-session";
@@ -132,6 +133,7 @@ import { SuggestedFollowupChips } from "@/features/chat/components/suggested-fol
 import { useChatSession } from "@/features/chat/hooks/use-chat-session";
 import { useChatThreadRuntime } from "@/features/chat/hooks/use-chat-thread-runtime";
 import { useChatUserContext } from "@/features/chat/hooks/use-chat-user-context";
+import { legalDocumentChatContext } from "@/features/chat/legal-document-chat-context";
 import { buildChatRequestMessage } from "@/features/chat/lib/build-chat-request-message";
 import { useChatRenameCommandStore } from "@/features/chat/lib/chat-rename-command-store";
 import { startNewThreadCommandHandoff } from "@/features/chat/lib/start-new-thread-command-handoff";
@@ -1117,12 +1119,11 @@ const useFileChatPlaceholder = ({
     };
   }
   if (activeLegal !== undefined) {
+    const { label } = activeLegalDocumentRef(activeLegal);
     return {
-      placeholder: t("chat.sourcePlaceholder", {
-        title: activeLegal.caseNumber,
-      }),
+      placeholder: t("chat.sourcePlaceholder", { title: label }),
       placeholderAction: t("chat.sourcePlaceholderAction"),
-      sourceLabel: activeLegal.caseNumber,
+      sourceLabel: label,
     };
   }
   return {
@@ -1323,11 +1324,11 @@ const FileChatOverlayInner = ({
     };
   });
   const getActiveExternal = useLatestCallback(() => activeExternal);
-  const getActiveLegalDecision = useLatestCallback(() =>
+  const activeLegalKey =
     activeLegal === undefined
       ? undefined
-      : { decisionId: activeLegal.decisionId },
-  );
+      : activeLegalDocumentRef(activeLegal).key;
+  const getActiveLegalKey = useLatestCallback(() => activeLegalKey);
   /**
    * Park a `suggest_changes` batch in the review panel. The editor is not
    * touched here: the user reviews each suggestion in the panel and the
@@ -1428,9 +1429,12 @@ const FileChatOverlayInner = ({
     getSendMode,
     getUserContext,
     ...(activeExternal ? { getActiveExternal: () => getActiveExternal() } : {}),
-    ...(activeLegal
-      ? { getActiveDecision: () => getActiveLegalDecision() }
-      : {}),
+    ...(activeLegalKey === undefined
+      ? {}
+      : legalDocumentChatContext({
+          documentKey: activeLegalKey,
+          readDocumentKey: getActiveLegalKey,
+        })),
     ...(activeDraft ? { getActiveDraft: () => getActiveDraft() } : {}),
     ...(activeFile ? { getActiveFile: () => getActiveFile() } : {}),
     ...(hasDocxEditSurface

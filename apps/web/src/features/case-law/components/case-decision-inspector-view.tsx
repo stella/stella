@@ -12,6 +12,7 @@ import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Skeleton } from "@stll/ui/skeleton";
 
+import { activeLegalFromReaderTarget } from "@/components/ai-suggestions/active-legal-document";
 import type { CaseDecisionViewPayload } from "@/components/inspector/case-decision-view";
 import {
   InspectorFindBar,
@@ -177,7 +178,10 @@ export const CaseDecisionInspectorView = ({
       />
       {/* The composer floats over the text, bound to this decision, the way
           it floats over a PDF bound to that file. */}
-      <LegalReaderAIChat className="min-h-0 flex-1" target={annotationTarget}>
+      <LegalReaderAIChat
+        activeLegal={activeLegalFromReaderTarget(annotationTarget)}
+        className="min-h-0 flex-1"
+      >
         <ScrollArea className="h-full">
           <main
             className="reader-paper min-h-full px-4 py-6"

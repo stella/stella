@@ -77,6 +77,7 @@ import { useChatThreadRuntime } from "@/features/chat/hooks/use-chat-thread-runt
 import { useChatUserContext } from "@/features/chat/hooks/use-chat-user-context";
 import { useRenameChatThread } from "@/features/chat/hooks/use-rename-chat-thread";
 import { useSuggestChatThreadTitle } from "@/features/chat/hooks/use-suggest-chat-thread-title";
+import { legalDocumentChatContext } from "@/features/chat/legal-document-chat-context";
 import { buildChatRequestMessage } from "@/features/chat/lib/build-chat-request-message";
 import { startNewThreadCommandHandoff } from "@/features/chat/lib/start-new-thread-command-handoff";
 import {
@@ -108,7 +109,6 @@ import { detached } from "@/lib/detached";
 import type { ChatPrompt } from "@/lib/prompts/types";
 import { useSavedPrompts } from "@/lib/prompts/use-saved-prompts";
 import { runReservedChatCommand } from "@/lib/reserved-chat-commands";
-import { toSafeId } from "@/lib/safe-id";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 
 type ChatTabPanelProps = {
@@ -148,16 +148,21 @@ export const ChatTabPanel = ({
   // stable reference across renders (matches legacy chat's pattern
   // — keeps Chat<>'s prepareSendMessagesRequest from re-binding).
   const getUserContext = useLatestCallback(() => userContext);
-  // Same pattern for the decision context — it's per-tab metadata
+  // Same pattern for the legal-document context — it's per-tab metadata
   // that changes only when openChat() is re-invoked, so capturing
   // the current value via useLatestCallback keeps the transport's
   // request shape stable across renders.
-  const tabDecisionId = tab.activeDecisionId;
-  const getActiveDecision = useLatestCallback(() =>
-    tabDecisionId
-      ? { decisionId: toSafeId<"caseLawDecision">(tabDecisionId) }
-      : undefined,
-  );
+  const tabLegalKey = tab.activeLegalKey;
+  const getTabLegalKey = useLatestCallback(() => tabLegalKey);
+  // Which corpus the tab is bound to decides which getter it carries, so a
+  // tab about a consolidation sends it the way the statute reader does.
+  const legalChatContext =
+    tabLegalKey === undefined
+      ? {}
+      : legalDocumentChatContext({
+          documentKey: tabLegalKey,
+          readDocumentKey: getTabLegalKey,
+        });
   const tabActiveSkill = tab.activeSkill;
   const getActiveSkill = useLatestCallback(() => tabActiveSkill);
   const t = useTranslations();
@@ -219,7 +224,7 @@ export const ChatTabPanel = ({
   const chatThreadContext = {
     allowMissingThread: true,
     getUserContext,
-    getActiveDecision,
+    ...legalChatContext,
     ...(tabActiveSkill ? { getActiveSkill } : {}),
     getContextMatterIds,
     getSendMode,
@@ -467,16 +472,15 @@ export const ChatTabPanel = ({
   // pane header: opens a fresh tab with the same scope + context.
   const startNewThread = () => {
     openChat({
-      // Named explicitly: a chat about a decision otherwise continues that
-      // decision's one conversation, and this button asks for a fresh one.
-      // Naming it also makes it the decision's conversation, so the reader's
-      // floating composer follows rather than staying on the thread left here.
+      // Named explicitly: a chat about a legal document otherwise continues
+      // that document's one conversation, and this button asks for a fresh
+      // one. Naming it also makes it the document's conversation, so the
+      // reader's floating composer follows rather than staying on the thread
+      // left here.
       id: createChatThreadId(),
       workspaceId: tabWorkspaceId,
       contextMatterIds: tab.contextMatterIds,
-      ...(tab.activeDecisionId
-        ? { activeDecisionId: tab.activeDecisionId }
-        : {}),
+      ...(tab.activeLegalKey ? { activeLegalKey: tab.activeLegalKey } : {}),
       ...(tab.activeSkill ? { activeSkill: tab.activeSkill } : {}),
     });
   };

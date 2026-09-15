@@ -28,8 +28,10 @@
 /* A legal reader scrolls its own paper rather than Folio's viewport. Reserve
  * the same trailing space so the last paragraph can clear the composer stack
  * instead of resting under it. Box-sizing keeps the reserve inside the paper's
- * min-height, so a short document gains no scrollbar from it. */
-[data-file-viewer-ai] .reader-paper {
+ * min-height, so a short document gains no scrollbar from it. Both slots,
+ * because a decision reader draws its paper and a statute reader does not;
+ * :is() keeps the reserve single on a column that is both. */
+[data-file-viewer-ai] :is(.reader-paper, [data-slot="reader-document-column"]) {
   padding-block-end: 8rem;
 }
 

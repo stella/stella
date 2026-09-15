@@ -13,10 +13,14 @@ import {
 } from "@/components/inspector/inspector-tabs-store";
 import { registerInspectorView } from "@/components/inspector/view-registry";
 import {
-  ensureDecisionChatThread,
-  lookupDecisionChatThread,
-  useDecisionChatThreads,
-} from "@/features/chat/decision-chat-threads";
+  decisionChatKey,
+  statuteChatKey,
+} from "@/features/chat/legal-document-chat-key";
+import {
+  ensureLegalDocumentChatThread,
+  lookupLegalDocumentChatThread,
+  useLegalDocumentChatThreads,
+} from "@/features/chat/legal-document-chat-threads";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 
@@ -1814,47 +1818,65 @@ describe("Inspector tab broadcast", () => {
   });
 });
 
-describe("a decision's chat tab and the reader's composer", () => {
+describe("a legal document's chat tab and the reader's composer", () => {
   beforeEach(() => {
-    useDecisionChatThreads.setState({ threadIdByDecisionId: {} });
+    useLegalDocumentChatThreads.setState({ threadIdByDocumentKey: {} });
   });
 
-  test("open the same thread every time the decision is asked about", () => {
+  test("open the same thread every time the document is asked about", () => {
     const store = useInspectorTabsStore.getState();
-    store.openChat({ activeDecisionId: "decision-1" });
+    store.openChat({ activeLegalKey: decisionChatKey("decision-1") });
     const first = useInspectorTabsStore.getState().tabs.at(0);
-    store.openChat({ activeDecisionId: "decision-1" });
+    store.openChat({ activeLegalKey: decisionChatKey("decision-1") });
     const tabs = useInspectorTabsStore.getState().tabs;
 
     expect(tabs).toHaveLength(1);
     expect(tabs.at(0)?.id).toBe(first?.id ?? "");
   });
 
-  test("keep separate threads for separate decisions", () => {
+  test("keep separate threads for separate documents", () => {
     const store = useInspectorTabsStore.getState();
-    store.openChat({ activeDecisionId: "decision-1" });
-    store.openChat({ activeDecisionId: "decision-2" });
+    store.openChat({ activeLegalKey: decisionChatKey("decision-1") });
+    store.openChat({ activeLegalKey: decisionChatKey("decision-2") });
     const tabs = useInspectorTabsStore.getState().tabs;
 
     expect(tabs).toHaveLength(2);
     expect(tabs.at(0)?.id).not.toBe(tabs.at(1)?.id ?? "");
   });
 
+  test("keep a consolidation apart from a decision of the same id", () => {
+    const store = useInspectorTabsStore.getState();
+    store.openChat({ activeLegalKey: decisionChatKey("shared-1") });
+    store.openChat({ activeLegalKey: statuteChatKey("shared-1") });
+
+    expect(useInspectorTabsStore.getState().tabs).toHaveLength(2);
+  });
+
+  test("open a consolidation's chat on the thread the statute reader binds", () => {
+    const owned = ensureLegalDocumentChatThread({
+      documentKey: statuteChatKey("document-1"),
+    });
+    useInspectorTabsStore
+      .getState()
+      .openChat({ activeLegalKey: statuteChatKey("document-1") });
+
+    expect(useInspectorTabsStore.getState().tabs.at(0)?.id).toBe(owned);
+  });
+
   test("follow a thread the caller names, so the reader binds to it too", () => {
     const named = toChatThreadId("thread-named");
     useInspectorTabsStore
       .getState()
-      .openChat({ activeDecisionId: "decision-1", id: named });
+      .openChat({ activeLegalKey: decisionChatKey("decision-1"), id: named });
 
-    expect(lookupDecisionChatThread("decision-1")).toEqual({
-      status: "thread",
-      threadId: named,
-    });
+    expect(
+      lookupLegalDocumentChatThread(decisionChatKey("decision-1")),
+    ).toEqual({ status: "thread", threadId: named });
   });
 
   test("follow the tab when a reserved /new command rotates its thread", () => {
     const store = useInspectorTabsStore.getState();
-    store.openChat({ activeDecisionId: "decision-1" });
+    store.openChat({ activeLegalKey: decisionChatKey("decision-1") });
     const opened = useInspectorTabsStore.getState().tabs.at(0);
     if (opened?.type !== "chat") {
       throw new Error("expected chat tab");
@@ -1862,14 +1884,13 @@ describe("a decision's chat tab and the reader's composer", () => {
     const rotated = toChatThreadId("thread-rotated");
     store.resetChatTabId(opened.id, rotated);
 
-    expect(lookupDecisionChatThread("decision-1")).toEqual({
-      status: "thread",
-      threadId: rotated,
-    });
+    expect(
+      lookupLegalDocumentChatThread(decisionChatKey("decision-1")),
+    ).toEqual({ status: "thread", threadId: rotated });
   });
 
   // The tab set is restored after the page has painted, so a reader on the
-  // decision has already minted an id nothing would otherwise take back.
+  // document has already minted an id nothing would otherwise take back.
   test("follow the restored tab rather than an id minted before it arrived", () => {
     installFakeBroadcastChannel();
     const scope = {
@@ -1877,6 +1898,47 @@ describe("a decision's chat tab and the reader's composer", () => {
       userId: "user-restore",
     };
     const restored = toChatThreadId("thread-restored");
+    window.localStorage.setItem(
+      `stella:inspector-state:v1:${scope.organizationId}:${scope.userId}`,
+      JSON.stringify({
+        activeId: restored,
+        collapsedGroupIds: [],
+        groupAssignments: {},
+        groups: [],
+        tabs: [
+          {
+            activeLegalKey: statuteChatKey("document-1"),
+            contextMatterIds: [],
+            id: restored,
+            label: "Statute chat",
+            type: "chat",
+          },
+        ],
+      }),
+    );
+    const minted = ensureLegalDocumentChatThread({
+      documentKey: statuteChatKey("document-1"),
+    });
+
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+
+    expect(minted).not.toBe(restored);
+    expect(lookupLegalDocumentChatThread(statuteChatKey("document-1"))).toEqual(
+      { status: "thread", threadId: restored },
+    );
+  });
+
+  // A tab set written before the owner was keyed by document carries the
+  // decision on `activeDecisionId`. Without conversion the restored tab is an
+  // unbound chat, and the decision's reader opens a second conversation beside
+  // the one the tab is still showing.
+  test("carry a decision binding written under the old field over to the key", () => {
+    installFakeBroadcastChannel();
+    const scope = {
+      organizationId: "org-legacy",
+      userId: "user-legacy",
+    };
+    const restored = toChatThreadId("thread-legacy");
     window.localStorage.setItem(
       `stella:inspector-state:v1:${scope.organizationId}:${scope.userId}`,
       JSON.stringify({
@@ -1895,15 +1957,16 @@ describe("a decision's chat tab and the reader's composer", () => {
         ],
       }),
     );
-    const minted = ensureDecisionChatThread({ decisionId: "decision-1" });
 
     cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
 
-    expect(minted).not.toBe(restored);
-    expect(lookupDecisionChatThread("decision-1")).toEqual({
-      status: "thread",
-      threadId: restored,
-    });
+    const tab = useInspectorTabsStore.getState().tabs.at(0);
+    expect(tab?.type === "chat" ? tab.activeLegalKey : undefined).toBe(
+      decisionChatKey("decision-1"),
+    );
+    expect(
+      lookupLegalDocumentChatThread(decisionChatKey("decision-1")),
+    ).toEqual({ status: "thread", threadId: restored });
   });
 
   test("leave the owner alone when a chat about nothing rotates", () => {
@@ -1914,6 +1977,8 @@ describe("a decision's chat tab and the reader's composer", () => {
       toChatThreadId("thread-plain-2"),
     );
 
-    expect(useDecisionChatThreads.getState().threadIdByDecisionId).toEqual({});
+    expect(
+      useLegalDocumentChatThreads.getState().threadIdByDocumentKey,
+    ).toEqual({});
   });
 });

@@ -6,6 +6,7 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import { Textarea } from "@stll/ui/textarea";
 
+import type { ActiveLegalDocument } from "@/components/ai-suggestions/active-legal-document";
 import { openPublicLawChat } from "@/components/public-law-ask";
 import type { ProvisionViewPayload } from "@/features/statutes/provision-inspector.logic";
 import {
@@ -25,6 +26,12 @@ type AskPassage = {
 };
 
 type ProvisionAskActionsProps = {
+  /**
+   * The consolidation the pane is bound to. The pane already floats a composer
+   * on that document's conversation, so a question asked here joins it instead
+   * of opening a second one beside it.
+   */
+  activeLegal: ActiveLegalDocument;
   /** The passages applying the provision in its leading decisions. */
   passages: readonly AskPassage[];
   payload: ProvisionViewPayload;
@@ -39,6 +46,7 @@ type ProvisionAskActionsProps = {
  * tools are reached for the rest.
  */
 export const ProvisionAskActions = ({
+  activeLegal,
   passages,
   payload,
 }: ProvisionAskActionsProps) => {
@@ -81,6 +89,7 @@ export const ProvisionAskActions = ({
 
   const summarize = () => {
     openPublicLawChat({
+      document: activeLegal,
       label,
       prompt: `${t("statutes.provisionAskSummarizePrompt", { subject })}${context}`,
     });
@@ -92,6 +101,7 @@ export const ProvisionAskActions = ({
       return;
     }
     openPublicLawChat({
+      document: activeLegal,
       label,
       prompt: `${t("statutes.provisionAskQuestionPrompt", {
         question: trimmed,
