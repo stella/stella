@@ -1,6 +1,10 @@
 import { panic } from "better-result";
 import * as v from "valibot";
 
+import { normalizeForExclusion } from "./normalization";
+
+export { normalizeForExclusion } from "./normalization";
+
 import type {
   createNativePipelineFromConfig,
   createPipelineContext,
@@ -329,9 +333,6 @@ export const buildChatAnonPipelineConfig = ({
  * whitespace collapsed so "Acme  Corp" and "Acme Corp"
  * collide.
  */
-export const normalizeForExclusion = (value: string): string =>
-  value.normalize("NFKC").toLowerCase().replaceAll(/\s+/gu, " ").trim();
-
 const PLACEHOLDER_TOKEN = /\[[A-Z][A-Z0-9_]*_\d+\]/gu;
 const PLACEHOLDER_LABEL = /^\[(?<label>[A-Z][A-Z0-9_]*)_\d+\]$/u;
 

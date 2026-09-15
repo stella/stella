@@ -1,7 +1,7 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { Result } from "better-result";
 
-import { normalizeForExclusion } from "@stll/anonymize-chat";
+import { normalizeForExclusion } from "@stll/anonymize-chat/normalization";
 
 import { fetchPrintPdf } from "@/components/pdf/peek/peek-pdf-print";
 import { PDF_MIME_TYPE } from "@/consts";
