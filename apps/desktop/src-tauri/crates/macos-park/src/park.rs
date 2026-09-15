@@ -180,6 +180,11 @@ pub fn park_window<R: Runtime>(window: &WebviewWindow<R>) -> bool {
   let Some((_, ns_window)) = ns_window(window) else {
     return false;
   };
+  park_panel(ns_window);
+  true
+}
+
+fn park_panel(ns_window: &NSWindow) {
   set_panel_parked(ns_window);
   // Ordering out is the only public way to give key status back. Ordering
   // straight back in keeps the page on screen; WebKit coalesces the two into
@@ -188,7 +193,6 @@ pub fn park_window<R: Runtime>(window: &WebviewWindow<R>) -> bool {
     ns_window.orderOut(None);
     ns_window.orderFront(None);
   }
-  true
 }
 
 /// Whether the persistent clipboard panel is currently presented. Native
