@@ -32,7 +32,7 @@ export type ApplyOutcome = {
   skipReason?: string;
 };
 
-export type MemberApplyOutcome = {
+type MemberApplyOutcome = {
   member: ReviewSuggestion;
   outcome: ApplyOutcome;
 };
