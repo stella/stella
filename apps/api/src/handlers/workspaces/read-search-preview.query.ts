@@ -79,6 +79,7 @@ const UNPROJECTED_PREVIEW_COLUMNS = [
   "externalChangeKey", // Connector concurrency tokens are internal.
   "externalICalUid", // Calendar synchronization identifiers are internal.
   "externalData", // Raw connector metadata is not needed for highlights.
+  "duplicateSourceEntityId", // Copy provenance is internal to replay handling.
   "readOnly", // The preview has no editing actions.
   "sortOrder", // Highlight ordering is fixed by date and identifier.
   "metadata", // Link metadata is unrelated to task/document highlights.
