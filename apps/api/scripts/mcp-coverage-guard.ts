@@ -109,6 +109,8 @@ const TOOLS_WITHOUT_ENUMERABLE_ENDPOINT: Record<string, string> = {
     "inline endpoint: apps/api/src/handlers/case-law/public-routes.ts POST /case/decisions/search",
   read_case_law_decision:
     "inline endpoint: apps/api/src/handlers/case-law/public-routes.ts GET /case/decisions/:decisionId",
+  read_case_law_citations:
+    "no dedicated endpoint: MCP handler reads the citation graph with its citing passages directly (apps/api/src/handlers/case-law/decisions/citation-passages.ts)",
   read_content_across_matters:
     "no dedicated endpoint: MCP handler reads extractedContent directly (apps/api/src/mcp/stella-tools.ts)",
   fetch:

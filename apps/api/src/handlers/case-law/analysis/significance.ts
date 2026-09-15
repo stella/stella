@@ -28,14 +28,12 @@ import {
   caseLawDecisions,
 } from "@/api/db/schema";
 import { CITATION_KIND } from "@/api/handlers/case-law/citation-kind";
-import {
-  CITATION_TREATMENTS,
-  treatmentOf,
-  type CitationTreatment,
-} from "@/api/handlers/case-law/decisions/citation-graph";
+import { treatmentOf } from "@/api/handlers/case-law/decisions/citation-graph";
 import { POLARITY } from "@/api/handlers/case-law/polarity/consts";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
+import { CITATION_TREATMENTS } from "@/api/lib/case-law/citation-vocabulary";
+import type { CitationTreatment } from "@/api/lib/case-law/citation-vocabulary";
 import {
   courtWeightFromMap,
   loadCourtWeights,

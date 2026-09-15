@@ -333,14 +333,18 @@ const searchPostgresDecisions = async (
 
   // Every matched language version, scored once. The page and the total both
   // read this set, so the representative rule below sees exactly what the
-  // page does.
+  // page does. `citation_authority` is carried out of the lateral rather than
+  // read from the decision's materialized column, which is refreshed on a
+  // schedule: the blend ranked on this value, so this is the value the hit
+  // reports.
   const matchedCte = sql`
     matched AS (
       SELECT
         sd.decision_id,
         d.language_group_key,
         ${sortKeyExpr} AS sort_key,
-        cb.cnt AS citation_count
+        cb.cnt AS citation_count,
+        cb.authority AS citation_authority
       FROM case_law_search_documents sd
       JOIN case_law_decisions d
         ON d.id = sd.decision_id
@@ -406,6 +410,7 @@ const searchPostgresDecisions = async (
       ) AS headline,
       m.sort_key,
       m.citation_count,
+      m.citation_authority,
       d.created_at
     FROM matched m
     JOIN case_law_decisions d
@@ -615,6 +620,10 @@ const searchPostgresDecisions = async (
       // on which provider served it.
       anchorId: null,
       citationCount: Number(row["citation_count"]) || 0,
+      citationAuthority: Number(row["citation_authority"]) || 0,
+      // Whole-decision scoring has no passages to count, so the breadth
+      // signal is the one match the decision itself is.
+      matchingPassages: 1,
       createdAt:
         row["created_at"] instanceof Date
           ? row["created_at"].toISOString()
@@ -1249,6 +1258,12 @@ type DecisionHitsPageOptions = {
   facets: DecisionSearchFacets | null;
   nextCursor: string | null;
   pageRanked: readonly RankedHit[];
+  /**
+   * Passages of each decision the query matched, within the scanned window.
+   * Empty where the branch scored whole decisions (an identifier lookup), and
+   * every hit then counts as the one match it is.
+   */
+  passageCountById: ReadonlyMap<string, number>;
   snippetById: ReadonlyMap<string, string>;
   total: SearchTotal;
 };
@@ -1262,6 +1277,7 @@ const decisionHitsPage = ({
   facets,
   nextCursor,
   pageRanked,
+  passageCountById,
   snippetById,
   total,
 }: DecisionHitsPageOptions) => {
@@ -1308,6 +1324,9 @@ const decisionHitsPage = ({
         // on a decision the entry named outright.
         anchorId: anchorIdById.get(hit.id) ?? null,
         citationCount: row.citationCount,
+        // The blend's own input, reported beside the result it ranked.
+        citationAuthority: hit.citationAuthority,
+        matchingPassages: passageCountById.get(hit.id) ?? 1,
         createdAt: row.createdAt.toISOString(),
       },
     ];
@@ -1563,6 +1582,7 @@ export const searchCorpusIndexDecisions = async (
           facets: null,
           nextCursor: null,
           pageRanked: identityPage,
+          passageCountById: new Map(),
           snippetById: new Map(),
           // The decisions the lookup found, not the ones this page holds: a
           // docket naming more decisions than fit a page still reports how
@@ -1678,7 +1698,8 @@ export const searchCorpusIndexDecisions = async (
       : null,
   ]);
 
-  const { anchorIdById, pageRanked, scan, snippetById } = searchPage;
+  const { anchorIdById, pageRanked, passageCountById, scan, snippetById } =
+    searchPage;
 
   const nextCursor =
     searchPage.nextCursor === null
@@ -1713,6 +1734,7 @@ export const searchCorpusIndexDecisions = async (
     facets: facetsAndTotal?.facets ?? null,
     nextCursor,
     pageRanked,
+    passageCountById,
     snippetById,
     total: facetsAndTotal?.total ?? SEARCH_TOTAL_NOT_COUNTED,
   });

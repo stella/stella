@@ -15,7 +15,15 @@ type CitationPageResponse = Extract<
 export type DecisionCitation = CitationPageResponse["items"][number];
 
 /** The decision at the far end of a resolved citation. */
-export type CitedDecision = NonNullable<DecisionCitation["decision"]>;
+type CitedDecision = NonNullable<DecisionCitation["decision"]>;
+
+/**
+ * The same decision as a link needs it, without the ranking the citation
+ * query read for it. The decision a reader is on is addressed the same way
+ * but is no citation's target, so it has no `citationAuthority` to give and
+ * must not be asked to invent one.
+ */
+export type CitedDecisionAddress = Omit<CitedDecision, "citationAuthority">;
 
 export type DecisionCitationSummary = Extract<
   NonNullable<Awaited<ReturnType<SummaryGet>>["data"]>,
