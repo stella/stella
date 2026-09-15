@@ -1800,6 +1800,8 @@
       "commentOnParagraph": "{label, select, none {Okomentovať odsek} other {Okomentovať odsek {label}}}",
       "commentOnSelection": "Okomentovať vybraný text",
       "deleteParagraph": "{label, select, none {Vymazať odsek} other {Vymazať odsek {label}}}",
+      "deleteParagraphRange": "Vymazať odseky {first}–{last}",
+      "deleteParagraphs": "{count, plural, one {Vymazať # odsek} few {Vymazať # odseky} many {Vymazať # odseku} other {Vymazať # odsekov}}",
       "deleteTable": "Vymazať tabuľku",
       "deleteTableColumn": "Vymazať stĺpec tabuľky",
       "deleteTableRow": "Vymazať riadok tabuľky",

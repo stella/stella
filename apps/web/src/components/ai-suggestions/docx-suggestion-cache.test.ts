@@ -40,6 +40,7 @@ const suggestion = (id: string): ReviewSuggestion => ({
   status: "pending",
   applyMode: null,
   revisionIds: null,
+  proposalBatchId: "proposal-1",
   undoHandle: null,
   pendingOperation: {
     id,

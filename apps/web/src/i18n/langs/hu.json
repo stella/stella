@@ -1800,6 +1800,8 @@
       "commentOnParagraph": "{label, select, none {Megjegyzés hozzáadása egy bekezdéshez} other {Megjegyzés hozzáadása a(z) {label} bekezdéshez}}",
       "commentOnSelection": "Megjegyzés hozzáadása a kijelölt szöveghez",
       "deleteParagraph": "{label, select, none {Bekezdés törlése} other {A(z) {label} bekezdés törlése}}",
+      "deleteParagraphRange": "A(z) {first}–{last} bekezdések törlése",
+      "deleteParagraphs": "{count, plural, one {# bekezdés törlése} other {# bekezdés törlése}}",
       "deleteTable": "Táblázat törlése",
       "deleteTableColumn": "Táblázatoszlop törlése",
       "deleteTableRow": "Táblázatsor törlése",

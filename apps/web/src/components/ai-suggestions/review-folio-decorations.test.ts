@@ -44,6 +44,7 @@ const suggestion = (
   status: "pending",
   summary: "Extend the payment period",
   type: "replaceInBlock",
+  proposalBatchId: "proposal-1",
   undoHandle: null,
   ...patch,
 });

@@ -1800,6 +1800,8 @@
       "commentOnParagraph": "{label, select, none {Lisa kommentaar lõigule} other {Lisa kommentaar lõigule {label}}}",
       "commentOnSelection": "Lisa kommentaar valitud tekstile",
       "deleteParagraph": "{label, select, none {Kustuta lõik} other {Kustuta lõik {label}}}",
+      "deleteParagraphRange": "Kustuta lõigud {first}–{last}",
+      "deleteParagraphs": "{count, plural, one {Kustuta # lõik} other {Kustuta # lõiku}}",
       "deleteTable": "Kustuta tabel",
       "deleteTableColumn": "Kustuta tabeli veerg",
       "deleteTableRow": "Kustuta tabeli rida",

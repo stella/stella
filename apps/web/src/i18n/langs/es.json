@@ -1800,6 +1800,8 @@
       "commentOnParagraph": "{label, select, none {Comentar un párrafo} other {Comentar el párrafo {label}}}",
       "commentOnSelection": "Comentar el texto seleccionado",
       "deleteParagraph": "{label, select, none {Eliminar un párrafo} other {Eliminar el párrafo {label}}}",
+      "deleteParagraphRange": "Eliminar los párrafos {first} a {last}",
+      "deleteParagraphs": "{count, plural, one {Eliminar # párrafo} other {Eliminar # párrafos}}",
       "deleteTable": "Eliminar una tabla",
       "deleteTableColumn": "Eliminar una columna de tabla",
       "deleteTableRow": "Eliminar una fila de tabla",

@@ -1800,6 +1800,8 @@
       "commentOnParagraph": "{label, select, none {Pridėti komentarą prie pastraipos} other {Pridėti komentarą prie pastraipos {label}}}",
       "commentOnSelection": "Pridėti komentarą prie pažymėto teksto",
       "deleteParagraph": "{label, select, none {Ištrinti pastraipą} other {Ištrinti pastraipą {label}}}",
+      "deleteParagraphRange": "Ištrinti pastraipas {first}–{last}",
+      "deleteParagraphs": "{count, plural, one {Ištrinti # pastraipą} few {Ištrinti # pastraipas} many {Ištrinti # pastraipos} other {Ištrinti # pastraipų}}",
       "deleteTable": "Ištrinti lentelę",
       "deleteTableColumn": "Ištrinti lentelės stulpelį",
       "deleteTableRow": "Ištrinti lentelės eilutę",

@@ -7,7 +7,6 @@
 import { describe, expect, test } from "bun:test";
 
 import {
-  filterReviewSuggestions,
   findLiveSuggestion,
   useReviewStore,
 } from "@/components/ai-suggestions/review-store";
@@ -35,33 +34,11 @@ const stub = (
   status,
   applyMode: null,
   revisionIds: null,
+  proposalBatchId: "proposal-1",
   undoHandle: null,
   pendingOperation: null,
   snapshot: null,
   ...overrides,
-});
-
-describe("filterReviewSuggestions", () => {
-  const everyStatus = () => [
-    stub("s1", "pending"),
-    stub("s2", "accepted"),
-    stub("s3", "rejected"),
-    stub("s4", "skipped"),
-    stub("s5", "applying"),
-  ];
-
-  test("returns every item while hideAccepted is off", () => {
-    expect(
-      filterReviewSuggestions(everyStatus(), { hideAccepted: false }),
-    ).toHaveLength(5);
-  });
-
-  test("hideAccepted keeps pending and applying, drops the rest", () => {
-    // The "applying" status must survive the filter so the loading
-    // indicator doesn't disappear mid-Accept-click.
-    const out = filterReviewSuggestions(everyStatus(), { hideAccepted: true });
-    expect(out.map((i) => i.id)).toEqual(["s1", "s5"]);
-  });
 });
 
 describe("findLiveSuggestion", () => {

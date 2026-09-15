@@ -1800,6 +1800,8 @@
       "commentOnParagraph": "{label, select, none {Skomentuj akapit} other {Skomentuj akapit {label}}}",
       "commentOnSelection": "Skomentuj zaznaczony tekst",
       "deleteParagraph": "{label, select, none {Usuń akapit} other {Usuń akapit {label}}}",
+      "deleteParagraphRange": "Usuń akapity {first}–{last}",
+      "deleteParagraphs": "{count, plural, one {Usuń # akapit} few {Usuń # akapity} many {Usuń # akapitów} other {Usuń # akapitu}}",
       "deleteTable": "Usuń tabelę",
       "deleteTableColumn": "Usuń kolumnę tabeli",
       "deleteTableRow": "Usuń wiersz tabeli",

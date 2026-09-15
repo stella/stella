@@ -125,6 +125,16 @@ import type {
   ReviewProposal,
   StartReviewResult,
 } from "@/components/ai-suggestions/playbook-review-store";
+import {
+  describeReviewChangeSummary,
+  filterReviewChanges,
+  groupReviewChanges,
+  orderSuggestionsByDocumentPosition,
+  reviewChangeHasMember,
+  reviewChangeOf,
+  reviewChangeStatus,
+} from "@/components/ai-suggestions/review-bar.logic";
+import type { ReviewChange } from "@/components/ai-suggestions/review-bar.logic";
 import type { DeltaCitation } from "@/components/ai-suggestions/review-delta";
 import { ReviewDeltaView } from "@/components/ai-suggestions/review-delta-view";
 import {
@@ -144,7 +154,6 @@ import {
 } from "@/components/ai-suggestions/review-position-row";
 import { RedlinePreview } from "@/components/ai-suggestions/review-redline-preview";
 import {
-  filterReviewSuggestions,
   getReviewFocusedId,
   REVIEW_SUGGESTION_ORIGIN,
   useReviewStore,
@@ -159,6 +168,7 @@ import {
 } from "@/components/ai-suggestions/review-verdict";
 import { useFolioDocumentBlocks } from "@/components/ai-suggestions/use-folio-document-blocks";
 import { useReviewActions } from "@/components/ai-suggestions/use-review-actions";
+import { useReviewChangeSummary } from "@/components/ai-suggestions/use-review-change-summary";
 import { useReviewStartMode } from "@/components/ai-suggestions/use-review-start-mode";
 import { DocumentIcon } from "@/components/document-icon";
 import { DOCUMENT_PANE } from "@/components/inspector/document-pane";
@@ -310,11 +320,22 @@ export const PlaybookFacet = ({
   const suggestions = useReviewStore(
     (state) => state.sessions[entityId] ?? EMPTY_SUGGESTIONS,
   );
+  // The queue as decisions, in reading order: the derivation the floating bar
+  // reads, so the list, its counts and Accept all agree with the stepper on
+  // what one change is.
+  const documentBlocks = useFolioDocumentBlocks(
+    targetEditorRef,
+    suggestions.length > 0,
+  );
+  const changes = groupReviewChanges(
+    orderSuggestionsByDocumentPosition(suggestions, documentBlocks),
+    documentBlocks,
+  );
   // Changes the chat proposed over this document. A run stages its own fixes
   // as suggestions too, but those belong to the finding that proposed them and
   // are resolved from its card, so only the chat's get a group of their own.
-  const chatSuggestions = suggestions.filter(
-    (item) => item.origin === REVIEW_SUGGESTION_ORIGIN.chat,
+  const chatChanges = changes.filter(
+    (change) => change.members[0].origin === REVIEW_SUGGESTION_ORIGIN.chat,
   );
 
   // Which version of the document is on screen now. The tab's facet bar reads
@@ -512,19 +533,28 @@ export const PlaybookFacet = ({
     return false;
   };
 
-  const acceptSuggestion = (suggestion: ReviewSuggestion) => {
+  const acceptChange = (change: ReviewChange) => {
     detached(
-      reviewActions.acceptOne(suggestion),
-      "playbook-facet.accept-suggestion",
+      reviewActions.acceptChange(change),
+      "playbook-facet.accept-change",
     );
+  };
+
+  // A finding's fix is always a change of its own.
+  const acceptSuggestion = (suggestion: ReviewSuggestion) => {
+    acceptChange(reviewChangeOf(suggestion));
+  };
+
+  const rejectSuggestion = (suggestion: ReviewSuggestion) => {
+    reviewActions.rejectChange(reviewChangeOf(suggestion));
   };
 
   // Everything pending on the document, whichever surface proposed it: the
   // queue is the document's, not one group's.
   const queueControls = (
     <ReviewQueueControls
-      onAcceptAll={reviewActions.acceptMany}
-      suggestions={suggestions}
+      changes={changes}
+      onAcceptAll={reviewActions.acceptAll}
     />
   );
 
@@ -533,14 +563,14 @@ export const PlaybookFacet = ({
    *  along on the group's heading row instead. */
   const chatSectionWith = (controls: ReactNode) => (
     <ChatSuggestionsSection
+      changes={chatChanges}
       controls={controls}
       editorAvailable={editorAvailable}
       entityId={entityId}
-      onAccept={acceptSuggestion}
+      onAccept={acceptChange}
       onFocus={reviewActions.navigateTo}
-      onReject={reviewActions.rejectOne}
+      onReject={reviewActions.rejectChange}
       onScrollToBlock={scrollToBlock}
-      suggestions={chatSuggestions}
     />
   );
 
@@ -655,7 +685,7 @@ export const PlaybookFacet = ({
           onAcceptSuggestion={acceptSuggestion}
           onAddCounterpartyNote={addCounterpartyNote}
           onOpenReferenceCitation={openReferenceCitation}
-          onRejectSuggestion={reviewActions.rejectOne}
+          onRejectSuggestion={rejectSuggestion}
           onRetry={(basis) => {
             detached(retryRun(basis), "playbook-facet.retry-run");
           }}
@@ -4356,17 +4386,19 @@ const SEVERITY_LABEL_KEY = {
  * what "accept all" means.
  */
 const ReviewQueueControls = ({
-  suggestions,
+  changes,
   onAcceptAll,
 }: {
-  suggestions: readonly ReviewSuggestion[];
-  onAcceptAll: (items: readonly ReviewSuggestion[]) => Promise<void>;
+  changes: readonly ReviewChange[];
+  onAcceptAll: (changes: readonly ReviewChange[]) => Promise<void>;
 }) => {
   const t = useTranslations();
   const hideAccepted = useReviewStore((state) => state.hideAccepted);
   const setHideAccepted = useReviewStore((state) => state.setHideAccepted);
-  const pending = suggestions.filter((item) => item.status === "pending");
-  if (suggestions.length === 0) {
+  const pending = changes.filter(
+    (change) => reviewChangeStatus(change) === "pending",
+  );
+  if (changes.length === 0) {
     return null;
   }
 
@@ -4395,7 +4427,7 @@ const ReviewQueueControls = ({
       </Tooltip>
       <AcceptAllButton
         onAcceptAll={onAcceptAll}
-        pendingItems={pending}
+        pendingChanges={pending}
         size="xs"
         variant="outline"
       >
@@ -4407,17 +4439,17 @@ const ReviewQueueControls = ({
 
 type ChatSuggestionsSectionProps = {
   entityId: string;
-  /** The chat's proposals for this document, in the order they were made. */
-  suggestions: readonly ReviewSuggestion[];
+  /** The chat's proposals for this document as decisions, in reading order. */
+  changes: readonly ReviewChange[];
   /** Rendered on the heading row. The launcher puts the queue controls here;
    *  the results view has its own header for them. */
   controls: ReactNode;
   editorAvailable: boolean;
-  onAccept: (suggestion: ReviewSuggestion) => void;
-  onReject: (suggestion: ReviewSuggestion) => void;
+  onAccept: (change: ReviewChange) => void;
+  onReject: (change: ReviewChange) => void;
   /** Park the in-document stepper on this change; the floating bar reads the
    *  same focused id, so the two can never point at different changes. */
-  onFocus: (suggestion: ReviewSuggestion) => void;
+  onFocus: (change: ReviewChange) => void;
   onScrollToBlock: (blockId: string) => void;
 };
 
@@ -4431,7 +4463,7 @@ type ChatSuggestionsSectionProps = {
  */
 const ChatSuggestionsSection = ({
   entityId,
-  suggestions,
+  changes,
   controls,
   editorAvailable,
   onAccept,
@@ -4445,24 +4477,27 @@ const ChatSuggestionsSection = ({
   const focusedId = useReviewStore((state) =>
     getReviewFocusedId(state, entityId),
   );
+  const focusedChangeId =
+    changes.find((change) => reviewChangeHasMember(change, focusedId))?.id ??
+    null;
   const listRef = useRef<HTMLUListElement>(null);
 
   // The stepper moved the focus, in the document or from the floating bar:
   // bring the card it landed on into view here too.
   useExternalSyncEffect(() => {
-    if (focusedId === null) {
+    if (focusedChangeId === null) {
       return;
     }
     listRef.current
-      ?.querySelector(`[data-suggestion-id="${CSS.escape(focusedId)}"]`)
+      ?.querySelector(`[data-suggestion-id="${CSS.escape(focusedChangeId)}"]`)
       ?.scrollIntoView({ block: "nearest" });
-  }, [focusedId]);
+  }, [focusedChangeId]);
 
-  if (suggestions.length === 0) {
+  if (changes.length === 0) {
     return null;
   }
 
-  const visible = filterReviewSuggestions(suggestions, { hideAccepted });
+  const visible = filterReviewChanges(changes, { hideAccepted });
 
   return (
     <section className="mt-4">
@@ -4478,15 +4513,15 @@ const ChatSuggestionsSection = ({
         {controls}
       </div>
       <ul className="space-y-1.5" ref={listRef}>
-        {visible.map((item) => (
+        {visible.map((change) => (
           <ChatSuggestionCard
+            change={change}
             editorAvailable={editorAvailable}
-            focused={focusedId === item.id}
-            item={item}
-            key={item.id}
-            onAccept={() => onAccept(item)}
-            onFocus={() => onFocus(item)}
-            onReject={() => onReject(item)}
+            focused={focusedChangeId === change.id}
+            key={change.id}
+            onAccept={() => onAccept(change)}
+            onFocus={() => onFocus(change)}
+            onReject={() => onReject(change)}
             onScrollToBlock={onScrollToBlock}
           />
         ))}
@@ -4498,10 +4533,11 @@ const ChatSuggestionsSection = ({
 /**
  * One change the chat proposed: what it does, why, and the redline it would
  * write. The same card shape as a finding — header row, one caption, the
- * comparison, then the actions — so a reviewer reads one list, not two.
+ * comparison, then the actions — so a reviewer reads one list, not two. A
+ * deletion run shows each paragraph it removes, in document order.
  */
 const ChatSuggestionCard = ({
-  item,
+  change,
   focused,
   editorAvailable,
   onAccept,
@@ -4509,7 +4545,7 @@ const ChatSuggestionCard = ({
   onReject,
   onScrollToBlock,
 }: {
-  item: ReviewSuggestion;
+  change: ReviewChange;
   focused: boolean;
   editorAvailable: boolean;
   onAccept: () => void;
@@ -4518,7 +4554,20 @@ const ChatSuggestionCard = ({
   onScrollToBlock: (blockId: string) => void;
 }) => {
   const t = useTranslations();
-  const isResolved = item.status !== "pending" && item.status !== "applying";
+  const summarize = useReviewChangeSummary();
+  const { members } = change;
+  const [first] = members;
+  const status = reviewChangeStatus(change);
+  const isResolved = status !== "pending" && status !== "applying";
+  const summary = summarize(describeReviewChangeSummary(change));
+  // Operations from one tool call often carry the same rationale; say it once.
+  const comments = [
+    ...new Set(
+      members.flatMap((member) =>
+        member.comment === undefined ? [] : [member.comment],
+      ),
+    ),
+  ];
 
   return (
     <li
@@ -4527,7 +4576,7 @@ const ChatSuggestionCard = ({
         focused && "ring-ring ring-1",
         isResolved && "opacity-60",
       )}
-      data-suggestion-id={item.id}
+      data-suggestion-id={change.id}
     >
       <button
         className="hover:bg-muted/70 w-full transition-colors"
@@ -4537,39 +4586,45 @@ const ChatSuggestionCard = ({
         <PositionHeader
           label={
             <>
-              {item.blockLabel !== undefined && (
+              {first.blockLabel !== undefined && (
                 <span className={POSITION_HEADER_META_CLASS}>
-                  {item.blockLabel}
+                  {first.blockLabel}
                 </span>
               )}
-              {item.severity !== "unspecified" && (
+              {first.severity !== "unspecified" && (
                 <span className={cn(POSITION_HEADER_META_CLASS, "text-end")}>
-                  {t(SEVERITY_LABEL_KEY[item.severity])}
+                  {t(SEVERITY_LABEL_KEY[first.severity])}
                 </span>
               )}
             </>
           }
           title={
             <BidiText as="span" className="text-foreground font-medium">
-              {item.summary}
+              {summary}
             </BidiText>
           }
         />
       </button>
       <div className="space-y-3 border-t px-3 py-3">
-        {item.comment !== undefined && (
-          <p className="text-muted-foreground text-sm leading-6 text-pretty">
-            <BidiText as="span">{item.comment}</BidiText>
+        {comments.map((comment) => (
+          <p
+            className="text-muted-foreground text-sm leading-6 text-pretty"
+            key={comment}
+          >
+            <BidiText as="span">{comment}</BidiText>
           </p>
-        )}
-        <RedlinePreview
-          preview={item.preview}
-          rejected={item.status === "rejected"}
-          srSummary={item.summary}
-        />
-        {item.status === "skipped" && item.skipReason !== undefined && (
+        ))}
+        {members.map((member) => (
+          <RedlinePreview
+            key={member.id}
+            preview={member.preview}
+            rejected={status === "rejected"}
+            srSummary={member.summary}
+          />
+        ))}
+        {status === "skipped" && first.skipReason !== undefined && (
           <p className="text-destructive text-xs">
-            {t("docxReview.skipped", { reason: item.skipReason })}
+            {t("docxReview.skipped", { reason: first.skipReason })}
           </p>
         )}
         <section
@@ -4580,12 +4635,12 @@ const ChatSuggestionCard = ({
             editorAvailable={editorAvailable}
             onAccept={onAccept}
             onReject={onReject}
-            suggestion={item}
+            suggestion={first}
           />
           <Button
             className="text-muted-foreground hover:text-foreground h-7 px-2 text-xs"
             disabled={!editorAvailable}
-            onClick={() => onScrollToBlock(item.blockId)}
+            onClick={() => onScrollToBlock(first.blockId)}
             size="sm"
             variant="ghost"
           >

@@ -1800,6 +1800,8 @@
       "commentOnParagraph": "{label, select, none {Commenter un paragraphe} other {Commenter le paragraphe {label}}}",
       "commentOnSelection": "Commenter le texte sélectionné",
       "deleteParagraph": "{label, select, none {Supprimer un paragraphe} other {Supprimer le paragraphe {label}}}",
+      "deleteParagraphRange": "Supprimer les paragraphes {first} à {last}",
+      "deleteParagraphs": "{count, plural, one {Supprimer # paragraphe} other {Supprimer # paragraphes}}",
       "deleteTable": "Supprimer un tableau",
       "deleteTableColumn": "Supprimer une colonne de tableau",
       "deleteTableRow": "Supprimer une ligne de tableau",

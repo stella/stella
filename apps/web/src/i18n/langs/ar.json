@@ -1800,6 +1800,8 @@
       "commentOnParagraph": "{label, select, none {إضافة تعليق إلى فقرة} other {إضافة تعليق إلى الفقرة {label}}}",
       "commentOnSelection": "إضافة تعليق إلى النص المحدد",
       "deleteParagraph": "{label, select, none {حذف فقرة} other {حذف الفقرة {label}}}",
+      "deleteParagraphRange": "حذف الفقرات من {first} إلى {last}",
+      "deleteParagraphs": "{count, plural, zero {حذف # فقرة} one {حذف فقرة واحدة} two {حذف فقرتين} few {حذف # فقرات} many {حذف # فقرةً} other {حذف # فقرة}}",
       "deleteTable": "حذف جدول",
       "deleteTableColumn": "حذف عمود جدول",
       "deleteTableRow": "حذف صف جدول",

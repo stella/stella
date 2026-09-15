@@ -117,6 +117,12 @@ export type ReviewSuggestion = {
   operationId?: string | undefined;
   /** Which surface proposed this change. */
   origin: ReviewSuggestionOrigin;
+  /**
+   * The proposal this suggestion arrived in: one `suggest_changes` call while
+   * queued live, one server insert once hydrated (the rows of one insert share
+   * its `created_at`). Only suggestions of one proposal are decided together.
+   */
+  proposalBatchId: string;
   /** Block id the suggestion targets. */
   blockId: string;
   /**
@@ -265,23 +271,6 @@ type ReviewActions = {
   pulseChatInput: (entityId: string) => void;
   setHideAccepted: (value: boolean) => void;
 };
-
-/**
- * What a review list shows of a session.
- *
- * `hideAccepted` drops everything except `pending` and `applying`. The
- * "applying" status stays so the loading indicator doesn't flicker out from
- * under the reviewer mid-apply.
- */
-export const filterReviewSuggestions = (
-  suggestions: readonly ReviewSuggestion[],
-  options: { hideAccepted: boolean },
-): readonly ReviewSuggestion[] =>
-  options.hideAccepted
-    ? suggestions.filter(
-        (item) => item.status === "pending" || item.status === "applying",
-      )
-    : suggestions;
 
 export const useReviewStore = create<ReviewState & ReviewActions>()((set) => ({
   sessions: {},

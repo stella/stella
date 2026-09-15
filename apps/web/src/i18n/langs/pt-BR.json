@@ -1800,6 +1800,8 @@
       "commentOnParagraph": "{label, select, none {Comentar um parágrafo} other {Comentar o parágrafo {label}}}",
       "commentOnSelection": "Comentar o texto selecionado",
       "deleteParagraph": "{label, select, none {Excluir um parágrafo} other {Excluir o parágrafo {label}}}",
+      "deleteParagraphRange": "Excluir os parágrafos {first} a {last}",
+      "deleteParagraphs": "{count, plural, one {Excluir # parágrafo} other {Excluir # parágrafos}}",
       "deleteTable": "Excluir uma tabela",
       "deleteTableColumn": "Excluir uma coluna de tabela",
       "deleteTableRow": "Excluir uma linha de tabela",
