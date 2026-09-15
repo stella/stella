@@ -445,6 +445,47 @@ const AnalysisNote = ({
     return `color-mix(in srgb, var(${cssVar}) 60%, transparent)`;
   })();
 
+  const style = {
+    ...position.style,
+    paddingInlineStart: `${0.625 + item.depth * 0.5}rem`,
+    borderInlineStartColor: stripe,
+    ...(presence === "highlighted" && {
+      boxShadow: `inset 2px 0 0 var(${cssVar})`,
+    }),
+  };
+  const body = (
+    <>
+      {item.heading && (
+        <span className="text-foreground-strong-muted mb-0.5 block text-[calc(0.8rem*var(--reader-text-scale))] leading-tight font-semibold">
+          {capitalize(item.heading)}
+        </span>
+      )}
+      {item.text && (
+        <span className="text-foreground-placeholder block text-[calc(0.75rem*var(--reader-text-scale))] leading-snug">
+          {item.text}
+        </span>
+      )}
+    </>
+  );
+
+  // An inline note already sits at its anchor, so there is nowhere to jump:
+  // it is read, not operated. A button here would take a tab stop and
+  // announce an action that does nothing.
+  if (onJump === undefined) {
+    return (
+      <div
+        className={cn(
+          "text-foreground-muted border-s-[3px] py-1 ps-2.5 text-start",
+          position.className,
+        )}
+        ref={(el) => measureRef?.(el, item.id)}
+        style={style}
+      >
+        {body}
+      </div>
+    );
+  }
+
   return (
     <button
       className={cn(
@@ -458,26 +499,10 @@ const AnalysisNote = ({
       onMouseEnter={() => onHover?.(true)}
       onMouseLeave={() => onHover?.(false)}
       ref={(el) => measureRef?.(el, item.id)}
-      style={{
-        ...position.style,
-        paddingInlineStart: `${0.625 + item.depth * 0.5}rem`,
-        borderInlineStartColor: stripe,
-        ...(presence === "highlighted" && {
-          boxShadow: `inset 2px 0 0 var(${cssVar})`,
-        }),
-      }}
+      style={style}
       type="button"
     >
-      {item.heading && (
-        <span className="text-foreground-strong-muted mb-0.5 block text-[calc(0.8rem*var(--reader-text-scale))] leading-tight font-semibold">
-          {capitalize(item.heading)}
-        </span>
-      )}
-      {item.text && (
-        <span className="text-foreground-placeholder block text-[calc(0.75rem*var(--reader-text-scale))] leading-snug">
-          {item.text}
-        </span>
-      )}
+      {body}
     </button>
   );
 };
@@ -664,8 +689,13 @@ const CommentNote = ({
       {item.mine && (
         <div
           className={cn(
-            "mt-1 flex items-center gap-1 opacity-0 transition-opacity",
-            "group-hover/comment:opacity-100 focus-within:opacity-100",
+            "mt-1 flex items-center gap-1 transition-opacity",
+            // Inline is the layout a narrow pane and a touch screen get, where
+            // there is no hover to reveal anything: a reader must be able to
+            // reach their own comment's controls without a pointer.
+            placement.type === "inline"
+              ? "opacity-100"
+              : "opacity-0 group-hover/comment:opacity-100 focus-within:opacity-100",
           )}
         >
           <Tooltip
