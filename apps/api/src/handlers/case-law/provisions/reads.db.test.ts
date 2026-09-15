@@ -9,8 +9,6 @@ import {
   caseLawSources,
   STATUTE_CITATION_TARGET_TYPE,
 } from "@/api/db/schema";
-import { withRedistributableSubject } from "@/api/handlers/case-law/decisions/public-subject";
-import type { RedistributableDecisionSubject } from "@/api/handlers/case-law/decisions/public-subject";
 import { readStatuteCitationCountsHandler } from "@/api/handlers/case-law/provisions/citation-counts";
 import { listCitingDecisionsHandler } from "@/api/handlers/case-law/provisions/citing-decisions";
 import { listDecisionProvisionsHandler } from "@/api/handlers/case-law/provisions/list-for-decision";
@@ -20,6 +18,8 @@ import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
+import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
+import type { RedistributableDecisionSubject } from "@/api/lib/case-law/public-subject";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import {
   createTestPglite,

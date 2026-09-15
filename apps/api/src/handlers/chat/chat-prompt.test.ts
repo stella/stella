@@ -254,6 +254,7 @@ describe("active decision section", () => {
     documentAst: null,
     fulltext: "Dovolání se zamítá.",
     textS3Key: null,
+    source: { descriptor: null },
   };
 
   /**
@@ -269,6 +270,17 @@ describe("active decision section", () => {
         // SAFETY: the section runs one relational read off this handle.
         // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test handle stands in for a transaction
         {
+          select: () => ({
+            from: () => ({
+              innerJoin: () => ({
+                where: () => ({
+                  limit: async () => [
+                    { id: DECISION_ID, country: "CZE", descriptor: null },
+                  ],
+                }),
+              }),
+            }),
+          }),
           query: {
             caseLawDecisions: {
               findFirst: async () => await Promise.resolve(DECISION_ROW),
