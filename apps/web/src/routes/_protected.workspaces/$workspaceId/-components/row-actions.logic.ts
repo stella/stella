@@ -121,7 +121,7 @@ export const getOcrExportFileName = (
 
 type GetDuplicateNameOptions = {
   duplicateLabel: string;
-  kind: "document" | "folder";
+  kind: WorkspaceEntity["kind"];
   name: string;
 };
 
