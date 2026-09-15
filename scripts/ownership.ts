@@ -322,6 +322,57 @@ export const OWNERSHIP = [
     enforcement: { kind: "none" },
   },
   {
+    id: "web-libpdf-loader",
+    capability: "Loading LibPDF in the web client",
+    owner: ["apps/web/src/lib/pdf/libpdf-loader.ts"],
+    summary:
+      "One dynamic import node keeps LibPDF and its transitive dependencies in one shared lazy chunk. " +
+      "Client features call loadLibPdf so adding another lazy consumer cannot duplicate the full parser graph.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@libpdf/core"],
+      allowed: [
+        {
+          path: "apps/web/e2e/anonymized-export/main.ts",
+          reason:
+            "Standalone browser fixture has its own Vite bundle and does not enter the application client graph.",
+        },
+        {
+          path: "apps/web/src/lib/anonymize/pdf-coords.ts",
+          reason: "Type-only PDF and PDFPage imports emit no runtime edge.",
+        },
+        {
+          path: "apps/web/src/lib/pdf/anonymized-export.logic.test.ts",
+          reason:
+            "Unit-test fixture constructs PDFs outside the client bundle.",
+        },
+        {
+          path: "apps/web/src/lib/pdf/anonymized-export.logic.ts",
+          reason: "Type-only PDFPage import emits no runtime edge.",
+        },
+        {
+          path: "apps/web/src/lib/pdf/page-editor/page-editor-transform.test.ts",
+          reason:
+            "Unit-test fixture constructs PDFs outside the client bundle.",
+        },
+        {
+          path: "apps/web/src/lib/pdf/page-editor/page-editor-transform.ts",
+          reason:
+            "PDF page transforms run in a dedicated worker bundle, separate from the application client graph.",
+        },
+        {
+          path: "apps/web/src/lib/pdf/pdf-search.test.ts",
+          reason:
+            "Unit-test fixture constructs PDFs outside the client bundle.",
+        },
+        {
+          path: "apps/web/src/lib/pdf/pdf-search.ts",
+          reason: "Type-only PDF and PDFPage imports emit no runtime edge.",
+        },
+      ],
+    },
+  },
+  {
     id: "docx-authoring",
     capability:
       "Producing DOCX bytes from Markdown, legal source, or a document model, and applying AI edits to a DOCX",

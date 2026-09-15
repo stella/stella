@@ -25,6 +25,7 @@ import type {
   EntityOverlay,
   FileAnonymization,
 } from "@/lib/pdf/anonymization-types";
+import { loadLibPdf } from "@/lib/pdf/libpdf-loader";
 import { anonymizationAllowlistOptions } from "@/lib/workspaces/queries/anonymization-allowlist";
 import { anonymizationTermsOptions } from "@/lib/workspaces/queries/anonymization-terms";
 
@@ -157,7 +158,7 @@ const runPipelineAndCommit = async ({
 }): Promise<void> => {
   const [buffer, { PDF }] = await Promise.all([
     fetchPrintPdf({ workspaceId, fieldId }),
-    import("@libpdf/core"),
+    loadLibPdf(),
   ]);
   const pdf = await PDF.load(new Uint8Array(buffer));
   const { text, spans: charSpans } = extractPDFText(pdf);

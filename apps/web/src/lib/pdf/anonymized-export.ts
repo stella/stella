@@ -3,6 +3,7 @@ import { Result } from "better-result";
 import { ClientOperationError } from "@/lib/errors/client";
 import { hasUnsupportedAnonymizationContent } from "@/lib/pdf/anonymized-export-content.logic";
 import { UnsupportedAnonymizedExportError } from "@/lib/pdf/anonymized-export-errors";
+import { loadLibPdf } from "@/lib/pdf/libpdf-loader";
 import type { PDFSearchBox } from "@/lib/pdf/pdf-search";
 import { toPDFSearchViewportBox } from "@/lib/pdf/pdf-search";
 import { loadPdfjs } from "@/lib/pdf/pdfjs-loader";
@@ -18,10 +19,7 @@ export const rasterizeAnonymizedPdf = async (
 ) =>
   await Result.tryPromise({
     try: async () => {
-      const [{ PDF }, pdfjs] = await Promise.all([
-        import("@libpdf/core"),
-        loadPdfjs(),
-      ]);
+      const [{ PDF }, pdfjs] = await Promise.all([loadLibPdf(), loadPdfjs()]);
       const loadingTask = pdfjs.getDocument({ data: buffer.slice(0) });
       try {
         const pdfDocument = await loadingTask.promise;
