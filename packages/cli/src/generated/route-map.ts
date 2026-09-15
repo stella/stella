@@ -22684,7 +22684,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "legislation", "search"],
                 capabilityId: "legislation.search",
                 description:
-                  "Full-text search the stella legislation corpus, returning ranked results with a highlighted snippet and each document's ELI, title, country, language, type, status, and effective date. Filter by jurisdiction, document type, status, source, language, and effective-date range; paginate with limit and cursor. Only sources cleared for redistribution are searched. Read a hit in full with legislation.get; use legislation.boe-search to query the Spanish BOE service directly instead.",
+                  "Full-text search the stella legislation corpus, returning ranked results with a highlighted snippet and each document's ELI, title, country, language, type, status, and effective date. Filter by jurisdiction, document type, status, source, language, and effective-date range; paginate with limit and cursor. Admitted jurisdiction codes (uppercase): CZE. Omit jurisdiction to search all admitted jurisdictions. Only admitted jurisdictions and sources cleared for redistribution are searched. Read a hit in full with legislation.get; use legislation.boe-search to query the Spanish BOE service directly instead.",
                 access: "read",
                 flags: [
                   {
@@ -22699,6 +22699,8 @@ export const generatedRouteMap: RouteNode = {
                   {
                     kind: "string",
                     repeatable: false,
+                    description:
+                      "Admitted jurisdiction codes (uppercase): CZE. Omit jurisdiction to search all admitted jurisdictions.",
                     flag: "--jurisdiction",
                     prop: "jurisdiction",
                     required: false,
@@ -22792,6 +22794,8 @@ export const generatedRouteMap: RouteNode = {
                         },
                         jurisdiction: {
                           maxLength: 3,
+                          description:
+                            "Admitted jurisdiction codes (uppercase): CZE. Omit jurisdiction to search all admitted jurisdictions.",
                           type: "string",
                         },
                         documentType: {

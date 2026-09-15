@@ -1,3 +1,4 @@
+import { Value } from "@sinclair/typebox/value";
 import type { StandardJSONSchemaV1 } from "@standard-schema/spec";
 /**
  * Agent-orientation eval: given stella's agent-facing surface, does a model
@@ -48,6 +49,7 @@ import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import * as v from "valibot";
 
+import { searchLegislationBodySchema } from "@/api/handlers/legislation/search-schema";
 import { resolveCaching } from "@/api/lib/ai-config";
 import { toSafeId } from "@/api/lib/branded-types";
 import {
@@ -543,6 +545,35 @@ const TASKS: readonly Task[] = [
       kind: "command",
       path: ["case-law", "search"],
       flags: { country: "DE" },
+    },
+  },
+  {
+    id: "search-czech-legislation",
+    request:
+      'Search Czech legislation for "náhrada škody" using legislation.search. Set the country filter explicitly so results are restricted to Czechia.',
+    mcp: {
+      toolName: "invoke_capability",
+      preflight: { type: "capability-described" },
+      exampleArgs: {
+        capability: "legislation.search",
+        input: { body: { query: "náhrada škody", jurisdiction: "CZE" } },
+      },
+      checkArgs: (args) => [
+        ...field(args, "capability", "legislation.search"),
+        ...[
+          ...Value.Errors(
+            searchLegislationBodySchema,
+            nested(args, ["input", "body"]),
+          ),
+        ].map((issue) => `input.body${issue.path}: ${issue.message}`),
+        ...nestedField(args, ["input", "body", "query"], "náhrada škody"),
+        ...nestedField(args, ["input", "body", "jurisdiction"], "CZE"),
+      ],
+    },
+    cli: {
+      kind: "command",
+      path: ["capability", "legislation", "search"],
+      flags: { query: "náhrada škody", jurisdiction: "CZE" },
     },
   },
   {
@@ -1326,6 +1357,8 @@ type RunRecord = {
   latencyMs: number;
   usage: TokenUsage | null;
   finalText: string;
+  /** Synthetic calls only; retain rejected payloads for contract diagnosis. */
+  call?: ModelTurn["call"];
 };
 
 const scoreMcpRun = ({
@@ -1554,6 +1587,7 @@ const runMcpTask = async ({
     workflowScope: mcpWorkflowScope(task),
     repeat,
     ...score,
+    call: turn.call,
     latencyMs: turn.latencyMs,
     usage: turn.usage,
     finalText: turn.finalText,
