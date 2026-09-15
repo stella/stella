@@ -5,7 +5,7 @@
  * REST chat endpoint can share the same prompt logic.
  */
 
-import { panic, Result } from "better-result";
+import { panic, Result, UnhandledException } from "better-result";
 import * as cheerio from "cheerio";
 import { and, asc, count, eq, isNull, or, sql } from "drizzle-orm";
 import * as v from "valibot";
@@ -26,7 +26,6 @@ import type { SkillMetadata } from "@stll/skills";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import {
-  caseLawDecisions,
   legalReaderAnnotations,
   entities,
   entityVersions,
@@ -66,13 +65,18 @@ import {
 } from "@/api/lib/agent-skills/skills";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
+import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { formatDecisionForPrompt } from "@/api/lib/case-law/analysis-prompt";
-import { parseDocumentAst } from "@/api/lib/case-law/document-ast";
+import { readDecisionAnalysisAst } from "@/api/lib/case-law/decision-analysis";
 import { estimateTextTokens } from "@/api/lib/chat/compaction-tokens";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { formatDateInTimeZone } from "@/api/lib/date-format";
 import { DOCX_REVIEW_MARKUP_EXAMPLES } from "@/api/lib/docx-review-markup";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  CorpusPayloadUnavailableError,
+  HandlerError,
+} from "@/api/lib/errors/tagged-errors";
 import type { EmailCitationBlock } from "@/api/lib/files/email-citations";
 import { MAX_EMAIL_CITATION_BLOCK_TEXT_LENGTH } from "@/api/lib/files/email-citations";
 import {
@@ -652,6 +656,7 @@ export const buildChatSystemPromptParts = async ({
     const decisionSection = yield* Result.await(
       buildActiveDecisionSection({
         activeDecision,
+        caseLawDb: caseLawPublicReadDb,
         organizationId,
         safeDb,
         userId,
@@ -1634,17 +1639,114 @@ export const formatAnnotationsForPrompt = (
   return kept.join("\n");
 };
 
-const buildActiveDecisionSection = async ({
-  activeDecision,
-  organizationId,
-  safeDb,
-  userId,
-}: {
+/** Name these reads in a payload-unavailable capture. */
+const ACTIVE_DECISION_AST_READ_STEP = "chatPrompt.activeDecisionAst";
+const ACTIVE_DECISION_TEXT_READ_STEP = "chatPrompt.activeDecisionText";
+
+/**
+ * What the prompt reads of a decision: its identity, and the pointers the
+ * document itself is resolved through. A canonical row's payload columns are
+ * trimmed and the corpus objects are the document.
+ */
+const ACTIVE_DECISION_COLUMNS = {
+  id: true,
+  astS3Key: true,
+  caseNumber: true,
+  contentHash: true,
+  country: true,
+  court: true,
+  decisionDate: true,
+  decisionType: true,
+  documentAst: true,
+  fulltext: true,
+  textS3Key: true,
+} as const;
+
+type ActiveDecisionAstPointers = {
+  astS3Key: string | null;
+  contentHash: string | null;
+  documentAst: unknown;
+  id: SafeId<"caseLawDecision">;
+};
+
+/**
+ * The decision's AST, or nothing when object storage refuses it. A trimmed
+ * canonical row has no Postgres copy to degrade to, and the flat text lives in
+ * a separate object: failing the turn over the AST would deny the user text
+ * the reader still shows. Anything else is a defect and still fails the read.
+ */
+const readActiveDecisionAst = async (row: ActiveDecisionAstPointers) => {
+  const read = await Result.tryPromise(
+    async () => await readDecisionAnalysisAst(row),
+  );
+  if (Result.isOk(read)) {
+    return read.value;
+  }
+
+  // `Result.tryPromise` reports a rejection as an `UnhandledException`
+  // carrying the original as its cause.
+  const raised =
+    read.error instanceof UnhandledException ? read.error.cause : read.error;
+  if (!CorpusPayloadUnavailableError.is(raised)) {
+    return panic(
+      "Reading the open decision's AST failed for a reason this read cannot contain",
+      raised,
+    );
+  }
+  captureError(raised, {
+    decisionId: row.id,
+    step: ACTIVE_DECISION_AST_READ_STEP,
+  });
+  return null;
+};
+
+type ActiveDecisionTextPointers = {
+  fulltext: string | null;
+  id: SafeId<"caseLawDecision">;
+  textS3Key: string | null;
+};
+
+/**
+ * The decision's flat text, for a row the corpus holds without a usable AST.
+ * The decision reader falls back to it and shows the document, so a chat that
+ * stopped at "no document" would deny text the user is reading.
+ */
+const readActiveDecisionFulltext = async ({
+  fulltext,
+  id,
+  textS3Key,
+}: ActiveDecisionTextPointers): Promise<string> => {
+  if (corpusStorageMode === "off" || textS3Key === null) {
+    return fulltext ?? "";
+  }
+  return (
+    (await readCorpusPayloadOrFallback({
+      documentId: id,
+      key: textS3Key,
+      step: ACTIVE_DECISION_TEXT_READ_STEP,
+      read: async () => await readCorpusText(textS3Key),
+      fallback: () => fulltext,
+    })) ?? ""
+  );
+};
+
+type ActiveDecisionSectionProps = {
   activeDecision: IncomingActiveDecision | undefined;
+  caseLawDb: CaseLawPublicReadDb;
   organizationId: SafeId<"organization"> | undefined;
   safeDb: SafeDb;
   userId: SafeId<"user"> | undefined;
-}): Promise<Result<string, SafeDbError>> =>
+};
+
+export const buildActiveDecisionSection = async ({
+  activeDecision,
+  caseLawDb,
+  organizationId,
+  safeDb,
+  userId,
+}: ActiveDecisionSectionProps): Promise<
+  Result<string, HandlerError<500> | SafeDbError>
+> =>
   await Result.gen(async function* () {
     if (!activeDecision) {
       return Result.ok("");
@@ -1694,43 +1796,54 @@ const buildActiveDecisionSection = async ({
           )
         : [];
 
+    // The corpus is global, and the decision reader serves it through the
+    // read-only public-law role. Reading it the same way here is what keeps a
+    // deployment whose corpus lives behind `PUBLIC_LAW_DATABASE_URL` from
+    // telling the user there is no document. No redistribution gate, unlike
+    // the statute above: this is the document the reader already has open.
     const decision = yield* Result.await(
-      safeDb((tx) =>
-        tx
-          .select({
-            caseNumber: caseLawDecisions.caseNumber,
-            country: caseLawDecisions.country,
-            court: caseLawDecisions.court,
-            decisionDate: caseLawDecisions.decisionDate,
-            decisionId: caseLawDecisions.id,
-            decisionType: caseLawDecisions.decisionType,
-            documentAst: caseLawDecisions.documentAst,
-            fulltext: caseLawDecisions.fulltext,
-          })
-          .from(caseLawDecisions)
-          .where(eq(caseLawDecisions.id, activeDecision.decisionId))
-          .limit(1),
-      ),
+      Result.tryPromise({
+        try: async () => {
+          const row = await caseLawDb(
+            async (tx) =>
+              await tx.query.caseLawDecisions.findFirst({
+                where: { id: { eq: activeDecision.decisionId } },
+                columns: ACTIVE_DECISION_COLUMNS,
+              }),
+          );
+          if (row === undefined) {
+            return null;
+          }
+
+          // Outside the transaction above: the document lives in object
+          // storage.
+          const ast = await readActiveDecisionAst(row);
+          const text = ast
+            ? formatDecisionForPrompt(ast.blocks)
+            : await readActiveDecisionFulltext(row);
+          return { row, text };
+        },
+        catch: (cause) =>
+          new HandlerError({
+            status: 500,
+            message: "Reading the open decision failed",
+            cause,
+          }),
+      }),
     );
 
-    const row = decision.at(0);
-    if (!row) {
+    if (decision === null) {
       return Result.ok("");
     }
 
-    const ast = parseDocumentAst(row.documentAst);
-    const sourceText = ast
-      ? formatDecisionForPrompt(ast.blocks)
-      : (row.fulltext ?? "");
-    const decisionText = sourceText.slice(0, ACTIVE_DECISION_MAX_CHARS);
-
+    const { row, text } = decision;
     const decisionPrompt = buildActiveDecisionPrompt({
       caseNumber: row.caseNumber,
       country: row.country,
       court: row.court,
       decisionDate: row.decisionDate,
-      decisionId: row.decisionId,
-      decisionText,
+      decisionId: row.id,
+      decisionText: text.slice(0, ACTIVE_DECISION_MAX_CHARS),
       decisionType: row.decisionType,
     });
     if (annotationRows.length === 0) {
