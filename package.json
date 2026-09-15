@@ -135,7 +135,7 @@
     "react": "catalog:react19",
     "scslre": "0.3.0",
     "sherif": "catalog:",
-    "squawk-cli": "2.64.0",
+    "squawk-cli": "2.65.0",
     "stylelint": "catalog:",
     "tailwindcss": "catalog:",
     "turbo": "2.10.12",
