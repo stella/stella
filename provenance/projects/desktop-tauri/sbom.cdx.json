@@ -18298,7 +18298,7 @@
       "version": "0.8.11"
     },
     {
-      "bom-ref": "pkg:cargo/reqwest@0.13.4",
+      "bom-ref": "pkg:cargo/reqwest@0.13.5",
       "evidence": {
         "identity": [
           {
@@ -18319,7 +18319,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "219c5811de6525e5416c7d5d53bb656d3afdbc6c5af816e0802bcfa42dbdc1c3"
+          "content": "16a1cfa75cc186dd73d5818e510e042e40927bccc9c236b061cea97e1eb08029"
         }
       ],
       "licenses": [
@@ -18341,9 +18341,9 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/reqwest@0.13.4",
+      "purl": "pkg:cargo/reqwest@0.13.5",
       "type": "library",
-      "version": "0.13.4"
+      "version": "0.13.5"
     },
     {
       "bom-ref": "pkg:cargo/ring@0.17.14",
@@ -34591,7 +34591,7 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/base64@0.22.1",
+        "pkg:cargo/base64@0.23.1",
         "pkg:cargo/bytes@1.12.1",
         "pkg:cargo/encoding_rs@0.8.35",
         "pkg:cargo/futures-core@0.3.34",
@@ -34628,7 +34628,7 @@
         "pkg:cargo/wasm-streams@0.5.0",
         "pkg:cargo/web-sys@0.3.104"
       ],
-      "ref": "pkg:cargo/reqwest@0.13.4"
+      "ref": "pkg:cargo/reqwest@0.13.5"
     },
     {
       "dependsOn": [
@@ -35077,7 +35077,7 @@
         "pkg:cargo/objc2@0.6.4",
         "pkg:cargo/opener@0.8.5",
         "pkg:cargo/plist@1.10.1",
-        "pkg:cargo/reqwest@0.13.4",
+        "pkg:cargo/reqwest@0.13.5",
         "pkg:cargo/serde@1.0.229",
         "pkg:cargo/serde_json@1.0.151",
         "pkg:cargo/sha2@0.11.0",
@@ -35289,7 +35289,7 @@
         "pkg:cargo/percent-encoding@2.3.2",
         "pkg:cargo/plist@1.10.1",
         "pkg:cargo/raw-window-handle@0.6.2",
-        "pkg:cargo/reqwest@0.13.4",
+        "pkg:cargo/reqwest@0.13.5",
         "pkg:cargo/serde@1.0.229",
         "pkg:cargo/serde_json@1.0.151",
         "pkg:cargo/serde_repr@0.1.21",
@@ -35498,7 +35498,7 @@
         "pkg:cargo/minisign-verify@0.2.5",
         "pkg:cargo/osakit@0.3.1",
         "pkg:cargo/percent-encoding@2.3.2",
-        "pkg:cargo/reqwest@0.13.4",
+        "pkg:cargo/reqwest@0.13.5",
         "pkg:cargo/rustls@0.23.43",
         "pkg:cargo/semver@1.0.28",
         "pkg:cargo/serde@1.0.229",
