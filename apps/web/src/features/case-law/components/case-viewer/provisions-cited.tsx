@@ -211,7 +211,9 @@ const WorkReferences = ({
       <p className="text-muted-foreground text-[0.7rem] tracking-wide">
         <BidiText as="span">{group.title}</BidiText>
       </p>
-      <ul className="m-0 flex list-none flex-col gap-0.5 p-0">
+      {/* References flow like prose: a code's thirty sections read on three
+          lines, not thirty. A reference showing its passages takes the row. */}
+      <ul className="m-0 flex list-none flex-wrap gap-x-3 gap-y-0.5 p-0">
         {group.provisions.map((provision) => {
           const document = documentFor(provision);
 
@@ -258,8 +260,8 @@ const ProvisionRowItem = ({
   const count = provision.occurrences.length;
 
   return (
-    <li className="flex flex-col">
-      <span className="flex flex-wrap items-baseline gap-1.5">
+    <li className={cn("flex flex-col", showPassages && "basis-full")}>
+      <span className="flex items-baseline gap-1.5 whitespace-nowrap">
         {linkTarget === null ? (
           <span className="text-foreground-strong-muted text-xs">{label}</span>
         ) : (

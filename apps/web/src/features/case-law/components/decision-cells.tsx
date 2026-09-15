@@ -174,8 +174,12 @@ export const CaseNumberCell = ({
       </div>
       {identity.length > 0 && (
         // One line, always: identity is scanned down the column, and a court
-        // name long enough to wrap would set the width of every row.
-        <p className="text-muted-foreground mt-0.5 flex max-w-80 items-center gap-x-1.5 truncate text-xs">
+        // name long enough to wrap would set the width of every row. The
+        // mark keeps the wrap-content mode's unfolding off this line.
+        <p
+          className="text-muted-foreground mt-0.5 flex max-w-80 min-w-0 items-center gap-x-1.5 overflow-hidden text-xs whitespace-nowrap"
+          data-one-line=""
+        >
           {identity.map(({ field, value }, index) => (
             <Fragment key={field}>
               {index > 0 && <span aria-hidden="true">·</span>}

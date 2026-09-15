@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import type { MouseEvent } from "react";
 
 import { useQuery } from "@tanstack/react-query";
@@ -16,6 +17,10 @@ import {
   createCaseDecisionViewTab,
   isPlainPrimaryClick,
 } from "@/components/inspector/case-decision-view";
+import {
+  InspectorFindBar,
+  useInspectorFind,
+} from "@/components/inspector/inspector-find";
 import { InspectorTabHeader } from "@/components/inspector/inspector-tab-header";
 import { useInspectorView } from "@/components/inspector/use-inspector-view";
 import type { InspectorViewRenderProps } from "@/components/inspector/view-registry";
@@ -58,6 +63,16 @@ export const CaseDecisionInspectorView = ({
     visibleDecisionBlocks(parseDocumentAst(decision?.documentAst)),
     decisionDate,
   );
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const contentRef = useRef<HTMLElement | null>(null);
+  // Cmd/Ctrl+F belongs to the decision in front of the reader rather than to
+  // the results table behind it, for as long as there is text to search.
+  const find = useInspectorFind({
+    contentRef,
+    enabled: decision !== undefined,
+    highlightKey: tab.id,
+    panelRef,
+  });
   const inspector = useInspectorView();
   const mainDecision = useMainCaseLawDecision();
   const swapTarget =
@@ -113,7 +128,10 @@ export const CaseDecisionInspectorView = ({
     );
 
   return (
-    <div className="bg-background flex min-h-0 flex-1 flex-col overflow-hidden">
+    <div
+      className="bg-background flex min-h-0 flex-1 flex-col overflow-hidden"
+      ref={panelRef}
+    >
       <InspectorTabHeader
         actions={
           <Tooltip
@@ -141,8 +159,9 @@ export const CaseDecisionInspectorView = ({
         label={tab.label}
         onClose={onClose}
       />
+      <InspectorFindBar find={find} />
       <ScrollArea className="min-h-0 flex-1">
-        <main className="reader-paper min-h-full px-4 py-6">
+        <main className="reader-paper min-h-full px-4 py-6" ref={contentRef}>
           <h1 className="sr-only">
             <BidiText as="span">{payload.caseNumber}</BidiText>
           </h1>

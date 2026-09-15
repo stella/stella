@@ -16,6 +16,28 @@ const TIER_BADGE_WEIGHT = {
   other: "dashed",
 } as const satisfies Record<CourtTier, CourtBadgeWeight>;
 
+type CourtTierBadgeProps = {
+  abbreviation: string;
+  tier: CourtTier;
+  className?: string;
+};
+
+/**
+ * The chip alone, weighted by tier: for a place that already names the court
+ * beside it, or that stands for the decision as a whole (an inspector tab).
+ */
+export const CourtTierBadge = ({
+  abbreviation,
+  className,
+  tier,
+}: CourtTierBadgeProps) => (
+  <CourtBadge
+    abbreviation={abbreviation}
+    className={cn(className)}
+    weight={TIER_BADGE_WEIGHT[tier]}
+  />
+);
+
 type CourtNameProps = {
   /**
    * The court's short form as the API derived it, or nothing where the corpus
@@ -41,12 +63,9 @@ export const CourtName = ({
 }: CourtNameProps) => (
   <span className={cn("inline-flex min-w-0 items-center gap-1.5", className)}>
     {abbreviation && tier !== undefined && (
-      <CourtBadge
-        abbreviation={abbreviation}
-        weight={TIER_BADGE_WEIGHT[tier]}
-      />
+      <CourtTierBadge abbreviation={abbreviation} tier={tier} />
     )}
-    <BidiText as="span" className="truncate">
+    <BidiText as="span" className="truncate" title={court}>
       {court}
     </BidiText>
   </span>

@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useRef } from "react";
 import type { ReactNode } from "react";
 
 import { useQuery } from "@tanstack/react-query";
@@ -9,6 +9,10 @@ import { Button } from "@stll/ui/button";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Skeleton } from "@stll/ui/skeleton";
 
+import {
+  InspectorFindBar,
+  useInspectorFind,
+} from "@/components/inspector/inspector-find";
 import { InspectorTabHeader } from "@/components/inspector/inspector-tab-header";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import type { InspectorViewRenderProps } from "@/components/inspector/view-registry";
@@ -25,7 +29,10 @@ import { StatuteValidityIndicator } from "@/features/statutes/components/statute
 import { StatuteVersionSwitcher } from "@/features/statutes/components/statute-version-switcher";
 import type { ProvisionViewPayload } from "@/features/statutes/provision-inspector.logic";
 import { topCitingDecisionsOptions } from "@/features/statutes/queries/citing-decisions";
-import { statuteVersionsOptions } from "@/features/statutes/queries/statutes";
+import {
+  statuteOptions,
+  statuteVersionsOptions,
+} from "@/features/statutes/queries/statutes";
 import { optionalArray } from "@/lib/arrays";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { createStatuteLinkTarget } from "@/lib/statute-route";
@@ -88,12 +95,31 @@ export const ProvisionInspectorView = ({
   );
   const leadingDecisions =
     leading === undefined ? [] : uniqueByDecision(leading);
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const contentRef = useRef<HTMLDivElement | null>(null);
+  // The wording's own query, read here only for whether there is text to
+  // search yet; the fetch is the one `ProvisionWording` already makes.
+  const { isSuccess: wordingReady } = useQuery(
+    statuteOptions(payload.documentId),
+  );
+  // Cmd/Ctrl+F belongs to the provision in front of the reader rather than to
+  // the results table behind it.
+  const find = useInspectorFind({
+    contentRef,
+    enabled: wordingReady,
+    highlightKey: tab.id,
+    panelRef,
+  });
 
   return (
-    <div className="bg-background flex min-h-0 flex-1 flex-col overflow-hidden">
+    <div
+      className="bg-background flex min-h-0 flex-1 flex-col overflow-hidden"
+      ref={panelRef}
+    >
       <InspectorTabHeader label={tab.label} onClose={onClose} />
+      <InspectorFindBar find={find} />
       <ScrollArea className="min-h-0 flex-1">
-        <div className="flex flex-col gap-6 p-4">
+        <div className="flex flex-col gap-6 p-4" ref={contentRef}>
           {selectedVersion !== undefined && (
             <div className="flex flex-wrap items-center justify-between gap-2">
               <StatuteValidityIndicator

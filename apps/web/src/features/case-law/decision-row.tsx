@@ -194,8 +194,11 @@ const DecisionRowCells = ({
           isSelectCell && "min-w-12 shrink-0",
           isPinnedBoundaryColumn(cell.column) && "border-e-0",
           cell.column.columnDef.meta?.muted && "text-muted-foreground",
+          // Prose unfolds; a line marked one-line (the identity under the
+          // case number) keeps its truncation, or a long court name would
+          // stack six lines and set the height of the row.
           contentMode === "fit-content" &&
-            "whitespace-normal! [&_.line-clamp-2]:line-clamp-none [&_.truncate]:min-w-0 [&_.truncate]:overflow-visible [&_.truncate]:wrap-break-word [&_.truncate]:whitespace-normal",
+            "whitespace-normal! [&_.line-clamp-2]:line-clamp-none [&_.truncate:not([data-one-line]_*)]:min-w-0 [&_.truncate:not([data-one-line]_*)]:overflow-visible [&_.truncate:not([data-one-line]_*)]:wrap-break-word [&_.truncate:not([data-one-line]_*)]:whitespace-normal",
           cell.column.getIsResizing() &&
             "after:bg-info after:pointer-events-none after:absolute after:end-0 after:top-0 after:bottom-0 after:z-50 after:w-px",
         )}

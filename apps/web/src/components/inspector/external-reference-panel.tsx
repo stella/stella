@@ -1,16 +1,8 @@
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { RefObject } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { Result } from "better-result";
-import {
-  ChevronLeftIcon,
-  ChevronRightIcon,
-  CopyIcon,
-  ExternalLinkIcon,
-  SearchIcon,
-  XIcon,
-} from "lucide-react";
+import { CopyIcon, ExternalLinkIcon, SearchIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { copyToClipboard } from "@stll/clipboard";
@@ -25,8 +17,6 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
-import { DirectionalIcon } from "@stll/ui/directional-icon";
-import { Input } from "@stll/ui/input";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Skeleton } from "@stll/ui/skeleton";
 import { stellaToast } from "@stll/ui/toast";
@@ -37,10 +27,13 @@ import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-a
 import { useExternalSourceStore } from "@/components/chat/external-source-store";
 import { CompanyRegistryPreview } from "@/components/company-registry-preview";
 import { findMcpConnectorIconHref } from "@/components/inspector/external-source-icon";
+import {
+  InspectorFindBar,
+  useInspectorFind,
+} from "@/components/inspector/inspector-find";
 import { InspectorTabHeader } from "@/components/inspector/inspector-tab-header";
 import type { InspectorTab } from "@/components/inspector/inspector-tabs-store";
 import { MeasuredPdfProvider } from "@/components/inspector/measured-pdf-provider";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { apiUrl } from "@/lib/api-url";
@@ -50,7 +43,6 @@ import { createChatThreadId, toChatThreadId } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
 import { APIError, toAPIError } from "@/lib/errors/api";
 import { fetchWithTimeout } from "@/lib/fetch";
-import { useFindSurface } from "@/lib/find-owner";
 import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
 import { openIsolatedWindow } from "@/lib/open-isolated-window";
 import { PDFPage } from "@/lib/pdf/pdf-page";
@@ -67,282 +59,6 @@ export type ExternalReferencePanelProps = {
   tab: Extract<InspectorTab, { type: "external" }>;
   workspaceId?: string | undefined;
 };
-
-type InspectorFindOptions = {
-  contentRef: RefObject<HTMLElement | null>;
-  enabled: boolean;
-  highlightKey: string;
-  panelRef: RefObject<HTMLElement | null>;
-};
-
-type FindState =
-  | { open: false }
-  | {
-      open: true;
-      query: string;
-      matchCount: number;
-      activeIndex: number;
-    };
-
-const FIND_CLOSED: FindState = { open: false };
-const FIND_OPENED: FindState = {
-  open: true,
-  query: "",
-  matchCount: 0,
-  activeIndex: 0,
-};
-
-const useInspectorFind = ({
-  contentRef,
-  enabled,
-  highlightKey,
-  panelRef,
-}: InspectorFindOptions) => {
-  const [findState, setFindState] = useState<FindState>(FIND_CLOSED);
-  const allHighlightName = `stella-inspector-find-${highlightKey}`;
-  const activeHighlightName = `stella-inspector-find-active-${highlightKey}`;
-
-  const clearFind = useCallback(() => {
-    setFindState((prev) =>
-      prev.open ? { ...prev, query: "", matchCount: 0, activeIndex: 0 } : prev,
-    );
-    // eslint-disable-next-line typescript/no-unnecessary-condition -- CSS.highlights is not available in every supported browser.
-    CSS.highlights?.delete(allHighlightName);
-    // eslint-disable-next-line typescript/no-unnecessary-condition -- CSS.highlights is not available in every supported browser.
-    CSS.highlights?.delete(activeHighlightName);
-  }, [activeHighlightName, allHighlightName]);
-
-  const closeFind = useCallback(() => {
-    setFindState(FIND_CLOSED);
-  }, []);
-
-  const openFind = useCallback(() => {
-    if (!enabled) {
-      return;
-    }
-    setFindState((prev) => (prev.open ? prev : FIND_OPENED));
-  }, [enabled]);
-
-  const setFindQuery = useCallback((query: string) => {
-    setFindState((prev) => (prev.open ? { ...prev, query } : prev));
-  }, []);
-
-  const nextMatch = useCallback(() => {
-    setFindState((prev) => {
-      if (!prev.open || prev.matchCount === 0) {
-        return prev;
-      }
-      return {
-        ...prev,
-        activeIndex: (prev.activeIndex + 1) % prev.matchCount,
-      };
-    });
-  }, []);
-
-  const previousMatch = useCallback(() => {
-    setFindState((prev) => {
-      if (!prev.open || prev.matchCount === 0) {
-        return prev;
-      }
-      return {
-        ...prev,
-        activeIndex: (prev.activeIndex - 1 + prev.matchCount) % prev.matchCount,
-      };
-    });
-  }, []);
-
-  const findOpen = findState.open;
-  const findQuery = findState.open ? findState.query : "";
-  const matchCount = findState.open ? findState.matchCount : 0;
-  const activeIndex = findState.open ? findState.activeIndex : 0;
-
-  // The DOCX pane and a table view's toolbar are candidates for the same
-  // press: this panel reaches the whole app while it is showing a document,
-  // and stands down for a pane the press landed inside or while a modal
-  // covers it.
-  useFindSurface({
-    enabled,
-    onFind: () => {
-      setFindState((prev) => (prev.open ? prev : FIND_OPENED));
-    },
-    owner: "inspector",
-    root: panelRef,
-    scope: "app",
-  });
-
-  // Escape closes this bar and nothing else, so it keeps a listener of its own
-  // rather than travelling through a registry that has no opinion about it.
-  useExternalSyncEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (enabled && findOpen && event.key === "Escape") {
-        event.preventDefault();
-        setFindState(FIND_CLOSED);
-      }
-    };
-
-    document.addEventListener("keydown", handleKeyDown, { capture: true });
-    return () => {
-      document.removeEventListener("keydown", handleKeyDown, { capture: true });
-    };
-  }, [enabled, findOpen]);
-
-  useLayoutEffect(() => {
-    // eslint-disable-next-line typescript/no-unnecessary-condition -- CSS.highlights is not available in every supported browser.
-    CSS.highlights?.delete(allHighlightName);
-    // eslint-disable-next-line typescript/no-unnecessary-condition -- CSS.highlights is not available in every supported browser.
-    CSS.highlights?.delete(activeHighlightName);
-
-    const root = contentRef.current;
-    const query = findQuery.trim();
-    if (!enabled || !root || query.length === 0) {
-      setFindState((prev) =>
-        prev.open && (prev.matchCount !== 0 || prev.activeIndex !== 0)
-          ? { ...prev, matchCount: 0, activeIndex: 0 }
-          : prev,
-      );
-      return undefined;
-    }
-
-    const ranges = collectTextRanges(root, query);
-    setFindState((prev) =>
-      prev.open && prev.matchCount !== ranges.length
-        ? { ...prev, matchCount: ranges.length }
-        : prev,
-    );
-
-    if (ranges.length === 0) {
-      setFindState((prev) =>
-        prev.open && prev.activeIndex !== 0
-          ? { ...prev, activeIndex: 0 }
-          : prev,
-      );
-      return undefined;
-    }
-
-    const safeActiveIndex = activeIndex >= ranges.length ? 0 : activeIndex;
-    if (safeActiveIndex !== activeIndex) {
-      setFindState((prev) =>
-        prev.open ? { ...prev, activeIndex: safeActiveIndex } : prev,
-      );
-      return undefined;
-    }
-
-    // eslint-disable-next-line typescript/no-unnecessary-condition -- CSS.highlights is not available in every supported browser.
-    CSS.highlights?.set(allHighlightName, new Highlight(...ranges));
-    const activeRange = ranges.at(safeActiveIndex);
-    if (activeRange) {
-      // eslint-disable-next-line typescript/no-unnecessary-condition -- CSS.highlights is not available in every supported browser.
-      CSS.highlights?.set(activeHighlightName, new Highlight(activeRange));
-      scrollRangeIntoView(activeRange);
-    }
-
-    return () => {
-      // eslint-disable-next-line typescript/no-unnecessary-condition -- CSS.highlights is not available in every supported browser.
-      CSS.highlights?.delete(allHighlightName);
-      // eslint-disable-next-line typescript/no-unnecessary-condition -- CSS.highlights is not available in every supported browser.
-      CSS.highlights?.delete(activeHighlightName);
-    };
-  }, [
-    activeHighlightName,
-    activeIndex,
-    allHighlightName,
-    contentRef,
-    enabled,
-    findQuery,
-  ]);
-
-  return {
-    activeMatchNumber: matchCount === 0 ? 0 : activeIndex + 1,
-    clearFind,
-    closeFind,
-    findOpen,
-    findQuery,
-    matchCount,
-    nextMatch,
-    openFind,
-    previousMatch,
-    setFindQuery,
-  };
-};
-
-const collectTextRanges = (root: HTMLElement, query: string): Range[] => {
-  const ranges: Range[] = [];
-  const normalizedQuery = query.toLocaleLowerCase();
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-
-  while (walker.nextNode()) {
-    const node = walker.currentNode;
-    const text = node.textContent ?? "";
-    const normalizedText = text.toLocaleLowerCase();
-    let from = 0;
-
-    while (from < normalizedText.length) {
-      const index = normalizedText.indexOf(normalizedQuery, from);
-      if (index === -1) {
-        break;
-      }
-
-      const range = document.createRange();
-      range.setStart(node, index);
-      range.setEnd(node, index + query.length);
-      ranges.push(range);
-      from = index + Math.max(query.length, 1);
-    }
-  }
-
-  return ranges;
-};
-
-const scrollRangeIntoView = (range: Range): void => {
-  const rect = firstVisibleRangeRect(range);
-  const root =
-    range.commonAncestorContainer.nodeType === Node.ELEMENT_NODE
-      ? range.commonAncestorContainer
-      : range.commonAncestorContainer.parentElement;
-  const scrollContainer =
-    root instanceof HTMLElement
-      ? root.closest<HTMLElement>('[data-slot="scroll-area-viewport"]')
-      : null;
-
-  if (rect && scrollContainer) {
-    const containerRect = scrollContainer.getBoundingClientRect();
-    const targetTop =
-      rect.top -
-      containerRect.top +
-      scrollContainer.scrollTop -
-      scrollContainer.clientHeight / 2 +
-      rect.height / 2;
-
-    scrollContainer.scrollTo({
-      behavior: "smooth",
-      top: Math.max(0, targetTop),
-    });
-    return;
-  }
-
-  const container = range.commonAncestorContainer;
-  const element =
-    container.nodeType === Node.ELEMENT_NODE
-      ? container
-      : container.parentElement;
-  if (element instanceof HTMLElement) {
-    element.scrollIntoView({ block: "center", behavior: "smooth" });
-  }
-};
-
-const firstVisibleRangeRect = (range: Range): DOMRect | undefined => {
-  for (const rect of range.getClientRects()) {
-    if (rect.width > 0 && rect.height > 0) {
-      return rect;
-    }
-  }
-
-  const rect = range.getBoundingClientRect();
-  return rect.width > 0 && rect.height > 0 ? rect : undefined;
-};
-
-const sanitizeHighlightKey = (value: string): string =>
-  value.replaceAll(/[^a-zA-Z0-9_-]/gu, "_");
 
 export const ExternalSourceLogo = ({
   className,
@@ -669,25 +385,12 @@ const GenericExternalReferencePanel = ({
       sourceToolName,
     ],
   );
-  const highlightKey = useMemo(() => sanitizeHighlightKey(tab.id), [tab.id]);
   const contentRef = useRef<HTMLElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
-  const findInputRef = useRef<HTMLInputElement | null>(null);
-  const {
-    activeMatchNumber,
-    clearFind,
-    closeFind,
-    findOpen,
-    findQuery,
-    matchCount,
-    nextMatch,
-    openFind,
-    previousMatch,
-    setFindQuery,
-  } = useInspectorFind({
+  const find = useInspectorFind({
     contentRef,
     enabled: previewText !== undefined,
-    highlightKey,
+    highlightKey: tab.id,
     panelRef,
   });
   const { data: mcpConnectorsData } = useQuery({
@@ -740,38 +443,18 @@ const GenericExternalReferencePanel = ({
     stellaToast.success(t("common.copied"));
   }, [confirmHref, t]);
 
-  useExternalSyncEffect(() => {
-    if (!findOpen) {
-      return;
-    }
-    findInputRef.current?.focus();
-    findInputRef.current?.select();
-  }, [findOpen]);
-
   return (
     <div
       className="bg-background flex min-h-0 flex-1 flex-col overflow-hidden"
       ref={panelRef}
     >
-      <style>
-        {`
-          ::highlight(stella-inspector-find-${highlightKey}) {
-            background-color: color-mix(in oklab, var(--color-primary) 22%, transparent);
-            color: inherit;
-          }
-          ::highlight(stella-inspector-find-active-${highlightKey}) {
-            background-color: color-mix(in oklab, var(--color-primary) 45%, transparent);
-            color: inherit;
-          }
-        `}
-      </style>
       <InspectorTabHeader
         actions={
           <div className="flex items-center gap-1">
             {previewText && (
               <Button
                 aria-label={t("common.find")}
-                onClick={openFind}
+                onClick={find.openFind}
                 size="xs"
                 title="Cmd+F"
                 variant="ghost"
@@ -841,87 +524,7 @@ const GenericExternalReferencePanel = ({
               </button>
             )}
           </div>
-          {findOpen && (
-            <div className="flex h-10 shrink-0 items-center gap-1 border-b px-2">
-              <Input
-                aria-label={t("folio.findReplace.findText")}
-                className="h-7 flex-1 rounded-md"
-                nativeInput
-                onChange={(event) => {
-                  setFindQuery(event.currentTarget.value);
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === "Escape") {
-                    event.preventDefault();
-                    clearFind();
-                    closeFind();
-                    return;
-                  }
-                  if (event.key !== "Enter") {
-                    return;
-                  }
-                  event.preventDefault();
-                  if (event.shiftKey) {
-                    previousMatch();
-                    return;
-                  }
-                  nextMatch();
-                }}
-                placeholder={t("folio.findReplace.findPlaceholder")}
-                ref={findInputRef}
-                size="sm"
-                type="search"
-                value={findQuery}
-              />
-              <span className="text-muted-foreground min-w-14 text-end text-xs tabular-nums">
-                {(() => {
-                  if (findQuery) {
-                    return (() => {
-                      if (matchCount > 0) {
-                        return t("folio.findReplace.matchCounter", {
-                          current: String(activeMatchNumber),
-                          total: String(matchCount),
-                        });
-                      }
-                      return t("common.noResults");
-                    })();
-                  }
-                  return "";
-                })()}
-              </span>
-              <Button
-                aria-label={t("folio.findReplace.previous")}
-                disabled={matchCount === 0}
-                onClick={previousMatch}
-                size="icon-xs"
-                title={t("folio.findReplace.previousShortcut")}
-                variant="ghost"
-              >
-                <DirectionalIcon className="size-3.5" icon={ChevronLeftIcon} />
-              </Button>
-              <Button
-                aria-label={t("folio.findReplace.next")}
-                disabled={matchCount === 0}
-                onClick={nextMatch}
-                size="icon-xs"
-                title={t("folio.findReplace.nextShortcut")}
-                variant="ghost"
-              >
-                <DirectionalIcon className="size-3.5" icon={ChevronRightIcon} />
-              </Button>
-              <Button
-                aria-label={t("folio.findReplace.close")}
-                onClick={() => {
-                  clearFind();
-                  closeFind();
-                }}
-                size="icon-xs"
-                variant="ghost"
-              >
-                <XIcon className="size-3.5" />
-              </Button>
-            </div>
-          )}
+          <InspectorFindBar find={find} />
           {(() => {
             if (previewLoading) {
               return (
