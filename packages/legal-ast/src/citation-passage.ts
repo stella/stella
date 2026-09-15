@@ -9,9 +9,11 @@
  * quoted from another.
  */
 
+import { escapeRegExp } from "@stll/text-normalize";
+
 import { hasBlockInlines, plainTextOf } from "./document-ast.js";
 import type { Block } from "./document-ast.js";
-import { dropOverlappingSpans, escapeRegExp } from "./text-spans.js";
+import { dropOverlappingSpans } from "./text-spans.js";
 
 /** What locating needs of a citation: the text the decision printed. */
 export type CitationSource = { citationText: string };

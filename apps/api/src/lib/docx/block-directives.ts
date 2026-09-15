@@ -76,6 +76,7 @@ import {
   resolvePath,
 } from "@stll/template-conditions";
 import type { LoopProperty, NamedCondition } from "@stll/template-conditions";
+import { escapeRegExp } from "@stll/text-normalize";
 
 import { ancestorByLocalName, isElement, paragraphText, W_NS } from "./ooxml";
 import {
@@ -523,9 +524,6 @@ export const flattenTemplateData = (
 };
 
 // ── w:t node rewriting ───────────────────────────────────
-
-export const escapeRegExp = (s: string): string =>
-  s.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 
 // ── OOXML block-level tag names ──────────────────────────
 

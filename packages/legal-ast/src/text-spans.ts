@@ -7,9 +7,6 @@
  * that disagreed would hand it nested marks.
  */
 
-export const escapeRegExp = (value: string): string =>
-  value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
-
 /** Overlapping spans keep the earlier, longer one. */
 export const dropOverlappingSpans = <T extends { end: number; start: number }>(
   spans: readonly T[],

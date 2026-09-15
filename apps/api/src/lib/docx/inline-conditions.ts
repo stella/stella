@@ -70,13 +70,13 @@ import {
   resolvePath,
   scanMarkers,
 } from "@stll/template-conditions";
+import { escapeRegExp } from "@stll/text-normalize";
 
 import {
   collectNumKeysInText,
   createDirectiveProcessingContext,
   type DirectiveProcessingContext,
   eachKey,
-  escapeRegExp,
   registerLoopItemPatchValues,
   rewriteEachPlaceholdersInText,
   scopeIterationNumberingInText,
