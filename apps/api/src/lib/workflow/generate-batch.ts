@@ -1,6 +1,10 @@
 import { PDF, rgb, Standard14Font, StandardFonts } from "@libpdf/core";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
+import {
+  isNativeHeicInputSupported,
+  type HeicMimeType,
+} from "@stll/ai-catalog";
 import { FolioDocxReviewer, type FolioAIBlock } from "@stll/folio-core/server";
 
 import { createSafeId } from "@/api/lib/branded-types";
@@ -9,8 +13,10 @@ import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
 import { createFileKey } from "@/api/lib/files/utils";
 import { readS3ArrayBuffer } from "@/api/lib/s3";
 import { extractFileTextResult } from "@/api/lib/search/extract-content";
+import { getTanStackTextModelInfoForRole } from "@/api/lib/tanstack-ai-models";
 import {
   canPrepareExtractedTextFile,
+  canPrepareNativeImageFile,
   isAISupportedFile,
 } from "@/api/lib/workflow/ai-file-support";
 import { generateWorkflowData } from "@/api/lib/workflow/ai-generate-batch";
@@ -48,6 +54,8 @@ export { isAISupportedFile };
 
 export type GenerateBatchDependencies = {
   fetchInputFieldsForBatch: typeof fetchInputFieldsForBatch;
+  getTextModelInfo?: typeof getTanStackTextModelInfoForRole;
+  isNativeImageSupported?: typeof isNativeHeicInputSupported;
 };
 
 const defaultGenerateBatchDependencies = {
@@ -132,7 +140,17 @@ export type PreparedExtractedTextFile = {
 export type PreparedInputFile =
   | PreparedPdfFile
   | PreparedDocxFile
-  | PreparedExtractedTextFile;
+  | PreparedExtractedTextFile
+  | PreparedNativeImageFile;
+
+type PreparedNativeImageFile = {
+  kind: "native-image";
+  fileFieldId: SafeId<"field">;
+  fileId: string;
+  content: Uint8Array;
+  mimeType: HeicMimeType;
+  simplifiedName: string;
+};
 
 export const fetchAndPrepareFiles = async (
   resolvedFiles: ResolvedFile[],
@@ -142,6 +160,23 @@ export const fetchAndPrepareFiles = async (
   await Promise.all(
     resolvedFiles.map(async (meta, index): Promise<PreparedInputFile> => {
       const simplifiedName = `F${index}`;
+
+      if (canPrepareNativeImageFile(meta)) {
+        const fileKey = createFileKey({
+          organizationId,
+          workspaceId,
+          fileId: meta.fileId,
+          mimeType: meta.mimeType,
+        });
+        return {
+          kind: "native-image",
+          fileFieldId: meta.fileFieldId,
+          fileId: meta.fileId,
+          content: new Uint8Array(await readS3ArrayBuffer(fileKey)),
+          mimeType: meta.mimeType,
+          simplifiedName,
+        };
+      }
 
       // DOCX without a converted PDF: parse to folio blocks and let
       // the AI cite block IDs directly. Falling through to the PDF
@@ -222,25 +257,33 @@ export const buildJustificationFilenames = (
 ): JustificationFilenames => {
   const filenames: JustificationFilenames = [];
   for (const file of files) {
-    if (file.kind === "pdf") {
-      filenames.push({
-        kind: "pdf-bates",
-        original: file.fileId,
-        simplified: file.simplifiedName,
-        fileFieldId: file.fileFieldId,
-      });
-      continue;
+    switch (file.kind) {
+      case "pdf":
+        filenames.push({
+          kind: "pdf-bates",
+          original: file.fileId,
+          simplified: file.simplifiedName,
+          fileFieldId: file.fileFieldId,
+        });
+        continue;
+      case "native-image":
+      case "extracted-text":
+        continue;
+      case "docx":
+        filenames.push({
+          kind: "docx-folio",
+          original: file.fileId,
+          simplified: file.simplifiedName,
+          fileFieldId: file.fileFieldId,
+          blocksById: new Map(
+            file.blocks.map((block) => [block.id, block.text]),
+          ),
+        });
+        continue;
+      default:
+        file satisfies never;
+        panic("Unhandled prepared workflow file kind");
     }
-    if (file.kind === "extracted-text") {
-      continue;
-    }
-    filenames.push({
-      kind: "docx-folio",
-      original: file.fileId,
-      simplified: file.simplifiedName,
-      fileFieldId: file.fileFieldId,
-      blocksById: new Map(file.blocks.map((block) => [block.id, block.text])),
-    });
   }
   return filenames;
 };
@@ -287,9 +330,36 @@ export const generateBatch = async (
       });
     }
 
-    const hasUnsupportedFiles = resolvedFiles.some(
-      (f) => !isAISupportedFile(f),
+    const unsupportedFiles = resolvedFiles.filter(
+      (file) => !isAISupportedFile(file),
     );
+    let hasUnsupportedFiles = unsupportedFiles.length > 0;
+    if (
+      hasUnsupportedFiles &&
+      unsupportedFiles.every(canPrepareNativeImageFile)
+    ) {
+      const model = yield* Result.try({
+        try: () =>
+          (dependencies.getTextModelInfo ?? getTanStackTextModelInfoForRole)(
+            "pdf",
+            orgAIConfig,
+            { organizationId },
+          ),
+        catch: (cause) =>
+          new WorkflowIntegrationError({
+            message: "Workflow AI model resolution failed",
+            cause,
+          }),
+      });
+      hasUnsupportedFiles = unsupportedFiles.some(
+        (file) =>
+          !(dependencies.isNativeImageSupported ?? isNativeHeicInputSupported)({
+            provider: model.provider,
+            modelId: model.modelId,
+            mimeType: file.mimeType,
+          }),
+      );
+    }
 
     if (hasUnsupportedFiles) {
       return Result.ok({

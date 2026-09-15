@@ -9,7 +9,10 @@ import {
   XLSX_MIME_TYPE,
 } from "@/api/mime-types";
 
-import { isAISupportedFile } from "./ai-file-support";
+import {
+  canPrepareNativeImageFile,
+  isAISupportedFile,
+} from "./ai-file-support";
 
 const resolvedFile = (mimeType: string): ResolvedFile => ({
   encrypted: false,
@@ -43,5 +46,27 @@ describe("AI file support", () => {
       isAISupportedFile({ ...resolvedFile(XLSX_MIME_TYPE), encrypted: true }),
     ).toBe(false);
     expect(isAISupportedFile(resolvedFile("application/zip"))).toBe(false);
+  });
+
+  test("native image preparation accepts only unencrypted HEIC/HEIF originals without a PDF derivative", () => {
+    for (const mimeType of ["image/heic", "image/heif"]) {
+      const file = resolvedFile(mimeType);
+      expect(canPrepareNativeImageFile(file)).toBe(true);
+      expect(canPrepareNativeImageFile({ ...file, encrypted: true })).toBe(
+        false,
+      );
+      expect(
+        canPrepareNativeImageFile({ ...file, pdfFileId: "existing-pdf" }),
+      ).toBe(false);
+      expect(isAISupportedFile(file)).toBe(false);
+    }
+    for (const mimeType of [
+      "image/heic-sequence",
+      "image/heif-sequence",
+      "image/jpeg",
+      PDF_MIME_TYPE,
+    ]) {
+      expect(canPrepareNativeImageFile(resolvedFile(mimeType))).toBe(false);
+    }
   });
 });

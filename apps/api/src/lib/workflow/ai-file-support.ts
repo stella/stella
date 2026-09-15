@@ -1,3 +1,5 @@
+import { isHeicMimeType, type HeicMimeType } from "@stll/ai-catalog";
+
 import { isNativelyRenderableMimeType } from "@/api/lib/files/pdf-derivative-policy";
 import { isOfficeDocumentMimeType } from "@/api/lib/search/extractable-mime-types";
 import type { ResolvedFile } from "@/api/lib/workflow/generate-batch-shared";
@@ -8,6 +10,11 @@ export const canPrepareExtractedTextFile = (file: ResolvedFile): boolean =>
   file.pdfFileId === null &&
   isNativelyRenderableMimeType(file.mimeType) &&
   isOfficeDocumentMimeType(file.mimeType);
+
+export const canPrepareNativeImageFile = (
+  file: ResolvedFile,
+): file is ResolvedFile & { mimeType: HeicMimeType } =>
+  !file.encrypted && file.pdfFileId === null && isHeicMimeType(file.mimeType);
 
 export const isAISupportedFile = (file: ResolvedFile): boolean =>
   (file.mimeType === PDF_MIME_TYPE && !file.encrypted) ||
