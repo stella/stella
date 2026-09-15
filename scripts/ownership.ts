@@ -333,37 +333,22 @@ export const OWNERSHIP = [
       specifiers: ["@libpdf/core"],
       allowed: [
         {
-          path: "apps/web/e2e/anonymized-export/main.ts",
+          path: "apps/api/",
           reason:
-            "Standalone browser fixture has its own Vite bundle and does not enter the application client graph.",
+            "API handlers and workers run in the server graph, separate from the web application client bundle.",
         },
         {
           path: "apps/web/src/lib/anonymize/pdf-coords.ts",
           reason: "Type-only PDF and PDFPage imports emit no runtime edge.",
         },
         {
-          path: "apps/web/src/lib/pdf/anonymized-export.logic.test.ts",
-          reason:
-            "Unit-test fixture constructs PDFs outside the client bundle.",
-        },
-        {
           path: "apps/web/src/lib/pdf/anonymized-export.logic.ts",
           reason: "Type-only PDFPage import emits no runtime edge.",
-        },
-        {
-          path: "apps/web/src/lib/pdf/page-editor/page-editor-transform.test.ts",
-          reason:
-            "Unit-test fixture constructs PDFs outside the client bundle.",
         },
         {
           path: "apps/web/src/lib/pdf/page-editor/page-editor-transform.ts",
           reason:
             "PDF page transforms run in a dedicated worker bundle, separate from the application client graph.",
-        },
-        {
-          path: "apps/web/src/lib/pdf/pdf-search.test.ts",
-          reason:
-            "Unit-test fixture constructs PDFs outside the client bundle.",
         },
         {
           path: "apps/web/src/lib/pdf/pdf-search.ts",
