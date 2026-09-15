@@ -659,7 +659,7 @@ export type ReaderVariant = "case-law" | "statute";
 export const HEADING_CLASS = {
   "case-law": {
     1: "mt-4 mb-5 text-center text-lg leading-tight font-bold tracking-widest first:mt-0",
-    2: "mt-[var(--reader-section-gap-top)] mb-[var(--reader-section-gap-bottom)] text-center text-[0.95rem] leading-snug font-bold tracking-wider",
+    2: "mt-[var(--reader-section-gap-top)] mb-[var(--reader-section-gap-bottom)] text-center text-[calc(0.95rem*var(--reader-text-scale))] leading-snug font-bold tracking-wider",
     3: "mt-[var(--reader-section-gap-top)] mb-[var(--reader-section-gap-bottom)] text-center text-sm leading-snug font-semibold",
     4: "mt-[var(--reader-section-gap-top)] mb-[var(--reader-section-gap-bottom)] text-center text-sm leading-snug font-medium",
     5: "mt-[var(--reader-section-gap-top)] mb-[var(--reader-section-gap-bottom)] text-sm leading-snug font-semibold",
@@ -680,12 +680,12 @@ export const HEADING_CLASS = {
   // container and the container it opens — is in `reader.css`, where a
   // sibling selector can see the chain.
   statute: {
-    1: "mt-[var(--reader-heading-gap-1)] mb-[var(--reader-heading-gap-bottom)] text-center text-[1.35rem] leading-tight font-bold tracking-widest first:mt-0",
-    2: "mt-[var(--reader-heading-gap-2)] mb-[var(--reader-heading-gap-bottom)] text-center text-[1.25rem] leading-snug font-bold tracking-wide",
-    3: "mt-[var(--reader-heading-gap-3)] mb-[var(--reader-heading-gap-bottom)] text-center text-[1.15rem] leading-snug font-bold",
-    4: "mt-[var(--reader-heading-gap-4)] mb-[var(--reader-heading-gap-bottom)] text-center text-[1.15rem] leading-snug font-bold",
-    5: "mt-[var(--reader-heading-gap-5)] mb-[var(--reader-heading-gap-bottom)] text-center text-[1.05rem] leading-snug font-semibold",
-    6: "mt-[var(--reader-heading-gap-6)] mb-[var(--reader-heading-gap-bottom)] text-center text-[1rem] leading-snug font-semibold",
+    1: "mt-[var(--reader-heading-gap-1)] mb-[var(--reader-heading-gap-bottom)] text-center text-[calc(1.35rem*var(--reader-text-scale))] leading-tight font-bold tracking-widest first:mt-0",
+    2: "mt-[var(--reader-heading-gap-2)] mb-[var(--reader-heading-gap-bottom)] text-center text-[calc(1.25rem*var(--reader-text-scale))] leading-snug font-bold tracking-wide",
+    3: "mt-[var(--reader-heading-gap-3)] mb-[var(--reader-heading-gap-bottom)] text-center text-[calc(1.15rem*var(--reader-text-scale))] leading-snug font-bold",
+    4: "mt-[var(--reader-heading-gap-4)] mb-[var(--reader-heading-gap-bottom)] text-center text-[calc(1.15rem*var(--reader-text-scale))] leading-snug font-bold",
+    5: "mt-[var(--reader-heading-gap-5)] mb-[var(--reader-heading-gap-bottom)] text-center text-[calc(1.05rem*var(--reader-text-scale))] leading-snug font-semibold",
+    6: "mt-[var(--reader-heading-gap-6)] mb-[var(--reader-heading-gap-bottom)] text-center text-[calc(1rem*var(--reader-text-scale))] leading-snug font-semibold",
   },
 } as const satisfies Record<ReaderVariant, Record<HeadingLevel, string>>;
 
@@ -969,7 +969,7 @@ export const BlockRenderer = ({
           "group relative scroll-mt-[var(--reader-anchor-offset)]",
           HEADING_CLASS[variant][block.level],
           provision !== null &&
-            "text-[1rem] leading-snug font-semibold tracking-normal",
+            "text-[calc(1rem*var(--reader-text-scale))] leading-snug font-semibold tracking-normal",
         )}
         {...documentAnchorProps}
       >
@@ -993,7 +993,7 @@ export const BlockRenderer = ({
                 action and the permalink hang off the inline end, so a wide
                 accessory never nudges "§ 120" off centre. */}
             <span className="relative flex items-center justify-center">
-              <span className="text-foreground text-[1.35rem] leading-none font-medium">
+              <span className="text-foreground text-[calc(1.35rem*var(--reader-text-scale))] leading-none font-medium">
                 <InlineContent
                   {...sharedInlineProps}
                   initialOffset={provision.designation.initialOffset}
@@ -1065,7 +1065,7 @@ export const BlockRenderer = ({
           isRomanNumeralDivider &&
             "mt-[var(--reader-section-gap-top)] mb-[var(--reader-section-gap-bottom)] text-center text-sm font-semibold",
           block.role === "case-number" &&
-            "reader-chrome text-muted-foreground mb-2 text-end text-[0.95rem]",
+            "reader-chrome text-muted-foreground mb-2 text-end text-[calc(0.95rem*var(--reader-text-scale))]",
           block.role === "closing" && "mt-8 text-center",
           block.role === "signature" &&
             "reader-signature text-muted-foreground mt-1 text-end",
@@ -1148,7 +1148,7 @@ export const BlockRenderer = ({
     <div className="group relative">
       {permalink}
       <table
-        className="reader-chrome my-4 w-full border-collapse scroll-mt-[var(--reader-anchor-offset)] text-[0.88rem]"
+        className="reader-chrome my-4 w-full border-collapse scroll-mt-[var(--reader-anchor-offset)] text-[calc(0.88rem*var(--reader-text-scale))]"
         {...documentAnchorProps}
       >
         <tbody>

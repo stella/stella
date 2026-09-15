@@ -15,8 +15,15 @@ import { useLocalStorage } from "@/hooks/use-local-storage";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { ClientOperationError } from "@/lib/errors/client";
 
-type ReaderTextScaleStyle = CSSProperties & {
-  "--reader-text-scale": number;
+/**
+ * What marks the element the scale applies from. The slot and the step travel
+ * together so a reader cannot set one without the other: `reader.css` keys the
+ * whole derived type ladder off this slot, and the step it multiplies by comes
+ * from the same object.
+ */
+type ReaderTextScaleRootProps = {
+  "data-slot": "reader-text-root";
+  style: CSSProperties & { "--reader-text-scale": number };
 };
 
 type ReaderTextScale = {
@@ -25,8 +32,8 @@ type ReaderTextScale = {
   /** The current size, as the zoom control's level. */
   level: number;
   reset: () => void;
-  /** Belongs on the reader root; `reader.css` sizes the body text from it. */
-  style: ReaderTextScaleStyle;
+  /** Spread onto the element the document's sizes are measured from. */
+  rootProps: ReaderTextScaleRootProps;
   zoom: (direction: ZoomDirection) => void;
 };
 
@@ -104,7 +111,10 @@ export const useReaderTextScale = (): ReaderTextScale => {
     ...readerTextScaleBounds(scale),
     level: scale,
     reset: () => applyScale(READER_TEXT_SCALE_DEFAULT),
-    style: { "--reader-text-scale": scale },
+    rootProps: {
+      "data-slot": "reader-text-root",
+      style: { "--reader-text-scale": scale },
+    },
     zoom: (direction) => applyScale(nextReaderTextScale(scale, direction)),
   };
 };

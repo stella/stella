@@ -7,6 +7,10 @@
   --reader-body-font: "Source Serif 4 Variable", serif;
   --reader-body-size-base: 16px;
   --reader-body-size: var(--reader-body-size-base);
+  /* How much larger the reader is set than the document's own sizes. One
+     step for the whole document; a reader that never asked reads at 1. Every
+     absolute type size inside a reader multiplies by it. */
+  --reader-text-scale: 1;
   --reader-body-line-height: 1.65;
   /* Measure: the line length the running text is read at, independent of how
      wide the pane happens to be. A decision opened in a wide inspector ran to
@@ -119,13 +123,41 @@
 [data-slot="inspector-dock-pane"] :is(.reader-case-law, .reader-statute) {
   max-width: var(--reader-measure);
   margin-inline: auto;
-  /* The pane's own text size, stepped by the reader's +/- and set on the
-     reader root. The declaration sits on the text itself rather than at
-     :root, where a custom property is substituted once and no descendant
-     could scale it; the header chrome keeps its own sizes either way. */
+}
+
+/* The element the document's sizes are measured from, marked by the reader's
+   own +/- (see use-reader-text-scale.ts, which owns the slot and the step
+   together). One declaration moves the whole document: the running text
+   through --reader-body-size, anything that merely inherits through the
+   root's own font-size, and every Tailwind size utility inside through the
+   theme's type ladder, which v4 resolves at the point of use — so a
+   `text-xs` written in a reader module tomorrow scales without being
+   rewritten. The multiples are Tailwind's own, so an unscaled reader is set
+   exactly as before.
+
+   These sit on the reader root rather than at :root because a custom
+   property is substituted once where it is declared: a copy at :root would
+   be frozen at scale 1 for every descendant. The pane's chrome — header,
+   find bar, toolbars — is outside this element and keeps its own sizes. */
+[data-slot="reader-text-root"] {
   --reader-body-size: calc(
-    var(--reader-body-size-base) * var(--reader-text-scale, 1)
+    var(--reader-body-size-base) * var(--reader-text-scale)
   );
+  font-size: calc(1em * var(--reader-text-scale));
+
+  --text-xs: calc(0.75rem * var(--reader-text-scale));
+  --text-sm: calc(0.875rem * var(--reader-text-scale));
+  --text-base: calc(1rem * var(--reader-text-scale));
+  --text-lg: calc(1.125rem * var(--reader-text-scale));
+  --text-xl: calc(1.25rem * var(--reader-text-scale));
+  --text-2xl: calc(1.5rem * var(--reader-text-scale));
+  --text-3xl: calc(1.875rem * var(--reader-text-scale));
+  --text-4xl: calc(2.25rem * var(--reader-text-scale));
+  --text-5xl: calc(3rem * var(--reader-text-scale));
+  --text-6xl: calc(3.75rem * var(--reader-text-scale));
+  --text-7xl: calc(4.5rem * var(--reader-text-scale));
+  --text-8xl: calc(6rem * var(--reader-text-scale));
+  --text-9xl: calc(8rem * var(--reader-text-scale));
 }
 
 /* Collapse gap between consecutive h3 sub-headings
@@ -286,7 +318,7 @@ div:has(> p[data-note="footnote"]) + div > p[data-note="footnote"]:first-child {
   margin-inline-end: 1.1rem;
   padding-top: 0.15em;
   border-top: 1px solid var(--color-border);
-  font-size: 0.68rem;
+  font-size: calc(0.68rem * var(--reader-text-scale));
   line-height: 1.2;
   color: var(--color-muted-foreground);
   text-decoration: none;
@@ -342,7 +374,7 @@ div:has(> p[data-note="footnote"]) + div > p[data-note="footnote"]:first-child {
 
 .reader-apparatus-summary {
   cursor: pointer;
-  font-size: 0.78rem;
+  font-size: calc(0.78rem * var(--reader-text-scale));
   color: var(--color-muted-foreground);
   user-select: none;
 }

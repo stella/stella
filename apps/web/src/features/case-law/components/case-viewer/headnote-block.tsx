@@ -99,7 +99,7 @@ export const HeadnoteBlock = ({
       open={openedByReader || forceOpen}
     >
       <summary
-        className="reader-chrome text-muted-foreground cursor-pointer text-[0.75rem] font-semibold tracking-wide uppercase select-none marker:text-current"
+        className="reader-chrome text-muted-foreground cursor-pointer text-[calc(0.75rem*var(--reader-text-scale))] font-semibold tracking-wide uppercase select-none marker:text-current"
         data-reader-chrome=""
       >
         {label}

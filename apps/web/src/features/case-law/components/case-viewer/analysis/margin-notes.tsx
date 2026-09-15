@@ -469,12 +469,12 @@ const AnalysisNote = ({
       type="button"
     >
       {item.heading && (
-        <span className="text-foreground-strong-muted mb-0.5 block text-[0.8rem] leading-tight font-semibold">
+        <span className="text-foreground-strong-muted mb-0.5 block text-[calc(0.8rem*var(--reader-text-scale))] leading-tight font-semibold">
           {capitalize(item.heading)}
         </span>
       )}
       {item.text && (
-        <span className="text-foreground-placeholder block text-[0.75rem] leading-snug">
+        <span className="text-foreground-placeholder block text-[calc(0.75rem*var(--reader-text-scale))] leading-snug">
           {item.text}
         </span>
       )}
@@ -632,7 +632,7 @@ const CommentNote = ({
           className="gap-1.5"
           image={item.author.image}
           name={item.author.name}
-          nameClassName="text-foreground-strong-muted text-[0.72rem] font-medium"
+          nameClassName="text-foreground-strong-muted text-[calc(0.72rem*var(--reader-text-scale))] font-medium"
         />
         {shared && (
           <Tooltip
@@ -649,12 +649,12 @@ const CommentNote = ({
         )}
       </div>
       {onJump === undefined ? (
-        <p className="text-foreground-muted mt-0.5 text-start text-[0.75rem] leading-snug">
+        <p className="text-foreground-muted mt-0.5 text-start text-[calc(0.75rem*var(--reader-text-scale))] leading-snug">
           {item.text}
         </p>
       ) : (
         <button
-          className="text-foreground-muted hover:text-foreground-strong-muted mt-0.5 block w-full text-start text-[0.75rem] leading-snug transition-colors"
+          className="text-foreground-muted hover:text-foreground-strong-muted mt-0.5 block w-full text-start text-[calc(0.75rem*var(--reader-text-scale))] leading-snug transition-colors"
           onClick={onJump}
           type="button"
         >

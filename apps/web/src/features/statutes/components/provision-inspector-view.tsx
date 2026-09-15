@@ -16,6 +16,7 @@ import {
 import { InspectorTabHeader } from "@/components/inspector/inspector-tab-header";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import type { InspectorViewRenderProps } from "@/components/inspector/view-registry";
+import { ViewerOverlayBar } from "@/components/inspector/viewer-overlay-bar";
 import { ZoomControls } from "@/components/inspector/zoom-controls";
 import { OpenOriginalButton } from "@/components/legal-reader/open-original-button";
 import { useReaderTextScale } from "@/components/legal-reader/use-reader-text-scale";
@@ -119,8 +120,96 @@ export const ProvisionInspectorView = ({
       className="bg-background flex min-h-0 flex-1 flex-col overflow-hidden"
       ref={panelRef}
     >
-      <InspectorTabHeader
-        actions={
+      <InspectorTabHeader label={tab.label} onClose={onClose} />
+      <InspectorFindBar find={find} />
+      {/* The bar floats over the provision the way it floats over a PDF page;
+          the scroll area below it moves, the corner does not. */}
+      <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+        <ScrollArea className="h-full">
+          <div
+            className="flex flex-col gap-6 p-4"
+            ref={contentRef}
+            {...textScale.rootProps}
+          >
+            {selectedVersion !== undefined && (
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <StatuteValidityIndicator
+                  status={selectedVersion.status}
+                  validFrom={selectedVersion.versionValidFrom}
+                  validTo={selectedVersion.versionValidTo}
+                />
+                <OpenOriginalButton
+                  href={
+                    selectedVersion.documentUrl ?? selectedVersion.sourceUrl
+                  }
+                />
+              </div>
+            )}
+
+            {/* The tab header already names the provision and the act; this
+              row offers the consolidation to read and the way out. */}
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <StatuteVersionSwitcher
+                currentVersionId={payload.documentId}
+                onVersionChange={switchVersion}
+                versions={availableVersions}
+              />
+              <Link
+                className="text-muted-foreground hover:text-foreground text-xs underline underline-offset-2"
+                hash={payload.highlightAnchorId ?? payload.anchorId}
+                {...createStatuteLinkTarget({
+                  country: selectedVersion?.country ?? payload.jurisdiction,
+                  documentId: payload.documentId,
+                  eli: selectedVersion?.eli,
+                  slug: selectedVersion?.slug,
+                  versionValidFrom: selectedVersion?.versionValidFrom,
+                })}
+              >
+                {t("statutes.showInText")}
+              </Link>
+            </div>
+
+            <ProvisionWording
+              anchorId={payload.anchorId}
+              documentId={payload.documentId}
+              highlightAnchorId={payload.highlightAnchorId}
+            />
+
+            {leadingDecisions.length > 0 && (
+              <ProvisionSection title={t("statutes.leadingDecisions")}>
+                <ul className="m-0 flex list-none flex-col p-0">
+                  {leadingDecisions.map((decision) => (
+                    <li key={decision.decisionId}>
+                      <CitingDecisionItem decision={decision} />
+                    </li>
+                  ))}
+                </ul>
+              </ProvisionSection>
+            )}
+
+            <ProvisionSection title={t("caseLaw.viewer.citedBy")}>
+              <ProvisionCitingDecisions
+                anchorId={payload.anchorId}
+                eli={payload.eli}
+                jurisdiction={payload.jurisdiction}
+              />
+            </ProvisionSection>
+
+            {versionCount > 1 && (
+              <ProvisionSection title={t("common.history")}>
+                <ProvisionHistory
+                  anchorId={payload.anchorId}
+                  documentId={payload.documentId}
+                />
+              </ProvisionSection>
+            )}
+
+            <ProvisionSection title={t("common.askAI")}>
+              <ProvisionAsk passages={leadingDecisions} payload={payload} />
+            </ProvisionSection>
+          </div>
+        </ScrollArea>
+        <ViewerOverlayBar>
           <ZoomControls
             atMax={textScale.atMax}
             atMin={textScale.atMin}
@@ -128,93 +217,8 @@ export const ProvisionInspectorView = ({
             onReset={textScale.reset}
             onZoom={textScale.zoom}
           />
-        }
-        label={tab.label}
-        onClose={onClose}
-      />
-      <InspectorFindBar find={find} />
-      <ScrollArea className="min-h-0 flex-1">
-        <div
-          className="flex flex-col gap-6 p-4"
-          ref={contentRef}
-          style={textScale.style}
-        >
-          {selectedVersion !== undefined && (
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <StatuteValidityIndicator
-                status={selectedVersion.status}
-                validFrom={selectedVersion.versionValidFrom}
-                validTo={selectedVersion.versionValidTo}
-              />
-              <OpenOriginalButton
-                href={selectedVersion.documentUrl ?? selectedVersion.sourceUrl}
-              />
-            </div>
-          )}
-
-          {/* The tab header already names the provision and the act; this
-              row offers the consolidation to read and the way out. */}
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <StatuteVersionSwitcher
-              currentVersionId={payload.documentId}
-              onVersionChange={switchVersion}
-              versions={availableVersions}
-            />
-            <Link
-              className="text-muted-foreground hover:text-foreground text-xs underline underline-offset-2"
-              hash={payload.highlightAnchorId ?? payload.anchorId}
-              {...createStatuteLinkTarget({
-                country: selectedVersion?.country ?? payload.jurisdiction,
-                documentId: payload.documentId,
-                eli: selectedVersion?.eli,
-                slug: selectedVersion?.slug,
-                versionValidFrom: selectedVersion?.versionValidFrom,
-              })}
-            >
-              {t("statutes.showInText")}
-            </Link>
-          </div>
-
-          <ProvisionWording
-            anchorId={payload.anchorId}
-            documentId={payload.documentId}
-            highlightAnchorId={payload.highlightAnchorId}
-          />
-
-          {leadingDecisions.length > 0 && (
-            <ProvisionSection title={t("statutes.leadingDecisions")}>
-              <ul className="m-0 flex list-none flex-col p-0">
-                {leadingDecisions.map((decision) => (
-                  <li key={decision.decisionId}>
-                    <CitingDecisionItem decision={decision} />
-                  </li>
-                ))}
-              </ul>
-            </ProvisionSection>
-          )}
-
-          <ProvisionSection title={t("caseLaw.viewer.citedBy")}>
-            <ProvisionCitingDecisions
-              anchorId={payload.anchorId}
-              eli={payload.eli}
-              jurisdiction={payload.jurisdiction}
-            />
-          </ProvisionSection>
-
-          {versionCount > 1 && (
-            <ProvisionSection title={t("common.history")}>
-              <ProvisionHistory
-                anchorId={payload.anchorId}
-                documentId={payload.documentId}
-              />
-            </ProvisionSection>
-          )}
-
-          <ProvisionSection title={t("common.askAI")}>
-            <ProvisionAsk passages={leadingDecisions} payload={payload} />
-          </ProvisionSection>
-        </div>
-      </ScrollArea>
+        </ViewerOverlayBar>
+      </div>
     </div>
   );
 };

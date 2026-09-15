@@ -159,7 +159,7 @@ const DecisionSourceAttribution = ({ url }: { url: string | null }) => {
 
   return (
     <footer
-      className="reader-chrome text-muted-foreground border-border/50 mt-10 border-t pt-3 text-[0.6875rem] leading-snug"
+      className="reader-chrome text-muted-foreground border-border/50 mt-10 border-t pt-3 text-[calc(0.6875rem*var(--reader-text-scale))] leading-snug"
       data-reader-chrome=""
     >
       {t.rich("caseLaw.reader.sourceAttribution", {

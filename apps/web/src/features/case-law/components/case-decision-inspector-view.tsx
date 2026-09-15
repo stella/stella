@@ -10,7 +10,6 @@ import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { ScrollArea } from "@stll/ui/scroll-area";
-import { Separator } from "@stll/ui/separator";
 import { Skeleton } from "@stll/ui/skeleton";
 
 import type { CaseDecisionViewPayload } from "@/components/inspector/case-decision-view";
@@ -20,6 +19,7 @@ import {
 } from "@/components/inspector/inspector-find";
 import { InspectorTabHeader } from "@/components/inspector/inspector-tab-header";
 import type { InspectorViewRenderProps } from "@/components/inspector/view-registry";
+import { ViewerOverlayBar } from "@/components/inspector/viewer-overlay-bar";
 import { ZoomControls } from "@/components/inspector/zoom-controls";
 import { AnnotationToolbar } from "@/components/legal-reader/annotations/annotation-toolbar";
 import { GuestAnnotationPrompt } from "@/components/legal-reader/annotations/guest-annotation-prompt";
@@ -55,14 +55,13 @@ import { decisionOptions } from "@/features/case-law/queries/decisions";
 import { detached } from "@/lib/detached";
 import { toSafeId } from "@/lib/safe-id";
 
-/** What the header carries, so the text is not preceded by a table of it. */
+/**
+ * Every fact the header's info popover carries, so the text is not preceded
+ * by a table of them. The source has its own button beside it.
+ */
 const HEADER_DECISION_FACTS = [
   "decisionType",
   "subject",
-] as const satisfies readonly DecisionFactKind[];
-
-/** What is left for the list above the text. */
-const BODY_DECISION_FACTS = [
   "legalAreas",
   "keywords",
   "judge",
@@ -153,14 +152,6 @@ export const CaseDecisionInspectorView = ({
       <InspectorTabHeader
         actions={
           <>
-            <ZoomControls
-              atMax={textScale.atMax}
-              atMin={textScale.atMin}
-              level={textScale.level}
-              onReset={textScale.reset}
-              onZoom={textScale.zoom}
-            />
-            <Separator className="mx-0.5 h-4" orientation="vertical" />
             {decision !== undefined && (
               <>
                 <OpenOriginalButton href={decision.sourceUrl} size="icon-xs" />
@@ -191,7 +182,7 @@ export const CaseDecisionInspectorView = ({
           <main
             className="reader-paper min-h-full px-4 py-6"
             ref={contentRef}
-            style={textScale.style}
+            {...textScale.rootProps}
           >
             <h1 className="sr-only">
               <BidiText as="span">{payload.caseNumber}</BidiText>
@@ -218,13 +209,6 @@ export const CaseDecisionInspectorView = ({
                 <CitationHeader
                   decisionDate={decision.decisionDate}
                   decisionId={decisionId}
-                />
-                <DecisionFacts
-                  decisionType={decision.decisionType}
-                  facts={BODY_DECISION_FACTS}
-                  metadata={decision.metadata}
-                  source={decision.source}
-                  sourceUrl={decision.sourceUrl}
                 />
                 <DecisionCitations
                   decision={{
@@ -264,6 +248,16 @@ export const CaseDecisionInspectorView = ({
             )}
           </main>
         </ScrollArea>
+        {/* The same bar the PDF floats over its page, over the text. */}
+        <ViewerOverlayBar>
+          <ZoomControls
+            atMax={textScale.atMax}
+            atMin={textScale.atMin}
+            level={textScale.level}
+            onReset={textScale.reset}
+            onZoom={textScale.zoom}
+          />
+        </ViewerOverlayBar>
       </LegalReaderAIChat>
       <AnnotationToolbar
         activeAnnotation={annotations.activeAnnotation}

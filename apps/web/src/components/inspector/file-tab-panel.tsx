@@ -77,6 +77,7 @@ import type { FileTab } from "@/components/inspector/inspector-tabs-store";
 import { MeasuredPdfProvider } from "@/components/inspector/measured-pdf-provider";
 import { PlaybookFacet } from "@/components/inspector/playbook-facet";
 import { VersionsFacet } from "@/components/inspector/versions-facet";
+import { ViewerOverlayBar } from "@/components/inspector/viewer-overlay-bar";
 import { MarkdownHybridEditor } from "@/components/markdown/markdown-hybrid-editor";
 import {
   PeekPdfControls,
@@ -832,14 +833,14 @@ export const FileTabPanel = ({
   // (Save / Create version) lives in the tab header
   // (`fileActions` above).
   const previewOverlay = isPreviewOverlayVisible ? (
-    <div className="bg-background/80 supports-[backdrop-filter]:bg-background/65 absolute end-2 top-2 z-10 flex items-center gap-1 rounded-md border p-0.5 shadow-sm backdrop-blur">
+    <ViewerOverlayBar>
       <PeekPdfControls
         onReset={() => handleResetZoom(tab.id)}
         onZoom={(direction) => handleZoom(tab.id, direction)}
         pdfColorControl={pdfColorControl}
         scaleOffset={scaleOffset}
       />
-    </div>
+    </ViewerOverlayBar>
   ) : null;
 
   const contextBar = (
