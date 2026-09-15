@@ -300,7 +300,7 @@ describe("duplicate entity", () => {
       },
       $count: async () => 1,
       select: () => ({
-        from: () => ({ where: async () => [{ name: sourceDocument?.name }] }),
+        from: () => ({ where: async () => [{ name: sourceDocument.name }] }),
       }),
       insert: (table: unknown) => ({
         values: (value: unknown) => {
