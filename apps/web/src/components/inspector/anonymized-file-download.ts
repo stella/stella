@@ -61,11 +61,16 @@ export const downloadAnonymizedFile = async ({
       const excluded = new Set(excludedCanonicals.map(normalizeForExclusion));
       const terms = detected.pairs.map(({ original }) => original);
       for (const entry of vocabulary.entries) {
+        const entryTerms = [entry.canonical, ...entry.variants];
         if (
           entry.enabled &&
-          !excluded.has(normalizeForExclusion(entry.canonical))
+          entryTerms.some((term) => !excluded.has(normalizeForExclusion(term)))
         ) {
-          terms.push(entry.canonical, ...entry.variants);
+          terms.push(
+            ...entryTerms.filter(
+              (term) => !excluded.has(normalizeForExclusion(term)),
+            ),
+          );
         }
       }
       const masks = buildAnonymizedExportMasks({ extraction, terms });

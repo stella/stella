@@ -66,6 +66,21 @@ describe("anonymized PDF export masks", () => {
     expect(masks.get(1)).toHaveLength(1);
   });
 
+  test("matches vocabulary terms across extracted line breaks", async () => {
+    const pdf = PDF.create();
+    const page = pdf.addPage({ size: "letter" });
+    page.drawText("Acme", { x: 50, y: 700, size: 18 });
+    page.drawText("Holdings", { x: 50, y: 675, size: 18 });
+
+    const extraction = extractAnonymizedExportText(await loadPages(pdf));
+    const masks = buildAnonymizedExportMasks({
+      extraction,
+      terms: ["Acme Holdings"],
+    }).unwrap();
+
+    expect(masks.get(0)).toHaveLength(2);
+  });
+
   test("does not cap a large set of matches at the preview limit", async () => {
     const pdf = PDF.create();
     const page = pdf.addPage({ size: "letter" });
