@@ -73,13 +73,17 @@ type RelatedDecision = {
   ecli: string | null;
   language: string;
   slug: string | null;
-  /**
-   * The materialized `ln(1 + weighted citations)` score. Search ranks by it
-   * too, so a reader weighing "who cites this" sees the same weight the
-   * result list gave those courts.
-   */
-  citationAuthority: number;
 };
+
+/**
+ * The same decision with the materialized `ln(1 + weighted citations)` score
+ * the query read for it. Search ranks by that score too, so a reader weighing
+ * "who cites this" sees the weight the result list gave those courts. Kept
+ * beside `RelatedDecision` rather than inside it: addressing a decision's page
+ * needs none of it, and the reader surfaces that only address one would have
+ * to invent a number.
+ */
+type RankedRelatedDecision = RelatedDecision & { citationAuthority: number };
 
 export type DecisionCitationRow = {
   id: SafeId<"caseLawCitation">;
@@ -91,7 +95,7 @@ export type DecisionCitationRow = {
    * held decision; such a row is text and nothing more. An incoming citation
    * is by construction resolved, so its decision is always present.
    */
-  decision: RelatedDecision | null;
+  decision: RankedRelatedDecision | null;
 };
 
 /** The decision at the far end of the citation, whichever way it points. */
@@ -120,7 +124,7 @@ type ScannedRow = {
   sectionIndex: number | null;
   polarity: string | null;
   visible: boolean;
-  decision: RelatedDecision | null;
+  decision: RankedRelatedDecision | null;
 };
 
 /**
@@ -456,7 +460,7 @@ export type LeadingCitationRow = {
   sectionIndex: number | null;
   treatment: CitationTreatment;
   /** Resolved by construction: only a held decision can lead. */
-  decision: RelatedDecision;
+  decision: RankedRelatedDecision;
 };
 
 type ListLeadingCitationsOptions = {

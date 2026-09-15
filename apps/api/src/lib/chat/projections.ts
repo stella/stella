@@ -9,10 +9,10 @@ import {
 } from "@stll/api-contract/case-law-text-field";
 import { SEARCH_TOTAL_TYPE } from "@stll/api-contract/search";
 import type { SearchTotal } from "@stll/api-contract/search";
+import { CITATION_PASSAGE_MENTIONS } from "@stll/legal-ast/citation-passage";
 
 import { TIME_ENTRY_VISIBILITY } from "@/api/lib/billing-constants";
 import {
-  CITATION_PASSAGE_MENTIONS,
   CITATION_READ_DIRECTIONS,
   CITATION_TREATMENTS,
 } from "@/api/lib/case-law/citation-vocabulary";

@@ -4,8 +4,10 @@ import type { ReactElement, ReactNode } from "react";
 import { useTranslations } from "use-intl";
 
 import type { ReadDecisionTextFields } from "@stll/api-contract/case-law-text-field";
+import { locateCitationSpans } from "@stll/legal-ast/citation-passage";
 import type { Block } from "@stll/legal-ast/document-ast";
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
+import { dropOverlappingSpans } from "@stll/legal-ast/text-spans";
 import { BidiText } from "@stll/ui/bidi-text";
 import { cn } from "@stll/ui/utils";
 
@@ -35,10 +37,6 @@ import type {
   SearchPiece,
 } from "@/components/legal-reader/reader-search";
 import { buildSearchResults } from "@/components/legal-reader/reader-search";
-import {
-  dropOverlappingSpans,
-  locateCitationAnchors,
-} from "@/features/case-law/citation-anchors";
 import type { CitationAnchorSource } from "@/features/case-law/citation-anchors";
 import { DecisionBodyUnavailable } from "@/features/case-law/components/case-viewer/decision-body-state";
 import { missingBodyReason } from "@/features/case-law/components/case-viewer/decision-body-state.logic";
@@ -505,7 +503,7 @@ const buildAnchorsByPieceId = ({
   provisions: readonly DecisionProvisionAnchor[];
   statutes: readonly DecisionStatuteCitationAnchor[];
 }): Record<string, TextAnchor[]> => {
-  const citationSpans = locateCitationAnchors({ blocks, citations });
+  const citationSpans = locateCitationSpans({ blocks, citations });
   const provisionSpans = locateProvisionAnchors({ blocks, provisions });
   const statuteSpans = new Map<string, DecisionStatuteCitationAnchor[]>();
   for (const statute of statutes) {

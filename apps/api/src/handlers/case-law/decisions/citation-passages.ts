@@ -17,6 +17,8 @@
 import { Result } from "better-result";
 import { eq, inArray } from "drizzle-orm";
 
+import { findCitationPassage } from "@stll/legal-ast/citation-passage";
+import type { CitationPassageMention } from "@stll/legal-ast/citation-passage";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
@@ -28,10 +30,7 @@ import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
-import type {
-  CitationPassageMention,
-  CitationReadDirection,
-} from "@/api/lib/case-law/citation-vocabulary";
+import type { CitationReadDirection } from "@/api/lib/case-law/citation-vocabulary";
 import { GRAPH_DIRECTION } from "@/api/lib/case-law/citation-vocabulary";
 import { readDecisionAnalysisAst } from "@/api/lib/case-law/decision-analysis";
 import { chunked } from "@/api/lib/chunked";
@@ -154,19 +153,13 @@ const readDecisionTextColumns = async (
   );
 };
 
-const WHITESPACE_RUN = /\s+/gu;
-
-/**
- * Both sides of the match are flattened the same way. A citation is stored as
- * the document printed it, line wrap included, while a block's `plainText` is
- * the AST's own flattening, so comparing the two verbatim misses exactly the
- * citations that were broken across lines.
- */
-const collapseWhitespace = (text: string): string =>
-  text.replace(WHITESPACE_RUN, " ").trim();
-
 type Excerpt = { text: string; truncated: boolean };
 
+/**
+ * A paragraph runs to thousands of characters and a page carries up to
+ * `caseLawDecisionCitationPageSize` of them, so what travels with a citation
+ * is centred on the citation rather than sent whole.
+ */
 const excerptAround = (text: string, at: number, length: number): Excerpt => {
   if (text.length <= PASSAGE_MAX_CHARS) {
     return { text, truncated: false };
@@ -182,89 +175,45 @@ const excerptAround = (text: string, at: number, length: number): Excerpt => {
   };
 };
 
-type CarryingBlock = { anchorId: string; at: number; text: string };
-
 export type CitationPassageOptions = {
   ast: DocumentAst;
   citationText: string;
-  /**
-   * The text of the section the citation row was extracted from, when the
-   * decision still carries its segmentation. The reader that shows a citing
-   * paragraph in the app narrows by the same section text
-   * (`apps/web/src/features/case-law/citation-passage.ts`), because the
-   * classifier read that section and no anchor ties a section to a block.
-   */
+  /** The section the citation row was extracted from, when the row kept it. */
   sectionText: string | undefined;
 };
 
 /**
- * The paragraph a citation sits in, anchored to the mention the treatment was
- * read from wherever the decision still says which that was.
+ * The citing paragraph as an agent-facing reply carries it: the block
+ * `findCitationPassage` chose, cut to the reply's budget.
  *
- * The extractor records the latest section that names the case, and the
- * classifier reads that section's first occurrence: inside the section, the
- * first carrying block is that occurrence. Without the section there is no
- * anchor, so the last carrying block stands in (a case is commonly listed
- * bare in the header and then discussed in the reasoning, and the discussion
- * is what was asked for) and `mention` says the treatment may have been read
- * from another paragraph.
+ * Choosing the block is the shared rule, not this read's: the app reader
+ * marks every mention over the same locator, so a citation cannot be
+ * highlighted in one paragraph and quoted from another.
  */
 export const citationPassageIn = ({
   ast,
   citationText,
   sectionText,
 }: CitationPassageOptions): CitationPassage | null => {
-  const needle = collapseWhitespace(citationText);
-  if (needle.length === 0) {
+  const match = findCitationPassage({
+    blocks: ast.blocks,
+    citationText,
+    sectionText,
+  });
+  if (match === null) {
     return null;
   }
-  const section =
-    sectionText === undefined ? undefined : collapseWhitespace(sectionText);
-  // Blocks, not occurrences: two mentions inside one block still return that
-  // block, so only a second carrying block makes the paragraph a choice.
-  const carrying: CarryingBlock[] = [];
-  let classified: CarryingBlock | null = null;
-  for (const block of ast.blocks) {
-    const text = collapseWhitespace(block.plainText);
-    const at = text.indexOf(needle);
-    if (at === -1) {
-      continue;
-    }
-    const carryingBlock = { anchorId: block.anchorId, at, text };
-    carrying.push(carryingBlock);
-    if (
-      classified === null &&
-      section !== undefined &&
-      text.length > 0 &&
-      section.includes(text)
-    ) {
-      classified = carryingBlock;
-    }
-  }
-  const chosen = classified ?? carrying.at(-1);
-  if (chosen === undefined) {
-    return null;
-  }
-  const excerpt = excerptAround(chosen.text, chosen.at, needle.length);
+  const excerpt = excerptAround(
+    match.text,
+    match.start,
+    match.end - match.start,
+  );
   return {
-    anchorId: chosen.anchorId,
+    anchorId: match.anchorId,
     text: excerpt.text,
     truncated: excerpt.truncated,
-    mention: mentionOf({ carrying: carrying.length, classified }),
+    mention: match.mention,
   };
-};
-
-const mentionOf = ({
-  carrying,
-  classified,
-}: {
-  carrying: number;
-  classified: CarryingBlock | null;
-}): CitationPassageMention => {
-  if (carrying === 1) {
-    return "sole";
-  }
-  return classified === null ? "latest_of_several" : "classified_section";
 };
 
 /** A citing decision's text, as a passage read needs to see it. */
