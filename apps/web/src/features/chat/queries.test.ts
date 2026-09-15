@@ -9,7 +9,10 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import type { ReasoningEffort } from "@stll/ai-catalog";
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
-import { CHAT_TURN_INTENT } from "@stll/api-contract";
+import {
+  API_VALIDATION_ERROR_CODE,
+  CHAT_TURN_INTENT,
+} from "@stll/api-contract";
 
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
 import { selectCreateDocumentDrafts } from "@/components/chat/create-document-draft.logic";
@@ -1857,6 +1860,53 @@ describe("chat runtime", () => {
       threadId,
     });
     expect(childRunId).not.toBe(parentRunId);
+  });
+
+  // A refused chat request must not reach the user as the connection
+  // adapter's opaque `HTTP error! status: 400`. chatFetchClient reads the body
+  // while the response is whole and rejects with an APIError; TanStack wraps
+  // that rejection in its own StreamReadError, so the API's status and code
+  // survive on the cause the error reporter walks, not on the top-level error.
+  test("carries the API status and code of a refused chat request on the reported cause", async () => {
+    const threadId = toChatThreadId("thread-refused");
+    globalThis.fetch = createFetchMock(
+      async () =>
+        new Response(
+          JSON.stringify({
+            code: API_VALIDATION_ERROR_CODE,
+            message: "Chat continuation does not match its awaited interaction",
+          }),
+          { headers: { "Content-Type": "application/json" }, status: 400 },
+        ),
+    );
+    const reported: unknown[] = [];
+    const runtime = createChatRuntime({
+      context: undefined,
+      initialMessages: [],
+      key: { scope: "global", threadId },
+      onError: (error) => {
+        reported.push(error);
+      },
+      onFinish: () => {},
+    });
+
+    await sendThreadChatMessage(
+      runtime,
+      createOutgoingMessage("22222222-2222-4222-8222-222222222204"),
+    );
+
+    const refusal = reported
+      .filter((error) => error instanceof Error)
+      .map((error) => error.cause)
+      .find((cause) => APIError.is(cause));
+    expect(APIError.is(refusal)).toBe(true);
+    if (APIError.is(refusal)) {
+      expect(refusal.status).toBe(400);
+      expect(refusal.code).toBe(API_VALIDATION_ERROR_CODE);
+      expect(refusal.rawMessage).toBe(
+        "Chat continuation does not match its awaited interaction",
+      );
+    }
   });
 });
 
