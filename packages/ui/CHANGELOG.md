@@ -1,5 +1,11 @@
 # @stll/ui
 
+## 0.27.3
+
+### Patch Changes
+
+- [#3396](https://github.com/stella/stella/pull/3396) [`3cee5ea`](https://github.com/stella/stella/commit/3cee5eab989c3966ed440749f7d5bfc6f1c66ee7) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add the `chrome-raised` overlay layer, one step above `chrome`, for in-pane controls that float over the docked composer. The composer's veil blurs what lies beneath it, so a control in the same band stayed sharp only when it happened to mount after the composer.
+
 ## 0.27.2
 
 ### Patch Changes
