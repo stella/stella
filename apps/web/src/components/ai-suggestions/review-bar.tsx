@@ -1,7 +1,7 @@
 /**
  * ReviewBar — floating bottom-center pill over the DOCX editor that
  * drives a keyboard-first review loop through the AI's pending
- * suggestions. Shares the review-store (and {@link useReviewActions})
+ * changes. Shares the review-store (and {@link useReviewActions})
  * with the inspector's document-review facet, so stepping / accepting /
  * rejecting here and there can never disagree.
  *
@@ -11,10 +11,10 @@
  * `rejectSuggestion`, `previousSuggestion`, `nextSuggestion`) that the user
  * can rebind, so the handler matches the effective binding rather than a
  * hardcoded chord:
- *   Alt+Enter        accept the focused suggestion and advance
- *   Alt+Shift+Enter  reject the focused suggestion and advance
- *   Alt+ArrowUp      focus the previous pending suggestion
- *   Alt+ArrowDown    focus the next pending suggestion
+ *   Alt+Enter        accept the focused change and advance
+ *   Alt+Shift+Enter  reject the focused change and advance
+ *   Alt+ArrowUp      focus the previous change
+ *   Alt+ArrowDown    focus the next change
  *
  * Alt (not Cmd/Ctrl) is the DEFAULT because folio binds Mod+Enter to a document-level
  * page break in the capture phase and Mod+Backspace to delete-backward;
@@ -55,9 +55,12 @@ import {
   getReviewBarAction,
   getReviewBarFocusTarget,
   getReviewBarPosition,
+  groupReviewChanges,
   orderSuggestionsByDocumentPosition,
   reviewBarHeading,
+  reviewChangeStatus,
 } from "@/components/ai-suggestions/review-bar.logic";
+import type { ReviewChange } from "@/components/ai-suggestions/review-bar.logic";
 import { describeSuggestionChange } from "@/components/ai-suggestions/review-operation-labels";
 import type { SuggestionChange } from "@/components/ai-suggestions/review-operation-labels";
 import {
@@ -67,6 +70,7 @@ import {
 import type { ReviewSuggestion } from "@/components/ai-suggestions/review-store";
 import { useFolioDocumentBlocks } from "@/components/ai-suggestions/use-folio-document-blocks";
 import { useReviewActions } from "@/components/ai-suggestions/use-review-actions";
+import { useReviewChangeSummary } from "@/components/ai-suggestions/use-review-change-summary";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useHydrationSafeHotkeyPlatform } from "@/hooks/use-hydration-safe-hotkey-platform";
@@ -77,8 +81,8 @@ import { useEffectiveHotkey } from "@/lib/use-effective-shortcuts";
 
 const EMPTY_SUGGESTIONS: readonly ReviewSuggestion[] = [];
 
-const isPending = (item: ReviewSuggestion): boolean =>
-  item.status === "pending";
+const isPending = (change: ReviewChange): boolean =>
+  reviewChangeStatus(change) === "pending";
 
 type ReviewBarProps = {
   entityId: string;
@@ -117,8 +121,8 @@ export const ReviewBar = ({
     docxEditorRef,
     storeSuggestions.length > 0,
   );
-  const suggestions = orderSuggestionsByDocumentPosition(
-    storeSuggestions,
+  const changes = groupReviewChanges(
+    orderSuggestionsByDocumentPosition(storeSuggestions, documentBlocks),
     documentBlocks,
   );
   const focusedId = useReviewStore((state) =>
@@ -128,10 +132,10 @@ export const ReviewBar = ({
   const {
     applyMode,
     setApplyMode,
-    acceptOne,
-    rejectOne,
-    acceptMany,
-    revertOne,
+    acceptChange,
+    rejectChange,
+    acceptAll,
+    revertChange,
     navigateTo,
   } = useReviewActions({
     entityId,
@@ -141,20 +145,20 @@ export const ReviewBar = ({
     requestDocxEditMode,
   });
 
-  const pendingItems = suggestions.filter(isPending);
+  const pendingChanges = changes.filter(isPending);
   const { activeIndex, current, total } = getReviewBarPosition(
-    suggestions,
+    changes,
     focusedId,
   );
-  const activeItem = suggestions.at(activeIndex);
+  const activeChange = changes.at(activeIndex);
   const activeAction =
-    activeItem === undefined ? "busy" : getReviewBarAction(activeItem);
+    activeChange === undefined ? "busy" : getReviewBarAction(activeChange);
 
   // The first proposed edit must be visible in the document as soon as the
   // review controls appear. Without this, the bar says "1 / n" but Folio has
   // no focused id, so it renders only generic underlines rather than the
   // exact struck-through/replacement pair the reviewer is about to resolve.
-  const focusTargetId = getReviewBarFocusTarget(suggestions, focusedId);
+  const focusTargetId = getReviewBarFocusTarget(changes, focusedId);
   useExternalSyncEffect(() => {
     if (focusTargetId !== null) {
       setFocusedId(entityId, focusTargetId);
@@ -162,9 +166,9 @@ export const ReviewBar = ({
   }, [entityId, focusTargetId, setFocusedId]);
 
   const focusAt = useLatestCallback((index: number) => {
-    const item = suggestions.at(index);
-    if (item) {
-      navigateTo(item);
+    const change = changes.at(index);
+    if (change) {
+      navigateTo(change);
     }
   });
 
@@ -178,24 +182,24 @@ export const ReviewBar = ({
 
   // Guards against a second acceptance starting while the current one is
   // still applying (rapid Alt+Enter / double-click), which would otherwise
-  // apply the same stale suggestion twice before the store settles.
+  // apply the same stale change twice before the store settles.
   const acceptBusyRef = useRef(false);
   const acceptAndAdvance = useLatestCallback(async () => {
     if (acceptBusyRef.current) {
       return;
     }
-    const target = suggestions.at(activeIndex);
-    if (target?.status !== "pending") {
+    const target = changes.at(activeIndex);
+    if (target === undefined || !isPending(target)) {
       return;
     }
     // Capture the neighbour BEFORE accepting: after accept the target
-    // leaves the pending queue, so the "next" to park on is the item that
+    // leaves the pending queue, so the "next" to park on is the change that
     // followed it (or the one before, at the end of the list).
-    const next = suggestions.at(activeIndex + 1);
+    const next = changes.at(activeIndex + 1);
     acceptBusyRef.current = true;
     // `.finally` (not try/finally): a try-without-catch trips the React
     // Compiler's HIR lowering and bails the component out of optimization.
-    await acceptOne(target).finally(() => {
+    await acceptChange(target).finally(() => {
       acceptBusyRef.current = false;
     });
     if (next && next.id !== target.id) {
@@ -204,22 +208,22 @@ export const ReviewBar = ({
   });
 
   const rejectAndAdvance = useLatestCallback(() => {
-    const target = suggestions.at(activeIndex);
-    if (target?.status !== "pending") {
+    const target = changes.at(activeIndex);
+    if (target === undefined || !isPending(target)) {
       return;
     }
-    const next = suggestions.at(activeIndex + 1);
-    rejectOne(target);
+    const next = changes.at(activeIndex + 1);
+    rejectChange(target);
     if (next && next.id !== target.id) {
       navigateTo(next);
     }
   });
 
   // The reasoning behind a proposal lives on its card in the review panel.
-  // Bring that panel forward and park it on this suggestion rather than
+  // Bring that panel forward and park it on this change rather than
   // restating the argument on a bar that has room for one line.
   const showWhy = useLatestCallback(() => {
-    const target = suggestions.at(activeIndex);
+    const target = changes.at(activeIndex);
     if (target === undefined) {
       return;
     }
@@ -235,11 +239,11 @@ export const ReviewBar = ({
   });
 
   const revertActive = useLatestCallback(() => {
-    const target = suggestions.at(activeIndex);
+    const target = changes.at(activeIndex);
     if (target === undefined || getReviewBarAction(target) !== "revert") {
       return;
     }
-    revertOne(target);
+    revertChange(target);
   });
 
   const handleKeyDown = useLatestCallback((event: KeyboardEvent) => {
@@ -305,10 +309,10 @@ export const ReviewBar = ({
       )}
       role="toolbar"
     >
-      {activeItem !== undefined && (
-        <SuggestionLabel
-          item={activeItem}
-          onActivate={() => navigateTo(activeItem)}
+      {activeChange !== undefined && (
+        <ChangeLabel
+          change={activeChange}
+          onActivate={() => navigateTo(activeChange)}
         />
       )}
       <span className="text-muted-foreground min-w-14 px-1 text-center text-xs font-medium tabular-nums">
@@ -332,7 +336,7 @@ export const ReviewBar = ({
       </Button>
       <Button
         aria-label={t("common.next")}
-        disabled={activeIndex >= suggestions.length - 1}
+        disabled={activeIndex >= changes.length - 1}
         onClick={goNext}
         size="icon-sm"
         tooltip={`${t("common.next")} · ${formatHotkeyForPlatform(
@@ -391,11 +395,11 @@ export const ReviewBar = ({
           state={activeAction === "busy" ? "applying" : "pending"}
         />
       )}
-      {pendingItems.length > 0 && (
+      {pendingChanges.length > 0 && (
         <AcceptAllButton
           className="h-7 px-2.5 text-xs"
-          onAcceptAll={acceptMany}
-          pendingItems={pendingItems}
+          onAcceptAll={acceptAll}
+          pendingChanges={pendingChanges}
           size="sm"
           variant="ghost"
         >
@@ -430,8 +434,8 @@ export const ReviewBar = ({
   );
 };
 
-type SuggestionLabelProps = {
-  item: ReviewSuggestion;
+type ChangeLabelProps = {
+  change: ReviewChange;
   onActivate: () => void;
 };
 
@@ -440,16 +444,27 @@ type SuggestionLabelProps = {
  *
  * The issue on top, because that is the reason the change exists: a review
  * finding's title, or — for a change the chat proposed, which has no finding —
- * what the operation does. The wording that would land underneath it, quietly,
+ * what the change does. The wording that would land underneath it, quietly,
  * because the reviewer needs to recognise it, not read it here; the panel card
- * and the document's own redline carry the full text.
+ * and the document's own redline carry the full text. A deletion run lands no
+ * wording, and its heading already names every paragraph it removes.
  */
-const SuggestionLabel = ({ item, onActivate }: SuggestionLabelProps) => {
-  const heading = reviewBarHeading(item);
-  const change =
-    item.pendingOperation === null
-      ? null
-      : describeSuggestionChange(item.pendingOperation);
+const ChangeLabel = ({ change, onActivate }: ChangeLabelProps) => {
+  const summarize = useReviewChangeSummary();
+  const heading = summarize(reviewBarHeading(change));
+  const wording = (() => {
+    switch (change.type) {
+      case "single": {
+        const operation = change.members[0].pendingOperation;
+        return operation === null ? null : describeSuggestionChange(operation);
+      }
+      case "deletionRun":
+        return null;
+      default:
+        change satisfies never;
+        return panic(`Unhandled review change: ${String(change)}`);
+    }
+  })();
 
   return (
     <button
@@ -464,7 +479,7 @@ const SuggestionLabel = ({ item, onActivate }: SuggestionLabelProps) => {
       >
         {heading}
       </BidiText>
-      {change !== null && <SuggestionChangeLine change={change} />}
+      {wording !== null && <SuggestionChangeLine change={wording} />}
     </button>
   );
 };

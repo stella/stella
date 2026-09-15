@@ -1803,6 +1803,8 @@ type Messages = {
       "commentOnParagraph": "{label, select, none {Comment on a paragraph} other {Comment on paragraph {label}}}";
       "commentOnSelection": "Comment on the selected text";
       "deleteParagraph": "{label, select, none {Delete a paragraph} other {Delete paragraph {label}}}";
+      "deleteParagraphRange": "Delete paragraphs {first}–{last}";
+      "deleteParagraphs": "{count, plural, one {Delete # paragraph} other {Delete # paragraphs}}";
       "deleteTable": "Delete a table";
       "deleteTableColumn": "Delete a table column";
       "deleteTableRow": "Delete a table row";

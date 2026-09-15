@@ -1800,6 +1800,8 @@
       "commentOnParagraph": "{label, select, none {Pievienot komentāru rindkopai} other {Pievienot komentāru rindkopai {label}}}",
       "commentOnSelection": "Pievienot komentāru atlasītajam tekstam",
       "deleteParagraph": "{label, select, none {Dzēst rindkopu} other {Dzēst rindkopu {label}}}",
+      "deleteParagraphRange": "Dzēst rindkopas {first}–{last}",
+      "deleteParagraphs": "{count, plural, zero {Dzēst # rindkopu} one {Dzēst # rindkopu} other {Dzēst # rindkopas}}",
       "deleteTable": "Dzēst tabulu",
       "deleteTableColumn": "Dzēst tabulas kolonnu",
       "deleteTableRow": "Dzēst tabulas rindu",

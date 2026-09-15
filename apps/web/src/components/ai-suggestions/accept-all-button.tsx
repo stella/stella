@@ -3,7 +3,7 @@
  * shared by the document-review facet's header and the floating
  * ReviewBar so the confirm-threshold behaviour can never drift.
  *
- * Up to {@link ACCEPT_ALL_CONFIRM_THRESHOLD} pending suggestions is a
+ * Up to {@link ACCEPT_ALL_CONFIRM_THRESHOLD} pending changes is a
  * one-click accept. Above it, a confirm dialog summarising the counts
  * by severity gates the batch, since applying dozens of tracked
  * changes at once is not casually undoable.
@@ -26,15 +26,15 @@ import {
 } from "@stll/ui/alert-dialog";
 import { Button } from "@stll/ui/button";
 
+import type { ReviewChange } from "@/components/ai-suggestions/review-bar.logic";
 import {
   SEVERITY_ORDER,
   type ReviewSeverityKey,
-  type ReviewSuggestion,
 } from "@/components/ai-suggestions/review-store";
 import type { TranslationKey } from "@/i18n/types";
 import { detached } from "@/lib/detached";
 
-/** Above this many pending suggestions, "accept all" asks to confirm first. */
+/** Above this many pending changes, "accept all" asks to confirm first. */
 export const ACCEPT_ALL_CONFIRM_THRESHOLD = 10;
 
 const SEVERITY_COUNT_KEYS = {
@@ -47,9 +47,9 @@ const SEVERITY_COUNT_KEYS = {
 type ButtonProps = ComponentProps<typeof Button>;
 
 type AcceptAllButtonProps = {
-  /** The pending suggestions this control would accept. */
-  pendingItems: readonly ReviewSuggestion[];
-  onAcceptAll: (items: readonly ReviewSuggestion[]) => void | Promise<void>;
+  /** The pending changes this control would accept. */
+  pendingChanges: readonly ReviewChange[];
+  onAcceptAll: (changes: readonly ReviewChange[]) => void | Promise<void>;
   className?: string | undefined;
   size?: ButtonProps["size"];
   variant?: ButtonProps["variant"];
@@ -57,7 +57,7 @@ type AcceptAllButtonProps = {
 };
 
 export const AcceptAllButton = ({
-  pendingItems,
+  pendingChanges,
   onAcceptAll,
   className,
   size,
@@ -85,7 +85,7 @@ export const AcceptAllButton = ({
     }
     setIsAccepting(true);
     detached(
-      Promise.resolve(onAcceptAll(pendingItems)).finally(() => {
+      Promise.resolve(onAcceptAll(pendingChanges)).finally(() => {
         setIsAccepting(false);
       }),
       "accept-all-button.accept-all",
@@ -93,7 +93,7 @@ export const AcceptAllButton = ({
   };
 
   const handleClick = () => {
-    if (pendingItems.length > ACCEPT_ALL_CONFIRM_THRESHOLD) {
+    if (pendingChanges.length > ACCEPT_ALL_CONFIRM_THRESHOLD) {
       setConfirmOpen(true);
       return;
     }
@@ -101,8 +101,8 @@ export const AcceptAllButton = ({
   };
 
   const breakdown = SEVERITY_ORDER.flatMap((severity) => {
-    const count = pendingItems.filter(
-      (item) => item.severity === severity,
+    const count = pendingChanges.filter(
+      (change) => change.members[0].severity === severity,
     ).length;
     if (count === 0) {
       return [];
@@ -115,7 +115,7 @@ export const AcceptAllButton = ({
       <Button
         aria-label={t("docxReview.acceptAll")}
         className={className}
-        disabled={pendingItems.length === 0 || isAccepting}
+        disabled={pendingChanges.length === 0 || isAccepting}
         onClick={handleClick}
         size={buttonSize}
         tooltip={t("docxReview.acceptAll")}
@@ -132,7 +132,7 @@ export const AcceptAllButton = ({
             </AlertDialogTitle>
             <AlertDialogDescription>
               {t("docxReview.acceptAllConfirmDescription", {
-                count: String(pendingItems.length),
+                count: String(pendingChanges.length),
               })}
             </AlertDialogDescription>
           </AlertDialogHeader>

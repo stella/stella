@@ -266,23 +266,6 @@ type ReviewActions = {
   setHideAccepted: (value: boolean) => void;
 };
 
-/**
- * What a review list shows of a session.
- *
- * `hideAccepted` drops everything except `pending` and `applying`. The
- * "applying" status stays so the loading indicator doesn't flicker out from
- * under the reviewer mid-apply.
- */
-export const filterReviewSuggestions = (
-  suggestions: readonly ReviewSuggestion[],
-  options: { hideAccepted: boolean },
-): readonly ReviewSuggestion[] =>
-  options.hideAccepted
-    ? suggestions.filter(
-        (item) => item.status === "pending" || item.status === "applying",
-      )
-    : suggestions;
-
 export const useReviewStore = create<ReviewState & ReviewActions>()((set) => ({
   sessions: {},
   applyMode: {},
