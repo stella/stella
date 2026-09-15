@@ -5,7 +5,6 @@ import { normalizeForExclusion } from "@stll/anonymize-chat/normalization";
 
 import { fetchPrintPdf } from "@/components/pdf/peek/peek-pdf-print";
 import { PDF_MIME_TYPE } from "@/consts";
-import { anonymizeChatTextInWorker } from "@/lib/anonymize/anonymize-chat-worker-client";
 import { ClientOperationError } from "@/lib/errors/client";
 import { rasterizeAnonymizedPdf } from "@/lib/pdf/anonymized-export";
 import {
@@ -49,6 +48,8 @@ export const downloadAnonymizedFile = async ({
           }),
         );
       }
+      const { anonymizeChatTextInWorker } =
+        await import("@/lib/anonymize/anonymize-chat-worker-client");
       const excludedCanonicals = allowlist.entries.map(
         ({ canonical }) => canonical,
       );
