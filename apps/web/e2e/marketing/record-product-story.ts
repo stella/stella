@@ -628,7 +628,9 @@ const scenes = [
     id: "template-fill",
     cursor: "visible",
     path: ({ templateFillFiles }) => templateFillFiles,
-    durationSeconds: 5.3,
+    // The fields follow the clause cards: leave time for the source picker,
+    // prefill, and scroll before holding the drafted value on screen.
+    durationSeconds: 8,
     prepare: async (page) => {
       await page.getByText(TEMPLATE_FILL_SOURCE_DOCUMENT).first().waitFor();
       await openTemplateFillDialog(page);
@@ -953,6 +955,10 @@ const recordCapture = async ({
   await page.screenshot({ path: referencePath, scale: "device" });
 
   await replayCaptureMotion(page, capture.id);
+  const payoffReference =
+    capture.id === "template-fill"
+      ? await captureTemplateFillPayoff(page, `${referencePath}.payoff.png`)
+      : undefined;
   await page.waitForTimeout(capture.durationSeconds * 1000);
   // Tail buffer so the marker-anchored cut never runs out of footage.
   await page.waitForTimeout(600);
@@ -1006,6 +1012,13 @@ const recordCapture = async ({
     posterPath,
     referencePath,
   });
+  if (payoffReference) {
+    await assertCapturePayoff({
+      label,
+      outputPath,
+      reference: payoffReference,
+    });
+  }
   process.stdout.write(`recorded ${path.relative(REPO_ROOT, outputPath)}\n`);
 };
 
@@ -1019,6 +1032,8 @@ const READY_CUT_OFFSET_SECONDS = 0.15;
 // frames hover around neutral 128.
 const READY_MARKER_MIN_CHROMA = 180;
 const MIN_READY_PSNR_DB = 22;
+const MIN_PAYOFF_PSNR_DB = 30;
+const PAYOFF_HOLD_SECONDS = 1;
 const DURATION_TOLERANCE_SECONDS = 0.35;
 
 const flashReadyMarker = async (page: Page) => {
@@ -1174,6 +1189,83 @@ const assertCaptureInvariants = async ({
 
 const formatPsnr = (value: number) =>
   Number.isFinite(value) ? `${value.toFixed(1)}dB` : "identical";
+
+type CapturePayoffReference = {
+  path: string;
+  region: { x: number; y: number; width: number; height: number };
+};
+
+const captureTemplateFillPayoff = async (
+  page: Page,
+  referencePath: string,
+): Promise<CapturePayoffReference> => {
+  const field = page.locator(TEMPLATE_FILL_CUSTOMER_NAME_SELECTOR);
+  // Locator screenshots wait for stable, visible content and scroll it into
+  // view. The DOM value alone can pass while the payoff remains off screen.
+  await field.screenshot({ path: referencePath, scale: "device" });
+  const bounds = await field.boundingBox();
+  if (!bounds) {
+    throw new Error(
+      "template-fill: the drafted Customer Name has no visible bounds",
+    );
+  }
+  return {
+    path: referencePath,
+    region: {
+      x: Math.round(bounds.x * CAPTURE_DPR),
+      y: Math.round(bounds.y * CAPTURE_DPR),
+      width: Math.round(bounds.width * CAPTURE_DPR),
+      height: Math.round(bounds.height * CAPTURE_DPR),
+    },
+  };
+};
+
+type AssertCapturePayoffOptions = {
+  label: string;
+  outputPath: string;
+  reference: CapturePayoffReference;
+};
+
+// Check the encoded cut, not just the live DOM: the drafted field must be
+// visible during the final hold. Crop to the field so unchanged app chrome
+// cannot hide a missing value in a whole-frame similarity score.
+export const assertCapturePayoff = async ({
+  label,
+  outputPath,
+  reference,
+}: AssertCapturePayoffOptions) => {
+  const duration = await probeDurationSeconds(outputPath);
+  const { x, y, width, height } = reference.region;
+  for (const secondsFromEnd of [PAYOFF_HOLD_SECONDS, 0.08]) {
+    const framePath = `${outputPath}.payoff-frame.png`;
+    await execFileAsync("ffmpeg", [
+      "-hide_banner",
+      "-loglevel",
+      "error",
+      "-y",
+      "-ss",
+      String(Math.max(0, duration - secondsFromEnd)),
+      "-i",
+      outputPath,
+      "-vf",
+      `crop=${width}:${height}:${x}:${y}:exact=1`,
+      "-frames:v",
+      "1",
+      framePath,
+    ]);
+    const psnr = await psnrBetween(framePath, reference.path);
+    await rm(framePath, { force: true });
+    if (psnr < MIN_PAYOFF_PSNR_DB) {
+      throw new Error(
+        `${label}: drafted field is missing from the final hold ` +
+          `(${secondsFromEnd}s before end: ${formatPsnr(psnr)} < ${MIN_PAYOFF_PSNR_DB}dB)`,
+      );
+    }
+    process.stdout.write(
+      `verified ${label} payoff at ${secondsFromEnd}s before end: ${formatPsnr(psnr)}\n`,
+    );
+  }
+};
 
 const probeDurationSeconds = async (mediaPath: string) => {
   const { stdout } = await execFileAsync("ffprobe", [
@@ -1999,4 +2091,6 @@ const createVideoPoster = async ({
   );
 };
 
-await main();
+if (import.meta.main) {
+  await main();
+}
