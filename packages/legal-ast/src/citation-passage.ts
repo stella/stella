@@ -11,6 +11,10 @@
 
 import { escapeRegExp } from "@stll/text-normalize";
 
+import {
+  CITATION_PREFIX_SOURCE,
+  stripCitationPrefix,
+} from "./citation-prefix.js";
 import { hasBlockInlines, plainTextOf } from "./document-ast.js";
 import type { Block } from "./document-ast.js";
 import { dropOverlappingSpans } from "./text-spans.js";
@@ -25,30 +29,62 @@ export type CitationSpan<Source extends CitationSource> = {
 };
 
 /**
- * Citations whose text is long enough to locate without false hits. A very
- * short case number would match inside longer ones and inside dates.
+ * Citations whose number is long enough to locate without false hits. A very
+ * short case number would match inside longer ones and inside dates. Measured
+ * on the bare number, since the prefix is not what is matched.
  */
 const MIN_ANCHOR_TEXT_LENGTH = 5;
+
+/**
+ * A source matching this literal in either Unicode normalization form.
+ *
+ * Nothing normalizes a decision's text, and a publisher is not consistent
+ * within one: `4 Tdo 348/2023` prints `I. ÚS 670/05` with a decomposed "Ú"
+ * (U+0055 U+0301) in one paragraph and a precomposed one (U+00DA) in
+ * another. The extractor stores one of them, so an escaped literal marks
+ * that paragraph and leaves the other as plain text, and a case-insensitive
+ * flag does not help: JavaScript regular expressions have no canonical
+ * equivalence. Composing the text instead would move every offset after the
+ * first accent, and offsets are what the renderer marks, so the pattern
+ * carries both spellings and the text is left exactly as it is.
+ */
+const eitherNormalization = (literal: string): string =>
+  Array.from(literal.normalize("NFC"), (character) => {
+    const decomposed = character.normalize("NFD");
+    return decomposed === character
+      ? escapeRegExp(character)
+      : `(?:${escapeRegExp(character)}|${escapeRegExp(decomposed)})`;
+  }).join("");
 
 /**
  * A pattern for the citation as the text may print it: the extractor stored
  * the verbatim match, which can carry a wrapped line or a double space where
  * the rendered paragraph has one, so whitespace runs match any whitespace.
+ *
+ * The number is what is matched, not the stored spelling. One row stands for
+ * every mention of its case, and a decision introduces the same case under
+ * whichever word that sentence calls for: "sp. zn. 4 Tdo 1323/2020" where it
+ * invokes the ruling, "č. j. 4 Tdo 1323/2020-906" where it names the file.
+ * Anchoring on the prefix the extractor happened to store would mark the
+ * first and leave the second as plain text. The prefix stays optional ahead
+ * of the number so the mark still covers it where the text prints it.
  */
 const patternFor = (citationText: string): RegExp | null => {
-  const trimmed = citationText.trim();
-  if (trimmed.length < MIN_ANCHOR_TEXT_LENGTH) {
+  // Composed for the length test, so the same number does not clear the
+  // threshold in one normalization form and fail it in the other.
+  const bare = stripCitationPrefix(citationText);
+  if (bare.normalize("NFC").length < MIN_ANCHOR_TEXT_LENGTH) {
     return null;
   }
-  const source = trimmed
-    .split(/\s+/u)
-    .map((part) => escapeRegExp(part))
-    .join("\\s+");
+  const source = bare.split(/\s+/u).map(eitherNormalization).join("\\s+");
   // Citation-safe boundaries, not `\b`: a case number ends in a digit and
   // may be followed by a page suffix ("-493") or a period, both fine, but
   // "II CSK 123/20" must not match inside "II CSK 123/201", and a number
   // must not start in the middle of a word or a longer number.
-  return new RegExp(`(?<![\\p{L}\\p{N}])${source}(?![\\p{L}\\p{N}/])`, "gu");
+  return new RegExp(
+    `(?<![\\p{L}\\p{N}])(?:${CITATION_PREFIX_SOURCE})?${source}(?![\\p{L}\\p{N}/])`,
+    "giu",
+  );
 };
 
 /**

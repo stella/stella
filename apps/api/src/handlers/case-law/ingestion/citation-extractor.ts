@@ -1,6 +1,10 @@
 import { panic } from "better-result";
 
 import {
+  CZ_FILE_NUMBER_PREFIX_SOURCE,
+  stripCitationPrefix,
+} from "@stll/legal-ast/citation-prefix";
+import {
   DECISION_IDENTIFIER_MAX_COUNT,
   DECISION_IDENTIFIER_TYPES,
   isDecisionIdentifier,
@@ -92,13 +96,18 @@ const CASE_NUMBER_BODY = String.raw`(?<caseNumber>\d{1,3}\s{0,3}\p{L}{1,6}[\s/]{
 // (slash instead of comma). `canonicalizeDedupKey` folds every join
 // spelling to one canonical key.
 const CASE_NUMBER_BODY_COMMA = String.raw`(?<caseNumber>\d{1,3}\s{0,3}\p{L}{1,6}[\s/]{1,3}\d{1,6}(?:[,/]\s{0,3}\d{1,6})?\/\d{2,4})(?!\d)`;
-const CZECH_REPORTER_CITATION_SOURCE = String.raw`[čc]\.\s*\d{1,5}\/\d{4}\s+Sb\.\s*(?:rozh\.\s*(?:tr|ob)\.?|NSS|NS)`;
 
-// Czech file-number prefix in all publisher spellings: `č. j.`, `č.j.`,
-// and the equally common contracted `čj.`. Keep one source for extraction
-// and prefix stripping so a newly accepted spelling cannot produce a key the
-// resolver canonicalizes differently.
-const CZ_FILE_NUMBER_PREFIX = String.raw`[čc]\.?\s*j\.:?\s*`;
+// The Constitutional Court's mark, in either Unicode normalization form.
+// Publishers serve "Ú" precomposed (U+00DA) and decomposed (U+0055 U+0301)
+// alike, and nothing normalizes a decision's text on the way in: the AST's
+// raw axis is what reader anchors index, so it stays verbatim, combining
+// marks included. A plain `[ÚU]S` class reads the decomposed spelling as a
+// bare "U" followed by a mark and matches nothing, dropping every
+// Constitutional Court citation in the document. The mark-free "US" spelling
+// (a dropped diacritic, likely an encoding fallback) is the same class.
+const US_MARK_SOURCE = String.raw`[ÚU]\p{Mn}*S`;
+
+const CZECH_REPORTER_CITATION_SOURCE = String.raw`[čc]\.\s*\d{1,5}\/\d{4}\s+Sb\.\s*(?:rozh\.\s*(?:tr|ob)\.?|NSS|NS)`;
 
 // Shared "sygn." lead-in, covering every registrar spelling seen in the
 // corpus: title-case "Sygn." at the start of a document header vs.
@@ -272,7 +281,10 @@ const CITATION_PATTERNS: RegExp[] = [
   // States never has this shape; the digit-led pattern above never
   // matches these either way. The bare form also covers the "sp. zn.
   // IV. ÚS 23/05" spelling.
-  /\b(?<caseNumber>(?:[IVX]{1,4}|Pl|PL)\.?\s*[ÚU]S(?:\s{0,3}[-‑–—]\s{0,3}st\.)?[\s/]+\d{1,5}\/\d{2,4})(?!\d)/gu,
+  new RegExp(
+    String.raw`\b(?<caseNumber>(?:[IVX]{1,4}|Pl|PL)\.?\s*${US_MARK_SOURCE}(?:\s{0,3}[-‑–—]\s{0,3}st\.)?[\s/]+\d{1,5}\/\d{2,4})(?!\d)`,
+    "gu",
+  ),
 
   // CJEU: "C-283/81", "T-13/99", "F-100/09" (Court of Justice, General
   // Court, Civil Service Tribunal), including the non-breaking hyphen the
@@ -331,7 +343,7 @@ const CITATION_PATTERNS: RegExp[] = [
   // and consolidated proceedings join two case numbers with a comma
   // before the shared year ("36 Co 52,53/2023", "27 Co 116, 119/2007").
   new RegExp(
-    String.raw`${CZ_FILE_NUMBER_PREFIX}${CASE_NUMBER_BODY_COMMA}`,
+    String.raw`${CZ_FILE_NUMBER_PREFIX_SOURCE}${CASE_NUMBER_BODY_COMMA}`,
     "gu",
   ),
 
@@ -340,7 +352,7 @@ const CITATION_PATTERNS: RegExp[] = [
   // 4/2011-12" (jurisdiction-conflict panel). Mirrors the sp. zn.
   // letter-first fallback above.
   new RegExp(
-    String.raw`${CZ_FILE_NUMBER_PREFIX}(?<caseNumber>\p{L}{1,6}\s+\d{1,6}\/\d{2,4})(?!\d)`,
+    String.raw`${CZ_FILE_NUMBER_PREFIX_SOURCE}(?<caseNumber>\p{L}{1,6}\s+\d{1,6}\/\d{2,4})(?!\d)`,
     "gu",
   ),
 
@@ -355,7 +367,7 @@ const CITATION_PATTERNS: RegExp[] = [
   // year. The code is a bounded 2-5 letter uppercase run so it cannot
   // swallow ordinary prose before an unprefixed case number.
   new RegExp(
-    String.raw`${CZ_FILE_NUMBER_PREFIX}(?<caseNumber>[A-Z]{2,5}\s{1,3}\d{1,3}\s{0,3}\p{L}{1,6}[\s/]{1,3}\d{1,6}(?:[,/]\s{0,3}\d{1,6})?\/\d{2,4})(?!\d)`,
+    String.raw`${CZ_FILE_NUMBER_PREFIX_SOURCE}(?<caseNumber>[A-Z]{2,5}\s{1,3}\d{1,3}\s{0,3}\p{L}{1,6}[\s/]{1,3}\d{1,6}(?:[,/]\s{0,3}\d{1,6})?\/\d{2,4})(?!\d)`,
     "gu",
   ),
 
@@ -557,6 +569,11 @@ const POLISH_LETTERS_DOCKET_RE =
  */
 const canonicalizeDedupKey = (text: string): string => {
   const cleaned = normalizeDashes(text)
+    // One key per case, whatever normalization form the publisher served:
+    // a decomposed "Ú" is the same letter as a precomposed one, and only
+    // the key folds it -- `citationText` stays verbatim so the reader can
+    // still find it in the document's own characters.
+    .normalize("NFC")
     .replace(/­/gu, "") // soft hyphen: invisible, never load-bearing
     .replace(/\u00A0/gu, " ") // NBSP -> space
     .replace(/\s+/gu, " ") // collapse line-wraps and repeated spaces
@@ -623,57 +640,6 @@ const canonicalizeDedupKey = (text: string): string => {
   const canonical = cleaned;
 
   return canonical.toLowerCase();
-};
-
-/**
- * Strip known prefixes to get the bare case number. `citationText` is
- * stored verbatim, including an embedded line-wrap newline the extraction
- * patterns above deliberately match through (a CRLF landing in a `\s`
- * gap); every capture below needs the dotAll flag or `.+` stops at that
- * newline and truncates the case number instead of spanning it, silently
- * dropping everything after the line break from the persisted key.
- */
-const stripPrefix = (text: string): string => {
-  const trimmed = text.trim();
-
-  // Czech/Slovak: "sp. zn. 21 Cdo 1234/2020", "sp.zn.: 38Csp/281/2025"
-  const spZn = /^sp\.\s*zn\.?:?\s*(?<caseNumber>.+)/isu.exec(trimmed);
-  if (spZn?.groups?.["caseNumber"]) {
-    return spZn.groups["caseNumber"].trim();
-  }
-
-  // Czech: "č. j. 5 As 123/2020", "č.j. 5 As 123/2020", "č. j.: 5 As 123/2020"
-  const cj = new RegExp(
-    String.raw`^${CZ_FILE_NUMBER_PREFIX}(?<caseNumber>.+)`,
-    "isu",
-  ).exec(trimmed);
-  if (cj?.groups?.["caseNumber"]) {
-    return cj.groups["caseNumber"].trim();
-  }
-
-  // Slovak: "č. k. 4 Obo 48/02", "č.k. 4 Obo 48/02" (číslo konania)
-  const ck = /^[čc]\.\s*k\.:?\s*(?<caseNumber>.+)/isu.exec(trimmed);
-  if (ck?.groups?.["caseNumber"]) {
-    return ck.groups["caseNumber"].trim();
-  }
-
-  // Czech senate file number: "sen. zn. 29 NSČR 55/2013"
-  const senZn = /^sen\.\s*zn\.:?\s*(?<caseNumber>.+)/isu.exec(trimmed);
-  if (senZn?.groups?.["caseNumber"]) {
-    return senZn.groups["caseNumber"].trim();
-  }
-
-  // Polish: "sygn. akt II CSK 123/20", "sygn. akt. I CK 363/02", "sygn.
-  // akt: I FSK 1261/07" (already case-insensitive via the /i flag,
-  // covering the title-case "Sygn. akt" document-header spelling too)
-  const sygn = /^sygn\.\s*(?::\s*)?(?:akt\.?:?\s*)?(?<caseNumber>.+)/isu.exec(
-    trimmed,
-  );
-  if (sygn?.groups?.["caseNumber"]) {
-    return sygn.groups["caseNumber"].trim();
-  }
-
-  return trimmed;
 };
 
 type DecisionMetadata = {
@@ -853,7 +819,7 @@ export const decisionIdentifiersFromStoredMetadata = ({
  * same normalization as the extractor's own dedup key.
  */
 export const bareCitationKey = (text: string): string =>
-  canonicalizeDedupKey(stripPrefix(text));
+  canonicalizeDedupKey(stripCitationPrefix(text));
 
 /**
  * The value that goes in a `citation_key` column, for every writer of one.

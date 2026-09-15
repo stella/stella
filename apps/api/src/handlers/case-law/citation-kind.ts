@@ -47,6 +47,12 @@ const AUTHORITY_REGISTRIES = new Set([
   "tdo",
   "odo",
   "nd",
+  // The criminal register for a complaint for breach of law ("stížnost pro
+  // porušení zákona", 7 Tz 62/90), which only the Supreme Court decides and
+  // which it publishes. Its numbers are old (the remedy predates the 1993
+  // split and is rare since), so a decision reaching for one is reaching for
+  // settled authority, the tier the rest of this court's registers sit on.
+  "tz",
   // Czech Supreme Court kolegium opinions ("stanoviska"): civil-and-
   // commercial (Cpjn 203/2010) and criminal (Tpjn 300/2017). A stanovisko is
   // issued to unify divergent practice, so it is authority by construction.
@@ -170,9 +176,22 @@ const PROCEDURAL_CUE =
  * `w uchwale`), and the two stems the settled-case-law formula is built on
  * (`ugruntowan`, `utrwalon` — "ugruntowane orzecznictwo", "utrwalona linia
  * orzecznicza"), the counterpart of the `ustálen` already listed for Czech.
+ *
+ * A `nález Ústavního soudu` is a constitutional judgment on the merits, and
+ * a decision reaches for one to say what the constitution requires: the
+ * phrase is the invocation, whether or not a pointing verb introduces it
+ * ("(nález Ústavního soudu sp. zn. I. ÚS 1135/17, ze dne 1. 11. 2017)").
+ *
+ * Czech and Slovak also point with `poukazuje na` / `poukázal na`, but the
+ * verb alone means only "points out", and a party points out the judgment
+ * under review as readily as a precedent. The cue is the whole phrase -
+ * pointing at a *decision* - so the word naming the document is what carries
+ * it ("poukazuje na usnesení Nejvyššího soudu sp. zn. 3 Tdo 759/2020").
+ * Where the same sentence also names the case's own history the two cue sets
+ * tie, as they should, and the registry decides.
  */
 const PRECEDENT_CUE =
-  /srov\.|srovnej|viz\s|judikat|ust[áa]len|pr[áa]vn[íi]\s+n[áa]zor|dovodil|vyslovil|kon[sš]tatoval|st[áa]l[áa]\s+praxe|ve\s+sv[ée]m\s+rozhodnut|porov\.|pozri|obdobne|vo\s+svojom\s+rozhodnut|v\s+s[úu]lade\s+s|por\.|zob\.|tak\s+też|podobnie|zgodnie\s+z|w\s+wyroku\s+z\s+dnia|w\s+uchwale|ugruntowan|utrwalon/iu;
+  /srov\.|srovnej|viz\s|judikat|ust[áa]len|pr[áa]vn[íi]\s+n[áa]zor|dovodil|vyslovil|kon[sš]tatoval|st[áa]l[áa]\s+praxe|ve\s+sv[ée]m\s+rozhodnut|n[áa]lez\p{Ll}*\s+[ÚU]stavn|pouk[áa]z\p{Ll}*\s+(?:i\s+)?na\s+(?:\p{L}+\s+){0,2}(?:usnesen|rozhodnut|rozsudek|rozsudok|n[áa]lez|stanovisk|judik)|porov\.|pozri|obdobne|vo\s+svojom\s+rozhodnut|v\s+s[úu]lade\s+s|por\.|zob\.|tak\s+też|podobnie|zgodnie\s+z|w\s+wyroku\s+z\s+dnia|w\s+uchwale|ugruntowan|utrwalon/iu;
 
 /**
  * Drop the citation prefix so the registry token is first. Spelled out
@@ -204,7 +223,13 @@ const withoutPrefix = (text: string): string =>
  * closed set, so the sloppiness never promoted anything, but there is no
  * reason for two spellings of "a letter" in one file.
  */
-const registryOf = (citationText: string): string | null => {
+const registryOf = (rawCitationText: string): string | null => {
+  // A mark is not a letter: `\p{L}` reads a decomposed "Ú" (U+0055 U+0301)
+  // as a bare "U", and the Constitutional Court's registry then looks like
+  // an unlisted one. Publishers serve both normalization forms and the
+  // document text keeps whichever it was served, so the reading composes
+  // first. Only this lookup key is folded; nothing stored is touched.
+  const citationText = rawCitationText.normalize("NFC");
   const roman = /^\s*[IVX]+\.?\s*(?<reg>\p{L}{1,5})/u.exec(citationText);
   const arabic = /^\s*\d{1,3}\s*(?<reg>\p{L}{1,6})/u.exec(citationText);
   const us = /ÚS|US/u.exec(citationText);

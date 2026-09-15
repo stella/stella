@@ -37,7 +37,9 @@ describe("locateCitationSpans", () => {
     });
     const span = anchors["n"]?.at(0);
     expect(span).toBeDefined();
-    expect(inlineText.slice(span?.start, span?.end)).toBe("I. ÚS 2447/13");
+    expect(inlineText.slice(span?.start, span?.end)).toBe(
+      "sp. zn. I. ÚS 2447/13",
+    );
   });
 
   test("finds every mention, tolerating wrapped whitespace, and skips tables", () => {
@@ -68,16 +70,11 @@ describe("locateCitationSpans", () => {
 
     expect(Object.keys(located).toSorted()).toEqual(["a", "b"]);
     const text = blocks.at(0)?.plainText ?? "";
-    expect(located["a"]?.map((span) => [span.start, span.end])).toEqual([
-      [
-        text.indexOf("I. ÚS"),
-        text.indexOf("I. ÚS") + citation.citationText.length,
-      ],
-      [
-        text.lastIndexOf("I. ÚS"),
-        text.lastIndexOf("I. ÚS") + citation.citationText.length,
-      ],
-    ]);
+    // The first mention carries a prefix and the second does not; both are
+    // the same case, so both are marked, each over what the text prints.
+    expect(
+      located["a"]?.map((span) => text.slice(span.start, span.end)),
+    ).toEqual(["sp. zn. I. ÚS 2447/13", "I. ÚS 2447/13"]);
     expect(located["b"]).toHaveLength(1);
     expect(located["b"]?.at(0)?.source.id).toBe("1");
   });
@@ -95,10 +92,11 @@ describe("locateCitationSpans", () => {
       ],
     });
 
-    expect(located["a"]?.map((span) => span.source.id)).toEqual([
-      "prefixed",
-      "bare",
-    ]);
+    // Two rows for one case mark each mention once, not twice over.
+    const text = blocks.at(0)?.plainText ?? "";
+    expect(
+      located["a"]?.map((span) => text.slice(span.start, span.end)),
+    ).toEqual(["sygn. akt II CSK 123/20", "II CSK 123/20"]);
   });
 
   test("a short text alone in a block yields no anchor", () => {
@@ -127,6 +125,76 @@ describe("locateCitationSpans", () => {
     expect(located["a"]?.map((span) => [span.start, span.end])).toEqual([
       [text.indexOf("II CSK 123/20-5"), text.indexOf("II CSK 123/20-5") + 13],
     ]);
+  });
+
+  test("marks a mention the decision introduces under another prefix", () => {
+    // One Czech judgment, two sentences of it: the reasoning invokes the
+    // ruling with "sp. zn." and the recitals name the file with "č. j." and
+    // its page, which is the spelling the extractor did not store.
+    const blocks = [
+      paragraph(
+        "a",
+        "Následně byl tento rozsudek zrušen usnesením Nejvyššího soudu ČR ze dne 30. 6. 2021, č. j. 4 Tdo 1323/2020-906, a to toliko z podnětu jeho podaného dovolání.",
+      ),
+      paragraph(
+        "b",
+        "byl následně v celém rozsahu zrušen usnesením Nejvyššího soudu ze dne 30. 6. 2021 sp. zn. 4 Tdo 1323/2020, v důsledku čehož „obživl“ výrok o vině.",
+      ),
+    ];
+    const citation = source("1", "sp. zn. 4 Tdo 1323/2020");
+    expect(blocks.at(0)?.plainText.includes(citation.citationText)).toBe(false);
+
+    const located = locateCitationSpans({ blocks, citations: [citation] });
+
+    expect(Object.keys(located).toSorted()).toEqual(["a", "b"]);
+    const recital = blocks.at(0)?.plainText ?? "";
+    expect(
+      located["a"]?.map((span) => recital.slice(span.start, span.end)),
+    ).toEqual(["č. j. 4 Tdo 1323/2020"]);
+  });
+
+  test("marks a mention printed in the other Unicode normalization form", () => {
+    // 4 Tdo 348/2023 prints I. ÚS 670/05 with "Ú" decomposed in one
+    // paragraph and precomposed in another. One case, so both are marked.
+    const composed = "I. ÚS 670/05";
+    const decomposed = composed.normalize("NFD");
+    expect(decomposed).not.toBe(composed);
+    const blocks = [
+      paragraph("a", `nález Ústavního soudu sp. zn. ${decomposed} je v tomto`),
+      paragraph("b", `srov. nález sp. zn. ${composed} a dále.`),
+    ];
+    const citation = source("1", composed);
+    expect(blocks.at(0)?.plainText.includes(composed)).toBe(false);
+
+    const located = locateCitationSpans({ blocks, citations: [citation] });
+
+    expect(Object.keys(located).toSorted()).toEqual(["a", "b"]);
+    const first = blocks.at(0)?.plainText ?? "";
+    expect(
+      located["a"]?.map((span) => first.slice(span.start, span.end)),
+    ).toEqual([`sp. zn. ${decomposed}`]);
+  });
+
+  test("marks a mention behind a decomposed file-number prefix", () => {
+    // The same decision writes "č. j." with the caron decomposed.
+    const blocks = [
+      paragraph(
+        "a",
+        "usnesením Nejvyššího soudu ČR ze dne 30. 6. 2021, č. j. 4 Tdo 1323/2020-906, a to toliko".normalize(
+          "NFD",
+        ),
+      ),
+    ];
+
+    const located = locateCitationSpans({
+      blocks,
+      citations: [source("1", "sp. zn. 4 Tdo 1323/2020")],
+    });
+
+    const text = blocks.at(0)?.plainText ?? "";
+    expect(
+      located["a"]?.map((span) => text.slice(span.start, span.end)),
+    ).toEqual(["č. j. 4 Tdo 1323/2020".normalize("NFD")]);
   });
 
   test("regex metacharacters in a citation are literal", () => {

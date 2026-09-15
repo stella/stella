@@ -56,6 +56,10 @@ const sentenceHeadPattern = (sentenceText: string): RegExp | null => {
  * subdivisions the reference carries, each optional in print. `§ 90` also
  * matches "§ 90 odst. 5" when the row states no subsection; a row that does
  * state one extends the match over it when the text agrees.
+ *
+ * The subdivision word is abbreviated in most judgments and spelled out in
+ * some ("§ 273 odstavec 1 tr. zákoníku"), which is the same reference; the
+ * Czech and Slovak inflections of the spelled-out word follow the stem.
  */
 const referencePattern = ({
   letter,
@@ -70,7 +74,7 @@ const referencePattern = ({
   const parts = [String.raw`${head}\s*${number}(?![\p{N}\p{L}])`];
   if (subsection !== null) {
     parts.push(
-      String.raw`(?:\s*(?:odst\.|ods\.|ust\.|para\.)\s*${escapeRegExp(subsection)}(?![\p{N}\p{L}]))?`,
+      String.raw`(?:\s*(?:odst\.|odstav\p{Ll}*|odsek\p{Ll}*|ods\.|ust\.|para\.)\s*${escapeRegExp(subsection)}(?![\p{N}\p{L}]))?`,
     );
   }
   if (letter !== null) {
