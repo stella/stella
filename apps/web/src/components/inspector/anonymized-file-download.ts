@@ -10,6 +10,7 @@ import {
   buildAnonymizedExportMasks,
   extractAnonymizedExportText,
 } from "@/lib/pdf/anonymized-export.logic";
+import { loadLibPdf } from "@/lib/pdf/libpdf-loader";
 import { downloadFile } from "@/lib/utils";
 
 type DownloadAnonymizedFileOptions = {
@@ -29,7 +30,7 @@ export const downloadAnonymizedFile = async ({
     try: async () => {
       const [buffer, { PDF }] = await Promise.all([
         fetchPrintPdf({ workspaceId, fieldId }),
-        import("@libpdf/core"),
+        loadLibPdf(),
       ]);
       const source = await PDF.load(new Uint8Array(buffer));
       const extraction = extractAnonymizedExportText(source.getPages());

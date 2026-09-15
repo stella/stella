@@ -2,6 +2,7 @@ import type { PDF, PDFPage } from "@libpdf/core";
 
 import { findSearchMatchRanges } from "@stll/text-normalize";
 
+import { loadLibPdf } from "@/lib/pdf/libpdf-loader";
 import type { PageViewport } from "@/lib/pdf/pdfjs-loader";
 import { MAX_SEARCH_PREVIEW_MATCHES } from "@/lib/search-match-navigation";
 import {
@@ -238,7 +239,7 @@ const getViewerSearchPages = async (
     return rootPages.map((page, pageIndex) => ({ page, pageIndex }));
   }
 
-  const { PDF } = await import("@libpdf/core");
+  const { PDF } = await loadLibPdf();
   const pages: ViewerSearchPage[] = [];
   const attachments = await Promise.all(
     pdfAttachments.map(async (content) => {
@@ -266,7 +267,7 @@ export const findPDFSearchResults = async ({
   signal,
 }: FindPDFSearchResultsOptions): Promise<PDFSearchResult | null> => {
   signal.throwIfAborted();
-  const { PDF } = await import("@libpdf/core");
+  const { PDF } = await loadLibPdf();
   signal.throwIfAborted();
   const pdf = await PDF.load(
     bytes,
