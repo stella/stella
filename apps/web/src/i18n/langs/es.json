@@ -944,8 +944,6 @@
       "title": "Seleccionar modelo de chat",
       "viaProvider": "mediante {provider}"
     },
-    "moveToMain": "Mover a la vista principal",
-    "moveToSide": "Mover al panel lateral",
     "newChat": "Nueva conversación",
     "noPromptPresetOnly": "Sin mensaje, solo preajuste",
     "noThreads": "Aún no hay conversaciones",
@@ -2701,6 +2699,8 @@
       "updatedAt": "Actualizado",
       "versionCurrent": "v{version} (actual)"
     },
+    "moveToMain": "Mover a la vista principal",
+    "moveToSide": "Mover al panel lateral",
     "openChat": "Abrir chat",
     "reopenTab": "Reabrir {name}",
     "resizePane": "Cambiar el tamaño del panel",
@@ -5250,10 +5250,8 @@
       "backToPeek": "Volver a la vista previa",
       "entitySidebar": "Detalles del documento",
       "evidence": "Prueba documental",
-      "fullView": "Vista completa",
       "incorrectPassword": "Contraseña incorrecta. Inténtelo de nuevo.",
       "nextPage": "Página siguiente",
-      "openFullView": "Abrir vista completa",
       "pageEditor": {
         "addPDF": "Añadir PDF",
         "applyCrop": "Aplicar recorte",

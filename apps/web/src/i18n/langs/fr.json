@@ -944,8 +944,6 @@
       "title": "Sélectionner le modèle de chat",
       "viaProvider": "par {provider}"
     },
-    "moveToMain": "Déplacer vers la vue principale",
-    "moveToSide": "Déplacer vers le panneau latéral",
     "newChat": "Nouvelle conversation",
     "noPromptPresetOnly": "Aucun message, préréglage uniquement",
     "noThreads": "Aucune conversation",
@@ -2701,6 +2699,8 @@
       "updatedAt": "Mis à jour",
       "versionCurrent": "v{version} (actuelle)"
     },
+    "moveToMain": "Déplacer vers la vue principale",
+    "moveToSide": "Déplacer vers le panneau latéral",
     "openChat": "Ouvrir la conversation",
     "reopenTab": "Rouvrir {name}",
     "resizePane": "Redimensionner le volet",
@@ -5250,10 +5250,8 @@
       "backToPeek": "Revenir à l'aperçu",
       "entitySidebar": "Détails du document",
       "evidence": "Pièce à conviction",
-      "fullView": "Vue complète",
       "incorrectPassword": "Mot de passe incorrect. Veuillez réessayer.",
       "nextPage": "Page suivante",
-      "openFullView": "Ouvrir en plein écran",
       "pageEditor": {
         "addPDF": "Ajouter un PDF",
         "applyCrop": "Appliquer le rognage",

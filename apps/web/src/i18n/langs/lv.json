@@ -944,8 +944,6 @@
       "title": "Atlasīt tērzēšanas modeli",
       "viaProvider": "izmantojot {provider}"
     },
-    "moveToMain": "Pārvietot uz galveno skatu",
-    "moveToSide": "Pārvietot uz sānu paneli",
     "newChat": "Jauna saruna",
     "noPromptPresetOnly": "Nav ziņojuma, tikai sākotnējais iestatījums",
     "noThreads": "Sarunu vēl nav",
@@ -2701,6 +2699,8 @@
       "updatedAt": "Atjaunināts",
       "versionCurrent": "v{version} (pašreizējā)"
     },
+    "moveToMain": "Pārvietot uz galveno skatu",
+    "moveToSide": "Pārvietot uz sānu paneli",
     "openChat": "Atvērt tērzēšanu",
     "reopenTab": "Atkārtoti atvērt {name}",
     "resizePane": "Mainīt paneļa izmēru",
@@ -5250,10 +5250,8 @@
       "backToPeek": "Atgriezties priekšskatījumā",
       "entitySidebar": "Dokumenta informācija",
       "evidence": "Pierādījums",
-      "fullView": "Pilnais skats",
       "incorrectPassword": "Nepareiza parole. Lūdzu, mēģiniet vēlreiz.",
       "nextPage": "Nākamā lappuse",
-      "openFullView": "Atvērt pilnu skatu",
       "pageEditor": {
         "addPDF": "Pievienot PDF",
         "applyCrop": "Lietot apgriešanu",

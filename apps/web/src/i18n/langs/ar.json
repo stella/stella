@@ -944,8 +944,6 @@
       "title": "اختر نموذج المحادثة",
       "viaProvider": "عبر {provider}"
     },
-    "moveToMain": "النقل إلى العرض الرئيسي",
-    "moveToSide": "النقل إلى اللوحة الجانبية",
     "newChat": "محادثة جديدة",
     "noPromptPresetOnly": "لا توجد رسالة، الإعداد المُسبق فقط",
     "noThreads": "لا توجد محادثات بعد",
@@ -2701,6 +2699,8 @@
       "updatedAt": "آخر تحديث",
       "versionCurrent": "الإصدار {version} (الحالي)"
     },
+    "moveToMain": "النقل إلى العرض الرئيسي",
+    "moveToSide": "النقل إلى اللوحة الجانبية",
     "openChat": "فتح المحادثة",
     "reopenTab": "إعادة فتح {name}",
     "resizePane": "تغيير حجم اللوحة",
@@ -5250,10 +5250,8 @@
       "backToPeek": "العودة إلى المعاينة",
       "entitySidebar": "تفاصيل المستند",
       "evidence": "التبرير",
-      "fullView": "العرض الكامل",
       "incorrectPassword": "كلمة المرور غير صحيحة. يُرجى المحاولة مرة أخرى.",
       "nextPage": "الصفحة التالية",
-      "openFullView": "فتح العرض الكامل",
       "pageEditor": {
         "addPDF": "إضافة PDF",
         "applyCrop": "تطبيق الاقتصاص",

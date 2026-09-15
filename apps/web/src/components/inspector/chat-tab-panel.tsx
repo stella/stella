@@ -837,7 +837,7 @@ const ChatTabPanelChrome = ({
   // row (`ChatComposerDock`), uniform with every other chat surface.
   const actions = onMoveToMain && (
     <Tooltip
-      content={t("chat.moveToMain")}
+      content={t("inspector.moveToMain")}
       render={
         <Button onClick={onMoveToMain} size="icon-xs" variant="ghost">
           <Maximize2Icon className="size-3.5" />

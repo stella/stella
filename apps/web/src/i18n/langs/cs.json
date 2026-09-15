@@ -944,8 +944,6 @@
       "title": "Vybrat model chatu",
       "viaProvider": "přes {provider}"
     },
-    "moveToMain": "Přesunout do hlavního zobrazení",
-    "moveToSide": "Přesunout do bočního panelu",
     "newChat": "Nový chat",
     "noPromptPresetOnly": "Bez zprávy, pouze předvolba",
     "noThreads": "Zatím žádné konverzace",
@@ -2701,6 +2699,8 @@
       "updatedAt": "Aktualizováno",
       "versionCurrent": "v{version} (aktuální)"
     },
+    "moveToMain": "Přesunout do hlavního zobrazení",
+    "moveToSide": "Přesunout do bočního panelu",
     "openChat": "Otevřít chat",
     "reopenTab": "Znovu otevřít {name}",
     "resizePane": "Změnit šířku panelu",
@@ -5250,10 +5250,8 @@
       "backToPeek": "Zpět do náhledu",
       "entitySidebar": "Detail dokumentu",
       "evidence": "Zdůvodnění",
-      "fullView": "Plné zobrazení",
       "incorrectPassword": "Nesprávné heslo. Zkuste to znovu.",
       "nextPage": "Další strana",
-      "openFullView": "Otevřít v plném zobrazení",
       "pageEditor": {
         "addPDF": "Přidat PDF",
         "applyCrop": "Použít ořez",

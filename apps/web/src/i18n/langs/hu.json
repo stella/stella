@@ -944,8 +944,6 @@
       "title": "Csevegési modell kiválasztása",
       "viaProvider": "a(z) {provider} szolgáltatáson keresztül"
     },
-    "moveToMain": "Áthelyezés a fő nézetbe",
-    "moveToSide": "Áthelyezés az oldalsó panelbe",
     "newChat": "Új csevegés",
     "noPromptPresetOnly": "Nincs üzenet, csak előbeállítás",
     "noThreads": "Még nincsenek beszélgetések",
@@ -2701,6 +2699,8 @@
       "updatedAt": "Frissítve",
       "versionCurrent": "v{version} (aktuális)"
     },
+    "moveToMain": "Áthelyezés a fő nézetbe",
+    "moveToSide": "Áthelyezés az oldalsó panelbe",
     "openChat": "Chat megnyitása",
     "reopenTab": "{name} újranyitása",
     "resizePane": "Panel átméretezése",
@@ -5250,10 +5250,8 @@
       "backToPeek": "Vissza a betekintéshez",
       "entitySidebar": "Dokumentum részletei",
       "evidence": "Bizonyíték",
-      "fullView": "Teljes nézet",
       "incorrectPassword": "Hibás jelszó. Kérjük, próbálja újra.",
       "nextPage": "Következő oldal",
-      "openFullView": "Teljes nézet megnyitása",
       "pageEditor": {
         "addPDF": "PDF hozzáadása",
         "applyCrop": "Vágás alkalmazása",

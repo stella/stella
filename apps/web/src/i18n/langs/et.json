@@ -944,8 +944,6 @@
       "title": "Vali vestlusmudel",
       "viaProvider": "teenuse {provider} kaudu"
     },
-    "moveToMain": "Vii põhivaatesse",
-    "moveToSide": "Vii külgpaneeli",
     "newChat": "Uus vestlus",
     "noPromptPresetOnly": "Sõnum puudub, ainult eelseadistus",
     "noThreads": "Vestlusi pole veel",
@@ -2701,6 +2699,8 @@
       "updatedAt": "Uuendatud",
       "versionCurrent": "v{version} (praegune)"
     },
+    "moveToMain": "Vii põhivaatesse",
+    "moveToSide": "Vii külgpaneeli",
     "openChat": "Ava vestlus",
     "reopenTab": "Ava {name} uuesti",
     "resizePane": "Muuda paneeli suurust",
@@ -5250,10 +5250,8 @@
       "backToPeek": "Tagasi sirvimisrežiimi",
       "entitySidebar": "Dokumendi üksikasjad",
       "evidence": "Tõend",
-      "fullView": "Täisvaade",
       "incorrectPassword": "Vale parool. Proovige uuesti.",
       "nextPage": "Järgmine leht",
-      "openFullView": "Ava täisvaade",
       "pageEditor": {
         "addPDF": "Lisa PDF",
         "applyCrop": "Rakenda kärpimine",

@@ -494,7 +494,7 @@ function ChatIndex() {
       actions={
         <ChromeHeaderActions>
           <Tooltip
-            content={t("chat.moveToSide")}
+            content={t("inspector.moveToSide")}
             render={
               <Button onClick={moveToSide} size="icon-sm" variant="ghost">
                 <Minimize2Icon className="size-4" />

@@ -944,8 +944,6 @@
       "title": "Selecionar modelo de chat",
       "viaProvider": "pelo provedor {provider}"
     },
-    "moveToMain": "Mover para a visualização principal",
-    "moveToSide": "Mover para o painel lateral",
     "newChat": "Novo bate-papo",
     "noPromptPresetOnly": "Sem mensagem, apenas predefinição",
     "noThreads": "Ainda não há conversas",
@@ -2701,6 +2699,8 @@
       "updatedAt": "Atualizado",
       "versionCurrent": "v{version} (atual)"
     },
+    "moveToMain": "Mover para a visualização principal",
+    "moveToSide": "Mover para o painel lateral",
     "openChat": "Abrir bate-papo",
     "reopenTab": "Reabrir {name}",
     "resizePane": "Redimensionar painel",
@@ -5250,10 +5250,8 @@
       "backToPeek": "Voltar para prévia",
       "entitySidebar": "Detalhes do documento",
       "evidence": "Justificativa",
-      "fullView": "Visualização completa",
       "incorrectPassword": "Senha incorreta. Por favor, tente novamente.",
       "nextPage": "Próxima página",
-      "openFullView": "Abrir visualização completa",
       "pageEditor": {
         "addPDF": "Adicionar PDF",
         "applyCrop": "Aplicar recorte",

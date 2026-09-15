@@ -944,8 +944,6 @@
       "title": "Chat-Modell auswählen",
       "viaProvider": "über {provider}"
     },
-    "moveToMain": "In Hauptansicht verschieben",
-    "moveToSide": "In Seitenleiste verschieben",
     "newChat": "Neuer Chat",
     "noPromptPresetOnly": "Keine Nachricht, nur Vorlage",
     "noThreads": "Noch keine Konversationen",
@@ -2701,6 +2699,8 @@
       "updatedAt": "Aktualisiert",
       "versionCurrent": "v{version} (aktuell)"
     },
+    "moveToMain": "In Hauptansicht verschieben",
+    "moveToSide": "In Seitenleiste verschieben",
     "openChat": "Chat öffnen",
     "reopenTab": "{name} erneut öffnen",
     "resizePane": "Bereich in der Größe ändern",
@@ -5250,10 +5250,8 @@
       "backToPeek": "Zurück zur Vorschau",
       "entitySidebar": "Dokumentdetails",
       "evidence": "Beweismittel",
-      "fullView": "Vollansicht",
       "incorrectPassword": "Falsches Passwort. Bitte versuchen Sie es erneut.",
       "nextPage": "Nächste Seite",
-      "openFullView": "Vollansicht öffnen",
       "pageEditor": {
         "addPDF": "PDF hinzufügen",
         "applyCrop": "Zuschnitt anwenden",

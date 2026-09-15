@@ -944,8 +944,6 @@
       "title": "Wybierz model czatu",
       "viaProvider": "przez {provider}"
     },
-    "moveToMain": "Przenieś do widoku głównego",
-    "moveToSide": "Przenieś do panelu bocznego",
     "newChat": "Nowy czat",
     "noPromptPresetOnly": "Brak wiadomości, tylko ustawienie wstępne",
     "noThreads": "Brak rozmów",
@@ -2701,6 +2699,8 @@
       "updatedAt": "Zaktualizowano",
       "versionCurrent": "v{version} (bieżąca)"
     },
+    "moveToMain": "Przenieś do widoku głównego",
+    "moveToSide": "Przenieś do panelu bocznego",
     "openChat": "Otwórz czat",
     "reopenTab": "Otwórz ponownie {name}",
     "resizePane": "Zmień rozmiar panelu",
@@ -5250,10 +5250,8 @@
       "backToPeek": "Wróć do podglądu",
       "entitySidebar": "Szczegóły dokumentu",
       "evidence": "Uzasadnienie",
-      "fullView": "Pełny widok",
       "incorrectPassword": "Nieprawidłowe hasło. Spróbuj ponownie.",
       "nextPage": "Następna strona",
-      "openFullView": "Otwórz pełny widok",
       "pageEditor": {
         "addPDF": "Dodaj PDF",
         "applyCrop": "Zastosuj przycięcie",

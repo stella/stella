@@ -59,7 +59,7 @@ export const useTabContextMenu = ({
         {onMaximize && (
           <MenuItem onClick={onMaximize}>
             <Maximize2Icon />
-            {t("chat.moveToMain")}
+            {t("inspector.moveToMain")}
           </MenuItem>
         )}
         <MenuSeparator />

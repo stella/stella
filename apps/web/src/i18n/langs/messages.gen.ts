@@ -947,8 +947,6 @@ type Messages = {
       "title": "Select chat model";
       "viaProvider": "via {provider}";
     };
-    "moveToMain": "Move to main view";
-    "moveToSide": "Move to side panel";
     "newChat": "New chat";
     "noPromptPresetOnly": "No message, preset only";
     "noThreads": "No conversations yet";
@@ -2704,6 +2702,8 @@ type Messages = {
       "updatedAt": "Updated";
       "versionCurrent": "v{version} (current)";
     };
+    "moveToMain": "Move to main view";
+    "moveToSide": "Move to side panel";
     "openChat": "Open chat";
     "reopenTab": "Reopen {name}";
     "resizePane": "Resize pane";
@@ -5253,10 +5253,8 @@ type Messages = {
       "backToPeek": "Back to peek";
       "entitySidebar": "Document details";
       "evidence": "Justification";
-      "fullView": "Full view";
       "incorrectPassword": "Incorrect password. Please try again.";
       "nextPage": "Next page";
-      "openFullView": "Open full view";
       "pageEditor": {
         "addPDF": "Add PDF";
         "applyCrop": "Apply crop";

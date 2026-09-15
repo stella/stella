@@ -944,8 +944,6 @@
       "title": "Vybrať model chatu",
       "viaProvider": "cez {provider}"
     },
-    "moveToMain": "Presunúť do hlavného zobrazenia",
-    "moveToSide": "Presunúť do bočného panela",
     "newChat": "Nový chat",
     "noPromptPresetOnly": "Bez správy, iba predvoľba",
     "noThreads": "Zatiaľ žiadne konverzácie",
@@ -2701,6 +2699,8 @@
       "updatedAt": "Aktualizované",
       "versionCurrent": "v{version} (aktuálna)"
     },
+    "moveToMain": "Presunúť do hlavného zobrazenia",
+    "moveToSide": "Presunúť do bočného panela",
     "openChat": "Otvoriť chat",
     "reopenTab": "Znova otvoriť {name}",
     "resizePane": "Zmeniť veľkosť panela",
@@ -5250,10 +5250,8 @@
       "backToPeek": "Späť do náhľadu",
       "entitySidebar": "Detaily dokumentu",
       "evidence": "Príloha",
-      "fullView": "Plné zobrazenie",
       "incorrectPassword": "Nesprávne heslo. Skúste znova.",
       "nextPage": "Nasledujúca strana",
-      "openFullView": "Otvoriť celé zobrazenie",
       "pageEditor": {
         "addPDF": "Pridať PDF",
         "applyCrop": "Použiť orezanie",

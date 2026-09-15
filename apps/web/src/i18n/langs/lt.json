@@ -944,8 +944,6 @@
       "title": "Pasirinkti pokalbių modelį",
       "viaProvider": "per {provider}"
     },
-    "moveToMain": "Perkelti į pagrindinį rodinį",
-    "moveToSide": "Perkelti į šoninį skydelį",
     "newChat": "Naujas pokalbis",
     "noPromptPresetOnly": "Pranešimo nėra, tik išankstinis nustatymas",
     "noThreads": "Pokalbių dar nėra",
@@ -2701,6 +2699,8 @@
       "updatedAt": "Atnaujinta",
       "versionCurrent": "v{version} (dabartinė)"
     },
+    "moveToMain": "Perkelti į pagrindinį rodinį",
+    "moveToSide": "Perkelti į šoninį skydelį",
     "openChat": "Atidaryti pokalbį",
     "reopenTab": "Iš naujo atidaryti {name}",
     "resizePane": "Keisti polangio dydį",
@@ -5250,10 +5250,8 @@
       "backToPeek": "Grįžti į peržiūrą",
       "entitySidebar": "Dokumento informacija",
       "evidence": "Įrodymas",
-      "fullView": "Pilnas vaizdas",
       "incorrectPassword": "Neteisingas slaptažodis. Bandykite dar kartą.",
       "nextPage": "Kitas puslapis",
-      "openFullView": "Atidaryti visą rodinį",
       "pageEditor": {
         "addPDF": "Pridėti PDF",
         "applyCrop": "Taikyti apkirpimą",
