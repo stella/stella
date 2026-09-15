@@ -12271,6 +12271,24 @@ export const generatedRouteMap: RouteNode = {
                     part: "body",
                     partPath: "entityId",
                   },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--name",
+                    prop: "name",
+                    required: false,
+                    part: "body",
+                    partPath: "name",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--target-entity-id",
+                    prop: "targetEntityId",
+                    required: false,
+                    part: "body",
+                    partPath: "targetEntityId",
+                  },
                 ],
                 inputOnly: [],
                 paginated: false,
@@ -12285,6 +12303,18 @@ export const generatedRouteMap: RouteNode = {
                       required: ["entityId"],
                       properties: {
                         entityId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        name: {
+                          minLength: 1,
+                          maxLength: 255,
+                          type: "string",
+                        },
+                        targetEntityId: {
                           minLength: 36,
                           maxLength: 36,
                           pattern:
