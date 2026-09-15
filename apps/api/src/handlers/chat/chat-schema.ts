@@ -1,4 +1,5 @@
 import { isStandardSchema, parseWithStandardSchema } from "@tanstack/ai";
+import type { DistributedOmit } from "@tanstack/ai-client";
 import { panic, Result } from "better-result";
 import { deepEquals } from "bun";
 import type { Static } from "elysia";
@@ -749,8 +750,8 @@ const validateContinuationToolCallIntegrity = ({
       incomingCall === undefined ||
       incomingCall.id !== canonicalCall.id ||
       !isPermittedContinuationToolCallTransition({
-        canonicalCall,
-        incomingCall,
+        canonicalCall: toComparableToolCall(canonicalCall),
+        incomingCall: toComparableToolCall(incomingCall),
       })
     ) {
       return invalidContinuationToolCall();
@@ -852,13 +853,25 @@ const APPROVAL_RESPONSE_MUTABLE_TOOL_CALL_PROPERTIES = new Set([
 const TOOL_OUTPUT_MUTABLE_TOOL_CALL_PROPERTIES = new Set(["output", "state"]);
 const NO_MUTABLE_TOOL_CALL_PROPERTIES: ReadonlySet<string> = new Set();
 
-// Two spellings of one value: `arguments` is derived from `input`, and the
-// client's spelling of both is discarded in favour of the server's. They are
-// compared by value (`hasEqualToolCallInput`) instead of as immutable bytes.
-const CONTINUATION_DERIVED_TOOL_CALL_PROPERTIES = new Set([
-  "arguments",
-  "input",
-]);
+/**
+ * The only form a continuation tool call is compared in. The provider's
+ * spelling of the call is not state: `arguments` is dropped, and `input` is
+ * folded so a strict tool schema's `null` for an absent optional reads as the
+ * absence it stands for. Every comparison the continuation check makes runs on
+ * this projection, so a byte comparison of `arguments` has no field to read.
+ *
+ * `DistributedOmit` keeps the per-tool union intact; a plain `Omit` would
+ * collapse it and drop `approval`, which only approval-gated tools carry.
+ */
+type ComparableToolCall = DistributedOmit<
+  ChatToolCallPart,
+  "arguments" | "input"
+> & { input: unknown };
+
+const toComparableToolCall = (call: ChatToolCallPart): ComparableToolCall => {
+  const { arguments: _spelling, input, ...comparable } = call;
+  return { ...comparable, input: withNullsOmitted(input) };
+};
 
 /**
  * The persisted call is authoritative: its `input` is the server's copy and
@@ -887,34 +900,18 @@ const restoreCanonicalToolCallInput = ({
   };
 };
 
-const hasEqualToolCallInput = ({
-  canonicalCall,
-  incomingCall,
-}: {
-  canonicalCall: ChatToolCallPart;
-  incomingCall: ChatToolCallPart;
-}): boolean =>
-  deepEquals(
-    withNullsOmitted(incomingCall.input),
-    withNullsOmitted(canonicalCall.input),
-  );
-
 const hasOnlyPermittedToolCallChanges = ({
   canonicalCall,
   incomingCall,
   mutableProperties,
 }: {
-  canonicalCall: ChatToolCallPart;
-  incomingCall: ChatToolCallPart;
+  canonicalCall: ComparableToolCall;
+  incomingCall: ComparableToolCall;
   mutableProperties: ReadonlySet<string>;
 }): boolean => {
-  const immutableProperties = (call: ChatToolCallPart) =>
+  const immutableProperties = (call: ComparableToolCall) =>
     Object.fromEntries(
-      Object.entries(call).filter(
-        ([key]) =>
-          !mutableProperties.has(key) &&
-          !CONTINUATION_DERIVED_TOOL_CALL_PROPERTIES.has(key),
-      ),
+      Object.entries(call).filter(([key]) => !mutableProperties.has(key)),
     );
   return deepEquals(
     immutableProperties(incomingCall),
@@ -926,8 +923,8 @@ const isPermittedContinuationToolCallTransition = ({
   canonicalCall,
   incomingCall,
 }: {
-  canonicalCall: ChatToolCallPart;
-  incomingCall: ChatToolCallPart;
+  canonicalCall: ComparableToolCall;
+  incomingCall: ComparableToolCall;
 }): boolean => {
   let stateTransitionAllowed = false;
   for (const allowedState of CONTINUATION_TOOL_CALL_TRANSITIONS[
@@ -941,7 +938,7 @@ const isPermittedContinuationToolCallTransition = ({
   if (
     !stateTransitionAllowed ||
     incomingCall.name !== canonicalCall.name ||
-    !hasEqualToolCallInput({ canonicalCall, incomingCall })
+    !deepEquals(incomingCall.input, canonicalCall.input)
   ) {
     return false;
   }
