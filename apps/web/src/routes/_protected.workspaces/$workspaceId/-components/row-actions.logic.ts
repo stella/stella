@@ -1,9 +1,6 @@
 import { panic } from "better-result";
 
-import {
-  ENTITY_NAME_MAX_LENGTH,
-  truncateEntityName,
-} from "@stll/api-contract";
+import { ENTITY_NAME_MAX_LENGTH, truncateEntityName } from "@stll/api-contract";
 
 import { PDF_MIME_TYPE } from "@/consts";
 import type {
