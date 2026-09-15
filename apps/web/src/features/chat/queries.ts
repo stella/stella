@@ -750,6 +750,7 @@ const CHAT_CONTEXT_CAPABILITY_KEYS = [
   "getActiveExternal",
   "getActiveFile",
   "getActiveSkill",
+  "getActiveStatute",
   "getActiveTemplate",
   "getContextMatterIds",
   "getDocxEditRepresentation",

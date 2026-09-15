@@ -124,18 +124,28 @@ const docxEditSnapshotSchema = t.Object({
   ),
 });
 
-export const activeFileSchema = t.Object(
-  {
-    entityId: tSafeId("entity"),
-    fileFieldId: t.Optional(tSafeId("field")),
-    fileName: t.String(),
-    supportsDocxEdits: t.Optional(t.Boolean()),
-    docxEditSnapshot: t.Optional(docxEditSnapshotSchema),
-  },
-  { additionalProperties: false },
-);
+/**
+ * One active document the chat can be bound to.
+ *
+ * Closed, always: what each kind means is resolved server-side from the ids it
+ * carries, so an unknown property is a client trying to tell the model
+ * something the server never looked up — a fabricated email citation, wording
+ * an act does not have. Going through this constructor is what makes a new
+ * kind closed by construction instead of by remembering the option.
+ */
+const activeContextSchema = <TShape extends Parameters<typeof t.Object>[0]>(
+  properties: TShape,
+) => t.Object(properties, { additionalProperties: false });
 
-export const activeDraftSchema = t.Object({
+export const activeFileSchema = activeContextSchema({
+  entityId: tSafeId("entity"),
+  fileFieldId: t.Optional(tSafeId("field")),
+  fileName: t.String(),
+  supportsDocxEdits: t.Optional(t.Boolean()),
+  docxEditSnapshot: t.Optional(docxEditSnapshotSchema),
+});
+
+export const activeDraftSchema = activeContextSchema({
   originChatMessageId: tSafeId("chatMessage"),
   originChatThreadId: tSafeId("chatThread"),
   toolCallId: t.String(),
@@ -150,17 +160,27 @@ export const activeDraftSchema = t.Object({
  * block-id space; the Studio client converts queued operations into
  * in-document suggestions.
  */
-export const activeTemplateSchema = t.Object({
+export const activeTemplateSchema = activeContextSchema({
   templateId: tSafeId("template"),
   fileName: t.String(),
   docxEditSnapshot: t.Optional(docxEditSnapshotSchema),
 });
 
-export const activeDecisionSchema = t.Object({
+export const activeDecisionSchema = activeContextSchema({
   decisionId: tSafeId("caseLawDecision"),
 });
 
-export const activeExternalSchema = t.Object({
+/**
+ * The statute consolidation open in the legal reader. Only the id travels:
+ * the act's identity, its text and the reader's marks on it are resolved
+ * server-side from the corpus, so a client cannot dictate what the model is
+ * told an act says.
+ */
+export const activeStatuteSchema = activeContextSchema({
+  documentId: tSafeId("legislationDocument"),
+});
+
+export const activeExternalSchema = activeContextSchema({
   connectorSlug: t.Optional(t.String()),
   provider: t.Optional(t.String()),
   snippet: t.Optional(t.String()),
@@ -170,7 +190,7 @@ export const activeExternalSchema = t.Object({
   url: t.String(),
 });
 
-export const activeSkillSchema = t.Object({
+export const activeSkillSchema = activeContextSchema({
   skillId: t.Optional(tSafeId("agentSkill")),
   skillName: t.String({ minLength: 1, maxLength: 64 }),
 });
@@ -236,6 +256,7 @@ const sendMessageCommonProperties = {
   activeDecision: t.Optional(activeDecisionSchema),
   activeExternal: t.Optional(activeExternalSchema),
   activeSkill: t.Optional(activeSkillSchema),
+  activeStatute: t.Optional(activeStatuteSchema),
   /**
    * Which DOCX-edit review mode this turn uses; omitted means
    * `DEFAULT_CHAT_EDIT_APPLY_MODE`. Threaded into `getChatTools`, which
@@ -380,6 +401,42 @@ export type IncomingActiveTemplate = Static<typeof activeTemplateSchema>;
 export type IncomingActiveDecision = Static<typeof activeDecisionSchema>;
 export type IncomingActiveExternal = Static<typeof activeExternalSchema>;
 export type IncomingActiveSkill = Static<typeof activeSkillSchema>;
+export type IncomingActiveStatute = Static<typeof activeStatuteSchema>;
+
+/**
+ * Every active document a turn may carry, by the body field that carries it.
+ *
+ * The send body below is the source of truth; this map is held equal to its
+ * `active*` fields at compile time, so a new active document is a type error
+ * here until it is declared, and the schema test enumerates this map rather
+ * than a hand-written list that could go stale.
+ */
+export const ACTIVE_CONTEXT_SCHEMAS = {
+  activeDecision: activeDecisionSchema,
+  activeDraft: activeDraftSchema,
+  activeExternal: activeExternalSchema,
+  activeFile: activeFileSchema,
+  activeSkill: activeSkillSchema,
+  activeStatute: activeStatuteSchema,
+  activeTemplate: activeTemplateSchema,
+} as const;
+
+type ActiveContextBodyKey = Extract<
+  keyof typeof sendMessageCommonProperties,
+  `active${string}`
+>;
+
+type UndeclaredActiveContextKey = Exclude<
+  ActiveContextBodyKey,
+  keyof typeof ACTIVE_CONTEXT_SCHEMAS
+>;
+type UnusedActiveContextSchema = Exclude<
+  keyof typeof ACTIVE_CONTEXT_SCHEMAS,
+  ActiveContextBodyKey
+>;
+
+true satisfies UndeclaredActiveContextKey extends never ? true : never;
+true satisfies UnusedActiveContextSchema extends never ? true : never;
 
 type ValidateMessageInput = {
   message: RawIncomingMessage;

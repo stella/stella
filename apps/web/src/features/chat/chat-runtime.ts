@@ -697,6 +697,28 @@ export const buildSendRequestBody = ({
   };
 };
 
+/**
+ * Every active-document getter, paired with the send-body field that carries
+ * its value.
+ *
+ * Total over the context's `getActive*` capabilities, so a new active document
+ * cannot be declared without choosing a field here, and the send test drives
+ * this map instead of a hand-written list: a getter whose value never reaches
+ * the body fails there rather than going out silently omitted.
+ */
+export const ACTIVE_DOCUMENT_SEND_FIELD = {
+  getActiveDecision: "activeDecision",
+  getActiveDraft: "activeDraft",
+  getActiveExternal: "activeExternal",
+  getActiveFile: "activeFile",
+  getActiveSkill: "activeSkill",
+  getActiveStatute: "activeStatute",
+  getActiveTemplate: "activeTemplate",
+} as const satisfies Record<
+  Extract<keyof ChatThreadOptionsContext, `getActive${string}`>,
+  keyof ChatSendRequestDraft
+>;
+
 const applyChatContext = ({
   body,
   context,
@@ -779,6 +801,13 @@ const applyChatContext = ({
       ...(activeSkill.skillId === undefined
         ? {}
         : { skillId: toSafeId<"agentSkill">(activeSkill.skillId) }),
+    };
+  }
+
+  const activeStatute = context?.getActiveStatute?.();
+  if (activeStatute) {
+    body.activeStatute = {
+      documentId: toSafeId<"legislationDocument">(activeStatute.documentId),
     };
   }
 

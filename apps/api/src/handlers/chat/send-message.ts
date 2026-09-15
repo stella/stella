@@ -56,6 +56,7 @@ import type {
   IncomingActiveExternal,
   IncomingActiveFile,
   IncomingActiveSkill,
+  IncomingActiveStatute,
   IncomingActiveTemplate,
   IncomingUserContext,
 } from "@/api/handlers/chat/chat-schema";
@@ -1806,6 +1807,7 @@ export const createSendMessage = (
           activeExternal: body.activeExternal,
           activeFile: body.activeFile,
           activeSkill: body.activeSkill,
+          activeStatute: body.activeStatute,
           activeTemplate: body.activeTemplate,
           contextMatterIds: effectiveContextMatterIds,
           memberRole,
@@ -2325,6 +2327,7 @@ type PrepareChatContextProps = {
   activeExternal: IncomingActiveExternal | undefined;
   activeFile: IncomingActiveFile | undefined;
   activeSkill: IncomingActiveSkill | undefined;
+  activeStatute: IncomingActiveStatute | undefined;
   activeTemplate: IncomingActiveTemplate | undefined;
   contextMatterIds: SafeId<"workspace">[];
   memberRole: { role: string };
@@ -2368,6 +2371,7 @@ const prepareChatContext = async ({
   activeExternal,
   activeFile,
   activeSkill,
+  activeStatute,
   activeTemplate,
   contextMatterIds,
   memberRole,
@@ -2403,6 +2407,7 @@ const prepareChatContext = async ({
         activeExternal,
         activeFile,
         activeSkill,
+        activeStatute,
         activeTemplate,
         contextMatterIds,
         memberRole,

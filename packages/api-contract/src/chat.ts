@@ -132,6 +132,9 @@ type ChatSendRequestBase = {
     skillId?: SafeId<"agentSkill">;
     skillName: string;
   };
+  activeStatute?: {
+    documentId: SafeId<"legislationDocument">;
+  };
   activeTemplate?: {
     docxEditSnapshot?: DocxEditSnapshot;
     fileName: string;
