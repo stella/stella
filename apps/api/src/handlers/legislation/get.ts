@@ -41,6 +41,7 @@ type LegislationTextMode =
   (typeof LEGISLATION_TEXT_MODE)[keyof typeof LEGISLATION_TEXT_MODE];
 
 type ReadLegislationOptions = {
+  /** Controls the response projection, never corpus publication permission. */
   audience: "public" | "workspace";
   textMode: LegislationTextMode;
 };
