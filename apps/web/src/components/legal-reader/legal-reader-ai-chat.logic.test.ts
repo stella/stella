@@ -1,23 +1,29 @@
 import { describe, expect, test } from "bun:test";
 
 import type { InspectorTab } from "@/components/inspector/inspector-store-types";
+import {
+  decisionChatKey,
+  statuteChatKey,
+} from "@/features/chat/legal-document-chat-key";
+import type { LegalDocumentChatKey } from "@/features/chat/legal-document-chat-key";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 
 import {
   activeChatTabThreadId,
-  decisionChatTabThreadId,
+  legalDocumentChatTabThreadId,
   overlayThreadCardVisibility,
 } from "./legal-reader-ai-chat.logic";
 
-const DECISION = "decision-1";
+const DECISION = decisionChatKey("decision-1");
+const STATUTE = statuteChatKey("decision-1");
 const THREAD = toChatThreadId("thread-1");
 const OTHER_THREAD = toChatThreadId("thread-2");
 
 const chatTab = ({
-  activeDecisionId,
+  activeLegalKey,
   id,
 }: {
-  activeDecisionId?: string | undefined;
+  activeLegalKey?: LegalDocumentChatKey | undefined;
   id: string;
 }) =>
   ({
@@ -25,7 +31,7 @@ const chatTab = ({
     id: toChatThreadId(id),
     label: "Chat",
     contextMatterIds: [],
-    activeDecisionId,
+    activeLegalKey,
   }) satisfies InspectorTab;
 
 const matterTab = {
@@ -35,32 +41,43 @@ const matterTab = {
   workspaceId: "workspace-1",
 } satisfies InspectorTab;
 
-describe("the chat tab a decision's conversation is open in", () => {
-  test("is none when no tab carries the decision", () => {
+describe("the chat tab a document's conversation is open in", () => {
+  test("is none when no tab carries the document", () => {
     expect(
-      decisionChatTabThreadId({
-        decisionId: DECISION,
+      legalDocumentChatTabThreadId({
+        documentKey: DECISION,
         tabs: [matterTab, chatTab({ id: "thread-1" })],
       }),
     ).toBeUndefined();
   });
 
-  test("ignores a chat tab about another decision", () => {
+  test("ignores a chat tab about another document", () => {
     expect(
-      decisionChatTabThreadId({
-        decisionId: DECISION,
-        tabs: [chatTab({ activeDecisionId: "decision-9", id: "thread-1" })],
+      legalDocumentChatTabThreadId({
+        documentKey: DECISION,
+        tabs: [
+          chatTab({ activeLegalKey: decisionChatKey("decision-9"), id: "t" }),
+        ],
+      }),
+    ).toBeUndefined();
+  });
+
+  test("ignores a tab about the other corpus under the same id", () => {
+    expect(
+      legalDocumentChatTabThreadId({
+        documentKey: STATUTE,
+        tabs: [chatTab({ activeLegalKey: DECISION, id: "thread-1" })],
       }),
     ).toBeUndefined();
   });
 
   test("is the most recent tab when a new chat superseded an older one", () => {
     expect(
-      decisionChatTabThreadId({
-        decisionId: DECISION,
+      legalDocumentChatTabThreadId({
+        documentKey: STATUTE,
         tabs: [
-          chatTab({ activeDecisionId: DECISION, id: "thread-1" }),
-          chatTab({ activeDecisionId: DECISION, id: "thread-2" }),
+          chatTab({ activeLegalKey: STATUTE, id: "thread-1" }),
+          chatTab({ activeLegalKey: STATUTE, id: "thread-2" }),
         ],
       }),
     ).toBe(OTHER_THREAD);

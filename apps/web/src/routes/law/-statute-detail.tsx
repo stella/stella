@@ -11,7 +11,9 @@ import {
 import { OutlineRail, outlineEntryText } from "@stll/ui/outline-rail";
 import { Separator } from "@stll/ui/separator";
 
+import type { ActiveLegalDocument } from "@/components/ai-suggestions/active-legal-document";
 import { DatePickerPopover } from "@/components/date-picker-popover";
+import { LegalReaderAIChat } from "@/components/legal-reader/legal-reader-ai-chat";
 import { OpenOriginalButton } from "@/components/legal-reader/open-original-button";
 import { OutlineJumpField } from "@/components/legal-reader/outline-jump-field";
 import {
@@ -236,6 +238,46 @@ export const PublicStatuteViewer = ({
     ? (statute.documentUrl ?? statute.sourceUrl)
     : null;
 
+  // The consolidation the chat is bound to, so a question typed over the
+  // wording carries the act the send endpoint selects provisions from. Null
+  // while no version was in force on the day asked for: there is no document
+  // to bind, and nothing to ask about.
+  const activeLegal: ActiveLegalDocument | null =
+    statute === null
+      ? null
+      : { type: "statute", documentId: statute.id, title: statute.title };
+
+  const readerBody = (
+    <div className="reader-scroll h-full overflow-y-auto" ref={readerRef}>
+      <div
+        className="flex flex-col gap-4 py-6"
+        data-slot="reader-document-column"
+      >
+        {statute === null ? (
+          <p className="text-muted-foreground py-16 text-center text-sm">
+            {t("statutes.noVersionInForce")}
+          </p>
+        ) : (
+          <AnnotatedStatuteText
+            blocks={blocks}
+            citationWork={citationWork}
+            country={statute.country}
+            documentId={statute.id}
+            eli={statute.eli}
+            fulltext={statute.fulltext}
+            language={statute.language}
+            masthead={preparedReader.masthead}
+            provisionCitationCounts={provisionCitationCounts}
+            scrollContainerRef={readerRef}
+            statuteTitle={statute.title}
+            versionCount={versions.length}
+            versionValidFrom={statute.versionValidFrom}
+          />
+        )}
+      </div>
+    </div>
+  );
+
   return (
     <main className="relative min-h-0 flex-1">
       <ChromeHeaderActions>
@@ -324,34 +366,17 @@ export const PublicStatuteViewer = ({
         resolvePct={resolveAnchorPct}
         scrollContainerRef={readerRef}
       />
-      <div className="reader-scroll h-full overflow-y-auto" ref={readerRef}>
-        <div
-          className="flex flex-col gap-4 py-6"
-          data-slot="reader-document-column"
-        >
-          {statute === null ? (
-            <p className="text-muted-foreground py-16 text-center text-sm">
-              {t("statutes.noVersionInForce")}
-            </p>
-          ) : (
-            <AnnotatedStatuteText
-              blocks={blocks}
-              citationWork={citationWork}
-              country={statute.country}
-              documentId={statute.id}
-              eli={statute.eli}
-              fulltext={statute.fulltext}
-              language={statute.language}
-              masthead={preparedReader.masthead}
-              provisionCitationCounts={provisionCitationCounts}
-              scrollContainerRef={readerRef}
-              statuteTitle={statute.title}
-              versionCount={versions.length}
-              versionValidFrom={statute.versionValidFrom}
-            />
-          )}
-        </div>
-      </div>
+      {/* The composer floats over the wording here as it does over a
+          decision, bound to this consolidation and so to its one
+          conversation. A page with no version in force has no document to
+          bind, so it keeps its text alone. */}
+      {activeLegal === null ? (
+        readerBody
+      ) : (
+        <LegalReaderAIChat activeLegal={activeLegal} className="h-full">
+          {readerBody}
+        </LegalReaderAIChat>
+      )}
     </main>
   );
 };

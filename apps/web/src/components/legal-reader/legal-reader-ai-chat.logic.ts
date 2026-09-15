@@ -9,33 +9,35 @@ import type {
   ChatTab,
   InspectorTab,
 } from "@/components/inspector/inspector-store-types";
+import type { LegalDocumentChatKey } from "@/features/chat/legal-document-chat-key";
 import type { ChatThreadId } from "@/lib/chat-thread-ref";
 
-const isDecisionChatTab = (
+const isLegalDocumentChatTab = (
   tab: InspectorTab,
-  decisionId: string,
-): tab is ChatTab => tab.type === "chat" && tab.activeDecisionId === decisionId;
+  documentKey: LegalDocumentChatKey,
+): tab is ChatTab => tab.type === "chat" && tab.activeLegalKey === documentKey;
 
-type DecisionChatTabThreadIdArgs = {
-  decisionId: string;
+type LegalDocumentChatTabThreadIdArgs = {
+  documentKey: LegalDocumentChatKey;
   tabs: readonly InspectorTab[];
 };
 
 /**
- * The thread of the chat tab already showing this decision, if one is open.
- * The most recent wins: a new chat started from an older tab is the decision's
+ * The thread of the chat tab already showing this document, if one is open.
+ * The most recent wins: a new chat started from an older tab is the document's
  * current conversation, and the tab it left behind is history.
  *
  * This is how the mapping survives a reload — the inspector persists chat tabs
- * with their decision and their thread id, the reader does not persist
+ * with their document and their thread id, the reader does not persist
  * anything of its own.
  */
-export const decisionChatTabThreadId = ({
-  decisionId,
+export const legalDocumentChatTabThreadId = ({
+  documentKey,
   tabs,
-}: DecisionChatTabThreadIdArgs): ChatThreadId | undefined =>
-  tabs.findLast((tab): tab is ChatTab => isDecisionChatTab(tab, decisionId))
-    ?.id;
+}: LegalDocumentChatTabThreadIdArgs): ChatThreadId | undefined =>
+  tabs.findLast((tab): tab is ChatTab =>
+    isLegalDocumentChatTab(tab, documentKey),
+  )?.id;
 
 type ActiveChatTabThreadIdArgs = {
   activeId: string | null;

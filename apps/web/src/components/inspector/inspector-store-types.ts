@@ -3,6 +3,7 @@ import type { Draft } from "immer";
 import type { TaskStatus } from "@stll/api-contract";
 
 import type { StructuredCloneable } from "@/components/inspector/view-registry";
+import type { LegalDocumentChatKey } from "@/features/chat/legal-document-chat-key";
 import type { ChatThreadId } from "@/lib/chat-thread-ref";
 
 export type ExternalTabId = `external:${string}`;
@@ -52,7 +53,8 @@ export type ChatTab = {
   label: string;
   workspaceId?: string | undefined;
   contextMatterIds: string[];
-  activeDecisionId?: string | undefined;
+  /** The legal document this chat is about, when it was opened from one. */
+  activeLegalKey?: LegalDocumentChatKey | undefined;
   activeSkill?:
     | {
         skillId?: string | undefined;
@@ -275,7 +277,7 @@ export type InspectorTabsActions = {
     label?: string;
     workspaceId?: string | undefined;
     contextMatterIds?: string[];
-    activeDecisionId?: string;
+    activeLegalKey?: LegalDocumentChatKey;
     activeSkill?: ChatTab["activeSkill"];
   }) => void;
   setChatContext: (tabId: string, matterIds: string[]) => void;

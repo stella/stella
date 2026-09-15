@@ -2,7 +2,10 @@ import { describe, expect, test } from "bun:test";
 
 import type { ReaderAnnotationTarget } from "@/components/legal-reader/annotations/reader-annotation-target";
 
-import { activeLegalFromReaderTarget } from "./active-legal-document";
+import {
+  activeLegalDocumentRef,
+  activeLegalFromReaderTarget,
+} from "./active-legal-document";
 
 const decisionTarget: ReaderAnnotationTarget = {
   type: "decision",
@@ -35,7 +38,25 @@ describe("activeLegalFromReaderTarget", () => {
     });
   });
 
-  test("refuses a statute, which no chat context type carries", () => {
-    expect(activeLegalFromReaderTarget(statuteTarget)).toBeNull();
+  test("sends the consolidation's own id, which its provisions are selected from", () => {
+    expect(activeLegalFromReaderTarget(statuteTarget)).toEqual({
+      type: "statute",
+      documentId: "statute-1",
+      title: "Občanský zákoník",
+    });
+  });
+});
+
+describe("what the surfaces around the composer read off the document", () => {
+  test("names a decision by its case number, under its own key", () => {
+    expect(
+      activeLegalDocumentRef(activeLegalFromReaderTarget(decisionTarget)),
+    ).toEqual({ key: "decision:decision-1", label: "22 Cdo 1234/2024" });
+  });
+
+  test("names a consolidation by the act's title, under its own key", () => {
+    expect(
+      activeLegalDocumentRef(activeLegalFromReaderTarget(statuteTarget)),
+    ).toEqual({ key: "statute:statute-1", label: "Občanský zákoník" });
   });
 });

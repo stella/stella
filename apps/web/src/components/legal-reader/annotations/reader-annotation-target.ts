@@ -2,6 +2,7 @@ import { panic } from "better-result";
 
 import type { ReaderAnnotationTargetType } from "@stll/api-contract/legal-reader-annotations";
 
+import { activeLegalFromReaderTarget } from "@/components/ai-suggestions/active-legal-document";
 import {
   decisionPassageContent,
   writeDecisionPassage,
@@ -10,7 +11,8 @@ import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-sto
 import type { SelectionAnchor } from "@/components/legal-reader/annotations/selection-anchor";
 import { openPublicLawChat } from "@/components/public-law-ask";
 import { formatDecisionCitation } from "@/features/case-law/citation-format";
-import { ensureDecisionChatThread } from "@/features/chat/decision-chat-threads";
+import { decisionChatKey } from "@/features/chat/legal-document-chat-key";
+import { ensureLegalDocumentChatThread } from "@/features/chat/legal-document-chat-threads";
 import { formatStatuteCitation } from "@/features/statutes/statute-format";
 import {
   createChatDraftState,
@@ -159,10 +161,11 @@ export const readerTargetCitation = ({
 };
 
 /**
- * Opens a fresh inspector chat about the selected passage. A decision is a
+ * Opens the document's inspector chat on the selected passage. A decision is a
  * resource the corpus tools can be handed, so the passage lands as chips with
- * the decision attached; a statute consolidation is not, so the prompt names
- * it in words the tools look it up by.
+ * the decision attached; a consolidation has no reference chip, so the prompt
+ * names it in words. Either way the question joins the conversation the
+ * reader's floating composer is already bound to.
  */
 export const askAboutReaderPassage = ({
   prompt,
@@ -181,7 +184,8 @@ export const askAboutReaderPassage = ({
       // whatever was unsent in that composer: losing a half-typed line is the
       // lesser harm against asking the question away from the history it
       // belongs to.
-      const threadId = ensureDecisionChatThread({ decisionId: target.id });
+      const documentKey = decisionChatKey(target.id);
+      const threadId = ensureLegalDocumentChatThread({ documentKey });
       useChatDraftStore.getState().setDraft(
         getChatThreadKey({ scope: "global", threadId }),
         createChatDraftState({
@@ -202,14 +206,18 @@ export const askAboutReaderPassage = ({
         }),
       );
       useInspectorTabsStore.getState().openChat({
-        activeDecisionId: target.id,
+        activeLegalKey: documentKey,
         id: threadId,
         label: target.caseNumber,
       });
       return;
     }
     case "statute": {
-      openPublicLawChat({ label: target.title, prompt });
+      openPublicLawChat({
+        document: activeLegalFromReaderTarget(target),
+        label: target.title,
+        prompt,
+      });
       return;
     }
     default: {

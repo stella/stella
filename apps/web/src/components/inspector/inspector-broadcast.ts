@@ -27,8 +27,12 @@ import {
   getInspectorPersistenceReference,
   getInspectorView,
 } from "@/components/inspector/view-registry";
-import { adoptRestoredDecisionChatThreads } from "@/features/chat/decision-chat-threads";
-import type { RestoredDecisionChatThread } from "@/features/chat/decision-chat-threads";
+import {
+  decisionChatKey,
+  isOptionalLegalDocumentChatKey,
+} from "@/features/chat/legal-document-chat-key";
+import { adoptRestoredLegalDocumentChatThreads } from "@/features/chat/legal-document-chat-threads";
+import type { RestoredLegalDocumentChatThread } from "@/features/chat/legal-document-chat-threads";
 import { getTranslator } from "@/i18n/i18n-store";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { readStoredJson } from "@/lib/stored-json";
@@ -53,9 +57,23 @@ type InspectorTabsSyncMessage = {
   groupAssignments?: Record<string, string | null> | undefined;
 };
 
+/**
+ * A chat tab written before a conversation was keyed by its document rather
+ * than by a decision id. `normalizeInspectorBroadcastTab` converts it on the
+ * way in, so a decision chat open across the upgrade keeps its one
+ * conversation instead of restoring unbound beside a fresh one.
+ *
+ * Remove this member, its validation and its conversion once no browser can
+ * still be restoring a tab set written before that change: the value is
+ * session-local, so a client that has opened the app since carries the new
+ * field.
+ */
+type LegacyDecisionChatTab = ChatTab & { activeDecisionId: string };
+
 type InspectorBroadcastTab =
   | InspectorTab
-  | (Omit<TaskTab, "creationStatus"> & { creationStatus?: undefined });
+  | (Omit<TaskTab, "creationStatus"> & { creationStatus?: undefined })
+  | LegacyDecisionChatTab;
 
 type InspectorBroadcastMessage =
   | InspectorTabsRequestMessage
@@ -173,16 +191,16 @@ export const getInspectorTabsBroadcastChannelName = ({
   `${INSPECTOR_TABS_CHANNEL_PREFIX}:${organizationId}:${userId}`;
 
 /**
- * The conversations a tab set carries: a chat tab opened about a decision is
- * that decision's conversation, wherever the tab came from.
+ * The conversations a tab set carries: a chat tab opened about a legal
+ * document is that document's conversation, wherever the tab came from.
  */
-const decisionChatThreadsIn = (
+const legalDocumentChatThreadsIn = (
   tabs: readonly InspectorTab[],
-): RestoredDecisionChatThread[] => {
-  const threads: RestoredDecisionChatThread[] = [];
+): RestoredLegalDocumentChatThread[] => {
+  const threads: RestoredLegalDocumentChatThread[] = [];
   for (const tab of tabs) {
-    if (tab.type === "chat" && tab.activeDecisionId !== undefined) {
-      threads.push({ decisionId: tab.activeDecisionId, threadId: tab.id });
+    if (tab.type === "chat" && tab.activeLegalKey !== undefined) {
+      threads.push({ documentKey: tab.activeLegalKey, threadId: tab.id });
     }
   }
   return threads;
@@ -201,7 +219,7 @@ const applySharedInspectorTabs = (
     groupAssignments,
   );
   store.setState(next);
-  adoptRestoredDecisionChatThreads(decisionChatThreadsIn(next.tabs));
+  adoptRestoredLegalDocumentChatThreads(legalDocumentChatThreadsIn(next.tabs));
   useInspectorCommandStore
     .getState()
     .clearCommandsForMissingTabs(new Set(next.tabs.map((tab) => tab.id)));
@@ -309,6 +327,7 @@ const isInspectorChatTab = (value: Record<string, unknown>, label: unknown) =>
   typeof label === "string" &&
   isOptionalString(value["workspaceId"]) &&
   isStringArray(value["contextMatterIds"]) &&
+  isOptionalLegalDocumentChatKey(value["activeLegalKey"]) &&
   isOptionalString(value["activeDecisionId"]) &&
   isActiveSkillContext(value["activeSkill"]);
 
@@ -439,10 +458,19 @@ const isInspectorBroadcastMessage = (
 
 const normalizeInspectorBroadcastTab = (
   tab: InspectorBroadcastTab,
-): InspectorTab =>
-  tab.type === "task" && tab.creationStatus === undefined
-    ? { ...tab, creationStatus: "ready" }
-    : tab;
+): InspectorTab => {
+  if (tab.type === "task" && tab.creationStatus === undefined) {
+    return { ...tab, creationStatus: "ready" };
+  }
+  if (tab.type === "chat" && "activeDecisionId" in tab) {
+    const { activeDecisionId, ...chat } = tab;
+    // A tab carrying both was written by a newer client: its key wins.
+    return chat.activeLegalKey === undefined
+      ? { ...chat, activeLegalKey: decisionChatKey(activeDecisionId) }
+      : chat;
+  }
+  return tab;
+};
 
 type PersistedInspectorState = {
   tabs: InspectorBroadcastTab[];
@@ -767,7 +795,7 @@ export const initializeInspectorTabBroadcast = (
     const persisted = readPersistedInspectorState(scope);
     if (persisted !== null) {
       const tabs = persisted.tabs.map(normalizeInspectorBroadcastTab);
-      adoptRestoredDecisionChatThreads(decisionChatThreadsIn(tabs));
+      adoptRestoredLegalDocumentChatThreads(legalDocumentChatThreadsIn(tabs));
       store.setState({
         tabs,
         groups: persisted.groups,

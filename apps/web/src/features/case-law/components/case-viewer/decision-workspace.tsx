@@ -15,6 +15,7 @@ import type { OutlineItem } from "@stll/ui/outline-rail";
 import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
 
+import { activeLegalFromReaderTarget } from "@/components/ai-suggestions/active-legal-document";
 import { AnnotationToolbar } from "@/components/legal-reader/annotations/annotation-toolbar";
 import { GuestAnnotationPrompt } from "@/components/legal-reader/annotations/guest-annotation-prompt";
 import type { ReaderAnnotationTarget } from "@/components/legal-reader/annotations/reader-annotation-target";
@@ -451,7 +452,10 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
             reader, bound to the same decision and so to the same conversation.
             The annotation toolbar stays outside it: it belongs to the marks on
             the text, not to the chat. */}
-        <LegalReaderAIChat className="h-full" target={annotationTarget}>
+        <LegalReaderAIChat
+          activeLegal={activeLegalFromReaderTarget(annotationTarget)}
+          className="h-full"
+        >
           <div className="reader-scroll h-full overflow-y-auto" ref={mainRef}>
             <div
               className="grid max-lg:!grid-cols-[1fr]"

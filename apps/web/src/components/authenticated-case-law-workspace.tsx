@@ -22,6 +22,7 @@ import {
 } from "@/components/require-ai-key";
 import { useSidebarInlineSize } from "@/components/sidebar";
 import { DecisionWorkspace } from "@/features/case-law/components/case-viewer/decision-workspace";
+import { decisionChatKey } from "@/features/chat/legal-document-chat-key";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { AuthenticatedUserProvider } from "@/lib/authenticated-user-context";
 import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -161,7 +162,7 @@ const AutoOpenDecisionChat = ({
 }) => {
   const openChat = useInspectorTabsStore((state) => state.openChat);
   useMountEffect(() => {
-    openChat({ activeDecisionId: decisionId });
+    openChat({ activeLegalKey: decisionChatKey(decisionId) });
   });
   return null;
 };

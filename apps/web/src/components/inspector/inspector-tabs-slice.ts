@@ -18,10 +18,11 @@ import type {
   TaskTab,
 } from "@/components/inspector/inspector-store-types";
 import { getInspectorView } from "@/components/inspector/view-registry";
+import type { LegalDocumentChatKey } from "@/features/chat/legal-document-chat-key";
 import {
-  adoptDecisionChatThread,
-  ensureDecisionChatThread,
-} from "@/features/chat/decision-chat-threads";
+  adoptLegalDocumentChatThread,
+  ensureLegalDocumentChatThread,
+} from "@/features/chat/legal-document-chat-threads";
 import { normalizeOptionalArray } from "@/lib/arrays";
 import { createChatThreadId } from "@/lib/chat-thread-ref";
 import type { ChatThreadId } from "@/lib/chat-thread-ref";
@@ -198,29 +199,30 @@ const upsertTaskTab = (state: Draft<InspectorTabsStore>, tab: TaskTab) => {
 
 type ChatTabThreadIdArgs = Pick<
   NonNullable<Parameters<InspectorTabsStore["openChat"]>[0]>,
-  "activeDecisionId" | "id"
+  "activeLegalKey" | "id"
 >;
 
 /**
- * Which thread a chat tab opens on. A decision has one conversation, owned by
- * `decision-chat-threads`: an unnamed chat about a decision continues it, and
- * a named one (a new chat started from the decision's own tab, or from a
- * selected passage) becomes it, so the reader's floating composer follows.
+ * Which thread a chat tab opens on. A legal document has one conversation,
+ * owned by `legal-document-chat-threads`: an unnamed chat about a decision or
+ * a consolidation continues it, and a named one (a new chat started from the
+ * document's own tab, or from a selected passage) becomes it, so the reader's
+ * floating composer follows.
  *
  * Resolved before the store update rather than inside it, so the owner is
  * never written from within another store's producer.
  */
 const resolveChatTabThreadId = ({
-  activeDecisionId,
+  activeLegalKey,
   id,
 }: ChatTabThreadIdArgs): ChatThreadId => {
-  if (activeDecisionId === undefined) {
+  if (activeLegalKey === undefined) {
     return id ?? createChatThreadId();
   }
   if (id === undefined) {
-    return ensureDecisionChatThread({ decisionId: activeDecisionId });
+    return ensureLegalDocumentChatThread({ documentKey: activeLegalKey });
   }
-  adoptDecisionChatThread({ decisionId: activeDecisionId, threadId: id });
+  adoptLegalDocumentChatThread({ documentKey: activeLegalKey, threadId: id });
   return id;
 };
 
@@ -557,7 +559,7 @@ export const createInspectorTabsSlice = (
           label: args.label ?? "New chat",
           workspaceId: args.workspaceId,
           contextMatterIds: normalizeOptionalArray(args.contextMatterIds),
-          activeDecisionId: args.activeDecisionId,
+          activeLegalKey: args.activeLegalKey,
           activeSkill: args.activeSkill,
         });
       } else if (existing.type === "chat") {
@@ -570,8 +572,8 @@ export const createInspectorTabsSlice = (
         if (args.contextMatterIds !== undefined) {
           existing.contextMatterIds = args.contextMatterIds;
         }
-        if (args.activeDecisionId !== undefined) {
-          existing.activeDecisionId = args.activeDecisionId;
+        if (args.activeLegalKey !== undefined) {
+          existing.activeLegalKey = args.activeLegalKey;
         }
         if (args.activeSkill !== undefined) {
           existing.activeSkill = args.activeSkill;
@@ -592,11 +594,11 @@ export const createInspectorTabsSlice = (
     }),
 
   resetChatTabId: (oldId, newId) => {
-    let rotatedDecisionId: string | undefined;
+    let rotatedLegalKey: LegalDocumentChatKey | undefined;
     set((state) => {
       const tab = state.tabs.find((candidate) => candidate.id === oldId);
       if (tab?.type === "chat") {
-        rotatedDecisionId = tab.activeDecisionId;
+        rotatedLegalKey = tab.activeLegalKey;
         tab.id = newId;
         if (Object.hasOwn(state.groupAssignments, oldId)) {
           state.groupAssignments[newId] = state.groupAssignments[oldId] ?? null;
@@ -608,11 +610,11 @@ export const createInspectorTabsSlice = (
       }
     });
     // This is the one action that moves a chat tab's thread, so it is the one
-    // place the decision's owner can learn about it. Told after the tab store
+    // place the document's owner can learn about it. Told after the tab store
     // has settled, never from inside its producer.
-    if (rotatedDecisionId !== undefined) {
-      adoptDecisionChatThread({
-        decisionId: rotatedDecisionId,
+    if (rotatedLegalKey !== undefined) {
+      adoptLegalDocumentChatThread({
+        documentKey: rotatedLegalKey,
         threadId: newId,
       });
     }
