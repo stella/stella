@@ -1,8 +1,6 @@
 import { Result, panic } from "better-result";
 import { and, eq, inArray, isNull, lt, notInArray, or, sql } from "drizzle-orm";
 
-import type { DecisionIdentifierType } from "@stll/legal-ast/decision-identifier";
-
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
@@ -12,11 +10,12 @@ import {
   caseLawDecisionSourceIdentities,
   caseLawDecisions,
   caseLawIngestionFailures,
+  caseLawPolarityRules,
   caseLawSources,
 } from "@/api/db/schema";
 import { corpusStorageMode } from "@/api/env-base";
-import type { CitationDecisionTypeHint } from "@/api/handlers/case-law/citation-decision-type-hint";
 import {
+  CITATION_KIND,
   classifyCitation,
   proceduralKeysFromMetadata,
 } from "@/api/handlers/case-law/citation-kind";
@@ -54,6 +53,12 @@ import { publisherCitationGap } from "@/api/handlers/case-law/ingestion/citation
 import { shouldSkipRefresh } from "@/api/handlers/case-law/ingestion/refresh-policy";
 import { segmentDecision } from "@/api/handlers/case-law/ingestion/segmenter";
 import { extractContext } from "@/api/handlers/case-law/polarity/context";
+import {
+  ACTIVE_RULE_SOURCES,
+  loadRules,
+  selectRuleMatch,
+} from "@/api/handlers/case-law/polarity/rule-engine";
+import type { RuleCache } from "@/api/handlers/case-law/polarity/rule-engine";
 import { pgPayloadCarriesDocument } from "@/api/handlers/case-law/stored-payload";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -116,6 +121,7 @@ import {
   PG_ERROR,
   pgErrorFields,
 } from "@/api/lib/pg-error";
+import { isRecord } from "@/api/lib/type-guards";
 
 export { sanitizeResult };
 
@@ -266,6 +272,12 @@ type ProcessDecisionAttemptOptions = {
   contentionReconciliation: ContentionReconciliation;
   refresh: DecisionRefresh;
   corpus: CaseLawCorpusDependencies;
+  /**
+   * Compiled polarity rules, reused across the decisions of one run. Omitted,
+   * each decision reads the rules for its own language once; a crawl passes
+   * one cache so the whole cycle reads them once per language.
+   */
+  polarityRules?: RuleCache | undefined;
 };
 
 export type CaseLawCorpusDependencies = {
@@ -356,48 +368,174 @@ const uploadSourceRaw = async (
     family: RAW_SOURCE_FAMILY.CASE_LAW,
   });
 
+type BuildCitationRowsOptions = {
+  citations: readonly ReturnType<typeof extractCitations>[number][];
+  citingDecisionId: SafeId<"caseLawDecision">;
+  /** The citing decision's language; it chooses the polarity rule set. */
+  language: string;
+  polarityRules: RuleCache | undefined;
+  proceduralKeys: ProceduralKeys;
+  scopedDb: ScopedDb;
+  sections: { index: number; text: string }[];
+};
+
 /**
- * Row values for one extracted citation, including what the citation is
- * doing: invoking authority, or naming the case's own procedural history.
- * Classified here rather than in the extractor because the decision needs
- * the surrounding text, which the pipeline already holds.
+ * Every citation row for one decision: what the citation is doing (invoking
+ * authority, or naming the case's own procedural history) and, where it
+ * invokes one, how the citing court treats it.
+ *
+ * Both are read off the surrounding text, which only the pipeline holds, and
+ * both are written when the row is published. Polarity used to be left to the
+ * background classifier, which the refresh path then undid: refreshing a
+ * decision deletes its citation rows and re-inserts them, so a label written
+ * after the insert survived only until the next refresh.
+ *
+ * Regex tier only. A procedural citation is skipped, and so is a context no
+ * rule reads: `polarity` stays null, which is what the background queue
+ * selects on and what an unexamined row looks like. There is no "examined,
+ * matched nothing" value, and inventing one here would empty that queue
+ * without classifying anything.
+ *
+ * Cost: one rules read per language per pipeline run where the caller owns a
+ * cache, one per decision otherwise, and none at all for a decision that
+ * cites nothing. Never one per citation.
  */
-const citationRow = (
-  citingDecisionId: SafeId<"caseLawDecision">,
-  citation: {
-    citationText: string;
-    sectionIndex: number | null;
-    citedDecisionTypeHint: CitationDecisionTypeHint | null;
-    identifierType: DecisionIdentifierType;
-    citedCourtHint: string | null;
-  },
-  sections: { index: number; text: string }[],
-  proceduralKeys: ProceduralKeys,
-) => {
-  const citationKey = citationKeyOf(citation.citationText);
-  return {
-    citingDecisionId,
-    citationText: citation.citationText,
-    citationKey,
-    identifierType: citation.identifierType,
-    normalizedIdentifierValue: normalizeDecisionIdentifierValue(
-      citation.identifierType,
+const buildCitationRows = async ({
+  citations,
+  citingDecisionId,
+  language,
+  polarityRules,
+  proceduralKeys,
+  scopedDb,
+  sections,
+}: BuildCitationRowsOptions): Promise<
+  (typeof caseLawCitations.$inferInsert)[]
+> => {
+  if (citations.length === 0) {
+    return [];
+  }
+  const rules = await loadRules(language, scopedDb, polarityRules);
+  return citations.map((citation) => {
+    const citationKey = citationKeyOf(citation.citationText);
+    const context = extractContext(
+      sections,
       citation.citationText,
-    ),
-    citedDecisionTypeHint: citation.citedDecisionTypeHint,
-    citedCourtHint: citation.citedCourtHint,
-    kind: classifyCitation({
+      citation.sectionIndex,
+    );
+    const kind = classifyCitation({
       citationText: citation.citationText,
       citationKey,
       proceduralKeys,
-      context: extractContext(
-        sections,
+      context,
+    });
+    const match =
+      kind === CITATION_KIND.PRECEDENT && context !== null
+        ? selectRuleMatch(rules, context)
+        : null;
+    return {
+      citingDecisionId,
+      citationText: citation.citationText,
+      citationKey,
+      identifierType: citation.identifierType,
+      normalizedIdentifierValue: normalizeDecisionIdentifierValue(
+        citation.identifierType,
         citation.citationText,
-        citation.sectionIndex,
       ),
-    }),
-    sectionIndex: citation.sectionIndex,
-  };
+      citedDecisionTypeHint: citation.citedDecisionTypeHint,
+      citedCourtHint: citation.citedCourtHint,
+      kind,
+      sectionIndex: citation.sectionIndex,
+      polarity: match?.polarity ?? null,
+      polarityRuleId: match?.ruleId ?? null,
+    };
+  });
+};
+
+/** Rows from `execute` under either driver shape (bare array or `{ rows }`). */
+const executedRows = (result: unknown): unknown[] => {
+  if (Array.isArray(result)) {
+    return result;
+  }
+  if (isRecord(result) && Array.isArray(result["rows"])) {
+    return result["rows"];
+  }
+  return [];
+};
+
+/** Each rule that labelled one of these citations, and how many it labelled. */
+const polarityMatchesByRule = (
+  rows: readonly (typeof caseLawCitations.$inferInsert)[],
+): Map<string, number> => {
+  const matches = new Map<string, number>();
+  for (const { polarityRuleId } of rows) {
+    if (polarityRuleId) {
+      matches.set(polarityRuleId, (matches.get(polarityRuleId) ?? 0) + 1);
+    }
+  }
+  return matches;
+};
+
+/**
+ * Settle this decision's polarity verdicts against the rules as they stand
+ * now, and count the matches against those rules.
+ *
+ * The compiled rules a verdict came from were read before this transaction
+ * opened, and a cache holds them for the rest of the crawl cycle. Meanwhile
+ * `seed-polarity-rules.ts` retires a rule and returns every citation it
+ * labelled to the unclassified pool; the maintenance lane serializes operator
+ * passes against each other, not against a crawl in flight. A verdict from a
+ * rule retired in that window would be published after the sweep that was
+ * meant to erase it, and nothing would ever revisit it: the drain and
+ * `classify-citations.ts` both select on `polarity IS NULL`. So the writer
+ * asks, inside the transaction that publishes the rows, whether the rule is
+ * still one the loader would compile, and drops the verdict when it is not.
+ *
+ * The statement is an UPDATE rather than a read, which is what orders the two
+ * passes: it takes a row lock on each rule it confirms, so a retirement
+ * racing this decision waits for the commit and its sweep then sees the rows.
+ * The rule ids are sorted so two ingest transactions confirming the same
+ * rules walk them in one order.
+ *
+ * Counting rides along because the count has to happen somewhere: a row
+ * published with a verdict never reaches `classify-citations.ts`, which is
+ * what used to move `match_count`, so without this the column would stop
+ * reporting how much work a rule does — the one thing it is for.
+ */
+const settleCitationPolarity = async (
+  tx: Transaction,
+  rows: readonly (typeof caseLawCitations.$inferInsert)[],
+  observedAt: Date,
+): Promise<(typeof caseLawCitations.$inferInsert)[]> => {
+  const matches = polarityMatchesByRule(rows);
+  if (matches.size === 0) {
+    return [...rows];
+  }
+  const tally = [...matches].sort(([a], [b]) => (a < b ? -1 : 1));
+  const confirmed: unknown = await tx.execute(sql`
+    UPDATE ${caseLawPolarityRules} AS r
+       SET match_count = r.match_count + m.matches,
+           updated_at = GREATEST(r.updated_at, ${observedAt})
+      FROM (VALUES ${sql.join(
+        tally.map(([ruleId, count]) => sql`(${ruleId}::uuid, ${count}::int)`),
+        sql.raw(","),
+      )}) AS m(id, matches)
+     WHERE r.id = m.id
+       AND r.source IN (${sql.join(
+         ACTIVE_RULE_SOURCES.map((source) => sql`${source}`),
+         sql.raw(","),
+       )})
+    RETURNING r.id::text AS id
+  `);
+  const active = new Set(
+    executedRows(confirmed).flatMap((row) =>
+      isRecord(row) && typeof row["id"] === "string" ? [row["id"]] : [],
+    ),
+  );
+  return rows.map((row) =>
+    row.polarityRuleId && !active.has(row.polarityRuleId)
+      ? { ...row, polarity: null, polarityRuleId: null }
+      : row,
+  );
 };
 
 /**
@@ -638,6 +776,7 @@ const processDecisionAttempt = async ({
   contentionReconciliation,
   refresh,
   corpus,
+  polarityRules,
 }: ProcessDecisionAttemptOptions): Promise<ProcessResult> => {
   const result = sanitizeResult(input);
   const rejectedDecisionDate =
@@ -1123,6 +1262,7 @@ const processDecisionAttempt = async ({
             contentionReconciliation: CONTENTION_RECONCILIATION.RETRY,
             refresh,
             corpus,
+            polarityRules,
           });
         }
         return {
@@ -1245,6 +1385,7 @@ const processDecisionAttempt = async ({
             contentionReconciliation: CONTENTION_RECONCILIATION.RETRY,
             refresh,
             corpus,
+            polarityRules,
           });
         }
         return {
@@ -1556,7 +1697,20 @@ const processDecisionAttempt = async ({
 
     const incomingCitationKey = citationKeyOf(result.caseNumber);
     return {
-      citations,
+      // Built here, outside the write transaction: classifying a citation
+      // reads the polarity rules, and the write path must not hold a row
+      // lock across that read. The citing row is either the one identity
+      // resolution found or the one this attempt is about to insert under
+      // the id it already reserved.
+      citationRows: await buildCitationRows({
+        citations,
+        citingDecisionId: existing?.id ?? decisionId,
+        language: result.language,
+        polarityRules,
+        proceduralKeys,
+        scopedDb,
+        sections,
+      }),
       corpusPayload,
       corpusPlan,
       identifierRows,
@@ -1566,12 +1720,10 @@ const processDecisionAttempt = async ({
       mirrorCarriesDocument,
       payloadColumns,
       pendingMirrorPayload,
-      proceduralKeys,
-      sections,
     };
   };
   const {
-    citations,
+    citationRows,
     corpusPayload,
     corpusPlan,
     identifierRows,
@@ -1581,8 +1733,6 @@ const processDecisionAttempt = async ({
     mirrorCarriesDocument,
     payloadColumns,
     pendingMirrorPayload,
-    proceduralKeys,
-    sections,
   } = await preparePersistenceInputs();
 
   /**
@@ -1926,14 +2076,10 @@ const processDecisionAttempt = async ({
           .delete(caseLawCitations)
           .where(eq(caseLawCitations.citingDecisionId, existing.id));
 
-        if (citations.length > 0) {
+        if (citationRows.length > 0) {
           await tx
             .insert(caseLawCitations)
-            .values(
-              citations.map((c) =>
-                citationRow(existing.id, c, sections, proceduralKeys),
-              ),
-            );
+            .values(await settleCitationPolarity(tx, citationRows, observedAt));
           await resolveCitationsForDecision(tx, existing.id);
         }
 
@@ -1990,14 +2136,10 @@ const processDecisionAttempt = async ({
 
       await announceDecisionIdentifiers(tx, decisionRow.id, identifierRows);
 
-      if (citations.length > 0) {
+      if (citationRows.length > 0) {
         await tx
           .insert(caseLawCitations)
-          .values(
-            citations.map((c) =>
-              citationRow(decisionRow.id, c, sections, proceduralKeys),
-            ),
-          );
+          .values(await settleCitationPolarity(tx, citationRows, observedAt));
         // Resolve what was just written, in the transaction that wrote it.
         // One indexed lookup per citation against the fetch and parse this
         // page already paid for; without it every new citation waits for the
@@ -2081,6 +2223,7 @@ const processDecisionAttempt = async ({
         contentionReconciliation: CONTENTION_RECONCILIATION.RETRY,
         refresh,
         corpus,
+        polarityRules,
       });
     }
     throw rowWrite.error;
@@ -2325,6 +2468,12 @@ export const runIngestionPipeline = async ({
   const MAX_CONSECUTIVE_FAILURES = 10;
   let haltReason: string | null = null;
   let checkpointObservationOrder = source.checkpointObservationOrder;
+  /**
+   * Compiled polarity rules for this cycle. One read per language the cycle
+   * meets, rather than one per decision; a rule edited mid-cycle lands on the
+   * next one, which is the same bargain the background classifier makes.
+   */
+  const polarityRules: RuleCache = new Map();
 
   const maxPages = maxPagesOverride ?? adapter.maxSyncPages ?? MAX_SYNC_PAGES;
 
@@ -2493,6 +2642,7 @@ export const runIngestionPipeline = async ({
               observedAt,
               observationOrder,
               corpus,
+              polarityRules,
             });
 
             if (outcome.inserted) {
