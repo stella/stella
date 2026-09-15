@@ -57,7 +57,7 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { APIError } from "@/lib/errors/api";
-import { resolveMatterColor } from "@/lib/matter-colors";
+import { matterChromeStyle, resolveMatterColor } from "@/lib/matter-colors";
 import { getCachedAnonymization } from "@/lib/pdf/anonymization-cache";
 import { workspaceOptions } from "@/lib/workspaces/queries";
 import { entityOptions } from "@/lib/workspaces/queries/entities";
@@ -170,14 +170,6 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
         : null,
     [workspace, navigate, workspaceId],
   );
-  // Resolve the matter's icon colour once so every tab header can
-  // tint with the same `color-mix(... 2%)` formula the matter
-  // breadcrumb uses — the inspector reads as a continuation of
-  // the matter chrome, not a separate surface.
-  const matterColor =
-    workspaceId !== undefined
-      ? resolveMatterColor(workspaceId, workspace?.color ?? null)
-      : null;
 
   const viewMatch = useMatch({
     from: "/_protected/workspaces/$workspaceId/$viewId",
@@ -233,10 +225,16 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
   }, [suggestionOwnerRouteActive, clearReviveSuggestion]);
 
   const activeTab = tabs.find((tab) => tab.id === activeId);
-  const activeMatterPanelColor =
+  const workspaceMatterColor =
+    workspaceId === undefined
+      ? null
+      : resolveMatterColor(workspaceId, workspace?.color ?? null);
+  // The inspector paints its own matter's tint, not the route's: a tab from
+  // another matter keeps that matter's ground on its rail, header, and panes.
+  const inspectorMatterColor =
     activeTab?.type === "matter"
       ? resolveMatterColor(activeTab.workspaceId, activeTab.color ?? null)
-      : matterColor;
+      : workspaceMatterColor;
 
   const {
     handleResetZoom,
@@ -490,8 +488,16 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
     <RenderStormRegion name="inspector">
       {/* Panes paint `bg-background`; pointing the token at the matter tint
           here gives every pane the same ground as the rest of the matter
-          chrome, including panes added later. */}
-      <div className="flex h-full bg-(--matter-background-tint) shadow-lg [--background:var(--matter-background-tint)]">
+          chrome, including panes added later. Without a matter of its own the
+          inspector inherits the route's tint variables. */}
+      <div
+        className="flex h-full bg-(--matter-background-tint) shadow-lg [--background:var(--matter-background-tint)]"
+        style={
+          inspectorMatterColor === null
+            ? undefined
+            : matterChromeStyle(inspectorMatterColor)
+        }
+      >
         <div className="hidden md:contents">
           <InspectorRail
             activeId={activeId}
@@ -528,13 +534,8 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
             // shape — so the user sees the expected interface
             // immediately and the data hydrates a frame later, no
             // spinner.
-            <Suspense
-              fallback={
-                <ChatTabPanelShell matterColor={matterColor} tab={activeTab} />
-              }
-            >
+            <Suspense fallback={<ChatTabPanelShell tab={activeTab} />}>
               <ChatTabPanel
-                matterColor={activeMatterPanelColor}
                 onClose={() => handleCloseTab(activeTab.id)}
                 onLabelContextMenu={ribbonContextMenu.openAt}
                 tab={activeTab}
@@ -581,7 +582,6 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
                   }}
                 />
               }
-              matterColor={activeMatterPanelColor}
               onClose={() => handleCloseTab(activeTab.id)}
             />
             <Suspense fallback={<MetadataPanelSkeleton />}>
@@ -631,7 +631,6 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
             handleWheelZoom={handleWheelZoom}
             handleZoom={handleZoom}
             key={tab.renderId ?? tab.id}
-            matterColor={matterColor}
             matterOrigin={matterOrigin}
             minimized={minimized}
             mountedPdfIds={mountedPdfIds}

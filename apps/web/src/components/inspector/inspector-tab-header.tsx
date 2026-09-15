@@ -11,7 +11,6 @@ import { cn } from "@stll/ui/utils";
 import { InlineEdit } from "@/components/inline-edit";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { MatterIcon } from "@/components/matter-icon";
-import { MATTER_TINT_GROUND, matterTint } from "@/lib/matter-colors";
 
 /**
  * Shared header strip used at the top of every inspector tab —
@@ -84,12 +83,6 @@ type InspectorTabHeaderProps = {
    * "open in big view", …). Rendered before the universal close.
    */
   actions?: ReactNode;
-  /**
-   * Resolved matter colour (hex or `var(--option-*)`). The header paints the
-   * same chrome tint as the app header beside it, so the inspector's top row
-   * continues the matter chrome instead of breaking to white.
-   */
-  matterColor?: string | null | undefined;
   onClose: () => void;
 };
 
@@ -100,22 +93,13 @@ export const InspectorTabHeader = ({
   rename,
   matter,
   actions,
-  matterColor,
   onClose,
 }: InspectorTabHeaderProps) => {
   const tCommon = useTranslations("common");
   const setMinimized = useInspectorTabsStore((s) => s.setMinimized);
 
   return (
-    <div
-      className="flex h-12 shrink-0 items-center justify-between border-b px-3"
-      style={{
-        backgroundColor: matterTint(
-          matterColor ?? null,
-          MATTER_TINT_GROUND.chrome,
-        ),
-      }}
-    >
+    <div className="flex h-12 shrink-0 items-center justify-between border-b bg-(--matter-sidebar-tint) px-3">
       <div className="flex min-w-0 items-center gap-2 overflow-hidden">
         <Button
           aria-label={tCommon("back")}

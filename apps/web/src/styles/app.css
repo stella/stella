@@ -18,3 +18,10 @@
  * compiled package output must be scanned explicitly: node_modules is outside
  * Tailwind's default source detection. */
 @source "../../../../node_modules/@stll/folio-react/dist/**/*.js";
+
+/* Resolved on the root element, where the theme and palette classes live,
+ * because a subtree may re-point `--background` (the inspector's matter tint). */
+:root {
+  --untinted-background: var(--background);
+  --untinted-sidebar: var(--sidebar);
+}
