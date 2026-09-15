@@ -72,15 +72,19 @@ const POLICIES = [
   descriptor: CorpusSourceDescriptor | null;
   expected: string;
 }[];
-const fixtures = POLICIES.map((policy) => ({
-  name: policy.name,
-  descriptor: policy.descriptor,
-  expected: policy.expected,
-  decisionId: createSafeId<"caseLawDecision">(),
-  caseSourceId: createSafeId<"caseLawSource">(),
-  statuteId: createSafeId<"legislationDocument">(),
-  statuteSourceId: createSafeId<"legislationSource">(),
-}));
+const COUNTRIES = ["CZE", "SVK", "POL", "DEU"] as const;
+const fixtures = COUNTRIES.flatMap((country) =>
+  POLICIES.map((policy) => ({
+    name: `${policy.name}-${country}`,
+    country,
+    descriptor: policy.descriptor,
+    expected: country === "CZE" ? policy.expected : ("absent" as const),
+    decisionId: createSafeId<"caseLawDecision">(),
+    caseSourceId: createSafeId<"caseLawSource">(),
+    statuteId: createSafeId<"legislationDocument">(),
+    statuteSourceId: createSafeId<"legislationSource">(),
+  })),
+);
 const listingId = createSafeId<"caseLawDecision">();
 const unavailableCountryId = createSafeId<"caseLawDecision">();
 const WORDING = "Distinct corpus wording must obey the source permission.";
@@ -131,7 +135,7 @@ beforeAll(
         id: fixture.decisionId,
         sourceId: fixture.caseSourceId,
         caseNumber: fixture.name,
-        country: "CZE",
+        country: fixture.country,
         court: "Court",
         language: "cs",
         fulltext: WORDING,
@@ -147,7 +151,7 @@ beforeAll(
         sourceId: fixture.statuteSourceId,
         eli: `test/${fixture.name}`,
         title: fixture.name,
-        country: "CZE",
+        country: fixture.country,
         language: "cs",
         fulltext: WORDING,
         status: "current",
@@ -155,7 +159,7 @@ beforeAll(
       });
     }
     const open =
-      fixtures.find((fixture) => fixture.name === "open") ??
+      fixtures.find((fixture) => fixture.name === "open-CZE") ??
       panic("Open fixture missing");
     revokeStatuteAi = async () => {
       await db
@@ -269,7 +273,7 @@ test("client-provided active decision ids cannot disclose unpublished or missing
 
 test("statute fallback withholds wording and marks when AI permission changes between reads", async () => {
   const open =
-    fixtures.find((fixture) => fixture.name === "open") ??
+    fixtures.find((fixture) => fixture.name === "open-CZE") ??
     panic("Open fixture missing");
   let reads = 0;
   const revokeBeforeFallback = async <T>(

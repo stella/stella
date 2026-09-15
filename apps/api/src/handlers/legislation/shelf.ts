@@ -9,7 +9,7 @@ import { readNonRedistributableLegislationSourceIds } from "@/api/handlers/legis
 import { errorTag } from "@/api/lib/errors/utils";
 import { createTtlResultCache } from "@/api/lib/legal-search/browse-facets-cache";
 import { isCorpusIndexJurisdiction } from "@/api/lib/legal-search/index-naming";
-import { redistributableLegislationSource } from "@/api/lib/legal-search/legislation-redistribution";
+import { publishedLegislationDocument } from "@/api/lib/legal-search/legislation-redistribution";
 import {
   inForceToday,
   versionSortKey,
@@ -117,7 +117,7 @@ export const readLegislationShelf = async ({
       )
       .where(
         and(
-          redistributableLegislationSource,
+          publishedLegislationDocument,
           eq(legislationDocuments.country, country),
           inForceToday(
             legislationDocuments.versionValidFrom,
@@ -139,7 +139,7 @@ export const readLegislationShelf = async ({
       )
       .where(
         and(
-          redistributableLegislationSource,
+          publishedLegislationDocument,
           eq(legislationDocuments.country, country),
           sql`${validFromKey} > CURRENT_DATE`,
           sql`${validFromKey} <= CURRENT_DATE + ${windowDays}`,

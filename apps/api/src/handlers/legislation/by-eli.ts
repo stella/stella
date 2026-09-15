@@ -5,7 +5,7 @@ import type { Static } from "elysia";
 
 import { legislationDocuments, legislationSources } from "@/api/db/schema";
 import { readPublicLegislationHandler } from "@/api/handlers/legislation/get";
-import { redistributableLegislationSource } from "@/api/lib/legal-search/legislation-redistribution";
+import { publishedLegislationDocument } from "@/api/lib/legal-search/legislation-redistribution";
 import {
   inForceOn,
   versionSortKey,
@@ -40,7 +40,7 @@ export const readStatuteByEliHandler = async (
 
   const workConditions: SQL[] = [
     eq(legislationDocuments.eli, query.eli),
-    redistributableLegislationSource,
+    publishedLegislationDocument,
   ];
 
   if (query.language !== undefined) {

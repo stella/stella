@@ -4,6 +4,10 @@ import type { SQL } from "drizzle-orm";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
 
+import {
+  PUBLIC_LEGISLATION_COUNTRIES,
+  isPublicLegislationCountry,
+} from "@stll/api-contract/legislation-publication";
 import { SEARCH_TOTAL_NOT_COUNTED } from "@stll/api-contract/search";
 import { isUuid } from "@stll/uuid-codec";
 
@@ -49,7 +53,11 @@ import {
   isCorpusIndexJurisdiction,
 } from "@/api/lib/legal-search/index-naming";
 import { currentLegislationCorpusProjection } from "@/api/lib/legal-search/legislation-corpus-projection";
-import { redistributableLegislationSource } from "@/api/lib/legal-search/legislation-redistribution";
+import {
+  redistributableLegislationSource,
+  publishedLegislationDocument,
+  publishedLegislationCountryFor,
+} from "@/api/lib/legal-search/legislation-redistribution";
 import { NO_EXPANSION_DICTIONARY_IDENTITY } from "@/api/lib/legal-search/morphology/dictionary";
 import { buildPgFtsSearchSql } from "@/api/lib/legal-search/pg-fts-query";
 import {
@@ -197,6 +205,7 @@ const pgSearch = async (
       ON legislation_sources.id = d.source_id
      AND ${redistributableLegislationSource}
     WHERE ${ftsSearch.predicate}
+      AND ${publishedLegislationCountryFor(sql`d.country`)}
       AND sd.retry_after IS NULL
       ${filters}
       ${cursorFilter}
@@ -240,7 +249,10 @@ const buildCorpusIndexQuery = (body: SearchLegislationBody): string | null => {
   if (freeText === null) {
     return null;
   }
-  const clauses = [freeText];
+  const clauses = [
+    freeText,
+    `(${PUBLIC_LEGISLATION_COUNTRIES.map((country) => `jurisdiction:${quoteCorpusValue(country)}`).join(" OR ")})`,
+  ];
   if (body.documentType) {
     clauses.push(`document_type:${quoteCorpusValue(body.documentType)}`);
   }
@@ -297,7 +309,7 @@ export const rehydrateLegislationCandidates = async ({
   // (metadata changed, async re-index/delete pending) must not satisfy filters
   // it no longer matches.
   const rehydrationFilters: SQL[] = [
-    redistributableLegislationSource,
+    publishedLegislationDocument,
     // Accept only hits this generation currently holds, read from its
     // projection state.
     currentLegislationCorpusProjection(generation),
@@ -474,7 +486,8 @@ export const searchLegislationHandler = async (
 
   if (
     body.jurisdiction !== undefined &&
-    !isCorpusIndexJurisdiction(body.jurisdiction)
+    (!isCorpusIndexJurisdiction(body.jurisdiction) ||
+      !isPublicLegislationCountry(body.jurisdiction))
   ) {
     return status(400, { message: "Invalid jurisdiction" });
   }

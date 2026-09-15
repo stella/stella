@@ -6,7 +6,7 @@ import {
   SITEMAP_XML_RESPONSE_HEADERS,
 } from "@/features/statutes/statute-sitemap";
 import { isPublicLawSitemapEnabled } from "@/lib/public-law-launch";
-import { isStatuteCountry } from "@/lib/statute-route";
+import { isPublicStatuteCountry } from "@/lib/statute-route";
 
 export const Route = createFileRoute(
   "/sitemaps/law-statutes/$country/{$bucket}.xml",
@@ -14,7 +14,10 @@ export const Route = createFileRoute(
   server: {
     handlers: {
       GET: async ({ params }) => {
-        if (!isPublicLawSitemapEnabled() || !isStatuteCountry(params.country)) {
+        if (
+          !isPublicLawSitemapEnabled() ||
+          !isPublicStatuteCountry(params.country)
+        ) {
           return new Response("Not Found", { status: 404 });
         }
 

@@ -4,6 +4,7 @@ import { PublicLawSearch } from "@/components/public-law-search";
 import { useFormatter } from "@/i18n/formatting-context";
 import {
   isStatuteCountry,
+  isPublicStatuteCountry,
   STATUTE_COUNTRIES,
   type StatuteCountry,
 } from "@/lib/statute-route";
@@ -49,13 +50,15 @@ export const StatuteSearch = ({
         })
       }
       countryPicker={{
-        countries: Object.keys(STATUTE_COUNTRIES).map((segment) => ({
-          label: countryName(segment),
-          value: segment,
-        })),
+        countries: Object.keys(STATUTE_COUNTRIES)
+          .filter(isPublicStatuteCountry)
+          .map((segment) => ({
+            label: countryName(segment),
+            value: segment,
+          })),
         country,
         onCountryChange: (value) => {
-          if (isStatuteCountry(value)) {
+          if (isPublicStatuteCountry(value)) {
             onCountryChange(value);
           }
         },

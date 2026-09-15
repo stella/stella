@@ -11,7 +11,7 @@ import {
 } from "@/api/db/schema";
 import { arrayOrEmpty } from "@/api/lib/array";
 import { groupableSql } from "@/api/lib/groupable-sql";
-import { redistributableLegislationSource } from "@/api/lib/legal-search/legislation-redistribution";
+import { publishedLegislationDocument } from "@/api/lib/legal-search/legislation-redistribution";
 import type {
   LegislationReadDb,
   LegislationReadTransaction,
@@ -67,7 +67,7 @@ const statuteLastmodSql = sql<string>`to_char(max(${legislationDocuments.updated
 
 const publishedStatuteConditions = (): SQL[] => [
   isNotNull(legislationDocuments.slug),
-  redistributableLegislationSource,
+  publishedLegislationDocument,
 ];
 
 const getCountryPathSegment = (country: string): string =>

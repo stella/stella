@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 
+import { isPublicLegislationCountry } from "@stll/api-contract/legislation-publication";
 import { decodeCompactUuid, encodeCompactUuid } from "@stll/uuid-codec";
 
 /**
@@ -21,6 +22,11 @@ export type StatuteCountry = keyof typeof STATUTE_COUNTRIES;
 
 export const isStatuteCountry = (value: string): value is StatuteCountry =>
   Object.hasOwn(STATUTE_COUNTRIES, value);
+
+export const isPublicStatuteCountry = (
+  value: string,
+): value is StatuteCountry =>
+  isStatuteCountry(value) && isPublicLegislationCountry(value.toUpperCase());
 
 const COUNTRY_SEGMENT_PATTERN = /^[a-z]{2,3}$/u;
 

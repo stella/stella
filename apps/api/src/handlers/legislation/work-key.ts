@@ -3,7 +3,10 @@ import type { SQL } from "drizzle-orm";
 
 import { legislationDocuments, legislationSources } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
-import { redistributableLegislationSource } from "@/api/lib/legal-search/legislation-redistribution";
+import {
+  publishedLegislationDocument,
+  publishedLegislationCountryFor,
+} from "@/api/lib/legal-search/legislation-redistribution";
 import type { LegislationReadTransaction } from "@/api/lib/legislation-public-read-db";
 
 /**
@@ -41,7 +44,7 @@ export const selectWorkKey = async (
     .where(
       and(
         eq(legislationDocuments.id, documentId),
-        redistributableLegislationSource,
+        publishedLegislationDocument,
       ),
     )
     .limit(1);
@@ -51,6 +54,7 @@ export const selectWorkKey = async (
 
 /** Restricts a `legislation_documents` scan to one Work. */
 export const workKeyConditions = (work: LegislationWorkKey): SQL[] => [
+  publishedLegislationCountryFor(legislationDocuments.country),
   eq(legislationDocuments.sourceId, work.sourceId),
   eq(legislationDocuments.eli, work.eli),
   eq(legislationDocuments.language, work.language),

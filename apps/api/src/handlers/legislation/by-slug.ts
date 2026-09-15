@@ -9,7 +9,7 @@ import {
   STATUTE_SLUG_MAX_LENGTH,
 } from "@/api/handlers/legislation/slug";
 import { workKeyConditions } from "@/api/handlers/legislation/work-key";
-import { redistributableLegislationSource } from "@/api/lib/legal-search/legislation-redistribution";
+import { publishedLegislationDocument } from "@/api/lib/legal-search/legislation-redistribution";
 import {
   inForceOn,
   versionSortKey,
@@ -82,7 +82,7 @@ export const readStatuteBySlugHandler = async ({
         and(
           eq(legislationDocuments.country, country),
           eq(legislationDocuments.slug, slug),
-          redistributableLegislationSource,
+          publishedLegislationDocument,
         ),
       )
       .orderBy(asc(legislationDocuments.eli), asc(legislationDocuments.id))

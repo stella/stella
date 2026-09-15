@@ -50,7 +50,15 @@ import {
 
 let client: Awaited<ReturnType<typeof createTestPglite>> | undefined;
 let legislationDb: LegislationReadDb;
+let shelfDb: LegislationReadDb;
+let shelfClient: Awaited<ReturnType<typeof createTestPglite>> | undefined;
 let workspaceDb: LegislationReadDb;
+
+const unpublishedStatutes = ["SVK", "POL", "DEU"].map((country) => ({
+  country,
+  id: createSafeId<"legislationDocument">(),
+  eli: `${country}/2020/123`,
+}));
 
 const openSourceId = createSafeId<"legislationSource">();
 const closedSourceId = createSafeId<"legislationSource">();
@@ -242,6 +250,18 @@ beforeAll(
       },
     ]);
     await db.insert(legislationDocuments).values([
+      ...unpublishedStatutes.map(({ id, country, eli }) =>
+        seedDocument({
+          id,
+          country,
+          eli,
+          sourceId: openSourceId,
+          title: "Unpublished jurisdiction statute",
+          documentAst: statuteAst("Withheld country wording"),
+          versionValidFrom: "2020-01-01",
+          versionValidTo: null,
+        }),
+      ),
       seedDocument({
         id: civilCodeSuperseded,
         sourceId: openSourceId,
@@ -372,110 +392,6 @@ beforeAll(
         versionValidFrom: "2021-01-01",
         versionValidTo: null,
       }),
-      // The shelf fixture lives in its own jurisdiction so the listing tests
-      // above keep their order. Dates are relative to today: the shelf is a
-      // window around the current date.
-      seedDocument({
-        id: shelfFreshSuperseded,
-        sourceId: openSourceId,
-        eli: "SK/2026/300",
-        title: "Fresh Act",
-        country: "SVK",
-        language: "sk",
-        versionValidFrom: "2020-01-01",
-        versionValidTo: daysFromToday(-5),
-      }),
-      seedDocument({
-        id: shelfFresh,
-        sourceId: openSourceId,
-        eli: "SK/2026/300",
-        title: "Fresh Act",
-        country: "SVK",
-        language: "sk",
-        versionValidFrom: daysFromToday(-5),
-        versionValidTo: null,
-      }),
-      seedDocument({
-        id: shelfEdgeRecent,
-        sourceId: openSourceId,
-        eli: "SK/2026/302",
-        title: "Edge Recent Act",
-        country: "SVK",
-        language: "sk",
-        versionValidFrom: daysFromToday(-LEGISLATION_SHELF_WINDOW_DAYS),
-        versionValidTo: null,
-      }),
-      seedDocument({
-        id: shelfStale,
-        sourceId: openSourceId,
-        eli: "SK/2026/303",
-        title: "Stale Act",
-        country: "SVK",
-        language: "sk",
-        versionValidFrom: daysFromToday(-LEGISLATION_SHELF_WINDOW_DAYS - 1),
-        versionValidTo: null,
-      }),
-      seedDocument({
-        id: shelfUpcomingCurrent,
-        sourceId: openSourceId,
-        eli: "SK/2026/301",
-        title: "Upcoming Act",
-        country: "SVK",
-        language: "sk",
-        versionValidFrom: "2020-01-01",
-        versionValidTo: daysFromToday(10),
-      }),
-      seedDocument({
-        id: shelfUpcomingNext,
-        sourceId: openSourceId,
-        eli: "SK/2026/301",
-        title: "Upcoming Act",
-        country: "SVK",
-        language: "sk",
-        versionValidFrom: daysFromToday(10),
-        versionValidTo: daysFromToday(20),
-      }),
-      // A later window of the same work: not the next one, so not shown.
-      seedDocument({
-        id: shelfUpcomingLater,
-        sourceId: openSourceId,
-        eli: "SK/2026/301",
-        title: "Upcoming Act",
-        country: "SVK",
-        language: "sk",
-        versionValidFrom: daysFromToday(20),
-        versionValidTo: null,
-      }),
-      seedDocument({
-        id: shelfEdgeFuture,
-        sourceId: openSourceId,
-        eli: "SK/2026/304",
-        title: "Edge Future Act",
-        country: "SVK",
-        language: "sk",
-        versionValidFrom: daysFromToday(LEGISLATION_SHELF_WINDOW_DAYS),
-        versionValidTo: null,
-      }),
-      seedDocument({
-        id: shelfFarFuture,
-        sourceId: openSourceId,
-        eli: "SK/2026/305",
-        title: "Far Future Act",
-        country: "SVK",
-        language: "sk",
-        versionValidFrom: daysFromToday(LEGISLATION_SHELF_WINDOW_DAYS + 1),
-        versionValidTo: null,
-      }),
-      seedDocument({
-        id: shelfWithheldFuture,
-        sourceId: closedSourceId,
-        eli: "SK/2026/306",
-        title: "Withheld Future Act",
-        country: "SVK",
-        language: "sk",
-        versionValidFrom: daysFromToday(3),
-        versionValidTo: null,
-      }),
     ]);
 
     workspaceDb = async (read) =>
@@ -487,23 +403,150 @@ beforeAll(
           await read(tx as unknown as LegislationReadTransaction),
       );
 
-    const readDb = async <T>(
-      fn: (tx: LegislationReadTransaction) => Promise<T>,
-    ): Promise<T> =>
-      await withPublicLawReaderRole(
-        db,
-        async (tx) =>
-          // SAFETY: this PGlite transaction executes under the production
-          // public-law role and exposes the same read surface to the callback.
-          // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- embedded role transaction stands in for LegislationReadTransaction
-          await fn(tx as unknown as LegislationReadTransaction),
-      );
-    legislationDb = readDb;
+    const readDb =
+      (targetDb: typeof db): LegislationReadDb =>
+      async (read) =>
+        await withPublicLawReaderRole(
+          targetDb,
+          async (tx) =>
+            // SAFETY: this PGlite transaction executes under the production
+            // public-law role and exposes the same read surface to the callback.
+            // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- embedded role transaction stands in for LegislationReadTransaction
+            await read(tx as unknown as LegislationReadTransaction),
+        );
+    legislationDb = readDb(db);
+
+    // The shelf owns a separate fixture so both suites exercise an admitted
+    // country without changing the listing's cursor ordering.
+    shelfClient = await createTestPglite();
+    const shelfOwner = drizzle({ client: shelfClient });
+    await shelfOwner.execute(sql.raw("SET TIME ZONE 'UTC'"));
+    await shelfOwner.insert(legislationSources).values([
+      { id: openSourceId, adapterKey: "shelf-open", name: "Open shelf" },
+      {
+        id: closedSourceId,
+        adapterKey: "shelf-closed",
+        name: "Closed shelf",
+        descriptor: {
+          license: "restricted",
+          attribution: null,
+          allowsRedistribution: false,
+          allowsDerivedAi: false,
+        },
+      },
+    ]);
+    await shelfOwner.insert(legislationDocuments).values([
+      seedDocument({
+        id: shelfFreshSuperseded,
+        sourceId: openSourceId,
+        eli: "CZ/2026/300",
+        title: "Fresh Act",
+        country: "CZE",
+        language: "cs",
+        versionValidFrom: "2020-01-01",
+        versionValidTo: daysFromToday(-5),
+      }),
+      seedDocument({
+        id: shelfFresh,
+        sourceId: openSourceId,
+        eli: "CZ/2026/300",
+        title: "Fresh Act",
+        country: "CZE",
+        language: "cs",
+        versionValidFrom: daysFromToday(-5),
+        versionValidTo: null,
+      }),
+      seedDocument({
+        id: shelfEdgeRecent,
+        sourceId: openSourceId,
+        eli: "CZ/2026/302",
+        title: "Edge Recent Act",
+        country: "CZE",
+        language: "cs",
+        versionValidFrom: daysFromToday(-LEGISLATION_SHELF_WINDOW_DAYS),
+        versionValidTo: null,
+      }),
+      seedDocument({
+        id: shelfStale,
+        sourceId: openSourceId,
+        eli: "CZ/2026/303",
+        title: "Stale Act",
+        country: "CZE",
+        language: "cs",
+        versionValidFrom: daysFromToday(-LEGISLATION_SHELF_WINDOW_DAYS - 1),
+        versionValidTo: null,
+      }),
+      seedDocument({
+        id: shelfUpcomingCurrent,
+        sourceId: openSourceId,
+        eli: "CZ/2026/301",
+        title: "Upcoming Act",
+        country: "CZE",
+        language: "cs",
+        versionValidFrom: "2020-01-01",
+        versionValidTo: daysFromToday(10),
+      }),
+      seedDocument({
+        id: shelfUpcomingNext,
+        sourceId: openSourceId,
+        eli: "CZ/2026/301",
+        title: "Upcoming Act",
+        country: "CZE",
+        language: "cs",
+        versionValidFrom: daysFromToday(10),
+        versionValidTo: daysFromToday(20),
+      }),
+      // A later window of the same work: not the next one, so not shown.
+      seedDocument({
+        id: shelfUpcomingLater,
+        sourceId: openSourceId,
+        eli: "CZ/2026/301",
+        title: "Upcoming Act",
+        country: "CZE",
+        language: "cs",
+        versionValidFrom: daysFromToday(20),
+        versionValidTo: null,
+      }),
+      seedDocument({
+        id: shelfEdgeFuture,
+        sourceId: openSourceId,
+        eli: "CZ/2026/304",
+        title: "Edge Future Act",
+        country: "CZE",
+        language: "cs",
+        versionValidFrom: daysFromToday(LEGISLATION_SHELF_WINDOW_DAYS),
+        versionValidTo: null,
+      }),
+      seedDocument({
+        id: shelfFarFuture,
+        sourceId: openSourceId,
+        eli: "CZ/2026/305",
+        title: "Far Future Act",
+        country: "CZE",
+        language: "cs",
+        versionValidFrom: daysFromToday(LEGISLATION_SHELF_WINDOW_DAYS + 1),
+        versionValidTo: null,
+      }),
+      seedDocument({
+        id: shelfWithheldFuture,
+        sourceId: closedSourceId,
+        eli: "CZ/2026/306",
+        title: "Withheld Future Act",
+        country: "CZE",
+        language: "cs",
+        versionValidFrom: daysFromToday(3),
+        versionValidTo: null,
+      }),
+    ]);
+    shelfDb = readDb(shelfOwner);
   },
   { timeout: propertyTestTimeout(30_000) },
 );
 
 afterAll(async () => {
+  if (shelfClient !== undefined) {
+    await shelfClient.close();
+  }
   if (client !== undefined) {
     await client.close();
   }
@@ -512,8 +555,8 @@ afterAll(async () => {
 describe("legislation shelf", () => {
   test("recently in force lists current consolidations opened within the window, newest first", async () => {
     const shelf = await readLegislationShelf({
-      legislationDb,
-      country: "SVK",
+      legislationDb: shelfDb,
+      country: "CZE",
     });
     // The superseded window of the fresh act and the stale act are out; the
     // window's own edge is in.
@@ -525,8 +568,8 @@ describe("legislation shelf", () => {
 
   test("entering into force lists each work's next window only, soonest first, within the window", async () => {
     const shelf = await readLegislationShelf({
-      legislationDb,
-      country: "SVK",
+      legislationDb: shelfDb,
+      country: "CZE",
     });
     expect(shelf.enteringIntoForce.map((item) => item.id)).toEqual([
       shelfUpcomingNext,
@@ -541,8 +584,8 @@ describe("legislation shelf", () => {
 
   test("the shelf is bounded and column-restricted for the public reader", async () => {
     const shelf = await readLegislationShelf({
-      legislationDb,
-      country: "SVK",
+      legislationDb: shelfDb,
+      country: "CZE",
     });
     expect(shelf.recentlyInForce.length).toBeLessThanOrEqual(
       LIMITS.legislationShelfPerList,
@@ -563,25 +606,25 @@ describe("legislation shelf", () => {
   test("the handler rejects a malformed jurisdiction before reading anything", async () => {
     const rejected = await readLegislationShelfHandler(
       { country: "s-k" },
-      legislationDb,
+      shelfDb,
     );
     expect("recentlyInForce" in rejected).toBe(false);
   });
 
   test("the shelf reads the jurisdiction in its corpus form", async () => {
     const shelf = await readLegislationShelf({
-      legislationDb,
-      country: "SVK",
+      legislationDb: shelfDb,
+      country: "CZE",
     });
-    expect(shelf.country).toBe("SVK");
-    expect(shelf.recentlyInForce.every((item) => item.country === "SVK")).toBe(
+    expect(shelf.country).toBe("CZE");
+    expect(shelf.recentlyInForce.every((item) => item.country === "CZE")).toBe(
       true,
     );
   });
 
   test("a jurisdiction without legislation has an empty shelf, not an error", async () => {
     const shelf = await readLegislationShelf({
-      legislationDb,
+      legislationDb: shelfDb,
       country: "POL",
     });
     expect(shelf).toEqual({
@@ -1288,4 +1331,38 @@ describe("provision history", () => {
       civilCodeSuperseded,
     ]);
   });
+});
+
+describe("statute country publication", () => {
+  test.each(unpublishedStatutes)(
+    "$country cannot be enumerated or reached through a document or work identifier",
+    async ({ id, country, eli }) => {
+      const page = expectPage(
+        await listStatutesHandler({ country }, legislationDb),
+      );
+      expect(page.items).toEqual([]);
+      expect(page.nextCursor).toBeNull();
+      expect(
+        await readPublicLegislationHandler(id, legislationDb),
+      ).toMatchObject({ code: 404 });
+      expect(
+        await readStatuteByEliHandler({ eli }, legislationDb),
+      ).toMatchObject({ code: 404 });
+      expect(
+        await listStatuteVersionsHandler({
+          documentId: id,
+          query: {},
+          legislationDb,
+        }),
+      ).toMatchObject({ code: 404 });
+      expect(
+        await readProvisionHistoryHandler({
+          documentId: id,
+          anchor: DELIVERY_ANCHOR,
+          query: {},
+          legislationDb,
+        }),
+      ).toMatchObject({ code: 404 });
+    },
+  );
 });
