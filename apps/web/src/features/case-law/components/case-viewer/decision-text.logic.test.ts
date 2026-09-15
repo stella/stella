@@ -16,6 +16,7 @@ import {
   footnoteParts,
   visibleDecisionBlocks,
 } from "@/features/case-law/components/case-viewer/decision-text.logic";
+import type { HeadnoteOrigin } from "@/features/case-law/components/case-viewer/headnote-block";
 
 const titleBlock = (plainText: string): Block => ({
   anchorId: "title",
@@ -369,7 +370,7 @@ describe("the mark on the court's own headnote", () => {
   });
 
   test("invents no chip for a court the read did not resolve", () => {
-    const unmarked = { type: "court", chip: null };
+    const unmarked: HeadnoteOrigin = { type: "court", chip: null };
 
     expect(courtHeadnoteOrigin({})).toEqual(unmarked);
     expect(courtHeadnoteOrigin({ courtAbbreviation: "NS" })).toEqual(unmarked);

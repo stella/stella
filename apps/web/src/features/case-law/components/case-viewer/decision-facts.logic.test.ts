@@ -44,9 +44,7 @@ describe("decision facts", () => {
       sourceUrl: null,
     });
 
-    expect([...DECISION_FACT_KINDS].toSorted()).toEqual(
-      Object.keys(facts).toSorted(),
-    );
+    expect([...DECISION_FACT_KINDS].sort()).toEqual(Object.keys(facts).sort());
   });
 
   test("a selection answers only for the facts it names", () => {

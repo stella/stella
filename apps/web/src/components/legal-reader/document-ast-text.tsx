@@ -989,7 +989,10 @@ export const BlockRenderer = ({
                 />
               </span>
             )}
-            <span className="flex flex-wrap items-center justify-center gap-2">
+            {/* The designation stays on the column's axis; the details
+                action and the permalink hang off the inline end, so a wide
+                accessory never nudges "§ 120" off centre. */}
+            <span className="relative flex items-center justify-center">
               <span className="text-foreground text-[1.35rem] leading-none font-medium">
                 <InlineContent
                   {...sharedInlineProps}
@@ -997,8 +1000,10 @@ export const BlockRenderer = ({
                   inlines={provision.designation.inlines}
                 />
               </span>
-              {provision.accessory}
-              {headingPermalink}
+              <span className="absolute inset-e-0 top-1/2 flex -translate-y-1/2 items-center gap-2">
+                {provision.accessory}
+                {headingPermalink}
+              </span>
             </span>
             {provision.below.inlines.length > 0 && (
               <span className="mt-3 block">
