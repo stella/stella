@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 1.3.1
+
+### Patch Changes
+
+- [#3420](https://github.com/stella/stella/pull/3420) [`3a33e1a`](https://github.com/stella/stella/commit/3a33e1a0399c6d8d698b3569d1ebcbd6e6fdb36c) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Expose optional copy names and replay-safe target identities for document duplication.
+
 ## 1.3.0
 
 ### Minor Changes
