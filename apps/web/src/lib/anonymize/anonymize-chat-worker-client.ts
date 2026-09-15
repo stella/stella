@@ -1,9 +1,8 @@
-import type { ChatAnonResult } from "@stll/anonymize-chat";
-
 import { getAnalytics } from "@/lib/analytics/provider";
 
 // eslint-disable-next-line import/default -- Vite ?worker&url import returns the emitted worker script URL as default export
 import anonymizeChatWorkerUrl from "../../workers/anonymize-chat-worker?worker&url";
+import { createAnonymizeChatWorkerClient } from "./anonymize-chat-worker-client.logic";
 
 /**
  * Main-thread client for the chat-input anonymization Web Worker.
@@ -14,47 +13,8 @@ import anonymizeChatWorkerUrl from "../../workers/anonymize-chat-worker?worker&u
  * be in flight without crossing wires.
  */
 
-type WorkerRequest = {
-  id: number;
-  text: string;
-  workspaceId: string;
-  excludedCanonicals?: readonly string[];
-};
-
-type WorkerResponse =
-  | ({ id: number; ok: true } & ChatAnonResult)
-  | { id: number; ok: false; error: string };
-
-type Pending = {
-  resolve: (value: ChatAnonResult) => void;
-  reject: (reason: Error) => void;
-};
-
-let worker: Worker | null = null;
-let nextRequestId = 0;
-
-class PendingWorkerRequests {
-  private readonly entries = new Map<number, Pending>();
-
-  add(id: number, entry: Pending) {
-    this.entries.set(id, entry);
-  }
-
-  take(id: number): Pending | undefined {
-    const entry = this.entries.get(id);
-    this.entries.delete(id);
-    return entry;
-  }
-
-  rejectAll(error: Error) {
-    for (const entry of this.entries.values()) {
-      entry.reject(error);
-    }
-    this.entries.clear();
-  }
-}
-
-const pendingRequests = new PendingWorkerRequests();
+const ANONYMIZE_REQUEST_TIMEOUT_MS = 30_000;
+const MAX_PENDING_ANONYMIZE_REQUESTS = 32;
 
 /**
  * Create the dedicated module worker.
@@ -93,38 +53,11 @@ const createAnonymizeChatWorker = (): Worker => {
   }
 };
 
-const ensureWorker = (): Worker => {
-  if (worker !== null) {
-    return worker;
-  }
-  const created = createAnonymizeChatWorker();
-  created.addEventListener("message", (event: MessageEvent<WorkerResponse>) => {
-    const message = event.data;
-    const entry = pendingRequests.take(message.id);
-    if (entry === undefined) {
-      return;
-    }
-    if (message.ok) {
-      entry.resolve({
-        redactedText: message.redactedText,
-        pairs: message.pairs,
-        redactionMap: message.redactionMap,
-        entityCount: message.entityCount,
-      });
-    } else {
-      entry.reject(new Error(message.error));
-    }
-  });
-  created.addEventListener("error", () => {
-    // The worker crashed — reject every in-flight request and
-    // drop the singleton so the next call recreates it.
-    const errored = new Error("anonymize-chat worker crashed");
-    pendingRequests.rejectAll(errored);
-    worker = null;
-  });
-  worker = created;
-  return created;
-};
+const client = createAnonymizeChatWorkerClient({
+  createWorker: createAnonymizeChatWorker,
+  requestTimeoutMs: ANONYMIZE_REQUEST_TIMEOUT_MS,
+  maxPendingRequests: MAX_PENDING_ANONYMIZE_REQUESTS,
+});
 
 // eslint-disable-next-line @typescript-eslint/promise-function-async -- the body is the Promise; an inner async wrapper would just add a microtask
 export const anonymizeChatTextInWorker = ({
@@ -140,20 +73,12 @@ export const anonymizeChatTextInWorker = ({
    * applies its own NFKC + case-insensitive comparison.
    */
   excludedCanonicals?: readonly string[];
-}): Promise<ChatAnonResult> => {
-  const w = ensureWorker();
-  nextRequestId += 1;
-  const id = nextRequestId;
-  return new Promise((resolve, reject) => {
-    pendingRequests.add(id, { resolve, reject });
-    const request: WorkerRequest =
-      excludedCanonicals === undefined
-        ? { id, text, workspaceId }
-        : { id, text, workspaceId, excludedCanonicals };
-    // eslint-disable-next-line unicorn/require-post-message-target-origin -- Worker.postMessage has no targetOrigin param (window-only)
-    w.postMessage(request);
-  });
-};
+}) =>
+  client.anonymize(
+    excludedCanonicals === undefined
+      ? { text, workspaceId }
+      : { text, workspaceId, excludedCanonicals },
+  );
 
 let warmedUp = false;
 

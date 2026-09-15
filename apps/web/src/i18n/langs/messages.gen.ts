@@ -2605,6 +2605,8 @@ type Messages = {
       "deleteAction": "Delete term";
       "detectedHeading": "Detected in this document ({count})";
       "detectingMatches": "Detecting matches in this document…";
+      "downloadAction": "Download anonymized PDF";
+      "downloadHint": "Exports the saved version as a PDF with non-selectable text.";
       "emptyState": "No workspace-specific terms yet. Add one above.";
       "ignoreAction": "Ignore in this document";
       "ignoreScopeAlways": "Always ignore";
@@ -2618,6 +2620,7 @@ type Messages = {
       "noMatchesInDocument": "None of your workspace terms appear in this document.";
       "openFullViewHint": "Open the file in full view to see anonymization highlights and per-document match counts.";
       "restoreAction": "Restore in this document";
+      "scanFailed": "The scan failed. Retry to detect matches.";
       "termAddedToast": "Added \"{value}\" to workspace anonymization terms.";
       "termMatchCountAriaLabel": "Matched {count} times in this document.";
       "title": "Anonymization vocabulary";

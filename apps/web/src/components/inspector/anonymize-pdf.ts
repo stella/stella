@@ -1,3 +1,6 @@
+import { useQuery } from "@tanstack/react-query";
+import { Result } from "better-result";
+
 import type { PipelineConfig } from "@stll/anonymize-wasm";
 
 import { useInspectorAnonymizationStore } from "@/components/inspector/inspector-anonymization-store";
@@ -6,6 +9,7 @@ import {
   type PipelineRun,
 } from "@/components/inspector/pipeline-run-registry.logic";
 import { PDF_MIME_TYPE } from "@/consts";
+import { getAnalytics } from "@/lib/analytics/provider";
 import { DEFAULT_ENTITY_LABELS } from "@/lib/anonymize/constants";
 import { extractPDFText } from "@/lib/anonymize/pdf-coords";
 import { createPipelineContextRunner } from "@/lib/anonymize/pipeline-context";
@@ -44,12 +48,26 @@ const buildPipelineConfig = (
 };
 
 const pipelineRuns = createPipelineRunRegistry();
+const fileAnonymizationKeys = {
+  run: ({
+    fieldId,
+    mimeType,
+    retry,
+    workspaceId,
+  }: {
+    fieldId: string;
+    mimeType: string | null;
+    retry: number;
+    workspaceId: string;
+  }) =>
+    ["file-anonymization", { fieldId, mimeType, retry, workspaceId }] as const,
+};
 let dictionariesPromise: Promise<
   NonNullable<PipelineConfig["dictionaries"]>
 > | null = null;
 const runWithPipelineContext = createPipelineContextRunner();
 
-export const anonymizePdf = async ({
+const anonymizePdf = async ({
   workspaceId,
   fieldId,
   mimeType,
@@ -66,23 +84,67 @@ export const anonymizePdf = async ({
   useInspectorAnonymizationStore
     .getState()
     .markAnonymizationPipelineStarted(fieldId);
-  try {
+  const result = await Result.tryPromise(async () => {
     await runPipelineAndCommit({ workspaceId, fieldId, isPdf, run });
-  } finally {
-    // Release the in-flight lock unconditionally — even
-    // when cancelled or when an awaited step rejected
-    // before the explicit cancellation check inside
-    // `runPipelineAndCommit`. Without this, a cancel +
-    // error race would leave `pipelineStartedFieldIds`
-    // permanently holding this field, and reopening the
-    // same document would keep the inspector facet stuck
-    // on the "Detecting…" placeholder.
-    if (pipelineRuns.finish(fieldId, run)) {
+  });
+  if (pipelineRuns.canCommit(fieldId, run)) {
+    if (Result.isError(result)) {
+      useInspectorAnonymizationStore
+        .getState()
+        .markAnonymizationPipelineFailed(fieldId);
+    } else {
       useInspectorAnonymizationStore
         .getState()
         .markAnonymizationPipelineRan(fieldId);
     }
   }
+  // Release ownership before propagating an error. A cancelled run cannot
+  // overwrite a successor's status, and no failure can leave this field locked.
+  pipelineRuns.finish(fieldId, run);
+  if (Result.isError(result)) {
+    await Promise.reject(result.error);
+  }
+};
+
+export const useFileAnonymizationPipeline = ({
+  enabled,
+  fieldId,
+  mimeType,
+  workspaceId,
+}: {
+  enabled: boolean;
+  fieldId: string;
+  mimeType?: string | undefined;
+  workspaceId: string;
+}): void => {
+  const retry = useInspectorAnonymizationStore(
+    (state) => state.anonymizationRetryByFieldId[fieldId] ?? 0,
+  );
+  const normalizedMimeType = mimeType ?? null;
+  useQuery({
+    enabled,
+    queryFn: async () => {
+      const result = await Result.tryPromise(async () => {
+        await anonymizePdf({
+          workspaceId,
+          fieldId,
+          mimeType: normalizedMimeType,
+        });
+      });
+      if (Result.isError(result)) {
+        getAnalytics().captureError(result.error);
+        await Promise.reject(result.error);
+      }
+      return "complete" as const;
+    },
+    queryKey: fileAnonymizationKeys.run({
+      fieldId,
+      mimeType: normalizedMimeType,
+      retry,
+      workspaceId,
+    }),
+    retry: false,
+  });
 };
 
 const runPipelineAndCommit = async ({
