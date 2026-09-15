@@ -1784,6 +1784,8 @@
     "countUnspecified": "{count, plural, one {# nieokreślona} few {# nieokreślone} many {# nieokreślonych} other {# nieokreślonej}}",
     "finalizePendingNote": "{count, plural, one {# sugestia nadal oczekuje na przegląd.} few {# sugestie nadal oczekują na przegląd.} many {# sugestii nadal oczekuje na przegląd.} other {# sugestii nadal oczekuje na przegląd.}}",
     "hideAccepted": "Ukryj zaakceptowane sugestie",
+    "keepInReview": "Zostaw w przeglądzie",
+    "pendingLimitReached": "Ten dokument ma zbyt wiele sugestii oczekujących na przegląd. Rozpatrz część z nich, zanim poprosisz o kolejne.",
     "persistFailed": "Nie udało się zapisać zmiany przeglądu",
     "reject": "Odrzuć",
     "rejectAll": "Odrzuć wszystkie",

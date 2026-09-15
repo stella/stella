@@ -4,7 +4,7 @@ import { and, eq } from "drizzle-orm";
 import { docxSuggestions } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
-import { syncReviewFindingForSuggestion } from "@/api/lib/document-review/suggestion-finding-sync";
+import { syncReviewFindingsForSuggestions } from "@/api/lib/document-review/suggestion-finding-sync";
 
 import { tResolveDocxSuggestionBody } from "./schemas";
 
@@ -71,17 +71,18 @@ const resolveDocxSuggestion = createSafeHandler(
             originReviewFindingId: docxSuggestions.originReviewFindingId,
           });
 
-        const resolved = rows.at(0);
-        if (resolved !== undefined && resolved.originReviewFindingId !== null) {
-          await syncReviewFindingForSuggestion({
-            tx,
-            workspaceId,
-            findingId: resolved.originReviewFindingId,
-            status: body.status,
-            userId: user.id,
-            recordAuditEvent,
-          });
-        }
+        await syncReviewFindingsForSuggestions({
+          tx,
+          workspaceId,
+          findingIds: rows.flatMap((row) =>
+            row.originReviewFindingId === null
+              ? []
+              : [row.originReviewFindingId],
+          ),
+          status: body.status,
+          userId: user.id,
+          recordAuditEvent,
+        });
         return rows;
       }),
     );

@@ -10,6 +10,7 @@
 
 import type { RefObject } from "react";
 
+import { useQueryClient } from "@tanstack/react-query";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
@@ -22,6 +23,10 @@ import {
   revertDocxSuggestionRequest,
 } from "@/components/ai-suggestions/docx-suggestion-persistence";
 import { findFolioReviewDecoration } from "@/components/ai-suggestions/review-folio-decorations";
+import {
+  serializeSuggestionWrite,
+  trackReviewSessionWrite,
+} from "@/components/ai-suggestions/review-session-writes";
 import {
   findLiveSuggestion,
   getReviewApplyMode,
@@ -38,16 +43,6 @@ import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 
 const DOCUMENT_OPERATION_CONTRACT_VERSION = 1 as const;
-
-/**
- * Per-suggestion server-mutation ordering queue, keyed by the globally unique
- * suggestion id. Module-level (not a per-hook ref) so it is SHARED across every
- * surface that mounts `useReviewActions` for the same suggestion — the review
- * bar and the inspector panel are normally co-mounted, and an accept from one
- * plus a revert from the other must still serialize against each other.
- * Entries self-clean once their tail promise settles, so the map cannot grow.
- */
-const docxSuggestionMutationChain = new Map<string, Promise<unknown>>();
 
 type ApplyOutcome = {
   status: "accepted" | "skipped";
@@ -102,6 +97,7 @@ export const useReviewActions = ({
   requestDocxEditMode,
 }: UseReviewActionsOptions): ReviewActions => {
   const t = useTranslations();
+  const queryClient = useQueryClient();
   const applyMode = useReviewStore((state) =>
     getReviewApplyMode(state, entityId),
   );
@@ -376,23 +372,12 @@ export const useReviewActions = ({
     async (
       id: string,
       task: () => Promise<DocxResolveResult>,
-    ): Promise<DocxResolveResult> => {
-      const prev = docxSuggestionMutationChain.get(id) ?? Promise.resolve();
-      const next = prev.then(
-        async () => await task(),
-        async () => await task(),
-      );
-      docxSuggestionMutationChain.set(id, next);
-      detached(
-        next.finally(() => {
-          if (docxSuggestionMutationChain.get(id) === next) {
-            docxSuggestionMutationChain.delete(id);
-          }
-        }),
-        "use-review-actions.serialize-docx-mutation",
-      );
-      return await next;
-    },
+    ): Promise<DocxResolveResult> =>
+      await serializeSuggestionWrite({
+        reviewSessionId: entityId,
+        suggestionId: id,
+        write: task,
+      }),
   );
 
   const toastPersistFailed = useLatestCallback(() => {
@@ -472,67 +457,79 @@ export const useReviewActions = ({
     if (claimPending(item.id, "applying") === null) {
       return;
     }
-    const unlocked = await ensureUnlocked();
-    if (!unlocked) {
-      // Release the claim so a cancelled unlock leaves the card actionable.
-      releaseClaim(item.id);
-      return;
-    }
-    // Yield to the macrotask queue so the "applying" status can paint before
-    // the synchronous editor apply.
-    await new Promise<void>((resolve) => {
-      setTimeout(resolve, 0);
-    });
-    // Re-read the LIVE row: the background persist can land in the unlock/paint
-    // gap and `reconcileServerIds` renames the row (client ref -> server id) and
-    // flips `persisted` true. Driving `recordOutcome` + the resolve off the
-    // captured `item` would write to the stale client id (a no-op after the
-    // rename), stranding the row "applying" while the server stays pending —
-    // a reload would then re-arm it as actionable. Follow the row to its
-    // current identity and operate on that instead.
-    const live = readLive(item.id);
-    if (live?.status !== "applying") {
-      // Our claim was lost (a reconcile collapse dropped the row, or another
-      // handler took it over). Nothing to apply.
-      return;
-    }
-    const outcome = acceptPending(live);
-    recordOutcome(live, outcome);
-    // Persist the resolution only when the apply actually landed; a
-    // `skipped` op leaves the row pending server-side so it can be
-    // retried. `appliedMode` mirrors what `recordOutcome` stored. `live.persisted`
-    // is read post-reconcile, so an accept that raced the create response still
-    // fires its resolve here rather than relying on the persist-window replay.
-    if (live.persisted === true && outcome.status === "accepted") {
-      detached(
-        (async () => {
-          const result = await runSerialized(
-            live.id,
-            async () =>
-              await resolveDocxSuggestionRequest({
-                workspaceId: persistedWorkspaceId(),
-                entityId,
-                suggestionId: live.id,
-                status: "accepted",
-                appliedMode: outcome.appliedMode,
-              }),
+    // The claimed row stays "applying" across the unlock and paint awaits
+    // below. Tracking that window makes a session reset wait until the accept
+    // lands or releases its claim.
+    await trackReviewSessionWrite(
+      entityId,
+      (async () => {
+        const unlocked = await ensureUnlocked();
+        if (!unlocked) {
+          // Release the claim so a cancelled unlock leaves the card actionable.
+          releaseClaim(item.id);
+          return;
+        }
+        // Yield to the macrotask queue so the "applying" status can paint before
+        // the synchronous editor apply.
+        await new Promise<void>((resolve) => {
+          setTimeout(resolve, 0);
+        });
+        // Re-read the LIVE row: the background persist can land in the unlock/paint
+        // gap and `reconcileServerIds` renames the row (client ref -> server id) and
+        // flips `persisted` true. Driving `recordOutcome` + the resolve off the
+        // captured `item` would write to the stale client id (a no-op after the
+        // rename), stranding the row "applying" while the server stays pending —
+        // a reload would then re-arm it as actionable. Follow the row to its
+        // current identity and operate on that instead.
+        const live = readLive(item.id);
+        if (live?.status !== "applying") {
+          // Our claim was lost (a reconcile collapse dropped the row, or another
+          // handler took it over). Nothing to apply.
+          return;
+        }
+        const outcome = acceptPending(live);
+        recordOutcome(live, outcome);
+        // Persist the resolution only when the apply actually landed; a
+        // `skipped` op leaves the row pending server-side so it can be
+        // retried. `appliedMode` mirrors what `recordOutcome` stored. `live.persisted`
+        // is read post-reconcile, so an accept that raced the create response still
+        // fires its resolve here rather than relying on the persist-window replay.
+        if (live.persisted === true && outcome.status === "accepted") {
+          detached(
+            trackReviewSessionWrite(
+              entityId,
+              (async () => {
+                const result = await runSerialized(
+                  live.id,
+                  async () =>
+                    await resolveDocxSuggestionRequest({
+                      queryClient,
+                      workspaceId: persistedWorkspaceId(),
+                      entityId,
+                      suggestionId: live.id,
+                      status: "accepted",
+                      appliedMode: outcome.appliedMode,
+                    }),
+                );
+                if (result === "synced") {
+                  return;
+                }
+                // The editor applied the change but the server row is not in
+                // "accepted": rewind the editor + local state so the user sees the
+                // suggestion pending again, matching the server.
+                rollbackAcceptedResolution(live, outcome, result);
+                if (result === "failed") {
+                  toastPersistFailed();
+                } else {
+                  toastStaleResolution();
+                }
+              })(),
+            ),
+            "use-review-actions.run-serialized",
           );
-          if (result === "synced") {
-            return;
-          }
-          // The editor applied the change but the server row is not in
-          // "accepted": rewind the editor + local state so the user sees the
-          // suggestion pending again, matching the server.
-          rollbackAcceptedResolution(live, outcome, result);
-          if (result === "failed") {
-            toastPersistFailed();
-          } else {
-            toastStaleResolution();
-          }
-        })(),
-        "use-review-actions.run-serialized",
-      );
-    }
+        }
+      })(),
+    );
   });
 
   const rejectOne = useLatestCallback((item: ReviewSuggestion) => {
@@ -564,28 +561,32 @@ export const useReviewActions = ({
     // revert the rejection and the suggestion goes back to actionable.
     if (claimed.persisted === true) {
       detached(
-        (async () => {
-          const result = await runSerialized(
-            claimed.id,
-            async () =>
-              await resolveDocxSuggestionRequest({
-                workspaceId: persistedWorkspaceId(),
-                entityId,
-                suggestionId: claimed.id,
-                status: "rejected",
-                appliedMode: null,
-              }),
-          );
-          if (result === "synced") {
-            return;
-          }
-          rollbackRejectedResolution(claimed, result);
-          if (result === "failed") {
-            toastPersistFailed();
-          } else {
-            toastStaleResolution();
-          }
-        })(),
+        trackReviewSessionWrite(
+          entityId,
+          (async () => {
+            const result = await runSerialized(
+              claimed.id,
+              async () =>
+                await resolveDocxSuggestionRequest({
+                  queryClient,
+                  workspaceId: persistedWorkspaceId(),
+                  entityId,
+                  suggestionId: claimed.id,
+                  status: "rejected",
+                  appliedMode: null,
+                }),
+            );
+            if (result === "synced") {
+              return;
+            }
+            rollbackRejectedResolution(claimed, result);
+            if (result === "failed") {
+              toastPersistFailed();
+            } else {
+              toastStaleResolution();
+            }
+          })(),
+        ),
         "use-review-actions.run-serialized",
       );
     }
@@ -646,45 +647,61 @@ export const useReviewActions = ({
       return;
     }
     detached(
-      (async () => {
-        const result = await runSerialized(
-          item.id,
-          async () =>
-            await revertDocxSuggestionRequest({
-              workspaceId: persistedWorkspaceId(),
-              entityId,
-              suggestionId: item.id,
-            }),
-        );
-        // "stale" means the server row was still pending — the same state we
-        // just moved the local suggestion to, so nothing to reconcile and no
-        // toast. "synced" is the happy path.
-        if (result === "synced" || result === "stale") {
-          return;
-        }
-        // "failed": the server row is still terminal, but the local revert
-        // already ran. Restore the prior resolution so they agree again.
-        captureResolveFailure("revert");
-        if (prev.status === "accepted") {
-          // Re-apply to restore the accepted change with fresh identifiers:
-          // the local revert already removed it (the tracked marks were
-          // rejected, or the direct-mode undo handle was consumed), so the old
-          // revisionIds / undoHandle no longer resolve. Restore with the mode
-          // it was ORIGINALLY accepted under (prev.applyMode), not whatever the
-          // picker shows now, so the editor state can't drift from the server's
-          // still-recorded tracked-changes/direct resolution.
-          const outcome = applyPending(item, prev.applyMode ?? undefined);
-          recordOutcome(item, outcome);
-        } else {
-          updateSuggestion(entityId, item.id, {
-            status: prev.status,
-            revisionIds: prev.revisionIds,
-            undoHandle: prev.undoHandle,
-            applyMode: prev.applyMode,
+      trackReviewSessionWrite(
+        entityId,
+        (async () => {
+          const result = await serializeSuggestionWrite({
+            reviewSessionId: entityId,
+            suggestionId: item.id,
+            write: async () =>
+              await revertDocxSuggestionRequest({
+                queryClient,
+                workspaceId: persistedWorkspaceId(),
+                entityId,
+                suggestion: item,
+              }),
           });
-        }
-        toastPersistFailed();
-      })(),
+          // "stale" means the server reverted nothing: the row was already
+          // pending (the state we just moved the local suggestion to), so no
+          // toast. "synced" is the happy path.
+          if (result === "synced" || result === "stale") {
+            return;
+          }
+          // "failed" or "pending-limit": the server row is still terminal, but
+          // the local revert already ran. Restore the prior resolution so they
+          // agree again. The document being at its pending cap is an expected
+          // refusal, not a transport failure to capture.
+          if (result === "failed") {
+            captureResolveFailure("revert");
+          }
+          if (prev.status === "accepted") {
+            // Re-apply to restore the accepted change with fresh identifiers:
+            // the local revert already removed it (the tracked marks were
+            // rejected, or the direct-mode undo handle was consumed), so the old
+            // revisionIds / undoHandle no longer resolve. Restore with the mode
+            // it was ORIGINALLY accepted under (prev.applyMode), not whatever the
+            // picker shows now, so the editor state can't drift from the server's
+            // still-recorded tracked-changes/direct resolution.
+            const outcome = applyPending(item, prev.applyMode ?? undefined);
+            recordOutcome(item, outcome);
+          } else {
+            updateSuggestion(entityId, item.id, {
+              status: prev.status,
+              revisionIds: prev.revisionIds,
+              undoHandle: prev.undoHandle,
+              applyMode: prev.applyMode,
+            });
+          }
+          if (result === "pending-limit") {
+            stellaToast.add({
+              title: t("docxReview.pendingLimitReached"),
+              type: "error",
+            });
+          } else {
+            toastPersistFailed();
+          }
+        })(),
+      ),
       "use-review-actions.run-serialized",
     );
   });
@@ -730,29 +747,33 @@ export const useReviewActions = ({
         return;
       }
       detached(
-        (async () => {
-          const results = await Promise.all(
-            toPersist.map(async ({ item, outcome }) => {
-              const result = await runSerialized(
-                item.id,
-                async () =>
-                  await resolveDocxSuggestionRequest({
-                    workspaceId: persistedWorkspaceId(),
-                    entityId,
-                    suggestionId: item.id,
-                    status: "accepted",
-                    appliedMode: outcome.appliedMode,
-                  }),
-              );
-              if (result === "synced") {
+        trackReviewSessionWrite(
+          entityId,
+          (async () => {
+            const results = await Promise.all(
+              toPersist.map(async ({ item, outcome }) => {
+                const result = await runSerialized(
+                  item.id,
+                  async () =>
+                    await resolveDocxSuggestionRequest({
+                      queryClient,
+                      workspaceId: persistedWorkspaceId(),
+                      entityId,
+                      suggestionId: item.id,
+                      status: "accepted",
+                      appliedMode: outcome.appliedMode,
+                    }),
+                );
+                if (result === "synced") {
+                  return result;
+                }
+                rollbackAcceptedResolution(item, outcome, result);
                 return result;
-              }
-              rollbackAcceptedResolution(item, outcome, result);
-              return result;
-            }),
-          );
-          surfaceBatchResolveToast(results);
-        })(),
+              }),
+            );
+            surfaceBatchResolveToast(results);
+          })(),
+        ),
         "use-review-actions.persist-claimed-outcomes",
       );
     },
@@ -792,29 +813,33 @@ export const useReviewActions = ({
       return;
     }
     detached(
-      (async () => {
-        const results = await Promise.all(
-          toPersist.map(async (item) => {
-            const result = await runSerialized(
-              item.id,
-              async () =>
-                await resolveDocxSuggestionRequest({
-                  workspaceId: persistedWorkspaceId(),
-                  entityId,
-                  suggestionId: item.id,
-                  status: "rejected",
-                  appliedMode: null,
-                }),
-            );
-            if (result === "synced") {
+      trackReviewSessionWrite(
+        entityId,
+        (async () => {
+          const results = await Promise.all(
+            toPersist.map(async (item) => {
+              const result = await runSerialized(
+                item.id,
+                async () =>
+                  await resolveDocxSuggestionRequest({
+                    queryClient,
+                    workspaceId: persistedWorkspaceId(),
+                    entityId,
+                    suggestionId: item.id,
+                    status: "rejected",
+                    appliedMode: null,
+                  }),
+              );
+              if (result === "synced") {
+                return result;
+              }
+              rollbackRejectedResolution(item, result);
               return result;
-            }
-            rollbackRejectedResolution(item, result);
-            return result;
-          }),
-        );
-        surfaceBatchResolveToast(results);
-      })(),
+            }),
+          );
+          surfaceBatchResolveToast(results);
+        })(),
+      ),
       "use-review-actions.persist-outcomes",
     );
   });

@@ -8,6 +8,7 @@
  *  - resolving the suggestion resolves the finding, and reverting reopens it.
  */
 
+import { panic } from "better-result";
 import {
   afterAll,
   beforeAll,
@@ -18,11 +19,15 @@ import {
 } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
+import { DOCX_SUGGESTIONS_PENDING_MAX } from "@stll/api-contract";
+
 import type { Transaction } from "@/api/db/root";
 import {
   docxSuggestions,
   documentReviewFindings,
   documentReviewRuns,
+  entities,
+  entityVersions,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import resolveDocxSuggestion from "@/api/handlers/docx-suggestions/resolve";
@@ -303,6 +308,7 @@ describe("review fixes staged as folio suggestions", () => {
       committed: 2,
       carried: 0,
       staged: 1,
+      skippedForPendingLimit: 0,
     });
 
     const staged = await suggestionsFor(fixedFindingId);
@@ -333,6 +339,7 @@ describe("review fixes staged as folio suggestions", () => {
       committed: 2,
       carried: 0,
       staged: 0,
+      skippedForPendingLimit: 0,
     });
     expect(await suggestionsFor(fixedFindingId)).toHaveLength(1);
   });
@@ -414,5 +421,96 @@ describe("review fixes staged as folio suggestions", () => {
       applicationStatus: "pending",
       appliedBy: null,
     });
+  });
+});
+
+type CappedReviewTarget = ReviewTarget & {
+  pendingIds: SafeId<"docxSuggestion">[];
+};
+
+// A document of its own, filled to its pending cap, so the cap cannot crowd
+// the other cases in this file.
+const seedCappedTarget = async (): Promise<CappedReviewTarget> => {
+  const entityId = toSafeId<"entity">(Bun.randomUUIDv7());
+  const entityVersionId = toSafeId<"entityVersion">(Bun.randomUUIDv7());
+  await testDb.insert(entities).values({
+    id: entityId,
+    workspaceId: ids.wsA1,
+    kind: "document",
+    name: "capped-review-document",
+  });
+  await testDb.insert(entityVersions).values({
+    id: entityVersionId,
+    workspaceId: ids.wsA1,
+    entityId,
+  });
+  const pendingIds = Array.from({ length: DOCX_SUGGESTIONS_PENDING_MAX }, () =>
+    toSafeId<"docxSuggestion">(Bun.randomUUIDv7()),
+  );
+  await testDb.insert(docxSuggestions).values(
+    pendingIds.map((id, index) => ({
+      id,
+      workspaceId: ids.wsA1,
+      entityId,
+      opPayload: {
+        id: `chat-${index}`,
+        type: "replaceInBlock",
+        blockId: "para-1",
+        find: "before",
+        replace: "after",
+      },
+      severity: "medium" as const,
+      area: "chat",
+      status: "pending" as const,
+    })),
+  );
+  return {
+    entityId,
+    entityVersionId,
+    fileFieldId: toSafeId<"field">(Bun.randomUUIDv7()),
+    pendingIds,
+  };
+};
+
+describe("review fixes and the document's pending suggestion cap", () => {
+  test("a document at its cap leaves new fixes unstaged and reports them without failing the run", async () => {
+    const target = await seedCappedTarget();
+    const runId = await seedRunningRun(target, 1);
+    const findingId = await seedFinding(runId, target, payloadWithFix);
+
+    expect(await finalize(runId, target, 1)).toEqual({
+      type: "completed",
+      committed: 1,
+      carried: 0,
+      staged: 0,
+      skippedForPendingLimit: 1,
+    });
+    expect(await suggestionsFor(findingId)).toHaveLength(0);
+
+    // Room frees up, and a redelivered completion stages the fix.
+    const freedId =
+      target.pendingIds.at(0) ?? panic("The seeded pending row is missing");
+    await testDb
+      .update(docxSuggestions)
+      .set({ status: "rejected" })
+      .where(eq(docxSuggestions.id, freedId));
+    expect(await finalize(runId, target, 1)).toEqual({
+      type: "completed",
+      committed: 1,
+      carried: 0,
+      staged: 1,
+      skippedForPendingLimit: 0,
+    });
+
+    // At the cap again, the fix is already staged: it would insert nothing,
+    // so it is not reported as skipped either.
+    expect(await finalize(runId, target, 1)).toEqual({
+      type: "completed",
+      committed: 1,
+      carried: 0,
+      staged: 0,
+      skippedForPendingLimit: 0,
+    });
+    expect(await suggestionsFor(findingId)).toHaveLength(1);
   });
 });

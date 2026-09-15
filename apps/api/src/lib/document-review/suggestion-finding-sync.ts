@@ -12,7 +12,7 @@
  */
 
 import { panic } from "better-result";
-import { and, eq } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import { documentReviewFindings } from "@/api/db/schema";
@@ -93,32 +93,39 @@ const findingDecisionUpdate = ({
   }
 };
 
-export type SyncReviewFindingForSuggestionArgs = {
+export type SyncReviewFindingsForSuggestionsArgs = {
   tx: Transaction;
   workspaceId: SafeId<"workspace">;
-  findingId: SafeId<"documentReviewFinding">;
-  /** The status the suggestion row just moved to. */
+  /** Findings linked to the suggestion rows that just moved. */
+  findingIds: readonly SafeId<"documentReviewFinding">[];
+  /** The status those suggestion rows just moved to. */
   status: DocxSuggestionStatus;
   userId: SafeId<"user">;
   recordAuditEvent: AuditRecorder;
 };
 
 /**
- * Move the linked finding to match a suggestion's new status, in the caller's
- * transaction. A finding that no longer exists (or that the caller's scope
- * cannot see) syncs nothing: the link is `ON DELETE SET NULL`, so an orphaned
- * suggestion is a state the schema allows.
+ * Move the linked findings to match their suggestions' new status, in the
+ * caller's transaction, with one locking read, one update and one audit
+ * write however many rows moved. Findings lock in id order, so two calls over
+ * overlapping sets cannot deadlock. A finding that no longer exists (or that
+ * the caller's scope cannot see) syncs nothing: the link is
+ * `ON DELETE SET NULL`, so an orphaned suggestion is a state the schema allows.
  */
-export const syncReviewFindingForSuggestion = async ({
+export const syncReviewFindingsForSuggestions = async ({
   tx,
   workspaceId,
-  findingId,
+  findingIds,
   status,
   userId,
   recordAuditEvent,
-}: SyncReviewFindingForSuggestionArgs): Promise<void> => {
-  const rows = await tx
+}: SyncReviewFindingsForSuggestionsArgs): Promise<void> => {
+  if (findingIds.length === 0) {
+    return;
+  }
+  const findings = await tx
     .select({
+      id: documentReviewFindings.id,
       runId: documentReviewFindings.runId,
       positionId: documentReviewFindings.positionId,
       decision: documentReviewFindings.decision,
@@ -127,14 +134,14 @@ export const syncReviewFindingForSuggestion = async ({
     .from(documentReviewFindings)
     .where(
       and(
-        eq(documentReviewFindings.id, findingId),
+        inArray(documentReviewFindings.id, findingIds),
         eq(documentReviewFindings.workspaceId, workspaceId),
       ),
     )
-    .limit(1)
+    .orderBy(asc(documentReviewFindings.id))
+    .limit(findingIds.length)
     .for("update");
-  const finding = rows.at(0);
-  if (finding === undefined) {
+  if (findings.length === 0) {
     return;
   }
 
@@ -144,28 +151,35 @@ export const syncReviewFindingForSuggestion = async ({
     .set(update)
     .where(
       and(
-        eq(documentReviewFindings.id, findingId),
+        inArray(
+          documentReviewFindings.id,
+          findings.map((finding) => finding.id),
+        ),
         eq(documentReviewFindings.workspaceId, workspaceId),
       ),
     );
 
-  // The same audit shape `PATCH /findings/:id` writes: one reviewer decision
-  // must read the same way in the log whichever surface it was taken on.
-  await recordAuditEvent(tx, {
-    action: AUDIT_ACTION.REVIEW,
-    resourceType: AUDIT_RESOURCE_TYPE.DOCUMENT_REVIEW_RUN,
-    resourceId: finding.runId,
-    changes: {
-      decision: { old: finding.decision, new: update.decision },
-      applicationStatus: {
-        old: finding.applicationStatus,
-        new: update.applicationStatus,
+  // The same audit shape `PATCH /findings/:id` writes, one event per finding:
+  // one reviewer decision must read the same way in the log whichever surface
+  // it was taken on.
+  await recordAuditEvent(
+    tx,
+    findings.map((finding) => ({
+      action: AUDIT_ACTION.REVIEW,
+      resourceType: AUDIT_RESOURCE_TYPE.DOCUMENT_REVIEW_RUN,
+      resourceId: finding.runId,
+      changes: {
+        decision: { old: finding.decision, new: update.decision },
+        applicationStatus: {
+          old: finding.applicationStatus,
+          new: update.applicationStatus,
+        },
       },
-    },
-    metadata: {
-      findingId,
-      positionId: finding.positionId,
-      suggestionStatus: status,
-    },
-  });
+      metadata: {
+        findingId: finding.id,
+        positionId: finding.positionId,
+        suggestionStatus: status,
+      },
+    })),
+  );
 };

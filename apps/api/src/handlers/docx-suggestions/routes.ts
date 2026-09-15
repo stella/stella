@@ -2,6 +2,7 @@ import Elysia from "elysia";
 
 import createDocxSuggestions from "@/api/handlers/docx-suggestions/create";
 import listDocxSuggestions from "@/api/handlers/docx-suggestions/read";
+import rejectPendingDocxSuggestions from "@/api/handlers/docx-suggestions/reject-pending";
 import resolveDocxSuggestion from "@/api/handlers/docx-suggestions/resolve";
 import revertDocxSuggestion from "@/api/handlers/docx-suggestions/revert";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
@@ -34,6 +35,15 @@ export const docxSuggestionsRoute = new Elysia({
     query: listDocxSuggestions.config.query,
     permissions: listDocxSuggestions.config.permissions,
   })
+  .patch(
+    "/entity/:entityId/reject-pending",
+    rejectPendingDocxSuggestions.handler,
+    {
+      body: rejectPendingDocxSuggestions.config.body,
+      params: rejectPendingDocxSuggestions.config.params,
+      permissions: rejectPendingDocxSuggestions.config.permissions,
+    },
+  )
   .patch(
     "/entity/:entityId/suggestion/:suggestionId/resolve",
     resolveDocxSuggestion.handler,

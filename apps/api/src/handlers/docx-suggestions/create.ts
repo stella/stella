@@ -6,12 +6,23 @@ import { createSafeHandler } from "@/api/lib/api-handlers";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import {
+  DOCX_PENDING_CAPACITY,
+  docxSuggestionsPendingLimitError,
+  lockDocxSuggestionPendingCapacity,
+} from "@/api/lib/docx/suggestion-pending-capacity";
 import { HandlerError, unreachable } from "@/api/lib/errors/tagged-errors";
 import { validateDocxSuggestionOperations } from "@/api/lib/folio-operation-validation";
 
 import { tCreateDocxSuggestionsBody } from "./schemas";
 
 type CreatedSuggestion = { ref: string; id: SafeId<"docxSuggestion"> };
+
+const CREATE_OUTCOME = {
+  created: "created",
+  entityNotFound: "entity-not-found",
+  pendingLimit: "pending-limit",
+} as const;
 
 /**
  * Batch-persist AI DOCX suggestions the client just queued for review.
@@ -114,24 +125,53 @@ const createDocxSuggestions = createSafeHandler(
       };
     });
 
-    yield* Result.await(
+    const outcome = yield* Result.await(
       safeDb(async (tx) => {
+        const capacity = await lockDocxSuggestionPendingCapacity({
+          tx,
+          workspaceId,
+          entityId: params.entityId,
+        });
+        if (capacity.type === DOCX_PENDING_CAPACITY.entityNotFound) {
+          return { type: CREATE_OUTCOME.entityNotFound };
+        }
+        if (prepared.length > capacity.remaining) {
+          return { type: CREATE_OUTCOME.pendingLimit };
+        }
         // audit: skip — review-flow bookkeeping. Suggestions are proposals,
         // not document mutations; a batch can be 200 rows and would flood the
         // audit log. The durable audit trail lives on the row
         // (resolvedByUserId / resolvedAt), written when a suggestion is
         // actually accepted or rejected.
-        await tx
+        // One statement stamps every row with the same `created_at` (the
+        // transaction start time), which clients read as the batch identity.
+        const inserted = await tx
           .insert(docxSuggestions)
-          .values(prepared.map((item) => item.row));
+          .values(prepared.map((item) => item.row))
+          .returning({ createdAt: docxSuggestions.createdAt });
+        const createdAt =
+          inserted.at(0)?.createdAt ??
+          unreachable("An insert of a non-empty batch returns its rows");
+        return { type: CREATE_OUTCOME.created, createdAt };
       }),
     );
-
-    const items: CreatedSuggestion[] = prepared.map((item) => ({
-      ref: item.ref,
-      id: item.row.id,
-    }));
-    return Result.ok({ items });
+    switch (outcome.type) {
+      case CREATE_OUTCOME.entityNotFound:
+        return Result.err(
+          new HandlerError({ status: 404, message: "Document not found." }),
+        );
+      case CREATE_OUTCOME.pendingLimit:
+        return Result.err(docxSuggestionsPendingLimitError());
+      case CREATE_OUTCOME.created: {
+        const items: CreatedSuggestion[] = prepared.map((item) => ({
+          ref: item.ref,
+          id: item.row.id,
+        }));
+        return Result.ok({ createdAt: outcome.createdAt, items });
+      }
+      default:
+        return unreachable(`Unhandled create outcome: ${String(outcome)}`);
+    }
   },
 );
 

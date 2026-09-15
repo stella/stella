@@ -1784,6 +1784,8 @@
     "countUnspecified": "{count, plural, zero {# nenorādītu} one {# nenorādīta} other {# nenorādītas}}",
     "finalizePendingNote": "{count, plural, zero {# ieteikumu joprojām gaida pārskatīšanu.} one {# ieteikums joprojām gaida pārskatīšanu.} other {# ieteikumi joprojām gaida pārskatīšanu.}}",
     "hideAccepted": "Slēpt pieņemtos ieteikumus",
+    "keepInReview": "Atstāt pārskatīšanai",
+    "pendingLimitReached": "Šajā dokumentā pārāk daudz ieteikumu gaida pārskatīšanu. Pirms pieprasāt jaunus, izskatiet dažus no tiem.",
     "persistFailed": "Neizdevās saglabāt jūsu pārskatīšanas izmaiņas",
     "reject": "Noraidīt",
     "rejectAll": "Noraidīt visu",

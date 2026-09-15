@@ -1784,6 +1784,8 @@
     "countUnspecified": "{count, plural, one {# nenurodyta} few {# nenurodytos} other {# nenurodytų}}",
     "finalizePendingNote": "{count, plural, one {# pasiūlymas vis dar laukia peržiūros.} few {# pasiūlymai vis dar laukia peržiūros.} other {# pasiūlymų vis dar laukia peržiūros.}}",
     "hideAccepted": "Slėpti priimtus pasiūlymus",
+    "keepInReview": "Palikti peržiūrai",
+    "pendingLimitReached": "Šiame dokumente per daug pasiūlymų laukia peržiūros. Prieš prašydami naujų, išspręskite dalį jų.",
     "persistFailed": "Nepavyko išsaugoti jūsų peržiūros pakeitimo",
     "reject": "Atmesti",
     "rejectAll": "Atmesti visus",

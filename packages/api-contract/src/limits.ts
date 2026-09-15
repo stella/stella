@@ -22,6 +22,14 @@ export const AGENT_SKILLS_CHAT_METADATA_MAX = 200;
 export const DOCX_SUGGESTIONS_PAGE_SIZE_MAX = 200;
 
 /**
+ * Max pending DOCX suggestions one document may hold. Create refuses a batch
+ * past it, so the client's pending hydration (capped at the same value) is
+ * complete, and one bulk reject (capped at the same value) covers every
+ * pending row.
+ */
+export const DOCX_SUGGESTIONS_PENDING_MAX = 1000;
+
+/**
  * Per-organization cap on matters (workspaces), enforced on create. The client
  * hides "new matter" surfaces at the cap.
  */

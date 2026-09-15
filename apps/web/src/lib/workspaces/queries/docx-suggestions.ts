@@ -1,19 +1,33 @@
 import { queryOptions } from "@tanstack/react-query";
+import { panic } from "better-result";
 
-import { DOCX_SUGGESTIONS_PAGE_SIZE_MAX } from "@stll/api-contract";
+import {
+  DOCX_SUGGESTIONS_PAGE_SIZE_MAX,
+  DOCX_SUGGESTIONS_PENDING_MAX,
+} from "@stll/api-contract";
 
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { parseDeterministicDate } from "@/lib/deterministic-date";
 import { unwrapEden } from "@/lib/errors/api";
 
 import { entitiesKeys } from "./entities";
 
+/**
+ * The API client keeps timestamps as the ISO strings the server sent
+ * (`parseDate: false`), whatever the generated types say. Hydration, the
+ * pending-list cache and the review store need real Dates, so every response
+ * carrying a suggestion `createdAt` is read through here.
+ */
+export const readDocxSuggestionCreatedAt = (value: Date | string): Date =>
+  parseDeterministicDate(value) ??
+  panic("The DOCX suggestion API returned an invalid createdAt");
+
 // Each hydration fetch requests a full page.
-// Page ALL pending rows up to this safety cap: pending drives the actionable
-// panel and must never be crowded out of hydration by resolved history. Well
-// past any realistic pending set for one entity; a capped pending hydration is
-// reported (never silently truncated) so the missing tail is observable.
-const DOCX_SUGGESTIONS_PENDING_MAX = 1000;
+// Page ALL pending rows up to DOCX_SUGGESTIONS_PENDING_MAX: pending drives the
+// actionable panel and must never be crowded out of hydration by resolved
+// history. A capped pending hydration is reported (never silently truncated)
+// so the missing tail is observable.
 
 type DocxSuggestionsKey = {
   workspaceId: string;
@@ -92,6 +106,12 @@ export const docxSuggestionsOptions = ({
         );
       }
 
-      return { items: pending.items };
+      return {
+        items: pending.items.map((item) =>
+          Object.assign(item, {
+            createdAt: readDocxSuggestionCreatedAt(item.createdAt),
+          }),
+        ),
+      };
     },
   });

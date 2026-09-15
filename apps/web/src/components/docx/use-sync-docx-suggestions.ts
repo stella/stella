@@ -147,6 +147,7 @@ export const useSyncDocxSuggestions = ({
         pendingOperation: op,
         snapshot,
         persisted: true,
+        createdAt: row.createdAt,
       };
       if (blockLabel !== undefined) {
         item.blockLabel = blockLabel;

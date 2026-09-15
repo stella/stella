@@ -51,6 +51,8 @@ export type FinalizeReviewRunResult =
       carried: number;
       /** Suggestion rows this call inserted; zero on a replayed completion. */
       staged: number;
+      /** New fixes left unstaged because the document is at its pending cap. */
+      skippedForPendingLimit: number;
     }
   | { type: "incomplete"; committed: number };
 
@@ -89,10 +91,10 @@ export const finalizeReviewRun = async ({
 
   // After carry-over, so a finding whose decision the reviewer already took in
   // the previous review of this document is not staged again as a proposal.
-  const staged =
+  const staging =
     executor === DOCUMENT_REVIEW_RUN_EXECUTOR.WORKER
       ? await stageReviewFixSuggestions({ tx, workspaceId, entityId, runId })
-      : 0;
+      : { staged: 0, skippedForPendingLimit: 0 };
 
   // audit: skip — terminal bookkeeping on the run row audited at create.
   const flipped = await tx
@@ -118,5 +120,11 @@ export const finalizeReviewRun = async ({
     await maybeEmitDocumentReviewSignal({ tx, workspaceId, runId });
   }
 
-  return { type: "completed", committed, carried, staged };
+  return {
+    type: "completed",
+    committed,
+    carried,
+    staged: staging.staged,
+    skippedForPendingLimit: staging.skippedForPendingLimit,
+  };
 };

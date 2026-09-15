@@ -1784,6 +1784,8 @@
     "countUnspecified": "{count, plural, one {# não especificado} other {# não especificados}}",
     "finalizePendingNote": "{count, plural, one {# sugestão ainda está pendente de revisão.} other {# sugestões ainda estão pendentes de revisão.}}",
     "hideAccepted": "Ocultar sugestões aceitas",
+    "keepInReview": "Manter em revisão",
+    "pendingLimitReached": "Este documento tem sugestões demais pendentes de revisão. Resolva algumas antes de pedir mais.",
     "persistFailed": "Não foi possível salvar sua alteração de revisão",
     "reject": "Rejeitar",
     "rejectAll": "Rejeitar tudo",

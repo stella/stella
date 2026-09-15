@@ -28,6 +28,7 @@ import {
   useQueryClient,
   useSuspenseQuery,
 } from "@tanstack/react-query";
+import type { QueryClient } from "@tanstack/react-query";
 import { panic, Result } from "better-result";
 import { LoaderCircleIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -72,8 +73,17 @@ import { cn } from "@stll/ui/utils";
 
 import { activeLegalDocumentRef } from "@/components/ai-suggestions/active-legal-document";
 import type { ActiveLegalDocument } from "@/components/ai-suggestions/active-legal-document";
-import { resolveDocxSuggestionRequest } from "@/components/ai-suggestions/docx-suggestion-persistence";
-import { resolveFileReviewSessionId } from "@/components/ai-suggestions/file-review-session";
+import {
+  CREATE_DOCX_SUGGESTIONS_ERROR,
+  createDocxSuggestionsRequest,
+  rejectPendingDocxSuggestionsRequest,
+  resolveDocxSuggestionRequest,
+} from "@/components/ai-suggestions/docx-suggestion-persistence";
+import {
+  PENDING_REVIEW_CHOICE,
+  resolveFileReviewSessionId,
+} from "@/components/ai-suggestions/file-review-session";
+import type { PendingReviewChoice } from "@/components/ai-suggestions/file-review-session";
 import { OVERLAY_THREAD_PRESENTATION } from "@/components/ai-suggestions/file-viewer-with-ai-config";
 import type { OverlayThreadPresentation } from "@/components/ai-suggestions/file-viewer-with-ai-config";
 import {
@@ -81,7 +91,15 @@ import {
   FLOATING_THREAD_CARD_OFFSET_WITH_REVIEW_CLASS,
   PromptBar,
 } from "@/components/ai-suggestions/host";
+import {
+  PENDING_REVIEW_PROMPT_STATUS,
+  PendingReviewNewThreadPrompt,
+} from "@/components/ai-suggestions/pending-review-new-thread-prompt";
 import { isNoopReviewOperation } from "@/components/ai-suggestions/review-operation-utils";
+import {
+  settleReviewSessionWrites,
+  trackReviewSessionWrite,
+} from "@/components/ai-suggestions/review-session-writes";
 import {
   REVIEW_SUGGESTION_ORIGIN,
   REVIEW_UNSPECIFIED_AREA,
@@ -154,7 +172,6 @@ import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { getTranslator } from "@/i18n/i18n-store";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { ChatAnonymizationLayer } from "@/lib/anonymize/use-chat-anonymization-layer";
-import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import {
   getChatSendMode,
@@ -178,8 +195,10 @@ import {
 } from "@/lib/chat-thread-ref";
 import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
-import { runReservedChatCommand } from "@/lib/reserved-chat-commands";
+import {
+  matchReservedChatCommand,
+  runReservedChatCommand,
+} from "@/lib/reserved-chat-commands";
 import { toSafeId } from "@/lib/safe-id";
 
 type ActiveFile = {
@@ -496,6 +515,7 @@ const queueReviewSuggestions = ({
 };
 
 type PersistQueuedSuggestionsOptions = {
+  queryClient: QueryClient;
   workspaceId: string;
   entityId: string;
   chatThreadId: ChatThreadId | undefined;
@@ -519,43 +539,43 @@ type PersistQueuedSuggestionsOptions = {
  * Client ids are echoed as `ref`; `reconcileServerIds` maps them back.
  */
 const persistQueuedSuggestions = async ({
+  queryClient,
   workspaceId,
   entityId,
   chatThreadId,
   items,
   docxEditorRef,
 }: PersistQueuedSuggestionsOptions): Promise<void> => {
-  const suggestions = items.flatMap((item) =>
-    item.pendingOperation === null
-      ? []
-      : [
-          {
-            ref: item.id,
-            opPayload: item.pendingOperation,
-            comment: item.comment ?? null,
-            severity: item.severity,
-            area: item.area,
-          },
-        ],
-  );
-  if (suggestions.length === 0) {
-    return;
-  }
-
-  const result = await Result.tryPromise(async () => {
-    const response = await api["docx-suggestions"]({ workspaceId })
-      .entity({ entityId })
-      .put({ suggestions, originThreadId: chatThreadId ?? null });
-    return unwrapEden(response);
+  const result = await createDocxSuggestionsRequest({
+    queryClient,
+    workspaceId,
+    entityId,
+    chatThreadId,
+    suggestions: items,
   });
   if (Result.isError(result)) {
-    getAnalytics().captureError(result.error);
+    getAnalytics().captureError(result.error.cause);
+    switch (result.error.type) {
+      case CREATE_DOCX_SUGGESTIONS_ERROR.pendingLimit:
+        stellaToast.add({
+          title: getTranslator()("docxReview.pendingLimitReached"),
+          type: "error",
+        });
+        return;
+      case CREATE_DOCX_SUGGESTIONS_ERROR.failed:
+        return;
+      default:
+        result.error satisfies never;
+        panic("Unhandled DOCX suggestion create error");
+    }
+  }
+  if (result.value === null) {
     return;
   }
-  const refToId = Object.fromEntries(
-    result.value.items.map(({ ref, id }) => [ref, id]),
-  );
-  useReviewStore.getState().reconcileServerIds(entityId, refToId);
+  const { refToId, createdAt } = result.value;
+  useReviewStore
+    .getState()
+    .reconcileServerIds(entityId, { refToId, createdAt });
 
   // Persist-window replay: the user can accept / reject a suggestion in the
   // gap between queueing it and this create response landing. Those
@@ -591,6 +611,7 @@ const persistQueuedSuggestions = async ({
     replayTargets.map(async (item) => ({
       id: item.id,
       replayResult: await resolveDocxSuggestionRequest({
+        queryClient,
         workspaceId,
         entityId,
         suggestionId: item.id,
@@ -762,9 +783,13 @@ type FileChatOverlayProps = {
   /**
    * Invoked when the user explicitly starts a new thread from the
    * overlay UI. Owners should swap the `chatThreadId` they pass in
-   * for a fresh value.
+   * for a fresh value, and treat the document's review session as
+   * `pendingReview` says.
    */
-  onNewThread: (threadId: ChatThreadId) => void;
+  onNewThread: (
+    threadId: ChatThreadId,
+    pendingReview: PendingReviewChoice,
+  ) => void;
   /** Called only after the server-persisted chat history proves this overlay
    * thread owns the active generated-document draft. */
   onActiveDraftChatBound?: ((threadId: ChatThreadId) => void) | undefined;
@@ -994,17 +1019,85 @@ const useFileChatReviewState = ({
   } else {
     reviewEntityId = resolveFileReviewSessionId({ type: "none" });
   }
-  const hasPendingReview = useReviewStore((state) => {
-    if (reviewEntityId === undefined) {
-      return false;
+  const pendingReviewCount = useReviewStore((state) =>
+    reviewEntityId === undefined
+      ? 0
+      : countPendingReviewSuggestions(state.sessions[reviewEntityId]),
+  );
+  return {
+    hasPendingReview: pendingReviewCount > 0,
+    pendingReviewCount,
+    reviewEntityId,
+  };
+};
+
+const countPendingReviewSuggestions = (
+  session: readonly ReviewSuggestion[] | undefined,
+): number =>
+  session?.filter(
+    (item) => item.status === "pending" || item.status === "applying",
+  ).length ?? 0;
+
+const NEW_THREAD_INTENT = {
+  rotate: "rotate",
+  handoff: "handoff",
+} as const;
+
+/**
+ * What the user asked for when they started a new thread. A `/new <message>`
+ * handoff keeps its draft in the composer while the choice is open, so the
+ * intent carries no copy of it.
+ */
+type NewThreadIntent =
+  | { type: typeof NEW_THREAD_INTENT.rotate }
+  | { type: typeof NEW_THREAD_INTENT.handoff };
+
+const NEW_THREAD_CHOICE_STATUS = {
+  idle: "idle",
+  ...PENDING_REVIEW_PROMPT_STATUS,
+  committing: "committing",
+} as const;
+
+/**
+ * A new thread requested over pending suggestions waits here for the
+ * reviewer's choice, then resumes the held intent. `committing` covers a
+ * rotation already under way, when the dock offers no new thread.
+ */
+type NewThreadChoiceState =
+  | { status: typeof NEW_THREAD_CHOICE_STATUS.idle }
+  | {
+      status:
+        | typeof NEW_THREAD_CHOICE_STATUS.choosing
+        | typeof NEW_THREAD_CHOICE_STATUS.dismissing;
+      intent: NewThreadIntent;
     }
-    return (
-      state.sessions[reviewEntityId]?.some(
-        (item) => item.status === "pending" || item.status === "applying",
-      ) === true
-    );
-  });
-  return { hasPendingReview, reviewEntityId };
+  | { status: typeof NEW_THREAD_CHOICE_STATUS.committing };
+
+const readNewThreadCommandMessage = (html: string): string | null => {
+  const command = matchReservedChatCommand(html);
+  return command?.command.id === "new" && command.args.length > 0
+    ? command.args
+    : null;
+};
+
+/** The dock offers a new thread only while none is already under way. */
+const offersNewThread = (choice: NewThreadChoiceState): boolean =>
+  choice.status === NEW_THREAD_CHOICE_STATUS.idle ||
+  choice.status === NEW_THREAD_CHOICE_STATUS.choosing;
+
+/** The pending-review prompt a choice shows, or null when none is open. */
+const pendingReviewPromptStatus = (choice: NewThreadChoiceState) => {
+  switch (choice.status) {
+    case NEW_THREAD_CHOICE_STATUS.choosing:
+    case NEW_THREAD_CHOICE_STATUS.dismissing:
+      return choice.status;
+    case NEW_THREAD_CHOICE_STATUS.idle:
+    case NEW_THREAD_CHOICE_STATUS.committing:
+      return null;
+    default:
+      choice satisfies never;
+      return panic("Unhandled new thread choice status");
+  }
 };
 
 const useFileChatDocxLifecycle = ({
@@ -1154,6 +1247,7 @@ const FileChatOverlayInner = ({
   threadPresentation = OVERLAY_THREAD_PRESENTATION.card,
 }: FileChatOverlayInnerProps) => {
   const t = useTranslations();
+  const queryClient = useQueryClient();
   const capturePromptSubmitError = useCallback(
     (error: unknown): void => {
       if (ChatSubmitPreservedError.is(error)) {
@@ -1211,10 +1305,11 @@ const FileChatOverlayInner = ({
   // renders while any suggestion is pending/applying (mirrors the bar's own
   // `isPending` gate). When it is, the thread card lifts above the bar so the
   // two floating surfaces never overlap.
-  const { hasPendingReview, reviewEntityId } = useFileChatReviewState({
-    activeDraft,
-    activeFile,
-  });
+  const { hasPendingReview, pendingReviewCount, reviewEntityId } =
+    useFileChatReviewState({
+      activeDraft,
+      activeFile,
+    });
   const editModeOptionId = useChatEditModeStore((state) => state.optionId);
   const setEditModeOptionId = useChatEditModeStore(
     (state) => state.setOptionId,
@@ -1385,13 +1480,17 @@ const FileChatOverlayInner = ({
         items.length > 0
       ) {
         detached(
-          persistQueuedSuggestions({
-            workspaceId,
-            entityId: activeFile.entityId,
-            chatThreadId,
-            items,
-            docxEditorRef,
-          }),
+          trackReviewSessionWrite(
+            reviewEntityId,
+            persistQueuedSuggestions({
+              queryClient,
+              workspaceId,
+              entityId: activeFile.entityId,
+              chatThreadId,
+              items,
+              docxEditorRef,
+            }),
+          ),
           "file-chat-overlay.persist-queued-suggestions",
         );
       }
@@ -1467,7 +1566,6 @@ const FileChatOverlayInner = ({
     onActiveDraftChatBound?.(chatThreadId);
     return undefined;
   }, [chatThreadId, hasPersistedDraftChatBinding, onActiveDraftChatBound]);
-  const queryClient = useQueryClient();
   // Persists the composer (+) menu's Models submenu selection into this
   // thread's cache, mirroring `ChatThreadPage`'s wiring so the file-chat (+)
   // menu keeps the same functionality as the main chat's.
@@ -2104,19 +2202,275 @@ const FileChatOverlayInner = ({
       .clearFileChatDraft(pendingFileChatDraft.sequence);
     return undefined;
   }, [activeFileFieldId, editorController, pendingFileChatDraft]);
-  // One handler for every new-thread entry point (dock icon and the
-  // `/new` reserved command): abort any live stream first — the
-  // rotation remount only swaps the surface, while the old Chat
-  // instance would keep streaming inside the query cache.
-  const startNewThread = () => {
+  const [newThreadChoice, setNewThreadChoice] = useState<NewThreadChoiceState>({
+    status: NEW_THREAD_CHOICE_STATUS.idle,
+  });
+  const newThreadPromptStatus = pendingReviewPromptStatus(newThreadChoice);
+  // Latches one new-thread commit at a time across its awaits. The choice
+  // state only drives the dock and trails a render behind the latch.
+  const newThreadCommitRef = useRef(false);
+  // Read from the store, not the render: callers read it again after settling
+  // the session's writes, which can reconcile or roll rows back to pending.
+  const readPendingReviewCount = () =>
+    reviewEntityId === undefined
+      ? 0
+      : countPendingReviewSuggestions(
+          useReviewStore.getState().sessions[reviewEntityId],
+        );
+  const settleReviewWrites = async () => {
+    if (reviewEntityId !== undefined) {
+      await settleReviewSessionWrites(reviewEntityId);
+    }
+  };
+  // The user committed to leaving this thread. Stop the old chat first, so a
+  // late `suggest_changes` call cannot queue rows after the session is read.
+  const beginNewThreadCommit = (): boolean => {
+    if (newThreadCommitRef.current) {
+      return false;
+    }
+    newThreadCommitRef.current = true;
+    stop();
+    return true;
+  };
+  const endNewThreadCommit = (next: NewThreadChoiceState) => {
+    newThreadCommitRef.current = false;
+    setNewThreadChoice(next);
+  };
+  // Every rotation ends here. A choice that resets the session first lets its
+  // in-flight writes reconcile into it, so no outcome is lost.
+  const commitNewThread = async (
+    threadId: ChatThreadId,
+    pendingReview: PendingReviewChoice,
+  ) => {
+    if (pendingReview !== PENDING_REVIEW_CHOICE.keep) {
+      await settleReviewWrites();
+    }
+    onNewThread(threadId, pendingReview);
+  };
+  // The rotation remount only swaps the surface; `beginNewThreadCommit`
+  // already stopped the old Chat instance, which would otherwise keep
+  // streaming inside the query cache.
+  const rotateThread = async (pendingReview: PendingReviewChoice) => {
     if (isDraftChatFrozen()) {
       return;
     }
-    stop();
     shouldFocusComposerAfterNewThreadRef.current = true;
     setPanelOpen(false);
-    onNewThread(createChatThreadId());
+    await commitNewThread(createChatThreadId(), pendingReview);
   };
+  // `/new <message>`: start the message on a fresh thread before its surface
+  // mounts. Runs inside the composer's submit, which restores the draft when
+  // this throws.
+  const sendNewThreadCommand = async ({
+    message,
+    files,
+    pendingReview,
+  }: {
+    message: string;
+    files: ChatDraftAttachment[];
+    pendingReview: PendingReviewChoice;
+  }) => {
+    if (!(await ensureAIAvailable())) {
+      throw new ChatSubmitPreservedError({ message: "AI is unavailable" });
+    }
+    if (Result.isError(await modelSelection.awaitPendingSelection())) {
+      throw new ChatSubmitPreservedError({
+        message: "Model selection failed",
+      });
+    }
+    const newThreadRef: ChatThreadRef =
+      workspaceId === undefined
+        ? { scope: "global", threadId: createChatThreadId() }
+        : {
+            scope: "workspace",
+            threadId: createChatThreadId(),
+            workspaceId,
+          };
+    await startNewThreadCommandHandoff({
+      activeOrganizationId,
+      context: {
+        ...chatThreadContext,
+        getSendMode: () => getChatSendMode(newThreadRef),
+      },
+      files,
+      html: message,
+      queryClient,
+      threadRef: newThreadRef,
+    });
+    await commitNewThread(newThreadRef.threadId, pendingReview);
+  };
+  const readComposerHtml = (): string => {
+    const { editor } = editorController;
+    return editor === null || editor.isDestroyed ? "" : editor.getHTML();
+  };
+  const requestNewThreadRotation = useLatestCallback(async () => {
+    if (isDraftChatFrozen() || newThreadCommitRef.current) {
+      return;
+    }
+    if (readPendingReviewCount() > 0) {
+      setNewThreadChoice({
+        status: NEW_THREAD_CHOICE_STATUS.choosing,
+        intent: { type: NEW_THREAD_INTENT.rotate },
+      });
+      return;
+    }
+    if (!beginNewThreadCommit()) {
+      return;
+    }
+    setNewThreadChoice({ status: NEW_THREAD_CHOICE_STATUS.committing });
+    await settleReviewWrites();
+    if (readPendingReviewCount() > 0) {
+      // Settling put rows back to pending (the server refused an accept or a
+      // replay), so they need the choice after all.
+      endNewThreadCommit({
+        status: NEW_THREAD_CHOICE_STATUS.choosing,
+        intent: { type: NEW_THREAD_INTENT.rotate },
+      });
+      return;
+    }
+    await rotateThread(PENDING_REVIEW_CHOICE.none);
+    endNewThreadCommit({ status: NEW_THREAD_CHOICE_STATUS.idle });
+  });
+  const resumeNewThread = useLatestCallback(
+    async (intent: NewThreadIntent, pendingReview: PendingReviewChoice) => {
+      switch (intent.type) {
+        case NEW_THREAD_INTENT.rotate:
+          await rotateThread(pendingReview);
+          return;
+        case NEW_THREAD_INTENT.handoff: {
+          // The draft is no longer a `/new <message>`: rotate without
+          // sending, and leave the draft to the user.
+          if (readNewThreadCommandMessage(readComposerHtml()) === null) {
+            await rotateThread(pendingReview);
+            return;
+          }
+          const sent = await Result.tryPromise({
+            try: async () => {
+              await editorController.submit(async ({ html, files }) => {
+                const message = readNewThreadCommandMessage(html);
+                if (message !== null) {
+                  await sendNewThreadCommand({ message, files, pendingReview });
+                }
+              });
+            },
+            catch: (cause) => cause,
+          });
+          if (Result.isError(sent)) {
+            capturePromptSubmitError(sent.error);
+          }
+          return;
+        }
+        default:
+          intent satisfies never;
+          panic("Unhandled new thread intent");
+      }
+    },
+  );
+  const keepPendingReview = () => {
+    if (
+      newThreadChoice.status !== NEW_THREAD_CHOICE_STATUS.choosing ||
+      !beginNewThreadCommit()
+    ) {
+      return;
+    }
+    const { intent } = newThreadChoice;
+    setNewThreadChoice({ status: NEW_THREAD_CHOICE_STATUS.committing });
+    detached(
+      resumeNewThread(intent, PENDING_REVIEW_CHOICE.keep).finally(() => {
+        endNewThreadCommit({ status: NEW_THREAD_CHOICE_STATUS.idle });
+      }),
+      "file-chat-overlay.keep-pending-review",
+    );
+  };
+  // Reject every row still pending once the session's writes settle, and
+  // repeat until a pass rejects nothing: settling can persist rows (a create
+  // lands) or put rows back to pending (the server refused an accept).
+  // Returns false when the server refused the reject.
+  const rejectPendingReviewRows = async (): Promise<boolean> => {
+    if (reviewEntityId === undefined) {
+      return true;
+    }
+    await settleReviewWrites();
+    const session = useReviewStore.getState().sessions[reviewEntityId];
+    if (session === undefined) {
+      return true;
+    }
+    const pendingItems = session.filter((item) => item.status === "pending");
+    const persistedIds = pendingItems.flatMap((item) =>
+      item.persisted === true ? [item.id] : [],
+    );
+    if (persistedIds.length > 0) {
+      if (activeFile === undefined || workspaceId === undefined) {
+        panic("Persisted DOCX suggestions require a workspace file");
+      }
+      const rejected = await rejectPendingDocxSuggestionsRequest({
+        queryClient,
+        workspaceId,
+        entityId: activeFile.entityId,
+        suggestionIds: persistedIds,
+      });
+      if (Result.isError(rejected)) {
+        getAnalytics().captureError(rejected.error);
+        stellaToast.add({
+          title: t("docxReview.persistFailed"),
+          type: "error",
+        });
+        return false;
+      }
+    }
+    // Mirror the server before the rotation resets the session, so a handoff
+    // that fails afterwards leaves no rejected row actionable. Unpersisted
+    // rows never reached the server and are dropped with the session.
+    useReviewStore.getState().setStatusBatch(
+      reviewEntityId,
+      pendingItems.map((item) => item.id),
+      "rejected",
+    );
+    if (persistedIds.length === 0) {
+      return true;
+    }
+    return await rejectPendingReviewRows();
+  };
+  const dismissPendingReview = useLatestCallback(async () => {
+    if (
+      newThreadChoice.status !== NEW_THREAD_CHOICE_STATUS.choosing ||
+      !beginNewThreadCommit()
+    ) {
+      return;
+    }
+    const { intent } = newThreadChoice;
+    setNewThreadChoice({ status: NEW_THREAD_CHOICE_STATUS.dismissing, intent });
+    if (!(await rejectPendingReviewRows())) {
+      endNewThreadCommit({ status: NEW_THREAD_CHOICE_STATUS.choosing, intent });
+      return;
+    }
+    await resumeNewThread(intent, PENDING_REVIEW_CHOICE.dismiss);
+    endNewThreadCommit({ status: NEW_THREAD_CHOICE_STATUS.idle });
+  });
+  const cancelNewThreadChoice = () => {
+    if (newThreadChoice.status !== NEW_THREAD_CHOICE_STATUS.choosing) {
+      return;
+    }
+    setNewThreadChoice({ status: NEW_THREAD_CHOICE_STATUS.idle });
+  };
+  // `/new <message>` is decided before the composer clears the draft: while
+  // suggestions are pending the choice opens and the draft stays in place, and
+  // while another new thread is starting the submit does not go through.
+  const canSubmitComposerDraft = useLatestCallback((): boolean => {
+    if (readNewThreadCommandMessage(readComposerHtml()) !== null) {
+      if (newThreadCommitRef.current) {
+        return false;
+      }
+      if (readPendingReviewCount() > 0) {
+        setNewThreadChoice({
+          status: NEW_THREAD_CHOICE_STATUS.choosing,
+          intent: { type: NEW_THREAD_INTENT.handoff },
+        });
+        return false;
+      }
+    }
+    return canSubmitWithCurrentDocxSnapshot();
+  });
   const handleComposerSubmit = useLatestCallback(
     async ({
       prompt,
@@ -2132,7 +2486,10 @@ const FileChatOverlayInner = ({
             newThreadMessages.push(args);
             return;
           }
-          startNewThread();
+          detached(
+            requestNewThreadRotation(),
+            "file-chat-overlay.request-new-thread",
+          );
           editorController.setContent("");
         },
         "rename-chat": (args) => {
@@ -2160,35 +2517,26 @@ const FileChatOverlayInner = ({
       if (newThreadMessage === undefined) {
         return;
       }
-      if (!(await ensureAIAvailable())) {
-        throw new ChatSubmitPreservedError({ message: "AI is unavailable" });
+      // The submit guard opens the choice instead while suggestions are
+      // pending, and holds `/new` while another new thread is starting.
+      if (!beginNewThreadCommit()) {
+        return;
       }
-      if (Result.isError(await modelSelection.awaitPendingSelection())) {
-        throw new ChatSubmitPreservedError({
-          message: "Model selection failed",
-        });
-      }
-      const newThreadRef: ChatThreadRef =
-        workspaceId === undefined
-          ? { scope: "global", threadId: createChatThreadId() }
-          : {
-              scope: "workspace",
-              threadId: createChatThreadId(),
-              workspaceId,
-            };
-      await startNewThreadCommandHandoff({
-        activeOrganizationId,
-        context: {
-          ...chatThreadContext,
-          getSendMode: () => getChatSendMode(newThreadRef),
-        },
+      setNewThreadChoice({ status: NEW_THREAD_CHOICE_STATUS.committing });
+      await settleReviewWrites();
+      // Rows that settling put back to pending stay in review: the message is
+      // already on its way, so there is no draft left to hold for a choice.
+      const pendingReview =
+        readPendingReviewCount() > 0
+          ? PENDING_REVIEW_CHOICE.keep
+          : PENDING_REVIEW_CHOICE.none;
+      await sendNewThreadCommand({
+        message: newThreadMessage,
         files,
-        html: newThreadMessage,
-        queryClient,
-        threadRef: newThreadRef,
+        pendingReview,
+      }).finally(() => {
+        endNewThreadCommit({ status: NEW_THREAD_CHOICE_STATUS.idle });
       });
-      stop();
-      onNewThread(newThreadRef.threadId);
     },
   );
   // A new message (the user's send, or a fresh assistant turn) re-pins the
@@ -2366,7 +2714,7 @@ const FileChatOverlayInner = ({
           anonymized={anonymized}
           attachmentsEnabled
           attentionPulseSeq={attentionPulseSeq}
-          canSubmitNow={canSubmitWithCurrentDocxSnapshot}
+          canSubmitNow={canSubmitComposerDraft}
           context={{ activeOrganizationId, threadRef }}
           editorController={editorController}
           mcpOrganizationId={activeOrganizationId}
@@ -2427,9 +2775,36 @@ const FileChatOverlayInner = ({
                 selectModel: modelSelection.selectModel,
               }}
               onNewThread={
-                hasMessages && draftPersistence.status !== "saving"
-                  ? startNewThread
+                hasMessages &&
+                draftPersistence.status !== "saving" &&
+                offersNewThread(newThreadChoice)
+                  ? () => {
+                      detached(
+                        requestNewThreadRotation(),
+                        "file-chat-overlay.request-new-thread",
+                      );
+                    }
                   : null
+              }
+              newThreadPrompt={
+                newThreadPromptStatus !== null
+                  ? {
+                      content: (
+                        <PendingReviewNewThreadPrompt
+                          onDismiss={() => {
+                            detached(
+                              dismissPendingReview(),
+                              "file-chat-overlay.dismiss-pending-review",
+                            );
+                          }}
+                          onKeep={keepPendingReview}
+                          pendingCount={pendingReviewCount}
+                          status={newThreadPromptStatus}
+                        />
+                      ),
+                      onCancel: cancelNewThreadChoice,
+                    }
+                  : undefined
               }
               leadingContext={
                 // The matter control is a real picker on every surface, so

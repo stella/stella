@@ -16,6 +16,8 @@
 import type { ReactNode, RefObject } from "react";
 import { startTransition, useRef } from "react";
 
+import { panic } from "better-result";
+
 import {
   setAISuggestionsMeta,
   setFocusedSuggestionMeta,
@@ -33,7 +35,11 @@ import type { ChatThreadId } from "@/lib/chat-thread-ref";
 
 import type { ActiveLegalDocument } from "./active-legal-document";
 import { FileChatOverlay } from "./file-chat-overlay";
-import { resolveFileReviewSessionId } from "./file-review-session";
+import {
+  PENDING_REVIEW_CHOICE,
+  resolveFileReviewSessionId,
+} from "./file-review-session";
+import type { PendingReviewChoice } from "./file-review-session";
 import type {
   FileChatOverlayActivation,
   OverlayThreadPresentation,
@@ -273,7 +279,10 @@ export const FileChatOverlayHost = ({
     activeDraft === undefined
       ? { status: "idle" }
       : getCreateDocumentDraftPersistence(activeDraft.toolCallId);
-  const handleNewThread = (threadId: ChatThreadId) => {
+  const handleNewThread = (
+    threadId: ChatThreadId,
+    pendingReview: PendingReviewChoice,
+  ) => {
     // The current runtime state is read again at the interaction boundary.
     // This closes the small interval before React commits the saving payload:
     // a click cannot rotate the thread after the save captured its binding.
@@ -284,17 +293,25 @@ export const FileChatOverlayHost = ({
     ) {
       return;
     }
-    // The previous thread's queued/accepted/rejected suggestions
-    // belong to that thread's history. Carrying them into a fresh
-    // thread invites the user to act on proposals they no longer
-    // have context for; reset the session whenever they explicitly
-    // start a new chat.
     const reviewSessionId = resolveActiveReviewSessionId({
       activeDraft,
       activeFile,
     });
-    if (reviewSessionId !== undefined) {
-      useReviewStore.getState().resetSession(reviewSessionId);
+    switch (pendingReview) {
+      case PENDING_REVIEW_CHOICE.keep:
+        break;
+      // The previous thread's resolved suggestions belong to that thread's
+      // history; with nothing left pending (or the pending ones just
+      // rejected), the fresh thread starts with an empty session.
+      case PENDING_REVIEW_CHOICE.dismiss:
+      case PENDING_REVIEW_CHOICE.none:
+        if (reviewSessionId !== undefined) {
+          useReviewStore.getState().resetSession(reviewSessionId);
+        }
+        break;
+      default:
+        pendingReview satisfies never;
+        panic("Unhandled pending review choice");
     }
     // Wrap the swap in a transition so React keeps the current chat
     // visible while `chatThreadOptions` suspends on the new key,

@@ -968,6 +968,13 @@ const finalizeRun = async (
       workspaceId: actor.workspaceId,
     });
   }
+  if (finalized.skippedForPendingLimit > 0) {
+    logger.warn("document_review_run.fixes_unstaged_pending_limit", {
+      count: String(finalized.skippedForPendingLimit),
+      runId: actor.runId,
+      workspaceId: actor.workspaceId,
+    });
+  }
   return null;
 };
 
