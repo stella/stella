@@ -15,7 +15,7 @@
     "test": "bun test"
   },
   "dependencies": {
-    "@hocuspocus/extension-redis": "4.6.0",
+    "@hocuspocus/extension-redis": "4.7.0",
     "@hocuspocus/server": "^4.6.0",
     "@stll/api-contract": "workspace:*",
     "@stll/errors": "workspace:*",
