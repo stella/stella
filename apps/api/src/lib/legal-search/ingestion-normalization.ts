@@ -110,17 +110,34 @@ export const partialObservationFromMetadata = (
  * own, so this is a JSONB path extraction. Written as
  * `jsonb_extract_path_text` rather than `-> ... ->>` because the key is a
  * bound parameter and Postgres cannot resolve `jsonb -> unknown` — the
- * function's variadic `text[]` can. Every caller applies it inside an
- * already-bounded lookup (identities the publisher just listed, a hundred at
- * a time), where the extraction is evaluated on rows the identity index has
- * already selected; it is not a predicate anything scans the corpus with.
+ * function's variadic `text[]` can.
  *
  * `IS DISTINCT FROM` rather than `<>`: the marker is written only when it is
  * true, so almost every row has no such key and the extraction yields NULL.
  * A row with no marker is a row that carries detail.
+ *
+ * It never drives an index. The reconciliation walk applies it inside an
+ * already-bounded lookup (identities the publisher just listed, a hundred at
+ * a time); the public reads in `published-decisions.ts` apply it beside their
+ * own country, source and keyset predicates, so it filters candidate rows
+ * those have already selected rather than choosing them.
  */
 export const storedObservationHasDetail = (metadata: Column): SQL =>
   sql`jsonb_extract_path_text(${metadata}, ${PARTIAL_OBSERVATION_KEY}, ${PARTIAL_OBSERVATION_FIELD.IS_LISTING_ONLY}) is distinct from 'true'`;
+
+/**
+ * The same predicate as raw SQL, for the lateral joins that address the
+ * decision table under an alias and never see a Drizzle column.
+ *
+ * `metadataColumn` is a code constant (`"d.metadata"`), never request input.
+ * The marker's path is interpolated as literals here because raw SQL carries
+ * no parameters, and it is spelled from the same two constants the Drizzle
+ * form and the JavaScript reader use, so the three cannot drift.
+ */
+export const storedObservationHasDetailSqlFor = (
+  metadataColumn: string,
+): string =>
+  `jsonb_extract_path_text(${metadataColumn}, '${PARTIAL_OBSERVATION_KEY}', '${PARTIAL_OBSERVATION_FIELD.IS_LISTING_ONLY}') is distinct from 'true'`;
 
 /**
  * Sanitize text fields before DB insertion. Postgres rejects null bytes in

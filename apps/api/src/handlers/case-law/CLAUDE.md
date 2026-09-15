@@ -486,6 +486,18 @@ the pipeline persists adapter-neutral observation quality so that rule applies
 to every court without depending on court-specific metadata keys.
 If the existing row has a pending corpus mirror, replay its stored payload to
 settlement before allowing the source page to advance.
+A listing-only row is durable but not published. Search, browse, the latest
+shelf, the corpus projection and the sitemaps exclude it; it becomes public
+only when a later observation carries its detail. Identity survives the
+failure, publication waits for it. A scheduled repair re-asks the publisher and
+promotes the row when the detail arrives; do not treat a listing-only row as
+finished, and do not delete it to hide it. "Not published" binds every public
+read, the decision page included: the row's own URL answers 404 until its
+detail arrives, so the corpus never publishes a page with no decision on it.
+The predicate is one, `publishedCaseLawDecision` in
+`lib/case-law/published-decisions.ts`, and
+`tests/security/case-law-public-route-invariants.test.ts` censuses the public
+read surface against it, so a new public read cannot forget it.
 
 Likewise, an HTTP 200 search response is not an empty result unless the
 publisher's exact no-results state is present. Fail closed on unknown markup.

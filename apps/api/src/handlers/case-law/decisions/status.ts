@@ -22,6 +22,7 @@ import type {
 } from "@/api/lib/case-law-public-read-db";
 import { loadCourtWeights } from "@/api/lib/case-law/court-weights";
 import { readNonRedistributableCaseLawSourceIds } from "@/api/lib/case-law/non-redistributable-sources";
+import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions";
 import { errorTag } from "@/api/lib/errors/utils";
 import { createTtlResultCache } from "@/api/lib/legal-search/browse-facets-cache";
 import type { LegalBrowseFacets } from "@/api/lib/legal-search/types";
@@ -94,6 +95,7 @@ export const readCaseLawCorpusStatusQuery = definePublicLawSharedQuery(
       .where(
         and(
           eq(caseLawDecisions.country, country),
+          publishedCaseLawDecision,
           excludedSourceIds.length === 0
             ? undefined
             : notInArray(caseLawDecisions.sourceId, [...excludedSourceIds]),

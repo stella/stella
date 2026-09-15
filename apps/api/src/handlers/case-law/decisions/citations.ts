@@ -9,6 +9,7 @@ import {
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
+import { publishedCaseLawDecisionFor } from "@/api/lib/case-law/published-decisions";
 import { redistributableCaseLawSourceFor } from "@/api/lib/case-law/redistribution";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -116,6 +117,7 @@ export const listOutgoingDecisionCitations = async ({
         OR (
           ${citedSource.id} IS NOT NULL
           AND ${redistributableCaseLawSourceFor(citedSource.descriptor)}
+          AND ${publishedCaseLawDecisionFor(citedDecision.metadata)}
         )
       )`,
     })
@@ -167,6 +169,7 @@ export const listIncomingDecisionCitations = async ({
       visible: sql<boolean>`(
         ${citingSource.id} IS NOT NULL
         AND ${redistributableCaseLawSourceFor(citingSource.descriptor)}
+        AND ${publishedCaseLawDecisionFor(citingDecision.metadata)}
       )`,
     })
     .from(candidates)

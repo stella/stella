@@ -4,7 +4,7 @@ import type { SQL } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
 import type { SafeId } from "@/api/lib/branded-types";
-import { redistributableSourceJoin } from "@/api/lib/case-law/search-sql";
+import { publicCaseLawDecisionJoin } from "@/api/lib/case-law/search-sql";
 import { LIMITS } from "@/api/lib/limits";
 import { CHAT_SEARCH_DISPLAY_METADATA_GENERATION } from "@/api/lib/search/chat-search-generation";
 import { chatThreadScopeSql } from "@/api/lib/search/chat-thread-scope-sql";
@@ -439,7 +439,7 @@ export const buildSearchPreviewQuery = ({
         FROM case_law_search_documents clsd
         JOIN case_law_decisions d ON d.id = clsd.decision_id
         LEFT JOIN case_law_fts_configs clfc ON clfc.language = clsd.language
-        ${redistributableSourceJoin}
+        ${publicCaseLawDecisionJoin}
         ${previewPassageJoin({
           generation: sql`clsd.preview_generation`,
           locatorTsQuery,

@@ -23,6 +23,10 @@ import { publicDecisionRowColumns } from "@/api/lib/case-law/decision-row-column
 import { readDecisionHeadnote } from "@/api/lib/case-law/decision-text";
 import { readPublicDecisionLanguageAlternatesByGroup } from "@/api/lib/case-law/language-alternates";
 import {
+  publishedCaseLawDecision,
+  publishedCaseLawDecisionFor,
+} from "@/api/lib/case-law/published-decisions";
+import {
   redistributableCaseLawSource,
   redistributableCaseLawSourceFor,
 } from "@/api/lib/case-law/redistribution";
@@ -168,6 +172,7 @@ export const listDecisionsHandler = async (
   const limit = query.limit ?? LIMITS.caseLawSearchPageSizeDefault;
   const conditions: SQL[] = [
     redistributableCaseLawSource,
+    publishedCaseLawDecision,
     ...decisionFilterConditions(scopedQuery, caseLawDecisions),
   ];
 
@@ -215,6 +220,7 @@ export const listDecisionsHandler = async (
                     // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- column against column inside one statement, nothing round-trips through a JS Date
                     sql`(${sibling.createdAt}, ${sibling.id}) < (${caseLawDecisions.createdAt}, ${caseLawDecisions.id})`,
                     redistributableCaseLawSourceFor(siblingSource.descriptor),
+                    publishedCaseLawDecisionFor(sibling.metadata),
                     ...decisionFilterConditions(scopedQuery, sibling),
                   ),
                 ),

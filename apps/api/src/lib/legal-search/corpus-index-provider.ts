@@ -16,6 +16,7 @@ import {
   type CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
 import { decisionIdentifierProjection } from "@/api/lib/case-law/decision-identifiers";
+import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import { currentCaseLawCorpusProjection } from "@/api/lib/legal-search/case-law-corpus-projection";
 import { corpusIndexBrowseFacets } from "@/api/lib/legal-search/corpus-index-facets";
@@ -147,6 +148,7 @@ export const rehydrateCorpusIndexProviderCandidates =
           and(
             inArray(caseLawDecisions.id, ids),
             redistributableCaseLawSource,
+            publishedCaseLawDecision,
             currentCaseLawCorpusProjection(generation),
           ),
         ),

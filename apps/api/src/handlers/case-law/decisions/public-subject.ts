@@ -2,9 +2,12 @@
  * The publication gate for public decision reads, by construction.
  *
  * A public endpoint that names a decision must answer "not found" when the
- * decision's country is outside the public list or its source may not be
- * redistributed: its citation texts, graph counts and provision references
- * are as much its content as its full text.
+ * decision's country is outside the public list, its source may not be
+ * redistributed, or the row is listing-only: its citation texts, graph counts
+ * and provision references are as much its content as its full text. A
+ * listing-only row is a listed identity whose detail never arrived (guide rule
+ * 20); it is durable so a later observation can enrich it, and unpublished
+ * until one does, here and on every aggregate surface alike.
  * The gate used to be a check each handler remembered to make, and two
  * handlers shipped without it. Here it is the only way to obtain a
  * `RedistributableDecisionSubject`, and every read handler takes one instead
@@ -41,6 +44,7 @@ import type {
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
 import { normalizePublicDecisionLanguage } from "@/api/lib/case-law/decision-language";
+import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions";
 import { isRedistributable } from "@/api/lib/legal-search/corpus-source";
 
 /** Module-private, so the subject type is constructible only below. */
@@ -125,7 +129,7 @@ const resolveSubjectIn = async (
     })
     .from(caseLawDecisions)
     .innerJoin(caseLawSources, eq(caseLawSources.id, caseLawDecisions.sourceId))
-    .where(condition)
+    .where(and(condition, publishedCaseLawDecision))
     .limit(1);
   const row = rows.at(0);
   if (

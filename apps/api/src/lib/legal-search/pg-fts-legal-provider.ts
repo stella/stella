@@ -9,7 +9,7 @@ import {
 import { decisionIdentifierProjection } from "@/api/lib/case-law/decision-identifiers";
 import {
   bodyPreviewJoin,
-  redistributableSourceJoin,
+  publicCaseLawDecisionJoin,
 } from "@/api/lib/case-law/search-sql";
 import { blendedRankSql } from "@/api/lib/legal-search/authority-sql";
 import { loadDocumentContext } from "@/api/lib/legal-search/document-context";
@@ -150,7 +150,7 @@ const searchResult = async (
     FROM case_law_search_documents sd
     JOIN case_law_decisions d
       ON d.id = sd.decision_id
-    ${redistributableSourceJoin}
+    ${publicCaseLawDecisionJoin}
     ${bodyPreviewJoin}
     WHERE ${ftsSearch.predicate}
       ${allFilters}
@@ -166,7 +166,7 @@ const searchResult = async (
     SELECT d.${sql.raw(column)} AS value, count(*)::int AS count
     FROM case_law_search_documents sd
     JOIN case_law_decisions d ON d.id = sd.decision_id
-    ${redistributableSourceJoin}
+    ${publicCaseLawDecisionJoin}
     WHERE ${ftsSearch.predicate}
       ${omit === "court" ? sql`` : courtFilter}
       ${omit === "country" ? sql`` : countryFilter}

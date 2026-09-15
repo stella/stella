@@ -16,7 +16,7 @@ import type {
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import { decisionIdentifierProjection } from "@/api/lib/case-law/decision-identifiers";
-import { redistributableSourceJoin } from "@/api/lib/case-law/search-sql";
+import { publicCaseLawDecisionJoin } from "@/api/lib/case-law/search-sql";
 import { escapeLike } from "@/api/lib/escape-like";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -851,7 +851,7 @@ export const searchGlobal = async (
         d.updated_at
       FROM case_law_search_documents clsd
       JOIN case_law_decisions d ON d.id = clsd.decision_id
-      ${redistributableSourceJoin}
+      ${publicCaseLawDecisionJoin}
       ${caseLawBodyPreviewJoin}
       WHERE TRUE
         ${caseLawTextSearchFilter}
@@ -918,7 +918,7 @@ export const searchGlobal = async (
       SELECT 1
       FROM case_law_search_documents clsd
       JOIN case_law_decisions d ON d.id = clsd.decision_id
-      ${redistributableSourceJoin}
+      ${publicCaseLawDecisionJoin}
       WHERE TRUE
         ${caseLawTextSearchFilter}
         ${caseLawUpdatedFilter}

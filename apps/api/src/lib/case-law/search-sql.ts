@@ -1,17 +1,24 @@
 import { sql } from "drizzle-orm";
 
+import { publishedCaseLawDecisionSqlFor } from "@/api/lib/case-law/published-decisions";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 
 /**
- * Query-time redistribution gate for the raw pg-fts queries (which join
- * `case_law_decisions d`). The projection is also gated at index time;
- * this keeps stale projection rows of a source that later turned
- * restricted out of public results.
+ * The public gate for the raw pg-fts queries, which all join
+ * `case_law_decisions d`: the source may be redistributed and the row is not
+ * listing-only.
+ *
+ * Both halves are query-time as well as index-time. The projection is gated
+ * when it is written, so this keeps out rows indexed before a source turned
+ * restricted, and rows indexed before their listing-only marker was read here
+ * — a listing-only row has a docket and a court, so it produces a search
+ * document even with no body to preview.
  */
-export const redistributableSourceJoin = sql`
+export const publicCaseLawDecisionJoin = sql`
   JOIN case_law_sources
     ON case_law_sources.id = d.source_id
    AND ${redistributableCaseLawSource}
+   AND ${sql.raw(publishedCaseLawDecisionSqlFor("d"))}
 `;
 
 export const bodyPreviewJoin = sql`

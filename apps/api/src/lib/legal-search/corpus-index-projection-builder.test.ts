@@ -29,6 +29,7 @@ const CASE_LAW_INPUT = {
   contentHash: "a".repeat(64),
   redistributionEligible: true,
   redacted: false,
+  listingOnly: false,
   caseNumber: "4 As 3/2008",
   identifiers: [
     { type: "source", value: "NSS-4-AS-3-2008" },
