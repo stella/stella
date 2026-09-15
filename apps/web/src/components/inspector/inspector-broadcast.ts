@@ -451,6 +451,13 @@ const toPersistedInspectorTab = (tab: InspectorTab): InspectorTab | null => {
     }
     return { ...tab, payload: persistence.project(tab.payload) };
   }
+  if (tab.type === "pdf") {
+    // The lane binds the tab to the document route this window renders; a
+    // reload may land anywhere, and an expanded tab without its route hides
+    // the file behind a metadata-only persona.
+    const { metadataLane: _metadataLane, ...reference } = tab;
+    return reference;
+  }
   return tab;
 };
 
