@@ -14,7 +14,7 @@
  */
 
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { asc, eq } from "drizzle-orm";
+import { asc, desc, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import { authRelationsPart } from "@/api/db/auth-schema";
@@ -36,6 +36,8 @@ import {
 } from "@/api/handlers/case-law/ingestion/pipeline";
 import type { CaseLawCorpusDependencies } from "@/api/handlers/case-law/ingestion/pipeline";
 import { RULE_SOURCE } from "@/api/handlers/case-law/polarity/consts";
+import { loadRules } from "@/api/handlers/case-law/polarity/rule-engine";
+import type { RuleCache } from "@/api/handlers/case-law/polarity/rule-engine";
 import { SEED_RULES } from "@/api/handlers/case-law/polarity/seed-rules";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -121,6 +123,18 @@ const readCitations = async () =>
     })
     .from(caseLawCitations)
     .orderBy(asc(caseLawCitations.citationText));
+
+/** The seeded `srov.` rule as it stands now: its source and its counter. */
+const readRule = async () =>
+  (
+    await db
+      .select({
+        source: caseLawPolarityRules.source,
+        matchCount: caseLawPolarityRules.matchCount,
+      })
+      .from(caseLawPolarityRules)
+      .where(eq(caseLawPolarityRules.pattern, SROV_PATTERN))
+  ).at(0);
 
 beforeAll(async () => {
   client = await createTestPglite();
@@ -224,4 +238,56 @@ test("a refreshed decision's citations keep the polarity the rules give", async 
       polarityRuleId,
     })),
   );
+
+  // A row published with a verdict never reaches `classify-citations.ts`, so
+  // the publish is the only place left that can say a rule fired. Twice: the
+  // refresh re-derived the same verdict on a new row.
+  expect(await readRule()).toMatchObject({ matchCount: 2 });
+});
+
+test("a verdict from a rule retired mid-cycle is not published", async () => {
+  // The rules a crawl compiled at the start of its cycle, held for the rest
+  // of it. This is the cache `runIngestionPipeline` owns.
+  const polarityRules: RuleCache = new Map();
+  await loadRules("cs", scopedDb, polarityRules);
+  expect(polarityRules.get("cs")?.length ?? 0).toBeGreaterThan(0);
+
+  // What `seed-polarity-rules.ts` does when a rule is withdrawn: retire it,
+  // then return the citations it labelled to the unclassified pool. The
+  // maintenance lane it holds does not serialize against a crawl in flight,
+  // so the cache above is now stale.
+  await db
+    .update(caseLawPolarityRules)
+    .set({ source: RULE_SOURCE.RETIRED })
+    .where(eq(caseLawPolarityRules.pattern, SROV_PATTERN));
+  const retired = await readRule();
+
+  await processDecision({
+    input: {
+      ...decision("hash-ingested-during-the-reseed"),
+      caseNumber: "30 Cdo 5555/2026",
+    },
+    sourceId,
+    scopedDb,
+    observedAt: new Date("2026-09-15T11:00:00.000Z"),
+    observationOrder: 4n,
+    polarityRules,
+    corpus,
+  });
+
+  // The stale cache still matched, and the publish refused the verdict: the
+  // sweep that erased this rule's verdicts has already run, and nothing
+  // revisits a row that carries one.
+  const [precedent] = await db
+    .select({
+      polarity: caseLawCitations.polarity,
+      polarityRuleId: caseLawCitations.polarityRuleId,
+    })
+    .from(caseLawCitations)
+    .where(eq(caseLawCitations.citationText, CITED_PRECEDENT))
+    .orderBy(desc(caseLawCitations.createdAt))
+    .limit(1);
+  expect(precedent).toEqual({ polarity: null, polarityRuleId: null });
+  // And a retired rule's counter did not move for a match it may not assert.
+  expect(await readRule()).toMatchObject({ matchCount: retired?.matchCount });
 });

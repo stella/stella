@@ -10,6 +10,7 @@ import {
   caseLawDecisionSourceIdentities,
   caseLawDecisions,
   caseLawIngestionFailures,
+  caseLawPolarityRules,
   caseLawSources,
 } from "@/api/db/schema";
 import { corpusStorageMode } from "@/api/env-base";
@@ -53,6 +54,7 @@ import { shouldSkipRefresh } from "@/api/handlers/case-law/ingestion/refresh-pol
 import { segmentDecision } from "@/api/handlers/case-law/ingestion/segmenter";
 import { extractContext } from "@/api/handlers/case-law/polarity/context";
 import {
+  ACTIVE_RULE_SOURCES,
   loadRules,
   selectRuleMatch,
 } from "@/api/handlers/case-law/polarity/rule-engine";
@@ -119,6 +121,7 @@ import {
   PG_ERROR,
   pgErrorFields,
 } from "@/api/lib/pg-error";
+import { isRecord } from "@/api/lib/type-guards";
 
 export { sanitizeResult };
 
@@ -446,6 +449,93 @@ const buildCitationRows = async ({
       polarityRuleId: match?.ruleId ?? null,
     };
   });
+};
+
+/** Rows from `execute` under either driver shape (bare array or `{ rows }`). */
+const executedRows = (result: unknown): unknown[] => {
+  if (Array.isArray(result)) {
+    return result;
+  }
+  if (isRecord(result) && Array.isArray(result["rows"])) {
+    return result["rows"];
+  }
+  return [];
+};
+
+/** Each rule that labelled one of these citations, and how many it labelled. */
+const polarityMatchesByRule = (
+  rows: readonly (typeof caseLawCitations.$inferInsert)[],
+): Map<string, number> => {
+  const matches = new Map<string, number>();
+  for (const { polarityRuleId } of rows) {
+    if (polarityRuleId) {
+      matches.set(polarityRuleId, (matches.get(polarityRuleId) ?? 0) + 1);
+    }
+  }
+  return matches;
+};
+
+/**
+ * Settle this decision's polarity verdicts against the rules as they stand
+ * now, and count the matches against those rules.
+ *
+ * The compiled rules a verdict came from were read before this transaction
+ * opened, and a cache holds them for the rest of the crawl cycle. Meanwhile
+ * `seed-polarity-rules.ts` retires a rule and returns every citation it
+ * labelled to the unclassified pool; the maintenance lane serializes operator
+ * passes against each other, not against a crawl in flight. A verdict from a
+ * rule retired in that window would be published after the sweep that was
+ * meant to erase it, and nothing would ever revisit it: the drain and
+ * `classify-citations.ts` both select on `polarity IS NULL`. So the writer
+ * asks, inside the transaction that publishes the rows, whether the rule is
+ * still one the loader would compile, and drops the verdict when it is not.
+ *
+ * The statement is an UPDATE rather than a read, which is what orders the two
+ * passes: it takes a row lock on each rule it confirms, so a retirement
+ * racing this decision waits for the commit and its sweep then sees the rows.
+ * The rule ids are sorted so two ingest transactions confirming the same
+ * rules walk them in one order.
+ *
+ * Counting rides along because the count has to happen somewhere: a row
+ * published with a verdict never reaches `classify-citations.ts`, which is
+ * what used to move `match_count`, so without this the column would stop
+ * reporting how much work a rule does — the one thing it is for.
+ */
+const settleCitationPolarity = async (
+  tx: Transaction,
+  rows: readonly (typeof caseLawCitations.$inferInsert)[],
+  observedAt: Date,
+): Promise<(typeof caseLawCitations.$inferInsert)[]> => {
+  const matches = polarityMatchesByRule(rows);
+  if (matches.size === 0) {
+    return [...rows];
+  }
+  const tally = [...matches].sort(([a], [b]) => (a < b ? -1 : 1));
+  const confirmed: unknown = await tx.execute(sql`
+    UPDATE ${caseLawPolarityRules} AS r
+       SET match_count = r.match_count + m.matches,
+           updated_at = GREATEST(r.updated_at, ${observedAt})
+      FROM (VALUES ${sql.join(
+        tally.map(([ruleId, count]) => sql`(${ruleId}::uuid, ${count}::int)`),
+        sql.raw(","),
+      )}) AS m(id, matches)
+     WHERE r.id = m.id
+       AND r.source IN (${sql.join(
+         ACTIVE_RULE_SOURCES.map((source) => sql`${source}`),
+         sql.raw(","),
+       )})
+    RETURNING r.id::text AS id
+  `);
+  const active = new Set(
+    executedRows(confirmed).flatMap((row) =>
+      isRecord(row) && typeof row["id"] === "string" ? [row["id"]] : [],
+    ),
+  );
+  return rows.map((row) =>
+    row.polarityRuleId && !active.has(row.polarityRuleId)
+      ? { ...row, polarity: null, polarityRuleId: null }
+      : row,
+  );
 };
 
 /**
@@ -1987,7 +2077,9 @@ const processDecisionAttempt = async ({
           .where(eq(caseLawCitations.citingDecisionId, existing.id));
 
         if (citationRows.length > 0) {
-          await tx.insert(caseLawCitations).values(citationRows);
+          await tx
+            .insert(caseLawCitations)
+            .values(await settleCitationPolarity(tx, citationRows, observedAt));
           await resolveCitationsForDecision(tx, existing.id);
         }
 
@@ -2045,7 +2137,9 @@ const processDecisionAttempt = async ({
       await announceDecisionIdentifiers(tx, decisionRow.id, identifierRows);
 
       if (citationRows.length > 0) {
-        await tx.insert(caseLawCitations).values(citationRows);
+        await tx
+          .insert(caseLawCitations)
+          .values(await settleCitationPolarity(tx, citationRows, observedAt));
         // Resolve what was just written, in the transaction that wrote it.
         // One indexed lookup per citation against the fetch and parse this
         // page already paid for; without it every new citation waits for the

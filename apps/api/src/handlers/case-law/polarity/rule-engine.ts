@@ -109,8 +109,18 @@ const compilePattern = (pattern: string): RegExp | null => {
   }
 };
 
-/** Active rule sources (proposed and retired rules are excluded). */
-const ACTIVE_SOURCES = [RULE_SOURCE.MANUAL, RULE_SOURCE.LLM_PROMOTED];
+/**
+ * Active rule sources: proposed and retired rules are excluded.
+ *
+ * Exported because a verdict may only be published while the rule that
+ * produced it still carries one of these, and the writer that checks it has
+ * to be asking the question the loader asked. Two hand-kept lists would agree
+ * until a source was added to one of them.
+ */
+export const ACTIVE_RULE_SOURCES = [
+  RULE_SOURCE.MANUAL,
+  RULE_SOURCE.LLM_PROMOTED,
+];
 
 /**
  * Active rules for one language, numbered within their own polarity.
@@ -142,7 +152,7 @@ export const rankPolarityRulesByTier = (language: string) =>
     .where(
       and(
         eq(caseLawPolarityRules.language, language),
-        inArray(caseLawPolarityRules.source, ACTIVE_SOURCES),
+        inArray(caseLawPolarityRules.source, ACTIVE_RULE_SOURCES),
         inArray(caseLawPolarityRules.polarity, CLASSIFIABLE_POLARITIES),
       ),
     )
