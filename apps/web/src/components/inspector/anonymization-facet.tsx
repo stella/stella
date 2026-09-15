@@ -487,7 +487,7 @@ export const AnonymizationFacet = ({
         queryClient,
         workspaceId,
       });
-    }).then(Result.flatten);
+    }).then((result) => (result.isErr() ? result : result.value));
     setDownloadStatus("idle");
     if (download.isErr()) {
       analytics.captureError(download.error);

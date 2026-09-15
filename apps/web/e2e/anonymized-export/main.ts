@@ -267,7 +267,9 @@ window.runUnsupportedExportCheck = async () => {
       }
       context.fillText("Sensitive raster text", 5, 20);
       const png = await (
-        await fetch(canvas.toDataURL("image/png"))
+        await fetch(canvas.toDataURL("image/png"), {
+          signal: AbortSignal.timeout(10_000),
+        })
       ).arrayBuffer();
       const image = pdf.embedPng(new Uint8Array(png));
       page.drawImage(image, { x: 20, y: 20, width: 160, height: 40 });
