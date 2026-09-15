@@ -65,7 +65,7 @@ export const CourtName = ({
     {abbreviation && tier !== undefined && (
       <CourtTierBadge abbreviation={abbreviation} tier={tier} />
     )}
-    <BidiText as="span" className="truncate">
+    <BidiText as="span" className="truncate" title={court}>
       {court}
     </BidiText>
   </span>
