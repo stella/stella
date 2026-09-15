@@ -1,5 +1,5 @@
 import { QueryClient } from "@tanstack/react-query";
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { beforeEach, describe, expect, test } from "bun:test";
 
 import {
@@ -53,6 +53,10 @@ const row = (id: string) =>
   pendingDocxSuggestionRow(suggestion(id), toSafeId<"docxSuggestion">(id)) ??
   panic("A suggestion with an operation always has a pending row");
 
+const listQueryKey = () =>
+  docxSuggestionsOptions({ workspaceId: WORKSPACE_ID, entityId: ENTITY_ID })
+    .queryKey;
+
 const target = (queryClient: QueryClient) => ({
   queryClient,
   workspaceId: WORKSPACE_ID,
@@ -60,19 +64,12 @@ const target = (queryClient: QueryClient) => ({
 });
 
 const seedCache = (queryClient: QueryClient, ids: readonly string[]) => {
-  queryClient.setQueryData(
-    docxSuggestionsOptions({ workspaceId: WORKSPACE_ID, entityId: ENTITY_ID })
-      .queryKey,
-    { items: ids.map(row) },
-  );
+  queryClient.setQueryData(listQueryKey(), { items: ids.map(row) });
 };
 
 // Mirrors useSyncDocxSuggestions: every cached row merges into the session.
 const hydrateFromCache = (queryClient: QueryClient) => {
-  const data = queryClient.getQueryData(
-    docxSuggestionsOptions({ workspaceId: WORKSPACE_ID, entityId: ENTITY_ID })
-      .queryKey,
-  );
+  const data = queryClient.getQueryData(listQueryKey());
   useReviewStore.getState().hydrateSuggestions(
     ENTITY_ID,
     (data?.items ?? []).map((cached) =>
@@ -84,25 +81,52 @@ const hydrateFromCache = (queryClient: QueryClient) => {
 const sessionIds = () =>
   (useReviewStore.getState().sessions[ENTITY_ID] ?? []).map((item) => item.id);
 
+// A list fetch that started before a write and still carries the rows as
+// they were then. Resolving it lands those rows unless the write cancelled it.
+const startStaleListFetch = (
+  queryClient: QueryClient,
+  ids: readonly string[],
+) => {
+  const response = Promise.withResolvers<undefined>();
+  const loadRowsAsTheyWere = async () => {
+    await response.promise;
+    return { items: ids.map(row) };
+  };
+  const fetched = Result.tryPromise({
+    try: async () =>
+      await queryClient.query({
+        queryKey: listQueryKey(),
+        queryFn: loadRowsAsTheyWere,
+      }),
+    catch: (cause) => cause,
+  });
+  return {
+    land: async () => {
+      response.resolve(undefined);
+      await fetched;
+    },
+  };
+};
+
 beforeEach(() => {
   useReviewStore.getState().resetSession(ENTITY_ID);
 });
 
 describe("docx suggestion hydration cache", () => {
-  test("rows resolved or dismissed do not return after a session reset", () => {
+  test("rows resolved or dismissed do not return after a session reset", async () => {
     const queryClient = new QueryClient();
     seedCache(queryClient, ["s1", "s2", "s3", "s4"]);
     hydrateFromCache(queryClient);
     expect(sessionIds()).toEqual(["s1", "s2", "s3", "s4"]);
 
-    writeDocxSuggestionsCache({
+    await writeDocxSuggestionsCache({
       ...target(queryClient),
       write: {
         type: DOCX_SUGGESTION_CACHE_WRITE.leavePending,
         suggestionIds: ["s1"],
       },
     });
-    writeDocxSuggestionsCache({
+    await writeDocxSuggestionsCache({
       ...target(queryClient),
       write: {
         type: DOCX_SUGGESTION_CACHE_WRITE.leavePending,
@@ -115,35 +139,67 @@ describe("docx suggestion hydration cache", () => {
     expect(sessionIds()).toEqual(["s4"]);
   });
 
-  test("a reverted or created row enters the pending list once", () => {
+  test("a reverted or created row enters the pending list once", async () => {
     const queryClient = new QueryClient();
     seedCache(queryClient, ["s1"]);
+    const enter = {
+      type: DOCX_SUGGESTION_CACHE_WRITE.enterPending,
+      rows: [row("s1"), row("s2")],
+    };
 
-    for (let attempt = 0; attempt < 2; attempt += 1) {
-      writeDocxSuggestionsCache({
-        ...target(queryClient),
-        write: {
-          type: DOCX_SUGGESTION_CACHE_WRITE.enterPending,
-          rows: [row("s1"), row("s2")],
-        },
-      });
-    }
+    await writeDocxSuggestionsCache({ ...target(queryClient), write: enter });
+    await writeDocxSuggestionsCache({ ...target(queryClient), write: enter });
 
     useReviewStore.getState().resetSession(ENTITY_ID);
     hydrateFromCache(queryClient);
     expect(sessionIds()).toEqual(["s1", "s2"]);
   });
 
-  test("a write before the list has loaded leaves nothing to hydrate", () => {
+  test("a write before the list has loaded leaves nothing to hydrate", async () => {
     const queryClient = new QueryClient();
 
-    writeDocxSuggestionsCache({
+    await writeDocxSuggestionsCache({
       ...target(queryClient),
       write: {
         type: DOCX_SUGGESTION_CACHE_WRITE.enterPending,
         rows: [row("s1")],
       },
     });
+
+    hydrateFromCache(queryClient);
+    expect(sessionIds()).toEqual([]);
+  });
+
+  test("a list fetch started before a write does not restore the rows it removed", async () => {
+    const queryClient = new QueryClient();
+    seedCache(queryClient, ["s1", "s2"]);
+    const staleFetch = startStaleListFetch(queryClient, ["s1", "s2"]);
+
+    await writeDocxSuggestionsCache({
+      ...target(queryClient),
+      write: {
+        type: DOCX_SUGGESTION_CACHE_WRITE.leavePending,
+        suggestionIds: ["s1"],
+      },
+    });
+    await staleFetch.land();
+
+    hydrateFromCache(queryClient);
+    expect(sessionIds()).toEqual(["s2"]);
+  });
+
+  test("an initial list fetch in flight during a write never lands its rows", async () => {
+    const queryClient = new QueryClient();
+    const staleFetch = startStaleListFetch(queryClient, ["s1"]);
+
+    await writeDocxSuggestionsCache({
+      ...target(queryClient),
+      write: {
+        type: DOCX_SUGGESTION_CACHE_WRITE.leavePending,
+        suggestionIds: ["s1"],
+      },
+    });
+    await staleFetch.land();
 
     hydrateFromCache(queryClient);
     expect(sessionIds()).toEqual([]);
@@ -165,7 +221,7 @@ const persistBatch = async ({
   created,
 }: PersistBatchOptions) => {
   await created;
-  writeDocxSuggestionsCache({
+  await writeDocxSuggestionsCache({
     ...target(queryClient),
     write: {
       type: DOCX_SUGGESTION_CACHE_WRITE.enterPending,
@@ -182,7 +238,7 @@ const persistBatch = async ({
   if (session === undefined) {
     return;
   }
-  writeDocxSuggestionsCache({
+  await writeDocxSuggestionsCache({
     ...target(queryClient),
     write: {
       type: DOCX_SUGGESTION_CACHE_WRITE.leavePending,
@@ -280,7 +336,7 @@ describe("a session reset racing an in-flight create", () => {
     );
     expect(persistedIds).toEqual(["s1"]);
 
-    writeDocxSuggestionsCache({
+    await writeDocxSuggestionsCache({
       ...target(queryClient),
       write: {
         type: DOCX_SUGGESTION_CACHE_WRITE.leavePending,

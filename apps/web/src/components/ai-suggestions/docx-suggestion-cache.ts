@@ -13,6 +13,7 @@ import { panic } from "better-result";
 
 import type { ReviewSuggestion } from "@/components/ai-suggestions/review-store";
 import { getAnalytics } from "@/lib/analytics/provider";
+import { detached } from "@/lib/detached";
 import { ClientTelemetryError } from "@/lib/errors/telemetry";
 import { docxSuggestionsOptions } from "@/lib/workspaces/queries/docx-suggestions";
 
@@ -49,40 +50,53 @@ type WriteDocxSuggestionsCacheOptions = {
  * Apply one pending-state change to the cached list. A list that has not
  * loaded yet is left alone: its first fetch reads the server directly.
  */
-export const writeDocxSuggestionsCache = ({
+export const writeDocxSuggestionsCache = async ({
   queryClient,
   workspaceId,
   entityId,
   write,
-}: WriteDocxSuggestionsCacheOptions): void => {
-  queryClient.setQueryData(
-    docxSuggestionsOptions({ workspaceId, entityId }).queryKey,
-    (current) => {
-      if (current === undefined) {
-        return current;
+}: WriteDocxSuggestionsCacheOptions): Promise<void> => {
+  const { queryKey } = docxSuggestionsOptions({ workspaceId, entityId });
+  // A list fetch that started before this write can carry the rows as they
+  // were before it. Cancel it, so it cannot land afterwards and undo the write.
+  const cancelledFetch =
+    queryClient.getQueryState(queryKey)?.fetchStatus === "fetching";
+  if (cancelledFetch) {
+    await queryClient.cancelQueries({ queryKey, exact: true });
+  }
+  queryClient.setQueryData(queryKey, (current) => {
+    if (current === undefined) {
+      return current;
+    }
+    switch (write.type) {
+      case DOCX_SUGGESTION_CACHE_WRITE.leavePending: {
+        const leaving = new Set(write.suggestionIds);
+        const items = current.items.filter((row) => !leaving.has(row.id));
+        return items.length === current.items.length
+          ? current
+          : { ...current, items };
       }
-      switch (write.type) {
-        case DOCX_SUGGESTION_CACHE_WRITE.leavePending: {
-          const leaving = new Set(write.suggestionIds);
-          const items = current.items.filter((row) => !leaving.has(row.id));
-          return items.length === current.items.length
-            ? current
-            : { ...current, items };
-        }
-        case DOCX_SUGGESTION_CACHE_WRITE.enterPending: {
-          const present = new Set<string>(current.items.map((row) => row.id));
-          const entering = write.rows.filter((row) => !present.has(row.id));
-          return entering.length === 0
-            ? current
-            : { ...current, items: [...current.items, ...entering] };
-        }
-        default: {
-          write satisfies never;
-          return panic("Unhandled docx suggestion cache write");
-        }
+      case DOCX_SUGGESTION_CACHE_WRITE.enterPending: {
+        const present = new Set<string>(current.items.map((row) => row.id));
+        const entering = write.rows.filter((row) => !present.has(row.id));
+        return entering.length === 0
+          ? current
+          : { ...current, items: [...current.items, ...entering] };
       }
-    },
-  );
+      default: {
+        write satisfies never;
+        return panic("Unhandled docx suggestion cache write");
+      }
+    }
+  });
+  if (cancelledFetch && queryClient.getQueryData(queryKey) === undefined) {
+    // The cancelled fetch was the list's first, so no data was updated.
+    // Mounted readers fetch again, now after this write.
+    detached(
+      queryClient.refetchQueries({ queryKey, exact: true, type: "active" }),
+      "docx-suggestion-cache.refetch-after-cancel",
+    );
+  }
 };
 
 /**

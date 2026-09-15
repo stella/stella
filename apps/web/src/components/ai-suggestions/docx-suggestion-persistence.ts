@@ -133,7 +133,7 @@ export const createDocxSuggestionsRequest = async ({
         : pendingDocxSuggestionRow(suggestion, id);
     return row === null ? [] : [row];
   });
-  writeDocxSuggestionsCache({
+  await writeDocxSuggestionsCache({
     queryClient,
     workspaceId,
     entityId,
@@ -184,7 +184,7 @@ export const resolveDocxSuggestionRequest = async ({
   }
   // Either way the server row is no longer pending: this call resolved it, or
   // another write already had.
-  writeDocxSuggestionsCache({
+  await writeDocxSuggestionsCache({
     queryClient,
     workspaceId,
     entityId,
@@ -226,7 +226,7 @@ export const revertDocxSuggestionRequest = async ({
     toSafeId<"docxSuggestion">(suggestion.id),
   );
   if (row !== null) {
-    writeDocxSuggestionsCache({
+    await writeDocxSuggestionsCache({
       queryClient,
       workspaceId,
       entityId,
@@ -268,7 +268,7 @@ export const rejectPendingDocxSuggestionsRequest = async ({
   if (Result.isError(result)) {
     return Result.err(result.error);
   }
-  writeDocxSuggestionsCache({
+  await writeDocxSuggestionsCache({
     queryClient,
     workspaceId,
     entityId,
