@@ -564,8 +564,13 @@ const persistQueuedSuggestions = async ({
         panic("Unhandled DOCX suggestion create error");
     }
   }
-  const refToId = result.value;
-  useReviewStore.getState().reconcileServerIds(entityId, refToId);
+  if (result.value === null) {
+    return;
+  }
+  const { refToId, createdAt } = result.value;
+  useReviewStore
+    .getState()
+    .reconcileServerIds(entityId, { refToId, createdAt });
 
   // Persist-window replay: the user can accept / reject a suggestion in the
   // gap between queueing it and this create response landing. Those

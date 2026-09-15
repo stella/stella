@@ -131,6 +131,7 @@ describe("the per-document pending suggestion cap", () => {
 
     const accepted = await createInCappedEntity(["fits-1"]);
     expect(accepted).toEqual({
+      createdAt: expect.any(Date),
       items: [{ ref: "fits-1", id: expect.any(String) }],
     });
     expect(await countPending(cappedEntityId)).toBe(

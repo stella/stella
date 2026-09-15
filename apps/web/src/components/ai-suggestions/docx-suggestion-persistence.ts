@@ -32,8 +32,9 @@ import { DOCX_SUGGESTIONS_PENDING_LIMIT_ERROR_CODE } from "@stll/api-contract";
 import type { FolioAIEditApplyMode } from "@stll/folio-react";
 
 import {
+  createdDocxSuggestionRows,
   DOCX_SUGGESTION_CACHE_WRITE,
-  pendingDocxSuggestionRow,
+  revertedDocxSuggestionRow,
   writeDocxSuggestionsCache,
 } from "@/components/ai-suggestions/docx-suggestion-cache";
 import type { ReviewSuggestion } from "@/components/ai-suggestions/review-store";
@@ -67,8 +68,16 @@ type CreateDocxSuggestionsError =
     }
   | { type: typeof CREATE_DOCX_SUGGESTIONS_ERROR.failed; cause: unknown };
 
+type CreatedDocxSuggestions = {
+  /** Server id for each client ref. */
+  refToId: Record<string, string>;
+  /** The server timestamp every row of this batch was persisted with. */
+  createdAt: Date;
+};
+
+/** `null` when no suggestion carried an operation, so nothing was sent. */
 type CreateDocxSuggestionsResult = Result<
-  Record<string, string>,
+  CreatedDocxSuggestions | null,
   CreateDocxSuggestionsError
 >;
 
@@ -98,7 +107,7 @@ export const createDocxSuggestionsRequest = async ({
         ],
   );
   if (body.length === 0) {
-    return Result.ok({});
+    return Result.ok(null);
   }
 
   const result = await Result.tryPromise({
@@ -124,25 +133,25 @@ export const createDocxSuggestionsRequest = async ({
     });
   }
 
-  const suggestionsByRef = new Map(suggestions.map((item) => [item.id, item]));
-  const rows = result.value.items.flatMap(({ ref, id }) => {
-    const suggestion = suggestionsByRef.get(ref);
-    const row =
-      suggestion === undefined
-        ? null
-        : pendingDocxSuggestionRow(suggestion, id);
-    return row === null ? [] : [row];
-  });
+  const { createdAt, items } = result.value;
   await writeDocxSuggestionsCache({
     queryClient,
     workspaceId,
     entityId,
-    write: { type: DOCX_SUGGESTION_CACHE_WRITE.enterPending, rows },
+    write: {
+      type: DOCX_SUGGESTION_CACHE_WRITE.enterPending,
+      rows: createdDocxSuggestionRows({
+        suggestions,
+        created: items,
+        createdAt,
+      }),
+    },
   });
 
-  return Result.ok(
-    Object.fromEntries(result.value.items.map(({ ref, id }) => [ref, id])),
-  );
+  return Result.ok({
+    refToId: Object.fromEntries(items.map(({ ref, id }) => [ref, id])),
+    createdAt,
+  });
 };
 
 type ResolveDocxSuggestionRequestArgs = DocxSuggestionTarget & {
@@ -221,10 +230,7 @@ export const revertDocxSuggestionRequest = async ({
   }
   // Either way the server row is pending now: this call reverted it, or it
   // already was.
-  const row = pendingDocxSuggestionRow(
-    suggestion,
-    toSafeId<"docxSuggestion">(suggestion.id),
-  );
+  const row = revertedDocxSuggestionRow(suggestion);
   if (row !== null) {
     await writeDocxSuggestionsCache({
       queryClient,

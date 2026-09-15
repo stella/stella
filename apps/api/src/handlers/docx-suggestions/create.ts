@@ -140,7 +140,7 @@ const createDocxSuggestions = createSafeHandler(
           )
           .for("update");
         if (lockedEntities.length === 0) {
-          return CREATE_OUTCOME.entityNotFound;
+          return { type: CREATE_OUTCOME.entityNotFound };
         }
         const pendingRows = await tx
           .select({ pending: count() })
@@ -155,20 +155,26 @@ const createDocxSuggestions = createSafeHandler(
           .limit(1);
         const pending = pendingRows.at(0)?.pending ?? 0;
         if (pending + prepared.length > DOCX_SUGGESTIONS_PENDING_MAX) {
-          return CREATE_OUTCOME.pendingLimit;
+          return { type: CREATE_OUTCOME.pendingLimit };
         }
         // audit: skip — review-flow bookkeeping. Suggestions are proposals,
         // not document mutations; a batch can be 200 rows and would flood the
         // audit log. The durable audit trail lives on the row
         // (resolvedByUserId / resolvedAt), written when a suggestion is
         // actually accepted or rejected.
-        await tx
+        // One statement stamps every row with the same `created_at` (the
+        // transaction start time), which clients read as the batch identity.
+        const inserted = await tx
           .insert(docxSuggestions)
-          .values(prepared.map((item) => item.row));
-        return CREATE_OUTCOME.created;
+          .values(prepared.map((item) => item.row))
+          .returning({ createdAt: docxSuggestions.createdAt });
+        const createdAt =
+          inserted.at(0)?.createdAt ??
+          unreachable("An insert of a non-empty batch returns its rows");
+        return { type: CREATE_OUTCOME.created, createdAt };
       }),
     );
-    switch (outcome) {
+    switch (outcome.type) {
       case CREATE_OUTCOME.entityNotFound:
         return Result.err(
           new HandlerError({ status: 404, message: "Document not found." }),
@@ -181,17 +187,16 @@ const createDocxSuggestions = createSafeHandler(
             message: `A document can hold at most ${DOCX_SUGGESTIONS_PENDING_MAX} pending suggestions.`,
           }),
         );
-      case CREATE_OUTCOME.created:
-        break;
+      case CREATE_OUTCOME.created: {
+        const items: CreatedSuggestion[] = prepared.map((item) => ({
+          ref: item.ref,
+          id: item.row.id,
+        }));
+        return Result.ok({ createdAt: outcome.createdAt, items });
+      }
       default:
         return unreachable(`Unhandled create outcome: ${String(outcome)}`);
     }
-
-    const items: CreatedSuggestion[] = prepared.map((item) => ({
-      ref: item.ref,
-      id: item.row.id,
-    }));
-    return Result.ok({ items });
   },
 );
 

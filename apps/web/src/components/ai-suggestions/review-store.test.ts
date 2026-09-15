@@ -134,13 +134,15 @@ describe("reconcileServerIds preserves the op ref", () => {
       },
     });
     useReviewStore.getState().appendSuggestions(entityId, [client]);
-    useReviewStore
-      .getState()
-      .reconcileServerIds(entityId, { "client-1": "server-1" });
+    useReviewStore.getState().reconcileServerIds(entityId, {
+      refToId: { "client-1": "server-1" },
+      createdAt: new Date("2026-09-15T10:00:00.000Z"),
+    });
 
     const row = useReviewStore.getState().sessions[entityId]?.at(0);
     expect(row?.id).toBe("server-1");
     expect(row?.persisted).toBe(true);
+    expect(row?.createdAt).toEqual(new Date("2026-09-15T10:00:00.000Z"));
     // The invariant findLiveSuggestion relies on: the op ref survives the
     // rename, so an in-flight accept can still follow the row.
     expect(row?.pendingOperation?.id).toBe("client-1");

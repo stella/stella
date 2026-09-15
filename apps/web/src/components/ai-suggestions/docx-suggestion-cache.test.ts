@@ -3,8 +3,9 @@ import { panic, Result } from "better-result";
 import { beforeEach, describe, expect, test } from "bun:test";
 
 import {
+  createdDocxSuggestionRows,
   DOCX_SUGGESTION_CACHE_WRITE,
-  pendingDocxSuggestionRow,
+  revertedDocxSuggestionRow,
   writeDocxSuggestionsCache,
 } from "@/components/ai-suggestions/docx-suggestion-cache";
 import {
@@ -18,6 +19,7 @@ import { docxSuggestionsOptions } from "@/lib/workspaces/queries/docx-suggestion
 
 const WORKSPACE_ID = "workspace-1";
 const ENTITY_ID = "entity-1";
+const CREATED_AT = new Date("2026-09-15T10:00:00.000Z");
 
 const suggestion = (id: string): ReviewSuggestion => ({
   id,
@@ -50,8 +52,11 @@ const suggestion = (id: string): ReviewSuggestion => ({
 });
 
 const row = (id: string) =>
-  pendingDocxSuggestionRow(suggestion(id), toSafeId<"docxSuggestion">(id)) ??
-  panic("A suggestion with an operation always has a pending row");
+  createdDocxSuggestionRows({
+    suggestions: [suggestion(id)],
+    created: [{ ref: id, id: toSafeId<"docxSuggestion">(id) }],
+    createdAt: CREATED_AT,
+  }).at(0) ?? panic("A suggestion with an operation always has a pending row");
 
 const listQueryKey = () =>
   docxSuggestionsOptions({ workspaceId: WORKSPACE_ID, entityId: ENTITY_ID })
@@ -155,6 +160,69 @@ describe("docx suggestion hydration cache", () => {
     expect(sessionIds()).toEqual(["s1", "s2"]);
   });
 
+  test("a created batch shares the server createdAt, and a revert keeps it", async () => {
+    const queryClient = new QueryClient();
+    seedCache(queryClient, []);
+    const batchCreatedAt = new Date("2026-09-15T11:30:00.123Z");
+    const queued = ["client-1", "client-2"].map((id) =>
+      Object.assign(suggestion(id), { persisted: false }),
+    );
+    useReviewStore.getState().appendSuggestions(ENTITY_ID, queued);
+
+    await writeDocxSuggestionsCache({
+      ...target(queryClient),
+      write: {
+        type: DOCX_SUGGESTION_CACHE_WRITE.enterPending,
+        rows: createdDocxSuggestionRows({
+          suggestions: queued,
+          created: [
+            { ref: "client-1", id: toSafeId<"docxSuggestion">("server-1") },
+            { ref: "client-2", id: toSafeId<"docxSuggestion">("server-2") },
+          ],
+          createdAt: batchCreatedAt,
+        }),
+      },
+    });
+    useReviewStore.getState().reconcileServerIds(ENTITY_ID, {
+      refToId: { "client-1": "server-1", "client-2": "server-2" },
+      createdAt: batchCreatedAt,
+    });
+
+    // server-1 is resolved (it leaves the pending list), then reverted.
+    await writeDocxSuggestionsCache({
+      ...target(queryClient),
+      write: {
+        type: DOCX_SUGGESTION_CACHE_WRITE.leavePending,
+        suggestionIds: ["server-1"],
+      },
+    });
+    const resolved =
+      useReviewStore
+        .getState()
+        .sessions[ENTITY_ID]?.find((item) => item.id === "server-1") ??
+      panic("The reconciled row stays in the session");
+    const reverted =
+      revertedDocxSuggestionRow(resolved) ??
+      panic("A persisted row always has a reverted row");
+    await writeDocxSuggestionsCache({
+      ...target(queryClient),
+      write: {
+        type: DOCX_SUGGESTION_CACHE_WRITE.enterPending,
+        rows: [reverted],
+      },
+    });
+
+    const cached = queryClient.getQueryData(listQueryKey())?.items ?? [];
+    expect(cached.map((item) => item.id).toSorted()).toEqual([
+      "server-1",
+      "server-2",
+    ]);
+    expect(cached.map((item) => item.createdAt)).toEqual([
+      batchCreatedAt,
+      batchCreatedAt,
+    ]);
+  });
+
   test("a write before the list has loaded leaves nothing to hydrate", async () => {
     const queryClient = new QueryClient();
 
@@ -228,12 +296,10 @@ const persistBatch = async ({
       rows: ids.map(row),
     },
   });
-  useReviewStore
-    .getState()
-    .reconcileServerIds(
-      ENTITY_ID,
-      Object.fromEntries(ids.map((id) => [id, id])),
-    );
+  useReviewStore.getState().reconcileServerIds(ENTITY_ID, {
+    refToId: Object.fromEntries(ids.map((id) => [id, id])),
+    createdAt: CREATED_AT,
+  });
   const session = useReviewStore.getState().sessions[ENTITY_ID];
   if (session === undefined) {
     return;

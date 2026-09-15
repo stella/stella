@@ -15,6 +15,7 @@ import type { ReviewSuggestion } from "@/components/ai-suggestions/review-store"
 import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
 import { ClientTelemetryError } from "@/lib/errors/telemetry";
+import { toSafeId } from "@/lib/safe-id";
 import { docxSuggestionsOptions } from "@/lib/workspaces/queries/docx-suggestions";
 
 type DocxSuggestionsQueryData = InferDataFromTag<
@@ -99,34 +100,84 @@ export const writeDocxSuggestionsCache = async ({
   }
 };
 
-/**
- * The cached pending row for a suggestion the server holds under `id`. A
- * suggestion without an operation never reaches the server, so asking for its
- * row is a caller bug: reported, and no row is produced.
- */
-export const pendingDocxSuggestionRow = (
+type ServerSuggestionIdentity = {
+  id: DocxSuggestionRow["id"];
+  createdAt: Date;
+};
+
+const reportMissingRowField = (message: string) => {
+  getAnalytics().captureError(
+    new ClientTelemetryError({ area: "docx-suggestion-cache", message }),
+  );
+};
+
+// A suggestion without an operation never reaches the server, so asking for
+// its row is a caller bug: reported, and no row is produced.
+const pendingDocxSuggestionRow = (
   suggestion: ReviewSuggestion,
-  id: DocxSuggestionRow["id"],
+  server: ServerSuggestionIdentity,
 ): DocxSuggestionRow | null => {
   if (suggestion.pendingOperation === null) {
-    getAnalytics().captureError(
-      new ClientTelemetryError({
-        area: "docx-suggestion-cache",
-        message:
-          "A pending DOCX suggestion row was built without an operation.",
-      }),
+    reportMissingRowField(
+      "A pending DOCX suggestion row was built without an operation.",
     );
     return null;
   }
   return {
-    id,
+    id: server.id,
     opPayload: suggestion.pendingOperation,
     comment: suggestion.comment ?? null,
     severity: suggestion.severity,
     area: suggestion.area,
     status: "pending",
     appliedMode: null,
-    createdAt: new Date(),
+    createdAt: server.createdAt,
     origin: suggestion.origin,
   };
+};
+
+type CreatedDocxSuggestionRowsOptions = {
+  suggestions: readonly ReviewSuggestion[];
+  created: readonly { ref: string; id: DocxSuggestionRow["id"] }[];
+  /** The server timestamp shared by every row of the create batch. */
+  createdAt: Date;
+};
+
+/**
+ * The cached pending rows for one create batch, all carrying the batch's
+ * server `createdAt`, as a list fetch would return them.
+ */
+export const createdDocxSuggestionRows = ({
+  suggestions,
+  created,
+  createdAt,
+}: CreatedDocxSuggestionRowsOptions): DocxSuggestionRow[] => {
+  const suggestionsByRef = new Map(suggestions.map((item) => [item.id, item]));
+  return created.flatMap(({ ref, id }) => {
+    const suggestion = suggestionsByRef.get(ref);
+    const row =
+      suggestion === undefined
+        ? null
+        : pendingDocxSuggestionRow(suggestion, { id, createdAt });
+    return row === null ? [] : [row];
+  });
+};
+
+/**
+ * The cached pending row for a reverted suggestion. It keeps the `createdAt`
+ * the server persisted it with, so it rejoins its original batch.
+ */
+export const revertedDocxSuggestionRow = (
+  suggestion: ReviewSuggestion,
+): DocxSuggestionRow | null => {
+  if (suggestion.createdAt === undefined) {
+    reportMissingRowField(
+      "A reverted DOCX suggestion has no server createdAt.",
+    );
+    return null;
+  }
+  return pendingDocxSuggestionRow(suggestion, {
+    id: toSafeId<"docxSuggestion">(suggestion.id),
+    createdAt: suggestion.createdAt,
+  });
 };

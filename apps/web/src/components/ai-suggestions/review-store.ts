@@ -191,6 +191,12 @@ export type ReviewSuggestion = {
    * guarantee.
    */
   persisted?: boolean | undefined;
+  /**
+   * When the server persisted this suggestion, set together with `persisted`.
+   * Every row of one create shares it, and a revert re-enters the pending
+   * list with it, so one proposal batch stays one batch.
+   */
+  createdAt?: Date | undefined;
 };
 
 type ReviewState = {
@@ -235,7 +241,7 @@ type ReviewActions = {
    */
   reconcileServerIds: (
     entityId: string,
-    refToId: Record<string, string>,
+    created: { refToId: Record<string, string>; createdAt: Date },
   ) => void;
   /**
    * Merge server-loaded suggestions into the session on reload. Dedups
@@ -322,7 +328,7 @@ export const useReviewStore = create<ReviewState & ReviewActions>()((set) => ({
     });
   },
 
-  reconcileServerIds: (entityId, refToId) => {
+  reconcileServerIds: (entityId, { refToId, createdAt }) => {
     set((state) => {
       const existing = state.sessions[entityId];
       if (!existing) {
@@ -348,7 +354,7 @@ export const useReviewStore = create<ReviewState & ReviewActions>()((set) => ({
         const serverId = refToId[item.id];
         if (serverId !== undefined) {
           changed = true;
-          next.push({ ...item, id: serverId, persisted: true });
+          next.push({ ...item, id: serverId, persisted: true, createdAt });
           continue;
         }
         // A hydrated entry whose id equals a server id a client entry is

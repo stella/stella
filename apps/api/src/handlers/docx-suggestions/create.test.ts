@@ -21,6 +21,7 @@ const ENTITY_ID = toSafeId<"entity">("33333333-3333-4333-8333-333333333333");
 const THREAD_ID = toSafeId<"chatThread">(
   "44444444-4444-4444-8444-444444444444",
 );
+const CREATED_AT = new Date("2026-09-15T10:00:00.000Z");
 
 type OriginThreadRow = {
   workspaceId: SafeId<"workspace">;
@@ -61,8 +62,9 @@ const createSuggestionTx = ({
     }),
   }),
   insert: () => ({
-    values: async (rows: unknown) => {
+    values: (rows: unknown) => {
       onInsert(rows);
+      return { returning: async () => [{ createdAt: CREATED_AT }] };
     },
   }),
 });
@@ -106,6 +108,7 @@ describe("DOCX suggestion creation", () => {
     });
 
     expect(await createDocxSuggestions.handler(context)).toEqual({
+      createdAt: CREATED_AT,
       items: [{ ref: "ref-1", id: expect.any(String) }],
     });
     expect(inserted).toEqual([
@@ -152,6 +155,7 @@ describe("DOCX suggestion creation", () => {
     });
 
     expect(await createDocxSuggestions.handler(context)).toEqual({
+      createdAt: CREATED_AT,
       items: [{ ref: "ref-1", id: expect.any(String) }],
     });
     expect(inserted).toEqual([
