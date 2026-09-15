@@ -241,7 +241,7 @@ export const installPgliteStatuteCitationCounts = async (
       "20260916010000_published_statute_citation_counts",
       "migration.sql",
     ),
-  )) {
+  ).filter((candidate) => !executableSql(candidate).startsWith("SET "))) {
     await db.execute(sql.raw(statement));
   }
 };

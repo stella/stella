@@ -1,6 +1,6 @@
-SET lock_timeout = '5s';--> statement-breakpoint
+SET LOCAL lock_timeout = '5s';--> statement-breakpoint
 
-SET statement_timeout = '30s';--> statement-breakpoint
+SET LOCAL statement_timeout = '30s';--> statement-breakpoint
 
 -- The public-read predicate is checked against its TypeScript owner by the DB tests.
 CREATE FUNCTION "case_law_statute_citation_is_published"(metadata jsonb)
