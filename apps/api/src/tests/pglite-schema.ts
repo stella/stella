@@ -235,6 +235,15 @@ export const installPgliteStatuteCitationCounts = async (
   for (const statement of statements) {
     await db.execute(sql.raw(statement));
   }
+  for (const statement of readMigrationStatements(
+    nodePath.join(
+      DRIZZLE_DIR,
+      "20260916010000_published_statute_citation_counts",
+      "migration.sql",
+    ),
+  )) {
+    await db.execute(sql.raw(statement));
+  }
 };
 
 const CORPUS_PROJECTION_REVISION_STATEMENT_PREFIXES = [
