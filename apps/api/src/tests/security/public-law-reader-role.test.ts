@@ -23,7 +23,6 @@ import {
   readDecisionTextColumnWritten,
 } from "@/api/handlers/case-law/decisions/get";
 import { listDecisionsHandler } from "@/api/handlers/case-law/decisions/list";
-import { withRedistributableSubject } from "@/api/handlers/case-law/decisions/public-subject";
 import {
   findDecisionIdsByIdentity,
   readCaseLawPageDecisionRows,
@@ -50,6 +49,7 @@ import {
   readPublicDecisionLanguageAlternatesQuery,
 } from "@/api/lib/case-law/language-alternates";
 import { readNonRedistributableCaseLawSourceIdsQuery } from "@/api/lib/case-law/non-redistributable-sources";
+import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
 import { readServingCorpusIndexGenerationTx } from "@/api/lib/legal-search/corpus-index-generation-store";
 import {
   CORPUS_INDEX_MANIFESTS,

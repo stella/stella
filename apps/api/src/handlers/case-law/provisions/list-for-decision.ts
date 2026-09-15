@@ -4,7 +4,7 @@ import { status, t } from "elysia";
 import type { Static } from "elysia";
 
 import { caseLawProvisionCitations } from "@/api/db/schema";
-import type { RedistributableDecisionSubject } from "@/api/handlers/case-law/decisions/public-subject";
+import type { RedistributableDecisionSubject } from "@/api/lib/case-law/public-subject";
 import { tPaginationCursor, tPaginationLimit } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 import {

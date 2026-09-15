@@ -11,7 +11,10 @@ import {
   readCorpusAst,
   readCorpusPayloadOrFallback,
 } from "@/api/lib/legal-search/corpus-storage";
-import { redistributableLegislationVersion } from "@/api/lib/legal-search/legislation-redistribution";
+import {
+  derivedAiLegislationVersion,
+  redistributableLegislationVersion,
+} from "@/api/lib/legal-search/legislation-redistribution";
 import type { LegislationReadDb } from "@/api/lib/legislation-public-read-db";
 
 /** What a stored consolidation must carry for its blocks to be readable. */
@@ -60,10 +63,17 @@ export const versionAstColumns = versionAstColumnsFor(corpusStorageMode);
  * reads answers with no row here, and the caller reports the payload
  * unavailable instead of serving text the publisher has withdrawn.
  */
-export const readStoredVersionAst = async (
-  legislationDb: LegislationReadDb,
-  id: SafeId<"legislationDocument">,
-): Promise<unknown> => {
+type ReadStoredVersionAstOptions = {
+  legislationDb: LegislationReadDb;
+  id: SafeId<"legislationDocument">;
+  purpose?: "reader" | "derived-ai";
+};
+
+export const readStoredVersionAst = async ({
+  legislationDb,
+  id,
+  purpose = "reader",
+}: ReadStoredVersionAstOptions): Promise<unknown> => {
   const [row] = await legislationDb(
     async (tx) =>
       await tx
@@ -73,6 +83,7 @@ export const readStoredVersionAst = async (
           and(
             eq(legislationDocuments.id, id),
             redistributableLegislationVersion,
+            purpose === "derived-ai" ? derivedAiLegislationVersion : undefined,
           ),
         )
         .limit(1),
@@ -85,6 +96,7 @@ export type ReadVersionBlocksOptions = {
   legislationDb: LegislationReadDb;
   /** Names the reading endpoint in a payload-unavailable capture. */
   step: string;
+  purpose?: "reader" | "derived-ai";
 };
 
 /**
@@ -101,6 +113,7 @@ export const readVersionBlocks = async ({
   row,
   legislationDb,
   step,
+  purpose = "reader",
 }: ReadVersionBlocksOptions): Promise<readonly Block[]> => {
   const { astS3Key } = row;
 
@@ -112,7 +125,7 @@ export const readVersionBlocks = async ({
         read: async () => await readCorpusAst(astS3Key),
         fallback: async () =>
           parsePersistedCorpusAst(
-            await readStoredVersionAst(legislationDb, row.id),
+            await readStoredVersionAst({ legislationDb, id: row.id, purpose }),
           ),
       })
     : parsePersistedCorpusAst(row.documentAst);

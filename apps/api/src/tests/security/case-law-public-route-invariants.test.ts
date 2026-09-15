@@ -25,8 +25,7 @@ void scopedDbIsPublicReadDb;
 const ROUTES_FILE = "apps/api/src/handlers/case-law/public-routes.ts";
 const LIST_DECISIONS_FILE = "apps/api/src/handlers/case-law/decisions/list.ts";
 const READ_DECISION_FILE = "apps/api/src/handlers/case-law/decisions/get.ts";
-const PUBLIC_SUBJECT_FILE =
-  "apps/api/src/handlers/case-law/decisions/public-subject.ts";
+const PUBLIC_SUBJECT_FILE = "apps/api/src/lib/case-law/public-subject.ts";
 const DEFERRED_DOCUMENT_FILE =
   "apps/api/src/handlers/case-law/decisions/get-deferred-document.ts";
 const FACETS_DECISIONS_FILE =

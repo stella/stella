@@ -19,3 +19,11 @@ export const redistributableLegislationVersion = sql`EXISTS (
    WHERE ${legislationSources.id} = ${legislationDocuments.sourceId}
      AND ${redistributableLegislationSource}
 )`;
+
+/** AI use is a separate permission from displaying source wording. */
+export const derivedAiLegislationVersion = sql`EXISTS (
+  SELECT 1 FROM ${legislationSources}
+   WHERE ${legislationSources.id} = ${legislationDocuments.sourceId}
+     AND (${legislationSources.descriptor} IS NULL
+          OR (${legislationSources.descriptor} ->> 'allowsDerivedAi') = 'true')
+)`;

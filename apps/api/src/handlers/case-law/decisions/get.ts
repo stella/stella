@@ -10,10 +10,7 @@ import {
   listIncomingDecisionCitations,
   listOutgoingDecisionCitations,
 } from "@/api/handlers/case-law/decisions/citations";
-import {
-  DECISION_NOT_FOUND,
-  type RedistributableDecisionSubject,
-} from "@/api/handlers/case-law/decisions/public-subject";
+import { DECISION_NOT_FOUND } from "@/api/handlers/case-law/decisions/public-subject";
 import {
   hasUsableAst,
   omitDerivablePlainText,
@@ -36,6 +33,7 @@ import {
   readWholeDecisionHeadnote,
 } from "@/api/lib/case-law/decision-text";
 import { listPublicDecisionLanguageAlternates } from "@/api/lib/case-law/language-alternates";
+import type { RedistributableDecisionSubject } from "@/api/lib/case-law/public-subject";
 import { publisherHeadnoteOf } from "@/api/lib/case-law/publisher-summary";
 import { decisionSourceAttributionUrl } from "@/api/lib/case-law/source-attribution";
 import { tPaginationCursor } from "@/api/lib/custom-schema";

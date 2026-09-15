@@ -24,7 +24,6 @@ import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import type { DecisionCitationRow } from "@/api/handlers/case-law/decisions/citation-graph";
 import { listDecisionCitationsHandler } from "@/api/handlers/case-law/decisions/citation-graph";
-import { withRedistributableSubject } from "@/api/handlers/case-law/decisions/public-subject";
 import type { SafeId } from "@/api/lib/branded-types";
 import type {
   CaseLawPublicReadDb,
@@ -33,6 +32,7 @@ import type {
 import type { CitationReadDirection } from "@/api/lib/case-law/citation-vocabulary";
 import { GRAPH_DIRECTION } from "@/api/lib/case-law/citation-vocabulary";
 import { readDecisionAnalysisAst } from "@/api/lib/case-law/decision-analysis";
+import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
 import { chunked } from "@/api/lib/chunked";
 import { errorTag } from "@/api/lib/errors/utils";
 import { allowsDerivedAi } from "@/api/lib/legal-search/corpus-source";

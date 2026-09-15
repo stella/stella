@@ -22,10 +22,10 @@ import {
 } from "@/api/handlers/case-law/decisions/document-on-demand";
 import { onDemandDocumentDeps } from "@/api/handlers/case-law/decisions/document-on-demand-deps";
 import { readDecisionHandler } from "@/api/handlers/case-law/decisions/get";
-import type { DecisionSubjectLocator } from "@/api/handlers/case-law/decisions/public-subject";
-import { withRedistributableSubject } from "@/api/handlers/case-law/decisions/public-subject";
 import { omitDerivablePlainText } from "@/api/handlers/case-law/document-ast";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+import type { DecisionSubjectLocator } from "@/api/lib/case-law/public-subject";
+import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
 
 type DecisionRead = Awaited<ReturnType<typeof readDecisionHandler>>;
 type ReadableDecision = Extract<DecisionRead, { documentPending: boolean }>;

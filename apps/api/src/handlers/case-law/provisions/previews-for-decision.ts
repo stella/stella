@@ -10,8 +10,8 @@ import {
   legislationDocuments,
   legislationSources,
 } from "@/api/db/schema";
-import type { RedistributableDecisionSubject } from "@/api/handlers/case-law/decisions/public-subject";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { RedistributableDecisionSubject } from "@/api/lib/case-law/public-subject";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import {
   buildProvisionPreview,

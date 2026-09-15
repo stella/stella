@@ -1,171 +1,19 @@
-/**
- * The publication gate for public decision reads, by construction.
- *
- * A public endpoint that names a decision must answer "not found" when the
- * decision's country is outside the public list, its source may not be
- * redistributed, or the row is listing-only: its citation texts, graph counts
- * and provision references are as much its content as its full text. A
- * listing-only row is a listed identity whose detail never arrived (guide rule
- * 20); it is durable so a later observation can enrich it, and unpublished
- * until one does, here and on every aggregate surface alike.
- * The gate used to be a check each handler remembered to make, and two
- * handlers shipped without it. Here it is the only way to obtain a
- * `RedistributableDecisionSubject`, and every read handler takes one instead
- * of a bare id, so a handler that skips the gate does not typecheck.
- *
- * The subject carries the transaction that gated it, and that transaction is
- * the only database handle a gated handler receives. Resolving in one
- * transaction and reading in another would leave a window where a source
- * turned restricted in between and the content still went out under a brand
- * that says "gated"; carrying the handle closes it, because the content a
- * handler reads can only come from the state the gate approved. The gated
- * transaction is a repeatable-read snapshot, so every statement under it —
- * the gate's and the handler's — sees that one state.
- */
-import { panic, Result } from "better-result";
-import { and, eq, sql } from "drizzle-orm";
+/** Public route factories and the census of handlers they gate. */
+import { Result } from "better-result";
 import { status } from "elysia";
 
-import {
-  isPublicCaseLawCountry,
-  publicCaseLawCountry,
-} from "@stll/api-contract/case-law-launch-readiness";
-
-import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import type {
   PublicHandlerConfig,
   PublicHandlerContext,
   SafeHandlerGenerator,
 } from "@/api/lib/api-handlers";
 import { createSafePublicHandler } from "@/api/lib/api-handlers";
-import type { SafeId } from "@/api/lib/branded-types";
+import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
 import type {
-  CaseLawPublicReadDb,
-  CaseLawPublicReadTransaction,
-} from "@/api/lib/case-law-public-read-db";
-import { normalizePublicDecisionLanguage } from "@/api/lib/case-law/decision-language";
-import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions";
-import { isRedistributable } from "@/api/lib/legal-search/corpus-source";
-
-/** Module-private, so the subject type is constructible only below. */
-const REDISTRIBUTABLE: unique symbol = Symbol("redistributableDecisionSubject");
-
-/**
- * A decision the public may read: resolved and gated in one place.
- *
- * `tx` is the transaction the gate ran in. A handler reads through it and
- * receives no other handle, so its rows and the gate's verdict come from one
- * snapshot; see the module comment.
- */
-export type RedistributableDecisionSubject = {
-  readonly id: SafeId<"caseLawDecision">;
-  readonly tx: CaseLawPublicReadTransaction;
-  readonly [REDISTRIBUTABLE]: true;
-};
-
-const subjectOf = (
-  id: SafeId<"caseLawDecision">,
-  tx: CaseLawPublicReadTransaction,
-): RedistributableDecisionSubject => ({ id, tx, [REDISTRIBUTABLE]: true });
-
-/** How a request names its subject. */
-export type DecisionSubjectLocator =
-  | { kind: "id"; id: SafeId<"caseLawDecision"> }
-  | {
-      kind: "slug";
-      country: string;
-      slug: string;
-      language: string | undefined;
-    };
-
-const locatorCondition = (locator: DecisionSubjectLocator) => {
-  switch (locator.kind) {
-    case "id":
-      return eq(caseLawDecisions.id, locator.id);
-    case "slug": {
-      const country = publicCaseLawCountry(locator.country);
-      const language = normalizePublicDecisionLanguage(locator.language);
-      if (
-        country === null ||
-        (locator.language !== undefined && language === null)
-      ) {
-        return null;
-      }
-      return language === null
-        ? and(
-            eq(caseLawDecisions.country, country),
-            eq(caseLawDecisions.slug, locator.slug),
-          )
-        : and(
-            eq(caseLawDecisions.country, country),
-            eq(caseLawDecisions.slug, locator.slug),
-            sql`replace(lower(${caseLawDecisions.language}), '_', '-') = ${language}`,
-          );
-    }
-    default: {
-      locator satisfies never;
-      return panic(`Unhandled locator: ${String(locator)}`);
-    }
-  }
-};
-
-/**
- * The subject a locator names within `tx`, or null when it is not public.
- * Missing and unavailable subjects deliberately have one answer.
- */
-const resolveSubjectIn = async (
-  tx: CaseLawPublicReadTransaction,
-  locator: DecisionSubjectLocator,
-): Promise<RedistributableDecisionSubject | null> => {
-  const condition = locatorCondition(locator);
-  if (condition === null) {
-    return null;
-  }
-  const rows = await tx
-    .select({
-      id: caseLawDecisions.id,
-      country: caseLawDecisions.country,
-      descriptor: caseLawSources.descriptor,
-    })
-    .from(caseLawDecisions)
-    .innerJoin(caseLawSources, eq(caseLawSources.id, caseLawDecisions.sourceId))
-    .where(and(condition, publishedCaseLawDecision))
-    .limit(1);
-  const row = rows.at(0);
-  if (
-    row === undefined ||
-    !isPublicCaseLawCountry(row.country) ||
-    !isRedistributable(row.descriptor)
-  ) {
-    return null;
-  }
-  return subjectOf(row.id, tx);
-};
-
-/**
- * Gate a decision and read it in one transaction.
- *
- * `read` runs with the subject inside the transaction that approved it, so
- * every row it returns belongs to the snapshot the gate judged. Returns null
- * when the decision does not exist or its source may not be redistributed;
- * every caller turns that into the same "not found" its surface uses.
- *
- * Work that must not hold a database transaction — fetching a document from
- * the publisher, writing through the ingestion path — belongs after this
- * resolves, never inside `read`.
- */
-export const withRedistributableSubject = async <T>(
-  caseLawDb: CaseLawPublicReadDb,
-  locator: DecisionSubjectLocator,
-  read: (subject: RedistributableDecisionSubject) => Promise<T>,
-): Promise<T | null> =>
-  await caseLawDb(
-    async (tx) => {
-      const subject = await resolveSubjectIn(tx, locator);
-      return subject === null ? null : await read(subject);
-    },
-    { isolation: "repeatable-read" },
-  );
+  DecisionSubjectLocator,
+  RedistributableDecisionSubject,
+} from "@/api/lib/case-law/public-subject";
 
 export const DECISION_NOT_FOUND = { message: "Decision not found" } as const;
 

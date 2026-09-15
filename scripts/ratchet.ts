@@ -2012,13 +2012,12 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
     scope: "file",
     id: "ad-hoc-decision-subject-gates",
     description:
-      "direct `isRedistributable(` calls in public case-law decision/provision handlers. The subject gate lives in `decisions/public-subject.ts` and reaches handlers as a branded subject; a handler re-checking it by hand is the pattern that let two endpoints ship ungated. Stays at 0",
+      "direct `isRedistributable(` calls in public case-law decision/provision handlers. The subject gate lives in `lib/case-law/public-subject.ts` and reaches handlers as a branded subject; a handler re-checking it by hand is the pattern that let two endpoints ship ungated. Stays at 0",
     include: [
       "apps/api/src/handlers/case-law/decisions/**/*.ts",
       "apps/api/src/handlers/case-law/provisions/**/*.ts",
     ],
-    exclude: (file) =>
-      isExcludedSource(file) || file.endsWith("/decisions/public-subject.ts"),
+    exclude: isExcludedSource,
     count: countDirectRedistributableCalls,
   },
   {
@@ -3255,7 +3254,7 @@ const EXPECTED_CROSS_WORKSPACE_DUPLICATE_EXPORT_NAMES = 3;
 // result-throws.ts, shared/ (from the earlier fixtures), plus alpha/, copied/,
 // api-only-helper.ts and shared-names.ts. The two `.test.ts` files, the
 // `.type-test.ts` file, __fixtures__/, tests/ and __tests__/ are excluded.
-const EXPECTED_API_LIB_TOP_LEVEL_ENTRIES = 8;
+const EXPECTED_API_LIB_TOP_LEVEL_ENTRIES = 9;
 // apps/web/src/lib children: index.tsx (from the earlier fixtures), plus
 // beta/, copied/, mirrored-names.ts and second-definition.ts. The `.test.ts`
 // companion is excluded.
@@ -3740,7 +3739,7 @@ const runSelfTest = (): number => {
     );
     writeFixture(
       root,
-      "apps/api/src/handlers/case-law/decisions/public-subject.ts",
+      "apps/api/src/lib/case-law/public-subject.ts",
       SELF_TEST_AD_HOC_SUBJECT_GATE,
     );
     writeFixture(
@@ -3964,7 +3963,7 @@ const runSelfTest = (): number => {
       }
     }
     if (
-      "apps/api/src/handlers/case-law/decisions/public-subject.ts" in
+      "apps/api/src/lib/case-law/public-subject.ts" in
       adHocSubjectGateMetric.files
     ) {
       failures.push(
