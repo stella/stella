@@ -4,7 +4,7 @@ import { and, eq, ne } from "drizzle-orm";
 import { docxSuggestions } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
-import { syncReviewFindingForSuggestion } from "@/api/lib/document-review/suggestion-finding-sync";
+import { syncReviewFindingsForSuggestions } from "@/api/lib/document-review/suggestion-finding-sync";
 
 /**
  * Revert a resolved suggestion back to pending, clearing the resolution
@@ -56,17 +56,18 @@ const revertDocxSuggestion = createSafeHandler(
             originReviewFindingId: docxSuggestions.originReviewFindingId,
           });
 
-        const reverted = rows.at(0);
-        if (reverted !== undefined && reverted.originReviewFindingId !== null) {
-          await syncReviewFindingForSuggestion({
-            tx,
-            workspaceId,
-            findingId: reverted.originReviewFindingId,
-            status: "pending",
-            userId: user.id,
-            recordAuditEvent,
-          });
-        }
+        await syncReviewFindingsForSuggestions({
+          tx,
+          workspaceId,
+          findingIds: rows.flatMap((row) =>
+            row.originReviewFindingId === null
+              ? []
+              : [row.originReviewFindingId],
+          ),
+          status: "pending",
+          userId: user.id,
+          recordAuditEvent,
+        });
         return rows;
       }),
     );
