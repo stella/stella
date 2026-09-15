@@ -2622,6 +2622,7 @@
       "termAddedToast": "A(z) „{value}” hozzáadva a munkaterület anonimizálási kifejezéseihez.",
       "termMatchCountAriaLabel": "{count} egyezés ebben a dokumentumban.",
       "title": "Anonimizálási szótár",
+      "unsupportedVisualContent": "Ez a fájl képeket vagy vektorgrafikákat tartalmaz, amelyekben nem ellenőrizhető az érzékeny szöveg. Az exportálás nem érhető el.",
       "workspaceTermsHeading": "Munkaterületi kifejezések ({count})"
     },
     "external": {

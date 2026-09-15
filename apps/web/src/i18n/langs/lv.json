@@ -2622,6 +2622,7 @@
       "termAddedToast": "\"{value}\" pievienots darba telpas anonimizācijas terminiem.",
       "termMatchCountAriaLabel": "Šajā dokumentā atrasts {count} reizes.",
       "title": "Anonimizācijas vārdnīca",
+      "unsupportedVisualContent": "Šajā failā ir attēli vai vektorgrafika, ko nevar pārbaudīt, vai tajā nav sensitīva teksta. Eksportēšana nav pieejama.",
       "workspaceTermsHeading": "Darba telpas termini ({count})"
     },
     "external": {

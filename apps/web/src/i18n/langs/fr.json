@@ -2622,6 +2622,7 @@
       "termAddedToast": "\"{value}\" a été ajouté aux termes d’anonymisation de l’espace de travail.",
       "termMatchCountAriaLabel": "Correspondance trouvée {count} fois dans ce document.",
       "title": "Vocabulaire d’anonymisation",
+      "unsupportedVisualContent": "Ce fichier contient des images ou des graphiques vectoriels qui ne peuvent pas être vérifiés pour détecter du texte sensible. L’exportation n’est pas disponible.",
       "workspaceTermsHeading": "Termes de l’espace de travail ({count})"
     },
     "external": {

@@ -2622,6 +2622,7 @@
       "termAddedToast": "Výraz „{value}“ bol pridaný medzi anonymizačné výrazy pracovného priestoru.",
       "termMatchCountAriaLabel": "Zhoda {count}-krát v tomto dokumente.",
       "title": "Anonymizačný slovník",
+      "unsupportedVisualContent": "Tento súbor obsahuje obrázky alebo vektorovú grafiku, pri ktorých nemožno overiť citlivý text. Export nie je k dispozícii.",
       "workspaceTermsHeading": "Výrazy pracovného priestoru ({count})"
     },
     "external": {

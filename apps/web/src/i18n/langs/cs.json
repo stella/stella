@@ -2622,6 +2622,7 @@
       "termAddedToast": "Výraz „{value}“ přidán do slovníčku pro anonymizaci.",
       "termMatchCountAriaLabel": "V tomto dokumentu nalezeno {count}×.",
       "title": "Slovníček pro anonymizaci",
+      "unsupportedVisualContent": "Tento soubor obsahuje obrázky nebo vektorovou grafiku, u kterých nelze ověřit citlivý text. Export není k dispozici.",
       "workspaceTermsHeading": "Slovníček pro anonymizaci ({count})"
     },
     "external": {
