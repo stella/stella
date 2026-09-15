@@ -258,6 +258,12 @@ const baselineExists = (): boolean => {
 
 type FieldStatus = "ok" | "regressed" | "dropped";
 
+// The single definition of "the gate fires above this". The drift report
+// below reads the same function, so the headroom it prints can never disagree
+// with the headroom that fails the build.
+const gateLimit = (field: GatedField, baseline: number): number =>
+  Math.max(baseline * HEADROOM, baseline + HEADROOM_FLOOR[field]);
+
 const compareField = (
   field: GatedField,
   current: number,
@@ -268,9 +274,7 @@ const compareField = (
     // work must be acknowledged with a --write-baseline.
     return current > 0 ? "regressed" : "ok";
   }
-  if (
-    current > Math.max(baseline * HEADROOM, baseline + HEADROOM_FLOOR[field])
-  ) {
+  if (current > gateLimit(field, baseline)) {
     return "regressed";
   }
   if (current < baseline * RATCHET_DOWN) {
@@ -321,6 +325,117 @@ const formatCheckMeasurement = (m: Measured, baseline: Baseline): string =>
   `(${pct(m.counters.types, baseline[m.id].types)}), instantiations ` +
   `${n(m.counters.instantiations)} ` +
   `(${pct(m.counters.instantiations, baseline[m.id].instantiations)})`;
+
+// --- Baseline drift ------------------------------------------------------------
+// The gate compares a PR against a baseline main has already been eating into.
+// Between refreshes, main's own growth silently consumes the headroom until a
+// PR that adds almost nothing fails for cost it did not introduce. Printing the
+// baseline's age and the tightest remaining headroom next to the PR's own
+// numbers lets an author tell "my change exploded" from "the baseline is
+// stale" without measuring main by hand.
+
+type BaselineAge = { sha: string; date: string; commits: number };
+
+const gitOutput = (args: readonly string[]): string | null => {
+  const proc = Bun.spawnSync(["git", ...args], {
+    cwd: REPO_ROOT,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  if (proc.exitCode !== 0) {
+    return null;
+  }
+  const output = proc.stdout.toString().trim();
+  return output === "" ? null : output;
+};
+
+// Null whenever git cannot answer (no repository, shallow clone, export
+// tarball): the headroom line still prints, only without the age.
+const readBaselineAge = (): BaselineAge | null => {
+  const written = gitOutput([
+    "log",
+    "--format=%H %cs",
+    "-1",
+    "--",
+    BASELINE_REL,
+  ]);
+  const fields = written?.split(" ");
+  const sha = fields?.at(0);
+  const date = fields?.at(1);
+  if (sha === undefined || date === undefined) {
+    return null;
+  }
+  // Number(null) is 0, so a failed rev-list would read as a fresh baseline:
+  // reject the absent output before converting it.
+  const counted = gitOutput(["rev-list", "--count", `${sha}..HEAD`]);
+  if (counted === null) {
+    return null;
+  }
+  const commits = Number(counted);
+  if (!Number.isFinite(commits)) {
+    return null;
+  }
+  return { sha: sha.slice(0, 10), date, commits };
+};
+
+type Headroom = {
+  id: ProjectId;
+  field: GatedField;
+  left: number;
+  allowance: number;
+};
+
+const tightestHeadroom = (
+  measured: readonly Measured[],
+  baseline: Baseline,
+): Headroom | null => {
+  let tightest: Headroom | null = null;
+  for (const m of measured) {
+    for (const field of GATED_FIELDS) {
+      const base = baseline[m.id][field];
+      if (base === 0) {
+        continue;
+      }
+      const limit = gateLimit(field, base);
+      const candidate = {
+        id: m.id,
+        field,
+        left: limit - m.counters[field],
+        allowance: limit - base,
+      };
+      const tighter =
+        tightest === null ||
+        candidate.left / candidate.allowance <
+          tightest.left / tightest.allowance;
+      if (tighter) {
+        tightest = candidate;
+      }
+    }
+  }
+  return tightest;
+};
+
+const formatDriftLine = (
+  age: BaselineAge | null,
+  tightest: Headroom | null,
+): string | null => {
+  if (tightest === null) {
+    return null;
+  }
+  const consumed =
+    ((tightest.allowance - tightest.left) / tightest.allowance) * 100;
+  const ageText =
+    age === null
+      ? BASELINE_REL
+      : `${BASELINE_REL} is ${n(age.commits)} commit(s) old ` +
+        `(${age.sha}, ${age.date})`;
+  return (
+    `typecheck-baseline: ${ageText}; tightest headroom is ${tightest.id} ` +
+    `${tightest.field}, ${n(Math.round(tightest.left))} of ` +
+    `${n(Math.round(tightest.allowance))} left (${consumed.toFixed(1)}% ` +
+    "consumed, main's own growth included)."
+  );
+};
 
 // --- Modes --------------------------------------------------------------------
 
@@ -390,6 +505,14 @@ const runCheck = (): number => {
 
   for (const m of result.measured) {
     console.log(formatCheckMeasurement(m, baseline));
+  }
+
+  const drift = formatDriftLine(
+    readBaselineAge(),
+    tightestHeadroom(result.measured, baseline),
+  );
+  if (drift !== null) {
+    console.log(drift);
   }
 
   for (const d of drops) {
@@ -596,6 +719,40 @@ const runSelfTest = (): number => {
     failures.push(
       `check measurement output mismatch (got ${measurementLines.join(" | ")})`,
     );
+  }
+
+  // The headroom the drift line prints is the gate's own limit: exactly at it
+  // still passes, one past it fails. This is what keeps the report honest if
+  // HEADROOM or the floor ever moves.
+  const typesLimit = gateLimit("types", 1_000_000);
+  if (compareField("types", typesLimit, 1_000_000) !== "ok") {
+    failures.push("the gate fired at the limit the drift line calls zero left");
+  }
+  if (compareField("types", typesLimit + 1, 1_000_000) !== "regressed") {
+    failures.push("the gate did not fire one past its own limit");
+  }
+
+  const tightest = tightestHeadroom(measured, baseline);
+  if (tightest?.id !== "web" || tightest.field !== "instantiations") {
+    failures.push(
+      `tightestHeadroom picked ${tightest?.id}.${tightest?.field}, want web.instantiations`,
+    );
+  }
+  const driftLine = formatDriftLine(
+    { sha: "a8c9cf89ef", date: "2026-09-07", commits: 302 },
+    tightest,
+  );
+  const expectedDriftLine =
+    `typecheck-baseline: ${BASELINE_REL} is 302 commit(s) old ` +
+    "(a8c9cf89ef, 2026-09-07); tightest headroom is web instantiations, " +
+    "-23,000,000 of 1,000,000 left (2400.0% consumed, main's own growth " +
+    "included).";
+  if (driftLine !== expectedDriftLine) {
+    failures.push(`drift line mismatch (got ${String(driftLine)})`);
+  }
+  // No git (shallow clone, tarball): the headroom still reports, ageless.
+  if (formatDriftLine(null, tightest)?.includes("commit(s) old") !== false) {
+    failures.push("drift line claimed an age without git");
   }
 
   if (failures.length > 0) {
