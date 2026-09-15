@@ -56,6 +56,7 @@ import {
   loadCourtWeights,
 } from "@/api/lib/case-law/court-weights";
 import type { CourtWeightEntry } from "@/api/lib/case-law/court-weights";
+import { publishedCaseLawDecisionSqlFor } from "@/api/lib/case-law/published-decisions";
 import { redistributableCaseLawSourceSqlFor } from "@/api/lib/case-law/redistribution";
 import { setCorpusBackfillStatementTimeout } from "@/api/lib/legal-search/backfill-statement-timeout";
 import { isRecord } from "@/api/lib/type-guards";
@@ -312,6 +313,11 @@ export const oldestCitationAuthorityRecomputeAt = async (
  * that is what resets a decision whose last citation went away, and what makes
  * the sum over batches equal the old single statement rather than merely
  * resemble it.
+ *
+ * The citing side carries the same two public gates as the search lateral that
+ * scores a page live: a decision the corpus does not publish does not weigh on
+ * one it does. A listing-only citing row that is later enriched re-enters the
+ * count when the stale sweep next reaches its targets.
  */
 export const recomputeCitationAuthorityBatch = async (
   tx: CitationAuthorityTx,
@@ -353,6 +359,7 @@ export const recomputeCitationAuthorityBatch = async (
           JOIN case_law_sources citing_src
             ON citing_src.id = citing_d.source_id
            AND ${sql.raw(redistributableCaseLawSourceSqlFor("citing_src"))}
+           AND ${sql.raw(publishedCaseLawDecisionSqlFor("citing_d"))}
         ) ON c.cited_decision_id = b.id
            -- Procedural references name the judgment under review, not an
            -- authority being invoked; counting them would rank a decision by

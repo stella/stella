@@ -66,6 +66,8 @@ const LAUNCH_READINESS_FILE =
   "packages/api-contract/src/case-law-launch-readiness.ts";
 const RESEARCH_SUGGEST_PROMPT_FILE =
   "apps/api/src/handlers/case-law/research/columns-suggest-prompt.ts";
+const CITATION_AUTHORITY_FILE =
+  "apps/api/src/handlers/case-law/citation-authority.ts";
 
 /**
  * Every route this slice mounts, sorted.
@@ -721,6 +723,25 @@ describe("public case-law route boundary", () => {
     expect(ownerSource).toContain("storedObservationHasDetailSqlFor(");
     expect(ownerSource).not.toContain("_stellaPartialObservation");
     expect(markerSource).toContain("PARTIAL_OBSERVATION_FIELD.IS_LISTING_ONLY");
+  });
+
+  test("the live citation score and its materialized twin gate the citing side alike", async () => {
+    // Two statements over the same citing rows: the lateral that scores a
+    // search page now, and the sweep that writes `citation_count` and
+    // `citation_authority` for every other public read. A gate on one and not
+    // the other is the drift that lets a row the corpus hides still rank the
+    // rows it shows.
+    const [searchSource, authoritySource] = await Promise.all([
+      readSearchSource(),
+      readSource(CITATION_AUTHORITY_FILE),
+    ]);
+
+    for (const source of [searchSource, authoritySource]) {
+      expect(source).toContain(
+        'redistributableCaseLawSourceSqlFor("citing_src")',
+      );
+      expect(source).toContain('publishedCaseLawDecisionSqlFor("citing_d")');
+    }
   });
 
   test("the question suggestion grounds only in what the public gate returns", async () => {
