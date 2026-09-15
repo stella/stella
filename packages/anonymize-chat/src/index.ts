@@ -329,7 +329,7 @@ export const buildChatAnonPipelineConfig = ({
  * whitespace collapsed so "Acme  Corp" and "Acme Corp"
  * collide.
  */
-const normalizeForExclusion = (value: string): string =>
+export const normalizeForExclusion = (value: string): string =>
   value.normalize("NFKC").toLowerCase().replaceAll(/\s+/gu, " ").trim();
 
 const PLACEHOLDER_TOKEN = /\[[A-Z][A-Z0-9_]*_\d+\]/gu;

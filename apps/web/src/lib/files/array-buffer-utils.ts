@@ -1,3 +1,5 @@
+import { replaceEqualDeep } from "@tanstack/react-query";
+
 type StableArrayBufferOptions = {
   incomingBuffer: ArrayBuffer;
   stableBuffer?: ArrayBuffer | undefined;
@@ -38,4 +40,32 @@ export const selectStableArrayBuffer = ({
   }
 
   return stableBuffer;
+};
+
+/** Keep refetched file data stable when metadata and bytes are unchanged. */
+export const shareFileData = (
+  previous: unknown,
+  incoming: unknown,
+): unknown => {
+  if (
+    typeof previous !== "object" ||
+    previous === null ||
+    typeof incoming !== "object" ||
+    incoming === null ||
+    !("buffer" in previous) ||
+    !("buffer" in incoming) ||
+    !(previous.buffer instanceof ArrayBuffer) ||
+    !(incoming.buffer instanceof ArrayBuffer)
+  ) {
+    return replaceEqualDeep(previous, incoming);
+  }
+
+  const next = {
+    ...incoming,
+    buffer: selectStableArrayBuffer({
+      incomingBuffer: incoming.buffer,
+      stableBuffer: previous.buffer,
+    }),
+  };
+  return replaceEqualDeep(previous, next);
 };

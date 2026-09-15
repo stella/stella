@@ -198,11 +198,17 @@ export type InspectorCommandState = {
   } | null;
 };
 
+type AnonymizationPipelineStatus = "idle" | "running" | "ready" | "error";
+
 export type InspectorAnonymizationState = {
   anonymizationActiveMountCount: number;
   documentTextSelectionByFieldId: Record<string, DocumentTextSelection>;
   anonymizationMatchesByFieldId: Record<string, AnonymizationMatchSnapshot>;
-  anonymizationPipelineStartedFieldIds: Set<string>;
+  anonymizationPipelineStatusByFieldId: Record<
+    string,
+    AnonymizationPipelineStatus
+  >;
+  anonymizationRetryByFieldId: Record<string, number>;
   anonymizationSelection: AnonymizationSelection;
 };
 
@@ -362,6 +368,8 @@ export type InspectorAnonymizationActions = {
   ) => void;
   markAnonymizationPipelineStarted: (fieldId: string) => void;
   markAnonymizationPipelineRan: (fieldId: string) => void;
+  markAnonymizationPipelineFailed: (fieldId: string) => void;
+  retryAnonymizationPipeline: (fieldId: string) => void;
   clearAnonymizationMatches: (fieldId: string) => void;
   selectAnonymizationTerm: (
     canonical: string,

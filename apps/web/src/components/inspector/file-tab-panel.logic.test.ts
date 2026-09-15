@@ -3,8 +3,65 @@ import { describe, expect, test } from "bun:test";
 import {
   getFileTabNativePreviewKind,
   getMarkdownDraftSyncDecision,
+  shouldRunFileAnonymizationPipeline,
   shouldSurfaceEmailResolutionAlert,
 } from "./file-tab-panel.logic";
+
+describe("file anonymization producer", () => {
+  const runnable = {
+    facet: "anonymization",
+    isActive: true,
+    isFullView: true,
+    isMinimized: false,
+    isMounted: true,
+    isNativeDocxDisplay: false,
+    pipelineStatus: "idle",
+  } as const;
+
+  test("starts the PDF pipeline for an active fullscreen idle facet", () => {
+    expect(shouldRunFileAnonymizationPipeline(runnable)).toBe(true);
+  });
+
+  test("leaves native DOCX detection to the editor worker", () => {
+    expect(
+      shouldRunFileAnonymizationPipeline({
+        ...runnable,
+        isNativeDocxDisplay: true,
+      }),
+    ).toBe(false);
+  });
+
+  test("waits for explicit retry after a failure", () => {
+    expect(
+      shouldRunFileAnonymizationPipeline({
+        ...runnable,
+        pipelineStatus: "error",
+      }),
+    ).toBe(false);
+    expect(
+      shouldRunFileAnonymizationPipeline({
+        ...runnable,
+        pipelineStatus: "idle",
+      }),
+    ).toBe(true);
+  });
+
+  test("does not run for hidden, side-peek, unmounted, or completed facets", () => {
+    expect(
+      (
+        [
+          { ...runnable, isActive: false },
+          { ...runnable, isFullView: false },
+          { ...runnable, isMinimized: true },
+          { ...runnable, isMounted: false },
+          { ...runnable, facet: "metadata" },
+          { ...runnable, pipelineStatus: "running" },
+          { ...runnable, pipelineStatus: "ready" },
+        ] as const
+      ).every((input) => !shouldRunFileAnonymizationPipeline(input)),
+    ).toBe(true);
+  });
+});
 
 describe("file tab native preview kind", () => {
   test("uses the stored filename for extension-recovered previews", () => {

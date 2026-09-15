@@ -11,6 +11,7 @@ import { api } from "@/lib/api";
 import { apiUrl } from "@/lib/api-url";
 import { APIError, shouldRetryAPIRequest, unwrapEden } from "@/lib/errors/api";
 import { fetchWithTimeout } from "@/lib/fetch";
+import { shareFileData } from "@/lib/files/array-buffer-utils";
 import type {
   EmailCitationBlock,
   EmailCitationSource,
@@ -144,6 +145,7 @@ export const fileOptions = (props: FileOptionsProps) =>
         buffer,
       } satisfies FileData;
     },
+    structuralSharing: shareFileData,
   });
 
 export const emailHtmlPreviewOptions = (props: FileOptionsProps) =>

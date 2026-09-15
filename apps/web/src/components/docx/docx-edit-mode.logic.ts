@@ -147,8 +147,7 @@ type DecideAnonymizationDetectionRunOptions = {
   text: string;
   cacheKey: string;
   lastDeliveredKey: string | null;
-  inFlightUntil: number;
-  now: number;
+  requestStatus: "idle" | "running";
 };
 
 export type AnonymizationDetectionDecision =
@@ -169,10 +168,9 @@ export const decideAnonymizationDetectionRun = ({
   text,
   cacheKey,
   lastDeliveredKey,
-  inFlightUntil,
-  now,
+  requestStatus,
 }: DecideAnonymizationDetectionRunOptions): AnonymizationDetectionDecision => {
-  if (now < inFlightUntil) {
+  if (requestStatus === "running") {
     return { action: "skip" };
   }
 
@@ -186,6 +184,14 @@ export const decideAnonymizationDetectionRun = ({
 
   return { action: "run" };
 };
+
+export const shouldCommitAnonymizationDetectionResult = ({
+  currentKey,
+  requestKey,
+}: {
+  currentKey: string;
+  requestKey: string;
+}): boolean => currentKey === requestKey;
 
 type DetectionPair = {
   original: string;
