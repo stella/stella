@@ -1200,15 +1200,18 @@ const captureTemplateFillPayoff = async (
   referencePath: string,
 ): Promise<CapturePayoffReference> => {
   const field = page.locator(TEMPLATE_FILL_CUSTOMER_NAME_SELECTOR);
-  // Locator screenshots wait for stable, visible content and scroll it into
-  // view. The DOM value alone can pass while the payoff remains off screen.
-  await field.screenshot({ path: referencePath, scale: "device" });
+  // The DOM value alone can pass while the payoff remains off screen.
+  await field.waitFor({ state: "visible" });
+  await field.scrollIntoViewIfNeeded();
   const bounds = await field.boundingBox();
   if (!bounds) {
     throw new Error(
       "template-fill: the drafted Customer Name has no visible bounds",
     );
   }
+  // Element screenshots enclose CSS bounds before applying DPR. Capture the
+  // viewport instead so both reference and video use the same device crop.
+  await page.screenshot({ path: referencePath, scale: "device" });
   return {
     path: referencePath,
     region: {
@@ -1236,6 +1239,21 @@ export const assertCapturePayoff = async ({
 }: AssertCapturePayoffOptions) => {
   const duration = await probeDurationSeconds(outputPath);
   const { x, y, width, height } = reference.region;
+  const crop = `crop=${width}:${height}:${x}:${y}:exact=1`;
+  const referenceCropPath = `${reference.path}.crop.png`;
+  await execFileAsync("ffmpeg", [
+    "-hide_banner",
+    "-loglevel",
+    "error",
+    "-y",
+    "-i",
+    reference.path,
+    "-vf",
+    crop,
+    "-frames:v",
+    "1",
+    referenceCropPath,
+  ]);
   for (const secondsFromEnd of [PAYOFF_HOLD_SECONDS, 0.08]) {
     const framePath = `${outputPath}.payoff-frame.png`;
     await execFileAsync("ffmpeg", [
@@ -1248,12 +1266,12 @@ export const assertCapturePayoff = async ({
       "-i",
       outputPath,
       "-vf",
-      `crop=${width}:${height}:${x}:${y}:exact=1`,
+      crop,
       "-frames:v",
       "1",
       framePath,
     ]);
-    const psnr = await psnrBetween(framePath, reference.path);
+    const psnr = await psnrBetween(framePath, referenceCropPath);
     await rm(framePath, { force: true });
     if (psnr < MIN_PAYOFF_PSNR_DB) {
       throw new Error(
@@ -1265,6 +1283,7 @@ export const assertCapturePayoff = async ({
       `verified ${label} payoff at ${secondsFromEnd}s before end: ${formatPsnr(psnr)}\n`,
     );
   }
+  await rm(referenceCropPath, { force: true });
 };
 
 const probeDurationSeconds = async (mediaPath: string) => {
