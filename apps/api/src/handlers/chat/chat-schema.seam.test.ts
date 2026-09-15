@@ -115,7 +115,7 @@ const clientContinuationParts = (rawArguments: string) => {
       ],
     },
   ]).at(0);
-  if (wireAnchor === undefined || wireAnchor.role !== "assistant") {
+  if (wireAnchor?.role !== "assistant") {
     throw new Error("The snapshot wire message lost its assistant anchor");
   }
 
