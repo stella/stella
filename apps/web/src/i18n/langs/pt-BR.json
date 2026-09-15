@@ -877,14 +877,12 @@
       "manual": "Revisão manual",
       "manualDescription": "As edições da IA ficam na fila para você revisar e aplicar uma a uma."
     },
-    "editableFilePlaceholder": "Converse ou edite {fileName}",
+    "editableFilePlaceholder": "Converse ou edite {title}",
     "editableFilePlaceholderAction": "Converse ou edite",
     "editorLoading": "Carregando editor…",
     "emptyThreadDescription": "Pergunte sobre este caso, redija um texto ou peça uma nota breve de pesquisa.",
     "emptyThreadTitle": "Iniciar conversa",
     "extractingContent": "Extraindo conteúdo...",
-    "filePlaceholder": "Conversar sobre {fileName}",
-    "filePlaceholderAction": "Conversar sobre",
     "fileThreadRebound": "O chat deste arquivo já foi iniciado em outra sessão. Sua mensagem foi mantida; envie novamente.",
     "fileTooLarge": "O arquivo excede o limite {maxSize}",
     "focusSuggestion": "Focar sugestão: {topic}",
@@ -1010,7 +1008,7 @@
         "team": "Habilidades de IA da equipe"
       }
     },
-    "sourcePlaceholder": "Converse sobre {title}",
+    "sourcePlaceholder": "Conversar sobre {title}",
     "sourcePlaceholderAction": "Conversar sobre",
     "sources": "Fontes:",
     "spawnSubagents": {

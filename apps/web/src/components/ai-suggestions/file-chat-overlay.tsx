@@ -1087,7 +1087,7 @@ const useFileChatPlaceholder = ({
   if (activeDraft !== undefined) {
     return {
       placeholder: t("chat.editableFilePlaceholder", {
-        fileName: activeDraft.fileName,
+        title: activeDraft.fileName,
       }),
       placeholderAction: t("chat.editableFilePlaceholderAction"),
       sourceLabel: activeDraft.fileName,
@@ -1098,13 +1098,15 @@ const useFileChatPlaceholder = ({
       activeFile.editable === true && docxEditSafety !== "unsafe";
     return {
       placeholder: t(
-        canOfferEdit ? "chat.editableFilePlaceholder" : "chat.filePlaceholder",
-        { fileName: activeFile.fileName },
+        canOfferEdit
+          ? "chat.editableFilePlaceholder"
+          : "chat.sourcePlaceholder",
+        { title: activeFile.fileName },
       ),
       placeholderAction: t(
         canOfferEdit
           ? "chat.editableFilePlaceholderAction"
-          : "chat.filePlaceholderAction",
+          : "chat.sourcePlaceholderAction",
       ),
       sourceLabel: activeFile.fileName,
     };
