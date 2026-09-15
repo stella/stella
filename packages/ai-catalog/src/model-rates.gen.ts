@@ -263,18 +263,18 @@ export const MODEL_RATES = {
   // models.dev: amazon-bedrock:us.anthropic.claude-sonnet-4-5-20250929-v1:0
   "us.anthropic.claude-sonnet-4-5-20250929-v1:0": {
     kind: "flat",
-    inputPerMTok: 300_000,
-    outputPerMTok: 1_500_000,
-    cachedInputPerMTok: 30_000,
-    cachedWriteInputPerMTok: 375_000,
+    inputPerMTok: 330_000,
+    outputPerMTok: 1_650_000,
+    cachedInputPerMTok: 33_000,
+    cachedWriteInputPerMTok: 412_500,
   },
   // models.dev: amazon-bedrock:us.anthropic.claude-haiku-4-5-20251001-v1:0
   "us.anthropic.claude-haiku-4-5-20251001-v1:0": {
     kind: "flat",
-    inputPerMTok: 100_000,
-    outputPerMTok: 500_000,
-    cachedInputPerMTok: 10_000,
-    cachedWriteInputPerMTok: 125_000,
+    inputPerMTok: 110_000,
+    outputPerMTok: 550_000,
+    cachedInputPerMTok: 11_000,
+    cachedWriteInputPerMTok: 137_500,
   },
   // models.dev: amazon-bedrock:us.amazon.nova-pro-v1:0
   "us.amazon.nova-pro-v1:0": {
