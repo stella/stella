@@ -1,4 +1,5 @@
 import { queryOptions } from "@tanstack/react-query";
+import { panic } from "better-result";
 
 import {
   DOCX_SUGGESTIONS_PAGE_SIZE_MAX,
@@ -7,9 +8,20 @@ import {
 
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { parseDeterministicDate } from "@/lib/deterministic-date";
 import { unwrapEden } from "@/lib/errors/api";
 
 import { entitiesKeys } from "./entities";
+
+/**
+ * The API client keeps timestamps as the ISO strings the server sent
+ * (`parseDate: false`), whatever the generated types say. Hydration, the
+ * pending-list cache and the review store need real Dates, so every response
+ * carrying a suggestion `createdAt` is read through here.
+ */
+export const readDocxSuggestionCreatedAt = (value: Date | string): Date =>
+  parseDeterministicDate(value) ??
+  panic("The DOCX suggestion API returned an invalid createdAt");
 
 // Each hydration fetch requests a full page.
 // Page ALL pending rows up to DOCX_SUGGESTIONS_PENDING_MAX: pending drives the
@@ -94,6 +106,12 @@ export const docxSuggestionsOptions = ({
         );
       }
 
-      return { items: pending.items };
+      return {
+        items: pending.items.map((item) =>
+          Object.assign(item, {
+            createdAt: readDocxSuggestionCreatedAt(item.createdAt),
+          }),
+        ),
+      };
     },
   });

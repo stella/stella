@@ -42,6 +42,7 @@ import { api } from "@/lib/api";
 import type { ChatThreadId } from "@/lib/chat-thread-ref";
 import { APIError, unwrapEden } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
+import { readDocxSuggestionCreatedAt } from "@/lib/workspaces/queries/docx-suggestions";
 
 export type DocxResolveResult = "synced" | "stale" | "failed";
 
@@ -133,7 +134,8 @@ export const createDocxSuggestionsRequest = async ({
     });
   }
 
-  const { createdAt, items } = result.value;
+  const { items } = result.value;
+  const createdAt = readDocxSuggestionCreatedAt(result.value.createdAt);
   await writeDocxSuggestionsCache({
     queryClient,
     workspaceId,
