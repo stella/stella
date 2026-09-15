@@ -1,5 +1,8 @@
 import type { REGION_BY_COUNTRY } from "@/features/case-law/case-law-jurisdiction";
-import { isStatuteCountry, type StatuteCountry } from "@/lib/statute-route";
+import {
+  isPublicStatuteCountry,
+  type StatuteCountry,
+} from "@/lib/statute-route";
 
 /** The two corpora the home dispatches an entry to. */
 export type LawScope = "decisions" | "statutes";
@@ -21,58 +24,54 @@ export type LawHomeDescriptor = {
  */
 export type LawHomeJurisdiction = keyof typeof REGION_BY_COUNTRY;
 
-export const LAW_HOME_JURISDICTIONS = {
+const LAW_HOME_EXAMPLES = {
   CZE: {
-    scopes: ["decisions", "statutes"],
-    examples: {
-      decisions: ["22 Cdo 2653/2012", "ECLI:CZ:NS:2012:23.CDO.1572.2012.1"],
-      statutes: ["89/2012 Sb.", "§ 2079 89/2012 Sb."],
-    },
+    decisions: ["22 Cdo 2653/2012", "ECLI:CZ:NS:2012:23.CDO.1572.2012.1"],
+    statutes: ["89/2012 Sb.", "§ 2079 89/2012 Sb."],
   },
   EU: {
-    scopes: ["decisions"],
-    examples: {
-      decisions: ["C-131/12"],
-      statutes: [],
-    },
+    decisions: ["C-131/12"],
+    statutes: [],
   },
   POL: {
-    scopes: ["decisions"],
-    examples: {
-      decisions: ["II CSK 123/19"],
-      statutes: [],
-    },
+    decisions: ["II CSK 123/19"],
+    statutes: [],
   },
   SVK: {
-    scopes: ["decisions", "statutes"],
-    examples: {
-      decisions: ["1Cdo/12/2020"],
-      statutes: ["40/1964 Zb."],
-    },
+    decisions: ["1Cdo/12/2020"],
+    statutes: ["40/1964 Zb."],
   },
-} as const satisfies Record<LawHomeJurisdiction, LawHomeDescriptor>;
+} as const satisfies Record<LawHomeJurisdiction, LawHomeDescriptor["examples"]>;
 
 /** Expects the corpus form (`CZE`), which `fromCaseLawCountryParam` produces. */
 export const isLawHomeJurisdiction = (
   country: string,
-): country is LawHomeJurisdiction =>
-  Object.hasOwn(LAW_HOME_JURISDICTIONS, country);
+): country is LawHomeJurisdiction => Object.hasOwn(LAW_HOME_EXAMPLES, country);
 
 export const LAW_HOME_JURISDICTION_CODES = Object.keys(
-  LAW_HOME_JURISDICTIONS,
+  LAW_HOME_EXAMPLES,
 ).filter(isLawHomeJurisdiction);
 
 export const lawHomeDescriptor = (
   country: string | undefined,
-): LawHomeDescriptor | null =>
-  country !== undefined && isLawHomeJurisdiction(country)
-    ? LAW_HOME_JURISDICTIONS[country]
-    : null;
+): LawHomeDescriptor | null => {
+  if (country === undefined || !isLawHomeJurisdiction(country)) {
+    return null;
+  }
+  const examples = LAW_HOME_EXAMPLES[country];
+  const hasStatutes = statuteCountryOf(country) !== null;
+  return {
+    scopes: hasStatutes ? ["decisions", "statutes"] : ["decisions"],
+    examples: {
+      decisions: examples.decisions,
+      statutes: hasStatutes ? examples.statutes : [],
+    },
+  };
+};
 
 /**
  * The statutes browser's country segment for a corpus country, when the
- * browser covers it. `STATUTE_COUNTRIES` is the authority; the descriptors'
- * `statutes` scope is bound to it by test.
+ * public browser admits it under the shared publication policy.
  */
 export const statuteCountryOf = (
   country: string | undefined,
@@ -81,5 +80,5 @@ export const statuteCountryOf = (
     return null;
   }
   const segment = country.toLowerCase();
-  return isStatuteCountry(segment) ? segment : null;
+  return isPublicStatuteCountry(segment) ? segment : null;
 };

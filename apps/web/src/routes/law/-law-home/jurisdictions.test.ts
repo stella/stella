@@ -5,10 +5,10 @@ import { parseDecisionQuery } from "@stll/api-contract/decision-query-intent";
 
 import { REGION_BY_COUNTRY } from "@/features/case-law/case-law-jurisdiction";
 import { parseStatuteQuery } from "@/features/statutes/statute-query-intent";
-import { STATUTE_COUNTRIES } from "@/lib/statute-route";
+import { isPublicStatuteCountry, STATUTE_COUNTRIES } from "@/lib/statute-route";
 import {
   LAW_HOME_JURISDICTION_CODES,
-  LAW_HOME_JURISDICTIONS,
+  lawHomeDescriptor,
   type LawScope,
   statuteCountryOf,
 } from "@/routes/law/-law-home/jurisdictions";
@@ -24,11 +24,12 @@ describe("law home jurisdictions", () => {
 
   test("the statutes scope is exactly the statutes browser's coverage", () => {
     const withStatutes: string[] = LAW_HOME_JURISDICTION_CODES.filter((code) =>
-      LAW_HOME_JURISDICTIONS[code].scopes.some(
+      lawHomeDescriptor(code)?.scopes.some(
         (scope: LawScope) => scope === "statutes",
       ),
     );
     const browserCountries = Object.keys(STATUTE_COUNTRIES)
+      .filter(isPublicStatuteCountry)
       .map((segment) => segment.toUpperCase())
       .sort();
 
@@ -37,7 +38,12 @@ describe("law home jurisdictions", () => {
 
   test("a listed scope has examples and an unlisted one has none", () => {
     for (const code of LAW_HOME_JURISDICTION_CODES) {
-      const { examples, scopes } = LAW_HOME_JURISDICTIONS[code];
+      const descriptor = lawHomeDescriptor(code);
+      expect(descriptor).not.toBeNull();
+      if (descriptor === null) {
+        continue;
+      }
+      const { examples, scopes } = descriptor;
       for (const scope of ALL_SCOPES) {
         const listed = scopes.some((offered: LawScope) => offered === scope);
         const count = examples[scope].length;
@@ -54,7 +60,12 @@ describe("law home jurisdictions", () => {
 
   test("every decision example parses as an identifier", () => {
     for (const code of LAW_HOME_JURISDICTION_CODES) {
-      for (const example of LAW_HOME_JURISDICTIONS[code].examples.decisions) {
+      const descriptor = lawHomeDescriptor(code);
+      expect(descriptor).not.toBeNull();
+      if (descriptor === null) {
+        continue;
+      }
+      for (const example of descriptor.examples.decisions) {
         const grammar = decisionDocketGrammarForJurisdiction(code);
         expect({
           example,
@@ -66,7 +77,12 @@ describe("law home jurisdictions", () => {
 
   test("every statute example parses as an act reference", () => {
     for (const code of LAW_HOME_JURISDICTION_CODES) {
-      const examples = LAW_HOME_JURISDICTIONS[code].examples.statutes;
+      const descriptor = lawHomeDescriptor(code);
+      expect(descriptor).not.toBeNull();
+      if (descriptor === null) {
+        continue;
+      }
+      const examples = descriptor.examples.statutes;
       if (examples.length === 0) {
         continue;
       }
@@ -87,7 +103,7 @@ describe("law home jurisdictions", () => {
 
   test("statuteCountryOf answers only for jurisdictions the browser covers", () => {
     expect(statuteCountryOf("CZE")).toBe("cze");
-    expect(statuteCountryOf("SVK")).toBe("svk");
+    expect(statuteCountryOf("SVK")).toBeNull();
     expect(statuteCountryOf("POL")).toBeNull();
     expect(statuteCountryOf("EU")).toBeNull();
     expect(statuteCountryOf(undefined)).toBeNull();
