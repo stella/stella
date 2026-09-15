@@ -18,8 +18,13 @@ import type {
   TaskTab,
 } from "@/components/inspector/inspector-store-types";
 import { getInspectorView } from "@/components/inspector/view-registry";
+import {
+  adoptDecisionChatThread,
+  ensureDecisionChatThread,
+} from "@/features/chat/decision-chat-threads";
 import { normalizeOptionalArray } from "@/lib/arrays";
 import { createChatThreadId } from "@/lib/chat-thread-ref";
+import type { ChatThreadId } from "@/lib/chat-thread-ref";
 import { isEmailFile } from "@/lib/consts";
 
 export const buildSkillResourceTabId = ({
@@ -189,6 +194,34 @@ const upsertTaskTab = (state: Draft<InspectorTabsStore>, tab: TaskTab) => {
     existing.isNew = true;
   }
   existing.workspaceId = tab.workspaceId;
+};
+
+type ChatTabThreadIdArgs = Pick<
+  NonNullable<Parameters<InspectorTabsStore["openChat"]>[0]>,
+  "activeDecisionId" | "id"
+>;
+
+/**
+ * Which thread a chat tab opens on. A decision has one conversation, owned by
+ * `decision-chat-threads`: an unnamed chat about a decision continues it, and
+ * a named one (a new chat started from the decision's own tab, or from a
+ * selected passage) becomes it, so the reader's floating composer follows.
+ *
+ * Resolved before the store update rather than inside it, so the owner is
+ * never written from within another store's producer.
+ */
+const resolveChatTabThreadId = ({
+  activeDecisionId,
+  id,
+}: ChatTabThreadIdArgs): ChatThreadId => {
+  if (activeDecisionId === undefined) {
+    return id ?? createChatThreadId();
+  }
+  if (id === undefined) {
+    return ensureDecisionChatThread({ decisionId: activeDecisionId });
+  }
+  adoptDecisionChatThread({ decisionId: activeDecisionId, threadId: id });
+  return id;
 };
 
 // Bulk open: adds a tab for every target in a single store update, then
@@ -513,9 +546,9 @@ export const createInspectorTabsSlice = (
       }
     }),
 
-  openChat: (args = {}) =>
+  openChat: (args = {}) => {
+    const id = resolveChatTabThreadId(args);
     set((state) => {
-      const id = args.id ?? createChatThreadId();
       const existing = state.tabs.find((tab) => tab.id === id);
       if (!existing) {
         state.tabs.push({
@@ -547,7 +580,8 @@ export const createInspectorTabsSlice = (
       activateInspectorTab(state, id);
       state.activationSeq += 1;
       state.minimized = false;
-    }),
+    });
+  },
 
   setChatContext: (tabId, matterIds) =>
     set((state) => {
@@ -557,10 +591,12 @@ export const createInspectorTabsSlice = (
       }
     }),
 
-  resetChatTabId: (oldId, newId) =>
+  resetChatTabId: (oldId, newId) => {
+    let rotatedDecisionId: string | undefined;
     set((state) => {
       const tab = state.tabs.find((candidate) => candidate.id === oldId);
       if (tab?.type === "chat") {
+        rotatedDecisionId = tab.activeDecisionId;
         tab.id = newId;
         if (Object.hasOwn(state.groupAssignments, oldId)) {
           state.groupAssignments[newId] = state.groupAssignments[oldId] ?? null;
@@ -570,7 +606,17 @@ export const createInspectorTabsSlice = (
       if (state.activeId === oldId) {
         state.activeId = newId;
       }
-    }),
+    });
+    // This is the one action that moves a chat tab's thread, so it is the one
+    // place the decision's owner can learn about it. Told after the tab store
+    // has settled, never from inside its producer.
+    if (rotatedDecisionId !== undefined) {
+      adoptDecisionChatThread({
+        decisionId: rotatedDecisionId,
+        threadId: newId,
+      });
+    }
+  },
 
   openView: ({ type, id, label, payload, ownerRouteId }) =>
     set((state) => {

@@ -73,6 +73,8 @@ import { cn } from "@stll/ui/utils";
 import type { ActiveLegalDocument } from "@/components/ai-suggestions/active-legal-document";
 import { resolveDocxSuggestionRequest } from "@/components/ai-suggestions/docx-suggestion-persistence";
 import { resolveFileReviewSessionId } from "@/components/ai-suggestions/file-review-session";
+import { OVERLAY_THREAD_PRESENTATION } from "@/components/ai-suggestions/file-viewer-with-ai-config";
+import type { OverlayThreadPresentation } from "@/components/ai-suggestions/file-viewer-with-ai-config";
 import {
   ChatThreadCard,
   FLOATING_THREAD_CARD_OFFSET_WITH_REVIEW_CLASS,
@@ -764,6 +766,12 @@ type FileChatOverlayProps = {
   /** Called only after the server-persisted chat history proves this overlay
    * thread owns the active generated-document draft. */
   onActiveDraftChatBound?: ((threadId: ChatThreadId) => void) | undefined;
+  /**
+   * Where this thread is read. `tab` means a docked tab is already showing it,
+   * so the floating card (and the minimized affordance that reopens it) would
+   * only repeat the tab beside itself; the composer stays either way.
+   */
+  threadPresentation?: OverlayThreadPresentation | undefined;
 };
 
 const hasPersistedActiveDraftChatBinding = ({
@@ -808,6 +816,7 @@ export const FileChatOverlay = ({
   onNewThread,
   onActiveDraftChatBound,
   requestDocxEditMode,
+  threadPresentation,
 }: FileChatOverlayProps) => {
   if (chatThreadId === undefined) {
     const fileFieldId = activeFile?.fileFieldId;
@@ -854,6 +863,7 @@ export const FileChatOverlay = ({
         onActiveDraftChatBound={onActiveDraftChatBound}
         onNewThread={onNewThread}
         requestDocxEditMode={requestDocxEditMode}
+        threadPresentation={threadPresentation}
         workspaceId={workspaceId}
       />
     </Suspense>
@@ -1138,6 +1148,7 @@ const FileChatOverlayInner = ({
   onDocxCommentsChange,
   onActiveDraftChatBound,
   onNewThread,
+  threadPresentation = OVERLAY_THREAD_PRESENTATION.card,
 }: FileChatOverlayInnerProps) => {
   const t = useTranslations();
   const capturePromptSubmitError = useCallback(
@@ -2027,6 +2038,12 @@ const FileChatOverlayInner = ({
   const threadScrollRef = useRef<HTMLDivElement>(null);
   const hasMessages = messages.length > 0;
   const hasThreadContent = hasMessages || error !== undefined;
+  // A docked tab showing this very thread is the conversation view, so the
+  // floating card (and the affordance that reopens it) would only repeat it
+  // beside itself. The composer is unaffected: a send from here lands in the
+  // same thread and the tab shows it.
+  const threadCardAvailable =
+    threadPresentation === OVERLAY_THREAD_PRESENTATION.card;
   // Auto-open the thread panel as soon as the first message lands so users see
   // streaming without having to click the chevron. Adjust-state-during-render on
   // the hasThreadContent transition (not every render) so the user can still
@@ -2249,7 +2266,7 @@ const FileChatOverlayInner = ({
           blockedApprovalTools,
         }}
       >
-        {panelOpen && hasThreadContent && (
+        {threadCardAvailable && panelOpen && hasThreadContent && (
           <ChatThreadCard
             bottomOffsetClass={
               hasPendingReview
@@ -2378,7 +2395,7 @@ const FileChatOverlayInner = ({
           onFocusChange={setComposerFocused}
           onSubmitError={capturePromptSubmitError}
           minimizedThreadAction={
-            !panelOpen && hasThreadContent
+            threadCardAvailable && !panelOpen && hasThreadContent
               ? {
                   label: t("chat.aiThread"),
                   onOpen: () => setPanelOpen(true),

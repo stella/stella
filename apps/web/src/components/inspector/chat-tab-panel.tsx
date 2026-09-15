@@ -467,6 +467,11 @@ export const ChatTabPanel = ({
   // pane header: opens a fresh tab with the same scope + context.
   const startNewThread = () => {
     openChat({
+      // Named explicitly: a chat about a decision otherwise continues that
+      // decision's one conversation, and this button asks for a fresh one.
+      // Naming it also makes it the decision's conversation, so the reader's
+      // floating composer follows rather than staying on the thread left here.
+      id: createChatThreadId(),
       workspaceId: tabWorkspaceId,
       contextMatterIds: tab.contextMatterIds,
       ...(tab.activeDecisionId

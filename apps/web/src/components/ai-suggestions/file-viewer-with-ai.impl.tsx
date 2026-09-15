@@ -34,7 +34,10 @@ import type { ChatThreadId } from "@/lib/chat-thread-ref";
 import type { ActiveLegalDocument } from "./active-legal-document";
 import { FileChatOverlay } from "./file-chat-overlay";
 import { resolveFileReviewSessionId } from "./file-review-session";
-import type { FileChatOverlayActivation } from "./file-viewer-with-ai-config";
+import type {
+  FileChatOverlayActivation,
+  OverlayThreadPresentation,
+} from "./file-viewer-with-ai-config";
 import {
   buildFolioReviewDecorations,
   resolveFolioReviewFocusId,
@@ -102,8 +105,15 @@ export type FileViewerWithAIProps = {
    * a file is: the question carries the decision on screen.
    */
   activeLegal?: ActiveLegalDocument | undefined;
+  /**
+   * Where this viewer's conversation is read. `tab` means a docked tab is
+   * already showing the same thread, so the overlay keeps its composer and
+   * drops the floating card that would repeat the tab beside itself. Defaults
+   * to `card`, the shape a viewer with no docked twin wants.
+   */
+  threadPresentation?: OverlayThreadPresentation | undefined;
   /** Optional class name applied to the wrapper. */
-  className?: string;
+  className?: string | undefined;
   /** Live Folio editor ref used by the overlay's DOCX edit tool. */
   docxEditorRef?: RefObject<DocxEditorRef | null> | undefined;
   /**
@@ -257,6 +267,7 @@ export const FileChatOverlayHost = ({
   onChatThreadIdChange,
   onActiveDraftChatBound,
   requestDocxEditMode,
+  threadPresentation,
 }: FileChatOverlayHostProps) => {
   const draftPersistence: CreateDocumentDraftPersistence =
     activeDraft === undefined
@@ -323,6 +334,7 @@ export const FileChatOverlayHost = ({
         onActiveDraftChatBound={onActiveDraftChatBound}
         onNewThread={handleNewThread}
         requestDocxEditMode={requestDocxEditMode}
+        threadPresentation={threadPresentation}
         workspaceId={workspaceId}
       />
     </>
