@@ -96,7 +96,7 @@ import {
   readCorpusText,
 } from "@/api/lib/legal-search/corpus-storage";
 import {
-  redistributableLegislationSource,
+  publishedLegislationDocument,
   redistributableLegislationVersion,
 } from "@/api/lib/legal-search/legislation-redistribution";
 import {
@@ -2083,7 +2083,7 @@ export const buildActiveStatuteSection = async ({
                 .where(
                   and(
                     eq(legislationDocuments.id, activeStatute.documentId),
-                    redistributableLegislationSource,
+                    publishedLegislationDocument,
                   ),
                 )
                 .limit(1),

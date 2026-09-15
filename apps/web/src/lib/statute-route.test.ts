@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
+
 import {
   createStatuteIndexPath,
   createStatuteLinkTarget,
@@ -10,6 +12,8 @@ import {
   normalizeStatuteVersionSegment,
   toStatuteCountrySegment,
 } from "@/lib/statute-route";
+
+import { isPublicStatuteCountry, STATUTE_COUNTRIES } from "./statute-route";
 
 const DOCUMENT_ID = "019dd47d-f507-7c84-b827-980af11b8980";
 const COMPACT_DOCUMENT_ID = "AZ3UffUHfIS4J5gK8RuJgA";
@@ -148,4 +152,14 @@ describe("public statute addresses", () => {
     expect(toStatuteCountrySegment("czechia")).toBe("cze");
     expect(createStatuteIndexPath("POL")).toBe("/law/pol/statutes");
   });
+});
+
+test("public statute routes follow the shared jurisdiction admission list", () => {
+  expect(
+    Object.keys(STATUTE_COUNTRIES)
+      .filter(isPublicStatuteCountry)
+      .map((country) => country.toUpperCase()),
+  ).toEqual([...PUBLIC_LEGISLATION_COUNTRIES]);
+  expect(isPublicStatuteCountry("svk")).toBe(false);
+  expect(isPublicStatuteCountry("xaa")).toBe(false);
 });

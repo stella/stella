@@ -18,7 +18,7 @@ import {
   previewVersionColumns,
 } from "@/api/lib/legal-search/legislation-provision-preview";
 import type { ProvisionPreview } from "@/api/lib/legal-search/legislation-provision-preview";
-import { redistributableLegislationSource } from "@/api/lib/legal-search/legislation-redistribution";
+import { publishedLegislationDocument } from "@/api/lib/legal-search/legislation-redistribution";
 import {
   inForceOn,
   versionSortKey,
@@ -158,7 +158,7 @@ const resolveWorkVersions = async (
            )}
           JOIN ${legislationSources}
             ON ${legislationSources.id} = ${legislationDocuments.sourceId}
-         WHERE ${redistributableLegislationSource}
+         WHERE ${publishedLegislationDocument}
          ORDER BY w.key,
                   ${versionSortKey(legislationDocuments.versionValidFrom)} DESC,
                   ${legislationDocuments.language} ASC,

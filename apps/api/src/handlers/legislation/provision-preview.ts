@@ -11,7 +11,7 @@ import {
   buildProvisionPreview,
   previewVersionColumns,
 } from "@/api/lib/legal-search/legislation-provision-preview";
-import { redistributableLegislationSource } from "@/api/lib/legal-search/legislation-redistribution";
+import { publishedLegislationDocument } from "@/api/lib/legal-search/legislation-redistribution";
 import {
   readVersionBlocks,
   versionAstColumns,
@@ -80,7 +80,7 @@ export const readProvisionPreviewHandler = async ({
         .where(
           and(
             eq(legislationDocuments.id, documentId),
-            redistributableLegislationSource,
+            publishedLegislationDocument,
           ),
         )
         .limit(1),

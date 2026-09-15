@@ -1,5 +1,5 @@
 import type { QueryClient } from "@tanstack/react-query";
-import { redirect } from "@tanstack/react-router";
+import { redirect, notFound } from "@tanstack/react-router";
 import { panic } from "better-result";
 import * as v from "valibot";
 
@@ -22,6 +22,7 @@ import {
 } from "@/lib/public-law-seo";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import {
+  isPublicStatuteCountry,
   createStatutePath,
   createStatuteRouteParams,
   extractStatuteDocumentIdFromRouteParam,
@@ -267,6 +268,9 @@ export const loadPublicStatuteRoute = async ({
   search,
 }: LoadPublicStatuteRouteOptions): Promise<PublicStatuteRouteData> => {
   const country = toStatuteCountrySegment(params.country);
+  if (!isPublicStatuteCountry(country)) {
+    notFound({ throw: true });
+  }
   const requestedDate =
     normalizeStatuteVersionSegment(params.version) ?? search.asOf;
   const readBySlug = async (slug: string, asOf: string | undefined) =>

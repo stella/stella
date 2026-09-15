@@ -22,6 +22,7 @@
     "./folio-collab": "./src/folio-collab.ts",
     "./legal-reader-annotations": "./src/legal-reader-annotations.ts",
     "./legislation-status": "./src/legislation-status.ts",
+    "./legislation-publication": "./src/legislation-publication.ts",
     "./matter-activity": "./src/matter-activity.ts",
     "./notifications": "./src/notifications.ts",
     "./safe-id": "./src/safe-id.ts",

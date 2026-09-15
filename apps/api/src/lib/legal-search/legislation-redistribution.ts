@@ -1,4 +1,7 @@
-import { sql } from "drizzle-orm";
+import { inArray, sql } from "drizzle-orm";
+import type { SQLWrapper } from "drizzle-orm";
+
+import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
 
 import { legislationDocuments, legislationSources } from "@/api/db/schema";
 
@@ -6,6 +9,16 @@ import { legislationDocuments, legislationSources } from "@/api/db/schema";
 export const redistributableLegislationSource = sql`(
   ${legislationSources.descriptor} IS NULL
   OR (${legislationSources.descriptor} ->> 'allowsRedistribution') = 'true'
+)`;
+
+/** Accepts the real country column, including an aliased search projection. */
+export const publishedLegislationCountryFor = (country: SQLWrapper) =>
+  inArray(country, PUBLIC_LEGISLATION_COUNTRIES);
+
+/** Source permission and jurisdiction admission are both required for public wording. */
+export const publishedLegislationDocument = sql`(
+  ${redistributableLegislationSource}
+  AND ${publishedLegislationCountryFor(legislationDocuments.country)}
 )`;
 
 /**
@@ -17,7 +30,7 @@ export const redistributableLegislationVersion = sql`EXISTS (
   SELECT 1
     FROM ${legislationSources}
    WHERE ${legislationSources.id} = ${legislationDocuments.sourceId}
-     AND ${redistributableLegislationSource}
+     AND ${publishedLegislationDocument}
 )`;
 
 /** AI use is a separate permission from displaying source wording. */

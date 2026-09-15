@@ -26,7 +26,7 @@ import {
   parsePersistedCorpusAst,
 } from "@/api/lib/legal-search/corpus-storage";
 import type { EmptyAst } from "@/api/lib/legal-search/document-types";
-import { redistributableLegislationSource } from "@/api/lib/legal-search/legislation-redistribution";
+import { publishedLegislationDocument } from "@/api/lib/legal-search/legislation-redistribution";
 import {
   legislationPublicReadDb,
   type LegislationReadDb,
@@ -108,7 +108,7 @@ export const readLegislationHandler = async (
         .where(
           and(
             eq(legislationDocuments.id, documentId),
-            redistributableLegislationSource,
+            publishedLegislationDocument,
           ),
         )
         .limit(1),
