@@ -1078,6 +1078,26 @@ const readNewThreadCommandMessage = (html: string): string | null => {
     : null;
 };
 
+/** The dock offers a new thread only while none is already under way. */
+const offersNewThread = (choice: NewThreadChoiceState): boolean =>
+  choice.status === NEW_THREAD_CHOICE_STATUS.idle ||
+  choice.status === NEW_THREAD_CHOICE_STATUS.choosing;
+
+/** The pending-review prompt a choice shows, or null when none is open. */
+const pendingReviewPromptStatus = (choice: NewThreadChoiceState) => {
+  switch (choice.status) {
+    case NEW_THREAD_CHOICE_STATUS.choosing:
+    case NEW_THREAD_CHOICE_STATUS.dismissing:
+      return choice.status;
+    case NEW_THREAD_CHOICE_STATUS.idle:
+    case NEW_THREAD_CHOICE_STATUS.committing:
+      return null;
+    default:
+      choice satisfies never;
+      return panic("Unhandled new thread choice status");
+  }
+};
+
 const useFileChatDocxLifecycle = ({
   activeDraft,
   activeFile,
@@ -2179,6 +2199,7 @@ const FileChatOverlayInner = ({
   const [newThreadChoice, setNewThreadChoice] = useState<NewThreadChoiceState>({
     status: NEW_THREAD_CHOICE_STATUS.idle,
   });
+  const newThreadPromptStatus = pendingReviewPromptStatus(newThreadChoice);
   // Latches one new-thread commit at a time across its awaits. The choice
   // state only drives the dock and trails a render behind the latch.
   const newThreadCommitRef = useRef(false);
@@ -2750,8 +2771,7 @@ const FileChatOverlayInner = ({
               onNewThread={
                 hasMessages &&
                 draftPersistence.status !== "saving" &&
-                (newThreadChoice.status === NEW_THREAD_CHOICE_STATUS.idle ||
-                  newThreadChoice.status === NEW_THREAD_CHOICE_STATUS.choosing)
+                offersNewThread(newThreadChoice)
                   ? () => {
                       detached(
                         requestNewThreadRotation(),
@@ -2761,8 +2781,7 @@ const FileChatOverlayInner = ({
                   : null
               }
               newThreadPrompt={
-                newThreadChoice.status === NEW_THREAD_CHOICE_STATUS.choosing ||
-                newThreadChoice.status === NEW_THREAD_CHOICE_STATUS.dismissing
+                newThreadPromptStatus !== null
                   ? {
                       content: (
                         <PendingReviewNewThreadPrompt
@@ -2774,7 +2793,7 @@ const FileChatOverlayInner = ({
                           }}
                           onKeep={keepPendingReview}
                           pendingCount={pendingReviewCount}
-                          status={newThreadChoice.status}
+                          status={newThreadPromptStatus}
                         />
                       ),
                       onCancel: cancelNewThreadChoice,
