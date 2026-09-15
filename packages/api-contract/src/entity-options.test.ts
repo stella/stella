@@ -4,7 +4,23 @@ import {
   isEntityPriority,
   isListItemType,
   isTaskStatus,
+  truncateEntityName,
 } from "./entity-options";
+
+describe("truncateEntityName", () => {
+  test("does not split a surrogate pair at the length boundary", () => {
+    expect(truncateEntityName(`${"a".repeat(254)}😀`)).toBe("a".repeat(254));
+    expect(truncateEntityName(`${"a".repeat(253)}😀`)).toBe(
+      `${"a".repeat(253)}😀`,
+    );
+  });
+
+  test("replaces malformed input before truncating it", () => {
+    expect(truncateEntityName(`${"a".repeat(254)}\uD83D`)).toBe(
+      `${"a".repeat(254)}�`,
+    );
+  });
+});
 
 describe("isTaskStatus", () => {
   test("accepts a canonical status", () => {

@@ -81,6 +81,9 @@ export const entities = p.pgTable(
       },
     ),
     name: p.text("name").notNull(),
+    // The root of an in-matter copy records its source so a caller-provided
+    // target identity can be replayed without creating another document.
+    duplicateSourceEntityId: safeUuid<"entity">("duplicate_source_entity_id"),
     displayName: p
       .varchar("display_name", { length: 512 })
       .notNull()

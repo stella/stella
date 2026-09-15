@@ -1,5 +1,7 @@
 import { panic } from "better-result";
 
+import { ENTITY_NAME_MAX_LENGTH, truncateEntityName } from "@stll/api-contract";
+
 import { PDF_MIME_TYPE } from "@/consts";
 import type {
   FieldId,
@@ -115,6 +117,34 @@ export const getOcrExportFileName = (
   return format === "searchable-pdf"
     ? `${baseName}-searchable.pdf`
     : `${baseName}.txt`;
+};
+
+type GetDuplicateNameOptions = {
+  duplicateLabel: string;
+  kind: WorkspaceEntity["kind"];
+  name: string;
+};
+
+/** Keep a recognizable source name while preserving a document's final extension. */
+export const getDuplicateName = ({
+  duplicateLabel,
+  kind,
+  name,
+}: GetDuplicateNameOptions): string => {
+  const dotIndex = name.lastIndexOf(".");
+  const hasExtension =
+    kind === "document" && dotIndex > 0 && name.length - dotIndex <= 32;
+  const extension = hasExtension ? name.slice(dotIndex) : "";
+  const base = hasExtension ? name.slice(0, dotIndex) : name;
+  const maxLabelLength = ENTITY_NAME_MAX_LENGTH - extension.length - 4;
+  const label = truncateEntityName(duplicateLabel, Math.max(maxLabelLength, 0));
+  const suffix = label ? ` (${label})` : "";
+  const maxBaseLength =
+    ENTITY_NAME_MAX_LENGTH - extension.length - suffix.length;
+  return `${truncateEntityName(
+    base,
+    Math.max(maxBaseLength, 1),
+  )}${suffix}${extension}`;
 };
 
 export const getDesktopEditLockState = (

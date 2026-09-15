@@ -40,6 +40,7 @@ import {
 } from "@stll/ui/alert-dialog";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { Loader } from "@stll/ui/loader";
 import {
   Menu,
   MenuItem,
@@ -130,6 +131,7 @@ import { requestManualOcr } from "@/routes/_protected.workspaces/$workspaceId/-c
 import {
   canRunManualOcr,
   getDesktopEditLockState,
+  getDuplicateName,
   getOcrExportFileName,
   getOcrExportFormats,
   getOcrSources,
@@ -145,6 +147,7 @@ export type VirtualAnchor = {
 };
 
 type RowActionsProps = {
+  duplicatePresentation?: "menu-only" | "primary" | undefined;
   entity: WorkspaceEntity;
   ocrSource?: OcrSource | undefined;
   workspaceId: string;
@@ -323,6 +326,7 @@ const OcrExportMenuItems = ({
 };
 
 export const RowActions = ({
+  duplicatePresentation = "menu-only",
   entity,
   workspaceId,
   open,
@@ -354,11 +358,13 @@ export const RowActions = ({
     CopyToMatterEntity[]
   >([]);
   const [isRetrying, setIsRetrying] = useState(false);
+  const [isDuplicating, setIsDuplicating] = useState(false);
   const [isOcrPending, setIsOcrPending] = useState(false);
   const [translationDialogState, setTranslationDialogState] =
     useState<TranslationDialogState>({ type: "closed" });
   const { data: properties } = useQuery(propertiesOptions(workspaceId));
   const uploadVersionInputRef = useRef<HTMLInputElement>(null);
+  const duplicateTargetIdsRef = useRef(new Map<string, string>());
   const file = getFirstFile(entity);
   const name = getEntityName(entity);
   const isFolder = entity.kind === "folder";
@@ -803,51 +809,83 @@ export const RowActions = ({
   };
 
   const handleDuplicate = async () => {
-    // Folders cannot be duplicated server-side; silently skip them so a
-    // mixed selection (folders + files) does not surface as a generic
-    // failure to the user.
-    const targets = bulkTargets.filter((e) => e.kind !== "folder");
-
-    if (targets.length === 0) {
-      stellaToast.add({
-        title: t("errors.actionFailed"),
-        type: "error",
-      });
+    if (isDuplicating) {
       return;
     }
 
+    setIsDuplicating(true);
+    const toastId = stellaToast.add({
+      title: t("common.duplicating"),
+      type: "loading",
+      timeout: Number.POSITIVE_INFINITY,
+    });
     let failedCount = 0;
-    for (const e of targets) {
-      const result = await Result.tryPromise(async () => {
-        // oxlint-disable-next-line no-network-await-in-loop/no-network-await-in-loop -- sequential bulk action: a partial failure leaves a deterministic prefix duplicated, and the run continues so the toast can count the rest
-        const response = await api
-          .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
-          .duplicate.post({
-            entityId: toSafeId<"entity">(e.entityId),
-          });
-        return unwrapEden(response);
-      });
-      if (Result.isError(result)) {
-        failedCount++;
+    let openedDuplicate: { entityId: string; fieldId: string } | null = null;
+    try {
+      for (const target of bulkTargets) {
+        const targetEntityId =
+          duplicateTargetIdsRef.current.get(target.entityId) ??
+          crypto.randomUUID();
+        duplicateTargetIdsRef.current.set(target.entityId, targetEntityId);
+        const result = await Result.tryPromise(async () => {
+          // oxlint-disable-next-line no-network-await-in-loop/no-network-await-in-loop -- sequential bulk action: each source owns a stable target identity, so retries converge and a partial failure has an exact per-item result
+          const response = await api
+            .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
+            .duplicate.post({
+              entityId: toSafeId<"entity">(target.entityId),
+              name: getDuplicateName({
+                duplicateLabel: t("common.duplicate"),
+                kind: target.kind,
+                name: getEntityName(target),
+              }),
+              targetEntityId: toSafeId<"entity">(targetEntityId),
+            });
+          return unwrapEden(response);
+        });
+        if (Result.isError(result)) {
+          failedCount++;
+          analytics.captureError(result.error);
+          continue;
+        }
+        duplicateTargetIdsRef.current.delete(target.entityId);
+        if (bulkTargets.length === 1 && result.value.fieldId !== null) {
+          openedDuplicate = {
+            entityId: result.value.entityId,
+            fieldId: result.value.fieldId,
+          };
+        }
       }
-    }
 
-    if (failedCount === 0) {
-      stellaToast.add({
+      if (failedCount === bulkTargets.length) {
+        stellaToast.update(toastId, {
+          title: t("errors.actionFailed"),
+          type: "error",
+        });
+        return;
+      }
+
+      await queryClient.invalidateQueries({
+        queryKey: entitiesKeys.all(workspaceId),
+      });
+      stellaToast.update(toastId, {
         title: t("common.duplicated"),
-        type: "success",
+        ...(failedCount > 0
+          ? { description: t("errors.actionFailed"), type: "warning" }
+          : { type: "success" }),
       });
-    } else if (failedCount === targets.length) {
-      stellaToast.add({
-        title: t("errors.actionFailed"),
-        type: "error",
-      });
-    } else {
-      stellaToast.add({
-        title: t("common.duplicated"),
-        description: t("errors.actionFailed"),
-        type: "warning",
-      });
+
+      if (openedDuplicate) {
+        await navigate({
+          to: "/workspaces/$workspaceId/$viewId/document",
+          params: { workspaceId, viewId: "all" },
+          search: {
+            entity: openedDuplicate.entityId,
+            field: openedDuplicate.fieldId,
+          },
+        });
+      }
+    } finally {
+      setIsDuplicating(false);
     }
   };
 
@@ -962,6 +1000,13 @@ export const RowActions = ({
 
   return (
     <Menu onOpenChange={onOpenChange} open={open}>
+      <RowDuplicatePrimaryAction
+        isCellContext={isCellContext}
+        label={t("common.duplicate")}
+        onDuplicate={handleDuplicate}
+        pending={isDuplicating}
+        presentation={duplicatePresentation}
+      />
       <Tooltip
         content={t("common.actions")}
         render={
@@ -1053,6 +1098,7 @@ export const RowActions = ({
           onDelete={requestDelete}
           onDownload={handleDownload}
           onDuplicate={handleDuplicate}
+          duplicatePending={isDuplicating}
           onOcrExport={handleOcrExport}
           onZipDownload={handleZipDownload}
         />
@@ -1100,6 +1146,43 @@ export const RowActions = ({
         />
       )}
     </Menu>
+  );
+};
+
+type RowDuplicatePrimaryActionProps = {
+  isCellContext: boolean;
+  label: string;
+  onDuplicate: () => Promise<void>;
+  pending: boolean;
+  presentation: "menu-only" | "primary";
+};
+
+const RowDuplicatePrimaryAction = ({
+  isCellContext,
+  label,
+  onDuplicate,
+  pending,
+  presentation,
+}: RowDuplicatePrimaryActionProps) => {
+  if (presentation !== "primary" || isCellContext) {
+    return null;
+  }
+
+  return (
+    <Button
+      className="opacity-0 transition-opacity group-hover/row:opacity-100 focus-visible:opacity-100"
+      disabled={pending}
+      onClick={(event) => {
+        event.stopPropagation();
+        detached(onDuplicate(), "row-actions.duplicate-primary");
+      }}
+      onPointerDown={(event) => event.stopPropagation()}
+      size="icon-xs"
+      tooltip={label}
+      variant="ghost"
+    >
+      {pending ? <Loader label={label} size="sm" /> : <CopyIcon />}
+    </Button>
   );
 };
 
@@ -1433,6 +1516,7 @@ const RowCellOcrExportMenuActions = ({
 };
 
 type RowFileOperationsMenuProps = {
+  duplicatePending: boolean;
   downloadRenditions: readonly DownloadRendition[];
   exportableOcrSources: readonly OcrSource[];
   hasAnyFile: boolean;
@@ -1447,6 +1531,7 @@ type RowFileOperationsMenuProps = {
 };
 
 const RowFileOperationsMenu = ({
+  duplicatePending,
   downloadRenditions,
   exportableOcrSources,
   hasAnyFile,
@@ -1542,10 +1627,11 @@ const RowFileOperationsMenu = ({
         </MenuItem>
       )}
       <MenuItem
+        disabled={duplicatePending}
         onClick={() => detached(onDuplicate(), "row-actions.duplicate")}
       >
         <CopyIcon />
-        {t("common.duplicate")}
+        {duplicatePending ? t("common.duplicating") : t("common.duplicate")}
       </MenuItem>
       <MenuItem onClick={onCopyToMatter}>
         <FolderSyncIcon />

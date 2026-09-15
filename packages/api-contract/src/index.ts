@@ -199,12 +199,14 @@ export type {
   OfficeCitationLocator,
 } from "./office-citations";
 export {
+  ENTITY_NAME_MAX_LENGTH,
   ENTITY_PRIORITIES,
   ENTITY_PRIORITY,
   isEntityPriority,
   isTaskStatus,
   TASK_STATUS,
   TASK_STATUSES,
+  truncateEntityName,
 } from "./entity-options";
 export type { EntityPriority, TaskStatus } from "./entity-options";
 export {

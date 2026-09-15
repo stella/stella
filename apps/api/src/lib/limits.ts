@@ -4,6 +4,7 @@ import {
   CASE_LAW_RESEARCH_RUN_DECISIONS_MAX,
   CHAT_RICH_PART_LIMITS,
   ENTITIES_PER_WORKSPACE_MAX,
+  ENTITY_NAME_MAX_LENGTH,
   FLOW_RUN_INPUT_ENTITIES_MAX,
   PROPERTIES_PER_WORKSPACE_MAX,
   PROPERTY_DEPENDENCIES_PER_PROPERTY_MAX,
@@ -323,7 +324,7 @@ export const LIMITS = {
   /** Max governed obligations synchronously unassigned during member removal. */
   workspaceMemberRemovalWorkObligationsMax: 500,
   practiceJurisdictionsPerOrganization: 12,
-  entityNameMaxLength: 255,
+  entityNameMaxLength: ENTITY_NAME_MAX_LENGTH,
   workspaceContributors: 5,
   searchQueryMaxLength: 500,
   searchPageSizeDefault: 20,

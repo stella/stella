@@ -1,3 +1,22 @@
+export const ENTITY_NAME_MAX_LENGTH = 255;
+
+/** Bound an entity name without splitting a UTF-16 surrogate pair. */
+export const truncateEntityName = (
+  value: string,
+  maxLength = ENTITY_NAME_MAX_LENGTH,
+): string => {
+  const characters: string[] = [];
+  let length = 0;
+  for (const character of value.toWellFormed()) {
+    if (length + character.length > maxLength) {
+      break;
+    }
+    characters.push(character);
+    length += character.length;
+  }
+  return characters.join("");
+};
+
 /**
  * The option sets an entity's own columns range over, declared once.
  *

@@ -5,11 +5,45 @@ import type { WorkspaceEntity } from "@/lib/types";
 import {
   canRunManualOcr,
   getDesktopEditLockState,
+  getDuplicateName,
   getOcrExportFormats,
   getOcrSource,
   getOcrSources,
   hasOcrExport,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions.logic";
+
+describe("duplicate names", () => {
+  test("keeps the final extension and a recognizable source name", () => {
+    expect(
+      getDuplicateName({
+        duplicateLabel: "Copy",
+        kind: "document",
+        name: "Agreement.final.docx",
+      }),
+    ).toBe("Agreement.final (Copy).docx");
+    expect(
+      getDuplicateName({
+        duplicateLabel: "Copy",
+        kind: "folder",
+        name: "Bundle.final",
+      }),
+    ).toBe("Bundle.final (Copy)");
+    expect(
+      getDuplicateName({
+        duplicateLabel: "Copy",
+        kind: "document",
+        name: `${"a".repeat(251)}.docx`,
+      }),
+    ).toHaveLength(255);
+    expect(
+      getDuplicateName({
+        duplicateLabel: "Copy",
+        kind: "document",
+        name: `${"a".repeat(244)}😀.docx`,
+      }),
+    ).toBe(`${"a".repeat(243)} (Copy).docx`);
+  });
+});
 
 const firstPropertyId = toSafeId<"property">("property-first");
 const selectedPropertyId = toSafeId<"property">("property-selected");

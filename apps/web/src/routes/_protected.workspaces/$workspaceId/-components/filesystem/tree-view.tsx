@@ -1652,6 +1652,7 @@ const FilesystemRow = ({
     <span className="flex justify-end">
       <RowActions
         anchor={contextAnchor}
+        duplicatePresentation="primary"
         entity={node}
         getAncestorIds={getAncestorIds}
         onOpenChange={(o) => {
