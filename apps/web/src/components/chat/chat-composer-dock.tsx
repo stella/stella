@@ -29,7 +29,7 @@ import type { ChatThreadRef } from "@/lib/chat-thread-ref";
  * A question the surface asks before a new thread starts, anchored to the
  * new-chat button. Closing it (Escape, a click outside) calls `onCancel`.
  */
-export type ChatComposerNewThreadPrompt = {
+type ChatComposerNewThreadPrompt = {
   content: ReactNode;
   onCancel: () => void;
 };
