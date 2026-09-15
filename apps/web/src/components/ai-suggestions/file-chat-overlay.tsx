@@ -73,10 +73,6 @@ import { cn } from "@stll/ui/utils";
 
 import type { ActiveLegalDocument } from "@/components/ai-suggestions/active-legal-document";
 import {
-  settleDocxSuggestionPersists,
-  trackDocxSuggestionPersist,
-} from "@/components/ai-suggestions/docx-suggestion-persist-tracker";
-import {
   CREATE_DOCX_SUGGESTIONS_ERROR,
   createDocxSuggestionsRequest,
   rejectPendingDocxSuggestionsRequest,
@@ -99,6 +95,10 @@ import {
   PendingReviewNewThreadPrompt,
 } from "@/components/ai-suggestions/pending-review-new-thread-prompt";
 import { isNoopReviewOperation } from "@/components/ai-suggestions/review-operation-utils";
+import {
+  settleReviewSessionWrites,
+  trackReviewSessionWrite,
+} from "@/components/ai-suggestions/review-session-writes";
 import {
   REVIEW_SUGGESTION_ORIGIN,
   REVIEW_UNSPECIFIED_AREA,
@@ -1445,7 +1445,7 @@ const FileChatOverlayInner = ({
         items.length > 0
       ) {
         detached(
-          trackDocxSuggestionPersist(
+          trackReviewSessionWrite(
             reviewEntityId,
             persistQueuedSuggestions({
               queryClient,
@@ -2177,7 +2177,7 @@ const FileChatOverlayInner = ({
         );
   const settleReviewPersists = async () => {
     if (reviewEntityId !== undefined) {
-      await settleDocxSuggestionPersists(reviewEntityId);
+      await settleReviewSessionWrites(reviewEntityId);
     }
   };
   // Every rotation ends here. A choice that resets the session first lets

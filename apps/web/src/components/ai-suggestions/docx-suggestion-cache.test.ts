@@ -9,9 +9,10 @@ import {
   writeDocxSuggestionsCache,
 } from "@/components/ai-suggestions/docx-suggestion-cache";
 import {
-  settleDocxSuggestionPersists,
-  trackDocxSuggestionPersist,
-} from "@/components/ai-suggestions/docx-suggestion-persist-tracker";
+  serializeSuggestionWrite,
+  settleReviewSessionWrites,
+  trackReviewSessionWrite,
+} from "@/components/ai-suggestions/review-session-writes";
 import { useReviewStore } from "@/components/ai-suggestions/review-store";
 import type { ReviewSuggestion } from "@/components/ai-suggestions/review-store";
 import { toSafeId } from "@/lib/safe-id";
@@ -340,7 +341,7 @@ const startInFlightCreate = (ids: readonly string[]): InFlightCreate => {
   const queryClient = new QueryClient();
   seedCache(queryClient, []);
   const create = Promise.withResolvers<undefined>();
-  const persist = trackDocxSuggestionPersist(
+  const persist = trackReviewSessionWrite(
     ENTITY_ID,
     persistBatch({ queryClient, ids, created: create.promise }),
   );
@@ -376,7 +377,7 @@ describe("a session reset racing an in-flight create", () => {
       "s2",
     ]);
 
-    const settled = settleDocxSuggestionPersists(ENTITY_ID);
+    const settled = settleReviewSessionWrites(ENTITY_ID);
     // The create lands on a later task, after anything that does not wait.
     setTimeout(resolveCreate, 0);
     await settled;
@@ -391,7 +392,7 @@ describe("a session reset racing an in-flight create", () => {
     queueUnpersisted(["s1"], "pending");
     const { queryClient, resolveCreate } = startInFlightCreate(["s1"]);
 
-    const settled = settleDocxSuggestionPersists(ENTITY_ID);
+    const settled = settleReviewSessionWrites(ENTITY_ID);
     // The create lands on a later task, after anything that does not wait.
     setTimeout(resolveCreate, 0);
     await settled;
@@ -413,5 +414,62 @@ describe("a session reset racing an in-flight create", () => {
 
     hydrateFromCache(queryClient);
     expect(sessionIds()).toEqual([]);
+  });
+});
+
+describe("review writes a session reset waits for", () => {
+  test("dismiss reads a row an in-flight accept rolled back to pending", async () => {
+    const queryClient = new QueryClient();
+    seedCache(queryClient, ["s1"]);
+    hydrateFromCache(queryClient);
+    useReviewStore.getState().setStatusBatch(ENTITY_ID, ["s1"], "applying");
+    const response = Promise.withResolvers<undefined>();
+    // The server did not take the accept, so the accept rolls its row back.
+    const accept = trackReviewSessionWrite(
+      ENTITY_ID,
+      (async () => {
+        await response.promise;
+        useReviewStore
+          .getState()
+          .updateSuggestion(ENTITY_ID, "s1", { status: "pending" });
+      })(),
+    );
+
+    const settled = settleReviewSessionWrites(ENTITY_ID);
+    // The accept's response lands on a later task.
+    setTimeout(() => {
+      response.resolve(undefined);
+    }, 0);
+    await settled;
+
+    const pendingIds = (
+      useReviewStore.getState().sessions[ENTITY_ID] ?? []
+    ).flatMap((item) => (item.status === "pending" ? [item.id] : []));
+    expect(pendingIds).toEqual(["s1"]);
+    await accept;
+  });
+
+  test("a suggestion's writes reach the server in submission order", async () => {
+    const order: string[] = [];
+    const acceptResponse = Promise.withResolvers<undefined>();
+    const accept = serializeSuggestionWrite({
+      reviewSessionId: ENTITY_ID,
+      suggestionId: "s1",
+      write: async () => {
+        await acceptResponse.promise;
+        order.push("accept");
+      },
+    });
+    const revert = serializeSuggestionWrite({
+      reviewSessionId: ENTITY_ID,
+      suggestionId: "s1",
+      write: async () => {
+        order.push("revert");
+      },
+    });
+
+    acceptResponse.resolve(undefined);
+    await Promise.all([accept, revert]);
+    expect(order).toEqual(["accept", "revert"]);
   });
 });
