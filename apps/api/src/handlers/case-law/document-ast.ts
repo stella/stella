@@ -35,7 +35,6 @@ export {
   hasUsableAst,
   isDocumentAst,
   omitDerivablePlainText,
-  parseDocumentAst,
   parseUsableDocumentAst,
   plainTextOf,
   projectPlainText,
