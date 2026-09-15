@@ -7,7 +7,6 @@ import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { courtWeightMapFromSeed } from "@/api/handlers/case-law/court-weight-seed";
 import { readLatestDecisionsByCourt } from "@/api/handlers/case-law/decisions/latest";
 import { listDecisionsHandler } from "@/api/handlers/case-law/decisions/list";
-import { withRedistributableSubject } from "@/api/handlers/case-law/decisions/public-subject";
 import { listSitemapShardDecisionsHandler } from "@/api/handlers/case-law/decisions/sitemap";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -16,6 +15,7 @@ import type {
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
 import { readPublicDecisionLanguageAlternatesByGroup } from "@/api/lib/case-law/language-alternates";
+import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
 import {
   publishedCaseLawDecision,
   publishedCaseLawDecisionSqlFor,

@@ -5,7 +5,7 @@ import {
   useInfiniteQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, notFound } from "@tanstack/react-router";
 import { panic } from "better-result";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
@@ -38,6 +38,7 @@ import {
   createStatutePath,
   createStatuteRouteParams,
   isStatuteCountry,
+  isPublicStatuteCountry,
 } from "@/lib/statute-route";
 
 /** What the route accepts in `q`, and therefore what the field may hold. */
@@ -113,6 +114,9 @@ export const Route = createFileRoute("/law/$country/statutes/")({
   validateSearch: searchSchema,
   loaderDeps: ({ search }) => search,
   loader: async ({ context: { queryClient }, deps, params }) => {
+    if (!isPublicStatuteCountry(params.country)) {
+      notFound({ throw: true });
+    }
     const pages = await ensureRouteInfiniteQueryData(
       queryClient,
       statutesInfiniteOptions(

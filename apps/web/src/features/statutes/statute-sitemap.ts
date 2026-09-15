@@ -11,7 +11,7 @@ import {
 } from "@/lib/public-sitemap";
 import {
   createStatutePath,
-  isStatuteCountry,
+  isPublicStatuteCountry,
   normalizeStatuteStoredSlug,
 } from "@/lib/statute-route";
 
@@ -167,7 +167,7 @@ export const fetchPublicStatuteSitemapShards = async ({
   // The jurisdictions the statutes browser can render are the web's own
   // question; the corpus may hold more than the browser routes.
   return page.map(({ items }) =>
-    items.filter(({ country }) => isStatuteCountry(country)),
+    items.filter(({ country }) => isPublicStatuteCountry(country)),
   );
 };
 
@@ -176,7 +176,7 @@ export const fetchPublicStatuteSitemapWorks = async ({
   shard,
   signal = AbortSignal.timeout(10_000),
 }: FetchStatuteSitemapWorksOptions): SitemapPageResult<StatuteSitemapWork> => {
-  if (!isStatuteCountry(shard.country)) {
+  if (!isPublicStatuteCountry(shard.country)) {
     return Result.err(
       new ClientOperationError({
         action: "fetchPublicStatuteSitemap",

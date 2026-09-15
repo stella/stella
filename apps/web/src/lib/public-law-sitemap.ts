@@ -31,7 +31,7 @@ import {
   isPublicToolsCrawlAllowed,
   isPublicToolsSitemapEnabled,
 } from "@/lib/public-tools-launch";
-import { isStatuteCountry } from "@/lib/statute-route";
+import { isPublicStatuteCountry } from "@/lib/statute-route";
 
 const LAW_SITEMAP_PATH = "/sitemaps/law.xml";
 const LAW_CASES_SITEMAP_BASE_PATH = "/sitemaps/law-cases";
@@ -248,7 +248,7 @@ export const createPublicLawSitemapIndexXml = (
     ({ country }) => publicCaseLawCountryFromParam(country) !== null,
   );
   const publicStatuteShards = statuteShards.filter(({ country }) =>
-    isStatuteCountry(country),
+    isPublicStatuteCountry(country),
   );
   const lawEntries = publicLawIndexingEnabled
     ? [
