@@ -16,7 +16,7 @@
   },
   "dependencies": {
     "@hocuspocus/extension-redis": "4.6.0",
-    "@hocuspocus/server": "^4.6.0",
+    "@hocuspocus/server": "^4.7.0",
     "@stll/api-contract": "workspace:*",
     "@stll/errors": "workspace:*",
     "@stll/time": "workspace:*",
