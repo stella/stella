@@ -8,7 +8,6 @@ import {
   createPipelineRunRegistry,
   type PipelineRun,
 } from "@/components/inspector/pipeline-run-registry.logic";
-import { PDF_MIME_TYPE } from "@/consts";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { DEFAULT_ENTITY_LABELS } from "@/lib/anonymize/constants";
 import { extractPDFText } from "@/lib/anonymize/pdf-coords";
@@ -77,7 +76,6 @@ const anonymizePdf = async ({
   mimeType: string | null;
 }): Promise<void> => {
   const run = pipelineRuns.start(fieldId);
-  const isPdf = mimeType === PDF_MIME_TYPE;
   // Tell the inspector facet a producer is in flight so
   // it shows "Detecting entities…" while the wasm pipeline
   // runs. Mirrored on every terminal exit below.
@@ -85,7 +83,7 @@ const anonymizePdf = async ({
     .getState()
     .markAnonymizationPipelineStarted(fieldId);
   const result = await Result.tryPromise(async () => {
-    await runPipelineAndCommit({ workspaceId, fieldId, isPdf, run });
+    await runPipelineAndCommit({ workspaceId, fieldId, run });
   });
   if (pipelineRuns.canCommit(fieldId, run)) {
     if (Result.isError(result)) {
@@ -150,19 +148,20 @@ export const useFileAnonymizationPipeline = ({
 const runPipelineAndCommit = async ({
   workspaceId,
   fieldId,
-  isPdf,
   run,
 }: {
   workspaceId: string;
   fieldId: string;
-  isPdf: boolean;
   run: PipelineRun;
 }): Promise<void> => {
   const response = await api
     .files({ workspaceId })
     .url({ fieldId })
     .get({
-      query: { purpose: isPdf ? "download" : "display" },
+      // Office files use their printable PDF rendition for anonymization.
+      // The display purpose returns native XLSX/PPTX bytes, which PDF.load
+      // cannot parse.
+      query: { purpose: "download" },
     });
 
   if (response.error) {
