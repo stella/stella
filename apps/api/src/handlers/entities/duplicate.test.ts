@@ -770,10 +770,13 @@ describe("duplicate entity", () => {
       .map(({ key }) => key);
     expect(copiedKeys).toHaveLength(1);
     expect(new Set(deletedKeys)).toEqual(new Set(copiedKeys));
-    // The store is back to the source object alone.
-    expect([...fake.objects.keys()]).toEqual([
-      `${envBase.S3_BUCKET}/${sourceKey}`,
-    ]);
+    // The store is back to the original source objects alone.
+    expect(new Set(fake.objects.keys())).toEqual(
+      new Set([
+        `${envBase.S3_BUCKET}/${sourceKey}`,
+        `${envBase.S3_BUCKET}/${secondarySourceKey}`,
+      ]),
+    );
 
     // Nothing is indexed for copies that no longer exist.
     expect(enqueueEntitySearchRepairsMock).not.toHaveBeenCalled();
