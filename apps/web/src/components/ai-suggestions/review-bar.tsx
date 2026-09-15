@@ -38,6 +38,7 @@ import { useTranslations } from "use-intl";
 import type { DocxEditorRef } from "@stll/folio-react";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { OVERLAY_LAYER_CLASS_NAMES } from "@stll/ui/overlay-layer";
 import { ReviewDecisionActions } from "@stll/ui/review-decision-actions";
 import {
   Select,
@@ -295,7 +296,8 @@ export const ReviewBar = ({
       aria-label={t("docxReview.barLabel")}
       data-docx-review-bar=""
       className={cn(
-        "text-popover-foreground border-foreground/15 pointer-events-auto absolute start-1/2 bottom-24 z-50 flex -translate-x-1/2 items-center gap-1 rounded-2xl border py-0.5 ps-1.5 pe-1",
+        "text-popover-foreground border-foreground/15 pointer-events-auto absolute start-1/2 bottom-24 flex -translate-x-1/2 items-center gap-1 rounded-2xl border py-0.5 ps-1.5 pe-1",
+        OVERLAY_LAYER_CLASS_NAMES["chrome-raised"],
         DOCKED_COMPOSER_WIDTH_CLASS,
         "bg-(--doc-float-surface) [--doc-float-surface:var(--color-white)] dark:[--doc-float-surface:var(--popover)]",
         "shadow-[0_0_0_1px_rgb(0_0_0/0.02),0_1px_2px_rgb(0_0_0/0.03),0_8px_20px_rgb(0_0_0/0.05)]",
