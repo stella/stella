@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 1.3.0
+
+### Minor Changes
+
+- [#3284](https://github.com/stella/stella/pull/3284) [`ce453f1`](https://github.com/stella/stella/commit/ce453f1abaf93f6543c6bafbceaab3795c1faa2a) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Case-law search accepts a sort and reports each hit's citation authority and matching-passage count; a new `case-law citations` capability lists what a decision cites or is cited by, with the treatment and the citing passage.
+
 ## 1.2.14
 
 ### Patch Changes

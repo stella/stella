@@ -2,20 +2,20 @@ import { useQuery } from "@tanstack/react-query";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { findCitationPassage } from "@stll/legal-ast/citation-passage";
+import type { CitationPassageMatch } from "@stll/legal-ast/citation-passage";
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Skeleton } from "@stll/ui/skeleton";
 
 import type { CitationAnchorSource } from "@/features/case-law/citation-anchors";
-import { findCitationPassage } from "@/features/case-law/citation-passage";
-import type { CitationPassage } from "@/features/case-law/citation-passage";
 import { decisionOptions } from "@/features/case-law/queries/decisions";
 
 /** Words shown on either side of the citation. */
 const CONTEXT_CHARS = 220;
 
 type CitationPassageRead =
-  | { passage: CitationPassage; status: "found" }
+  | { passage: CitationPassageMatch; status: "found" }
   /** The text does not carry the citation the row recorded. */
   | { passage: null; status: "absent" }
   | { passage: null; status: "failed" }
@@ -57,7 +57,7 @@ export const useCitationPassage = ({
       ? null
       : findCitationPassage({
           blocks: ast.blocks,
-          citation,
+          citationText: citation.citationText,
           sectionText:
             citation.sectionIndex === undefined || decision.sections === null
               ? undefined

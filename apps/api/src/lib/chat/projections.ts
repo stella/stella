@@ -9,8 +9,13 @@ import {
 } from "@stll/api-contract/case-law-text-field";
 import { SEARCH_TOTAL_TYPE } from "@stll/api-contract/search";
 import type { SearchTotal } from "@stll/api-contract/search";
+import { CITATION_PASSAGE_MENTIONS } from "@stll/legal-ast/citation-passage";
 
 import { TIME_ENTRY_VISIBILITY } from "@/api/lib/billing-constants";
+import {
+  CITATION_READ_DIRECTIONS,
+  CITATION_TREATMENTS,
+} from "@/api/lib/case-law/citation-vocabulary";
 import { COURT_TIER_LABELS } from "@/api/lib/case-law/court-tiers";
 import {
   DOCUMENT_PROCESSING_FAILURE_CODE,
@@ -1339,6 +1344,8 @@ export const SEARCH_CASE_LAW_PROJECTION = v.strictObject({
       appUrl: v.nullable(v.string()),
       caseNumber: v.string(),
       citationCount: v.number(),
+      // `ln(1 + weighted citations)`, the score the ranking blends in.
+      citationAuthority: v.number(),
       country: v.string(),
       court: v.string(),
       // The court's short form as a lawyer writes it (ÚS, NS, NSS, SN, CJEU),
@@ -1352,6 +1359,8 @@ export const SEARCH_CASE_LAW_PROJECTION = v.strictObject({
       decisionType: v.nullable(v.string()),
       ecli: v.nullable(v.string()),
       language: v.string(),
+      // Passages of the decision that matched, within the scanned window.
+      matchingPassages: v.number(),
       snippet: v.nullable(v.string()),
       sourceUrl: v.nullable(v.string()),
     }),
@@ -1447,6 +1456,58 @@ export const READ_CASE_LAW_DECISION_PROJECTION = v.strictObject({
     truncated: v.boolean(),
     textWithheldReason: v.optional(v.string()),
   }),
+});
+
+/**
+ * read_case_law_citations. Source of truth: `handleReadCaseLawCitationsTool`
+ * (`stella-tools.ts`) mapping `readGatedDecisionCitations`. All ids are public
+ * case-law corpus ids (citation, decision). `passage` is publisher decision
+ * text, withheld where the source bars derived AI use.
+ */
+export const READ_CASE_LAW_CITATIONS_PROJECTION = v.strictObject({
+  // The decision the citations were read from, echoed so a paged reply still
+  // says what it is about.
+  decisionId: passthroughId(),
+  direction: v.picklist(CITATION_READ_DIRECTIONS),
+  // Opaque citation-id cursor, base64url-encoded.
+  nextCursor: v.nullable(passthroughId()),
+  citations: v.array(
+    v.strictObject({
+      citationId: passthroughId(),
+      citationText: v.string(),
+      // The classified reading, or `unclassified` where there is none: a row
+      // the classifier never reached and one it could not answer for are both
+      // the absence of a reading, never a neutral one.
+      polarity: v.picklist(CITATION_TREATMENTS),
+      // Null for a citation the corpus holds no decision for; its text is
+      // still returned, so an agent sees what the court cited.
+      decision: v.nullable(
+        v.strictObject({
+          // Nullable for the same reason as search_case_law's `appUrl`.
+          appUrl: v.nullable(v.string()),
+          caseNumber: v.string(),
+          citationAuthority: v.number(),
+          court: v.string(),
+          decisionDate: v.nullable(v.string()),
+          decisionId: passthroughId(),
+          decisionType: v.nullable(v.string()),
+          resourceName: passthroughId(),
+        }),
+      ),
+      // An excerpt of the citing paragraph, by AST anchor. Null where none is
+      // available. `truncated` says the block was longer than the excerpt;
+      // `mention` says whether the document left a choice of paragraph, in
+      // which case `polarity` may have been read from another one.
+      passage: v.nullable(
+        v.strictObject({
+          anchorId: passthroughId(),
+          text: v.string(),
+          truncated: v.boolean(),
+          mention: v.picklist(CITATION_PASSAGE_MENTIONS),
+        }),
+      ),
+    }),
+  ),
 });
 
 /**

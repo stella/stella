@@ -18,7 +18,7 @@ import {
 import type {
   CitationTreatment,
   CitationTreatmentCounts,
-  CitedDecision,
+  CitedDecisionAddress,
   DecisionCitation,
 } from "@/features/case-law/citation-treatment";
 import {
@@ -42,7 +42,7 @@ export const DIRECTION_TITLE = {
 
 type DecisionCitationsProps = {
   /** The decision being read, as a citation names it. */
-  decision: CitedDecision;
+  decision: CitedDecisionAddress;
   decisionId: SafeId<"caseLawDecision">;
 };
 
@@ -307,7 +307,7 @@ const CitationRow = ({
   direction,
   item,
 }: {
-  decision: CitedDecision;
+  decision: CitedDecisionAddress;
   direction: CitationDirection;
   item: DecisionCitation;
 }) => {

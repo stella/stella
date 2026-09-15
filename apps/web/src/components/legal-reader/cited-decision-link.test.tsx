@@ -72,7 +72,9 @@ describe("CitationPassageQuote", () => {
         read={{
           passage: {
             anchorId: "p-12",
+            blockId: "b-12",
             end: text.indexOf("Pl. ÚS 36/08") + "Pl. ÚS 36/08".length,
+            mention: "sole",
             start: text.indexOf("Pl. ÚS 36/08"),
             text,
           },

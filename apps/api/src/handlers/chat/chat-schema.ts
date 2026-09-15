@@ -1,4 +1,5 @@
 import { isStandardSchema, parseWithStandardSchema } from "@tanstack/ai";
+import type { DistributedOmit } from "@tanstack/ai-client";
 import { panic, Result } from "better-result";
 import { deepEquals } from "bun";
 import type { Static } from "elysia";
@@ -123,18 +124,28 @@ const docxEditSnapshotSchema = t.Object({
   ),
 });
 
-export const activeFileSchema = t.Object(
-  {
-    entityId: tSafeId("entity"),
-    fileFieldId: t.Optional(tSafeId("field")),
-    fileName: t.String(),
-    supportsDocxEdits: t.Optional(t.Boolean()),
-    docxEditSnapshot: t.Optional(docxEditSnapshotSchema),
-  },
-  { additionalProperties: false },
-);
+/**
+ * One active document the chat can be bound to.
+ *
+ * Closed, always: what each kind means is resolved server-side from the ids it
+ * carries, so an unknown property is a client trying to tell the model
+ * something the server never looked up — a fabricated email citation, wording
+ * an act does not have. Going through this constructor is what makes a new
+ * kind closed by construction instead of by remembering the option.
+ */
+const activeContextSchema = <TShape extends Parameters<typeof t.Object>[0]>(
+  properties: TShape,
+) => t.Object(properties, { additionalProperties: false });
 
-export const activeDraftSchema = t.Object({
+export const activeFileSchema = activeContextSchema({
+  entityId: tSafeId("entity"),
+  fileFieldId: t.Optional(tSafeId("field")),
+  fileName: t.String(),
+  supportsDocxEdits: t.Optional(t.Boolean()),
+  docxEditSnapshot: t.Optional(docxEditSnapshotSchema),
+});
+
+export const activeDraftSchema = activeContextSchema({
   originChatMessageId: tSafeId("chatMessage"),
   originChatThreadId: tSafeId("chatThread"),
   toolCallId: t.String(),
@@ -149,17 +160,27 @@ export const activeDraftSchema = t.Object({
  * block-id space; the Studio client converts queued operations into
  * in-document suggestions.
  */
-export const activeTemplateSchema = t.Object({
+export const activeTemplateSchema = activeContextSchema({
   templateId: tSafeId("template"),
   fileName: t.String(),
   docxEditSnapshot: t.Optional(docxEditSnapshotSchema),
 });
 
-export const activeDecisionSchema = t.Object({
+export const activeDecisionSchema = activeContextSchema({
   decisionId: tSafeId("caseLawDecision"),
 });
 
-export const activeExternalSchema = t.Object({
+/**
+ * The statute consolidation open in the legal reader. Only the id travels:
+ * the act's identity, its text and the reader's marks on it are resolved
+ * server-side from the corpus, so a client cannot dictate what the model is
+ * told an act says.
+ */
+export const activeStatuteSchema = activeContextSchema({
+  documentId: tSafeId("legislationDocument"),
+});
+
+export const activeExternalSchema = activeContextSchema({
   connectorSlug: t.Optional(t.String()),
   provider: t.Optional(t.String()),
   snippet: t.Optional(t.String()),
@@ -169,7 +190,7 @@ export const activeExternalSchema = t.Object({
   url: t.String(),
 });
 
-export const activeSkillSchema = t.Object({
+export const activeSkillSchema = activeContextSchema({
   skillId: t.Optional(tSafeId("agentSkill")),
   skillName: t.String({ minLength: 1, maxLength: 64 }),
 });
@@ -235,6 +256,7 @@ const sendMessageCommonProperties = {
   activeDecision: t.Optional(activeDecisionSchema),
   activeExternal: t.Optional(activeExternalSchema),
   activeSkill: t.Optional(activeSkillSchema),
+  activeStatute: t.Optional(activeStatuteSchema),
   /**
    * Which DOCX-edit review mode this turn uses; omitted means
    * `DEFAULT_CHAT_EDIT_APPLY_MODE`. Threaded into `getChatTools`, which
@@ -379,6 +401,42 @@ export type IncomingActiveTemplate = Static<typeof activeTemplateSchema>;
 export type IncomingActiveDecision = Static<typeof activeDecisionSchema>;
 export type IncomingActiveExternal = Static<typeof activeExternalSchema>;
 export type IncomingActiveSkill = Static<typeof activeSkillSchema>;
+export type IncomingActiveStatute = Static<typeof activeStatuteSchema>;
+
+/**
+ * Every active document a turn may carry, by the body field that carries it.
+ *
+ * The send body below is the source of truth; this map is held equal to its
+ * `active*` fields at compile time, so a new active document is a type error
+ * here until it is declared, and the schema test enumerates this map rather
+ * than a hand-written list that could go stale.
+ */
+export const ACTIVE_CONTEXT_SCHEMAS = {
+  activeDecision: activeDecisionSchema,
+  activeDraft: activeDraftSchema,
+  activeExternal: activeExternalSchema,
+  activeFile: activeFileSchema,
+  activeSkill: activeSkillSchema,
+  activeStatute: activeStatuteSchema,
+  activeTemplate: activeTemplateSchema,
+} as const;
+
+type ActiveContextBodyKey = Extract<
+  keyof typeof sendMessageCommonProperties,
+  `active${string}`
+>;
+
+type UndeclaredActiveContextKey = Exclude<
+  ActiveContextBodyKey,
+  keyof typeof ACTIVE_CONTEXT_SCHEMAS
+>;
+type UnusedActiveContextSchema = Exclude<
+  keyof typeof ACTIVE_CONTEXT_SCHEMAS,
+  ActiveContextBodyKey
+>;
+
+true satisfies UndeclaredActiveContextKey extends never ? true : never;
+true satisfies UnusedActiveContextSchema extends never ? true : never;
 
 type ValidateMessageInput = {
   message: RawIncomingMessage;
@@ -749,8 +807,8 @@ const validateContinuationToolCallIntegrity = ({
       incomingCall === undefined ||
       incomingCall.id !== canonicalCall.id ||
       !isPermittedContinuationToolCallTransition({
-        canonicalCall,
-        incomingCall,
+        canonicalCall: toComparableToolCall(canonicalCall),
+        incomingCall: toComparableToolCall(incomingCall),
       })
     ) {
       return invalidContinuationToolCall();
@@ -852,13 +910,25 @@ const APPROVAL_RESPONSE_MUTABLE_TOOL_CALL_PROPERTIES = new Set([
 const TOOL_OUTPUT_MUTABLE_TOOL_CALL_PROPERTIES = new Set(["output", "state"]);
 const NO_MUTABLE_TOOL_CALL_PROPERTIES: ReadonlySet<string> = new Set();
 
-// Two spellings of one value: `arguments` is derived from `input`, and the
-// client's spelling of both is discarded in favour of the server's. They are
-// compared by value (`hasEqualToolCallInput`) instead of as immutable bytes.
-const CONTINUATION_DERIVED_TOOL_CALL_PROPERTIES = new Set([
-  "arguments",
-  "input",
-]);
+/**
+ * The only form a continuation tool call is compared in. The provider's
+ * spelling of the call is not state: `arguments` is dropped, and `input` is
+ * folded so a strict tool schema's `null` for an absent optional reads as the
+ * absence it stands for. Every comparison the continuation check makes runs on
+ * this projection, so a byte comparison of `arguments` has no field to read.
+ *
+ * `DistributedOmit` keeps the per-tool union intact; a plain `Omit` would
+ * collapse it and drop `approval`, which only approval-gated tools carry.
+ */
+type ComparableToolCall = DistributedOmit<
+  ChatToolCallPart,
+  "arguments" | "input"
+> & { input: unknown };
+
+const toComparableToolCall = (call: ChatToolCallPart): ComparableToolCall => {
+  const { arguments: _spelling, input, ...comparable } = call;
+  return { ...comparable, input: withNullsOmitted(input) };
+};
 
 /**
  * The persisted call is authoritative: its `input` is the server's copy and
@@ -887,34 +957,18 @@ const restoreCanonicalToolCallInput = ({
   };
 };
 
-const hasEqualToolCallInput = ({
-  canonicalCall,
-  incomingCall,
-}: {
-  canonicalCall: ChatToolCallPart;
-  incomingCall: ChatToolCallPart;
-}): boolean =>
-  deepEquals(
-    withNullsOmitted(incomingCall.input),
-    withNullsOmitted(canonicalCall.input),
-  );
-
 const hasOnlyPermittedToolCallChanges = ({
   canonicalCall,
   incomingCall,
   mutableProperties,
 }: {
-  canonicalCall: ChatToolCallPart;
-  incomingCall: ChatToolCallPart;
+  canonicalCall: ComparableToolCall;
+  incomingCall: ComparableToolCall;
   mutableProperties: ReadonlySet<string>;
 }): boolean => {
-  const immutableProperties = (call: ChatToolCallPart) =>
+  const immutableProperties = (call: ComparableToolCall) =>
     Object.fromEntries(
-      Object.entries(call).filter(
-        ([key]) =>
-          !mutableProperties.has(key) &&
-          !CONTINUATION_DERIVED_TOOL_CALL_PROPERTIES.has(key),
-      ),
+      Object.entries(call).filter(([key]) => !mutableProperties.has(key)),
     );
   return deepEquals(
     immutableProperties(incomingCall),
@@ -926,8 +980,8 @@ const isPermittedContinuationToolCallTransition = ({
   canonicalCall,
   incomingCall,
 }: {
-  canonicalCall: ChatToolCallPart;
-  incomingCall: ChatToolCallPart;
+  canonicalCall: ComparableToolCall;
+  incomingCall: ComparableToolCall;
 }): boolean => {
   let stateTransitionAllowed = false;
   for (const allowedState of CONTINUATION_TOOL_CALL_TRANSITIONS[
@@ -941,7 +995,7 @@ const isPermittedContinuationToolCallTransition = ({
   if (
     !stateTransitionAllowed ||
     incomingCall.name !== canonicalCall.name ||
-    !hasEqualToolCallInput({ canonicalCall, incomingCall })
+    !deepEquals(incomingCall.input, canonicalCall.input)
   ) {
     return false;
   }

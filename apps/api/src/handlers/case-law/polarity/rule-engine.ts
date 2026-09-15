@@ -109,8 +109,18 @@ const compilePattern = (pattern: string): RegExp | null => {
   }
 };
 
-/** Active rule sources (proposed and retired rules are excluded). */
-const ACTIVE_SOURCES = [RULE_SOURCE.MANUAL, RULE_SOURCE.LLM_PROMOTED];
+/**
+ * Active rule sources: proposed and retired rules are excluded.
+ *
+ * Exported because a verdict may only be published while the rule that
+ * produced it still carries one of these, and the writer that checks it has
+ * to be asking the question the loader asked. Two hand-kept lists would agree
+ * until a source was added to one of them.
+ */
+export const ACTIVE_RULE_SOURCES = [
+  RULE_SOURCE.MANUAL,
+  RULE_SOURCE.LLM_PROMOTED,
+];
 
 /**
  * Active rules for one language, numbered within their own polarity.
@@ -142,7 +152,7 @@ export const rankPolarityRulesByTier = (language: string) =>
     .where(
       and(
         eq(caseLawPolarityRules.language, language),
-        inArray(caseLawPolarityRules.source, ACTIVE_SOURCES),
+        inArray(caseLawPolarityRules.source, ACTIVE_RULE_SOURCES),
         inArray(caseLawPolarityRules.polarity, CLASSIFIABLE_POLARITIES),
       ),
     )
@@ -239,8 +249,13 @@ export const selectRuleMatch = (
  * Pass a `cache` map to reuse compiled rules within a batch run.
  * Without a cache, rules are fetched from the database on every
  * call (stateless for the API server).
+ *
+ * Exported so a caller classifying a batch of citations against one
+ * language pays the read once and then matches in memory with
+ * {@link selectRuleMatch}, instead of going through {@link matchRule} per
+ * citation and relying on a cache to hide the difference.
  */
-const loadRules = async (
+export const loadRules = async (
   language: string,
   scopedDb: ScopedDb,
   cache?: RuleCache,

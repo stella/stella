@@ -433,6 +433,12 @@ export const LIMITS = {
    * no preview and read their own when a reader opens them.
    */
   caseLawProvisionPreviewVersionsMax: 8,
+  /** Citations one agent-facing read returns when it names no size of its own. */
+  caseLawAgentCitationPageSizeDefault: 20,
+  /** Citing paragraph sent with a citation, centred on the citation itself. */
+  caseLawCitationPassageChars: 1200,
+  /** Decision ASTs fetched at once while resolving one page of passages. */
+  caseLawCitationPassageConcurrency: 6,
   caseLawSearchPageSizeDefault: 20,
   caseLawSearchPageSizeMax: 100,
   /** Max language variants for one decision's languageGroupKey. Bounds the

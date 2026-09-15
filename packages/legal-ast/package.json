@@ -35,25 +35,29 @@
       "types": "./src/case-law-heading.ts",
       "import": "./src/case-law-heading.ts"
     },
+    "./citation-passage": {
+      "types": "./src/citation-passage.ts",
+      "import": "./src/citation-passage.ts"
+    },
     "./czech-document-roles": {
       "types": "./src/czech-document-roles.ts",
       "import": "./src/czech-document-roles.ts"
-    },
-    "./document-ast": {
-      "types": "./src/document-ast.ts",
-      "import": "./src/document-ast.ts"
     },
     "./decision-identifier": {
       "types": "./src/decision-identifier.ts",
       "import": "./src/decision-identifier.ts"
     },
-    "./provision-preview": {
-      "types": "./src/provision-preview.ts",
-      "import": "./src/provision-preview.ts"
+    "./document-ast": {
+      "types": "./src/document-ast.ts",
+      "import": "./src/document-ast.ts"
     },
     "./inline": {
       "types": "./src/inline.ts",
       "import": "./src/inline.ts"
+    },
+    "./provision-preview": {
+      "types": "./src/provision-preview.ts",
+      "import": "./src/provision-preview.ts"
     },
     "./statute-ast": {
       "types": "./src/statute-ast.ts",
@@ -62,6 +66,10 @@
     "./text-sanitize": {
       "types": "./src/text-sanitize.ts",
       "import": "./src/text-sanitize.ts"
+    },
+    "./text-spans": {
+      "types": "./src/text-spans.ts",
+      "import": "./src/text-spans.ts"
     }
   },
   "scripts": {

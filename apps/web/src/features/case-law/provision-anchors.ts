@@ -1,11 +1,9 @@
 import { hasBlockInlines } from "@stll/legal-ast/document-ast";
 import type { Block } from "@stll/legal-ast/document-ast";
+import { dropOverlappingSpans } from "@stll/legal-ast/text-spans";
+import { escapeRegExp } from "@stll/text-normalize";
 
 import { inlinesToPlainText } from "@/components/legal-reader/document-ast-text";
-import {
-  dropOverlappingSpans,
-  escapeRegExp,
-} from "@/features/case-law/citation-anchors";
 import type { ProvisionReference } from "@/features/case-law/provision-label";
 
 /**

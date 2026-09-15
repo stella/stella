@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ChevronRightIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import type { CitationPassageMatch } from "@stll/legal-ast/citation-passage";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { Skeleton } from "@stll/ui/skeleton";
@@ -12,7 +13,6 @@ import { cn } from "@stll/ui/utils";
 import { createCaseDecisionViewTab } from "@/components/inspector/case-decision-view";
 import { useInspectorView } from "@/components/inspector/use-inspector-view";
 import type { CitationAnchorSource } from "@/features/case-law/citation-anchors";
-import type { CitationPassage } from "@/features/case-law/citation-passage";
 import {
   CITATION_TREATMENT_DOT,
   CITATION_TREATMENT_LABEL,
@@ -21,7 +21,7 @@ import {
 } from "@/features/case-law/citation-treatment";
 import type {
   CitationTreatment,
-  CitedDecision,
+  CitedDecisionAddress,
 } from "@/features/case-law/citation-treatment";
 import {
   CitationPassageQuote,
@@ -48,7 +48,7 @@ import { forceReflow } from "@/lib/utils";
 
 type LeadingCitationsProps = {
   /** The decision being read, as a citation names it. */
-  decision: CitedDecision;
+  decision: CitedDecisionAddress;
   decisionId: SafeId<"caseLawDecision">;
 };
 
@@ -335,7 +335,7 @@ const LeadingPassage = ({
   textDecisionId,
 }: {
   citation: CitationAnchorSource;
-  onOpen: (passage: CitationPassage) => void;
+  onOpen: (passage: CitationPassageMatch) => void;
   textDecisionId: string;
 }) => {
   const t = useTranslations();
