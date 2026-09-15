@@ -18,6 +18,10 @@ const createContext = ({
 }): UpdateInvoiceCtx =>
   asTestRaw<UpdateInvoiceCtx>({
     body,
+    request: new Request("https://example.test/v1/invoices/ws_test/inv_test", {
+      method: "PATCH",
+    }),
+    route: "/v1/invoices/:workspaceId/:invoiceId",
     safeDb,
     params: {
       workspaceId: toSafeId<"workspace">("ws_test"),

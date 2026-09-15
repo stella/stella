@@ -35,6 +35,10 @@ const createContext = ({
 }): CreateInvoiceCtx =>
   asTestRaw<CreateInvoiceCtx>({
     body,
+    request: new Request("https://example.test/v1/invoices/ws_test", {
+      method: "PUT",
+    }),
+    route: "/v1/invoices/:workspaceId",
     safeDb,
     scopedDb,
     recordAuditEvent,

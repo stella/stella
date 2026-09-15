@@ -18,6 +18,11 @@ const createContext = ({
 }): DeleteTimeEntryCtx =>
   asTestRaw<DeleteTimeEntryCtx>({
     body: { id: toSafeId<"timeEntry">("time_entry_test") },
+    request: new Request(
+      "https://example.test/v1/time-entries/workspace_test",
+      { method: "DELETE" },
+    ),
+    route: "/v1/time-entries/:workspaceId",
     safeDb,
     scopedDb,
     workspaceId: toSafeId<"workspace">("workspace_test"),

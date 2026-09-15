@@ -64,6 +64,10 @@ const createHandlerContext = ({
     },
     memberRole: { role: "owner" },
     body,
+    request: new Request(`https://example.test/v1/tasks/${workspaceId}`, {
+      method: "PUT",
+    }),
+    route: "/v1/tasks/:workspaceId",
     safeDb,
     scopedDb,
   });

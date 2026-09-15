@@ -36,10 +36,10 @@ import type {
 import { getChatThreadKey } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
 import { ClientOperationError } from "@/lib/errors/client";
-import { fetchWithTimeout } from "@/lib/fetch";
 import { toSafeId } from "@/lib/safe-id";
 import type { SafeId } from "@/lib/safe-id";
 
+import { chatFetchClient } from "./chat-fetch";
 import { SUGGEST_TEMPLATE_FIELDS_TOOL_SCOPE } from "./chat-query-contract";
 import type {
   ActiveFileContext,
@@ -137,11 +137,6 @@ export const sendThreadChatMessage = async (
 };
 
 const getChatApiPath = () => apiUrl("/chat");
-
-// Matches the backend's own AI-call budget (send-message.ts'
-// CHAT_METERED_AI_TIMEOUT_MS) so the client doesn't cut a slow-but-healthy
-// model response off before the server would.
-const CHAT_FETCH_TIMEOUT_MS = 600_000;
 
 type CreateChatRuntimeProps = {
   context: ChatThreadOptionsContext | undefined;
@@ -269,20 +264,6 @@ export const createChatRuntime = ({
     }
   };
 
-  const chatFetchClient = Object.assign(
-    async (input: RequestInfo | URL, init?: RequestInit) => {
-      const { signal, ...requestInit } = init ?? {};
-      return await fetchWithTimeout(input, {
-        ...requestInit,
-        ...(signal === null ? {} : { signal }),
-        timeoutMs: CHAT_FETCH_TIMEOUT_MS,
-      });
-    },
-    // Bun augments the global fetch type with this optional optimization.
-    // TanStack accepts `typeof globalThis.fetch`; the browser transport does
-    // not need preconnection, so expose a typed no-op instead of casting.
-    { preconnect: () => undefined },
-  ) satisfies typeof globalThis.fetch;
   const upstreamConnection = fetchServerSentEvents(getChatApiPath(), {
     credentials: "include",
     headers: { "Content-Type": "application/json" },

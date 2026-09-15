@@ -19,6 +19,10 @@ const createContext = ({
 }): CreateWorkspacesCtx =>
   asTestRaw<CreateWorkspacesCtx>({
     body,
+    request: new Request("https://example.test/v1/workspaces", {
+      method: "PUT",
+    }),
+    route: "/v1/workspaces",
     safeDb,
     scopedDb,
     memberRole: { role: "owner" },

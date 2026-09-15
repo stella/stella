@@ -104,6 +104,11 @@ const createHarness = (rows: StoredFinding[]) => {
     body: { decision: "accepted" },
     memberRole: { role: "owner" },
     params: { workspaceId: WORKSPACE_ID, findingId: FINDING_ID },
+    request: new Request(
+      `https://example.test/v1/workspaces/${WORKSPACE_ID}/document-reviews/findings/${FINDING_ID}`,
+      { method: "PATCH" },
+    ),
+    route: "/v1/workspaces/:workspaceId/document-reviews/findings/:findingId",
     safeDb,
     scopedDb,
     workspaceId: WORKSPACE_ID,

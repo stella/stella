@@ -33,6 +33,8 @@ describe("exportAuditLogs", () => {
       recordAuditEvent: async () => {
         auditCallCount += 1;
       },
+      request: new Request("https://example.test/v1/audit-logs/export"),
+      route: "/v1/audit-logs/export",
       safeDb,
       session: {
         activeOrganizationId: toSafeId<"organization">("organization_test"),

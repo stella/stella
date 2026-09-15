@@ -48,6 +48,10 @@ const runUpdate = async (amountCents: number) => {
         id: toSafeId<"expense">("expense_test"),
         currency: "KWD",
       },
+      request: new Request("https://example.test/v1/expenses/workspace_test", {
+        method: "PATCH",
+      }),
+      route: "/v1/expenses/:workspaceId",
       safeDb,
       workspaceId: toSafeId<"workspace">("workspace_test"),
       memberRole: { role: "owner" },

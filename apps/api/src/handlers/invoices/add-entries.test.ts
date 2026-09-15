@@ -17,6 +17,11 @@ const createContext = (
   const { scopedDb } = createScopedDbMock({});
   return asTestRaw<AddEntriesCtx>({
     body,
+    request: new Request(
+      "https://example.test/v1/invoices/ws_test/inv_test/entries",
+      { method: "POST" },
+    ),
+    route: "/v1/invoices/:workspaceId/:invoiceId/entries",
     safeDb,
     scopedDb,
     params: {

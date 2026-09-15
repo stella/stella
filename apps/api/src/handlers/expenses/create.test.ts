@@ -23,6 +23,10 @@ const createContext = ({
       category: "filing_fee",
       description: "test",
     },
+    request: new Request("https://example.test/v1/expenses/workspace_test", {
+      method: "PUT",
+    }),
+    route: "/v1/expenses/:workspaceId",
     safeDb,
     workspaceId: toSafeId<"workspace">("workspace_test"),
     memberRole: { role: "owner" },

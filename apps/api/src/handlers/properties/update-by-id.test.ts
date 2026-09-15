@@ -24,6 +24,11 @@ const createContext = ({
 }): UpdatePropertyCtx =>
   asTestRaw<UpdatePropertyCtx>({
     body,
+    request: new Request(
+      "https://example.test/v1/properties/workspace_test/property_test",
+      { method: "POST" },
+    ),
+    route: "/v1/properties/:workspaceId/:propertyId",
     safeDb,
     scopedDb,
     params: { propertyId: toSafeId<"property">("property_test") },

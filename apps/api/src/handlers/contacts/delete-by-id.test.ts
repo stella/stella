@@ -19,6 +19,10 @@ const createContext = ({
 }): DeleteContactCtx =>
   asTestRaw<DeleteContactCtx>({
     params: { contactId },
+    request: new Request(`https://example.test/v1/contacts/${contactId}`, {
+      method: "DELETE",
+    }),
+    route: "/v1/contacts/:contactId",
     safeDb,
     scopedDb,
     memberRole: { role: "owner" },
