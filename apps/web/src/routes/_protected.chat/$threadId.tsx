@@ -3,8 +3,18 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Skeleton } from "@stll/ui/skeleton";
 
 import { chatThreadOptions } from "@/features/chat/queries";
+import { getAnalytics } from "@/lib/analytics/provider";
+import { roleOptions } from "@/lib/auth-queries";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
-import { ensureRouteQueryData } from "@/lib/react-query";
+import { detached } from "@/lib/detached";
+import { mcpConnectorsOptions, skillsOptions } from "@/lib/knowledge/queries";
+import { managementRoles } from "@/lib/organization/consts";
+import {
+  ensureRouteQueryData,
+  prefetchNonCriticalInfiniteQuery,
+  prefetchRouteQuery,
+} from "@/lib/react-query";
+import { usageEntitlementOptions } from "@/lib/usage-queries";
 import { ChatThreadPage } from "@/routes/_protected.chat/-components/chat-thread-page";
 
 export const Route = createFileRoute("/_protected/chat/$threadId")({
@@ -15,6 +25,44 @@ export const Route = createFileRoute("/_protected/chat/$threadId")({
   // between two consecutive chats.
   pendingMs: 1000,
   loader: async ({ context, params }) => {
+    const { queryClient } = context;
+    const organizationId = context.user.activeOrganizationId;
+    const onPrefetchError = (error: unknown) => {
+      getAnalytics().captureError(error);
+    };
+    const prefetchManagerEntitlement = async () => {
+      // Parent and child loaders can run together; share the role query
+      // before warming this manager-only endpoint.
+      await prefetchRouteQuery(queryClient, roleOptions, onPrefetchError);
+      const role = queryClient.getQueryData(roleOptions.queryKey);
+      if (role === undefined || !managementRoles.includes(role)) {
+        return;
+      }
+      await prefetchRouteQuery(
+        queryClient,
+        usageEntitlementOptions({ organizationId }),
+        onPrefetchError,
+      );
+    };
+
+    // Composer data is independent of messages. Start it before the cold
+    // thread query blocks mounting the page and its query observers.
+    detached(
+      Promise.all([
+        prefetchNonCriticalInfiniteQuery(
+          queryClient,
+          skillsOptions(organizationId),
+          onPrefetchError,
+        ),
+        prefetchRouteQuery(
+          queryClient,
+          mcpConnectorsOptions(organizationId),
+          onPrefetchError,
+        ),
+        prefetchManagerEntitlement(),
+      ]),
+      "chat-thread.prefetch",
+    );
     // Prime the pure thread-data query the page suspends on so the fetch
     // starts during navigation instead of after the component mounts and
     // suspends. `context` here is a key-shape stub only (no live getters):
