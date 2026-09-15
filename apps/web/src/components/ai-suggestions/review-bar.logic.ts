@@ -361,6 +361,33 @@ const isChatDeletion = (suggestion: ReviewSuggestion): boolean =>
   suggestion.pendingOperation?.type === "deleteBlock";
 
 /**
+ * An accepted change is one apply batch: its members share the batch's undo
+ * handle, and reverting the change undoes that batch. Accepted suggestions
+ * from separate batches, or hydrated ones that carry no handle, stay apart
+ * even when their blocks are adjacent.
+ */
+const sharesApplyTransaction = (
+  previous: ReviewSuggestion,
+  next: ReviewSuggestion,
+): boolean => {
+  switch (previous.status) {
+    case "accepted":
+      return (
+        previous.undoHandle !== null &&
+        previous.undoHandle.id === next.undoHandle?.id
+      );
+    case "pending":
+    case "applying":
+    case "rejected":
+    case "skipped":
+      return true;
+    default:
+      previous.status satisfies never;
+      return panic(`Unhandled status: ${String(previous.status)}`);
+  }
+};
+
+/**
  * A review finding's fix answers that finding, so it never joins another
  * suggestion. Unplaced suggestions never join either: `UNPLACED` is not a
  * position two blocks can be adjacent at.
@@ -382,6 +409,7 @@ const continuesDeletionRun = (
   previous.suggestion.status === next.suggestion.status &&
   previous.suggestion.proposalBatchId === next.suggestion.proposalBatchId &&
   previous.suggestion.severity === next.suggestion.severity &&
+  sharesApplyTransaction(previous.suggestion, next.suggestion) &&
   previous.suggestion.snapshot !== null &&
   previous.suggestion.snapshot === next.suggestion.snapshot &&
   Number.isFinite(previous.position) &&

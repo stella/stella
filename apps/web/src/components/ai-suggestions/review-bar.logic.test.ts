@@ -143,6 +143,16 @@ describe("what a review list shows", () => {
   });
 });
 
+/** The undo handles of two separate accept batches. */
+const FIRST_ACCEPT_BATCH = {
+  id: "undo-1",
+  type: "documentOperationUndo",
+} as const;
+const SECOND_ACCEPT_BATCH = {
+  id: "undo-2",
+  type: "documentOperationUndo",
+} as const;
+
 /** What one tool call saw; its suggestions share the reference. */
 const PROPOSAL_SNAPSHOT = { anchors: {}, blocks: [] };
 /** What a later tool call saw, after the document moved on. */
@@ -355,6 +365,54 @@ describe("a section deleted paragraph by paragraph is one change", () => {
     expect(memberIds(changes)).toEqual([["heading"], ["body"]]);
   });
 
+  test("deletions accepted in separate batches stay separate", () => {
+    const changes = groupReviewChanges(
+      [
+        onBlock("heading", "heading", {
+          status: "accepted",
+          undoHandle: FIRST_ACCEPT_BATCH,
+        }),
+        onBlock("body", "body", {
+          status: "accepted",
+          undoHandle: SECOND_ACCEPT_BATCH,
+        }),
+      ],
+      section,
+    );
+
+    expect(memberIds(changes)).toEqual([["heading"], ["body"]]);
+  });
+
+  test("deletions accepted in one batch stay one change", () => {
+    const changes = groupReviewChanges(
+      [
+        onBlock("heading", "heading", {
+          status: "accepted",
+          undoHandle: FIRST_ACCEPT_BATCH,
+        }),
+        onBlock("body", "body", {
+          status: "accepted",
+          undoHandle: FIRST_ACCEPT_BATCH,
+        }),
+      ],
+      section,
+    );
+
+    expect(memberIds(changes)).toEqual([["heading", "body"]]);
+  });
+
+  test("accepted deletions hydrated without an undo handle stay separate", () => {
+    const changes = groupReviewChanges(
+      [
+        onBlock("heading", "heading", { status: "accepted" }),
+        onBlock("body", "body", { status: "accepted" }),
+      ],
+      section,
+    );
+
+    expect(memberIds(changes)).toEqual([["heading"], ["body"]]);
+  });
+
   test("nothing groups while the document is unreadable", () => {
     const changes = groupReviewChanges(
       [onBlock("heading", "heading"), onBlock("body", "body")],
@@ -495,6 +553,11 @@ const generatedSession = fc
           status: fc.constantFrom(...STATUSES),
           proposalBatchId: fc.constantFrom("proposal-1", "proposal-2"),
           severity: fc.constantFrom("high", "low"),
+          undoHandle: fc.constantFrom(
+            FIRST_ACCEPT_BATCH,
+            SECOND_ACCEPT_BATCH,
+            null,
+          ),
           snapshot: fc.constantFrom(
             PROPOSAL_SNAPSHOT,
             LATER_PROPOSAL_SNAPSHOT,
@@ -521,6 +584,7 @@ const generatedSession = fc
         snapshot: spec.snapshot,
         proposalBatchId: spec.proposalBatchId,
         severity: spec.severity,
+        undoHandle: spec.undoHandle,
       };
     }),
   }));
@@ -577,6 +641,10 @@ describe("grouping the review queue into changes", () => {
             expect(member.snapshot).toBe(first.snapshot);
             expect(member.proposalBatchId).toBe(first.proposalBatchId);
             expect(member.severity).toBe(first.severity);
+            if (first.status === "accepted") {
+              expect(first.undoHandle).not.toBeNull();
+              expect(member.undoHandle?.id).toBe(first.undoHandle?.id);
+            }
           }
           expect(first.snapshot).not.toBeNull();
           expect(previousIndex).toBeGreaterThanOrEqual(0);
