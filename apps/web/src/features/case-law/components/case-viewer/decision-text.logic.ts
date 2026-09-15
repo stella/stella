@@ -177,13 +177,13 @@ export const editorialSupplementBlocks = (
  * case name.
  */
 export const decisionCaseName = ({
-  blocks,
+  ast,
   caseNumber,
 }: {
-  blocks: readonly Block[];
+  ast: DocumentAst | null;
   caseNumber: string;
 }): string | null => {
-  const title = blocks.find(
+  const title = ast?.blocks.find(
     (block) => block.type === "heading" && block.role === "decision-title",
   )?.plainText;
   const citeSuffix = `, ${caseNumber}`;

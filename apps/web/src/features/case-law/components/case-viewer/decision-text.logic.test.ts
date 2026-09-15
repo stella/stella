@@ -28,11 +28,26 @@ const titleBlock = (plainText: string): Block => ({
   type: "heading",
 });
 
+const astOf = (blocks: Block[]): DocumentAst => ({
+  version: 1,
+  source: { system: "test", documentId: "1", webUrl: "", printUrl: "" },
+  metadata: {
+    caseNumber: "347 U.S. 483",
+    ecli: null,
+    court: "Supreme Court",
+    decisionDate: null,
+    decisionType: null,
+    keywords: [],
+    statutes: [],
+  },
+  blocks,
+});
+
 describe("citable case name", () => {
   test("takes the name off a title of the “Name, Cite” shape", () => {
     expect(
       decisionCaseName({
-        blocks: [titleBlock("Brown v. Board of Education, 347 U.S. 483")],
+        ast: astOf([titleBlock("Brown v. Board of Education, 347 U.S. 483")]),
         caseNumber: "347 U.S. 483",
       }),
     ).toBe("Brown v. Board of Education");
@@ -41,11 +56,17 @@ describe("citable case name", () => {
   test("a heading that only names the court is not a case name", () => {
     expect(
       decisionCaseName({
-        blocks: [titleBlock("JUDGMENT OF THE COURT (Grand Chamber)")],
+        ast: astOf([titleBlock("JUDGMENT OF THE COURT (Grand Chamber)")]),
         caseNumber: "C-311/18",
       }),
     ).toBeNull();
-    expect(decisionCaseName({ blocks: [], caseNumber: "C-311/18" })).toBeNull();
+    expect(
+      decisionCaseName({ ast: astOf([]), caseNumber: "C-311/18" }),
+    ).toBeNull();
+  });
+
+  test("an unparsed document has no case name", () => {
+    expect(decisionCaseName({ ast: null, caseNumber: "C-311/18" })).toBeNull();
   });
 });
 

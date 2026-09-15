@@ -116,7 +116,7 @@ export const CaseDecisionInspectorView = ({
     ecli: decision?.ecli ?? null,
     id: decisionId,
     name: decisionCaseName({
-      blocks: ast?.blocks ?? [],
+      ast,
       caseNumber: payload.caseNumber,
     }),
   } as const satisfies ReaderAnnotationTarget;

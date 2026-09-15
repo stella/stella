@@ -44,7 +44,8 @@ describe("decision facts", () => {
       sourceUrl: null,
     });
 
-    expect([...DECISION_FACT_KINDS].sort()).toEqual(Object.keys(facts).sort());
+    const orderedKinds: string[] = [...DECISION_FACT_KINDS];
+    expect(orderedKinds.sort()).toEqual(Object.keys(facts).sort());
   });
 
   test("a selection answers only for the facts it names", () => {

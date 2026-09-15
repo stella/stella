@@ -129,7 +129,7 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
   const ast = parseDocumentAst(decision.documentAst);
   // The case's citable name, for the legal copy modes.
   const caseName = decisionCaseName({
-    blocks: ast?.blocks ?? [],
+    ast,
     caseNumber: decision.caseNumber,
   });
   const annotationTarget = {
