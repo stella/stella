@@ -69,7 +69,6 @@ import {
   shouldRunFileAnonymizationPipeline,
   shouldSurfaceEmailResolutionAlert,
 } from "@/components/inspector/file-tab-panel.logic";
-import { useAnonymizationPipelineStatus } from "@/components/inspector/inspector-anonymization-store";
 import { InspectorPdfErrorFallback } from "@/components/inspector/inspector-pdf-error-fallback";
 import {
   InspectorTabHeader,
@@ -498,7 +497,6 @@ export const FileTabPanel = ({
   const readsDocumentInInspector = documentReviewPaneFieldId === tab.id;
   const fullViewFacet =
     tab.facet ?? (readsDocumentInInspector ? "preview" : "metadata");
-  const pipelineStatus = useAnonymizationPipelineStatus(tab.id);
   useFileAnonymizationPipeline({
     enabled: shouldRunFileAnonymizationPipeline({
       facet: fullViewFacet,
@@ -507,11 +505,11 @@ export const FileTabPanel = ({
       isMinimized: minimized,
       isMounted: mountedPdfIds.has(tab.id),
       isNativeDocxDisplay,
-      pipelineStatus,
     }),
     fieldId: tab.id,
     mimeType: tab.mimeType,
     workspaceId: tab.workspaceId,
+    entityId: tab.entityId ?? null,
   });
   // A DOCX tab opened by a caller that knows only the file field (a review's
   // reference, a search hit) still needs the field's property to mount the

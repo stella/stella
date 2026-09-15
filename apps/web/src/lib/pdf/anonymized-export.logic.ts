@@ -1,37 +1,15 @@
 import type { PDFPage } from "@libpdf/core";
 import { Result } from "better-result";
 
-import { findSearchMatchRanges } from "@stll/text-normalize";
-
+import {
+  findFileAnonymizationMatches,
+  normalizeWhitespaceWithOffsets,
+} from "@/lib/anonymize/file-anonymization-matches.logic";
 import { ClientOperationError } from "@/lib/errors/client";
 import { buildPageSearchText, mergePDFSearchBoxes } from "@/lib/pdf/pdf-search";
 import type { PDFSearchBox } from "@/lib/pdf/pdf-search";
 
 type ExportGlyph = { pageIndex: number; box: PDFSearchBox };
-
-type NormalizedText = { text: string; originalBoundaries: number[] };
-
-export const normalizeWhitespaceWithOffsets = (
-  text: string,
-): NormalizedText => {
-  const normalized: string[] = [];
-  const originalBoundaries = [0];
-  let index = 0;
-  while (index < text.length) {
-    if (/\s/u.test(text[index] ?? "")) {
-      while (index < text.length && /\s/u.test(text[index] ?? "")) {
-        index += 1;
-      }
-      normalized.push(" ");
-      originalBoundaries.push(index);
-      continue;
-    }
-    normalized.push(text[index] ?? "");
-    index += 1;
-    originalBoundaries.push(index);
-  }
-  return { text: normalized.join(""), originalBoundaries };
-};
 
 export const extractAnonymizedExportText = (pages: readonly PDFPage[]) => {
   const textParts: string[] = [];
@@ -62,20 +40,11 @@ export const buildAnonymizedExportMasks = ({
   const normalizedExtraction = normalizeWhitespaceWithOffsets(extraction.text);
   const selected = new Set<ExportGlyph>();
   for (const term of new Set(terms)) {
-    const normalizedTerm = term.replace(/\s+/gu, " ").trim();
-    if (normalizedTerm.length === 0) {
-      continue;
-    }
-    for (const { start, end } of findSearchMatchRanges(
-      normalizedExtraction.text,
-      normalizedTerm,
+    for (const { start, end } of findFileAnonymizationMatches(
+      normalizedExtraction,
+      term,
     )) {
-      const originalStart = normalizedExtraction.originalBoundaries[start];
-      const originalEnd = normalizedExtraction.originalBoundaries[end];
-      if (originalStart === undefined || originalEnd === undefined) {
-        continue;
-      }
-      for (const glyph of extraction.glyphs.slice(originalStart, originalEnd)) {
+      for (const glyph of extraction.glyphs.slice(start, end)) {
         if (glyph !== null) {
           selected.add(glyph);
         }

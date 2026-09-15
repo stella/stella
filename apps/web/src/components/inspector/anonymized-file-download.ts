@@ -1,10 +1,9 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { Result } from "better-result";
 
-import { normalizeForExclusion } from "@stll/anonymize-chat/normalization";
-
 import { fetchPrintPdf } from "@/components/pdf/peek/peek-pdf-print";
 import { PDF_MIME_TYPE } from "@/consts";
+import { detectFileAnonymizationTerms } from "@/lib/anonymize/file-anonymization-policy";
 import { ClientOperationError } from "@/lib/errors/client";
 import { rasterizeAnonymizedPdf } from "@/lib/pdf/anonymized-export";
 import {
@@ -12,8 +11,6 @@ import {
   extractAnonymizedExportText,
 } from "@/lib/pdf/anonymized-export.logic";
 import { downloadFile } from "@/lib/utils";
-import { anonymizationAllowlistOptions } from "@/lib/workspaces/queries/anonymization-allowlist";
-import { anonymizationTermsOptions } from "@/lib/workspaces/queries/anonymization-terms";
 
 type DownloadAnonymizedFileOptions = {
   workspaceId: string;
@@ -30,12 +27,8 @@ export const downloadAnonymizedFile = async ({
 }: DownloadAnonymizedFileOptions) =>
   await Result.tryPromise({
     try: async () => {
-      const [buffer, vocabulary, allowlist, { PDF }] = await Promise.all([
+      const [buffer, { PDF }] = await Promise.all([
         fetchPrintPdf({ workspaceId, fieldId }),
-        queryClient.query(anonymizationTermsOptions(workspaceId)),
-        queryClient.query(
-          anonymizationAllowlistOptions({ workspaceId, entityId }),
-        ),
         import("@libpdf/core"),
       ]);
       const source = await PDF.load(new Uint8Array(buffer));
@@ -48,31 +41,13 @@ export const downloadAnonymizedFile = async ({
           }),
         );
       }
-      const { anonymizeChatTextInWorker } =
-        await import("@/lib/anonymize/anonymize-chat-worker-client");
-      const excludedCanonicals = allowlist.entries.map(
-        ({ canonical }) => canonical,
-      );
-      const detected = await anonymizeChatTextInWorker({
-        workspaceId,
+      const detectedTerms = await detectFileAnonymizationTerms({
         text: extraction.text,
-        excludedCanonicals,
+        workspaceId,
+        entityId,
+        queryClient,
       });
-      const excluded = new Set(excludedCanonicals.map(normalizeForExclusion));
-      const terms = detected.pairs.map(({ original }) => original);
-      for (const entry of vocabulary.entries) {
-        const entryTerms = [entry.canonical, ...entry.variants];
-        if (
-          entry.enabled &&
-          entryTerms.some((term) => !excluded.has(normalizeForExclusion(term)))
-        ) {
-          terms.push(
-            ...entryTerms.filter(
-              (term) => !excluded.has(normalizeForExclusion(term)),
-            ),
-          );
-        }
-      }
+      const terms = detectedTerms.map(({ text }) => text);
       const masks = buildAnonymizedExportMasks({ extraction, terms });
       if (masks.isErr()) {
         return masks;

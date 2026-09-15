@@ -1,20 +1,24 @@
-import { useQuery } from "@tanstack/react-query";
+import {
+  useQuery,
+  useQueryClient,
+  type QueryClient,
+} from "@tanstack/react-query";
 import { Result } from "better-result";
-
-import type { PipelineConfig } from "@stll/anonymize-wasm";
 
 import { useInspectorAnonymizationStore } from "@/components/inspector/inspector-anonymization-store";
 import {
   createPipelineRunRegistry,
   type PipelineRun,
 } from "@/components/inspector/pipeline-run-registry.logic";
+import { fetchPrintPdf } from "@/components/pdf/peek/peek-pdf-print";
 import { getAnalytics } from "@/lib/analytics/provider";
-import { DEFAULT_ENTITY_LABELS } from "@/lib/anonymize/constants";
+import {
+  findFileAnonymizationMatches,
+  normalizeWhitespaceWithOffsets,
+} from "@/lib/anonymize/file-anonymization-matches.logic";
+import { detectFileAnonymizationTerms } from "@/lib/anonymize/file-anonymization-policy";
 import { extractPDFText } from "@/lib/anonymize/pdf-coords";
-import { createPipelineContextRunner } from "@/lib/anonymize/pipeline-context";
-import { api } from "@/lib/api";
 import { ClientOperationError } from "@/lib/errors/client";
-import { fetchWithTimeout } from "@/lib/fetch";
 import {
   allocateEntityOverlayId,
   clearAnonymizationForField,
@@ -25,55 +29,20 @@ import type {
   EntityOverlay,
   FileAnonymization,
 } from "@/lib/pdf/anonymization-types";
-
-const buildPipelineConfig = (
-  workspaceId: string,
-  labels: readonly string[],
-): PipelineConfig => {
-  const config: PipelineConfig = {
-    threshold: 0.4,
-    enableTriggerPhrases: true,
-    enableRegex: true,
-    enableNameCorpus: true,
-    enableDenyList: false,
-    enableGazetteer: false,
-    enableConfidenceBoost: false,
-    enableCoreference: true,
-    enableLegalForms: true,
-    labels: [...labels],
-    workspaceId,
-  };
-  return config;
-};
+import { anonymizationAllowlistOptions } from "@/lib/workspaces/queries/anonymization-allowlist";
+import { anonymizationTermsOptions } from "@/lib/workspaces/queries/anonymization-terms";
 
 const pipelineRuns = createPipelineRunRegistry();
-const fileAnonymizationKeys = {
-  run: ({
-    fieldId,
-    mimeType,
-    retry,
-    workspaceId,
-  }: {
-    fieldId: string;
-    mimeType: string | null;
-    retry: number;
-    workspaceId: string;
-  }) =>
-    ["file-anonymization", { fieldId, mimeType, retry, workspaceId }] as const,
-};
-let dictionariesPromise: Promise<
-  NonNullable<PipelineConfig["dictionaries"]>
-> | null = null;
-const runWithPipelineContext = createPipelineContextRunner();
-
 const anonymizePdf = async ({
   workspaceId,
   fieldId,
-  mimeType,
+  entityId,
+  queryClient,
 }: {
   workspaceId: string;
   fieldId: string;
-  mimeType: string | null;
+  entityId: string | null;
+  queryClient: QueryClient;
 }): Promise<void> => {
   const run = pipelineRuns.start(fieldId);
   // Tell the inspector facet a producer is in flight so
@@ -83,7 +52,13 @@ const anonymizePdf = async ({
     .getState()
     .markAnonymizationPipelineStarted(fieldId);
   const result = await Result.tryPromise(async () => {
-    await runPipelineAndCommit({ workspaceId, fieldId, run });
+    await runPipelineAndCommit({
+      workspaceId,
+      fieldId,
+      entityId,
+      queryClient,
+      run,
+    });
   });
   if (pipelineRuns.canCommit(fieldId, run)) {
     if (Result.isError(result)) {
@@ -109,24 +84,43 @@ export const useFileAnonymizationPipeline = ({
   fieldId,
   mimeType,
   workspaceId,
+  entityId,
 }: {
   enabled: boolean;
   fieldId: string;
   mimeType?: string | undefined;
   workspaceId: string;
+  entityId: string | null;
 }): void => {
+  const queryClient = useQueryClient();
   const retry = useInspectorAnonymizationStore(
     (state) => state.anonymizationRetryByFieldId[fieldId] ?? 0,
   );
+  const pipelineStatus = useInspectorAnonymizationStore(
+    (state) => state.anonymizationPipelineStatusByFieldId[fieldId] ?? "idle",
+  );
   const normalizedMimeType = mimeType ?? null;
-  useQuery({
+  const vocabularyQuery = useQuery({
+    ...anonymizationTermsOptions(workspaceId),
     enabled,
+  });
+  const allowlistQuery = useQuery({
+    ...anonymizationAllowlistOptions({ workspaceId, entityId }),
+    enabled,
+  });
+  useQuery({
+    enabled:
+      enabled &&
+      pipelineStatus !== "error" &&
+      !vocabularyQuery.isPending &&
+      !allowlistQuery.isPending,
     queryFn: async () => {
       const result = await Result.tryPromise(async () => {
         await anonymizePdf({
           workspaceId,
           fieldId,
-          mimeType: normalizedMimeType,
+          entityId,
+          queryClient,
         });
       });
       if (Result.isError(result)) {
@@ -135,12 +129,20 @@ export const useFileAnonymizationPipeline = ({
       }
       return "complete" as const;
     },
-    queryKey: fileAnonymizationKeys.run({
-      fieldId,
-      mimeType: normalizedMimeType,
-      retry,
-      workspaceId,
-    }),
+    queryKey: [
+      "file-anonymization",
+      {
+        fieldId,
+        entityId,
+        mimeType: normalizedMimeType,
+        retry,
+        workspaceId,
+        vocabulary: vocabularyQuery.data,
+        exclusions: allowlistQuery.data,
+      },
+    ],
+    staleTime: Infinity,
+    retryOnMount: false,
     retry: false,
   });
 };
@@ -148,89 +150,65 @@ export const useFileAnonymizationPipeline = ({
 const runPipelineAndCommit = async ({
   workspaceId,
   fieldId,
+  entityId,
+  queryClient,
   run,
 }: {
   workspaceId: string;
   fieldId: string;
+  entityId: string | null;
+  queryClient: QueryClient;
   run: PipelineRun;
 }): Promise<void> => {
-  const response = await api
-    .files({ workspaceId })
-    .url({ fieldId })
-    .get({
-      // Office files use their printable PDF rendition for anonymization.
-      // The display purpose returns native XLSX/PPTX bytes, which PDF.load
-      // cannot parse.
-      query: { purpose: "download" },
-    });
-
-  if (response.error) {
-    throw new ClientOperationError({
-      action: "anonymizePdf",
-      message: "Failed to get file URL",
-      cause: response.error,
-    });
-  }
-
-  const s3Response = await fetchWithTimeout(response.data.presignedUrl, {
-    timeoutMs: 60_000,
-  });
-  if (!s3Response.ok) {
-    throw new ClientOperationError({
-      action: "anonymizePdf",
-      message: "Failed to fetch file from storage",
-    });
-  }
-
-  const buffer = await s3Response.arrayBuffer();
-  const pdfBytes = new Uint8Array(buffer);
-
-  const { PDF } = await import("@libpdf/core");
-  const pdf = await PDF.load(pdfBytes);
-  const { text, spans: charSpans } = extractPDFText(pdf);
-
-  const [{ loadNameDictionaries }, wasm] = await Promise.all([
-    import("@stll/anonymize-data"),
-    import("@stll/anonymize-wasm"),
+  const [buffer, { PDF }] = await Promise.all([
+    fetchPrintPdf({ workspaceId, fieldId }),
+    import("@libpdf/core"),
   ]);
-  dictionariesPromise ??= loadNameDictionaries();
-  const dictionaries = await dictionariesPromise;
-  // Detection-only: this overlay only needs the entity spans, so the
-  // combined `redaction` half of the single detect+redact call is
-  // discarded.
-  const entities = await runWithPipelineContext(async () => {
-    const context = wasm.createPipelineContext();
-    const config = {
-      ...buildPipelineConfig(workspaceId, DEFAULT_ENTITY_LABELS),
-      dictionaries,
-    };
-    const binding = await wasm.getBinding();
-    const pipeline = await wasm.createNativePipelineFromConfig({
-      binding,
-      config,
-      gazetteerEntries: [],
-      context,
-    });
-    return pipeline.redactText(text).resolvedEntities;
+  const pdf = await PDF.load(new Uint8Array(buffer));
+  const { text, spans: charSpans } = extractPDFText(pdf);
+  if (!text.trim()) {
+    await Promise.reject(
+      new ClientOperationError({
+        action: "anonymizePdf",
+        message: "The file has no readable text to anonymize",
+      }),
+    );
+    return;
+  }
+  const terms = await detectFileAnonymizationTerms({
+    text,
+    workspaceId,
+    entityId,
+    queryClient,
   });
-
+  const normalizedText = normalizeWhitespaceWithOffsets(text);
   const overlayEntities: EntityOverlay[] = [];
-
-  for (const entity of entities) {
-    const spans = getEntitySpans({
-      charSpans,
-      entityStart: entity.start,
-      entityEnd: entity.end,
-    });
-    if (spans.length === 0) {
-      continue;
+  const seenRanges = new Set<string>();
+  for (const term of terms) {
+    for (const { start, end } of findFileAnonymizationMatches(
+      normalizedText,
+      term.text,
+    )) {
+      const key = `${start}:${end}`;
+      if (seenRanges.has(key)) {
+        continue;
+      }
+      seenRanges.add(key);
+      const spans = getEntitySpans({
+        charSpans,
+        entityStart: start,
+        entityEnd: end,
+      });
+      if (spans.length === 0) {
+        continue;
+      }
+      overlayEntities.push({
+        id: allocateEntityOverlayId(),
+        label: term.label,
+        text: term.text,
+        spans,
+      });
     }
-    overlayEntities.push({
-      id: allocateEntityOverlayId(),
-      label: entity.label,
-      text: entity.text,
-      spans,
-    });
   }
 
   if (!pipelineRuns.canCommit(fieldId, run)) {
