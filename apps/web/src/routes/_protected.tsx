@@ -88,7 +88,11 @@ import { AuthenticatedUserProvider } from "@/lib/authenticated-user-context";
 import { ChromeHeaderActionsSlot } from "@/lib/chrome-header-actions";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
-import { resolveMatterColor } from "@/lib/matter-colors";
+import {
+  MATTER_TINT_GROUND,
+  matterTint,
+  resolveMatterColor,
+} from "@/lib/matter-colors";
 import { notificationsOptions } from "@/lib/notification-queries";
 import { aiAvailabilityOptions } from "@/lib/organization/ai-config-queries";
 import { usePinnedStore } from "@/lib/pinned-store";
@@ -357,12 +361,14 @@ function ProtectedComponent() {
     ? resolveMatterColor(activeWorkspaceId, activeWorkspace?.color ?? null)
     : null;
   const matterChromeStyle: MatterChromeStyle = {
-    "--matter-background-tint": activeMatterColor
-      ? `color-mix(in srgb, ${activeMatterColor} 2%, var(--background))`
-      : "var(--background)",
-    "--matter-sidebar-tint": activeMatterColor
-      ? `color-mix(in srgb, ${activeMatterColor} 2%, var(--sidebar))`
-      : "var(--sidebar)",
+    "--matter-background-tint": matterTint(
+      activeMatterColor,
+      MATTER_TINT_GROUND.content,
+    ),
+    "--matter-sidebar-tint": matterTint(
+      activeMatterColor,
+      MATTER_TINT_GROUND.chrome,
+    ),
   };
   const inspectorPaneOpen = useInspectorTabsStore(
     (state) => state.tabs.length > 0 && !state.minimized,

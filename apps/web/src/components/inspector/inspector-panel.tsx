@@ -488,7 +488,10 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
 
   return (
     <RenderStormRegion name="inspector">
-      <div className="flex h-full bg-(--matter-background-tint) shadow-lg">
+      {/* Panes paint `bg-background`; pointing the token at the matter tint
+          here gives every pane the same ground as the rest of the matter
+          chrome, including panes added later. */}
+      <div className="flex h-full bg-(--matter-background-tint) shadow-lg [--background:var(--matter-background-tint)]">
         <div className="hidden md:contents">
           <InspectorRail
             activeId={activeId}

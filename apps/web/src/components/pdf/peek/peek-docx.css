@@ -1,6 +1,13 @@
+/* Resolved on the root element, where the theme and palette classes live, so
+   a subtree that re-points `--background` (the inspector's matter tint) still
+   renders documents on untinted paper. */
+:root {
+  --document-paper: var(--background);
+}
+
 .document-preview-surface,
 .folio-docx-preview {
-  --document-preview-page: var(--background);
+  --document-preview-page: var(--document-paper);
   --document-preview-surface: color-mix(
     in srgb,
     var(--background) 92%,
@@ -14,6 +21,11 @@
   --doc-bg: var(--document-preview-surface);
   --doc-bg-subtle: var(--document-preview-surface);
   --doc-canvas: var(--document-preview-page);
+}
+
+/* Folio declares its page token on its own root from `--background`. */
+.folio-docx-preview .folio-root {
+  --doc-page: var(--document-paper);
 }
 
 .dark .document-preview-surface,
