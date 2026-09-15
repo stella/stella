@@ -177,7 +177,7 @@ export const CaseNumberCell = ({
         // name long enough to wrap would set the width of every row. The
         // mark keeps the wrap-content mode's unfolding off this line.
         <p
-          className="text-muted-foreground mt-0.5 flex max-w-80 min-w-0 items-center gap-x-1.5 overflow-hidden text-xs whitespace-nowrap"
+          className="text-muted-foreground mt-0.5 flex max-w-80 min-w-0 items-center gap-x-1.5 overflow-hidden text-xs text-ellipsis whitespace-nowrap"
           data-one-line=""
         >
           {identity.map(({ field, value }, index) => (
