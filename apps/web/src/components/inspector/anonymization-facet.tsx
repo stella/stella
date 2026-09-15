@@ -65,6 +65,7 @@ import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { UnsupportedAnonymizedExportError } from "@/lib/pdf/anonymized-export-errors";
 import { toSafeId } from "@/lib/safe-id";
 import { anonymizationAllowlistOptions } from "@/lib/workspaces/queries/anonymization-allowlist";
 import { anonymizationTermsOptions } from "@/lib/workspaces/queries/anonymization-terms";
@@ -491,7 +492,9 @@ export const AnonymizationFacet = ({
     if (download.isErr()) {
       analytics.captureError(download.error);
       stellaToast.add({
-        title: userErrorFromThrown(download.error, t("errors.actionFailed")),
+        title: UnsupportedAnonymizedExportError.is(download.error)
+          ? t("inspector.anonymization.unsupportedVisualContent")
+          : userErrorFromThrown(download.error, t("errors.actionFailed")),
         type: "error",
       });
     }

@@ -2621,6 +2621,7 @@
       "termAddedToast": "Added \"{value}\" to workspace anonymization terms.",
       "termMatchCountAriaLabel": "Matched {count} times in this document.",
       "title": "Anonymization vocabulary",
+      "unsupportedVisualContent": "This file contains images or vector graphics that cannot be checked for sensitive text. Export is unavailable.",
       "workspaceTermsHeading": "Workspace terms ({count})"
     },
     "external": {

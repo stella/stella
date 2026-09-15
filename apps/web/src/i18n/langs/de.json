@@ -2621,6 +2621,7 @@
       "termAddedToast": "„{value}“ zu den Anonymisierungsbegriffen der Kanzlei hinzugefügt.",
       "termMatchCountAriaLabel": "{count}-mal in diesem Dokument gefunden.",
       "title": "Anonymisierungs-Vokabular",
+      "unsupportedVisualContent": "Diese Datei enthält Bilder oder Vektorgrafiken, die nicht auf vertraulichen Text geprüft werden können. Der Export ist nicht verfügbar.",
       "workspaceTermsHeading": "Kanzleibegriffe ({count})"
     },
     "external": {

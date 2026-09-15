@@ -2621,6 +2621,7 @@
       "termAddedToast": "Dodano „{value}” do terminów anonimizacji obszaru roboczego.",
       "termMatchCountAriaLabel": "Dopasowano {count} razy w tym dokumencie.",
       "title": "Słownik anonimizacji",
+      "unsupportedVisualContent": "Ten plik zawiera obrazy lub grafikę wektorową, których nie można sprawdzić pod kątem wrażliwego tekstu. Eksport jest niedostępny.",
       "workspaceTermsHeading": "Terminy obszaru roboczego ({count})"
     },
     "external": {

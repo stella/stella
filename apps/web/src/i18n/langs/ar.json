@@ -2621,6 +2621,7 @@
       "termAddedToast": "تمت إضافة «{value}» إلى مصطلحات إخفاء الهوية لمساحة العمل.",
       "termMatchCountAriaLabel": "طُوبق {count} مرة في هذا المستند.",
       "title": "مفردات إخفاء الهوية",
+      "unsupportedVisualContent": "يحتوي هذا الملف على صور أو رسومات متجهة يتعذر فحصها بحثًا عن نص حساس. التصدير غير متاح.",
       "workspaceTermsHeading": "مصطلحات مساحة العمل ({count})"
     },
     "external": {
