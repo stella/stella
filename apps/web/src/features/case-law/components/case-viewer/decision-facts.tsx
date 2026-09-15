@@ -4,67 +4,115 @@ import { ExternalLinkIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
+import { cn } from "@stll/ui/utils";
 
 import {
   buildDecisionFacts,
-  hasDecisionFacts,
+  DECISION_FACT_KINDS,
+  decisionFactIsPresent,
 } from "@/features/case-law/components/case-viewer/decision-facts.logic";
-import type { DecisionFactsInput } from "@/features/case-law/components/case-viewer/decision-facts.logic";
+import type {
+  DecisionFactKind,
+  DecisionFacts as DecisionFactValues,
+  DecisionFactsInput,
+} from "@/features/case-law/components/case-viewer/decision-facts.logic";
+import type { TranslationKey } from "@/i18n/types";
 import { sanitizeHref } from "@/lib/sanitize-href";
+
+/**
+ * How each fact is labelled and printed. One entry per fact kind, so a fact
+ * a surface can select is a fact the reader can draw.
+ */
+const FACT_ROWS = {
+  decisionType: {
+    label: "common.type",
+    render: (facts) => <span className="capitalize">{facts.decisionType}</span>,
+  },
+  judge: {
+    label: "caseLaw.viewer.judgeRapporteur",
+    render: (facts) => <BidiText as="span">{facts.judge}</BidiText>,
+  },
+  keywords: {
+    label: "inspector.metadata.documentProperties.keys.keywords",
+    render: (facts) => facts.keywords.join(", "),
+  },
+  legalAreas: {
+    label: "caseLaw.viewer.legalArea",
+    render: (facts) => facts.legalAreas.join(" · "),
+  },
+  source: {
+    label: "common.source",
+    render: (facts) => <SourceLink source={facts.source} />,
+  },
+  subject: {
+    label: "inspector.metadata.documentProperties.keys.subject",
+    render: (facts) => facts.subject,
+  },
+} as const satisfies Record<
+  DecisionFactKind,
+  { label: TranslationKey; render: (facts: DecisionFactValues) => ReactNode }
+>;
+
+type DecisionFactsProps = DecisionFactsInput & {
+  className?: string | undefined;
+  /** Which facts this surface prints; the rest are shown elsewhere. */
+  facts: readonly DecisionFactKind[];
+};
 
 /**
  * Publisher facts above the text: what kind of decision, which area of law,
  * who reported it, and where it came from. Quiet by design; the text is the
  * content, this is its label.
+ *
+ * The caller names the facts it prints, because a surface that already shows
+ * one of them in its own chrome must not repeat it in the list.
  */
-export const DecisionFacts = (input: DecisionFactsInput) => {
+export const DecisionFacts = ({
+  className,
+  facts,
+  ...input
+}: DecisionFactsProps) => {
   const t = useTranslations();
-  const facts = buildDecisionFacts(input);
-  if (!hasDecisionFacts(facts)) {
+  const values = buildDecisionFacts(input);
+  const shown = DECISION_FACT_KINDS.filter(
+    (kind) => facts.includes(kind) && decisionFactIsPresent(values, kind),
+  );
+  if (shown.length === 0) {
     return null;
   }
 
   return (
-    <dl className="reader-chrome text-muted-foreground mb-6 grid grid-cols-[9rem_minmax(0,1fr)] gap-x-4 gap-y-1 text-xs print:mb-4">
-      {facts.decisionType !== null && (
-        <Fact label={t("common.type")}>
-          <span className="capitalize">{facts.decisionType}</span>
-        </Fact>
+    <dl
+      className={cn(
+        "reader-chrome text-muted-foreground mb-6 grid grid-cols-[9rem_minmax(0,1fr)] gap-x-4 gap-y-1 text-xs print:mb-4",
+        className,
       )}
-      {facts.legalAreas.length > 0 && (
-        <Fact label={t("caseLaw.viewer.legalArea")}>
-          {facts.legalAreas.join(" · ")}
+    >
+      {shown.map((kind) => (
+        <Fact key={kind} label={t(FACT_ROWS[kind].label)}>
+          {FACT_ROWS[kind].render(values)}
         </Fact>
-      )}
-      {facts.subject !== null && (
-        <Fact label={t("inspector.metadata.documentProperties.keys.subject")}>
-          {facts.subject}
-        </Fact>
-      )}
-      {facts.keywords.length > 0 && (
-        <Fact label={t("inspector.metadata.documentProperties.keys.keywords")}>
-          {facts.keywords.join(", ")}
-        </Fact>
-      )}
-      {facts.judge !== null && (
-        <Fact label={t("caseLaw.viewer.judgeRapporteur")}>
-          <BidiText as="span">{facts.judge}</BidiText>
-        </Fact>
-      )}
-      {facts.source !== null && (
-        <Fact label={t("common.source")}>
-          <a
-            className="hover:text-foreground inline-flex items-center gap-1 underline-offset-2 hover:underline"
-            href={sanitizeHref(facts.source.url)}
-            rel="noopener noreferrer"
-            target="_blank"
-          >
-            {facts.source.name ?? t("inspector.external.openOriginal")}
-            <ExternalLinkIcon aria-hidden="true" className="size-3" />
-          </a>
-        </Fact>
-      )}
+      ))}
     </dl>
+  );
+};
+
+const SourceLink = ({ source }: { source: DecisionFactValues["source"] }) => {
+  const t = useTranslations();
+  if (source === null) {
+    return null;
+  }
+
+  return (
+    <a
+      className="hover:text-foreground inline-flex items-center gap-1 underline-offset-2 hover:underline"
+      href={sanitizeHref(source.url)}
+      rel="noopener noreferrer"
+      target="_blank"
+    >
+      {source.name ?? t("inspector.external.openOriginal")}
+      <ExternalLinkIcon aria-hidden="true" className="size-3" />
+    </a>
   );
 };
 

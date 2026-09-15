@@ -12,6 +12,46 @@
  * read-then-write loop with no layout thrash in between.
  */
 
+import { panic } from "better-result";
+
+/**
+ * Where a note is drawn. The wide reader has a gutter and paints its notes
+ * into it at a measured offset; a reader too narrow for one (the inspector
+ * pane) has no second column at all, so the note takes its place in the
+ * text's own flow, directly under the paragraph it belongs to.
+ */
+export type NotePlacement =
+  | { type: "gutter"; top: number }
+  | { type: "inline" };
+
+export type NotePlacementPresentation = {
+  className: string;
+  style: { top: string } | undefined;
+};
+
+/** How a placement positions the note's own box. */
+export const notePlacementPresentation = (
+  placement: NotePlacement,
+): NotePlacementPresentation => {
+  switch (placement.type) {
+    case "gutter": {
+      return {
+        className: "absolute start-0 end-0",
+        style: { top: `${String(placement.top)}px` },
+      };
+    }
+    case "inline": {
+      // No display utility: the note keeps whatever box its own element is,
+      // so the composer stays the column it lays itself out as.
+      return { className: "my-2 w-full", style: undefined };
+    }
+    default: {
+      placement satisfies never;
+      return panic(`Unhandled note placement: ${String(placement)}`);
+    }
+  }
+};
+
 /** Height assumed for a note that has not been measured yet. */
 export const UNMEASURED_NOTE_HEIGHT_PX = 48;
 

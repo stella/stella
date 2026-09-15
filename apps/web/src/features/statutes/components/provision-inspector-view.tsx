@@ -16,7 +16,9 @@ import {
 import { InspectorTabHeader } from "@/components/inspector/inspector-tab-header";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import type { InspectorViewRenderProps } from "@/components/inspector/view-registry";
+import { ZoomControls } from "@/components/inspector/zoom-controls";
 import { OpenOriginalButton } from "@/components/legal-reader/open-original-button";
+import { useReaderTextScale } from "@/components/legal-reader/use-reader-text-scale";
 import { usePublicSignInRequest } from "@/components/public-sign-in-request";
 import {
   CitingDecisionItem,
@@ -57,6 +59,7 @@ export const ProvisionInspectorView = ({
 }: InspectorViewRenderProps<ProvisionViewPayload>) => {
   const t = useTranslations();
   const { payload } = tab;
+  const textScale = useReaderTextScale();
   const updateView = useInspectorTabsStore((state) => state.updateView);
   const { data: versions } = useQuery(
     statuteVersionsOptions(payload.documentId),
@@ -116,10 +119,26 @@ export const ProvisionInspectorView = ({
       className="bg-background flex min-h-0 flex-1 flex-col overflow-hidden"
       ref={panelRef}
     >
-      <InspectorTabHeader label={tab.label} onClose={onClose} />
+      <InspectorTabHeader
+        actions={
+          <ZoomControls
+            atMax={textScale.atMax}
+            atMin={textScale.atMin}
+            level={textScale.level}
+            onReset={textScale.reset}
+            onZoom={textScale.zoom}
+          />
+        }
+        label={tab.label}
+        onClose={onClose}
+      />
       <InspectorFindBar find={find} />
       <ScrollArea className="min-h-0 flex-1">
-        <div className="flex flex-col gap-6 p-4" ref={contentRef}>
+        <div
+          className="flex flex-col gap-6 p-4"
+          ref={contentRef}
+          style={textScale.style}
+        >
           {selectedVersion !== undefined && (
             <div className="flex flex-wrap items-center justify-between gap-2">
               <StatuteValidityIndicator

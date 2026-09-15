@@ -882,8 +882,6 @@
     "editorLoading": "Redaktori laadimine…",
     "emptyThreadDescription": "Küsi selle toimiku kohta, koosta tekst või palu lühikest uurimismärkust.",
     "emptyThreadTitle": "Alusta vestlust",
-    "externalSourcePlaceholder": "Vestle teemal {title}",
-    "externalSourcePlaceholderAction": "Vestle teemal",
     "extractingContent": "Sisu ekstraktimine...",
     "filePlaceholder": "Vestle teemal {fileName}",
     "filePlaceholderAction": "Vestle teemal",
@@ -1014,6 +1012,8 @@
         "team": "Tiimi AI oskused"
       }
     },
+    "sourcePlaceholder": "Vestle teemal {title}",
+    "sourcePlaceholderAction": "Vestle teemal",
     "sources": "Allikad:",
     "spawnSubagents": {
       "failed": "Ebaõnnestus"
@@ -4126,6 +4126,7 @@
     "leadingDecisions": "Juhtivad lahendid",
     "noVersionInForce": "Valitud kuupäeval ei kehtinud ükski selle õigusakti redaktsioon.",
     "openEnded": "praeguseni",
+    "openProvision": "Ava säte",
     "outline": "Sisukord",
     "outlineJumpLabel": "Liigu sättele",
     "outlineJumpPlaceholder": "§ 10 või pealkiri",

@@ -882,8 +882,6 @@
     "editorLoading": "Įkeliamas redaktorius…",
     "emptyThreadDescription": "Paklauskite apie šią bylą, parenkite tekstą arba paprašykite trumpos tyrimo pastabos.",
     "emptyThreadTitle": "Pradėti pokalbį",
-    "externalSourcePlaceholder": "Kalbėtis apie {title}",
-    "externalSourcePlaceholderAction": "Kalbėtis apie",
     "extractingContent": "Turinio ištraukimas...",
     "filePlaceholder": "Kalbėtis apie {fileName}",
     "filePlaceholderAction": "Kalbėtis apie",
@@ -1014,6 +1012,8 @@
         "team": "Komandos DI įgūdžiai"
       }
     },
+    "sourcePlaceholder": "Kalbėtis apie {title}",
+    "sourcePlaceholderAction": "Kalbėtis apie",
     "sources": "Šaltiniai:",
     "spawnSubagents": {
       "failed": "Nepavyko"
@@ -4126,6 +4126,7 @@
     "leadingDecisions": "Pagrindiniai sprendimai",
     "noVersionInForce": "Pasirinktą dieną negaliojo nė viena šio akto redakcija.",
     "openEnded": "dabar",
+    "openProvision": "Atverti nuostatą",
     "outline": "Turinys",
     "outlineJumpLabel": "Pereiti prie nuostatos",
     "outlineJumpPlaceholder": "§ 10 arba pavadinimas",

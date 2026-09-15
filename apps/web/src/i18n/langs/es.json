@@ -882,8 +882,6 @@
     "editorLoading": "Cargando el editor…",
     "emptyThreadDescription": "Pregunta sobre este asunto, redacta texto o pide una breve nota de investigación.",
     "emptyThreadTitle": "Iniciar conversación",
-    "externalSourcePlaceholder": "Chat sobre {title}",
-    "externalSourcePlaceholderAction": "Chat sobre",
     "extractingContent": "Extrayendo contenido...",
     "filePlaceholder": "Chat sobre {fileName}",
     "filePlaceholderAction": "Chat sobre",
@@ -1014,6 +1012,8 @@
         "team": "Habilidades de IA del equipo"
       }
     },
+    "sourcePlaceholder": "Chat sobre {title}",
+    "sourcePlaceholderAction": "Chat sobre",
     "sources": "Fuentes:",
     "spawnSubagents": {
       "failed": "Falló"
@@ -4126,6 +4126,7 @@
     "leadingDecisions": "Sentencias de referencia",
     "noVersionInForce": "Ninguna versión de esta norma estaba vigente en la fecha elegida.",
     "openEnded": "actualidad",
+    "openProvision": "Abrir la disposición",
     "outline": "Índice",
     "outlineJumpLabel": "Ir a una disposición",
     "outlineJumpPlaceholder": "§ 10 o un título",

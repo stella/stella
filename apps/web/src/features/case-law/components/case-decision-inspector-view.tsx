@@ -1,43 +1,72 @@
 import { useRef } from "react";
-import type { MouseEvent } from "react";
+import type { ReactNode } from "react";
 
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
-import { Maximize2Icon } from "lucide-react";
+import { InfoIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { ScrollArea } from "@stll/ui/scroll-area";
+import { Separator } from "@stll/ui/separator";
 import { Skeleton } from "@stll/ui/skeleton";
 
 import type { CaseDecisionViewPayload } from "@/components/inspector/case-decision-view";
-import {
-  createCaseDecisionViewTab,
-  isPlainPrimaryClick,
-} from "@/components/inspector/case-decision-view";
 import {
   InspectorFindBar,
   useInspectorFind,
 } from "@/components/inspector/inspector-find";
 import { InspectorTabHeader } from "@/components/inspector/inspector-tab-header";
-import { useInspectorView } from "@/components/inspector/use-inspector-view";
 import type { InspectorViewRenderProps } from "@/components/inspector/view-registry";
-import Tooltip from "@/components/tooltip";
+import { ZoomControls } from "@/components/inspector/zoom-controls";
+import { AnnotationToolbar } from "@/components/legal-reader/annotations/annotation-toolbar";
+import { GuestAnnotationPrompt } from "@/components/legal-reader/annotations/guest-annotation-prompt";
+import type { ReaderAnnotationTarget } from "@/components/legal-reader/annotations/reader-annotation-target";
+import { LegalReaderAIChat } from "@/components/legal-reader/legal-reader-ai-chat";
+import { OpenOriginalButton } from "@/components/legal-reader/open-original-button";
+import { useReaderTextScale } from "@/components/legal-reader/use-reader-text-scale";
+import { MarginNotes } from "@/features/case-law/components/case-viewer/analysis/margin-notes";
+import type { MarginItem } from "@/features/case-law/components/case-viewer/analysis/margin-notes";
 import { CitationHeader } from "@/features/case-law/components/case-viewer/citation-header";
 import { DecisionCitations } from "@/features/case-law/components/case-viewer/decision-citations";
 import { DecisionFacts } from "@/features/case-law/components/case-viewer/decision-facts";
+import {
+  buildDecisionFacts,
+  hasDecisionFacts,
+} from "@/features/case-law/components/case-viewer/decision-facts.logic";
+import type {
+  DecisionFactKind,
+  DecisionFactsInput,
+} from "@/features/case-law/components/case-viewer/decision-facts.logic";
 import { DecisionText } from "@/features/case-law/components/case-viewer/decision-text";
-import { visibleDecisionBlocks } from "@/features/case-law/components/case-viewer/decision-text.logic";
+import {
+  decisionCaseName,
+  visibleDecisionBlocks,
+} from "@/features/case-law/components/case-viewer/decision-text.logic";
 import { ProvisionsCited } from "@/features/case-law/components/case-viewer/provisions-cited";
+import { useDecisionAnnotationSurface } from "@/features/case-law/components/case-viewer/use-decision-annotation-surface";
 import { useDecisionCitationAnchors } from "@/features/case-law/components/case-viewer/use-decision-citation-anchors";
 import { useDecisionProvisionAnchors } from "@/features/case-law/components/case-viewer/use-decision-provision-anchors";
 import { useDecisionStatuteCitationAnchors } from "@/features/case-law/components/case-viewer/use-decision-statute-citation-anchors";
+import { DecisionMainViewAction } from "@/features/case-law/components/decision-main-view-action";
 import { decisionOptions } from "@/features/case-law/queries/decisions";
-import { useMainCaseLawDecision } from "@/features/case-law/use-main-decision";
 import { detached } from "@/lib/detached";
 import { toSafeId } from "@/lib/safe-id";
+
+/** What the header carries, so the text is not preceded by a table of it. */
+const HEADER_DECISION_FACTS = [
+  "decisionType",
+  "subject",
+] as const satisfies readonly DecisionFactKind[];
+
+/** What is left for the list above the text. */
+const BODY_DECISION_FACTS = [
+  "legalAreas",
+  "keywords",
+  "judge",
+] as const satisfies readonly DecisionFactKind[];
 
 /** A compact decision reader composed for the inspector's bounded width. */
 export const CaseDecisionInspectorView = ({
@@ -46,6 +75,7 @@ export const CaseDecisionInspectorView = ({
 }: InspectorViewRenderProps<CaseDecisionViewPayload>) => {
   const t = useTranslations();
   const { payload } = tab;
+  const textScale = useReaderTextScale();
   const decisionId = toSafeId<"caseLawDecision">(payload.decisionId);
   const citationAnchors = useDecisionCitationAnchors(decisionId);
   const {
@@ -55,12 +85,13 @@ export const CaseDecisionInspectorView = ({
     refetch,
   } = useQuery(decisionOptions(decisionId));
   const decisionDate = decision?.decisionDate ?? null;
+  const ast = parseDocumentAst(decision?.documentAst);
   const provisionAnchors = useDecisionProvisionAnchors(
     decisionId,
     decisionDate,
   );
   const statuteCitationAnchors = useDecisionStatuteCitationAnchors(
-    visibleDecisionBlocks(parseDocumentAst(decision?.documentAst)),
+    visibleDecisionBlocks(ast),
     decisionDate,
   );
   const panelRef = useRef<HTMLDivElement | null>(null);
@@ -73,60 +104,47 @@ export const CaseDecisionInspectorView = ({
     highlightKey: tab.id,
     panelRef,
   });
-  const inspector = useInspectorView();
-  const mainDecision = useMainCaseLawDecision();
-  const swapTarget =
-    mainDecision !== undefined && mainDecision.id !== payload.decisionId
-      ? mainDecision
-      : undefined;
-
-  // Plain primary click moves this decision to main; when the main view
-  // already shows another decision, the two exchange places instead of
-  // the main one being silently dropped. Modified clicks stay native
-  // (new browser tab) and leave the inspector untouched.
-  const onMainNavigation = (event: MouseEvent<HTMLAnchorElement>) => {
-    if (!isPlainPrimaryClick(event)) {
-      return;
+  // The same marks, store and bar the full page has. The target is addressed
+  // by the tab's own decision id, so the reader's marks are already the right
+  // ones before the decision itself has arrived.
+  const annotationTarget = {
+    type: "decision",
+    caseNumber: payload.caseNumber,
+    country: payload.country,
+    court: payload.court,
+    decisionDate,
+    decisionType: decision?.decisionType ?? null,
+    ecli: decision?.ecli ?? null,
+    id: decisionId,
+    name: decisionCaseName({
+      blocks: ast?.blocks ?? [],
+      caseNumber: payload.caseNumber,
+    }),
+  } as const satisfies ReaderAnnotationTarget;
+  const annotations = useDecisionAnnotationSurface({
+    marks: "all",
+    scrollContainerRef: contentRef,
+    target: annotationTarget,
+  });
+  // The pane has no margin column, so a note takes its place in the text:
+  // under the paragraph it belongs to, where the margin would have put it
+  // beside.
+  const notesByAnchorId = ((): ReadonlyMap<string, ReactNode> => {
+    const grouped = new Map<string, MarginItem[]>();
+    for (const note of annotations.notes) {
+      const items = grouped.get(note.startAnchorId);
+      if (items === undefined) {
+        grouped.set(note.startAnchorId, [note]);
+        continue;
+      }
+      items.push(note);
     }
-    onClose();
-    if (swapTarget !== undefined) {
-      inspector.open(
-        createCaseDecisionViewTab({
-          caseNumber: swapTarget.caseNumber,
-          country: swapTarget.country,
-          court: swapTarget.court,
-          decisionId: swapTarget.id,
-          language: swapTarget.language,
-          languageAlternates: swapTarget.languageAlternates,
-          slug: swapTarget.slug,
-        }),
-      );
+    const rendered = new Map<string, ReactNode>();
+    for (const [anchorId, items] of grouped) {
+      rendered.set(anchorId, <MarginNotes items={items} placement="inline" />);
     }
-  };
-  const mainLink =
-    payload.language === undefined ? (
-      <Link
-        onClick={onMainNavigation}
-        params={{
-          country: payload.country,
-          court: payload.court,
-          slug: payload.slug,
-        }}
-        to="/law/$country/cases/$court/$slug"
-      />
-    ) : (
-      <Link
-        onClick={onMainNavigation}
-        params={{
-          country: payload.country,
-          court: payload.court,
-          language: payload.language,
-          slug: payload.slug,
-        }}
-        to="/law/$country/cases/$court/$language/$slug"
-      />
-    );
-
+    return rendered;
+  })();
   return (
     <div
       className="bg-background flex min-h-0 flex-1 flex-col overflow-hidden"
@@ -134,102 +152,168 @@ export const CaseDecisionInspectorView = ({
     >
       <InspectorTabHeader
         actions={
-          <Tooltip
-            content={
-              swapTarget === undefined
-                ? t("chat.moveToMain")
-                : t("inspector.swapViews")
-            }
-            render={
-              <Button
-                aria-label={
-                  swapTarget === undefined
-                    ? t("chat.moveToMain")
-                    : t("inspector.swapViews")
-                }
-                render={mainLink}
-                size="icon-xs"
-                variant="ghost"
-              />
-            }
-          >
-            <Maximize2Icon className="size-3.5" />
-          </Tooltip>
+          <>
+            <ZoomControls
+              atMax={textScale.atMax}
+              atMin={textScale.atMin}
+              level={textScale.level}
+              onReset={textScale.reset}
+              onZoom={textScale.zoom}
+            />
+            <Separator className="mx-0.5 h-4" orientation="vertical" />
+            {decision !== undefined && (
+              <>
+                <OpenOriginalButton href={decision.sourceUrl} size="icon-xs" />
+                <DecisionInfoPopover
+                  decisionType={decision.decisionType}
+                  metadata={decision.metadata}
+                  source={decision.source}
+                  sourceUrl={decision.sourceUrl}
+                />
+              </>
+            )}
+            {/* The text moves to the page, so the tab that held it goes. */}
+            <DecisionMainViewAction onMoveToMain={onClose} payload={payload} />
+          </>
         }
         label={tab.label}
         onClose={onClose}
       />
       <InspectorFindBar find={find} />
-      <ScrollArea className="min-h-0 flex-1">
-        <main className="reader-paper min-h-full px-4 py-6" ref={contentRef}>
-          <h1 className="sr-only">
-            <BidiText as="span">{payload.caseNumber}</BidiText>
-          </h1>
-          {isPending && <DecisionInspectorLoader />}
-          {isError && (
-            <div className="flex flex-col items-start gap-2 font-sans">
-              <p className="text-muted-foreground text-xs">
-                {t("errors.actionFailed")}
-              </p>
-              <Button
-                onClick={() => {
-                  detached(refetch(), "case-law.inspector-retry");
-                }}
-                size="sm"
-                variant="ghost"
-              >
-                {t("common.retry")}
-              </Button>
-            </div>
-          )}
-          {decision !== undefined && (
-            <>
-              <CitationHeader
-                decisionDate={decision.decisionDate}
-                decisionId={decisionId}
-              />
-              <DecisionFacts
-                decisionType={decision.decisionType}
-                metadata={decision.metadata}
-                source={decision.source}
-                sourceUrl={decision.sourceUrl}
-              />
-              <DecisionCitations
-                decision={{
-                  caseNumber: decision.caseNumber,
-                  country: decision.country,
-                  court: decision.court,
-                  decisionDate: decision.decisionDate,
-                  decisionType: decision.decisionType,
-                  ecli: decision.ecli,
-                  id: decision.id,
-                  language: decision.language,
-                  slug: decision.slug,
-                }}
-                decisionId={decisionId}
-              />
-              <ProvisionsCited
-                decisionDate={decision.decisionDate}
-                decisionId={decisionId}
-              />
-              {/* The words that found the decision come with the tab: the
+      <GuestAnnotationPrompt
+        className="shrink-0"
+        count={annotations.guestCount}
+      />
+      {/* The composer floats over the text, bound to this decision, the way
+          it floats over a PDF bound to that file. */}
+      <LegalReaderAIChat className="min-h-0 flex-1" target={annotationTarget}>
+        <ScrollArea className="h-full">
+          <main
+            className="reader-paper min-h-full px-4 py-6"
+            ref={contentRef}
+            style={textScale.style}
+          >
+            <h1 className="sr-only">
+              <BidiText as="span">{payload.caseNumber}</BidiText>
+            </h1>
+            {isPending && <DecisionInspectorLoader />}
+            {isError && (
+              <div className="flex flex-col items-start gap-2 font-sans">
+                <p className="text-muted-foreground text-xs">
+                  {t("errors.actionFailed")}
+                </p>
+                <Button
+                  onClick={() => {
+                    detached(refetch(), "case-law.inspector-retry");
+                  }}
+                  size="sm"
+                  variant="ghost"
+                >
+                  {t("common.retry")}
+                </Button>
+              </div>
+            )}
+            {decision !== undefined && (
+              <>
+                <CitationHeader
+                  decisionDate={decision.decisionDate}
+                  decisionId={decisionId}
+                />
+                <DecisionFacts
+                  decisionType={decision.decisionType}
+                  facts={BODY_DECISION_FACTS}
+                  metadata={decision.metadata}
+                  source={decision.source}
+                  sourceUrl={decision.sourceUrl}
+                />
+                <DecisionCitations
+                  decision={{
+                    caseNumber: decision.caseNumber,
+                    country: decision.country,
+                    court: decision.court,
+                    decisionDate: decision.decisionDate,
+                    decisionType: decision.decisionType,
+                    ecli: decision.ecli,
+                    id: decision.id,
+                    language: decision.language,
+                    slug: decision.slug,
+                  }}
+                  decisionId={decisionId}
+                />
+                <ProvisionsCited
+                  decisionDate={decision.decisionDate}
+                  decisionId={decisionId}
+                />
+                {/* The words that found the decision come with the tab: the
                   reader opens on them marked, at the passage the row named,
                   and the passage keeps its marker rather than flashing once. */}
-              <DecisionText
-                activeMatchIndex={0}
-                citationAnchors={citationAnchors}
-                decision={decision}
-                decisionId={decisionId}
-                landingAnchorId={payload.anchorId}
-                provisionAnchors={provisionAnchors}
-                searchQuery={payload.searchQuery ?? ""}
-                statuteCitationAnchors={statuteCitationAnchors}
-              />
-            </>
-          )}
-        </main>
-      </ScrollArea>
+                <DecisionText
+                  activeMatchIndex={0}
+                  annotationAnchors={annotations.anchors}
+                  citationAnchors={citationAnchors}
+                  decision={decision}
+                  decisionId={decisionId}
+                  landingAnchorId={payload.anchorId}
+                  notesByAnchorId={notesByAnchorId}
+                  onAnnotationActivate={annotations.setActiveAnnotationId}
+                  provisionAnchors={provisionAnchors}
+                  searchQuery={payload.searchQuery ?? ""}
+                  statuteCitationAnchors={statuteCitationAnchors}
+                />
+              </>
+            )}
+          </main>
+        </ScrollArea>
+      </LegalReaderAIChat>
+      <AnnotationToolbar
+        activeAnnotation={annotations.activeAnnotation}
+        activeSpans={annotations.activeSpans}
+        controller={annotations.controller}
+        mode={annotations.mode}
+        onActivateAnnotation={annotations.setActiveAnnotationId}
+        onClearActive={annotations.clearActive}
+        onCompose={annotations.startComposing}
+        scrollContainerRef={contentRef}
+        target={annotationTarget}
+      />
     </div>
+  );
+};
+
+/**
+ * The publisher's classification of the decision, one press away. It labels
+ * the text rather than being part of it, and at this width a two-row table
+ * above the first paragraph costs more than it tells.
+ */
+const DecisionInfoPopover = (input: DecisionFactsInput) => {
+  const t = useTranslations();
+  const facts = buildDecisionFacts(input);
+  if (!hasDecisionFacts({ facts, kinds: HEADER_DECISION_FACTS })) {
+    return null;
+  }
+
+  return (
+    <Popover>
+      <PopoverTrigger
+        render={
+          <Button
+            aria-label={t("common.details")}
+            size="icon-xs"
+            title={t("common.details")}
+            variant="ghost"
+          />
+        }
+      >
+        <InfoIcon className="size-3.5" />
+      </PopoverTrigger>
+      <PopoverPopup align="end" className="w-72" side="bottom">
+        <DecisionFacts
+          {...input}
+          className="mb-0 grid-cols-[auto_minmax(0,1fr)] gap-x-3"
+          facts={HEADER_DECISION_FACTS}
+        />
+      </PopoverPopup>
+    </Popover>
   );
 };
 

@@ -882,8 +882,6 @@
     "editorLoading": "Načítám editor…",
     "emptyThreadDescription": "Zeptejte se na tento spis, navrhněte text nebo požádejte o krátkou rešerši.",
     "emptyThreadTitle": "Začít konverzaci",
-    "externalSourcePlaceholder": "Chatovat o {title}",
-    "externalSourcePlaceholderAction": "Chatovat o",
     "extractingContent": "Extrahování obsahu...",
     "filePlaceholder": "Chatovat o {fileName}",
     "filePlaceholderAction": "Chatovat o",
@@ -1014,6 +1012,8 @@
         "team": "Týmové dovednosti"
       }
     },
+    "sourcePlaceholder": "Chatovat o {title}",
+    "sourcePlaceholderAction": "Chatovat o",
     "sources": "Zdroje:",
     "spawnSubagents": {
       "failed": "Selhalo"
@@ -4126,6 +4126,7 @@
     "leadingDecisions": "Klíčová rozhodnutí",
     "noVersionInForce": "K vybranému dni nebylo účinné žádné znění tohoto předpisu.",
     "openEnded": "současnost",
+    "openProvision": "Otevřít ustanovení",
     "outline": "Obsah",
     "outlineJumpLabel": "Přejít na ustanovení",
     "outlineJumpPlaceholder": "§ 10 nebo název",

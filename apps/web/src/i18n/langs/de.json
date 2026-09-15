@@ -882,8 +882,6 @@
     "editorLoading": "Editor wird geladen…",
     "emptyThreadDescription": "Fragen Sie zu dieser Akte, entwerfen Sie Text oder bitten Sie um eine kurze Recherche.",
     "emptyThreadTitle": "Konversation starten",
-    "externalSourcePlaceholder": "Chat über {title}",
-    "externalSourcePlaceholderAction": "Chat über",
     "extractingContent": "Inhalt wird extrahiert...",
     "filePlaceholder": "Chat über {fileName}",
     "filePlaceholderAction": "Chat über",
@@ -1014,6 +1012,8 @@
         "team": "Team-KI-Skills"
       }
     },
+    "sourcePlaceholder": "Chat über {title}",
+    "sourcePlaceholderAction": "Chat über",
     "sources": "Quellen:",
     "spawnSubagents": {
       "failed": "Fehlgeschlagen"
@@ -4126,6 +4126,7 @@
     "leadingDecisions": "Leitentscheidungen",
     "noVersionInForce": "Am gewählten Tag galt keine Fassung dieses Gesetzes.",
     "openEnded": "heute",
+    "openProvision": "Vorschrift öffnen",
     "outline": "Inhalt",
     "outlineJumpLabel": "Zu einer Vorschrift springen",
     "outlineJumpPlaceholder": "§ 10 oder Überschrift",

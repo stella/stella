@@ -25,6 +25,14 @@
   scroll-padding-block-end: 10rem;
 }
 
+/* A legal reader scrolls its own paper rather than Folio's viewport. Reserve
+ * the same trailing space so the last paragraph can clear the composer stack
+ * instead of resting under it. Box-sizing keeps the reserve inside the paper's
+ * min-height, so a short document gains no scrollbar from it. */
+[data-file-viewer-ai] .reader-paper {
+  padding-block-end: 8rem;
+}
+
 /* Folio's native suggested mode must remain legible over authored DOCX
  * highlights. Deletions recede as neutral source text; insertions keep the
  * document's normal text colour with a quiet success underline. The authored

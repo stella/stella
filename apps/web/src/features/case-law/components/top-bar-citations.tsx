@@ -1,5 +1,4 @@
 import { useQuery } from "@tanstack/react-query";
-import { useRouterState } from "@tanstack/react-router";
 import { useNow, useTranslations } from "use-intl";
 
 import { Temporal } from "@stll/time";
@@ -23,21 +22,16 @@ import { useFormatter } from "@/i18n/formatting-context";
  */
 export const TopBarCitations = () => {
   const decision = useMainCaseLawDecision();
-  const routeId = useRouterState({
-    select: (state) => state.matches.at(-1)?.routeId ?? null,
-  });
-  if (decision === undefined || routeId === null) {
+  if (decision === undefined) {
     return null;
   }
-  return <TopBarCitationsFor decision={decision} routeId={routeId} />;
+  return <TopBarCitationsFor decision={decision} />;
 };
 
 const TopBarCitationsFor = ({
   decision,
-  routeId,
 }: {
   decision: NonNullable<ReturnType<typeof useMainCaseLawDecision>>;
-  routeId: string;
 }) => {
   const t = useTranslations();
   const format = useFormatter();
@@ -78,18 +72,15 @@ const TopBarCitationsFor = ({
     .join(" · ");
   const openDetails = () => {
     useInspectorTabsStore.getState().openView(
-      createCaseDecisionDetailsTab(
-        {
-          caseNumber: decision.caseNumber,
-          country: decision.country,
-          court: decision.court,
-          decisionId: decision.id,
-          language: decision.language,
-          languageAlternates: decision.languageAlternates,
-          slug: decision.slug,
-        },
-        routeId,
-      ),
+      createCaseDecisionDetailsTab({
+        caseNumber: decision.caseNumber,
+        country: decision.country,
+        court: decision.court,
+        decisionId: decision.id,
+        language: decision.language,
+        languageAlternates: decision.languageAlternates,
+        slug: decision.slug,
+      }),
     );
   };
 

@@ -23,9 +23,10 @@ import { UserIdentity } from "@/components/user-avatar";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { forceReflow } from "@/lib/utils";
 
-import type { AnchoredNote } from "./margin-notes.logic";
+import type { AnchoredNote, NotePlacement } from "./margin-notes.logic";
 import {
   gutterIsAvailable,
+  notePlacementPresentation,
   placeGutterNotes,
   UNMEASURED_NOTE_HEIGHT_PX,
 } from "./margin-notes.logic";
@@ -71,10 +72,56 @@ export type MarginItem =
   | CommentMarginItem
   | ComposerMarginItem;
 
-type MarginNotesProps = {
-  items: MarginItem[];
-  scrollContainerRef: RefObject<HTMLElement | null>;
+type MarginNotesProps =
+  | {
+      items: MarginItem[];
+      /** Painted into the reader's own margin, beside their anchors. */
+      placement: "gutter";
+      scrollContainerRef: RefObject<HTMLElement | null>;
+    }
+  | {
+      items: MarginItem[];
+      /** Drawn in the text's flow, under the paragraph they belong to. */
+      placement: "inline";
+    };
+
+/**
+ * The notes on a document, wherever the reader has room for them. The gutter
+ * is the wide reader's; a pane too narrow for a second column takes the same
+ * notes in the text's own flow.
+ */
+export const MarginNotes = (props: MarginNotesProps) => {
+  switch (props.placement) {
+    case "gutter": {
+      return (
+        <GutterNotes
+          items={props.items}
+          scrollContainerRef={props.scrollContainerRef}
+        />
+      );
+    }
+    case "inline": {
+      return <InlineNotes items={props.items} />;
+    }
+    default: {
+      props satisfies never;
+      return panic(`Unhandled notes placement: ${String(props)}`);
+    }
+  }
 };
+
+/**
+ * The notes under their paragraph, in reading order. Nothing is measured:
+ * the note sits where the document puts it, so it cannot drift from its
+ * anchor and needs no leader line back to it.
+ */
+const InlineNotes = ({ items }: { items: MarginItem[] }) => (
+  <div className="reader-chrome" data-reader-chrome="">
+    {items.map((item) => (
+      <MarginNote item={item} key={item.id} placement={{ type: "inline" }} />
+    ))}
+  </div>
+);
 
 type PositionedItem = MarginItem & {
   top: number;
@@ -102,10 +149,13 @@ const resolveItemAnchor = (
   );
 };
 
-export const MarginNotes = ({
+const GutterNotes = ({
   items,
   scrollContainerRef,
-}: MarginNotesProps) => {
+}: {
+  items: MarginItem[];
+  scrollContainerRef: RefObject<HTMLElement | null>;
+}) => {
   const [positioned, setPositioned] = useState<PositionedItem[]>([]);
   const containerRef = useRef<HTMLDivElement>(null);
   // Lazy state singleton (mutated in place, identity stable): avoids both
@@ -282,55 +332,91 @@ export const MarginNotes = ({
           </div>
         );
       })}
-      {positioned.map((item) => {
-        switch (item.kind) {
-          case "comment": {
-            return (
-              <CommentNote
-                item={item}
-                key={item.id}
-                measureRef={measureRef}
-                onHover={(on) => noteHover(item, on)}
-                onJump={() => scrollTo(item)}
-                presence={notePresence(item)}
-              />
-            );
-          }
-          case "composer": {
-            return (
-              <ComposerNote item={item} key={item.id} measureRef={measureRef} />
-            );
-          }
-          case "card":
-          case "annotation": {
-            return (
-              <AnalysisNote
-                item={item}
-                key={item.id}
-                measureRef={measureRef}
-                onHover={(on) => noteHover(item, on)}
-                onJump={() => scrollTo(item)}
-                presence={notePresence(item)}
-              />
-            );
-          }
-          default: {
-            item satisfies never;
-            return panic(`Unhandled item: ${String(item)}`);
-          }
-        }
-      })}
+      {positioned.map((item) => (
+        <MarginNote
+          item={item}
+          key={item.id}
+          measureRef={measureRef}
+          onHover={(on) => noteHover(item, on)}
+          onJump={() => scrollTo(item)}
+          placement={{ type: "gutter", top: item.top }}
+          presence={notePresence(item)}
+        />
+      ))}
     </div>
   );
+};
+
+type MarginNoteProps = {
+  item: MarginItem;
+  measureRef?: ((el: HTMLElement | null, id: string) => void) | undefined;
+  onHover?: ((on: boolean) => void) | undefined;
+  onJump?: (() => void) | undefined;
+  placement: NotePlacement;
+  presence?: NotePresence | undefined;
+};
+
+/** One note, in whichever of the two places the reader has room for it. */
+const MarginNote = ({
+  item,
+  measureRef,
+  onHover,
+  onJump,
+  placement,
+  presence = "normal",
+}: MarginNoteProps) => {
+  switch (item.kind) {
+    case "comment": {
+      return (
+        <CommentNote
+          item={item}
+          measureRef={measureRef}
+          onHover={onHover}
+          onJump={onJump}
+          placement={placement}
+          presence={presence}
+        />
+      );
+    }
+    case "composer": {
+      return (
+        <ComposerNote
+          item={item}
+          measureRef={measureRef}
+          placement={placement}
+        />
+      );
+    }
+    case "card":
+    case "annotation": {
+      return (
+        <AnalysisNote
+          item={item}
+          measureRef={measureRef}
+          onHover={onHover}
+          onJump={onJump}
+          placement={placement}
+          presence={presence}
+        />
+      );
+    }
+    default: {
+      item satisfies never;
+      return panic(`Unhandled item: ${String(item)}`);
+    }
+  }
 };
 
 type NotePresence = "normal" | "highlighted" | "dimmed";
 
 type NoteProps<T extends MarginItem> = {
-  item: T & { top: number };
-  measureRef: (el: HTMLElement | null, id: string) => void;
-  onHover: (on: boolean) => void;
-  onJump: () => void;
+  item: T;
+  /** Gutter only: the note's own height decides where the next one starts. */
+  measureRef?: ((el: HTMLElement | null, id: string) => void) | undefined;
+  onHover?: ((on: boolean) => void) | undefined;
+  /** Gutter only: an inline note already sits at its anchor. */
+  onJump?: (() => void) | undefined;
+  placement: NotePlacement;
   /** Reverse hover: the reader's pointer is on annotated text — its own
    * notes light up, every other note steps back. */
   presence: NotePresence;
@@ -341,8 +427,10 @@ const AnalysisNote = ({
   measureRef,
   onHover,
   onJump,
+  placement,
   presence,
 }: NoteProps<AnalysisMarginItem>) => {
+  const position = notePlacementPresentation(placement);
   const cssVar = getCategoryVar(item.category);
   // Reverse hover speaks through the colour stripe alone — the words stay
   // readable in every state. Dimmed washes the stripe out; highlighted goes
@@ -359,16 +447,19 @@ const AnalysisNote = ({
 
   return (
     <button
-      className="text-foreground-muted hover:text-foreground-strong-muted absolute start-0 end-0 border-s-[3px] py-1 ps-2.5 text-start transition-[color,border-color,box-shadow]"
-      onBlur={() => onHover(false)}
+      className={cn(
+        "text-foreground-muted hover:text-foreground-strong-muted border-s-[3px] py-1 ps-2.5 text-start transition-[color,border-color,box-shadow]",
+        position.className,
+      )}
+      onBlur={() => onHover?.(false)}
       // oxlint-disable-next-line require-contained-handler/require-contained-handler -- measure callback ref, no portal-bearing descendants
       onClick={onJump}
-      onFocus={containedHandler(null, () => onHover(true))}
-      onMouseEnter={() => onHover(true)}
-      onMouseLeave={() => onHover(false)}
-      ref={(el) => measureRef(el, item.id)}
+      onFocus={containedHandler(null, () => onHover?.(true))}
+      onMouseEnter={() => onHover?.(true)}
+      onMouseLeave={() => onHover?.(false)}
+      ref={(el) => measureRef?.(el, item.id)}
       style={{
-        top: `${item.top}px`,
+        ...position.style,
         paddingInlineStart: `${0.625 + item.depth * 0.5}rem`,
         borderInlineStartColor: stripe,
         ...(presence === "highlighted" && {
@@ -398,11 +489,14 @@ const AnalysisNote = ({
 const ComposerNote = ({
   item,
   measureRef,
+  placement,
 }: {
-  item: ComposerMarginItem & { top: number };
-  measureRef: (el: HTMLElement | null, id: string) => void;
+  item: ComposerMarginItem;
+  measureRef?: ((el: HTMLElement | null, id: string) => void) | undefined;
+  placement: NotePlacement;
 }) => {
   const t = useTranslations();
+  const position = notePlacementPresentation(placement);
   const [body, setBody] = useState("");
   const [visibility, setVisibility] = useState<"private" | "shared">("private");
   const shared = visibility === "shared";
@@ -418,14 +512,17 @@ const ComposerNote = ({
 
   return (
     <form
-      className="absolute start-0 end-0 flex flex-col gap-1.5 border-s-[3px] py-1 ps-2.5 pe-2"
+      className={cn(
+        "flex flex-col gap-1.5 border-s-[3px] py-1 ps-2.5 pe-2",
+        position.className,
+      )}
       onSubmit={(event) => {
         event.preventDefault();
         submit();
       }}
-      ref={(el) => measureRef(el, item.id)}
+      ref={(el) => measureRef?.(el, item.id)}
       style={{
-        top: `${item.top}px`,
+        ...position.style,
         borderInlineStartColor: "var(--option-sky)",
       }}
     >
@@ -500,10 +597,12 @@ const CommentNote = ({
   measureRef,
   onHover,
   onJump,
+  placement,
   presence,
 }: NoteProps<CommentMarginItem>) => {
   const t = useTranslations();
   const shared = item.visibility === "shared";
+  const position = notePlacementPresentation(placement);
 
   const stripe =
     presence === "dimmed"
@@ -512,12 +611,15 @@ const CommentNote = ({
 
   return (
     <div
-      className="group/comment absolute start-0 end-0 border-s-[3px] py-1 ps-2.5 transition-[border-color,box-shadow]"
-      onMouseEnter={() => onHover(true)}
-      onMouseLeave={() => onHover(false)}
-      ref={(el) => measureRef(el, item.id)}
+      className={cn(
+        "group/comment border-s-[3px] py-1 ps-2.5 transition-[border-color,box-shadow]",
+        position.className,
+      )}
+      onMouseEnter={() => onHover?.(true)}
+      onMouseLeave={() => onHover?.(false)}
+      ref={(el) => measureRef?.(el, item.id)}
       style={{
-        top: `${item.top}px`,
+        ...position.style,
         borderInlineStartColor: stripe,
         ...(presence === "highlighted" && {
           boxShadow: "inset 2px 0 0 var(--option-sky)",
@@ -546,13 +648,19 @@ const CommentNote = ({
           </Tooltip>
         )}
       </div>
-      <button
-        className="text-foreground-muted hover:text-foreground-strong-muted mt-0.5 block w-full text-start text-[0.75rem] leading-snug transition-colors"
-        onClick={onJump}
-        type="button"
-      >
-        {item.text}
-      </button>
+      {onJump === undefined ? (
+        <p className="text-foreground-muted mt-0.5 text-start text-[0.75rem] leading-snug">
+          {item.text}
+        </p>
+      ) : (
+        <button
+          className="text-foreground-muted hover:text-foreground-strong-muted mt-0.5 block w-full text-start text-[0.75rem] leading-snug transition-colors"
+          onClick={onJump}
+          type="button"
+        >
+          {item.text}
+        </button>
+      )}
       {item.mine && (
         <div
           className={cn(

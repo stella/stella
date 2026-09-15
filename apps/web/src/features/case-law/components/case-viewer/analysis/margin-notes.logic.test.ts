@@ -1,7 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
 import type { AnchoredNote } from "./margin-notes.logic";
-import { gutterIsAvailable, placeGutterNotes } from "./margin-notes.logic";
+import {
+  gutterIsAvailable,
+  notePlacementPresentation,
+  placeGutterNotes,
+} from "./margin-notes.logic";
 
 const gutter = { width: 260 };
 const collapsed = { width: 0 };
@@ -82,5 +86,24 @@ describe("placing notes in the gutter", () => {
     });
 
     expect(placed.map(({ note: id }) => id)).toEqual(["earlier", "composer"]);
+  });
+});
+
+describe("note placement", () => {
+  test("a gutter note is lifted out of flow onto its measured offset", () => {
+    const { className, style } = notePlacementPresentation({
+      top: 128,
+      type: "gutter",
+    });
+
+    expect(className).toContain("absolute");
+    expect(style).toEqual({ top: "128px" });
+  });
+
+  test("an inline note stays in flow, so nothing positions it", () => {
+    const { className, style } = notePlacementPresentation({ type: "inline" });
+
+    expect(className).not.toContain("absolute");
+    expect(style).toBeUndefined();
   });
 });

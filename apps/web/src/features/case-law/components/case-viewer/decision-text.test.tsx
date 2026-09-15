@@ -8,12 +8,14 @@ import {
   TEXT_ABSENCE_REASON,
   TEXT_FIELD_TYPE,
 } from "@stll/api-contract/case-law-text-field";
+import type { DecisionAnalysis } from "@stll/legal-ast/analysis";
 import type {
   DocumentAst,
   ParagraphBlock,
   ParagraphRole,
 } from "@stll/legal-ast/document-ast";
 
+import { AiHeadnotes } from "@/features/case-law/components/case-viewer/analysis/ai-headnotes";
 import { DecisionText } from "@/features/case-law/components/case-viewer/decision-text";
 import { editorialSupplementBlocks } from "@/features/case-law/components/case-viewer/decision-text.logic";
 import messages from "@/i18n/langs/en.json";
@@ -306,10 +308,16 @@ const publisherParagraph = (
 });
 
 const renderTopMatter = ({
+  analysis,
+  courtAbbreviation,
+  courtTier,
   documentAst = ast,
   fields = {},
   searchQuery = "",
 }: {
+  analysis?: DecisionAnalysis;
+  courtAbbreviation?: string;
+  courtTier?: string;
   documentAst?: unknown;
   fields?: TextFieldOverrides;
   searchQuery?: string;
@@ -318,9 +326,16 @@ const renderTopMatter = ({
     <IntlProvider locale="en" messages={messages} timeZone="UTC">
       <DecisionText
         activeMatchIndex={-1}
+        aiHeadnotes={
+          analysis === undefined ? null : (
+            <AiHeadnotes analysis={analysis} onAnchorClick={() => undefined} />
+          )
+        }
         decision={{
           caseNumber: "1 As 1/2026",
           court: "Test court",
+          courtAbbreviation,
+          courtTier,
           documentAst,
           documentPending: false,
           documentReadFailed: false,
@@ -521,5 +536,119 @@ describe("what a decision opens with", () => {
     expect(fold).not.toContain(headnote);
     expect(fold).not.toContain("Publisher syllabus.");
     expect(occurrences(markup, "Publisher syllabus.")).toBe(1);
+  });
+});
+
+/** One section of the top matter: its `<details>` tag and all that follows. */
+const sectionOf = (markup: string, text: string): string =>
+  markup
+    .split("<details")
+    .slice(1)
+    .find((section) => section.includes(text)) ?? "";
+
+/** The attributes of the `<details>` that opens the section holding `text`. */
+const sectionAttributes = (markup: string, text: string): string => {
+  const section = sectionOf(markup, text);
+  return section.slice(0, section.indexOf(">"));
+};
+
+/** The `<summary>` line of the section whose body contains `text`. */
+const sectionSummary = (markup: string, text: string): string => {
+  const section = sectionOf(markup, text);
+  return section.slice(0, section.indexOf("</summary>"));
+};
+
+// Two authors write the same two sections, and a reader must be able to tell
+// whose sentence they are reading — by the mark on it, never by a shape that
+// would also rank one author above the other.
+describe("a headnote the court wrote and one a model wrote", () => {
+  const analysis = {
+    version: 3,
+    generatedAt: "2026-02-01T00:00:00.000Z",
+    model: "test-model",
+    inputFingerprint: "fingerprint-1",
+    tree: [],
+    holding: { anchors: [], language: "cs", text: "Model holding sentence." },
+    abstract: { language: "cs", text: "Model abstract sentence." },
+    topics: [],
+  } satisfies DecisionAnalysis;
+  const courtHeadnote = "Publisher headnote sentence.";
+  const courtAbstract = "Publisher abstract sentence.";
+
+  const markup = renderTopMatter({
+    analysis,
+    courtAbbreviation: "NS",
+    courtTier: "supreme",
+    fields: { abstract: courtAbstract, legalSentence: courtHeadnote },
+  });
+
+  test("draws both under one label and one shape", () => {
+    const summaries = [...markup.matchAll(/<summary class="(?<cls>[^"]*)"/gu)]
+      .map((match) => match.groups?.["cls"])
+      .filter((cls) => cls !== undefined);
+
+    // The court's two sections and the model's two, all styled alike.
+    expect(summaries).toHaveLength(4);
+    expect(new Set(summaries).size).toBe(1);
+    expect(sectionSummary(markup, courtHeadnote)).toContain(
+      messages.caseLaw.viewer.legalSentence,
+    );
+    expect(sectionSummary(markup, "Model holding sentence.")).toContain(
+      messages.caseLaw.viewer.legalSentence,
+    );
+  });
+
+  test("marks each section with who wrote it", () => {
+    const court = sectionSummary(markup, courtHeadnote);
+    const model = sectionSummary(markup, "Model holding sentence.");
+
+    expect(court).toContain('data-slot="court-badge"');
+    expect(court).toContain("NS");
+    expect(court).not.toContain(messages.caseLaw.notesFilter.ai);
+    expect(model).toContain(messages.caseLaw.notesFilter.ai);
+    expect(model).not.toContain('data-slot="court-badge"');
+  });
+
+  test("opens with the court's own, then what the model made of it", () => {
+    expect(markup.indexOf(courtHeadnote)).toBeLessThan(
+      markup.indexOf("Model holding sentence."),
+    );
+    expect(markup.indexOf("Model holding sentence.")).toBeLessThan(
+      markup.indexOf("Model abstract sentence."),
+    );
+    expect(markup.indexOf("Model abstract sentence.")).toBeLessThan(
+      markup.indexOf("Court text."),
+    );
+  });
+
+  // A section keeps the fold its kind has always had, whoever wrote it: a
+  // headnote is what the reader came for, an abstract repeats the decision.
+  // The court's abstract folds under its headnote; the model's abstract opens,
+  // being the reader's way into a decision the court did not summarise.
+  test("opens every block but the court's abstract", () => {
+    expect(sectionAttributes(markup, courtHeadnote)).toContain("open");
+    expect(sectionAttributes(markup, "Model holding sentence.")).toContain(
+      "open",
+    );
+    expect(sectionAttributes(markup, courtAbstract)).not.toContain("open");
+    expect(sectionAttributes(markup, "Model abstract sentence.")).toContain(
+      "open",
+    );
+  });
+
+  // The model's sentences are not the decision's words: they can be neither
+  // highlighted, nor cited, nor pulled into a quotation of the text beside
+  // them. The court's own keep all three.
+  test("keeps the model's sentences out of the annotatable text", () => {
+    expect(sectionAttributes(markup, "Model holding sentence.")).toContain(
+      "data-reader-chrome",
+    );
+    expect(sectionOf(markup, "Model holding sentence.")).not.toContain(
+      "data-anchor",
+    );
+    expect(sectionAttributes(markup, courtHeadnote)).not.toContain(
+      "data-reader-chrome",
+    );
+    expect(sectionOf(markup, courtHeadnote)).toContain("data-anchor");
   });
 });

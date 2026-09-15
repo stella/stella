@@ -1,7 +1,9 @@
+import { CASE_DECISION_DETAILS_VIEW } from "@/components/inspector/case-decision-details-view";
 import {
   CASE_DECISION_VIEW,
   isCaseDecisionViewPayload,
 } from "@/components/inspector/case-decision-view";
+import type { CaseDecisionViewPayload } from "@/components/inspector/case-decision-view";
 import { registerInspectorPersistenceReference } from "@/components/inspector/view-registry";
 import {
   INBOX_SIGNAL_VIEW,
@@ -18,26 +20,41 @@ registerInspectorPersistenceReference({
   project: ({ signalId }) => ({ signalId }),
 });
 
+/**
+ * What survives a reload of a decision tab: its route identity and the
+ * passage it was opened at. The words that found it do not — a reopened
+ * reader marks nothing until it is searched again.
+ */
+const projectCaseDecision = ({
+  anchorId,
+  caseNumber,
+  country,
+  court,
+  decisionId,
+  language,
+  slug,
+}: CaseDecisionViewPayload): CaseDecisionViewPayload => ({
+  caseNumber,
+  country,
+  court,
+  decisionId,
+  slug,
+  ...(language === undefined ? {} : { language }),
+  ...(anchorId === undefined ? {} : { anchorId }),
+});
+
 registerInspectorPersistenceReference({
   type: CASE_DECISION_VIEW,
   validate: isCaseDecisionViewPayload,
-  project: ({
-    anchorId,
-    caseNumber,
-    country,
-    court,
-    decisionId,
-    language,
-    slug,
-  }) => ({
-    caseNumber,
-    country,
-    court,
-    decisionId,
-    slug,
-    ...(language === undefined ? {} : { language }),
-    ...(anchorId === undefined ? {} : { anchorId }),
-  }),
+  project: projectCaseDecision,
+});
+
+// The facts of a decision are the same payload under a second view kind, so
+// the tab that holds them comes back from a reload the way the text tab does.
+registerInspectorPersistenceReference({
+  type: CASE_DECISION_DETAILS_VIEW,
+  validate: isCaseDecisionViewPayload,
+  project: projectCaseDecision,
 });
 
 registerInspectorPersistenceReference({

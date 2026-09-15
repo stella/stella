@@ -31,6 +31,7 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import type { DocxEditSafety } from "@/lib/chat-edit-mode";
 import type { ChatThreadId } from "@/lib/chat-thread-ref";
 
+import type { ActiveLegalDocument } from "./active-legal-document";
 import { FileChatOverlay } from "./file-chat-overlay";
 import { resolveFileReviewSessionId } from "./file-review-session";
 import type { FileChatOverlayActivation } from "./file-viewer-with-ai-config";
@@ -96,6 +97,11 @@ export type FileViewerWithAIProps = {
   activeDraft?: ActiveDocumentDraft | undefined;
   /** Optional external source context, for MCP/web previews. */
   activeExternal?: ActiveExternal | undefined;
+  /**
+   * The corpus document a legal reader is showing, bound to the chat the way
+   * a file is: the question carries the decision on screen.
+   */
+  activeLegal?: ActiveLegalDocument | undefined;
   /** Optional class name applied to the wrapper. */
   className?: string;
   /** Live Folio editor ref used by the overlay's DOCX edit tool. */
@@ -242,6 +248,7 @@ export const FileChatOverlayHost = ({
   activeFile,
   activeDraft,
   activeExternal,
+  activeLegal,
   docxEditable,
   docxEditSafety,
   docxEditorRef,
@@ -305,6 +312,7 @@ export const FileChatOverlayHost = ({
         activeExternal={activeExternal}
         activeDraft={activeDraft}
         activeFile={activeFile}
+        activeLegal={activeLegal}
         chatThreadId={chatThreadId}
         draftPersistence={draftPersistence}
         docxComments={docxComments}

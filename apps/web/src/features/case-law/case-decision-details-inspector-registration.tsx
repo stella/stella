@@ -1,29 +1,17 @@
 import { lazy, Suspense } from "react";
 
-import { InfoIcon } from "lucide-react";
-
-import { cn } from "@stll/ui/utils";
-
 import { CASE_DECISION_DETAILS_VIEW } from "@/components/inspector/case-decision-details-view";
 import { isCaseDecisionViewPayload } from "@/components/inspector/case-decision-view";
 import type { CaseDecisionViewPayload } from "@/components/inspector/case-decision-view";
 import { registerInspectorView } from "@/components/inspector/view-registry";
-import type {
-  InspectorRailIconProps,
-  InspectorViewRenderProps,
-} from "@/components/inspector/view-registry";
+import type { InspectorViewRenderProps } from "@/components/inspector/view-registry";
+import { CaseDecisionDetailsRailIcon } from "@/features/case-law/components/case-decision-rail-icon";
 
 const LazyCaseDecisionDetailsInspectorView = lazy(async () => {
   const module =
     await import("@/features/case-law/components/case-decision-details-inspector-view");
   return { default: module.CaseDecisionDetailsInspectorView };
 });
-
-const CaseDecisionDetailsRailIcon = ({
-  active,
-}: InspectorRailIconProps<CaseDecisionViewPayload>) => (
-  <InfoIcon className={cn("size-3.5", !active && "opacity-70")} />
-);
 
 const CaseDecisionDetailsView = (
   props: InspectorViewRenderProps<CaseDecisionViewPayload>,
@@ -37,7 +25,9 @@ registerInspectorView<CaseDecisionViewPayload>({
   type: CASE_DECISION_DETAILS_VIEW,
   render: CaseDecisionDetailsView,
   railIcon: CaseDecisionDetailsRailIcon,
-  navigationPolicy: "close-on-route-leave",
+  // The facts of a decision are a tab of that decision, not of the page that
+  // opened them: they stay until closed, the way a file tab does.
+  navigationPolicy: "persist",
   validate: isCaseDecisionViewPayload,
   ariaLabel: (tab) => tab.label,
 });

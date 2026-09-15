@@ -6,11 +6,18 @@ import { useTranslations } from "use-intl";
 import type { DecisionAnalysis } from "@stll/legal-ast/analysis";
 import { analysisLayersOf } from "@stll/legal-ast/analysis";
 import { BidiText } from "@stll/ui/bidi-text";
+import { cn } from "@stll/ui/utils";
+
+/** The margin's written layers, in the order they are drawn. */
+export const ANALYSIS_LAYER_KINDS = ["topics", "significance"] as const;
+
+export type AnalysisLayerKind = (typeof ANALYSIS_LAYER_KINDS)[number];
 
 type AnalysisLayersProps = {
   analysis: DecisionAnalysis;
-  /** Scrolls the text to a paragraph the holding rests on. */
-  onAnchorClick: (anchorId: string) => void;
+  className?: string | undefined;
+  /** Which layers this place draws. */
+  layers: readonly AnalysisLayerKind[];
 };
 
 /**
@@ -40,70 +47,31 @@ const Layer = ({
 };
 
 /**
- * The written layers of an analysis, above the margin notes: the holding
- * with the paragraphs it rests on, the abstract, the topics, and — when the
- * corpus has been read for it — how later courts have treated the decision.
+ * The written layers of an analysis that keep the margin column: the topics,
+ * and — when the corpus has been read for it — how later courts have treated
+ * the decision. The holding and the abstract open the decision itself, in its
+ * top matter, drawn as the court's own headnote is.
  *
  * A stored analysis from before these layers existed carries none of them,
  * and then nothing renders: an absent layer is absent, never an empty box.
  */
 export const AnalysisLayers = ({
   analysis,
-  onAnchorClick,
+  className,
+  layers,
 }: AnalysisLayersProps) => {
   const t = useTranslations();
-  const { abstract, holding, significance, topics } =
-    analysisLayersOf(analysis);
+  const all = analysisLayersOf(analysis);
+  const shows = (kind: AnalysisLayerKind): boolean => layers.includes(kind);
+  const significance = shows("significance") ? all.significance : null;
+  const topics = shows("topics") ? all.topics : [];
 
-  if (
-    holding === null &&
-    abstract === null &&
-    significance === null &&
-    topics.length === 0
-  ) {
+  if (significance === null && topics.length === 0) {
     return null;
   }
 
   return (
-    <div className="border-border/60 border-b pb-3">
-      {holding !== null && (
-        <Layer label={t("caseLaw.analysis.categories.holding")}>
-          <BidiText
-            className="text-foreground text-xs leading-relaxed"
-            lang={holding.language}
-          >
-            {holding.text}
-          </BidiText>
-          {holding.anchors.length > 0 && (
-            <div className="flex flex-wrap gap-1 pt-1.5">
-              {holding.anchors.map((anchor) => (
-                <button
-                  className="text-muted-foreground hover:text-foreground hover:bg-muted rounded px-1.5 py-1 text-[0.65rem] transition-colors"
-                  key={`${anchor.startAnchorId}-${anchor.endAnchorId}`}
-                  onClick={() => {
-                    onAnchorClick(anchor.startAnchorId);
-                  }}
-                  type="button"
-                >
-                  {t("caseLaw.analysis.holdingAnchor")}
-                </button>
-              ))}
-            </div>
-          )}
-        </Layer>
-      )}
-
-      {abstract !== null && (
-        <Layer label={t("caseLaw.analysis.abstract")}>
-          <BidiText
-            className="text-muted-foreground text-xs leading-relaxed"
-            lang={abstract.language}
-          >
-            {abstract.text}
-          </BidiText>
-        </Layer>
-      )}
-
+    <div className={cn("border-border/60 border-b pb-3", className)}>
       {topics.length > 0 && (
         <Layer label={t("caseLaw.analysis.topics")}>
           <ul className="flex flex-wrap gap-1">

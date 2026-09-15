@@ -70,6 +70,7 @@ import { COMPOSER_TEXT_CLASS } from "@stll/ui/composer";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
+import type { ActiveLegalDocument } from "@/components/ai-suggestions/active-legal-document";
 import { resolveDocxSuggestionRequest } from "@/components/ai-suggestions/docx-suggestion-persistence";
 import { resolveFileReviewSessionId } from "@/components/ai-suggestions/file-review-session";
 import {
@@ -729,6 +730,12 @@ type FileChatOverlayProps = {
   /** The persistence lifecycle owns this draft chat while it is being saved. */
   draftPersistence: CreateDocumentDraftPersistence;
   activeExternal?: ActiveExternal | undefined;
+  /**
+   * The corpus document a legal reader is showing. Carried to the model the
+   * way a file is, so a question typed over the reader is about the decision
+   * on screen rather than about whatever the words happen to match.
+   */
+  activeLegal?: ActiveLegalDocument | undefined;
   docxEditorRef?: RefObject<DocxEditorRef | null> | undefined;
   docxEditable?: boolean | undefined;
   /**
@@ -792,6 +799,7 @@ export const FileChatOverlay = ({
   activeDraft,
   draftPersistence,
   activeExternal,
+  activeLegal,
   docxEditable,
   docxEditSafety,
   docxEditorRef,
@@ -834,6 +842,7 @@ export const FileChatOverlay = ({
       <FileChatOverlayInner
         activeExternal={activeExternal}
         activeDraft={activeDraft}
+        activeLegal={activeLegal}
         draftPersistence={draftPersistence}
         activeFile={activeFile}
         chatThreadId={chatThreadId}
@@ -853,7 +862,11 @@ export const FileChatOverlay = ({
 
 type ResolvedFileChatOverlayProps = Omit<
   FileChatOverlayProps,
-  "activeExternal" | "activeFile" | "chatThreadId" | "workspaceId"
+  | "activeExternal"
+  | "activeFile"
+  | "activeLegal"
+  | "chatThreadId"
+  | "workspaceId"
 > & {
   activeFile: ActiveFile & { fileFieldId: string };
   workspaceId: string;
@@ -1050,10 +1063,15 @@ const useFileChatPlaceholder = ({
   activeDraft,
   activeExternal,
   activeFile,
+  activeLegal,
   docxEditSafety,
 }: Pick<
   FileChatOverlayInnerProps,
-  "activeDraft" | "activeExternal" | "activeFile" | "docxEditSafety"
+  | "activeDraft"
+  | "activeExternal"
+  | "activeFile"
+  | "activeLegal"
+  | "docxEditSafety"
 >) => {
   const t = useTranslations();
   if (activeDraft !== undefined) {
@@ -1083,11 +1101,18 @@ const useFileChatPlaceholder = ({
   }
   if (activeExternal !== undefined) {
     return {
-      placeholder: t("chat.externalSourcePlaceholder", {
-        title: activeExternal.title,
-      }),
-      placeholderAction: t("chat.externalSourcePlaceholderAction"),
+      placeholder: t("chat.sourcePlaceholder", { title: activeExternal.title }),
+      placeholderAction: t("chat.sourcePlaceholderAction"),
       sourceLabel: activeExternal.title,
+    };
+  }
+  if (activeLegal !== undefined) {
+    return {
+      placeholder: t("chat.sourcePlaceholder", {
+        title: activeLegal.caseNumber,
+      }),
+      placeholderAction: t("chat.sourcePlaceholderAction"),
+      sourceLabel: activeLegal.caseNumber,
     };
   }
   return {
@@ -1104,6 +1129,7 @@ const FileChatOverlayInner = ({
   activeDraft,
   draftPersistence,
   activeExternal,
+  activeLegal,
   docxEditable,
   docxEditSafety,
   docxEditorRef,
@@ -1286,6 +1312,11 @@ const FileChatOverlayInner = ({
     };
   });
   const getActiveExternal = useLatestCallback(() => activeExternal);
+  const getActiveLegalDecision = useLatestCallback(() =>
+    activeLegal === undefined
+      ? undefined
+      : { decisionId: activeLegal.decisionId },
+  );
   /**
    * Park a `suggest_changes` batch in the review panel. The editor is not
    * touched here: the user reviews each suggestion in the panel and the
@@ -1386,6 +1417,9 @@ const FileChatOverlayInner = ({
     getSendMode,
     getUserContext,
     ...(activeExternal ? { getActiveExternal: () => getActiveExternal() } : {}),
+    ...(activeLegal
+      ? { getActiveDecision: () => getActiveLegalDecision() }
+      : {}),
     ...(activeDraft ? { getActiveDraft: () => getActiveDraft() } : {}),
     ...(activeFile ? { getActiveFile: () => getActiveFile() } : {}),
     ...(hasDocxEditSurface
@@ -1578,6 +1612,7 @@ const FileChatOverlayInner = ({
     activeDraft,
     activeExternal,
     activeFile,
+    activeLegal,
     docxEditSafety,
   });
 

@@ -1,4 +1,4 @@
-import { Fragment, useRef, useState } from "react";
+import { Fragment, useRef } from "react";
 import type { ReactElement, ReactNode } from "react";
 
 import { useTranslations } from "use-intl";
@@ -46,6 +46,7 @@ import type { DecisionDocumentState } from "@/features/case-law/components/case-
 import {
   annotationsOverlappingTextSpan,
   apparatusBlockIds,
+  courtHeadnoteOrigin,
   decisionTopMatter,
   editorialSupplementBlocks,
   footnoteParts,
@@ -57,6 +58,8 @@ import type {
   FootnoteParts,
   TopMatterSource,
 } from "@/features/case-law/components/case-viewer/decision-text.logic";
+import { HeadnoteBlock } from "@/features/case-law/components/case-viewer/headnote-block";
+import type { HeadnoteOrigin } from "@/features/case-law/components/case-viewer/headnote-block";
 import type { DecisionProvisionAnchor } from "@/features/case-law/components/case-viewer/use-decision-provision-anchors";
 import type { DecisionStatuteCitationAnchor } from "@/features/case-law/components/case-viewer/use-decision-statute-citation-anchors";
 import { locateExternalCjeuCitations } from "@/features/case-law/fallback-legal-anchors";
@@ -69,6 +72,9 @@ import { sanitizeHref } from "@/lib/sanitize-href";
 type Decision = DecisionDocumentState & {
   caseNumber: string;
   court: string;
+  /** The court's chip, as the read derived it; absent where it states none. */
+  courtAbbreviation?: string | null | undefined;
+  courtTier?: string | null | undefined;
   id: string;
   language: string;
   fulltext: string | null;
@@ -80,6 +86,13 @@ type Decision = DecisionDocumentState & {
 
 type DecisionTextProps = {
   activeMatchIndex: number;
+  /**
+   * The model's headnote and abstract, drawn in the top matter under the
+   * court's own. A node rather than the analysis itself: the order the two
+   * origins are read in belongs to the decision, and nothing else about an
+   * analysis does.
+   */
+  aiHeadnotes?: ReactNode | undefined;
   /** The reader's own marks and what colleagues shared. */
   annotationAnchors?: readonly AnnotationAnchorSource[] | undefined;
   /** Resolved citations whose mentions in the text become links. */
@@ -97,6 +110,13 @@ type DecisionTextProps = {
    * match rather than on the document's first.
    */
   landingAnchorId?: string | undefined;
+  /**
+   * Notes drawn in the text's own flow, under the block they belong to: what
+   * a reader gets in a pane too narrow for a margin to put them in. A note
+   * whose anchor this text does not draw follows the text instead, so a
+   * comment is never silently lost with its paragraph.
+   */
+  notesByAnchorId?: ReadonlyMap<string, ReactNode> | undefined;
   onAnnotationActivate?: ((annotationId: string) => void) | undefined;
   onMatchCountChange?: ((count: number) => void) | undefined;
   /** Applied provisions whose statute is held, for inline links. */
@@ -354,65 +374,56 @@ const sourceHasMatch = (
 };
 
 /**
- * What a decision opens with: the headnote it is cited by, and the
- * publisher's abstract of it.
+ * What a decision opens with: the headnote it is cited by, the publisher's
+ * abstract of it, and — under them, in the same blocks — what a model made of
+ * the two.
  *
- * Both sit above the court's own text, where a reader looks for them, instead
- * of folded into the document at the place the publisher happened to print
- * them. The headnote is open — it is the reason most readers came — and the
- * abstract is folded, because it repeats the decision at length. Both
- * defaults are the same on the server and on the client, so the first paint
- * is the final one; a find match opens the abstract for as long as it is
- * inside.
+ * All of it sits above the court's own text, where a reader looks for it,
+ * instead of folded into the document at the place the publisher happened to
+ * print it. A headnote is open — it is the reason most readers came — and an
+ * abstract is folded, because it repeats the decision at length; the fold
+ * follows the section, not its author, so neither author's headnote is
+ * ranked above the other by shape. A find match opens the section it is in
+ * for as long as it is inside.
  */
 const DecisionTopMatterSections = ({
   activeMatchIndex,
+  aiHeadnotes,
   anchorsByPieceId,
   annotationAnchors,
+  courtOrigin,
   footnotes,
   rangesByPieceId,
   topMatter,
 }: {
   activeMatchIndex: number;
+  aiHeadnotes: ReactNode;
   anchorsByPieceId: Record<string, TextAnchor[]>;
   annotationAnchors: readonly AnnotationAnchorSource[];
+  courtOrigin: HeadnoteOrigin;
   footnotes: FootnoteParts;
   rangesByPieceId: Record<string, SearchMatchRange[]>;
   topMatter: DecisionTopMatter;
 }) => {
   const t = useTranslations();
-  const [legalSentenceClosedByUser, setLegalSentenceClosedByUser] =
-    useState(false);
-  const [abstractOpenedByUser, setAbstractOpenedByUser] = useState(false);
   const { abstract, legalSentence } = topMatter;
-  const abstractOpen =
-    abstractOpenedByUser || sourceHasMatch(abstract, rangesByPieceId);
-  const legalSentenceOpen =
-    !legalSentenceClosedByUser ||
-    sourceHasMatch(legalSentence, rangesByPieceId);
+  const hasAi = aiHeadnotes !== null && aiHeadnotes !== undefined;
 
-  if (legalSentence === null && abstract === null) {
+  if (legalSentence === null && abstract === null && !hasAi) {
     return null;
   }
 
   return (
-    // The publisher's text is read like the decision it belongs to: the
-    // article's serif, size and line-height, inherited. Only the labels are
-    // chrome.
+    // The text is read like the decision it belongs to: the article's serif,
+    // size and line-height, inherited. Only the labels are chrome.
     <div className="bg-muted/30 border-border/50 mb-8 rounded-lg border px-5 py-4">
       {legalSentence !== null && (
-        <details
-          onToggle={(event) =>
-            setLegalSentenceClosedByUser(!event.currentTarget.open)
-          }
-          open={legalSentenceOpen}
+        <HeadnoteBlock
+          defaultOpen
+          forceOpen={sourceHasMatch(legalSentence, rangesByPieceId)}
+          label={t("caseLaw.viewer.legalSentence")}
+          origin={courtOrigin}
         >
-          <summary
-            className="reader-chrome text-muted-foreground mb-2 cursor-pointer text-[0.75rem] font-semibold tracking-wide uppercase select-none marker:text-current"
-            data-reader-chrome=""
-          >
-            {t("caseLaw.viewer.legalSentence")}
-          </summary>
           <TopMatterBody
             activeMatchIndex={activeMatchIndex}
             anchorsByPieceId={anchorsByPieceId}
@@ -422,35 +433,27 @@ const DecisionTopMatterSections = ({
             source={legalSentence}
             variant="legal-sentence"
           />
-        </details>
+        </HeadnoteBlock>
       )}
       {abstract !== null && (
-        <details
-          className={cn(legalSentence !== null ? "mt-4" : "")}
-          onToggle={(event) =>
-            setAbstractOpenedByUser(event.currentTarget.open)
-          }
-          open={abstractOpen}
+        <HeadnoteBlock
+          defaultOpen={false}
+          forceOpen={sourceHasMatch(abstract, rangesByPieceId)}
+          label={t("caseLaw.viewer.abstract")}
+          origin={courtOrigin}
         >
-          <summary
-            className="reader-chrome text-muted-foreground cursor-pointer text-[0.75rem] font-semibold tracking-wide uppercase select-none marker:text-current"
-            data-reader-chrome=""
-          >
-            {t("caseLaw.viewer.abstract")}
-          </summary>
-          <div className="mt-3">
-            <TopMatterBody
-              activeMatchIndex={activeMatchIndex}
-              anchorsByPieceId={anchorsByPieceId}
-              annotationAnchors={annotationAnchors}
-              footnotes={footnotes}
-              rangesByPieceId={rangesByPieceId}
-              source={abstract}
-              variant="abstract"
-            />
-          </div>
-        </details>
+          <TopMatterBody
+            activeMatchIndex={activeMatchIndex}
+            anchorsByPieceId={anchorsByPieceId}
+            annotationAnchors={annotationAnchors}
+            footnotes={footnotes}
+            rangesByPieceId={rangesByPieceId}
+            source={abstract}
+            variant="abstract"
+          />
+        </HeadnoteBlock>
       )}
+      {aiHeadnotes}
     </div>
   );
 };
@@ -668,6 +671,7 @@ const renderBlocksWithHoldingZone = ({
   blocks,
   footnotes,
   landingAnchorId,
+  notesByAnchorId,
   rangesByPieceId,
   sectionMap,
 }: {
@@ -679,6 +683,7 @@ const renderBlocksWithHoldingZone = ({
   /** Note grouping for the whole decision, top matter included. */
   footnotes: FootnoteParts;
   landingAnchorId: string | undefined;
+  notesByAnchorId: ReadonlyMap<string, ReactNode> | undefined;
   rangesByPieceId: Record<string, SearchMatchRange[]>;
   sectionMap?: Map<string, { cssVar: string; headingId: string }> | undefined;
 }): ReactNode[] => {
@@ -753,12 +758,22 @@ const renderBlocksWithHoldingZone = ({
                 variant="case-law"
               />
             );
-            return isHoldingBlock(block) ? (
+            const body = isHoldingBlock(block) ? (
               <div className="font-[520]" key={block.id}>
                 {rendered}
               </div>
             ) : (
               rendered
+            );
+            const notes = notesByAnchorId?.get(block.anchorId);
+            if (notes === undefined) {
+              return body;
+            }
+            return (
+              <>
+                {body}
+                {notes}
+              </>
             );
           },
         )}
@@ -777,11 +792,13 @@ const NO_STATUTE_CITATION_ANCHORS: readonly DecisionStatuteCitationAnchor[] =
 
 export const DecisionText = ({
   activeMatchIndex,
+  aiHeadnotes = null,
   annotationAnchors = NO_ANNOTATION_ANCHORS,
   citationAnchors = NO_CITATION_ANCHORS,
   decision,
   decisionId,
   landingAnchorId,
+  notesByAnchorId,
   onAnnotationActivate,
   onMatchCountChange,
   provisionAnchors = NO_PROVISION_ANCHORS,
@@ -797,6 +814,7 @@ export const DecisionText = ({
     blocks: visibleBlocks,
     textFields: decision.textFields,
   });
+  const courtOrigin = courtHeadnoteOrigin(decision);
   // The document renders what the top matter did not take. Anchors still come
   // from every visible block, wherever it ends up drawn; match numbering,
   // note grouping and the landing passage follow the order the page renders,
@@ -988,7 +1006,9 @@ export const DecisionText = ({
           />
           <DecisionTopMatterSections
             activeMatchIndex={shownMatchIndex}
+            aiHeadnotes={aiHeadnotes}
             anchorsByPieceId={anchorsByPieceId}
+            courtOrigin={courtOrigin}
             annotationAnchors={
               hydrated ? annotationAnchors : NO_ANNOTATION_ANCHORS
             }
@@ -1004,6 +1024,7 @@ export const DecisionText = ({
             blocks: bodyBlocks,
             footnotes,
             landingAnchorId,
+            notesByAnchorId,
             rangesByPieceId: searchResults.rangesByPieceId,
             sectionMap,
           })}
@@ -1033,7 +1054,9 @@ export const DecisionText = ({
           />
           <DecisionTopMatterSections
             activeMatchIndex={shownMatchIndex}
+            aiHeadnotes={aiHeadnotes}
             anchorsByPieceId={anchorsByPieceId}
+            courtOrigin={courtOrigin}
             annotationAnchors={
               hydrated ? annotationAnchors : NO_ANNOTATION_ANCHORS
             }
@@ -1072,7 +1095,9 @@ export const DecisionText = ({
       >
         <DecisionTopMatterSections
           activeMatchIndex={shownMatchIndex}
+          aiHeadnotes={aiHeadnotes}
           anchorsByPieceId={anchorsByPieceId}
+          courtOrigin={courtOrigin}
           annotationAnchors={
             hydrated ? annotationAnchors : NO_ANNOTATION_ANCHORS
           }
@@ -1089,11 +1114,25 @@ export const DecisionText = ({
     );
   })();
 
+  // A note whose paragraph the flow above did not draw — anchored in the top
+  // matter, or in a decision that only resolved to fulltext — follows the
+  // text rather than going with its anchor.
+  const drawnAnchorIds = new Set(bodyBlocks.map((block) => block.anchorId));
+  const trailingNotes =
+    notesByAnchorId === undefined
+      ? []
+      : [...notesByAnchorId].filter(
+          ([anchorId]) => !drawnAnchorIds.has(anchorId),
+        );
+
   // `reader-case-law` caps the measure: the decision and the attribution line
   // under it are read at a line length, not at the width of the pane.
   return (
     <div className="reader-case-law">
       {body}
+      {trailingNotes.map(([anchorId, note]) => (
+        <Fragment key={anchorId}>{note}</Fragment>
+      ))}
       <DecisionSourceAttribution url={decision.sourceAttributionUrl} />
     </div>
   );
