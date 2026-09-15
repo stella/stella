@@ -138,24 +138,37 @@ pub fn present_key_panel<R: Runtime>(window: &WebviewWindow<R>) -> bool {
     return false;
   };
   make_nonactivating_panel(ns_window);
-  ns_window.setAlphaValue(1.0);
-  ns_window.setIgnoresMouseEvents(false);
   // Cmd-H from an activating window (settings) hides the whole app, and
   // ordering a window front does not clear that.
   let app = NSApplication::sharedApplication(main_thread);
   if app.isHidden() {
     app.unhideWithoutActivation();
   }
-  ns_window.makeKeyAndOrderFront(None);
+  present_panel(ns_window);
+  true
+}
+
+/// Restores a parked panel and makes it key, with the webview still its first
+/// responder: a key panel whose first responder is the panel itself swallows
+/// every keystroke until a mouse event over the webview hands them back.
+fn present_panel(ns_window: &NSWindow) {
+  ns_window.setAlphaValue(1.0);
+  ns_window.setIgnoresMouseEvents(false);
   // Frames WebKit rendered while the window was parked never reach the
   // screen, and presenting alone commits nothing new, so the page shows its
   // pre-park frame until the next input. A visibility cycle on the content
   // view is a real view-state change for WebKit and resumes the commits.
+  // Hiding the view that holds the first responder makes AppKit resign it to
+  // the window, and neither unhiding nor becoming key hands it back, so it is
+  // restored by hand. The cycle runs before the panel is key so the page
+  // never sees a blur in the middle of an open.
+  let first_responder = ns_window.firstResponder();
   if let Some(content) = ns_window.contentView() {
     content.setHidden(true);
     content.setHidden(false);
   }
-  true
+  ns_window.makeFirstResponder(first_responder.as_deref());
+  ns_window.makeKeyAndOrderFront(None);
 }
 
 /// Parks the window: fully transparent, click-through, and no longer key, so
@@ -167,6 +180,11 @@ pub fn park_window<R: Runtime>(window: &WebviewWindow<R>) -> bool {
   let Some((_, ns_window)) = ns_window(window) else {
     return false;
   };
+  park_panel(ns_window);
+  true
+}
+
+fn park_panel(ns_window: &NSWindow) {
   set_panel_parked(ns_window);
   // Ordering out is the only public way to give key status back. Ordering
   // straight back in keeps the page on screen; WebKit coalesces the two into
@@ -175,7 +193,6 @@ pub fn park_window<R: Runtime>(window: &WebviewWindow<R>) -> bool {
     ns_window.orderOut(None);
     ns_window.orderFront(None);
   }
-  true
 }
 
 /// Whether the persistent clipboard panel is currently presented. Native
