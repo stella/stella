@@ -1469,6 +1469,7 @@
     "rename": "Pārdēvēt",
     "required": "Obligāts",
     "reset": "Atiestatīt",
+    "resetZoom": "Atiestatīt tālummaiņu",
     "restore": "Atjaunot",
     "retry": "Mēģināt vēlreiz",
     "role": "Loma",
@@ -1527,7 +1528,9 @@
     "versionLabel": "{version}. versija",
     "viewSource": "Skatīt avotu",
     "workflow": "Darbplūsma",
-    "workflows": "Darbplūsmas"
+    "workflows": "Darbplūsmas",
+    "zoomIn": "Tuvināt",
+    "zoomOut": "Tālināt"
   },
   "consent": {
     "allow": "Atļaut",
@@ -5293,11 +5296,8 @@
       },
       "passwordLabel": "Ievadiet PDF paroli",
       "previousPage": "Iepriekšējā lappuse",
-      "resetZoom": "Atiestatīt tālummaiņu",
       "showOriginal": "Rādīt oriģinālās lapas",
-      "unlock": "Atbloķēt",
-      "zoomIn": "Tuvināt",
-      "zoomOut": "Tālināt"
+      "unlock": "Atbloķēt"
     },
     "playbooks": {
       "autoRun": "Automātiska palaišana",

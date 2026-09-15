@@ -1469,6 +1469,7 @@
     "rename": "Renomear",
     "required": "Obrigatório",
     "reset": "Redefinir",
+    "resetZoom": "Redefinir zoom",
     "restore": "Restaurar",
     "retry": "Tentar novamente",
     "role": "Função",
@@ -1527,7 +1528,9 @@
     "versionLabel": "Versão {version}",
     "viewSource": "Ver fonte",
     "workflow": "Fluxo de trabalho",
-    "workflows": "Fluxos de trabalho"
+    "workflows": "Fluxos de trabalho",
+    "zoomIn": "Ampliar",
+    "zoomOut": "Diminuir zoom"
   },
   "consent": {
     "allow": "Permitir",
@@ -5293,11 +5296,8 @@
       },
       "passwordLabel": "Digite a senha do PDF",
       "previousPage": "Página anterior",
-      "resetZoom": "Redefinir zoom",
       "showOriginal": "Mostrar páginas originais",
-      "unlock": "Desbloquear",
-      "zoomIn": "Ampliar",
-      "zoomOut": "Diminuir zoom"
+      "unlock": "Desbloquear"
     },
     "playbooks": {
       "autoRun": "Execução automática",

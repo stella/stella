@@ -1469,6 +1469,7 @@
     "rename": "Premenovať",
     "required": "Povinné",
     "reset": "Obnoviť",
+    "resetZoom": "Obnoviť priblíženie",
     "restore": "Obnoviť",
     "retry": "Skúsiť znova",
     "role": "Rola",
@@ -1527,7 +1528,9 @@
     "versionLabel": "Verzia {version}",
     "viewSource": "Zobraziť zdroj",
     "workflow": "Pracovný postup",
-    "workflows": "Pracovné postupy"
+    "workflows": "Pracovné postupy",
+    "zoomIn": "Priblížiť",
+    "zoomOut": "Oddialiť"
   },
   "consent": {
     "allow": "Povoliť",
@@ -5293,11 +5296,8 @@
       },
       "passwordLabel": "Zadajte heslo k PDF",
       "previousPage": "Predchádzajúca strana",
-      "resetZoom": "Obnoviť priblíženie",
       "showOriginal": "Zobraziť pôvodné stránky",
-      "unlock": "Odomknúť",
-      "zoomIn": "Priblížiť",
-      "zoomOut": "Oddialiť"
+      "unlock": "Odomknúť"
     },
     "playbooks": {
       "autoRun": "Automatické spustenie",

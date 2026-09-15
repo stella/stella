@@ -1472,6 +1472,7 @@ type Messages = {
     "rename": "Rename";
     "required": "Required";
     "reset": "Reset";
+    "resetZoom": "Reset zoom";
     "restore": "Restore";
     "retry": "Retry";
     "role": "Role";
@@ -1531,6 +1532,8 @@ type Messages = {
     "viewSource": "View source";
     "workflow": "Workflow";
     "workflows": "Workflows";
+    "zoomIn": "Zoom in";
+    "zoomOut": "Zoom out";
   };
   "consent": {
     "allow": "Allow";
@@ -5296,11 +5299,8 @@ type Messages = {
       };
       "passwordLabel": "Enter the PDF password";
       "previousPage": "Previous page";
-      "resetZoom": "Reset zoom";
       "showOriginal": "Show original pages";
       "unlock": "Unlock";
-      "zoomIn": "Zoom in";
-      "zoomOut": "Zoom out";
     };
     "playbooks": {
       "autoRun": "Auto run";

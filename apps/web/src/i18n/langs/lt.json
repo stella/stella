@@ -1469,6 +1469,7 @@
     "rename": "Pervadinti",
     "required": "Privalomas",
     "reset": "Atstatyti",
+    "resetZoom": "Atstatyti mastelį",
     "restore": "Atkurti",
     "retry": "Bandyti dar kartą",
     "role": "Rolė",
@@ -1527,7 +1528,9 @@
     "versionLabel": "{version} versija",
     "viewSource": "Žiūrėti šaltinį",
     "workflow": "Darbo eiga",
-    "workflows": "Darbo eigos"
+    "workflows": "Darbo eigos",
+    "zoomIn": "Priartinti",
+    "zoomOut": "Nutolinti"
   },
   "consent": {
     "allow": "Leisti",
@@ -5293,11 +5296,8 @@
       },
       "passwordLabel": "Įveskite PDF slaptažodį",
       "previousPage": "Ankstesnis puslapis",
-      "resetZoom": "Atstatyti mastelį",
       "showOriginal": "Rodyti originalius puslapius",
-      "unlock": "Atrakinti",
-      "zoomIn": "Priartinti",
-      "zoomOut": "Nutolinti"
+      "unlock": "Atrakinti"
     },
     "playbooks": {
       "autoRun": "Automatinis vykdymas",

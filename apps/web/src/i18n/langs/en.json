@@ -1469,6 +1469,7 @@
     "rename": "Rename",
     "required": "Required",
     "reset": "Reset",
+    "resetZoom": "Reset zoom",
     "restore": "Restore",
     "retry": "Retry",
     "role": "Role",
@@ -1527,7 +1528,9 @@
     "versionLabel": "Version {version}",
     "viewSource": "View source",
     "workflow": "Workflow",
-    "workflows": "Workflows"
+    "workflows": "Workflows",
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out"
   },
   "consent": {
     "allow": "Allow",
@@ -5293,11 +5296,8 @@
       },
       "passwordLabel": "Enter the PDF password",
       "previousPage": "Previous page",
-      "resetZoom": "Reset zoom",
       "showOriginal": "Show original pages",
-      "unlock": "Unlock",
-      "zoomIn": "Zoom in",
-      "zoomOut": "Zoom out"
+      "unlock": "Unlock"
     },
     "playbooks": {
       "autoRun": "Auto run",

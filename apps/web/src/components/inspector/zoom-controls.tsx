@@ -52,7 +52,7 @@ export const ZoomControls = ({
         disabled={atMin}
         onClick={() => onZoom("out")}
         size="icon-xs"
-        tooltip={t("workspaces.pdf.zoomOut")}
+        tooltip={t("common.zoomOut")}
         tooltipLayer={tooltipLayer}
         variant="ghost"
       >
@@ -62,7 +62,7 @@ export const ZoomControls = ({
         disabled={atMax}
         onClick={() => onZoom("in")}
         size="icon-xs"
-        tooltip={t("workspaces.pdf.zoomIn")}
+        tooltip={t("common.zoomIn")}
         tooltipLayer={tooltipLayer}
         variant="ghost"
       >
@@ -72,7 +72,7 @@ export const ZoomControls = ({
         disabled={level === DEFAULT_LEVEL}
         onClick={onReset}
         size="icon-xs"
-        tooltip={t("workspaces.pdf.resetZoom")}
+        tooltip={t("common.resetZoom")}
         tooltipLayer={tooltipLayer}
         variant="ghost"
       >

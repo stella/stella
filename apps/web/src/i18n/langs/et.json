@@ -1469,6 +1469,7 @@
     "rename": "Nimeta ümber",
     "required": "Kohustuslik",
     "reset": "Lähtesta",
+    "resetZoom": "Lähtesta suum",
     "restore": "Taasta",
     "retry": "Proovi uuesti",
     "role": "Roll",
@@ -1527,7 +1528,9 @@
     "versionLabel": "Versioon {version}",
     "viewSource": "Vaata allikat",
     "workflow": "Töövoog",
-    "workflows": "Töövood"
+    "workflows": "Töövood",
+    "zoomIn": "Suumi sisse",
+    "zoomOut": "Suumi välja"
   },
   "consent": {
     "allow": "Luba",
@@ -5293,11 +5296,8 @@
       },
       "passwordLabel": "Sisestage PDF-i parool",
       "previousPage": "Eelmine leht",
-      "resetZoom": "Lähtesta suum",
       "showOriginal": "Kuva originaalleheküljed",
-      "unlock": "Ava lukk",
-      "zoomIn": "Suumi sisse",
-      "zoomOut": "Suumi välja"
+      "unlock": "Ava lukk"
     },
     "playbooks": {
       "autoRun": "Automaatne käivitamine",

@@ -1469,6 +1469,7 @@
     "rename": "Átnevezés",
     "required": "Kötelező",
     "reset": "Visszaállítás",
+    "resetZoom": "Nagyítás visszaállítása",
     "restore": "Visszaállítás",
     "retry": "Újrapróbál",
     "role": "Szerepkör",
@@ -1527,7 +1528,9 @@
     "versionLabel": "{version}. verzió",
     "viewSource": "Forrás megtekintése",
     "workflow": "Munkafolyamat",
-    "workflows": "Munkafolyamatok"
+    "workflows": "Munkafolyamatok",
+    "zoomIn": "Nagyítás",
+    "zoomOut": "Kicsinyítés"
   },
   "consent": {
     "allow": "Engedélyezés",
@@ -5293,11 +5296,8 @@
       },
       "passwordLabel": "Adja meg a PDF jelszavát",
       "previousPage": "Előző oldal",
-      "resetZoom": "Nagyítás visszaállítása",
       "showOriginal": "Eredeti oldalak megjelenítése",
-      "unlock": "Feloldás",
-      "zoomIn": "Nagyítás",
-      "zoomOut": "Kicsinyítés"
+      "unlock": "Feloldás"
     },
     "playbooks": {
       "autoRun": "Automatikus futtatás",

@@ -1469,6 +1469,7 @@
     "rename": "Umbenennen",
     "required": "Erforderlich",
     "reset": "Zurücksetzen",
+    "resetZoom": "Zoom zurücksetzen",
     "restore": "Wiederherstellen",
     "retry": "Erneut versuchen",
     "role": "Rolle",
@@ -1527,7 +1528,9 @@
     "versionLabel": "Version {version}",
     "viewSource": "Quelle anzeigen",
     "workflow": "Arbeitsablauf",
-    "workflows": "Workflows"
+    "workflows": "Workflows",
+    "zoomIn": "Vergrößern",
+    "zoomOut": "Verkleinern"
   },
   "consent": {
     "allow": "Zulassen",
@@ -5293,11 +5296,8 @@
       },
       "passwordLabel": "PDF-Passwort eingeben",
       "previousPage": "Vorherige Seite",
-      "resetZoom": "Zoom zurücksetzen",
       "showOriginal": "Originalseiten anzeigen",
-      "unlock": "Entsperren",
-      "zoomIn": "Vergrößern",
-      "zoomOut": "Verkleinern"
+      "unlock": "Entsperren"
     },
     "playbooks": {
       "autoRun": "Automatisch ausführen",
