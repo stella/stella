@@ -90,12 +90,52 @@ const undoLandedOperations = (
   ) {
     return;
   }
-  const revisionIds = result.applied.flatMap(
-    (applied) => revisionIdsOf(applied) ?? [],
-  );
+  const revisionIds: number[] = [];
+  for (const applied of result.applied) {
+    const ids = revisionIdsOf(applied);
+    if (ids !== null) {
+      revisionIds.push(...ids);
+    }
+  }
   if (revisionIds.length > 0) {
     editor.rejectAIEditOperation(revisionIds);
   }
+};
+
+export type ReviewChangeUndoEditor = Pick<
+  ReviewChangeApplyEditor,
+  "rejectAIEditOperation" | "undoDocumentOperations"
+>;
+
+/**
+ * Take a change's accepted operations back out of the document. Tracked marks
+ * are rejected by revision id, which holds however the document moved since.
+ * A direct-mode accept left no marks, so the batch's undo handle is the only
+ * lever, and members accepted in one batch share it. Returns whether the
+ * editor took everything back.
+ */
+export const undoAcceptedMembers = (
+  editor: ReviewChangeUndoEditor | null,
+  members: readonly Pick<ReviewSuggestion, "revisionIds" | "undoHandle">[],
+): boolean => {
+  const revisionIds = new Set<number>();
+  for (const { revisionIds: memberRevisionIds } of members) {
+    if (memberRevisionIds === null) {
+      continue;
+    }
+    for (const id of memberRevisionIds) {
+      revisionIds.add(id);
+    }
+  }
+  if (revisionIds.size > 0) {
+    return editor?.rejectAIEditOperation([...revisionIds]) === true;
+  }
+  const undoHandle =
+    members.find((member) => member.undoHandle !== null)?.undoHandle ?? null;
+  if (undoHandle === null) {
+    return true;
+  }
+  return editor?.undoDocumentOperations(undoHandle).status === "undone";
 };
 
 type ApplyReviewChangeOptions = {

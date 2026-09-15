@@ -37,11 +37,17 @@ import {
 import {
   applyReviewChange,
   skipEveryMember,
+  undoAcceptedMembers,
 } from "@/components/ai-suggestions/review-change-apply.logic";
 import type {
   ApplyOutcome,
   MemberApplyOutcomes,
 } from "@/components/ai-suggestions/review-change-apply.logic";
+import { settleChangeResolutions } from "@/components/ai-suggestions/review-change-resolution.logic";
+import type {
+  DocxWriteResult,
+  MemberResolution,
+} from "@/components/ai-suggestions/review-change-resolution.logic";
 import { findFolioReviewDecoration } from "@/components/ai-suggestions/review-folio-decorations";
 import {
   serializeSuggestionWrite,
@@ -61,13 +67,6 @@ import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-
-const uniqueRevisionIds = (
-  lists: readonly (readonly number[] | null)[],
-): number[] => [...new Set(lists.flatMap((ids) => ids ?? []))];
-
-/** What a suggestion write reports; a revert can also meet the pending cap. */
-type DocxWriteResult = Awaited<ReturnType<typeof revertDocxSuggestionRequest>>;
 
 export type UseReviewActionsOptions = {
   entityId: string;
@@ -98,16 +97,9 @@ export type ReviewActions = {
   navigateTo: (change: ReviewChange) => void;
 };
 
-type ServerResolution = {
-  member: ReviewSuggestion;
-  resolve: () => Promise<DocxWriteResult>;
-  /** Puts the server row back to where it was before `resolve`. */
-  undo: () => Promise<DocxWriteResult>;
-};
-
 type PersistChangeOptions = {
   context: "accept" | "reject" | "revert";
-  resolutions: readonly ServerResolution[];
+  resolutions: readonly MemberResolution[];
   /** Restore the whole change locally after the server refused a member. */
   rollback: () => void;
 };
@@ -413,29 +405,13 @@ export const useReviewActions = ({
       resolutions,
       rollback,
     }: PersistChangeOptions): Promise<readonly DocxWriteResult[]> => {
-      const settled = await Promise.all(
-        resolutions.map(async (resolution) => ({
-          resolution,
-          result: await runSerialized(resolution.member.id, resolution.resolve),
-        })),
-      );
-      const results = settled.map(({ result }) => result);
-      if (results.every((result) => result === "synced")) {
-        return results;
-      }
-      if (results.includes("failed")) {
-        captureResolveFailure(context);
-      }
-      rollback();
-      const undone = await Promise.all(
-        settled
-          .filter(({ result }) => result === "synced")
-          .map(
-            async ({ resolution }) =>
-              await runSerialized(resolution.member.id, resolution.undo),
-          ),
-      );
-      if (undone.includes("failed")) {
+      const { results, undone } = await settleChangeResolutions({
+        resolutions,
+        standing: ["synced"],
+        rollback,
+        run: async (member, write) => await runSerialized(member.id, write),
+      });
+      if (results.includes("failed") || undone.includes("failed")) {
         captureResolveFailure(context);
       }
       return [
@@ -458,17 +434,10 @@ export const useReviewActions = ({
   // Undo the editor ops an accept landed and put every member back to pending.
   const rollbackAcceptedChange = useLatestCallback(
     (outcomes: MemberApplyOutcomes) => {
-      const revisionIds = uniqueRevisionIds(
-        outcomes.map(({ outcome }) => outcome.revisionIds),
+      undoAcceptedMembers(
+        docxEditorRef.current,
+        outcomes.map(({ outcome }) => outcome),
       );
-      const undoHandle =
-        outcomes.find(({ outcome }) => outcome.undoHandle !== null)?.outcome
-          .undoHandle ?? null;
-      if (revisionIds.length > 0) {
-        docxEditorRef.current?.rejectAIEditOperation(revisionIds);
-      } else if (undoHandle !== null) {
-        docxEditorRef.current?.undoDocumentOperations(undoHandle);
-      }
       for (const { member } of outcomes) {
         updateSuggestion(entityId, member.id, {
           status: "pending",
@@ -491,7 +460,7 @@ export const useReviewActions = ({
       }
       const resolutions = outcomes
         .filter(({ member }) => member.persisted === true)
-        .map(({ member, outcome }): ServerResolution => ({
+        .map(({ member, outcome }): MemberResolution => ({
           member,
           resolve: async () =>
             await resolveDocxSuggestionRequest({
@@ -648,7 +617,7 @@ export const useReviewActions = ({
     // revert the rejection and the change goes back to actionable.
     const resolutions = claimed
       .filter((member) => member.persisted === true)
-      .map((member): ServerResolution => ({
+      .map((member): MemberResolution => ({
         member,
         resolve: async () =>
           await resolveDocxSuggestionRequest({
@@ -701,40 +670,15 @@ export const useReviewActions = ({
       undoHandle: member.undoHandle,
       applyMode: member.applyMode,
     }));
-    if (status === "accepted") {
-      // Reverting an accept must undo whatever the accept applied.
-      //
-      // Tracked-changes accepts carry `revisionIds`: reject those specific
-      // marks by id (`rejectAIEditOperation`), which is position-independent
-      // and works no matter what else changed in the document since. A strict
-      // LIFO/exact-doc-match undo rejects ("Action failed") after any later
-      // edit — a second accept, manual typing, or resolving the change through
-      // the Word review controls — i.e. exactly when an out-of-order revert is
-      // most wanted.
-      //
-      // Direct-mode accepts leave no tracked marks; there the stack undo is
-      // still the only lever. Members accepted in one batch share its handle.
-      const revisionIds = uniqueRevisionIds(
-        members.map((member) => member.revisionIds),
-      );
-      const undoHandle =
-        members.find((member) => member.undoHandle !== null)?.undoHandle ??
-        null;
-      if (revisionIds.length > 0) {
-        if (
-          docxEditorRef.current?.rejectAIEditOperation(revisionIds) !== true
-        ) {
-          stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
-          return;
-        }
-      } else if (undoHandle !== null) {
-        const undoResult =
-          docxEditorRef.current?.undoDocumentOperations(undoHandle);
-        if (undoResult?.status !== "undone") {
-          stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
-          return;
-        }
-      }
+    // Reverting an accept must undo whatever the accept applied. Rejecting the
+    // tracked marks by id works after later edits, where a strict stack undo
+    // would refuse exactly when an out-of-order revert is most wanted.
+    if (
+      status === "accepted" &&
+      !undoAcceptedMembers(docxEditorRef.current, members)
+    ) {
+      stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
+      return;
     }
     for (const member of members) {
       updateSuggestion(entityId, member.id, {
@@ -753,7 +697,7 @@ export const useReviewActions = ({
           member,
           status: previousStatus,
           applyMode: previousMode,
-        }): ServerResolution => ({
+        }): MemberResolution => ({
           member,
           resolve: revertRequest(member),
           undo: async () =>

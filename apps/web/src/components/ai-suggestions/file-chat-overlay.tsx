@@ -78,6 +78,7 @@ import {
   createDocxSuggestionsRequest,
   rejectPendingDocxSuggestionsRequest,
   resolveDocxSuggestionRequest,
+  revertDocxSuggestionRequest,
 } from "@/components/ai-suggestions/docx-suggestion-persistence";
 import {
   PENDING_REVIEW_CHOICE,
@@ -95,8 +96,10 @@ import {
   PENDING_REVIEW_PROMPT_STATUS,
   PendingReviewNewThreadPrompt,
 } from "@/components/ai-suggestions/pending-review-new-thread-prompt";
+import { replayResolvedSuggestions } from "@/components/ai-suggestions/review-change-resolution.logic";
 import { isNoopReviewOperation } from "@/components/ai-suggestions/review-operation-utils";
 import {
+  serializeSuggestionWrite,
   settleReviewSessionWrites,
   trackReviewSessionWrite,
 } from "@/components/ai-suggestions/review-session-writes";
@@ -609,53 +612,47 @@ const persistQueuedSuggestions = async ({
   if (replayTargets.length === 0) {
     return;
   }
-  const replayResults = await Promise.all(
-    replayTargets.map(async (item) => ({
-      id: item.id,
-      replayResult: await resolveDocxSuggestionRequest({
+  const replayResults = await replayResolvedSuggestions({
+    rows: replayTargets,
+    readEditor: () => docxEditorRef.current,
+    resolve: async (row) =>
+      await resolveDocxSuggestionRequest({
         queryClient,
         workspaceId,
         entityId,
-        suggestionId: item.id,
-        status: item.status,
-        appliedMode: item.applyMode ?? "tracked-changes",
+        suggestionId: row.id,
+        status: row.status,
+        appliedMode: row.applyMode ?? "tracked-changes",
       }),
-    })),
-  );
-  const failedTargets = replayResults.filter(
-    ({ replayResult }) => replayResult === "failed",
-  );
-  if (failedTargets.length === 0) {
-    return;
-  }
-
-  // A `"failed"` replay left the local accept/reject applied while the
-  // server row stays `pending`: a reload would restore an actionable copy
-  // and let the same op apply twice. Roll each failed target back to
-  // pending to match the still-pending server row. Read the CURRENT store
-  // row (not the pre-replay snapshot) so we undo the op that actually
-  // landed; an accepted row's editor op is reversed via its undoHandle.
-  const currentSession = useReviewStore.getState().sessions[entityId];
-  for (const { id } of failedTargets) {
-    const row = currentSession?.find((candidate) => candidate.id === id);
-    if (row === undefined) {
-      continue;
-    }
-    if (row.status === "accepted") {
-      if (row.undoHandle !== null) {
-        docxEditorRef.current?.undoDocumentOperations(row.undoHandle);
-      }
-      useReviewStore.getState().updateSuggestion(entityId, id, {
-        status: "pending",
-        revisionIds: null,
-        undoHandle: null,
-        applyMode: null,
-      });
-    } else if (row.status === "rejected") {
+    revert: async (row) =>
+      await revertDocxSuggestionRequest({
+        queryClient,
+        workspaceId,
+        entityId,
+        suggestion: row,
+      }),
+    readLive: (id) =>
       useReviewStore
         .getState()
-        .updateSuggestion(entityId, id, { status: "pending" });
+        .sessions[entityId]?.find((candidate) => candidate.id === id),
+    updateSuggestion: (id, patch) => {
+      useReviewStore.getState().updateSuggestion(entityId, id, patch);
+    },
+    run: async (row, write) =>
+      await serializeSuggestionWrite({
+        reviewSessionId: entityId,
+        suggestionId: row.id,
+        write,
+      }),
+  });
+  if (!replayResults.includes("failed")) {
+    if (replayResults.includes("pending-limit")) {
+      stellaToast.add({
+        title: getTranslator()("docxReview.pendingLimitReached"),
+        type: "error",
+      });
     }
+    return;
   }
 
   getAnalytics().captureError(
