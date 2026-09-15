@@ -208,8 +208,17 @@ const WorkReferences = ({
 
   return (
     <div className="flex flex-col gap-1">
-      <p className="text-muted-foreground text-[0.7rem] tracking-wide">
-        <BidiText as="span">{group.title}</BidiText>
+      <p className="text-muted-foreground flex min-w-0 items-baseline gap-1.5 text-[0.7rem] tracking-wide">
+        <BidiText as="span" className="shrink-0">
+          {group.title}
+        </BidiText>
+        {/* The act's name once its record is in: a number alone asks the
+            reader to know that 89/2012 Sb. is the civil code. */}
+        {statute !== undefined && statute !== null && (
+          <BidiText as="span" className="truncate" title={statute.title}>
+            {statute.title}
+          </BidiText>
+        )}
       </p>
       {/* References flow like prose: a code's thirty sections read on three
           lines, not thirty. A reference showing its passages takes the row. */}
