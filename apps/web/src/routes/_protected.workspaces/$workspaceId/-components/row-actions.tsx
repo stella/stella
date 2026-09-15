@@ -833,10 +833,11 @@ export const RowActions = ({
             .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
             .duplicate.post({
               entityId: toSafeId<"entity">(target.entityId),
-              name: getDuplicateName(
-                getEntityName(target),
-                t("common.duplicate"),
-              ),
+              name: getDuplicateName({
+                duplicateLabel: t("common.duplicate"),
+                kind: target.kind,
+                name: getEntityName(target),
+              }),
               targetEntityId: toSafeId<"entity">(targetEntityId),
             });
           return unwrapEden(response);

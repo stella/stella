@@ -262,6 +262,33 @@ describe("duplicate name collisions", () => {
     expect(resolved).toBe(`${"a".repeat(248)}_2.docx`);
     expect(resolved).toHaveLength(255);
   });
+
+  test("detects collisions after truncating an oversized extension", async () => {
+    const extension = `.${"x".repeat(253)}`;
+    const requestedName = `a${extension}`;
+    const boundedExtension = extension.slice(0, 253);
+    const firstCollisionName = `_1${boundedExtension}`;
+    const tx = {
+      select: () => ({
+        from: () => ({
+          where: async () => [
+            { name: requestedName },
+            { name: firstCollisionName },
+          ],
+        }),
+      }),
+    };
+
+    const resolved = await resolveEntityName({
+      tx: asTestRaw<Transaction>(tx),
+      workspaceId,
+      parentId: null,
+      name: requestedName,
+    });
+
+    expect(resolved).toBe(`_2${boundedExtension}`);
+    expect(resolved).toHaveLength(255);
+  });
 });
 
 describe("duplicate entity", () => {

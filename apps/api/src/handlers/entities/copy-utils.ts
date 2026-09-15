@@ -582,20 +582,14 @@ export const resolveEntityName = async ({
 
   let maxSuffixNumber = 0;
   for (const siblingName of siblingNames) {
-    if (!siblingName.endsWith(ext)) {
-      continue;
-    }
-    const stem = ext ? siblingName.slice(0, -ext.length) : siblingName;
-    const match = /_(\d+)$/u.exec(stem);
-    if (!match) {
-      continue;
-    }
-    const suffixNumber = Number.parseInt(match[1] ?? "", 10);
-    if (
-      suffixNumber > maxSuffixNumber &&
-      siblingName === collisionName(suffixNumber)
-    ) {
-      maxSuffixNumber = suffixNumber;
+    for (const match of siblingName.matchAll(/_(\d+)/gu)) {
+      const suffixNumber = Number.parseInt(match[1] ?? "", 10);
+      if (
+        suffixNumber > maxSuffixNumber &&
+        siblingName === collisionName(suffixNumber)
+      ) {
+        maxSuffixNumber = suffixNumber;
+      }
     }
   }
 

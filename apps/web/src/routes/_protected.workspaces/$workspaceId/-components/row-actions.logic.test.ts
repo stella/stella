@@ -14,16 +14,34 @@ import {
 
 describe("duplicate names", () => {
   test("keeps the final extension and a recognizable source name", () => {
-    expect(getDuplicateName("Agreement.final.docx", "Copy")).toBe(
-      "Agreement.final (Copy).docx",
-    );
-    expect(getDuplicateName("Bundle", "Copy")).toBe("Bundle (Copy)");
-    expect(getDuplicateName(`${"a".repeat(251)}.docx`, "Copy")).toHaveLength(
-      255,
-    );
-    expect(getDuplicateName(`${"a".repeat(244)}😀.docx`, "Copy")).toBe(
-      `${"a".repeat(243)} (Copy).docx`,
-    );
+    expect(
+      getDuplicateName({
+        duplicateLabel: "Copy",
+        kind: "document",
+        name: "Agreement.final.docx",
+      }),
+    ).toBe("Agreement.final (Copy).docx");
+    expect(
+      getDuplicateName({
+        duplicateLabel: "Copy",
+        kind: "folder",
+        name: "Bundle.final",
+      }),
+    ).toBe("Bundle.final (Copy)");
+    expect(
+      getDuplicateName({
+        duplicateLabel: "Copy",
+        kind: "document",
+        name: `${"a".repeat(251)}.docx`,
+      }),
+    ).toHaveLength(255);
+    expect(
+      getDuplicateName({
+        duplicateLabel: "Copy",
+        kind: "document",
+        name: `${"a".repeat(244)}😀.docx`,
+      }),
+    ).toBe(`${"a".repeat(243)} (Copy).docx`);
   });
 });
 

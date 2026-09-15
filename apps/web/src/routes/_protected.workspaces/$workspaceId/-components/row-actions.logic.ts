@@ -119,13 +119,21 @@ export const getOcrExportFileName = (
     : `${baseName}.txt`;
 };
 
-/** Keep a recognizable source name while preserving the final extension. */
-export const getDuplicateName = (
-  name: string,
-  duplicateLabel: string,
-): string => {
+type GetDuplicateNameOptions = {
+  duplicateLabel: string;
+  kind: "document" | "folder";
+  name: string;
+};
+
+/** Keep a recognizable source name while preserving a document's final extension. */
+export const getDuplicateName = ({
+  duplicateLabel,
+  kind,
+  name,
+}: GetDuplicateNameOptions): string => {
   const dotIndex = name.lastIndexOf(".");
-  const hasExtension = dotIndex > 0 && name.length - dotIndex <= 32;
+  const hasExtension =
+    kind === "document" && dotIndex > 0 && name.length - dotIndex <= 32;
   const extension = hasExtension ? name.slice(dotIndex) : "";
   const base = hasExtension ? name.slice(0, dotIndex) : name;
   const maxLabelLength = ENTITY_NAME_MAX_LENGTH - extension.length - 4;
