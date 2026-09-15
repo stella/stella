@@ -898,7 +898,22 @@ export const reconcileSharedInspectorTabs = (
   groupAssignments: InspectorTabsStore["groupAssignments"] = state.groupAssignments,
 ): SharedInspectorTabsState => {
   const localViewTabs = state.tabs.filter(isGenericInspectorTab);
-  const tabs: InspectorTab[] = [...sharedTabs, ...localViewTabs];
+  // A file tab's lane follows the route of the window it lives in, so the
+  // sender's lane never applies here.
+  const localMetadataLanes = new Map(
+    state.tabs.flatMap((tab) =>
+      tab.type === "pdf" ? [[tab.id, tab.metadataLane] as const] : [],
+    ),
+  );
+  const tabs: InspectorTab[] = sharedTabs.map((tab) => {
+    if (tab.type !== "pdf") {
+      return tab;
+    }
+    const { metadataLane: _metadataLane, ...shared } = tab;
+    const metadataLane = localMetadataLanes.get(tab.id);
+    return metadataLane === undefined ? shared : { ...shared, metadataLane };
+  });
+  tabs.push(...localViewTabs);
   const localViewIds = new Set(localViewTabs.map((tab) => tab.id));
   const mergedGroupAssignments = {
     ...groupAssignments,

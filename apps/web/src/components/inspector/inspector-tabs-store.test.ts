@@ -1237,6 +1237,59 @@ describe("Inspector tab broadcast", () => {
     });
   });
 
+  test("a reload restores a full-view file tab in side peek", () => {
+    installFakeBroadcastChannel();
+    const scope = { organizationId: "org-1", userId: "user-1" };
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+    openFullscreenFileTab();
+
+    cleanupInspectorBroadcast();
+    cleanupInspectorBroadcast = null;
+    useInspectorTabsStore.setState({ tabs: [], activeId: null });
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+
+    const restored = useInspectorTabsStore.getState().tabs.at(0);
+    expect(restored).toMatchObject({ id: "field-1", type: "pdf" });
+    expect(restored).not.toHaveProperty("metadataLane");
+  });
+
+  test("keeps each window's own file tab lane across syncs", () => {
+    installFakeBroadcastChannel();
+    const scope = { organizationId: "org-1", userId: "user-1" };
+    const peer = new FakeBroadcastChannel(
+      getInspectorTabsBroadcastChannelName(scope),
+    );
+    openFullscreenFileTab();
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+    const fileTab = (id: string) => ({
+      type: "pdf",
+      id,
+      entityId: `entity-${id}`,
+      label: "Contract.docx",
+      fileName: "Contract.docx",
+      pdfFileId: null,
+      workspaceId: "workspace-1",
+    });
+
+    peer.emit({
+      type: "inspector-tabs:sync",
+      senderId: "peer-tab",
+      updatedAt: 1,
+      tabs: [
+        { ...fileTab("field-1"), metadataLane: "closed" },
+        { ...fileTab("field-2"), metadataLane: "expanded" },
+      ],
+    });
+
+    const { tabs } = useInspectorTabsStore.getState();
+    expect(tabs.find(({ id }) => id === "field-1")).toMatchObject({
+      metadataLane: "expanded",
+    });
+    expect(tabs.find(({ id }) => id === "field-2")).not.toHaveProperty(
+      "metadataLane",
+    );
+  });
+
   test("normalizes task tabs from browser tabs created before creation status existed", () => {
     installFakeBroadcastChannel();
     const scope = { organizationId: "org-1", userId: "user-1" };
