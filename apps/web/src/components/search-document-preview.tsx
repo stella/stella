@@ -125,10 +125,8 @@ export const SearchDocumentPreview = ({
             />
           )}
           <PeekPdfControls
-            canResetZoom={scaleOffset !== 0}
-            onResetZoom={() => handleResetZoom(target.fieldId)}
-            onZoomIn={() => handleZoom(target.fieldId, "in")}
-            onZoomOut={() => handleZoom(target.fieldId, "out")}
+            onReset={() => handleResetZoom(target.fieldId)}
+            onZoom={(direction) => handleZoom(target.fieldId, direction)}
             scaleOffset={scaleOffset}
             tooltipLayer="search-child"
           />

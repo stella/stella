@@ -12,14 +12,10 @@ import type { ReactNode, RefObject } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   AlertTriangleIcon,
-  FoldHorizontalIcon,
-  MinusIcon,
   MonitorIcon,
   MoonIcon,
-  PlusIcon,
   PrinterIcon,
   SunIcon,
-  UnfoldHorizontalIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -48,6 +44,8 @@ import {
 } from "@/components/docx-preview-zoom";
 import { useDocxBlockScroll } from "@/components/docx/use-docx-block-scroll";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
+import { ZoomControls } from "@/components/inspector/zoom-controls";
+import type { ZoomDirection } from "@/components/inspector/zoom-controls";
 import { PageAnonymization } from "@/components/pdf/page-anonymization";
 import { PageCitation } from "@/components/pdf/page-citation";
 import { resolvePendingPdfCitationPageId } from "@/components/pdf/peek/pdf-citation-navigation.logic";
@@ -360,10 +358,10 @@ type PeekPdfColorControl = {
 };
 
 type PeekPdfControlsProps = {
-  canResetZoom: boolean;
-  onZoomIn?: (() => void) | undefined;
-  onZoomOut?: (() => void) | undefined;
-  onResetZoom?: (() => void) | undefined;
+  atMax?: boolean | undefined;
+  atMin?: boolean | undefined;
+  onReset: () => void;
+  onZoom: (direction: ZoomDirection) => void;
   pdfColorControl?: PeekPdfColorControl | undefined;
   scaleOffset: number;
   tooltipLayer?: OverlayLayer | undefined;
@@ -409,61 +407,33 @@ const PDFColorModeControl = ({
 };
 
 export const PeekPdfControls = ({
-  canResetZoom,
-  onZoomIn,
-  onZoomOut,
-  onResetZoom,
+  atMax,
+  atMin,
+  onReset,
+  onZoom,
   pdfColorControl,
   scaleOffset,
   tooltipLayer,
-}: PeekPdfControlsProps) => {
-  const t = useTranslations();
-
-  return (
-    <>
-      <Button
-        disabled={!onZoomOut}
-        onClick={onZoomOut}
-        size="icon-xs"
-        tooltip={t("workspaces.pdf.zoomOut")}
-        tooltipLayer={tooltipLayer}
-        variant="ghost"
-      >
-        <MinusIcon className="size-3" />
-      </Button>
-      <Button
-        disabled={!onZoomIn}
-        onClick={onZoomIn}
-        size="icon-xs"
-        tooltip={t("workspaces.pdf.zoomIn")}
-        tooltipLayer={tooltipLayer}
-        variant="ghost"
-      >
-        <PlusIcon className="size-3" />
-      </Button>
-      <Button
-        disabled={!canResetZoom || !onResetZoom}
-        onClick={onResetZoom}
-        size="icon-xs"
-        tooltip={t("workspaces.pdf.resetZoom")}
-        tooltipLayer={tooltipLayer}
-        variant="ghost"
-      >
-        {scaleOffset > 0 ? (
-          <FoldHorizontalIcon className="size-3" />
-        ) : (
-          <UnfoldHorizontalIcon className="size-3" />
-        )}
-      </Button>
-      {pdfColorControl && (
-        <>
-          <Separator className="mx-0.5 h-4" orientation="vertical" />
-          <PDFColorModeControl {...pdfColorControl} />
-        </>
-      )}
-    </>
-  );
-};
+}: PeekPdfControlsProps) => (
+  <>
+    {/* The viewer's offset is measured from the fit scale, which is the
+        level the control reads as 1. */}
+    <ZoomControls
+      atMax={atMax}
+      atMin={atMin}
+      level={1 + scaleOffset}
+      onReset={onReset}
+      onZoom={onZoom}
+      tooltipLayer={tooltipLayer}
+    />
+    {pdfColorControl && (
+      <>
+        <Separator className="mx-0.5 h-4" orientation="vertical" />
+        <PDFColorModeControl {...pdfColorControl} />
+      </>
+    )}
+  </>
+);
 
 export const PeekPrintButton = () => {
   const t = useTranslations();

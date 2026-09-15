@@ -226,7 +226,6 @@ const getFileTabDisplayState = ({
   const storedScaleOffset = scaleOffsets.get(tab.id);
   const scaleOffset = storedScaleOffset ?? 0;
   return {
-    canResetZoom: scaleOffset !== 0,
     desktopEditFileType: getDesktopEditFileType({
       fileName: tab.fileName,
       mimeType: tab.mimeType,
@@ -481,7 +480,6 @@ export const FileTabPanel = ({
   const replaceFileFieldId = useInspectorTabsStore((s) => s.replaceFileFieldId);
   const setFileFacet = useInspectorTabsStore((s) => s.setFileFacet);
   const {
-    canResetZoom,
     desktopEditFileType,
     isActive,
     isEmailDisplay,
@@ -836,10 +834,8 @@ export const FileTabPanel = ({
   const previewOverlay = isPreviewOverlayVisible ? (
     <div className="bg-background/80 supports-[backdrop-filter]:bg-background/65 absolute end-2 top-2 z-10 flex items-center gap-1 rounded-md border p-0.5 shadow-sm backdrop-blur">
       <PeekPdfControls
-        canResetZoom={canResetZoom}
-        onResetZoom={() => handleResetZoom(tab.id)}
-        onZoomIn={() => handleZoom(tab.id, "in")}
-        onZoomOut={() => handleZoom(tab.id, "out")}
+        onReset={() => handleResetZoom(tab.id)}
+        onZoom={(direction) => handleZoom(tab.id, direction)}
         pdfColorControl={pdfColorControl}
         scaleOffset={scaleOffset}
       />
@@ -1267,8 +1263,7 @@ export const FileTabPanel = ({
               fileName={tab.fileName}
               onResetZoom={resetEmailAttachmentZoom}
               onSelectedIdChange={setSelectedEmailAttachmentId}
-              onZoomIn={() => zoomEmailAttachment("in")}
-              onZoomOut={() => zoomEmailAttachment("out")}
+              onZoom={zoomEmailAttachment}
               overlayActivation={emailAttachmentOverlayActivation}
               scaleOffset={emailAttachmentScaleOffset}
               selectedId={selectedEmailAttachmentId}
@@ -1396,8 +1391,7 @@ export const FileTabPanel = ({
               fileName={tab.fileName}
               onResetZoom={resetEmailAttachmentZoom}
               onSelectedIdChange={setSelectedEmailAttachmentId}
-              onZoomIn={() => zoomEmailAttachment("in")}
-              onZoomOut={() => zoomEmailAttachment("out")}
+              onZoom={zoomEmailAttachment}
               overlayActivation={emailAttachmentOverlayActivation}
               scaleOffset={emailAttachmentScaleOffset}
               selectedId={selectedEmailAttachmentId}

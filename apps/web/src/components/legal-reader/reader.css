@@ -5,7 +5,8 @@
 
 :root {
   --reader-body-font: "Source Serif 4 Variable", serif;
-  --reader-body-size: 16px;
+  --reader-body-size-base: 16px;
+  --reader-body-size: var(--reader-body-size-base);
   --reader-body-line-height: 1.65;
   /* Measure: the line length the running text is read at, independent of how
      wide the pane happens to be. A decision opened in a wide inspector ran to
@@ -118,6 +119,13 @@
 [data-slot="inspector-dock-pane"] :is(.reader-case-law, .reader-statute) {
   max-width: var(--reader-measure);
   margin-inline: auto;
+  /* The pane's own text size, stepped by the reader's +/- and set on the
+     reader root. The declaration sits on the text itself rather than at
+     :root, where a custom property is substituted once and no descendant
+     could scale it; the header chrome keeps its own sizes either way. */
+  --reader-body-size: calc(
+    var(--reader-body-size-base) * var(--reader-text-scale, 1)
+  );
 }
 
 /* Collapse gap between consecutive h3 sub-headings
