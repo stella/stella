@@ -10,7 +10,8 @@
  * Session-scoped on purpose. What survives a reload is the decision's chat
  * TAB, which the inspector persists with both its decision and its thread id;
  * a reader mounting into a fresh session hands that thread back here as
- * `adoptThreadId`.
+ * `adoptThreadId`, and the restored tab set itself hands back whatever the
+ * reader painted too early to see.
  */
 
 import { create } from "zustand";
@@ -73,6 +74,44 @@ export const ensureDecisionChatThread = ({
     },
   }));
   return threadId;
+};
+
+/** A decision's conversation as a restored tab set carries it. */
+export type RestoredDecisionChatThread = {
+  decisionId: string;
+  threadId: ChatThreadId;
+};
+
+/**
+ * Hand a restored tab set's conversations back to the owner.
+ *
+ * The chat TAB is what survives a reload, but it is restored after the page
+ * has painted: by then a reader mounted on the same decision has already
+ * minted an id of its own, and nothing would ever ask it to give that up. The
+ * tab is the persisted truth, so it wins, and both surfaces continue the
+ * conversation the reader left instead of splitting into two.
+ *
+ * Later entries win, matching the tab set's own rule that a decision's newest
+ * chat tab is its current conversation.
+ */
+export const adoptRestoredDecisionChatThreads = (
+  restored: readonly RestoredDecisionChatThread[],
+): void => {
+  if (restored.length === 0) {
+    return;
+  }
+  useDecisionChatThreads.setState((state) => {
+    const next = { ...state.threadIdByDecisionId };
+    let changed = false;
+    for (const { decisionId, threadId } of restored) {
+      if (next[decisionId] === threadId) {
+        continue;
+      }
+      next[decisionId] = threadId;
+      changed = true;
+    }
+    return changed ? { threadIdByDecisionId: next } : state;
+  });
 };
 
 type AdoptDecisionChatThreadArgs = {

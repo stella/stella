@@ -13,6 +13,7 @@ import {
 } from "@/components/inspector/inspector-tabs-store";
 import { registerInspectorView } from "@/components/inspector/view-registry";
 import {
+  ensureDecisionChatThread,
   lookupDecisionChatThread,
   useDecisionChatThreads,
 } from "@/features/chat/decision-chat-threads";
@@ -1811,6 +1812,44 @@ describe("a decision's chat tab and the reader's composer", () => {
     expect(lookupDecisionChatThread("decision-1")).toEqual({
       status: "thread",
       threadId: rotated,
+    });
+  });
+
+  // The tab set is restored after the page has painted, so a reader on the
+  // decision has already minted an id nothing would otherwise take back.
+  test("follow the restored tab rather than an id minted before it arrived", () => {
+    installFakeBroadcastChannel();
+    const scope = {
+      organizationId: "org-restore",
+      userId: "user-restore",
+    };
+    const restored = toChatThreadId("thread-restored");
+    window.localStorage.setItem(
+      `stella:inspector-state:v1:${scope.organizationId}:${scope.userId}`,
+      JSON.stringify({
+        activeId: restored,
+        collapsedGroupIds: [],
+        groupAssignments: {},
+        groups: [],
+        tabs: [
+          {
+            activeDecisionId: "decision-1",
+            contextMatterIds: [],
+            id: restored,
+            label: "Decision chat",
+            type: "chat",
+          },
+        ],
+      }),
+    );
+    const minted = ensureDecisionChatThread({ decisionId: "decision-1" });
+
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+
+    expect(minted).not.toBe(restored);
+    expect(lookupDecisionChatThread("decision-1")).toEqual({
+      status: "thread",
+      threadId: restored,
     });
   });
 
