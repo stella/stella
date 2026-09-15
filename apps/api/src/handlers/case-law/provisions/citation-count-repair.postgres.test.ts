@@ -33,7 +33,7 @@ if (!databaseUrl || !runPostgresTests) {
         const decisionId = createSafeId<"caseLawDecision">();
         const firstFinished = Promise.withResolvers<undefined>();
         const releaseFirst = Promise.withResolvers<undefined>();
-        const secondStarted = Promise.withResolvers<undefined>();
+        const secondStarted = Promise.withResolvers<number>();
         const listingOnly = {
           _stellaPartialObservation: { isListingOnly: true },
         };
@@ -93,19 +93,26 @@ if (!databaseUrl || !runPostgresTests) {
           await Promise.race([firstFinished.promise, first]);
           const second = secondClient.begin(async (client) => {
             await client`SET LOCAL statement_timeout = '5s'`;
-            secondStarted.resolve(undefined);
+            const rows = await client`SELECT pg_backend_pid() AS pid`;
+            const pid: unknown = rows.at(0)?.pid;
+            if (typeof pid !== "number") {
+              return secondStarted.reject(
+                new TypeError("Expected PostgreSQL backend PID"),
+              );
+            }
+            secondStarted.resolve(pid);
             await (firstOperation === "writer"
               ? applyTransition(client)
               : writeCitation(client));
           });
           operations.push(second);
-          await secondStarted.promise;
+          const secondPid = await secondStarted.promise;
           // Observe a real PostgreSQL lock wait, so scheduler timing cannot make this vacuous.
           const deadline = Date.now() + 3000;
           let blocked = false;
           while (!blocked && Date.now() < deadline) {
             const rows = await observer`SELECT EXISTS (
-              SELECT 1 FROM pg_stat_activity WHERE datname = current_database()
+              SELECT 1 FROM pg_stat_activity WHERE pid = ${secondPid}
                 AND cardinality(pg_blocking_pids(pid)) > 0
             ) AS blocked`;
             blocked = rows.at(0)?.blocked === true;
