@@ -9,6 +9,7 @@ import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { Input } from "@stll/ui/input";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useFindSurface } from "@/lib/find-owner";
 
 type InspectorFindOptions = {
@@ -33,6 +34,11 @@ type FindBarState =
       query: string;
       matchCount: number;
       activeIndex: number;
+      /**
+       * Bumped on every awarded find command, so a shortcut pressed while
+       * the bar is already open still returns the caret to the query.
+       */
+      focusRequest: number;
     };
 
 const FIND_CLOSED: FindBarState = { open: false };
@@ -41,7 +47,19 @@ const FIND_OPENED: FindBarState = {
   query: "",
   matchCount: 0,
   activeIndex: 0,
+  focusRequest: 0,
 };
+
+/** What a match collection reads from the bar. */
+type FindInputs = {
+  activeIndex: number;
+  enabled: boolean;
+  findQuery: string;
+};
+
+/** The state after a find command: opened, or open with focus asked for again. */
+const findCommanded = (prev: FindBarState): FindBarState =>
+  prev.open ? { ...prev, focusRequest: prev.focusRequest + 1 } : FIND_OPENED;
 
 /**
  * Find-in-text for an inspector reader: the shortcut registration, the match
@@ -80,7 +98,7 @@ export const useInspectorFind = ({
     if (!enabled) {
       return;
     }
-    setFindState((prev) => (prev.open ? prev : FIND_OPENED));
+    setFindState(findCommanded);
   }, [enabled]);
 
   const setFindQuery = useCallback((query: string) => {
@@ -115,6 +133,7 @@ export const useInspectorFind = ({
   const findQuery = findState.open ? findState.query : "";
   const matchCount = findState.open ? findState.matchCount : 0;
   const activeIndex = findState.open ? findState.activeIndex : 0;
+  const focusRequest = findState.open ? findState.focusRequest : 0;
 
   // The DOCX pane and a table view's toolbar are candidates for the same
   // press: an inspector reader reaches the whole app while it is showing
@@ -123,7 +142,7 @@ export const useInspectorFind = ({
   useFindSurface({
     enabled,
     onFind: () => {
-      setFindState((prev) => (prev.open ? prev : FIND_OPENED));
+      setFindState(findCommanded);
     },
     owner: "inspector",
     root: panelRef,
@@ -146,70 +165,101 @@ export const useInspectorFind = ({
     };
   }, [enabled, findOpen]);
 
-  useLayoutEffect(() => {
-    // eslint-disable-next-line typescript/no-unnecessary-condition -- CSS.highlights is not available in every supported browser.
-    CSS.highlights?.delete(allHighlightName);
-    // eslint-disable-next-line typescript/no-unnecessary-condition -- CSS.highlights is not available in every supported browser.
-    CSS.highlights?.delete(activeHighlightName);
-
-    const root = contentRef.current;
-    const query = findQuery.trim();
-    if (!enabled || !root || query.length === 0) {
-      setFindState((prev) =>
-        prev.open && (prev.matchCount !== 0 || prev.activeIndex !== 0)
-          ? { ...prev, matchCount: 0, activeIndex: 0 }
-          : prev,
-      );
-      return undefined;
-    }
-
-    const ranges = collectTextRanges(root, query);
-    setFindState((prev) =>
-      prev.open && prev.matchCount !== ranges.length
-        ? { ...prev, matchCount: ranges.length }
-        : prev,
-    );
-
-    if (ranges.length === 0) {
-      setFindState((prev) =>
-        prev.open && prev.activeIndex !== 0
-          ? { ...prev, activeIndex: 0 }
-          : prev,
-      );
-      return undefined;
-    }
-
-    const safeActiveIndex = activeIndex >= ranges.length ? 0 : activeIndex;
-    if (safeActiveIndex !== activeIndex) {
-      setFindState((prev) =>
-        prev.open ? { ...prev, activeIndex: safeActiveIndex } : prev,
-      );
-      return undefined;
-    }
-
-    // eslint-disable-next-line typescript/no-unnecessary-condition -- CSS.highlights is not available in every supported browser.
-    CSS.highlights?.set(allHighlightName, new Highlight(...ranges));
-    const activeRange = ranges.at(safeActiveIndex);
-    if (activeRange) {
-      // eslint-disable-next-line typescript/no-unnecessary-condition -- CSS.highlights is not available in every supported browser.
-      CSS.highlights?.set(activeHighlightName, new Highlight(activeRange));
-      scrollRangeIntoView(activeRange);
-    }
-
-    return () => {
+  // One collection for both things that change what matches: the bar's own
+  // values, and the reader's text arriving later. Called with the values
+  // rather than closing over them, so the effect below lists what it reads.
+  const applyFind = useLatestCallback(
+    ({
+      activeIndex: index,
+      enabled: isEnabled,
+      findQuery: queryInput,
+    }: FindInputs) => {
       // eslint-disable-next-line typescript/no-unnecessary-condition -- CSS.highlights is not available in every supported browser.
       CSS.highlights?.delete(allHighlightName);
       // eslint-disable-next-line typescript/no-unnecessary-condition -- CSS.highlights is not available in every supported browser.
       CSS.highlights?.delete(activeHighlightName);
+
+      const root = contentRef.current;
+      const query = queryInput.trim();
+      if (!isEnabled || !root || query.length === 0) {
+        setFindState((prev) =>
+          prev.open && (prev.matchCount !== 0 || prev.activeIndex !== 0)
+            ? { ...prev, matchCount: 0, activeIndex: 0 }
+            : prev,
+        );
+        return undefined;
+      }
+
+      const ranges = collectTextRanges(root, query);
+      setFindState((prev) =>
+        prev.open && prev.matchCount !== ranges.length
+          ? { ...prev, matchCount: ranges.length }
+          : prev,
+      );
+
+      if (ranges.length === 0) {
+        setFindState((prev) =>
+          prev.open && prev.activeIndex !== 0
+            ? { ...prev, activeIndex: 0 }
+            : prev,
+        );
+        return undefined;
+      }
+
+      const safeActiveIndex = index >= ranges.length ? 0 : index;
+      if (safeActiveIndex !== index) {
+        setFindState((prev) =>
+          prev.open ? { ...prev, activeIndex: safeActiveIndex } : prev,
+        );
+        return undefined;
+      }
+
+      // eslint-disable-next-line typescript/no-unnecessary-condition -- CSS.highlights is not available in every supported browser.
+      CSS.highlights?.set(allHighlightName, new Highlight(...ranges));
+      const activeRange = ranges.at(safeActiveIndex);
+      if (activeRange) {
+        // eslint-disable-next-line typescript/no-unnecessary-condition -- CSS.highlights is not available in every supported browser.
+        CSS.highlights?.set(activeHighlightName, new Highlight(activeRange));
+        scrollRangeIntoView(activeRange);
+      }
+
+      return () => {
+        // eslint-disable-next-line typescript/no-unnecessary-condition -- CSS.highlights is not available in every supported browser.
+        CSS.highlights?.delete(allHighlightName);
+        // eslint-disable-next-line typescript/no-unnecessary-condition -- CSS.highlights is not available in every supported browser.
+        CSS.highlights?.delete(activeHighlightName);
+      };
+    },
+  );
+
+  useLayoutEffect(
+    () => applyFind({ activeIndex, enabled, findQuery }),
+    [activeIndex, applyFind, enabled, findQuery],
+  );
+
+  // The reader fills in after the bar can be open: citations, provision
+  // history and "load more" insert text later. Each insertion is a new
+  // document to match against, so the collection runs again on it.
+  const reapplyFind = useLatestCallback(() => {
+    applyFind({ activeIndex, enabled, findQuery });
+  });
+  useExternalSyncEffect(() => {
+    const root = contentRef.current;
+    if (!enabled || !root) {
+      return undefined;
+    }
+    const observer = new MutationObserver(() => {
+      reapplyFind();
+    });
+    observer.observe(root, {
+      characterData: true,
+      childList: true,
+      subtree: true,
+    });
+    return () => {
+      observer.disconnect();
     };
-  }, [
-    activeHighlightName,
-    activeIndex,
-    allHighlightName,
-    contentRef,
-    enabled,
-    findQuery,
-  ]);
+  }, [contentRef, enabled, reapplyFind]);
 
   return {
     activeMatchNumber: matchCount === 0 ? 0 : activeIndex + 1,
@@ -217,6 +267,7 @@ export const useInspectorFind = ({
     closeFind,
     findOpen,
     findQuery,
+    focusRequest,
     highlightKey: safeKey,
     matchCount,
     nextMatch,
@@ -243,6 +294,7 @@ export const InspectorFindBar = ({ find }: { find: InspectorFind }) => {
     closeFind,
     findOpen,
     findQuery,
+    focusRequest,
     highlightKey,
     matchCount,
     nextMatch,
@@ -250,13 +302,15 @@ export const InspectorFindBar = ({ find }: { find: InspectorFind }) => {
     setFindQuery,
   } = find;
 
+  // On open, and again on every find command while open: the shortcut
+  // pressed from the reader brings the caret back to the query.
   useExternalSyncEffect(() => {
     if (!findOpen) {
       return;
     }
     inputRef.current?.focus();
     inputRef.current?.select();
-  }, [findOpen]);
+  }, [findOpen, focusRequest]);
 
   if (!findOpen) {
     return null;
@@ -358,15 +412,34 @@ export const InspectorFindBar = ({ find }: { find: InspectorFind }) => {
   );
 };
 
+/**
+ * Case-folded text whose offsets still address the original: a character
+ * whose lowercase form has a different UTF-16 length (`İ` becomes `i̇`)
+ * stays as it is, so an index found in the folded text is valid as a range
+ * offset in the node it came from.
+ */
+const foldCase = (text: string): string => {
+  const folded = text.toLocaleLowerCase();
+  if (folded.length === text.length) {
+    return folded;
+  }
+  let out = "";
+  for (const char of text) {
+    const lower = char.toLocaleLowerCase();
+    out += lower.length === char.length ? lower : char;
+  }
+  return out;
+};
+
 const collectTextRanges = (root: HTMLElement, query: string): Range[] => {
   const ranges: Range[] = [];
-  const normalizedQuery = query.toLocaleLowerCase();
+  const normalizedQuery = foldCase(query);
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
 
   while (walker.nextNode()) {
     const node = walker.currentNode;
     const text = node.textContent ?? "";
-    const normalizedText = text.toLocaleLowerCase();
+    const normalizedText = foldCase(text);
     let from = 0;
 
     while (from < normalizedText.length) {
@@ -377,16 +450,36 @@ const collectTextRanges = (root: HTMLElement, query: string): Range[] => {
 
       const range = document.createRange();
       range.setStart(node, index);
-      range.setEnd(node, index + query.length);
+      range.setEnd(node, index + normalizedQuery.length);
       ranges.push(range);
-      from = index + Math.max(query.length, 1);
+      from = index + Math.max(normalizedQuery.length, 1);
     }
   }
 
   return ranges;
 };
 
+/**
+ * Opens every disclosure the range sits in. A match inside a closed
+ * `<details>` (the decision reader folds its reporter apparatus) is counted
+ * but has no box to highlight or scroll to until the fold is open.
+ */
+const revealRange = (range: Range): void => {
+  const container = range.commonAncestorContainer;
+  let element =
+    container instanceof Element ? container : container.parentElement;
+  while (element) {
+    const details = element.closest("details");
+    if (!details) {
+      return;
+    }
+    details.open = true;
+    element = details.parentElement;
+  }
+};
+
 const scrollRangeIntoView = (range: Range): void => {
+  revealRange(range);
   const rect = firstVisibleRangeRect(range);
   const root =
     range.commonAncestorContainer.nodeType === Node.ELEMENT_NODE
