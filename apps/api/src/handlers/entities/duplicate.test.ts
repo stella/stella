@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import { Result } from "better-result";
 
+import type { Transaction } from "@/api/db/root";
+import type { SafeDb } from "@/api/db/safe-db";
 import {
   auditLogs,
   documentCounters,
@@ -12,13 +15,15 @@ import { envBase } from "@/api/env-base";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
+import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import { createFileKey } from "@/api/lib/file-key";
 import { entityVersionInsertResult } from "@/api/tests/helpers/entity-version-insert-mock";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
-import { copyFileObject } from "./copy-utils";
+import { copyFileObject, resolveEntityName } from "./copy-utils";
 import { createDuplicateEntity } from "./duplicate";
 
 const requestNativeExtractionRunsMock = mock(
@@ -53,6 +58,9 @@ const documentId = toSafeId<"entity">("document_child");
 const nestedFolderId = toSafeId<"entity">("nested_folder");
 const requestedDuplicateId = toSafeId<"entity">("requested_duplicate");
 const propertyId = toSafeId<"property">("property_1");
+const secondaryPropertyId = toSafeId<"property">("property_2");
+const sourceFileFieldId = toSafeId<"field">("source_file_field");
+const secondaryFileFieldId = toSafeId<"field">("secondary_file_field");
 
 const fileContent = {
   type: "file",
@@ -67,6 +75,14 @@ const fileContent = {
   pdfFileId: null,
 } satisfies FieldContent;
 
+const secondaryFileContent = {
+  ...fileContent,
+  id: Bun.randomUUIDv7(),
+  fileName: "Schedule.xlsx",
+  mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  sha256Hex: "b".repeat(64),
+} satisfies FieldContent;
+
 // The duplicate runs against a real store: every copy is a server-side copy
 // of this object, so the key a copy lands under and the file id persisted on
 // the duplicated field have to agree.
@@ -77,12 +93,24 @@ const sourceKey = createFileKey({
   fileId: fileContent.id,
   mimeType: fileContent.mimeType,
 });
+const secondarySourceKey = createFileKey({
+  organizationId,
+  workspaceId,
+  fileId: secondaryFileContent.id,
+  mimeType: secondaryFileContent.mimeType,
+});
 
 let fake: FakeS3;
 
 beforeEach(() => {
   fake = startFakeS3();
   fake.put(envBase.S3_BUCKET, sourceKey, sourceBytes, fileContent.mimeType);
+  fake.put(
+    envBase.S3_BUCKET,
+    secondarySourceKey,
+    sourceBytes,
+    secondaryFileContent.mimeType,
+  );
 });
 
 afterEach(() => {
@@ -164,7 +192,7 @@ const sourceEntities = [
     parentId: rootFolderId,
     currentVersion: {
       id: toSafeId<"entityVersion">("version_child"),
-      fields: [{ propertyId, content: fileContent }],
+      fields: [{ id: sourceFileFieldId, propertyId, content: fileContent }],
     },
   },
   {
@@ -209,12 +237,56 @@ const createContext = ({
   } as Parameters<typeof duplicateEntity.handler>[0];
 };
 
+describe("duplicate name collisions", () => {
+  test("reserves room for the collision suffix and extension", async () => {
+    const requestedName = `${"a".repeat(250)}.docx`;
+    const firstCollisionName = `${"a".repeat(248)}_1.docx`;
+    const tx = {
+      select: () => ({
+        from: () => ({
+          where: async () => [
+            { name: requestedName },
+            { name: firstCollisionName },
+          ],
+        }),
+      }),
+    };
+
+    const resolved = await resolveEntityName({
+      tx: asTestRaw<Transaction>(tx),
+      workspaceId,
+      parentId: null,
+      name: requestedName,
+    });
+
+    expect(resolved).toBe(`${"a".repeat(248)}_2.docx`);
+    expect(resolved).toHaveLength(255);
+  });
+});
+
 describe("duplicate entity", () => {
-  test("uses the requested identity and keeps a custom file name in sync", async () => {
+  test("uses the requested identity and renames only the primary file", async () => {
     const insertedEntities: InsertedEntity[] = [];
     const insertedFields: InsertedField[] = [];
 
-    const sourceDocument = sourceEntities.at(1);
+    const source = sourceEntities.at(1);
+    if (!source) {
+      throw new Error("Expected source document fixture");
+    }
+    const sourceDocument = {
+      ...source,
+      currentVersion: {
+        ...source.currentVersion,
+        fields: [
+          { id: sourceFileFieldId, propertyId, content: fileContent },
+          {
+            id: secondaryFileFieldId,
+            propertyId: secondaryPropertyId,
+            content: secondaryFileContent,
+          },
+        ],
+      },
+    };
     let entityLookupCount = 0;
     const tx = {
       query: {
@@ -270,24 +342,31 @@ describe("duplicate entity", () => {
       name: "Child (copy).docx",
     });
     expect(insertedEntities.at(0)?.name).toBe("Child (copy).docx");
-    const content = insertedFields.at(0)?.content;
-    expect(content?.type).toBe("file");
-    if (content?.type === "file") {
-      expect(content.fileName).toBe("Child (copy).docx");
+    const primaryContent = insertedFields.at(0)?.content;
+    expect(primaryContent?.type).toBe("file");
+    if (primaryContent?.type === "file") {
+      expect(primaryContent.fileName).toBe("Child (copy).docx");
+    }
+    const secondaryContent = insertedFields.at(1)?.content;
+    expect(secondaryContent?.type).toBe("file");
+    if (secondaryContent?.type === "file") {
+      expect(secondaryContent.fileName).toBe("Schedule.xlsx");
     }
   });
 
   test("returns the committed target when the same request is replayed", async () => {
     const sourceDocument = sourceEntities.at(1);
     let entityLookupCount = 0;
+    let replayQuery: unknown;
     const tx = {
       query: {
         entities: {
-          findFirst: async () => {
+          findFirst: async (query: unknown) => {
             entityLookupCount++;
             if (entityLookupCount === 1) {
               return sourceDocument;
             }
+            replayQuery = query;
             return {
               id: requestedDuplicateId,
               name: "Child (Copy).docx",
@@ -345,6 +424,13 @@ describe("duplicate entity", () => {
       fieldId: toSafeId<"field">("existing_copy_field"),
       name: "Child (Copy).docx",
     });
+    expect(replayQuery).toMatchObject({
+      with: {
+        currentVersion: {
+          with: { fields: { orderBy: { id: "asc" } } },
+        },
+      },
+    });
     const copiedKeys = fake.requests
       .filter(({ method }) => method === "COPY")
       .map(({ key }) => key);
@@ -354,6 +440,89 @@ describe("duplicate entity", () => {
         .filter(({ method }) => method === "DELETE")
         .map(({ key }) => key),
     ).toEqual([]);
+  });
+
+  test("retains copied objects when a lost commit acknowledgement replays", async () => {
+    const sourceDocument = sourceEntities.at(1);
+    let entityLookupCount = 0;
+    const replayFieldId = toSafeId<"field">("committed_copy_field");
+    const tx = {
+      query: {
+        entities: {
+          findFirst: async () => {
+            entityLookupCount++;
+            if (entityLookupCount === 1) {
+              return sourceDocument;
+            }
+            if (entityLookupCount === 2) {
+              return undefined;
+            }
+            return {
+              id: requestedDuplicateId,
+              name: "Child (Copy).docx",
+              currentVersion: {
+                fields: [{ id: replayFieldId, content: fileContent }],
+              },
+            };
+          },
+        },
+        workspaces: { findFirst: async () => ({ reference: null }) },
+      },
+      $count: async () => 1,
+      select: () => ({
+        from: () => ({ where: async () => [{ name: sourceDocument?.name }] }),
+      }),
+      insert: (table: unknown) => ({
+        values: (value: unknown) => {
+          if (table === documentCounters) {
+            return {
+              onConflictDoUpdate: () => ({
+                returning: async () => [{ lastValue: 1 }],
+              }),
+            };
+          }
+          return table === entityVersions
+            ? entityVersionInsertResult(value)
+            : undefined;
+        },
+      }),
+      update: () => ({ set: () => ({ where: async () => {} }) }),
+    };
+    const { safeDb: committedSafeDb } = createScopedDbMock(tx);
+    let safeDbCallCount = 0;
+    const safeDb: SafeDb = async (callback, retry) => {
+      safeDbCallCount++;
+      const result = await committedSafeDb(callback, retry);
+      if (safeDbCallCount === 3 && !Result.isError(result)) {
+        return Result.err(
+          new DatabaseError({ message: "commit acknowledgement lost" }),
+        );
+      }
+      return result;
+    };
+
+    const result = await duplicateEntity.handler(
+      createContext({
+        body: {
+          entityId: documentId,
+          name: "Child (Copy).docx",
+          targetEntityId: requestedDuplicateId,
+        },
+        safeDb,
+      }),
+    );
+
+    expect(result).toEqual({
+      entityId: requestedDuplicateId,
+      fieldId: replayFieldId,
+      name: "Child (Copy).docx",
+    });
+    expect(fake.requests.filter(({ method }) => method === "COPY")).toHaveLength(
+      1,
+    );
+    expect(fake.requests.filter(({ method }) => method === "DELETE")).toEqual(
+      [],
+    );
   });
 
   test("duplicates folder trees instead of rejecting folders", async () => {

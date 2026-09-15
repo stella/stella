@@ -1,6 +1,11 @@
 import { panic, Result, TaggedError } from "better-result";
 import { and, eq, isNull, like } from "drizzle-orm";
 
+import {
+  ENTITY_NAME_MAX_LENGTH,
+  truncateEntityName,
+} from "@stll/api-contract";
+
 import type { Transaction } from "@/api/db/root";
 import { entities, fields, workspaces } from "@/api/db/schema";
 import type { entityVersions } from "@/api/db/schema";
@@ -506,10 +511,6 @@ export const rollbackS3Copies = async (keys: string[]): Promise<void> => {
   );
 };
 
-/** Escape regex metacharacters. */
-const escapeRegex = (value: string) =>
-  value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
-
 const trailingSuffixRe = /_\d+$/u;
 
 type ResolveEntityNameProps = {
@@ -542,7 +543,15 @@ export const resolveEntityName = async ({
   // Strip trailing _N to get the root name
   const base = rawBase.replace(trailingSuffixRe, "");
 
-  const pattern = `${escapeLike(base)}%${escapeLike(ext)}`;
+  const longestSuffix = `_${LIMITS.entitiesCount}`;
+  const searchPrefix = truncateEntityName(
+    base,
+    Math.max(
+      ENTITY_NAME_MAX_LENGTH - ext.length - longestSuffix.length,
+      0,
+    ),
+  );
+  const pattern = `${escapeLike(searchPrefix)}%`;
   const parentCondition = parentId
     ? eq(entities.parentId, parentId)
     : isNull(entities.parentId);
@@ -564,27 +573,39 @@ export const resolveEntityName = async ({
     return name;
   }
 
-  const suffixRe = new RegExp(
-    `^${escapeRegex(base)}(?:_(\\d+))?${escapeRegex(ext)}$`,
-    "u",
-  );
+  const collisionName = (suffixNumber: number) => {
+    const suffix = `_${suffixNumber}`;
+    const boundedExtension = truncateEntityName(
+      ext,
+      ENTITY_NAME_MAX_LENGTH - suffix.length,
+    );
+    const boundedBase = truncateEntityName(
+      base,
+      ENTITY_NAME_MAX_LENGTH - suffix.length - boundedExtension.length,
+    );
+    return `${boundedBase}${suffix}${boundedExtension}`;
+  };
 
-  let maxN = 0;
-  for (const sibling of siblings) {
-    if (!sibling.name) {
+  let maxSuffixNumber = 0;
+  for (const siblingName of siblingNames) {
+    if (!siblingName.endsWith(ext)) {
       continue;
     }
-    const match = suffixRe.exec(sibling.name);
+    const stem = ext ? siblingName.slice(0, -ext.length) : siblingName;
+    const match = /_(\d+)$/u.exec(stem);
     if (!match) {
       continue;
     }
-    const n = match[1] ? Number.parseInt(match[1], 10) : 0;
-    if (n > maxN) {
-      maxN = n;
+    const suffixNumber = Number.parseInt(match[1] ?? "", 10);
+    if (
+      suffixNumber > maxSuffixNumber &&
+      siblingName === collisionName(suffixNumber)
+    ) {
+      maxSuffixNumber = suffixNumber;
     }
   }
 
-  return `${base}_${maxN + 1}${ext}`;
+  return collisionName(maxSuffixNumber + 1);
 };
 
 export const getFolderSubtree = (
@@ -970,6 +991,12 @@ export const copyEntities = async ({
       targetVersionIds.get(currentVersion.id) ??
       panic("Current version was not written for the copied entity");
 
+    const renamedRootFileFieldId =
+      source.id === sourceEntityId && targetRootName !== undefined
+        ? currentVersion.fields.find(({ content }) => content.type === "file")
+            ?.id
+        : undefined;
+
     // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- sequential update sets currentVersionId on the just-created entity/version pair
     await tx
       .update(entities)
@@ -1014,8 +1041,7 @@ export const copyEntities = async ({
         }
 
         const content =
-          source.id === sourceEntityId &&
-          targetRootName !== undefined &&
+          field.id === renamedRootFileFieldId &&
           field.content.type === "file"
             ? {
                 ...field.content,

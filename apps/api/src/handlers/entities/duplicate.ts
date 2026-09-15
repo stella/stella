@@ -135,6 +135,7 @@ const duplicateEntityHandler = async function* ({
               with: {
                 fields: {
                   columns: { id: true, content: true },
+                  orderBy: { id: "asc" },
                   limit: LIMITS.propertiesCount,
                 },
               },
@@ -220,16 +221,21 @@ const duplicateEntityHandler = async function* ({
       }),
   );
 
-  // An aborted copy leaves no rows, so every object copied for it is an
-  // orphan and the whole set goes back.
   if (Result.isError(txResultResult)) {
-    await rollbackS3Copies(copiedS3Keys);
     if (targetEntityId) {
       const replayed = await findReplay(targetEntityId);
-      if (!Result.isError(replayed) && replayed.value) {
+      if (Result.isError(replayed)) {
+        // The transaction outcome and the ownership of its objects are both
+        // unknown. Retain them until a replay can prove whether they are
+        // referenced; deleting here could corrupt a committed duplicate.
+        return Result.err(transactionAbortError(txResultResult.error));
+      }
+      if (replayed.value) {
         return Result.ok(duplicateReplayPayload(replayed.value));
       }
     }
+    // The transaction is confirmed absent, so every copied object is orphaned.
+    await rollbackS3Copies(copiedS3Keys);
     return Result.err(transactionAbortError(txResultResult.error));
   }
 

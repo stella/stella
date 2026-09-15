@@ -21,6 +21,9 @@ describe("duplicate names", () => {
     expect(getDuplicateName(`${"a".repeat(251)}.docx`, "Copy")).toHaveLength(
       255,
     );
+    expect(getDuplicateName(`${"a".repeat(244)}😀.docx`, "Copy")).toBe(
+      `${"a".repeat(243)} (Copy).docx`,
+    );
   });
 });
 

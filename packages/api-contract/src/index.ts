@@ -206,6 +206,7 @@ export {
   isTaskStatus,
   TASK_STATUS,
   TASK_STATUSES,
+  truncateEntityName,
 } from "./entity-options";
 export type { EntityPriority, TaskStatus } from "./entity-options";
 export {
