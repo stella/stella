@@ -232,7 +232,7 @@ const buildGridTemplate = (
   const extraTracks = extraColumns
     .map((col) => `${widths[col.id] ?? DEFAULT_EXTRA_WIDTH_PX}px`)
     .join(" ");
-  return `${nameTrack}${extraTracks ? ` ${extraTracks}` : ""} 4rem`;
+  return `${nameTrack}${extraTracks ? ` ${extraTracks}` : ""} 2rem`;
 };
 
 type ColumnWidthsApi = {
