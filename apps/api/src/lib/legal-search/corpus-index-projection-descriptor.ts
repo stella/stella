@@ -31,6 +31,13 @@ type ProjectionInputBase = {
 export type CaseLawProjectionInput = ProjectionInputBase & {
   family: "case_law";
   redacted: boolean;
+  /**
+   * The publisher listed this decision and never served its detail (guide
+   * rule 20). The row is durable and unpublished, so it is erased from the
+   * projection rather than indexed — including when a later partial
+   * observation gives it a body while the marker still stands.
+   */
+  listingOnly: boolean;
   caseNumber: string;
   identifiers: readonly { type: string; value: string }[];
   court: string;
@@ -140,7 +147,7 @@ export const deriveCorpusIndexProjectionDescriptor = (
     input.contentHash === null ||
     EMPTY_CORPUS_CONTENT_HASHES.includes(input.contentHash) ||
     !input.redistributionEligible ||
-    (input.family === "case_law" && input.redacted)
+    (input.family === "case_law" && (input.redacted || input.listingOnly))
   ) {
     return { action: "erase" };
   }

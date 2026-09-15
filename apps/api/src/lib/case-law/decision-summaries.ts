@@ -6,6 +6,7 @@ import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { publicDecisionRowColumns } from "@/api/lib/case-law/decision-row-columns";
 import { readDecisionHeadnote } from "@/api/lib/case-law/decision-text";
 import { readPublicDecisionLanguageAlternatesByGroup } from "@/api/lib/case-law/language-alternates";
+import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 
 type ReadPublicDecisionSummariesOptions = {
@@ -37,6 +38,7 @@ export const readPublicDecisionSummaries = async ({
         and(
           inArray(caseLawDecisions.id, [...decisionIds]),
           redistributableCaseLawSource,
+          publishedCaseLawDecision,
         ),
       )
       .limit(decisionIds.length),

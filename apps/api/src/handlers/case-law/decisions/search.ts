@@ -81,6 +81,10 @@ import { readDecisionHeadnote } from "@/api/lib/case-law/decision-text";
 import { readPublicDecisionLanguageAlternatesByGroup } from "@/api/lib/case-law/language-alternates";
 import { readCaseLawSourceRegistry } from "@/api/lib/case-law/non-redistributable-sources";
 import {
+  publishedCaseLawDecision,
+  publishedCaseLawDecisionSqlFor,
+} from "@/api/lib/case-law/published-decisions";
+import {
   publisherHeadnoteMetadataSql,
   publisherKeywordsMetadataSql,
 } from "@/api/lib/case-law/publisher-summary";
@@ -90,7 +94,7 @@ import {
 } from "@/api/lib/case-law/redistribution";
 import {
   bodyPreviewJoin,
-  redistributableSourceJoin,
+  publicCaseLawDecisionJoin,
 } from "@/api/lib/case-law/search-sql";
 import { errorTag } from "@/api/lib/errors/utils";
 import { decisionDocketGrammarForCountry } from "@/api/lib/legal-search/adapter-manifest";
@@ -328,6 +332,7 @@ const searchPostgresDecisions = async (
         ON citing_src.id = citing_d.source_id
        AND ${redistributableCaseLawSourceSqlFor("citing_src")}
       WHERE c.cited_decision_id = d.id
+        AND ${publishedCaseLawDecisionSqlFor("citing_d")}
     ) cb
   `);
 
@@ -348,7 +353,7 @@ const searchPostgresDecisions = async (
       FROM case_law_search_documents sd
       JOIN case_law_decisions d
         ON d.id = sd.decision_id
-      ${redistributableSourceJoin}
+      ${publicCaseLawDecisionJoin}
       LEFT JOIN ${citationAuthorityLateral} ON true
       WHERE ${ftsSearch.predicate}
         ${allFilters}
@@ -444,7 +449,7 @@ const searchPostgresDecisions = async (
     FROM case_law_search_documents sd
     JOIN case_law_decisions d
       ON d.id = sd.decision_id
-    ${redistributableSourceJoin}
+    ${publicCaseLawDecisionJoin}
   `;
 
   const courtFacetQuery = sql`
@@ -931,6 +936,7 @@ const caseLawSearchRowFilters = (
 ): SQL[] => {
   const filters: SQL[] = [
     redistributableCaseLawSource,
+    publishedCaseLawDecision,
     // The generation's projection state rejects a scrubbed or pending row, so
     // a stale physical copy cannot serve outdated or erased snippets.
     currentCaseLawCorpusProjection(generation),

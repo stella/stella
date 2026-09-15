@@ -28,6 +28,7 @@ import {
 } from "@/api/lib/legal-search/corpus-index-projection-descriptor";
 import { lockCorpusIndexProjectionWriterTx } from "@/api/lib/legal-search/corpus-index-projection-revision";
 import { isRedistributable } from "@/api/lib/legal-search/corpus-source";
+import { partialObservationFromMetadata } from "@/api/lib/legal-search/ingestion-normalization";
 
 const CORPUS_INDEX_MANIFEST_COUNT = Object.keys(CORPUS_INDEX_MANIFESTS).length;
 
@@ -130,6 +131,7 @@ export const caseLawProjectionInputFromCanonical = ({
   contentHash,
   redistributionEligible: isRedistributable(sourceDescriptor),
   redacted: redactedAt !== null,
+  listingOnly: partialObservationFromMetadata(metadata).isListingOnly,
   caseNumber,
   identifiers,
   court,

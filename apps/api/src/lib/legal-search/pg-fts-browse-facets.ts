@@ -7,6 +7,7 @@ import {
   caseLawPublicReadDb,
   type CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
+import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import { LegalBrowseFacetsError } from "@/api/lib/legal-search/browse-facets";
 import type {
@@ -39,7 +40,10 @@ export const readPgFtsBrowseFacets = definePublicLawSharedQuery(
     tx: CaseLawPublicReadTransaction,
     query: LegalBrowseFacetsQuery,
   ): Promise<LegalBrowseFacets> => {
-    const scope: SQL[] = [redistributableCaseLawSource];
+    const scope: SQL[] = [
+      redistributableCaseLawSource,
+      publishedCaseLawDecision,
+    ];
     if (query.jurisdiction) {
       scope.push(eq(caseLawDecisions.country, query.jurisdiction));
     }

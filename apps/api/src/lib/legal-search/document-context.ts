@@ -2,6 +2,7 @@ import { corpusStorageMode } from "@/api/env-base";
 import type { SafeId } from "@/api/lib/branded-types";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
+import { publishedCaseLawDecisionFor } from "@/api/lib/case-law/published-decisions";
 import {
   readCorpusAst,
   readCorpusPayloadOrFallback,
@@ -20,7 +21,10 @@ export const readDocumentContextDecision = definePublicLawSharedQuery(
     decisionId: SafeId<"caseLawDecision">,
   ) =>
     await tx.query.caseLawDecisions.findFirst({
-      where: { id: { eq: decisionId } },
+      where: {
+        id: { eq: decisionId },
+        RAW: (table) => publishedCaseLawDecisionFor(table.metadata),
+      },
       columns: {
         id: true,
         caseNumber: true,

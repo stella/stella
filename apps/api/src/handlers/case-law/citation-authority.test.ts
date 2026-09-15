@@ -271,6 +271,38 @@ test("materialized authority equals citationScore() at the same instant", async 
   expect(await countOf(citedId)).toBe(3);
 });
 
+test("a listing-only citing decision weighs on nothing", async () => {
+  // A row the corpus does not publish must not raise a published decision's
+  // count or its rank. The live scorer in the search lateral and this
+  // materialized column read the same citing side, so they gate it alike.
+  const before = await countOf(citedId);
+  const beforeAuthority = await authorityOf(citedId);
+  expect(before).toBeGreaterThan(0);
+
+  await db
+    .update(caseLawDecisions)
+    .set({
+      metadata: { _stellaPartialObservation: { isListingOnly: true } },
+    })
+    .where(eq(caseLawDecisions.id, supremeCitingId));
+  await markAllDue();
+  await sweep(1000);
+
+  expect(await countOf(citedId)).toBe(before - 1);
+  expect(await authorityOf(citedId)).toBeLessThan(beforeAuthority);
+
+  // And it weighs again the moment its detail arrives.
+  await db
+    .update(caseLawDecisions)
+    .set({ metadata: {} })
+    .where(eq(caseLawDecisions.id, supremeCitingId));
+  await markAllDue();
+  await sweep(1000);
+
+  expect(await countOf(citedId)).toBe(before);
+  expect(await authorityOf(citedId)).toBeCloseTo(beforeAuthority, 9);
+});
+
 test("a decision with no incoming citations has zero authority", async () => {
   expect(await authorityOf(orphanId)).toBe(0);
   expect(await countOf(orphanId)).toBe(0);

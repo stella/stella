@@ -129,7 +129,7 @@ const CORPUS_PROJECTION_REVISION_TABLE_SQL = quoteSqlIdentifier(
 // The snapshot bakes in the superset every suite needs: RLS roles, schema,
 // workspace-access objects, and the role grants. Suites that never SET ROLE
 // simply ignore the grants.
-const ROLE_GRANT_STATEMENTS = [
+export const ROLE_GRANT_STATEMENTS = [
   `
     GRANT SELECT, INSERT, UPDATE, DELETE
       ON ALL TABLES IN SCHEMA public TO stella
@@ -224,6 +224,32 @@ const ROLE_GRANT_STATEMENTS = [
   `,
   `
     GRANT MAINTAIN ON TABLE "case_law_sources" TO stella_ingestion
+  `,
+  // Ingestion-owned case-law tables the migrations grant one by one, as they
+  // were added. `pglite-role-grants.test.ts` holds this list and the
+  // migrations to agreement, so the next such table cannot be forgotten here.
+  `
+    GRANT SELECT ON TABLE
+      "case_law_reconciliation_items",
+      "case_law_coverage_slices",
+      "case_law_search_document_preview_passages"
+    TO stella
+  `,
+  `
+    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
+      "case_law_reconciliation_items",
+      "case_law_coverage_slices",
+      "case_law_corpus_upload_intents",
+      "case_law_decision_source_identities",
+      "case_law_search_document_preview_passages",
+      "case_law_citation_resolution_census",
+      "case_law_citation_resolution_census_runs",
+      "case_law_citation_resolution_progress"
+    TO stella_ingestion
+  `,
+  `
+    GRANT SELECT, INSERT ON TABLE "case_law_corpus_jurisdictions"
+    TO stella_ingestion
   `,
   // case_law_index_jobs is append-only: ingestion appends audit rows
   // but never updates or deletes them.

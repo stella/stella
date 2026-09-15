@@ -27,6 +27,7 @@ const CASE_LAW_INPUT = {
   contentHash: "a".repeat(64),
   redistributionEligible: true,
   redacted: false,
+  listingOnly: false,
   caseNumber: "4 As 3/2008",
   identifiers: [
     { type: "source", value: "NSS-4-AS-3-2008" },
@@ -89,9 +90,13 @@ test("every projected metadata change invalidates the input fingerprint", () => 
   expect(changed).not.toEqual(first);
 });
 
-test("redaction, missing or empty payload, and redistribution revocation erase", () => {
+test("redaction, a listing-only row, missing or empty payload, and redistribution revocation erase", () => {
   for (const input of [
     { ...CASE_LAW_INPUT, redacted: true },
+    // The row was listed and never served: durable, and never projected. It
+    // is erased even carrying a body, which a partial refresh can give it
+    // while the marker still stands.
+    { ...CASE_LAW_INPUT, listingOnly: true },
     { ...CASE_LAW_INPUT, contentHash: null },
     { ...CASE_LAW_INPUT, redistributionEligible: false },
   ]) {

@@ -17,6 +17,7 @@ import type { CorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-ma
 import { deriveCorpusIndexProjectionDescriptor } from "@/api/lib/legal-search/corpus-index-projection-descriptor";
 import {
   buildCorpusIndexProjectionDesiredStateValues,
+  caseLawProjectionInputFromCanonical,
   lockActiveCorpusProjectionManifestForMutation,
   type CorpusIndexProjectionSubject,
 } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
@@ -496,29 +497,33 @@ const bootstrapCaseLaw = async ({
           subject: { family: "case_law", entityId: row.documentId },
           generation,
           epoch: row.projectionEpoch === 0n ? 1n : row.projectionEpoch,
-          descriptor: deriveCorpusIndexProjectionDescriptor(manifest, {
-            family: "case_law",
-            documentId: row.documentId,
-            sourceId: row.sourceId,
-            jurisdiction: row.jurisdiction,
-            language: row.language,
-            documentType: row.documentType,
-            contentHash: row.contentHash,
-            redistributionEligible: isRedistributable(
-              descriptorOf(row.sourceId),
-            ),
-            redacted: row.redactedAt !== null,
-            caseNumber: row.caseNumber,
-            identifiers:
-              identifiersByDecision.get(row.documentId) ??
-              panic(
-                `Corpus projection bootstrap lost identifier state for decision ${row.documentId}`,
-              ),
-            court: row.court,
-            decisionDate: row.decisionDate,
-            ecli: row.ecli,
-            metadata: row.metadata,
-          }),
+          // Through the canonical builder, not a second inline literal: the
+          // bootstrap walk and the per-row projection must derive the same
+          // input from the same row, and a hand-kept copy drifts field by
+          // field as the input grows.
+          descriptor: deriveCorpusIndexProjectionDescriptor(
+            manifest,
+            caseLawProjectionInputFromCanonical({
+              documentId: row.documentId,
+              sourceId: row.sourceId,
+              jurisdiction: row.jurisdiction,
+              language: row.language,
+              documentType: row.documentType,
+              contentHash: row.contentHash,
+              redactedAt: row.redactedAt,
+              caseNumber: row.caseNumber,
+              identifiers:
+                identifiersByDecision.get(row.documentId) ??
+                panic(
+                  `Corpus projection bootstrap lost identifier state for decision ${row.documentId}`,
+                ),
+              court: row.court,
+              decisionDate: row.decisionDate,
+              ecli: row.ecli,
+              metadata: row.metadata,
+              sourceDescriptor: descriptorOf(row.sourceId),
+            }),
+          ),
         }),
       );
     },

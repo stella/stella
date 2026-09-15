@@ -453,6 +453,15 @@ const applyFinaldoc = (
   decision.documentAst = result.documentAst;
   decision.sourceRaw = result.sourceRaw;
   decision.sourceRawContentType = "application/json";
+  // The publisher linked a document and nothing came back: the listed identity
+  // survives (rule 20) but the row carries the listing alone. Marking it keeps
+  // the row out of every public surface, and out of what `heldRequiresDetail`
+  // counts as held, so a later reconciliation pass asks for the document
+  // again. Only the crawl reaches this; the reconciliation path reports
+  // `detail-unavailable` before it enriches.
+  if (result.sourceRaw === undefined) {
+    decision.isListingOnly = true;
+  }
 
   const rm = result.richMetadata;
   if (Object.keys(rm).length > 0) {
@@ -958,6 +967,12 @@ export const czRegionalAdapter = defineSourceAdapter({
     firstSlice: CZ_REGIONAL_FEED_START,
     ...czRegionalDaySlices.walk,
     tipWindowDays: CZ_REGIONAL_TIP_WINDOW_DAYS,
+    // `applyFinaldoc` marks a row whose linked document did not come back
+    // `isListingOnly`; unset, that stub would count as held and its document
+    // would never be asked for again. A row the publisher links no document
+    // for is not marked and stays held: there is nothing left to ask for, and
+    // re-listing it on every pass would never let the day settle.
+    heldRequiresDetail: true,
     listSlicePage: listCzRegionalSlicePage,
     buildDecision: buildCzRegionalFromPayload,
   },

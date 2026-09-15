@@ -8,6 +8,7 @@ import type {
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
 import { normalizePublicDecisionLanguage } from "@/api/lib/case-law/decision-language";
+import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -90,6 +91,7 @@ export const readPublicDecisionLanguageAlternatesQuery =
             inArray(caseLawDecisions.languageGroupKey, [...languageGroupKeys]),
             inArray(caseLawDecisions.country, [...PUBLIC_CASE_LAW_COUNTRIES]),
             redistributableCaseLawSource,
+            publishedCaseLawDecision,
             sql`${normalizedLanguageSql} ~ ${ROUTE_LANGUAGE_PATTERN}`,
           ),
         )

@@ -14,6 +14,7 @@ import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
+import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import { groupableSql } from "@/api/lib/groupable-sql";
 import { LIMITS } from "@/api/lib/limits";
@@ -191,6 +192,7 @@ export const readSitemapBucketShards = async (
     .where(
       and(
         redistributableCaseLawSource,
+        publishedCaseLawDecision,
         inArray(caseLawDecisions.country, [...PUBLIC_CASE_LAW_COUNTRIES]),
       ),
     )
@@ -231,6 +233,7 @@ export const readSitemapDecisionAlternates = async (
         inArray(caseLawDecisions.languageGroupKey, languageGroupKeys),
         inArray(caseLawDecisions.country, [...PUBLIC_CASE_LAW_COUNTRIES]),
         redistributableCaseLawSource,
+        publishedCaseLawDecision,
       ),
     )
     .orderBy(asc(caseLawDecisions.language), asc(caseLawDecisions.id))
@@ -256,6 +259,7 @@ export const listSitemapShardsHandler = async (
       .where(
         and(
           redistributableCaseLawSource,
+          publishedCaseLawDecision,
           inArray(caseLawDecisions.country, [...PUBLIC_CASE_LAW_COUNTRIES]),
         ),
       )
@@ -388,7 +392,13 @@ export const listSitemapShardDecisionsHandler = async (
         caseLawSources,
         eq(caseLawSources.id, caseLawDecisions.sourceId),
       )
-      .where(and(redistributableCaseLawSource, ...conditions))
+      .where(
+        and(
+          redistributableCaseLawSource,
+          publishedCaseLawDecision,
+          ...conditions,
+        ),
+      )
       .orderBy(desc(caseLawDecisions.updatedAt), desc(caseLawDecisions.id))
       .limit(LIMITS.caseLawSitemapShardUrlLimit + 1);
 

@@ -13,6 +13,7 @@ import {
   courtTierLabelFromMap,
   type CourtWeightMap,
 } from "@/api/lib/case-law/court-weights";
+import { publishedCaseLawDecisionSqlFor } from "@/api/lib/case-law/published-decisions";
 import {
   definePublicLawSharedQuery,
   PUBLIC_LAW_SHARED_QUERY,
@@ -203,6 +204,7 @@ export const readCaseLawCourtActivityQuery = definePublicLawSharedQuery(
     const scanFrom = new Date(sinceWeek.getTime() - CLOCK_SKEW_MARGIN_MS);
     // Emitted only when a source is actually withheld, so the ordinary read
     // stays on the index alone.
+    const published = sql`AND ${sql.raw(publishedCaseLawDecisionSqlFor("d"))}`;
     const admitted =
       excludedSourceIds.length === 0
         ? sql``
@@ -234,6 +236,7 @@ export const readCaseLawCourtActivityQuery = definePublicLawSharedQuery(
         FROM case_law_decisions d
         WHERE d.country = ${country}
           AND d.court = named.court
+          ${published}
           ${admitted}
         ORDER BY d.updated_at DESC
         LIMIT 1
@@ -246,6 +249,7 @@ export const readCaseLawCourtActivityQuery = definePublicLawSharedQuery(
         WHERE d.country = ${country}
           AND d.court = named.court
           AND d.updated_at >= ${scanFrom}::timestamptz
+          ${published}
           ${admitted}
       ) recent ON true
       ORDER BY named.ordinality

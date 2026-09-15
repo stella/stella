@@ -11,6 +11,7 @@ import {
   caseLawSources,
 } from "@/api/db/schema";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import { tPaginationCursor, tPaginationLimit } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
@@ -140,6 +141,7 @@ export const listCitingDecisionsHandler = async (
     eq(caseLawDecisions.country, jurisdiction),
     work,
     redistributableCaseLawSource,
+    publishedCaseLawDecision,
   ];
 
   if (query.anchor !== undefined) {

@@ -1,6 +1,6 @@
 {
   "apps/api": {
-    "count": 753,
+    "count": 750,
     "files": {
       "apps/api/scripts/lib/capability-catalog.ts": 9,
       "apps/api/scripts/lib/case-law-fixture-analyses.ts": 1,
@@ -32,11 +32,12 @@
       "apps/api/src/handlers/case-law/ingestion/reconciliation-engine.ts": 3,
       "apps/api/src/handlers/case-law/ingestion/replay.ts": 3,
       "apps/api/src/handlers/case-law/public-routes.ts": 1,
+      "apps/api/src/handlers/chat/active-statute-selection.logic.ts": 1,
       "apps/api/src/handlers/chat/attachment-validation.ts": 1,
       "apps/api/src/handlers/chat/chat-message-parts.ts": 9,
       "apps/api/src/handlers/chat/chat-message-persistence.ts": 1,
       "apps/api/src/handlers/chat/chat-prompt.ts": 1,
-      "apps/api/src/handlers/chat/chat-schema.ts": 5,
+      "apps/api/src/handlers/chat/chat-schema.ts": 1,
       "apps/api/src/handlers/chat/chat-scope.ts": 1,
       "apps/api/src/handlers/chat/chat-turn-state.ts": 3,
       "apps/api/src/handlers/chat/export/citation-footnotes.ts": 3,

@@ -9,6 +9,10 @@ import type {
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
 import { corpusIndexReadContract } from "@/api/lib/legal-search/corpus-index-read-contract";
+import {
+  apiSourceRoot,
+  collectApiModuleGraph,
+} from "@/api/tests/api-module-graph";
 
 type ScopedDbIsPublicReadDb = ScopedDb extends CaseLawPublicReadDb
   ? true
@@ -62,6 +66,8 @@ const LAUNCH_READINESS_FILE =
   "packages/api-contract/src/case-law-launch-readiness.ts";
 const RESEARCH_SUGGEST_PROMPT_FILE =
   "apps/api/src/handlers/case-law/research/columns-suggest-prompt.ts";
+const CITATION_AUTHORITY_FILE =
+  "apps/api/src/handlers/case-law/citation-authority.ts";
 
 /**
  * Every route this slice mounts, sorted.
@@ -121,6 +127,141 @@ const readLanguageAlternatesSource = async () =>
 const readSitemapSource = async () => await readSource(SITEMAP_DECISIONS_FILE);
 const readPublicReadDbSource = async () =>
   await readSource(PUBLIC_READ_DB_FILE);
+
+/**
+ * How a module in the public read surface answers for listing-only rows.
+ *
+ * A listing-only decision (guide rule 20) is a listed identity whose detail
+ * never arrived: durable, and unpublished until it does. Excluding it is not a
+ * thing each new read can be trusted to remember, so the census below derives
+ * the surface from the route module's own import graph and requires a written
+ * answer for every module in it that names the decision table.
+ */
+const PUBLIC_DECISION_READ_GATE = {
+  /** Carries the shared predicate, in one of its three spellings. */
+  PREDICATE: "carries-the-predicate",
+  /** Reads through a `RedistributableDecisionSubject`, which the gate mints. */
+  SUBJECT: "gated-by-the-subject-factory",
+  /** Names the table without reading a decision row out of it. */
+  NO_ROW_READ: "reads-no-decision-row",
+} as const;
+
+type PublicDecisionReadEntry =
+  | { gate: typeof PUBLIC_DECISION_READ_GATE.PREDICATE }
+  | { gate: typeof PUBLIC_DECISION_READ_GATE.SUBJECT }
+  | { gate: typeof PUBLIC_DECISION_READ_GATE.NO_ROW_READ; reason: string };
+
+/** The spellings of the one predicate, plus the marker reader the projection uses. */
+const PUBLIC_DECISION_PREDICATE_TOKENS = [
+  "publishedCaseLawDecision",
+  "publicCaseLawDecisionJoin",
+  "partialObservationFromMetadata",
+] as const;
+
+const DECISION_TABLE_MENTION = /caseLawDecisions|case_law_decisions/u;
+
+const PUBLIC_DECISION_READ_GATES = {
+  "apps/api/src/db/rls.ts": {
+    gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
+    reason: "Declares the roles and policies; issues no query.",
+  },
+  "apps/api/src/db/schema/case-law.ts": {
+    gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
+    reason: "Table definition.",
+  },
+  "apps/api/src/db/schema/legislation.ts": {
+    gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
+    reason: "Table definition; references the decision table by name only.",
+  },
+  "apps/api/src/db/schema/relations.ts": {
+    gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
+    reason: "Relation definitions.",
+  },
+  [CITATION_GRAPH_FILE]: { gate: PUBLIC_DECISION_READ_GATE.PREDICATE },
+  "apps/api/src/handlers/case-law/decisions/citations.ts": {
+    gate: PUBLIC_DECISION_READ_GATE.PREDICATE,
+  },
+  [READ_DECISION_FILE]: { gate: PUBLIC_DECISION_READ_GATE.SUBJECT },
+  [LATEST_DECISIONS_FILE]: { gate: PUBLIC_DECISION_READ_GATE.PREDICATE },
+  [LIST_DECISIONS_FILE]: { gate: PUBLIC_DECISION_READ_GATE.PREDICATE },
+  [PUBLIC_SUBJECT_FILE]: { gate: PUBLIC_DECISION_READ_GATE.PREDICATE },
+  [SEARCH_DECISIONS_FILE]: { gate: PUBLIC_DECISION_READ_GATE.PREDICATE },
+  "apps/api/src/handlers/case-law/decisions/shelf-courts.ts": {
+    gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
+    reason:
+      "Walks distinct court names. The shelf's rows come from the latest " +
+      "handler, which carries the predicate, so a court whose only rows are " +
+      "listing-only contributes none and is dropped.",
+  },
+  [SITEMAP_DECISIONS_FILE]: { gate: PUBLIC_DECISION_READ_GATE.PREDICATE },
+  "apps/api/src/handlers/case-law/decisions/status-courts.ts": {
+    gate: PUBLIC_DECISION_READ_GATE.PREDICATE,
+  },
+  [STATUS_DECISIONS_FILE]: { gate: PUBLIC_DECISION_READ_GATE.PREDICATE },
+  [CITING_DECISIONS_FILE]: { gate: PUBLIC_DECISION_READ_GATE.PREDICATE },
+  "apps/api/src/handlers/case-law/provisions/previews-for-decision.ts": {
+    gate: PUBLIC_DECISION_READ_GATE.SUBJECT,
+  },
+  "apps/api/src/handlers/case-law/stored-payload.ts": {
+    gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
+    reason: "SQL fragments for 'this row holds a document'; no query.",
+  },
+  "apps/api/src/lib/case-law-public-read-db.ts": {
+    gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
+    reason: "The read handle the gated reads run through.",
+  },
+  "apps/api/src/lib/case-law/decision-row-columns.ts": {
+    gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
+    reason: "The column list a public row is selected with; no query.",
+  },
+  [LANGUAGE_ALTERNATES_FILE]: { gate: PUBLIC_DECISION_READ_GATE.PREDICATE },
+  "apps/api/src/lib/case-law/published-decisions.ts": {
+    gate: PUBLIC_DECISION_READ_GATE.PREDICATE,
+  },
+  "apps/api/src/lib/case-law/search-sql.ts": {
+    gate: PUBLIC_DECISION_READ_GATE.PREDICATE,
+  },
+  "apps/api/src/lib/decision-date-bounds-sql.ts": {
+    gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
+    reason: "Date-bound fragments; no query.",
+  },
+  "apps/api/src/lib/legal-search/case-law-corpus-projection.ts": {
+    gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
+    reason: "Index-id and projection-state fragments; no row read.",
+  },
+  "apps/api/src/lib/legal-search/case-law-corpus-upload-intents.ts": {
+    gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
+    reason: "Ingestion-side mirror upload intents; not a public read.",
+  },
+  "apps/api/src/lib/legal-search/case-law-search-index.ts": {
+    gate: PUBLIC_DECISION_READ_GATE.PREDICATE,
+  },
+  [CORPUS_INDEX_PROJECTION_INPUT_FILE]: {
+    gate: PUBLIC_DECISION_READ_GATE.PREDICATE,
+  },
+  "apps/api/src/lib/legal-search/corpus-index-provider.ts": {
+    gate: PUBLIC_DECISION_READ_GATE.PREDICATE,
+  },
+  "apps/api/src/lib/legal-search/document-context.ts": {
+    gate: PUBLIC_DECISION_READ_GATE.PREDICATE,
+  },
+  [PG_FTS_FACETS_FILE]: { gate: PUBLIC_DECISION_READ_GATE.PREDICATE },
+  "apps/api/src/lib/legal-search/pg-fts-legal-provider.ts": {
+    gate: PUBLIC_DECISION_READ_GATE.PREDICATE,
+  },
+  "apps/api/src/lib/legal-search/sk-document-backfill.ts": {
+    gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
+    reason: "Ingestion backfill of Slovak documents; not a public read.",
+  },
+  [PUBLIC_READ_DB_FILE]: {
+    gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
+    reason: "The public reader's connection and its per-transaction guards.",
+  },
+  "apps/api/src/lib/public-law-relations.ts": {
+    gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
+    reason: "The columns the reader role is granted; no query.",
+  },
+} as const satisfies Record<string, PublicDecisionReadEntry>;
 
 const publicRouteBlock = (source: string): string => {
   const start = source.indexOf("export const publicCaseLawRoute");
@@ -488,7 +629,10 @@ describe("public case-law route boundary", () => {
       "readNonRedistributableCaseLawSourceIds",
     );
     expect(browseFacetsCacheSource).toContain("excludedSourceIds");
-    expect(searchSource).toContain("redistributableSourceJoin");
+    expect(searchSource).toContain("publicCaseLawDecisionJoin");
+    expect(
+      await readSource("apps/api/src/lib/case-law/search-sql.ts"),
+    ).toContain("redistributableCaseLawSource");
     expect(searchSource).toContain("redistributableCaseLawSource");
     expect(sitemapSource).toContain("redistributableCaseLawSource");
 
@@ -505,6 +649,99 @@ describe("public case-law route boundary", () => {
     );
     expect(decisionProvisionsSource).not.toContain("decisionId: SafeId");
     expect(citingDecisionsSource).toContain("redistributableCaseLawSource");
+  });
+
+  test("every public case-law read of the decision table excludes listing-only rows", async () => {
+    // Derived, not listed: the surface is whatever the route module imports,
+    // so a new public read arrives in this census without anyone adding it,
+    // and has to be answered for before the suite passes.
+    const modules = await collectApiModuleGraph(
+      nodePath.resolve(apiSourceRoot, "handlers/case-law/public-routes.ts"),
+    );
+    const readers = new Map<string, string>();
+    await Promise.all(
+      [...modules].map(async (modulePath) => {
+        const source = await Bun.file(modulePath).text();
+        if (DECISION_TABLE_MENTION.test(source)) {
+          readers.set(nodePath.relative(repoRoot, modulePath), source);
+        }
+      }),
+    );
+
+    expect([...readers.keys()].toSorted()).toEqual(
+      Object.keys(PUBLIC_DECISION_READ_GATES).toSorted(),
+    );
+
+    const gates = new Map<string, PublicDecisionReadEntry>(
+      Object.entries(PUBLIC_DECISION_READ_GATES),
+    );
+    const gateOf = (path: string) => gates.get(path)?.gate;
+    const carriesPredicate = (source: string) =>
+      PUBLIC_DECISION_PREDICATE_TOKENS.some((token) => source.includes(token));
+
+    const ungated = [...readers]
+      .filter(
+        ([path, source]) =>
+          gateOf(path) === PUBLIC_DECISION_READ_GATE.PREDICATE &&
+          !carriesPredicate(source),
+      )
+      .map(([path]) => path);
+    expect(ungated).toEqual([]);
+
+    const unbranded = [...readers]
+      .filter(
+        ([path, source]) =>
+          gateOf(path) === PUBLIC_DECISION_READ_GATE.SUBJECT &&
+          !source.includes("RedistributableDecisionSubject"),
+      )
+      .map(([path]) => path);
+    expect(unbranded).toEqual([]);
+
+    // An exemption with no reason is the escape hatch this census exists to
+    // close, so the reasons are checked rather than trusted.
+    const unexplained = Object.entries(PUBLIC_DECISION_READ_GATES)
+      .filter(
+        ([, entry]) =>
+          entry.gate === PUBLIC_DECISION_READ_GATE.NO_ROW_READ &&
+          entry.reason.trim().length === 0,
+      )
+      .map(([path]) => path);
+    expect(unexplained).toEqual([]);
+  });
+
+  test("the listing-only predicate has one owner", async () => {
+    const [ownerSource, markerSource] = await Promise.all([
+      readSource("apps/api/src/lib/case-law/published-decisions.ts"),
+      readSource("apps/api/src/lib/legal-search/ingestion-normalization.ts"),
+    ]);
+
+    // The owner states the predicate once per spelling, and each spelling is
+    // built from the marker module rather than from a literal path of its own.
+    expect(ownerSource).toContain(
+      "publishedCaseLawDecisionFor = storedObservationHasDetail",
+    );
+    expect(ownerSource).toContain("storedObservationHasDetailSqlFor(");
+    expect(ownerSource).not.toContain("_stellaPartialObservation");
+    expect(markerSource).toContain("PARTIAL_OBSERVATION_FIELD.IS_LISTING_ONLY");
+  });
+
+  test("the live citation score and its materialized twin gate the citing side alike", async () => {
+    // Two statements over the same citing rows: the lateral that scores a
+    // search page now, and the sweep that writes `citation_count` and
+    // `citation_authority` for every other public read. A gate on one and not
+    // the other is the drift that lets a row the corpus hides still rank the
+    // rows it shows.
+    const [searchSource, authoritySource] = await Promise.all([
+      readSearchSource(),
+      readSource(CITATION_AUTHORITY_FILE),
+    ]);
+
+    for (const source of [searchSource, authoritySource]) {
+      expect(source).toContain(
+        'redistributableCaseLawSourceSqlFor("citing_src")',
+      );
+      expect(source).toContain('publishedCaseLawDecisionSqlFor("citing_d")');
+    }
   });
 
   test("the question suggestion grounds only in what the public gate returns", async () => {

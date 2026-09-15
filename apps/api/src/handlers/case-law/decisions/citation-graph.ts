@@ -25,6 +25,7 @@ import type {
   CitationDirection,
   CitationTreatment,
 } from "@/api/lib/case-law/citation-vocabulary";
+import { publishedCaseLawDecisionFor } from "@/api/lib/case-law/published-decisions";
 import { redistributableCaseLawSourceFor } from "@/api/lib/case-law/redistribution";
 import { tPaginationCursor } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
@@ -203,6 +204,7 @@ const visibleFor = ({
   const resolvedAndOpen = sql`(
     ${relatedSource.id} IS NOT NULL
     AND ${redistributableCaseLawSourceFor(relatedSource.descriptor)}
+    AND ${publishedCaseLawDecisionFor(relatedDecision.metadata)}
     AND ${inArray(relatedDecision.country, [...PUBLIC_CASE_LAW_COUNTRIES])}
   )`;
   return keepsUnresolved

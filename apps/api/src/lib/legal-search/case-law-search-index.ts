@@ -10,6 +10,7 @@ import {
 } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
+import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import { setCorpusBackfillStatementTimeout } from "@/api/lib/legal-search/backfill-statement-timeout";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
@@ -66,13 +67,16 @@ export const indexDecision = async (
           eq(caseLawDecisions.id, decisionId),
           isNull(caseLawDecisions.redactedAt),
           redistributableCaseLawSource,
+          publishedCaseLawDecision,
         ),
       )
       .limit(1),
   );
 
   if (!decision) {
-    // Deleted or gated by source policy: drop any stale projection row.
+    // Deleted, gated by source policy, or listing-only: drop any stale
+    // projection row. The three probes below carry the same gate, so a row
+    // this one refuses is not handed back on the next backfill pass.
     await removeDecisionFromIndex(decisionId, scopedDb);
     return;
   }
@@ -222,6 +226,7 @@ export const backfillSearchIndex = async (
         and(
           isNull(caseLawDecisions.redactedAt),
           redistributableCaseLawSource,
+          publishedCaseLawDecision,
           notExists(
             tx
               .select({ one: sql`1` })
@@ -253,6 +258,7 @@ export const backfillSearchIndex = async (
         and(
           isNull(caseLawDecisions.redactedAt),
           redistributableCaseLawSource,
+          publishedCaseLawDecision,
           or(
             // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- column-to-column comparison evaluated in Postgres; no JS Date is bound
             gt(caseLawDecisions.updatedAt, caseLawSearchDocuments.updatedAt),

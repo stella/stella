@@ -20,6 +20,7 @@ import {
   readPublicDecisionLanguageAlternatesByGroup,
 } from "@/api/lib/case-law/language-alternates";
 import { readNonRedistributableCaseLawSourceIds } from "@/api/lib/case-law/non-redistributable-sources";
+import { publishedCaseLawDecisionSqlFor } from "@/api/lib/case-law/published-decisions";
 import {
   publisherHeadnoteMetadataSql,
   publisherKeywordsMetadataSql,
@@ -173,6 +174,7 @@ export const readLatestDecisionsByCourt = async ({
            AND ${sql.raw(redistributableCaseLawSourceSqlFor("s"))}
           WHERE d.country = ${country}
             AND d.court = shelf.court
+            AND ${sql.raw(publishedCaseLawDecisionSqlFor("d"))}
             AND (
               d.language_group_key IS NULL
               OR NOT EXISTS (
@@ -182,6 +184,7 @@ export const readLatestDecisionsByCourt = async ({
                   ON sibling_source.id = sibling.source_id
                  AND ${sql.raw(redistributableCaseLawSourceSqlFor("sibling_source"))}
                 WHERE sibling.language_group_key = d.language_group_key
+                  AND ${sql.raw(publishedCaseLawDecisionSqlFor("sibling"))}
                   AND sibling.country = d.country
                   AND sibling.court = d.court
                   AND (sibling.created_at, sibling.id) < (d.created_at, d.id)
