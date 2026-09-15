@@ -877,14 +877,12 @@
       "manual": "Ruční kontrola",
       "manualDescription": "Úpravy od AI se zařadí do fronty, abyste je mohli jednotlivě zkontrolovat a použít."
     },
-    "editableFilePlaceholder": "Chatovat nebo upravit {fileName}",
+    "editableFilePlaceholder": "Chatovat nebo upravit {title}",
     "editableFilePlaceholderAction": "Chatovat nebo upravit",
     "editorLoading": "Načítám editor…",
     "emptyThreadDescription": "Zeptejte se na tento spis, navrhněte text nebo požádejte o krátkou rešerši.",
     "emptyThreadTitle": "Začít konverzaci",
     "extractingContent": "Extrahování obsahu...",
-    "filePlaceholder": "Chatovat o {fileName}",
-    "filePlaceholderAction": "Chatovat o",
     "fileThreadRebound": "Chat k tomuto souboru už byl zahájen v jiné relaci. Vaše zpráva zůstala zachována; odešlete ji znovu.",
     "fileTooLarge": "Soubor překračuje limit {maxSize}",
     "focusSuggestion": "Zaměřit návrh: {topic}",
@@ -944,8 +942,6 @@
       "title": "Vybrat model chatu",
       "viaProvider": "přes {provider}"
     },
-    "moveToMain": "Přesunout do hlavního zobrazení",
-    "moveToSide": "Přesunout do bočního panelu",
     "newChat": "Nový chat",
     "noPromptPresetOnly": "Bez zprávy, pouze předvolba",
     "noThreads": "Zatím žádné konverzace",
@@ -1473,6 +1469,7 @@
     "rename": "Přejmenovat",
     "required": "Povinné",
     "reset": "Resetovat",
+    "resetZoom": "Resetovat přiblížení",
     "restore": "Obnovit",
     "retry": "Spustit znovu",
     "role": "Role",
@@ -1531,7 +1528,9 @@
     "versionLabel": "Verze {version}",
     "viewSource": "Zobrazit zdroj",
     "workflow": "Pracovní postup",
-    "workflows": "Pracovní postupy"
+    "workflows": "Pracovní postupy",
+    "zoomIn": "Přiblížit",
+    "zoomOut": "Oddálit"
   },
   "consent": {
     "allow": "Povolit",
@@ -2701,6 +2700,8 @@
       "updatedAt": "Aktualizováno",
       "versionCurrent": "v{version} (aktuální)"
     },
+    "moveToMain": "Přesunout do hlavního zobrazení",
+    "moveToSide": "Přesunout do bočního panelu",
     "openChat": "Otevřít chat",
     "reopenTab": "Znovu otevřít {name}",
     "resizePane": "Změnit šířku panelu",
@@ -5250,10 +5251,8 @@
       "backToPeek": "Zpět do náhledu",
       "entitySidebar": "Detail dokumentu",
       "evidence": "Zdůvodnění",
-      "fullView": "Plné zobrazení",
       "incorrectPassword": "Nesprávné heslo. Zkuste to znovu.",
       "nextPage": "Další strana",
-      "openFullView": "Otevřít v plném zobrazení",
       "pageEditor": {
         "addPDF": "Přidat PDF",
         "applyCrop": "Použít ořez",
@@ -5297,11 +5296,8 @@
       },
       "passwordLabel": "Zadejte heslo PDF",
       "previousPage": "Předchozí strana",
-      "resetZoom": "Resetovat přiblížení",
       "showOriginal": "Zobrazit původní stránky",
-      "unlock": "Odemknout",
-      "zoomIn": "Přiblížit",
-      "zoomOut": "Oddálit"
+      "unlock": "Odemknout"
     },
     "playbooks": {
       "autoRun": "Automatické spuštění",

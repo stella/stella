@@ -877,14 +877,12 @@
       "manual": "Revisión manual",
       "manualDescription": "Las ediciones de la IA quedan pendientes para que las revises y apliques una a una."
     },
-    "editableFilePlaceholder": "Chat sobre {fileName} o editar",
+    "editableFilePlaceholder": "Chat sobre {title} o editar",
     "editableFilePlaceholderAction": "Chat o editar",
     "editorLoading": "Cargando el editor…",
     "emptyThreadDescription": "Pregunta sobre este asunto, redacta texto o pide una breve nota de investigación.",
     "emptyThreadTitle": "Iniciar conversación",
     "extractingContent": "Extrayendo contenido...",
-    "filePlaceholder": "Chat sobre {fileName}",
-    "filePlaceholderAction": "Chat sobre",
     "fileThreadRebound": "El chat de este archivo ya se inició en otra sesión. Tu mensaje se ha conservado; envíalo de nuevo.",
     "fileTooLarge": "El archivo supera el límite de {maxSize}",
     "focusSuggestion": "Enfocar sugerencia: {topic}",
@@ -944,8 +942,6 @@
       "title": "Seleccionar modelo de chat",
       "viaProvider": "mediante {provider}"
     },
-    "moveToMain": "Mover a la vista principal",
-    "moveToSide": "Mover al panel lateral",
     "newChat": "Nueva conversación",
     "noPromptPresetOnly": "Sin mensaje, solo preajuste",
     "noThreads": "Aún no hay conversaciones",
@@ -1473,6 +1469,7 @@
     "rename": "Renombrar",
     "required": "Obligatorio",
     "reset": "Restablecer",
+    "resetZoom": "Restablecer zoom",
     "restore": "Restaurar",
     "retry": "Reintentar",
     "role": "Rol",
@@ -1531,7 +1528,9 @@
     "versionLabel": "Versión {version}",
     "viewSource": "Ver fuente",
     "workflow": "Flujo de trabajo",
-    "workflows": "Flujos de trabajo"
+    "workflows": "Flujos de trabajo",
+    "zoomIn": "Acercar",
+    "zoomOut": "Alejar"
   },
   "consent": {
     "allow": "Permitir",
@@ -2701,6 +2700,8 @@
       "updatedAt": "Actualizado",
       "versionCurrent": "v{version} (actual)"
     },
+    "moveToMain": "Mover a la vista principal",
+    "moveToSide": "Mover al panel lateral",
     "openChat": "Abrir chat",
     "reopenTab": "Reabrir {name}",
     "resizePane": "Cambiar el tamaño del panel",
@@ -5250,10 +5251,8 @@
       "backToPeek": "Volver a la vista previa",
       "entitySidebar": "Detalles del documento",
       "evidence": "Prueba documental",
-      "fullView": "Vista completa",
       "incorrectPassword": "Contraseña incorrecta. Inténtelo de nuevo.",
       "nextPage": "Página siguiente",
-      "openFullView": "Abrir vista completa",
       "pageEditor": {
         "addPDF": "Añadir PDF",
         "applyCrop": "Aplicar recorte",
@@ -5297,11 +5296,8 @@
       },
       "passwordLabel": "Introduzca la contraseña del PDF",
       "previousPage": "Página anterior",
-      "resetZoom": "Restablecer zoom",
       "showOriginal": "Mostrar páginas originales",
-      "unlock": "Desbloquear",
-      "zoomIn": "Acercar",
-      "zoomOut": "Alejar"
+      "unlock": "Desbloquear"
     },
     "playbooks": {
       "autoRun": "Ejecución automática",

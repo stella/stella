@@ -759,7 +759,7 @@ const TemplateStudioChatInner = ({
   };
 
   const editorController = useChatEditor({
-    placeholder: t("chat.editableFilePlaceholder", { fileName }),
+    placeholder: t("chat.editableFilePlaceholder", { title: fileName }),
     threadRef,
   });
 

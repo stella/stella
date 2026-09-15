@@ -877,14 +877,12 @@
       "manual": "مراجعة يدوية",
       "manualDescription": "تُدرج تعديلات الذكاء الاصطناعي في قائمة انتظار لتراجعها وتطبّقها واحدًا تلو الآخر."
     },
-    "editableFilePlaceholder": "تحدّث عن {fileName} أو حرّره",
+    "editableFilePlaceholder": "تحدّث عن {title} أو حرّره",
     "editableFilePlaceholderAction": "تحدّث عنه أو حرّره",
     "editorLoading": "جارٍ تحميل المحرّر…",
     "emptyThreadDescription": "اسأل عن هذا الملف القانوني، أو صُغ نصاً، أو اطلب مذكّرة بحثية موجزة.",
     "emptyThreadTitle": "ابدأ محادثة",
     "extractingContent": "جارٍ استخراج المحتوى...",
-    "filePlaceholder": "تحدّث عن {fileName}",
-    "filePlaceholderAction": "تحدّث عن",
     "fileThreadRebound": "بدأت محادثة هذا الملف بالفعل في جلسة أخرى. تم الاحتفاظ برسالتك؛ أرسلها مرة أخرى.",
     "fileTooLarge": "يتجاوز الملف الحدّ المسموح به {maxSize}",
     "focusSuggestion": "اقتراح التركيز: {topic}",
@@ -944,8 +942,6 @@
       "title": "اختر نموذج المحادثة",
       "viaProvider": "عبر {provider}"
     },
-    "moveToMain": "النقل إلى العرض الرئيسي",
-    "moveToSide": "النقل إلى اللوحة الجانبية",
     "newChat": "محادثة جديدة",
     "noPromptPresetOnly": "لا توجد رسالة، الإعداد المُسبق فقط",
     "noThreads": "لا توجد محادثات بعد",
@@ -1473,6 +1469,7 @@
     "rename": "إعادة تسمية",
     "required": "مطلوب",
     "reset": "إعادة تعيين",
+    "resetZoom": "إعادة تعيين التكبير",
     "restore": "استعادة",
     "retry": "إعادة المحاولة",
     "role": "الدور",
@@ -1531,7 +1528,9 @@
     "versionLabel": "الإصدار {version}",
     "viewSource": "عرض المصدر",
     "workflow": "سير العمل",
-    "workflows": "مسارات العمل"
+    "workflows": "مسارات العمل",
+    "zoomIn": "تكبير",
+    "zoomOut": "تصغير"
   },
   "consent": {
     "allow": "السماح",
@@ -2701,6 +2700,8 @@
       "updatedAt": "آخر تحديث",
       "versionCurrent": "الإصدار {version} (الحالي)"
     },
+    "moveToMain": "النقل إلى العرض الرئيسي",
+    "moveToSide": "النقل إلى اللوحة الجانبية",
     "openChat": "فتح المحادثة",
     "reopenTab": "إعادة فتح {name}",
     "resizePane": "تغيير حجم اللوحة",
@@ -5250,10 +5251,8 @@
       "backToPeek": "العودة إلى المعاينة",
       "entitySidebar": "تفاصيل المستند",
       "evidence": "التبرير",
-      "fullView": "العرض الكامل",
       "incorrectPassword": "كلمة المرور غير صحيحة. يُرجى المحاولة مرة أخرى.",
       "nextPage": "الصفحة التالية",
-      "openFullView": "فتح العرض الكامل",
       "pageEditor": {
         "addPDF": "إضافة PDF",
         "applyCrop": "تطبيق الاقتصاص",
@@ -5297,11 +5296,8 @@
       },
       "passwordLabel": "أدخل كلمة مرور ملف PDF",
       "previousPage": "الصفحة السابقة",
-      "resetZoom": "إعادة تعيين التكبير",
       "showOriginal": "عرض الصفحات الأصلية",
-      "unlock": "إلغاء القفل",
-      "zoomIn": "تكبير",
-      "zoomOut": "تصغير"
+      "unlock": "إلغاء القفل"
     },
     "playbooks": {
       "autoRun": "تشغيل تلقائي",

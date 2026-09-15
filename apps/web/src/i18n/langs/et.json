@@ -877,14 +877,12 @@
       "manual": "Käsitsi ülevaatamine",
       "manualDescription": "Tehisintellekti muudatused pannakse ootele, et saaksid need ükshaaval üle vaadata ja rakendada."
     },
-    "editableFilePlaceholder": "Vestle või muuda: {fileName}",
+    "editableFilePlaceholder": "Vestle või muuda: {title}",
     "editableFilePlaceholderAction": "Vestle või muuda",
     "editorLoading": "Redaktori laadimine…",
     "emptyThreadDescription": "Küsi selle toimiku kohta, koosta tekst või palu lühikest uurimismärkust.",
     "emptyThreadTitle": "Alusta vestlust",
     "extractingContent": "Sisu ekstraktimine...",
-    "filePlaceholder": "Vestle teemal {fileName}",
-    "filePlaceholderAction": "Vestle teemal",
     "fileThreadRebound": "Selle faili vestlus alustati juba teises seansis. Teie sõnum säilitati; saatke see uuesti.",
     "fileTooLarge": "Fail ületab {maxSize} piirangu",
     "focusSuggestion": "Fookusta soovitus: {topic}",
@@ -944,8 +942,6 @@
       "title": "Vali vestlusmudel",
       "viaProvider": "teenuse {provider} kaudu"
     },
-    "moveToMain": "Vii põhivaatesse",
-    "moveToSide": "Vii külgpaneeli",
     "newChat": "Uus vestlus",
     "noPromptPresetOnly": "Sõnum puudub, ainult eelseadistus",
     "noThreads": "Vestlusi pole veel",
@@ -1473,6 +1469,7 @@
     "rename": "Nimeta ümber",
     "required": "Kohustuslik",
     "reset": "Lähtesta",
+    "resetZoom": "Lähtesta suum",
     "restore": "Taasta",
     "retry": "Proovi uuesti",
     "role": "Roll",
@@ -1531,7 +1528,9 @@
     "versionLabel": "Versioon {version}",
     "viewSource": "Vaata allikat",
     "workflow": "Töövoog",
-    "workflows": "Töövood"
+    "workflows": "Töövood",
+    "zoomIn": "Suumi sisse",
+    "zoomOut": "Suumi välja"
   },
   "consent": {
     "allow": "Luba",
@@ -2701,6 +2700,8 @@
       "updatedAt": "Uuendatud",
       "versionCurrent": "v{version} (praegune)"
     },
+    "moveToMain": "Vii põhivaatesse",
+    "moveToSide": "Vii külgpaneeli",
     "openChat": "Ava vestlus",
     "reopenTab": "Ava {name} uuesti",
     "resizePane": "Muuda paneeli suurust",
@@ -5250,10 +5251,8 @@
       "backToPeek": "Tagasi sirvimisrežiimi",
       "entitySidebar": "Dokumendi üksikasjad",
       "evidence": "Tõend",
-      "fullView": "Täisvaade",
       "incorrectPassword": "Vale parool. Proovige uuesti.",
       "nextPage": "Järgmine leht",
-      "openFullView": "Ava täisvaade",
       "pageEditor": {
         "addPDF": "Lisa PDF",
         "applyCrop": "Rakenda kärpimine",
@@ -5297,11 +5296,8 @@
       },
       "passwordLabel": "Sisestage PDF-i parool",
       "previousPage": "Eelmine leht",
-      "resetZoom": "Lähtesta suum",
       "showOriginal": "Kuva originaalleheküljed",
-      "unlock": "Ava lukk",
-      "zoomIn": "Suumi sisse",
-      "zoomOut": "Suumi välja"
+      "unlock": "Ava lukk"
     },
     "playbooks": {
       "autoRun": "Automaatne käivitamine",

@@ -76,7 +76,7 @@ export const DecisionMainViewAction = ({
   const label =
     action.type === "swap-with-main"
       ? t("inspector.swapViews")
-      : t("chat.moveToMain");
+      : t("inspector.moveToMain");
   const link =
     payload.language === undefined ? (
       <Link

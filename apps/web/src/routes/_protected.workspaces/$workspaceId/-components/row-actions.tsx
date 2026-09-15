@@ -1340,7 +1340,7 @@ const RowFeatureMenuActions = ({
         onOpenVersionHistory !== undefined && (
           <MenuItem onClick={onOpenVersionHistory}>
             <Maximize2Icon />
-            {t("workspaces.pdf.fullView")}
+            {t("inspector.moveToMain")}
           </MenuItem>
         )}
       {onEditPages !== undefined && (

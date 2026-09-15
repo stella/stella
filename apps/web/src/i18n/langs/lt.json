@@ -877,14 +877,12 @@
       "manual": "Rankinė peržiūra",
       "manualDescription": "DI pakeitimai pateikiami jums, kad galėtumėte juos po vieną peržiūrėti ir pritaikyti."
     },
-    "editableFilePlaceholder": "Kalbėtis apie {fileName} arba redaguoti",
+    "editableFilePlaceholder": "Kalbėtis apie {title} arba redaguoti",
     "editableFilePlaceholderAction": "Kalbėtis arba redaguoti",
     "editorLoading": "Įkeliamas redaktorius…",
     "emptyThreadDescription": "Paklauskite apie šią bylą, parenkite tekstą arba paprašykite trumpos tyrimo pastabos.",
     "emptyThreadTitle": "Pradėti pokalbį",
     "extractingContent": "Turinio ištraukimas...",
-    "filePlaceholder": "Kalbėtis apie {fileName}",
-    "filePlaceholderAction": "Kalbėtis apie",
     "fileThreadRebound": "Šio failo pokalbis jau pradėtas kitoje sesijoje. Jūsų žinutė išsaugota; išsiųskite ją dar kartą.",
     "fileTooLarge": "Failas viršija {maxSize} limitą",
     "focusSuggestion": "Fokusuoti pasiūlymą: {topic}",
@@ -944,8 +942,6 @@
       "title": "Pasirinkti pokalbių modelį",
       "viaProvider": "per {provider}"
     },
-    "moveToMain": "Perkelti į pagrindinį rodinį",
-    "moveToSide": "Perkelti į šoninį skydelį",
     "newChat": "Naujas pokalbis",
     "noPromptPresetOnly": "Pranešimo nėra, tik išankstinis nustatymas",
     "noThreads": "Pokalbių dar nėra",
@@ -1473,6 +1469,7 @@
     "rename": "Pervadinti",
     "required": "Privalomas",
     "reset": "Atstatyti",
+    "resetZoom": "Atstatyti mastelį",
     "restore": "Atkurti",
     "retry": "Bandyti dar kartą",
     "role": "Rolė",
@@ -1531,7 +1528,9 @@
     "versionLabel": "{version} versija",
     "viewSource": "Žiūrėti šaltinį",
     "workflow": "Darbo eiga",
-    "workflows": "Darbo eigos"
+    "workflows": "Darbo eigos",
+    "zoomIn": "Priartinti",
+    "zoomOut": "Nutolinti"
   },
   "consent": {
     "allow": "Leisti",
@@ -2701,6 +2700,8 @@
       "updatedAt": "Atnaujinta",
       "versionCurrent": "v{version} (dabartinė)"
     },
+    "moveToMain": "Perkelti į pagrindinį rodinį",
+    "moveToSide": "Perkelti į šoninį skydelį",
     "openChat": "Atidaryti pokalbį",
     "reopenTab": "Iš naujo atidaryti {name}",
     "resizePane": "Keisti polangio dydį",
@@ -5250,10 +5251,8 @@
       "backToPeek": "Grįžti į peržiūrą",
       "entitySidebar": "Dokumento informacija",
       "evidence": "Įrodymas",
-      "fullView": "Pilnas vaizdas",
       "incorrectPassword": "Neteisingas slaptažodis. Bandykite dar kartą.",
       "nextPage": "Kitas puslapis",
-      "openFullView": "Atidaryti visą rodinį",
       "pageEditor": {
         "addPDF": "Pridėti PDF",
         "applyCrop": "Taikyti apkirpimą",
@@ -5297,11 +5296,8 @@
       },
       "passwordLabel": "Įveskite PDF slaptažodį",
       "previousPage": "Ankstesnis puslapis",
-      "resetZoom": "Atstatyti mastelį",
       "showOriginal": "Rodyti originalius puslapius",
-      "unlock": "Atrakinti",
-      "zoomIn": "Priartinti",
-      "zoomOut": "Nutolinti"
+      "unlock": "Atrakinti"
     },
     "playbooks": {
       "autoRun": "Automatinis vykdymas",

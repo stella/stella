@@ -806,17 +806,22 @@ export const FileTabPanel = ({
     return null;
   })();
 
-  const fullViewButton = (
-    <Button
-      onClick={() => {
-        detached(handleOpenFullView(), "file-tab-panel.open-full-view");
-      }}
-      size="xs"
-      variant="ghost"
-    >
-      <Maximize2Icon className="size-3.5" />
-      {t("workspaces.pdf.fullView")}
-    </Button>
+  const moveToMainButton = (
+    <Tooltip
+      content={t("inspector.moveToMain")}
+      render={
+        <Button
+          aria-label={t("inspector.moveToMain")}
+          onClick={() => {
+            detached(handleOpenFullView(), "file-tab-panel.open-full-view");
+          }}
+          size="icon-xs"
+          variant="ghost"
+        >
+          <Maximize2Icon className="size-3.5" />
+        </Button>
+      }
+    />
   );
 
   const fileActions = (
@@ -824,7 +829,7 @@ export const FileTabPanel = ({
       {downloadButton}
       {desktopOpenButton}
       {isPreviewFacet && (markdownActions ?? editToggle)}
-      {canOpenFullView && fullViewButton}
+      {canOpenFullView && moveToMainButton}
     </>
   );
 

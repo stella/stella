@@ -130,11 +130,13 @@ export function PublicDecisionViewer({
           href={originalUrl}
         />
         <Tooltip
-          content={willSwap ? t("inspector.swapViews") : t("chat.moveToSide")}
+          content={
+            willSwap ? t("inspector.swapViews") : t("inspector.moveToSide")
+          }
           render={
             <Button
               aria-label={
-                willSwap ? t("inspector.swapViews") : t("chat.moveToSide")
+                willSwap ? t("inspector.swapViews") : t("inspector.moveToSide")
               }
               className="hidden md:inline-flex"
               onClick={moveToSide}

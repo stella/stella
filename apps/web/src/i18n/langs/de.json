@@ -877,14 +877,12 @@
       "manual": "Manuelle Prüfung",
       "manualDescription": "KI-Änderungen werden vorgemerkt, damit Sie sie einzeln prüfen und anwenden können."
     },
-    "editableFilePlaceholder": "Chat über {fileName} oder bearbeiten",
+    "editableFilePlaceholder": "Chat über {title} oder bearbeiten",
     "editableFilePlaceholderAction": "Chatten oder bearbeiten",
     "editorLoading": "Editor wird geladen…",
     "emptyThreadDescription": "Fragen Sie zu dieser Akte, entwerfen Sie Text oder bitten Sie um eine kurze Recherche.",
     "emptyThreadTitle": "Konversation starten",
     "extractingContent": "Inhalt wird extrahiert...",
-    "filePlaceholder": "Chat über {fileName}",
-    "filePlaceholderAction": "Chat über",
     "fileThreadRebound": "Der Chat zu dieser Datei wurde bereits in einer anderen Sitzung gestartet. Ihre Nachricht wurde beibehalten; senden Sie sie erneut.",
     "fileTooLarge": "Datei überschreitet das Limit von {maxSize}",
     "focusSuggestion": "Vorschlag fokussieren: {topic}",
@@ -944,8 +942,6 @@
       "title": "Chat-Modell auswählen",
       "viaProvider": "über {provider}"
     },
-    "moveToMain": "In Hauptansicht verschieben",
-    "moveToSide": "In Seitenleiste verschieben",
     "newChat": "Neuer Chat",
     "noPromptPresetOnly": "Keine Nachricht, nur Vorlage",
     "noThreads": "Noch keine Konversationen",
@@ -1473,6 +1469,7 @@
     "rename": "Umbenennen",
     "required": "Erforderlich",
     "reset": "Zurücksetzen",
+    "resetZoom": "Zoom zurücksetzen",
     "restore": "Wiederherstellen",
     "retry": "Erneut versuchen",
     "role": "Rolle",
@@ -1531,7 +1528,9 @@
     "versionLabel": "Version {version}",
     "viewSource": "Quelle anzeigen",
     "workflow": "Arbeitsablauf",
-    "workflows": "Workflows"
+    "workflows": "Workflows",
+    "zoomIn": "Vergrößern",
+    "zoomOut": "Verkleinern"
   },
   "consent": {
     "allow": "Zulassen",
@@ -2701,6 +2700,8 @@
       "updatedAt": "Aktualisiert",
       "versionCurrent": "v{version} (aktuell)"
     },
+    "moveToMain": "In Hauptansicht verschieben",
+    "moveToSide": "In Seitenleiste verschieben",
     "openChat": "Chat öffnen",
     "reopenTab": "{name} erneut öffnen",
     "resizePane": "Bereich in der Größe ändern",
@@ -5250,10 +5251,8 @@
       "backToPeek": "Zurück zur Vorschau",
       "entitySidebar": "Dokumentdetails",
       "evidence": "Beweismittel",
-      "fullView": "Vollansicht",
       "incorrectPassword": "Falsches Passwort. Bitte versuchen Sie es erneut.",
       "nextPage": "Nächste Seite",
-      "openFullView": "Vollansicht öffnen",
       "pageEditor": {
         "addPDF": "PDF hinzufügen",
         "applyCrop": "Zuschnitt anwenden",
@@ -5297,11 +5296,8 @@
       },
       "passwordLabel": "PDF-Passwort eingeben",
       "previousPage": "Vorherige Seite",
-      "resetZoom": "Zoom zurücksetzen",
       "showOriginal": "Originalseiten anzeigen",
-      "unlock": "Entsperren",
-      "zoomIn": "Vergrößern",
-      "zoomOut": "Verkleinern"
+      "unlock": "Entsperren"
     },
     "playbooks": {
       "autoRun": "Automatisch ausführen",

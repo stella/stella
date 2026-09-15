@@ -877,14 +877,12 @@
       "manual": "Revisão manual",
       "manualDescription": "As edições da IA ficam na fila para você revisar e aplicar uma a uma."
     },
-    "editableFilePlaceholder": "Converse ou edite {fileName}",
+    "editableFilePlaceholder": "Converse ou edite {title}",
     "editableFilePlaceholderAction": "Converse ou edite",
     "editorLoading": "Carregando editor…",
     "emptyThreadDescription": "Pergunte sobre este caso, redija um texto ou peça uma nota breve de pesquisa.",
     "emptyThreadTitle": "Iniciar conversa",
     "extractingContent": "Extraindo conteúdo...",
-    "filePlaceholder": "Conversar sobre {fileName}",
-    "filePlaceholderAction": "Conversar sobre",
     "fileThreadRebound": "O chat deste arquivo já foi iniciado em outra sessão. Sua mensagem foi mantida; envie novamente.",
     "fileTooLarge": "O arquivo excede o limite {maxSize}",
     "focusSuggestion": "Focar sugestão: {topic}",
@@ -944,8 +942,6 @@
       "title": "Selecionar modelo de chat",
       "viaProvider": "pelo provedor {provider}"
     },
-    "moveToMain": "Mover para a visualização principal",
-    "moveToSide": "Mover para o painel lateral",
     "newChat": "Novo bate-papo",
     "noPromptPresetOnly": "Sem mensagem, apenas predefinição",
     "noThreads": "Ainda não há conversas",
@@ -1012,7 +1008,7 @@
         "team": "Habilidades de IA da equipe"
       }
     },
-    "sourcePlaceholder": "Converse sobre {title}",
+    "sourcePlaceholder": "Conversar sobre {title}",
     "sourcePlaceholderAction": "Conversar sobre",
     "sources": "Fontes:",
     "spawnSubagents": {
@@ -1473,6 +1469,7 @@
     "rename": "Renomear",
     "required": "Obrigatório",
     "reset": "Redefinir",
+    "resetZoom": "Redefinir zoom",
     "restore": "Restaurar",
     "retry": "Tentar novamente",
     "role": "Função",
@@ -1531,7 +1528,9 @@
     "versionLabel": "Versão {version}",
     "viewSource": "Ver fonte",
     "workflow": "Fluxo de trabalho",
-    "workflows": "Fluxos de trabalho"
+    "workflows": "Fluxos de trabalho",
+    "zoomIn": "Ampliar",
+    "zoomOut": "Diminuir zoom"
   },
   "consent": {
     "allow": "Permitir",
@@ -2701,6 +2700,8 @@
       "updatedAt": "Atualizado",
       "versionCurrent": "v{version} (atual)"
     },
+    "moveToMain": "Mover para a visualização principal",
+    "moveToSide": "Mover para o painel lateral",
     "openChat": "Abrir bate-papo",
     "reopenTab": "Reabrir {name}",
     "resizePane": "Redimensionar painel",
@@ -5250,10 +5251,8 @@
       "backToPeek": "Voltar para prévia",
       "entitySidebar": "Detalhes do documento",
       "evidence": "Justificativa",
-      "fullView": "Visualização completa",
       "incorrectPassword": "Senha incorreta. Por favor, tente novamente.",
       "nextPage": "Próxima página",
-      "openFullView": "Abrir visualização completa",
       "pageEditor": {
         "addPDF": "Adicionar PDF",
         "applyCrop": "Aplicar recorte",
@@ -5297,11 +5296,8 @@
       },
       "passwordLabel": "Digite a senha do PDF",
       "previousPage": "Página anterior",
-      "resetZoom": "Redefinir zoom",
       "showOriginal": "Mostrar páginas originais",
-      "unlock": "Desbloquear",
-      "zoomIn": "Ampliar",
-      "zoomOut": "Diminuir zoom"
+      "unlock": "Desbloquear"
     },
     "playbooks": {
       "autoRun": "Execução automática",

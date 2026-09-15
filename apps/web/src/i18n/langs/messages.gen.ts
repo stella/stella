@@ -880,14 +880,12 @@ type Messages = {
       "manual": "Manual review";
       "manualDescription": "AI edits are queued for you to review and apply one by one.";
     };
-    "editableFilePlaceholder": "Chat about or edit {fileName}";
+    "editableFilePlaceholder": "Chat about or edit {title}";
     "editableFilePlaceholderAction": "Chat about or edit";
     "editorLoading": "Loading editor…";
     "emptyThreadDescription": "Ask about this matter, draft text, or request a short research note.";
     "emptyThreadTitle": "Start a conversation";
     "extractingContent": "Extracting content...";
-    "filePlaceholder": "Chat about {fileName}";
-    "filePlaceholderAction": "Chat about";
     "fileThreadRebound": "This file's chat was started in another session. Your message was kept; send it again to continue there.";
     "fileTooLarge": "File exceeds {maxSize} limit";
     "focusSuggestion": "Focus suggestion: {topic}";
@@ -947,8 +945,6 @@ type Messages = {
       "title": "Select chat model";
       "viaProvider": "via {provider}";
     };
-    "moveToMain": "Move to main view";
-    "moveToSide": "Move to side panel";
     "newChat": "New chat";
     "noPromptPresetOnly": "No message, preset only";
     "noThreads": "No conversations yet";
@@ -1476,6 +1472,7 @@ type Messages = {
     "rename": "Rename";
     "required": "Required";
     "reset": "Reset";
+    "resetZoom": "Reset zoom";
     "restore": "Restore";
     "retry": "Retry";
     "role": "Role";
@@ -1535,6 +1532,8 @@ type Messages = {
     "viewSource": "View source";
     "workflow": "Workflow";
     "workflows": "Workflows";
+    "zoomIn": "Zoom in";
+    "zoomOut": "Zoom out";
   };
   "consent": {
     "allow": "Allow";
@@ -2704,6 +2703,8 @@ type Messages = {
       "updatedAt": "Updated";
       "versionCurrent": "v{version} (current)";
     };
+    "moveToMain": "Move to main view";
+    "moveToSide": "Move to side panel";
     "openChat": "Open chat";
     "reopenTab": "Reopen {name}";
     "resizePane": "Resize pane";
@@ -5253,10 +5254,8 @@ type Messages = {
       "backToPeek": "Back to peek";
       "entitySidebar": "Document details";
       "evidence": "Justification";
-      "fullView": "Full view";
       "incorrectPassword": "Incorrect password. Please try again.";
       "nextPage": "Next page";
-      "openFullView": "Open full view";
       "pageEditor": {
         "addPDF": "Add PDF";
         "applyCrop": "Apply crop";
@@ -5300,11 +5299,8 @@ type Messages = {
       };
       "passwordLabel": "Enter the PDF password";
       "previousPage": "Previous page";
-      "resetZoom": "Reset zoom";
       "showOriginal": "Show original pages";
       "unlock": "Unlock";
-      "zoomIn": "Zoom in";
-      "zoomOut": "Zoom out";
     };
     "playbooks": {
       "autoRun": "Auto run";
