@@ -215,8 +215,8 @@ describe("docx suggestion hydration cache", () => {
 
     const cached = queryClient.getQueryData(listQueryKey())?.items ?? [];
     expect(cached.map((item) => item.id).toSorted()).toEqual([
-      "server-1",
-      "server-2",
+      toSafeId<"docxSuggestion">("server-1"),
+      toSafeId<"docxSuggestion">("server-2"),
     ]);
     expect(cached.map((item) => item.createdAt)).toEqual([
       batchCreatedAt,
