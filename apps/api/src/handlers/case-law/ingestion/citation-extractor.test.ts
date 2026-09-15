@@ -90,6 +90,28 @@ describe("extractCitations", () => {
     expect(texts).toContain("Pl. ÚS 12/94");
   });
 
+  test("extracts a Constitutional Court citation whose mark is decomposed", () => {
+    // From 4 Tdo 348/2023, whose text carries "Ú" as U+0055 U+0301. Nothing
+    // normalizes a decision on the way in, and a `[ÚU]S` class reads the
+    // decomposed spelling as a bare "U" followed by a mark: every
+    // Constitutional Court citation in that paragraph went missing.
+    const text =
+      "současně založit kolizi se zásadami vyjádřenými v hlavě páté Listiny (nález Ústavního soudu sp. zn. I. ÚS 1135/17, ze dne 1. 11. 2017).".normalize(
+        "NFD",
+      );
+    expect(text).not.toBe(text.normalize("NFC"));
+
+    const citations = extractCitations([{ index: 0, text }]);
+
+    expect(citations).toHaveLength(1);
+    expect(citations[0]?.citationText).toBe("I. ÚS 1135/17".normalize("NFD"));
+    // Either normalization form reaches the resolver as one key, so the
+    // decomposed spelling still joins the composed corpus row.
+    expect(bareCitationKey(citations[0]?.citationText ?? "")).toBe(
+      bareCitationKey("I.ÚS 1135/17"),
+    );
+  });
+
   test("extracts Slovak Constitutional Court citations without the senate dot", () => {
     const text = "nález sp. zn. III ÚS 154/2011 z 13. 4. 2011";
     const citations = extractCitations([{ index: 0, text }]);

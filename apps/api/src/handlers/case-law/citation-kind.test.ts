@@ -113,6 +113,45 @@ describe("context decides when it speaks", () => {
       }),
     ).toBe(CITATION_KIND.PROCEDURAL);
   });
+
+  test("pointing at a decision marks precedent, the recitals tying aside", () => {
+    // From 4 Tdo 348/2023: the sentence points at a Supreme Court ruling for
+    // what it held and names the first-instance court in the same breath, so
+    // the recital cue alone carried it and hid a resolvable precedent.
+    expect(
+      classifyCitation({
+        citationText: "sp. zn. 3 Tdo 759/2020",
+        context:
+          "kdy totožného pochybení se dopustil i soud prvního stupně. Předně poukazuje na usnesení Nejvyššího soudu sp. zn. 3 Tdo 759/2020, ze dne 7. 10. 2020, podle kterého je porušení zásady reformation in peius způsobilým dovolacím důvodem.",
+      }),
+    ).toBe(CITATION_KIND.PRECEDENT);
+  });
+
+  test("a constitutional judgment is precedent beside a recital cue", () => {
+    // From 4 Tdo 348/2023. The window reaches into the next paragraph, which
+    // opens on the first-instance court, so the recital cue alone decided a
+    // parenthetical invocation of the constitution.
+    expect(
+      classifyCitation({
+        citationText: "I. ÚS 1135/17",
+        context:
+          "kolizi se zásadami vyjádřenými v hlavě páté Listiny (nález Ústavního soudu sp. zn. I. ÚS 1135/17, ze dne 1. 11. 2017). Za další zásadní pochybení soudu prvního stupně považuje",
+      }),
+    ).toBe(CITATION_KIND.PRECEDENT);
+  });
+
+  test("pointing at a decision marks precedent on its own", () => {
+    expect(
+      classifyCitationVerdict({
+        citationText: "sp. zn. 7 Tz 62/90",
+        context:
+          "Obviněný zároveň poukazuje na rozhodnutí Nejvyššího soudu sp. zn. 7 Tz 62/90 ze dne 11. 2. 1991, které řeší naznačenou problematiku.",
+      }),
+    ).toEqual({
+      kind: CITATION_KIND.PRECEDENT,
+      evidence: CITATION_KIND_EVIDENCE.CONTEXT,
+    });
+  });
 });
 
 describe("the registry decides when context does not", () => {
@@ -131,10 +170,27 @@ describe("the registry decides when context does not", () => {
     ).toBe(CITATION_KIND.PROCEDURAL);
   });
 
+  test("a breach-of-law complaint is precedent", () => {
+    // "Tz" is the Supreme Court's own register, decided and published by it.
+    expect(
+      classifyCitation({ citationText: "sp. zn. 7 Tz 62/90", context: null }),
+    ).toBe(CITATION_KIND.PRECEDENT);
+  });
+
   test("a constitutional-court citation is precedent", () => {
     expect(
       classifyCitation({ citationText: "II. ÚS 251/04", context: null }),
     ).toBe(CITATION_KIND.PRECEDENT);
+  });
+
+  test("a constitutional-court citation is precedent when its mark is decomposed", () => {
+    // "Ú" as U+0055 U+0301, the form this publisher serves. A combining mark
+    // is not a letter, so the registry read as a bare "U" and fell through.
+    const decomposed = "I. ÚS 1135/17".normalize("NFD");
+    expect(decomposed).not.toBe("I. ÚS 1135/17");
+    expect(classifyCitation({ citationText: decomposed, context: null })).toBe(
+      CITATION_KIND.PRECEDENT,
+    );
   });
 
   test("a Polish supreme-court registry is precedent", () => {

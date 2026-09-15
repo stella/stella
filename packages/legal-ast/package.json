@@ -39,6 +39,10 @@
       "types": "./src/citation-passage.ts",
       "import": "./src/citation-passage.ts"
     },
+    "./citation-prefix": {
+      "types": "./src/citation-prefix.ts",
+      "import": "./src/citation-prefix.ts"
+    },
     "./czech-document-roles": {
       "types": "./src/czech-document-roles.ts",
       "import": "./src/czech-document-roles.ts"
