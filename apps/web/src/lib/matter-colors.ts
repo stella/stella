@@ -1,3 +1,5 @@
+import type { CSSProperties } from "react";
+
 // Fallback swatches for older or imported workspaces without a stored color.
 const DEFAULT_MATTER_SWATCH = "--option-blue";
 
@@ -75,3 +77,35 @@ export const toStoredMatterColor = (color: string) => {
  */
 export const resolveMatterColor = (id: string, color: string | null) =>
   color ? resolveStoredMatterColor(color) : getMatterColor(id);
+
+/**
+ * The ground a matter tint is mixed into: chrome rows or content. Root-resolved
+ * tokens, so a subtree that re-points `--background` at the tint cannot feed
+ * the tint back into itself.
+ */
+export const MATTER_TINT_GROUND = {
+  chrome: "var(--untinted-sidebar)",
+  content: "var(--untinted-background)",
+} as const;
+
+type MatterTintGround =
+  (typeof MATTER_TINT_GROUND)[keyof typeof MATTER_TINT_GROUND];
+
+/**
+ * The matter tint a surface paints: 2% of the matter colour over its ground.
+ * Every separately painted row (app header, inspector tab header, page
+ * organizer toolbar) reads this one formula, so adjacent rows cannot drift.
+ */
+export const matterTint = (color: string | null, ground: MatterTintGround) =>
+  color === null ? ground : `color-mix(in srgb, ${color} 2%, ${ground})`;
+
+export type MatterChromeStyle = CSSProperties & {
+  "--matter-background-tint": string;
+  "--matter-sidebar-tint": string;
+};
+
+/** The tint variables a matter-scoped subtree paints its chrome and panes from. */
+export const matterChromeStyle = (color: string | null): MatterChromeStyle => ({
+  "--matter-background-tint": matterTint(color, MATTER_TINT_GROUND.content),
+  "--matter-sidebar-tint": matterTint(color, MATTER_TINT_GROUND.chrome),
+});

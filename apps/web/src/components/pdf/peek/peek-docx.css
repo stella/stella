@@ -1,6 +1,6 @@
 .document-preview-surface,
 .folio-docx-preview {
-  --document-preview-page: var(--background);
+  --document-preview-page: var(--untinted-background);
   --document-preview-surface: color-mix(
     in srgb,
     var(--background) 92%,
@@ -14,6 +14,11 @@
   --doc-bg: var(--document-preview-surface);
   --doc-bg-subtle: var(--document-preview-surface);
   --doc-canvas: var(--document-preview-page);
+}
+
+/* Folio declares its page token on its own root from `--background`. */
+.folio-docx-preview .folio-root {
+  --doc-page: var(--untinted-background);
 }
 
 .dark .document-preview-surface,

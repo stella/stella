@@ -6,7 +6,7 @@ import {
   useRef,
   useState,
 } from "react";
-import type { CSSProperties, MouseEvent } from "react";
+import type { MouseEvent } from "react";
 
 import { useHotkey } from "@tanstack/react-hotkeys";
 import {
@@ -89,7 +89,8 @@ import { AuthenticatedUserProvider } from "@/lib/authenticated-user-context";
 import { ChromeHeaderActionsSlot } from "@/lib/chrome-header-actions";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
-import { resolveMatterColor } from "@/lib/matter-colors";
+import { matterChromeStyle, resolveMatterColor } from "@/lib/matter-colors";
+import type { MatterChromeStyle } from "@/lib/matter-colors";
 import { notificationsOptions } from "@/lib/notification-queries";
 import { aiAvailabilityOptions } from "@/lib/organization/ai-config-queries";
 import { usePinnedStore } from "@/lib/pinned-store";
@@ -111,11 +112,6 @@ const LazyInspectorPanel = lazy(
       default: m.InspectorPanel,
     })),
 );
-
-type MatterChromeStyle = CSSProperties & {
-  "--matter-background-tint": string;
-  "--matter-sidebar-tint": string;
-};
 
 // Visual shell for the inspector rail while the panel chunk is
 // loading. Mirrors the real rail's chrome (top toggle, bottom
@@ -357,14 +353,7 @@ function ProtectedComponent() {
   const activeMatterColor = activeWorkspaceId
     ? resolveMatterColor(activeWorkspaceId, activeWorkspace?.color ?? null)
     : null;
-  const matterChromeStyle: MatterChromeStyle = {
-    "--matter-background-tint": activeMatterColor
-      ? `color-mix(in srgb, ${activeMatterColor} 2%, var(--background))`
-      : "var(--background)",
-    "--matter-sidebar-tint": activeMatterColor
-      ? `color-mix(in srgb, ${activeMatterColor} 2%, var(--sidebar))`
-      : "var(--sidebar)",
-  };
+  const routeMatterChromeStyle = matterChromeStyle(activeMatterColor);
   const inspectorPaneOpen = useInspectorTabsStore(
     (state) => state.tabs.length > 0 && !state.minimized,
   );
@@ -420,7 +409,7 @@ function ProtectedComponent() {
       key={`${inspectorBroadcastOrganizationId}:${inspectorBroadcastUserId}`}
       user={analyticsUser}
     >
-      <div className="contents" style={matterChromeStyle}>
+      <div className="contents" style={routeMatterChromeStyle}>
         <SidebarProvider forceCollapsed={forceSidebarCollapsed}>
           <SidebarToggleHotkey />
           <ChatMentionProviders>
@@ -432,7 +421,7 @@ function ProtectedComponent() {
                   composition="host-responsive"
                   endDock={
                     <WorkspaceInspectorSidePanel
-                      matterChromeStyle={matterChromeStyle}
+                      routeMatterChromeStyle={routeMatterChromeStyle}
                     />
                   }
                   navigation={{ content: <AppSidebar />, mode: "responsive" }}
@@ -710,9 +699,9 @@ const getInspectorTabWorkspaceId = (
  * inspector chrome.
  */
 function WorkspaceInspectorSidePanel({
-  matterChromeStyle,
+  routeMatterChromeStyle,
 }: {
-  matterChromeStyle: MatterChromeStyle;
+  routeMatterChromeStyle: MatterChromeStyle;
 }) {
   const t = useTranslations();
   const { isMobile } = useSidebar();
@@ -812,7 +801,7 @@ function WorkspaceInspectorSidePanel({
           className="h-dvh w-full max-w-none border-0 p-0 md:hidden"
           showCloseButton={false}
           side="inline-end"
-          style={matterChromeStyle}
+          style={routeMatterChromeStyle}
         >
           <SheetHeader className="sr-only">
             <SheetTitle>{t("inspector.title")}</SheetTitle>

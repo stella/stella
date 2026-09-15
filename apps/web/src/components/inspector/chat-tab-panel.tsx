@@ -115,12 +115,6 @@ type ChatTabPanelProps = {
   tab: ChatTab;
   onClose: () => void;
   onLabelContextMenu: (event: MouseEvent<HTMLElement>) => void;
-  /**
-   * Resolved matter colour from the inspector's workspace context,
-   * passed straight through to the tab header so the chat tab
-   * picks up the same breadcrumb tint as the rest of the matter.
-   */
-  matterColor?: string | null | undefined;
 };
 
 const chatTabThreadRef = (tab: ChatTab): ChatThreadRef =>
@@ -136,7 +130,6 @@ export const ChatTabPanel = ({
   tab,
   onClose,
   onLabelContextMenu,
-  matterColor,
 }: ChatTabPanelProps) => {
   // The inspector pane mounts under a workspace route, but the
   // *thread* itself can be either workspace-scoped (chat lives
@@ -589,7 +582,6 @@ export const ChatTabPanel = ({
         }}
       >
         <ChatTabPanelChrome
-          matterColor={matterColor}
           onClose={onClose}
           onLabelContextMenu={onLabelContextMenu}
           onMoveToMain={moveToMain}
@@ -808,7 +800,6 @@ type ChatTabPanelChromeProps = {
     action?: React.ReactNode;
   };
   onMoveToMain?: (() => void) | undefined;
-  matterColor?: string | null | undefined;
   children: React.ReactNode;
 };
 
@@ -829,7 +820,6 @@ const ChatTabPanelChrome = ({
   onStartRename,
   rename,
   onMoveToMain,
-  matterColor,
   children,
 }: ChatTabPanelChromeProps) => {
   const t = useTranslations();
@@ -856,7 +846,6 @@ const ChatTabPanelChrome = ({
         label={
           isPlaceholderThreadTitle(tab.label) ? t("chat.newChat") : tab.label
         }
-        matterColor={matterColor}
         onClose={onClose}
         onLabelContextMenu={onLabelContextMenu}
         onStartRename={onStartRename}
@@ -908,18 +897,11 @@ const PromptBarPlaceholder = ({ tab }: { tab: ChatTab }) => {
  * interface immediately and the data hydrates a frame later, no
  * spinner flash, no layout shift.
  */
-export const ChatTabPanelShell = ({
-  tab,
-  matterColor,
-}: {
-  tab: ChatTab;
-  matterColor?: string | null | undefined;
-}) => {
+export const ChatTabPanelShell = ({ tab }: { tab: ChatTab }) => {
   const savedPrompts = useSavedPrompts();
   const threadRef = chatTabThreadRef(tab);
   return (
     <ChatTabPanelChrome
-      matterColor={matterColor}
       onClose={noop}
       onLabelContextMenu={noop}
       onMoveToMain={noop}

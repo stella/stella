@@ -76,7 +76,11 @@ import {
   ENTITY_VERSION_UPLOAD_RESULT,
   uploadEntityVersion,
 } from "@/lib/files/upload-entity-version";
-import { resolveMatterColor } from "@/lib/matter-colors";
+import {
+  MATTER_TINT_GROUND,
+  matterTint,
+  resolveMatterColor,
+} from "@/lib/matter-colors";
 import { usePDFDocument } from "@/lib/pdf/hooks/use-pdf-document";
 import {
   MAX_PAGE_EDITOR_PAGES,
@@ -1022,7 +1026,7 @@ const LoadedPDFPageOrganizer = ({
   const allPagesSelected = selectedIds.size === plan.pages.length;
   const multiSelectModifier = hotkeyPlatform === "mac" ? "Cmd" : "Ctrl";
   const chromeStyle = {
-    backgroundColor: `color-mix(in srgb, ${matterColor} 2%, transparent)`,
+    backgroundColor: matterTint(matterColor, MATTER_TINT_GROUND.content),
   };
 
   if (isUnsupported) {

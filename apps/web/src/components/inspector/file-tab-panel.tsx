@@ -135,7 +135,6 @@ type FileTabPanelProps = {
   handleResetZoom: (tabId: string) => void;
   handleWheelZoom: (tabId: string, deltaY: number) => void;
   handleZoom: (tabId: string, direction: "in" | "out") => void;
-  matterColor: string | null;
   matterOrigin: MatterOrigin | null;
   minimized: boolean;
   mountedPdfIds: ReadonlySet<string>;
@@ -449,7 +448,6 @@ export const FileTabPanel = ({
   handleResetZoom,
   handleWheelZoom,
   handleZoom,
-  matterColor,
   matterOrigin,
   minimized,
   mountedPdfIds,
@@ -862,7 +860,6 @@ export const FileTabPanel = ({
           />
         ) : undefined
       }
-      matterColor={matterColor}
       onClose={() => handleCloseTab(tab.id)}
       onLabelContextMenu={ribbonLabelContextMenuOpenAt}
       onStartRename={() => startRename(tab)}
