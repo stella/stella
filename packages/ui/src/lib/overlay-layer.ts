@@ -26,6 +26,13 @@ export const SHELL_CHROME_LAYER_CLASS_NAME = "z-30";
 export const OVERLAY_LAYER_CLASS_NAMES = {
   /** Docked composer, suggestion chips, and other in-pane floating chrome. */
   chrome: "z-[80]",
+  /**
+   * In-pane controls floating over the docked composer (a review bar, a
+   * suggestion stepper). The composer's veil blurs everything beneath it with
+   * `backdrop-filter`; one step above `chrome` keeps these controls sharp
+   * regardless of mount order.
+   */
+  "chrome-raised": "z-[81]",
   /** Dialogs, sheets, popovers, tooltips: above chrome, below toasts. */
   default: "z-[85]",
   /** Search sits a hair above a plain dialog so its own popup wins. */

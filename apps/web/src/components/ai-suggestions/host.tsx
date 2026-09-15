@@ -610,7 +610,8 @@ export const SuggestionStepper = ({
     <div
       className={cn(
         DOC_FLOAT_SURFACE_CLASS,
-        "border-foreground/15 absolute start-1/2 bottom-26 z-50 flex -translate-x-1/2 items-center gap-1 rounded-full border px-1.5 py-1 shadow-[0_0_0_1px_rgb(0_0_0/0.02),0_1px_2px_rgb(0_0_0/0.03),0_8px_20px_rgb(0_0_0/0.05)]",
+        OVERLAY_LAYER_CLASS_NAMES["chrome-raised"],
+        "border-foreground/15 absolute start-1/2 bottom-26 flex -translate-x-1/2 items-center gap-1 rounded-full border px-1.5 py-1 shadow-[0_0_0_1px_rgb(0_0_0/0.02),0_1px_2px_rgb(0_0_0/0.03),0_8px_20px_rgb(0_0_0/0.05)]",
       )}
     >
       <Button
