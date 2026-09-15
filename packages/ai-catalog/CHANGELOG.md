@@ -1,5 +1,11 @@
 # @stll/ai-catalog
 
+## 0.1.12
+
+### Patch Changes
+
+- [#3419](https://github.com/stella/stella/pull/3419) [`0eacb6a`](https://github.com/stella/stella/commit/0eacb6ad99f1874f2e751fdfb686c6d5d3eeb66b) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Refresh Amazon Bedrock Claude model rates from models.dev.
+
 ## 0.1.11
 
 ### Patch Changes
