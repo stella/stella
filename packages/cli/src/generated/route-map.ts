@@ -480,7 +480,7 @@ export const generatedRouteMap: RouteNode = {
                 enum: ["relevance", "newest"],
                 repeatable: false,
                 description:
-                  "Result order; defaults to 'relevance'. 'relevance' blends text match with citation authority and court rank; 'newest' orders by decision date and returns only dated decisions.",
+                  "Result order; defaults to 'relevance'. 'relevance' blends text match with citation authority and court rank; 'newest' orders by decision date and returns only dated decisions. A query naming a decision outright (docket number, ECLI) is answered by identity lookup, which ignores this option.",
                 required: false,
               },
             ],
@@ -557,7 +557,7 @@ export const generatedRouteMap: RouteNode = {
                   enum: ["relevance", "newest"],
                   type: "string",
                   description:
-                    "Result order; defaults to 'relevance'. 'relevance' blends text match with citation authority and court rank; 'newest' orders by decision date and returns only dated decisions.",
+                    "Result order; defaults to 'relevance'. 'relevance' blends text match with citation authority and court rank; 'newest' orders by decision date and returns only dated decisions. A query naming a decision outright (docket number, ECLI) is answered by identity lookup, which ignores this option.",
                 },
               },
             },
@@ -612,7 +612,7 @@ export const generatedRouteMap: RouteNode = {
             commandPath: ["case-law", "citations"],
             toolName: "read_case_law_citations",
             description:
-              "Find out what the courts citing a decision said about it (followed, distinguished, overruled), or what a decision relied on.",
+              "What the courts citing a decision said about it (followed, distinguished, overruled), or what it cited.",
             flags: [
               {
                 flag: "--decision-id",
@@ -629,7 +629,7 @@ export const generatedRouteMap: RouteNode = {
                 enum: ["cites", "cited_by"],
                 repeatable: false,
                 description:
-                  "Which side of the citation graph to read: 'cites' for the decisions this decision relies on, 'cited_by' for the decisions that rely on it.",
+                  "Which side of the citation graph to read: 'cites' for the decisions this decision cites, 'cited_by' for the decisions that cite it. Citing is not agreeing: both sides carry negative treatments.",
                 required: true,
               },
             ],
@@ -653,7 +653,7 @@ export const generatedRouteMap: RouteNode = {
                   enum: ["cites", "cited_by"],
                   type: "string",
                   description:
-                    "Which side of the citation graph to read: 'cites' for the decisions this decision relies on, 'cited_by' for the decisions that rely on it.",
+                    "Which side of the citation graph to read: 'cites' for the decisions this decision cites, 'cited_by' for the decisions that cite it. Citing is not agreeing: both sides carry negative treatments.",
                 },
                 limit: {
                   type: "integer",

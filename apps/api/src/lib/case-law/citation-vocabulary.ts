@@ -9,7 +9,10 @@
 
 /**
  * One side of the citation graph, seen from a decision: the decisions it
- * relies on (`outgoing`) or the decisions that rely on it (`incoming`).
+ * cites (`outgoing`) or the decisions that cite it (`incoming`). Citing is
+ * not relying: the graph carries the citations that distinguish, reject or
+ * depart from the cited decision alongside the ones that follow it, so only
+ * `CITATION_TREATMENTS` says how a court used what it cited.
  */
 export const CITATION_DIRECTIONS = ["incoming", "outgoing"] as const;
 export type CitationDirection = (typeof CITATION_DIRECTIONS)[number];
@@ -43,3 +46,26 @@ export const CITATION_TREATMENTS = [
   "unclassified",
 ] as const;
 export type CitationTreatment = (typeof CITATION_TREATMENTS)[number];
+
+/**
+ * Which mention of the cited case a returned paragraph carries, so a reader
+ * knows whether it is the mention the treatment was classified from.
+ *
+ * A treatment is classified from the mention ingestion recorded, addressed by
+ * `sectionIndex` into the decision's section segmentation. That segmentation
+ * is not the AST's blocks, so a document naming a case several times could
+ * otherwise classify one mention and display another:
+ *
+ * - `sole`: one block carries the citation, so there is no other mention.
+ * - `classified_section`: the paragraph came from the recorded section, which
+ *   is the section the classifier read.
+ * - `latest_of_several`: the decision no longer carries that segmentation, so
+ *   the last of its several mentions stands in and the treatment may have
+ *   been read from another paragraph.
+ */
+export const CITATION_PASSAGE_MENTIONS = [
+  "sole",
+  "classified_section",
+  "latest_of_several",
+] as const;
+export type CitationPassageMention = (typeof CITATION_PASSAGE_MENTIONS)[number];

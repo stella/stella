@@ -557,7 +557,7 @@ const TASKS: readonly Task[] = [
       checkArgs: (args) => [
         ...field(args, "decision_id", CASE_LAW_DECISION_ID),
         // The whole point of the task: the other direction answers what this
-        // decision relied on, which is not what was asked.
+        // decision cites, which is not what was asked.
         ...field(args, "direction", "cited_by"),
       ],
     },

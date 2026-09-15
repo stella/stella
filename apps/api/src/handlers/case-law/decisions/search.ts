@@ -333,14 +333,18 @@ const searchPostgresDecisions = async (
 
   // Every matched language version, scored once. The page and the total both
   // read this set, so the representative rule below sees exactly what the
-  // page does.
+  // page does. `citation_authority` is carried out of the lateral rather than
+  // read from the decision's materialized column, which is refreshed on a
+  // schedule: the blend ranked on this value, so this is the value the hit
+  // reports.
   const matchedCte = sql`
     matched AS (
       SELECT
         sd.decision_id,
         d.language_group_key,
         ${sortKeyExpr} AS sort_key,
-        cb.cnt AS citation_count
+        cb.cnt AS citation_count,
+        cb.authority AS citation_authority
       FROM case_law_search_documents sd
       JOIN case_law_decisions d
         ON d.id = sd.decision_id
@@ -406,7 +410,7 @@ const searchPostgresDecisions = async (
       ) AS headline,
       m.sort_key,
       m.citation_count,
-      d.citation_authority,
+      m.citation_authority,
       d.created_at
     FROM matched m
     JOIN case_law_decisions d

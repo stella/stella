@@ -12,6 +12,7 @@ import type { SearchTotal } from "@stll/api-contract/search";
 
 import { TIME_ENTRY_VISIBILITY } from "@/api/lib/billing-constants";
 import {
+  CITATION_PASSAGE_MENTIONS,
   CITATION_READ_DIRECTIONS,
   CITATION_TREATMENTS,
 } from "@/api/lib/case-law/citation-vocabulary";
@@ -1493,9 +1494,17 @@ export const READ_CASE_LAW_CITATIONS_PROJECTION = v.strictObject({
           resourceName: passthroughId(),
         }),
       ),
-      // The citing paragraph, by AST anchor. Null where none is available.
+      // An excerpt of the citing paragraph, by AST anchor. Null where none is
+      // available. `truncated` says the block was longer than the excerpt;
+      // `mention` says whether the document left a choice of paragraph, in
+      // which case `polarity` may have been read from another one.
       passage: v.nullable(
-        v.strictObject({ anchorId: passthroughId(), text: v.string() }),
+        v.strictObject({
+          anchorId: passthroughId(),
+          text: v.string(),
+          truncated: v.boolean(),
+          mention: v.picklist(CITATION_PASSAGE_MENTIONS),
+        }),
       ),
     }),
   ),

@@ -231,7 +231,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
             "newest"
           ],
           "type": "string",
-          "description": "Result order; defaults to 'relevance'. 'relevance' blends text match with citation authority and court rank; 'newest' orders by decision date and returns only dated decisions."
+          "description": "Result order; defaults to 'relevance'. 'relevance' blends text match with citation authority and court rank; 'newest' orders by decision date and returns only dated decisions. A query naming a decision outright (docket number, ECLI) is answered by identity lookup, which ignores this option."
         }
       }
     }
@@ -306,7 +306,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "scope": "stella:read",
     "access": "read",
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Find out what the courts citing a decision said about it (followed, distinguished, overruled), or what a decision relied on. Returns one page of citations, each with the citing court's treatment and the paragraph the citation sits in. \`direction: 'cited_by'\` returns the decisions relying on this one; \`'cites'\` returns what it relied on. \`polarity\` is the classified reading, or 'unclassified' where there is none. \`decision\` is null for a citation the corpus holds no decision for; its text is still returned. \`passage\` is null when the source bars AI use of its text, the document is not parsed, or no paragraph carries the citation. Example: { decision_id: '<uuid>', direction: 'cited_by', limit: 20 }. Pass the returned nextCursor back as cursor to read more.",
+    "description": "What the courts citing a decision said about it (followed, distinguished, overruled), or what it cited. One page of citations, each with the citing court's treatment and an excerpt of the paragraph the citation sits in. \`cited_by\` returns the decisions that cite this one, \`cites\` the ones it cites; neither means agreement, both carry negative treatments. \`polarity\` is the classified reading, or 'unclassified' where there is none. \`passage.text\` is at most 1200 characters centred on the citation, cut when \`passage.truncated\`; \`passage.mention\` is 'sole', 'classified_section' (the mention the treatment was read from), or 'latest_of_several' (it may not be). Example: { decision_id: '<uuid>', direction: 'cited_by', limit: 20 }. Pass the returned nextCursor back as cursor.",
     "annotations": {
       "title": "Read case-law citations",
       "destructiveHint": false,
@@ -332,7 +332,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
             "cited_by"
           ],
           "type": "string",
-          "description": "Which side of the citation graph to read: 'cites' for the decisions this decision relies on, 'cited_by' for the decisions that rely on it."
+          "description": "Which side of the citation graph to read: 'cites' for the decisions this decision cites, 'cited_by' for the decisions that cite it. Citing is not agreeing: both sides carry negative treatments."
         },
         "limit": {
           "type": "integer",
@@ -3723,7 +3723,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
             "newest"
           ],
           "type": "string",
-          "description": "Result order; defaults to 'relevance'. 'relevance' blends text match with citation authority and court rank; 'newest' orders by decision date and returns only dated decisions."
+          "description": "Result order; defaults to 'relevance'. 'relevance' blends text match with citation authority and court rank; 'newest' orders by decision date and returns only dated decisions. A query naming a decision outright (docket number, ECLI) is answered by identity lookup, which ignores this option."
         }
       }
     }
@@ -3798,7 +3798,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     "scope": "stella:read_anonymized",
     "access": "read",
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Find out what the courts citing a decision said about it (followed, distinguished, overruled), or what a decision relied on. Returns one page of citations, each with the citing court's treatment and the paragraph the citation sits in. \`direction: 'cited_by'\` returns the decisions relying on this one; \`'cites'\` returns what it relied on. \`polarity\` is the classified reading, or 'unclassified' where there is none. \`decision\` is null for a citation the corpus holds no decision for; its text is still returned. \`passage\` is null when the source bars AI use of its text, the document is not parsed, or no paragraph carries the citation. Example: { decision_id: '<uuid>', direction: 'cited_by', limit: 20 }. Pass the returned nextCursor back as cursor to read more.",
+    "description": "What the courts citing a decision said about it (followed, distinguished, overruled), or what it cited. One page of citations, each with the citing court's treatment and an excerpt of the paragraph the citation sits in. \`cited_by\` returns the decisions that cite this one, \`cites\` the ones it cites; neither means agreement, both carry negative treatments. \`polarity\` is the classified reading, or 'unclassified' where there is none. \`passage.text\` is at most 1200 characters centred on the citation, cut when \`passage.truncated\`; \`passage.mention\` is 'sole', 'classified_section' (the mention the treatment was read from), or 'latest_of_several' (it may not be). Example: { decision_id: '<uuid>', direction: 'cited_by', limit: 20 }. Pass the returned nextCursor back as cursor.",
     "annotations": {
       "title": "Read case-law citations",
       "destructiveHint": false,
@@ -3824,7 +3824,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
             "cited_by"
           ],
           "type": "string",
-          "description": "Which side of the citation graph to read: 'cites' for the decisions this decision relies on, 'cited_by' for the decisions that rely on it."
+          "description": "Which side of the citation graph to read: 'cites' for the decisions this decision cites, 'cited_by' for the decisions that cite it. Citing is not agreeing: both sides carry negative treatments."
         },
         "limit": {
           "type": "integer",

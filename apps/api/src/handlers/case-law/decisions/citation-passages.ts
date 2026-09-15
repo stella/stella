@@ -8,15 +8,15 @@
  *
  * The paragraph lives in the decision's AST, which is object storage under
  * canonical corpus mode. Fetching it must not hold the gated read transaction
- * open, so the shape here mirrors `readGatedDecisionWithDocument`: gate and
- * read every row inside one transaction, then resolve passages once it has
- * closed.
+ * open, so the shape here mirrors `readGatedDecisionWithDocument`: gate the
+ * citations and resolve where each document lives inside one transaction,
+ * then read the documents in bounded groups once it has closed. Nothing a
+ * citation count could multiply is read while the gate's transaction is open.
  */
 
 import { Result } from "better-result";
 import { eq, inArray } from "drizzle-orm";
 
-import { mapWithConcurrency } from "@stll/concurrency";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
@@ -28,18 +28,26 @@ import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
-import type { CitationReadDirection } from "@/api/lib/case-law/citation-vocabulary";
+import type {
+  CitationPassageMention,
+  CitationReadDirection,
+} from "@/api/lib/case-law/citation-vocabulary";
 import { GRAPH_DIRECTION } from "@/api/lib/case-law/citation-vocabulary";
 import { readDecisionAnalysisAst } from "@/api/lib/case-law/decision-analysis";
+import { chunked } from "@/api/lib/chunked";
 import { errorTag } from "@/api/lib/errors/utils";
 import { allowsDerivedAi } from "@/api/lib/legal-search/corpus-source";
+import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
 
 /** The paragraph an agent is given per citation, and its deep-link anchor. */
 export type CitationPassage = {
   anchorId: string;
+  /** An excerpt, not the block, whenever `truncated` is true. */
   text: string;
+  truncated: boolean;
+  mention: CitationPassageMention;
 };
 
 export type CitationWithPassage = DecisionCitationRow & {
@@ -70,28 +78,26 @@ export type DecisionCitationsRead =
 const PASSAGE_MAX_CHARS = LIMITS.caseLawCitationPassageChars;
 
 /** Documents whose AST is fetched at once while resolving one page. */
-const PASSAGE_AST_CONCURRENCY = LIMITS.caseLawCitationPassageConcurrency;
+const PASSAGE_AST_GROUP_SIZE = LIMITS.caseLawCitationPassageConcurrency;
 
 /**
- * What a passage read needs about the decision whose text it comes from.
- *
- * `documentAst` is the row's own copy, and it is read for the fallback path
- * alone: a canonical row's column is trimmed and the object is the document.
- * Under `corpusStorageMode: "off"` the column IS the document, so a page of
- * incoming citations reads up to `limit` whole ASTs out of Postgres; that is
- * the mode's cost, and the page size is the bound on it.
+ * Which decisions a passage read may take text from, and where their AST
+ * lives. Deliberately no `documentAst`: under `corpusStorageMode: "off"` that
+ * column IS the document, so selecting it for a whole page would pull up to
+ * `limit` independently unbounded JSONB documents into the gated
+ * repeatable-read transaction. The bytes are read in bounded groups after the
+ * gate closes instead.
  */
-type PassageSourceRow = {
+type PassageSourcePointer = {
   id: SafeId<"caseLawDecision">;
   astS3Key: string | null;
   contentHash: string | null;
-  documentAst: unknown;
 };
 
-const readPassageSourceRows = async (
+const readPassageSourcePointers = async (
   tx: CaseLawPublicReadTransaction,
   ids: readonly SafeId<"caseLawDecision">[],
-): Promise<PassageSourceRow[]> => {
+): Promise<PassageSourcePointer[]> => {
   if (ids.length === 0) {
     return [];
   }
@@ -100,7 +106,6 @@ const readPassageSourceRows = async (
       id: caseLawDecisions.id,
       astS3Key: caseLawDecisions.astS3Key,
       contentHash: caseLawDecisions.contentHash,
-      documentAst: caseLawDecisions.documentAst,
       descriptor: caseLawSources.descriptor,
     })
     .from(caseLawDecisions)
@@ -111,6 +116,41 @@ const readPassageSourceRows = async (
   // with it.
   return rows.flatMap(({ descriptor, ...row }) =>
     allowsDerivedAi(descriptor) ? [row] : [],
+  );
+};
+
+/**
+ * What one group of citing decisions holds in its own columns, read outside
+ * the gate's transaction.
+ *
+ * `documentAst` is the fallback for a canonical row whose object cannot be
+ * read, and is the whole document under `corpusStorageMode: "off"`.
+ * `sections` is the segmentation the citation extractor indexed and the
+ * polarity classifier read, which is what lets a passage be anchored to the
+ * mention the treatment came from.
+ */
+type DecisionTextColumns = {
+  documentAst: unknown;
+  sections: DecisionSection[] | null;
+};
+
+const readDecisionTextColumns = async (
+  caseLawDb: CaseLawPublicReadDb,
+  ids: readonly SafeId<"caseLawDecision">[],
+): Promise<Map<string, DecisionTextColumns>> => {
+  const rows = await caseLawDb(
+    async (tx) =>
+      await tx
+        .select({
+          id: caseLawDecisions.id,
+          documentAst: caseLawDecisions.documentAst,
+          sections: caseLawDecisions.sections,
+        })
+        .from(caseLawDecisions)
+        .where(inArray(caseLawDecisions.id, [...ids])),
+  );
+  return new Map(
+    rows.map(({ id, ...columns }) => [String(id), columns] as const),
   );
 };
 
@@ -125,80 +165,174 @@ const WHITESPACE_RUN = /\s+/gu;
 const collapseWhitespace = (text: string): string =>
   text.replace(WHITESPACE_RUN, " ").trim();
 
-const excerptAround = (text: string, at: number, length: number): string => {
+type Excerpt = { text: string; truncated: boolean };
+
+const excerptAround = (text: string, at: number, length: number): Excerpt => {
   if (text.length <= PASSAGE_MAX_CHARS) {
-    return text;
+    return { text, truncated: false };
   }
   const margin = Math.max(0, Math.floor((PASSAGE_MAX_CHARS - length) / 2));
   const start = Math.max(
     0,
     Math.min(at - margin, text.length - PASSAGE_MAX_CHARS),
   );
-  return text.slice(start, start + PASSAGE_MAX_CHARS);
+  return {
+    text: text.slice(start, start + PASSAGE_MAX_CHARS),
+    truncated: true,
+  };
+};
+
+type CarryingBlock = { anchorId: string; at: number; text: string };
+
+export type CitationPassageOptions = {
+  ast: DocumentAst;
+  citationText: string;
+  /**
+   * The text of the section the citation row was extracted from, when the
+   * decision still carries its segmentation. The reader that shows a citing
+   * paragraph in the app narrows by the same section text
+   * (`apps/web/src/features/case-law/citation-passage.ts`), because the
+   * classifier read that section and no anchor ties a section to a block.
+   */
+  sectionText: string | undefined;
 };
 
 /**
- * The block that carries a citation, latest first.
+ * The paragraph a citation sits in, anchored to the mention the treatment was
+ * read from wherever the decision still says which that was.
  *
- * A case is commonly listed bare in the header and then discussed in the
- * reasoning, and the discussion is what was asked for. The extractor records
- * the later section for the same reason, so both sides prefer one mention.
+ * The extractor records the latest section that names the case, and the
+ * classifier reads that section's first occurrence: inside the section, the
+ * first carrying block is that occurrence. Without the section there is no
+ * anchor, so the last carrying block stands in (a case is commonly listed
+ * bare in the header and then discussed in the reasoning, and the discussion
+ * is what was asked for) and `mention` says the treatment may have been read
+ * from another paragraph.
  */
-export const citationPassageIn = (
-  ast: DocumentAst,
-  citationText: string,
-): CitationPassage | null => {
+export const citationPassageIn = ({
+  ast,
+  citationText,
+  sectionText,
+}: CitationPassageOptions): CitationPassage | null => {
   const needle = collapseWhitespace(citationText);
   if (needle.length === 0) {
     return null;
   }
-  for (let index = ast.blocks.length - 1; index >= 0; index -= 1) {
-    const block = ast.blocks[index];
-    if (block === undefined) {
-      continue;
-    }
+  const section =
+    sectionText === undefined ? undefined : collapseWhitespace(sectionText);
+  // Blocks, not occurrences: two mentions inside one block still return that
+  // block, so only a second carrying block makes the paragraph a choice.
+  const carrying: CarryingBlock[] = [];
+  let classified: CarryingBlock | null = null;
+  for (const block of ast.blocks) {
     const text = collapseWhitespace(block.plainText);
     const at = text.indexOf(needle);
     if (at === -1) {
       continue;
     }
-    return {
-      anchorId: block.anchorId,
-      text: excerptAround(text, at, needle.length),
-    };
+    const carryingBlock = { anchorId: block.anchorId, at, text };
+    carrying.push(carryingBlock);
+    if (
+      classified === null &&
+      section !== undefined &&
+      text.length > 0 &&
+      section.includes(text)
+    ) {
+      classified = carryingBlock;
+    }
   }
-  return null;
+  const chosen = classified ?? carrying.at(-1);
+  if (chosen === undefined) {
+    return null;
+  }
+  const excerpt = excerptAround(chosen.text, chosen.at, needle.length);
+  return {
+    anchorId: chosen.anchorId,
+    text: excerpt.text,
+    truncated: excerpt.truncated,
+    mention: mentionOf({ carrying: carrying.length, classified }),
+  };
+};
+
+const mentionOf = ({
+  carrying,
+  classified,
+}: {
+  carrying: number;
+  classified: CarryingBlock | null;
+}): CitationPassageMention => {
+  if (carrying === 1) {
+    return "sole";
+  }
+  return classified === null ? "latest_of_several" : "classified_section";
+};
+
+/** A citing decision's text, as a passage read needs to see it. */
+type DecisionText = {
+  ast: DocumentAst;
+  sections: DecisionSection[] | null;
+};
+
+/** The section a citation row was extracted from, when the row kept one. */
+const sectionTextAt = (
+  sections: DecisionSection[] | null,
+  sectionIndex: number | null,
+): string | undefined => {
+  if (sections === null || sectionIndex === null) {
+    return undefined;
+  }
+  return sections.find((section) => section.index === sectionIndex)?.text;
 };
 
 /**
- * One AST read per distinct decision, bounded. An object that cannot be read
- * costs its rows their passage, never the page: the citation and the decision
- * it names are still the answer to what the court cited.
+ * One document read per distinct decision, a group at a time. The group is
+ * the bound on bytes in flight: citation count does not bound document size,
+ * so a page's decisions are never resolved together however many of them it
+ * holds, and the group size is the concurrency. A document that cannot be
+ * read costs its rows their passage, never the page: the citation and the
+ * decision it names are still the answer to what the court cited.
  */
-const readAstsByDecision = async (
-  sources: readonly PassageSourceRow[],
-): Promise<Map<string, DocumentAst>> => {
-  const entries = await mapWithConcurrency({
-    items: sources,
-    limit: PASSAGE_AST_CONCURRENCY,
-    operation: async (source) => {
-      const read = await Result.tryPromise(
-        async () => await readDecisionAnalysisAst(source),
-      );
-      if (Result.isError(read)) {
-        logger.warn("case_law.citation_passage.ast_unavailable", {
-          "error.type": errorTag(read.error),
-        });
-        return null;
+const readDecisionTextByDecision = async (
+  caseLawDb: CaseLawPublicReadDb,
+  pointers: readonly PassageSourcePointer[],
+): Promise<Map<string, DecisionText>> => {
+  const textByDecision = new Map<string, DecisionText>();
+  for (const group of chunked(pointers, PASSAGE_AST_GROUP_SIZE)) {
+    const columns = await readDecisionTextColumns(
+      caseLawDb,
+      group.map((pointer) => pointer.id),
+    );
+    const entries = await Promise.all(
+      group.map(async (pointer) => {
+        const row = columns.get(String(pointer.id));
+        const read = await Result.tryPromise(
+          async () =>
+            await readDecisionAnalysisAst({
+              ...pointer,
+              documentAst: row?.documentAst ?? null,
+            }),
+        );
+        if (Result.isError(read)) {
+          logger.warn("case_law.citation_passage.ast_unavailable", {
+            "error.type": errorTag(read.error),
+          });
+          return null;
+        }
+        return read.value === null
+          ? null
+          : {
+              id: pointer.id,
+              text: { ast: read.value, sections: row?.sections ?? null },
+            };
+      }),
+    );
+    for (const entry of entries) {
+      if (entry !== null) {
+        textByDecision.set(String(entry.id), entry.text);
       }
-      return read.value === null ? null : { ast: read.value, id: source.id };
-    },
-  });
-  return new Map(
-    entries.flatMap((entry) =>
-      entry === null ? [] : [[String(entry.id), entry.ast] as const],
-    ),
-  );
+    }
+  }
+  return textByDecision;
 };
 
 export type ReadDecisionCitationsOptions = {
@@ -253,7 +387,7 @@ export const readGatedDecisionCitations = async ({
             ];
       return {
         page,
-        sources: await readPassageSourceRows(subject.tx, citingIds),
+        sources: await readPassageSourcePointers(subject.tx, citingIds),
         type: "page" as const,
       };
     },
@@ -265,15 +399,24 @@ export const readGatedDecisionCitations = async ({
     return gated;
   }
 
-  const astByDecision = await readAstsByDecision(gated.sources);
+  const textByDecision = await readDecisionTextByDecision(
+    caseLawDb,
+    gated.sources,
+  );
   const items = gated.page.items.map((item): CitationWithPassage => {
     const citingId =
       direction === "cites" ? String(decisionId) : String(item.decision?.id);
-    const ast = astByDecision.get(citingId);
+    const text = textByDecision.get(citingId);
     return {
       ...item,
       passage:
-        ast === undefined ? null : citationPassageIn(ast, item.citationText),
+        text === undefined
+          ? null
+          : citationPassageIn({
+              ast: text.ast,
+              citationText: item.citationText,
+              sectionText: sectionTextAt(text.sections, item.sectionIndex),
+            }),
     };
   });
 

@@ -134,15 +134,23 @@ const TOOL_COUNT_CEILING: Record<SurfaceMode, number> = {
 // Pin those exact sizes so future schema growth remains reviewable.
 // read_case_law_citations and the case-law search filters it sits beside
 // (`sort`, plus the hit fields and facet semantics the search description now
-// states) measure 118_301 default and 54_301 anonymized. Pin those exact
+// states) measure 118_752 default and 54_752 anonymized: the citation
+// passage says whether it was cut and which mention of the cited case it
+// carries, and the search sort names the identifier lookup that ignores it.
+// The citation tool's own description paid part of that back. Pin those exact
 // sizes so the next schema growth stays reviewable.
 const TOOLS_LIST_PAYLOAD_CHAR_CEILING: Record<SurfaceMode, number> = {
-  default: 118_400,
-  anonymized: 54_400,
+  default: 118_800,
+  anonymized: 54_800,
 };
 
+// default bumped 42_000 -> 42_300 for the two fields read_case_law_citations
+// adds to each passage (`truncated`, and the closed `mention` set): a model
+// reading an excerpt as the whole paragraph, or a passage as the mention the
+// treatment was classified from, is reading something the data does not say.
+// Measured 42_212. The anonymized surface does not carry this tool.
 const OUTPUT_SCHEMA_TOTAL_CHAR_CEILING: Record<SurfaceMode, number> = {
-  default: 42_000,
+  default: 42_300,
   anonymized: 28_000,
 };
 

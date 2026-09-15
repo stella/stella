@@ -890,7 +890,7 @@ describe("OpenAI-compatible MCP tools", () => {
           type: "string",
           enum: [...SEARCH_SORTS],
           description:
-            "Result order; defaults to 'relevance'. 'relevance' blends text match with citation authority and court rank; 'newest' orders by decision date and returns only dated decisions.",
+            "Result order; defaults to 'relevance'. 'relevance' blends text match with citation authority and court rank; 'newest' orders by decision date and returns only dated decisions. A query naming a decision outright (docket number, ECLI) is answered by identity lookup, which ignores this option.",
         },
       },
       required: ["query", "country"],
@@ -915,7 +915,7 @@ describe("OpenAI-compatible MCP tools", () => {
           type: "string",
           enum: [...CITATION_READ_DIRECTIONS],
           description:
-            "Which side of the citation graph to read: 'cites' for the decisions this decision relies on, 'cited_by' for the decisions that rely on it.",
+            "Which side of the citation graph to read: 'cites' for the decisions this decision cites, 'cited_by' for the decisions that cite it. Citing is not agreeing: both sides carry negative treatments.",
         },
         limit: {
           type: "integer",
@@ -1650,6 +1650,8 @@ describe("OpenAI-compatible MCP tools", () => {
             passage: {
               anchorId: "b-42",
               text: "Od závěru rozsudku 29 Cdo 123/2024 se velký senát odchyluje.",
+              truncated: false,
+              mention: "latest_of_several",
             },
           },
           {
@@ -1704,6 +1706,8 @@ describe("OpenAI-compatible MCP tools", () => {
           passage: {
             anchorId: "b-42",
             text: "Od závěru rozsudku 29 Cdo 123/2024 se velký senát odchyluje.",
+            truncated: false,
+            mention: "latest_of_several",
           },
         },
         {

@@ -1311,6 +1311,8 @@ const CONTRACT_CORPUS = {
                 passage: {
                   anchorId: "b12",
                   text: "Soud odkázal na rozsudek 22 Cdo 1000/2020.",
+                  truncated: false,
+                  mention: "sole",
                 },
               },
             ],
