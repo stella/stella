@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
 import type { Block } from "@stll/legal-ast/document-ast";
-import { provisionHeadingAnchor } from "@stll/legal-ast/provision-preview";
 
 import { selectStatuteProvisions } from "@/api/handlers/chat/active-statute-selection.logic";
 
@@ -32,14 +31,8 @@ const act = (count: number, bodyChars: number): Block[] =>
     ];
   });
 
-const selectedText = (
-  selection: ReturnType<typeof selectStatuteProvisions>,
-): string => selection.provisions.map(({ text }) => text).join("");
-
-const totalChars = (
-  selection: ReturnType<typeof selectStatuteProvisions>,
-): number =>
-  selection.provisions.reduce((sum, { text }) => sum + text.length, 0);
+const designationCost = (anchorId: string): number =>
+  `[${anchorId}]`.length + 2;
 
 describe("statute provision selection", () => {
   test("files a subdivision under the provision that owns it", () => {
@@ -59,6 +52,55 @@ describe("statute provision selection", () => {
       "par_2",
     ]);
     expect(selection.provisions.at(0)?.text).toContain("[par_1-odst_1-pism_a]");
+  });
+
+  test("keeps sibling sections apart when their anchors share a prefix", () => {
+    // `sec-1` and `sec-2` are two sections, not one: a split on the anchor
+    // path would merge them and hand the model one oversized provision.
+    const selection = selectStatuteProvisions({
+      annotatedAnchorIds: [],
+      blocks: [
+        heading("sec-1", "Section 1"),
+        paragraph("sec-1-1", "First rule."),
+        heading("sec-2", "Section 2"),
+        paragraph("sec-2-1", "Second rule."),
+      ],
+      maxChars: 10_000,
+    });
+
+    expect(selection.provisions.map(({ anchorId }) => anchorId)).toEqual([
+      "sec-1",
+      "sec-2",
+    ]);
+  });
+
+  test("selects a marked provision by the block its mark sits on", () => {
+    const selection = selectStatuteProvisions({
+      annotatedAnchorIds: ["sec-2-1"],
+      blocks: [
+        heading("sec-1", "Section 1"),
+        paragraph("sec-1-1", "x".repeat(400)),
+        heading("sec-2", "Section 2"),
+        paragraph("sec-2-1", "Second rule."),
+      ],
+      maxChars: 120,
+    });
+
+    expect(
+      selection.provisions.find(({ annotated }) => annotated)?.anchorId,
+    ).toBe("sec-2");
+  });
+
+  test("ignores a mark whose block is gone from this consolidation", () => {
+    const selection = selectStatuteProvisions({
+      annotatedAnchorIds: ["par_404-odst_1"],
+      blocks: act(2, 20),
+      maxChars: 10_000,
+    });
+
+    expect(selection.provisions.every(({ annotated }) => !annotated)).toBe(
+      true,
+    );
   });
 
   test("reads the act whole when it fits, and says so", () => {
@@ -121,7 +163,7 @@ describe("statute provision selection", () => {
     );
     expect(marked?.clipped).toBe(true);
     expect(selection.partial).toBe(true);
-    expect(totalChars(selection)).toBeLessThanOrEqual(500);
+    expect(selection.text.length).toBeLessThanOrEqual(500);
   });
 
   test("clips between blocks so no passage carries a half-written anchor", () => {
@@ -140,6 +182,17 @@ describe("statute provision selection", () => {
     // The heading fits; neither subsection does, and neither leaves a
     // fragment of `[par_90-odst_1]` behind.
     expect(marked?.text).toBe("[par_90] S");
+  });
+
+  test("a marked provision with no room for wording keeps its designation", () => {
+    const selection = selectStatuteProvisions({
+      annotatedAnchorIds: ["par_2-odst_1"],
+      blocks: act(3, 400),
+      maxChars: designationCost("par_2"),
+    });
+
+    expect(selection.provisions.map(({ text }) => text)).toEqual(["[par_2]"]);
+    expect(selection.partial).toBe(true);
   });
 
   test("marked provisions share the budget rather than starving each other", () => {
@@ -167,7 +220,7 @@ describe("statute provision selection", () => {
     // past the 200 characters an equal split would have given it.
     expect(short?.clipped).toBe(false);
     expect(long?.text.length).toBeGreaterThan(200);
-    expect(totalChars(selection)).toBeLessThanOrEqual(400);
+    expect(selection.text.length).toBeLessThanOrEqual(400);
   });
 });
 
@@ -199,6 +252,23 @@ describe("statute provision selection invariants", () => {
   }[];
   const BUDGETS = [0, 1, 37, 500, 4000, 24_000, 1_000_000] as const;
 
+  test("bounds the rendered block for an act of blank provisions", () => {
+    // Every provision renders as its bare designation, which costs characters
+    // the wording budget alone would not have counted.
+    const blocks = Array.from({ length: 5000 }).flatMap((_unused, index) => [
+      heading(`par_${String(index + 1)}`, "   "),
+      paragraph(`par_${String(index + 1)}-odst_1`, "  "),
+    ]);
+    const selection = selectStatuteProvisions({
+      annotatedAnchorIds: [],
+      blocks,
+      maxChars: 1000,
+    });
+
+    expect(selection.text.length).toBeLessThanOrEqual(1000);
+    expect(selection.partial).toBe(true);
+  });
+
   for (const { bodyChars, marks, provisions } of CASES) {
     for (const maxChars of BUDGETS) {
       test(`${String(provisions)} provisions of ${String(bodyChars)} chars, ${String(marks.length)} marked, budget ${String(maxChars)}`, () => {
@@ -209,25 +279,35 @@ describe("statute provision selection invariants", () => {
           maxChars,
         });
         const kept = selection.provisions.map(({ anchorId }) => anchorId);
-
-        // The budget is a ceiling, whatever the act and the marks look like.
-        expect(totalChars(selection)).toBeLessThanOrEqual(maxChars);
-
-        // A marked provision is never dropped: its designation survives even
-        // when its wording does not.
-        for (const mark of marks) {
-          expect(kept).toContain(provisionHeadingAnchor(mark));
-        }
-
-        // `partial` is exactly "the model is not reading the whole act".
         const whole = selectStatuteProvisions({
           annotatedAnchorIds: marks,
           blocks,
           maxChars: Number.MAX_SAFE_INTEGER,
         });
+
+        // The budget bounds the RENDERED block, separators and bare
+        // designations included, so nothing downstream ever has to cut it.
+        expect(selection.text.length).toBeLessThanOrEqual(maxChars);
+        expect(selection.text).toBe(
+          selection.provisions.map(({ text }) => text).join("\n\n"),
+        );
+
+        // A marked provision survives as long as the budget admits the
+        // designations of all of them; its wording may not.
+        const markedAnchors = whole.provisions
+          .filter(({ annotated }) => annotated)
+          .map(({ anchorId }) => anchorId);
+        const designations = markedAnchors.reduce(
+          (sum, anchorId) => sum + designationCost(anchorId),
+          0,
+        );
+        if (maxChars >= designations) {
+          expect(kept).toEqual(expect.arrayContaining(markedAnchors));
+        }
+
+        // `partial` is exactly "the model is not reading the whole act".
         expect(selection.partial).toBe(
-          selection.omittedProvisionCount > 0 ||
-            selectedText(selection) !== selectedText(whole),
+          selection.omittedProvisionCount > 0 || selection.text !== whole.text,
         );
         expect(whole.partial).toBe(false);
 
@@ -238,18 +318,15 @@ describe("statute provision selection invariants", () => {
         );
         for (const { anchorId, text } of selection.provisions) {
           const full = wholeByAnchor.get(anchorId) ?? "";
-          expect(full.startsWith(text)).toBe(true);
           expect(
-            text.length === 0 ||
-              text === full ||
-              full.slice(text.length).startsWith("\n\n"),
+            text === `[${anchorId}]` ||
+              (full.startsWith(text) &&
+                (text === full || full.slice(text.length).startsWith("\n\n"))),
           ).toBe(true);
         }
 
         // Document order, whichever pass chose a provision.
-        const documentOrder = blocks
-          .map(({ anchorId }) => provisionHeadingAnchor(anchorId))
-          .filter((anchor, index, all) => all.indexOf(anchor) === index);
+        const documentOrder = whole.provisions.map(({ anchorId }) => anchorId);
         expect(kept).toEqual(
           documentOrder.filter((anchor) => kept.includes(anchor)),
         );
