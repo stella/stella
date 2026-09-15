@@ -509,7 +509,7 @@ export const FileTabPanel = ({
     fieldId: tab.id,
     mimeType: tab.mimeType,
     workspaceId: tab.workspaceId,
-    entityId: tab.entityId ?? null,
+    entityId: tab.entityId,
   });
   // A DOCX tab opened by a caller that knows only the file field (a review's
   // reference, a search hit) still needs the field's property to mount the
