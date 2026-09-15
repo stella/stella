@@ -1786,6 +1786,7 @@
     "finalizePendingNote": "{count, plural, one {# suggestion is still pending review.} other {# suggestions are still pending review.}}",
     "hideAccepted": "Hide accepted suggestions",
     "keepInReview": "Keep in review",
+    "pendingLimitReached": "This document has too many suggestions awaiting review. Resolve some before asking for more.",
     "persistFailed": "Couldn't save your review change",
     "reject": "Reject",
     "rejectAll": "Reject all",

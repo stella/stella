@@ -36,6 +36,10 @@ export type ApiFileSecurityRejectionDetails = Omit<
  */
 export const API_VERSION_CONFLICT_ERROR_CODE = "version_conflict" as const;
 
+/** A document already holds `DOCX_SUGGESTIONS_PENDING_MAX` pending suggestions. */
+export const DOCX_SUGGESTIONS_PENDING_LIMIT_ERROR_CODE =
+  "docx_suggestions_pending_limit" as const;
+
 export type ApiValidationErrorValue = {
   expected?: string | undefined;
   found?: unknown;

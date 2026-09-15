@@ -1786,6 +1786,7 @@
     "finalizePendingNote": "{count, plural, one {# návrh stále čeká na revizi.} few {# návrhy stále čekají na revizi.} other {# návrhů stále čeká na revizi.}}",
     "hideAccepted": "Skrýt přijaté návrhy",
     "keepInReview": "Ponechat v revizi",
+    "pendingLimitReached": "Tento dokument má příliš mnoho návrhů čekajících na revizi. Než požádáte o další, některé vyřešte.",
     "persistFailed": "Nepodařilo se uložit vaši změnu revize",
     "reject": "Odmítnout",
     "rejectAll": "Odmítnout vše",

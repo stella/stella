@@ -77,6 +77,7 @@ import {
   trackDocxSuggestionPersist,
 } from "@/components/ai-suggestions/docx-suggestion-persist-tracker";
 import {
+  CREATE_DOCX_SUGGESTIONS_ERROR,
   createDocxSuggestionsRequest,
   rejectPendingDocxSuggestionsRequest,
   resolveDocxSuggestionRequest,
@@ -548,8 +549,20 @@ const persistQueuedSuggestions = async ({
     suggestions: items,
   });
   if (Result.isError(result)) {
-    getAnalytics().captureError(result.error);
-    return;
+    getAnalytics().captureError(result.error.cause);
+    switch (result.error.type) {
+      case CREATE_DOCX_SUGGESTIONS_ERROR.pendingLimit:
+        stellaToast.add({
+          title: getTranslator()("docxReview.pendingLimitReached"),
+          type: "error",
+        });
+        return;
+      case CREATE_DOCX_SUGGESTIONS_ERROR.failed:
+        return;
+      default:
+        result.error satisfies never;
+        panic("Unhandled DOCX suggestion create error");
+    }
   }
   const refToId = result.value;
   useReviewStore.getState().reconcileServerIds(entityId, refToId);

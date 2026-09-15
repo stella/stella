@@ -28,7 +28,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { Result } from "better-result";
 import type { UnhandledException } from "better-result";
 
-import { DOCX_SUGGESTIONS_PENDING_MAX } from "@stll/api-contract";
+import { DOCX_SUGGESTIONS_PENDING_LIMIT_ERROR_CODE } from "@stll/api-contract";
 import type { FolioAIEditApplyMode } from "@stll/folio-react";
 
 import {
@@ -39,7 +39,7 @@ import {
 import type { ReviewSuggestion } from "@/components/ai-suggestions/review-store";
 import { api } from "@/lib/api";
 import type { ChatThreadId } from "@/lib/chat-thread-ref";
-import { unwrapEden } from "@/lib/errors/api";
+import { APIError, unwrapEden } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 
 export type DocxResolveResult = "synced" | "stale" | "failed";
@@ -55,9 +55,21 @@ type CreateDocxSuggestionsRequestArgs = DocxSuggestionTarget & {
   suggestions: readonly ReviewSuggestion[];
 };
 
+export const CREATE_DOCX_SUGGESTIONS_ERROR = {
+  pendingLimit: "pending-limit",
+  failed: "failed",
+} as const;
+
+type CreateDocxSuggestionsError =
+  | {
+      type: typeof CREATE_DOCX_SUGGESTIONS_ERROR.pendingLimit;
+      cause: unknown;
+    }
+  | { type: typeof CREATE_DOCX_SUGGESTIONS_ERROR.failed; cause: unknown };
+
 type CreateDocxSuggestionsResult = Result<
   Record<string, string>,
-  UnhandledException
+  CreateDocxSuggestionsError
 >;
 
 /**
@@ -89,14 +101,27 @@ export const createDocxSuggestionsRequest = async ({
     return Result.ok({});
   }
 
-  const result = await Result.tryPromise(async () => {
-    const response = await api["docx-suggestions"]({ workspaceId })
-      .entity({ entityId })
-      .put({ suggestions: body, originThreadId: chatThreadId ?? null });
-    return unwrapEden(response);
+  const result = await Result.tryPromise({
+    try: async () => {
+      const response = await api["docx-suggestions"]({ workspaceId })
+        .entity({ entityId })
+        .put({ suggestions: body, originThreadId: chatThreadId ?? null });
+      return unwrapEden(response);
+    },
+    catch: (cause) => cause,
   });
   if (Result.isError(result)) {
-    return result;
+    // The server refuses a batch that would take the document past its
+    // pending cap; those suggestions stay client-only, like any failed create.
+    const pendingLimit =
+      APIError.is(result.error) &&
+      result.error.code === DOCX_SUGGESTIONS_PENDING_LIMIT_ERROR_CODE;
+    return Result.err({
+      type: pendingLimit
+        ? CREATE_DOCX_SUGGESTIONS_ERROR.pendingLimit
+        : CREATE_DOCX_SUGGESTIONS_ERROR.failed,
+      cause: result.error,
+    });
   }
 
   const suggestionsByRef = new Map(suggestions.map((item) => [item.id, item]));
@@ -228,43 +253,29 @@ export const rejectPendingDocxSuggestionsRequest = async ({
 }: RejectPendingDocxSuggestionsRequestArgs): Promise<
   Result<void, UnhandledException>
 > => {
-  const chunks: string[][] = [];
-  for (
-    let start = 0;
-    start < suggestionIds.length;
-    start += DOCX_SUGGESTIONS_PENDING_MAX
-  ) {
-    chunks.push(
-      suggestionIds.slice(start, start + DOCX_SUGGESTIONS_PENDING_MAX),
-    );
-  }
-  const results = await Promise.all(
-    chunks.map(async (chunk) => {
-      const result = await Result.tryPromise(async () => {
-        const response = await api["docx-suggestions"]({ workspaceId })
-          .entity({ entityId })
-          ["reject-pending"].patch({
-            suggestionIds: chunk.map((id) => toSafeId<"docxSuggestion">(id)),
-          });
-        return unwrapEden(response);
+  // No chunking: create caps a document's pending rows at the same bound the
+  // bulk reject body accepts, so every pending id fits in one request.
+  const result = await Result.tryPromise(async () => {
+    const response = await api["docx-suggestions"]({ workspaceId })
+      .entity({ entityId })
+      ["reject-pending"].patch({
+        suggestionIds: suggestionIds.map((id) =>
+          toSafeId<"docxSuggestion">(id),
+        ),
       });
-      if (Result.isOk(result)) {
-        writeDocxSuggestionsCache({
-          queryClient,
-          workspaceId,
-          entityId,
-          write: {
-            type: DOCX_SUGGESTION_CACHE_WRITE.leavePending,
-            suggestionIds: chunk,
-          },
-        });
-      }
-      return result;
-    }),
-  );
-  const failure = results.find((result) => Result.isError(result));
-  if (failure !== undefined && Result.isError(failure)) {
-    return failure;
+    return unwrapEden(response);
+  });
+  if (Result.isError(result)) {
+    return Result.err(result.error);
   }
+  writeDocxSuggestionsCache({
+    queryClient,
+    workspaceId,
+    entityId,
+    write: {
+      type: DOCX_SUGGESTION_CACHE_WRITE.leavePending,
+      suggestionIds,
+    },
+  });
   return Result.ok(undefined);
 };
