@@ -1,7 +1,15 @@
+import { EventType, type StreamChunk } from "@tanstack/ai";
+import { createOpenaiChat } from "@tanstack/ai-openai";
+import { resolveDebugOption } from "@tanstack/ai/adapter-internals";
 import { modelMessageToUIMessage, uiMessagesToWire } from "@tanstack/ai/client";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { expect, test } from "bun:test";
-import * as v from "valibot";
+
+import {
+  DOCX_SUGGEST_CHANGES_OPTIONS_BY_SURFACE,
+  DOCX_SUGGESTION_SURFACE,
+} from "@stll/api-contract/chat-docx-suggestions";
+import { parseSuggestChangesInput } from "@stll/folio-agents";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import {
@@ -9,56 +17,157 @@ import {
   toPersistableChatMessage,
 } from "@/api/handlers/chat/chat-message-parts";
 import { validateMessage } from "@/api/handlers/chat/chat-schema";
-import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
+import {
+  createSuggestChangesTools,
+  SUGGEST_CHANGES_TOOL_NAME,
+} from "@/api/handlers/chat/tools/folio-agent-tools";
 import { toSafeId } from "@/api/lib/branded-types";
-import type { ChatToolMap } from "@/api/lib/chat/chat-tool-types";
 
 const CALL_ID = "call_seam_suggest_changes";
-const TOOL_NAME = "suggest_changes";
 const MESSAGE_ID = toSafeId<"chatMessage">("msg_seam_suggest_changes");
 const ACCEPTED = "accepted";
 const REJECTED = "Chat continuation does not match its awaited interaction";
 const OUTPUT = { ok: true, queued: ["op-1", "op-2"] };
 
+const SURFACE = DOCX_SUGGESTION_SURFACE.fileOverlay;
+const SUGGEST_CHANGES_OPTIONS =
+  DOCX_SUGGEST_CHANGES_OPTIONS_BY_SURFACE[SURFACE];
+/** The registration the file overlay runs with, not a stand-in for it. */
+const clientTools = createSuggestChangesTools(SURFACE);
+const suggestChanges = clientTools[SUGGEST_CHANGES_TOOL_NAME];
+
 const noDbReads: SafeDb = async () => {
   throw new Error("This validation path should not read the database");
 };
 
-const clientTools = {
-  [TOOL_NAME]: {
-    name: TOOL_NAME,
-    description: "Propose document edits for review",
-    inputSchema: toTanStackToolSchema(
-      v.looseObject({
-        operations: v.array(v.looseObject({ type: v.string() })),
-      }),
-    ),
-  },
-} satisfies ChatToolMap;
+/**
+ * A call the production contract accepts. `parseSuggestChangesInput` is the
+ * parser the client executes the tool with, built from the same surface
+ * options as the registered schema, so a fixture the contract would reject
+ * fails here instead of sailing through a permissive stand-in.
+ */
+const canonicalInput = (blockIds: readonly [string, string]) => {
+  const input = {
+    operations: [
+      {
+        type: "deleteBlock",
+        blockId: blockIds[0],
+        severity: "medium",
+        area: "Profiling",
+      },
+      {
+        type: "replaceBlock",
+        blockId: blockIds[1],
+        text: "Personal data is retained for 30 days.",
+        severity: "low",
+        area: "Retention",
+        styleId: null,
+      },
+    ],
+  };
+  const parsed = parseSuggestChangesInput(input, SUGGEST_CHANGES_OPTIONS);
+  return parsed.ok
+    ? input
+    : panic(
+        `The seam fixture is not a valid ${SUGGEST_CHANGES_TOOL_NAME} call: ${parsed.error}`,
+      );
+};
+
+type ProviderToolCall = {
+  /** The provider's own text for the call, whitespace and all. */
+  arguments: string;
+  /** The adapter's parse of that text, which is what the run persists. */
+  input: unknown;
+};
 
 /**
- * The provider's own text for the call. A strict tool schema forces every
- * property into `required` and widens absent optionals with `null`, and the
- * model's whitespace and key order are its own, not `JSON.stringify`'s.
+ * Stream one tool call through the real OpenAI adapter with the real tool
+ * registered. The adapter converts the tool's schema for the provider and
+ * normalizes the reply against that conversion, so whether an absent optional
+ * comes back as `null` is decided by the production schema rather than spelled
+ * out here. (Today this schema converts non-strict, so nothing is widened and
+ * the `styleId` null above is the schema's own nullable.)
  */
-const providerArguments = (blockIds: readonly [string, string]): string =>
-  `{
-  "documentVersion": null,
-  "operations": [
-    { "severity": "medium", "type": "deleteBlock", "blockId": ${JSON.stringify(blockIds[0])},
-      "area": "Profiling", "comment": null, "moveId": null, "precondition": null },
-    { "severity": "low", "type": "deleteBlock", "blockId": ${JSON.stringify(blockIds[1])},
-      "area": "Retention", "comment": null, "moveId": null, "precondition": null }
-  ]
-}`;
+const streamProviderToolCall = async (
+  input: unknown,
+): Promise<ProviderToolCall> => {
+  const argumentsText = JSON.stringify(input, null, 2);
+  const adapter = createOpenaiChat("gpt-5.2", "test-key");
+  Reflect.set(adapter, "client", {
+    responses: {
+      create: () =>
+        (async function* () {
+          yield {
+            type: "response.created",
+            response: {
+              id: "response-1",
+              model: "gpt-5.2",
+              status: "in_progress",
+            },
+          };
+          yield {
+            type: "response.output_item.added",
+            output_index: 0,
+            item: {
+              type: "function_call",
+              id: CALL_ID,
+              name: SUGGEST_CHANGES_TOOL_NAME,
+            },
+          };
+          yield {
+            type: "response.function_call_arguments.delta",
+            item_id: CALL_ID,
+            delta: argumentsText,
+          };
+          yield {
+            type: "response.function_call_arguments.done",
+            item_id: CALL_ID,
+            arguments: argumentsText,
+          };
+          yield {
+            type: "response.completed",
+            response: {
+              id: "response-1",
+              model: "gpt-5.2",
+              status: "completed",
+              output: [
+                {
+                  type: "function_call",
+                  id: CALL_ID,
+                  name: SUGGEST_CHANGES_TOOL_NAME,
+                  arguments: argumentsText,
+                },
+              ],
+              usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 },
+            },
+          };
+        })(),
+    },
+  });
 
-const CANONICAL_BLOCK_IDS = ["b_42", "b_43"] as const;
+  const chunks: StreamChunk[] = [];
+  for await (const chunk of adapter.chatStream({
+    logger: resolveDebugOption(false),
+    messages: [{ role: "user", content: "Suggest changes." }],
+    model: adapter.model,
+    tools: [suggestChanges],
+  })) {
+    chunks.push(chunk);
+  }
+
+  for (const chunk of chunks) {
+    if (chunk.type === EventType.TOOL_CALL_END) {
+      return { arguments: argumentsText, input: chunk.input };
+    }
+  }
+  return panic("The stubbed provider stream ended without a tool call");
+};
 
 /**
  * The persisted assistant message, built the way the run builds it: the raw
  * provider text plus the adapter's parse of it, through the real v3 write path.
  */
-const persistedAssistantContent = () =>
+const persistedAssistantContent = (call: ProviderToolCall) =>
   chatMessageContentFromMessage(
     toPersistableChatMessage({
       id: MESSAGE_ID,
@@ -67,24 +176,9 @@ const persistedAssistantContent = () =>
         {
           type: "tool-call",
           id: CALL_ID,
-          name: TOOL_NAME,
-          arguments: providerArguments(CANONICAL_BLOCK_IDS),
-          input: {
-            operations: [
-              {
-                type: "deleteBlock",
-                blockId: "b_42",
-                severity: "medium",
-                area: "Profiling",
-              },
-              {
-                type: "deleteBlock",
-                blockId: "b_43",
-                severity: "low",
-                area: "Retention",
-              },
-            ],
-          },
+          name: SUGGEST_CHANGES_TOOL_NAME,
+          arguments: call.arguments,
+          input: call.input,
           state: "input-complete",
         },
       ],
@@ -97,7 +191,7 @@ const persistedAssistantContent = () =>
  * message (`modelMessageToUIMessage`, which is what the snapshot normalizer
  * delegates to for an assistant message), then `addToolResult`'s edit. The wire
  * carries only `arguments`, so the rebuilt part's `input` is a re-parse of the
- * provider's text, nulls and all: that is the seam this binds.
+ * provider's text: that is the seam this binds.
  */
 const clientContinuationParts = (rawArguments: string) => {
   const wireAnchor = uiMessagesToWire([
@@ -108,7 +202,7 @@ const clientContinuationParts = (rawArguments: string) => {
         {
           type: "tool-call",
           id: CALL_ID,
-          name: TOOL_NAME,
+          name: SUGGEST_CHANGES_TOOL_NAME,
           arguments: rawArguments,
           state: "input-complete",
         },
@@ -142,7 +236,13 @@ const clientContinuationParts = (rawArguments: string) => {
   ];
 };
 
-const continuationOutcome = async (rawArguments: string): Promise<string> => {
+const continuationOutcome = async ({
+  persisted,
+  rawArguments,
+}: {
+  persisted: ProviderToolCall;
+  rawArguments: string;
+}): Promise<string> => {
   const result = await validateMessage({
     message: {
       id: MESSAGE_ID,
@@ -151,7 +251,7 @@ const continuationOutcome = async (rawArguments: string): Promise<string> => {
     },
     persistedMessage: {
       role: "assistant",
-      content: persistedAssistantContent(),
+      content: persistedAssistantContent(persisted),
     },
     resume: [
       {
@@ -169,13 +269,26 @@ const continuationOutcome = async (rawArguments: string): Promise<string> => {
 };
 
 test("accepts the continuation the client library rebuilds from the snapshot", async () => {
+  const call = await streamProviderToolCall(canonicalInput(["b_42", "b_43"]));
+
   expect(
-    await continuationOutcome(providerArguments(CANONICAL_BLOCK_IDS)),
+    await continuationOutcome({
+      persisted: call,
+      rawArguments: call.arguments,
+    }),
   ).toBe(ACCEPTED);
 });
 
 test("rejects a continuation whose rebuilt call edits a different block", async () => {
-  expect(await continuationOutcome(providerArguments(["b_42", "b_99"]))).toBe(
-    REJECTED,
+  const call = await streamProviderToolCall(canonicalInput(["b_42", "b_43"]));
+  const drifted = await streamProviderToolCall(
+    canonicalInput(["b_42", "b_99"]),
   );
+
+  expect(
+    await continuationOutcome({
+      persisted: call,
+      rawArguments: drifted.arguments,
+    }),
+  ).toBe(REJECTED);
 });
