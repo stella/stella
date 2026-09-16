@@ -24,10 +24,10 @@ import { ViewerOverlayBar } from "@/components/inspector/viewer-overlay-bar";
 import { ZoomControls } from "@/components/inspector/zoom-controls";
 import { AnnotationToolbar } from "@/components/legal-reader/annotations/annotation-toolbar";
 import { GuestAnnotationPrompt } from "@/components/legal-reader/annotations/guest-annotation-prompt";
-import type { ReaderAnnotationTarget } from "@/components/legal-reader/annotations/reader-annotation-target";
 import { LegalReaderAIChat } from "@/components/legal-reader/legal-reader-ai-chat";
 import { OpenOriginalButton } from "@/components/legal-reader/open-original-button";
 import { useReaderTextScale } from "@/components/legal-reader/use-reader-text-scale";
+import { decisionInspectorAnnotationTarget } from "@/features/case-law/components/case-decision-inspector-view.logic";
 import { MarginNotes } from "@/features/case-law/components/case-viewer/analysis/margin-notes";
 import type { MarginItem } from "@/features/case-law/components/case-viewer/analysis/margin-notes";
 import { CitationHeader } from "@/features/case-law/components/case-viewer/citation-header";
@@ -42,10 +42,7 @@ import type {
   DecisionFactsInput,
 } from "@/features/case-law/components/case-viewer/decision-facts.logic";
 import { DecisionText } from "@/features/case-law/components/case-viewer/decision-text";
-import {
-  decisionCaseName,
-  visibleDecisionBlocks,
-} from "@/features/case-law/components/case-viewer/decision-text.logic";
+import { visibleDecisionBlocks } from "@/features/case-law/components/case-viewer/decision-text.logic";
 import { ProvisionsCited } from "@/features/case-law/components/case-viewer/provisions-cited";
 import { useDecisionAnnotationSurface } from "@/features/case-law/components/case-viewer/use-decision-annotation-surface";
 import { useDecisionCitationAnchors } from "@/features/case-law/components/case-viewer/use-decision-citation-anchors";
@@ -107,20 +104,12 @@ export const CaseDecisionInspectorView = ({
   // The same marks, store and bar the full page has. The target is addressed
   // by the tab's own decision id, so the reader's marks are already the right
   // ones before the decision itself has arrived.
-  const annotationTarget = {
-    type: "decision",
-    caseNumber: payload.caseNumber,
-    country: payload.country,
-    court: payload.court,
-    decisionDate,
-    decisionType: decision?.decisionType ?? null,
-    ecli: decision?.ecli ?? null,
-    id: decisionId,
-    name: decisionCaseName({
-      ast,
-      caseNumber: payload.caseNumber,
-    }),
-  } as const satisfies ReaderAnnotationTarget;
+  const annotationTarget = decisionInspectorAnnotationTarget({
+    ast,
+    decision,
+    decisionId,
+    payload,
+  });
   const annotations = useDecisionAnnotationSurface({
     marks: "all",
     scrollContainerRef: contentRef,

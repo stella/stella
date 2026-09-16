@@ -1,5 +1,6 @@
 import { parsePlainDate, Temporal } from "@stll/time";
 
+import { fromCaseLawCountryParam } from "@/features/case-law/case-law-jurisdiction";
 import { parseDeterministicDate } from "@/lib/deterministic-date";
 
 /**
@@ -234,4 +235,7 @@ const CITATION_FORMATTERS: Record<string, (input: CitationInput) => string> = {
 };
 
 export const formatDecisionCitation = (input: CitationInput): string =>
-  (CITATION_FORMATTERS[input.country] ?? genericCitation)(input);
+  (
+    CITATION_FORMATTERS[fromCaseLawCountryParam(input.country)] ??
+    genericCitation
+  )(input);
