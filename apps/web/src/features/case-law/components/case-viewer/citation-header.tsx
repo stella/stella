@@ -3,7 +3,9 @@ import { useNow, useTranslations } from "use-intl";
 
 import { CASE_LAW_CITATION_TIMELINE_MAX_YEARS } from "@stll/api-contract";
 import { Temporal } from "@stll/time";
+import { cn } from "@stll/ui/utils";
 
+import { VIEWER_OVERLAY_BAR_CLEARANCE } from "@/components/inspector/viewer-overlay-bar";
 import { decisionYear } from "@/features/case-law/citation-format";
 import { totalCitations } from "@/features/case-law/citation-treatment";
 import type { CitationYearCounts } from "@/features/case-law/citation-treatment";
@@ -107,7 +109,13 @@ export const CitationHeader = ({
   return (
     <div
       aria-label={summaryText}
-      className="reader-chrome text-muted-foreground mb-3 flex items-center justify-end gap-3 text-xs print:hidden"
+      className={cn(
+        "reader-chrome text-muted-foreground mb-3 flex flex-wrap items-center justify-start gap-x-3 gap-y-1 text-xs print:hidden",
+        // The zoom bar floats over this first row at the opposite corner; the
+        // row keeps that corner free at every reader width and on every scroll
+        // position, since the bar does not move with the text.
+        VIEWER_OVERLAY_BAR_CLEARANCE,
+      )}
       role="group"
     >
       <CitationYearStrip

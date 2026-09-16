@@ -137,8 +137,13 @@ export const CitationYearStrip = ({
   return (
     <svg
       aria-label={t("caseLaw.citation.stripLabel")}
-      className={cn("block shrink-0 overflow-visible", className)}
+      // The drawn width is a maximum, not a demand: a 60-year span is 359px
+      // and the surfaces that hold the strip are narrower than that. It keeps
+      // its full height when squeezed and compresses the years instead, since
+      // the counts are what the strip is read for.
+      className={cn("block max-w-full min-w-0 overflow-visible", className)}
       height={STRIP_HEIGHT}
+      preserveAspectRatio="none"
       role="img"
       viewBox={`0 0 ${String(width)} ${String(STRIP_HEIGHT)}`}
       width={width}
