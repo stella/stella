@@ -121,7 +121,10 @@ export const account = pgTable(
   "account",
   {
     id: text("id").primaryKey(),
-    issuer: text("issuer").notNull(),
+    // Better Auth wrote this from 1.7.0 to 1.7.2 and retracted it in 1.7.3.
+    // Nullable so the library can stop writing it; existing rows keep the
+    // provenance the 1.7 backfill derived.
+    issuer: text("issuer"),
     accountId: text("account_id").notNull(),
     providerId: text("provider_id").notNull(),
     userId: text("user_id")
@@ -141,8 +144,11 @@ export const account = pgTable(
   },
   (table) => [
     index("account_userId_idx").on(table.userId),
-    uniqueIndex("account_issuer_account_id_uidx").on(
-      table.issuer,
+    // One account row per external identity. This is the pair Better Auth
+    // links accounts by, so it holds the guarantee the retracted
+    // (issuer, account_id) index used to.
+    uniqueIndex("account_provider_account_id_uidx").on(
+      table.providerId,
       table.accountId,
     ),
     uniqueIndex("account_credential_singleton_uidx")

@@ -15,6 +15,8 @@ const CREDENTIAL_INDEX = "account_credential_singleton_uidx";
 const SOURCE_DOCUMENT_INDEX = "case_law_decisions_source_document_idx";
 const SOURCE_CASE_INDEX = "case_law_decisions_source_case_lang_null_idx";
 const LEGACY_SOURCE_CASE_INDEX = "case_law_decisions_source_case_lang_idx";
+const ACCOUNT_INDEX = "account_provider_account_id_uidx";
+const LEGACY_ACCOUNT_INDEX = "account_issuer_account_id_uidx";
 const FILTER_INDEX_CUTOVER = ONLINE_MIGRATION_INDEX_CUTOVERS.at(0);
 if (!FILTER_INDEX_CUTOVER) {
   throw new TypeError("Expected the filter index cutover");
@@ -149,6 +151,34 @@ describe("online migrations", () => {
     expect(dropOffset).toBeGreaterThan(
       indexOfStatement(harness.statements, SOURCE_CASE_INDEX),
     );
+  });
+
+  test("retires the account issuer index only after its replacement validates", async () => {
+    const harness = createHarness();
+
+    await runOnlineMigrations(harness.pool);
+
+    expect(
+      indexOfStatement(
+        harness.statements,
+        `DROP INDEX CONCURRENTLY IF EXISTS public."${LEGACY_ACCOUNT_INDEX}"`,
+      ),
+    ).toBeGreaterThan(indexOfStatement(harness.statements, ACCOUNT_INDEX));
+  });
+
+  test("preserves the account issuer index when its replacement is not ready", async () => {
+    const harness = createHarness({
+      indexStates: { [ACCOUNT_INDEX]: [false, false] },
+    });
+
+    const rejection: unknown = await runOnlineMigrations(harness.pool).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(rejection).toMatchObject({
+      message: `Required migration index ${ACCOUNT_INDEX} is not ready`,
+    });
+    expect(indexOfStatement(harness.statements, LEGACY_ACCOUNT_INDEX)).toBe(-1);
   });
 
   test("preserves a legacy index when a replacement is not ready", async () => {
