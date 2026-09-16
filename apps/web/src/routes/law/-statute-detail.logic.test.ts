@@ -37,6 +37,7 @@ const statute = ({
   versionValidFrom,
   versionValidTo,
 }: StatuteSeed): PublicStatute => ({
+  allowsDerivedAi: true,
   citationCaseCount: null,
   country: "CZE",
   createdAt: new Date("2026-01-01T00:00:00.000Z"),
