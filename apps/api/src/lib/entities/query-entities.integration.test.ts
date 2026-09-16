@@ -800,7 +800,9 @@ describe("work type filters", () => {
   const filterEntityIds: SafeId<"entity">[] = [];
 
   afterEach(async () => {
-    if (filterEntityIds.length === 0) return;
+    if (filterEntityIds.length === 0) {
+      return;
+    }
     await testDb.delete(entities).where(inArray(entities.id, filterEntityIds));
     filterEntityIds.length = 0;
   });

@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 
@@ -68,6 +68,10 @@ const supportedFilter = (node: ConditionNode): boolean => {
       return supportedOperand(node.left) && supportedOperand(node.right);
     case "predicate":
       return supportedOperand(node.operand);
+    default: {
+      node satisfies never;
+      return panic(`Unhandled condition node: ${String(node)}`);
+    }
   }
 };
 
@@ -77,26 +81,29 @@ export const validateEntityViewLayout = (value: unknown) => {
     catch: () =>
       new HandlerError({ status: 400, message: "Invalid view layout" }),
   });
-  if (parsed.isErr()) return parsed;
+  if (parsed.isErr()) {
+    return parsed;
+  }
   const layout = parsed.value;
-  if (layout.type !== "table" && layout.type !== "kanban")
+  if (layout.type !== "table" && layout.type !== "kanban") {
     return Result.err(
       new HandlerError({
         status: 400,
         message: "Cross-matter views support table and kanban layouts",
       }),
     );
-  const groups: readonly string[] = Object.values(ENTITY_VIEW_GROUP);
+  }
+  const groups = new Set<string>(Object.values(ENTITY_VIEW_GROUP));
   const allowedPrimary =
     layout.type === "table"
       ? groups
-      : [ENTITY_VIEW_GROUP.STATUS, ENTITY_VIEW_GROUP.KIND];
+      : new Set<string>([ENTITY_VIEW_GROUP.STATUS, ENTITY_VIEW_GROUP.KIND]);
   if (
     (layout.groupByPropertyId !== undefined &&
-      !allowedPrimary.includes(layout.groupByPropertyId)) ||
+      !allowedPrimary.has(layout.groupByPropertyId)) ||
     (layout.type === "kanban" &&
       layout.subgroupByPropertyId !== undefined &&
-      (!groups.includes(layout.subgroupByPropertyId) ||
+      (!groups.has(layout.subgroupByPropertyId) ||
         layout.subgroupByPropertyId === layout.groupByPropertyId))
   ) {
     return Result.err(
@@ -115,19 +122,21 @@ export const validateEntityViewLayout = (value: unknown) => {
       }),
     );
   }
-  const columns = Object.keys(ENTITY_VIEW_COLUMNS);
-  const sortColumns = Object.entries(ENTITY_VIEW_COLUMNS)
-    .filter(([, column]) => column.sortable)
-    .map(([id]) => id);
+  const columns = new Set(Object.keys(ENTITY_VIEW_COLUMNS));
+  const sortColumns = new Set(
+    Object.entries(ENTITY_VIEW_COLUMNS)
+      .filter(([, column]) => column.sortable)
+      .map(([id]) => id),
+  );
   if (
     layout.calculations.length > 0 ||
-    layout.sorts.some((sort) => !sortColumns.includes(sort.propertyId)) ||
+    layout.sorts.some((sort) => !sortColumns.has(sort.propertyId)) ||
     layout.hiddenProperties.some(
-      (id) => layout.type !== "table" || !columns.includes(id),
+      (id) => layout.type !== "table" || !columns.has(id),
     ) ||
     (layout.type === "table" &&
       [...layout.columnOrder, ...layout.columnPinning].some(
-        (id) => !columns.includes(id),
+        (id) => !columns.has(id),
       ))
   ) {
     return Result.err(

@@ -138,7 +138,7 @@ export const buildBudgetEdgeSchema = ({
     outputSchema: ReturnType<typeof buildBatchSchema>;
     measured: StructuredOutputMeasure;
   } | null = null;
-  let rejectedNext: BudgetEdgeSchema["rejectedNext"] | null = null;
+  let rejectedNext: BudgetEdgeSchema["rejectedNext"];
 
   for (let index = 0; ; index += 1) {
     const candidateProperties = [...properties, syntheticProperty(index)];
@@ -182,10 +182,6 @@ export const buildBudgetEdgeSchema = ({
         `(${byteCeiling} bytes); the budget-edge probe cannot build a schema.`,
     );
   }
-  if (rejectedNext === null) {
-    return panic("Budget-edge probe terminated without finding its boundary.");
-  }
-
   return {
     outputSchema: accepted.outputSchema,
     propertyCount: properties.length,

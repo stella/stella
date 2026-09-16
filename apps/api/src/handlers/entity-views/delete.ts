@@ -39,19 +39,21 @@ export default createSafeRootHandler(
             )
             .returning()
         ).at(0);
-        if (row)
+        if (row) {
           await recordAuditEvent(tx, {
             action: AUDIT_ACTION.DELETE,
             resourceType: AUDIT_RESOURCE_TYPE.VIEW,
             resourceId: row.id,
           });
+        }
         return row;
       }),
     );
-    if (!removed)
+    if (!removed) {
       return Result.err(
         new HandlerError({ status: 404, message: "View not found" }),
       );
+    }
     return Result.ok({});
   },
 );

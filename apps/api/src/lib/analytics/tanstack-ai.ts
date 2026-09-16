@@ -1,7 +1,8 @@
-import type {
-  ChatMiddleware,
-  ChatMiddlewareContext,
-  TokenUsage,
+import {
+  EventType,
+  type ChatMiddleware,
+  type ChatMiddlewareContext,
+  type TokenUsage,
 } from "@tanstack/ai";
 import { Result } from "better-result";
 
@@ -429,12 +430,13 @@ export const createTanStackAIAnalyticsCallbacks = ({
     // status this code does not map from a failure that carried none at all;
     // without it an `unknown` kind is indistinguishable between the two.
     const kind = classifyAIError(error);
+    const finishReason = context?.run?.finishReason;
     const attributes = {
       "error.type": errorTag(error),
       "ai.error_kind": kind,
       "ai.feature": config.feature,
-      ...(context?.run?.finishReason != null
-        ? { "ai.finish_reason": context.run.finishReason }
+      ...(typeof finishReason === "string"
+        ? { "ai.finish_reason": finishReason }
         : {}),
       ...(context?.run?.outputTokens !== undefined
         ? { "ai.output_tokens": context.run.outputTokens }
@@ -568,7 +570,7 @@ export const createTanStackAIAnalyticsCallbacks = ({
         run.outputTokens = undefined;
       },
       onChunk: (ctx, chunk) => {
-        if (chunk.type === "RUN_FINISHED") {
+        if (chunk.type === EventType.RUN_FINISHED) {
           runState(ctx).finishReason = finishReasonOf(chunk);
         }
       },

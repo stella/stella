@@ -31,7 +31,9 @@ export default createSafeRootHandler(
       body.layout === undefined
         ? Result.ok(undefined)
         : validateEntityViewLayout(body.layout);
-    if (layout.isErr()) return Result.err(layout.error);
+    if (layout.isErr()) {
+      return Result.err(layout.error);
+    }
     const row = yield* Result.await(
       safeDb(async (tx) => {
         const where = and(
@@ -49,7 +51,9 @@ export default createSafeRootHandler(
             .limit(1)
             .for("update")
         ).at(0);
-        if (!before) return null;
+        if (!before) {
+          return null;
+        }
         const updated = (
           await tx
             .update(entityViews)
@@ -61,7 +65,9 @@ export default createSafeRootHandler(
             .where(where)
             .returning()
         ).at(0);
-        if (!updated) return panic("Locked view update returned no row");
+        if (!updated) {
+          return panic("Locked view update returned no row");
+        }
         await recordAuditEvent(tx, {
           action: AUDIT_ACTION.UPDATE,
           resourceType: AUDIT_RESOURCE_TYPE.VIEW,
@@ -74,10 +80,11 @@ export default createSafeRootHandler(
         return updated;
       }),
     );
-    if (!row)
+    if (!row) {
       return Result.err(
         new HandlerError({ status: 404, message: "View not found" }),
       );
+    }
     return Result.ok(response(row));
   },
 );

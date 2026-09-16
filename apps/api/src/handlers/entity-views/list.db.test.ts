@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { inArray } from "drizzle-orm";
 import { ElysiaCustomStatusResponse } from "elysia/error";
@@ -87,7 +88,7 @@ describe("entity view owner isolation", () => {
     const result = await listViews.handler(contextFor(ids.orgA, ids.userA1));
     expect(result).not.toBeInstanceOf(ElysiaCustomStatusResponse);
     if (result instanceof ElysiaCustomStatusResponse) {
-      return expect.unreachable("Expected the entity view list");
+      panic("Expected the entity view list");
     }
     expect(result.items.map((view) => view.name)).toEqual(["A private"]);
   });

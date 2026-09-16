@@ -28,10 +28,11 @@ export default createSafeRootHandler(
     user,
     recordAuditEvent,
   }) {
-    if (new Set(viewIds).size !== viewIds.length)
+    if (new Set(viewIds).size !== viewIds.length) {
       return Result.err(
         new HandlerError({ status: 400, message: "Duplicate view IDs" }),
       );
+    }
     const changed = yield* Result.await(
       safeDb(async (tx) => {
         await tx.execute(
@@ -50,8 +51,9 @@ export default createSafeRootHandler(
         if (
           existing.length !== viewIds.length ||
           viewIds.some((id) => !ids.has(id))
-        )
+        ) {
           return false;
+        }
         await tx
           .update(entityViews)
           .set({
@@ -65,26 +67,34 @@ export default createSafeRootHandler(
             updatedAt: new Date(),
           })
           .where(where);
-        for (const row of existing) {
-          const next = viewIds.indexOf(row.id);
-          if (next !== row.position)
-            await recordAuditEvent(tx, {
-              action: AUDIT_ACTION.UPDATE,
-              resourceType: AUDIT_RESOURCE_TYPE.VIEW,
-              resourceId: row.id,
-              changes: { position: { old: row.position, new: next } },
-            });
-        }
+        await recordAuditEvent(
+          tx,
+          existing.flatMap((row) => {
+            const next = viewIds.indexOf(row.id);
+            if (next === row.position) {
+              return [];
+            }
+            return [
+              {
+                action: AUDIT_ACTION.UPDATE,
+                resourceType: AUDIT_RESOURCE_TYPE.VIEW,
+                resourceId: row.id,
+                changes: { position: { old: row.position, new: next } },
+              },
+            ];
+          }),
+        );
         return true;
       }),
     );
-    if (!changed)
+    if (!changed) {
       return Result.err(
         new HandlerError({
           status: 400,
           message: "Supply every saved view exactly once",
         }),
       );
+    }
     return Result.ok({});
   },
 );

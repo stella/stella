@@ -826,8 +826,8 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
             );
             break;
           default: {
-            const exhaustive: never = boundary;
-            throw new Error(`Unexpected boundary: ${exhaustive}`);
+            boundary satisfies never;
+            throw new Error("Unexpected analytics boundary");
           }
         }
         await callbacks.middleware.onError?.(truncated, {
@@ -927,7 +927,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
     } satisfies AnyTextAdapter;
 
     try {
-      await expect(
+      expect(
         generateChatObject({
           adapter,
           messages: [{ role: "user", content: "Return JSON" }],

@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import {
   afterAll,
   beforeAll,
@@ -67,7 +68,9 @@ const readScope = async ({
       inArray(entities.id, [ids.entityA1, ids.entityA2, ids.entityB1]),
     ],
   });
-  if (result.isErr()) throw result.error;
+  if (result.isErr()) {
+    throw result.error;
+  }
   return result.value;
 };
 
@@ -77,8 +80,9 @@ describe("canonical entity query scope", () => {
       scope: { type: "organization", organizationId: ids.orgA },
     });
     const matterPages = await Promise.all(
-      [ids.wsA1, ids.wsA2].map((workspaceId) =>
-        readScope({ scope: { type: "matter", workspaceId } }),
+      [ids.wsA1, ids.wsA2].map(
+        async (workspaceId) =>
+          await readScope({ scope: { type: "matter", workspaceId } }),
       ),
     );
     const expected = matterPages.flatMap((page) => page.entities);
@@ -90,8 +94,9 @@ describe("canonical entity query scope", () => {
         ({ entityId }) => entityId === row.entityId,
       );
       expect(expectedRow).toBeDefined();
-      if (!expectedRow)
-        return expect.unreachable("Expected matching matter row");
+      if (!expectedRow) {
+        panic("Expected matching matter row");
+      }
       expect(row).toEqual(expectedRow);
       expect(row.workspaceName.length).toBeGreaterThan(0);
       expect(row.fields.length).toBeGreaterThan(0);
@@ -114,10 +119,13 @@ describe("canonical entity query scope", () => {
     const whole = await readScope({ scope });
     const first = await readScope({ scope, limit: 1 });
     const boundary = first.entities.at(0);
-    if (!boundary) return expect.unreachable("Expected a first entity");
+    if (!boundary) {
+      panic("Expected a first entity");
+    }
     const cursor = first.cursorValuesByEntityId.get(boundary.entityId);
-    if (!cursor)
-      return expect.unreachable("Expected a cursor for the first entity");
+    if (!cursor) {
+      panic("Expected a cursor for the first entity");
+    }
     const second = await readScope({ scope, cursor, limit: 1 });
     expect(
       [...first.entities, ...second.entities].map(({ entityId }) => entityId),

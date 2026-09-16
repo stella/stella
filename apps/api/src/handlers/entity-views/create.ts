@@ -27,7 +27,9 @@ export default createSafeRootHandler(
   config,
   async function* ({ body, safeDb, session, user, recordAuditEvent }) {
     const layout = validateEntityViewLayout(body.layout);
-    if (layout.isErr()) return Result.err(layout.error);
+    if (layout.isErr()) {
+      return Result.err(layout.error);
+    }
     const created = yield* Result.await(
       safeDb(async (tx) => {
         // Serialize the bounded list and insertion across tabs and API replicas.
@@ -44,7 +46,13 @@ export default createSafeRootHandler(
             }),
           )
           .limit(LIMITS.viewsCount);
-        if (existing.length >= LIMITS.viewsCount) return null;
+        if (existing.length >= LIMITS.viewsCount) {
+          return null;
+        }
+        let highestPosition = -1;
+        for (const view of existing) {
+          highestPosition = Math.max(highestPosition, view.position);
+        }
         const rows = await tx
           .insert(entityViews)
           .values({
@@ -52,9 +60,7 @@ export default createSafeRootHandler(
             userId: user.id,
             name: body.name.trim(),
             layout: layout.value,
-            position:
-              existing.reduce((max, view) => Math.max(max, view.position), -1) +
-              1,
+            position: highestPosition + 1,
           })
           .returning();
         const row = rows.at(0) ?? panic("View insert returned no row");
@@ -67,10 +73,11 @@ export default createSafeRootHandler(
         return row;
       }),
     );
-    if (!created)
+    if (!created) {
       return Result.err(
         new HandlerError({ status: 400, message: "Views limit reached" }),
       );
+    }
     return Result.ok(response(created));
   },
 );
