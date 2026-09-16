@@ -1,6 +1,8 @@
 import { Result, panic } from "better-result";
 import { and, eq, inArray, isNull, lt, notInArray, or, sql } from "drizzle-orm";
 
+import { isCaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
+
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
@@ -100,7 +102,6 @@ import {
   writeCorpusDocument,
 } from "@/api/lib/legal-search/corpus-storage";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
-import { isCaseLawJurisdiction } from "@/api/lib/legal-search/ingestion-constants";
 import {
   partialObservationFromMetadata,
   sanitizeResult,

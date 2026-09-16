@@ -1,4 +1,4 @@
-import type { ProvisionReference } from "@/features/case-law/provision-label";
+import type { ProvisionReference } from "@stll/legal-ast/provision-reference";
 
 export type ProvisionRow = ProvisionReference & {
   anchor: string;

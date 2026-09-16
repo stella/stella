@@ -1,5 +1,7 @@
 import { panic } from "better-result";
 
+import type { CaseLawJurisdiction } from "./case-law-jurisdictions";
+
 /** A normalized docket accepted by one jurisdiction's declared grammar. */
 export type ParsedDecisionDocket<TJurisdiction extends string = string> = {
   readonly jurisdiction: TJurisdiction;
@@ -143,7 +145,11 @@ export const DECISION_DOCKET_GRAMMARS = {
     jurisdiction: "SVK",
     patterns: SVK_DOCKET_PATTERNS,
   }),
-} as const;
+} as const satisfies {
+  readonly [
+    TJurisdiction in CaseLawJurisdiction
+  ]: DecisionDocketGrammarFor<TJurisdiction>;
+};
 
 export type DecisionDocketJurisdiction = keyof typeof DECISION_DOCKET_GRAMMARS;
 export type DecisionDocketGrammar =

@@ -1,9 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
-import type {
-  ProvisionReference,
-  RenderProvisionPart,
-} from "@/features/case-law/provision-label";
+import type { ProvisionReference } from "@stll/legal-ast/provision-reference";
+
+import type { RenderProvisionPart } from "@/features/case-law/provision-label";
 import { formatProvisionReference } from "@/features/case-law/provision-label";
 
 // Stands in for the catalog, in the Czech wording the example citation uses.

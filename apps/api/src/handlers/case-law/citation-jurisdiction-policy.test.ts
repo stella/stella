@@ -1,12 +1,13 @@
 import { expect, test } from "bun:test";
 
+import { CASE_LAW_JURISDICTIONS } from "@stll/api-contract/case-law-jurisdictions";
+
 import {
   CITATION_RESOLUTION_JURISDICTION_POLICY,
   citationResolutionPolicyRows,
   resolvableJurisdictionsFrom,
 } from "@/api/handlers/case-law/citation-jurisdiction-policy";
 import { listAdapters } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
-import { CASE_LAW_JURISDICTIONS } from "@/api/lib/legal-search/ingestion-constants";
 
 /**
  * The policy map is total over `CaseLawJurisdiction` by construction, so a

@@ -352,6 +352,7 @@
         "@stll/folio-core": "catalog:",
         "@stll/folio-react": "catalog:",
         "@stll/legal-ast": "workspace:*",
+        "@stll/legal-atlas": "workspace:*",
         "@stll/locales": "workspace:*",
         "@stll/money": "workspace:*",
         "@stll/permissions": "workspace:*",
@@ -784,6 +785,7 @@
       "name": "@stll/legal-atlas",
       "version": "0.0.0",
       "dependencies": {
+        "@stll/api-contract": "workspace:*",
         "@stll/legal-ast": "workspace:*",
         "better-result": "catalog:",
       },

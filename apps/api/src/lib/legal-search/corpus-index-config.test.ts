@@ -1,5 +1,10 @@
 import { expect, test } from "bun:test";
 
+import {
+  CASE_LAW_JURISDICTIONS,
+  type CaseLawJurisdiction,
+} from "@stll/api-contract/case-law-jurisdictions";
+
 import { CASE_LAW_INDEX_GROUPS } from "@/api/lib/legal-search/case-law-index-groups";
 import {
   caseLawIndexConfig,
@@ -9,10 +14,6 @@ import {
   DECISION_TIMESTAMP_FIELD,
   TAG_FIELD_VALUE_LIMIT,
 } from "@/api/lib/legal-search/corpus-index-config";
-import {
-  CASE_LAW_JURISDICTIONS,
-  type CaseLawJurisdiction,
-} from "@/api/lib/legal-search/ingestion-constants";
 
 test("searchable text fields enable fieldnorms so BM25 scoring works", () => {
   const fields = new Map(

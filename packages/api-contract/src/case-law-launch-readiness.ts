@@ -1,10 +1,16 @@
 import { panic } from "better-result";
 import * as v from "valibot";
 
+import type { CaseLawJurisdiction } from "./case-law-jurisdictions";
 import launchReadiness from "./launch-readiness.json" with { type: "json" };
 
 /** Countries the public case-law browser has a complete routing/display model for. */
-export const CASE_LAW_BROWSER_COUNTRIES = ["CZE", "EU", "POL", "SVK"] as const;
+export const CASE_LAW_BROWSER_COUNTRIES = [
+  "CZE",
+  "EU",
+  "POL",
+  "SVK",
+] as const satisfies readonly CaseLawJurisdiction[];
 
 export type CaseLawBrowserCountry = (typeof CASE_LAW_BROWSER_COUNTRIES)[number];
 

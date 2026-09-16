@@ -63,6 +63,10 @@
       "types": "./src/provision-preview.ts",
       "import": "./src/provision-preview.ts"
     },
+    "./provision-reference": {
+      "types": "./src/provision-reference.ts",
+      "import": "./src/provision-reference.ts"
+    },
     "./statute-ast": {
       "types": "./src/statute-ast.ts",
       "import": "./src/statute-ast.ts"

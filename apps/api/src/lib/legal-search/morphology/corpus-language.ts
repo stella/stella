@@ -1,7 +1,8 @@
 import {
   isCaseLawJurisdiction,
   type CaseLawJurisdiction,
-} from "@/api/lib/legal-search/ingestion-constants";
+} from "@stll/api-contract/case-law-jurisdictions";
+
 import {
   MORPHOLOGY_LANGUAGES,
   type MorphologyLanguage,

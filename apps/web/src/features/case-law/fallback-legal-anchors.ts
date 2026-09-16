@@ -1,19 +1,20 @@
 import { hasBlockInlines } from "@stll/legal-ast/document-ast";
 import type { Block } from "@stll/legal-ast/document-ast";
+import { locateGazetteCitations } from "@stll/legal-atlas/provision-citation-grammars";
+import type {
+  LocatedGazetteCitation,
+  LocatedProvisionCitation,
+  SupportedProvisionCitationGrammar,
+} from "@stll/legal-atlas/provision-citation-grammars";
 
 import { inlinesToPlainText } from "@/components/legal-reader/document-ast-text";
 
-const CZECH_STATUTE_CITATION =
-  /(?<![\p{L}\p{N}])(?:č\.\s*)?(?<number>\d{1,5})\/(?<year>\d{4})\s+Sb\.(?!\s*(?:m\.\s*s\.|NSS|rozh\.))/giu;
 const CJEU_CASE_NUMBER =
   /(?<![\p{L}\p{N}])(?<caseNumber>[CTF]\s{0,3}[-‑–—­]\s{0,3}\d{1,4}\/\d{2})(?!\d)/gu;
 
-export type CzechStatuteCitationAnchor = {
+export type StatuteCitationAnchor = LocatedGazetteCitation & {
   blockId: string;
-  eli: string;
-  end: number;
   id: string;
-  start: number;
 };
 
 export type ExternalDecisionCitationAnchor = {
@@ -22,6 +23,45 @@ export type ExternalDecisionCitationAnchor = {
   href: string;
   id: string;
   start: number;
+};
+
+export type AbbreviatedProvisionCitation = LocatedProvisionCitation & {
+  blockId: string;
+  id: string;
+  sentenceText: string;
+  spanStart: number;
+};
+
+/**
+ * Provision references whose work is named by an abbreviation of the citing
+ * court's jurisdiction. The grammar is the authority; this locator only walks
+ * the blocks.
+ */
+export const locateAbbreviatedProvisionCitations = (
+  blocks: readonly Block[],
+  grammar: SupportedProvisionCitationGrammar,
+): AbbreviatedProvisionCitation[] => {
+  const citations: AbbreviatedProvisionCitation[] = [];
+  let documentOffset = 0;
+
+  for (const block of blocks) {
+    if (!hasBlockInlines(block)) {
+      continue;
+    }
+    const text = inlinesToPlainText(block.inlines);
+
+    for (const citation of grammar.locateAbbreviatedProvisions(text)) {
+      citations.push({
+        ...citation,
+        blockId: block.id,
+        id: `${block.id}:abbreviated-provision:${String(citation.start)}`,
+        sentenceText: text,
+        spanStart: documentOffset + citation.start,
+      });
+    }
+    documentOffset += text.length + 1;
+  }
+  return citations;
 };
 
 const CJEU_DASH_CHARACTERS = "-‑–—­";
@@ -34,34 +74,24 @@ const normalizeCjeuCaseNumber = (value: string): string =>
     return character.trim() === "" ? "" : character;
   }).join("");
 
-/** Bare Czech Collection citations, whether or not a provision precedes them. */
-export const locateCzechStatuteCitations = (
+/**
+ * Works cited by gazette number, whether or not a provision precedes them.
+ * The gazette names the work's jurisdiction, so every grammar reads them.
+ */
+export const locateStatuteCitations = (
   blocks: readonly Block[],
-): CzechStatuteCitationAnchor[] => {
-  const anchors: CzechStatuteCitationAnchor[] = [];
+): StatuteCitationAnchor[] => {
+  const anchors: StatuteCitationAnchor[] = [];
   for (const block of blocks) {
     if (!hasBlockInlines(block)) {
       continue;
     }
     const text = inlinesToPlainText(block.inlines);
-    CZECH_STATUTE_CITATION.lastIndex = 0;
-    for (
-      let match = CZECH_STATUTE_CITATION.exec(text);
-      match !== null;
-      match = CZECH_STATUTE_CITATION.exec(text)
-    ) {
-      const number = match.groups?.["number"];
-      const year = match.groups?.["year"];
-      if (number === undefined || year === undefined) {
-        continue;
-      }
-      const eli = `https://www.e-sbirka.cz/eli/cz/sb/${year}/${number}`;
+    for (const citation of locateGazetteCitations(text)) {
       anchors.push({
+        ...citation,
         blockId: block.id,
-        eli,
-        end: match.index + match[0].length,
-        id: `${block.id}:statute:${String(match.index)}`,
-        start: match.index,
+        id: `${block.id}:statute:${String(citation.start)}`,
       });
     }
   }

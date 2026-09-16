@@ -83,10 +83,12 @@ export const CaseDecisionInspectorView = ({
   } = useQuery(decisionOptions(decisionId));
   const decisionDate = decision?.decisionDate ?? null;
   const ast = parseDocumentAst(decision?.documentAst);
-  const provisionAnchors = useDecisionProvisionAnchors(
+  const provisionAnchors = useDecisionProvisionAnchors({
+    blocks: visibleDecisionBlocks(ast),
+    country: decision?.country ?? null,
     decisionId,
     decisionDate,
-  );
+  });
   const statuteCitationAnchors = useDecisionStatuteCitationAnchors(
     visibleDecisionBlocks(ast),
     decisionDate,

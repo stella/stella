@@ -1,16 +1,18 @@
 import { hasBlockInlines } from "@stll/legal-ast/document-ast";
 import type { Block } from "@stll/legal-ast/document-ast";
+import type { ProvisionReference } from "@stll/legal-ast/provision-reference";
 import { dropOverlappingSpans } from "@stll/legal-ast/text-spans";
 import { escapeRegExp } from "@stll/text-normalize";
 
 import { inlinesToPlainText } from "@/components/legal-reader/document-ast-text";
-import type { ProvisionReference } from "@/features/case-law/provision-label";
 
 /**
  * A provision reference to locate: the sentence the extractor read it from
  * and the reference itself. `id` keys the rendered anchor.
  */
 export type ProvisionAnchorSource<T = unknown> = {
+  /** Exact rendered span when a local parser located this occurrence. */
+  exactSpan?: { blockId: string; end: number; start: number } | undefined;
   id: string;
   reference: Pick<
     ProvisionReference,
@@ -121,6 +123,20 @@ export const locateProvisionAnchors = <T>({
     (left, right) => left.spanStart - right.spanStart,
   );
   for (const source of orderedProvisions) {
+    if (source.exactSpan !== undefined) {
+      const spans = hitsByBlock.get(source.exactSpan.blockId);
+      const span = {
+        end: source.exactSpan.end,
+        source,
+        start: source.exactSpan.start,
+      };
+      if (spans === undefined) {
+        hitsByBlock.set(source.exactSpan.blockId, [span]);
+      } else {
+        spans.push(span);
+      }
+      continue;
+    }
     const head = sentenceHeadPattern(source.sentenceText);
     if (head === null) {
       continue;

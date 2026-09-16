@@ -14,6 +14,8 @@ import { panic } from "better-result";
 import type { SQL } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 
+import { isCaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
+
 import {
   lockCitationGraph,
   reopenCitationsForDecisionKey,
@@ -24,7 +26,6 @@ import {
 import type { SafeId } from "@/api/lib/branded-types";
 import { canonicalDecisionDate } from "@/api/lib/dates";
 import { decisionDateOutOfBoundsSql } from "@/api/lib/decision-date-bounds-sql";
-import { isCaseLawJurisdiction } from "@/api/lib/legal-search/ingestion-constants";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 import { isRecord } from "@/api/lib/type-guards";
 

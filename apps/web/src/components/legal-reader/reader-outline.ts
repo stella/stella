@@ -1,4 +1,5 @@
 import type { Block, HeadingBlock } from "@stll/legal-ast/document-ast";
+import type { ProvisionUnit } from "@stll/legal-ast/provision-reference";
 import type { OutlineItem } from "@stll/ui/outline-rail";
 
 import { inlinesToPlainText } from "@/components/legal-reader/document-ast-text";
@@ -135,10 +136,7 @@ export const outlineFromHeadings = (
 export const PROVISION_UNITS = {
   article: "article",
   section: "section",
-} as const;
-
-export type ProvisionUnit =
-  (typeof PROVISION_UNITS)[keyof typeof PROVISION_UNITS];
+} as const satisfies Record<ProvisionUnit, ProvisionUnit>;
 
 export type ProvisionDesignation = {
   /** The designation as the document prints it (`§`, `Čl.`, `Art.`). */
