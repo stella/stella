@@ -18,6 +18,7 @@ import {
   MCP_OAUTH_PROTOCOL_SCOPES,
 } from "@stll/api-contract";
 
+import { buildOAuthClientRegistrationRequest } from "@/api/lib/mcp-upstream/oauth";
 import { MCP_OAUTH_SCOPES } from "@/api/mcp/constants";
 
 /** A registration body the server must accept, labelled by its client. */
@@ -149,20 +150,17 @@ export const OAUTH_CLIENT_REGISTRATION_FIXTURES = {
     },
   },
   stellaUpstreamConnector: {
-    // apps/api/src/lib/mcp-upstream/oauth.ts `registerOAuthClient`: what stella
-    // sends when it is the client registering against another server.
+    // Built by the producer, not copied from it: this is the body
+    // `registerOAuthClient` posts when stella is the client registering
+    // against another server, so a change there moves the census with it.
     client: "stella upstream MCP connector",
     origin: "repository",
-    body: {
-      client_name: "stella",
-      client_uri: "https://app.example.com",
-      grant_types: ["authorization_code", "refresh_token"],
-      redirect_uris: ["https://app.example.com/api/mcp-upstream/callback"],
-      response_types: ["code"],
-      scope: "openid profile offline_access",
-      software_id: "stella-example-connector",
-      token_endpoint_auth_method: "none",
-    },
+    body: buildOAuthClientRegistrationRequest({
+      clientUri: "https://app.example.com",
+      connectorSlug: "example-connector",
+      redirectUri: "https://app.example.com/api/mcp-upstream/callback",
+      requestedScopes: ["openid", "profile", "offline_access"],
+    }),
   },
   microsoftEnterpriseTokenStore: {
     /**

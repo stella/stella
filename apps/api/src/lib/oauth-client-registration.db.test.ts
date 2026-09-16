@@ -54,7 +54,7 @@ const registrationErrorSchema = v.looseObject({ error: v.string() });
  * rather than the requested subset, and `contacts` because an empty array is
  * normalized away.
  */
-const ECHOED_METADATA_FIELDS = [
+const ECHOED_METADATA_FIELDS: ReadonlySet<string> = new Set([
   "application_type",
   "client_name",
   "client_uri",
@@ -67,7 +67,7 @@ const ECHOED_METADATA_FIELDS = [
   "software_version",
   "token_endpoint_auth_method",
   "tos_uri",
-] as const;
+]);
 
 const acceptanceCases = Object.values(OAUTH_CLIENT_REGISTRATION_FIXTURES).map(
   (fixture) => [`${fixture.client} [${fixture.origin}]`, fixture] as const,
@@ -87,12 +87,15 @@ describe("OAuth dynamic client registration", () => {
       await response.json(),
     );
 
-    for (const field of ECHOED_METADATA_FIELDS) {
-      if (!(field in fixture.body)) {
-        continue;
-      }
+    const echoed = Object.entries(fixture.body).filter(([field]) =>
+      ECHOED_METADATA_FIELDS.has(field),
+    );
+    // A fixture that echoes nothing would assert nothing.
+    expect(echoed.length).toBeGreaterThan(0);
+
+    for (const [field, sent] of echoed) {
       expect(registered[field], `${fixture.client} altered ${field}`).toEqual(
-        fixture.body[field],
+        sent,
       );
     }
   });
@@ -132,8 +135,8 @@ describe("OAuth dynamic client registration", () => {
     }
     // Registered-but-unmodelled metadata is kept, so "ignore the unknown" did
     // not become "drop everything the core schema does not map".
-    expect(registered.software_id).toBe(body.software_id);
-    expect(registered.software_version).toBe(body.software_version);
+    expect(registered["software_id"]).toBe(body.software_id);
+    expect(registered["software_version"]).toBe(body.software_version);
   });
 
   test("issues a client secret to a registrar that states no auth method", async () => {
