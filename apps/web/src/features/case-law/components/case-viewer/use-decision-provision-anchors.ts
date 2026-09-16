@@ -21,6 +21,7 @@ import {
   versionCoversDate,
 } from "@/features/case-law/statute-version";
 import { useProvisionPartRenderer } from "@/features/case-law/use-provision-part-renderer";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { optionalArray } from "@/lib/arrays";
 import { decisionDateToIso } from "@/lib/decision-date";
@@ -44,33 +45,33 @@ type UseDecisionProvisionAnchorsOptions = {
   decisionId: SafeId<"caseLawDecision">;
 };
 
-const REPORTED_UNDECLARED_COUNTRIES = new Set<string>();
-
 /**
  * The grammar of the citing court, or null where its citations read as text.
  * A decision row is history and may carry a code no jurisdiction declares;
- * that is reported once per session rather than parsed by another country's
- * grammar.
+ * such a code is reported when it is first seen rather than parsed by
+ * another country's grammar.
  */
-const citingProvisionCitationGrammar = (
+const useCitingProvisionCitationGrammar = (
   country: string | null,
 ): SupportedProvisionCitationGrammar | null => {
-  if (country === null) {
-    return null;
-  }
-  if (!isCaseLawJurisdiction(country)) {
-    if (!REPORTED_UNDECLARED_COUNTRIES.has(country)) {
-      REPORTED_UNDECLARED_COUNTRIES.add(country);
-      getAnalytics().captureError(
-        new ClientTelemetryError({
-          area: "case-law-provision-grammar",
-          message: `[Case-law provision grammar] Undeclared jurisdiction ${country}`,
-        }),
-      );
+  const declared =
+    country !== null && isCaseLawJurisdiction(country) ? country : null;
+  const undeclared = declared === null ? country : null;
+  useExternalSyncEffect(() => {
+    if (undeclared === null) {
+      return;
     }
+    getAnalytics().captureError(
+      new ClientTelemetryError({
+        area: "case-law-provision-grammar",
+        message: `[Case-law provision grammar] Undeclared jurisdiction ${undeclared}`,
+      }),
+    );
+  }, [undeclared]);
+  if (declared === null) {
     return null;
   }
-  const grammar = PROVISION_CITATION_GRAMMARS[country];
+  const grammar = PROVISION_CITATION_GRAMMARS[declared];
   return grammar.status === "supported" ? grammar : null;
 };
 
@@ -115,7 +116,7 @@ export const useDecisionProvisionAnchors = ({
     ),
   );
 
-  const grammar = citingProvisionCitationGrammar(country);
+  const grammar = useCitingProvisionCitationGrammar(country);
   const fallbackReferences =
     grammar === null
       ? []
