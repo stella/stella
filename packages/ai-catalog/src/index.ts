@@ -151,6 +151,24 @@ export const FIRST_PARTY_MODEL_PROVIDERS: Exclude<
   : never = FIRST_PARTY_MODEL_PROVIDER_VALUES;
 
 /**
+ * Provider IDs for the GPT-5.6 family. OpenAI exposes Sol through the
+ * `gpt-5.6` alias while OpenRouter uses the explicit `gpt-5.6-sol` ID. Keep
+ * both routes in one row so adding a family member cannot update one picker
+ * and silently omit the other.
+ */
+const GPT_56_MODEL_IDS = {
+  sol: { openai: "gpt-5.6", openrouter: "openai/gpt-5.6-sol" },
+  terra: { openai: "gpt-5.6-terra", openrouter: "openai/gpt-5.6-terra" },
+  luna: { openai: "gpt-5.6-luna", openrouter: "openai/gpt-5.6-luna" },
+} as const;
+const GPT_56_OPENAI_MODEL_IDS = Object.values(GPT_56_MODEL_IDS).map(
+  ({ openai }) => openai,
+);
+const GPT_56_OPENROUTER_MODEL_IDS = Object.values(GPT_56_MODEL_IDS).map(
+  ({ openrouter }) => openrouter,
+);
+
+/**
  * Per-role default model IDs for the BYOK-capable cloud providers.
  * Shared between the instance default table (`DEFAULT_MODELS`) and the
  * settings-UI default selection, so a default is defined exactly once.
@@ -163,10 +181,10 @@ export const BYOK_DEFAULT_MODELS = {
     pdf: "gemini-3.7-flash",
   },
   openrouter: {
-    fast: "openai/gpt-5.6-luna",
-    chat: "openai/gpt-5.6-terra",
-    reasoning: "openai/gpt-5.6-terra",
-    pdf: "openai/gpt-5.6-terra",
+    fast: GPT_56_MODEL_IDS.luna.openrouter,
+    chat: GPT_56_MODEL_IDS.terra.openrouter,
+    reasoning: GPT_56_MODEL_IDS.terra.openrouter,
+    pdf: GPT_56_MODEL_IDS.terra.openrouter,
   },
   openai: {
     fast: "gpt-5.4-nano",
@@ -254,9 +272,7 @@ export const BYOK_MODEL_OPTIONS = {
   ],
   openai: [
     "gpt-6-astra",
-    "gpt-5.6",
-    "gpt-5.6-terra",
-    "gpt-5.6-luna",
+    ...GPT_56_OPENAI_MODEL_IDS,
     "gpt-5.5",
     "gpt-5.4",
     "gpt-5.4-mini",
@@ -265,8 +281,7 @@ export const BYOK_MODEL_OPTIONS = {
   ],
   openrouter: [
     "openai/gpt-6-astra",
-    "openai/gpt-5.6-luna",
-    "openai/gpt-5.6-terra",
+    ...GPT_56_OPENROUTER_MODEL_IDS,
     "google/gemini-3.8-flash",
     "google/gemini-3.7-flash",
     "google/gemini-3.6-flash",
@@ -394,9 +409,18 @@ export const MODEL_DISPLAY_METADATA = {
   "gpt-6-astra": { displayName: "GPT-6 Astra", iconProvider: "openai" },
   // `gpt-5.6` is OpenAI's alias for the Sol model. Keep the API alias as the
   // canonical ID while exposing the family member's product name in pickers.
-  "gpt-5.6": { displayName: "GPT-5.6 Sol", iconProvider: "openai" },
-  "gpt-5.6-terra": { displayName: "GPT-5.6 Terra", iconProvider: "openai" },
-  "gpt-5.6-luna": { displayName: "GPT-5.6 Luna", iconProvider: "openai" },
+  [GPT_56_MODEL_IDS.sol.openai]: {
+    displayName: "GPT-5.6 Sol",
+    iconProvider: "openai",
+  },
+  [GPT_56_MODEL_IDS.terra.openai]: {
+    displayName: "GPT-5.6 Terra",
+    iconProvider: "openai",
+  },
+  [GPT_56_MODEL_IDS.luna.openai]: {
+    displayName: "GPT-5.6 Luna",
+    iconProvider: "openai",
+  },
   "gpt-5.5": { displayName: "GPT-5.5", iconProvider: "openai" },
   "gpt-5.4": { displayName: "GPT-5.4", iconProvider: "openai" },
   "gpt-5.4-mini": {
@@ -412,11 +436,15 @@ export const MODEL_DISPLAY_METADATA = {
     displayName: "GPT-6 Astra",
     iconProvider: "openai",
   },
-  "openai/gpt-5.6-luna": {
+  [GPT_56_MODEL_IDS.sol.openrouter]: {
+    displayName: "GPT-5.6 Sol",
+    iconProvider: "openai",
+  },
+  [GPT_56_MODEL_IDS.luna.openrouter]: {
     displayName: "GPT-5.6 Luna",
     iconProvider: "openai",
   },
-  "openai/gpt-5.6-terra": {
+  [GPT_56_MODEL_IDS.terra.openrouter]: {
     displayName: "GPT-5.6 Terra",
     iconProvider: "openai",
   },
@@ -992,6 +1020,7 @@ export const CONTEXT_WINDOW_TOKENS = {
   "anthropic/claude-opus-4.8": 200_000,
   "anthropic/claude-sonnet-4.6": 200_000,
   "openai/gpt-6-astra": 922_000,
+  "openai/gpt-5.6-sol": 922_000,
   "openai/gpt-5.6-luna": 922_000,
   "openai/gpt-5.6-terra": 922_000,
   "openai/gpt-5.5": 400_000,
