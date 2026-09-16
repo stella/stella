@@ -18567,7 +18567,7 @@
       "version": "1.1.4"
     },
     {
-      "bom-ref": "pkg:cargo/rustls@0.23.43",
+      "bom-ref": "pkg:cargo/rustls@0.23.45",
       "evidence": {
         "identity": [
           {
@@ -18588,7 +18588,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "0283386ce02abc0151e1761d08802dfe86c173b0b494af5cbc086574e453da06"
+          "content": "0d41d731c7d2f962d1ccc364cec258de3c0e93b38c2fb3ba97ac74513048d634"
         }
       ],
       "licenses": [
@@ -18615,9 +18615,9 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/rustls@0.23.43",
+      "purl": "pkg:cargo/rustls@0.23.45",
       "type": "library",
-      "version": "0.23.43"
+      "version": "0.23.45"
     },
     {
       "bom-ref": "pkg:cargo/rustls-native-certs@0.8.4",
@@ -18820,7 +18820,7 @@
       "version": "0.1.1"
     },
     {
-      "bom-ref": "pkg:cargo/rustls-webpki@0.103.13",
+      "bom-ref": "pkg:cargo/rustls-webpki@0.103.15",
       "evidence": {
         "identity": [
           {
@@ -18841,7 +18841,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "61c429a8649f110dddef65e2a5ad240f747e85f7758a6bccc7e5777bd33f756e"
+          "content": "f3c3cf1d8b1e7d4927e2d154c3fcb02979afb9939629c62cd9048d4f07b60ac2"
         }
       ],
       "licenses": [
@@ -18858,9 +18858,9 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/rustls-webpki@0.103.13",
+      "purl": "pkg:cargo/rustls-webpki@0.103.15",
       "type": "library",
-      "version": "0.103.13"
+      "version": "0.103.15"
     },
     {
       "bom-ref": "pkg:cargo/rustversion@1.0.23",
@@ -25611,7 +25611,7 @@
       "version": "1.0.4"
     },
     {
-      "bom-ref": "pkg:cargo/uuid@1.26.0",
+      "bom-ref": "pkg:cargo/uuid@1.26.1",
       "evidence": {
         "identity": [
           {
@@ -25632,7 +25632,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "b5772d71c9be8a8a6ac2117d949c5b224c1b72241bb611d9a3012edcf8af7812"
+          "content": "2ef6dac1e96601b4fb3acccccff2139741fcb757cb9a36089bf5be91cfb285ce"
         }
       ],
       "licenses": [
@@ -25654,9 +25654,9 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/uuid@1.26.0",
+      "purl": "pkg:cargo/uuid@1.26.1",
       "type": "library",
-      "version": "1.26.0"
+      "version": "1.26.1"
     },
     {
       "bom-ref": "pkg:cargo/valuable@0.1.1",
@@ -32353,7 +32353,7 @@
       "dependsOn": [
         "pkg:cargo/byteorder@1.5.0",
         "pkg:cargo/fnv@1.0.7",
-        "pkg:cargo/uuid@1.26.0"
+        "pkg:cargo/uuid@1.26.1"
       ],
       "ref": "pkg:cargo/cfb@0.7.3"
     },
@@ -33359,7 +33359,7 @@
         "pkg:cargo/http@1.5.0",
         "pkg:cargo/hyper-util@0.1.20",
         "pkg:cargo/hyper@1.11.0",
-        "pkg:cargo/rustls@0.23.43",
+        "pkg:cargo/rustls@0.23.45",
         "pkg:cargo/tokio-rustls@0.26.4",
         "pkg:cargo/tokio@1.53.1",
         "pkg:cargo/tower-service@0.3.3"
@@ -33772,7 +33772,7 @@
         "pkg:cargo/objc2-foundation@0.3.2",
         "pkg:cargo/objc2@0.6.4",
         "pkg:cargo/time@0.3.55",
-        "pkg:cargo/uuid@1.26.0"
+        "pkg:cargo/uuid@1.26.1"
       ],
       "ref": "pkg:cargo/mac-notification-sys@0.6.15"
     },
@@ -34461,7 +34461,7 @@
         "pkg:cargo/quinn-proto@0.11.16",
         "pkg:cargo/quinn-udp@0.5.15",
         "pkg:cargo/rustc-hash@2.1.3",
-        "pkg:cargo/rustls@0.23.43",
+        "pkg:cargo/rustls@0.23.45",
         "pkg:cargo/socket2@0.6.5",
         "pkg:cargo/thiserror@2.0.20",
         "pkg:cargo/tokio@1.53.1",
@@ -34481,7 +34481,7 @@
         "pkg:cargo/ring@0.17.14",
         "pkg:cargo/rustc-hash@2.1.3",
         "pkg:cargo/rustls-pki-types@1.15.1",
-        "pkg:cargo/rustls@0.23.43",
+        "pkg:cargo/rustls@0.23.45",
         "pkg:cargo/slab@0.4.12",
         "pkg:cargo/thiserror@2.0.20",
         "pkg:cargo/tinyvec@1.12.0",
@@ -34612,7 +34612,7 @@
         "pkg:cargo/quinn@0.11.11",
         "pkg:cargo/rustls-pki-types@1.15.1",
         "pkg:cargo/rustls-platform-verifier@0.7.0",
-        "pkg:cargo/rustls@0.23.43",
+        "pkg:cargo/rustls@0.23.45",
         "pkg:cargo/serde@1.0.229",
         "pkg:cargo/serde_json@1.0.151",
         "pkg:cargo/sync_wrapper@1.0.2",
@@ -34674,11 +34674,11 @@
         "pkg:cargo/once_cell@1.21.4",
         "pkg:cargo/ring@0.17.14",
         "pkg:cargo/rustls-pki-types@1.15.1",
-        "pkg:cargo/rustls-webpki@0.103.13",
+        "pkg:cargo/rustls-webpki@0.103.15",
         "pkg:cargo/subtle@2.6.1",
         "pkg:cargo/zeroize@1.9.0"
       ],
-      "ref": "pkg:cargo/rustls@0.23.43"
+      "ref": "pkg:cargo/rustls@0.23.45"
     },
     {
       "dependsOn": [
@@ -34705,8 +34705,8 @@
         "pkg:cargo/once_cell@1.21.4",
         "pkg:cargo/rustls-native-certs@0.8.4",
         "pkg:cargo/rustls-platform-verifier-android@0.1.1",
-        "pkg:cargo/rustls-webpki@0.103.13",
-        "pkg:cargo/rustls@0.23.43",
+        "pkg:cargo/rustls-webpki@0.103.15",
+        "pkg:cargo/rustls@0.23.45",
         "pkg:cargo/security-framework-sys@2.17.0",
         "pkg:cargo/security-framework@3.7.0",
         "pkg:cargo/webpki-root-certs@1.0.9",
@@ -34725,7 +34725,7 @@
         "pkg:cargo/rustls-pki-types@1.15.1",
         "pkg:cargo/untrusted@0.9.0"
       ],
-      "ref": "pkg:cargo/rustls-webpki@0.103.13"
+      "ref": "pkg:cargo/rustls-webpki@0.103.15"
     },
     {
       "dependsOn": [],
@@ -35099,7 +35099,7 @@
         "pkg:cargo/tracing-subscriber@0.3.23",
         "pkg:cargo/tracing@0.1.44",
         "pkg:cargo/ts-rs@12.0.1",
-        "pkg:cargo/uuid@1.26.0",
+        "pkg:cargo/uuid@1.26.1",
         "pkg:cargo/windows-icons@0.4.0",
         "pkg:cargo/windows-native-keyring-store@1.1.0",
         "pkg:cargo/winsafe@0.0.29",
@@ -35348,7 +35348,7 @@
         "pkg:cargo/thiserror@2.0.20",
         "pkg:cargo/time@0.3.55",
         "pkg:cargo/url@2.5.8",
-        "pkg:cargo/uuid@1.26.0",
+        "pkg:cargo/uuid@1.26.1",
         "pkg:cargo/walkdir@2.5.0"
       ],
       "ref": "pkg:cargo/tauri-codegen@2.6.3"
@@ -35499,7 +35499,7 @@
         "pkg:cargo/osakit@0.3.1",
         "pkg:cargo/percent-encoding@2.3.2",
         "pkg:cargo/reqwest@0.13.5",
-        "pkg:cargo/rustls@0.23.43",
+        "pkg:cargo/rustls@0.23.45",
         "pkg:cargo/semver@1.0.28",
         "pkg:cargo/serde@1.0.229",
         "pkg:cargo/serde_json@1.0.151",
@@ -35591,7 +35591,7 @@
         "pkg:cargo/toml@1.1.4+spec-1.1.0",
         "pkg:cargo/url@2.5.8",
         "pkg:cargo/urlpattern@0.3.0",
-        "pkg:cargo/uuid@1.26.0",
+        "pkg:cargo/uuid@1.26.1",
         "pkg:cargo/walkdir@2.5.0"
       ],
       "ref": "pkg:cargo/tauri-utils@2.9.3"
@@ -35734,7 +35734,7 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/rustls@0.23.43",
+        "pkg:cargo/rustls@0.23.45",
         "pkg:cargo/tokio@1.53.1"
       ],
       "ref": "pkg:cargo/tokio-rustls@0.26.4"
@@ -36024,7 +36024,7 @@
         "pkg:cargo/serde_core@1.0.229",
         "pkg:cargo/wasm-bindgen@0.2.127"
       ],
-      "ref": "pkg:cargo/uuid@1.26.0"
+      "ref": "pkg:cargo/uuid@1.26.1"
     },
     {
       "dependsOn": [],
@@ -36636,7 +36636,7 @@
         "pkg:cargo/serde_repr@0.1.21",
         "pkg:cargo/tracing@0.1.44",
         "pkg:cargo/uds_windows@1.2.1",
-        "pkg:cargo/uuid@1.26.0",
+        "pkg:cargo/uuid@1.26.1",
         "pkg:cargo/windows-sys@0.61.2",
         "pkg:cargo/winnow@1.0.4",
         "pkg:cargo/zbus_macros@5.18.0",
