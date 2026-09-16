@@ -611,7 +611,7 @@ const OutlineRow = ({
           {field === undefined ? null : (
             <span className="text-muted-foreground ms-auto flex shrink-0 items-center gap-1.5">
               {count > 1 ? (
-                <span className="text-muted-foreground text-[10px] tabular-nums">
+                <span className="text-muted-foreground text-3xs tabular-nums">
                   {format.number(count)}×
                 </span>
               ) : null}
@@ -854,7 +854,7 @@ const FieldRowLabel = ({ label, path }: { label: string; path: string }) => {
       {/* The field code only enters the layout on hover, so the label gets
           the full width and truncates solely when the code is actually
           shown — not pre-shrunk to reserve space for a hidden element. */}
-      <code className="text-muted-foreground hidden min-w-0 truncate text-[10px] group-hover:block">
+      <code className="text-muted-foreground text-3xs hidden min-w-0 truncate group-hover:block">
         {path}
       </code>
     </>
@@ -1000,7 +1000,7 @@ const ScopeHeader = ({
       )}
       <div className="min-w-0 flex-1">
         {title === undefined ? null : (
-          <p className="text-muted-foreground text-[11px] font-medium tracking-wide uppercase">
+          <p className="text-muted-foreground text-2xs font-medium tracking-wide uppercase">
             {title}
           </p>
         )}
@@ -1146,7 +1146,7 @@ const FieldConditionSection = ({
         onRewrite={rewrite}
       />
       <Button
-        className="text-muted-foreground self-start"
+        className="self-start"
         disabled={!condition.canRemove}
         onClick={() => {
           if (actions?.unwrapFieldCondition(field.path) !== true) {
@@ -1159,7 +1159,7 @@ const FieldConditionSection = ({
             ? undefined
             : t("templates.studio.removeConditionBlocked")
         }
-        variant="ghost"
+        variant="muted"
       >
         <Trash2Icon className="size-3.5" />
         {t("templates.studio.removeCondition")}
@@ -1509,7 +1509,7 @@ export const FieldFace = ({
                     ? t("templates.studio.insertFormatDefault")
                     : format.key}
                 </span>
-                <code className="text-muted-foreground text-[10px]">
+                <code className="text-muted-foreground text-3xs">
                   {index === 0
                     ? `{{${field.path}}}`
                     : `{{${field.path}.${format.key}}}`}

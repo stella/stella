@@ -164,7 +164,7 @@ export const ChatPastedTextNode = (props: NodeViewProps) => {
             </div>
             <textarea
               aria-label={t("common.edit")}
-              className="bg-muted/40 focus-visible:ring-ring max-h-60 min-h-32 resize-none overflow-auto rounded-md border p-2 font-mono text-[11px] whitespace-pre-wrap focus-visible:ring-2 focus-visible:outline-none"
+              className="bg-muted/40 focus-visible:ring-ring text-2xs max-h-60 min-h-32 resize-none overflow-auto rounded-md border p-2 font-mono whitespace-pre-wrap focus-visible:ring-2 focus-visible:outline-none"
               dir={contentDir(draftText)}
               onBlur={commitDraft}
               onChange={(event) => {

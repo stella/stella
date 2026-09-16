@@ -223,10 +223,10 @@ const CustomColorControls = ({
       />
     </Suspense>
     <div className="flex items-center gap-1.5">
-      <span className="text-muted-foreground text-[11px]">#</span>
+      <span className="text-muted-foreground text-2xs">#</span>
       <input
         aria-label="Custom hex color"
-        className="border-input bg-background text-foreground h-6 flex-1 rounded border px-1.5 font-mono text-[11px] outline-none"
+        className="border-input bg-background text-foreground text-2xs h-6 flex-1 rounded border px-1.5 font-mono outline-none"
         dir="ltr"
         maxLength={6}
         onChange={(event) => handleInputChange(event.target.value)}
@@ -407,7 +407,7 @@ const ColorPickerContent = ({
           render={
             <button
               aria-label="No color"
-              className="text-muted-foreground hover:bg-accent hover:text-accent-foreground flex h-6 w-full items-center gap-1.5 rounded px-1 text-[11px] transition-colors"
+              className="text-muted-foreground hover:bg-accent hover:text-accent-foreground text-2xs flex h-6 w-full items-center gap-1.5 rounded px-1 transition-colors"
               onClick={onClear}
               type="button"
             />
@@ -444,7 +444,7 @@ const ColorPickerContent = ({
       {/* Expand / custom color */}
       {!expanded ? (
         <button
-          className="text-muted-foreground hover:text-foreground flex items-center justify-center gap-1 py-0.5 text-[11px] transition-colors"
+          className="text-muted-foreground hover:text-foreground text-2xs flex items-center justify-center gap-1 py-0.5 transition-colors"
           onClick={() => setExpanded(true)}
           type="button"
         >

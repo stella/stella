@@ -502,7 +502,6 @@ const EditFieldButton = ({ onEdit }: { onEdit: () => void }) => {
   return (
     <Button
       aria-label={t("common.edit")}
-      className="text-muted-foreground"
       onClick={(event) => {
         event.stopPropagation();
         onEdit();
@@ -510,7 +509,7 @@ const EditFieldButton = ({ onEdit }: { onEdit: () => void }) => {
       size="icon-sm"
       title={t("common.edit")}
       type="button"
-      variant="ghost"
+      variant="muted"
     >
       <PencilIcon className="size-3.5" />
     </Button>

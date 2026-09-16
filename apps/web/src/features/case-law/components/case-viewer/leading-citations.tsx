@@ -124,7 +124,7 @@ const DirectionSection = ({
         }
         return (
           <div className="flex flex-col gap-1" key={treatment}>
-            <p className="text-muted-foreground flex items-center gap-1.5 text-[0.7rem] tracking-wide uppercase">
+            <p className="text-muted-foreground text-2xs flex items-center gap-1.5 tracking-wide uppercase">
               <span
                 aria-hidden="true"
                 className={cn(
@@ -231,7 +231,7 @@ const LeadingRow = ({
           >
             {citedDecisionLabel(row.decision)}
           </BidiText>
-          <span className="text-muted-foreground text-[0.7rem]">
+          <span className="text-muted-foreground text-2xs">
             {decided === null
               ? row.decision.court
               : `${row.decision.court} · ${decided}`}

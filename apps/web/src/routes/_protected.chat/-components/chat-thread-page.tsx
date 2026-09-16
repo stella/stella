@@ -13,8 +13,7 @@ import { Minimize2Icon, PlusIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
-import { Button } from "@stll/ui/button";
-import { buttonVariants } from "@stll/ui/button-variants";
+import { Button, buttonVariants } from "@stll/ui/button";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 

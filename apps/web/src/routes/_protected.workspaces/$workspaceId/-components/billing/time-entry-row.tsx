@@ -95,13 +95,13 @@ export const TimeEntryRow = ({
               </BidiText>
             )}
             {!entry.billable && (
-              <span className="bg-muted text-muted-foreground shrink-0 rounded px-1.5 py-0.5 text-[0.625rem]">
+              <span className="bg-muted text-muted-foreground text-3xs shrink-0 rounded px-1.5 py-0.5">
                 {t("billing.nonBillable")}
               </span>
             )}
             <span
               className={cn(
-                "shrink-0 rounded px-1.5 py-0.5 text-[0.625rem]",
+                "text-3xs shrink-0 rounded px-1.5 py-0.5",
                 STATUS_STYLES[entry.status] ?? STATUS_STYLES["draft"],
               )}
             >
@@ -218,10 +218,10 @@ export const TimeEntryRow = ({
                 t("common.delete"),
                 entry.narrative,
               )}
-              className="text-destructive size-7"
+              className="size-7"
               onClick={() => onDelete(entry.id)}
               size="icon"
-              variant="ghost"
+              variant="destructive-ghost"
             >
               <TrashIcon className="size-3.5" />
             </Button>

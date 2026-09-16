@@ -1797,7 +1797,7 @@ const AssistantReasoningTokenSummary = ({ count }: { count: number }) => {
 const ReasoningTokenCount = ({ count }: { count: number }) => {
   const t = useTranslations();
   return (
-    <span className="text-muted-foreground text-[11px] leading-none tabular-nums">
+    <span className="text-muted-foreground text-2xs leading-none tabular-nums">
       {t("chat.reasoningTokens", { count })}
     </span>
   );
@@ -1909,7 +1909,7 @@ const AssistantThinkingBody = ({
           "[&_h1]:my-1 [&_h1]:text-xs [&_h2]:my-1 [&_h2]:text-xs",
           "[&_h3]:my-1 [&_h3]:text-xs [&_h4]:my-1 [&_h4]:text-xs",
           "[&_h5]:my-1 [&_h5]:text-xs [&_h6]:my-1 [&_h6]:text-xs",
-          "[&_code]:text-[11px]",
+          "[&_code]:text-2xs",
         )}
         components={components}
         restorationPairs={restorationPairs}

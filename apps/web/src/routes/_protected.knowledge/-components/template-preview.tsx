@@ -286,7 +286,7 @@ const ErrorIndicator = ({ error }: { error: StructureError }) => (
 const SectionDivider = ({ label }: { label: string }) => (
   <TextSeparator
     className="gap-2 pt-2 pb-1"
-    labelClassName="text-[10px] tracking-wider uppercase"
+    labelClassName="text-3xs tracking-wider uppercase"
   >
     {label}
   </TextSeparator>

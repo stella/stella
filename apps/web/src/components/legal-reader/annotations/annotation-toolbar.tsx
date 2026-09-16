@@ -711,7 +711,7 @@ export const AnnotationToolbar = ({
                   // floor is the viewport's, not the pane's.
                   <PreviewPane className="w-[min(18rem,calc(100vw-9rem))]">
                     {copyPreviewMode !== null && (
-                      <p className="text-foreground text-[0.7rem] leading-snug whitespace-pre-wrap">
+                      <p className="text-foreground text-2xs leading-snug whitespace-pre-wrap">
                         {copyTextFor(
                           copyPreviewMode,
                           {
@@ -850,7 +850,7 @@ const VisibilityToggle = ({
         <Button
           aria-label={label}
           aria-pressed={shared}
-          className="gap-1 px-1.5 text-[0.7rem]"
+          className="text-2xs gap-1 px-1.5"
           onClick={() => onChange(shared ? "private" : "shared")}
           size="sm"
           variant="ghost"

@@ -50,11 +50,11 @@ export const CitingDecisionItem = ({
       <BidiText as="span" className="text-foreground text-xs font-medium">
         {decision.caseNumber}
       </BidiText>
-      <span className="text-muted-foreground text-[0.7rem]">
+      <span className="text-muted-foreground text-2xs">
         {decided === null ? decision.court : `${decision.court} · ${decided}`}
       </span>
       {decision.sentenceText === null ? null : (
-        <span className="text-foreground-strong-muted line-clamp-3 text-[0.72rem] leading-snug">
+        <span className="text-foreground-strong-muted text-2xs line-clamp-3 leading-snug">
           {decision.sentenceText}
         </span>
       )}

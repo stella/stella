@@ -135,7 +135,7 @@ export const AICellSourceCard = ({
             {statement.text}
             {statement.pages.map((page) => (
               <span
-                className="border-border bg-muted/64 text-foreground-strong-muted ms-1 inline-flex shrink-0 items-center rounded-md border px-1 py-0 align-middle text-[10px] font-medium tracking-tight"
+                className="border-border bg-muted/64 text-foreground-strong-muted text-3xs ms-1 inline-flex shrink-0 items-center rounded-md border px-1 py-0 align-middle font-medium tracking-tight"
                 key={page.key}
               >
                 p.&nbsp;{page.pageNumber}

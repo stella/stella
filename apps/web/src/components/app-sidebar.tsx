@@ -597,13 +597,10 @@ export const AppSidebar = (props: AppSidebarProps) => {
             }
             render={
               <Button
-                className={cn(
-                  "text-muted-foreground",
-                  SIDE_RAIL_ICON_BUTTON_SIZE,
-                )}
+                className={SIDE_RAIL_ICON_BUTTON_SIZE}
                 onClick={toggleSidebar}
                 size="icon"
-                variant="ghost"
+                variant="muted"
               />
             }
             side="right"
@@ -655,7 +652,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
                       if (item.id === "search") {
                         return (
                           <SidebarMenuBadge>
-                            <kbd className="text-muted-foreground text-[0.625rem]">
+                            <kbd className="text-muted-foreground text-3xs">
                               {formatHotkeyForPlatform(
                                 searchHotkey,
                                 hotkeyPlatform,
@@ -667,7 +664,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
                       if (item.id === "inbox" && openInboxCount > 0) {
                         return (
                           <SidebarMenuBadge>
-                            <span className="text-muted-foreground text-[0.625rem] tabular-nums">
+                            <span className="text-muted-foreground text-3xs tabular-nums">
                               {format.number(openInboxCount)}
                             </span>
                           </SidebarMenuBadge>
@@ -923,7 +920,7 @@ const NavBadge = ({
   digit: number;
 }) => (
   <SidebarMenuBadge className={className}>
-    <kbd className="animate-in bg-muted text-muted-foreground fade-in rounded border px-1.5 py-0.5 text-[0.625rem] duration-150 motion-reduce:animate-none">
+    <kbd className="animate-in bg-muted text-muted-foreground fade-in text-3xs rounded border px-1.5 py-0.5 duration-150 motion-reduce:animate-none">
       {digit}
     </kbd>
   </SidebarMenuBadge>
@@ -1366,7 +1363,7 @@ const MatterItem = ({
               <Tooltip
                 content={formatFullTimestamp(ws.lastActivityAt)}
                 render={
-                  <span className="text-muted-foreground truncate text-[0.625rem] leading-tight opacity-60 transition-opacity duration-200 group-hover/sidebar-menu-button:opacity-100" />
+                  <span className="text-muted-foreground text-3xs truncate leading-tight opacity-60 transition-opacity duration-200 group-hover/sidebar-menu-button:opacity-100" />
                 }
               >
                 <BidiText>

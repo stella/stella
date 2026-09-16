@@ -177,7 +177,7 @@ export function TypeChip({ type }: { type: ClaimType }) {
       />
       {t(meta.labelKey)}
       {!meta.verifiable && (
-        <span className="border-border text-muted-foreground border-s ps-1.5 text-[11px] font-medium normal-case">
+        <span className="border-border text-muted-foreground text-2xs border-s ps-1.5 font-medium normal-case">
           {t("avt.claimTypes.setAside")}
         </span>
       )}
@@ -191,7 +191,7 @@ export function ConfBadge({ level }: { level: ConfidenceLevel }) {
   return (
     <span
       className={cn(
-        "border-border bg-muted text-muted-foreground inline-flex h-5.5 items-center gap-1.5 rounded-md border px-2 text-[11px] font-semibold",
+        "border-border bg-muted text-muted-foreground text-2xs inline-flex h-5.5 items-center gap-1.5 rounded-md border px-2 font-semibold",
         low && "text-warning border-warning/32 bg-warning/10",
       )}
       title={t("avt.confidence.tooltip")}
@@ -210,7 +210,7 @@ export function MediumChip({ medium }: { medium: string | undefined }) {
   }
   return (
     <span
-      className="bg-muted text-muted-foreground border-border inline-flex h-5.5 items-center gap-1.5 rounded-md border px-2 text-[11px] font-semibold whitespace-nowrap"
+      className="bg-muted text-muted-foreground border-border text-2xs inline-flex h-5.5 items-center gap-1.5 rounded-md border px-2 font-semibold whitespace-nowrap"
       title={t("avt.sourceMediumTooltip")}
     >
       <PenIcon aria-hidden="true" className="size-3" />
@@ -225,7 +225,7 @@ export function InterpNote({ note }: { note: string | undefined }) {
     return null;
   }
   return (
-    <div className="text-warning-foreground bg-warning/10 border-warning/32 flex items-start gap-1.5 rounded-md border px-2.5 py-2 text-[11.5px] leading-relaxed">
+    <div className="text-warning-foreground bg-warning/10 border-warning/32 text-2xs flex items-start gap-1.5 rounded-md border px-2.5 py-2 leading-relaxed">
       <CircleAlertIcon
         aria-hidden="true"
         className="text-warning mt-0.5 size-3.5 shrink-0"

@@ -54,7 +54,7 @@ export const UserIdentity = ({
   name,
   secondaryText,
   className,
-  avatarClassName = "size-8 shrink-0 text-[0.625rem]",
+  avatarClassName = "size-8 shrink-0 text-3xs",
   avatarFallbackClassName,
   nameClassName,
   secondaryClassName,

@@ -100,9 +100,9 @@ export const ChatMessageActionsMenu = ({
           render={
             <Button
               aria-label={t("common.actions")}
-              className="text-muted-foreground size-6"
+              className="size-6"
               size="icon-xs"
-              variant="ghost"
+              variant="muted"
             >
               <EllipsisIcon aria-hidden="true" className="size-3.5" />
             </Button>

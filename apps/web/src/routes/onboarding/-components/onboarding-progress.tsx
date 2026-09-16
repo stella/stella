@@ -33,7 +33,7 @@ export const OnboardingProgress = ({
           />
           <span
             className={cn(
-              "text-[11px] wrap-anywhere transition-colors duration-300",
+              "text-2xs wrap-anywhere transition-colors duration-300",
               i <= currentStep
                 ? "text-muted-foreground"
                 : "text-foreground-disabled",

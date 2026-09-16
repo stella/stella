@@ -765,7 +765,7 @@ const GestureInsertPreview = ({ kind }: { kind: GestureInsertKind }) => {
           />
         )}
       </div>
-      <p className="text-muted-foreground mt-1.5 shrink-0 text-[11px] leading-snug">
+      <p className="text-muted-foreground text-2xs mt-1.5 shrink-0 leading-snug">
         {t(CONCEPT_KEY[kind])}
       </p>
     </div>
@@ -859,7 +859,7 @@ const GestureSplitRow = ({
                 <OptionIcon className="text-muted-foreground size-3.5 shrink-0" />
                 <span className="min-w-0 truncate">{option.label}</span>
                 {option.sublabel === undefined ? null : (
-                  <code className="text-muted-foreground ms-auto min-w-0 truncate text-[10px]">
+                  <code className="text-muted-foreground text-3xs ms-auto min-w-0 truncate">
                     {option.sublabel}
                   </code>
                 )}

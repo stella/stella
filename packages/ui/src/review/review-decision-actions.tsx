@@ -149,11 +149,10 @@ const renderControls = ({
         <>
           {onRevert === undefined ? null : (
             <Button
-              className="text-muted-foreground hover:text-foreground"
               disabled={disabled}
               onClick={onRevert}
               size={size}
-              variant="ghost"
+              variant="muted"
             >
               {revertLabel}
             </Button>

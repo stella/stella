@@ -55,8 +55,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@stll/ui/breadcrumb";
-import { Button } from "@stll/ui/button";
-import { buttonVariants } from "@stll/ui/button-variants";
+import { Button, buttonVariants } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import { ColorPicker } from "@stll/ui/color-picker";
 import {
@@ -1147,7 +1146,7 @@ export function UiPlayground() {
                   <Avatar>
                     <AvatarFallback>MS</AvatarFallback>
                   </Avatar>
-                  <Avatar className="size-6 text-[0.625rem]">
+                  <Avatar className="text-3xs size-6">
                     <AvatarFallback>KL</AvatarFallback>
                   </Avatar>
                 </div>

@@ -2923,13 +2923,7 @@ export default defineConfig({
       rules: { "no-raw-colors/no-raw-colors": "off" },
     },
     {
-      // button-variants.ts(x) holds the variant styles that used to live
-      // in button.tsx (moved for only-export-components); the exemption
-      // follows the code.
-      files: [
-        "packages/ui/src/**/button.tsx",
-        "packages/ui/src/**/button-variants.tsx",
-      ],
+      files: ["packages/ui/src/**/button.tsx"],
       rules: {
         "no-raw-colors/no-raw-colors": "off",
         "no-inline-style-colors/no-inline-style-colors": "off",

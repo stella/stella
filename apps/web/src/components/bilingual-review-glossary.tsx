@@ -87,7 +87,7 @@ export const BilingualReviewGlossary = ({
                 value={draft.target}
               />
               <div className="flex items-center gap-1">
-                <span className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-[11px]">
+                <span className="bg-muted text-muted-foreground text-2xs rounded px-1.5 py-0.5">
                   {t(BILINGUAL_GLOSSARY_ORIGIN_LABEL_KEYS[draft.origin])}
                 </span>
                 <Button

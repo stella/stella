@@ -111,7 +111,7 @@ export const StatuteVersionMenu = ({
                     >
                       {versionLabel(version)}
                     </span>
-                    <span className="text-muted-foreground mt-0.5 block text-[0.7rem] font-medium tracking-wide uppercase">
+                    <span className="text-muted-foreground text-2xs mt-0.5 block font-medium tracking-wide uppercase">
                       {statusLabel}
                     </span>
                   </span>

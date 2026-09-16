@@ -42,12 +42,7 @@ export const AdvancedFilterEditor = ({
         />
       </div>
       <div className="shrink-0 border-t p-2" data-slot="advanced-filter-footer">
-        <Button
-          className="text-muted-foreground"
-          onClick={onRemove}
-          size="xs"
-          variant="ghost"
-        >
+        <Button onClick={onRemove} size="xs" variant="muted">
           {t("workspaces.views.removeAdvancedFilter")}
         </Button>
       </div>

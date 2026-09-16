@@ -417,7 +417,7 @@ export const CatalogueStep = ({
               {otherRows.length > 0 && recommendedRows.length > 0 && (
                 <TextSeparator
                   className="my-2"
-                  labelClassName="text-[10px] font-medium tracking-wider uppercase"
+                  labelClassName="text-3xs font-medium tracking-wider uppercase"
                 >
                   {t("onboarding.catalogueCommunityHeading")}
                 </TextSeparator>

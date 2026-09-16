@@ -643,7 +643,7 @@ const OrganizerPageCard = ({
             dropIndicator.edge === "before" ? "-start-2" : "-end-2",
           )}
         >
-          <span className="bg-primary text-primary-foreground absolute start-1/2 top-2 -translate-x-1/2 rounded-full px-1.5 py-0.5 text-[10px] leading-none font-medium whitespace-nowrap shadow-sm">
+          <span className="bg-primary text-primary-foreground text-3xs absolute start-1/2 top-2 -translate-x-1/2 rounded-full px-1.5 py-0.5 leading-none font-medium whitespace-nowrap shadow-sm">
             {tPageEditor("pageNumber", {
               number: format.number(dropIndicator.pageNumber),
             })}

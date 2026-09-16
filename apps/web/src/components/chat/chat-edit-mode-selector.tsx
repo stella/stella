@@ -89,7 +89,7 @@ const ViewOnlyEditModeChip = () => {
   const t = useTranslations();
   return (
     <span
-      className="text-muted-foreground inline-flex max-w-[180px] min-w-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px]"
+      className="text-muted-foreground text-2xs inline-flex max-w-[180px] min-w-0 items-center gap-1 rounded-md px-1.5 py-0.5"
       title={t("folio.unsupportedDocxEditDescription")}
     >
       <LockIcon aria-hidden="true" className="size-3 shrink-0" />
@@ -127,7 +127,7 @@ const ChatEditModeSelector = ({
   return (
     <Menu>
       <MenuTrigger
-        className="text-muted-foreground hover:text-foreground hover:bg-accent inline-flex max-w-[180px] min-w-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] transition-colors"
+        className="text-muted-foreground hover:text-foreground hover:bg-accent text-2xs inline-flex max-w-[180px] min-w-0 items-center gap-1 rounded-md px-1.5 py-0.5 transition-colors"
         title={t(OPTION_LABEL_KEY[optionId])}
       >
         <TriggerIcon aria-hidden="true" className="size-3 shrink-0" />
@@ -155,7 +155,7 @@ const ChatEditModeSelector = ({
                     <span className="truncate">
                       {t(OPTION_LABEL_KEY[option])}
                     </span>
-                    <span className="text-muted-foreground text-[11px] text-wrap">
+                    <span className="text-muted-foreground text-2xs text-wrap">
                       {t(OPTION_DESCRIPTION_KEY[option])}
                     </span>
                   </span>

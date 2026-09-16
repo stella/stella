@@ -711,7 +711,7 @@ export const PromptBar = (props: PromptBarProps) => {
                 "border-foreground/15 inline-flex items-center gap-1.5 rounded-full border py-1 ps-3 pe-1 shadow-[0_1px_2px_rgb(0_0_0/0.03),0_8px_20px_rgb(0_0_0/0.05)]",
               )}
             >
-              <span className="text-muted-foreground text-[12px] font-medium">
+              <span className="text-muted-foreground text-xs font-medium">
                 {presetScopeChooser.question}
               </span>
               <Button
@@ -845,7 +845,7 @@ export const PromptBar = (props: PromptBarProps) => {
       )}
       {layout === "floating" && pendingCount > 0 && (
         <ComposerControlSlot className="ps-0.5">
-          <span className="bg-muted text-foreground inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1.5 text-[11px] font-semibold tabular-nums">
+          <span className="bg-muted text-foreground text-2xs inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1.5 font-semibold tabular-nums">
             {format.number(pendingCount)}
           </span>
         </ComposerControlSlot>
@@ -1065,7 +1065,7 @@ export const SuggestionCard = (props: SuggestionCardProps) => {
     >
       <button
         type="button"
-        className="text-muted-foreground flex w-full cursor-pointer items-center gap-1.5 border-0 bg-transparent p-0 text-start text-[11px]"
+        className="text-muted-foreground text-2xs flex w-full cursor-pointer items-center gap-1.5 border-0 bg-transparent p-0 text-start"
         onClick={() => onFocus(suggestion.id)}
         aria-label={t("chat.focusSuggestion", { topic: suggestion.topic })}
       >
@@ -1088,17 +1088,17 @@ export const SuggestionCard = (props: SuggestionCardProps) => {
           </>
         )}
         {suggestion.status === "stale" && (
-          <span className="bg-destructive/12 text-destructive ms-1 inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-medium tracking-wider uppercase">
+          <span className="bg-destructive/12 text-destructive text-3xs ms-1 inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 font-medium tracking-wider uppercase">
             {t("common.stale")}
           </span>
         )}
         {suggestion.status === "accepted" && (
-          <span className="bg-success/15 text-success ms-1 inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-medium tracking-wider uppercase">
+          <span className="bg-success/15 text-success text-3xs ms-1 inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 font-medium tracking-wider uppercase">
             {t("chat.suggestionStatus.accepted")}
           </span>
         )}
         {suggestion.status === "rejected" && (
-          <span className="bg-muted text-muted-foreground ms-1 inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-medium tracking-wider uppercase">
+          <span className="bg-muted text-muted-foreground text-3xs ms-1 inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 font-medium tracking-wider uppercase">
             {t("chat.suggestionStatus.rejected")}
           </span>
         )}
@@ -1111,7 +1111,7 @@ export const SuggestionCard = (props: SuggestionCardProps) => {
               {suggestion.originalText}
             </span>
           </div>
-          <div className="text-muted-foreground mt-1 px-2.5 font-mono text-[11px] leading-snug break-all">
+          <div className="text-muted-foreground text-2xs mt-1 px-2.5 font-mono leading-snug break-all">
             {suggestion.suggestedText}
           </div>
         </>
@@ -1208,7 +1208,7 @@ const FilledByBadge = ({ filledBy }: FilledByBadgeProps) => {
   const t = useTranslations();
   if (filledBy === "ai") {
     return (
-      <span className="bg-info/10 text-info inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium">
+      <span className="bg-info/10 text-info text-3xs inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 font-medium">
         <WandSparklesIcon aria-hidden="true" className="size-3 shrink-0" />
         {t("templates.studio.draftedByAi")}
       </span>
@@ -1216,7 +1216,7 @@ const FilledByBadge = ({ filledBy }: FilledByBadgeProps) => {
   }
   if (filledBy === "personAi") {
     return (
-      <span className="bg-info/10 text-info inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium">
+      <span className="bg-info/10 text-info text-3xs inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 font-medium">
         <UserIcon aria-hidden="true" className="size-3 shrink-0" />
         <WandSparklesIcon aria-hidden="true" className="size-3 shrink-0" />
         {t("templates.studio.textPlusAi")}
@@ -1224,7 +1224,7 @@ const FilledByBadge = ({ filledBy }: FilledByBadgeProps) => {
     );
   }
   return (
-    <span className="bg-muted text-muted-foreground inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium">
+    <span className="bg-muted text-muted-foreground text-3xs inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 font-medium">
       <UserIcon aria-hidden="true" className="size-3 shrink-0" />
       {t("templates.studio.filledByPerson")}
     </span>

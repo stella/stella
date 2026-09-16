@@ -132,6 +132,10 @@ is `text-sm`; headings step up to `text-base` or `text-lg`. The
 full Tailwind type scale is available but sizes above `text-xl`
 are rare outside of marketing pages.
 
+Two tokens extend the scale downwards for badges, counts, and
+captions: `text-2xs` (11px) and `text-3xs` (10px). Use them instead
+of arbitrary values such as `text-[10px]`.
+
 ---
 
 ## 4. Component Stylings
@@ -174,6 +178,9 @@ Separator, Sheet, Skeleton, Table, Tabs, Textarea, Toast, Tooltip.
 - **outline:** border + transparent background
 - **secondary:** secondary surface
 - **ghost:** transparent, accent on hover
+- **muted:** muted text, foreground text and accent on hover (quiet
+  actions in toolbars and rows)
+- **destructive-ghost:** destructive text, transparent, tinted on hover
 - **link:** underline, no background
 
 Sizes: `default` (h-9), `sm` (h-8), `lg` (h-10), `xl` (h-11),

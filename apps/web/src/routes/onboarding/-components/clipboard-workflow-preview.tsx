@@ -54,7 +54,7 @@ export const ClipboardWorkflowPreview = ({
         ))}
       </svg>
       <kbd
-        className="cwp-press bg-background text-foreground border-border/70 absolute start-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-md border px-2 py-0.5 font-mono text-[11px] shadow-[0_1px_0_var(--color-border)] rtl:translate-x-1/2"
+        className="cwp-press bg-background text-foreground border-border/70 text-2xs absolute start-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-md border px-2 py-0.5 font-mono shadow-[0_1px_0_var(--color-border)] rtl:translate-x-1/2"
         dir="ltr"
         style={delay(T.key)}
       >
@@ -188,7 +188,7 @@ type ClipboardWorkflowPreviewProps = {
 };
 
 const Chip = ({ snippet }: { snippet: Snippet }) => (
-  <span className="bg-foreground text-background grid size-4 shrink-0 place-items-center rounded-[4px] text-[10px] leading-none font-semibold">
+  <span className="bg-foreground text-background text-3xs grid size-4 shrink-0 place-items-center rounded-[4px] leading-none font-semibold">
     <bdi>{snippet.label}</bdi>
   </span>
 );

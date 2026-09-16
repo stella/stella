@@ -15,7 +15,7 @@ export const AuthorCell = ({ entity }: { entity: WorkspaceEntity }) => {
 
   return (
     <UserIdentity
-      avatarClassName="size-5 shrink-0 text-[10px]"
+      avatarClassName="size-5 shrink-0 text-3xs"
       className="justify-end gap-1.5"
       image={entity.createdByImage}
       name={name}

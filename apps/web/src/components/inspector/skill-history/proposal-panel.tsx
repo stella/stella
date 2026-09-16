@@ -52,7 +52,7 @@ export const ProposalMenu = ({
             <GitPullRequestIcon className="size-3.5" />
             {t("skillHistory.proposals")}
             {openCount > 0 ? (
-              <span className="bg-muted text-muted-foreground ms-0.5 inline-flex min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-medium tabular-nums">
+              <span className="bg-muted text-muted-foreground text-3xs ms-0.5 inline-flex min-w-4 items-center justify-center rounded-full px-1 font-medium tabular-nums">
                 {format.number(openCount)}
               </span>
             ) : null}
@@ -81,7 +81,7 @@ export const ProposalMenu = ({
                   >
                     <span className="flex items-center gap-1.5">
                       <ProposalStatusBadge status={proposal.status} />
-                      <span className="text-muted-foreground truncate text-[11px]">
+                      <span className="text-muted-foreground text-2xs truncate">
                         {t("skillHistory.proposalMeta", {
                           author: authorName(proposal.authorId),
                           date: format.dateTime(new Date(proposal.createdAt), {
@@ -96,7 +96,7 @@ export const ProposalMenu = ({
                         ? t("skillHistory.proposalNoSummary")
                         : proposal.summary}
                     </span>
-                    <span className="text-muted-foreground text-[11px]">
+                    <span className="text-muted-foreground text-2xs">
                       {proposal.baseIsCurrent
                         ? t("skillHistory.basedOnCurrent")
                         : t("skillHistory.outOfDate")}

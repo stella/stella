@@ -964,7 +964,7 @@ const HorizontalTodayMarker = () => {
   return (
     <div className="w-20 shrink-0 snap-end">
       <div className="h-5" />
-      <div className="text-destructive mt-1 h-4 text-end text-[11px] font-medium">
+      <div className="text-destructive text-2xs mt-1 h-4 text-end font-medium">
         {t("common.today")}
       </div>
       <div aria-hidden="true" className="relative mt-2 h-3">
@@ -1024,7 +1024,7 @@ const HorizontalActivityMilestone = ({
         </span>
       </div>
       {showProvenance && (
-        <p className="text-muted-foreground mt-0.5 text-[11px] leading-4">
+        <p className="text-muted-foreground text-2xs mt-0.5 leading-4">
           <TriggerDetail item={first} />
         </p>
       )}
@@ -1065,7 +1065,7 @@ const HorizontalMilestoneFrame = ({
         content={format.dateTime(timestamp, FULL_DATE_LONG_TIME_FORMAT)}
         render={
           <time
-            className="text-muted-foreground mt-1 block h-4 pe-8 text-[11px] tabular-nums"
+            className="text-muted-foreground text-2xs mt-1 block h-4 pe-8 tabular-nums"
             dateTime={activityAt}
           >
             {format.dateTime(timestamp, { timeStyle: "short" })}
@@ -1195,7 +1195,7 @@ const TimelineEntry = ({
         content={format.dateTime(timestamp, FULL_DATE_LONG_TIME_FORMAT)}
         render={
           <time
-            className="text-muted-foreground flex items-start justify-end pe-1 pt-3 text-[11px] tabular-nums"
+            className="text-muted-foreground text-2xs flex items-start justify-end pe-1 pt-3 tabular-nums"
             dateTime={activityAt}
           >
             {format.dateTime(timestamp, { timeStyle: "short" })}
@@ -1277,7 +1277,7 @@ const ActivityList = ({
           {t("workspaces.overview.activity.title")}
         </caption>
         <thead className="sr-only md:not-sr-only">
-          <tr className="text-muted-foreground border-b text-[11px] font-medium">
+          <tr className="text-muted-foreground text-2xs border-b font-medium">
             <th className="w-40 px-4 py-2 text-start font-medium" scope="col">
               {t("workspaces.overview.activity.list.dateTime")}
             </th>
@@ -1647,7 +1647,7 @@ const ActivityTriplet = ({ detail, group, size }: ActivityTripletProps) => {
         <span
           className={cn(
             compact
-              ? "text-muted-foreground mt-0.5 grid grid-cols-[1.25rem_minmax(0,1fr)] gap-x-1.5 text-[11px] leading-4"
+              ? "text-muted-foreground text-2xs mt-0.5 grid grid-cols-[1.25rem_minmax(0,1fr)] gap-x-1.5 leading-4"
               : "text-muted-foreground mt-0.5 grid grid-cols-[1.25rem_minmax(0,1fr)] gap-x-1.5 text-xs leading-4",
           )}
         >

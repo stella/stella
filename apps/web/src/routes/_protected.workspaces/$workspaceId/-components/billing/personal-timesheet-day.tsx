@@ -175,11 +175,11 @@ export const PersonalTimesheetDay = ({
                       tCommon("delete"),
                       entry.narrative,
                     )}
-                    className="text-destructive size-11"
+                    className="size-11"
                     disabled={deleteEntry.isPending}
                     onClick={() => setDeletingId(entry.id)}
                     size="icon"
-                    variant="ghost"
+                    variant="destructive-ghost"
                   >
                     <TrashIcon className="size-4" />
                   </Button>

@@ -240,7 +240,7 @@ export function TemplateStudioInspectorView({
                   content={tag}
                   key={tag}
                   render={
-                    <span className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-[10px] font-medium">
+                    <span className="bg-muted text-muted-foreground text-3xs rounded px-1.5 py-0.5 font-medium">
                       {languageChipLabel(tag, lang)}
                     </span>
                   }
@@ -347,11 +347,10 @@ export const StudioHealthBadge = ({ templateId }: { templateId: string }) => {
       className={cn(
         issueCount === 0 && "text-success",
         issueCount > 0 && !hasErrors && "text-warning-foreground",
-        hasErrors && "text-destructive",
       )}
       size="xs"
       title={t("templates.checkTemplate")}
-      variant="ghost"
+      variant={hasErrors ? "destructive-ghost" : "ghost"}
     >
       {issueCount === 0 ? (
         <CheckCircle2Icon className="size-3.5" />
@@ -808,7 +807,7 @@ export const InsertExistingFieldItem = ({
     return (
       <MenuItem onClick={() => onInsert(field.path)}>
         <span className="min-w-0 truncate">{label}</span>
-        <code className="text-muted-foreground ms-auto ps-3 text-[10px]">
+        <code className="text-muted-foreground text-3xs ms-auto ps-3">
           {field.path}
         </code>
       </MenuItem>
@@ -818,7 +817,7 @@ export const InsertExistingFieldItem = ({
     <MenuSub>
       <MenuSubTrigger>
         <span className="min-w-0 truncate">{label}</span>
-        <code className="text-muted-foreground ms-auto ps-3 text-[10px]">
+        <code className="text-muted-foreground text-3xs ms-auto ps-3">
           {field.path}
         </code>
       </MenuSubTrigger>
@@ -1518,7 +1517,7 @@ export const GuidanceNote = ({
       />
       <span
         className={cn(
-          "self-end text-[11px] tabular-nums",
+          "text-2xs self-end tabular-nums",
           overRecommended ? "text-warning" : "text-muted-foreground",
         )}
       >

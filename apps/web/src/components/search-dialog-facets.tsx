@@ -134,7 +134,7 @@ export const TimeFacetGroup = ({
       {isCustom && (
         <div className="mt-2 space-y-1 px-2">
           <div>
-            <p className="text-muted-foreground text-[0.625rem] font-medium tracking-wide uppercase">
+            <p className="text-muted-foreground text-3xs font-medium tracking-wide uppercase">
               {t("search.dateFrom")}
             </p>
             <DatePickerPopover
@@ -146,7 +146,7 @@ export const TimeFacetGroup = ({
             />
           </div>
           <div>
-            <p className="text-muted-foreground text-[0.625rem] font-medium tracking-wide uppercase">
+            <p className="text-muted-foreground text-3xs font-medium tracking-wide uppercase">
               {t("search.dateTo")}
             </p>
             <DatePickerPopover

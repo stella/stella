@@ -181,18 +181,13 @@ const contentForType = (
 
 // ── Inline action (muted text-only ghost button) ──────
 // Tier "+ add" affordances read as plain muted text until hover, not filled
-// controls. A ghost xs Button with a muted text
-// override keeps focus rings, sizing, and keyboard behaviour consistent.
+// controls. The muted xs Button keeps focus rings, sizing, and keyboard
+// behaviour consistent.
 const InlineAction = ({
   className,
   ...props
 }: React.ComponentProps<typeof Button>) => (
-  <Button
-    className={cn("text-muted-foreground hover:text-foreground", className)}
-    size="xs"
-    variant="ghost"
-    {...props}
-  />
+  <Button className={className} size="xs" variant="muted" {...props} />
 );
 
 // ── Root: position card ───────────────────────────────
@@ -960,7 +955,7 @@ const RuleRow = ({
   const t = useTranslations();
   return (
     <div className="flex items-start gap-2">
-      <span className="text-muted-foreground w-11 shrink-0 pt-2 text-[10px] tracking-wide uppercase tabular-nums">
+      <span className="text-muted-foreground text-3xs w-11 shrink-0 pt-2 tracking-wide uppercase tabular-nums">
         {label}
       </span>
       <Input
@@ -1005,7 +1000,7 @@ const FallbackEntryRow = ({
   const t = useTranslations();
   return (
     <div className="flex items-start gap-2">
-      <span className="text-muted-foreground w-11 shrink-0 pt-2 text-[10px] tracking-wide uppercase tabular-nums">
+      <span className="text-muted-foreground text-3xs w-11 shrink-0 pt-2 tracking-wide uppercase tabular-nums">
         {t("knowledge.playbooks.entryRank", { index: String(index + 1) })}
       </span>
       <div className="flex-1 space-y-1.5">
@@ -1077,7 +1072,7 @@ const IdealEditor = ({
   return (
     <div className="border-border ms-11 space-y-2 border-s-2 ps-3">
       <div className="flex items-center gap-2">
-        <span className="text-muted-foreground text-[10px] tracking-wide uppercase">
+        <span className="text-muted-foreground text-3xs tracking-wide uppercase">
           {t("knowledge.playbooks.idealLanguage")}
         </span>
         <Select
@@ -1509,7 +1504,7 @@ const ExtractionAdvanced = ({
         {ask.derived ? (
           <dl className="border-border/60 divide-border/60 divide-y rounded-md border">
             <div className="space-y-1 p-2.5">
-              <dt className="text-foreground-label text-[11px] font-medium">
+              <dt className="text-foreground-label text-2xs font-medium">
                 {t("knowledge.playbooks.derivedQuestion")}
               </dt>
               <dd className="text-foreground text-sm leading-5 text-pretty">
@@ -1611,7 +1606,7 @@ const CheckEditor = ({
           <p className="text-foreground text-xs font-medium">
             {t("knowledge.playbooks.check")}
           </p>
-          <p className="text-muted-foreground text-[11px] text-pretty">
+          <p className="text-muted-foreground text-2xs text-pretty">
             {t("knowledge.playbooks.checkHint")}
           </p>
         </div>

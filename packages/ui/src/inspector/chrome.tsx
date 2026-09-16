@@ -201,7 +201,7 @@ export const InspectorDescription = ({
 }: React.ComponentProps<"p">) => (
   <p
     className={cn(
-      "text-muted-foreground truncate text-[11px] [unicode-bidi:isolate]",
+      "text-muted-foreground text-2xs truncate [unicode-bidi:isolate]",
       className,
     )}
     data-slot="inspector-description"

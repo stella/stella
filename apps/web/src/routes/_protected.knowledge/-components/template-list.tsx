@@ -411,11 +411,11 @@ export const TemplateList = ({
           {hasNextPage && (
             <div className="border-t p-1">
               <Button
-                className="text-muted-foreground w-full"
+                className="w-full"
                 disabled={isFetchingNextPage}
                 onClick={onLoadMore}
                 size="sm"
-                variant="ghost"
+                variant="muted"
               >
                 {t("common.loadMore")}
               </Button>
@@ -954,7 +954,7 @@ const RowStats = ({ template, lang }: RowStatsProps) => {
           {template.languages.map((tag) => (
             <span
               aria-label={languageDisplayName(tag, lang)}
-              className="bg-muted rounded px-1.5 py-0.5 text-[10px] font-medium uppercase"
+              className="bg-muted text-3xs rounded px-1.5 py-0.5 font-medium uppercase"
               key={tag}
               role="group"
             >

@@ -161,7 +161,7 @@ const CalendarPreview = ({ workspaceId }: { workspaceId: string }) => (
             className="bg-card flex min-w-0 flex-col gap-0.5 rounded-sm border p-1"
             key={day}
           >
-            <span className="text-muted-foreground text-[10px] leading-none">
+            <span className="text-muted-foreground text-3xs leading-none">
               {day}
             </span>
             {chip && (

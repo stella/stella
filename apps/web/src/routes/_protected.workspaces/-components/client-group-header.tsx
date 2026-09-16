@@ -84,7 +84,7 @@ export const ClientGroupHeader = ({
       <span
         className={cn(
           "bg-muted rounded-full px-1.5 py-0.5",
-          "text-muted-foreground text-[0.625rem] tabular-nums",
+          "text-muted-foreground text-3xs tabular-nums",
         )}
       >
         {format.number(matterCount)}

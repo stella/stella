@@ -144,17 +144,17 @@ export const VersionRow = ({
       <div className="flex w-full items-center gap-1.5">
         <span className="text-sm font-medium">{title}</span>
         {isCurrent && (
-          <span className="bg-primary/10 text-primary rounded-full px-1.5 py-0.5 text-[10px] font-medium">
+          <span className="bg-primary/10 text-primary text-3xs rounded-full px-1.5 py-0.5 font-medium">
             {t("fileDetail.current")}
           </span>
         )}
         {isViewing && (
-          <span className="bg-primary text-primary-foreground rounded-full px-1.5 py-0.5 text-[10px] font-medium">
+          <span className="bg-primary text-primary-foreground text-3xs rounded-full px-1.5 py-0.5 font-medium">
             {t("fileDetail.viewing")}
           </span>
         )}
         {stats && (
-          <span className="ms-auto flex items-center gap-1 text-[10px] tabular-nums">
+          <span className="text-3xs ms-auto flex items-center gap-1 tabular-nums">
             <span className="text-success">+{stats.added}</span>
             <span className="text-destructive">−{stats.removed}</span>
           </span>
@@ -239,12 +239,12 @@ export const VersionRow = ({
           {loadDiff && (
             <Button
               aria-expanded={isDiffOpen}
-              className="text-muted-foreground hover:text-foreground gap-1 px-1.5 text-xs font-normal"
+              className="gap-1 px-1.5 text-xs font-normal"
               onClick={() => {
                 detached(toggleDiff(), "version-list.toggle-diff");
               }}
               size="xs"
-              variant="ghost"
+              variant="muted"
             >
               {isDiffOpen ? (
                 <ChevronDownIcon className="size-3" />
@@ -257,14 +257,13 @@ export const VersionRow = ({
           {summarize && (
             <Button
               aria-label={t("common.summarizeChanges")}
-              className="text-muted-foreground hover:text-foreground"
               disabled={summary.status === "loading"}
               onClick={() => {
                 detached(handleSummarize(), "version-list.summarize");
               }}
               size="icon-xs"
               title={t("common.summarizeChanges")}
-              variant="ghost"
+              variant="muted"
             >
               {summary.status === "loading" ? (
                 <Loader2Icon className="size-3.5 animate-spin" />
@@ -364,7 +363,7 @@ const DiffSegmentParagraph = ({ segment }: { segment: VersionDiffSegment }) => {
     return (
       <div
         aria-hidden="true"
-        className="text-foreground-placeholder text-center text-[10px] leading-3 tracking-[0.25em] select-none"
+        className="text-foreground-placeholder text-3xs text-center leading-3 tracking-[0.25em] select-none"
       >
         ···
       </div>
@@ -430,7 +429,7 @@ const MarkerAwareText = ({ text }: { text: string }) => {
       nodes.push(text.slice(cursor, match.index));
     }
     nodes.push(
-      <code className="font-mono text-[11px]" key={match.index}>
+      <code className="text-2xs font-mono" key={match.index}>
         {match[0]}
       </code>,
     );

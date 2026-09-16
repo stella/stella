@@ -194,7 +194,7 @@ const PanelGroup = ({
 }) => (
   <section className="space-y-2">
     {title ? (
-      <h2 className="text-muted-foreground px-1 text-[11px] font-medium tracking-[0.08em] uppercase">
+      <h2 className="text-muted-foreground text-2xs px-1 font-medium tracking-[0.08em] uppercase">
         {title}
       </h2>
     ) : null}
@@ -277,7 +277,7 @@ const GeneralPane = ({
           </div>
           <span
             className={cn(
-              "inline-flex rounded-full border px-2 py-0.5 text-[11px] font-medium",
+              "text-2xs inline-flex rounded-full border px-2 py-0.5 font-medium",
               presentation.status === "linked"
                 ? "border-success/20 bg-success/10 text-success-foreground"
                 : "bg-muted text-muted-foreground border-border",
@@ -760,7 +760,7 @@ const App = () => {
         )}
       >
         <header className="pb-2">
-          <p className="text-muted-foreground text-[11px] font-medium tracking-[0.14em] uppercase">
+          <p className="text-muted-foreground text-2xs font-medium tracking-[0.14em] uppercase">
             {t("stellaDesktop")}
           </p>
           <h1 className="mt-1 text-xl font-semibold">{t("title")}</h1>

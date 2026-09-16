@@ -314,7 +314,7 @@ export const JurisdictionGlobePreview = ({
             >
               <span className="truncate">{name}</span>
               {jurisdiction.isPrimary && selected.length > 1 && (
-                <span className="bg-primary/10 text-primary rounded-full px-1.5 py-0.5 text-[10px]">
+                <span className="bg-primary/10 text-primary text-3xs rounded-full px-1.5 py-0.5">
                   {t("onboarding.jurisdictionPrimary")}
                 </span>
               )}

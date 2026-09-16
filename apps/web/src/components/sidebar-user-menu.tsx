@@ -101,7 +101,7 @@ export const SidebarUserMenu = ({ user }: SidebarUserMenuProps) => {
         >
           <UserAvatar
             className="size-7 rounded-full"
-            fallbackClassName="text-[0.625rem]"
+            fallbackClassName="text-3xs"
             image={user.image}
             name={displayName}
           />
@@ -118,7 +118,7 @@ export const SidebarUserMenu = ({ user }: SidebarUserMenuProps) => {
                         {user.name}
                       </BidiText>
                       {role && (
-                        <span className="bg-muted text-muted-foreground inline-flex shrink-0 items-center rounded-md px-1.5 py-0.5 text-[0.625rem] font-medium select-none">
+                        <span className="bg-muted text-muted-foreground text-3xs inline-flex shrink-0 items-center rounded-md px-1.5 py-0.5 font-medium select-none">
                           {t(`organization.roles.${role}`)}
                         </span>
                       )}
@@ -143,7 +143,7 @@ export const SidebarUserMenu = ({ user }: SidebarUserMenuProps) => {
                       {user.email || t("common.user")}
                     </BidiText>
                     {role && (
-                      <span className="bg-muted text-muted-foreground inline-flex shrink-0 items-center rounded-md px-1.5 py-0.5 text-[0.625rem] font-medium select-none">
+                      <span className="bg-muted text-muted-foreground text-3xs inline-flex shrink-0 items-center rounded-md px-1.5 py-0.5 font-medium select-none">
                         {t(`organization.roles.${role}`)}
                       </span>
                     )}
@@ -251,7 +251,7 @@ export const SidebarUserMenu = ({ user }: SidebarUserMenuProps) => {
           </MenuItem>
           <MenuItem
             aria-label={t("selfhost.viewReleaseNotes")}
-            className="text-foreground-ghost data-highlighted:text-foreground min-h-0 px-2 pt-1.5 pb-1 text-[0.6875rem] tabular-nums"
+            className="text-foreground-ghost data-highlighted:text-foreground text-2xs min-h-0 px-2 pt-1.5 pb-1 tabular-nums"
             label={t("selfhost.viewReleaseNotes")}
             nativeButton={false}
             render={
@@ -389,7 +389,7 @@ const OrganizationRoleBadge = ({ role }: { role: Role | undefined }) => {
   }
 
   return (
-    <span className="bg-muted text-muted-foreground inline-flex shrink-0 items-center rounded-md px-1.5 py-0.5 text-[0.6875rem] font-medium select-none">
+    <span className="bg-muted text-muted-foreground text-2xs inline-flex shrink-0 items-center rounded-md px-1.5 py-0.5 font-medium select-none">
       {t(`organization.roles.${role}`)}
     </span>
   );

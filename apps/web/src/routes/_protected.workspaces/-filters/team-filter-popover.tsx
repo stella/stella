@@ -165,7 +165,7 @@ export const TeamFilterPopover = ({
                     render={
                       <button
                         className={cn(
-                          "text-muted-foreground hover:text-foreground shrink-0 rounded px-1.5 py-0.5 text-[0.625rem] tracking-tight uppercase",
+                          "text-muted-foreground hover:text-foreground text-3xs shrink-0 rounded px-1.5 py-0.5 tracking-tight uppercase",
                           isLeadUser && "text-primary",
                         )}
                         onClick={() =>

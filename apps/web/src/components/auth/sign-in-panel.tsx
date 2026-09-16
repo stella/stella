@@ -679,7 +679,7 @@ const SocialButton = ({
       <span className="min-w-0 text-center">{label}</span>
     </Button>
     {lastUsed && (
-      <span className="bg-primary text-primary-foreground absolute end-3 -top-2 rounded-full px-2 py-0.5 text-[10px] font-medium">
+      <span className="bg-primary text-primary-foreground text-3xs absolute end-3 -top-2 rounded-full px-2 py-0.5 font-medium">
         {lastUsedLabel}
       </span>
     )}

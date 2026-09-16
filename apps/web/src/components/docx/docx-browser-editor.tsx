@@ -2387,7 +2387,7 @@ const CollaborationPresence = ({
           title={user.name}
         >
           <UserIdentityAvatar
-            className="size-7 text-[0.625rem]"
+            className="text-3xs size-7"
             image={user.image}
             name={user.name}
           />

@@ -81,7 +81,7 @@ export const DecisionFilterPopover = ({
         <SlidersHorizontalIcon aria-hidden="true" className="size-3.5" />
         {t("common.filters")}
         {activeFilterCount > 0 && (
-          <span className="bg-primary text-primary-foreground inline-flex min-w-4 items-center justify-center rounded-full px-1 text-[10px] leading-4 font-medium tabular-nums">
+          <span className="bg-primary text-primary-foreground text-3xs inline-flex min-w-4 items-center justify-center rounded-full px-1 leading-4 font-medium tabular-nums">
             {format.number(activeFilterCount)}
           </span>
         )}
@@ -238,7 +238,7 @@ const DateBound = ({
   value: string | null;
 }) => (
   <label className="flex flex-col gap-1">
-    <span className="text-muted-foreground text-[0.625rem] font-medium tracking-wide uppercase">
+    <span className="text-muted-foreground text-3xs font-medium tracking-wide uppercase">
       {label}
     </span>
     <DatePickerPopover
@@ -465,7 +465,7 @@ const FacetOptions = ({
                 {item.label}
               </BidiText>
               {item.count !== null && (
-                <span className="text-muted-foreground shrink-0 text-[11px] tabular-nums">
+                <span className="text-muted-foreground text-2xs shrink-0 tabular-nums">
                   {format.number(item.count)}
                 </span>
               )}

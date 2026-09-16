@@ -70,7 +70,7 @@ export const ReviewCommentCard = ({
       name={author.name}
     />
     <div className="min-w-0 flex-1">
-      <p className="text-muted-foreground flex min-w-0 items-baseline gap-1.5 text-[11px]">
+      <p className="text-muted-foreground text-2xs flex min-w-0 items-baseline gap-1.5">
         <BidiText
           as="span"
           className="text-foreground-strong-muted truncate font-medium"
@@ -90,13 +90,13 @@ export const ReviewCommentCard = ({
       {anchorText === undefined || anchorText === "" ? null : (
         <BidiText
           as="p"
-          className="text-muted-foreground mt-0.5 truncate text-[11px] italic"
+          className="text-muted-foreground text-2xs mt-0.5 truncate italic"
         >
           {anchorText}
         </BidiText>
       )}
       {isStale && staleLabel !== undefined ? (
-        <p className="text-muted-foreground mt-0.5 text-[11px]">{staleLabel}</p>
+        <p className="text-muted-foreground text-2xs mt-0.5">{staleLabel}</p>
       ) : null}
     </div>
     <div className="flex shrink-0 items-center gap-0.5">

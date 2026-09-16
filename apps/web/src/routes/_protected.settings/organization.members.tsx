@@ -251,7 +251,7 @@ function Members() {
                   <TableRow className="group" key={member.id}>
                     <TableCell>
                       <UserIdentity
-                        avatarClassName="size-8 shrink-0 text-[0.625rem]"
+                        avatarClassName="size-8 shrink-0 text-3xs"
                         image={member.user.image}
                         name={member.user.name}
                         secondaryText={member.user.email}

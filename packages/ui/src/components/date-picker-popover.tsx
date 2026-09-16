@@ -676,7 +676,7 @@ const DatePickerPopoverContent = ({
                 {weekdays.map((weekday) => (
                   <span
                     className={cn(
-                      "py-1 text-center text-[10px]",
+                      "text-3xs py-1 text-center",
                       weekday.isWeekend
                         ? "text-muted-foreground"
                         : "text-foreground-label",
@@ -883,7 +883,7 @@ const MonthGrid = ({
                   <span
                     aria-hidden="true"
                     className={cn(
-                      "me-1 text-[10px] tabular-nums opacity-50",
+                      "text-3xs me-1 tabular-nums opacity-50",
                       !isSelected && "text-muted-foreground",
                     )}
                   >

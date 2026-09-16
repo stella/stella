@@ -176,7 +176,7 @@ const BilingualReviewRow = ({
             </SelectPopup>
           </Select>
           {originKey !== null && (
-            <span className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-[11px]">
+            <span className="bg-muted text-muted-foreground text-2xs rounded px-1.5 py-0.5">
               {t(originKey)}
             </span>
           )}

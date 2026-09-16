@@ -192,7 +192,7 @@ export const ChatModelOptionsMenu = ({
       >
         <span className="flex flex-col py-0.5">
           <span>{t("chat.modelSelector.autoLabel")}</span>
-          <span className="text-muted-foreground text-[11px] text-wrap">
+          <span className="text-muted-foreground text-2xs text-wrap">
             {t("chat.modelSelector.autoDescription")}
           </span>
         </span>
@@ -237,7 +237,7 @@ const ModelOptionRow = ({
               {option.displayName}
             </BidiText>
             {routedProviderDiffers && (
-              <span className="text-muted-foreground text-[11px]">
+              <span className="text-muted-foreground text-2xs">
                 {t("chat.modelSelector.viaProvider", {
                   provider: PROVIDER_LABELS[option.provider],
                 })}

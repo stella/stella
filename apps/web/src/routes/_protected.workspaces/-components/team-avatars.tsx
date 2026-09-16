@@ -12,7 +12,7 @@ type TeamAvatarsProps = {
   leadUserId: string | null;
   /** Size in tailwind units, e.g. "size-6". */
   size?: string;
-  /** Inner text size class, e.g. "text-[0.625rem]". */
+  /** Inner text size class, e.g. "text-3xs". */
   textSize?: string;
   maxVisible?: number;
   emptyFallback?: React.ReactNode;
@@ -22,7 +22,7 @@ export const TeamAvatars = ({
   members,
   leadUserId,
   size = "size-6",
-  textSize = "text-[0.625rem]",
+  textSize = "text-3xs",
   maxVisible = 3,
   emptyFallback,
   // Explicit ReactNode: `emptyFallback` widens the inferred return to a type

@@ -419,7 +419,7 @@ const MatterPickerSection = ({
                       <BidiText
                         as="span"
                         className={cn(
-                          "shrink-0 text-[10px]",
+                          "text-3xs shrink-0",
                           isSelected ? "opacity-80" : "text-muted-foreground",
                         )}
                       >
@@ -485,7 +485,7 @@ const CreatedSuccessCard = ({ output, onOpen }: CreatedSuccessCardProps) => {
           {output.fileName}
         </BidiText>
         {canOpen && (
-          <span className="text-muted-foreground inline-flex items-center gap-1 text-[11px]">
+          <span className="text-muted-foreground text-2xs inline-flex items-center gap-1">
             {t("chat.createDocument.openInFolio")}
             <DirectionalIcon
               className="size-3 shrink-0"

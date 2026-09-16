@@ -92,12 +92,12 @@ export const CatalogueStackPreview = ({
         <header className="border-border flex items-center justify-between border-b px-5 py-4">
           <div className="flex items-center gap-2">
             <StellaWordmark className="h-4" />
-            <span className="border-border text-muted-foreground rounded-sm border px-1.5 py-0.5 text-[0.625rem] font-medium tracking-[0.1em] uppercase">
+            <span className="border-border text-muted-foreground text-3xs rounded-sm border px-1.5 py-0.5 font-medium tracking-[0.1em] uppercase">
               AI
             </span>
           </div>
           <span
-            className="text-muted-foreground text-[10px] tracking-wider uppercase"
+            className="text-muted-foreground text-3xs tracking-wider uppercase"
             style={{ fontVariantNumeric: "tabular-nums" }}
           >
             {t("onboarding.cataloguePreviewCount", { count: total })}
@@ -149,7 +149,7 @@ const Section = ({
   children: React.ReactNode;
 }) => (
   <section className="flex flex-col gap-2">
-    <h3 className="text-muted-foreground text-[10px] font-medium tracking-wider uppercase">
+    <h3 className="text-muted-foreground text-3xs font-medium tracking-wider uppercase">
       {title}
     </h3>
     <div className="flex flex-col gap-1.5">{children}</div>
@@ -188,13 +188,13 @@ const Row = ({
           {labelKey ? t(labelKey) : entry.displayName}
         </span>
         {entry.jurisdictions.length > 0 && (
-          <span className="text-muted-foreground text-[10px]">
+          <span className="text-muted-foreground text-3xs">
             {entry.jurisdictions.join(" · ")}
           </span>
         )}
       </div>
       {tone === "baseline" && (
-        <span className="text-foreground-placeholder text-[10px] tracking-wider uppercase">
+        <span className="text-foreground-placeholder text-3xs tracking-wider uppercase">
           {t("onboarding.catalogueAlwaysOn")}
         </span>
       )}

@@ -1,7 +1,7 @@
 import { DownloadIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { buttonVariants } from "@stll/ui/button-variants";
+import { buttonVariants } from "@stll/ui/button";
 import { cn } from "@stll/ui/utils";
 
 import {

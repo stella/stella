@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 
 import { cn } from "../lib/utils";
-import { buttonVariants } from "./button-variants";
+import { buttonVariants } from "./button";
 
 type ToastData = {
   tooltipStyle?: boolean;

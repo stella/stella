@@ -759,7 +759,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                 <span />
                 {Array.from({ length: 7 }, (_, i) => (
                   <span
-                    className="text-muted-foreground text-center text-[0.625rem]"
+                    className="text-muted-foreground text-3xs text-center"
                     key={i}
                   >
                     {getLocaleDayLabel(i, firstWeekday)}

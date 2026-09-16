@@ -1941,7 +1941,7 @@ const ReferenceFilePicker = ({
         <h3 className={SECTION_LABEL_CLASS}>
           {t("inspector.review.referencesSection")}
         </h3>
-        <span className="text-muted-foreground text-[11px] tabular-nums">
+        <span className="text-muted-foreground text-2xs tabular-nums">
           {t("inspector.review.referencesCount", {
             count: references.length,
             max: DOCUMENT_REVIEW_LIMITS.referencesMax,
@@ -1964,7 +1964,7 @@ const ReferenceFilePicker = ({
               </BidiText>
               {reference.workspaceId !== workspaceId &&
                 reference.workspaceName !== null && (
-                  <BidiText className="text-muted-foreground max-w-28 shrink-0 truncate text-[11px]">
+                  <BidiText className="text-muted-foreground text-2xs max-w-28 shrink-0 truncate">
                     {reference.workspaceName}
                   </BidiText>
                 )}
@@ -2025,7 +2025,7 @@ const ReferenceFilePicker = ({
       />
       {suggestedSources.length > 0 && (
         <div className="space-y-0.5">
-          <p className="text-muted-foreground px-2.5 text-[11px]">
+          <p className="text-muted-foreground text-2xs px-2.5">
             {t("inspector.review.fromThisMatter")}
           </p>
           <ul className="space-y-0.5">

@@ -76,17 +76,16 @@ export const ToolCallCodeBlock = ({
 
   return (
     <div className="bg-background/50 overflow-hidden rounded-lg border">
-      <div className="text-muted-foreground flex h-9 items-center justify-between px-2.5 text-[11px]">
+      <div className="text-muted-foreground text-2xs flex h-9 items-center justify-between px-2.5">
         <span className="font-mono lowercase">{language}</span>
         <Button
           aria-label={t("common.copy")}
-          className="text-muted-foreground"
           onClick={() => {
             detached(handleCopy(), "tool-call-code-block.copy");
           }}
           size="icon-xs"
           type="button"
-          variant="ghost"
+          variant="muted"
         >
           <CopyIcon className="size-3.5" />
         </Button>

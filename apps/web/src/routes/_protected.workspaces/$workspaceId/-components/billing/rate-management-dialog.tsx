@@ -278,10 +278,10 @@ const RateTablesView = ({
                 )}
                 <Button
                   aria-label={t("common.delete")}
-                  className="text-destructive size-7"
+                  className="size-7"
                   onClick={() => handleDelete(table.id)}
                   size="icon"
-                  variant="ghost"
+                  variant="destructive-ghost"
                 >
                   <TrashIcon className="size-3.5" />
                 </Button>
@@ -573,7 +573,7 @@ const RateEntriesView = ({
                 {entry.userId ? (
                   <div className="flex items-center gap-2">
                     <UserIdentity
-                      avatarClassName="size-7 shrink-0 text-[0.625rem]"
+                      avatarClassName="size-7 shrink-0 text-3xs"
                       image={entry.userImage}
                       name={entry.userName}
                     />
@@ -609,10 +609,10 @@ const RateEntriesView = ({
 
               <Button
                 aria-label={t("common.delete")}
-                className="text-destructive size-7 opacity-0 transition-opacity group-hover:opacity-100"
+                className="size-7 opacity-0 transition-opacity group-hover:opacity-100"
                 onClick={() => handleDelete(entry.id)}
                 size="icon"
-                variant="ghost"
+                variant="destructive-ghost"
               >
                 <TrashIcon className="size-3.5" />
               </Button>
@@ -739,7 +739,7 @@ const CreateRateEntryForm = ({
 
                     return (
                       <UserIdentity
-                        avatarClassName="size-7 shrink-0 text-[0.625rem]"
+                        avatarClassName="size-7 shrink-0 text-3xs"
                         className="min-w-0"
                         image={selectedMember.user.image}
                         name={selectedMember.user.name}
@@ -756,7 +756,7 @@ const CreateRateEntryForm = ({
                 {members.map((member) => (
                   <SelectItem key={member.userId} value={member.userId}>
                     <UserIdentity
-                      avatarClassName="size-7 shrink-0 text-[0.625rem]"
+                      avatarClassName="size-7 shrink-0 text-3xs"
                       className="min-w-0"
                       image={member.user.image}
                       name={member.user.name}

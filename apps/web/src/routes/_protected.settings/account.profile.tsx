@@ -730,7 +730,7 @@ function ProfilePageBody() {
                               className="bg-muted/20 flex flex-col gap-1 rounded-md p-3"
                             >
                               <div className="text-muted-foreground flex text-xs">
-                                <span className="bg-muted rounded px-1.5 py-0.5 font-mono text-[10px] capitalize">
+                                <span className="bg-muted text-3xs rounded px-1.5 py-0.5 font-mono capitalize">
                                   {task.role}
                                 </span>
                               </div>

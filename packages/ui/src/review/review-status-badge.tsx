@@ -62,7 +62,7 @@ const REVIEW_STATUS_BADGE_BASE_CLASS =
   "inline-flex shrink-0 items-center rounded-full border font-medium whitespace-nowrap";
 
 const SIZE_CLASS = {
-  xs: "gap-1 px-1.5 py-0.5 text-[11px]",
+  xs: "gap-1 px-1.5 py-0.5 text-2xs",
   sm: "gap-1.5 px-2 py-0.5 text-xs",
 } as const satisfies Record<ReviewStatusSize, string>;
 

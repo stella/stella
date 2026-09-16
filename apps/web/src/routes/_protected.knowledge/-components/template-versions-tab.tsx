@@ -159,7 +159,7 @@ export const TemplateVersionsTab = ({
       {hasNextPage && (
         <div className="border-t p-1">
           <Button
-            className="text-muted-foreground w-full"
+            className="w-full"
             disabled={isFetchingNextPage}
             onClick={() => {
               detached(
@@ -168,7 +168,7 @@ export const TemplateVersionsTab = ({
               );
             }}
             size="sm"
-            variant="ghost"
+            variant="muted"
           >
             {t("common.loadMore")}
           </Button>

@@ -148,10 +148,10 @@ export const SplitEntryDialog = ({
               {splits.length > 2 && (
                 <Button
                   aria-label={t("common.delete")}
-                  className="text-destructive size-8"
+                  className="size-8"
                   onClick={() => removeSplit(index)}
                   size="icon"
-                  variant="ghost"
+                  variant="destructive-ghost"
                 >
                   <TrashIcon className="size-3.5" />
                 </Button>

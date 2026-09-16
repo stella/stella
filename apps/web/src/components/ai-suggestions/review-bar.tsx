@@ -515,7 +515,7 @@ const SuggestionChangeLine = ({
   return (
     <BidiText
       as="span"
-      className="text-muted-foreground block truncate text-[11px] leading-4"
+      className="text-muted-foreground text-2xs block truncate leading-4"
     >
       {text}
     </BidiText>

@@ -103,7 +103,7 @@ export const COMPOSER_SEND_BUTTON_CLASS =
  * the row stays subordinate to the box above it.
  */
 export const COMPOSER_PICKER_TRIGGER_CLASS =
-  "text-muted-foreground hover:text-foreground hover:bg-accent inline-flex min-w-0 shrink items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] transition-colors";
+  "text-muted-foreground hover:text-foreground hover:bg-accent inline-flex min-w-0 shrink items-center gap-1 rounded-md px-1.5 py-0.5 text-2xs transition-colors";
 
 type ComposerStatusRowProps = {
   /** Left cluster: matter picker, web-search / anonymize toggles, ... */

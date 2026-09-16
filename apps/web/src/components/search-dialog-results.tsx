@@ -81,7 +81,7 @@ export const CommandActionItem = ({
       <Icon className="text-muted-foreground size-4 shrink-0" />
       <span className="min-w-0 flex-1 truncate">{action.title}</span>
       {action.hotkey && (
-        <kbd className="bg-muted text-muted-foreground pointer-events-none inline-flex h-5 shrink-0 items-center gap-1 rounded border px-1.5 text-[10px] font-medium select-none">
+        <kbd className="bg-muted text-muted-foreground text-3xs pointer-events-none inline-flex h-5 shrink-0 items-center gap-1 rounded border px-1.5 font-medium select-none">
           {formatHotkeyForPlatform(action.hotkey, hotkeyPlatform)}
         </kbd>
       )}

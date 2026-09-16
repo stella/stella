@@ -48,7 +48,7 @@ const LoaderState = ({ label, detail, hint, className }: LoaderStateProps) => (
         </p>
       )}
       {hint !== undefined && (
-        <p className="text-muted-foreground text-[11px] text-pretty">{hint}</p>
+        <p className="text-muted-foreground text-2xs text-pretty">{hint}</p>
       )}
     </div>
   </div>

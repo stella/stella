@@ -95,7 +95,7 @@ export const TypeChipsRow = <TType extends string>({
           showSeparator && "border-t pt-2",
         )}
       >
-        <span className="text-foreground-label shrink-0 px-1.5 text-[11px] font-medium">
+        <span className="text-foreground-label text-2xs shrink-0 px-1.5 font-medium">
           {t("workspaces.properties.returnsLabel")}
         </span>
         {chipDefs.map(({ type, icon: Icon, label }) => {
@@ -138,7 +138,7 @@ export const TypeChipsRow = <TType extends string>({
         )}
       </div>
       {typeChanged && (
-        <p className="text-warning-foreground inline-flex items-center gap-1.5 text-[11px]">
+        <p className="text-warning-foreground text-2xs inline-flex items-center gap-1.5">
           <AlertTriangleIcon className="size-3 shrink-0" />
           {t("workspaces.properties.typeChangeWarning")}
         </p>
@@ -169,7 +169,7 @@ export const ReadingFromRow = ({
     availableFiles.length > 0;
 
   return (
-    <div className="text-muted-foreground flex flex-wrap items-center gap-1.5 text-[11.5px]">
+    <div className="text-muted-foreground text-2xs flex flex-wrap items-center gap-1.5">
       <span className="inline-flex items-center gap-1">
         <AtSignIcon className="size-2.5" />
         {t("workspaces.properties.readingFrom")}
@@ -186,7 +186,7 @@ export const ReadingFromRow = ({
           <PopoverTrigger
             render={
               <Button
-                className="text-foreground-label hover:text-foreground gap-0.5 px-1 text-[11.5px]"
+                className="text-foreground-label hover:text-foreground text-2xs gap-0.5 px-1"
                 size="xs"
                 type="button"
                 variant="ghost"
@@ -232,7 +232,7 @@ const ReadingChip = ({ label, onRemove }: ReadingChipProps) => {
   const t = useTranslations();
 
   return (
-    <span className="bg-muted/64 group inline-flex h-6 items-center gap-1 rounded-md px-2 text-[11.5px]">
+    <span className="bg-muted/64 group text-2xs inline-flex h-6 items-center gap-1 rounded-md px-2">
       <FileTextIcon className="size-3" />
       {label}
       {onRemove && (
