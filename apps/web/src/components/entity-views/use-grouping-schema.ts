@@ -5,8 +5,8 @@ import { useTranslations } from "use-intl";
 
 import type { KanbanGroupOption } from "@stll/ui/kanban";
 
+import { useWorkspaceKanbanSchema } from "@/components/workspaces/kanban/use-kanban-schema";
 import type { WorkspaceProperty } from "@/lib/types";
-import { useWorkspaceKanbanSchema } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/use-kanban-schema";
 
 import { ENTITY_VIEW_GROUP, entryMatterId, entryType } from "./model";
 import type { EntityViewRow } from "./types";

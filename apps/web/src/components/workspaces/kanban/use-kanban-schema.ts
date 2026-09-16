@@ -2,9 +2,9 @@ import { useMemo } from "react";
 
 import { useTranslations } from "use-intl";
 
+import type { WorkspaceKanbanSchema } from "@/components/workspaces/kanban/kanban-view.logic";
+import { workspaceKanbanSchema } from "@/components/workspaces/kanban/kanban-view.logic";
 import type { WorkspaceProperty } from "@/lib/types";
-import type { WorkspaceKanbanSchema } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.logic";
-import { workspaceKanbanSchema } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.logic";
 
 /**
  * The workspace's kanban schema, with the column labels every built-in grouping

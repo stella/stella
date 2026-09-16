@@ -1,5 +1,5 @@
 import { createContext, use, useMemo, useRef, useState } from "react";
-import type { ReactNode, RefObject } from "react";
+import type { ComponentType, ReactNode, RefObject } from "react";
 
 import { flexRender, useTable } from "@tanstack/react-table";
 import type { RowSelectionState } from "@tanstack/react-table";
@@ -8,7 +8,6 @@ import {
   CalendarIcon,
   CircleDotIcon,
   FlagIcon,
-  FolderIcon,
   ListChecksIcon,
   ShapesIcon,
   TextIcon,
@@ -24,8 +23,10 @@ import { ReviewStatusBadge } from "@stll/ui/review-status-badge";
 import { cn } from "@stll/ui/utils";
 import type { SortableProperty } from "@stll/workspace-ui/sorts";
 
+import { SignalCard } from "@/components/inbox/signal-card";
 import { openInspectorSelection } from "@/components/inspector/inspector-actions";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+import { MattersNavIcon } from "@/components/matter-icon";
 import { MatterRefLink } from "@/components/matter-ref-link";
 import { UserIdentity } from "@/components/user-avatar";
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
@@ -63,7 +64,6 @@ import type { TranslationKey } from "@/i18n/types";
 import type { WorkspaceView } from "@/lib/types";
 import type { TableContentMode } from "@/lib/workspaces/table-store";
 import { useTableStore } from "@/lib/workspaces/table-store";
-import { SignalCard } from "@/routes/_protected.inbox/-signal-card";
 
 import {
   ENTITY_VIEW_GROUP,
@@ -80,7 +80,7 @@ import type { EntityViewEntry, EntityViewRow, EntityViewScope } from "./types";
 
 const COLUMN_MODEL = {
   _name: { label: "common.name", icon: TextIcon, size: 300 },
-  _matter: { label: "common.matter", icon: FolderIcon, size: 200 },
+  _matter: { label: "common.matter", icon: MattersNavIcon, size: 200 },
   "_agenda-kind": { label: "common.type", icon: ShapesIcon, size: 130 },
   _status: { label: "tasks.status", icon: CircleDotIcon, size: 140 },
   _priority: { label: "tasks.priority", icon: FlagIcon, size: 130 },
@@ -89,7 +89,11 @@ const COLUMN_MODEL = {
   _actions: { label: "common.actions", icon: ListChecksIcon, size: 240 },
 } as const satisfies Record<
   keyof typeof ENTITY_VIEW_COLUMNS,
-  { label: TranslationKey; icon: typeof TextIcon; size: number }
+  {
+    label: TranslationKey;
+    icon: ComponentType<{ className?: string }>;
+    size: number;
+  }
 >;
 type CollectionColumn = keyof typeof COLUMN_MODEL;
 export const useEntityViewSortProperties = (): SortableProperty[] => {

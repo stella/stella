@@ -45,6 +45,11 @@ import {
 } from "@stll/workspace-ui/calculations";
 
 import { InlineEdit } from "@/components/inline-edit";
+import { KanbanCard } from "@/components/workspaces/kanban/kanban-card";
+import {
+  useKanbanColumnDrag,
+  useKanbanEntityDropTarget,
+} from "@/components/workspaces/kanban/use-kanban-drop-targets";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useExternalFileDrop } from "@/hooks/use-external-file-drop";
 import { useFormatter } from "@/i18n/formatting-context";
@@ -56,11 +61,6 @@ import type {
   WorkspaceProperty,
 } from "@/lib/types";
 import { toCalculationValue } from "@/lib/workspaces/calculations";
-import { KanbanCard } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-card";
-import {
-  useKanbanColumnDrag,
-  useKanbanEntityDropTarget,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/use-kanban-drop-targets";
 import { useWorkspaceCalculationLabels } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-workspace-calculation-labels";
 
 const KANBAN_CARD_ESTIMATE_PX = 128;

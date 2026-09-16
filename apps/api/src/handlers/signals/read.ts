@@ -110,13 +110,16 @@ type SignalRow = Omit<
   "organizationId" | "dedupeKey"
 >;
 
-export const serializeSignal = <TRow extends SignalRow>(row: TRow) => ({
-  ...row,
-  snoozedUntil: row.snoozedUntil?.toISOString() ?? null,
-  resolvedAt: row.resolvedAt?.toISOString() ?? null,
-  createdAt: row.createdAt.toISOString(),
-  updatedAt: row.updatedAt.toISOString(),
-});
+export const serializeSignal = <TRow extends SignalRow>(row: TRow) => {
+  const { snoozedUntil, resolvedAt, createdAt, updatedAt, ...signal } = row;
+  return {
+    ...signal,
+    snoozedUntil: snoozedUntil?.toISOString() ?? null,
+    resolvedAt: resolvedAt?.toISOString() ?? null,
+    createdAt: createdAt.toISOString(),
+    updatedAt: updatedAt.toISOString(),
+  };
+};
 
 type ListSignalsProps = {
   safeDb: SafeDb;

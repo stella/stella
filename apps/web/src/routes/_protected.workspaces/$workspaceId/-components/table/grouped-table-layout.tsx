@@ -31,6 +31,11 @@ import {
   toTableEntities,
 } from "@/components/workspaces/entity-utils";
 import { useSyncJustificationChunks } from "@/components/workspaces/hooks/use-sync-justifications";
+import {
+  isGroupableProperty,
+  resolveWorkspaceKanbanGrouping,
+} from "@/components/workspaces/kanban/kanban-view.logic";
+import { useWorkspaceKanbanSchema } from "@/components/workspaces/kanban/use-kanban-schema";
 import { FindHighlightScope } from "@/components/workspaces/table/find-highlight";
 import {
   buildDocTypeGateLabels,
@@ -76,11 +81,6 @@ import { workspaceTableAdapter } from "@/lib/workspaces/table-adapter";
 import { useTableStore } from "@/lib/workspaces/table-store";
 import { BottomRow } from "@/routes/_protected.workspaces/$workspaceId/-components/bottom-row";
 import { EmptyState } from "@/routes/_protected.workspaces/$workspaceId/-components/empty-state";
-import {
-  isGroupableProperty,
-  resolveWorkspaceKanbanGrouping,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.logic";
-import { useWorkspaceKanbanSchema } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/use-kanban-schema";
 import { useEntityRowHost } from "@/routes/_protected.workspaces/$workspaceId/-components/table/entity-row-host";
 import { GroupScopeProvider } from "@/routes/_protected.workspaces/$workspaceId/-components/table/group-scope";
 import {

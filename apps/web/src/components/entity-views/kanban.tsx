@@ -19,7 +19,10 @@ import {
 } from "@stll/ui/kanban";
 import { stellaToast } from "@stll/ui/toast";
 
+import { SignalCard } from "@/components/inbox/signal-card";
 import { MatterRefLink } from "@/components/matter-ref-link";
+import { KanbanCard } from "@/components/workspaces/kanban/kanban-card";
+import { useKanbanEntityDropTarget } from "@/components/workspaces/kanban/use-kanban-drop-targets";
 import { useMountEffect } from "@/hooks/use-effect";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
@@ -32,9 +35,6 @@ import { toSafeId } from "@/lib/safe-id";
 import type { ViewLayout } from "@/lib/types";
 import { useRenameEntity } from "@/lib/workspaces/mutations/entities";
 import { invalidateTaskQueries } from "@/lib/workspaces/mutations/tasks";
-import { SignalCard } from "@/routes/_protected.inbox/-signal-card";
-import { KanbanCard } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-card";
-import { useKanbanEntityDropTarget } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/use-kanban-drop-targets";
 
 import { ENTITY_VIEW_GROUP, entryId, entryGroupValue } from "./model";
 import { NewEntityViewTask } from "./new-task";

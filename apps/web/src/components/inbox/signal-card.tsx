@@ -29,6 +29,14 @@ import { Textarea } from "@stll/ui/textarea";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
+import {
+  acceptSignal,
+  assignSignal,
+  type ClientSignalAcceptanceResult,
+  dismissSignal,
+  openSignalChat,
+  snoozeSignal,
+} from "@/components/inbox/signal-actions";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { MatterRefLink } from "@/components/matter-ref-link";
 import Tooltip from "@/components/tooltip";
@@ -56,14 +64,6 @@ import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
 import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 import { myWorkKeys } from "@/lib/workspaces/queries/my-work";
-import {
-  acceptSignal,
-  assignSignal,
-  type ClientSignalAcceptanceResult,
-  dismissSignal,
-  openSignalChat,
-  snoozeSignal,
-} from "@/routes/_protected.inbox/-signal-actions";
 
 type SignalCardProps = {
   signal: InboxSignal;

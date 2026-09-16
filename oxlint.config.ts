@@ -1225,7 +1225,7 @@ export default defineConfig({
         "apps/web/src/components/inspector/inspector-panel.tsx",
         "apps/web/src/routes/_protected.knowledge/-components/template-studio-chat.tsx",
         "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-view.tsx",
-        "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags.tsx",
+        "apps/web/src/components/workspaces/cell-metadata-flags.tsx",
         "packages/ui/src/components/hex-color-picker.tsx",
       ],
       rules: {
@@ -2616,7 +2616,7 @@ export default defineConfig({
       // target and the column draggable go through). Every other apps/web
       // import restriction still applies, so it is restated here.
       files: [
-        "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/use-kanban-drop-targets.ts",
+        "apps/web/src/components/workspaces/kanban/use-kanban-drop-targets.ts",
       ],
       rules: {
         "no-restricted-imports": [
@@ -3019,7 +3019,7 @@ export default defineConfig({
         "apps/web/src/components/inspector/entity-metadata-panel.tsx",
         "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-result.tsx",
         "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table-column.tsx",
-        "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-card.tsx",
+        "apps/web/src/components/workspaces/kanban/kanban-card.tsx",
       ],
       rules: {
         "no-workspace-field-value-drift/no-workspace-field-value-drift":

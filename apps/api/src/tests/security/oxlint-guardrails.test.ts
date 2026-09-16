@@ -189,7 +189,7 @@ describe("custom oxlint guardrails", () => {
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table-column.tsx",
     );
     expect(configSource).toContain(
-      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-card.tsx",
+      "apps/web/src/components/workspaces/kanban/kanban-card.tsx",
     );
     expect(configSource).toContain(
       "apps/web/src/components/inspector/entity-metadata-panel.tsx",

@@ -68,6 +68,10 @@ import { openInspectorSelection } from "@/components/inspector/inspector-actions
 import Tooltip from "@/components/tooltip";
 import { TranslateDocumentDialog } from "@/components/translate-document-dialog";
 import { canTranslateDocument } from "@/components/translate-document-dialog.logic";
+import {
+  CellLockMenuItem,
+  CellMetadataMenuSection,
+} from "@/components/workspaces/cell-metadata-flags";
 import { CopyToMatterDialog } from "@/components/workspaces/copy-to-matter-dialog";
 import {
   buildSelectionParentLookup,
@@ -79,6 +83,20 @@ import {
   getFirstFile,
 } from "@/components/workspaces/entity-utils";
 import { useEntitiesCountLimit } from "@/components/workspaces/hooks/use-limits";
+import { useRetryCell } from "@/components/workspaces/hooks/use-retry-cell";
+import { requestManualOcr } from "@/components/workspaces/request-manual-ocr";
+import {
+  canRunManualOcr,
+  getDesktopEditLockState,
+  getDuplicateName,
+  getOcrExportFileName,
+  getOcrExportFormats,
+  getOcrSources,
+  hasOcrExport,
+  type OcrExportFormat,
+  type OcrSource,
+  type RowActionContext,
+} from "@/components/workspaces/row-actions.logic";
 import type { TableTreeNode } from "@/components/workspaces/table/types";
 import { PDF_MIME_TYPE } from "@/consts";
 import { usePermissions } from "@/hooks/use-permissions";
@@ -123,24 +141,6 @@ import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
 import { useIsWorkflowRunning } from "@/lib/workspaces/queries/workspace";
 import { useWorkspaceStore } from "@/lib/workspaces/store";
-import {
-  CellLockMenuItem,
-  CellMetadataMenuSection,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags";
-import { requestManualOcr } from "@/routes/_protected.workspaces/$workspaceId/-components/request-manual-ocr";
-import {
-  canRunManualOcr,
-  getDesktopEditLockState,
-  getDuplicateName,
-  getOcrExportFileName,
-  getOcrExportFormats,
-  getOcrSources,
-  hasOcrExport,
-  type OcrExportFormat,
-  type OcrSource,
-  type RowActionContext,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions.logic";
-import { useRetryCell } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-retry-cell";
 
 export type VirtualAnchor = {
   getBoundingClientRect: () => DOMRect;

@@ -5,7 +5,7 @@ import { ENTITY_VIEW_GROUP } from "./model";
 export const defaultEntityViews = (labels: {
   table: string;
   kanban: string;
-}): WorkspaceView<"table" | "kanban">[] => {
+}) => {
   const base = {
     version: 1 as const,
     filters: [
@@ -42,5 +42,5 @@ export const defaultEntityViews = (labels: {
       createdAt: "",
       layout: { ...base, type: "table", columnOrder: [], columnPinning: [] },
     },
-  ];
+  ] satisfies WorkspaceView[];
 };

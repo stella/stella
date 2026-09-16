@@ -1,7 +1,6 @@
 import { panic, Result } from "better-result";
 import { t } from "elysia";
 
-import { readEntitiesWindowBodySchema } from "@/api/handlers/entities/read-window";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
@@ -12,6 +11,7 @@ import {
 } from "@/api/lib/entities/kanban-group-condition";
 import { queryEntities } from "@/api/lib/entities/query-entities";
 import type { EntityQueryScope } from "@/api/lib/entities/query-scope";
+import { entityQueryWindowBodySchema } from "@/api/lib/entities/query-window-schema";
 import {
   decodeEntitiesWindowCursor,
   encodeEntitiesWindowCursor,
@@ -28,7 +28,7 @@ const config = {
   mcp: { type: "covered", by: "read_content_across_matters" },
   access: "read",
   body: t.Object({
-    ...readEntitiesWindowBodySchema.properties,
+    ...entityQueryWindowBodySchema.properties,
     scope: t.Union([
       t.Object({ type: t.Literal("organization") }),
       t.Object({ type: t.Literal("matter"), matterId: tSafeId("workspace") }),

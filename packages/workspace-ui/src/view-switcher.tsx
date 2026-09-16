@@ -133,10 +133,7 @@ export const WorkspaceViewSwitcher = <View extends WorkspaceViewSwitcherItem>({
         ) : null,
     };
   });
-  const reserveActionSpace = viewTabs.some(
-    ({ actions }) =>
-      actions !== null && actions !== undefined && typeof actions !== "boolean",
-  );
+  const reserveActionSpace = viewTabs.some(({ actions }) => actions !== null);
   const [instanceId] = useState(Symbol);
   const [stripContainer, setStripContainer] = useState<HTMLDivElement | null>(
     null,

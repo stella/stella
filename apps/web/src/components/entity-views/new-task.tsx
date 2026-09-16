@@ -117,7 +117,7 @@ export const NewEntityViewTask = ({
         )}
       </MenuTrigger>
       <MenuPopup>
-        {(data?.workspaces ?? []).map((workspace) => (
+        {data?.workspaces.map((workspace) => (
           <MenuItem
             key={workspace.id}
             onClick={() =>

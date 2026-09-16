@@ -6,8 +6,8 @@ import {
   EntityViewsPending,
 } from "@/components/entity-views/entity-views";
 import { isInboxPreviewEnabled } from "@/hooks/use-inbox-preview";
-import { entityViewsOptions } from "@/lib/entity-views/queries";
 import { pageTitle } from "@/lib/page-title";
+import { entityViewsOptions } from "@/lib/workspaces/queries/entity-views";
 
 const protectedRouteApi = getRouteApi("/_protected");
 

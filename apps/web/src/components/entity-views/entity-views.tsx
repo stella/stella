@@ -32,6 +32,11 @@ import { SortChips } from "@stll/workspace-ui/sorts";
 import { WorkspaceViewSwitcher } from "@stll/workspace-ui/view-switcher";
 
 import { InlineEdit } from "@/components/inline-edit";
+import {
+  GroupByControl,
+  KanbanGroupingSettings,
+} from "@/components/workspaces/view-grouping-controls";
+import { FilterChips } from "@/components/workspaces/view-toolbar-filters";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useLocale } from "@/i18n/formatting-context";
@@ -39,11 +44,6 @@ import { getLangDir, useI18nStore } from "@/i18n/i18n-store";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
-import {
-  entityViewKeys,
-  entityViewRowsOptions,
-  entityViewsOptions,
-} from "@/lib/entity-views/queries";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import {
@@ -56,12 +56,12 @@ import type { InboxView } from "@/lib/inbox/queries";
 import { toSafeId } from "@/lib/safe-id";
 import type { ViewLayout, WorkspaceView } from "@/lib/types";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
-import { isTableView, mergeLayout } from "@/lib/workspaces/view-layout";
 import {
-  GroupByControl,
-  KanbanGroupingSettings,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar";
-import { FilterChips } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar-filters";
+  entityViewKeys,
+  entityViewRowsOptions,
+  entityViewsOptions,
+} from "@/lib/workspaces/queries/entity-views";
+import { isTableView, mergeLayout } from "@/lib/workspaces/view-layout";
 
 import { defaultEntityViews } from "./defaults";
 import { EntityViewKanban } from "./kanban";
@@ -76,7 +76,7 @@ import {
   EntityViewTable,
   useEntityViewSortProperties,
 } from "./table";
-import type { EntityViewScope } from "./types";
+import type { EntityViewEntry, EntityViewScope } from "./types";
 
 const isUnsavedViewId = (id: string) =>
   id.startsWith("default:") || id.startsWith("draft:");
@@ -106,7 +106,10 @@ export const EntityViews = ({ organizationId, scope }: EntityViewsProps) => {
       }),
     [t],
   );
-  const savedViews = saved.data?.items ?? [];
+  const savedViews = useMemo(() => {
+    if (!saved.data) return [];
+    return saved.data.items;
+  }, [saved.data]);
   const views = [
     ...savedViews,
     ...defaults.filter(
@@ -330,12 +333,17 @@ export const EntityViews = ({ organizationId, scope }: EntityViewsProps) => {
           }
         />
         <ViewToolbarChrome className="md:ms-auto md:justify-end">
-          <Select onValueChange={setProposalView} value={proposalView}>
+          <Select
+            onValueChange={(view) => {
+              if (view) setProposalView(view);
+            }}
+            value={proposalView}
+          >
             <SelectTrigger
               aria-label={t("inbox.proposalView", {
                 view: t(
                   proposalView === "open"
-                    ? "common.open"
+                    ? "inbox.view.new"
                     : `inbox.view.${proposalView}`,
                 ),
               })}
@@ -345,7 +353,7 @@ export const EntityViews = ({ organizationId, scope }: EntityViewsProps) => {
                 {t("inbox.proposalView", {
                   view: t(
                     proposalView === "open"
-                      ? "common.open"
+                      ? "inbox.view.new"
                       : `inbox.view.${proposalView}`,
                   ),
                 })}
@@ -354,7 +362,7 @@ export const EntityViews = ({ organizationId, scope }: EntityViewsProps) => {
             <SelectPopup>
               {INBOX_VIEWS.map((view) => (
                 <SelectItem key={view} value={view}>
-                  {t(view === "open" ? "common.open" : `inbox.view.${view}`)}
+                  {t(view === "open" ? "inbox.view.new" : `inbox.view.${view}`)}
                 </SelectItem>
               ))}
             </SelectPopup>
@@ -458,29 +466,25 @@ const EntityViewContent = ({
       workspaceId: scope.type === "matter" ? scope.matterId : null,
     }),
   );
-  const proposalEntries = useMemo(
-    () =>
-      proposals.data?.pages
-        .flatMap((page) =>
-          page.items.map((signal) => ({ type: "proposal" as const, signal })),
-        )
-        .filter((entry) =>
-          proposalMatchesFilters(entry, view.layout.filters),
-        ) ?? [],
-    [proposals.data, view.layout.filters],
-  );
-  const entries = useMemo(
-    () =>
-      sortEntityViewEntries({
-        entries: [
-          ...proposalEntries,
-          ...(records.data?.pages.flatMap((page) => page.items) ?? []),
-        ],
-        sorts: view.layout.sorts,
-        locale,
-      }),
-    [locale, proposalEntries, records.data, view.layout.sorts],
-  );
+  const proposalEntries = useMemo(() => {
+    if (!proposals.data) return [];
+    return proposals.data.pages
+      .flatMap((page) =>
+        page.items.map((signal) => ({ type: "proposal" as const, signal })),
+      )
+      .filter((entry) => proposalMatchesFilters(entry, view.layout.filters));
+  }, [proposals.data, view.layout.filters]);
+  const entries = useMemo(() => {
+    const loadedEntries: EntityViewEntry[] = [...proposalEntries];
+    if (records.data) {
+      for (const page of records.data.pages) loadedEntries.push(...page.items);
+    }
+    return sortEntityViewEntries({
+      entries: loadedEntries,
+      sorts: view.layout.sorts,
+      locale,
+    });
+  }, [locale, proposalEntries, records.data, view.layout.sorts]);
   const rows = useMemo(() => entries.map(toEntityViewRow), [entries]);
   const refresh = async () => {
     await Promise.all([

@@ -21,18 +21,18 @@ import type { OptionColor } from "@stll/ui/option-color";
 import { cn } from "@stll/ui/utils";
 
 import { UserIdentity } from "@/components/user-avatar";
+import { KanbanCard } from "@/components/workspaces/kanban/kanban-card";
+import {
+  useKanbanColumnDrag,
+  useKanbanEntityDropTarget,
+} from "@/components/workspaces/kanban/use-kanban-drop-targets";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { WorkspaceEntity, WorkspaceProperty } from "@/lib/types";
-import { KanbanCard } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-card";
 import {
   KanbanColumnActions,
   KanbanColumnSwatch,
   KanbanColumnTitle,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column";
-import {
-  useKanbanColumnDrag,
-  useKanbanEntityDropTarget,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/use-kanban-drop-targets";
 
 type KanbanSubgroupBoardProps = {
   cardFields: string[];

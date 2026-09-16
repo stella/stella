@@ -30,6 +30,18 @@ import { stellaToast } from "@stll/ui/toast";
 
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { getInternalPropertyId } from "@/components/workspaces/entity-utils";
+import {
+  buildKanbanAssigneeMatrix,
+  canMoveCardToSubgroupLane,
+  isKanbanSubgroupProperty,
+  resolveAssigneeLaneDropIntent,
+  resolveWorkspaceKanbanDynamicSubgroup,
+  resolveWorkspaceKanbanGrouping,
+  resolveWorkspaceKanbanGroupValue,
+  resolveWorkspaceKanbanSubgroup,
+  windowIncludesAssignees,
+} from "@/components/workspaces/kanban/kanban-view.logic";
+import { useWorkspaceKanbanSchema } from "@/components/workspaces/kanban/use-kanban-schema";
 import { useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useAnalytics } from "@/lib/analytics/provider";
@@ -83,18 +95,6 @@ import { EmptyState } from "@/routes/_protected.workspaces/$workspaceId/-compone
 import { KanbanColumn } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column";
 import type { KanbanCalculations } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column";
 import { KanbanSubgroupBoard } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-subgroup-board";
-import {
-  buildKanbanAssigneeMatrix,
-  canMoveCardToSubgroupLane,
-  isKanbanSubgroupProperty,
-  resolveAssigneeLaneDropIntent,
-  resolveWorkspaceKanbanDynamicSubgroup,
-  resolveWorkspaceKanbanGrouping,
-  resolveWorkspaceKanbanGroupValue,
-  resolveWorkspaceKanbanSubgroup,
-  windowIncludesAssignees,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.logic";
-import { useWorkspaceKanbanSchema } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/use-kanban-schema";
 import { viewEntityKinds } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-kind-filters";
 import { useUpdateView } from "@/routes/_protected.workspaces/$workspaceId/-mutations/views";
 
