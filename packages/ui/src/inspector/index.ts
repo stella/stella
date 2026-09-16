@@ -33,6 +33,7 @@ export {
 export { InspectorDock } from "./dock";
 export type { InspectorDockMount } from "./dock";
 export { entityTabGlyph, InspectorEntityTab } from "./entity-tab";
+export type { InspectorEntityTabInactiveIcon } from "./entity-tab";
 export { InspectorFacetBar } from "./facet-bar";
 export {
   PROPERTY_ROW_GRID,

@@ -25,10 +25,14 @@ export const CaseDecisionRailIcon = ({
   if (decision === undefined || !abbreviation) {
     return <FileTextIcon className={cn("size-3.5", !active && "opacity-70")} />;
   }
+  // Never faded, unlike the fallback glyph above: two capitals at chip size
+  // have no contrast to spare, and the tab's spine and fill already say which
+  // one is open. The rails hold the other half of that invariant: the app rail
+  // through `railIconInactive: "legible"` on the registration, the public rail
+  // by not fading a rail icon at all.
   return (
     <CourtTierBadge
       abbreviation={abbreviation}
-      className={cn(!active && "opacity-70")}
       tier={isCourtTier(decision.courtTier) ? decision.courtTier : "other"}
     />
   );
