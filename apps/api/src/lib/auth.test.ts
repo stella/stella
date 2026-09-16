@@ -32,6 +32,8 @@ import {
   withStellaTwoFactorSignInGate,
 } from "@/api/lib/auth";
 import { toSafeId } from "@/api/lib/branded-types";
+import { AUTH_RATE_LIMITS } from "@/api/lib/limits";
+import { OAUTH_CLIENT_REGISTRATION_PATH } from "@/api/lib/oauth-loopback-registration";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
@@ -852,6 +854,31 @@ describe("OAuth resource provisioning", () => {
     }
 
     expect(oauthPlugin.options.resourceSeedMode).toBe("none");
+  });
+
+  test("the registration rate limit the plugin enforces is the declared one", () => {
+    // Asserts the rule the limiter actually reads, not the option passed in:
+    // the plugin silently falls back to its own 5-per-minute default for a
+    // misspelled or dropped `rateLimit.register`, and 5 is low enough to
+    // refuse a team onboarding together from one address.
+    const oauthPlugin = getAuth().options.plugins.find(
+      (plugin) => plugin.id === "oauth-provider",
+    );
+    if (!oauthPlugin?.rateLimit) {
+      throw new Error("OAuth provider plugin declares no rate-limit rules");
+    }
+
+    const registrationRules = oauthPlugin.rateLimit.filter((rule) =>
+      rule.pathMatcher(OAUTH_CLIENT_REGISTRATION_PATH),
+    );
+
+    expect(registrationRules).toHaveLength(1);
+    expect(registrationRules.at(0)).toMatchObject({
+      window: AUTH_RATE_LIMITS.oauthClientRegistration.window,
+      max: AUTH_RATE_LIMITS.oauthClientRegistration.max,
+    });
+    // The point of the override: it must differ from the library default.
+    expect(AUTH_RATE_LIMITS.oauthClientRegistration.max).toBeGreaterThan(5);
   });
 
   test("the fragment bridge runs after the OAuth provider", () => {

@@ -329,6 +329,49 @@ export const buildAuthorizeUrl = ({
   return url.toString();
 };
 
+export type OAuthClientRegistrationRequest = {
+  client_name: string;
+  client_uri: string;
+  grant_types: string[];
+  redirect_uris: string[];
+  response_types: string[];
+  scope?: string;
+  software_id: string;
+  token_endpoint_auth_method: "none";
+};
+
+/**
+ * The RFC 7591 registration body stella posts when it is the client.
+ *
+ * Exported so the registration census in
+ * `tests/helpers/oauth-client-registration-fixtures.ts` builds the body from this
+ * producer rather than carrying a copy, which would keep asserting a shape
+ * stella had stopped sending.
+ *
+ * `contacts` is optional (RFC 7591 §2) and some authorization servers reject
+ * an empty array as invalid metadata, so it is omitted rather than sent empty.
+ */
+export const buildOAuthClientRegistrationRequest = ({
+  clientUri,
+  connectorSlug,
+  redirectUri,
+  requestedScopes,
+}: {
+  clientUri: string;
+  connectorSlug: string;
+  redirectUri: string;
+  requestedScopes: string[];
+}): OAuthClientRegistrationRequest => ({
+  client_name: "stella",
+  client_uri: clientUri,
+  grant_types: ["authorization_code", "refresh_token"],
+  redirect_uris: [redirectUri],
+  response_types: ["code"],
+  software_id: `stella-${connectorSlug}`,
+  token_endpoint_auth_method: "none",
+  ...(requestedScopes.length > 0 ? { scope: requestedScopes.join(" ") } : {}),
+});
+
 export const registerOAuthClient = async ({
   authorizationServer,
   connectorSlug,
@@ -350,19 +393,12 @@ export const registerOAuthClient = async ({
     );
   }
 
-  const registrationBody = {
-    client_name: "stella",
-    client_uri: env.FRONTEND_URL,
-    grant_types: ["authorization_code", "refresh_token"],
-    redirect_uris: [redirectUri],
-    response_types: ["code"],
-    token_endpoint_auth_method: "none",
-    // `contacts` is optional (RFC 7591 §2) and some authorization servers
-    // reject an empty array as invalid metadata, so it is omitted rather than
-    // sent empty.
-    software_id: `stella-${connectorSlug}`,
-    ...(requestedScopes.length > 0 ? { scope: requestedScopes.join(" ") } : {}),
-  };
+  const registrationBody = buildOAuthClientRegistrationRequest({
+    clientUri: env.FRONTEND_URL,
+    connectorSlug,
+    redirectUri,
+    requestedScopes,
+  });
 
   const response = await fetchJson({
     init: {

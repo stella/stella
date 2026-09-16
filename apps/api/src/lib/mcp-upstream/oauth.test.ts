@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   buildMcpClientMetadataDocument,
+  buildOAuthClientRegistrationRequest,
   clientRegistrationMode,
   getMcpClientMetadataDocumentUrl,
   getMcpOAuthRedirectUri,
@@ -73,6 +74,42 @@ describe("buildMcpClientMetadataDocument", () => {
     expect(document.token_endpoint_auth_method).toBe("none");
     expect(document.redirect_uris).toEqual([getMcpOAuthRedirectUri()]);
     expect(Object.keys(document)).not.toContain("client_secret");
+  });
+});
+
+describe("buildOAuthClientRegistrationRequest", () => {
+  const registrationInput = {
+    clientUri: "https://app.example.com",
+    connectorSlug: "example-connector",
+    redirectUri: "https://app.example.com/api/mcp-upstream/callback",
+    requestedScopes: ["openid", "profile"],
+  };
+
+  test("registers a public client that names the connector it is for", () => {
+    const request = buildOAuthClientRegistrationRequest(registrationInput);
+
+    expect(request).toEqual({
+      client_name: "stella",
+      client_uri: "https://app.example.com",
+      grant_types: ["authorization_code", "refresh_token"],
+      redirect_uris: ["https://app.example.com/api/mcp-upstream/callback"],
+      response_types: ["code"],
+      scope: "openid profile",
+      software_id: "stella-example-connector",
+      token_endpoint_auth_method: "none",
+    });
+  });
+
+  test("omits contacts and scope rather than sending them empty", () => {
+    // RFC 7591 §2 makes both optional, and an authorization server that
+    // rejects an empty array would refuse the whole registration.
+    const request = buildOAuthClientRegistrationRequest({
+      ...registrationInput,
+      requestedScopes: [],
+    });
+
+    expect(Object.keys(request)).not.toContain("contacts");
+    expect(Object.keys(request)).not.toContain("scope");
   });
 });
 

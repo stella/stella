@@ -639,6 +639,18 @@ export const AUTH_RATE_LIMITS = {
   verifyOtp: { window: 60, max: 5 },
   forgetPassword: { window: 60, max: 3 },
   resetPassword: { window: 60, max: 5 },
+  /**
+   * Dynamic client registration (RFC 7591). The OAuth provider defaults this
+   * to 5 per minute, which is below what normal onboarding produces: several
+   * MCP clients register a fresh client on every user connect, some register
+   * twice per attempt, an office behind a single NAT address onboarding a team
+   * lands all of it in one minute, and a hosted registrar such as Microsoft's
+   * Enterprise token store egresses from addresses shared across tenants. A
+   * refused registration is a dead connector before authorization starts, so
+   * 30 covers a team onboarding together while still bounding an
+   * unauthenticated flood from any one address.
+   */
+  oauthClientRegistration: { window: 60, max: 30 },
 } as const;
 
 /**

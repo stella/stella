@@ -1250,6 +1250,7 @@ const createAuth = () => {
         clientRegistrationAllowedResources: oauthResourceIdentifiers,
         allowDynamicClientRegistration: true,
         allowUnauthenticatedClientRegistration: true,
+        rateLimit: { register: AUTH_RATE_LIMITS.oauthClientRegistration },
         accessTokenExpiresIn: ACCESS_TOKEN_EXPIRES_IN,
         refreshTokenExpiresIn: REFRESH_TOKEN_EXPIRES_IN,
         clientReference: ({ session }) =>
