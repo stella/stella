@@ -4936,7 +4936,6 @@
         "uploadAsNewDocument": "Importer comme nouveau document"
       },
       "removeMetadata": "Supprimer les métadonnées du document",
-      "removeMetadataHint": "Supprime l’auteur, la société et l’historique des modifications. Les codes de référence <bdi>stella</bdi> sont conservés.",
       "renamedToAvoidConflicts": "{count, plural, one {# fichier renommé pour éviter les conflits} many {# fichiers renommés pour éviter les conflits} other {# fichiers renommés pour éviter les conflits}}",
       "retryFailed": "Réessayer {count, plural, one {# fichier} other {# fichiers}}",
       "runOcr": "Mettre l’OCR en file d’attente",

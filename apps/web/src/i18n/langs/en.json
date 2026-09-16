@@ -4936,7 +4936,6 @@
         "uploadAsNewDocument": "Upload as new document"
       },
       "removeMetadata": "Remove document metadata",
-      "removeMetadataHint": "Removes author, company and editing history. <bdi>stella</bdi> reference codes are kept.",
       "renamedToAvoidConflicts": "{count, plural, one {# file renamed to avoid conflicts} other {# files renamed to avoid conflicts}}",
       "retryFailed": "Retry {count, plural, one {# file} other {# files}}",
       "runOcr": "Queue OCR",

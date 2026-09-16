@@ -4936,7 +4936,6 @@
         "uploadAsNewDocument": "Als neues Dokument hochladen"
       },
       "removeMetadata": "Dokumentmetadaten entfernen",
-      "removeMetadataHint": "Entfernt Autor, Firma und Bearbeitungsverlauf. <bdi>stella</bdi>-Referenzcodes bleiben erhalten.",
       "renamedToAvoidConflicts": "{count, plural, one {# Datei umbenannt, um Konflikte zu vermeiden} other {# Dateien umbenannt, um Konflikte zu vermeiden}}",
       "retryFailed": "{count, plural, one {# Datei} other {# Dateien}} erneut versuchen",
       "runOcr": "OCR einreihen",

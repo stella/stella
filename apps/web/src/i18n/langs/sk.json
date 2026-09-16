@@ -4936,7 +4936,6 @@
         "uploadAsNewDocument": "Nahrať ako nový dokument"
       },
       "removeMetadata": "Odstrániť metadáta dokumentu",
-      "removeMetadataHint": "Odstráni autora, spoločnosť a históriu úprav. Referenčné kódy <bdi>stella</bdi> zostanú zachované.",
       "renamedToAvoidConflicts": "{count, plural, one {# súbor premenovaný kvôli konfliktu} few {# súbory premenované kvôli konfliktom} other {# súborov premenovaných kvôli konfliktom}}",
       "retryFailed": "Opakovať {count, plural, one {# súbor} few {# súbory} other {# súborov}}",
       "runOcr": "Zaradiť OCR do fronty",

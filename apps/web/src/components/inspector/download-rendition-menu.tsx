@@ -3,7 +3,6 @@ import { useState } from "react";
 import { ChevronDownIcon, DownloadIcon, FileOutputIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import {
   Menu,
@@ -66,18 +65,10 @@ export const DownloadRenditionMenuItems = ({
       {canStripMetadata && (
         <MenuCheckboxItem
           checked={stripMetadata}
-          className="items-start"
           closeOnClick={false}
           onCheckedChange={setStripMetadata}
         >
-          <span className="flex max-w-72 flex-col py-0.5">
-            <span>{t("workspaces.files.removeMetadata")}</span>
-            <span className="text-muted-foreground text-xs text-wrap">
-              {t.rich("workspaces.files.removeMetadataHint", {
-                bdi: (chunks) => <BidiText>{chunks}</BidiText>,
-              })}
-            </span>
-          </span>
+          {t("workspaces.files.removeMetadata")}
         </MenuCheckboxItem>
       )}
       {canTransform && (

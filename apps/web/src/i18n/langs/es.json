@@ -4936,7 +4936,6 @@
         "uploadAsNewDocument": "Subir como documento nuevo"
       },
       "removeMetadata": "Eliminar metadatos del documento",
-      "removeMetadataHint": "Elimina el autor, la empresa y el historial de edición. Se conservan los códigos de referencia de <bdi>stella</bdi>.",
       "renamedToAvoidConflicts": "{count, plural, one {# archivo renombrado para evitar conflictos} other {# archivos renombrados para evitar conflictos}}",
       "retryFailed": "Reintentar {count, plural, one {# archivo} other {# archivos}}",
       "runOcr": "Poner OCR en cola",
