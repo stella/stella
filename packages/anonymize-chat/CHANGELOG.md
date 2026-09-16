@@ -1,5 +1,13 @@
 # @stll/anonymize-chat
 
+## 0.1.3
+
+### Patch Changes
+
+- [#3418](https://github.com/stella/stella/pull/3418) [`aa29443`](https://github.com/stella/stella/commit/aa294433bd3b0880f991a9abe1598d4fc50bf7aa) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Export the exclusion comparison key so document exports use the same normalization as the anonymization pipeline.
+
+  Update the anonymization runtime to 3.0.1 to preserve source byte offsets when resolving entities with normalized whitespace.
+
 ## 0.1.2
 
 ### Patch Changes
