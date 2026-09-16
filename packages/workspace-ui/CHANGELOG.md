@@ -1,5 +1,17 @@
 # @stll/workspace-ui
 
+## 0.11.0
+
+### Minor Changes
+
+- [#3435](https://github.com/stella/stella/pull/3435) [`79b2d6f`](https://github.com/stella/stella/commit/79b2d6f8aa38df700555a2cdaa796af36c536433) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add agenda-kind filters and shared view-toolbar and Kanban proposal primitives. Expose cross-matter saved-view operations through the generated CLI capability tree. Replace view-switcher `renderActions` with `actionMenu`, which owns the vertical menu trigger. Hide redundant empty-lane counts and let empty Kanban cells scroll with the board.
+
+### Patch Changes
+
+- Updated dependencies [[`79b2d6f`](https://github.com/stella/stella/commit/79b2d6f8aa38df700555a2cdaa796af36c536433)]:
+  - @stll/conditions@0.4.0
+  - @stll/ui@0.28.0
+
 ## 0.10.5
 
 ### Patch Changes
