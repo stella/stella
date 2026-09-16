@@ -5,6 +5,7 @@ import * as v from "valibot";
 
 const DEV_VISUAL = {
   controlSizes: "control-sizes",
+  inspectorPane: "inspector-pane",
   workspaceTable: "workspace-table",
 } as const;
 
@@ -25,6 +26,15 @@ const ControlSizesPlayground = import.meta.env.DEV
     })
   : null;
 
+const InspectorPanePlayground = import.meta.env.DEV
+  ? React.lazy(async () => {
+      const module =
+        await import("@/routes/dev/-components/inspector-pane-playground");
+
+      return { default: module.InspectorPanePlayground };
+    })
+  : null;
+
 const WorkspaceTablePlayground = import.meta.env.DEV
   ? React.lazy(async () => {
       const module =
@@ -36,7 +46,11 @@ const WorkspaceTablePlayground = import.meta.env.DEV
 
 const searchSchema = v.object({
   visual: v.optional(
-    v.picklist([DEV_VISUAL.controlSizes, DEV_VISUAL.workspaceTable]),
+    v.picklist([
+      DEV_VISUAL.controlSizes,
+      DEV_VISUAL.inspectorPane,
+      DEV_VISUAL.workspaceTable,
+    ]),
   ),
 });
 
@@ -66,6 +80,22 @@ function DevRouteComponent() {
               <ControlSizesPlayground />
             </div>
           </div>
+        </main>
+      </React.Suspense>
+    );
+  }
+
+  if (visual === DEV_VISUAL.inspectorPane) {
+    if (InspectorPanePlayground === null) {
+      return null;
+    }
+
+    // No page chrome: the bench sizes its own panes, and anything that
+    // bounded them here would answer the question under test.
+    return (
+      <React.Suspense fallback={null}>
+        <main className="bg-background flex min-h-0 flex-1 flex-col overflow-auto p-4">
+          <InspectorPanePlayground />
         </main>
       </React.Suspense>
     );

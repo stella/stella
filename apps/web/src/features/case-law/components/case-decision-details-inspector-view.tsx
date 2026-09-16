@@ -41,7 +41,14 @@ export const CaseDecisionDetailsInspectorView = ({
         onClose={onClose}
       />
       <ScrollArea axis="vertical" className="min-h-0 flex-1">
-        <div className="px-4 py-4 font-sans">
+        {/* The pane no longer scrolls sideways, so a value that cannot wrap
+            would be clipped instead of read: an ECLI is one unbroken token
+            longer than the ~80px this grid leaves it at the 320px minimum.
+            `overflow-wrap: anywhere` is inherited, so every value in the view
+            (the facts grid below, the citation lists, whatever is added next)
+            gets break opportunities from here, and real words still break on
+            their own boundaries. */}
+        <div className="px-4 py-4 font-sans wrap-anywhere">
           {/* The header names the decision; repeating it above the facts
               would say the same thing twice on a bounded width. */}
           <h1 className="sr-only">
