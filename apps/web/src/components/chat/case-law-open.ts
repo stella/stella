@@ -16,6 +16,11 @@ import { unwrapPublicLawEden } from "@/lib/public-law-api";
 import { toSafeId } from "@/lib/safe-id";
 
 type NavigateToCaseLawDecision = (options: {
+  /**
+   * The block the reader lands on, as the route reads it back: bare, with no
+   * leading `#`. The reader marks it and scrolls to it.
+   */
+  hash?: string;
   params: {
     country: string;
     court: string;
@@ -23,6 +28,11 @@ type NavigateToCaseLawDecision = (options: {
   };
   to: "/law/$country/cases/$court/$slug";
 }) => Promise<void> | void;
+
+type OpenCaseLawDecisionOptions = {
+  /** A passage of the decision to open at, rather than its beginning. */
+  anchorId?: string | undefined;
+};
 
 const CASE_LAW_LINK_SEARCH_LIMIT = 5;
 
@@ -89,6 +99,7 @@ const resolveCaseLawDecisionRouteParams = async (
 export const openCaseLawDecision = async (
   rawDecisionRef: string,
   navigate: NavigateToCaseLawDecision,
+  { anchorId }: OpenCaseLawDecisionOptions = {},
 ) => {
   try {
     if (!isPublicLawPreviewEnabled()) {
@@ -113,6 +124,7 @@ export const openCaseLawDecision = async (
     await navigate({
       to: "/law/$country/cases/$court/$slug",
       params,
+      ...(anchorId === undefined ? {} : { hash: anchorId }),
     });
   } catch (error) {
     getAnalytics().captureError(error);

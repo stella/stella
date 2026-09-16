@@ -71,10 +71,16 @@ const UNPUBLISHED_DECISION = {
   updatedAt: new Date("2026-01-01T00:00:00.000Z"),
 } satisfies DecisionBySlug;
 
+const PUBLISHED_DECISION = {
+  ...UNPUBLISHED_DECISION,
+  country: PUBLIC_COUNTRY,
+} satisfies DecisionBySlug;
+
 describe("public case-law decision route readiness", () => {
   test("rejects a route outside the generated country list", () => {
     expect(
       loadPublicCaseLawDecisionRoute({
+        hash: "",
         params: {
           country: "xaa",
           court: "synthetic-court",
@@ -96,6 +102,7 @@ describe("public case-law decision route readiness", () => {
 
     expect(
       loadPublicCaseLawDecisionRoute({
+        hash: "",
         params: {
           country: "cze",
           court: "synthetic-court",
@@ -105,5 +112,64 @@ describe("public case-law decision route readiness", () => {
         search: {},
       }),
     ).rejects.toMatchObject({ isNotFound: true });
+  });
+});
+
+describe("canonical decision redirect", () => {
+  const seedStaleSlug = () => {
+    const queryClient = new QueryClient();
+    const options = decisionBySlugOptions({
+      country: PUBLIC_COUNTRY,
+      slug: "stale-slug",
+    });
+    queryClient.setQueryData(options.queryKey, PUBLISHED_DECISION);
+    return queryClient;
+  };
+
+  test("carries the passage the reader came for to the canonical path", async () => {
+    // A citation chip opens the decision at a block. Canonicalising the path
+    // must not drop the fragment, or the reader lands at the top of the
+    // decision instead of on the passage the answer cited.
+    const redirected = await loadPublicCaseLawDecisionRoute({
+      hash: "p-12",
+      params: {
+        country: "cze",
+        court: "synthetic-court",
+        slug: "stale-slug",
+      },
+      queryClient: seedStaleSlug(),
+      search: {},
+    }).then(
+      () => panic("Expected the stale slug to redirect."),
+      (error: unknown) => error,
+    );
+
+    expect(redirected).toMatchObject({
+      options: { params: { slug: "synthetic-decision" } },
+    });
+    // The same path the no-fragment case asserts the absence of, so that
+    // assertion cannot pass by naming a property neither case carries.
+    expect(redirected).toHaveProperty("options.hash", "p-12");
+  });
+
+  test("a decision opened at no passage keeps a bare canonical URL", async () => {
+    const redirected = await loadPublicCaseLawDecisionRoute({
+      hash: "",
+      params: {
+        country: "cze",
+        court: "synthetic-court",
+        slug: "stale-slug",
+      },
+      queryClient: seedStaleSlug(),
+      search: {},
+    }).then(
+      () => panic("Expected the stale slug to redirect."),
+      (error: unknown) => error,
+    );
+
+    expect(redirected).toMatchObject({
+      options: { params: { slug: "synthetic-decision" } },
+    });
+    expect(redirected).not.toHaveProperty("options.hash");
   });
 });

@@ -14,9 +14,12 @@ import {
 import { useTranslations } from "use-intl";
 
 import {
+  CHAT_DECISION_PASSAGE_HREF_PREFIX,
+  parseChatDecisionPassageHref,
   parseCanonicalChatSourceCitationHref,
   parseChatResourceHref,
   RESOURCE_TYPE,
+  type ChatDecisionPassageTarget,
   type ChatSourceCitationTarget,
 } from "@stll/api-contract";
 import { isFolioBlockId } from "@stll/folio-react";
@@ -215,6 +218,51 @@ const DecisionChip = ({
               detached(
                 openCaseLawDecision(decisionRef, navigate),
                 "streamdown-mention-link.open-case-law-decision",
+              )
+          : undefined
+      }
+      truncate
+    >
+      {label}
+    </InlinePill>
+  );
+};
+
+/**
+ * Click-to-open chip for an inline decision-passage citation, which the AI
+ * emits in an answer about the decision the reader has open. Opening the
+ * decision at the anchor is one navigation: the route reads the fragment back
+ * as the block to land on, and the reader marks it — so a chat docked beside
+ * the decision it cites scrolls in place, and one anywhere else opens it.
+ */
+const DecisionPassageChip = ({
+  children,
+  interactive,
+  target: { anchorId, decisionId },
+}: {
+  children: React.ReactNode;
+  interactive: boolean;
+  target: ChatDecisionPassageTarget;
+}) => {
+  const navigate = useNavigate();
+  // A model occasionally emits a degenerate citation whose text is the bare
+  // href or is empty. The anchor is the decision's own paragraph marker, so it
+  // reads as a locator rather than as the internal scheme.
+  const text = collectChipText(children).trim();
+  const label =
+    text.length === 0 ||
+    text.toLowerCase().startsWith(CHAT_DECISION_PASSAGE_HREF_PREFIX)
+      ? anchorId
+      : children;
+  return (
+    <InlinePill
+      leadingIcon={<LandmarkIcon className="size-3 shrink-0" />}
+      onActivate={
+        interactive
+          ? () =>
+              detached(
+                openCaseLawDecision(decisionId, navigate, { anchorId }),
+                "streamdown-mention-link.open-decision-passage",
               )
           : undefined
       }
@@ -556,6 +604,15 @@ export const StreamdownMentionLink = ({
 
   if (href === UNRESOLVED_REF_HREF) {
     return <span {...props}>{children}</span>;
+  }
+
+  const decisionPassage = parseChatDecisionPassageHref(href);
+  if (decisionPassage) {
+    return (
+      <DecisionPassageChip interactive={interactive} target={decisionPassage}>
+        {children}
+      </DecisionPassageChip>
+    );
   }
 
   const sourceCitation = parseCanonicalChatSourceCitationHref(href);

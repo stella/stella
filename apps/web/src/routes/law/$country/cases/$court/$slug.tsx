@@ -10,8 +10,9 @@ import {
 export const Route = createFileRoute("/law/$country/cases/$court/$slug")({
   validateSearch: publicDecisionSearchSchema,
   loaderDeps: ({ search }) => search,
-  loader: async ({ context: { queryClient }, deps, params }) =>
+  loader: async ({ context: { queryClient }, deps, location, params }) =>
     await loadPublicCaseLawDecisionRoute({
+      hash: location.hash,
       params,
       queryClient,
       search: deps,

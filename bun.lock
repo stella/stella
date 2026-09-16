@@ -540,6 +540,7 @@
         "@stll/anonymize-chat": "workspace:*",
         "@stll/template-conditions": "workspace:*",
         "@stll/time": "workspace:*",
+        "@stll/uuid-codec": "workspace:*",
         "better-result": "catalog:",
         "valibot": "catalog:",
       },

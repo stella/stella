@@ -158,6 +158,63 @@ describe("styleDocumentCitations", () => {
     ).toEqual(["Unverified citation: message passage"]);
   });
 
+  test("decision passage citations unwrap or become unverified footnotes", () => {
+    const passageCitation =
+      "[the appeal is dismissed](#stella-decision-passage=33333333-3333-4333-8333-333333333333:p-12)";
+    const withoutCitations = styleDocumentCitations(
+      markdownToStellaDocument(passageCitation),
+      "none",
+      options,
+    );
+    const withFootnotes = styleDocumentCitationsWithCounts(
+      markdownToStellaDocument(passageCitation),
+      "footnotes",
+      options,
+    );
+
+    expect(collectText(withoutCitations.package.document.content)).toBe(
+      "the appeal is dismissed",
+    );
+    expect(
+      collectHyperlinkTargets(withoutCitations.package.document.content),
+    ).toEqual([]);
+    expect(withFootnotes.citationCounts).toEqual({
+      unverified: 1,
+      verified: 0,
+    });
+    expect(
+      withFootnotes.document.package.footnotes?.map(({ content }) =>
+        collectText(content),
+      ),
+    ).toEqual(["Unverified citation: the appeal is dismissed"]);
+  });
+
+  test("malformed decision passage hrefs export as plain text", () => {
+    // A hallucinated anchor or a non-uuid decision must not survive the export
+    // as a dead internal hyperlink.
+    for (const href of [
+      "#stella-decision-passage=not-a-uuid:p-12",
+      // Percent-encoded: outside the anchor grammar the parsers ever mint.
+      "#stella-decision-passage=33333333-3333-4333-8333-333333333333:p%2D12",
+      "#stella-decision-passage=33333333-3333-4333-8333-333333333333",
+    ]) {
+      const result = styleDocumentCitationsWithCounts(
+        markdownToStellaDocument(`[claim](${href})`),
+        "footnotes",
+        options,
+      );
+
+      expect(collectText(result.document.package.document.content)).toBe(
+        "claim",
+      );
+      expect(
+        collectHyperlinkTargets(result.document.package.document.content),
+      ).toEqual([]);
+      expect(result.document.package.footnotes).toEqual([]);
+      expect(result.citationCounts).toEqual({ unverified: 0, verified: 0 });
+    }
+  });
+
   test("malformed email citation hrefs export as plain text", () => {
     const malformed = markdownToStellaDocument("[claim](#email:bogus)");
     const result = styleDocumentCitationsWithCounts(
