@@ -72,7 +72,9 @@ const cliAnnotationSchema = v.object({
   itemsKey: v.optional(v.string()),
   singleReadWhen: v.optional(v.string()),
   columns: v.optional(stringArraySchema),
-  windowedText: v.optional(v.literal(true)),
+  windowedText: v.optional(
+    v.object({ textPath: v.pipe(v.string(), v.minLength(1)) }),
+  ),
   paginationless: v.optional(v.literal(true)),
   inputOnly: v.optional(stringArraySchema),
   discriminator: v.optional(

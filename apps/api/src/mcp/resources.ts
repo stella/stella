@@ -26,6 +26,8 @@ import {
   buildWorkflowReference,
   TEMPLATE_WORKFLOW_REFERENCE_URI,
 } from "@/api/mcp/template-workflow-reference";
+import { isMcpToolFeatureEnabled } from "@/api/mcp/tool-feature";
+import type { McpToolFeatureFlag } from "@/api/mcp/tool-types";
 
 /**
  * MCP resources are static, no-argument documents (the textbook fit for a
@@ -49,9 +51,20 @@ type StaticResource = {
   description: string;
   mimeType: string;
   listed: boolean;
+  /**
+   * The deployment gate this resource rides, when it documents a gated tool
+   * family. A reference whose tools are filtered out of `tools/list` would
+   * otherwise hand a client a procedure it has no advertised schema for, so
+   * it is neither listed nor readable while the gate is closed: the same
+   * predicate, on both surfaces.
+   */
+  feature?: McpToolFeatureFlag;
   read: () => string | Promise<string>;
   resourceMeta?: () => Record<string, unknown>;
 };
+
+const isAvailable = (resource: StaticResource): boolean =>
+  isMcpToolFeatureEnabled(resource.feature);
 
 const PRODUCT_IDENTITY_URI = "stella://about";
 
@@ -131,6 +144,7 @@ const STATIC_RESOURCES: readonly StaticResource[] = [
       "search_legislation call.",
     mimeType: "text/markdown",
     listed: true,
+    feature: "FEATURE_PUBLIC_LAW",
     read: buildLegislationWorkflowReference,
   },
   {
@@ -172,22 +186,22 @@ const documentUploadResourceMeta = (): Record<string, unknown> => {
 };
 
 export const listMcpResources = (_mode: McpMode): Resource[] =>
-  STATIC_RESOURCES.filter(({ listed }) => listed).map(
-    ({ description, mimeType, name, title, uri }) => ({
-      uri,
-      name,
-      title,
-      description,
-      mimeType,
-    }),
-  );
+  STATIC_RESOURCES.filter(
+    (resource) => resource.listed && isAvailable(resource),
+  ).map(({ description, mimeType, name, title, uri }) => ({
+    uri,
+    name,
+    title,
+    description,
+    mimeType,
+  }));
 
 export const readMcpResource = async (
   uri: string,
   _mode: McpMode,
 ): Promise<ReadResourceResult> => {
   const resource = STATIC_RESOURCES.find((entry) => entry.uri === uri);
-  if (!resource) {
+  if (!resource || !isAvailable(resource)) {
     throw new ProtocolError(
       ProtocolErrorCode.InvalidParams,
       `Unknown resource: ${uri}`,

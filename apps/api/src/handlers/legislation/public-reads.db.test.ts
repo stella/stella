@@ -12,7 +12,10 @@ import {
   legislationDocuments,
   legislationSources,
 } from "@/api/db/schema";
-import { readStatuteByEliHandler } from "@/api/handlers/legislation/by-eli";
+import {
+  readStatuteByEliHandler,
+  resolveStatuteWorkVersion,
+} from "@/api/handlers/legislation/by-eli";
 import {
   readLegislationHandler,
   readPublicLegislationHandler,
@@ -656,6 +659,7 @@ const expectPage = (result: unknown): StatutePage => {
 
 type ProvisionHistoryPage = {
   items: {
+    allowsDerivedAi: boolean;
     documentId: string;
     versionValidFrom: string | null;
     versionValidTo: string | null;
@@ -1233,6 +1237,42 @@ describe("point-in-time statute read", () => {
   });
 });
 
+describe("statute work resolution", () => {
+  test("resolves a work whose only window has already closed", async () => {
+    // The Sunset Act's validity window closed today, so no consolidation of
+    // it applies: a history read must still reach it.
+    expect(
+      await resolveStatuteWorkVersion({ eli: "CZ/1998/222" }, legislationDb),
+    ).toEqual({ type: "expression", id: sunsetAct });
+    expect(
+      await readStatuteByEliHandler({ eli: "CZ/1998/222" }, legislationDb),
+    ).toMatchObject({ code: 404 });
+  });
+
+  test("resolves a work whose newest window has not opened yet", async () => {
+    // Newest by validity sort, whatever the date: the future consolidation
+    // wins over the one in force today.
+    expect(
+      await resolveStatuteWorkVersion(
+        { eli: "CZ/2012/89", language: "cs" },
+        legislationDb,
+      ),
+    ).toEqual({ type: "expression", id: civilCodeFuture });
+  });
+
+  test("reads as unknown for an ELI the corpus does not hold", async () => {
+    expect(
+      await resolveStatuteWorkVersion({ eli: "CZ/1900/1" }, legislationDb),
+    ).toEqual({ type: "unknown-work" });
+  });
+
+  test("reads as unknown for a source not cleared for redistribution", async () => {
+    expect(
+      await resolveStatuteWorkVersion({ eli: "CZ/1999/111" }, legislationDb),
+    ).toEqual({ type: "unknown-work" });
+  });
+});
+
 describe("provision history", () => {
   test("returns the provision's own text per version, newest window first", async () => {
     const page = expectHistoryPage(
@@ -1286,6 +1326,45 @@ describe("provision history", () => {
       code: 404,
       response: { message: "Provision not found" },
     });
+  });
+
+  test("answers from a version that dropped the anchor, not just from one that kept it", async () => {
+    // Addressed at the consolidation in which the provision is repealed: the
+    // document only establishes the Work key, so the older wordings are still
+    // the history of that anchor.
+    const page = expectHistoryPage(
+      await readProvisionHistoryHandler({
+        documentId: civilCodeFuture,
+        anchor: DELIVERY_ANCHOR,
+        query: {},
+        legislationDb,
+      }),
+    );
+
+    expect(page.items.map((item) => item.documentId)).toEqual([
+      civilCodeCurrent,
+      civilCodeOpenOlder,
+      civilCodeSuperseded,
+    ]);
+  });
+
+  test("carries each version's derived-AI permission with its wording", async () => {
+    const page = expectHistoryPage(
+      await readProvisionHistoryHandler({
+        documentId: civilCodeCurrent,
+        anchor: DELIVERY_ANCHOR,
+        query: {},
+        legislationDb,
+      }),
+    );
+
+    // Every fixture version of this work comes from the open source, so the
+    // flag is true; an agent-facing read withholds the text where it is not.
+    expect(page.items.map((item) => item.allowsDerivedAi)).toEqual([
+      true,
+      true,
+      true,
+    ]);
   });
 
   test("reads as not found for a source not cleared for redistribution", async () => {

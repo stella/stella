@@ -16,7 +16,10 @@ import {
 import type { readGatedDecisionCitations } from "@/api/handlers/case-law/decisions/citation-passages";
 import type { readGatedDecisionWithDocument } from "@/api/handlers/case-law/decisions/get-deferred-document";
 import type { searchDecisionsHandler } from "@/api/handlers/case-law/decisions/search";
-import type { resolveStatuteExpression } from "@/api/handlers/legislation/by-eli";
+import type {
+  resolveStatuteExpression,
+  resolveStatuteWorkVersion,
+} from "@/api/handlers/legislation/by-eli";
 import type { readPublicLegislationHandler } from "@/api/handlers/legislation/get";
 import type { readProvisionHistoryHandler } from "@/api/handlers/legislation/provision-history";
 import type { readLegislationProvisionVersions } from "@/api/handlers/legislation/provision-versions";
@@ -120,6 +123,7 @@ export type McpRequestContext = {
     readGatedDecisionWithDocument?: typeof readGatedDecisionWithDocument;
     searchLegislationHandler?: typeof searchLegislationHandler;
     resolveStatuteExpression?: typeof resolveStatuteExpression;
+    resolveStatuteWorkVersion?: typeof resolveStatuteWorkVersion;
     readPublicLegislationHandler?: typeof readPublicLegislationHandler;
     listStatuteVersionsHandler?: typeof listStatuteVersionsHandler;
     readProvisionHistoryHandler?: typeof readProvisionHistoryHandler;

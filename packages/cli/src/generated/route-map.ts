@@ -583,6 +583,7 @@ export const generatedRouteMap: RouteNode = {
             inputOnly: [],
             paginated: true,
             windowedText: true,
+            textPath: "decision.text",
             destructive: false,
             scope: "read",
             inputSchema: {
@@ -698,6 +699,7 @@ export const generatedRouteMap: RouteNode = {
             inputOnly: [],
             paginated: true,
             windowedText: true,
+            textPath: "text",
             destructive: false,
             scope: "read",
             inputSchema: {
@@ -2492,6 +2494,7 @@ export const generatedRouteMap: RouteNode = {
             inputOnly: [],
             paginated: true,
             windowedText: true,
+            textPath: "statute.text",
             destructive: false,
             scope: "read",
             inputSchema: {
@@ -2567,7 +2570,7 @@ export const generatedRouteMap: RouteNode = {
                         minLength: 1,
                         maxLength: 256,
                         description:
-                          "Anchor of the provision in the publisher's own scheme (par_1729, par_1729-odst_1). read_statute's outline lists the anchors a consolidation carries; they are not derivable from a section number.",
+                          "Anchor of the provision in the publisher's own scheme. read_statute's outline lists a consolidation's provision anchors (par_1729); a subdivision of one of them is accepted too and narrows the answer to that subdivision (par_1729-odst_1, par_1729-odst_2-pism_a). Anchors are not derivable from a section number.",
                       },
                       as_of: {
                         type: "string",
@@ -2590,7 +2593,7 @@ export const generatedRouteMap: RouteNode = {
                   minItems: 1,
                   maxItems: 20,
                   description:
-                    "The provisions to read, at most 20 per call. Each entry is answered on its own, so one unknown anchor does not sink the rest.",
+                    "The provisions to read, at most 20 per call. Each entry is validated and answered on its own, so a malformed or unresolvable entry does not sink the rest: it comes back with its own status.",
                 },
               },
             },
@@ -2619,7 +2622,7 @@ export const generatedRouteMap: RouteNode = {
                 kind: "string",
                 repeatable: false,
                 description:
-                  "Anchor of the provision in the publisher's own scheme (par_1729, par_1729-odst_1). read_statute's outline lists the anchors a consolidation carries; they are not derivable from a section number.",
+                  "Anchor of the provision in the publisher's own scheme. read_statute's outline lists a consolidation's provision anchors (par_1729); a subdivision of one of them is accepted too and narrows the answer to that subdivision (par_1729-odst_1, par_1729-odst_2-pism_a). Anchors are not derivable from a section number.",
                 required: true,
               },
               {
@@ -2655,7 +2658,7 @@ export const generatedRouteMap: RouteNode = {
                   minLength: 1,
                   maxLength: 256,
                   description:
-                    "Anchor of the provision in the publisher's own scheme (par_1729, par_1729-odst_1). read_statute's outline lists the anchors a consolidation carries; they are not derivable from a section number.",
+                    "Anchor of the provision in the publisher's own scheme. read_statute's outline lists a consolidation's provision anchors (par_1729); a subdivision of one of them is accepted too and narrows the answer to that subdivision (par_1729-odst_1, par_1729-odst_2-pism_a). Anchors are not derivable from a section number.",
                 },
                 language: {
                   type: "string",

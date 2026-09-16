@@ -4,6 +4,9 @@ import type { Block } from "@stll/legal-ast/document-ast";
 
 import { extractProvisionText } from "@/api/handlers/legislation/provision-text";
 
+/** Written as an escape so the fixture text is unambiguous in review. */
+const SECTION_SIGN = "\u00a7";
+
 const heading = (anchorId: string, level: 1 | 2 | 3, text: string): Block => ({
   id: `h-${anchorId}`,
   anchorId,
@@ -79,9 +82,60 @@ describe("extractProvisionText", () => {
     );
   });
 
-  test("ignores an anchor that belongs to a paragraph, not a heading", () => {
-    // Only a heading opens a provision; a paragraph anchor is a deep-link
-    // target inside one.
+  test("reads an anchor whose provision cannot be located as absent", () => {
+    // `sec` is not a heading in this fixture, so nothing files `sec-1-1`.
     expect(extractProvisionText(blocks, "sec-1-1")).toBeNull();
+  });
+});
+
+/**
+ * The publisher's own grammar: a provision heading, then the subdivisions
+ * filed under it by anchor path. Both spellings are addressable, because both
+ * are what a citation names.
+ */
+const czechBlocks: Block[] = [
+  heading("par_1729", 3, `${SECTION_SIGN} 1729`),
+  paragraph("par_1729-odst_1", "(1) The engaged persons choose the rite."),
+  paragraph("par_1729-odst_2", "(2) Otherwise:"),
+  paragraph("par_1729-odst_2-pism_a", "a) the first case,"),
+  paragraph("par_1729-odst_2-pism_b", "b) the second case."),
+  heading("par_1730", 3, `${SECTION_SIGN} 1730`),
+  paragraph("par_1730-odst_1", "(1) The next provision."),
+];
+
+describe("extractProvisionText: subdivision anchors", () => {
+  test("keeps the whole provision for its heading anchor", () => {
+    expect(extractProvisionText(czechBlocks, "par_1729")).toBe(
+      [
+        `${SECTION_SIGN} 1729`,
+        "(1) The engaged persons choose the rite.",
+        "(2) Otherwise:",
+        "a) the first case,",
+        "b) the second case.",
+      ].join("\n"),
+    );
+  });
+
+  test("narrows to one subdivision", () => {
+    expect(extractProvisionText(czechBlocks, "par_1729-odst_1")).toBe(
+      "(1) The engaged persons choose the rite.",
+    );
+  });
+
+  test("keeps the subdivisions nested under a cited one", () => {
+    // Nesting lives in the anchor path, not in a heading level, and stops
+    // before the next sibling paragraph.
+    expect(extractProvisionText(czechBlocks, "par_1729-odst_2")).toBe(
+      ["(2) Otherwise:", "a) the first case,", "b) the second case."].join(
+        "\n",
+      ),
+    );
+  });
+
+  test("reads a subdivision the provision does not carry as absent", () => {
+    // Never the provision body instead: that would answer with neighbouring
+    // wording under an anchor the consolidation never had.
+    expect(extractProvisionText(czechBlocks, "par_1729-odst_9")).toBeNull();
+    expect(extractProvisionText(czechBlocks, "par_9999-odst_1")).toBeNull();
   });
 });

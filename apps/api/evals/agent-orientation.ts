@@ -393,6 +393,22 @@ const nested = (
   return current;
 };
 
+/**
+ * A set of (eli, anchor) entries as one comparable string: each entry's keys
+ * are sorted and the entries themselves are sorted, so a batch naming the
+ * same provisions in the other order compares equal.
+ */
+const provisionEntrySet = (entries: readonly unknown[]): string =>
+  JSON.stringify(
+    entries
+      .map((entry) =>
+        isRecord(entry)
+          ? JSON.stringify(Object.entries(entry).sort())
+          : JSON.stringify(entry),
+      )
+      .sort(),
+  );
+
 const nestedField = (
   args: Record<string, unknown>,
   keyPath: readonly string[],
@@ -413,6 +429,12 @@ type CliExpectedCommand = {
   /** Tokens after `stella`, e.g. ["document", "list"] or ["capability", "entities", "translate"]. */
   path: readonly string[];
   flags: Readonly<Record<string, string>>;
+  /**
+   * Compare the `--input` payload's arrays as sets. For a batch tool the
+   * entries are a set the tool answers in input order, and nothing in the
+   * request fixes which entry comes first.
+   */
+  unorderedInput?: true;
   destructive?: true;
 };
 
@@ -505,6 +527,8 @@ const CASE_LAW_DECISION_ID = "b2b2b2b2-0000-4000-8000-000000000031";
 // publisher's own anchors; neither is UUID-shaped, and neither is guessable,
 // so the tasks carry them the way a previous call would have returned them.
 const STATUTE_ELI = "/eli/cz/sb/2012/89";
+/** The quoted query the corpus-search task asks for, verbatim on both surfaces. */
+const CZECH_DAMAGES_QUERY = "náhrada škody";
 const STATUTE_ANCHOR = "par_1729";
 const STATUTE_SECOND_ANCHOR = "par_2079";
 
@@ -553,15 +577,13 @@ const TASKS: readonly Task[] = [
   },
   {
     id: "search-czech-legislation",
-    request:
-      'Search the stella legislation corpus for Czech statutes about "náhrada škody". Restrict the results to Czechia.',
+    request: `Search the stella legislation corpus for Czech statutes about "${CZECH_DAMAGES_QUERY}". Restrict the results to Czechia.`,
     mcp: {
       toolName: "search_legislation",
-      exampleArgs: { country: "CZE", query: "náhrada škody" },
+      exampleArgs: { country: "CZE", query: CZECH_DAMAGES_QUERY },
       checkArgs: (args) => [
-        ...(typeof args["query"] === "string" && args["query"].length > 0
-          ? []
-          : ["query: expected a non-empty string"]),
+        // The request quotes the query, so a paraphrase is a different search.
+        ...field(args, "query", CZECH_DAMAGES_QUERY),
         // The handler folds the code (publicLegislationCountry), so `cze` is
         // as correct as `CZE`.
         ...(typeof args["country"] === "string" &&
@@ -573,7 +595,7 @@ const TASKS: readonly Task[] = [
     cli: {
       kind: "command",
       path: ["legislation", "search"],
-      flags: { country: "CZE" },
+      flags: { country: "CZE", query: CZECH_DAMAGES_QUERY },
     },
   },
   {
@@ -616,24 +638,26 @@ const TASKS: readonly Task[] = [
         if (items.length !== 2) {
           return [`items: expected 2 entries, got ${items.length}`];
         }
-        return items.flatMap((entry, index) => {
-          if (!isRecord(entry)) {
-            return [`items.${index}: expected an object`];
-          }
-          const expectedAnchor =
-            index === 0 ? STATUTE_ANCHOR : STATUTE_SECOND_ANCHOR;
-          return [
-            ...field(entry, "eli", STATUTE_ELI),
-            ...field(entry, "anchor", expectedAnchor),
-          ].map((issue) => `items.${index}.${issue}`);
-        });
+        // The batch is a set, not a sequence: the request names two
+        // provisions without fixing which comes first, so either order is
+        // right.
+        const requested = provisionEntrySet([
+          { anchor: STATUTE_ANCHOR, eli: STATUTE_ELI },
+          { anchor: STATUTE_SECOND_ANCHOR, eli: STATUTE_ELI },
+        ]);
+        const supplied = provisionEntrySet(items);
+        return supplied === requested
+          ? []
+          : [`items: expected ${requested}, got ${supplied}`];
       },
     },
     cli: {
       kind: "command",
       path: ["legislation", "provisions"],
       // The batch is reachable only through `--input`; the scorer compares
-      // the parsed payload, so key order does not matter but the entries do.
+      // the parsed payload as a set, so neither key order nor entry order
+      // matters.
+      unorderedInput: true,
       flags: {
         input: JSON.stringify({
           items: [
@@ -1589,6 +1613,7 @@ const scoreCliRun = ({
         actual,
         expected: expectedValue,
         flagName,
+        unordered: expected.unorderedInput === true,
       })
     ) {
       issues.push(

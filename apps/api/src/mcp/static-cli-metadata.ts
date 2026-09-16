@@ -123,7 +123,7 @@ export const DEFAULT_MCP_CLI_ANNOTATIONS = defineMcpCliToolAnnotations(
     read_content_across_matters: {
       command: ["document", "content"],
       scope: "read",
-      windowedText: true,
+      windowedText: { textPath: "text" },
     },
     search_case_law: {
       command: ["case-law", "search"],
@@ -133,7 +133,7 @@ export const DEFAULT_MCP_CLI_ANNOTATIONS = defineMcpCliToolAnnotations(
     read_case_law_decision: {
       command: ["case-law", "read"],
       scope: "read",
-      windowedText: true,
+      windowedText: { textPath: "decision.text" },
     },
     read_case_law_citations: {
       command: ["case-law", "citations"],
@@ -239,7 +239,7 @@ export const DEFAULT_MCP_CLI_ANNOTATIONS = defineMcpCliToolAnnotations(
     read_statute: {
       command: ["legislation", "read"],
       scope: "read",
-      windowedText: true,
+      windowedText: { textPath: "statute.text" },
     },
     read_statute_provisions: {
       command: ["legislation", "provisions"],

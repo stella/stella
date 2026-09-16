@@ -827,7 +827,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 256,
-                "description": "Anchor of the provision in the publisher's own scheme (par_1729, par_1729-odst_1). read_statute's outline lists the anchors a consolidation carries; they are not derivable from a section number."
+                "description": "Anchor of the provision in the publisher's own scheme. read_statute's outline lists a consolidation's provision anchors (par_1729); a subdivision of one of them is accepted too and narrows the answer to that subdivision (par_1729-odst_1, par_1729-odst_2-pism_a). Anchors are not derivable from a section number."
               },
               "as_of": {
                 "type": "string",
@@ -850,7 +850,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           },
           "minItems": 1,
           "maxItems": 20,
-          "description": "The provisions to read, at most 20 per call. Each entry is answered on its own, so one unknown anchor does not sink the rest."
+          "description": "The provisions to read, at most 20 per call. Each entry is validated and answered on its own, so a malformed or unresolvable entry does not sink the rest: it comes back with its own status."
         }
       }
     }
@@ -885,7 +885,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           "type": "string",
           "minLength": 1,
           "maxLength": 256,
-          "description": "Anchor of the provision in the publisher's own scheme (par_1729, par_1729-odst_1). read_statute's outline lists the anchors a consolidation carries; they are not derivable from a section number."
+          "description": "Anchor of the provision in the publisher's own scheme. read_statute's outline lists a consolidation's provision anchors (par_1729); a subdivision of one of them is accepted too and narrows the answer to that subdivision (par_1729-odst_1, par_1729-odst_2-pism_a). Anchors are not derivable from a section number."
         },
         "language": {
           "type": "string",
@@ -4256,7 +4256,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 256,
-                "description": "Anchor of the provision in the publisher's own scheme (par_1729, par_1729-odst_1). read_statute's outline lists the anchors a consolidation carries; they are not derivable from a section number."
+                "description": "Anchor of the provision in the publisher's own scheme. read_statute's outline lists a consolidation's provision anchors (par_1729); a subdivision of one of them is accepted too and narrows the answer to that subdivision (par_1729-odst_1, par_1729-odst_2-pism_a). Anchors are not derivable from a section number."
               },
               "as_of": {
                 "type": "string",
@@ -4279,7 +4279,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
           },
           "minItems": 1,
           "maxItems": 20,
-          "description": "The provisions to read, at most 20 per call. Each entry is answered on its own, so one unknown anchor does not sink the rest."
+          "description": "The provisions to read, at most 20 per call. Each entry is validated and answered on its own, so a malformed or unresolvable entry does not sink the rest: it comes back with its own status."
         }
       }
     }
@@ -4314,7 +4314,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
           "type": "string",
           "minLength": 1,
           "maxLength": 256,
-          "description": "Anchor of the provision in the publisher's own scheme (par_1729, par_1729-odst_1). read_statute's outline lists the anchors a consolidation carries; they are not derivable from a section number."
+          "description": "Anchor of the provision in the publisher's own scheme. read_statute's outline lists a consolidation's provision anchors (par_1729); a subdivision of one of them is accepted too and narrows the answer to that subdivision (par_1729-odst_1, par_1729-odst_2-pism_a). Anchors are not derivable from a section number."
         },
         "language": {
           "type": "string",

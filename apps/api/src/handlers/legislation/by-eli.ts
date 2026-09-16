@@ -48,6 +48,61 @@ export type StatuteExpressionResolution =
  * statutes the same way: one implementation decides what an ELI plus a date
  * means, so a tool cannot resolve it differently from the reader.
  */
+const workConditionsFor = ({
+  eli,
+  language,
+}: {
+  eli: string;
+  language?: string | undefined;
+}): SQL[] => {
+  const conditions: SQL[] = [
+    eq(legislationDocuments.eli, eli),
+    publishedLegislationDocument,
+  ];
+  if (language !== undefined) {
+    conditions.push(eq(legislationDocuments.language, language));
+  }
+  return conditions;
+};
+
+/**
+ * The newest consolidation of a Work by its ELI, whatever its validity window.
+ *
+ * A caller that wants the amendment history of a Work is not asking about
+ * today: a repealed, expired or not-yet-effective act has no applicable
+ * Expression and every one of its consolidations is still readable history.
+ * So this deliberately ignores validity and answers with the latest window
+ * the corpus holds, which is all a Work-walking read needs to establish the
+ * Work key from.
+ */
+export const resolveStatuteWorkVersion = async (
+  query: { eli: string; language?: string | undefined },
+  legislationDb: LegislationReadDb,
+): Promise<StatuteExpressionResolution> => {
+  const conditions = workConditionsFor(query);
+
+  return await legislationDb(async (tx) => {
+    const [version] = await tx
+      .select({ id: legislationDocuments.id })
+      .from(legislationDocuments)
+      .innerJoin(
+        legislationSources,
+        eq(legislationSources.id, legislationDocuments.sourceId),
+      )
+      .where(and(...conditions))
+      .orderBy(
+        desc(versionSortKey(legislationDocuments.versionValidFrom)),
+        asc(legislationDocuments.language),
+        desc(legislationDocuments.id),
+      )
+      .limit(1);
+
+    return version === undefined
+      ? ({ type: "unknown-work" } as const)
+      : ({ type: "expression", id: version.id } as const);
+  });
+};
+
 export const resolveStatuteExpression = async (
   query: ReadStatuteByEliQuery,
   legislationDb: LegislationReadDb,
@@ -55,14 +110,7 @@ export const resolveStatuteExpression = async (
   const asOf =
     query.asOf === undefined ? sql`CURRENT_DATE` : sql`${query.asOf}::date`;
 
-  const workConditions: SQL[] = [
-    eq(legislationDocuments.eli, query.eli),
-    publishedLegislationDocument,
-  ];
-
-  if (query.language !== undefined) {
-    workConditions.push(eq(legislationDocuments.language, query.language));
-  }
+  const workConditions = workConditionsFor(query);
 
   return await legislationDb(async (tx) => {
     const [expression] = await tx

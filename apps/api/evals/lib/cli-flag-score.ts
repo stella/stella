@@ -17,23 +17,54 @@ const parseCliInputObject = (
     : null;
 };
 
+/**
+ * The same JSON with every array sorted by its members' JSON form, so two
+ * payloads that differ only in the order of a set compare equal. Opt-in per
+ * expectation: an ordered list must stay order-sensitive.
+ */
+const withSortedArrays = (value: unknown): unknown => {
+  if (Array.isArray(value)) {
+    return value
+      .map(withSortedArrays)
+      .sort((left, right) =>
+        JSON.stringify(left).localeCompare(JSON.stringify(right)),
+      );
+  }
+  if (value !== null && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, member]) => [
+        key,
+        withSortedArrays(member),
+      ]),
+    );
+  }
+  return value;
+};
+
 export const sameCliFlagValue = ({
   actual,
   expected,
   flagName,
+  unordered = false,
 }: {
   actual: string | null | undefined;
   expected: string;
   flagName: string;
+  /** Compare the `--input` payload's arrays as sets rather than sequences. */
+  unordered?: boolean;
 }): boolean => {
   if (flagName !== "input") {
     return actual === expected;
   }
   const actualInput = parseCliInputObject(actual);
   const expectedInput = parseCliInputObject(expected);
-  return (
-    actualInput !== null &&
-    expectedInput !== null &&
-    isDeepStrictEqual(actualInput, expectedInput)
-  );
+  if (actualInput === null || expectedInput === null) {
+    return false;
+  }
+  return unordered
+    ? isDeepStrictEqual(
+        withSortedArrays(actualInput),
+        withSortedArrays(expectedInput),
+      )
+    : isDeepStrictEqual(actualInput, expectedInput);
 };

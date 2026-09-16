@@ -92,16 +92,19 @@ const WORKFLOW_STEPS: readonly WorkflowStep[] = [
       `${READ_STATUTE_PROVISIONS} with \`items\`, up to ` +
       `${LIMITS.legislationProvisionBatchMax} entries of ` +
       "{ eli, anchor } plus an optional `as_of` and `language`. An `anchor` " +
-      "is the publisher's own (`par_1729`, `par_1729-odst_1`) and the " +
-      `\`outline\` from ${READ_STATUTE} is where they come from: they are ` +
-      "not derivable from a section number, so do not spell one yourself. " +
+      `is the publisher's own, and the \`outline\` from ${READ_STATUTE} is ` +
+      "where the provision anchors come from (`par_1729`): they are not " +
+      "derivable from a section number, so do not spell one yourself. A " +
+      "subdivision of a listed anchor is accepted too and narrows the answer " +
+      "to that subdivision (`par_1729-odst_1`, `par_1729-odst_2-pism_a`). " +
       "Entries may name different acts and different dates in one call. " +
-      "Every entry is answered on its own, in input order, under " +
-      `\`status\`: ${PROVISION_READ_STATUSES.join(", ")}. Only \`found\` ` +
-      "carries `text`; the rest carry a `message` saying what to change. " +
-      `Provision text is cut at ${LIMITS.legislationProvisionTextChars} ` +
-      "characters with `truncated` set. Prefer one batched call over one " +
-      "call per provision.",
+      "Every entry is validated and answered on its own, in input order, " +
+      `under \`status\`: ${PROVISION_READ_STATUSES.join(", ")}. Only ` +
+      "`found` carries `text`; `invalid` carries that entry's own `issues[]` " +
+      "and the rest carry a `message` saying what to change, so resend only " +
+      "the entries the reply names. Provision text is cut at " +
+      `${LIMITS.legislationProvisionTextChars} characters with ` +
+      "`truncated` set. Prefer one batched call over one call per provision.",
   },
   {
     title: "Follow one provision across amendments",
@@ -109,8 +112,13 @@ const WORKFLOW_STEPS: readonly WorkflowStep[] = [
       `${READ_PROVISION_HISTORY} with the work's \`eli\` and one \`anchor\`. ` +
       "It returns that provision's text in each consolidation of the work, " +
       "newest validity window first, so two wordings can be compared " +
-      "without downloading whole statutes. A consolidation that does not " +
-      "carry the anchor is left out of `items`. It defaults to " +
+      "without downloading whole statutes. It asks about the work and not " +
+      "about today, so a repealed, expired or not-yet-effective act answers, " +
+      "and so does an anchor a later consolidation dropped. A consolidation " +
+      "that does not carry the anchor is left out of `items`, and each item " +
+      "that remains carries the same `status` the batch read uses: `found` " +
+      "with its `text`, or `text_withheld` where that consolidation's source " +
+      "bars AI use of its wording. It defaults to " +
       `${LIMITS.legislationProvisionHistoryPageSizeDefault} versions per ` +
       "page and takes at most " +
       `${LIMITS.legislationProvisionHistoryPageSizeMax}; pass the returned ` +
@@ -132,10 +140,11 @@ const FACTS = [
     title:
       "Displaying wording and feeding it to a model are separate permissions",
     detail:
-      `A source may permit one and not the other. ${READ_STATUTE} then ` +
-      "answers with the metadata, the versions and the outline, and " +
-      "`textWithheldReason` in place of `text`; the same entry in " +
-      `${READ_STATUTE_PROVISIONS} answers \`text_withheld\`. Follow the ` +
+      "A source may permit one and not the other, and it is decided per " +
+      `consolidation. ${READ_STATUTE} answers with the metadata, the ` +
+      "versions and the outline, and `textWithheldReason` in place of " +
+      `\`text\`; ${READ_STATUTE_PROVISIONS} and ${READ_PROVISION_HISTORY} ` +
+      "answer `text_withheld` for the versions it covers. Follow the " +
       "statute's `appUrl` and read it there instead; retrying will not " +
       "change the answer.",
   },

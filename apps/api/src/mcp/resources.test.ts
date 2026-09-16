@@ -5,6 +5,7 @@ import { describe, expect, test } from "bun:test";
 
 import { MCP_APP_RESOURCE_MIME_TYPE } from "@stll/api-contract";
 
+import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
 import { LIMITS } from "@/api/lib/limits";
 import { DOCUMENT_UPLOAD_APP_RESOURCE_URI } from "@/api/mcp/document-file-upload";
@@ -318,6 +319,40 @@ describe("MCP resources", () => {
         prefersBorder: true,
       },
     });
+  });
+
+  test("lists and reads the legislation workflow only behind its own gate", async () => {
+    const previousFeaturePublicLaw = env.FEATURE_PUBLIC_LAW;
+    const previousIsDev = env.isDev;
+    env.FEATURE_PUBLIC_LAW = false;
+    env.isDev = false;
+    try {
+      // The four corpus tools are filtered out of tools/list on this
+      // deployment, so a reference telling a model to call them would hand it
+      // a procedure it has no advertised schema for.
+      expect(
+        listMcpResources("default").map((entry) => entry.uri),
+      ).not.toContain(LEGISLATION_WORKFLOW_REFERENCE_URI);
+      let caught: unknown;
+      try {
+        await readMcpResource(LEGISLATION_WORKFLOW_REFERENCE_URI, "default");
+      } catch (error) {
+        caught = error;
+      }
+      expect(caught).toBeInstanceOf(ProtocolError);
+      // An ungated reference is unaffected.
+      expect(listMcpResources("default").map((entry) => entry.uri)).toContain(
+        WORKFLOW_REFERENCE_URI,
+      );
+
+      env.FEATURE_PUBLIC_LAW = true;
+      expect(listMcpResources("default").map((entry) => entry.uri)).toContain(
+        LEGISLATION_WORKFLOW_REFERENCE_URI,
+      );
+    } finally {
+      env.FEATURE_PUBLIC_LAW = previousFeaturePublicLaw;
+      env.isDev = previousIsDev;
+    }
   });
 
   test("throws for an unknown resource uri", async () => {

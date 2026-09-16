@@ -233,6 +233,7 @@ const searchProviderSearchMock = mock(
 const searchDecisionsHandlerMock = mock();
 const searchLegislationHandlerMock = mock();
 const resolveStatuteExpressionMock = mock();
+const resolveStatuteWorkVersionMock = mock();
 const readPublicLegislationHandlerMock = mock();
 const listStatuteVersionsHandlerMock = mock();
 const readProvisionHistoryHandlerMock = mock();
@@ -852,6 +853,7 @@ const createContext = ({
     searchDecisionsHandler: searchDecisionsHandlerMock,
     searchLegislationHandler: searchLegislationHandlerMock,
     resolveStatuteExpression: resolveStatuteExpressionMock,
+    resolveStatuteWorkVersion: resolveStatuteWorkVersionMock,
     readPublicLegislationHandler: readPublicLegislationHandlerMock,
     listStatuteVersionsHandler: listStatuteVersionsHandlerMock,
     readProvisionHistoryHandler: readProvisionHistoryHandlerMock,
@@ -879,6 +881,7 @@ describe("OpenAI-compatible MCP tools", () => {
     searchDecisionsHandlerMock.mockReset();
     searchLegislationHandlerMock.mockReset();
     resolveStatuteExpressionMock.mockReset();
+    resolveStatuteWorkVersionMock.mockReset();
     readPublicLegislationHandlerMock.mockReset();
     listStatuteVersionsHandlerMock.mockReset();
     readProvisionHistoryHandlerMock.mockReset();
@@ -2006,7 +2009,7 @@ describe("OpenAI-compatible MCP tools", () => {
                 minLength: 1,
                 maxLength: 256,
                 description:
-                  "Anchor of the provision in the publisher's own scheme (par_1729, par_1729-odst_1). read_statute's outline lists the anchors a consolidation carries; they are not derivable from a section number.",
+                  "Anchor of the provision in the publisher's own scheme. read_statute's outline lists a consolidation's provision anchors (par_1729); a subdivision of one of them is accepted too and narrows the answer to that subdivision (par_1729-odst_1, par_1729-odst_2-pism_a). Anchors are not derivable from a section number.",
               },
               as_of: {
                 type: "string",
@@ -2028,7 +2031,7 @@ describe("OpenAI-compatible MCP tools", () => {
           },
           minItems: 1,
           maxItems: LIMITS.legislationProvisionBatchMax,
-          description: `The provisions to read, at most ${LIMITS.legislationProvisionBatchMax} per call. Each entry is answered on its own, so one unknown anchor does not sink the rest.`,
+          description: `The provisions to read, at most ${LIMITS.legislationProvisionBatchMax} per call. Each entry is validated and answered on its own, so a malformed or unresolvable entry does not sink the rest: it comes back with its own status.`,
         },
       },
       required: ["items"],
@@ -2358,20 +2361,69 @@ describe("OpenAI-compatible MCP tools", () => {
     });
   });
 
-  test("read_provision_history reads the work from today's consolidation and pages back", async () => {
+  test("read_statute_provisions answers a malformed entry beside the valid ones", async () => {
     resolveStatuteExpressionMock.mockResolvedValue({
+      type: "expression",
+      id: STATUTE_ID,
+    });
+    readLegislationProvisionVersionsMock.mockResolvedValue([
+      createProvisionVersionRow(),
+    ]);
+    readVersionBlocksMock.mockResolvedValue(createStatuteBlocks());
+
+    const payload = parseToolPayload(
+      await handleMcpToolCall({
+        args: {
+          items: [
+            { anchor: PROVISION_ANCHOR, eli: STATUTE_ELI },
+            // Three ways to be refused: an empty anchor, a missing ELI, and a
+            // property the entry schema does not declare.
+            { anchor: "", eli: STATUTE_ELI },
+            { anchor: PROVISION_ANCHOR },
+            { anchor: PROVISION_ANCHOR, eli: STATUTE_ELI, section: "1729" },
+          ],
+        },
+        context: createContext(),
+        toolName: "read_statute_provisions",
+      }),
+    );
+
+    // The valid entry was still resolved and read: one bad entry does not
+    // sink the batch, which is the whole point of batching.
+    expect(resolveStatuteExpressionMock).toHaveBeenCalledTimes(1);
+    expect(readVersionBlocksMock).toHaveBeenCalledTimes(1);
+    const items =
+      isRecord(payload) && Array.isArray(payload["items"])
+        ? payload["items"]
+        : [];
+    expect(
+      items.map((item) => (isRecord(item) ? item["status"] : null)),
+    ).toEqual(["found", "invalid", "invalid", "invalid"]);
+    const refused = items.at(1);
+    expect(refused).toMatchObject({ index: 1, status: "invalid" });
+    expect(
+      isRecord(refused) && Array.isArray(refused["issues"])
+        ? refused["issues"]
+        : [],
+    ).not.toHaveLength(0);
+  });
+
+  test("read_provision_history resolves the work, not a currently applicable version", async () => {
+    resolveStatuteWorkVersionMock.mockResolvedValue({
       type: "expression",
       id: STATUTE_ID,
     });
     readProvisionHistoryHandlerMock.mockResolvedValue({
       items: [
         {
+          allowsDerivedAi: true,
           documentId: STATUTE_ID,
           text: "\u00a7 1729 as amended",
           versionValidFrom: "2014-01-01",
           versionValidTo: null,
         },
         {
+          allowsDerivedAi: true,
           documentId: STATUTE_PRIOR_ID,
           text: "\u00a7 1729 as enacted",
           versionValidFrom: "2012-03-22",
@@ -2387,8 +2439,11 @@ describe("OpenAI-compatible MCP tools", () => {
       toolName: "read_provision_history",
     });
 
-    // No as-of: the history starts from the text in force today.
-    expect(resolveStatuteExpressionMock.mock.calls.at(0)?.at(0)).toEqual({
+    // The Work resolver, never the as-of one: a repealed, expired or
+    // not-yet-effective act has no applicable expression and every one of its
+    // consolidations is still readable history.
+    expect(resolveStatuteExpressionMock).not.toHaveBeenCalled();
+    expect(resolveStatuteWorkVersionMock.mock.calls.at(0)?.at(0)).toEqual({
       eli: STATUTE_ELI,
     });
     expect(
@@ -2405,6 +2460,7 @@ describe("OpenAI-compatible MCP tools", () => {
         {
           documentId: STATUTE_ID,
           resourceName: `stella://resource/legislation_document/id=${STATUTE_ID}`,
+          status: "found",
           text: "\u00a7 1729 as amended",
           truncated: false,
           versionValidFrom: "2014-01-01",
@@ -2413,6 +2469,7 @@ describe("OpenAI-compatible MCP tools", () => {
         {
           documentId: STATUTE_PRIOR_ID,
           resourceName: `stella://resource/legislation_document/id=${STATUTE_PRIOR_ID}`,
+          status: "found",
           text: "\u00a7 1729 as enacted",
           truncated: false,
           versionValidFrom: "2012-03-22",
@@ -2423,8 +2480,71 @@ describe("OpenAI-compatible MCP tools", () => {
     });
   });
 
+  test("read_provision_history withholds one barred version among readable ones", async () => {
+    resolveStatuteWorkVersionMock.mockResolvedValue({
+      type: "expression",
+      id: STATUTE_ID,
+    });
+    readProvisionHistoryHandlerMock.mockResolvedValue({
+      items: [
+        {
+          allowsDerivedAi: true,
+          documentId: STATUTE_ID,
+          text: "\u00a7 1729 as amended",
+          versionValidFrom: "2014-01-01",
+          versionValidTo: null,
+        },
+        {
+          // The Work was re-licensed between consolidations, so the gate is
+          // per item: this wording never reaches the model.
+          allowsDerivedAi: false,
+          documentId: STATUTE_PRIOR_ID,
+          text: "\u00a7 1729 as enacted",
+          versionValidFrom: "2012-03-22",
+          versionValidTo: "2013-12-31",
+        },
+      ],
+      nextCursor: null,
+    });
+
+    const payload = parseToolPayload(
+      await handleMcpToolCall({
+        args: { anchor: PROVISION_ANCHOR, eli: STATUTE_ELI },
+        context: createContext(),
+        toolName: "read_provision_history",
+      }),
+    );
+
+    expect(payload).toEqual({
+      anchor: PROVISION_ANCHOR,
+      eli: STATUTE_ELI,
+      items: [
+        {
+          documentId: STATUTE_ID,
+          resourceName: `stella://resource/legislation_document/id=${STATUTE_ID}`,
+          status: "found",
+          text: "\u00a7 1729 as amended",
+          truncated: false,
+          versionValidFrom: "2014-01-01",
+          versionValidTo: null,
+        },
+        {
+          documentId: STATUTE_PRIOR_ID,
+          message:
+            "The source licence does not permit AI use of this wording. Read it at the statute's appUrl instead.",
+          resourceName: `stella://resource/legislation_document/id=${STATUTE_PRIOR_ID}`,
+          status: "text_withheld",
+          versionValidFrom: "2012-03-22",
+          versionValidTo: "2013-12-31",
+        },
+      ],
+      nextCursor: null,
+    });
+    expect(JSON.stringify(payload)).not.toContain("as enacted");
+  });
+
   test("read_provision_history points at the outline when the anchor is absent", async () => {
-    resolveStatuteExpressionMock.mockResolvedValue({
+    resolveStatuteWorkVersionMock.mockResolvedValue({
       type: "expression",
       id: STATUTE_ID,
     });

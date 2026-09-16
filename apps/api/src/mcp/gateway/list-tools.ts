@@ -1,6 +1,5 @@
 import type { Tool as McpTool } from "@modelcontextprotocol/server";
 
-import { env } from "@/api/env";
 import {
   isExternalMcpToolName,
   isSkillToolName,
@@ -26,10 +25,10 @@ import {
   getStaticMcpToolOutputContract,
   listStaticMcpToolDefinitions,
 } from "@/api/mcp/static-tool-definitions";
+import { isMcpToolFeatureEnabled } from "@/api/mcp/tool-feature";
 import type {
   McpAnonymizedPolicy,
   McpToolDefinition,
-  McpToolFeatureFlag,
   McpToolInputSchema,
   McpToolAnnotations,
   RuntimeMcpToolOutputContract,
@@ -37,17 +36,11 @@ import type {
 } from "@/api/mcp/tool-types";
 import { enumProp } from "@/api/mcp/tool-utils";
 
-/**
- * A feature-gated tool is advertised and dispatchable only when its deployment
- * flag is on, mirroring the backing route's own gate (e.g. the case-law public
- * routes use `env.isDev || env.FEATURE_PUBLIC_LAW`). Untagged tools are always
- * available. Dev deployments see every tool so local work is not blocked. This
- * is the single chokepoint the list surface and the dispatch guard share so a
- * gated-off tool can neither be discovered nor invoked by guessing its name.
- */
-export const isMcpToolFeatureEnabled = (
-  feature: McpToolFeatureFlag | undefined,
-): boolean => feature === undefined || env.isDev || env[feature];
+// The gate's one owner is `mcp/tool-feature.ts`, so the resource list and the
+// connect-time instructions apply the same predicate without importing the
+// tool registry. Re-exported here because every existing caller of the tool
+// surface reaches it through this module.
+export { isMcpToolFeatureEnabled };
 
 // Skills and external connector tools are resolved by the dynamic gateway in
 // default mode only; they are never part of the anonymized projection.

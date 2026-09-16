@@ -3,7 +3,9 @@ import type { SQL } from "drizzle-orm";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
 
-import { legislationDocuments } from "@/api/db/schema";
+import { mapWithConcurrency } from "@stll/concurrency";
+
+import { legislationDocuments, legislationSources } from "@/api/db/schema";
 import { extractProvisionText } from "@/api/handlers/legislation/provision-text";
 import {
   selectWorkKey,
@@ -15,6 +17,7 @@ import {
   tPaginationLimit,
   tSafeId,
 } from "@/api/lib/custom-schema";
+import { derivedAiLegislationSource } from "@/api/lib/legal-search/legislation-redistribution";
 import {
   UNVERSIONED_SORT_DATE,
   versionSortKey,
@@ -85,6 +88,11 @@ const versionColumns = {
   ...versionAstColumns,
   versionValidFrom: legislationDocuments.versionValidFrom,
   versionValidTo: legislationDocuments.versionValidTo,
+  // Displaying a consolidation's wording and feeding it to a model are
+  // separate publisher permissions. The reader ignores this; the agent-facing
+  // history withholds the text of a version whose source bars derived AI use,
+  // so the permission travels with every item instead of being re-queried.
+  allowsDerivedAi: derivedAiLegislationSource,
 };
 
 /**
@@ -93,7 +101,10 @@ const versionColumns = {
  *
  * The page walks versions, not occurrences: a version in which the anchor is
  * absent is dropped from `items` while still counting against the page, so
- * the cursor stays a plain keyset over the version order.
+ * the cursor stays a plain keyset over the version order. The addressed
+ * document only establishes the Work key: an anchor a later consolidation
+ * dropped is still reachable, and "provision not found" is answered once the
+ * walk has seen every version of the Work without one occurrence.
  */
 export const readProvisionHistoryHandler = async ({
   documentId,
@@ -113,18 +124,12 @@ export const readProvisionHistoryHandler = async ({
     }
   }
 
-  const resolved = await legislationDb(async (tx) => {
+  const versions = await legislationDb(async (tx) => {
     const work = await selectWorkKey(tx, documentId);
 
     if (work === null) {
       return null;
     }
-
-    const [origin] = await tx
-      .select(versionColumns)
-      .from(legislationDocuments)
-      .where(eq(legislationDocuments.id, documentId))
-      .limit(1);
 
     const conditions: SQL[] = workKeyConditions(work);
 
@@ -134,58 +139,49 @@ export const readProvisionHistoryHandler = async ({
       );
     }
 
-    const versions = await tx
+    return await tx
       .select(versionColumns)
       .from(legislationDocuments)
+      .innerJoin(
+        legislationSources,
+        eq(legislationSources.id, legislationDocuments.sourceId),
+      )
       .where(and(...conditions))
       .orderBy(
         sql`${versionSortKey(legislationDocuments.versionValidFrom)} desc`,
         sql`${legislationDocuments.id} desc`,
       )
       .limit(limit + 1);
-
-    return { origin, versions };
   });
 
-  if (resolved?.origin === undefined) {
+  if (versions === null) {
     return status(404, { message: "Legislation document not found" });
   }
 
-  const { origin, versions } = resolved;
-  const originText = extractProvisionText(
-    await readVersionBlocks({
-      row: origin,
-      legislationDb,
-      step: HISTORY_READ_STEP,
-    }),
-    anchor,
-  );
-
-  if (originText === null) {
-    return status(404, { message: "Provision not found" });
-  }
-
-  const texts = await Promise.all(
-    versions.map(async (version) =>
-      version.id === origin.id
-        ? originText
-        : extractProvisionText(
-            await readVersionBlocks({
-              row: version,
-              legislationDb,
-              step: HISTORY_READ_STEP,
-            }),
-            anchor,
-          ),
-    ),
-  );
+  // One object-storage read per version, bounded rather than one request per
+  // item: a page is already capped far below the version page size because
+  // each item costs one whole AST.
+  const texts = await mapWithConcurrency({
+    items: versions,
+    limit: LIMITS.legislationProvisionReadConcurrency,
+    operation: async (version) =>
+      extractProvisionText(
+        await readVersionBlocks({
+          row: version,
+          legislationDb,
+          step: HISTORY_READ_STEP,
+        }),
+        anchor,
+      ),
+  });
 
   const page = createCursorPage({
     rows: versions.map((version, index) => ({
+      allowsDerivedAi: version.allowsDerivedAi,
       documentId: version.id,
       versionValidFrom: version.versionValidFrom,
       versionValidTo: version.versionValidTo,
-      text: texts.at(index) ?? null,
+      text: texts[index] ?? null,
     })),
     limit,
     cursorForItem: (item) =>
@@ -195,10 +191,15 @@ export const readProvisionHistoryHandler = async ({
       ]),
   });
 
-  return {
-    ...page,
-    items: page.items.flatMap(({ text, ...item }) =>
-      text === null ? [] : [{ ...item, text }],
-    ),
-  };
+  const items = page.items.flatMap(({ text, ...item }) =>
+    text === null ? [] : [{ ...item, text }],
+  );
+
+  // No consolidation of the Work carried the anchor and there is nothing
+  // older to look at, so the anchor addresses no provision of this Work.
+  if (items.length === 0 && page.nextCursor === null) {
+    return status(404, { message: "Provision not found" });
+  }
+
+  return { ...page, items };
 };

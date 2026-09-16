@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { env } from "@/api/env";
 import {
   getMcpInstructions,
   MCP_INSTRUCTIONS,
@@ -36,7 +37,6 @@ describe("MCP server instructions", () => {
     expect(MCP_INSTRUCTIONS.default.length).toBeGreaterThan(0);
     expect(MCP_INSTRUCTIONS.anonymized.length).toBeGreaterThan(0);
     expect(MCP_INSTRUCTIONS.documents.length).toBeGreaterThan(0);
-    expect(getMcpInstructions("default")).toBe(MCP_INSTRUCTIONS.default);
     expect(getMcpInstructions("anonymized")).toBe(MCP_INSTRUCTIONS.anonymized);
     expect(getMcpInstructions("documents")).toBe(MCP_INSTRUCTIONS.documents);
   });
@@ -63,6 +63,48 @@ describe("MCP server instructions", () => {
     expect(MCP_INSTRUCTIONS.default).toContain(
       LEGISLATION_WORKFLOW_REFERENCE_URI,
     );
+  });
+
+  // The budgets above bound the worst case, so `MCP_INSTRUCTIONS` is built
+  // with every gate open; what a deployment serves comes from
+  // `getMcpInstructions`, and a gate-off deployment advertises none of the
+  // legislation tools the workflow tells a model to call.
+  const withPublicLaw = (
+    { featurePublicLaw, isDev }: { featurePublicLaw: boolean; isDev: boolean },
+    run: () => void,
+  ) => {
+    const previousFeaturePublicLaw = env.FEATURE_PUBLIC_LAW;
+    const previousIsDev = env.isDev;
+    env.FEATURE_PUBLIC_LAW = featurePublicLaw;
+    env.isDev = isDev;
+    try {
+      run();
+    } finally {
+      env.FEATURE_PUBLIC_LAW = previousFeaturePublicLaw;
+      env.isDev = previousIsDev;
+    }
+  };
+
+  test("serves the legislation pointer only while the public-law gate is open", () => {
+    withPublicLaw({ featurePublicLaw: true, isDev: false }, () => {
+      const served = getMcpInstructions("default");
+      expect(served).toContain(LEGISLATION_WORKFLOW_REFERENCE_URI);
+      expect(served).toBe(MCP_INSTRUCTIONS.default);
+    });
+
+    withPublicLaw({ featurePublicLaw: false, isDev: false }, () => {
+      const served = getMcpInstructions("default");
+      expect(served).not.toContain(LEGISLATION_WORKFLOW_REFERENCE_URI);
+      // The template workflow is not gated, so it stays.
+      expect(served).toContain(TEMPLATE_WORKFLOW_REFERENCE_URI);
+    });
+
+    // Dev sees everything, like the tool list.
+    withPublicLaw({ featurePublicLaw: false, isDev: true }, () => {
+      expect(getMcpInstructions("default")).toContain(
+        LEGISLATION_WORKFLOW_REFERENCE_URI,
+      );
+    });
   });
 
   test("the anonymized surface omits the feedback preparation tool", () => {

@@ -154,9 +154,14 @@ const TOOL_COUNT_CEILING: Record<SurfaceMode, number> = {
 // `items[]` object; the alternative was one legislation tool whose meaning
 // depended on which optional arguments were present. Pin those exact sizes so
 // the next schema growth stays reviewable.
+// default 130_300 -> 130_800 and anonymized 66_300 -> 66_800 (measured
+// 130_753 and 66_753) for two contract facts the batch provision read owes a
+// model: that a subdivision anchor is accepted, and that an entry is
+// validated on its own so a malformed one comes back with its own status
+// instead of sinking the call.
 const TOOLS_LIST_PAYLOAD_CHAR_CEILING: Record<SurfaceMode, number> = {
-  default: 130_300,
-  anonymized: 66_300,
+  default: 130_800,
+  anonymized: 66_800,
 };
 
 // default bumped 42_000 -> 42_300 for the two fields read_case_law_citations
@@ -170,9 +175,14 @@ const TOOLS_LIST_PAYLOAD_CHAR_CEILING: Record<SurfaceMode, number> = {
 // read_statute, is well under the per-tool ceiling; it declares the outline
 // entries, the version window and the withheld-text field, each of which says
 // something the data would otherwise be read as promising.
+// default 46_400 -> 46_600 and anonymized 32_000 -> 32_300 (measured 46_525
+// and 32_161) for the two branches the provision reads gained: an `invalid`
+// entry carrying its own `issues[]`, and a history item discriminated on the
+// same status vocabulary so a version whose source bars derived AI use
+// answers `text_withheld` rather than its wording.
 const OUTPUT_SCHEMA_TOTAL_CHAR_CEILING: Record<SurfaceMode, number> = {
-  default: 46_400,
-  anonymized: 32_000,
+  default: 46_600,
+  anonymized: 32_300,
 };
 
 // Largest measured schema is read_document at 3_434 chars. A single tool must

@@ -12,6 +12,7 @@ import { hasUsableAst } from "@stll/legal-ast/document-ast";
 
 import type {
   resolveStatuteExpression,
+  resolveStatuteWorkVersion,
   StatuteExpressionResolution,
 } from "@/api/handlers/legislation/by-eli";
 import type { readPublicLegislationHandler } from "@/api/handlers/legislation/get";
@@ -51,6 +52,7 @@ import {
   isToolErrorResult,
   MAX_CURSOR_LENGTH,
   MCP_CONTENT_MAX_CHARS,
+  mapValibotIssues,
   notFoundResult,
   nullAsAbsent,
   structuredErrorResult,
@@ -96,6 +98,11 @@ const defaultResolveStatuteExpression: typeof resolveStatuteExpression = async (
   await (
     await import("@/api/handlers/legislation/by-eli")
   ).resolveStatuteExpression(query, legislationDb);
+const defaultResolveStatuteWorkVersion: typeof resolveStatuteWorkVersion =
+  async (query, legislationDb) =>
+    await (
+      await import("@/api/handlers/legislation/by-eli")
+    ).resolveStatuteWorkVersion(query, legislationDb);
 const defaultReadPublicLegislationHandler: typeof readPublicLegislationHandler =
   async (documentId, legislationDb) =>
     await (
@@ -134,6 +141,10 @@ const FIND_THE_ELI_HINT =
 const PICK_AN_ANCHOR_HINT =
   "Call read_statute for this eli and pick an anchorId from its outline.";
 
+/** One sentence for the one reason wording is withheld, in both tools. */
+const WITHHELD_WORDING_MESSAGE =
+  "The source licence does not permit AI use of this wording. Read it at the statute's appUrl instead.";
+
 const eliInputSchema = v.pipe(
   v.string(),
   v.minLength(1),
@@ -150,9 +161,11 @@ const anchorInputSchema = v.pipe(
   v.minLength(1),
   v.maxLength(256),
   v.description(
-    "Anchor of the provision in the publisher's own scheme (par_1729, " +
-      "par_1729-odst_1). read_statute's outline lists the anchors a " +
-      "consolidation carries; they are not derivable from a section number.",
+    "Anchor of the provision in the publisher's own scheme. read_statute's " +
+      "outline lists a consolidation's provision anchors (par_1729); a " +
+      "subdivision of one of them is accepted too and narrows the answer to " +
+      "that subdivision (par_1729-odst_1, par_1729-odst_2-pism_a). Anchors " +
+      "are not derivable from a section number.",
   ),
 );
 
@@ -278,18 +291,48 @@ const provisionRequestSchema = v.strictObject({
   language: v.optional(languageInputSchema),
 });
 
+const PROVISION_BATCH_MIN_ITEMS = 1;
+
+const PROVISION_BATCH_DESCRIPTION =
+  `The provisions to read, at most ${LIMITS.legislationProvisionBatchMax} per call. ` +
+  "Each entry is validated and answered on its own, so a malformed or " +
+  "unresolvable entry does not sink the rest: it comes back with its own " +
+  "status.";
+
+/**
+ * The advertised contract: the bounded array of fully declared entries.
+ *
+ * The handler parses the same call in two stages (the envelope, then each
+ * entry through `provisionRequestSchema` — this very schema's element), so a
+ * model sees the exact entry shape here while one bad entry is answered per
+ * entry rather than rejecting the batch. There is no second entry reader: the
+ * element schema is shared by both stages.
+ */
 const readStatuteProvisionsArgsSchema = nullAsAbsent(
   v.strictObject({
     items: v.pipe(
       v.array(provisionRequestSchema),
-      v.minLength(1),
+      v.minLength(PROVISION_BATCH_MIN_ITEMS),
       v.maxLength(LIMITS.legislationProvisionBatchMax),
-      v.description(
-        `The provisions to read, at most ${LIMITS.legislationProvisionBatchMax} per call. Each entry is answered on its own, so one unknown anchor does not sink the rest.`,
-      ),
+      v.description(PROVISION_BATCH_DESCRIPTION),
     ),
   }),
 );
+
+/** Stage one: the envelope and the array bound, entries still unread. */
+const provisionsBatchEnvelopeSchema = nullAsAbsent(
+  v.strictObject({
+    items: v.pipe(
+      v.array(v.unknown()),
+      v.minLength(PROVISION_BATCH_MIN_ITEMS),
+      v.maxLength(LIMITS.legislationProvisionBatchMax),
+      v.description(PROVISION_BATCH_DESCRIPTION),
+    ),
+  }),
+);
+
+/** Stage two: one entry, through the element the advertised array declares. */
+const provisionEntrySchema = nullAsAbsent(provisionRequestSchema);
 
 const readProvisionHistoryArgsSchema = nullAsAbsent(
   v.strictObject({
@@ -778,8 +821,7 @@ const provisionItemResult = ({
       if (!version.allowsDerivedAi) {
         return {
           ...subject,
-          message:
-            "The source licence does not permit AI use of this wording. Read it at the statute's appUrl instead.",
+          message: WITHHELD_WORDING_MESSAGE,
           status: PROVISION_STATUS.textWithheld,
         };
       }
@@ -814,22 +856,59 @@ const provisionItemResult = ({
   }
 };
 
+/** One requested entry: either it parsed, or it is answered on its own. */
+type ParsedProvisionEntry =
+  | { type: "entry"; request: ProvisionRequest }
+  | { type: "invalid"; result: ProvisionItemResult };
+
+/**
+ * Read each entry through the element schema the tool advertises. A refused
+ * entry becomes its own `invalid` answer instead of failing the call, which
+ * is what makes the batch worth batching: a model resends one entry, not
+ * nineteen good ones.
+ */
+const parseProvisionEntries = (
+  items: readonly unknown[],
+): readonly ParsedProvisionEntry[] =>
+  items.map((item, index) => {
+    const entry = v.safeParse(provisionEntrySchema, item);
+    if (entry.success) {
+      return { type: "entry", request: entry.output };
+    }
+    const issues = mapValibotIssues(entry.issues);
+    return {
+      type: "invalid",
+      result: {
+        index,
+        issues,
+        message:
+          issues.at(0)?.message ?? "This entry does not match items[]'s shape",
+        status: PROVISION_STATUS.invalid,
+      },
+    };
+  });
+
 const handleReadStatuteProvisionsTool: TypedMcpToolHandler<
   v.InferInput<typeof READ_STATUTE_PROVISIONS_PROJECTION>
 > = async ({ args, context }) => {
-  const parsed = v.safeParse(readStatuteProvisionsArgsSchema, args);
+  // Two stages: the envelope and the array bound fail the whole call, because
+  // a call with no items or twenty-one of them asked for nothing answerable.
+  const parsed = v.safeParse(provisionsBatchEnvelopeSchema, args);
   if (!parsed.success) {
     return validationErrorResult(parsed.issues);
   }
-  const { items } = parsed.output;
+  const entries = parseProvisionEntries(parsed.output.items);
 
   // Two de-duplication passes, so a batch naming the same act twenty times
   // resolves it once and reads its AST once.
   const requestsByKey = new Map<string, ProvisionRequest>();
-  for (const item of items) {
-    const key = provisionRequestKey(item);
+  for (const entry of entries) {
+    if (entry.type !== "entry") {
+      continue;
+    }
+    const key = provisionRequestKey(entry.request);
     if (!requestsByKey.has(key)) {
-      requestsByKey.set(key, item);
+      requestsByKey.set(key, entry.request);
     }
   }
 
@@ -900,15 +979,17 @@ const handleReadStatuteProvisionsTool: TypedMcpToolHandler<
   );
 
   return toolDataResult({
-    items: items.map((item) =>
-      provisionItemResult({
-        blocksByDocumentId,
-        item,
-        resolution:
-          resolutionsByKey.get(provisionRequestKey(item)) ??
-          panic("Lost a provision resolution"),
-        versionsByDocumentId,
-      }),
+    items: entries.map((entry) =>
+      entry.type === "invalid"
+        ? entry.result
+        : provisionItemResult({
+            blocksByDocumentId,
+            item: entry.request,
+            resolution:
+              resolutionsByKey.get(provisionRequestKey(entry.request)) ??
+              panic("Lost a provision resolution"),
+            versionsByDocumentId,
+          }),
     ),
   } satisfies v.InferInput<typeof READ_STATUTE_PROVISIONS_PROJECTION>);
 };
@@ -936,11 +1017,13 @@ const handleReadProvisionHistoryTool: TypedMcpToolHandler<
   const limit =
     parsed.output.limit ?? LIMITS.legislationProvisionHistoryPageSizeDefault;
 
-  // The history walks the whole work, so it starts from the consolidation in
-  // force today and pages backwards from there.
+  // The history walks the whole Work, so it resolves the Work rather than a
+  // consolidation applicable today: a repealed, expired or not-yet-effective
+  // act has no applicable expression and every one of its consolidations is
+  // still readable history.
   const resolved = await (
-    context.testDependencies?.resolveStatuteExpression ??
-    defaultResolveStatuteExpression
+    context.testDependencies?.resolveStatuteWorkVersion ??
+    defaultResolveStatuteWorkVersion
   )(
     { eli, ...(language === undefined ? {} : { language }) },
     legislationPublicReadDb,
@@ -975,13 +1058,29 @@ const handleReadProvisionHistoryTool: TypedMcpToolHandler<
   return toolDataResult({
     anchor,
     eli,
-    items: page.items.map((item) => ({
-      ...boundProvisionText(item.text),
-      documentId: item.documentId,
-      resourceName: legislationResourceName(item.documentId),
-      versionValidFrom: item.versionValidFrom,
-      versionValidTo: item.versionValidTo,
-    })),
+    items: page.items.map((item) => {
+      const version = {
+        documentId: item.documentId,
+        resourceName: legislationResourceName(item.documentId),
+        versionValidFrom: item.versionValidFrom,
+        versionValidTo: item.versionValidTo,
+      };
+      // The same publisher permission read_statute and
+      // read_statute_provisions apply, per consolidation: a Work may be
+      // re-licensed between versions, so the gate is per item and not per
+      // call.
+      return item.allowsDerivedAi
+        ? {
+            ...version,
+            ...boundProvisionText(item.text),
+            status: PROVISION_STATUS.found,
+          }
+        : {
+            ...version,
+            message: WITHHELD_WORDING_MESSAGE,
+            status: PROVISION_STATUS.textWithheld,
+          };
+    }),
     nextCursor: page.nextCursor,
   } satisfies v.InferInput<typeof READ_PROVISION_HISTORY_PROJECTION>);
 };

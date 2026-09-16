@@ -474,7 +474,7 @@ const resolvePaginationMode = (
     return "none";
   }
   // Windowed-text and paginationless tools page a cursor but expose no --limit.
-  if (annotation?.windowedText || annotation?.paginationless) {
+  if (annotation?.windowedText !== undefined || annotation?.paginationless) {
     return "cursor-only";
   }
   return hasLimit ? "full" : "cursor-only";
@@ -584,7 +584,8 @@ const leafSpecsForTool = ({
   const requestTimeoutMs = annotation?.requestTimeoutMs;
   const scope = annotation ? scopeOf(annotation) : undefined;
   const itemsKey = annotation?.itemsKey;
-  const windowedText = annotation?.windowedText === true;
+  const textPath = annotation?.windowedText?.textPath;
+  const windowedText = textPath !== undefined;
   const confirmPassthrough = annotation?.confirmPassthrough;
   const mode = resolvePaginationMode(properties, annotation);
   const paginated = mode !== "none";
@@ -647,6 +648,7 @@ const leafSpecsForTool = ({
         inputOnly,
         paginated,
         windowedText,
+        ...(textPath === undefined ? {} : { textPath }),
         ...(itemsKey === undefined ? {} : { itemsKey }),
         destructive: sub?.destructive ?? destructiveHint,
         ...(confirmPassthrough === undefined ? {} : { confirmPassthrough }),
@@ -675,6 +677,7 @@ const leafSpecsForTool = ({
       inputOnly,
       paginated,
       windowedText,
+      ...(textPath === undefined ? {} : { textPath }),
       ...(itemsKey === undefined ? {} : { itemsKey }),
       destructive: confirmPassthrough === true ? false : destructiveHint,
       ...(confirmPassthrough === undefined ? {} : { confirmPassthrough }),

@@ -1641,27 +1641,58 @@ export const READ_STATUTE_PROVISIONS_PROJECTION = v.strictObject({
           }),
         ),
       ),
+      // An entry the input schema refused. It carries its position and its
+      // issues rather than the subject fields, because the subject is what
+      // failed to parse; the entries beside it are still answered.
+      projectionBranch(
+        v.strictObject({
+          index: v.number(),
+          issues: v.array(
+            v.strictObject({ message: v.string(), path: v.string() }),
+          ),
+          message: v.string(),
+          status: v.literal(PROVISION_STATUS.invalid),
+        }),
+      ),
     ]),
   ),
 });
+
+const statuteProvisionVersion = {
+  documentId: passthroughId(),
+  resourceName: passthroughId(),
+  versionValidFrom: v.nullable(v.string()),
+  versionValidTo: v.nullable(v.string()),
+} as const;
 
 /**
  * read_provision_history. Source of truth: `handleReadProvisionHistoryTool`
  * (`legislation-tools.ts`) over `readProvisionHistoryHandler`. A version in
  * which the anchor is absent is dropped by that handler, so every item here
- * carries wording.
+ * has an occurrence; whether its wording travels is a separate publisher
+ * permission, so the items are discriminated on the same `status` vocabulary
+ * the batch provision read answers in.
  */
 export const READ_PROVISION_HISTORY_PROJECTION = v.strictObject({
   ...provisionEntrySubject,
   items: v.array(
-    v.strictObject({
-      documentId: passthroughId(),
-      resourceName: passthroughId(),
-      text: v.string(),
-      truncated: v.boolean(),
-      versionValidFrom: v.nullable(v.string()),
-      versionValidTo: v.nullable(v.string()),
-    }),
+    v.variant("status", [
+      projectionBranch(
+        v.strictObject({
+          ...statuteProvisionVersion,
+          status: v.literal(PROVISION_STATUS.found),
+          text: v.string(),
+          truncated: v.boolean(),
+        }),
+      ),
+      projectionBranch(
+        v.strictObject({
+          ...statuteProvisionVersion,
+          message: v.string(),
+          status: v.literal(PROVISION_STATUS.textWithheld),
+        }),
+      ),
+    ]),
   ),
   // Opaque `[versionValidFrom, documentId]` cursor, base64url-encoded.
   nextCursor: v.nullable(passthroughId()),

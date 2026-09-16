@@ -269,7 +269,14 @@ export type McpCliToolAnnotation = {
   itemsKey?: string;
   singleReadWhen?: string;
   columns?: readonly string[];
-  windowedText?: true;
+  /**
+   * The tool answers one window of long text, paged by `cursor`. `textPath`
+   * is where that text lives in the payload, dot-separated
+   * (`text`, `decision.text`, `statute.text`): a CLI that assumed a top-level
+   * `text` rendered nothing for a read that nests its subject, so the path is
+   * stated rather than defaulted.
+   */
+  windowedText?: { textPath: string };
   paginationless?: true;
   inputOnly?: readonly string[];
   discriminator?: {

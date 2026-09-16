@@ -77,6 +77,7 @@ const readGatedDecisionCitationsMock = mock();
 const withRedistributableSubjectMock = mock();
 const searchLegislationHandlerMock = mock();
 const resolveStatuteExpressionMock = mock();
+const resolveStatuteWorkVersionMock = mock();
 const readPublicLegislationHandlerMock = mock();
 const listStatuteVersionsHandlerMock = mock();
 const readProvisionHistoryHandlerMock = mock();
@@ -195,6 +196,7 @@ const buildContext = (tx: unknown): McpRequestContext => {
       readGatedDecisionCitations: readGatedDecisionCitationsMock,
       searchLegislationHandler: searchLegislationHandlerMock,
       resolveStatuteExpression: resolveStatuteExpressionMock,
+      resolveStatuteWorkVersion: resolveStatuteWorkVersionMock,
       readPublicLegislationHandler: readPublicLegislationHandlerMock,
       listStatuteVersionsHandler: listStatuteVersionsHandlerMock,
       readProvisionHistoryHandler: readProvisionHistoryHandlerMock,
@@ -1473,13 +1475,14 @@ const CONTRACT_CORPUS = {
       mode: "history",
       buildArgs: () => ({ anchor: "par_1729", eli: "/eli/cz/sb/2012/89" }),
       setup: () => {
-        resolveStatuteExpressionMock.mockResolvedValue({
+        resolveStatuteWorkVersionMock.mockResolvedValue({
           type: "expression",
           id: toSafeId<"legislationDocument">(uid(73)),
         });
         readProvisionHistoryHandlerMock.mockResolvedValue({
           items: [
             {
+              allowsDerivedAi: true,
               documentId: uid(73),
               versionValidFrom: "2014-01-01",
               versionValidTo: null,
@@ -1643,6 +1646,7 @@ const ALL_MOCKS = [
   readGatedDecisionCitationsMock,
   searchLegislationHandlerMock,
   resolveStatuteExpressionMock,
+  resolveStatuteWorkVersionMock,
   readPublicLegislationHandlerMock,
   listStatuteVersionsHandlerMock,
   readProvisionHistoryHandlerMock,

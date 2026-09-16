@@ -130,7 +130,7 @@ export const runCapabilityCommand = async ({
       format,
       itemsKey: spec.itemsKey,
       result,
-      windowedText: false,
+      textPath: undefined,
       writers,
       writeReceipt: spec.access === "write",
     });
@@ -187,7 +187,7 @@ export const runCapabilityCommand = async ({
       context,
       writers,
       format,
-      windowedText: false,
+      textPath: undefined,
       itemsKey: spec.itemsKey,
       baseArgs: toolArgs,
       serverUrl,

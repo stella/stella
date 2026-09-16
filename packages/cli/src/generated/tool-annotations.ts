@@ -39,12 +39,16 @@ export const generatedToolAnnotations: Readonly<
   read_content_across_matters: {
     command: ["document", "content"],
     scope: "read",
-    windowedText: true,
+    windowedText: {
+      textPath: "text",
+    },
   },
   read_case_law_decision: {
     command: ["case-law", "read"],
     scope: "read",
-    windowedText: true,
+    windowedText: {
+      textPath: "decision.text",
+    },
   },
   read_case_law_citations: {
     command: ["case-law", "citations"],
@@ -67,7 +71,9 @@ export const generatedToolAnnotations: Readonly<
   read_statute: {
     command: ["legislation", "read"],
     scope: "read",
-    windowedText: true,
+    windowedText: {
+      textPath: "statute.text",
+    },
   },
   read_statute_provisions: {
     command: ["legislation", "provisions"],
