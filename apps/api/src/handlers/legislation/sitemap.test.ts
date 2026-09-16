@@ -245,6 +245,9 @@ test("the shard index lists one all-bucket shard per jurisdiction", async () => 
 
   expect(shards.items).toEqual([
     { bucket: "all", country: "cze", lastmod: "2026-03-04" },
-    { bucket: "all", country: "svk", lastmod: "2026-01-15" },
   ]);
+});
+
+test("a stored statute in an unpublished jurisdiction has no sitemap entry", async () => {
+  expect(await listStatutes("svk")).toEqual([]);
 });

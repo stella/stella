@@ -17,9 +17,9 @@ import { authRelationsPart } from "@/api/db/auth-schema";
 import { caseLawDecisions, caseLawSources, relations } from "@/api/db/schema";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import { readDecisionHandler } from "@/api/handlers/case-law/decisions/get";
-import { withRedistributableSubject } from "@/api/handlers/case-law/decisions/public-subject";
 import type { SafeId } from "@/api/lib/branded-types";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";

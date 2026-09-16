@@ -10,15 +10,15 @@ import {
   legislationDocuments,
   legislationSources,
 } from "@/api/db/schema";
-import type { RedistributableDecisionSubject } from "@/api/handlers/case-law/decisions/public-subject";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { RedistributableDecisionSubject } from "@/api/lib/case-law/public-subject";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import {
   buildProvisionPreview,
   previewVersionColumns,
 } from "@/api/lib/legal-search/legislation-provision-preview";
 import type { ProvisionPreview } from "@/api/lib/legal-search/legislation-provision-preview";
-import { redistributableLegislationSource } from "@/api/lib/legal-search/legislation-redistribution";
+import { publishedLegislationDocument } from "@/api/lib/legal-search/legislation-redistribution";
 import {
   inForceOn,
   versionSortKey,
@@ -158,7 +158,7 @@ const resolveWorkVersions = async (
            )}
           JOIN ${legislationSources}
             ON ${legislationSources.id} = ${legislationDocuments.sourceId}
-         WHERE ${redistributableLegislationSource}
+         WHERE ${publishedLegislationDocument}
          ORDER BY w.key,
                   ${versionSortKey(legislationDocuments.versionValidFrom)} DESC,
                   ${legislationDocuments.language} ASC,

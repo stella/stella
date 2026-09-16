@@ -5,17 +5,15 @@ import { drizzle } from "drizzle-orm/pglite";
 import Elysia, { t } from "elysia";
 
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
-import {
-  createSafePublicSubjectHandler,
-  withRedistributableSubject,
-} from "@/api/handlers/case-law/decisions/public-subject";
-import type { RedistributableDecisionSubject } from "@/api/handlers/case-law/decisions/public-subject";
+import { createSafePublicSubjectHandler } from "@/api/handlers/case-law/decisions/public-subject";
 import type { PublicHandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeId } from "@/api/lib/branded-types";
 import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
+import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
+import type { RedistributableDecisionSubject } from "@/api/lib/case-law/public-subject";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import {

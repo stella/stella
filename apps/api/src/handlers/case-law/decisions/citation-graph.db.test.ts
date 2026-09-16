@@ -16,8 +16,6 @@ import {
   treatmentOf,
 } from "@/api/handlers/case-law/decisions/citation-graph";
 import type { DecisionCitationRow } from "@/api/handlers/case-law/decisions/citation-graph";
-import { withRedistributableSubject } from "@/api/handlers/case-law/decisions/public-subject";
-import type { RedistributableDecisionSubject } from "@/api/handlers/case-law/decisions/public-subject";
 import { POLARITIES, POLARITY } from "@/api/handlers/case-law/polarity/consts";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -27,6 +25,8 @@ import type {
 } from "@/api/lib/case-law-public-read-db";
 import { CITATION_TREATMENTS } from "@/api/lib/case-law/citation-vocabulary";
 import type { CitationDirection } from "@/api/lib/case-law/citation-vocabulary";
+import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
+import type { RedistributableDecisionSubject } from "@/api/lib/case-law/public-subject";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import {
   createTestPglite,

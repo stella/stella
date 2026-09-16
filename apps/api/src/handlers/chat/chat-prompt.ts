@@ -69,6 +69,7 @@ import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { formatDecisionForPrompt } from "@/api/lib/case-law/analysis-prompt";
 import { readDecisionAnalysisAst } from "@/api/lib/case-law/decision-analysis";
+import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
 import { estimateTextTokens } from "@/api/lib/chat/compaction-tokens";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { formatDateInTimeZone } from "@/api/lib/date-format";
@@ -89,12 +90,13 @@ import {
 } from "@/api/lib/files/office-evidence";
 import type { OfficeEvidencePayload } from "@/api/lib/files/office-evidence-types";
 import { createFileKey } from "@/api/lib/files/utils";
+import { allowsDerivedAi } from "@/api/lib/legal-search/corpus-source";
 import {
   readCorpusPayloadOrFallback,
   readCorpusText,
 } from "@/api/lib/legal-search/corpus-storage";
 import {
-  redistributableLegislationSource,
+  publishedLegislationDocument,
   redistributableLegislationVersion,
 } from "@/api/lib/legal-search/legislation-redistribution";
 import {
@@ -102,6 +104,7 @@ import {
   versionAstColumns,
 } from "@/api/lib/legal-search/legislation-version-blocks";
 import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
+import type { LegislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import {
   sanitizeForPrompt,
@@ -112,6 +115,8 @@ import { readS3ArrayBuffer } from "@/api/lib/s3";
 
 const TITLE_MAX_LENGTH = 80;
 const ACTIVE_DECISION_MAX_CHARS = 12_000;
+const DERIVED_AI_WITHHELD_PROMPT =
+  "The source does not permit derived AI use. Its wording and reader annotations have been withheld. Explain this restriction to the user; do not summarize, reconstruct, or retrieve the withheld wording through another tool.";
 /**
  * How much statute wording one turn may carry. Not a truncation point: an act
  * is orders of magnitude larger than a decision, so this is the budget
@@ -665,6 +670,7 @@ export const buildChatSystemPromptParts = async ({
     const statuteSection = yield* Result.await(
       buildActiveStatuteSection({
         activeStatute,
+        legislationDb: legislationPublicReadDb,
         organizationId,
         safeDb,
         userId,
@@ -1752,6 +1758,66 @@ export const buildActiveDecisionSection = async ({
       return Result.ok("");
     }
 
+    // Client-supplied active ids pass the same publication boundary as the
+    // reader. The source policy and payload pointers share its snapshot.
+    const decision = yield* Result.await(
+      Result.tryPromise({
+        try: async () => {
+          const row = await withRedistributableSubject(
+            caseLawDb,
+            { kind: "id", id: activeDecision.decisionId },
+            async ({ id, tx }) =>
+              await tx.query.caseLawDecisions.findFirst({
+                where: { id: { eq: id } },
+                columns: ACTIVE_DECISION_COLUMNS,
+                with: { source: { columns: { descriptor: true } } },
+              }),
+          );
+          if (row === null || row === undefined) {
+            return null;
+          }
+          const source =
+            row.source ?? panic("Case-law decision has no source relation");
+          if (!allowsDerivedAi(source.descriptor)) {
+            return { status: "withheld", row } as const;
+          }
+
+          // Outside the transaction above: the document lives in object
+          // storage.
+          const ast = await readActiveDecisionAst(row);
+          const text = ast
+            ? formatDecisionForPrompt(ast.blocks)
+            : await readActiveDecisionFulltext(row);
+          return { status: "available", row, text } as const;
+        },
+        catch: (cause) =>
+          new HandlerError({
+            status: 500,
+            message: "Reading the open decision failed",
+            cause,
+          }),
+      }),
+    );
+
+    if (decision === null) {
+      return Result.ok("");
+    }
+
+    switch (decision.status) {
+      case "withheld":
+        return Result.ok(
+          [
+            `The user is viewing case-law decision "${sanitizePromptLine({ maxLength: 200, text: decision.row.caseNumber })}".`,
+            DERIVED_AI_WITHHELD_PROMPT,
+          ].join("\n\n"),
+        );
+      case "available":
+        break;
+      default:
+        decision satisfies never;
+        return panic("Unhandled active decision policy");
+    }
+
     // The reader's own marks and what colleagues shared; a visitor has none.
     // Author and organization are in the predicate as well as in the row
     // policy, so a private note never reaches another reader's prompt.
@@ -1795,46 +1861,6 @@ export const buildActiveDecisionSection = async ({
             ),
           )
         : [];
-
-    // The corpus is global, and the decision reader serves it through the
-    // read-only public-law role. Reading it the same way here is what keeps a
-    // deployment whose corpus lives behind `PUBLIC_LAW_DATABASE_URL` from
-    // telling the user there is no document. No redistribution gate, unlike
-    // the statute above: this is the document the reader already has open.
-    const decision = yield* Result.await(
-      Result.tryPromise({
-        try: async () => {
-          const row = await caseLawDb(
-            async (tx) =>
-              await tx.query.caseLawDecisions.findFirst({
-                where: { id: { eq: activeDecision.decisionId } },
-                columns: ACTIVE_DECISION_COLUMNS,
-              }),
-          );
-          if (row === undefined) {
-            return null;
-          }
-
-          // Outside the transaction above: the document lives in object
-          // storage.
-          const ast = await readActiveDecisionAst(row);
-          const text = ast
-            ? formatDecisionForPrompt(ast.blocks)
-            : await readActiveDecisionFulltext(row);
-          return { row, text };
-        },
-        catch: (cause) =>
-          new HandlerError({
-            status: 500,
-            message: "Reading the open decision failed",
-            cause,
-          }),
-      }),
-    );
-
-    if (decision === null) {
-      return Result.ok("");
-    }
 
     const { row, text } = decision;
     const decisionPrompt = buildActiveDecisionPrompt({
@@ -1958,15 +1984,21 @@ const ACTIVE_STATUTE_TEXT_READ_STEP = "chatPrompt.activeStatuteText";
  */
 const readActiveStatuteFulltext = async (
   documentId: SafeId<"legislationDocument">,
-): Promise<string> => {
-  const [version] = await legislationPublicReadDb(
+  legislationDb: LegislationPublicReadDb,
+) => {
+  const [version] = await legislationDb(
     async (tx) =>
       await tx
         .select({
+          descriptor: legislationSources.descriptor,
           fulltext: legislationDocuments.fulltext,
           textS3Key: legislationDocuments.textS3Key,
         })
         .from(legislationDocuments)
+        .innerJoin(
+          legislationSources,
+          eq(legislationSources.id, legislationDocuments.sourceId),
+        )
         .where(
           and(
             eq(legislationDocuments.id, documentId),
@@ -1976,33 +2008,40 @@ const readActiveStatuteFulltext = async (
         .limit(1),
   );
   if (version === undefined) {
-    return "";
+    return { status: "withheld" } as const;
   }
 
+  if (!allowsDerivedAi(version.descriptor)) {
+    return { status: "withheld" } as const;
+  }
   const { fulltext, textS3Key } = version;
   if (corpusStorageMode === "off" || textS3Key === null) {
-    return fulltext ?? "";
+    return { status: "available", fulltext: fulltext ?? "" } as const;
   }
-  return (
-    (await readCorpusPayloadOrFallback({
-      documentId,
-      key: textS3Key,
-      step: ACTIVE_STATUTE_TEXT_READ_STEP,
-      read: async () => await readCorpusText(textS3Key),
-      fallback: () => fulltext,
-    })) ?? ""
-  );
+  return {
+    status: "available",
+    fulltext:
+      (await readCorpusPayloadOrFallback({
+        documentId,
+        key: textS3Key,
+        step: ACTIVE_STATUTE_TEXT_READ_STEP,
+        read: async () => await readCorpusText(textS3Key),
+        fallback: () => fulltext,
+      })) ?? "",
+  } as const;
 };
 
 type ActiveStatuteSectionProps = {
   activeStatute: IncomingActiveStatute | undefined;
+  legislationDb: LegislationPublicReadDb;
   organizationId: SafeId<"organization"> | undefined;
   safeDb: SafeDb;
   userId: SafeId<"user"> | undefined;
 };
 
-const buildActiveStatuteSection = async ({
+export const buildActiveStatuteSection = async ({
   activeStatute,
+  legislationDb,
   organizationId,
   safeDb,
   userId,
@@ -2012,6 +2051,103 @@ const buildActiveStatuteSection = async ({
   await Result.gen(async function* () {
     if (!activeStatute) {
       return Result.ok("");
+    }
+
+    // The corpus is global, and the statute reader serves it through the
+    // read-only public-law role behind the publisher's redistribution gate.
+    // Reading it the same way here is what keeps the chat from quoting an act
+    // the reader itself would not show.
+    const statute = yield* Result.await(
+      Result.tryPromise({
+        try: async () => {
+          const [version] = await legislationDb(
+            async (tx) =>
+              await tx
+                .select({
+                  descriptor: legislationSources.descriptor,
+                  country: legislationDocuments.country,
+                  documentType: legislationDocuments.documentType,
+                  eli: legislationDocuments.eli,
+                  language: legislationDocuments.language,
+                  status: legislationDocuments.status,
+                  title: legislationDocuments.title,
+                  versionValidFrom: legislationDocuments.versionValidFrom,
+                  versionValidTo: legislationDocuments.versionValidTo,
+                  ...versionAstColumns,
+                })
+                .from(legislationDocuments)
+                .innerJoin(
+                  legislationSources,
+                  eq(legislationSources.id, legislationDocuments.sourceId),
+                )
+                .where(
+                  and(
+                    eq(legislationDocuments.id, activeStatute.documentId),
+                    publishedLegislationDocument,
+                  ),
+                )
+                .limit(1),
+          );
+          if (version === undefined) {
+            return null;
+          }
+
+          if (!allowsDerivedAi(version.descriptor)) {
+            return { status: "withheld", version } as const;
+          }
+
+          // Outside the transaction above: the AST lives in object storage.
+          const blocks = await readVersionBlocks({
+            row: version,
+            legislationDb,
+            step: ACTIVE_STATUTE_READ_STEP,
+            purpose: "derived-ai",
+          });
+          let fulltext = "";
+          if (blocks.length === 0) {
+            const fallback = await readActiveStatuteFulltext(
+              activeStatute.documentId,
+              legislationDb,
+            );
+            switch (fallback.status) {
+              case "withheld":
+                return { status: "withheld", version } as const;
+              case "available":
+                fulltext = fallback.fulltext;
+                break;
+              default:
+                fallback satisfies never;
+                return panic("Unhandled statute fallback policy");
+            }
+          }
+          return { status: "available", blocks, fulltext, version } as const;
+        },
+        catch: (cause) =>
+          new HandlerError({
+            status: 500,
+            message: "Reading the open statute failed",
+            cause,
+          }),
+      }),
+    );
+
+    if (statute === null) {
+      return Result.ok("");
+    }
+
+    switch (statute.status) {
+      case "withheld":
+        return Result.ok(
+          [
+            `The user is reading the act "${sanitizePromptLine({ maxLength: 300, text: statute.version.title })}".`,
+            DERIVED_AI_WITHHELD_PROMPT,
+          ].join("\n\n"),
+        );
+      case "available":
+        break;
+      default:
+        statute satisfies never;
+        return panic("Unhandled active statute policy");
     }
 
     // The decision section's predicate, on the statute target: the author and
@@ -2058,69 +2194,6 @@ const buildActiveStatuteSection = async ({
             ),
           )
         : [];
-
-    // The corpus is global, and the statute reader serves it through the
-    // read-only public-law role behind the publisher's redistribution gate.
-    // Reading it the same way here is what keeps the chat from quoting an act
-    // the reader itself would not show.
-    const statute = yield* Result.await(
-      Result.tryPromise({
-        try: async () => {
-          const [version] = await legislationPublicReadDb(
-            async (tx) =>
-              await tx
-                .select({
-                  country: legislationDocuments.country,
-                  documentType: legislationDocuments.documentType,
-                  eli: legislationDocuments.eli,
-                  language: legislationDocuments.language,
-                  status: legislationDocuments.status,
-                  title: legislationDocuments.title,
-                  versionValidFrom: legislationDocuments.versionValidFrom,
-                  versionValidTo: legislationDocuments.versionValidTo,
-                  ...versionAstColumns,
-                })
-                .from(legislationDocuments)
-                .innerJoin(
-                  legislationSources,
-                  eq(legislationSources.id, legislationDocuments.sourceId),
-                )
-                .where(
-                  and(
-                    eq(legislationDocuments.id, activeStatute.documentId),
-                    redistributableLegislationSource,
-                  ),
-                )
-                .limit(1),
-          );
-          if (version === undefined) {
-            return null;
-          }
-
-          // Outside the transaction above: the AST lives in object storage.
-          const blocks = await readVersionBlocks({
-            row: version,
-            legislationDb: legislationPublicReadDb,
-            step: ACTIVE_STATUTE_READ_STEP,
-          });
-          const fulltext =
-            blocks.length === 0
-              ? await readActiveStatuteFulltext(activeStatute.documentId)
-              : "";
-          return { blocks, fulltext, version };
-        },
-        catch: (cause) =>
-          new HandlerError({
-            status: 500,
-            message: "Reading the open statute failed",
-            cause,
-          }),
-      }),
-    );
-
-    if (statute === null) {
-      return Result.ok("");
-    }
 
     const { blocks, fulltext, version } = statute;
     const statutePrompt = buildActiveStatutePrompt({

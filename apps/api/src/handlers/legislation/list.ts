@@ -19,7 +19,7 @@ import {
 import type { SafeId } from "@/api/lib/branded-types";
 import { tPaginationCursor, tPaginationLimit } from "@/api/lib/custom-schema";
 import { escapeLike } from "@/api/lib/escape-like";
-import { redistributableLegislationSource } from "@/api/lib/legal-search/legislation-redistribution";
+import { publishedLegislationDocument } from "@/api/lib/legal-search/legislation-redistribution";
 import {
   inForceOn,
   versionSortKey,
@@ -205,7 +205,7 @@ export const listStatutesHandler = async (
   const asOf =
     query.asOf === undefined ? sql`CURRENT_DATE` : sql`${query.asOf}::date`;
   const conditions: SQL[] = [
-    redistributableLegislationSource,
+    publishedLegislationDocument,
     eq(legislationDocuments.country, query.country.toUpperCase()),
     inForceOn(
       legislationDocuments.versionValidFrom,
