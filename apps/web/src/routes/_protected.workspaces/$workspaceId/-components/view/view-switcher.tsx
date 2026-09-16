@@ -297,7 +297,9 @@ export const ViewSwitcher = ({
         actionMenu={{
           label: t("common.actions"),
           onOpenChange: (view, open) => {
-            if (!open) return;
+            if (!open) {
+              return;
+            }
             viewActions.setTarget({
               view,
               canDelete:
@@ -529,7 +531,9 @@ const useViewActionsMenu = ({
   };
 
   const renderItems = ({ view, canDelete }: ViewActionsTarget) => {
-    if (!hasActions) return null;
+    if (!hasActions) {
+      return null;
+    }
     const { id, layout } = view;
     const Icon = layoutIcons[layout.type];
     return (

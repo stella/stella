@@ -25,11 +25,11 @@ import readFilesystemTree from "@/api/handlers/entities/read-filesystem-tree";
 import readGroupCounts from "@/api/handlers/entities/read-group-counts";
 import readKanbanGroup from "@/api/handlers/entities/read-kanban-group";
 import readPropertyFacets from "@/api/handlers/entities/read-property-facets";
-import readEntitiesWindow from "@/api/handlers/entities/read-window";
 import markColumnFlag from "@/api/handlers/fields/mark-column-flag";
 import updateProperty from "@/api/handlers/properties/update";
 import calendarTasks from "@/api/handlers/tasks/calendar";
 import { tCondition, tConditionNode } from "@/api/lib/conditions/contract";
+import { entityQueryWindowBodySchema } from "@/api/lib/entities/query-window-schema";
 import { LIMITS } from "@/api/lib/limits";
 import { createPropertyBodySchema } from "@/api/lib/properties/create-schema";
 import {
@@ -77,7 +77,6 @@ const filters = (
 /** Keyed by module path relative to `apps/api/src`, without extension. */
 const PROBES: Record<string, Probe[]> = {
   "handlers/entities/list": [filters(readEntities.config.body)],
-  "handlers/entities/read-window": [filters(readEntitiesWindow.config.body)],
   "handlers/entities/read-filesystem-tree": [
     filters(readFilesystemTree.config.body),
   ],
@@ -123,6 +122,7 @@ const PROBES: Record<string, Probe[]> = {
       }),
     },
   ],
+  "lib/entities/query-window-schema": [filters(entityQueryWindowBodySchema)],
   "lib/properties/create-schema": [
     {
       schema: createPropertyBodySchema,

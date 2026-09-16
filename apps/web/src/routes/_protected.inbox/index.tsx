@@ -7,6 +7,7 @@ import {
 } from "@/components/entity-views/entity-views";
 import { isInboxPreviewEnabled } from "@/hooks/use-inbox-preview";
 import { pageTitle } from "@/lib/page-title";
+import { ensureRouteQueryData } from "@/lib/react-query";
 import { entityViewsOptions } from "@/lib/workspaces/queries/entity-views";
 
 const protectedRouteApi = getRouteApi("/_protected");
@@ -18,7 +19,8 @@ export const Route = createFileRoute("/_protected/inbox/")({
     }
   },
   loader: async ({ context }) => {
-    await context.queryClient.ensureQueryData(
+    await ensureRouteQueryData(
+      context.queryClient,
       entityViewsOptions(context.user.activeOrganizationId),
     );
   },

@@ -7,14 +7,12 @@ import { Result } from "better-result";
 import {
   AlignJustifyIcon,
   CalendarIcon,
-  Columns3Icon,
   ClockIcon,
   DownloadIcon,
   HashIcon,
   Loader2Icon,
   PlayIcon,
   Rows3Icon,
-  Settings2Icon,
   SparklesIcon,
   UserIcon,
   WandSparklesIcon,
@@ -35,13 +33,11 @@ import {
   MenuSeparator,
   MenuTrigger,
 } from "@stll/ui/menu";
-import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { SegmentedIconToggle } from "@stll/ui/segmented-icon-toggle";
 import {
   Select,
   SelectItem,
   SelectPopup,
-  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/select";

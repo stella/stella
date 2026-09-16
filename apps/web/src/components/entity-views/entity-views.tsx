@@ -96,7 +96,9 @@ export const EntityViews = ({ organizationId, scope }: EntityViewsProps) => {
   const savedIds = useRef(new Map<string, string>());
   const latestSave = useRef(0);
   useExternalSyncEffect(() => {
-    if (saved.error) analytics.captureError(saved.error);
+    if (saved.error) {
+      analytics.captureError(saved.error);
+    }
   }, [analytics, saved.error]);
   const defaults = useMemo(
     () =>
@@ -107,7 +109,9 @@ export const EntityViews = ({ organizationId, scope }: EntityViewsProps) => {
     [t],
   );
   const savedViews = useMemo(() => {
-    if (!saved.data) return [];
+    if (!saved.data) {
+      return [];
+    }
     return saved.data.items;
   }, [saved.data]);
   const views = [
@@ -159,14 +163,18 @@ export const EntityViews = ({ organizationId, scope }: EntityViewsProps) => {
     },
     onSuccess: async (view, submitted, context) => {
       await queryClient.invalidateQueries(entityViewsOptions(organizationId));
-      if (context?.sequence !== latestSave.current) return;
+      if (context.sequence !== latestSave.current) {
+        return;
+      }
       setSelectedId((current) =>
         current === submitted.id ? view.id : current,
       );
       setDraft(null);
     },
     onError: (error, _view, context) => {
-      if (context?.sequence === latestSave.current) setDraft(null);
+      if (context?.sequence === latestSave.current) {
+        setDraft(null);
+      }
       reportError(error);
     },
   });
@@ -180,7 +188,9 @@ export const EntityViews = ({ organizationId, scope }: EntityViewsProps) => {
       ),
     onSuccess: async (_result, removedId) => {
       for (const [temporaryId, serverId] of savedIds.current) {
-        if (serverId === removedId) savedIds.current.delete(temporaryId);
+        if (serverId === removedId) {
+          savedIds.current.delete(temporaryId);
+        }
       }
       await queryClient.invalidateQueries(entityViewsOptions(organizationId));
       setSelectedId("default:kanban");
@@ -194,12 +204,15 @@ export const EntityViews = ({ organizationId, scope }: EntityViewsProps) => {
           viewIds: viewIds.map((id) => toSafeId<"workspaceView">(id)),
         }),
       ),
-    onSuccess: () =>
-      queryClient.invalidateQueries(entityViewsOptions(organizationId)),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries(entityViewsOptions(organizationId));
+    },
     onError: reportError,
   });
-  if (saved.isPending || !activeView) return <EntityViewsPending />;
-  if (saved.error)
+  if (saved.isPending || !activeView) {
+    return <EntityViewsPending />;
+  }
+  if (saved.error) {
     return (
       <div className="p-4 text-sm">
         <p>{userErrorFromThrown(saved.error, t("common.unexpectedError"))}</p>
@@ -208,16 +221,21 @@ export const EntityViews = ({ organizationId, scope }: EntityViewsProps) => {
         </Button>
       </div>
     );
+  }
   const canEditView = isUnsavedViewId(activeView.id)
     ? canCreateView
     : canUpdateView;
   const persist = (view: WorkspaceView) => {
-    if (isUnsavedViewId(view.id) ? !canCreateView : !canUpdateView) return;
+    if (isUnsavedViewId(view.id) ? !canCreateView : !canUpdateView) {
+      return;
+    }
     setSelectedId(view.id);
     save.mutate(view);
   };
   const onLayoutChange = (layout: ViewLayout) => {
-    if (canEditView) persist({ ...activeView, layout });
+    if (canEditView) {
+      persist({ ...activeView, layout });
+    }
   };
   const groups = [
     { id: ENTITY_VIEW_GROUP.TYPE, label: t("common.type") },
@@ -248,8 +266,9 @@ export const EntityViews = ({ organizationId, scope }: EntityViewsProps) => {
             setDraft(null);
           }}
           onViewDoubleClick={(view) => {
-            if (isUnsavedViewId(view.id) ? canCreateView : canUpdateView)
+            if (isUnsavedViewId(view.id) ? canCreateView : canUpdateView) {
               setEditing({ id: view.id, name: view.name });
+            }
           }}
           renderIcon={(view) =>
             view.layout.type === "table" ? (
@@ -268,8 +287,9 @@ export const EntityViews = ({ organizationId, scope }: EntityViewsProps) => {
                       onChange={(name) => setEditing({ id: view.id, name })}
                       onCancel={() => setEditing(null)}
                       onCommit={() => {
-                        if (editing.name.trim())
+                        if (editing.name.trim()) {
                           persist({ ...view, name: editing.name.trim() });
+                        }
                         setEditing(null);
                       }}
                     />
@@ -335,7 +355,9 @@ export const EntityViews = ({ organizationId, scope }: EntityViewsProps) => {
         <ViewToolbarChrome className="md:ms-auto md:justify-end">
           <Select
             onValueChange={(view) => {
-              if (view) setProposalView(view);
+              if (view) {
+                setProposalView(view);
+              }
             }}
             value={proposalView}
           >
@@ -392,13 +414,14 @@ export const EntityViews = ({ organizationId, scope }: EntityViewsProps) => {
                 groupByPropertyId={activeView.layout.groupByPropertyId}
                 subgroupByPropertyId={activeView.layout.subgroupByPropertyId}
                 onChange={(groupByPropertyId, subgroupByPropertyId) => {
-                  if (activeView.layout.type === "kanban")
+                  if (activeView.layout.type === "kanban") {
                     onLayoutChange(
                       mergeLayout(activeView.layout, {
                         groupByPropertyId,
                         subgroupByPropertyId,
                       }),
                     );
+                  }
                 }}
               />
             )}
@@ -417,12 +440,13 @@ export const EntityViews = ({ organizationId, scope }: EntityViewsProps) => {
                 allowCreatedByGrouping
                 groupByPropertyId={activeView.layout.groupByPropertyId}
                 onChange={(groupByPropertyId) => {
-                  if (activeView.layout.type === "table")
+                  if (activeView.layout.type === "table") {
                     onLayoutChange(
                       mergeLayout(activeView.layout, {
                         groupByPropertyId: groupByPropertyId || undefined,
                       }),
                     );
+                  }
                 }}
               />
             )}
@@ -467,7 +491,9 @@ const EntityViewContent = ({
     }),
   );
   const proposalEntries = useMemo(() => {
-    if (!proposals.data) return [];
+    if (!proposals.data) {
+      return [];
+    }
     return proposals.data.pages
       .flatMap((page) =>
         page.items.map((signal) => ({ type: "proposal" as const, signal })),
@@ -477,7 +503,9 @@ const EntityViewContent = ({
   const entries = useMemo(() => {
     const loadedEntries: EntityViewEntry[] = [...proposalEntries];
     if (records.data) {
-      for (const page of records.data.pages) loadedEntries.push(...page.items);
+      for (const page of records.data.pages) {
+        loadedEntries.push(...page.items);
+      }
     }
     return sortEntityViewEntries({
       entries: loadedEntries,
@@ -500,10 +528,11 @@ const EntityViewContent = ({
             entry.type === "entity" ? [entry.workspaceId] : [],
           ),
         ),
-      ].map((workspaceId) =>
-        queryClient.invalidateQueries({
-          queryKey: entitiesKeys.all(workspaceId),
-        }),
+      ].map(
+        async (workspaceId) =>
+          await queryClient.invalidateQueries({
+            queryKey: entitiesKeys.all(workspaceId),
+          }),
       ),
     ]);
   };
@@ -511,18 +540,53 @@ const EntityViewContent = ({
   const loadingMore =
     records.isFetchingNextPage || proposals.isFetchingNextPage;
   const onLoadMore = () => {
-    if (records.hasNextPage && !records.isFetchingNextPage)
+    if (records.hasNextPage && !records.isFetchingNextPage) {
       detached(records.fetchNextPage(), "entity-views.more-records");
-    if (proposals.hasNextPage && !proposals.isFetchingNextPage)
+    }
+    if (proposals.hasNextPage && !proposals.isFetchingNextPage) {
       detached(proposals.fetchNextPage(), "entity-views.more-proposals");
+    }
   };
   useExternalSyncEffect(() => {
-    if (records.error) analytics.captureError(records.error);
-    if (proposals.error) analytics.captureError(proposals.error);
+    if (records.error) {
+      analytics.captureError(records.error);
+    }
+    if (proposals.error) {
+      analytics.captureError(proposals.error);
+    }
   }, [analytics, records.error, proposals.error]);
   const loading = records.isPending || proposals.isPending;
-  if (loading && !isTableView(view)) return <EntityViewsPending />;
+  if (loading && !isTableView(view)) {
+    return <EntityViewsPending />;
+  }
   const error = records.error ?? proposals.error;
+  let content = null;
+  if (isTableView(view)) {
+    content = (
+      <EntityViewTable
+        rows={rows}
+        scope={scope}
+        view={view}
+        onLayoutChange={onLayoutChange}
+        organizationId={organizationId}
+        onChanged={refresh}
+        loading={loading}
+        hasNextPage={hasNextPage}
+        loadingMore={loadingMore}
+        onLoadMore={onLoadMore}
+      />
+    );
+  } else if (view.layout.type === "kanban") {
+    content = (
+      <EntityViewKanban
+        rows={rows}
+        layout={view.layout}
+        scope={scope}
+        organizationId={organizationId}
+        onChanged={refresh}
+      />
+    );
+  }
   return (
     <>
       {error && (
@@ -540,28 +604,7 @@ const EntityViewContent = ({
           </Button>
         </div>
       )}
-      {isTableView(view) ? (
-        <EntityViewTable
-          rows={rows}
-          scope={scope}
-          view={view}
-          onLayoutChange={onLayoutChange}
-          organizationId={organizationId}
-          onChanged={refresh}
-          loading={loading}
-          hasNextPage={hasNextPage}
-          loadingMore={loadingMore}
-          onLoadMore={onLoadMore}
-        />
-      ) : view.layout.type === "kanban" ? (
-        <EntityViewKanban
-          rows={rows}
-          layout={view.layout}
-          scope={scope}
-          organizationId={organizationId}
-          onChanged={refresh}
-        />
-      ) : null}
+      {content}
       {view.layout.type === "kanban" && hasNextPage && (
         <Button
           className="mx-auto my-2"

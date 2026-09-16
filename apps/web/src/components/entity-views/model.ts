@@ -1,6 +1,9 @@
 import { panic } from "better-result";
 
-import { ENTITY_VIEW_COLUMNS } from "@stll/api-contract/entity-views";
+import {
+  ENTITY_VIEW_GROUP,
+  type ENTITY_VIEW_COLUMNS,
+} from "@stll/api-contract/entity-views";
 import { SUGGESTION_KIND } from "@stll/api-contract/signals";
 import { compareByLocale } from "@stll/collation";
 import {
@@ -16,8 +19,7 @@ import type { ViewLayout } from "@/lib/types";
 
 import type { EntityViewEntry, EntityViewRow } from "./types";
 
-export { ENTITY_VIEW_GROUP } from "@stll/api-contract/entity-views";
-import { ENTITY_VIEW_GROUP } from "@stll/api-contract/entity-views";
+export { ENTITY_VIEW_GROUP };
 
 export const entrySuggestion = (entry: EntityViewEntry) =>
   entry.type === "proposal"
@@ -36,19 +38,19 @@ export const entryId = (entry: EntityViewEntry) =>
 export const entryMatterId = (entry: EntityViewEntry) =>
   entry.type === "entity" ? entry.workspaceId : entry.signal.workspaceId;
 
-export const entryKind = (entry: EntityViewEntry) =>
-  entry.type === "entity"
-    ? entry.entity.kind
-    : entrySuggestion(entry)
-      ? "task"
-      : null;
+export const entryKind = (entry: EntityViewEntry) => {
+  if (entry.type === "entity") {
+    return entry.entity.kind;
+  }
+  return entrySuggestion(entry) ? "task" : null;
+};
 
-export const entryStatus = (entry: EntityViewEntry) =>
-  entry.type === "entity"
-    ? entry.entity.status
-    : entrySuggestion(entry)
-      ? "open"
-      : null;
+export const entryStatus = (entry: EntityViewEntry) => {
+  if (entry.type === "entity") {
+    return entry.entity.status;
+  }
+  return entrySuggestion(entry) ? "open" : null;
+};
 
 export const entryType = (entry: EntityViewEntry) => {
   if (entry.type === "entity") {
@@ -57,11 +59,10 @@ export const entryType = (entry: EntityViewEntry) => {
       : entry.entity.kind;
   }
   const suggestion = entrySuggestion(entry);
-  return suggestion?.kind === SUGGESTION_KIND.CREATE_DEADLINE
-    ? "deadline"
-    : suggestion
-      ? "task"
-      : null;
+  if (suggestion?.kind === SUGGESTION_KIND.CREATE_DEADLINE) {
+    return "deadline";
+  }
+  return suggestion ? "task" : null;
 };
 
 export const proposalMatchesFilters = (
@@ -70,13 +71,17 @@ export const proposalMatchesFilters = (
 ) =>
   filters.every((filter) => {
     const pruned = pruneIncomplete(filter);
-    if (!pruned) return true;
+    if (!pruned) {
+      return true;
+    }
     const effective = foldCondition(pruned, {
       leaf: (node): ConditionNode | null =>
         isEffectiveLeaf(node) ? node : null,
       group: (node, children) => ({ ...node, children: [...children] }),
     });
-    if (!effective) return true;
+    if (!effective) {
+      return true;
+    }
     return evaluateCondition(effective, (operand) => {
       switch (operand.type) {
         case "kind":
@@ -168,19 +173,28 @@ export const sortEntityViewEntries = ({
 }: SortEntityViewEntriesOptions) => {
   const compare = compareByLocale(locale);
   const accessors = sorts.map(({ propertyId, desc }) => {
-    if (!isEntityViewSortColumn(propertyId))
+    if (!isEntityViewSortColumn(propertyId)) {
       panic(`Unsupported collection sort: ${propertyId}`);
+    }
     return { getValue: entityViewSortValues[propertyId], desc };
   });
   return entries.toSorted((left, right) => {
     for (const { getValue, desc } of accessors) {
       const a = getValue(left);
       const b = getValue(right);
-      if (a === b) continue;
-      if (a === null) return 1;
-      if (b === null) return -1;
+      if (a === b) {
+        continue;
+      }
+      if (a === null) {
+        return 1;
+      }
+      if (b === null) {
+        return -1;
+      }
       const order = compare(a, b);
-      if (order !== 0) return desc ? -order : order;
+      if (order !== 0) {
+        return desc ? -order : order;
+      }
     }
     return 0;
   });

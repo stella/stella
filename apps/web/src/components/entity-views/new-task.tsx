@@ -46,7 +46,9 @@ export const NewEntityViewTask = ({
   const pendingRef = useRef(false);
   const [pending, setPending] = useState(false);
   const create = async (selectedWorkspaceId: string) => {
-    if (pendingRef.current) return;
+    if (pendingRef.current) {
+      return;
+    }
     pendingRef.current = true;
     setPending(true);
     const result = await Result.tryPromise(async () =>
@@ -89,8 +91,10 @@ export const NewEntityViewTask = ({
     pendingRef.current = false;
     setPending(false);
   };
-  if (!canCreate) return null;
-  if (workspaceId)
+  if (!canCreate) {
+    return null;
+  }
+  if (workspaceId) {
     return (
       <KanbanCellAction
         disabled={pending}
@@ -103,11 +107,16 @@ export const NewEntityViewTask = ({
         )}
       </KanbanCellAction>
     );
+  }
   return (
     <Menu>
       <MenuTrigger
         render={
-          <KanbanCellAction disabled={pending || !data?.workspaces.length} />
+          <KanbanCellAction
+            disabled={
+              pending || data === undefined || data.workspaces.length === 0
+            }
+          />
         }
       >
         {t(

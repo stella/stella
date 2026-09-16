@@ -18,6 +18,7 @@ import {
   resolveKanbanGrouping,
 } from "@stll/ui/kanban";
 import { stellaToast } from "@stll/ui/toast";
+import { cn } from "@stll/ui/utils";
 
 import { SignalCard } from "@/components/inbox/signal-card";
 import { MatterRefLink } from "@/components/matter-ref-link";
@@ -72,7 +73,9 @@ export const EntityViewKanban = ({
   const queryClient = useQueryClient();
   useMountEffect(() => {
     const element = scrollRef.current;
-    if (!element) return;
+    if (!element) {
+      return undefined;
+    }
     return registerKanbanBoardAutoScroll({
       element,
       sources: KANBAN_BOARD_AUTO_SCROLL_SOURCES.elements,
@@ -85,7 +88,8 @@ export const EntityViewKanban = ({
   const schema = {
     ...sourceSchema,
     builtInGroups: sourceSchema.builtInGroups.map((group) => ({
-      ...group,
+      id: group.id,
+      options: group.options,
       selectRows: (items: readonly PlacedRow[]) => [...items],
     })),
   };
@@ -97,26 +101,32 @@ export const EntityViewKanban = ({
       placed.push({ row, lane: entryGroupValue(row.entry, subgroupId) });
       continue;
     }
-    const users =
-      row.entry.type === "entity"
-        ? row.entry.entity.assignees.map((assignee) => assignee.userId)
-        : row.entry.signal.assigneeUserId
-          ? [row.entry.signal.assigneeUserId]
-          : [];
-    if (users.length === 0) placed.push({ row, lane: null });
-    for (const userId of users) placed.push({ row, lane: userId });
+    let users: string[] = [];
+    if (row.entry.type === "entity") {
+      users = row.entry.entity.assignees.map((assignee) => assignee.userId);
+    } else if (row.entry.signal.assigneeUserId) {
+      users = [row.entry.signal.assigneeUserId];
+    }
+    if (users.length === 0) {
+      placed.push({ row, lane: null });
+    }
+    for (const userId of users) {
+      placed.push({ row, lane: userId });
+    }
   }
   const matrix = buildKanbanBoardMatrix({
     rows: placed,
     group: resolveKanbanGrouping({ groupBy: groupId, schema }),
     subgroup: resolveKanbanGrouping({ groupBy: subgroupId, schema }),
     uncategorizedLabel: t("common.unassigned"),
-    resolveGroupValue: ({ grouping, row }) =>
-      grouping.type === "none"
-        ? null
-        : grouping.propertyId === subgroupId
-          ? row.lane
-          : entryGroupValue(row.row.entry, grouping.propertyId),
+    resolveGroupValue: ({ grouping, row }) => {
+      if (grouping.type === "none") {
+        return null;
+      }
+      return grouping.propertyId === subgroupId
+        ? row.lane
+        : entryGroupValue(row.row.entry, grouping.propertyId);
+    },
   });
 
   const move = async ({
@@ -137,14 +147,16 @@ export const EntityViewKanban = ({
       entry.entity.kind !== "task" ||
       !isTaskStatus(status) ||
       pendingRef.current.has(entityId)
-    )
+    ) {
       return;
+    }
     if (
       subgroupId &&
       subgroupId !== ENTITY_VIEW_GROUP.ASSIGNEE &&
       entryGroupValue(entry, subgroupId) !== targetLane
-    )
+    ) {
       return;
+    }
     pendingRef.current.add(entityId);
     setPending(new Set(pendingRef.current));
     const result = await Result.tryPromise(async () => {
@@ -191,34 +203,44 @@ export const EntityViewKanban = ({
     laneValue: string | null,
   ) => {
     const { column } = cell.coordinate;
-    if (column.type !== "group" || subgroupId === ENTITY_VIEW_GROUP.AUTHOR)
+    if (column.type !== "group" || subgroupId === ENTITY_VIEW_GROUP.AUTHOR) {
       return null;
+    }
     if (
       subgroupId === ENTITY_VIEW_GROUP.TYPE &&
       laneValue !== "task" &&
       laneValue !== "deadline"
-    )
+    ) {
       return null;
-    if (subgroupId === ENTITY_VIEW_GROUP.KIND && laneValue !== "task")
+    }
+    if (subgroupId === ENTITY_VIEW_GROUP.KIND && laneValue !== "task") {
       return null;
-    if (subgroupId === ENTITY_VIEW_GROUP.MATTER && laneValue === null)
+    }
+    if (subgroupId === ENTITY_VIEW_GROUP.MATTER && laneValue === null) {
       return null;
-    const status = isTaskStatus(column.group.value)
-      ? column.group.value
-      : groupId === ENTITY_VIEW_GROUP.KIND && column.group.value === "task"
-        ? TASK_STATUS.OPEN
-        : null;
-    if (!status) return null;
+    }
+    let status = null;
+    if (isTaskStatus(column.group.value)) {
+      status = column.group.value;
+    } else if (
+      groupId === ENTITY_VIEW_GROUP.KIND &&
+      column.group.value === "task"
+    ) {
+      status = TASK_STATUS.OPEN;
+    }
+    if (!status) {
+      return null;
+    }
+    let workspaceId = null;
+    if (subgroupId === ENTITY_VIEW_GROUP.MATTER) {
+      workspaceId = laneValue;
+    } else if (scope.type === "matter") {
+      workspaceId = scope.matterId;
+    }
     return (
       <NewEntityViewTask
         organizationId={organizationId}
-        workspaceId={
-          subgroupId === ENTITY_VIEW_GROUP.MATTER
-            ? laneValue
-            : scope.type === "matter"
-              ? scope.matterId
-              : null
-        }
+        workspaceId={workspaceId}
         status={status}
         assigneeUserId={
           subgroupId === ENTITY_VIEW_GROUP.ASSIGNEE ? laneValue : undefined
@@ -356,11 +378,10 @@ const EntityViewKanbanCell = ({
             />
           ) : (
             <div
-              className={
-                pending.has(row.entry.entity.entityId)
-                  ? "pointer-events-none opacity-60"
-                  : undefined
-              }
+              className={cn(
+                pending.has(row.entry.entity.entityId) &&
+                  "pointer-events-none opacity-60",
+              )}
             >
               <KanbanCard
                 entity={row.entry.entity}
@@ -374,15 +395,16 @@ const EntityViewKanbanCell = ({
                 onRename={
                   canEdit && !row.entry.entity.readOnly
                     ? (entityId, name) => {
-                        if (row.entry.type === "entity")
+                        if (row.entry.type === "entity") {
                           onRename(row.entry.workspaceId, entityId, name);
+                        }
                       }
                     : undefined
                 }
                 context={
                   <span className="text-muted-foreground text-xs">
                     <MatterRefLink workspaceId={row.entry.workspaceId}>
-                      {row.entry.workspaceName}
+                      <UserText>{row.entry.workspaceName}</UserText>
                     </MatterRefLink>
                   </span>
                 }
