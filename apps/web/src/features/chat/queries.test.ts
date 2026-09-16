@@ -1429,6 +1429,106 @@ describe("chat runtime", () => {
     });
   });
 
+  test("isolates a rejected tool-result attempt from its queued retry", async () => {
+    const threadId = toChatThreadId("thread-queued-draft-result-retry");
+    const input = {
+      name: "Power of attorney",
+      source: "@doc kind=other locale=en page=A4",
+    };
+    const pendingMessage = {
+      id: "33333333-3333-4333-8333-333333333336",
+      role: "assistant",
+      parts: [
+        {
+          type: "tool-call",
+          id: "tool-queued-draft",
+          name: "create-document",
+          state: "input-complete",
+          arguments: JSON.stringify(input),
+          input,
+        },
+      ],
+    } as const satisfies PersistedChatMessage;
+    let releaseFirstRequest = () => {};
+    const firstRequestMayFinish = new Promise<void>((resolve) => {
+      releaseFirstRequest = resolve;
+    });
+    let noteFirstRequestStarted = () => {};
+    const firstRequestStarted = new Promise<void>((resolve) => {
+      noteFirstRequestStarted = resolve;
+    });
+    let requestCount = 0;
+    globalThis.fetch = createFetchMock(async () => {
+      requestCount += 1;
+      if (requestCount === 1) {
+        noteFirstRequestStarted();
+        await firstRequestMayFinish;
+        return new Response(
+          JSON.stringify({
+            code: API_VALIDATION_ERROR_CODE,
+            message: "Chat continuation does not match its awaited interaction",
+          }),
+          { headers: { "Content-Type": "application/json" }, status: 400 },
+        );
+      }
+      return createSseResponse([
+        { type: "RUN_STARTED", threadId, runId: "run-retry-success" },
+        {
+          type: "RUN_FINISHED",
+          threadId,
+          runId: "run-retry-success",
+          finishReason: "stop",
+          outcome: { type: "success" },
+        },
+      ]);
+    });
+    const runtime = createChatRuntime({
+      context: undefined,
+      initialMessages: [pendingMessage],
+      key: { scope: "global", threadId },
+      onError: () => {},
+      onFinish: () => {},
+    });
+    const firstOutput = {
+      success: true,
+      destination: "draft",
+      fileName: "Rejected.docx",
+    };
+    const retryOutput = {
+      success: true,
+      destination: "draft",
+      fileName: "Accepted.docx",
+    };
+
+    const firstAttempt = Result.tryPromise(async () => {
+      await runtime.addToolResult({
+        tool: "create-document",
+        toolCallId: "tool-queued-draft",
+        output: firstOutput,
+      });
+    });
+    await firstRequestStarted;
+    const retry = Result.tryPromise(async () => {
+      await runtime.addToolResult({
+        tool: "create-document",
+        toolCallId: "tool-queued-draft",
+        output: retryOutput,
+      });
+    });
+
+    expect(requestCount).toBe(1);
+    releaseFirstRequest();
+    const [firstResult, retryResult] = await Promise.all([firstAttempt, retry]);
+
+    expect(Result.isError(firstResult)).toBe(true);
+    expect(Result.isOk(retryResult)).toBe(true);
+    expect(requestCount).toBe(2);
+    expect(runtime.getSnapshot().messages.at(0)?.parts.at(0)).toMatchObject({
+      state: "complete",
+      output: retryOutput,
+    });
+  });
+
   test("streams reasoning and final text through tanstack ChatClient", async () => {
     const threadId = toChatThreadId("thread-A");
     const requests: unknown[] = [];

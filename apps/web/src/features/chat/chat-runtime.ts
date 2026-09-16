@@ -147,6 +147,10 @@ type CreateChatRuntimeProps = {
   onFinish: () => void;
 };
 
+type ActiveToolResultOperation = {
+  rejection: Error | undefined;
+};
+
 const toError = (error: unknown): Error =>
   error instanceof Error ? error : new Error(String(error));
 
@@ -199,7 +203,8 @@ export const createChatRuntime = ({
   onFinish,
 }: CreateChatRuntimeProps): ChatRuntime => {
   const listeners = new Set<() => void>();
-  let rejectedContinuationSequence = 0;
+  let activeToolResultOperation: ActiveToolResultOperation | undefined;
+  let toolResultQueue = Promise.resolve();
   let snapshot: ChatRuntimeSnapshot = {
     error: undefined,
     isLoading: false,
@@ -231,6 +236,12 @@ export const createChatRuntime = ({
 
   const reportRuntimeError = (error: unknown): void => {
     captureRuntimeError(error);
+  };
+
+  const enqueueToolResult = (operation: () => Promise<void>): Promise<void> => {
+    const queued = toolResultQueue.then(operation);
+    toolResultQueue = queued.catch(ignoreAbandonedStreamError);
+    return queued;
   };
 
   type PendingInterruptResolution = {
@@ -315,7 +326,9 @@ export const createChatRuntime = ({
     connection,
     onError: (error) => {
       if (isRejectedChatContinuation(error)) {
-        rejectedContinuationSequence += 1;
+        if (activeToolResultOperation !== undefined) {
+          activeToolResultOperation.rejection = error;
+        }
       }
       onError(error);
       setSnapshot({ error });
@@ -472,45 +485,54 @@ export const createChatRuntime = ({
         await client.addToolApprovalResponse(response);
       });
     },
-    addToolResult: async (result, options) => {
-      const messagesBeforeResult = snapshot.messages;
-      const errorBeforeResult = snapshot.error;
-      const rejectionSequenceBeforeResult = rejectedContinuationSequence;
-      await withBody(options, async () => {
+    addToolResult: (result, options) =>
+      enqueueToolResult(async () => {
+        const messagesBeforeResult = snapshot.messages;
+        const errorBeforeResult = snapshot.error;
+        const operation: ActiveToolResultOperation = { rejection: undefined };
+        activeToolResultOperation = operation;
         try {
-          await client.addToolResult({
-            tool: result.tool,
-            toolCallId: result.toolCallId,
-            output: result.output,
-            ...(result.state === undefined ? {} : { state: result.state }),
-            ...(result.errorText === undefined
-              ? {}
-              : { errorText: result.errorText }),
+          await withBody(options, async () => {
+            try {
+              await client.addToolResult({
+                tool: result.tool,
+                toolCallId: result.toolCallId,
+                output: result.output,
+                ...(result.state === undefined ? {} : { state: result.state }),
+                ...(result.errorText === undefined
+                  ? {}
+                  : { errorText: result.errorText }),
+              });
+              if (
+                snapshot.error !== undefined &&
+                snapshot.error !== errorBeforeResult
+              ) {
+                throw snapshot.error;
+              }
+            } catch (error) {
+              if (
+                operation.rejection !== undefined ||
+                isRejectedChatContinuation(error)
+              ) {
+                // TanStack applies the result optimistically before it sends
+                // the continuation. A rejected request must not leave that
+                // local result looking durable: generated-document saving
+                // uses the completed server message as its authorization
+                // proof. A failure after a successful HTTP response is
+                // different: the server has already persisted the result, so
+                // the optimistic state is true.
+                client.setMessagesManually(messagesBeforeResult);
+                setSnapshot({ messages: messagesBeforeResult });
+              }
+              throw error;
+            }
           });
-          if (
-            snapshot.error !== undefined &&
-            snapshot.error !== errorBeforeResult
-          ) {
-            throw snapshot.error;
+        } finally {
+          if (activeToolResultOperation === operation) {
+            activeToolResultOperation = undefined;
           }
-        } catch (error) {
-          if (
-            rejectedContinuationSequence !== rejectionSequenceBeforeResult ||
-            isRejectedChatContinuation(error)
-          ) {
-            // TanStack applies the result optimistically before it sends the
-            // continuation. A rejected request must not leave that local
-            // result looking durable: generated-document saving uses the
-            // completed server message as its authorization proof. A failure
-            // after a successful HTTP response is different: the server has
-            // already persisted the result, so the optimistic state is true.
-            client.setMessagesManually(messagesBeforeResult);
-            setSnapshot({ messages: messagesBeforeResult });
-          }
-          throw error;
         }
-      });
-    },
+      }),
     getSnapshot: () => snapshot,
     reload: async (options) => {
       await withBody(
