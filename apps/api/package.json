@@ -147,7 +147,7 @@
     "nodemailer": "^10.0.3",
     "onnxruntime-node": "1.29.0",
     "postal-mime": "^3.0.0",
-    "posthog-node": "^5.51.8",
+    "posthog-node": "^5.52.1",
     "quickjs-emscripten": "^0.32.0",
     "quickjs-emscripten-core": "^0.32.0",
     "slimdom": "^4.3.5",
