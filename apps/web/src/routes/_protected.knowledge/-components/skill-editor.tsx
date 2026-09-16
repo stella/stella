@@ -1226,7 +1226,10 @@ function FileRowActions({
             </Button>
           }
         />
-        <PopoverContent className="flex w-56 flex-col gap-2 p-2 text-sm">
+        <PopoverContent
+          className="flex w-56 flex-col gap-2 text-sm"
+          padding="sm"
+        >
           <span>{tSkills("deleteFileConfirm")}</span>
           <div className="flex justify-end gap-2">
             <Button

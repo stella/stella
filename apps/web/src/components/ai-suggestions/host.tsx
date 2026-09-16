@@ -439,7 +439,7 @@ export const SuggestionStepper = ({
         // Centred on the host and shrink-to-fit, so in a 320px pane a verbose
         // locale's labels would spill past both edges: the row wraps and the
         // counter gives up its floor instead.
-        "border-foreground/15 absolute start-1/2 bottom-26 flex max-w-[calc(100%-1rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-1 rounded-full border px-1.5 py-1 shadow-[0_0_0_1px_rgb(0_0_0/0.02),0_1px_2px_rgb(0_0_0/0.03),0_8px_20px_rgb(0_0_0/0.05)]",
+        "border-foreground/15 absolute start-1/2 bottom-26 flex max-w-[calc(100%-1rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-1 rounded-full border px-1.5 py-1 shadow-floating-ring",
       )}
     >
       <Button
@@ -708,7 +708,7 @@ export const PromptBar = (props: PromptBarProps) => {
             <span
               className={cn(
                 DOC_FLOAT_SURFACE_CLASS,
-                "border-foreground/15 inline-flex items-center gap-1.5 rounded-full border py-1 ps-3 pe-1 shadow-[0_1px_2px_rgb(0_0_0/0.03),0_8px_20px_rgb(0_0_0/0.05)]",
+                "border-foreground/15 shadow-floating inline-flex items-center gap-1.5 rounded-full border py-1 ps-3 pe-1",
               )}
             >
               <span className="text-muted-foreground text-xs font-medium">
@@ -745,7 +745,7 @@ export const PromptBar = (props: PromptBarProps) => {
             <span
               className={cn(
                 DOC_FLOAT_SURFACE_CLASS,
-                "border-foreground/15 inline-flex rounded-full border shadow-[0_1px_2px_rgb(0_0_0/0.03),0_8px_20px_rgb(0_0_0/0.05)]",
+                "border-foreground/15 shadow-floating inline-flex rounded-full border",
               )}
               key={preset.id}
             >
@@ -773,7 +773,7 @@ export const PromptBar = (props: PromptBarProps) => {
             <div
               className={cn(
                 DOC_FLOAT_SURFACE_CLASS,
-                "border-foreground/15 absolute inset-x-1 bottom-full mb-2 overflow-hidden rounded-xl border shadow-[0_1px_2px_rgb(0_0_0/0.03),0_8px_20px_rgb(0_0_0/0.05)]",
+                "border-foreground/15 shadow-floating absolute inset-x-1 bottom-full mb-2 overflow-hidden rounded-xl border",
               )}
             >
               <ChatDraftAttachmentChips

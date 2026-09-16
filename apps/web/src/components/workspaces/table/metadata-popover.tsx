@@ -39,8 +39,9 @@ export const MetadataPopover = <TRow extends TableRowData = TableTreeNode>({
       </PopoverTrigger>
       <PopoverPopup
         align="start"
-        className="min-w-48 overflow-clip *:data-[slot=popover-viewport]:p-0!"
+        className="min-w-48 overflow-clip"
         initialFocus={false}
+        padding="none"
       >
         <SortProperty column={column} sortHint={sortHint} />
         <Separator />

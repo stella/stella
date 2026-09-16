@@ -33,6 +33,20 @@ function PopoverTrigger({
   });
 }
 
+/**
+ * Viewport padding. The inline value also feeds the page-width calculation of
+ * the viewport, so both axes change together.
+ */
+const POPOVER_PADDING = {
+  none: "py-0 [--viewport-inline-padding:0px]",
+  xs: "py-1 [--viewport-inline-padding:--spacing(1)]",
+  sm: "py-2 [--viewport-inline-padding:--spacing(2)]",
+  md: "py-3 [--viewport-inline-padding:--spacing(3)]",
+  default: "py-4 [--viewport-inline-padding:--spacing(4)]",
+} as const;
+
+type PopoverPadding = keyof typeof POPOVER_PADDING;
+
 const PopoverPopup = ({
   children,
   className,
@@ -41,10 +55,12 @@ const PopoverPopup = ({
   sideOffset = 4,
   alignOffset = 0,
   tooltipStyle = false,
+  padding = "default",
   anchor,
   layer = "default",
   ...props
 }: PopoverPrimitive.Popup.Props & {
+  padding?: PopoverPadding;
   side?: PopoverPrimitive.Positioner.Props["side"];
   align?: PopoverPrimitive.Positioner.Props["align"];
   sideOffset?: PopoverPrimitive.Positioner.Props["sideOffset"];
@@ -80,10 +96,13 @@ const PopoverPopup = ({
       >
         <PopoverPrimitive.Viewport
           className={cn(
-            "relative size-full max-h-(--available-height) overflow-clip px-(--viewport-inline-padding) py-4 outline-none [--viewport-inline-padding:--spacing(4)] **:data-current:w-[calc(var(--popup-width)-2*var(--viewport-inline-padding)-2px)] **:data-current:opacity-100 **:data-current:transition-opacity **:data-current:data-ending-style:opacity-0 data-instant:transition-none **:data-previous:w-[calc(var(--popup-width)-2*var(--viewport-inline-padding)-2px)] **:data-previous:opacity-100 **:data-previous:transition-opacity **:data-previous:data-ending-style:opacity-0 **:data-current:data-starting-style:opacity-0 **:data-previous:data-starting-style:opacity-0",
+            "relative size-full max-h-(--available-height) overflow-clip px-(--viewport-inline-padding) outline-none **:data-current:w-[calc(var(--popup-width)-2*var(--viewport-inline-padding)-2px)] **:data-current:opacity-100 **:data-current:transition-opacity **:data-current:data-ending-style:opacity-0 data-instant:transition-none **:data-previous:w-[calc(var(--popup-width)-2*var(--viewport-inline-padding)-2px)] **:data-previous:opacity-100 **:data-previous:transition-opacity **:data-previous:data-ending-style:opacity-0 **:data-current:data-starting-style:opacity-0 **:data-previous:data-starting-style:opacity-0",
             tooltipStyle
               ? "py-1 [--viewport-inline-padding:--spacing(2)]"
-              : "not-data-transitioning:overflow-y-auto",
+              : [
+                  POPOVER_PADDING[padding],
+                  "not-data-transitioning:overflow-y-auto",
+                ],
           )}
           data-slot="popover-viewport"
         >

@@ -59,7 +59,7 @@ export const ProposalMenu = ({
           </Button>
         }
       />
-      <PopoverContent align="start" className="w-80 p-0">
+      <PopoverContent align="start" className="w-80" padding="none">
         {proposals.length === 0 ? (
           <p className="text-muted-foreground px-3 py-2 text-xs">
             {t("skillHistory.proposalsEmpty")}

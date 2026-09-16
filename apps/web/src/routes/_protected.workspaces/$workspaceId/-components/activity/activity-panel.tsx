@@ -1830,7 +1830,7 @@ const activityGroupTargetIcon = (group: ActivityGroup) => {
       >
         {group.items.slice(0, 3).map((item) => (
           <span
-            className="bg-background flex size-3.5 shrink-0 items-center justify-center rounded-[2px]"
+            className="bg-background flex size-3.5 shrink-0 items-center justify-center rounded-xs"
             key={item.id}
           >
             {activityTargetIcon(item)}

@@ -65,7 +65,8 @@ export const StatuteVersionMenu = ({
       />
       <PopoverPopup
         align="end"
-        className="w-[min(28rem,var(--available-width))] p-0"
+        className="w-[min(28rem,var(--available-width))]"
+        padding="none"
         side="bottom"
       >
         <ol className="relative py-1">

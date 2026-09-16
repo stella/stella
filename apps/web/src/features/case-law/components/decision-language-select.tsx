@@ -85,7 +85,7 @@ const DecisionLanguageSelectFor = ({
     <Select onValueChange={onValueChange} value={current?.id ?? decision.id}>
       <SelectTrigger
         aria-label={t("common.language")}
-        className="h-8 w-auto text-xs"
+        className="h-8 w-auto"
         size="sm"
       >
         <SelectValue placeholder={t("common.language")} />

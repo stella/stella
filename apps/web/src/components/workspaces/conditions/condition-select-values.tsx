@@ -66,7 +66,7 @@ export const SingleSelectValue = ({
       value={value}
     >
       <SelectTrigger
-        className={cn("h-7 min-h-0 w-auto min-w-28 text-xs", className)}
+        className={cn("h-7 min-h-0 w-auto min-w-28", className)}
         size="sm"
       >
         <SelectValue placeholder={t("workspaces.fields.selectAValue")}>
@@ -132,7 +132,7 @@ export const MultiSelectValue = ({
       value={value}
     >
       <SelectTrigger
-        className={cn("h-7 min-h-0 w-auto min-w-28 text-xs", className)}
+        className={cn("h-7 min-h-0 w-auto min-w-28", className)}
         size="sm"
       >
         <SelectValue>{() => label}</SelectValue>

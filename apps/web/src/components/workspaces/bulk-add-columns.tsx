@@ -645,10 +645,7 @@ const PropertyColumnsBody = ({
               }
               value={scopeDocType ?? SCOPE_ALL_VALUE}
             >
-              <SelectTrigger
-                className="h-7 min-h-0 w-auto min-w-36 text-xs"
-                size="sm"
-              >
+              <SelectTrigger className="h-7 min-h-0 w-auto min-w-36" size="sm">
                 <SelectValue />
               </SelectTrigger>
               <SelectPopup>

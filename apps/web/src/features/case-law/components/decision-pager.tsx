@@ -125,7 +125,7 @@ export const DecisionPager = ({
         >
           <SelectTrigger
             aria-label={t("caseLaw.pagination.perPage")}
-            className="h-7 min-h-0 w-auto min-w-16 text-xs"
+            className="h-7 min-h-0 w-auto min-w-16"
             size="sm"
           >
             <SelectValue>{String(pageSize)}</SelectValue>

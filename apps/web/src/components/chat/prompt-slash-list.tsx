@@ -141,8 +141,9 @@ export const PromptSlashList = ({
         <PopoverPopup
           align="start"
           anchor={decorationNode}
-          className="w-72 max-w-[min(20rem,calc(100vw-2rem))] *:data-[slot=popover-viewport]:p-2!"
+          className="w-72 max-w-[min(20rem,calc(100vw-2rem))]"
           initialFocus={false}
+          padding="sm"
           side="top"
         >
           <p className="text-muted-foreground text-xs">
@@ -160,8 +161,9 @@ export const PromptSlashList = ({
       <PopoverPopup
         align="start"
         anchor={decorationNode}
-        className="w-80 max-w-[min(22rem,calc(100vw-2rem))] *:data-[slot=popover-viewport]:p-1!"
+        className="w-80 max-w-[min(22rem,calc(100vw-2rem))]"
         initialFocus={false}
+        padding="xs"
         side="top"
       >
         <div className="max-h-72 space-y-1 overflow-y-auto" ref={listRef}>

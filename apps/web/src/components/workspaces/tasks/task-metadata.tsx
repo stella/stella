@@ -282,7 +282,7 @@ export const OwnerPicker = ({
           <span className="text-muted-foreground">{tCommon("unassigned")}</span>
         )}
       </PopoverTrigger>
-      <PopoverPopup className="w-64 p-2" side="bottom">
+      <PopoverPopup className="w-64" padding="sm" side="bottom">
         <div className="flex flex-col gap-2">
           <div className="flex max-h-56 flex-col overflow-y-auto">
             {selectableMembers?.map((member) => {
@@ -395,10 +395,7 @@ export const AssigneePicker = ({
             <PlusIcon className="size-3.5" />
             <span>{t("addAssignee")}</span>
           </PopoverTrigger>
-          <PopoverPopup
-            className="*:data-[slot=popover-viewport]:p-1!"
-            side="bottom"
-          >
+          <PopoverPopup padding="xs" side="bottom">
             <div className="flex w-48 flex-col">
               {unassignedMembers.map((m) => {
                 const user = m.user;

@@ -85,7 +85,7 @@ export const PromptBarShell = ({
       COMPOSER_BOX_CLASS,
       "group/bar relative flex w-full transition-[box-shadow,border-color]",
       COMPOSER_COMPACT_ROW_CLASS,
-      "shadow-[0_0_0_1px_rgb(0_0_0/0.02),0_1px_2px_rgb(0_0_0/0.03),0_8px_20px_rgb(0_0_0/0.05)]",
+      "shadow-floating-ring",
       DOC_FLOAT_SURFACE_CLASS,
       className,
     )}

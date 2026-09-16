@@ -246,8 +246,9 @@ export const ChatMentionList = ({
       <PopoverPopup
         align="start"
         anchor={anchor}
-        className="w-96 max-w-[min(24rem,calc(100vw-2rem))] *:data-[slot=popover-positioner]:transition-none! *:data-[slot=popover-viewport]:p-1!"
+        className="w-96 max-w-[min(24rem,calc(100vw-2rem))] *:data-[slot=popover-positioner]:transition-none!"
         initialFocus={false}
+        padding="xs"
         side="top"
       >
         <div

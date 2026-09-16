@@ -241,7 +241,7 @@ const FilterChip = ({
           })}
         </span>
       </PopoverTrigger>
-      <PopoverPopup align="start" className="w-72 p-0">
+      <PopoverPopup align="start" className="w-72" padding="none">
         <FilterEditBody
           facetContext={facetContext}
           field={field}
@@ -323,7 +323,7 @@ const FilterEditBody = ({
           }}
           value={operator}
         >
-          <SelectTrigger className="h-7 min-h-0 w-full text-xs" size="sm">
+          <SelectTrigger className="h-7 min-h-0 w-full" size="sm">
             <SelectValue>
               {() => t(operatorLabelKey(field.valueType, operator))}
             </SelectValue>
@@ -472,7 +472,11 @@ const AdvancedFilterChip = ({
           })}
         </span>
       </PopoverTrigger>
-      <PopoverPopup align="start" className={ADVANCED_FILTER_POPUP_CLASS_NAME}>
+      <PopoverPopup
+        align="start"
+        className={ADVANCED_FILTER_POPUP_CLASS_NAME}
+        padding="none"
+      >
         <AdvancedFilterEditor
           facetContext={facetContext}
           fields={fields}
@@ -517,7 +521,7 @@ const AddFilterPicker = ({
   return (
     <Popover onOpenChange={setOpen} open={open}>
       <PopoverTrigger render={trigger} />
-      <PopoverPopup align="start" className="w-64 p-0">
+      <PopoverPopup align="start" className="w-64" padding="none">
         <Command mode="none" onValueChange={setQuery} value={query}>
           <div className="border-b px-2.5 py-2">
             <CommandInput

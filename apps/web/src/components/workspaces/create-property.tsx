@@ -1000,10 +1000,7 @@ const DocumentTypeScopeRow = ({
         }
         value={value ?? SCOPE_ALL_VALUE}
       >
-        <SelectTrigger
-          className="h-7 min-h-0 w-auto min-w-40 text-xs"
-          size="sm"
-        >
+        <SelectTrigger className="h-7 min-h-0 w-auto min-w-40" size="sm">
           <SelectValue />
         </SelectTrigger>
         <SelectPopup>

@@ -379,7 +379,7 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
         <BidiText as="span">{decision.caseNumber}</BidiText>
       </h1>
       <div className="relative min-h-0 flex-1">
-        <div className="bg-background/80 supports-[backdrop-filter]:bg-background/55 absolute start-3 bottom-3 z-30 flex items-center overflow-hidden rounded-lg border shadow-[0_1px_2px_rgb(0_0_0/0.05),0_8px_24px_rgb(0_0_0/0.08)] backdrop-blur-xl max-lg:hidden">
+        <div className="bg-background/80 supports-[backdrop-filter]:bg-background/55 absolute start-3 bottom-3 z-30 flex items-center overflow-hidden rounded-lg border shadow-floating backdrop-blur-xl max-lg:hidden">
           {notesFilterOptions.map((option) => {
             const Icon = option.icon;
             const isActive = notesFilter === option.value;

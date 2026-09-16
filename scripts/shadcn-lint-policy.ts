@@ -45,7 +45,14 @@ export const SHADCN_LINT_RULES = {
   "shadcn/no-restyle": [
     "error",
     {
-      allow: ["layout"],
+      allow: [
+        "layout",
+        // Reveal-on-hover: a row shows its actions when hovered or focused.
+        // Whether a control is visible is the caller's concern, like `hidden`.
+        "opacity-0",
+        "opacity-100",
+        "transition-opacity",
+      ],
       contracts: [
         // Bidi isolation wrappers around caller text: the caller owns the
         // type and colour, the component owns only `unicode-bidi`.
@@ -68,6 +75,12 @@ export const SHADCN_LINT_RULES = {
           allow: ["layout", "typography", "color"],
         },
         { pattern: "^Label$", allow: ["layout", "typography"] },
+        // The panel is the dialog's layout container: how its children stack
+        // is the caller's layout, like the `flex-col` it sits next to.
+        {
+          pattern: "^DialogPanel$",
+          allow: ["layout", "gap", "gap-x", "gap-y", "space-x", "space-y"],
+        },
       ],
     },
   ],
@@ -81,6 +94,10 @@ export const SHADCN_LINT_RULES = {
         "*-[calc(--spacing(*)-1px)]",
         // The legal reader scales its type with a user setting.
         "text-[calc(*var(--reader-text-scale))]",
+        // A CSS variable is a token reference, not a raw value.
+        "*-[var(--*)]",
+        // Transition property lists have no token form.
+        "transition-[*]",
       ],
     },
   ],
@@ -108,6 +125,12 @@ export const SHADCN_LINT_POLICY_OVERRIDES = [
       "shadcn/no-arbitrary-values": "off",
       "shadcn/no-restyle": "off",
     },
+  },
+  {
+    // Pixel mockups of the product on the marketing site: miniature type,
+    // clamp() sizes, and their own theme. Outside the design system.
+    files: ["apps/landing/src/components/react/previews/**"],
+    rules: { "shadcn/no-arbitrary-values": "off" },
   },
   {
     // Third-party brand artwork (file-type, sign-in provider, AI provider,

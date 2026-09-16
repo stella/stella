@@ -38,7 +38,7 @@ type SuggestedActionsProps = {
 // the popover token in dark, so chips read cleanly over arbitrary
 // document content rather than going translucent on hover.
 const FLOATING_SURFACE_CLASS =
-  "border-foreground/15 border shadow-[0_1px_2px_rgb(0_0_0/0.03),0_8px_20px_rgb(0_0_0/0.05)] [--suggested-surface:var(--color-white)] dark:[--suggested-surface:var(--popover)] bg-(--suggested-surface)";
+  "border-foreground/15 border shadow-floating [--suggested-surface:var(--color-white)] dark:[--suggested-surface:var(--popover)] bg-(--suggested-surface)";
 
 // Translucent + slightly blurred backdrop for the `overlay` surface: chips
 // float over scrolling content (the chat message list) and stay readable

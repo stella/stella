@@ -240,7 +240,7 @@ export const ConditionFace = ({
                 </Button>
               }
             />
-            <PopoverPopup className="max-w-xs p-3">
+            <PopoverPopup className="max-w-xs" padding="md">
               <p className="text-xs">
                 {t("templates.studio.conditionHelpTooltip")}
               </p>

@@ -136,6 +136,13 @@ Two tokens extend the scale downwards for badges, counts, and
 captions: `text-2xs` (11px) and `text-3xs` (10px). Use them instead
 of arbitrary values such as `text-[10px]`.
 
+### Elevation
+
+Floating surfaces (cards, previews, docked bars) use `shadow-floating`;
+`shadow-floating-ring` adds a hairline ring for surfaces without a
+border. Tailwind's `shadow-xs` to `shadow-lg` remain for controls and
+popups. Do not write a shadow recipe inline.
+
 ---
 
 ## 4. Component Stylings

@@ -405,7 +405,7 @@ function FeaturedTools() {
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,0.85fr)_minmax(0,0.85fr)]">
         <Link
-          className="bg-background group flex min-w-0 flex-col gap-5 rounded-2xl p-5 text-start shadow-[0_1px_2px_rgb(0_0_0/0.04),0_10px_30px_rgb(0_0_0/0.055)] transition-transform duration-150 hover:-translate-y-0.5 hover:shadow-[0_2px_5px_rgb(0_0_0/0.05),0_14px_36px_rgb(0_0_0/0.07)] sm:col-span-2 sm:p-6 xl:col-span-1"
+          className="bg-background group shadow-floating flex min-w-0 flex-col gap-5 rounded-2xl p-5 text-start transition-transform duration-150 hover:-translate-y-0.5 hover:shadow-[0_2px_5px_rgb(0_0_0/0.05),0_14px_36px_rgb(0_0_0/0.07)] sm:col-span-2 sm:p-6 xl:col-span-1"
           from="/tools/"
           params={{ slug: contractReview.slug }}
           to="/tools/$slug"
@@ -522,7 +522,7 @@ function OutcomeToolCard({
 
   return (
     <Link
-      className="bg-background group hover:bg-muted/20 flex min-w-0 flex-col rounded-2xl p-5 text-start shadow-[0_1px_2px_rgb(0_0_0/0.035),0_8px_26px_rgb(0_0_0/0.045)] transition-transform duration-150 hover:-translate-y-0.5"
+      className="bg-background group hover:bg-muted/20 shadow-floating flex min-w-0 flex-col rounded-2xl p-5 text-start transition-transform duration-150 hover:-translate-y-0.5"
       from="/tools/"
       params={{ slug: entry.slug }}
       to="/tools/$slug"

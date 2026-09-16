@@ -1065,7 +1065,7 @@ const CalendarDatePropertyControl = ({
         }}
         value={datePropertyId}
       >
-        <SelectTrigger className="h-6 min-h-0 min-w-24 text-xs" size="sm">
+        <SelectTrigger className="h-6 min-h-0 min-w-24" size="sm">
           <SelectValue placeholder={datePropertyLabel}>
             {datePropertyLabel}
           </SelectValue>
@@ -1273,7 +1273,7 @@ const TimelineDatePropertyControl = ({
         }}
         value={startDatePropertyId}
       >
-        <SelectTrigger className="h-6 min-h-0 min-w-24 text-xs" size="sm">
+        <SelectTrigger className="h-6 min-h-0 min-w-24" size="sm">
           <SelectValue placeholder={startDatePropertyLabel}>
             {startDatePropertyLabel}
           </SelectValue>
@@ -1291,7 +1291,7 @@ const TimelineDatePropertyControl = ({
         }}
         value={endDatePropertyId}
       >
-        <SelectTrigger className="h-6 min-h-0 min-w-24 text-xs" size="sm">
+        <SelectTrigger className="h-6 min-h-0 min-w-24" size="sm">
           <SelectValue placeholder={endDatePropertyLabel}>
             {endDatePropertyLabel}
           </SelectValue>

@@ -185,10 +185,7 @@ const OptionRow = ({
             style={{ backgroundColor: resolveOptionColor(option.color).color }}
           />
         </PopoverTrigger>
-        <PopoverPopup
-          className="*:data-[slot=popover-viewport]:p-1!"
-          side="top"
-        >
+        <PopoverPopup padding="xs" side="top">
           <div className="grid grid-cols-8 gap-0.5">
             {optionColors.map((color) => (
               <PopoverClose

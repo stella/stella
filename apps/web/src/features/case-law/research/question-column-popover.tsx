@@ -72,8 +72,9 @@ export const QuestionColumnPopover = ({
       </PopoverTrigger>
       <PopoverPopup
         align="start"
-        className="min-w-56 overflow-clip *:data-[slot=popover-viewport]:p-0!"
+        className="min-w-56 overflow-clip"
         initialFocus={false}
+        padding="none"
       >
         {may("edit") && (
           <>

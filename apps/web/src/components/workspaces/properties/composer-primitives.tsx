@@ -196,7 +196,7 @@ export const ReadingFromRow = ({
             <PlusIcon className="size-2.5" />
             {t("workspaces.properties.addReadingSource")}
           </PopoverTrigger>
-          <PopoverPopup className="*:data-[slot=popover-viewport]:p-1!">
+          <PopoverPopup padding="xs">
             <div className="flex w-48 flex-col gap-0.5">
               {availableFiles.map((file) => (
                 <PopoverClose

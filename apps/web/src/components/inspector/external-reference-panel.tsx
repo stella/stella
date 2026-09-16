@@ -77,7 +77,7 @@ export const ExternalSourceLogo = ({
       >
         <img
           alt=""
-          className="size-3 rounded-[2px] object-contain"
+          className="size-3 rounded-xs object-contain"
           height={12}
           src={iconHref}
           width={12}

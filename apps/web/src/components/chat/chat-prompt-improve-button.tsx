@@ -189,7 +189,8 @@ export const ChatPromptImproveButton = ({
         </PopoverTrigger>
         <PopoverPopup
           align="end"
-          className="w-[min(20rem,calc(100vw-2rem))] p-1"
+          className="w-[min(20rem,calc(100vw-2rem))]"
+          padding="xs"
           side="bottom"
         >
           <div className="flex flex-col gap-0.5">

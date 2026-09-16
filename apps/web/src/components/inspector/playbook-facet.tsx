@@ -4150,7 +4150,7 @@ const CounterpartyNotePopover = ({
         <MessageSquareIcon className="me-1 size-3.5" />
         {t("inspector.review.addNote")}
       </PopoverTrigger>
-      <PopoverPopup align="start" className="w-72 p-3">
+      <PopoverPopup align="start" className="w-72" padding="md">
         <div className="space-y-2">
           <Textarea
             aria-label={t("inspector.review.addNote")}

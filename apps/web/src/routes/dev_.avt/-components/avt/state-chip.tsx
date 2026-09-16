@@ -139,7 +139,7 @@ export function StateSwatch({ state }: { state: ClaimState }) {
   return (
     <span
       aria-hidden="true"
-      className="inline-block size-2 shrink-0 rounded-[2px]"
+      className="inline-block size-2 shrink-0 rounded-xs"
       style={STATE_COLOR[state].swatchStyle}
     />
   );

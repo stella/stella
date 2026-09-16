@@ -63,7 +63,7 @@ export const ClipboardWorkflowPreview = ({
     </div>
 
     <div
-      className="cwp-pop bg-background border-border/50 rounded-lg border shadow-[0_1px_2px_rgb(0_0_0/0.04),0_8px_24px_rgb(0_0_0/0.08)]"
+      className="cwp-pop bg-background border-border/50 shadow-floating rounded-lg border"
       style={delay(T.panel)}
     >
       <div className="border-border/50 flex items-center gap-2 border-b px-2.5 py-2">

@@ -1340,7 +1340,7 @@ export const ClauseDriftPopover = ({
           </Button>
         }
       />
-      <PopoverPopup className="w-72 p-3">
+      <PopoverPopup className="w-72" padding="md">
         <ul className="mb-2 flex flex-col gap-1">
           {outdated.map((link) => (
             <li className="truncate text-sm" dir="auto" key={link.id}>
