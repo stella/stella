@@ -48,6 +48,7 @@ import type {
   ChatPart,
   PersistableChatMessage,
   PersistedChatMessageContent,
+  PersistedChatMessageContentV3,
 } from "@/api/handlers/chat/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ChatToolMap } from "@/api/lib/chat/chat-tool-types";
@@ -59,6 +60,7 @@ import {
   brandPersistedEntityId,
   brandPersistedWorkspaceId,
 } from "@/api/lib/safe-id-boundaries";
+import { isRecord } from "@/api/lib/type-guards";
 
 export {
   CHAT_EDIT_APPLY_MODE,
@@ -461,6 +463,28 @@ type ValidateMessageResult = Result<
 
 type ChatToolCallPart = Extract<ChatPart, { type: "tool-call" }>;
 type ChatToolResultPart = Extract<ChatPart, { type: "tool-result" }>;
+type PersistedToolCallPart = Extract<
+  PersistedChatMessageContentV3["data"][number],
+  { type: "tool-call" }
+>;
+type DistributiveKeyof<T> = T extends unknown ? keyof T : never;
+type ContinuationToolCallProperty = DistributiveKeyof<
+  ChatToolCallPart | PersistedToolCallPart
+>;
+const CONTINUATION_TOOL_CALL_PROPERTY_DISPOSITION = {
+  approval: "state-specific",
+  arguments: "state-independent",
+  id: "state-independent",
+  input: "state-independent",
+  metadata: "state-independent",
+  name: "state-independent",
+  output: "state-specific",
+  state: "state-specific",
+  type: "state-independent",
+} as const satisfies Record<
+  ContinuationToolCallProperty,
+  "state-independent" | "state-specific"
+>;
 const TOOL_CALL_OUTPUT_VALIDATION = {
   "awaiting-input": "schema",
   "approval-requested": "schema",
@@ -935,6 +959,37 @@ const canonicalizeToolCall = (
   return candidate;
 };
 
+const canonicalToolCallBase = (
+  canonicalCall: ChatToolCallPart,
+): Record<string, unknown> => {
+  const canonicalValue: unknown = canonicalCall;
+  if (!isRecord(canonicalValue)) {
+    panic("Canonical chat tool call is not an object");
+  }
+  const base: Record<string, unknown> = {};
+  for (const [property, disposition] of Object.entries(
+    CONTINUATION_TOOL_CALL_PROPERTY_DISPOSITION,
+  )) {
+    if (
+      disposition === "state-independent" &&
+      Object.hasOwn(canonicalValue, property)
+    ) {
+      base[property] = canonicalValue[property];
+    }
+  }
+  const input: unknown = canonicalCall.input;
+  const argumentsText =
+    input === undefined ? undefined : JSON.stringify(canonicalCall.input);
+  return {
+    ...base,
+    arguments:
+      typeof argumentsText === "string"
+        ? argumentsText
+        : canonicalCall.arguments,
+    input,
+  };
+};
+
 const validateContinuationToolCallTransition = ({
   canonicalCall,
   incomingCall,
@@ -942,9 +997,11 @@ const validateContinuationToolCallTransition = ({
   canonicalCall: ChatToolCallPart;
   incomingCall: ChatToolCallPart;
 }): Result<ValidatedContinuationToolCall, HandlerError<400>> => {
-  const canonical = canonicalizeToolCall(canonicalCall);
   if (incomingCall.state === canonicalCall.state) {
-    return Result.ok({ type: "unchanged", call: canonical });
+    return Result.ok({
+      type: "unchanged",
+      call: canonicalizeToolCall(canonicalCall),
+    });
   }
   if (
     incomingCall.name !== canonicalCall.name ||
@@ -955,6 +1012,7 @@ const validateContinuationToolCallTransition = ({
   ) {
     return invalidContinuationToolCall();
   }
+  const canonicalBase = canonicalToolCallBase(canonicalCall);
 
   switch (canonicalCall.state) {
     case "approval-requested": {
@@ -971,12 +1029,15 @@ const validateContinuationToolCallTransition = ({
       ) {
         return invalidContinuationToolCall();
       }
+      const output: unknown = canonicalCall.output;
       const candidate: unknown = {
-        ...canonical,
+        ...canonicalBase,
         approval: {
-          ...canonicalCall.approval,
           approved: incomingCall.approval.approved,
+          id: canonicalCall.approval.id,
+          needsApproval: canonicalCall.approval.needsApproval,
         },
+        ...(output === undefined ? {} : { output }),
         state: incomingCall.state,
       };
       if (!isChatPart(candidate) || candidate.type !== "tool-call") {
@@ -990,7 +1051,7 @@ const validateContinuationToolCallTransition = ({
       }
       const output: unknown = incomingCall.output;
       const candidate: unknown = {
-        ...canonical,
+        ...canonicalBase,
         output,
         state: incomingCall.state,
       };

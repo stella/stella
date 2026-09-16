@@ -1108,6 +1108,7 @@ describe("validateMessage", () => {
     };
     const persistedCall: unknown = {
       type: "tool-call",
+      approval: { id: "stale-approval", needsApproval: true },
       id: callId,
       name: "ask-user",
       arguments: JSON.stringify(input),
@@ -1174,7 +1175,9 @@ describe("validateMessage", () => {
 
       expect(Result.isOk(result)).toBe(true);
       if (Result.isOk(result)) {
-        expect(result.value.message.parts.at(0)).toMatchObject({ metadata });
+        const transitionedCall = result.value.message.parts.at(0);
+        expect(transitionedCall).toMatchObject({ metadata });
+        expect(transitionedCall).not.toHaveProperty("approval");
       }
     }
   });
