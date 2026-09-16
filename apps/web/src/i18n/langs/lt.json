@@ -2603,6 +2603,8 @@
       "deleteAction": "Ištrinti terminą",
       "detectedHeading": "Aptikta šiame dokumente ({count})",
       "detectingMatches": "Šiame dokumente ieškoma atitikmenų…",
+      "downloadAction": "Atsisiųsti anoniminį PDF",
+      "downloadHint": "Eksportuoja išsaugotą versiją kaip PDF failą, kuriame teksto negalima pažymėti.",
       "emptyState": "Dar nėra darbo srities terminų. Pridėkite vieną aukščiau.",
       "ignoreAction": "Ignoruoti šiame dokumente",
       "ignoreScopeAlways": "Visada ignoruoti",
@@ -2616,9 +2618,11 @@
       "noMatchesInDocument": "Nė vienas darbo srities terminas šiame dokumente nerastas.",
       "openFullViewHint": "Atidarykite failą viso ekrano režimu, kad pamatytumėte anonimizavimo paryškinimus ir dokumento atitikmenų skaičius.",
       "restoreAction": "Atkurti šiame dokumente",
+      "scanFailed": "Nuskaityti nepavyko. Bandykite dar kartą, kad aptiktumėte atitikmenis.",
       "termAddedToast": "\"{value}\" pridėta prie darbo srities anonimizavimo terminų.",
       "termMatchCountAriaLabel": "Šiame dokumente rasta {count} kartų.",
       "title": "Anonimizavimo žodynas",
+      "unsupportedVisualContent": "Šiame faile yra vaizdų arba vektorinės grafikos, kurių neįmanoma patikrinti, ar juose nėra neskelbtino teksto. Eksportuoti negalima.",
       "workspaceTermsHeading": "Darbo srities terminai ({count})"
     },
     "external": {

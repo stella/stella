@@ -47,7 +47,6 @@ import type {
   DocxEditorRef,
   EditorMode,
 } from "@stll/folio-react";
-import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import {
   Select as StSelect,
@@ -133,6 +132,7 @@ import {
   dedupeDetectedAnonymizationTerms,
   mergeAnonymizationTerms,
   resolveCheckpointAutosaveStatus,
+  shouldCommitAnonymizationDetectionResult,
 } from "./docx-edit-mode.logic";
 import type { AutosaveStatus } from "./docx-edit-mode.logic";
 import type {
@@ -323,11 +323,13 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
     if (!anonymizationTermsQuery.data) {
       return [];
     }
-    return anonymizationTermsQuery.data.entries.map((entry) => ({
-      canonical: entry.canonical,
-      label: entry.label,
-      variants: entry.variants,
-    }));
+    return anonymizationTermsQuery.data.entries
+      .filter((entry) => entry.enabled)
+      .map((entry) => ({
+        canonical: entry.canonical,
+        label: entry.label,
+        variants: entry.variants,
+      }));
   }, [anonymizationTermsQuery.data]);
   // Detected-entity highlights — runs the wasm anonymization
   // pipeline against the live doc text and exposes each detected
@@ -346,6 +348,9 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
   // the allowlist changes, instead of waiting for the next 2s
   // heartbeat tick.
   const runDetectionRef = useRef<(() => void) | null>(null);
+  const detectionRetry = useInspectorAnonymizationStore(
+    (state) => state.anonymizationRetryByFieldId[fieldId] ?? 0,
+  );
   useExternalSyncEffect(() => {
     const view = editorViewForAnonymization;
     if (!view || !isAnonymizationActive) {
@@ -356,6 +361,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
       return undefined;
     }
     let cancelled = false;
+    let failedKey: string | null = null;
     // Mark the pipeline as in-flight from mount so the
     // inspector facet shows "Detecting entities…" right
     // away instead of flashing "0 entities" during the
@@ -379,41 +385,52 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
     // allowlist so the now-excluded canonical disappears from
     // detected terms without waiting for the user to edit.
     let lastDeliveredKey: string | null = null;
-    // Suppress overlapping calls for a short window so we don't
-    // queue up dozens of requests for a stable doc; if the call
-    // never delivers, the window expires and a retry fires.
-    let inFlightUntil = 0;
-    const IN_FLIGHT_TIMEOUT_MS = 10_000;
+    // The worker client owns the deadline. Keep one request pending until
+    // it settles so slow scans never accumulate duplicate document jobs.
+    let requestStatus: "idle" | "running" = "idle";
     const markRan = () =>
       useInspectorAnonymizationStore
         .getState()
         .markAnonymizationPipelineRan(fieldId);
+    const readDetectionInput = () => {
+      const text = view.state.doc.textBetween(
+        0,
+        view.state.doc.content.size,
+        "\n",
+        "\n",
+      );
+      const excludedCanonicals = excludedCanonicalsRef.current;
+      return {
+        text,
+        excludedCanonicals,
+        cacheKey: buildAnonymizationDetectionKey({
+          text,
+          excludedCanonicals,
+        }),
+      };
+    };
     const run = () => {
       if (cancelled) {
         return;
       }
       // Cheap in-flight short-circuit before serializing the doc:
-      // `view.state.doc.textContent` walks the whole ProseMirror
+      // `view.state.doc.textBetween` walks the whole ProseMirror
       // tree, so on large DOCX files we must not pay it every 2s
       // tick while a worker request is still pending. The decision
       // helper repeats this guard for its own correctness, but the
       // expensive read has to stay behind it.
-      const now = Temporal.Now.instant().epochMilliseconds;
-      if (now < inFlightUntil) {
+      if (requestStatus === "running") {
         return;
       }
-      const text = view.state.doc.textContent;
-      const excluded = excludedCanonicalsRef.current;
-      const cacheKey = buildAnonymizationDetectionKey({
-        text,
-        excludedCanonicals: excluded,
-      });
+      const { text, excludedCanonicals, cacheKey } = readDetectionInput();
+      if (cacheKey === failedKey) {
+        return;
+      }
       const decision = decideAnonymizationDetectionRun({
         text,
         cacheKey,
         lastDeliveredKey,
-        inFlightUntil,
-        now,
+        requestStatus,
       });
       if (decision.action === "skip") {
         return;
@@ -432,8 +449,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
         // started state (we're not running anything).
         return;
       }
-      inFlightUntil =
-        Temporal.Now.instant().epochMilliseconds + IN_FLIGHT_TIMEOUT_MS;
+      requestStatus = "running";
       // (Re-)mark started: handles reruns triggered by
       // edits or allowlist changes after the first run
       // already called `markAnonymizationPipelineRan`.
@@ -443,14 +459,24 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
       anonymizeChatTextInWorker({
         text,
         workspaceId,
-        excludedCanonicals: excluded,
+        excludedCanonicals,
       })
         .then((result) => {
-          inFlightUntil = 0;
+          requestStatus = "idle";
           if (cancelled) {
             return;
           }
+          if (
+            !shouldCommitAnonymizationDetectionResult({
+              currentKey: readDetectionInput().cacheKey,
+              requestKey: cacheKey,
+            })
+          ) {
+            run();
+            return;
+          }
           lastDeliveredKey = cacheKey;
+          failedKey = null;
           setDetectedAnonymizationTerms(
             dedupeDetectedAnonymizationTerms(result.pairs),
           );
@@ -458,15 +484,25 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
           return;
         })
         .catch((error: unknown) => {
-          inFlightUntil = 0;
-          // Surface worker failures to telemetry: a silent reset
-          // hides systemic detection-worker breakage behind a facet
-          // that merely stops showing "Detecting…".
+          requestStatus = "idle";
+          if (cancelled) {
+            return;
+          }
+          if (
+            !shouldCommitAnonymizationDetectionResult({
+              currentKey: readDetectionInput().cacheKey,
+              requestKey: cacheKey,
+            })
+          ) {
+            getAnalytics().captureError(error);
+            run();
+            return;
+          }
+          failedKey = cacheKey;
           getAnalytics().captureError(error);
-          // Mark on failure too — without this, a worker
-          // error would leave the facet stuck on
-          // "Detecting…" forever.
-          markRan();
+          useInspectorAnonymizationStore
+            .getState()
+            .markAnonymizationPipelineFailed(fieldId);
         });
     };
     // The doc text isn't always populated when the view first
@@ -486,12 +522,14 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
       runDetectionRef.current = null;
       clearTimeout(initialTimer);
       clearInterval(heartbeat);
-      // Release the in-flight lock on unmount/dep change
-      // so a stale "Detecting…" doesn't survive a tab
-      // switch or an anonymization toggle-off.
-      markRan();
     };
-  }, [editorViewForAnonymization, isAnonymizationActive, workspaceId, fieldId]);
+  }, [
+    editorViewForAnonymization,
+    isAnonymizationActive,
+    workspaceId,
+    fieldId,
+    detectionRetry,
+  ]);
   // Per-doc allowlist: canonicals the user has flagged as false
   // positives. The chat-anon worker filters these out of its
   // detected entities itself; we still need to strip them from
@@ -546,15 +584,24 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
     if (!view) {
       return;
     }
-    try {
+    const dispatched = Result.try(() => {
       const { key, payload } = setAnonymizationTermsMeta(
         mergedAnonymizationTerms,
       );
       view.dispatch(view.state.tr.setMeta(key, payload));
-    } catch {
-      // wait for the next onEditorViewReady capture to retry.
+    });
+    if (Result.isError(dispatched)) {
+      getAnalytics().captureError(dispatched.error);
+      useInspectorAnonymizationStore
+        .getState()
+        .markAnonymizationPipelineFailed(fieldId);
     }
-  }, [editorViewForAnonymization, mergedAnonymizationTerms]);
+  }, [
+    editorViewForAnonymization,
+    mergedAnonymizationTerms,
+    fieldId,
+    detectionRetry,
+  ]);
   // Publish the plugin's live match list to the inspector facet
   // so it can show counts and filter the workspace vocabulary
   // list. Polls once a second — cheap, and necessary because the

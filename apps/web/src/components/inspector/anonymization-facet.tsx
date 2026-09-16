@@ -8,18 +8,18 @@
  * inspector, and any other surface that loads the workspace
  * gazetteer.
  *
- * v1 deliberately scopes down to the catalog management UX —
- * detected-on-this-file overlays, text-selection floating
- * actions, and "download anonymized" land in follow-up commits.
+ * Downloads scan the saved file and apply the vocabulary and exclusions.
  */
 
 import { useLayoutEffect, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
 
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Result } from "better-result";
 import {
   ChevronDown,
   ChevronRight,
+  Download,
   ExternalLinkIcon,
   EyeOff,
   RotateCcw,
@@ -49,9 +49,10 @@ import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
 import { AnonymizationContextMenu } from "@/components/inspector/anonymization-context-menu";
+import { AnonymizationMatchStatus } from "@/components/inspector/anonymization-match-status";
 import {
   useAnonymizationMatches,
-  useAnonymizationMatchesReady,
+  useAnonymizationPipelineStatus,
   useInspectorAnonymizationStore,
 } from "@/components/inspector/inspector-anonymization-store";
 import Tooltip from "@/components/tooltip";
@@ -64,6 +65,7 @@ import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { UnsupportedAnonymizedExportError } from "@/lib/pdf/anonymized-export-errors";
 import { toSafeId } from "@/lib/safe-id";
 import { anonymizationAllowlistOptions } from "@/lib/workspaces/queries/anonymization-allowlist";
 import { anonymizationTermsOptions } from "@/lib/workspaces/queries/anonymization-terms";
@@ -199,6 +201,7 @@ export const AnonymizationFacet = ({
   onOpenFullView,
 }: AnonymizationFacetProps) => {
   const t = useTranslations();
+  const queryClient = useQueryClient();
   const format = useFormatter();
   const locale = useLocale();
   const analytics = useAnalytics();
@@ -397,7 +400,8 @@ export const AnonymizationFacet = ({
 
   const allEntries = termsQuery.data?.entries;
   const matchSnapshot = useAnonymizationMatches(activeFieldId);
-  const matchesReady = useAnonymizationMatchesReady(activeFieldId);
+  const pipelineStatus = useAnonymizationPipelineStatus(activeFieldId);
+  const matchesReady = pipelineStatus === "ready";
   const allowlistQuery = useQuery({
     ...anonymizationAllowlistOptions({ workspaceId, entityId }),
     enabled: activeFieldId !== null,
@@ -463,6 +467,38 @@ export const AnonymizationFacet = ({
     return catalogEntries;
   })();
   const noOpenDocument = activeFieldId === null;
+  const [downloadStatus, setDownloadStatus] = useState<"idle" | "running">(
+    "idle",
+  );
+  const canDownloadAnonymized =
+    activeFieldId !== null && matchesReady && downloadStatus === "idle";
+
+  const handleDownloadAnonymized = async () => {
+    if (!activeFieldId || !canDownloadAnonymized) {
+      return;
+    }
+    setDownloadStatus("running");
+    const download = await Result.tryPromise(async () => {
+      const { downloadAnonymizedFile } =
+        await import("@/components/inspector/anonymized-file-download");
+      return await downloadAnonymizedFile({
+        entityId,
+        fieldId: activeFieldId,
+        queryClient,
+        workspaceId,
+      });
+    }).then((result) => (result.isErr() ? result : result.value));
+    setDownloadStatus("idle");
+    if (download.isErr()) {
+      analytics.captureError(download.error);
+      stellaToast.add({
+        title: UnsupportedAnonymizedExportError.is(download.error)
+          ? t("inspector.anonymization.unsupportedVisualContent")
+          : userErrorFromThrown(download.error, t("errors.actionFailed")),
+        type: "error",
+      });
+    }
+  };
 
   // Auto-detected entities to surface in the "Detected" section.
   // Skip canonicals that already live in the workspace catalog —
@@ -650,6 +686,47 @@ export const AnonymizationFacet = ({
       <h3 className="text-foreground text-sm font-medium">
         {t("inspector.anonymization.title")}
       </h3>
+      {activeFieldId !== null && (
+        <div className="flex flex-col gap-1.5">
+          <Button
+            aria-label={t("inspector.anonymization.downloadAction")}
+            className="w-full justify-start"
+            disabled={!canDownloadAnonymized}
+            onClick={() => {
+              detached(
+                handleDownloadAnonymized(),
+                "anonymization-facet.download",
+              );
+            }}
+            size="sm"
+            variant="outline"
+          >
+            <Download />
+            {downloadStatus === "running"
+              ? t("common.preparing")
+              : t("inspector.anonymization.downloadAction")}
+          </Button>
+          <p className="text-muted-foreground text-xs leading-relaxed text-pretty">
+            {t("inspector.anonymization.downloadHint")}
+          </p>
+        </div>
+      )}
+      {pipelineStatus === "error" && activeFieldId !== null && (
+        <Button
+          aria-label={t("common.retry")}
+          className="w-full justify-start"
+          onClick={() => {
+            useInspectorAnonymizationStore
+              .getState()
+              .retryAnonymizationPipeline(activeFieldId);
+          }}
+          size="sm"
+          variant="outline"
+        >
+          <RotateCcw />
+          {t("common.retry")}
+        </Button>
+      )}
 
       <form
         action={submitTerm}
@@ -724,19 +801,11 @@ export const AnonymizationFacet = ({
             );
           })();
         }
-        if (!matchesReady) {
-          return (
-            <div className="text-muted-foreground bg-muted/40 rounded-md px-3 py-2 text-xs">
-              {t("inspector.anonymization.detectingMatches")}
-            </div>
-          );
-        }
         return (
-          <div className="bg-muted/40 text-foreground rounded-md px-3 py-2 text-xs">
-            {t("inspector.anonymization.matchCount", {
-              count: String(matchSnapshot.totalMatches),
-            })}
-          </div>
+          <AnonymizationMatchStatus
+            matchCount={matchSnapshot.totalMatches}
+            pipelineStatus={pipelineStatus}
+          />
         );
       })()}
 

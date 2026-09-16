@@ -22,11 +22,10 @@ import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { fetchWithTimeout } from "@/lib/fetch";
+import { selectStableArrayBuffer } from "@/lib/files/array-buffer-utils";
 import { filesKeys } from "@/lib/files/queries";
 import { toSafeId } from "@/lib/safe-id";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
-
-import { selectStableArrayBuffer } from "./array-buffer-utils";
 
 export type EditSessionState =
   | { status: "idle" }

@@ -14,6 +14,8 @@ import type {
   SupportedLanguage,
 } from "@stll/anonymize-wasm";
 
+import { normalizeForExclusion } from "./normalization";
+
 /**
  * Default entity labels supported by the anonymization pipeline.
  *
@@ -322,15 +324,7 @@ export const buildChatAnonPipelineConfig = ({
   return config;
 };
 
-/**
- * Fold a surface form to its comparison key for the
- * excluded-canonicals filter. Mirrors Folio's
- * decoration matcher: NFKC + lowercase, with runs of
- * whitespace collapsed so "Acme  Corp" and "Acme Corp"
- * collide.
- */
-const normalizeForExclusion = (value: string): string =>
-  value.normalize("NFKC").toLowerCase().replaceAll(/\s+/gu, " ").trim();
+export { normalizeForExclusion } from "./normalization";
 
 const PLACEHOLDER_TOKEN = /\[[A-Z][A-Z0-9_]*_\d+\]/gu;
 const PLACEHOLDER_LABEL = /^\[(?<label>[A-Z][A-Z0-9_]*)_\d+\]$/u;

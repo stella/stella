@@ -3,8 +3,47 @@ import { describe, expect, test } from "bun:test";
 import {
   getFileTabNativePreviewKind,
   getMarkdownDraftSyncDecision,
+  shouldRunFileAnonymizationPipeline,
   shouldSurfaceEmailResolutionAlert,
 } from "./file-tab-panel.logic";
+
+describe("file anonymization producer", () => {
+  const runnable = {
+    facet: "anonymization",
+    isActive: true,
+    isFullView: true,
+    isMinimized: false,
+    isMounted: true,
+    isNativeDocxDisplay: false,
+  } as const;
+
+  test("starts the PDF pipeline for an active fullscreen idle facet", () => {
+    expect(shouldRunFileAnonymizationPipeline(runnable)).toBe(true);
+  });
+
+  test("leaves native DOCX detection to the editor worker", () => {
+    expect(
+      shouldRunFileAnonymizationPipeline({
+        ...runnable,
+        isNativeDocxDisplay: true,
+      }),
+    ).toBe(false);
+  });
+
+  test("does not run for hidden, side-peek, or unmounted facets", () => {
+    expect(
+      (
+        [
+          { ...runnable, isActive: false },
+          { ...runnable, isFullView: false },
+          { ...runnable, isMinimized: true },
+          { ...runnable, isMounted: false },
+          { ...runnable, facet: "metadata" },
+        ] as const
+      ).every((input) => !shouldRunFileAnonymizationPipeline(input)),
+    ).toBe(true);
+  });
+});
 
 describe("file tab native preview kind", () => {
   test("uses the stored filename for extension-recovered previews", () => {

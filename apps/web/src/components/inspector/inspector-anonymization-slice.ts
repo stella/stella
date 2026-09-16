@@ -1,5 +1,3 @@
-import { original } from "immer";
-
 import type {
   AnonymizationMatchSnapshot,
   InspectorAnonymizationSet,
@@ -12,34 +10,14 @@ export const EMPTY_ANONYMIZATION_MATCH_SNAPSHOT: AnonymizationMatchSnapshot = {
   labelByCanonical: new Map(),
 };
 
-const withFieldAdded = (fields: Set<string>, fieldId: string): Set<string> => {
-  if (fields.has(fieldId)) {
-    return fields;
-  }
-  const next = new Set(fields);
-  next.add(fieldId);
-  return next;
-};
-
-const withFieldRemoved = (
-  fields: Set<string>,
-  fieldId: string,
-): Set<string> => {
-  if (!fields.has(fieldId)) {
-    return fields;
-  }
-  const next = new Set(fields);
-  next.delete(fieldId);
-  return next;
-};
-
 export const createInspectorAnonymizationSlice = (
   set: InspectorAnonymizationSet,
 ): InspectorAnonymizationStore => ({
   anonymizationActiveMountCount: 0,
   documentTextSelectionByFieldId: {},
   anonymizationMatchesByFieldId: {},
-  anonymizationPipelineStartedFieldIds: new Set(),
+  anonymizationPipelineStatusByFieldId: {},
+  anonymizationRetryByFieldId: {},
   anonymizationSelection: {
     canonical: null,
     label: null,
@@ -89,41 +67,50 @@ export const createInspectorAnonymizationSlice = (
 
   markAnonymizationPipelineStarted: (fieldId) =>
     set((state) => {
-      const pipelineFields =
-        original(state).anonymizationPipelineStartedFieldIds;
-      state.anonymizationPipelineStartedFieldIds = withFieldAdded(
-        pipelineFields,
-        fieldId,
-      );
+      state.anonymizationPipelineStatusByFieldId[fieldId] = "running";
     }),
 
   markAnonymizationPipelineRan: (fieldId) =>
     set((state) => {
-      const pipelineFields =
-        original(state).anonymizationPipelineStartedFieldIds;
-      state.anonymizationPipelineStartedFieldIds = withFieldRemoved(
-        pipelineFields,
-        fieldId,
-      );
+      state.anonymizationPipelineStatusByFieldId[fieldId] = "ready";
+    }),
+
+  markAnonymizationPipelineFailed: (fieldId) =>
+    set((state) => {
+      state.anonymizationPipelineStatusByFieldId[fieldId] = "error";
+    }),
+
+  retryAnonymizationPipeline: (fieldId) =>
+    set((state) => {
+      state.anonymizationPipelineStatusByFieldId[fieldId] = "idle";
+      state.anonymizationRetryByFieldId[fieldId] =
+        (state.anonymizationRetryByFieldId[fieldId] ?? 0) + 1;
     }),
 
   clearAnonymizationMatches: (fieldId) =>
     set((state) => {
-      const hadMatches = fieldId in state.anonymizationMatchesByFieldId;
-      const pipelineFields =
-        original(state).anonymizationPipelineStartedFieldIds;
-      const nextStarted = withFieldRemoved(pipelineFields, fieldId);
-      if (!hadMatches && nextStarted === pipelineFields) {
+      if (
+        !(fieldId in state.anonymizationMatchesByFieldId) &&
+        !(fieldId in state.anonymizationPipelineStatusByFieldId) &&
+        !(fieldId in state.anonymizationRetryByFieldId)
+      ) {
         return;
       }
-      state.anonymizationMatchesByFieldId = hadMatches
-        ? Object.fromEntries(
-            Object.entries(state.anonymizationMatchesByFieldId).filter(
-              ([id]) => id !== fieldId,
-            ),
-          )
-        : state.anonymizationMatchesByFieldId;
-      state.anonymizationPipelineStartedFieldIds = nextStarted;
+      state.anonymizationMatchesByFieldId = Object.fromEntries(
+        Object.entries(state.anonymizationMatchesByFieldId).filter(
+          ([id]) => id !== fieldId,
+        ),
+      );
+      state.anonymizationPipelineStatusByFieldId = Object.fromEntries(
+        Object.entries(state.anonymizationPipelineStatusByFieldId).filter(
+          ([id]) => id !== fieldId,
+        ),
+      );
+      state.anonymizationRetryByFieldId = Object.fromEntries(
+        Object.entries(state.anonymizationRetryByFieldId).filter(
+          ([id]) => id !== fieldId,
+        ),
+      );
     }),
 
   selectAnonymizationTerm: (canonical, label, source, fieldId) =>

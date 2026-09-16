@@ -113,7 +113,7 @@ type PageSearchText = {
   text: string;
 };
 
-const buildPageSearchText = (pageText: PageText): PageSearchText => {
+export const buildPageSearchText = (pageText: PageText): PageSearchText => {
   const boxesByOffset: (PDFSearchBox | null)[] = [];
   const textParts: string[] = [];
 

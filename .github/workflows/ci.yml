@@ -2358,6 +2358,10 @@ jobs:
           e2e/specs/vite-dependency-canary.spec.ts
           --project chromium
 
+      - name: Test anonymized PDF export
+        if: steps.e2e-stack.outputs.status == 'ready'
+        run: bun --filter @stll/web test:e2e:anonymized-export
+
       # Own output dir, not uploaded: the blob reporter clears its directory
       # per invocation, so sharing it would drop the canary blob, and a collab
       # blob (testDir e2e/collab) breaks the merged specs report. Its failures

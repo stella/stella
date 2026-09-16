@@ -19,6 +19,28 @@ export const FULLVIEW_FACETS: readonly Facet[] = FILE_FACETS.filter(
   (facet) => facet !== "preview",
 );
 
+export const shouldRunFileAnonymizationPipeline = ({
+  facet,
+  isActive,
+  isFullView,
+  isMinimized,
+  isMounted,
+  isNativeDocxDisplay,
+}: {
+  facet: Facet;
+  isActive: boolean;
+  isFullView: boolean;
+  isMinimized: boolean;
+  isMounted: boolean;
+  isNativeDocxDisplay: boolean;
+}): boolean =>
+  facet === "anonymization" &&
+  isActive &&
+  isFullView &&
+  !isMinimized &&
+  isMounted &&
+  !isNativeDocxDisplay;
+
 export type FileTabNativePreviewKind = "email" | "markdown" | "office" | "pdf";
 
 export const getFileTabNativePreviewKind = ({

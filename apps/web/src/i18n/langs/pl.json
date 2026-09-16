@@ -2603,6 +2603,8 @@
       "deleteAction": "Usuń termin",
       "detectedHeading": "Wykryto w tym dokumencie ({count})",
       "detectingMatches": "Wykrywanie dopasowań w tym dokumencie…",
+      "downloadAction": "Pobierz zanonimizowany PDF",
+      "downloadHint": "Eksportuje zapisaną wersję jako plik PDF z tekstem, którego nie można zaznaczać.",
       "emptyState": "Brak terminów specyficznych dla obszaru roboczego. Dodaj termin powyżej.",
       "ignoreAction": "Ignoruj w tym dokumencie",
       "ignoreScopeAlways": "Zawsze ignoruj",
@@ -2616,9 +2618,11 @@
       "noMatchesInDocument": "Żaden z Twoich terminów obszaru roboczego nie występuje w tym dokumencie.",
       "openFullViewHint": "Otwórz plik w widoku pełnoekranowym, aby zobaczyć podświetlenia anonimizacji i liczbę dopasowań w dokumencie.",
       "restoreAction": "Przywróć w tym dokumencie",
+      "scanFailed": "Skanowanie nie powiodło się. Spróbuj ponownie, aby wykryć dopasowania.",
       "termAddedToast": "Dodano „{value}” do terminów anonimizacji obszaru roboczego.",
       "termMatchCountAriaLabel": "Dopasowano {count} razy w tym dokumencie.",
       "title": "Słownik anonimizacji",
+      "unsupportedVisualContent": "Ten plik zawiera obrazy lub grafikę wektorową, których nie można sprawdzić pod kątem wrażliwego tekstu. Eksport jest niedostępny.",
       "workspaceTermsHeading": "Terminy obszaru roboczego ({count})"
     },
     "external": {

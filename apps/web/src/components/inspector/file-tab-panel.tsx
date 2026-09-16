@@ -31,6 +31,7 @@ import {
 import { DocxBrowserEditor } from "@/components/docx/docx-browser-editor";
 import type { DocxBrowserEditorActions } from "@/components/docx/docx-browser-editor";
 import { AnonymizationFacet } from "@/components/inspector/anonymization-facet";
+import { useFileAnonymizationPipeline } from "@/components/inspector/anonymize-pdf";
 import { DesktopOpenButton } from "@/components/inspector/desktop-open-button";
 import { DocumentAiSourceBar } from "@/components/inspector/document-ai-source-bar";
 import { DownloadSplitButton } from "@/components/inspector/download-rendition-menu";
@@ -65,6 +66,7 @@ import {
   FULLVIEW_FACETS,
   getFileTabNativePreviewKind,
   getMarkdownDraftSyncDecision,
+  shouldRunFileAnonymizationPipeline,
   shouldSurfaceEmailResolutionAlert,
 } from "@/components/inspector/file-tab-panel.logic";
 import { InspectorPdfErrorFallback } from "@/components/inspector/inspector-pdf-error-fallback";
@@ -492,6 +494,23 @@ export const FileTabPanel = ({
     requiresPdfMeasurement,
     scaleOffset,
   } = getFileTabDisplayState({ activeId, minimized, scaleOffsets, tab });
+  const readsDocumentInInspector = documentReviewPaneFieldId === tab.id;
+  const fullViewFacet =
+    tab.facet ?? (readsDocumentInInspector ? "preview" : "metadata");
+  useFileAnonymizationPipeline({
+    enabled: shouldRunFileAnonymizationPipeline({
+      facet: fullViewFacet,
+      isActive,
+      isFullView: tab.metadataLane === "expanded",
+      isMinimized: minimized,
+      isMounted: mountedPdfIds.has(tab.id),
+      isNativeDocxDisplay,
+    }),
+    fieldId: tab.id,
+    mimeType: tab.mimeType,
+    workspaceId: tab.workspaceId,
+    entityId: tab.entityId,
+  });
   // A DOCX tab opened by a caller that knows only the file field (a review's
   // reference, a search hit) still needs the field's property to mount the
   // editor; read it off the entity rather than leaving the viewer empty.
@@ -683,9 +702,6 @@ export const FileTabPanel = ({
   // This tab is the route's document while the route's own pane is showing the
   // review: the inspector is where the document is read, so the fullscreen
   // persona keeps its preview.
-  const readsDocumentInInspector = documentReviewPaneFieldId === tab.id;
-  const fullViewFacet =
-    tab.facet ?? (readsDocumentInInspector ? "preview" : "metadata");
   const desktopOpenButton =
     desktopEditTarget !== null ? (
       <DesktopOpenButton

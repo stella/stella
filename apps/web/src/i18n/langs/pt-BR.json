@@ -2603,6 +2603,8 @@
       "deleteAction": "Excluir termo",
       "detectedHeading": "Detectado neste documento ({count})",
       "detectingMatches": "Detectando correspondências neste documento…",
+      "downloadAction": "Baixar PDF anonimizado",
+      "downloadHint": "Exporta a versão salva como PDF com texto não selecionável.",
       "emptyState": "Ainda não há termos específicos do espaço de trabalho. Adicione um acima.",
       "ignoreAction": "Ignorar neste documento",
       "ignoreScopeAlways": "Sempre ignorar",
@@ -2616,9 +2618,11 @@
       "noMatchesInDocument": "Nenhum dos termos do seu espaço de trabalho aparece neste documento.",
       "openFullViewHint": "Abra o arquivo em tela cheia para ver os destaques de anonimização e as contagens por documento.",
       "restoreAction": "Restaurar neste documento",
+      "scanFailed": "A análise falhou. Tente novamente para detectar correspondências.",
       "termAddedToast": "“{value}” adicionado aos termos de anonimização do espaço de trabalho.",
       "termMatchCountAriaLabel": "Encontrado {count} vezes neste documento.",
       "title": "Vocabulário de anonimização",
+      "unsupportedVisualContent": "Este arquivo contém imagens ou gráficos vetoriais que não podem ser verificados quanto a texto sensível. A exportação não está disponível.",
       "workspaceTermsHeading": "Termos do espaço de trabalho ({count})"
     },
     "external": {

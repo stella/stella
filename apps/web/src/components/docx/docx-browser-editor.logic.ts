@@ -1,8 +1,8 @@
 import { panic } from "better-result";
 
 import type { DocxEditSafety } from "@/lib/chat-edit-mode";
+import { selectStableArrayBuffer } from "@/lib/files/array-buffer-utils";
 
-import { selectStableArrayBuffer } from "./array-buffer-utils";
 import type { EditSessionState } from "./use-edit-session";
 
 export type DocxPreviewFile = {

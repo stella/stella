@@ -2603,6 +2603,8 @@
       "deleteAction": "Begriff löschen",
       "detectedHeading": "In diesem Dokument erkannt ({count})",
       "detectingMatches": "Treffer in diesem Dokument werden erkannt…",
+      "downloadAction": "Anonymisierte PDF herunterladen",
+      "downloadHint": "Exportiert die gespeicherte Version als PDF mit nicht auswählbarem Text.",
       "emptyState": "Noch keine kanzleispezifischen Begriffe. Fügen Sie oben einen hinzu.",
       "ignoreAction": "In diesem Dokument ignorieren",
       "ignoreScopeAlways": "Immer ignorieren",
@@ -2616,9 +2618,11 @@
       "noMatchesInDocument": "Keiner Ihrer Kanzleibegriffe kommt in diesem Dokument vor.",
       "openFullViewHint": "Öffnen Sie die Datei in der Vollansicht, um die Anonymisierungs-Markierungen und die Trefferzahlen pro Dokument zu sehen.",
       "restoreAction": "In diesem Dokument wiederherstellen",
+      "scanFailed": "Die Prüfung ist fehlgeschlagen. Starten Sie sie erneut, um Treffer zu erkennen.",
       "termAddedToast": "„{value}“ zu den Anonymisierungsbegriffen der Kanzlei hinzugefügt.",
       "termMatchCountAriaLabel": "{count}-mal in diesem Dokument gefunden.",
       "title": "Anonymisierungs-Vokabular",
+      "unsupportedVisualContent": "Diese Datei enthält Bilder oder Vektorgrafiken, die nicht auf vertraulichen Text geprüft werden können. Der Export ist nicht verfügbar.",
       "workspaceTermsHeading": "Kanzleibegriffe ({count})"
     },
     "external": {
