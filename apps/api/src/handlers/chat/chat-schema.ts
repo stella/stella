@@ -1,5 +1,4 @@
 import { isStandardSchema, parseWithStandardSchema } from "@tanstack/ai";
-import type { DistributedOmit } from "@tanstack/ai-client";
 import { panic, Result } from "better-result";
 import { deepEquals } from "bun";
 import type { Static } from "elysia";
@@ -49,6 +48,7 @@ import type {
   ChatPart,
   PersistableChatMessage,
   PersistedChatMessageContent,
+  PersistedChatMessageContentV3,
 } from "@/api/handlers/chat/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ChatToolMap } from "@/api/lib/chat/chat-tool-types";
@@ -60,6 +60,7 @@ import {
   brandPersistedEntityId,
   brandPersistedWorkspaceId,
 } from "@/api/lib/safe-id-boundaries";
+import { isRecord } from "@/api/lib/type-guards";
 
 export {
   CHAT_EDIT_APPLY_MODE,
@@ -462,17 +463,27 @@ type ValidateMessageResult = Result<
 
 type ChatToolCallPart = Extract<ChatPart, { type: "tool-call" }>;
 type ChatToolResultPart = Extract<ChatPart, { type: "tool-result" }>;
-const CONTINUATION_TOOL_CALL_TRANSITIONS = {
-  "approval-requested": ["approval-requested", "approval-responded"],
-  "approval-responded": ["approval-responded"],
-  "awaiting-input": ["awaiting-input"],
-  complete: ["complete"],
-  error: ["error"],
-  "input-complete": ["input-complete", "complete", "error"],
-  "input-streaming": ["input-streaming"],
+type PersistedToolCallPart = Extract<
+  PersistedChatMessageContentV3["data"][number],
+  { type: "tool-call" }
+>;
+type DistributiveKeyof<T> = T extends unknown ? keyof T : never;
+type ContinuationToolCallProperty = DistributiveKeyof<
+  ChatToolCallPart | PersistedToolCallPart
+>;
+const CONTINUATION_TOOL_CALL_PROPERTY_DISPOSITION = {
+  approval: "state-specific",
+  arguments: "state-independent",
+  id: "state-independent",
+  input: "state-independent",
+  metadata: "state-independent",
+  name: "state-independent",
+  output: "state-specific",
+  state: "state-specific",
+  type: "state-independent",
 } as const satisfies Record<
-  ChatToolCallPart["state"],
-  readonly ChatToolCallPart["state"][]
+  ContinuationToolCallProperty,
+  "state-independent" | "state-specific"
 >;
 const TOOL_CALL_OUTPUT_VALIDATION = {
   "awaiting-input": "schema",
@@ -690,18 +701,19 @@ const validateIncomingChatParts = ({
         }).parts
       : [];
   if (message.role === "assistant" && persistedMessage?.role === "assistant") {
-    const continuationIntegrityResult = validateContinuationToolCallIntegrity({
+    const continuationResult = validateContinuationToolCallIntegrity({
       incomingParts: validatedParts,
       persistedParts,
       resume,
     });
-    if (Result.isError(continuationIntegrityResult)) {
-      return Result.err(continuationIntegrityResult.error);
+    if (Result.isError(continuationResult)) {
+      return Result.err(continuationResult.error);
     }
     return Result.ok(
       applyValidatedContinuationTransitions({
         incomingParts: validatedParts,
         persistedParts,
+        validatedCallsById: continuationResult.value,
       }),
     );
   }
@@ -711,29 +723,25 @@ const validateIncomingChatParts = ({
 const applyValidatedContinuationTransitions = ({
   incomingParts,
   persistedParts,
+  validatedCallsById,
 }: {
   incomingParts: readonly ChatPart[];
   persistedParts: readonly ChatPart[];
+  validatedCallsById: ReadonlyMap<string, ValidatedContinuationToolCall>;
 }): ChatPart[] => {
-  const incomingCalls = new Map(
-    incomingParts.flatMap((part) =>
-      part.type === "tool-call" ? [[part.id, part] as const] : [],
-    ),
-  );
   const transitionedCallIds = new Set<string>();
   const mergedParts = persistedParts.map((part) => {
     if (part.type !== "tool-call") {
       return part;
     }
-    const incomingCall = incomingCalls.get(part.id);
-    if (incomingCall === undefined || incomingCall.state === part.state) {
-      return restoreCanonicalToolCallInput({ call: part, canonicalCall: part });
+    const validatedCall = validatedCallsById.get(part.id);
+    if (validatedCall === undefined) {
+      return canonicalizeToolCall(part);
     }
-    transitionedCallIds.add(part.id);
-    return restoreCanonicalToolCallInput({
-      call: incomingCall,
-      canonicalCall: part,
-    });
+    if (validatedCall.type === "transitioned") {
+      transitionedCallIds.add(part.id);
+    }
+    return validatedCall.call;
   });
   const resultCallIds = new Set(
     persistedParts.flatMap((part) =>
@@ -782,6 +790,10 @@ const applyValidatedContinuationTransitions = ({
  * compared by value with that null-widening folded on both sides, and the server
  * copy is restored onto the accepted call.
  */
+type ValidatedContinuationToolCall =
+  | { type: "transitioned"; call: ChatToolCallPart }
+  | { type: "unchanged"; call: ChatToolCallPart };
+
 const validateContinuationToolCallIntegrity = ({
   incomingParts,
   persistedParts,
@@ -790,7 +802,10 @@ const validateContinuationToolCallIntegrity = ({
   incomingParts: readonly ChatPart[];
   persistedParts: readonly ChatPart[];
   resume: AgUiResume | undefined;
-}): Result<void, HandlerError<400>> => {
+}): Result<
+  ReadonlyMap<string, ValidatedContinuationToolCall>,
+  HandlerError<400>
+> => {
   const canonicalCalls = persistedParts.filter(
     (part): part is ChatToolCallPart => part.type === "tool-call",
   );
@@ -801,6 +816,7 @@ const validateContinuationToolCallIntegrity = ({
     canonicalCalls.map((call) => [call.id, call] as const),
   );
   const incomingCallsById = new Map<string, ChatToolCallPart>();
+  const validatedCallsById = new Map<string, ValidatedContinuationToolCall>();
   for (const incomingCall of incomingCalls) {
     const canonicalCall = canonicalCallsById.get(incomingCall.id);
     if (canonicalCall === undefined || incomingCallsById.has(incomingCall.id)) {
@@ -808,19 +824,14 @@ const validateContinuationToolCallIntegrity = ({
     }
     incomingCallsById.set(incomingCall.id, incomingCall);
 
-    // Completed historical calls are server-owned history, not continuation
-    // input. TanStack may omit them or reconstruct them from a snapshot with
-    // a different presentation shape. The merge below always restores the
-    // persisted call, so only a state transition needs an integrity check.
-    if (
-      incomingCall.state !== canonicalCall.state &&
-      !isPermittedContinuationToolCallTransition({
-        canonicalCall: toComparableToolCall(canonicalCall),
-        incomingCall: toComparableToolCall(incomingCall),
-      })
-    ) {
-      return invalidContinuationToolCall();
+    const validatedCallResult = validateContinuationToolCallTransition({
+      canonicalCall,
+      incomingCall,
+    });
+    if (Result.isError(validatedCallResult)) {
+      return Result.err(validatedCallResult.error);
     }
+    validatedCallsById.set(incomingCall.id, validatedCallResult.value);
   }
 
   const awaitedInteractions = getAwaitingUserInteractions({
@@ -861,17 +872,20 @@ const validateContinuationToolCallIntegrity = ({
         interruptId: `client_tool_${call.id}`,
       });
     }
-    const resumedInteractions = incomingCalls.flatMap((call) => {
-      const canonicalCall = canonicalCallsById.get(call.id);
-      if (canonicalCall === undefined || canonicalCall.state === call.state) {
-        return [];
-      }
-      const resumed = getResumedUserInteraction({
-        awaited: awaitedInteractions,
-        message: { parts: [call], role: "assistant" },
-      });
-      return resumed === null ? [] : [{ call, interaction: resumed }];
-    });
+    const resumedInteractions = [...validatedCallsById.values()].flatMap(
+      (validatedCall) => {
+        if (validatedCall.type === "unchanged") {
+          return [];
+        }
+        const resumed = getResumedUserInteraction({
+          awaited: awaitedInteractions,
+          message: { parts: [validatedCall.call], role: "assistant" },
+        });
+        return resumed === null
+          ? []
+          : [{ call: validatedCall.call, interaction: resumed }];
+      },
+    );
     if (
       awaitedInterrupts.length !== awaitedInteractions.length ||
       resume.length !== awaitedInterrupts.length ||
@@ -907,7 +921,7 @@ const validateContinuationToolCallIntegrity = ({
       return invalidContinuationToolCall();
     }
   }
-  return Result.ok();
+  return Result.ok(validatedCallsById);
 };
 
 const invalidContinuationToolCall = (): Result<never, HandlerError<400>> =>
@@ -919,142 +933,143 @@ const invalidContinuationToolCall = (): Result<never, HandlerError<400>> =>
     }),
   );
 
-const APPROVAL_RESPONSE_MUTABLE_TOOL_CALL_PROPERTIES = new Set([
-  "approval",
-  "state",
-]);
-const TOOL_OUTPUT_MUTABLE_TOOL_CALL_PROPERTIES = new Set(["output", "state"]);
-const NO_MUTABLE_TOOL_CALL_PROPERTIES: ReadonlySet<string> = new Set();
-
 /**
- * The only form a continuation tool call is compared in. The provider's
- * spelling of the call is not state: `arguments` is dropped, and `input` is
- * folded so a strict tool schema's `null` for an absent optional reads as the
- * absence it stands for. Every comparison the continuation check makes runs on
- * this projection, so a byte comparison of `arguments` has no field to read.
- *
- * `DistributedOmit` keeps the per-tool union intact; a plain `Omit` would
- * collapse it and drop `approval`, which only approval-gated tools carry.
+ * The persisted call is the base of every continuation. This is intentionally
+ * a positive projection: a client can contribute only the response fields
+ * copied by `validateContinuationToolCallTransition`. New SDK or persistence fields
+ * therefore remain server-owned without another denylist entry.
  */
-type ComparableToolCall = DistributedOmit<
-  ChatToolCallPart,
-  "arguments" | "input"
-> & { input: unknown };
-
-const toComparableToolCall = (call: ChatToolCallPart): ComparableToolCall => {
-  const { arguments: _spelling, input, ...comparable } = call;
-  return { ...comparable, input: withNullsOmitted(input) };
-};
-
-/**
- * The persisted call is authoritative: its `input` is the server's copy and
- * `arguments` is derived from that input the same way v3 read-back derives it,
- * so a persisted v2 call whose `arguments` still carry model refs keeps
- * agreeing with the input that tool validation checks it against.
- */
-const restoreCanonicalToolCallInput = ({
-  call,
-  canonicalCall,
-}: {
-  call: ChatToolCallPart;
-  canonicalCall: ChatToolCallPart;
-}): ChatToolCallPart => {
-  if (canonicalCall.input === undefined) {
-    return { ...call, arguments: canonicalCall.arguments, input: undefined };
-  }
-  const argumentsText = JSON.stringify(canonicalCall.input);
-  return {
-    ...call,
+const canonicalizeToolCall = (
+  canonicalCall: ChatToolCallPart,
+): ChatToolCallPart => {
+  const input = canonicalCall.input;
+  const argumentsText =
+    input === undefined ? undefined : JSON.stringify(canonicalCall.input);
+  const candidate: unknown = {
+    ...canonicalCall,
     arguments:
       typeof argumentsText === "string"
         ? argumentsText
         : canonicalCall.arguments,
-    input: canonicalCall.input,
+    input,
+  };
+  if (!isChatPart(candidate) || candidate.type !== "tool-call") {
+    panic("Canonical chat tool call violates the tool-call contract");
+  }
+  return candidate;
+};
+
+const canonicalToolCallBase = (
+  canonicalCall: ChatToolCallPart,
+): Record<string, unknown> => {
+  const canonicalValue: unknown = canonicalCall;
+  if (!isRecord(canonicalValue)) {
+    panic("Canonical chat tool call is not an object");
+  }
+  const base: Record<string, unknown> = {};
+  for (const [property, disposition] of Object.entries(
+    CONTINUATION_TOOL_CALL_PROPERTY_DISPOSITION,
+  )) {
+    if (
+      disposition === "state-independent" &&
+      Object.hasOwn(canonicalValue, property)
+    ) {
+      base[property] = canonicalValue[property];
+    }
+  }
+  const input: unknown = canonicalCall.input;
+  const argumentsText =
+    input === undefined ? undefined : JSON.stringify(canonicalCall.input);
+  return {
+    ...base,
+    arguments:
+      typeof argumentsText === "string"
+        ? argumentsText
+        : canonicalCall.arguments,
+    input,
   };
 };
 
-const hasOnlyPermittedToolCallChanges = ({
-  canonicalCall,
-  incomingCall,
-  mutableProperties,
-}: {
-  canonicalCall: ComparableToolCall;
-  incomingCall: ComparableToolCall;
-  mutableProperties: ReadonlySet<string>;
-}): boolean => {
-  const immutableProperties = (call: ComparableToolCall) =>
-    Object.fromEntries(
-      Object.entries(call).filter(([key]) => !mutableProperties.has(key)),
-    );
-  return deepEquals(
-    immutableProperties(incomingCall),
-    immutableProperties(canonicalCall),
-  );
-};
-
-const isPermittedContinuationToolCallTransition = ({
+const validateContinuationToolCallTransition = ({
   canonicalCall,
   incomingCall,
 }: {
-  canonicalCall: ComparableToolCall;
-  incomingCall: ComparableToolCall;
-}): boolean => {
-  let stateTransitionAllowed = false;
-  for (const allowedState of CONTINUATION_TOOL_CALL_TRANSITIONS[
-    canonicalCall.state
-  ]) {
-    if (allowedState === incomingCall.state) {
-      stateTransitionAllowed = true;
-      break;
-    }
-  }
-  if (
-    !stateTransitionAllowed ||
-    incomingCall.name !== canonicalCall.name ||
-    !deepEquals(incomingCall.input, canonicalCall.input)
-  ) {
-    return false;
-  }
-
+  canonicalCall: ChatToolCallPart;
+  incomingCall: ChatToolCallPart;
+}): Result<ValidatedContinuationToolCall, HandlerError<400>> => {
   if (incomingCall.state === canonicalCall.state) {
-    return hasOnlyPermittedToolCallChanges({
-      canonicalCall,
-      incomingCall,
-      mutableProperties: NO_MUTABLE_TOOL_CALL_PROPERTIES,
+    return Result.ok({
+      type: "unchanged",
+      call: canonicalizeToolCall(canonicalCall),
     });
   }
   if (
-    canonicalCall.state === "approval-requested" &&
-    incomingCall.state === "approval-responded"
+    incomingCall.name !== canonicalCall.name ||
+    !deepEquals(
+      withNullsOmitted(incomingCall.input),
+      withNullsOmitted(canonicalCall.input),
+    )
   ) {
-    if (!("approval" in canonicalCall) || !("approval" in incomingCall)) {
-      return false;
+    return invalidContinuationToolCall();
+  }
+  const canonicalBase = canonicalToolCallBase(canonicalCall);
+
+  switch (canonicalCall.state) {
+    case "approval-requested": {
+      if (
+        incomingCall.state !== "approval-responded" ||
+        !("approval" in canonicalCall) ||
+        !("approval" in incomingCall) ||
+        incomingCall.approval.id !== canonicalCall.approval.id ||
+        incomingCall.approval.needsApproval !==
+          canonicalCall.approval.needsApproval ||
+        canonicalCall.approval.approved !== undefined ||
+        typeof incomingCall.approval.approved !== "boolean" ||
+        !deepEquals(incomingCall.output, canonicalCall.output)
+      ) {
+        return invalidContinuationToolCall();
+      }
+      const output: unknown = canonicalCall.output;
+      const candidate: unknown = {
+        ...canonicalBase,
+        approval: {
+          approved: incomingCall.approval.approved,
+          id: canonicalCall.approval.id,
+          needsApproval: canonicalCall.approval.needsApproval,
+        },
+        ...(output === undefined ? {} : { output }),
+        state: incomingCall.state,
+      };
+      if (!isChatPart(candidate) || candidate.type !== "tool-call") {
+        panic("Validated chat tool call violates the tool-call contract");
+      }
+      return Result.ok({ type: "transitioned", call: candidate });
     }
-    return (
-      hasOnlyPermittedToolCallChanges({
-        canonicalCall,
-        incomingCall,
-        mutableProperties: APPROVAL_RESPONSE_MUTABLE_TOOL_CALL_PROPERTIES,
-      }) &&
-      incomingCall.approval.id === canonicalCall.approval.id &&
-      incomingCall.approval.needsApproval ===
-        canonicalCall.approval.needsApproval &&
-      canonicalCall.approval.approved === undefined &&
-      typeof incomingCall.approval.approved === "boolean" &&
-      deepEquals(incomingCall.output, canonicalCall.output)
-    );
+    case "input-complete": {
+      if (incomingCall.state !== "complete" && incomingCall.state !== "error") {
+        return invalidContinuationToolCall();
+      }
+      const output: unknown = incomingCall.output;
+      const candidate: unknown = {
+        ...canonicalBase,
+        output,
+        state: incomingCall.state,
+      };
+      if (!isChatPart(candidate) || candidate.type !== "tool-call") {
+        panic("Validated chat tool call violates the tool-call contract");
+      }
+      return Result.ok({ type: "transitioned", call: candidate });
+    }
+    case "approval-responded":
+    case "awaiting-input":
+    case "complete":
+    case "error":
+    case "input-streaming":
+      return invalidContinuationToolCall();
+    default:
+      canonicalCall.state satisfies never;
+      return panic(`Unhandled tool-call state: ${String(canonicalCall.state)}`);
   }
-  if (
-    canonicalCall.state === "input-complete" &&
-    (incomingCall.state === "complete" || incomingCall.state === "error")
-  ) {
-    return hasOnlyPermittedToolCallChanges({
-      canonicalCall,
-      incomingCall,
-      mutableProperties: TOOL_OUTPUT_MUTABLE_TOOL_CALL_PROPERTIES,
-    });
-  }
-  return false;
 };
 
 const validateIncomingChatMetadata = (
