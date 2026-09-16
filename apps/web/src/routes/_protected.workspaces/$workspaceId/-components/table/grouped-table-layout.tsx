@@ -786,4 +786,3 @@ const GroupSection = ({
     </section>
   );
 };
-
