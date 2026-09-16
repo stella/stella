@@ -75,11 +75,16 @@ export const SHADCN_LINT_RULES = {
           allow: ["layout", "typography", "color"],
         },
         { pattern: "^Label$", allow: ["layout", "typography"] },
-        // The panel is the dialog's layout container: how its children stack
-        // is the caller's layout, like the `flex-col` it sits next to.
+        // Layout containers: how their children stack is the caller's
+        // layout, like the `flex-col` it sits next to.
         {
-          pattern: "^DialogPanel$",
+          pattern: "^(?:DialogPanel|FramePanel|Form|Field)$",
           allow: ["layout", "gap", "gap-x", "gap-y", "space-x", "space-y"],
+        },
+        // Code-shaped values (keys, identifiers) read in the monospace face.
+        {
+          pattern: "^(?:Input|InputGroupInput|SecretInput|Textarea)$",
+          allow: ["layout", "font-mono"],
         },
       ],
     },
@@ -98,6 +103,9 @@ export const SHADCN_LINT_RULES = {
         "*-[var(--*)]",
         // Transition property lists have no token form.
         "transition-[*]",
+        "rounded-[inherit]",
+        // Marker bar beside quoted or highlighted passages; no 3px step exists.
+        "border-s-[3px]",
       ],
     },
   ],
@@ -116,6 +124,16 @@ export const SHADCN_LINT_SETTINGS = {
 } as const;
 
 export const SHADCN_LINT_POLICY_OVERRIDES = [
+  {
+    // Plugin fixtures are inputs for the local rules' tests, written to
+    // trigger those rules; they are not product markup.
+    files: [".oxlint-plugins/__fixtures__/**"],
+    rules: {
+      "shadcn/no-arbitrary-values": "off",
+      "shadcn/no-raw-colors": "off",
+      "shadcn/no-restyle": "off",
+    },
+  },
   {
     // The design-system components themselves: they restyle sibling
     // components and need structural arbitrary values. The preset's

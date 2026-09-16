@@ -259,7 +259,7 @@ export const WorkspaceBreadcrumb = ({
     if (isEditingRef) {
       return (
         <Input
-          className={cn(breadcrumbInputClassName, "w-28 text-sm")}
+          className={cn(breadcrumbInputClassName, "w-28")}
           onBlur={() => {
             detached(refRename.commit(), "workspace-breadcrumb.commit");
           }}

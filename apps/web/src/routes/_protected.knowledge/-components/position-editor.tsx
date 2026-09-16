@@ -1285,7 +1285,7 @@ const NegotiationSection = ({
                 // eslint-disable-next-line react/no-array-index-key -- talkingPoints is a persisted string[] (playbook negotiation data) with no id field and duplicate values allowed; each Input is fully controlled by its string value, so index-keyed reuse never mismatches rendered content.
                 <div className="flex items-center gap-2" key={index}>
                   <Input
-                    className="h-8 flex-1 text-sm"
+                    className="flex-1"
                     onChange={(e) =>
                       setTalkingPoints(
                         talkingPoints.map((existing, i) =>
@@ -1296,6 +1296,7 @@ const NegotiationSection = ({
                     placeholder={t(
                       "knowledge.playbooks.negotiation.talkingPointPlaceholder",
                     )}
+                    size="sm"
                     value={point}
                   />
                   <Button
@@ -1334,7 +1335,6 @@ const NegotiationSection = ({
               {t("knowledge.playbooks.negotiation.escalationLabel")}
             </Label>
             <Input
-              className="h-8 text-sm"
               id={`position-negotiation-escalation-${position.sourceId}`}
               maxLength={NEGOTIATION_FIELD_LIMITS.escalation}
               onChange={(e) =>
@@ -1345,6 +1345,7 @@ const NegotiationSection = ({
               placeholder={t(
                 "knowledge.playbooks.negotiation.escalationPlaceholder",
               )}
+              size="sm"
               value={negotiation?.escalation ?? ""}
             />
           </div>
@@ -1957,7 +1958,7 @@ const SelectOptionsEditor = ({
               style={{ backgroundColor: optionSwatch(option.color) }}
             />
             <Input
-              className="h-7 flex-1 text-sm"
+              className="flex-1"
               onChange={(e) =>
                 setOptions(
                   content.options.map((o, i) =>
@@ -1966,6 +1967,7 @@ const SelectOptionsEditor = ({
                 )
               }
               placeholder={t("knowledge.playbooks.optionPlaceholder")}
+              size="sm"
               value={option.value}
             />
             <Button

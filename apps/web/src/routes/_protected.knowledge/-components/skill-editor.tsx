@@ -1003,7 +1003,7 @@ function SkillFileTree({
           return (
             <Input
               autoFocus
-              className="h-7 flex-1 text-sm"
+              className="flex-1"
               onBlur={onCancelFolderRename}
               onChange={(event) => setRenameValue(event.target.value)}
               onClick={(event) => event.stopPropagation()}
@@ -1017,6 +1017,7 @@ function SkillFileTree({
                   onCancelFolderRename();
                 }
               }}
+              size="sm"
               value={renameValue}
             />
           );
@@ -1031,7 +1032,7 @@ function SkillFileTree({
           return (
             <Input
               autoFocus
-              className="h-7 flex-1 text-sm"
+              className="flex-1"
               onBlur={onCancelRename}
               onChange={(event) => setRenameValue(event.target.value)}
               onClick={(event) => event.stopPropagation()}
@@ -1045,6 +1046,7 @@ function SkillFileTree({
                   onCancelRename();
                 }
               }}
+              size="sm"
               value={renameValue}
             />
           );

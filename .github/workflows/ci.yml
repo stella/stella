@@ -735,7 +735,9 @@ jobs:
         # file's count at its baseline and fails when a listed file reaches
         # zero, so the list only shrinks. Regenerate:
         # `bun scripts/shadcn-lint-baseline.ts --write`.
-        run: bun scripts/shadcn-lint-baseline.ts --check
+        run: |
+          bun test scripts/shadcn-lint-baseline.test.ts scripts/oxlint-config-inputs.test.ts
+          bun scripts/shadcn-lint-baseline.ts --check
 
       - name: Oxlint override union guard
         if: needs.ci-plan.outputs.package_checks_required == 'true'

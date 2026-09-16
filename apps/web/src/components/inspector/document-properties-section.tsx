@@ -324,7 +324,6 @@ const EditablePropertyValue = ({
   return (
     <Input
       aria-label={label}
-      className="h-7 text-sm"
       disabled={saving}
       onBlur={() => {
         detached(save(), "document-properties-section.save");
@@ -338,6 +337,7 @@ const EditablePropertyValue = ({
           setDraft(value);
         }
       }}
+      size="sm"
       value={draft}
     />
   );
