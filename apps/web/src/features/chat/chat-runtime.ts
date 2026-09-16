@@ -238,10 +238,12 @@ export const createChatRuntime = ({
     captureRuntimeError(error);
   };
 
-  const enqueueToolResult = (operation: () => Promise<void>): Promise<void> => {
+  const enqueueToolResult = async (
+    operation: () => Promise<void>,
+  ): Promise<void> => {
     const queued = toolResultQueue.then(operation);
     toolResultQueue = queued.catch(ignoreAbandonedStreamError);
-    return queued;
+    await queued;
   };
 
   type PendingInterruptResolution = {
@@ -325,10 +327,11 @@ export const createChatRuntime = ({
     initialMessages,
     connection,
     onError: (error) => {
-      if (isRejectedChatContinuation(error)) {
-        if (activeToolResultOperation !== undefined) {
-          activeToolResultOperation.rejection = error;
-        }
+      if (
+        activeToolResultOperation !== undefined &&
+        isRejectedChatContinuation(error)
+      ) {
+        activeToolResultOperation.rejection = error;
       }
       onError(error);
       setSnapshot({ error });
@@ -485,8 +488,8 @@ export const createChatRuntime = ({
         await client.addToolApprovalResponse(response);
       });
     },
-    addToolResult: (result, options) =>
-      enqueueToolResult(async () => {
+    addToolResult: async (result, options) => {
+      await enqueueToolResult(async () => {
         const messagesBeforeResult = snapshot.messages;
         const errorBeforeResult = snapshot.error;
         const operation: ActiveToolResultOperation = { rejection: undefined };
@@ -532,7 +535,8 @@ export const createChatRuntime = ({
             activeToolResultOperation = undefined;
           }
         }
-      }),
+      });
+    },
     getSnapshot: () => snapshot,
     reload: async (options) => {
       await withBody(
