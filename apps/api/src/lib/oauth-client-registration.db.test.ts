@@ -4,13 +4,13 @@ import * as v from "valibot";
 import { getAuth } from "@/api/lib/auth";
 import { getAuthEndpointUrl } from "@/api/lib/auth-paths";
 import {
-  OAUTH_CLIENT_REGISTRATION_FIXTURES,
-  OAUTH_CLIENT_REGISTRATION_REJECTION_FIXTURES,
-} from "@/api/lib/oauth-client-registration-fixtures";
-import {
   initAgentAuthTestDb,
   releaseAgentAuthTestDb,
 } from "@/api/tests/helpers/mock-agent-auth-db";
+import {
+  OAUTH_CLIENT_REGISTRATION_FIXTURES,
+  OAUTH_CLIENT_REGISTRATION_REJECTION_FIXTURES,
+} from "@/api/tests/helpers/oauth-client-registration-fixtures";
 
 beforeAll(async () => {
   await initAgentAuthTestDb();

@@ -344,7 +344,7 @@ export type OAuthClientRegistrationRequest = {
  * The RFC 7591 registration body stella posts when it is the client.
  *
  * Exported so the registration census in
- * `lib/oauth-client-registration-fixtures.ts` builds the body from this
+ * `tests/helpers/oauth-client-registration-fixtures.ts` builds the body from this
  * producer rather than carrying a copy, which would keep asserting a shape
  * stella had stopped sending.
  *
