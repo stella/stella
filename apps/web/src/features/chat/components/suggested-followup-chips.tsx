@@ -19,6 +19,7 @@ type SuggestedFollowupChipsProps = {
   onSelect: (prompt: string) => void;
   /** Prompts already gated by `resolveSuggestedPromptsAvailability`. */
   prompts: string[];
+  scrollAction?: "inline-end" | "none";
   /**
    * Chip backdrop. `overlay` (default) suits chips floating over document
    * text; `plain` suits chips rendered on a solid surface such as inside the
@@ -34,15 +35,15 @@ type SuggestedFollowupChipsProps = {
  * composer, or `surface="plain"` when rendered inside the thread card so the
  * chips sit within the chat window.
  *
- * The inline scroll-to-bottom action overlays the row's trailing end (over
- * the chips' fade-out) rather than taking a leading slot, so the first chip
- * starts flush with the composer's leading edge whether or not the action
- * is showing.
+ * When this component owns the scroll action, it overlays the row's trailing
+ * end (over the chips' fade-out) rather than taking a leading slot. A parent
+ * composer can instead own the action and set `scrollAction="none"`.
  */
 export const SuggestedFollowupChips = ({
   className,
   onSelect,
   prompts,
+  scrollAction = "inline-end",
   surface,
 }: SuggestedFollowupChipsProps) => {
   const t = useTranslations();
@@ -57,7 +58,9 @@ export const SuggestedFollowupChips = ({
   // footprint so the last chip can scroll clear of it. `pe-11` covers the
   // action's 44px coarse-pointer hit area, not only its 28px circle.
   const reserveScrollAction =
-    stickToBottom !== null && isScrollActionVisible(stickToBottom);
+    scrollAction === "inline-end" &&
+    stickToBottom !== null &&
+    isScrollActionVisible(stickToBottom);
 
   return (
     <div className={cn("relative max-w-full pb-2", className)}>
@@ -69,7 +72,7 @@ export const SuggestedFollowupChips = ({
         orientation="horizontal"
         surface={resolvedSurface}
       />
-      {stickToBottom !== null && (
+      {scrollAction === "inline-end" && stickToBottom !== null && (
         <ConversationScrollButton
           className="absolute end-0 top-0"
           placement="inline"
