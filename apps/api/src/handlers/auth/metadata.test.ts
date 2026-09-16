@@ -39,6 +39,7 @@ describe("OAuth authorization server metadata", () => {
         scopes_supported: v.array(v.string()),
         token_endpoint: v.string(),
         token_endpoint_auth_methods_supported: v.array(v.string()),
+        client_id_metadata_document_supported: v.boolean(),
         agent_auth: v.object({
           skill: v.string(),
           identity_endpoint: v.string(),
@@ -76,6 +77,9 @@ describe("OAuth authorization server metadata", () => {
     // and access tokens die after ACCESS_TOKEN_EXPIRES_IN with no way to
     // renew short of full re-consent.
     expect(body.scopes_supported).toContain("offline_access");
+    // A hosted client that discovers this document must see CIMD advertised;
+    // without the flag it falls back to per-user dynamic registration.
+    expect(body.client_id_metadata_document_supported).toBe(true);
     expect(body.token_endpoint_auth_methods_supported).toContain("none");
     expect(body.token_endpoint_auth_methods_supported).toContain(
       "client_secret_basic",
