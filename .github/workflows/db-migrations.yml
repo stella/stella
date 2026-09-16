@@ -39,7 +39,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@90f2b249f1456155fb8a81af2959df40d5006bef
+        uses: stella/.github/actions/setup-bun-cached@35506c43f400ed14b8554568d5d9988a49299f0c
 
       - name: Install dependencies
         run: bash scripts/bun-ci-retry.sh --ignore-scripts
@@ -94,7 +94,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@90f2b249f1456155fb8a81af2959df40d5006bef
+        uses: stella/.github/actions/setup-bun-cached@35506c43f400ed14b8554568d5d9988a49299f0c
 
       - name: Install dependencies
         run: bash scripts/bun-ci-retry.sh --ignore-scripts
