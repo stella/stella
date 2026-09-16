@@ -1,7 +1,11 @@
+import type { createFormatter } from "use-intl/core";
+
 import { parsePlainDate, Temporal } from "@stll/time";
 
 import { fromCaseLawCountryParam } from "@/features/case-law/case-law-jurisdiction";
 import { parseDeterministicDate } from "@/lib/deterministic-date";
+
+type IntlFormatter = ReturnType<typeof createFormatter>;
 
 /**
  * Jurisdiction-conventional citation of one decision, for the reader's
@@ -48,6 +52,16 @@ export const parseDecisionDate = (
         .toZonedDateTimeISO("UTC")
         .toPlainDate();
 };
+
+/**
+ * A calendar year as the reader's locale writes it, never grouped: a year is
+ * an identifier rather than a quantity, so "2 020" is wrong everywhere, while
+ * Eastern Arabic-Indic digits are right in the locales that use them. Without
+ * this a chart shows its counts in one numbering system and its axis in
+ * another.
+ */
+export const formatYear = (format: IntlFormatter, year: number): string =>
+  format.number(year, { useGrouping: false });
 
 /** The calendar year a decision was handed down; null when undated. */
 export const decisionYear = (value: Date | string | null): number | null =>

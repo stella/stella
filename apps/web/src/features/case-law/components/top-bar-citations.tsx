@@ -3,12 +3,16 @@ import { useNow, useTranslations } from "use-intl";
 
 import { Temporal } from "@stll/time";
 import { Popover, PopoverPanel, PopoverTrigger } from "@stll/ui/popover";
+import { cn } from "@stll/ui/utils";
 
 import { decisionYear } from "@/features/case-law/citation-format";
 import { totalCitations } from "@/features/case-law/citation-treatment";
 import { citationStripFromYear } from "@/features/case-law/components/case-viewer/citation-header";
 import { CitationTimelinePanel } from "@/features/case-law/components/citation-timeline-panel";
-import { CitationYearStrip } from "@/features/case-law/components/citation-year-strip";
+import {
+  CITATION_TRIGGER_TOUCH_TARGET,
+  CitationYearStrip,
+} from "@/features/case-law/components/citation-year-strip";
 import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
 import { decisionCitationSummaryOptions } from "@/features/case-law/queries/citations";
 import { useMainCaseLawDecision } from "@/features/case-law/use-main-decision";
@@ -87,7 +91,10 @@ const TopBarCitationsFor = ({
         render={
           <button
             aria-label={label}
-            className="text-muted-foreground hover:text-foreground ms-3 flex shrink-0 items-center gap-2 rounded-sm px-1 py-0.5 font-sans text-xs transition-colors"
+            className={cn(
+              "text-muted-foreground hover:text-foreground ms-3 flex shrink-0 items-center gap-2 rounded-sm px-1 py-0.5 font-sans text-xs transition-colors",
+              CITATION_TRIGGER_TOUCH_TARGET,
+            )}
             type="button"
           />
         }
@@ -116,7 +123,10 @@ const TopBarCitationsFor = ({
           </span>
         )}
       </PopoverTrigger>
-      <PopoverPanel align="start" className="w-80">
+      <PopoverPanel
+        align="start"
+        className="w-[min(24rem,calc(100vw-2rem))] max-w-none"
+      >
         <CitationTimelinePanel
           fromYear={fromYear}
           summary={summary}

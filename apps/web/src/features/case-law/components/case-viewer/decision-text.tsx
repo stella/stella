@@ -38,6 +38,7 @@ import type {
 } from "@/components/legal-reader/reader-search";
 import { buildSearchResults } from "@/components/legal-reader/reader-search";
 import type { CitationAnchorSource } from "@/features/case-law/citation-anchors";
+import { decisionReferenceTintClassName } from "@/features/case-law/citation-treatment";
 import { DecisionBodyUnavailable } from "@/features/case-law/components/case-viewer/decision-body-state";
 import { missingBodyReason } from "@/features/case-law/components/case-viewer/decision-body-state.logic";
 import type { DecisionDocumentState } from "@/features/case-law/components/case-viewer/decision-body-state.logic";
@@ -584,7 +585,13 @@ const buildAnchorsByPieceId = ({
             children,
           });
           return (
-            <CitedDecisionLink decision={span.source.decision}>
+            <CitedDecisionLink
+              className={cn(
+                decisionReferenceTintClassName(span.source.treatment),
+              )}
+              decision={span.source.decision}
+              treatment={span.source.treatment}
+            >
               {marked}
             </CitedDecisionLink>
           );
@@ -647,8 +654,13 @@ const buildAnchorsByPieceId = ({
             annotations: linkAnnotations,
             children,
           });
+          // A decision the corpus does not hold is still a decision the
+          // reader is scanning for, so it carries the neutral wash.
           return (
-            <ExternalCitationLink href={span.href}>
+            <ExternalCitationLink
+              className={cn(decisionReferenceTintClassName())}
+              href={span.href}
+            >
               {marked}
             </ExternalCitationLink>
           );

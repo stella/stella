@@ -7,6 +7,7 @@ import type {
   CitationTreatmentCounts,
   CitationYearCounts,
 } from "@/features/case-law/citation-treatment";
+import { decisionDateToIso } from "@/lib/decision-date";
 
 /** A year with citations is never drawn flat, however large the peak. */
 export const MIN_VISIBLE_HEIGHT = 1;
@@ -28,9 +29,11 @@ type StackColumnSegmentsOptions = {
  * One column's segments, stacked bottom-up in display order reversed so the
  * treatment that must not be missed (negative) sits on top where the eye
  * lands. Every present treatment gets at least `MIN_VISIBLE_HEIGHT`, and the
- * stack never exceeds `columnHeight`: rounding and the floor can overshoot,
- * so the excess is taken back from the tallest segments first, never below
- * the floor, which keeps the top edge inside the plot.
+ * stack is exactly `max(columnHeight, present treatments)` tall: rounding and
+ * the floor can overshoot, so the excess is taken back from the tallest
+ * segments first, never below the floor. A year with more treatments than the
+ * scale gives it pixels is the one case where the column stands taller than
+ * asked, because the alternative is a treatment nobody can see.
  *
  * Shared by the strip and the timeline chart, so a year cannot stack one way
  * at a glance and another way when the reader opens it.
@@ -56,11 +59,17 @@ export const stackColumnSegments = ({
     });
   }
 
+  // The height the stack actually settles at. Below one pixel per present
+  // treatment the excess could never be paid off — every segment would sit on
+  // the floor with the loop unable to take anything back — and the stack
+  // would overrun the column it was asked for.
+  const stackHeight = Math.max(columnHeight, sized.length * MIN_VISIBLE_HEIGHT);
+
   let stacked = 0;
   for (const part of sized) {
     stacked += part.height;
   }
-  let excess = stacked - columnHeight;
+  let excess = stacked - stackHeight;
   while (excess > 0) {
     let tallest = sized.at(0);
     for (const part of sized) {
@@ -163,6 +172,42 @@ export const lastNegativeYear = (
   }
   return last;
 };
+
+type CitingDecisionOrder = {
+  decision: {
+    /** The materialized weight search and the citator both rank by. */
+    citationAuthority: number;
+    decisionDate: Date | string | null;
+  };
+};
+
+/**
+ * The citing decisions to show first, flattened out of the per-treatment
+ * leaders the citator lists: the most authoritative court first, and the
+ * more recent decision where two carry the same weight. Undated decisions
+ * sort last among their equals rather than jumping the queue.
+ */
+export const topCitingDecisions = <T extends CitingDecisionOrder>(
+  rows: readonly T[],
+  limit: number,
+): T[] =>
+  [...rows]
+    .sort((a, b) => {
+      const byAuthority =
+        b.decision.citationAuthority - a.decision.citationAuthority;
+      if (byAuthority !== 0) {
+        return byAuthority;
+      }
+      // Compared as ISO days, where lexical order is chronological; an
+      // undated decision has no day and falls to the end of its tier.
+      const left = decisionDateToIso(a.decision.decisionDate) ?? "";
+      const right = decisionDateToIso(b.decision.decisionDate) ?? "";
+      if (left === right) {
+        return 0;
+      }
+      return left < right ? 1 : -1;
+    })
+    .slice(0, limit);
 
 type TimelineTickYearsOptions = {
   /** How many labels fit side by side without touching. */

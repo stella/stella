@@ -7,6 +7,7 @@ import {
   peakTimelineColumn,
   stackColumnSegments,
   timelineTickYears,
+  topCitingDecisions,
 } from "@/features/case-law/components/citation-timeline.logic";
 
 const counts = ({
@@ -60,6 +61,31 @@ describe("stackColumnSegments", () => {
     });
     expect(segments.map((part) => part.treatment)).toEqual(["positive"]);
     expect(segments.at(0)?.height).toBe(16);
+  });
+
+  test("a year with more treatments than pixels keeps every one of them", () => {
+    // Five treatments scaled to a single pixel: the floor cannot be paid off
+    // against a 1px column, so the stack settles at one pixel per treatment
+    // rather than overrunning the height it was asked for.
+    const segments = stackColumnSegments({
+      baseline: 5,
+      columnHeight: 1,
+      counts: counts({
+        negative: 1,
+        neutral: 1,
+        positive: 1,
+        supportive: 1,
+        unclassified: 1,
+        year: 2020,
+      }),
+    });
+    const stacked = segments.reduce((sum, part) => sum + part.height, 0);
+    expect(segments).toHaveLength(5);
+    expect(stacked).toBe(5);
+    for (const segment of segments) {
+      expect(segment.height).toBe(1);
+      expect(segment.y).toBeGreaterThanOrEqual(0);
+    }
   });
 
   test("the column stands on the baseline it is given", () => {
@@ -158,6 +184,41 @@ describe("timelineTickYears", () => {
 
   test("an empty span labels nothing", () => {
     expect(timelineTickYears({ maxTicks: 8, years: [] })).toEqual([]);
+  });
+});
+
+describe("topCitingDecisions", () => {
+  const row = (
+    id: string,
+    citationAuthority: number,
+    decisionDate: string | null,
+  ) => ({ decision: { citationAuthority, decisionDate }, id });
+
+  test("the most authoritative court first, the later decision on a tie", () => {
+    const rows = [
+      row("older-peer", 10, "2018-01-01"),
+      row("weak", 2, "2024-01-01"),
+      row("newer-peer", 10, "2021-06-01"),
+    ];
+    expect(topCitingDecisions(rows, 5).map((item) => item.id)).toEqual([
+      "newer-peer",
+      "older-peer",
+      "weak",
+    ]);
+  });
+
+  test("an undated decision falls to the end of its own tier", () => {
+    const rows = [row("undated", 10, null), row("dated", 10, "2001-01-01")];
+    expect(topCitingDecisions(rows, 5).map((item) => item.id)).toEqual([
+      "dated",
+      "undated",
+    ]);
+  });
+
+  test("only the first few are shown, and the input is left alone", () => {
+    const rows = [row("a", 1, "2020-01-01"), row("b", 9, "2020-01-01")];
+    expect(topCitingDecisions(rows, 1).map((item) => item.id)).toEqual(["b"]);
+    expect(rows.map((item) => item.id)).toEqual(["a", "b"]);
   });
 });
 

@@ -8,13 +8,17 @@ import { cn } from "@stll/ui/utils";
 
 import type { createCaseDecisionDetailsTab } from "@/components/inspector/case-decision-details-view";
 import { VIEWER_OVERLAY_BAR_CLEARANCE } from "@/components/inspector/viewer-overlay-bar";
-import { decisionYear } from "@/features/case-law/citation-format";
+import { decisionYear, formatYear } from "@/features/case-law/citation-format";
 import { totalCitations } from "@/features/case-law/citation-treatment";
 import { CitationTimelinePanel } from "@/features/case-law/components/citation-timeline-panel";
 import { lastNegativeYear } from "@/features/case-law/components/citation-timeline.logic";
-import { CitationYearStrip } from "@/features/case-law/components/citation-year-strip";
+import {
+  CITATION_TRIGGER_TOUCH_TARGET,
+  CitationYearStrip,
+} from "@/features/case-law/components/citation-year-strip";
 import { decisionCitationSummaryOptions } from "@/features/case-law/queries/citations";
 import { useHydrated } from "@/hooks/use-hydrated";
+import { useFormatter } from "@/i18n/formatting-context";
 import type { SafeId } from "@/lib/safe-id";
 
 type CitationHeaderProps = {
@@ -61,6 +65,7 @@ export const CitationHeader = ({
   target,
 }: CitationHeaderProps) => {
   const t = useTranslations();
+  const format = useFormatter();
   const now = useNow();
   const { data: summary } = useQuery(
     decisionCitationSummaryOptions(decisionId),
@@ -95,7 +100,9 @@ export const CitationHeader = ({
       : null,
     lastNegative === null
       ? null
-      : t("caseLaw.citation.lastNegative", { year: String(lastNegative) }),
+      : t("caseLaw.citation.lastNegative", {
+          year: formatYear(format, lastNegative),
+        }),
   ]
     .filter((part) => part !== null)
     .join(" · ");
@@ -115,7 +122,13 @@ export const CitationHeader = ({
           render={
             <button
               aria-label={summaryText}
-              className="text-muted-foreground hover:text-foreground flex flex-wrap items-center gap-x-3 gap-y-1 rounded-sm px-1 py-0.5 text-start transition-colors"
+              // A 16px strip is a 20px band to tap; the pseudo-element gives
+              // a finger the project's 44px target without moving a pixel of
+              // what the eye sees.
+              className={cn(
+                "text-muted-foreground hover:text-foreground flex flex-wrap items-center gap-x-3 gap-y-1 rounded-sm px-1 py-0.5 text-start transition-colors",
+                CITATION_TRIGGER_TOUCH_TARGET,
+              )}
               type="button"
             />
           }
@@ -127,7 +140,10 @@ export const CitationHeader = ({
           />
           <span aria-hidden="true">{summaryText}</span>
         </PopoverTrigger>
-        <PopoverPanel align="start" className="w-80">
+        <PopoverPanel
+          align="start"
+          className="w-[min(24rem,calc(100vw-2rem))] max-w-none"
+        >
           <CitationTimelinePanel
             fromYear={fromYear}
             summary={summary}

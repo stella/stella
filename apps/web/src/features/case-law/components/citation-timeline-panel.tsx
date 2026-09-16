@@ -1,26 +1,35 @@
-import { useId } from "react";
-
+import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
+import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { PopoverClose, PopoverTitle } from "@stll/ui/popover";
+import { Skeleton } from "@stll/ui/skeleton";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
 import { cn } from "@stll/ui/utils";
 
 import { createCaseDecisionDetailsTab } from "@/components/inspector/case-decision-details-view";
+import { createCaseDecisionViewTab } from "@/components/inspector/case-decision-view";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+import { useInspectorView } from "@/components/inspector/use-inspector-view";
+import { decisionYear, formatYear } from "@/features/case-law/citation-format";
 import {
   CITATION_TREATMENT_DOT,
   CITATION_TREATMENT_FILL,
   CITATION_TREATMENT_LABEL,
+  CITATION_TREATMENT_ORDER,
   totalCitations,
 } from "@/features/case-law/citation-treatment";
 import type {
-  CitationTreatment,
   CitationTreatmentCounts,
   CitationYearCounts,
   DecisionCitationSummary,
 } from "@/features/case-law/citation-treatment";
+import {
+  CitationNegativeHatch,
+  negativeHatchFill,
+  useCitationHatchId,
+} from "@/features/case-law/components/citation-negative-hatch";
 import {
   citationTimelineColumns,
   citationTimelinePeak,
@@ -30,12 +39,20 @@ import {
   presentTreatments,
   stackColumnSegments,
   timelineTickYears,
+  topCitingDecisions,
 } from "@/features/case-law/components/citation-timeline.logic";
 import type { TimelineColumn } from "@/features/case-law/components/citation-timeline.logic";
+import { CitationTreatmentBar } from "@/features/case-law/components/citation-treatment-bar";
+import { decisionLeadingCitationsOptions } from "@/features/case-law/queries/citations";
+import type { LeadingCitation } from "@/features/case-law/queries/citations";
 import { useFormatter } from "@/i18n/formatting-context";
+import { citedDecisionLabel } from "@/lib/cited-decision-label";
+import { detached } from "@/lib/detached";
 
 /** The panel's own width, minus its padding: the plot is drawn at this size. */
-const CHART_WIDTH = 288;
+const CHART_WIDTH = 350;
+/** How many citing decisions the panel names before handing over to the list. */
+const CITING_DECISIONS_SHOWN = 5;
 /** Room above the plot for the one count the chart labels directly. */
 const PEAK_LABEL_HEIGHT = 11;
 const PLOT_HEIGHT = 72;
@@ -71,9 +88,10 @@ type CitationTimelinePanelProps = {
 };
 
 /**
- * A decision's reception in full: how often it was cited in each year of the
- * span, how the citing courts treated it, and the way to the decisions
- * themselves. What the strip shows at a glance, opened up.
+ * A decision's reception in full: how the citing courts treated it, whether
+ * anyone has gone against it lately, when it was cited, and which of the
+ * decisions citing it carry the most weight. The strip says how often; this
+ * says by whom, how, and whether it still holds.
  */
 export const CitationTimelinePanel = ({
   fromYear,
@@ -82,30 +100,45 @@ export const CitationTimelinePanel = ({
   toYear,
 }: CitationTimelinePanelProps) => {
   const t = useTranslations();
+  const format = useFormatter();
   const total = totalCitations(summary.incoming);
   const lastNegative = lastNegativeYear(summary.incomingByYear);
 
   return (
     <>
-      <div className="flex flex-col gap-0.5">
+      <div className="flex items-baseline justify-between gap-2">
         <PopoverTitle className="text-foreground text-sm font-medium">
-          {t("caseLaw.citation.citedSummary", { count: total })}
+          {t("caseLaw.viewer.citedBy")}
         </PopoverTitle>
-        <p className="text-muted-foreground text-xs">
-          {t("caseLaw.citation.stripLabel")}
-        </p>
+        <span className="text-muted-foreground text-xs tabular-nums">
+          {format.number(total)}
+        </span>
       </div>
+
+      <div className="flex flex-col gap-2">
+        <CitationTreatmentBar
+          className="h-2"
+          counts={summary.incoming}
+          total={total}
+        />
+        <TreatmentCounts counts={summary.incoming} />
+        {lastNegative !== null && (
+          <p className="text-destructive text-xs">
+            {t("caseLaw.citation.lastNegative", {
+              year: formatYear(format, lastNegative),
+            })}
+          </p>
+        )}
+      </div>
+
       <CitationTimelineChart
         byYear={summary.incomingByYear}
         fromYear={fromYear}
         toYear={toYear}
       />
-      <TreatmentLegend counts={summary.incoming} />
-      {lastNegative !== null && (
-        <p className="text-destructive text-xs">
-          {t("caseLaw.citation.lastNegative", { year: String(lastNegative) })}
-        </p>
-      )}
+
+      <CitingDecisions target={target} />
+
       <PopoverClose
         render={
           <Button
@@ -126,6 +159,178 @@ export const CitationTimelinePanel = ({
   );
 };
 
+/**
+ * What the proportion bar above is made of, in the same order and the same
+ * colours. Negative leads and wears the ink it is drawn in: it is the count
+ * a reader came for.
+ */
+const TreatmentCounts = ({ counts }: { counts: CitationTreatmentCounts }) => {
+  const t = useTranslations();
+  const format = useFormatter();
+
+  return (
+    <ul className="m-0 flex list-none flex-wrap gap-x-3 gap-y-1 p-0">
+      {CITATION_TREATMENT_ORDER.filter(
+        (treatment) => counts[treatment] > 0,
+      ).map((treatment) => (
+        <li
+          className={cn(
+            "text-muted-foreground flex items-center gap-1.5 text-xs",
+            treatment === "negative" && "text-destructive font-medium",
+          )}
+          key={treatment}
+        >
+          <span
+            aria-hidden="true"
+            className={cn(
+              "size-1.5 shrink-0 rounded-full",
+              CITATION_TREATMENT_DOT[treatment],
+            )}
+          />
+          <span className="tabular-nums">
+            {format.number(counts[treatment])}
+          </span>
+          {t(CITATION_TREATMENT_LABEL[treatment])}
+        </li>
+      ))}
+    </ul>
+  );
+};
+
+/**
+ * The decisions citing this one that carry the most weight, ranked the way
+ * the citator ranks them. The payoff of opening the panel: a case number, a
+ * court and a year answer "who follows this?" as no bar chart can.
+ */
+const CitingDecisions = ({
+  target,
+}: {
+  target: CitationTimelinePanelProps["target"];
+}) => {
+  const t = useTranslations();
+  const {
+    data: leading,
+    isError,
+    refetch,
+  } = useQuery(decisionLeadingCitationsOptions(target.decisionId, "incoming"));
+
+  if (isError) {
+    return (
+      <div className="flex items-center gap-2">
+        <p className="text-muted-foreground text-xs">
+          {t("errors.actionFailed")}
+        </p>
+        <Button
+          className="text-xs"
+          onClick={() => {
+            detached(refetch(), "case-law.citation-timeline-retry");
+          }}
+          size="sm"
+          variant="ghost"
+        >
+          {t("common.retry")}
+        </Button>
+      </div>
+    );
+  }
+
+  if (leading === undefined) {
+    return <CitingDecisionsLoader />;
+  }
+
+  const rows = topCitingDecisions(leading, CITING_DECISIONS_SHOWN);
+  if (rows.length === 0) {
+    return null;
+  }
+
+  return (
+    <ul className="m-0 flex list-none flex-col p-0">
+      {rows.map((row) => (
+        <CitingDecisionRow key={row.id} row={row} />
+      ))}
+    </ul>
+  );
+};
+
+const CitingDecisionRow = ({ row }: { row: LeadingCitation }) => {
+  const t = useTranslations();
+  const format = useFormatter();
+  const inspector = useInspectorView();
+  const year = decisionYear(row.decision.decisionDate);
+
+  return (
+    <li className="flex">
+      {/* The panel steps aside for the decision it sent the reader to. */}
+      <PopoverClose
+        render={
+          <button
+            className="hover:bg-muted/60 -mx-1.5 flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-start"
+            onClick={() => {
+              inspector.open(
+                createCaseDecisionViewTab({
+                  caseNumber: row.decision.caseNumber,
+                  country: row.decision.country,
+                  court: row.decision.court,
+                  decisionId: row.decision.id,
+                  language: row.decision.language,
+                  slug: row.decision.slug,
+                }),
+              );
+            }}
+            type="button"
+          />
+        }
+      >
+        <span className="flex min-w-0 flex-1 flex-col">
+          <BidiText
+            as="span"
+            className="text-foreground-strong-muted truncate text-xs font-medium"
+          >
+            {citedDecisionLabel(row.decision)}
+          </BidiText>
+          <BidiText
+            as="span"
+            className="text-muted-foreground truncate text-[0.7rem]"
+          >
+            {year === null
+              ? row.decision.court
+              : `${row.decision.court} · ${formatYear(format, year)}`}
+          </BidiText>
+        </span>
+        <span
+          className={cn(
+            "flex shrink-0 items-center gap-1.5 text-[0.7rem]",
+            row.treatment === "negative"
+              ? "text-destructive"
+              : "text-muted-foreground",
+          )}
+        >
+          <span
+            aria-hidden="true"
+            className={cn(
+              "size-1.5 shrink-0 rounded-full",
+              CITATION_TREATMENT_DOT[row.treatment],
+            )}
+          />
+          {t(CITATION_TREATMENT_LABEL[row.treatment])}
+        </span>
+      </PopoverClose>
+    </li>
+  );
+};
+
+/** The shape of the rows to come, so the panel does not jump when they land. */
+const CitingDecisionsLoader = () => (
+  <div className="flex flex-col gap-2">
+    {[0, 1, 2].map((row) => (
+      <div className="flex flex-col gap-1" key={row}>
+        <Skeleton className="h-3 w-40" />
+        <Skeleton className="h-2.5 w-28" />
+      </div>
+    ))}
+  </div>
+);
+
 type CitationTimelineChartProps = {
   byYear: readonly CitationYearCounts[];
   fromYear: number;
@@ -145,7 +350,7 @@ const CitationTimelineChart = ({
 }: CitationTimelineChartProps) => {
   const t = useTranslations();
   const format = useFormatter();
-  const hatchId = useId();
+  const hatchId = useCitationHatchId();
 
   if (toYear < fromYear) {
     return null;
@@ -166,34 +371,16 @@ const CitationTimelineChart = ({
   return (
     <svg
       aria-label={t("caseLaw.citation.stripLabel")}
-      className="block h-auto w-full"
+      // A time axis runs oldest to newest whichever way the UI reads, so the
+      // plot states its own direction: inherited RTL would flip what `start`
+      // and `end` mean for the endpoint labels and hang them off the edges.
+      className="block h-auto w-full [direction:ltr]"
       height={CHART_HEIGHT}
       role="img"
       viewBox={`0 0 ${String(CHART_WIDTH)} ${String(CHART_HEIGHT)}`}
       width={CHART_WIDTH}
     >
-      {/* Negative treatment is the one figure a reader must not miss, so it
-          is hatched as well as coloured: colour alone fails a colour-blind
-          reader, a monochrome print, and forced-colours mode. */}
-      <defs>
-        <pattern
-          height="3"
-          id={hatchId}
-          patternTransform="rotate(45)"
-          patternUnits="userSpaceOnUse"
-          width="3"
-        >
-          <rect className="fill-destructive" height="3" width="3" />
-          <line
-            className="stroke-popover"
-            strokeWidth="1.25"
-            x1="0"
-            x2="0"
-            y1="0"
-            y2="3"
-          />
-        </pattern>
-      </defs>
+      <CitationNegativeHatch id={hatchId} surfaceClassName="stroke-popover" />
       {columns.map((column, index) => (
         <TimelineBar
           column={column}
@@ -242,7 +429,7 @@ const CitationTimelineChart = ({
             x={x}
             y={AXIS_LABEL_BASELINE}
           >
-            {String(year)}
+            {formatYear(format, year)}
           </text>
         );
       })}
@@ -290,6 +477,7 @@ const TimelineBar = ({
   x,
 }: TimelineBarProps) => {
   const t = useTranslations();
+  const format = useFormatter();
 
   if (counts === undefined) {
     return (
@@ -315,12 +503,12 @@ const TimelineBar = ({
   const breakdown = presentTreatments(counts)
     .map(
       (treatment) =>
-        `${t(CITATION_TREATMENT_LABEL[treatment])} ${String(counts[treatment])}`,
+        `${t(CITATION_TREATMENT_LABEL[treatment])} ${format.number(counts[treatment])}`,
     )
     .join(" · ");
   const title = t("caseLaw.citation.yearTitle", {
     count: total,
-    year: String(year),
+    year: formatYear(format, year),
   });
 
   return (
@@ -330,7 +518,15 @@ const TimelineBar = ({
           tooltip shows on hover. */}
       <TooltipTrigger
         render={
-          <g aria-label={`${title}: ${breakdown}`} role="img" tabIndex={0} />
+          <g
+            aria-label={`${title}: ${breakdown}`}
+            // A pointer never draws the ring: clicking a bar focuses the
+            // group, and a ring round one column reads as a selection the
+            // chart does not have.
+            className="focus-visible:outline-ring outline-none focus-visible:outline-2 focus-visible:outline-offset-1"
+            role="img"
+            tabIndex={0}
+          />
         }
       >
         {/* The whole slot answers the pointer, so a one-citation year is as
@@ -349,9 +545,7 @@ const TimelineBar = ({
                 CITATION_TREATMENT_FILL[segment.treatment],
               "stroke-popover",
             )}
-            fill={
-              segment.treatment === "negative" ? `url(#${hatchId})` : undefined
-            }
+            fill={negativeHatchFill(segment.treatment, hatchId)}
             height={segment.height}
             key={segment.treatment}
             // Segments meet edge to edge; a hairline of the surface between
@@ -369,55 +563,5 @@ const TimelineBar = ({
         <span className="text-muted-foreground block text-xs">{breakdown}</span>
       </TooltipPopup>
     </Tooltip>
-  );
-};
-
-/**
- * The chart's key, which is also the treatment rollup: every treatment the
- * decision actually carries, its colour, and how many citations it holds.
- */
-const TreatmentLegend = ({ counts }: { counts: CitationTreatmentCounts }) => {
-  const t = useTranslations();
-  const format = useFormatter();
-
-  return (
-    <ul className="m-0 grid list-none grid-cols-2 gap-x-3 gap-y-1 p-0">
-      {presentTreatments(counts).map((treatment) => (
-        <li
-          className="text-muted-foreground flex items-center gap-1.5 text-xs"
-          key={treatment}
-        >
-          <LegendSwatch treatment={treatment} />
-          <span className="text-foreground-strong-muted tabular-nums">
-            {format.number(counts[treatment])}
-          </span>
-          <span className="truncate">
-            {t(CITATION_TREATMENT_LABEL[treatment])}
-          </span>
-        </li>
-      ))}
-    </ul>
-  );
-};
-
-/** Negative carries the chart's hatch, so the key matches the bars. */
-const LegendSwatch = ({ treatment }: { treatment: CitationTreatment }) => {
-  if (treatment === "negative") {
-    return (
-      <span
-        aria-hidden="true"
-        className="border-destructive bg-destructive size-2 shrink-0 rounded-[2px] border bg-[repeating-linear-gradient(45deg,transparent_0_1px,var(--color-popover)_1px_2px)]"
-      />
-    );
-  }
-
-  return (
-    <span
-      aria-hidden="true"
-      className={cn(
-        "size-1.5 shrink-0 rounded-full",
-        CITATION_TREATMENT_DOT[treatment],
-      )}
-    />
   );
 };

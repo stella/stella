@@ -22,6 +22,7 @@ export const useDecisionCitationAnchors = (
           decision: item.decision,
           id: item.id,
           sectionIndex: item.sectionIndex,
+          treatment: item.treatment,
         });
       }
     }
