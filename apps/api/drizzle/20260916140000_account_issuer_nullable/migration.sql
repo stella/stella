@@ -17,8 +17,12 @@ SET statement_timeout = '30s';--> statement-breakpoint
 -- and leave the release retryable rather than queue behind a long-running
 -- reader while every new session insert piles up behind it. Re-running is a
 -- no-op once the column is already nullable.
-ALTER TABLE "account"
-  ALTER COLUMN "issuer" DROP NOT NULL;--> statement-breakpoint
+--
+-- Relaxing it cannot break a client: the only writer is Better Auth, 1.7.1
+-- still fills the column on every insert, and no product code reads it. See
+-- the header above for why the constraint has to go before the bump.
+-- squawk-ignore ban-drop-not-null
+ALTER TABLE "account" ALTER COLUMN "issuer" DROP NOT NULL;--> statement-breakpoint
 
 -- The identity guarantee moves to (provider_id, account_id), the pair Better
 -- Auth links accounts by, so uniqueness survives `issuer` becoming optional.
