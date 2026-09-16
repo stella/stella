@@ -6,7 +6,6 @@ import {
   BookmarkPlusIcon,
   CalendarIcon,
   CopyIcon,
-  EllipsisVerticalIcon,
   FolderTreeIcon,
   GanttChartIcon,
   KanbanIcon,
@@ -295,7 +294,17 @@ export const ViewSwitcher = ({
           event.preventDefault();
           setRenamingViewId(view.id);
         }}
-        renderActions={(view) => {
+        actionMenu={{
+          label: t("common.actions"),
+          onOpenChange: (view, open) => {
+            if (!open) return;
+            viewActions.setTarget({
+              view,
+              canDelete: !isRequiredViewLayout(view.layout.type) ||
+                views.filter((candidate) => candidate.layout.type === view.layout.type).length > 1,
+            });
+          },
+          renderItems: (view) => {
           if (view.id !== activeViewId) {
             return null;
           }
@@ -304,11 +313,11 @@ export const ViewSwitcher = ({
             views.filter(
               (candidate) => candidate.layout.type === view.layout.type,
             ).length <= 1;
-          return viewActions.renderActions({
+          return viewActions.renderItems({
             view,
             canDelete: !isLastOfLayout,
           });
-        }}
+        } }}
         renderIcon={(view) => {
           const Icon = layoutIcons[view.layout.type];
           return <Icon className="size-3.5 shrink-0" />;
@@ -475,7 +484,6 @@ const useViewActionsMenu = ({
   const convertView = useConvertView(workspaceId);
   const deleteView = useDeleteView(workspaceId);
   const [target, setTarget] = useState<ViewActionsTarget | null>(null);
-  const [isActionsOpen, setIsActionsOpen] = useState(false);
   const [isSaveTemplateOpen, setIsSaveTemplateOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
 
@@ -517,6 +525,7 @@ const useViewActionsMenu = ({
   };
 
   const renderItems = ({ view, canDelete }: ViewActionsTarget) => {
+    if (!hasActions) return null;
     const { id, layout } = view;
     const Icon = layoutIcons[layout.type];
     return (
@@ -607,43 +616,6 @@ const useViewActionsMenu = ({
     contextMenu.openAt(event);
   };
 
-  // The visible three-dot trigger is a real `MenuTrigger`, so Base UI
-  // anchors the popup to the button and restores focus to it on close
-  // (keyboard/AT included). The cursor-anchored `openFor` path is kept
-  // only for right-click on a tab.
-  const renderActions = ({ view, canDelete }: ViewActionsTarget) => {
-    if (!hasActions) {
-      return null;
-    }
-    return (
-      <Menu
-        onOpenChange={(open) => {
-          setIsActionsOpen(open);
-          if (open) {
-            setTarget({ view, canDelete });
-          }
-        }}
-      >
-        <MenuTrigger
-          aria-label={t("common.actions")}
-          render={
-            <Button
-              // The surrounding tab is a draggable; this button is not a drag
-              // affordance. Only covers presses on the button itself, which is
-              // why the tab separately refuses to drag while the menu is open.
-              draggable={false}
-              size="icon-xs"
-              variant="ghost"
-            />
-          }
-        >
-          <EllipsisVerticalIcon />
-        </MenuTrigger>
-        <MenuPopup>{renderItems({ view, canDelete })}</MenuPopup>
-      </Menu>
-    );
-  };
-
   const overlays = (
     <>
       {canCreateView && target && (
@@ -691,9 +663,8 @@ const useViewActionsMenu = ({
     </>
   );
 
-  // The dismiss layer covers the whole strip, so an open menu anywhere gates
-  // dragging on every tab, not just its own.
-  const isAnyMenuOpen = isActionsOpen || contextMenu.open;
+  // Context menus also block the shared switcher’s drag interactions.
+  const isAnyMenuOpen = contextMenu.open;
 
-  return { openFor, renderActions, overlays, isAnyMenuOpen };
+  return { openFor, renderItems, setTarget, overlays, isAnyMenuOpen };
 };

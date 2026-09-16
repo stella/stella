@@ -2,7 +2,6 @@ import { useState } from "react";
 
 import {
   CircleDotIcon,
-  FilterIcon,
   FlagIcon,
   MoreHorizontalIcon,
   ShapesIcon,
@@ -25,6 +24,7 @@ import {
   CommandSeparator,
 } from "@stll/ui/command";
 import { Input } from "@stll/ui/input";
+import { ViewFilterButton, ViewFilterChip } from "@stll/ui/view-toolbar";
 import {
   Menu,
   MenuItem,
@@ -63,6 +63,7 @@ import {
   MultiSelectValue,
   SingleSelectValue,
 } from "@/components/workspaces/conditions/condition-select-values";
+import { WORK_TYPES } from "@/components/workspaces/tasks/task-detail-constants";
 import { SelectColorIcon } from "@/components/workspaces/properties/shared";
 import { PropertyIcon } from "@/components/workspaces/property-helpers";
 import type { TranslationKey } from "@/i18n/types";
@@ -143,15 +144,10 @@ export const FilterChips = ({
       onAddAdvanced={addAdvanced}
       onAddField={addField}
       trigger={
-        <Button
-          aria-label={t("workspaces.views.filter")}
+        <ViewFilterButton
           disabled={atFilterCap}
-          size="icon-xs"
-          title={t("workspaces.views.filter")}
-          variant="ghost"
-        >
-          <FilterIcon className="size-3.5" />
-        </Button>
+          label={t("workspaces.views.filter")}
+        />
       }
     />
   );
@@ -232,11 +228,7 @@ const FilterChip = ({
     <Popover onOpenChange={onOpenChange} open={open}>
       <PopoverTrigger
         render={
-          <Button
-            className="gap-1.5 font-normal"
-            size="xs"
-            variant="secondary"
-          />
+          <ViewFilterChip />
         }
       >
         <FieldTypeIcon field={field} />
@@ -475,11 +467,7 @@ const AdvancedFilterChip = ({
     <Popover onOpenChange={onOpenChange} open={open}>
       <PopoverTrigger
         render={
-          <Button
-            className="gap-1.5 font-normal"
-            size="xs"
-            variant="secondary"
-          />
+          <ViewFilterChip />
         }
       >
         <SlidersHorizontalIcon className="size-3.5" />
@@ -687,7 +675,7 @@ const ENTITY_KINDS = ["document", "task"] as const;
 
 const KIND_LABEL_KEYS = {
   document: "common.document",
-  task: "search.kinds.task",
+  task: "workspaces.overview.activity.filters.tasks",
 } as const satisfies Record<(typeof ENTITY_KINDS)[number], TranslationKey>;
 
 const STATUS_VALUE_LABEL_KEYS = {
@@ -719,6 +707,16 @@ const useFilterFields = (properties: WorkspaceProperty[]): FieldOption[] => {
       options: ENTITY_KINDS.map((kind) => ({
         value: kind,
         label: t(KIND_LABEL_KEYS[kind]),
+      })),
+    },
+    {
+      operand: { type: "builtin", field: "agendaKind" },
+      label: t("common.type"),
+      valueType: "single-select",
+      type: "single-select",
+      options: WORK_TYPES.map((value) => ({
+        value,
+        label: t(`tasks.workTypeValues.${value}`),
       })),
     },
     {

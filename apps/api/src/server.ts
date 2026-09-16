@@ -98,6 +98,7 @@ import { usageRoute } from "@/api/handlers/usage/routes";
 import { userFilesRoute } from "@/api/handlers/user-files/routes";
 import { verifyAuthRoute } from "@/api/handlers/verify/routes";
 import { viewTemplatesRoute } from "@/api/handlers/view-templates/routes";
+import { entityViewsRoute } from "@/api/handlers/entity-views/routes";
 import { viewsRoute } from "@/api/handlers/views/routes";
 import { wellKnownRoute } from "@/api/handlers/well-known/routes";
 import { myWorkRoute } from "@/api/handlers/work-obligations/my-work-route";
@@ -692,6 +693,7 @@ const api = new Elysia()
       .use(usageRoute)
       .use(viewTemplatesRoute)
       .use(viewsRoute)
+      .use(entityViewsRoute)
       .use(listsRoute)
       .use(tasksRoute)
       .use(workObligationsRoute)

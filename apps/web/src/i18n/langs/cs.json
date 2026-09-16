@@ -2549,7 +2549,7 @@
     },
     "filter": {
       "any": "Jakýkoli",
-      "mine": "Moje"
+      "mine": "Přiřazené mně"
     },
     "newRequest": "Nový požadavek",
     "openMatter": "Otevřít spis",
@@ -4305,9 +4305,10 @@
       "assignee": "Řešitel",
       "reviewer": "Revident"
     },
-    "assignees": "Přiřazení",
+    "assignees": "Spolupracovníci",
     "clearDate": "Vymazat datum",
     "completeWork": "Dokončit práci",
+    "deadlines": "Lhůty",
     "delegationReason": "Důvod změny",
     "deletedAccount": "Smazaný účet",
     "dueDate": "Termín",
@@ -4319,16 +4320,16 @@
     "myWorkTitle": "Moje práce",
     "newTask": "Nový úkol",
     "noActivity": "Zatím žádná aktivita",
-    "noAssignees": "Žádní přiřazení",
+    "noAssignees": "Žádní spolupracovníci",
     "noLinks": "Žádné propojené položky",
-    "noOwner": "Bez odpovědné osoby",
+    "noOwner": "Nepřiděleno",
     "noSubtasks": "Žádné podúkoly",
     "noTasksAssigned": "Nemáte přiřazené žádné úkoly",
     "noWorkInQueue": "V této frontě není žádná práce",
     "notFound": "Úkol nenalezen",
     "openWorkflowRun": "Otevřít běh pracovního postupu",
     "overdue": "Po termínu",
-    "owner": "Odpovědná osoba",
+    "owner": "Řeší",
     "priority": "Priorita",
     "priorityValues": {
       "high": "Vysoká",

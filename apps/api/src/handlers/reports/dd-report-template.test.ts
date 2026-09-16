@@ -134,6 +134,8 @@ const makeEntity = (
   fields: QueryEntityResult["fields"],
 ): QueryEntityResult => ({
   entityId,
+  workspaceId: "workspace-1",
+  workspaceName: "Test matter",
   kind: "document",
   name,
   parentId: null,

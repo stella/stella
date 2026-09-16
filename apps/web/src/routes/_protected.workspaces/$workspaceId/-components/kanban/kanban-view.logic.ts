@@ -38,6 +38,7 @@ import {
   getInternalPropertyId,
   resolveKanbanGroupBy,
 } from "@/components/workspaces/entity-utils";
+import { TASK_STATUS_OPTION_COLORS } from "@/components/workspaces/tasks/task-detail-constants";
 import { resolveOptionColor } from "@/components/workspaces/property-utils";
 import { getFormattingLocale } from "@/i18n/i18n-store";
 import type { OptionColor } from "@/lib/api-contract";
@@ -65,14 +66,6 @@ type TaskStatusLabels = Record<TaskStatus, string>;
 
 type EntityKindLabels = Record<EntityKind, string>;
 
-const STATUS_OPTION_COLORS = {
-  open: "gray",
-  in_progress: "blue",
-  in_review: "amber",
-  done: "green",
-  cancelled: "red",
-} as const satisfies Record<TaskStatus, OptionColor>;
-
 const toGroupOption = (value: string, label: string, color: OptionColor) => {
   const variants = resolveOptionColor(color);
   return {
@@ -90,7 +83,7 @@ const statusGroup = (
 ): KanbanBuiltInGroup<WorkspaceEntity> => ({
   id: getInternalPropertyId("status"),
   options: TASK_STATUS_ORDER.map((status) =>
-    toGroupOption(status, labels[status], STATUS_OPTION_COLORS[status]),
+    toGroupOption(status, labels[status], TASK_STATUS_OPTION_COLORS[status]),
   ),
   selectRows: (rows) => rows.filter((row) => row.kind === "task"),
 });

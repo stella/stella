@@ -2549,7 +2549,7 @@
     },
     "filter": {
       "any": "Dowolne",
-      "mine": "Moje"
+      "mine": "Przypisane mnie"
     },
     "newRequest": "Nowe zgłoszenie",
     "openMatter": "Otwórz sprawę",
@@ -4305,9 +4305,10 @@
       "assignee": "Wykonawca",
       "reviewer": "Recenzent"
     },
-    "assignees": "Przypisani",
+    "assignees": "Współpracownicy",
     "clearDate": "Wyczyść datę",
     "completeWork": "Ukończ pracę",
+    "deadlines": "Terminy",
     "delegationReason": "Powód zmiany",
     "deletedAccount": "Usunięte konto",
     "dueDate": "Termin",
@@ -4319,16 +4320,16 @@
     "myWorkTitle": "Moja praca",
     "newTask": "Nowe zadanie",
     "noActivity": "Brak aktywności",
-    "noAssignees": "Brak przypisanych",
+    "noAssignees": "Brak współpracowników",
     "noLinks": "Brak powiązanych elementów",
-    "noOwner": "Brak osoby odpowiedzialnej",
+    "noOwner": "Nieprzypisane",
     "noSubtasks": "Brak podzadań",
     "noTasksAssigned": "Nie masz przypisanych zadań",
     "noWorkInQueue": "Brak pracy w tej kolejce",
     "notFound": "Nie znaleziono zadania",
     "openWorkflowRun": "Otwórz uruchomienie przepływu pracy",
     "overdue": "Po terminie",
-    "owner": "Osoba odpowiedzialna",
+    "owner": "Zajmuje się",
     "priority": "Priorytet",
     "priorityValues": {
       "high": "Wysoki",

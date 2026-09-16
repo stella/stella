@@ -25,6 +25,7 @@ export * from "./schema/flows";
 export * from "./schema/mcp";
 export * from "./schema/sharepoint";
 export * from "./schema/files-views";
+export * from "./schema/entity-views";
 export * from "./schema/reports";
 export * from "./schema/skills";
 export * from "./schema/style-sets";

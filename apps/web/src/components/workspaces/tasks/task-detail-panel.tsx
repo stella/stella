@@ -5,7 +5,6 @@ import { Link, useRouteContext } from "@tanstack/react-router";
 import { panic } from "better-result";
 import {
   ArrowLeftIcon,
-  CheckCircle2Icon,
   HistoryIcon,
   InboxIcon,
   RotateCcwIcon,
@@ -218,7 +217,7 @@ const TaskDetailPanelContent = ({
         | { type: "acknowledge" }
         | {
             type: "transition";
-            action: "complete" | "cancel" | "reopen";
+            action: "reopen";
             reason?: string;
           },
     ) => {
@@ -731,7 +730,12 @@ const TaskDetailPanelContent = ({
           </MetadataRow>
         </div>
 
-        {workflow && (
+        {workflow &&
+          ((workflow.status === "awaiting_acknowledgement" &&
+            workflow.ownerUserId === userId) ||
+            workflow.status === "completed" ||
+            workflow.status === "cancelled" ||
+            hardDeadlineOverdue) && (
           <div className="border-t px-4 py-3">
             {workflow.status === "awaiting_acknowledgement" &&
               workflow.ownerUserId === userId && (
@@ -753,22 +757,6 @@ const TaskDetailPanelContent = ({
               )}
 
             <div className="flex flex-wrap gap-2">
-              {workflow.status === "active" &&
-                workflow.ownerUserId === userId && (
-                  <Button
-                    disabled={workflowActionMutation.isPending}
-                    onClick={() =>
-                      workflowActionMutation.mutate({
-                        type: "transition",
-                        action: "complete",
-                      })
-                    }
-                    size="sm"
-                  >
-                    <CheckCircle2Icon />
-                    {t("completeWork")}
-                  </Button>
-                )}
               {(workflow.status === "completed" ||
                 workflow.status === "cancelled") && (
                 <Button

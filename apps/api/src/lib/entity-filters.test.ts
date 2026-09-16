@@ -8,8 +8,9 @@ import {
   PROPERTY_FIND_SUPPORT,
 } from "@stll/api-contract";
 import { compareByLocale } from "@stll/collation";
-import type { ConditionNode } from "@stll/conditions";
+import type { BuiltinField, ConditionNode } from "@stll/conditions";
 import { propertyConfig } from "@stll/property-testing";
+import { toSafeId } from "@/api/lib/branded-types";
 
 import {
   applyFilters,
@@ -24,7 +25,7 @@ import {
 // -- buildFilterConditions (builtin filters) --
 
 const builtinCompare = (
-  field: "status" | "priority",
+  field: BuiltinField,
   op: "eq" | "neq",
   value: string,
 ): ConditionNode => ({
@@ -35,7 +36,7 @@ const builtinCompare = (
 });
 
 const builtinPredicate = (
-  field: "status" | "priority",
+  field: BuiltinField,
   op: "in" | "is_empty",
   value?: string[],
 ): ConditionNode => ({
@@ -132,12 +133,15 @@ describe("buildFilterConditions (kind)", () => {
 
 // -- buildFindConditions --
 
-const WORKSPACE_ID = "ws1";
+const WORKSPACE_ID = toSafeId<"workspace">("ws1");
 
 type Find = NonNullable<Parameters<typeof buildFindConditions>[0]["find"]>;
 
 const findConditions = (find: Find | undefined) =>
-  buildFindConditions({ find, workspaceId: WORKSPACE_ID });
+  buildFindConditions({
+    find,
+    scope: { type: "matter", workspaceId: WORKSPACE_ID },
+  });
 
 const findSql = (find: Find): string => {
   const [condition] = findConditions(find);

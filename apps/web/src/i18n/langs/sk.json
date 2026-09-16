@@ -2549,7 +2549,7 @@
     },
     "filter": {
       "any": "Akýkoľvek",
-      "mine": "Moje"
+      "mine": "Priradené mne"
     },
     "newRequest": "Nová požiadavka",
     "openMatter": "Otvoriť spis",
@@ -4305,9 +4305,10 @@
       "assignee": "Riešiteľ",
       "reviewer": "Revident"
     },
-    "assignees": "Priradení",
+    "assignees": "Spolupracovníci",
     "clearDate": "Vymazať dátum",
     "completeWork": "Dokončiť prácu",
+    "deadlines": "Lehoty",
     "delegationReason": "Dôvod zmeny",
     "deletedAccount": "Vymazaný účet",
     "dueDate": "Termín",
@@ -4319,16 +4320,16 @@
     "myWorkTitle": "Moja práca",
     "newTask": "Nová úloha",
     "noActivity": "Zatiaľ žiadna aktivita",
-    "noAssignees": "Žiadni priradení",
+    "noAssignees": "Žiadni spolupracovníci",
     "noLinks": "Žiadne prepojené položky",
-    "noOwner": "Bez zodpovednej osoby",
+    "noOwner": "Nepridelené",
     "noSubtasks": "Žiadne podúlohy",
     "noTasksAssigned": "Nemáte priradené žiadne úlohy",
     "noWorkInQueue": "V tomto rade nie je žiadna práca",
     "notFound": "Úloha sa nenašla",
     "openWorkflowRun": "Otvoriť spustenie pracovného postupu",
     "overdue": "Po termíne",
-    "owner": "Zodpovedná osoba",
+    "owner": "Rieši",
     "priority": "Priorita",
     "priorityValues": {
       "high": "Vysoká",

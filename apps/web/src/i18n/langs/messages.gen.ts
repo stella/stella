@@ -2552,7 +2552,7 @@ type Messages = {
     };
     "filter": {
       "any": "Any";
-      "mine": "Mine";
+      "mine": "Assigned to me";
     };
     "newRequest": "New request";
     "openMatter": "Open matter";
@@ -4308,9 +4308,10 @@ type Messages = {
       "assignee": "Assignee";
       "reviewer": "Reviewer";
     };
-    "assignees": "Assignees";
+    "assignees": "Collaborators";
     "clearDate": "Clear date";
     "completeWork": "Complete work";
+    "deadlines": "Deadlines";
     "delegationReason": "Reason for change";
     "deletedAccount": "Deleted account";
     "dueDate": "Due date";
@@ -4322,16 +4323,16 @@ type Messages = {
     "myWorkTitle": "My work";
     "newTask": "New task";
     "noActivity": "No activity yet";
-    "noAssignees": "No assignees";
+    "noAssignees": "No collaborators";
     "noLinks": "No linked items";
-    "noOwner": "No accountable owner";
+    "noOwner": "Unassigned";
     "noSubtasks": "No subtasks";
     "noTasksAssigned": "No tasks assigned to you";
     "noWorkInQueue": "No work in this queue";
     "notFound": "Task not found";
     "openWorkflowRun": "Open workflow run";
     "overdue": "Overdue";
-    "owner": "Owner";
+    "owner": "Handled by";
     "priority": "Priority";
     "priorityValues": {
       "high": "High";

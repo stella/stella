@@ -2549,7 +2549,7 @@
     },
     "filter": {
       "any": "Beliebig",
-      "mine": "Meine"
+      "mine": "Mir zugewiesen"
     },
     "newRequest": "Neue Anfrage",
     "openMatter": "Akte öffnen",
@@ -4305,9 +4305,10 @@
       "assignee": "Bearbeiter",
       "reviewer": "Prüfer"
     },
-    "assignees": "Zugewiesene",
+    "assignees": "Mitwirkende",
     "clearDate": "Datum löschen",
     "completeWork": "Arbeit abschließen",
+    "deadlines": "Fristen",
     "delegationReason": "Grund für die Änderung",
     "deletedAccount": "Gelöschtes Konto",
     "dueDate": "Fälligkeitsdatum",
@@ -4319,16 +4320,16 @@
     "myWorkTitle": "Meine Arbeit",
     "newTask": "Neue Aufgabe",
     "noActivity": "Noch keine Aktivität",
-    "noAssignees": "Keine Zuweisungen",
+    "noAssignees": "Keine Mitwirkenden",
     "noLinks": "Keine verknüpften Einträge",
-    "noOwner": "Keine verantwortliche Person",
+    "noOwner": "Nicht zugewiesen",
     "noSubtasks": "Keine Unteraufgaben",
     "noTasksAssigned": "Keine Aufgaben zugewiesen",
     "noWorkInQueue": "Keine Arbeit in dieser Warteschlange",
     "notFound": "Aufgabe nicht gefunden",
     "openWorkflowRun": "Arbeitsablauf-Ausführung öffnen",
     "overdue": "Überfällig",
-    "owner": "Verantwortlich",
+    "owner": "Bearbeitet von",
     "priority": "Priorität",
     "priorityValues": {
       "high": "Hoch",

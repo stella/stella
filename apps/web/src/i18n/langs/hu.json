@@ -2549,7 +2549,7 @@
     },
     "filter": {
       "any": "Bármely",
-      "mine": "Saját"
+      "mine": "Nekem kiosztva"
     },
     "newRequest": "Új kérés",
     "openMatter": "Ügy megnyitása",
@@ -4305,9 +4305,10 @@
       "assignee": "Felelős",
       "reviewer": "Ellenőr"
     },
-    "assignees": "Felelősök",
+    "assignees": "Közreműködők",
     "clearDate": "Dátum törlése",
     "completeWork": "Munka befejezése",
+    "deadlines": "Határidők",
     "delegationReason": "A módosítás oka",
     "deletedAccount": "Törölt fiók",
     "dueDate": "Határidő",
@@ -4319,9 +4320,9 @@
     "myWorkTitle": "Saját munkám",
     "newTask": "Új feladat",
     "noActivity": "Még nincs tevékenység",
-    "noAssignees": "Nincs felelős",
+    "noAssignees": "Nincsenek közreműködők",
     "noLinks": "Nincsenek kapcsolt elemek",
-    "noOwner": "Nincs felelős",
+    "noOwner": "Nincs kijelölve",
     "noSubtasks": "Nincsenek alfeladatok",
     "noTasksAssigned": "Nincsenek hozzárendelt feladatok",
     "noWorkInQueue": "Nincs munka ebben a sorban",

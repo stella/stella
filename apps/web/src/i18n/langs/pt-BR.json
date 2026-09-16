@@ -2549,7 +2549,7 @@
     },
     "filter": {
       "any": "Qualquer",
-      "mine": "Meus"
+      "mine": "Atribuídas a mim"
     },
     "newRequest": "Nova solicitação",
     "openMatter": "Abrir caso",
@@ -4305,9 +4305,10 @@
       "assignee": "Responsável",
       "reviewer": "Revisor"
     },
-    "assignees": "Responsáveis",
+    "assignees": "Colaboradores",
     "clearDate": "Limpar data",
     "completeWork": "Concluir trabalho",
+    "deadlines": "Prazos",
     "delegationReason": "Motivo da alteração",
     "deletedAccount": "Conta excluída",
     "dueDate": "Data de vencimento",
@@ -4319,16 +4320,16 @@
     "myWorkTitle": "Meu trabalho",
     "newTask": "Nova tarefa",
     "noActivity": "Ainda não há atividade",
-    "noAssignees": "Nenhum responsável",
+    "noAssignees": "Sem colaboradores",
     "noLinks": "Nenhum item vinculado",
-    "noOwner": "Sem responsável",
+    "noOwner": "Não atribuído",
     "noSubtasks": "Sem subtarefas",
     "noTasksAssigned": "Nenhuma tarefa atribuída a você",
     "noWorkInQueue": "Não há trabalho nesta fila",
     "notFound": "Tarefa não encontrada",
     "openWorkflowRun": "Abrir a execução do fluxo de trabalho",
     "overdue": "Atrasado",
-    "owner": "Responsável",
+    "owner": "A cargo de",
     "priority": "Prioridade",
     "priorityValues": {
       "high": "Alto",

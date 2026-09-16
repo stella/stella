@@ -60,7 +60,7 @@ export const createReadFilesystemTreeHandler = (
       const result = yield* Result.await(
         queryEntitiesImpl({
           safeDb,
-          workspaceId,
+          scope: { type: "matter", workspaceId },
           currentUserId: currentUser.id,
           currentOrganizationId: session.activeOrganizationId,
           filters: arrayOrEmpty(body.filters),

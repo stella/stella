@@ -5,7 +5,7 @@ import * as v from "valibot";
 
 import { VIEW_SORTS_MAX } from "@stll/api-contract";
 import { CALCULATION_KINDS } from "@stll/calculations";
-import { conditionNodeSchema } from "@stll/conditions";
+import { BUILTIN_FIELDS, conditionNodeSchema } from "@stll/conditions";
 import { propertyConfig } from "@stll/property-testing";
 
 import { tConditionNode } from "@/api/lib/conditions/contract";
@@ -235,7 +235,7 @@ const arbHiddenProperties = fc.array(fc.string({ maxLength: 16 }), {
   maxLength: 5,
 });
 
-const arbBuiltinField = fc.constantFrom("status", "priority");
+const arbBuiltinField = fc.constantFrom(...BUILTIN_FIELDS);
 const arbLiteralValue = fc.oneof(
   fc.string({ maxLength: 16 }),
   fc.integer(),

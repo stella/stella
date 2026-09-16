@@ -9,6 +9,7 @@ import type {
   SignalView,
 } from "@stll/api-contract/signals";
 
+import { member, user } from "@/api/db/auth-schema";
 import type { SafeDb } from "@/api/db/safe-db";
 import { signals, workspaces } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -78,6 +79,7 @@ const decodeSignalCursor = (cursor: string): SafeId<"signal"> | null => {
 const signalColumns = {
   id: signals.id,
   workspaceId: signals.workspaceId,
+  workspaceName: workspaces.name,
   kind: signals.kind,
   origin: signals.origin,
   scoutKey: signals.scoutKey,
@@ -91,6 +93,10 @@ const signalColumns = {
   status: signals.status,
   snoozedUntil: signals.snoozedUntil,
   assigneeUserId: signals.assigneeUserId,
+  assigneeUserName: sql<
+    string | null
+  >`coalesce(nullif(trim(${user.name}), ''), ${user.email})`,
+  assigneeUserImage: user.image,
   createdByUserId: signals.createdByUserId,
   dismissReason: signals.dismissReason,
   acceptedResult: signals.acceptedResult,
@@ -104,7 +110,7 @@ type SignalRow = Omit<
   "organizationId" | "dedupeKey"
 >;
 
-export const serializeSignal = (row: SignalRow) => ({
+export const serializeSignal = <TRow extends SignalRow>(row: TRow) => ({
   ...row,
   snoozedUntil: row.snoozedUntil?.toISOString() ?? null,
   resolvedAt: row.resolvedAt?.toISOString() ?? null,
@@ -200,6 +206,15 @@ export const listSignalsHandler = async function* ({
       tx
         .select(signalColumns)
         .from(signals)
+        .leftJoin(workspaces, eq(workspaces.id, signals.workspaceId))
+        .leftJoin(
+          member,
+          and(
+            eq(member.userId, signals.assigneeUserId),
+            eq(member.organizationId, organizationId),
+          ),
+        )
+        .leftJoin(user, eq(user.id, member.userId))
         .where(and(...conditions))
         .orderBy(desc(signals.createdAt), desc(signals.id))
         .limit(limit + 1),
@@ -236,6 +251,15 @@ export const loadVisibleSignal = async function* ({
       tx
         .select(signalColumns)
         .from(signals)
+        .leftJoin(workspaces, eq(workspaces.id, signals.workspaceId))
+        .leftJoin(
+          member,
+          and(
+            eq(member.userId, signals.assigneeUserId),
+            eq(member.organizationId, organizationId),
+          ),
+        )
+        .leftJoin(user, eq(user.id, member.userId))
         .where(
           and(
             eq(signals.id, signalId),

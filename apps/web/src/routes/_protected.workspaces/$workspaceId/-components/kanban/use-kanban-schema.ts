@@ -1,3 +1,5 @@
+import { useMemo } from "react";
+
 import { useTranslations } from "use-intl";
 
 import type { WorkspaceProperty } from "@/lib/types";
@@ -14,7 +16,7 @@ export const useWorkspaceKanbanSchema = (
 ): WorkspaceKanbanSchema => {
   const t = useTranslations();
 
-  return workspaceKanbanSchema({
+  return useMemo(() => workspaceKanbanSchema({
     properties,
     statusLabels: {
       open: t("tasks.statusValues.open"),
@@ -30,5 +32,5 @@ export const useWorkspaceKanbanSchema = (
       message: t("search.kinds.message"),
       link: t("search.kinds.link"),
     },
-  });
+  }), [properties, t]);
 };

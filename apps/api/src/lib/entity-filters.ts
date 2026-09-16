@@ -1,11 +1,12 @@
 import { panic } from "better-result";
 import { and, asc, eq, inArray, isNull, ne, not, or, sql } from "drizzle-orm";
-import type { SQL } from "drizzle-orm";
+import type { SQL, SQLWrapper } from "drizzle-orm";
 
 import { ENTITY_FIND_TERM_MIN_LENGTH, isEntityKind } from "@stll/api-contract";
 import type { EntityFind } from "@stll/api-contract";
 import { compareByLocale } from "@stll/collation";
 import {
+  type BuiltinField,
   type CompareNode,
   type ConditionNode,
   type ConditionValue,
@@ -23,6 +24,10 @@ import {
 import { user } from "@/api/db/auth-schema";
 import { entities, entityVersions, fields, properties } from "@/api/db/schema";
 import type { EntityKind, FieldContent } from "@/api/db/schema-validators";
+import {
+  entityQueryScopeCondition,
+  type EntityQueryScope,
+} from "@/api/lib/entities/query-scope";
 import { escapeLike } from "@/api/lib/escape-like";
 import { typedPgArray } from "@/api/lib/search/sql";
 
@@ -409,8 +414,14 @@ const fieldsExist = (propertyMatch: SQL, opCondition: SQL): SQL =>
 const propertyExists = (propertyId: string, opCondition: SQL): SQL =>
   fieldsExist(sql`${fields.propertyId} = ${propertyId}`, opCondition);
 
-const builtinColumn = (field: "status" | "priority") =>
-  field === "status" ? entities.status : entities.priority;
+const BUILTIN_COLUMNS = {
+  status: entities.status,
+  priority: entities.priority,
+  // Task reads normalize older rows with no agenda kind to a regular task.
+  agendaKind: sql`CASE WHEN ${entities.kind} = 'task' THEN COALESCE(${entities.agendaKind}, 'task') ELSE ${entities.agendaKind} END`,
+} satisfies Record<BuiltinField, SQLWrapper>;
+
+const builtinColumn = (field: BuiltinField) => BUILTIN_COLUMNS[field];
 
 const KIND_DOCUMENT = "document" as const;
 const KIND_FOLDER = "folder" as const;
@@ -482,7 +493,7 @@ const literalString = (operand: Operand): string | null =>
   operand.type === "literal" ? String(operand.value) : null;
 
 const compileBuiltinCompare = (
-  field: "status" | "priority",
+  field: BuiltinField,
   op: CompareNode["op"],
   value: string,
 ): SQL | null => {
@@ -612,7 +623,7 @@ const compilePropertyPredicate = (
 };
 
 const compileBuiltinPredicate = (
-  field: "status" | "priority",
+  field: BuiltinField,
   node: PredicateNode,
 ): SQL | null => {
   const col = builtinColumn(field);
@@ -793,8 +804,8 @@ const FINDABLE_FIELD_TYPES_PREDICATE_SQL: SQL = (() => {
 
 type BuildFindConditionsOptions = {
   find: EntityFind | undefined;
-  /** The workspace the reader is already scoped to; bounds the cell scan. */
-  workspaceId: string;
+  /** Bounds the candidate cell scan without correlating it to each entity. */
+  scope: EntityQueryScope;
 };
 
 /**
@@ -828,7 +839,7 @@ type BuildFindConditionsOptions = {
  */
 export const buildFindConditions = ({
   find,
-  workspaceId,
+  scope,
 }: BuildFindConditionsOptions): SQL[] => {
   if (!find) {
     return [];
@@ -850,7 +861,7 @@ export const buildFindConditions = ({
       ? null
       : sql`${entities.currentVersionId} IN (
           SELECT ${fields.entityVersionId} FROM ${fields}
-          WHERE ${fields.workspaceId} = ${workspaceId}
+          WHERE ${entityQueryScopeCondition(scope, fields.workspaceId)}
             AND ${fields.propertyId} = ANY(${typedPgArray(propertyIds, "uuid")})
             AND ${FINDABLE_FIELD_TYPES_PREDICATE_SQL}
             AND field_find_text(${fields.content}) ILIKE ${pattern}

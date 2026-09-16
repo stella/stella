@@ -107,6 +107,7 @@ type UseKanbanEntityDropTargetParams<TElement extends HTMLElement> = {
   elementRef: RefObject<TElement | null>;
   enabled?: boolean;
   name: string;
+  canDrop?: ((entityId: string, sourceSubgroupValue: string | null | undefined) => boolean) | undefined;
   onDrop: (
     entityId: string,
     sourceSubgroupValue: string | null | undefined,
@@ -118,10 +119,12 @@ export const useKanbanEntityDropTarget = <TElement extends HTMLElement>({
   elementRef,
   enabled = true,
   name,
+  canDrop,
   onDrop,
 }: UseKanbanEntityDropTargetParams<TElement>): boolean => {
   const [isDragOver, setIsDragOver] = useState(false);
   const handleDrop = useLatestCallback(onDrop);
+  const acceptsDrop = useLatestCallback((entityId: string, lane: string | null | undefined) => canDrop?.(entityId, lane) ?? true);
 
   useExternalSyncEffect(() => {
     const element = elementRef.current;
@@ -132,7 +135,10 @@ export const useKanbanEntityDropTarget = <TElement extends HTMLElement>({
     return attachElementDropTarget({
       element,
       name,
-      canDrop: ({ source }) => source.data["type"] === ENTITY_DRAG_TYPE,
+      canDrop: ({ source }) => {
+        const entityId = source.data["entityId"];
+        return source.data["type"] === ENTITY_DRAG_TYPE && typeof entityId === "string" && acceptsDrop(entityId, readSourceSubgroupValue(source.data));
+      },
       getData: () => withDropAnnouncementData({}, { type: "container", name }),
       onDragEnter: () => setIsDragOver(true),
       onDragLeave: () => setIsDragOver(false),
@@ -144,7 +150,7 @@ export const useKanbanEntityDropTarget = <TElement extends HTMLElement>({
         }
       },
     });
-  }, [elementRef, enabled, handleDrop, name]);
+  }, [acceptsDrop, elementRef, enabled, handleDrop, name]);
 
   return isDragOver;
 };

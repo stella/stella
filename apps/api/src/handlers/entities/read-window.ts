@@ -19,7 +19,7 @@ import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
 import { tViewSortSchema } from "@/api/lib/views-schema";
 
-const readEntitiesWindowBodySchema = t.Object({
+export const readEntitiesWindowBodySchema = t.Object({
   filters: t.Optional(
     t.Array(tConditionNode, { maxItems: LIMITS.viewFiltersCount }),
   ),
@@ -87,7 +87,7 @@ const readEntitiesWindow = createSafeHandler(
     const result = yield* Result.await(
       queryEntities({
         safeDb,
-        workspaceId,
+        scope: { type: "matter", workspaceId },
         currentUserId: currentUser.id,
         currentOrganizationId: session.activeOrganizationId,
         filters: arrayOrEmpty(body.filters),

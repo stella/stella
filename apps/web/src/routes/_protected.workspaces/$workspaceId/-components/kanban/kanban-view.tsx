@@ -36,6 +36,7 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import type { OptionColor } from "@/lib/api-contract";
 import { detached } from "@/lib/detached";
+import { unwrapEden } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import {
   ATTACHED_TEMPLATE_UPLOAD_PREFLIGHT,
@@ -57,7 +58,7 @@ import {
   useUpsertField,
 } from "@/lib/workspaces/mutations/entities";
 import { useUpdateProperty } from "@/lib/workspaces/mutations/properties";
-import { useMoveTaskAssignee } from "@/lib/workspaces/mutations/tasks";
+import { invalidateTaskQueries, useMoveTaskAssignee } from "@/lib/workspaces/mutations/tasks";
 import {
   uploadFileEntitiesBatched,
   useBatchUploadLabels,
@@ -419,23 +420,18 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
           taskId: toSafeId<"entity">(taskId),
           status,
         });
-      if (response.error) {
-        stellaToast.add({
-          title: t("errors.actionFailed"),
-          type: "error",
-        });
-      }
+      unwrapEden(response);
       return { taskId };
     },
+    onError: (error) => {
+      analytics.captureError(error);
+      stellaToast.add({
+        title: t("errors.actionFailed"),
+        type: "error",
+      });
+    },
     onSuccess: async ({ taskId }) => {
-      await Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: entitiesKeys.all(workspaceId),
-        }),
-        queryClient.invalidateQueries({
-          queryKey: taskKeys.detail(workspaceId, taskId),
-        }),
-      ]);
+      await invalidateTaskQueries({ queryClient, workspaceId, taskId });
     },
   });
 

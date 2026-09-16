@@ -24,6 +24,7 @@ import {
   STATUS_ICONS,
   TASK_PRIORITIES,
   TASK_STATUSES,
+  WORK_TYPES,
 } from "@/components/workspaces/tasks/task-detail-constants";
 import { useLocale } from "@/i18n/formatting-context";
 import {
@@ -36,11 +37,8 @@ import type {
   ListItemType,
   TaskPriority,
   TaskStatus,
+  WorkType,
 } from "./task-detail-constants";
-
-const WORK_TYPES = ["task", "deadline"] as const;
-
-export type WorkType = (typeof WORK_TYPES)[number];
 
 // -- Layout helper --
 

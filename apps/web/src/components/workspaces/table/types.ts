@@ -9,6 +9,7 @@ import type {
   Row,
 } from "@tanstack/react-table";
 
+import type { EntityViewRow } from "@/components/entity-views/types";
 import type { WorkspaceTableFeatures } from "@/components/workspaces/table/table-features";
 import type { Decision } from "@/features/case-law/components/decision-cells";
 import type { WorkspaceEntity } from "@/lib/types";
@@ -34,7 +35,7 @@ export type DecisionRowData = {
  * aliases below default to the entity row, so entity code reads unchanged —
  * and supplies the behaviours that kind has through a `TableRowHost`.
  */
-export type TableRowData = TableTreeNode | DecisionRowData;
+export type TableRowData = TableTreeNode | DecisionRowData | EntityViewRow;
 
 // Keep the feature-set generic centralized so table consumers cannot drift from
 // the capabilities registered in `table-features.ts`.

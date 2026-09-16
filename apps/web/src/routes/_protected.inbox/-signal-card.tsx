@@ -9,6 +9,7 @@ import { SIGNAL_STATUS, SUGGESTION_KIND } from "@stll/api-contract/signals";
 import type { SignalSuggestion } from "@stll/api-contract/signals";
 import { UserText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { KanbanCardShell } from "@stll/ui/kanban";
 import {
   Menu,
   MenuGroup,
@@ -23,6 +24,7 @@ import {
   PopoverPopup,
   PopoverTrigger,
 } from "@stll/ui/popover";
+import { ReviewDecisionActions } from "@stll/ui/review-decision-actions";
 import { Textarea } from "@stll/ui/textarea";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
@@ -66,9 +68,16 @@ import {
 type SignalCardProps = {
   signal: InboxSignal;
   organizationId: string;
+  presentation?: "card" | "actions";
+  onChanged?: () => Promise<void>;
 };
 
-export const SignalCard = ({ signal, organizationId }: SignalCardProps) => {
+export const SignalCard = ({
+  signal,
+  organizationId,
+  presentation = "card",
+  onChanged,
+}: SignalCardProps) => {
   const t = useTranslations();
   const format = useFormatter();
   const analytics = useAnalytics();
@@ -106,6 +115,7 @@ export const SignalCard = ({ signal, organizationId }: SignalCardProps) => {
         ? [queryClient.invalidateQueries({ queryKey: myWorkKeys.all })]
         : []),
     ]);
+    await onChanged?.();
     setBusy(false);
     return true;
   };
@@ -165,16 +175,130 @@ export const SignalCard = ({ signal, organizationId }: SignalCardProps) => {
     );
 
   const scoutKey = scoutLabelKey(signal.scoutKey);
+  const taskSuggestion = signal.suggestions.find(
+    (suggestion) =>
+      suggestion.kind === SUGGESTION_KIND.CREATE_TASK ||
+      suggestion.kind === SUGGESTION_KIND.CREATE_DEADLINE,
+  );
+
+  const actions = isOpen && (canResolve || canChat) && (
+    <div className="flex flex-wrap items-center gap-1.5">
+      {canResolve && taskSuggestion && (
+        <ReviewDecisionActions
+          state={busy ? "applying" : "pending"}
+          acceptLabel={t("common.accept")}
+          rejectLabel={t("docxReview.reject")}
+          acceptTooltip={t(SUGGESTION_LABEL_KEY[taskSuggestion.kind])}
+          onAccept={() => {
+            detached(accept(taskSuggestion.kind), "inbox.accept-proposal");
+          }}
+          onReject={() => {
+            detached(dismiss(null), "inbox.refuse-proposal");
+          }}
+        />
+      )}
+      {canResolve &&
+        !taskSuggestion &&
+        signal.suggestions.map((suggestion) => (
+          <SuggestionButton
+            disabled={busy}
+            key={suggestion.kind}
+            onAccept={accept}
+            onAssign={assign}
+            onOpenChat={(prompt) => openSignalChat(signal, prompt)}
+            organizationId={organizationId}
+            suggestion={suggestion}
+          />
+        ))}
+      <span className="flex-1" />
+      {canChat && (
+        <Button
+          className="text-muted-foreground"
+          onClick={askAboutThis}
+          size="sm"
+          variant="ghost"
+        >
+          <MessageSquareIcon />
+          {t("inbox.ask")}
+        </Button>
+      )}
+      {canResolve && (
+        <>
+          <Menu>
+            <MenuTrigger
+              render={
+                <Button
+                  aria-label={t("inbox.snooze")}
+                  className="text-muted-foreground"
+                  disabled={busy}
+                  size="sm"
+                  variant="ghost"
+                />
+              }
+            >
+              <AlarmClockIcon />
+            </MenuTrigger>
+            <MenuPopup>
+              <MenuGroup>
+                <MenuGroupLabel>{t("inbox.snooze")}</MenuGroupLabel>
+                <MenuItem
+                  onClick={() => {
+                    detached(
+                      run(
+                        async () =>
+                          await snoozeSignal({
+                            ...mutationArgs,
+                            until: snoozeUntil("tomorrow"),
+                          }),
+                        null,
+                      ),
+                      "inbox.snooze",
+                    );
+                  }}
+                >
+                  {t("inbox.snoozeTomorrow")}
+                </MenuItem>
+                <MenuItem
+                  onClick={() => {
+                    detached(
+                      run(
+                        async () =>
+                          await snoozeSignal({
+                            ...mutationArgs,
+                            until: snoozeUntil("next-week"),
+                          }),
+                        null,
+                      ),
+                      "inbox.snooze",
+                    );
+                  }}
+                >
+                  {t("inbox.snoozeNextWeek")}
+                </MenuItem>
+              </MenuGroup>
+            </MenuPopup>
+          </Menu>
+          {!taskSuggestion && (
+            <DismissPopover disabled={busy} onDismiss={dismiss} />
+          )}
+        </>
+      )}
+    </div>
+  );
+
+  if (presentation === "actions") {
+    return actions;
+  }
 
   return (
-    <article
+    <KanbanCardShell
+      appearance={isOpen && taskSuggestion ? "proposal" : "standard"}
       className={cn(
-        "group/card bg-card text-card-foreground flex flex-col gap-2 rounded-lg p-3 shadow-xs",
-        "hover:shadow-sm motion-safe:transition-shadow motion-safe:duration-150",
+        "text-card-foreground flex min-w-0 flex-col gap-3",
         busy && "opacity-60",
       )}
     >
-      <div className="flex items-start gap-3">
+      <div className="flex items-start gap-2">
         <span
           aria-label={t(SEVERITY_LABEL_KEY[signal.severity])}
           className={cn(
@@ -185,7 +309,7 @@ export const SignalCard = ({ signal, organizationId }: SignalCardProps) => {
         />
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           <button
-            className="text-start text-sm font-medium text-balance hover:underline"
+            className="text-start text-sm leading-5 font-medium text-balance wrap-anywhere hover:underline"
             onClick={openEvidence}
             type="button"
           >
@@ -193,13 +317,12 @@ export const SignalCard = ({ signal, organizationId }: SignalCardProps) => {
           </button>
           <UserText
             as="p"
-            className="text-muted-foreground line-clamp-2 text-sm text-pretty"
+            className="text-muted-foreground line-clamp-3 text-xs leading-5 text-pretty wrap-anywhere"
           >
             {signal.summary}
           </UserText>
           <div className="text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
             <OriginChip
-              confidence={signal.confidence}
               createdByUserId={signal.createdByUserId}
               label={t(ORIGIN_LABEL_KEY[signal.origin])}
               organizationId={organizationId}
@@ -251,94 +374,8 @@ export const SignalCard = ({ signal, organizationId }: SignalCardProps) => {
         </div>
       </div>
 
-      {isOpen && (canResolve || canChat) && (
-        <div className="flex flex-wrap items-center gap-1.5 ps-5">
-          {canResolve &&
-            signal.suggestions.map((suggestion) => (
-              <SuggestionButton
-                disabled={busy}
-                key={suggestion.kind}
-                onAccept={accept}
-                onAssign={assign}
-                onOpenChat={(prompt) => openSignalChat(signal, prompt)}
-                organizationId={organizationId}
-                suggestion={suggestion}
-              />
-            ))}
-          <span className="flex-1" />
-          {canChat && (
-            <Button
-              className="text-muted-foreground"
-              onClick={askAboutThis}
-              size="sm"
-              variant="ghost"
-            >
-              <MessageSquareIcon />
-              {t("inbox.ask")}
-            </Button>
-          )}
-          {canResolve && (
-            <>
-              <Menu>
-                <MenuTrigger
-                  render={
-                    <Button
-                      aria-label={t("inbox.snooze")}
-                      className="text-muted-foreground"
-                      disabled={busy}
-                      size="sm"
-                      variant="ghost"
-                    />
-                  }
-                >
-                  <AlarmClockIcon />
-                </MenuTrigger>
-                <MenuPopup>
-                  <MenuGroup>
-                    <MenuGroupLabel>{t("inbox.snooze")}</MenuGroupLabel>
-                    <MenuItem
-                      onClick={() => {
-                        detached(
-                          run(
-                            async () =>
-                              await snoozeSignal({
-                                ...mutationArgs,
-                                until: snoozeUntil("tomorrow"),
-                              }),
-                            null,
-                          ),
-                          "inbox.snooze",
-                        );
-                      }}
-                    >
-                      {t("inbox.snoozeTomorrow")}
-                    </MenuItem>
-                    <MenuItem
-                      onClick={() => {
-                        detached(
-                          run(
-                            async () =>
-                              await snoozeSignal({
-                                ...mutationArgs,
-                                until: snoozeUntil("next-week"),
-                              }),
-                            null,
-                          ),
-                          "inbox.snooze",
-                        );
-                      }}
-                    >
-                      {t("inbox.snoozeNextWeek")}
-                    </MenuItem>
-                  </MenuGroup>
-                </MenuPopup>
-              </Menu>
-              <DismissPopover disabled={busy} onDismiss={dismiss} />
-            </>
-          )}
-        </div>
-      )}
-    </article>
+      {actions}
+    </KanbanCardShell>
   );
 };
 
@@ -346,7 +383,6 @@ type OriginChipProps = {
   origin: InboxSignal["origin"];
   label: string;
   scoutLabel: string | null;
-  confidence: number | null;
   createdByUserId: string | null;
   organizationId: string;
 };
@@ -355,12 +391,9 @@ const OriginChip = ({
   origin,
   label,
   scoutLabel,
-  confidence,
   createdByUserId,
   organizationId,
 }: OriginChipProps) => {
-  const t = useTranslations();
-  const format = useFormatter();
   const { data: organization } = useQuery({
     ...organizationOptions(organizationId),
     enabled: origin === "manual" && createdByUserId !== null,
@@ -381,14 +414,6 @@ const OriginChip = ({
       )}
       {origin === "source" && scoutLabel !== null && (
         <span>· {scoutLabel}</span>
-      )}
-      {origin === "model" && confidence !== null && (
-        <span className="tabular-nums">
-          ·{" "}
-          {t("inbox.confidence", {
-            percent: format.number(confidence, { style: "percent" }),
-          })}
-        </span>
       )}
     </span>
   );

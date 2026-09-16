@@ -1,4 +1,5 @@
 import { useRef } from "react";
+import type { ReactNode } from "react";
 
 import { CalendarIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -55,6 +56,7 @@ import { RowActions } from "@/routes/_protected.workspaces/$workspaceId/-compone
 import { useInspectorFlash } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-inspector-flash";
 
 type KanbanCardProps = {
+  context?: ReactNode;
   entity: WorkspaceEntity;
   workspaceId: string;
   draggable?: boolean | undefined;
@@ -71,6 +73,7 @@ type KanbanCardProps = {
 };
 
 export const KanbanCard = ({
+  context,
   entity,
   workspaceId,
   draggable = true,
@@ -211,6 +214,7 @@ export const KanbanCard = ({
           />
         )}
       </span>
+      {context}
       {isTask && <TaskBadges entity={entity} />}
       {showMetadataBadges && (
         <KanbanEntityMetadataBadges

@@ -46,6 +46,7 @@ import {
   SelectValue,
 } from "@stll/ui/select";
 import { stellaToast } from "@stll/ui/toast";
+import { ViewToolbarChrome } from "@stll/ui/view-toolbar";
 
 import { CsvIcon, DocxIcon, XlsxIcon } from "@/components/document-icon";
 import { FolderExpandToggle } from "@/components/file-tree/folder-expand-toggle";
@@ -142,7 +143,7 @@ export const ViewToolbar = ({
   const columnToggleGroups = useMatterColumnToggleGroups(properties);
 
   return (
-    <div className="flex min-w-0 shrink-0 [scrollbar-width:none] flex-nowrap items-center gap-1 overflow-x-auto px-2 py-1 [-ms-overflow-style:none] md:ms-auto md:flex-wrap md:justify-end md:overflow-visible [&::-webkit-scrollbar]:hidden">
+    <ViewToolbarChrome className="md:ms-auto md:justify-end">
       <ExtractionRunProgress workspaceId={workspaceId} />
 
       {view.layout.type === "filesystem" && folderState.hasFolders && (
@@ -292,7 +293,7 @@ export const ViewToolbar = ({
           workspaceId={workspaceId}
         />
       )}
-    </div>
+    </ViewToolbarChrome>
   );
 };
 
@@ -912,7 +913,10 @@ const FilesystemOrganizerAction = ({
 
 const GROUP_BY_NONE_VALUE = "_none";
 
+export type AdditionalViewGroup = { id: string; label: string };
+
 type GroupByControlProps = {
+  additionalGroups?: readonly AdditionalViewGroup[] | undefined;
   properties: WorkspaceProperty[];
   groupByPropertyId: string | undefined;
   onChange: (propertyId: string) => void;
@@ -934,7 +938,8 @@ type GroupByControlProps = {
   showLabel?: boolean | undefined;
 };
 
-const GroupByControl = ({
+export const GroupByControl = ({
+  additionalGroups = [],
   properties,
   groupByPropertyId,
   onChange,
@@ -995,6 +1000,7 @@ const GroupByControl = ({
       return t("common.assignee");
     }
     return (
+      additionalGroups.find((group) => group.id === resolvedId)?.label ??
       eligible.find((p) => p.id === resolvedId)?.name ??
       t("workspaces.views.selectProperty")
     );
@@ -1062,6 +1068,9 @@ const GroupByControl = ({
                 {t("common.assignee")}
               </SelectItem>
             )}
+          {additionalGroups.filter((group) => group.id !== excludedPropertyId).map((group) => (
+            <SelectItem key={group.id} value={group.id}>{group.label}</SelectItem>
+          ))}
           {basicProps.map((prop) => (
             <SelectItem key={prop.id} value={prop.id}>
               {prop.name}
@@ -1084,6 +1093,7 @@ const GroupByControl = ({
 };
 
 type KanbanGroupingSettingsProps = {
+  additionalSubgroups?: readonly AdditionalViewGroup[] | undefined;
   groupByPropertyId: string | undefined;
   subgroupByPropertyId: string | undefined;
   onChange: (
@@ -1098,7 +1108,8 @@ type KanbanGroupingSettingsProps = {
   allowAssigneeGrouping: boolean;
 };
 
-const KanbanGroupingSettings = ({
+export const KanbanGroupingSettings = ({
+  additionalSubgroups,
   groupByPropertyId,
   subgroupByPropertyId,
   onChange,
@@ -1157,6 +1168,7 @@ const KanbanGroupingSettings = ({
               {t("workspaces.views.subgroup")}
             </span>
             <GroupByControl
+              additionalGroups={additionalSubgroups}
               allowNone
               allowCreatedByGrouping
               allowAssigneeGrouping={allowAssigneeGrouping}

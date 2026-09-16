@@ -2549,7 +2549,7 @@
     },
     "filter": {
       "any": "Kõik",
-      "mine": "Minu"
+      "mine": "Mulle määratud"
     },
     "newRequest": "Uus taotlus",
     "openMatter": "Ava toimik",
@@ -4305,9 +4305,10 @@
       "assignee": "Täitja",
       "reviewer": "Ülevaataja"
     },
-    "assignees": "Määratud",
+    "assignees": "Kaasosalised",
     "clearDate": "Tühjenda kuupäev",
     "completeWork": "Lõpeta töö",
+    "deadlines": "Tähtajad",
     "delegationReason": "Muudatuse põhjus",
     "deletedAccount": "Kustutatud konto",
     "dueDate": "Tähtaeg",
@@ -4319,16 +4320,16 @@
     "myWorkTitle": "Minu töö",
     "newTask": "Uus ülesanne",
     "noActivity": "Tegevusi veel pole",
-    "noAssignees": "Kedagi pole määratud",
+    "noAssignees": "Kaasosalisi pole",
     "noLinks": "Seotud kirjed puuduvad",
-    "noOwner": "Vastutaja puudub",
+    "noOwner": "Määramata",
     "noSubtasks": "Alamülesanded puuduvad",
     "noTasksAssigned": "Sulle pole ülesandeid määratud",
     "noWorkInQueue": "Selles järjekorras pole tööd",
     "notFound": "Ülesannet ei leitud",
     "openWorkflowRun": "Ava töövoo käivitus",
     "overdue": "Tähtaeg ületatud",
-    "owner": "Vastutaja",
+    "owner": "Tegeleb",
     "priority": "Prioriteet",
     "priorityValues": {
       "high": "Kõrge",

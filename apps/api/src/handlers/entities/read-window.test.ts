@@ -21,6 +21,8 @@ const idRows = [
 ];
 const entityRows = idRows.map(({ id }, index) => ({
   id,
+  workspaceId,
+  workspaceName: "Test matter",
   kind: "document" as const,
   name: `Document ${index + 1}`,
   parentId: null,

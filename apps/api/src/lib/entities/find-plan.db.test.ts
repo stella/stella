@@ -126,7 +126,7 @@ const explainFind = async (term: string): Promise<string> =>
       isNotNull(entities.currentVersionId),
       ...buildFindConditions({
         find: { scope: { propertyIds: [propertyId], type: "columns" }, term },
-        workspaceId: ids.wsA1,
+        scope: { type: "matter", workspaceId: ids.wsA1 },
       }),
     );
     const explained = await tx.execute(
@@ -160,7 +160,7 @@ test("the rows the index proposes are the rows the recheck keeps", async () => {
             scope: { propertyIds: [propertyId], type: "columns" },
             term: "needle",
           },
-          workspaceId: ids.wsA1,
+          scope: { type: "matter", workspaceId: ids.wsA1 },
         }),
       ),
     );

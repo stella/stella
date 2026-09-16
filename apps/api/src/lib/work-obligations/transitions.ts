@@ -17,7 +17,7 @@ import type { TaskStatus } from "@/api/lib/entity-constants";
  * legacy task-status write (task API or `save_task`) that implies one. Both
  * read this table, so the allowed source statuses, the target status, the
  * lifecycle event, the mirrored legacy task status and the audit action cannot
- * drift apart. Permissions, reason requirements, locking and event emission
+ * drift apart. Permissions, optional reason handling, locking and event emission
  * stay with each caller: this module owns the transition data and the pure
  * resolution only.
  *

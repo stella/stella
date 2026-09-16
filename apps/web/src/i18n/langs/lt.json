@@ -2549,7 +2549,7 @@
     },
     "filter": {
       "any": "Bet kuris",
-      "mine": "Mano"
+      "mine": "Priskirta man"
     },
     "newRequest": "Nauja užklausa",
     "openMatter": "Atidaryti bylą",
@@ -4305,9 +4305,10 @@
       "assignee": "Vykdytojas",
       "reviewer": "Peržiūrėtojas"
     },
-    "assignees": "Priskirti",
+    "assignees": "Bendradarbiai",
     "clearDate": "Išvalyti datą",
     "completeWork": "Užbaigti darbą",
+    "deadlines": "Terminai",
     "delegationReason": "Pakeitimo priežastis",
     "deletedAccount": "Ištrinta paskyra",
     "dueDate": "Terminas",
@@ -4319,16 +4320,16 @@
     "myWorkTitle": "Mano darbai",
     "newTask": "Nauja užduotis",
     "noActivity": "Veiklos dar nėra",
-    "noAssignees": "Nėra priskirtų",
+    "noAssignees": "Nėra bendradarbių",
     "noLinks": "Nėra susietų įrašų",
-    "noOwner": "Nėra atsakingo asmens",
+    "noOwner": "Nepriskirta",
     "noSubtasks": "Nėra použduočių",
     "noTasksAssigned": "Jums nėra priskirtų užduočių",
     "noWorkInQueue": "Šioje eilėje darbų nėra",
     "notFound": "Užduotis nerasta",
     "openWorkflowRun": "Atidaryti darbo eigos vykdymą",
     "overdue": "Vėluojama",
-    "owner": "Atsakingas asmuo",
+    "owner": "Vykdo",
     "priority": "Prioritetas",
     "priorityValues": {
       "high": "Aukštas",

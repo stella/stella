@@ -75,6 +75,7 @@ import {
   workspaceViewTemplates,
   workspaceViews,
 } from "./files-views";
+import { entityViews } from "./entity-views";
 import { flowDefinitions, flowRunSteps, flowRuns } from "./flows";
 import {
   legalListColumns,
@@ -130,6 +131,7 @@ export const relations = defineRelations(
     agentSkills,
     agentSkillResources,
     savedSearches,
+    entityViews,
     styleSets,
     user,
     contacts,
@@ -1439,6 +1441,9 @@ export const relations = defineRelations(
         from: r.savedSearches.userId,
         to: r.user.id,
       }),
+    },
+    entityViews: {
+      user: r.one.user({ from: r.entityViews.userId, to: r.user.id }),
     },
   }),
 );

@@ -39,7 +39,7 @@ export const NULLARY_PREDICATE_OPS = [
   "is_truthy",
 ] as const;
 
-export const BUILTIN_FIELDS = ["status", "priority"] as const;
+export const BUILTIN_FIELDS = ["status", "priority", "agendaKind"] as const;
 export type BuiltinField = (typeof BUILTIN_FIELDS)[number];
 
 export const COMBINATORS = ["and", "or"] as const;
