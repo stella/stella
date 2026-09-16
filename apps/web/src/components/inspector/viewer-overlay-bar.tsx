@@ -16,3 +16,11 @@ export const ViewerOverlayBar = ({ children }: PropsWithChildren) => (
     {children}
   </div>
 );
+
+/**
+ * Inline-end space the first row of a document must leave free so the bar
+ * cannot paint over it: the corner the bar takes, measured from the document
+ * column's own inline padding. Sized for the zoom triad the readers float,
+ * the widest bar that shares its corner with content.
+ */
+export const VIEWER_OVERLAY_BAR_CLEARANCE = "pe-24";
