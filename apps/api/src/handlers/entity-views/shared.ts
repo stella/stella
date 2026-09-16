@@ -13,6 +13,10 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import type {
+  UnprojectedColumns,
+  UnbackedProjectionKeys,
+} from "@/api/lib/projection-totality";
 import { parseViewLayout, tViewLayoutSchema } from "@/api/lib/views-schema";
 import {
   hasDuplicateSorts,
@@ -43,6 +47,29 @@ export const response = (row: typeof entityViews.$inferSelect) => ({
   position: row.position,
   createdAt: row.createdAt.toISOString(),
 });
+
+type EntityViewRow = typeof entityViews.$inferSelect;
+const UNPROJECTED_ENTITY_VIEW_COLUMNS = [
+  // The active organization and authenticated owner are supplied by the session.
+  "organizationId",
+  "userId",
+  // The shared view model does not expose the internal mutation timestamp.
+  "updatedAt",
+] as const satisfies readonly (keyof EntityViewRow)[];
+// Version describes the response format, not a persisted row column.
+type EntityViewProjection = Omit<ReturnType<typeof response>, "version">;
+type MissingEntityViewColumn = UnprojectedColumns<
+  EntityViewRow,
+  EntityViewProjection,
+  (typeof UNPROJECTED_ENTITY_VIEW_COLUMNS)[number]
+>;
+type UnexpectedEntityViewColumn = UnbackedProjectionKeys<
+  EntityViewRow,
+  EntityViewProjection,
+  (typeof UNPROJECTED_ENTITY_VIEW_COLUMNS)[number]
+>;
+true satisfies MissingEntityViewColumn extends never ? true : never;
+true satisfies UnexpectedEntityViewColumn extends never ? true : never;
 
 export const viewOwner = ({
   organizationId,
