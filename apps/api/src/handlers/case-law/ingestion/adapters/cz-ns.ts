@@ -10,12 +10,14 @@ import {
 } from "@/api/handlers/case-law/consts";
 import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import {
+  decodeSourceRawEnvelope,
   defineSourceAdapter,
   excludedSourceField,
   EMPTY_AST,
   encodeSourceRawEnvelope,
   isPersistableSourceDocumentId,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  STORED_RAW_REPARSE_REJECTION,
   SOURCE_TOTAL_PROBE_FAILURE,
   sourceTotalProbeFailed,
   sourceTotalRead,
@@ -28,6 +30,8 @@ import type {
   ReconciliationSlicePage,
   ReconciliationSlicePageOptions,
   SourceFieldDisposition,
+  StoredRawReparseInput,
+  StoredRawReparseOutcome,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/adapters/calendar-day-slice-walk";
 import {
@@ -558,6 +562,140 @@ type CzNsBuildResult =
   | { type: "unkeyable" }
   | { type: "detail-unavailable"; httpStatus: number };
 
+type BuildCzNsDecisionFromPagesOptions = {
+  row: CzNsListingRow;
+  webHtml: string;
+  printHtml: string;
+};
+
+const buildCzNsDecisionFromPages = ({
+  row,
+  webHtml,
+  printHtml,
+}: BuildCzNsDecisionFromPagesOptions): IngestionResult | null => {
+  const fields = czNsIdentityFields(row);
+  if (fields === null) {
+    return null;
+  }
+  const { unid } = fields;
+  const caseNumbers = caseNumbersOf(row);
+  const [caseNumber, ...additionalCaseNumbers] = caseNumbers;
+  if (caseNumber === undefined) {
+    return null;
+  }
+  const publisherIdentifiers = additionalCaseNumbers.map((value) => ({
+    type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+    value,
+  }));
+  const [firstPublisherIdentifier, ...otherPublisherIdentifiers] =
+    publisherIdentifiers;
+  const webUrl = `${BASE_URL}/WebSearch/${unid}?openDocument`;
+  const printUrl = `${BASE_URL}/WebPrint/${unid}?openDocument`;
+  const meta = parseDetailPage(webHtml);
+  const summary =
+    meta["legalSentence"] === undefined && meta["abstract"] === undefined
+      ? ""
+      : `|${meta["legalSentence"] ?? ""}|${meta["abstract"] ?? ""}`;
+  const publishedOnWeb =
+    meta["publishedOnWeb"] === undefined
+      ? undefined
+      : parseCeDate(meta["publishedOnWeb"]);
+  // The refresh gate compares only this hash before deciding whether to
+  // project identifiers and metadata again. Keep the complete ordered docket
+  // set in it, so an alias-only publisher edit cannot be mistaken for the
+  // same observation.
+  const raw = `${JSON.stringify(caseNumbers)}|${meta["ecli"] ?? ""}|${meta["court"] ?? ""}|${meta["decisionDate"] ?? ""}|${publishedOnWeb ?? ""}${summary}`;
+
+  let documentAst: DocumentAst | EmptyAst = EMPTY_AST;
+  let fulltext = meta["fulltext"];
+  let sourceMetadata: Record<string, unknown> = {};
+
+  if (printHtml) {
+    const parsed = parseNsDecisionHtml({
+      documentId: unid,
+      webUrl,
+      printUrl,
+      webHtml,
+      printHtml,
+    });
+    documentAst = parsed.documentAst;
+    fulltext = parsed.fulltext;
+    sourceMetadata = parsed.sourceMetadata;
+  }
+
+  const judge = fulltext ? extractJudge(fulltext) : undefined;
+  const court = czDecisionCourt({
+    adapterKey: ADAPTER_KEYS.CZ_NS,
+    ecli: meta["ecli"],
+    publisherCourt: CZ_NS_PUBLISHER_COURT,
+    sourceDocumentId: unid,
+    statedCourt: meta["court"],
+  });
+  const publishedSummary = summaryOfLabels(meta);
+
+  return {
+    caseNumber,
+    ...(firstPublisherIdentifier === undefined
+      ? {}
+      : {
+          identifiers: [firstPublisherIdentifier, ...otherPublisherIdentifiers],
+        }),
+    sourceDocumentId: unid,
+    legacySourceUrls: [webUrl],
+    ecli: meta["ecli"],
+    court,
+    country: ADAPTER_MANIFESTS[ADAPTER_KEYS.CZ_NS].country,
+    language: CZ_NS_LANGUAGE,
+    decisionDate: meta["decisionDate"]
+      ? parseCeDate(meta["decisionDate"])
+      : undefined,
+    decisionType: meta["decisionType"]?.toLowerCase(),
+    fulltext,
+    sourceUrl: webUrl,
+    documentUrl: webUrl,
+    textFields: {
+      ...absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+      abstract: sourceTextField(ADAPTER_KEYS.CZ_NS, publishedSummary.abstract),
+      legalSentence: sourceTextField(
+        ADAPTER_KEYS.CZ_NS,
+        publishedSummary.legalSentence,
+      ),
+    },
+    metadata: checkedDecisionMetadata({
+      caseNumber,
+      ecli: meta["ecli"],
+      court,
+      decisionDate: meta["decisionDate"]
+        ? parseCeDate(meta["decisionDate"])
+        : undefined,
+      decisionType: meta["decisionType"]?.toLowerCase(),
+      ...sourceMetadata,
+      judge,
+      category: publishedSummary.category,
+      zverejnenoNaWebu:
+        publishedOnWeb ?? isoDate(sourceMetadata["zverejnenoNaWebu"]),
+      keywords: meta["keywords"]?.split("\n").flatMap((s) => {
+        const trimmed = s.trim();
+        return trimmed ? [trimmed] : [];
+      }),
+      statutes: meta["statutes"]?.split("\n").flatMap((s) => {
+        const trimmed = s.trim();
+        return trimmed ? [trimmed] : [];
+      }),
+      additionalCaseNumbers:
+        additionalCaseNumbers.length > 0 ? additionalCaseNumbers : undefined,
+    }),
+    rawHash: hashContent(raw),
+    parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.CZ_NS],
+    documentAst,
+    sourceRaw: encodeSourceRawEnvelope({
+      [CZ_NS_RAW_PART.DETAIL]: webHtml,
+      [CZ_NS_RAW_PART.PRINT]: printHtml,
+    }),
+    sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  };
+};
+
 /**
  * Build one decision from a listed row, through this adapter's own fetch and
  * parse path.
@@ -582,16 +720,6 @@ export const buildCzNsDecision = async (
     return { type: "unkeyable" };
   }
   const { unid } = fields;
-  const [caseNumber, ...additionalCaseNumbers] = caseNumbersOf(row);
-  if (caseNumber === undefined) {
-    return { type: "unkeyable" };
-  }
-  const publisherIdentifiers = additionalCaseNumbers.map((value) => ({
-    type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
-    value,
-  }));
-  const [firstPublisherIdentifier, ...otherPublisherIdentifiers] =
-    publisherIdentifiers;
 
   const webUrl = `${BASE_URL}/WebSearch/${unid}?openDocument`;
   const printUrl = `${BASE_URL}/WebPrint/${unid}?openDocument`;
@@ -617,150 +745,107 @@ export const buildCzNsDecision = async (
 
   const webHtml = await detailResponse.text();
   const printHtml = printResponse.ok ? await printResponse.text() : "";
+  const decision = buildCzNsDecisionFromPages({ row, webHtml, printHtml });
+  return decision === null
+    ? { type: "unkeyable" }
+    : { type: "built", decision };
+};
 
-  const meta = parseDetailPage(webHtml);
-  // The court writes a headnote and an annotation when it selects an already
-  // published decision for its collection, and edits them afterwards. Left out
-  // of the source hash, the refresh check would read such a row as unchanged
-  // and skip the update for good. They are appended only where the court
-  // states one, so a decision that has neither hashes exactly as it did and is
-  // not rewritten for this; both positions are then present, so a headnote
-  // alone and an annotation alone cannot hash alike.
-  const summary =
-    meta["legalSentence"] === undefined && meta["abstract"] === undefined
-      ? ""
-      : `|${meta["legalSentence"] ?? ""}|${meta["abstract"] ?? ""}`;
-  const publishedOnWeb =
-    meta["publishedOnWeb"] === undefined
-      ? undefined
-      : parseCeDate(meta["publishedOnWeb"]);
-  // The publication day and the court are hashed for every decision, not only
-  // where the page states one, and that moves every stored row's hash once. It
-  // is the pass that carries them, and the multi-part raw beside them, onto
-  // rows written before any of it existed: the refresh check skips a row whose
-  // hash stands still, so a field nothing hashes can never reach the corpus
-  // that is already stored. For the court that is the whole point — a row
-  // stored under the publisher's name whose page states another court has an
-  // otherwise unchanged page, and would keep the wrong court for good.
-  const raw = `${caseNumber}|${meta["ecli"] ?? ""}|${meta["court"] ?? ""}|${meta["decisionDate"] ?? ""}|${publishedOnWeb ?? ""}${summary}`;
+const CZ_NS_REPARSABLE_CONTENT_TYPES = new Set([
+  "text/html",
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+]);
 
-  // Parse AST from the print page (rich HTML)
-  let documentAst: DocumentAst | EmptyAst = EMPTY_AST;
-  let fulltext = meta["fulltext"];
-
-  let sourceMetadata: Record<string, unknown> = {};
-
-  if (printHtml) {
-    const parsed = parseNsDecisionHtml({
-      documentId: unid,
-      webUrl,
-      printUrl,
-      webHtml,
-      printHtml,
-    });
-    documentAst = parsed.documentAst;
-    fulltext = parsed.fulltext;
-    sourceMetadata = parsed.sourceMetadata;
+const storedRawParts = (
+  raw: string,
+): { webHtml: string; printHtml: string } | null => {
+  const envelope = decodeSourceRawEnvelope(raw);
+  if (envelope !== null) {
+    const webHtml = envelope[CZ_NS_RAW_PART.DETAIL];
+    const printHtml = envelope[CZ_NS_RAW_PART.PRINT];
+    return typeof webHtml === "string" && typeof printHtml === "string"
+      ? { webHtml, printHtml }
+      : null;
   }
 
-  // Extract judge from fulltext signature block
-  const judge = fulltext ? extractJudge(fulltext) : undefined;
+  const legacy = Result.try((): unknown => JSON.parse(raw)).unwrapOr(null);
+  if (!isRecord(legacy)) {
+    return null;
+  }
+  const webHtml = legacy["webHtml"];
+  const printHtml = legacy["printHtml"];
+  return typeof webHtml === "string" && typeof printHtml === "string"
+    ? { webHtml, printHtml }
+    : null;
+};
 
-  const court = czDecisionCourt({
-    adapterKey: ADAPTER_KEYS.CZ_NS,
-    ecli: meta["ecli"],
-    publisherCourt: CZ_NS_PUBLISHER_COURT,
-    sourceDocumentId: unid,
-    statedCourt: meta["court"],
+const storedAdditionalCaseNumbers = (
+  metadata: Record<string, unknown>,
+): readonly string[] | undefined => {
+  const value = metadata["additionalCaseNumbers"];
+  return Array.isArray(value) &&
+    value.every((item) => typeof item === "string" && item.trim().length > 0)
+    ? value
+    : undefined;
+};
+
+/**
+ * Rebuild a decision from either generation of the saved two-page payload.
+ * Legacy rows carry their complete docket list in the joined `caseNumber`,
+ * while current rows carry aliases in metadata; neither needs a source fetch.
+ */
+const reparseStoredRaw = (
+  stored: StoredRawReparseInput,
+): StoredRawReparseOutcome => {
+  if (
+    stored.contentType !== null &&
+    !CZ_NS_REPARSABLE_CONTENT_TYPES.has(stored.contentType)
+  ) {
+    return {
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.UNSUPPORTED_CONTENT,
+      detail: `stored content type ${stored.contentType}`,
+    };
+  }
+  if (stored.sourceDocumentId === null) {
+    return {
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA,
+      detail: "missing source document id",
+    };
+  }
+
+  const raw = new TextDecoder().decode(stored.raw);
+  const parts = storedRawParts(raw);
+  if (parts === null) {
+    return {
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.NO_DOCUMENT,
+      detail: `no decision pages in the stored payload for ${stored.caseNumber}`,
+    };
+  }
+  const result = buildCzNsDecisionFromPages({
+    row: {
+      unid: stored.sourceDocumentId,
+      caseNumber: stored.caseNumber,
+      additionalCaseNumbers: storedAdditionalCaseNumbers(stored.metadata),
+    },
+    webHtml: parts.webHtml,
+    printHtml: parts.printHtml,
   });
-  const publishedSummary = summaryOfLabels(meta);
-
+  if (result === null) {
+    return {
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.IDENTITY_MISMATCH,
+      detail: `stored identity is invalid for ${stored.caseNumber}`,
+    };
+  }
   return {
-    type: "built",
-    decision: {
-      caseNumber,
-      ...(firstPublisherIdentifier === undefined
-        ? {}
-        : {
-            identifiers: [
-              firstPublisherIdentifier,
-              ...otherPublisherIdentifiers,
-            ],
-          }),
-      sourceDocumentId: unid,
-      // What every row this adapter wrote before it stated an id was stored
-      // under: one row per docket, carrying the document URL of whichever of
-      // the docket's decisions was written last. The URL names one document
-      // exactly, so it re-keys that row to the document it was built from
-      // rather than inserting a second one beside it; the docket's further
-      // decisions find no null-id row and are inserted, which is the collapse
-      // being undone.
-      legacySourceUrls: [webUrl],
-      ecli: meta["ecli"],
-      court,
-      country: ADAPTER_MANIFESTS[ADAPTER_KEYS.CZ_NS].country,
-      language: CZ_NS_LANGUAGE,
-      decisionDate: meta["decisionDate"]
-        ? parseCeDate(meta["decisionDate"])
-        : undefined,
-      decisionType: meta["decisionType"]?.toLowerCase(),
-      fulltext,
-      sourceUrl: webUrl,
-      documentUrl: webUrl,
-      textFields: {
-        ...absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-        abstract: sourceTextField(
-          ADAPTER_KEYS.CZ_NS,
-          publishedSummary.abstract,
-        ),
-        legalSentence: sourceTextField(
-          ADAPTER_KEYS.CZ_NS,
-          publishedSummary.legalSentence,
-        ),
-      },
-      metadata: checkedDecisionMetadata({
-        caseNumber,
-        ecli: meta["ecli"],
-        court,
-        decisionDate: meta["decisionDate"]
-          ? parseCeDate(meta["decisionDate"])
-          : undefined,
-        decisionType: meta["decisionType"]?.toLowerCase(),
-        ...sourceMetadata,
-        judge,
-        category: publishedSummary.category,
-        // Read from the detail page rather than left to the parser: the print
-        // page the parser reads carries the court's other metadata rows but
-        // not this one, so a row built from the print page alone never states
-        // the day the document was published. Whichever page states it, the
-        // key holds one format: the parser keeps the page's own words for a
-        // date its Domino pattern does not match, and two spellings of a date
-        // under one key is a filter nobody can write.
-        zverejnenoNaWebu:
-          publishedOnWeb ?? isoDate(sourceMetadata["zverejnenoNaWebu"]),
-        keywords: meta["keywords"]?.split("\n").flatMap((s) => {
-          const trimmed = s.trim();
-          return trimmed ? [trimmed] : [];
-        }),
-        statutes: meta["statutes"]?.split("\n").flatMap((s) => {
-          const trimmed = s.trim();
-          return trimmed ? [trimmed] : [];
-        }),
-        additionalCaseNumbers:
-          additionalCaseNumbers.length > 0 ? additionalCaseNumbers : undefined,
-      }),
-      rawHash: hashContent(raw),
-      parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.CZ_NS],
-      documentAst,
-      // Both pages fetched for this decision, named by role: the detail page
-      // states the metadata rows, the print page carries the document. Stored
-      // whole so a field read later can be recovered from what was fetched
-      // rather than from a re-crawl.
-      sourceRaw: encodeSourceRawEnvelope({
-        [CZ_NS_RAW_PART.DETAIL]: webHtml,
-        [CZ_NS_RAW_PART.PRINT]: printHtml,
-      }),
-      sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+    type: "parsed",
+    result: {
+      ...result,
+      sourceRaw: raw,
+      sourceRawContentType: stored.contentType ?? undefined,
     },
   };
 };
@@ -1108,6 +1193,7 @@ export const czNsAdapter = defineSourceAdapter({
   },
   language: CZ_NS_LANGUAGE,
   minRequestIntervalMs: 200,
+  reparseStoredRaw,
   // Each page fetches 40 decisions + detail pages. ~40s/page.
   // 15 pages ≈ 10 min (within MAX_CYCLE_MS).
   maxSyncPages: 15,

@@ -840,9 +840,31 @@ describe("cz-ns buildDecision", () => {
     expect(decision.metadata["zverejnenoNaWebu"]).toBe("2026-06-10");
     expect(decision.rawHash).toBe(
       hashContent(
-        `${DOCKET.FIRST}|ECLI:CZ:NS:2026:30.CDO.3000.2025.1|Nejvyšší soud|28. 5. 2026|2026-06-10`,
+        `${JSON.stringify([DOCKET.FIRST])}|ECLI:CZ:NS:2026:30.CDO.3000.2025.1|Nejvyšší soud|28. 5. 2026|2026-06-10`,
       ),
     );
+  });
+
+  test("alias-only publisher changes move the source hash", async () => {
+    mockFetch({ printStatus: 404 });
+    const hashes: string[] = [];
+    for (const additionalCaseNumbers of [
+      undefined,
+      [DOCKET.SECOND],
+      [DOCKET.SECOND, DOCKET.SUFFIXED],
+      [DOCKET.SUFFIXED, DOCKET.SECOND],
+    ]) {
+      const built = await reconciliation.buildDecision({
+        unid: UNID.FIRST,
+        caseNumber: DOCKET.FIRST,
+        additionalCaseNumbers,
+      });
+      expect(built.type).toBe("built");
+      if (built.type === "built") {
+        hashes.push(built.decision.rawHash);
+      }
+    }
+    expect(new Set(hashes).size).toBe(4);
   });
 
   test("a detail page that does not come back is reported, never written", async () => {
@@ -897,5 +919,82 @@ describe("cz-ns buildDecision", () => {
       }),
     ).toEqual({ type: "unkeyable" });
     expect(requestedUrls).toHaveLength(0);
+  });
+});
+
+describe("cz-ns stored-raw replay", () => {
+  const replay = czNsAdapter.reparseStoredRaw;
+  if (replay === undefined) {
+    throw new TypeError("Expected cz-ns to implement reparseStoredRaw");
+  }
+
+  test("current envelopes rebuild to a fixed point without the network", async () => {
+    mockFetch({ printStatus: 404 });
+    const built = await reconciliation.buildDecision({
+      unid: UNID.CO_SETTLED,
+      caseNumber: DOCKET.FIRST,
+      additionalCaseNumbers: [DOCKET.SECOND],
+    });
+    if (built.type !== "built") {
+      throw new TypeError("Expected the fixture decision to build");
+    }
+    globalThis.fetch = asFetchMock(async () => {
+      throw new Error("a replay must not contact the publisher");
+    });
+
+    const outcome = await replay({
+      raw: new TextEncoder().encode(built.decision.sourceRaw ?? ""),
+      contentType: built.decision.sourceRawContentType ?? null,
+      caseNumber: built.decision.caseNumber,
+      sourceDocumentId: built.decision.sourceDocumentId ?? null,
+      language: built.decision.language,
+      court: built.decision.court,
+      ecli: built.decision.ecli ?? null,
+      decisionDate: built.decision.decisionDate ?? null,
+      decisionType: built.decision.decisionType ?? null,
+      sourceUrl: built.decision.sourceUrl ?? null,
+      documentUrl: built.decision.documentUrl ?? null,
+      metadata: built.decision.metadata,
+    });
+
+    expect(outcome).toEqual({ type: "parsed", result: built.decision });
+  });
+
+  test("legacy joined dockets recover every identity from the saved pages", async () => {
+    globalThis.fetch = asFetchMock(async () => {
+      throw new Error("a replay must not contact the publisher");
+    });
+    const joined = `${DOCKET.FIRST}, ${DOCKET.SECOND}`;
+    const outcome = await replay({
+      raw: new TextEncoder().encode(
+        JSON.stringify({
+          webHtml: detailPageHtml(DOCKET.FIRST),
+          printHtml: "",
+        }),
+      ),
+      contentType: "text/html",
+      caseNumber: joined,
+      sourceDocumentId: UNID.CO_SETTLED,
+      language: "cs",
+      court: "Nejvyšší soud",
+      ecli: null,
+      decisionDate: null,
+      decisionType: null,
+      sourceUrl: null,
+      documentUrl: null,
+      metadata: { caseNumber: joined },
+    });
+
+    expect(outcome.type).toBe("parsed");
+    if (outcome.type !== "parsed") {
+      return;
+    }
+    expect(outcome.result.caseNumber).toBe(DOCKET.FIRST);
+    expect(outcome.result.identifiers?.map(({ value }) => value)).toEqual([
+      DOCKET.SECOND,
+    ]);
+    expect(outcome.result.metadata["additionalCaseNumbers"]).toEqual([
+      DOCKET.SECOND,
+    ]);
   });
 });
