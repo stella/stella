@@ -55,7 +55,7 @@ describe("entity read handler search", () => {
 
     expect(queryEntitiesMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        workspaceId,
+        scope: { type: "matter", workspaceId },
         currentOrganizationId: organizationId,
         search: "closing binder",
         cursor: null,
@@ -118,7 +118,7 @@ describe("entity read handler search", () => {
 
     expect(queryEntitiesMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        workspaceId,
+        scope: { type: "matter", workspaceId },
         currentOrganizationId: organizationId,
         search: "closing binder",
         limit: LIMITS.entitiesCount,

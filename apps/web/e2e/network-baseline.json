@@ -616,12 +616,14 @@
       "GET /api/auth/organization/list",
       "GET /health",
       "GET /v1/chat/threads",
+      "GET /v1/entity-views",
       "GET /v1/notifications",
       "GET /v1/notifications/events",
       "GET /v1/organization-settings/ai-availability",
       "GET /v1/signals",
       "GET /v1/signals/count",
-      "GET /v1/workspaces/navigation"
+      "GET /v1/workspaces/navigation",
+      "POST /v1/entity-views/query-window"
     ],
     "requestCounts": {
       "GET /api/auth/get-session": 1,
@@ -630,12 +632,14 @@
       "GET /api/auth/organization/list": 1,
       "GET /health": 1,
       "GET /v1/chat/threads": 1,
+      "GET /v1/entity-views": 1,
       "GET /v1/notifications": 1,
       "GET /v1/notifications/events": 1,
       "GET /v1/organization-settings/ai-availability": 1,
       "GET /v1/signals": 1,
       "GET /v1/signals/count": 1,
-      "GET /v1/workspaces/navigation": 1
+      "GET /v1/workspaces/navigation": 1,
+      "POST /v1/entity-views/query-window": 1
     },
     "dbQueries": {
       "GET /api/auth/get-session": 2,

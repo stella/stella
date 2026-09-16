@@ -1512,6 +1512,7 @@
     "tryAgain": "Spróbuj ponownie",
     "type": "Typ",
     "typeNameToConfirm": "Wpisz nazwę, aby potwierdzić",
+    "unassigned": "Nieprzypisane",
     "uncategorized": "Bez kategorii",
     "undo": "Cofnij",
     "unexpectedError": "Wystąpił nieoczekiwany błąd. Skontaktuj się z pomocą techniczną.",
@@ -2549,7 +2550,7 @@
     },
     "filter": {
       "any": "Dowolne",
-      "mine": "Moje"
+      "mine": "Przypisane mnie"
     },
     "newRequest": "Nowe zgłoszenie",
     "openMatter": "Otwórz sprawę",
@@ -2558,6 +2559,7 @@
       "model": "AI",
       "source": "Źródło zewnętrzne"
     },
+    "proposalView": "Sugestie: {view}",
     "request": {
       "created": "Zgłoszenie wysłane",
       "description": "Opisz, czym ma się zająć zespół prawny. Zgłoszenie trafi do skrzynki do przeglądu.",
@@ -2586,7 +2588,6 @@
       "fileToWorkspace": "Dołącz do sprawy",
       "runReview": "Uruchom przegląd"
     },
-    "unassigned": "Nieprzypisane",
     "verdict": {
       "safe": "Bezpieczne"
     },
@@ -4305,9 +4306,10 @@
       "assignee": "Wykonawca",
       "reviewer": "Recenzent"
     },
-    "assignees": "Przypisani",
+    "assignees": "Współpracownicy",
     "clearDate": "Wyczyść datę",
     "completeWork": "Ukończ pracę",
+    "deadlines": "Terminy",
     "delegationReason": "Powód zmiany",
     "deletedAccount": "Usunięte konto",
     "dueDate": "Termin",
@@ -4319,16 +4321,15 @@
     "myWorkTitle": "Moja praca",
     "newTask": "Nowe zadanie",
     "noActivity": "Brak aktywności",
-    "noAssignees": "Brak przypisanych",
+    "noAssignees": "Brak współpracowników",
     "noLinks": "Brak powiązanych elementów",
-    "noOwner": "Brak osoby odpowiedzialnej",
     "noSubtasks": "Brak podzadań",
     "noTasksAssigned": "Nie masz przypisanych zadań",
     "noWorkInQueue": "Brak pracy w tej kolejce",
     "notFound": "Nie znaleziono zadania",
     "openWorkflowRun": "Otwórz uruchomienie przepływu pracy",
     "overdue": "Po terminie",
-    "owner": "Osoba odpowiedzialna",
+    "owner": "Zajmuje się",
     "priority": "Priorytet",
     "priorityValues": {
       "high": "Wysoki",

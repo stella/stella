@@ -75,7 +75,7 @@ const DELIBERATE_NARROWINGS = [
   {
     rule: "no-restricted-imports",
     scope:
-      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/use-kanban-drop-targets.ts",
+      "apps/web/src/components/workspaces/kanban/use-kanban-drop-targets.ts",
     drops: [
       "path:@atlaskit/pragmatic-drag-and-drop/element/adapter#draggable,dropTargetForElements",
     ],

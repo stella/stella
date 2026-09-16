@@ -1,7 +1,5 @@
 import { describe, expect, test } from "bun:test";
 
-import { toSafeId } from "@/lib/safe-id";
-import type { WorkspaceEntity } from "@/lib/types";
 import {
   canRunManualOcr,
   getDesktopEditLockState,
@@ -10,7 +8,9 @@ import {
   getOcrSource,
   getOcrSources,
   hasOcrExport,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions.logic";
+} from "@/components/workspaces/row-actions.logic";
+import { toSafeId } from "@/lib/safe-id";
+import type { WorkspaceEntity } from "@/lib/types";
 
 describe("duplicate names", () => {
   test("keeps the final extension and a recognizable source name", () => {

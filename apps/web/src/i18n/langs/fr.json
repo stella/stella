@@ -1512,6 +1512,7 @@
     "tryAgain": "Réessayer",
     "type": "Type",
     "typeNameToConfirm": "Saisissez le nom pour confirmer",
+    "unassigned": "Non attribué",
     "uncategorized": "Non catégorisé",
     "undo": "Annuler",
     "unexpectedError": "Une erreur inattendue est survenue. Veuillez contacter le support.",
@@ -2549,7 +2550,7 @@
     },
     "filter": {
       "any": "Tous",
-      "mine": "Les miens"
+      "mine": "Qui me sont attribuées"
     },
     "newRequest": "Nouvelle demande",
     "openMatter": "Ouvrir le dossier",
@@ -2558,6 +2559,7 @@
       "model": "IA",
       "source": "Source externe"
     },
+    "proposalView": "Suggestions : {view}",
     "request": {
       "created": "Demande envoyée",
       "description": "Décrivez ce que l'équipe juridique doit examiner. La demande arrive dans la boîte de réception pour tri.",
@@ -2586,7 +2588,6 @@
       "fileToWorkspace": "Classer dans un dossier",
       "runReview": "Lancer la revue"
     },
-    "unassigned": "Non attribué",
     "verdict": {
       "safe": "Sans risque"
     },
@@ -4305,9 +4306,10 @@
       "assignee": "Assigné",
       "reviewer": "Réviseur"
     },
-    "assignees": "Assignés",
+    "assignees": "Collaborateurs",
     "clearDate": "Effacer la date",
     "completeWork": "Terminer le travail",
+    "deadlines": "Échéances",
     "delegationReason": "Motif de la modification",
     "deletedAccount": "Compte supprimé",
     "dueDate": "Échéance",
@@ -4319,16 +4321,15 @@
     "myWorkTitle": "Mon travail",
     "newTask": "Nouvelle tâche",
     "noActivity": "Aucune activité pour le moment",
-    "noAssignees": "Aucun assigné",
+    "noAssignees": "Aucun collaborateur",
     "noLinks": "Aucun élément lié",
-    "noOwner": "Aucun responsable",
     "noSubtasks": "Aucune sous-tâche",
     "noTasksAssigned": "Aucune tâche ne vous est assignée",
     "noWorkInQueue": "Aucun travail dans cette file",
     "notFound": "Tâche introuvable",
     "openWorkflowRun": "Ouvrir l'exécution du flux de travail",
     "overdue": "En retard",
-    "owner": "Responsable",
+    "owner": "Pris en charge par",
     "priority": "Priorité",
     "priorityValues": {
       "high": "Haute",

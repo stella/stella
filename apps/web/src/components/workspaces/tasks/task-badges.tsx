@@ -40,7 +40,10 @@ const isOverdue = (dueDate: string, status: string | null) =>
   status !== "done" && status !== "cancelled" && dueDate < localISODate();
 
 type TaskBadgesProps = {
-  entity: WorkspaceEntity;
+  entity: Pick<
+    WorkspaceEntity,
+    "kind" | "priority" | "dueDate" | "status" | "listItemType"
+  >;
   className?: string;
 };
 

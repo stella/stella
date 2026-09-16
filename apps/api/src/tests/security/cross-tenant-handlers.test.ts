@@ -21,6 +21,7 @@ import {
   caseLawResearchColumns,
   documentTranslationRuns,
   entities,
+  entityViews,
   entityVersions,
   fields,
   legalLists,
@@ -43,6 +44,7 @@ import listDocxSuggestions from "@/api/handlers/docx-suggestions/read";
 import readEntityById from "@/api/handlers/entities/get";
 import readVersionById from "@/api/handlers/entities/read-version-by-id";
 import readVersions from "@/api/handlers/entities/read-versions";
+import listEntityViews from "@/api/handlers/entity-views/list";
 import readExpenses from "@/api/handlers/expenses/list";
 import { readEmailHtmlPreviewHandler } from "@/api/handlers/files/get";
 import readInvoiceById from "@/api/handlers/invoices/get";
@@ -126,6 +128,9 @@ const savedSearchA = toSafeId<"savedSearch">(
 );
 const savedSearchB = toSafeId<"savedSearch">(
   "22222222-2222-4222-8222-222222222245",
+);
+const entityViewB = toSafeId<"workspaceView">(
+  "22222222-2222-4222-8222-222222222255",
 );
 const foreignSignalB = toSafeId<"signal">(
   "22222222-2222-4222-8222-222222222248",
@@ -595,6 +600,15 @@ const isolationCases: IsolationCase[] = [
     expectPositive: (result) => expectPageContainsId(result, savedSearchB),
   },
   {
+    name: "personal cross-matter view list",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(listEntityViews, workspaceA, {}),
+    runBPositive: async ({ workspaceB }) =>
+      await runHandler(listEntityViews, workspaceB, {}),
+    expectDenied: (result) => expectPageExcludesId(result, entityViewB),
+    expectPositive: (result) => expectPageContainsId(result, entityViewB),
+  },
+  {
     // A shared mark belongs to the organization that made it: a reader in
     // another firm opens the same public decision and must see none of it.
     name: "legal reader annotation list",
@@ -806,6 +820,23 @@ beforeAll(async () => {
       criteria: savedSearchCriteria(ids.wsB1),
     },
   ]);
+  await testDb.insert(entityViews).values({
+    id: entityViewB,
+    organizationId: ids.orgB,
+    userId: ids.userB1,
+    name: "Firm B tasks",
+    layout: {
+      version: 1,
+      type: "table",
+      filters: [],
+      sorts: [],
+      hiddenProperties: [],
+      calculations: [],
+      columnOrder: [],
+      columnPinning: [],
+    },
+    position: 0,
+  });
   await testDb.insert(caseLawResearchColumns).values({
     id: researchColumnB,
     organizationId: ids.orgB,

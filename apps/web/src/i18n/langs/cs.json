@@ -1512,6 +1512,7 @@
     "tryAgain": "Zkusit znovu",
     "type": "Typ",
     "typeNameToConfirm": "Pro potvrzení napište název",
+    "unassigned": "Nepřiřazeno",
     "uncategorized": "Nekategorizováno",
     "undo": "Zpět",
     "unexpectedError": "Došlo k neočekávané chybě. Kontaktujte podporu.",
@@ -2549,7 +2550,7 @@
     },
     "filter": {
       "any": "Jakýkoli",
-      "mine": "Moje"
+      "mine": "Přiřazené mně"
     },
     "newRequest": "Nový požadavek",
     "openMatter": "Otevřít spis",
@@ -2558,6 +2559,7 @@
       "model": "AI",
       "source": "Externí zdroj"
     },
+    "proposalView": "Návrhy: {view}",
     "request": {
       "created": "Požadavek odeslán",
       "description": "Popište, na co se má právní tým podívat. Požadavek se objeví v doručené poště k roztřídění.",
@@ -2586,7 +2588,6 @@
       "fileToWorkspace": "Založit do spisu",
       "runReview": "Spustit kontrolu"
     },
-    "unassigned": "Nepřiřazeno",
     "verdict": {
       "safe": "Bez rizika"
     },
@@ -4305,9 +4306,10 @@
       "assignee": "Řešitel",
       "reviewer": "Revident"
     },
-    "assignees": "Přiřazení",
+    "assignees": "Spolupracovníci",
     "clearDate": "Vymazat datum",
     "completeWork": "Dokončit práci",
+    "deadlines": "Lhůty",
     "delegationReason": "Důvod změny",
     "deletedAccount": "Smazaný účet",
     "dueDate": "Termín",
@@ -4319,16 +4321,15 @@
     "myWorkTitle": "Moje práce",
     "newTask": "Nový úkol",
     "noActivity": "Zatím žádná aktivita",
-    "noAssignees": "Žádní přiřazení",
+    "noAssignees": "Žádní spolupracovníci",
     "noLinks": "Žádné propojené položky",
-    "noOwner": "Bez odpovědné osoby",
     "noSubtasks": "Žádné podúkoly",
     "noTasksAssigned": "Nemáte přiřazené žádné úkoly",
     "noWorkInQueue": "V této frontě není žádná práce",
     "notFound": "Úkol nenalezen",
     "openWorkflowRun": "Otevřít běh pracovního postupu",
     "overdue": "Po termínu",
-    "owner": "Odpovědná osoba",
+    "owner": "Řeší",
     "priority": "Priorita",
     "priorityValues": {
       "high": "Vysoká",

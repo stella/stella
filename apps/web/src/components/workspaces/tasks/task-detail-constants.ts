@@ -24,6 +24,7 @@ import {
   LIST_ITEM_TYPES,
 } from "@stll/api-contract/entity-options";
 import type { ListItemType } from "@stll/api-contract/entity-options";
+import type { OptionColor } from "@stll/ui/option-color";
 
 import type { TranslationKey } from "@/i18n/types";
 
@@ -60,6 +61,14 @@ export const ITEM_TYPE_TRANSLATION_KEYS = {
   task: "search.kinds.task",
 } as const satisfies Record<ListItemType, TranslationKey>;
 
+export const TASK_STATUS_OPTION_COLORS = {
+  open: "gray",
+  in_progress: "blue",
+  in_review: "amber",
+  done: "green",
+  cancelled: "red",
+} as const satisfies Record<TaskStatus, OptionColor>;
+
 export const STATUS_ICONS = {
   open: CircleIcon,
   in_progress: CircleDotIcon,
@@ -91,3 +100,6 @@ export const PRIORITY_COLORS = {
   medium: "text-warning",
   low: "text-foreground-muted dark:text-foreground",
 } as const satisfies Record<TaskPriority, string>;
+
+export const WORK_TYPES = ["task", "deadline"] as const;
+export type WorkType = (typeof WORK_TYPES)[number];

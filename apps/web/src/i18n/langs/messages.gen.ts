@@ -1515,6 +1515,7 @@ type Messages = {
     "tryAgain": "Try again";
     "type": "Type";
     "typeNameToConfirm": "Type the name to confirm";
+    "unassigned": "Unassigned";
     "uncategorized": "Uncategorized";
     "undo": "Undo";
     "unexpectedError": "An unexpected error occurred. Please contact support.";
@@ -2552,7 +2553,7 @@ type Messages = {
     };
     "filter": {
       "any": "Any";
-      "mine": "Mine";
+      "mine": "Assigned to me";
     };
     "newRequest": "New request";
     "openMatter": "Open matter";
@@ -2561,6 +2562,7 @@ type Messages = {
       "model": "AI";
       "source": "External source";
     };
+    "proposalView": "Suggestions: {view}";
     "request": {
       "created": "Request posted";
       "description": "Describe what the legal team should look at. It lands in the inbox for triage.";
@@ -2589,7 +2591,6 @@ type Messages = {
       "fileToWorkspace": "File to matter";
       "runReview": "Run review";
     };
-    "unassigned": "Unassigned";
     "verdict": {
       "safe": "Safe";
     };
@@ -4308,9 +4309,10 @@ type Messages = {
       "assignee": "Assignee";
       "reviewer": "Reviewer";
     };
-    "assignees": "Assignees";
+    "assignees": "Collaborators";
     "clearDate": "Clear date";
     "completeWork": "Complete work";
+    "deadlines": "Deadlines";
     "delegationReason": "Reason for change";
     "deletedAccount": "Deleted account";
     "dueDate": "Due date";
@@ -4322,16 +4324,15 @@ type Messages = {
     "myWorkTitle": "My work";
     "newTask": "New task";
     "noActivity": "No activity yet";
-    "noAssignees": "No assignees";
+    "noAssignees": "No collaborators";
     "noLinks": "No linked items";
-    "noOwner": "No accountable owner";
     "noSubtasks": "No subtasks";
     "noTasksAssigned": "No tasks assigned to you";
     "noWorkInQueue": "No work in this queue";
     "notFound": "Task not found";
     "openWorkflowRun": "Open workflow run";
     "overdue": "Overdue";
-    "owner": "Owner";
+    "owner": "Handled by";
     "priority": "Priority";
     "priorityValues": {
       "high": "High";

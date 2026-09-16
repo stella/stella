@@ -11,8 +11,11 @@ import {
   draggable,
   dropTargetForElements,
 } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
+import { EllipsisVerticalIcon } from "lucide-react";
 
+import { Button } from "@stll/ui/button";
 import { TOOLBAR_ROW_HEIGHT } from "@stll/ui/inspector";
+import { Menu, MenuPopup, MenuTrigger } from "@stll/ui/menu";
 import { Tabs, TabsList, TabsTab } from "@stll/ui/tabs";
 import { cn } from "@stll/ui/utils";
 
@@ -74,7 +77,11 @@ export type WorkspaceViewSwitcherProps<View extends WorkspaceViewSwitcherItem> =
       view: View,
       event: React.MouseEvent<HTMLElement>,
     ) => void;
-    renderActions?: (view: View) => React.ReactNode;
+    actionMenu?: {
+      label: string;
+      renderItems: (view: View) => React.ReactNode;
+      onOpenChange?: (view: View, open: boolean) => void;
+    };
     renderIcon: (view: View) => React.ReactNode;
   };
 
@@ -89,18 +96,44 @@ export const WorkspaceViewSwitcher = <View extends WorkspaceViewSwitcherItem>({
   onViewChange,
   onViewContextMenu,
   onViewDoubleClick,
-  renderActions,
+  actionMenu,
   renderIcon,
 }: WorkspaceViewSwitcherProps<View>) => {
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const canReorder = reorder !== null;
-  const viewTabs = views.map((view) => ({
-    view,
-    actions: renderActions?.(view),
-  }));
-  const reserveActionSpace = viewTabs.some(
-    ({ actions }) =>
-      actions !== null && actions !== undefined && typeof actions !== "boolean",
-  );
+  const viewTabs = views.map((view) => {
+    const items = actionMenu?.renderItems(view);
+    const hasItems =
+      items !== null && items !== undefined && typeof items !== "boolean";
+    return {
+      view,
+      actions:
+        actionMenu && hasItems ? (
+          <Menu
+            onOpenChange={(open) => {
+              setOpenMenuId((currentId) => {
+                if (open) {
+                  return view.id;
+                }
+                return currentId === view.id ? null : currentId;
+              });
+              actionMenu.onOpenChange?.(view, open);
+            }}
+          >
+            <MenuTrigger
+              aria-label={actionMenu.label}
+              render={
+                <Button draggable={false} size="icon-xs" variant="ghost" />
+              }
+            >
+              <EllipsisVerticalIcon />
+            </MenuTrigger>
+            <MenuPopup>{items}</MenuPopup>
+          </Menu>
+        ) : null,
+    };
+  });
+  const reserveActionSpace = viewTabs.some(({ actions }) => actions !== null);
   const [instanceId] = useState(Symbol);
   const [stripContainer, setStripContainer] = useState<HTMLDivElement | null>(
     null,
@@ -187,7 +220,9 @@ export const WorkspaceViewSwitcher = <View extends WorkspaceViewSwitcherItem>({
                   direction={direction}
                   getDragData={reorder?.getDragData}
                   getDropData={reorder?.getDropData}
-                  isDragBlocked={reorder?.isBlocked ?? false}
+                  isDragBlocked={
+                    openMenuId !== null || (reorder?.isBlocked ?? false)
+                  }
                   instanceId={instanceId}
                   key={view.id}
                   onContextMenu={onViewContextMenu}

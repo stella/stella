@@ -70,6 +70,7 @@ import {
   pendingUploads,
   taskAssignees,
 } from "./entities";
+import { entityViews } from "./entity-views";
 import {
   userFiles,
   workspaceViewTemplates,
@@ -130,6 +131,7 @@ export const relations = defineRelations(
     agentSkills,
     agentSkillResources,
     savedSearches,
+    entityViews,
     styleSets,
     user,
     contacts,
@@ -1439,6 +1441,9 @@ export const relations = defineRelations(
         from: r.savedSearches.userId,
         to: r.user.id,
       }),
+    },
+    entityViews: {
+      user: r.one.user({ from: r.entityViews.userId, to: r.user.id }),
     },
   }),
 );

@@ -2,9 +2,9 @@ import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 
 import { DirectionProvider } from "@base-ui/react";
-import { EllipsisVertical } from "lucide-react";
 
 import { WorkspaceViewSwitcher } from "../../../../workspace-ui/src/view-switcher";
+import { MenuItem } from "../../components/menu";
 import { InspectorContent, InspectorRailContent } from "../../inspector";
 
 const WorkspaceViewSwitcherFixture = () => {
@@ -36,17 +36,15 @@ const WorkspaceViewSwitcherFixture = () => {
             ariaLabel={direction === "rtl" ? "العروض المحفوظة" : "Saved views"}
             direction={direction}
             onViewChange={setActiveViewId}
-            renderActions={(view) =>
-              view.id === activeViewId ? (
-                <button
-                  aria-label={`${actionsLabel} ${view.name}`}
-                  className="size-5"
-                  type="button"
-                >
-                  <EllipsisVertical aria-hidden size={16} />
-                </button>
-              ) : null
-            }
+            actionMenu={{
+              label: actionsLabel,
+              renderItems: (view) =>
+                view.id === activeViewId ? (
+                  <MenuItem>
+                    {direction === "rtl" ? "إعادة تسمية" : "Rename"}
+                  </MenuItem>
+                ) : null,
+            }}
             renderIcon={() => null}
             reorder={null}
             views={views}

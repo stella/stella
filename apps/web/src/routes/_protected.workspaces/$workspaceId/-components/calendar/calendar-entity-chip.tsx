@@ -16,13 +16,13 @@ import { withDragAnnouncementData } from "@/components/drag-and-drop-live-region
 import type { DragPreviewData } from "@/components/drag-preview";
 import { renderDragPreview } from "@/components/drag-preview";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+import { useInspectorFlash } from "@/components/workspaces/hooks/use-inspector-flash";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useFormatter } from "@/i18n/formatting-context";
 import { formatDecisionDate } from "@/lib/decision-date";
 import { captureInvalidTaskOption } from "@/lib/task-option-telemetry";
 import { ENTITY_DRAG_TYPE } from "@/lib/workspaces/drag-constants";
 import type { CalendarTask } from "@/lib/workspaces/queries/calendar-tasks";
-import { useInspectorFlash } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-inspector-flash";
 
 const TASK_STATUS_BORDER_COLORS = {
   open: "border-s-muted-foreground",

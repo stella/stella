@@ -62,15 +62,23 @@ type TaskAssigneeVars = {
   userId: string;
 };
 
-const invalidateTaskAssigneeQueries = async (
-  queryClient: QueryClient,
-  workspaceId: string,
-  taskId: string,
-) => {
+type InvalidateTaskQueriesOptions = {
+  queryClient: QueryClient;
+  workspaceId: string;
+  taskId: string;
+};
+
+/** Refresh every task projection, including open Inspector details. */
+export const invalidateTaskQueries = async ({
+  queryClient,
+  workspaceId,
+  taskId,
+}: InvalidateTaskQueriesOptions) => {
   await Promise.all([
     queryClient.invalidateQueries({
       queryKey: taskKeys.detail(workspaceId, taskId),
     }),
+    queryClient.invalidateQueries({ queryKey: myWorkKeys.all }),
     queryClient.invalidateQueries({
       queryKey: entitiesKeys.all(workspaceId),
     }),
@@ -97,7 +105,7 @@ export const useAddTaskAssignee = (workspaceId: string) => {
       return unwrapEden(response);
     },
     onSuccess: async (_data, { taskId }) => {
-      await invalidateTaskAssigneeQueries(queryClient, workspaceId, taskId);
+      await invalidateTaskQueries({ queryClient, workspaceId, taskId });
     },
     onError: (error) => {
       analytics.captureError(error);
@@ -126,7 +134,7 @@ export const useRemoveTaskAssignee = (workspaceId: string) => {
       return unwrapEden(response);
     },
     onSuccess: async (_data, { taskId }) => {
-      await invalidateTaskAssigneeQueries(queryClient, workspaceId, taskId);
+      await invalidateTaskQueries({ queryClient, workspaceId, taskId });
     },
     onError: (error) => {
       analytics.captureError(error);
@@ -171,7 +179,7 @@ export const useMoveTaskAssignee = (workspaceId: string) => {
       return unwrapEden(response);
     },
     onSuccess: async (_data, { taskId }) => {
-      await invalidateTaskAssigneeQueries(queryClient, workspaceId, taskId);
+      await invalidateTaskQueries({ queryClient, workspaceId, taskId });
     },
     onError: (error) => {
       analytics.captureError(error);

@@ -139,7 +139,7 @@ const exportViewReport = createSafeHandler(
     const cappedRowsResult = yield* Result.await(
       queryEntities({
         safeDb,
-        workspaceId,
+        scope: { type: "matter", workspaceId },
         currentUserId: user.id,
         currentOrganizationId: organizationId,
         filters: layout.filters,

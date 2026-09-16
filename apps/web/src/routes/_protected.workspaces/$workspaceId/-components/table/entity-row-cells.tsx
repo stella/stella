@@ -25,6 +25,10 @@ import {
   getEntityName,
   getFirstFile,
 } from "@/components/workspaces/entity-utils";
+import { useInspectorFlash } from "@/components/workspaces/hooks/use-inspector-flash";
+import { RowActions } from "@/components/workspaces/row-actions";
+import type { VirtualAnchor } from "@/components/workspaces/row-actions";
+import { getOcrSource } from "@/components/workspaces/row-actions.logic";
 import type { TableRowRenderInput } from "@/components/workspaces/table/row-host";
 import { SelectRowContent } from "@/components/workspaces/table/select-row-content";
 import type {
@@ -55,11 +59,7 @@ import { toSafeId } from "@/lib/safe-id";
 import type { PropertyId } from "@/lib/types";
 import { ENTITY_DRAG_TYPE } from "@/lib/workspaces/drag-constants";
 import type { TableContentMode } from "@/lib/workspaces/table-store";
-import { RowActions } from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions";
-import type { VirtualAnchor } from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions";
-import { getOcrSource } from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions.logic";
 import { VersionOrNewFileDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/version-or-new-file-dialog";
-import { useInspectorFlash } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-inspector-flash";
 import { useVersionOrNewFileDrop } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-version-or-new-file-drop";
 
 const shouldIgnoreRowExpansionClick = (target: EventTarget) => {

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { DragEvent, ReactElement, ReactNode } from "react";
+import type { DragEvent, ReactElement, ReactNode, Ref } from "react";
 
 import { ChevronDownIcon } from "lucide-react";
 
@@ -146,6 +146,7 @@ type KanbanSubgroupCollapseControl =
     };
 
 export type KanbanSubgroupBoardProps<TRow> = {
+  scrollRef?: Ref<HTMLDivElement> | undefined;
   matrix: KanbanBoardMatrix<TRow>;
   renderColumnHeader: (context: KanbanSubgroupColumnHeaderContext) => ReactNode;
   renderLaneIdentity: (context: KanbanSubgroupLaneIdentityContext) => ReactNode;
@@ -239,6 +240,7 @@ export type KanbanSubgroupBoardProps<TRow> = {
  * folded band costs no vertical space.
  */
 export const KanbanSubgroupBoard = <TRow,>({
+  scrollRef,
   matrix,
   renderColumnHeader,
   renderLaneIdentity,
@@ -632,22 +634,29 @@ export const KanbanSubgroupBoard = <TRow,>({
   };
 
   /** One column's cell in a lane's row: what it holds, then what it offers. */
-  const laneColumnCell = (
-    group: KanbanGroup,
-    column: KanbanBoardColumn,
-    count: number,
-  ): Rendered => (
+  const laneColumnCell = ({
+    group,
+    column,
+    count,
+    laneCount,
+  }: {
+    group: KanbanGroup;
+    column: KanbanBoardColumn;
+    count: number;
+    laneCount: number;
+  }): Rendered => (
     <div
       className={cn("flex items-center gap-1 px-3", KANBAN_CHROME_ROW_HEIGHT)}
       data-kanban-lane-column-count={count}
     >
-      {renderLaneColumnSummary ? (
-        renderLaneColumnSummary({ column, count, lane: group })
-      ) : (
-        <span className="text-muted-foreground text-xs tabular-nums">
-          {formatCount(count)}
-        </span>
-      )}
+      {laneCount > 0 &&
+        (renderLaneColumnSummary ? (
+          renderLaneColumnSummary({ column, count, lane: group })
+        ) : (
+          <span className="text-muted-foreground text-xs tabular-nums">
+            {formatCount(count)}
+          </span>
+        ))}
       {renderLaneColumnAction === undefined ? null : (
         <span className="ms-auto flex items-center">
           {renderLaneColumnAction({ column, lane: group })}
@@ -672,6 +681,7 @@ export const KanbanSubgroupBoard = <TRow,>({
   return (
     <div
       className={cn("h-full overflow-auto px-4 pb-4", className)}
+      ref={scrollRef}
       style={stickyTopStyle}
     >
       <div className="min-w-max">
@@ -832,7 +842,7 @@ export const KanbanSubgroupBoard = <TRow,>({
                   <button
                     aria-expanded={!collapsed}
                     className={cn(
-                      "hover:bg-muted/60 flex items-center gap-2 rounded-lg px-2 text-start transition-[background-color]",
+                      "hover:bg-muted/60 flex items-center gap-2 rounded-lg px-2 text-start text-sm font-medium transition-[background-color]",
                       KANBAN_CHROME_ROW_HEIGHT,
                       KANBAN_CHROME_TOGGLE_COARSE_TARGET_CLASS,
                     )}
@@ -857,15 +867,17 @@ export const KanbanSubgroupBoard = <TRow,>({
                 {renderRow({
                   label: "Lane column summaries",
                   renderColumn: (column) =>
-                    laneColumnCell(
+                    laneColumnCell({
                       group,
                       column,
-                      cellFor(column)?.rows.length ?? 0,
-                    ),
+                      count: cellFor(column)?.rows.length ?? 0,
+                      laneCount: count,
+                    }),
                   // A folded band stands for several columns at once, so its
                   // slot can only carry the total; there is no room for the
                   // per-column pair the open columns show.
-                  renderFoldedBand: (_band, span) => foldedCount(span, cells),
+                  renderFoldedBand: (_band, span) =>
+                    count > 0 ? foldedCount(span, cells) : null,
                 })}
               </div>
 

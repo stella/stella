@@ -576,7 +576,7 @@
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-scroll.logic.ts": 3,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-utils.ts": 2,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-view.logic.ts": 1,
-      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-overrides-store.ts": 1,
+      "apps/web/src/components/workspaces/cell-metadata-overrides-store.ts": 1,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog.tsx": 2,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/import-organizer.logic.ts": 1,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/table-columns.tsx": 1,

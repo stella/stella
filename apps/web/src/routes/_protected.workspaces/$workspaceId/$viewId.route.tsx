@@ -18,6 +18,7 @@ import {
   resolveKanbanGroupBy,
   toISODate,
 } from "@/components/workspaces/entity-utils";
+import { windowIncludesAssignees } from "@/components/workspaces/kanban/kanban-view.logic";
 import { resolveEntityFind } from "@/components/workspaces/table/entity-find.logic";
 import { UNRESTRICTED_FIND } from "@/components/workspaces/table/table-find.logic";
 import { guideAnchor } from "@/features/guides/guide-anchor";
@@ -50,7 +51,6 @@ import {
 } from "@/lib/workspaces/queries/time-entries";
 import { viewsOptions } from "@/lib/workspaces/queries/views";
 import { useTableStore } from "@/lib/workspaces/table-store";
-import { windowIncludesAssignees } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.logic";
 import { includesListItems } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-kind-filters";
 import { ViewSwitcher } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher";
 import { ViewToolbar } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar";

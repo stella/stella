@@ -1512,6 +1512,7 @@
     "tryAgain": "Reintentar",
     "type": "Tipo",
     "typeNameToConfirm": "Escriba el nombre para confirmar",
+    "unassigned": "Sin asignar",
     "uncategorized": "Sin categorizar",
     "undo": "Deshacer",
     "unexpectedError": "Se produjo un error inesperado. Contacte con soporte.",
@@ -2549,7 +2550,7 @@
     },
     "filter": {
       "any": "Cualquiera",
-      "mine": "Míos"
+      "mine": "Asignadas a mí"
     },
     "newRequest": "Nueva solicitud",
     "openMatter": "Abrir asunto",
@@ -2558,6 +2559,7 @@
       "model": "IA",
       "source": "Fuente externa"
     },
+    "proposalView": "Sugerencias: {view}",
     "request": {
       "created": "Solicitud enviada",
       "description": "Describa qué debe revisar el equipo legal. La solicitud llega a la bandeja de entrada para su triaje.",
@@ -2586,7 +2588,6 @@
       "fileToWorkspace": "Archivar en asunto",
       "runReview": "Ejecutar revisión"
     },
-    "unassigned": "Sin asignar",
     "verdict": {
       "safe": "Seguro"
     },
@@ -4305,9 +4306,10 @@
       "assignee": "Asignado",
       "reviewer": "Revisor"
     },
-    "assignees": "Asignados",
+    "assignees": "Colaboradores",
     "clearDate": "Borrar fecha",
     "completeWork": "Completar trabajo",
+    "deadlines": "Plazos",
     "delegationReason": "Motivo del cambio",
     "deletedAccount": "Cuenta eliminada",
     "dueDate": "Fecha límite",
@@ -4319,16 +4321,15 @@
     "myWorkTitle": "Mi trabajo",
     "newTask": "Nueva tarea",
     "noActivity": "Aún no hay actividad",
-    "noAssignees": "Sin asignados",
+    "noAssignees": "Sin colaboradores",
     "noLinks": "Sin elementos vinculados",
-    "noOwner": "Sin responsable",
     "noSubtasks": "Sin subtareas",
     "noTasksAssigned": "No tienes tareas asignadas",
     "noWorkInQueue": "No hay trabajo en esta cola",
     "notFound": "Tarea no encontrada",
     "openWorkflowRun": "Abrir la ejecución del flujo de trabajo",
     "overdue": "Vencida",
-    "owner": "Responsable",
+    "owner": "A cargo de",
     "priority": "Prioridad",
     "priorityValues": {
       "high": "Alta",

@@ -6,6 +6,8 @@ import { KANBAN_CARD_STICKY_TOP_CLASS } from "./sticky-lane";
 
 export type KanbanCardShellProps = {
   children: ReactNode;
+  /** Proposed work stays visually distinct until a person accepts it. */
+  appearance?: "standard" | "proposal" | undefined;
   /** Overlay slot pinned to the top-end corner (row actions). */
   actions?: ReactNode;
   /**
@@ -73,6 +75,7 @@ export type KanbanCardShellProps = {
  */
 export const KanbanCardShell = ({
   children,
+  appearance = "standard",
   actions,
   actionsVisibility = "always",
   stickyHeader,
@@ -113,7 +116,12 @@ export const KanbanCardShell = ({
         ref={dragRef}
       >
         <div
-          className={cn(CARD_CLASS, active && ACTIVE_CLASS, className)}
+          className={cn(
+            CARD_CLASS,
+            appearance === "proposal" && "border-dashed",
+            active && ACTIVE_CLASS,
+            className,
+          )}
           ref={bodyRef}
         >
           {body}
@@ -133,6 +141,7 @@ export const KanbanCardShell = ({
       <div
         className={cn(
           CARD_CLASS,
+          appearance === "proposal" && "border-dashed",
           "cursor-pointer transition-shadow hover:shadow-md",
           active && ACTIVE_CLASS,
           className,

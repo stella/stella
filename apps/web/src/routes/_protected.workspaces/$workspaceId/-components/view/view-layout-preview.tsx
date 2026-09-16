@@ -13,6 +13,7 @@ import { PreviewPane } from "@stll/ui/preview-pane";
 import { cn } from "@stll/ui/utils";
 
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
+import { KanbanCard } from "@/components/workspaces/kanban/kanban-card";
 import type {
   TaskPriority,
   TaskStatus,
@@ -28,7 +29,6 @@ import type { ViewLayoutType, WorkspaceEntity } from "@/lib/types";
 import type { CalendarTask } from "@/lib/workspaces/queries/calendar-tasks";
 import { CalendarEntityChip } from "@/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-entity-chip";
 import { TASK_STATUS_DOT_COLORS } from "@/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-utils";
-import { KanbanCard } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-card";
 
 import "./view-layout-preview.css";
 

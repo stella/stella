@@ -204,6 +204,98 @@ describe("projectToProviderSafeJsonSchema", () => {
     }
   });
 
+  test("preserves every omitted bound as guidance without changing authored descriptions", () => {
+    const boundCases = {
+      minimum: { type: "number", guidance: "Minimum value (inclusive)" },
+      maximum: { type: "number", guidance: "Maximum value (inclusive)" },
+      minItems: { type: "array", guidance: "Minimum number of items" },
+      maxItems: { type: "array", guidance: "Maximum number of items" },
+      minLength: {
+        type: "string",
+        guidance: "Minimum string length in characters",
+      },
+      maxLength: {
+        type: "string",
+        guidance: "Maximum string length in characters",
+      },
+    } as const satisfies Record<
+      (typeof VALUE_CONSTRAINT_JSON_SCHEMA_KEYWORDS)[number],
+      { type: string; guidance: string }
+    >;
+
+    fc.assert(
+      fc.property(
+        fc.integer({ min: 0, max: 100_000 }),
+        fc.option(fc.string(), { nil: undefined }),
+        (bound, description) => {
+          for (const keyword of VALUE_CONSTRAINT_JSON_SCHEMA_KEYWORDS) {
+            const { type, guidance } = boundCases[keyword];
+            const field = {
+              type,
+              ...(type === "array" ? { items: { type: "string" } } : {}),
+              ...(description === undefined ? {} : { description }),
+              [keyword]: bound,
+            };
+            const input = { type: "object", properties: { field } };
+            const options = { valueConstraintStrategy: "omit" } as const;
+            const projected = projectToProviderSafeJsonSchema(input, options);
+            const expectedDescription = `${guidance}: ${String(bound)}.`;
+            const expectedField = {
+              type,
+              ...(type === "array" ? { items: { type: "string" } } : {}),
+              description:
+                description === undefined
+                  ? expectedDescription
+                  : `${description}\n${expectedDescription}`,
+            };
+
+            expect(projected.schema).toEqual({
+              type: "object",
+              properties: { field: expectedField },
+            });
+            expect(projected.droppedKeywords).toEqual([
+              `properties.field.${keyword}`,
+            ]);
+            expect(
+              projectToProviderSafeJsonSchema(projected.schema, options),
+            ).toEqual({ schema: projected.schema, droppedKeywords: [] });
+            expect(
+              projectToProviderSafeJsonSchema(input, {
+                valueConstraintStrategy: "preserve",
+              }),
+            ).toEqual({ schema: input, droppedKeywords: [] });
+          }
+        },
+      ),
+      propertyConfig({ numRuns: 100 }),
+    );
+  });
+
+  test("describes the tighter bounds after combining allOf branches", () => {
+    const { schema, droppedKeywords } = projectToProviderSafeJsonSchema(
+      {
+        type: "array",
+        description: "Supporting evidence.",
+        items: { type: "string" },
+        allOf: [{ minItems: 1, maxItems: 10 }, { maxItems: 4 }],
+      },
+      { valueConstraintStrategy: "omit" },
+    );
+
+    expect(schema).toEqual({
+      type: "array",
+      description:
+        "Supporting evidence.\nMinimum number of items: 1.\nMaximum number of items: 4.",
+      items: { type: "string" },
+    });
+    expect(droppedKeywords).toEqual(["minItems", "maxItems"]);
+    expect(
+      projectToProviderSafeJsonSchema(schema, {
+        valueConstraintStrategy: "omit",
+      }),
+    ).toEqual({ schema, droppedKeywords: [] });
+  });
+
   test("keeps structured-output array bounds local to the app", () => {
     const evidenceSchema = v.strictObject({
       source: v.string(),

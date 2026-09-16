@@ -37,8 +37,10 @@ export type ExtractedDeadline = v.InferOutput<
 
 export const DEADLINE_SYSTEM_PROMPT =
   "Extract explicit obligations with calendar dates from the legal document. " +
-  "Return only dated deadlines, each with a short label, the due date as an ISO date, " +
-  "a verbatim quote of the sentence that states it, and a confidence from 0 to 1. " +
+  `Return at most ${DEADLINE_MAX_ITEMS} dated deadlines, each with a short label, the due date as an ISO date, ` +
+  "a short contiguous verbatim excerpt supporting that deadline, and a confidence from 0 to 1. " +
+  `Each excerpt must fit within ${DEADLINE_QUOTE_MAX_CHARS} characters; quote only the relevant clause, not the whole sentence. ` +
+  "Never paraphrase, join separate passages, or cut away a qualification that changes the obligation. " +
   "Ignore dates that are not deadlines (signature dates, references, past events).";
 
 const normalizeWhitespace = (value: string): string =>

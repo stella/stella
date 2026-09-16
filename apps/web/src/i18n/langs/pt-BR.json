@@ -1512,6 +1512,7 @@
     "tryAgain": "Tente novamente",
     "type": "Tipo",
     "typeNameToConfirm": "Digite o nome para confirmar",
+    "unassigned": "Não atribuído",
     "uncategorized": "Sem categoria",
     "undo": "Desfazer",
     "unexpectedError": "Ocorreu um erro inesperado. Entre em contato com o suporte.",
@@ -2549,7 +2550,7 @@
     },
     "filter": {
       "any": "Qualquer",
-      "mine": "Meus"
+      "mine": "Atribuídas a mim"
     },
     "newRequest": "Nova solicitação",
     "openMatter": "Abrir caso",
@@ -2558,6 +2559,7 @@
       "model": "IA",
       "source": "Fonte externa"
     },
+    "proposalView": "Sugestões: {view}",
     "request": {
       "created": "Solicitação enviada",
       "description": "Descreva o que a equipe jurídica deve analisar. A solicitação chega à caixa de entrada para triagem.",
@@ -2586,7 +2588,6 @@
       "fileToWorkspace": "Arquivar no caso",
       "runReview": "Executar revisão"
     },
-    "unassigned": "Não atribuído",
     "verdict": {
       "safe": "Seguro"
     },
@@ -4305,9 +4306,10 @@
       "assignee": "Responsável",
       "reviewer": "Revisor"
     },
-    "assignees": "Responsáveis",
+    "assignees": "Colaboradores",
     "clearDate": "Limpar data",
     "completeWork": "Concluir trabalho",
+    "deadlines": "Prazos",
     "delegationReason": "Motivo da alteração",
     "deletedAccount": "Conta excluída",
     "dueDate": "Data de vencimento",
@@ -4319,16 +4321,15 @@
     "myWorkTitle": "Meu trabalho",
     "newTask": "Nova tarefa",
     "noActivity": "Ainda não há atividade",
-    "noAssignees": "Nenhum responsável",
+    "noAssignees": "Sem colaboradores",
     "noLinks": "Nenhum item vinculado",
-    "noOwner": "Sem responsável",
     "noSubtasks": "Sem subtarefas",
     "noTasksAssigned": "Nenhuma tarefa atribuída a você",
     "noWorkInQueue": "Não há trabalho nesta fila",
     "notFound": "Tarefa não encontrada",
     "openWorkflowRun": "Abrir a execução do fluxo de trabalho",
     "overdue": "Atrasado",
-    "owner": "Responsável",
+    "owner": "A cargo de",
     "priority": "Prioridade",
     "priorityValues": {
       "high": "Alto",

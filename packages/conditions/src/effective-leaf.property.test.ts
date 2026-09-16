@@ -6,6 +6,7 @@ import { propertyConfig } from "@stll/property-testing";
 import { isEffectiveLeaf } from "./effective-leaf";
 import { type FoldHandlers, foldCondition } from "./fold";
 import {
+  BUILTIN_FIELDS,
   COMPARE_OPS,
   type CompareNode,
   type Combinator,
@@ -29,7 +30,7 @@ const operandArb: fc.Arbitrary<Operand> = fc.oneof(
     .constantFrom("a", "b")
     .map((propertyId): Operand => ({ type: "property", propertyId })),
   fc
-    .constantFrom("status", "priority")
+    .constantFrom(...BUILTIN_FIELDS)
     .map((field): Operand => ({ type: "builtin", field })),
   fc.constant<Operand>({ type: "kind" }),
   fc.constantFrom("a", "b").map((path): Operand => ({ type: "path", path })),

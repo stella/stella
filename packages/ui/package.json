@@ -30,6 +30,7 @@
   ],
   "exports": {
     ".": "./src/index.ts",
+    "./view-toolbar": "./src/components/view-toolbar.tsx",
     "./accordion": "./src/components/accordion.tsx",
     "./application-rail": "./src/components/application-rail.tsx",
     "./alert-dialog": "./src/components/alert-dialog.tsx",

@@ -417,14 +417,12 @@ type ResolveWorkflowStatusTransitionOptions = {
   requestedStatus: string | undefined;
   userId: SafeId<"user">;
   workflow: LockedWorkObligation;
-  workflowReason: string | undefined;
 };
 
 type WorkflowStatusPolicyOptions = {
   action: WorkObligationTransitionAction;
   userId: SafeId<"user">;
   workflow: LockedWorkObligation;
-  workflowReason: string | undefined;
 };
 
 /** The move each action names, for the message a refusal has to explain. */
@@ -459,7 +457,6 @@ const assertWorkflowStatusPolicy = ({
   action,
   userId,
   workflow,
-  workflowReason,
 }: WorkflowStatusPolicyOptions): void => {
   switch (action) {
     case WORK_OBLIGATION_TRANSITION_ACTION.COMPLETE:
@@ -471,16 +468,6 @@ const assertWorkflowStatusPolicy = ({
       }
       return;
     case WORK_OBLIGATION_TRANSITION_ACTION.CANCEL:
-      if (
-        workflow.status !== WORK_OBLIGATION_STATUS.UNASSIGNED &&
-        !workflowReason
-      ) {
-        throw new HandlerError({
-          status: 400,
-          message: "A reason is required when cancelling assigned work",
-        });
-      }
-      return;
     case WORK_OBLIGATION_TRANSITION_ACTION.REOPEN:
       return;
     default: {
@@ -501,7 +488,6 @@ const resolveWorkflowStatusTransition = ({
   requestedStatus,
   userId,
   workflow,
-  workflowReason,
 }: ResolveWorkflowStatusTransitionOptions) => {
   const intent = workObligationIntentForTaskStatus({
     currentStatus: workflow.status,
@@ -528,7 +514,7 @@ const resolveWorkflowStatusTransition = ({
       message: blockedTransitionMessage(action, workflow.status),
     });
   }
-  assertWorkflowStatusPolicy({ action, userId, workflow, workflowReason });
+  assertWorkflowStatusPolicy({ action, userId, workflow });
   return {
     type: "transition" as const,
     action,
@@ -579,7 +565,7 @@ const applyTaskUpdate = async function* ({
     );
   }
 
-  const workflowReason = body.workflowReason?.trim();
+  const workflowReason = body.workflowReason?.trim() || undefined;
   const inputResult = validateTaskInput(body);
   if (inputResult.status === "error") {
     return Result.err(inputResult.error);
@@ -700,7 +686,6 @@ const applyTaskUpdate = async function* ({
           requestedStatus: body.status,
           userId,
           workflow,
-          workflowReason,
         });
 
         if (statusTransition.type === "transition") {

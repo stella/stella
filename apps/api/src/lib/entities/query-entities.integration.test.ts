@@ -25,7 +25,10 @@ import { createScopedDb } from "@/api/db/scoped";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { TASK_ASSIGNEE_ROLE } from "@/api/lib/entity-constants";
-import { buildFindConditions } from "@/api/lib/entity-filters";
+import {
+  buildFilterConditions,
+  buildFindConditions,
+} from "@/api/lib/entity-filters";
 import { isRecord } from "@/api/lib/type-guards";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
@@ -118,7 +121,7 @@ const insertLiveSession = async ({
 const readActiveEditor = async () => {
   const result = await queryEntities({
     safeDb,
-    workspaceId: ids.wsA1,
+    scope: { type: "matter", workspaceId: ids.wsA1 },
     currentUserId: ids.userA1,
     currentOrganizationId: ids.orgA,
     filters: [],
@@ -231,7 +234,7 @@ describe("entity creator projection", () => {
     try {
       const result = await queryEntities({
         safeDb,
-        workspaceId: ids.wsA1,
+        scope: { type: "matter", workspaceId: ids.wsA1 },
         currentUserId: ids.userA1,
         currentOrganizationId: ids.orgA,
         filters: [],
@@ -301,7 +304,7 @@ describe("task assignee projection", () => {
   ) => {
     const result = await queryEntities({
       safeDb,
-      workspaceId: ids.wsA1,
+      scope: { type: "matter", workspaceId: ids.wsA1 },
       currentUserId: ids.userA1,
       currentOrganizationId: ids.orgA,
       filters: [],
@@ -630,7 +633,7 @@ describe("find in table", () => {
   }): Promise<string[]> => {
     const result = await queryEntities({
       safeDb,
-      workspaceId: ids.wsA1,
+      scope: { type: "matter", workspaceId: ids.wsA1 },
       currentUserId: ids.userA1,
       currentOrganizationId: ids.orgA,
       filters: [],
@@ -730,7 +733,10 @@ describe("find in table", () => {
           and(
             eq(entities.workspaceId, ids.wsA1),
             isNotNull(entities.currentVersionId),
-            ...buildFindConditions({ find, workspaceId: ids.wsA1 }),
+            ...buildFindConditions({
+              find,
+              scope: { type: "matter", workspaceId: ids.wsA1 },
+            }),
           ),
         ),
     );
@@ -748,7 +754,7 @@ describe("find in table", () => {
     };
     const first = await queryEntities({
       safeDb,
-      workspaceId: ids.wsA1,
+      scope: { type: "matter", workspaceId: ids.wsA1 },
       currentUserId: ids.userA1,
       currentOrganizationId: ids.orgA,
       filters: [],
@@ -767,7 +773,7 @@ describe("find in table", () => {
 
     const second = await queryEntities({
       safeDb,
-      workspaceId: ids.wsA1,
+      scope: { type: "matter", workspaceId: ids.wsA1 },
       currentUserId: ids.userA1,
       currentOrganizationId: ids.orgA,
       filters: [],
@@ -787,5 +793,55 @@ describe("find in table", () => {
     expect(firstNames).toHaveLength(2);
     expect(secondNames.length).toBeGreaterThan(0);
     expect(secondNames).not.toContain(firstNames.at(0));
+  });
+});
+
+describe("work type filters", () => {
+  const filterEntityIds: SafeId<"entity">[] = [];
+
+  afterEach(async () => {
+    if (filterEntityIds.length === 0) {
+      return;
+    }
+    await testDb.delete(entities).where(inArray(entities.id, filterEntityIds));
+    filterEntityIds.length = 0;
+  });
+
+  test("tasks and deadlines are disjoint, including tasks without an explicit type", async () => {
+    const rows = ([null, "task", "deadline"] as const).map((agendaKind) => ({
+      id: createSafeId<"entity">(),
+      workspaceId: ids.wsA1,
+      kind: "task" as const,
+      name: "Work type filter fixture",
+      agendaKind,
+    }));
+    filterEntityIds.push(...rows.map((row) => row.id));
+    await testDb.insert(entities).values(rows);
+
+    for (const selectedType of ["task", "deadline"] as const) {
+      const matching = await testDb
+        .select({ id: entities.id })
+        .from(entities)
+        .where(
+          and(
+            inArray(entities.id, filterEntityIds),
+            ...buildFilterConditions([
+              {
+                type: "predicate",
+                operand: { type: "builtin", field: "agendaKind" },
+                op: "in",
+                value: [selectedType],
+              },
+            ]),
+          ),
+        );
+      expect(new Set(matching.map((row) => row.id))).toEqual(
+        new Set(
+          rows
+            .filter((row) => (row.agendaKind ?? "task") === selectedType)
+            .map((row) => row.id),
+        ),
+      );
+    }
   });
 });

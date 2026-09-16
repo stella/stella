@@ -37,7 +37,9 @@ import { runScout } from "@/api/lib/signals/scout";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 
 const DEADLINE_GENERATION_TIMEOUT_MS = 60_000;
-const DEADLINE_MAX_OUTPUT_TOKENS = 2000;
+// Ten bounded excerpts plus reasoning share the provider's output ceiling.
+// A 2,000-token allowance truncated valid extractions before JSON could close.
+const DEADLINE_MAX_OUTPUT_TOKENS = 8192;
 const DEADLINE_SCOUT_MAX_ATTEMPTS = 5;
 const DEADLINE_SCOUT_ERROR_CODE = {
   NO_ACTOR: "no_actor",

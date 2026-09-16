@@ -1,7 +1,8 @@
-import type {
-  ChatMiddleware,
-  ChatMiddlewareContext,
-  TokenUsage,
+import {
+  EventType,
+  type ChatMiddleware,
+  type ChatMiddlewareContext,
+  type TokenUsage,
 } from "@tanstack/ai";
 import { Result } from "better-result";
 
@@ -21,6 +22,10 @@ import {
 } from "@/api/lib/ai-error";
 import { captureError as captureTelemetryError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  finishReasonOf,
+  type TanStackTextFinishReason,
+} from "@/api/lib/chat/tanstack-chat-runtime";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
@@ -54,6 +59,8 @@ type AnalyticsMetadata = Record<string, AnalyticsPrimitive>;
 type RunAnalyticsState = {
   /** Start of the current agent-loop iteration (one model call). */
   iterationStartedAt: number;
+  finishReason: TanStackTextFinishReason;
+  outputTokens: number | undefined;
   toolCount: number;
   /** Sum of every iteration's reported usage. */
   usage: {
@@ -353,6 +360,8 @@ export const createTanStackAIAnalyticsCallbacks = ({
     const now = performance.now();
     const created: RunAnalyticsState = {
       iterationStartedAt: now,
+      finishReason: null,
+      outputTokens: undefined,
       toolCount: 0,
       usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
       usageReported: false,
@@ -397,8 +406,14 @@ export const createTanStackAIAnalyticsCallbacks = ({
       return modelInfo;
     };
 
-  const captureGenerationError = (error: unknown, durationMs?: number) => {
-    if (hasCapturedGenerationError) {
+  const captureGenerationError = (
+    error: unknown,
+    context?: { durationMs: number; run: RunAnalyticsState | undefined },
+  ) => {
+    // Each middleware terminal hook owns one run. The catch-path fallback
+    // has no run identity, and the SDK rethrows a different Error instance.
+    // Preserve fallback deduplication without suppressing concurrent runs.
+    if (context === undefined && hasCapturedGenerationError) {
       return;
     }
     hasCapturedGenerationError = true;
@@ -415,10 +430,17 @@ export const createTanStackAIAnalyticsCallbacks = ({
     // status this code does not map from a failure that carried none at all;
     // without it an `unknown` kind is indistinguishable between the two.
     const kind = classifyAIError(error);
+    const finishReason = context?.run?.finishReason;
     const attributes = {
       "error.type": errorTag(error),
       "ai.error_kind": kind,
       "ai.feature": config.feature,
+      ...(typeof finishReason === "string"
+        ? { "ai.finish_reason": finishReason }
+        : {}),
+      ...(context?.run?.outputTokens !== undefined
+        ? { "ai.output_tokens": context.run.outputTokens }
+        : {}),
       ...(HandlerError.is(error) ? { "error.status_code": error.status } : {}),
       ...(resolvedModelInfo
         ? {
@@ -453,7 +475,8 @@ export const createTanStackAIAnalyticsCallbacks = ({
         // the construction-time clock is the catch-path fallback and can
         // include setup work.
         $ai_latency:
-          (durationMs ?? performance.now() - startedAt) / ONE_SECOND_MS,
+          (context?.durationMs ?? performance.now() - startedAt) /
+          ONE_SECOND_MS,
         $ai_trace_id: config.traceId,
         feature: config.feature,
         ...(resolvedModelInfo
@@ -536,7 +559,20 @@ export const createTanStackAIAnalyticsCallbacks = ({
       // start and `onUsage` closes it, so per-generation latency covers only
       // that call (the run-level `duration` spans every iteration and tool).
       onIteration: (ctx) => {
-        runState(ctx).iterationStartedAt = performance.now();
+        const run = runState(ctx);
+        run.iterationStartedAt = performance.now();
+        run.finishReason = null;
+        run.outputTokens = undefined;
+      },
+      onStructuredOutputConfig: (ctx) => {
+        const run = runState(ctx);
+        run.finishReason = null;
+        run.outputTokens = undefined;
+      },
+      onChunk: (ctx, chunk) => {
+        if (chunk.type === EventType.RUN_FINISHED) {
+          runState(ctx).finishReason = finishReasonOf(chunk);
+        }
       },
       onAfterToolCall: (ctx) => {
         runState(ctx).toolCount += 1;
@@ -545,8 +581,9 @@ export const createTanStackAIAnalyticsCallbacks = ({
         runs.delete(ctx.runId);
       },
       onError: (ctx, { duration, error }) => {
+        const run = runs.get(ctx.runId);
         runs.delete(ctx.runId);
-        captureGenerationError(error, duration);
+        captureGenerationError(error, { durationMs: duration, run });
       },
       onFinish: (ctx, { duration, usage }) => {
         const run = runs.get(ctx.runId);
@@ -611,6 +648,7 @@ export const createTanStackAIAnalyticsCallbacks = ({
           });
           return;
         }
+        run.outputTokens = usageSnapshot.value.completionTokens;
         run.usage.promptTokens += usageSnapshot.value.promptTokens;
         run.usage.completionTokens += usageSnapshot.value.completionTokens;
         run.usage.totalTokens += usageSnapshot.value.totalTokens;

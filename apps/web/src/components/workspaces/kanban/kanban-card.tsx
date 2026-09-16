@@ -1,4 +1,5 @@
 import { useRef } from "react";
+import type { ReactNode } from "react";
 
 import { CalendarIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -16,6 +17,8 @@ import { InlineEdit } from "@/components/inline-edit";
 import { openInspectorSelection } from "@/components/inspector/inspector-actions";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { UserIdentity } from "@/components/user-avatar";
+import { ActiveEditBadge } from "@/components/workspaces/active-edit-badge";
+import { useCellMetadataFlags } from "@/components/workspaces/cell-metadata-flags";
 import { EditableField } from "@/components/workspaces/editable-field";
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
 import {
@@ -23,6 +26,12 @@ import {
   getFirstFile,
   getInternalPropertyId,
 } from "@/components/workspaces/entity-utils";
+import { useInspectorFlash } from "@/components/workspaces/hooks/use-inspector-flash";
+import {
+  getKanbanCardMetadataVisibility,
+  getKanbanCardRenameInitialValue,
+} from "@/components/workspaces/kanban/kanban-card.logic";
+import { RowActions } from "@/components/workspaces/row-actions";
 import { TaskBadges } from "@/components/workspaces/tasks/task-badges";
 import {
   isTaskPriority,
@@ -45,16 +54,9 @@ import type {
   WorkspaceProperty,
 } from "@/lib/types";
 import { ENTITY_DRAG_TYPE } from "@/lib/workspaces/drag-constants";
-import { ActiveEditBadge } from "@/routes/_protected.workspaces/$workspaceId/-components/active-edit-badge";
-import { useCellMetadataFlags } from "@/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags";
-import {
-  getKanbanCardMetadataVisibility,
-  getKanbanCardRenameInitialValue,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-card.logic";
-import { RowActions } from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions";
-import { useInspectorFlash } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-inspector-flash";
 
 type KanbanCardProps = {
+  context?: ReactNode;
   entity: WorkspaceEntity;
   workspaceId: string;
   draggable?: boolean | undefined;
@@ -71,6 +73,7 @@ type KanbanCardProps = {
 };
 
 export const KanbanCard = ({
+  context,
   entity,
   workspaceId,
   draggable = true,
@@ -211,6 +214,7 @@ export const KanbanCard = ({
           />
         )}
       </span>
+      {context}
       {isTask && <TaskBadges entity={entity} />}
       {showMetadataBadges && (
         <KanbanEntityMetadataBadges

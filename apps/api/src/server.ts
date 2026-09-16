@@ -39,6 +39,7 @@ import { documentsRoute } from "@/api/handlers/documents/routes";
 import { docxSuggestionsRoute } from "@/api/handlers/docx-suggestions/routes";
 import { desktopEditSessionsRoute } from "@/api/handlers/entities/desktop-edit-sessions-route";
 import { entitiesRoute } from "@/api/handlers/entities/routes";
+import { entityViewsRoute } from "@/api/handlers/entity-views/routes";
 import { expensesRoute } from "@/api/handlers/expenses/routes";
 import { externalPreviewRoute } from "@/api/handlers/external-preview/routes";
 import { feedbackPublicRoute } from "@/api/handlers/feedback/routes";
@@ -692,6 +693,7 @@ const api = new Elysia()
       .use(usageRoute)
       .use(viewTemplatesRoute)
       .use(viewsRoute)
+      .use(entityViewsRoute)
       .use(listsRoute)
       .use(tasksRoute)
       .use(workObligationsRoute)

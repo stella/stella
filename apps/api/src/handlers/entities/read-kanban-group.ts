@@ -89,7 +89,7 @@ const readKanbanGroup = createSafeHandler(
     const result = yield* Result.await(
       queryEntities({
         safeDb,
-        workspaceId,
+        scope: { type: "matter", workspaceId },
         currentUserId: currentUser.id,
         currentOrganizationId: session.activeOrganizationId,
         filters: arrayOrEmpty(body.filters),

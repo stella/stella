@@ -1,10 +1,7 @@
 import { panic, Result } from "better-result";
 import { t } from "elysia";
 
-import {
-  WORK_OBLIGATION_SOURCE,
-  WORK_OBLIGATION_STATUS,
-} from "@/api/db/schema";
+import { WORK_OBLIGATION_SOURCE } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -43,7 +40,7 @@ const transitionWorkObligation = createSafeHandler(
     body,
     recordAuditEvent,
   }) {
-    const reason = body.reason?.trim();
+    const reason = body.reason?.trim() || undefined;
     const result = yield* Result.await(
       safeDb(async (tx) => {
         const existing = await lockWorkObligation(tx, {
@@ -69,14 +66,6 @@ const transitionWorkObligation = createSafeHandler(
         ) {
           return { status: "not_owner" as const };
         }
-        if (
-          body.action === WORK_OBLIGATION_TRANSITION_ACTION.CANCEL &&
-          existing.status !== WORK_OBLIGATION_STATUS.UNASSIGNED &&
-          !reason
-        ) {
-          return { status: "reason_required" as const };
-        }
-
         const settled = await settleWorkObligation({
           tx,
           entityId: params.entityId,
@@ -118,13 +107,6 @@ const transitionWorkObligation = createSafeHandler(
           new HandlerError({
             status: 403,
             message: "Only the accountable owner can complete this work",
-          }),
-        );
-      case "reason_required":
-        return Result.err(
-          new HandlerError({
-            status: 400,
-            message: "A reason is required when cancelling assigned work",
           }),
         );
       case "conflict":

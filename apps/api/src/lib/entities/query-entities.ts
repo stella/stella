@@ -29,6 +29,7 @@ import {
   fields,
   searchDocuments,
   taskAssignees,
+  workspaces,
 } from "@/api/db/schema";
 import type {
   CellMetadata,
@@ -44,6 +45,10 @@ import {
 } from "@/api/lib/db-pagination";
 import { liveDesktopEditSessionPredicates } from "@/api/lib/desktop-edit-session-predicates";
 import { isValidDateCursorValue } from "@/api/lib/entities/cursor-validation";
+import {
+  entityQueryScopeCondition,
+  type EntityQueryScope,
+} from "@/api/lib/entities/query-scope";
 import {
   ENTITY_SORTABLE_FIELD_VALUE_MAX_LENGTH,
   type EntitiesWindowCursorValue,
@@ -105,6 +110,8 @@ export type { OcrExportStatus };
 
 export type QueryEntityResult = {
   entityId: string;
+  workspaceId: string;
+  workspaceName: string;
   kind: EntityKind;
   name: string | null;
   parentId: string | null;
@@ -164,7 +171,7 @@ export type QueryEntityResult = {
 
 type QueryEntitiesProps = {
   safeDb: SafeDb;
-  workspaceId: SafeId<"workspace">;
+  scope: EntityQueryScope;
   currentUserId: string;
   currentOrganizationId: SafeId<"organization">;
   filters: ConditionNode[];
@@ -287,6 +294,7 @@ const buildCellMetadataPredicates = ({
 }) => {
   const predicates = [
     eq(cellMetadata.entityVersionId, entities.currentVersionId),
+    eq(cellMetadata.workspaceId, entities.workspaceId),
     idFilter,
   ];
   if (fieldMode !== "visible") {
@@ -680,7 +688,7 @@ const isGeneratedCursorValue = (
 
 const queryEntitiesGenerator = async function* ({
   safeDb,
-  workspaceId,
+  scope,
   currentUserId,
   currentOrganizationId,
   filters,
@@ -696,12 +704,14 @@ const queryEntitiesGenerator = async function* ({
   extraConditions = [],
   includeAssignees = false,
 }: QueryEntitiesProps) {
-  const workspaceCondition = eq(entities.workspaceId, workspaceId);
+  const workspaceCondition = entityQueryScopeCondition(
+    scope,
+    entities.workspaceId,
+  );
   const filterConditions = buildFilterConditions(filters);
   const searchConditions = buildSearchConditions({
     search,
     organizationId: currentOrganizationId,
-    workspaceId,
   });
   const kindConditions =
     excludedKinds.length > 0 ? [notInArray(entities.kind, excludedKinds)] : [];
@@ -712,7 +722,7 @@ const queryEntitiesGenerator = async function* ({
     workspaceCondition,
     ...filterConditions,
     ...searchConditions,
-    ...buildFindConditions({ find, workspaceId }),
+    ...buildFindConditions({ find, scope }),
     ...kindConditions,
     ...previewableConditions,
     ...extraConditions,
@@ -761,7 +771,9 @@ const queryEntitiesGenerator = async function* ({
   const sessionEditor = alias(user, "session_editor");
   const fieldPredicates = [
     eq(fields.entityVersionId, entities.currentVersionId),
+    eq(fields.workspaceId, entities.workspaceId),
     idFilter,
+    workspaceCondition,
   ];
   if (fieldMode === "visible") {
     const uniqueFieldIds = [...new Set(fieldIds)];
@@ -783,6 +795,7 @@ const queryEntitiesGenerator = async function* ({
     fieldMode,
     idFilter,
   });
+  cellMetadataPredicates.push(workspaceCondition);
 
   const [
     entityRowsResult,
@@ -802,6 +815,8 @@ const queryEntitiesGenerator = async function* ({
         tx
           .select({
             id: entities.id,
+            workspaceId: entities.workspaceId,
+            workspaceName: workspaces.name,
             kind: entities.kind,
             name: entities.name,
             parentId: entities.parentId,
@@ -847,6 +862,7 @@ const queryEntitiesGenerator = async function* ({
             sortOrder: entities.sortOrder,
           })
           .from(entities)
+          .innerJoin(workspaces, eq(workspaces.id, entities.workspaceId))
           // The current version's reference rides the row the page already
           // reads: one join on the entity's own version pointer, never a query
           // per row.
@@ -854,7 +870,7 @@ const queryEntitiesGenerator = async function* ({
             entityVersions,
             and(
               eq(entityVersions.id, entities.currentVersionId),
-              eq(entityVersions.workspaceId, workspaceId),
+              eq(entityVersions.workspaceId, entities.workspaceId),
             ),
           )
           .leftJoin(
@@ -868,7 +884,7 @@ const queryEntitiesGenerator = async function* ({
               and(eq(entities.createdBy, user.id), isNotNull(user.deletedAt)),
             ),
           )
-          .where(idFilter)
+          .where(and(idFilter, workspaceCondition))
       );
     }),
     safeDb((tx) =>
@@ -881,6 +897,7 @@ const queryEntitiesGenerator = async function* ({
         .where(
           and(
             inArray(entityVersions.entityId, pageIds),
+            entityQueryScopeCondition(scope, entityVersions.workspaceId),
             isNull(entityVersions.deletedAt),
           ),
         )
@@ -908,7 +925,7 @@ const queryEntitiesGenerator = async function* ({
           extractedContent,
           and(
             eq(extractedContent.entityId, entities.id),
-            eq(extractedContent.workspaceId, workspaceId),
+            eq(extractedContent.workspaceId, entities.workspaceId),
             eq(extractedContent.sourceEntityVersionId, fields.entityVersionId),
             eq(extractedContent.sourceFieldId, fields.id),
             isNotNull(extractedContent.ocrRunId),
@@ -918,7 +935,7 @@ const queryEntitiesGenerator = async function* ({
           documentProcessingRuns,
           and(
             eq(documentProcessingRuns.id, extractedContent.ocrRunId),
-            eq(documentProcessingRuns.workspaceId, workspaceId),
+            eq(documentProcessingRuns.workspaceId, entities.workspaceId),
           ),
         ),
     ),
@@ -961,7 +978,7 @@ const queryEntitiesGenerator = async function* ({
               // Keep the tenant boundary in this read even though pageIds
               // originate from a workspace-scoped entity query and SafeDb
               // enforces RLS. It also makes the matching index usable.
-              eq(desktopEditSessions.workspaceId, workspaceId),
+              entityQueryScopeCondition(scope, desktopEditSessions.workspaceId),
               inArray(desktopEditSessions.entityId, pageIds),
               ...liveDesktopEditSessionPredicates(new Date()),
             ),
@@ -992,8 +1009,20 @@ const queryEntitiesGenerator = async function* ({
               image: user.image,
             })
             .from(taskAssignees)
+            .innerJoin(
+              member,
+              and(
+                eq(member.userId, taskAssignees.userId),
+                eq(member.organizationId, currentOrganizationId),
+              ),
+            )
             .innerJoin(user, eq(taskAssignees.userId, user.id))
-            .where(inArray(taskAssignees.entityId, pageIds)),
+            .where(
+              and(
+                inArray(taskAssignees.entityId, pageIds),
+                entityQueryScopeCondition(scope, taskAssignees.workspaceId),
+              ),
+            ),
         )
       : Promise.resolve(Result.ok([])),
   ]);
@@ -1092,6 +1121,8 @@ const queryEntitiesGenerator = async function* ({
 
     result.push({
       entityId: entity.id,
+      workspaceId: entity.workspaceId,
+      workspaceName: entity.workspaceName,
       kind: entity.kind,
       name: entity.name,
       parentId: entity.parentId,
@@ -1153,11 +1184,9 @@ const queryEntitiesGenerator = async function* ({
 const buildSearchConditions = ({
   search,
   organizationId,
-  workspaceId,
 }: {
   search?: string | undefined;
   organizationId: SafeId<"organization">;
-  workspaceId: SafeId<"workspace">;
 }): SQL[] => {
   const trimmed = search?.trim() ?? "";
   if (!trimmed) {
@@ -1169,7 +1198,7 @@ const buildSearchConditions = ({
       SELECT 1 FROM ${searchDocuments} sd
       WHERE sd.entity_id = ${entities.id}
         AND sd.organization_id = ${organizationId}
-        AND sd.workspace_id = ${workspaceId}
+        AND sd.workspace_id = ${entities.workspaceId}
         AND sd.title ILIKE ${`%${trimmed}%`}
     )`,
   ];

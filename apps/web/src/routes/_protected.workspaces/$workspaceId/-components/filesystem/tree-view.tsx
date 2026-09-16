@@ -51,6 +51,7 @@ import { FileTreeNameCell } from "@/components/file-tree/file-tree";
 import { InlineEdit } from "@/components/inline-edit";
 import { openInspectorSelection } from "@/components/inspector/inspector-actions";
 import Tooltip from "@/components/tooltip";
+import { ActiveEditBadge } from "@/components/workspaces/active-edit-badge";
 import { resolveAncestorIds } from "@/components/workspaces/copy-to-matter-dialog.logic";
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
 import {
@@ -62,6 +63,8 @@ import {
   getInternalPropertyId,
 } from "@/components/workspaces/entity-utils";
 import type { InternalPropertyId } from "@/components/workspaces/entity-utils";
+import { useInspectorFlash } from "@/components/workspaces/hooks/use-inspector-flash";
+import { RowActions } from "@/components/workspaces/row-actions";
 import type { TableTreeNode } from "@/components/workspaces/table/types";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
@@ -89,7 +92,6 @@ import {
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
 import { useWorkspaceStore } from "@/lib/workspaces/store";
 import { mergeLayout } from "@/lib/workspaces/view-layout";
-import { ActiveEditBadge } from "@/routes/_protected.workspaces/$workspaceId/-components/active-edit-badge";
 import { AddEntityMenu } from "@/routes/_protected.workspaces/$workspaceId/-components/add-entity-menu";
 import { EmptyState } from "@/routes/_protected.workspaces/$workspaceId/-components/empty-state";
 import { calculateFolderStatistics } from "@/routes/_protected.workspaces/$workspaceId/-components/filesystem/folder-statistics.logic";
@@ -105,9 +107,7 @@ import {
   LastUpdatedCell,
   VersionCell,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/metadata-cells";
-import { RowActions } from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions";
 import { VersionOrNewFileDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/version-or-new-file-dialog";
-import { useInspectorFlash } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-inspector-flash";
 import { useVersionOrNewFileDrop } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-version-or-new-file-drop";
 import { useUpdateView } from "@/routes/_protected.workspaces/$workspaceId/-mutations/views";
 

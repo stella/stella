@@ -15,7 +15,13 @@ import { Button } from "@stll/ui/button";
 
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import Tooltip from "@/components/tooltip";
+import { ActiveEditBadge } from "@/components/workspaces/active-edit-badge";
+import {
+  CellMetadataFlags,
+  useCellMetadataFlags,
+} from "@/components/workspaces/cell-metadata-flags";
 import { EditableField } from "@/components/workspaces/editable-field";
+import { useRetryCell } from "@/components/workspaces/hooks/use-retry-cell";
 import {
   type ColorVariants,
   emptyColor,
@@ -33,19 +39,13 @@ import {
   selectJustificationByFieldId,
   useWorkspaceStore,
 } from "@/lib/workspaces/store";
-import { ActiveEditBadge } from "@/routes/_protected.workspaces/$workspaceId/-components/active-edit-badge";
 import { AICellSourceCard } from "@/routes/_protected.workspaces/$workspaceId/-components/ai-cell-source-card";
-import {
-  CellMetadataFlags,
-  useCellMetadataFlags,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags";
 import {
   isAIExtractionProperty,
   resolveAiCellTargets,
   type AIExtractionTarget,
   type SourceFileTarget,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/table-column.logic";
-import { useRetryCell } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-retry-cell";
 
 export const PropertyCell = ({
   entity,

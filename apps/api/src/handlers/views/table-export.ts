@@ -156,7 +156,7 @@ const exportTableView = createSafeHandler(
     const queryResult = yield* Result.await(
       queryEntities({
         safeDb,
-        workspaceId,
+        scope: { type: "matter", workspaceId },
         currentUserId: user.id,
         currentOrganizationId: session.activeOrganizationId,
         filters: layout.filters,

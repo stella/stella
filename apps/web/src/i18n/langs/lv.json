@@ -1512,6 +1512,7 @@
     "tryAgain": "Mēģināt vēlreiz",
     "type": "Tips",
     "typeNameToConfirm": "Ievadiet nosaukumu, lai apstiprinātu",
+    "unassigned": "Nav piešķirts",
     "uncategorized": "Nekategorizēts",
     "undo": "Atsaukt",
     "unexpectedError": "Radās neparedzēta kļūda. Lūdzu, sazinieties ar atbalsta dienestu.",
@@ -2549,7 +2550,7 @@
     },
     "filter": {
       "any": "Jebkurš",
-      "mine": "Mani"
+      "mine": "Man piešķirtās"
     },
     "newRequest": "Jauns pieprasījums",
     "openMatter": "Atvērt lietu",
@@ -2558,6 +2559,7 @@
       "model": "MI",
       "source": "Ārējs avots"
     },
+    "proposalView": "Ieteikumi: {view}",
     "request": {
       "created": "Pieprasījums nosūtīts",
       "description": "Aprakstiet, kas jāizskata juridiskajai komandai. Pieprasījums nonāks iesūtnē šķirošanai.",
@@ -2586,7 +2588,6 @@
       "fileToWorkspace": "Pievienot lietai",
       "runReview": "Sākt pārskatu"
     },
-    "unassigned": "Nav piešķirts",
     "verdict": {
       "safe": "Droši"
     },
@@ -4305,9 +4306,10 @@
       "assignee": "Izpildītājs",
       "reviewer": "Pārskatītājs"
     },
-    "assignees": "Atbildīgie",
+    "assignees": "Līdzstrādnieki",
     "clearDate": "Notīrīt datumu",
     "completeWork": "Pabeigt darbu",
+    "deadlines": "Termiņi",
     "delegationReason": "Izmaiņu iemesls",
     "deletedAccount": "Dzēsts konts",
     "dueDate": "Izpildes termiņš",
@@ -4319,16 +4321,15 @@
     "myWorkTitle": "Mans darbs",
     "newTask": "Jauns uzdevums",
     "noActivity": "Aktivitāšu vēl nav",
-    "noAssignees": "Nav atbildīgo",
+    "noAssignees": "Nav līdzstrādnieku",
     "noLinks": "Nav saistīto ierakstu",
-    "noOwner": "Nav atbildīgās personas",
     "noSubtasks": "Nav apakšuzdevumu",
     "noTasksAssigned": "Jums nav piešķirtu uzdevumu",
     "noWorkInQueue": "Šajā rindā nav darba",
     "notFound": "Uzdevums nav atrasts",
     "openWorkflowRun": "Atvērt darbplūsmas izpildi",
     "overdue": "Nokavēts",
-    "owner": "Atbildīgā persona",
+    "owner": "Veic",
     "priority": "Prioritāte",
     "priorityValues": {
       "high": "Augsta",

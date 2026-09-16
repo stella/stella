@@ -1512,6 +1512,7 @@
     "tryAgain": "حاول مرة أخرى",
     "type": "النوع",
     "typeNameToConfirm": "اكتب الاسم للتأكيد",
+    "unassigned": "غير مُسند",
     "uncategorized": "غير مصنّف",
     "undo": "تراجع",
     "unexpectedError": "حدث خطأ غير متوقع. يُرجى التواصل مع الدعم.",
@@ -2549,7 +2550,7 @@
     },
     "filter": {
       "any": "الكل",
-      "mine": "الخاصة بي"
+      "mine": "المُسندة إليّ"
     },
     "newRequest": "طلب جديد",
     "openMatter": "فتح الملف",
@@ -2558,6 +2559,7 @@
       "model": "ذكاء اصطناعي",
       "source": "مصدر خارجي"
     },
+    "proposalView": "الاقتراحات: {view}",
     "request": {
       "created": "تم إرسال الطلب",
       "description": "صف ما يجب أن يراجعه الفريق القانوني. يصل الطلب إلى صندوق الوارد للفرز.",
@@ -2586,7 +2588,6 @@
       "fileToWorkspace": "حفظ في ملف",
       "runReview": "تشغيل المراجعة"
     },
-    "unassigned": "غير مُسند",
     "verdict": {
       "safe": "آمن"
     },
@@ -4305,9 +4306,10 @@
       "assignee": "المُكلَّف",
       "reviewer": "المراجِع"
     },
-    "assignees": "المُكلَّفون",
+    "assignees": "المتعاونون",
     "clearDate": "مسح التاريخ",
     "completeWork": "إكمال العمل",
+    "deadlines": "المواعيد النهائية",
     "delegationReason": "سبب التغيير",
     "deletedAccount": "حساب محذوف",
     "dueDate": "تاريخ الاستحقاق",
@@ -4319,16 +4321,15 @@
     "myWorkTitle": "عملي",
     "newTask": "مهمة جديدة",
     "noActivity": "لا يوجد نشاط بعد",
-    "noAssignees": "لا يوجد مُكلَّفون",
+    "noAssignees": "لا يوجد متعاونون",
     "noLinks": "لا توجد عناصر مرتبطة",
-    "noOwner": "لا يوجد مسؤول",
     "noSubtasks": "لا توجد مهام فرعية",
     "noTasksAssigned": "لا توجد مهام مُكلَّفة إليك",
     "noWorkInQueue": "لا يوجد عمل في هذه القائمة",
     "notFound": "لم يُعثر على المهمة",
     "openWorkflowRun": "فتح تشغيل سير العمل",
     "overdue": "متأخرة",
-    "owner": "المسؤول",
+    "owner": "يتولى المهمة",
     "priority": "الأولوية",
     "priorityValues": {
       "high": "عالية",

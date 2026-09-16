@@ -12473,10 +12473,10 @@ export const generatedRouteMap: RouteNode = {
                           items: {
                             anyOf: [
                               {
-                                $ref: "#/$defs/s_88402f3c68c1",
+                                $ref: "#/$defs/s_81f0360286f1",
                               },
                               {
-                                $ref: "#/$defs/s_db9cd85a47d3",
+                                $ref: "#/$defs/s_58ff7eb0d8f6",
                               },
                               {
                                 type: "object",
@@ -12507,10 +12507,10 @@ export const generatedRouteMap: RouteNode = {
                                     items: {
                                       anyOf: [
                                         {
-                                          $ref: "#/$defs/s_88402f3c68c1",
+                                          $ref: "#/$defs/s_81f0360286f1",
                                         },
                                         {
-                                          $ref: "#/$defs/s_db9cd85a47d3",
+                                          $ref: "#/$defs/s_58ff7eb0d8f6",
                                         },
                                         {
                                           type: "object",
@@ -12545,10 +12545,10 @@ export const generatedRouteMap: RouteNode = {
                                               items: {
                                                 anyOf: [
                                                   {
-                                                    $ref: "#/$defs/s_88402f3c68c1",
+                                                    $ref: "#/$defs/s_81f0360286f1",
                                                   },
                                                   {
-                                                    $ref: "#/$defs/s_db9cd85a47d3",
+                                                    $ref: "#/$defs/s_58ff7eb0d8f6",
                                                   },
                                                   {
                                                     type: "object",
@@ -12583,10 +12583,10 @@ export const generatedRouteMap: RouteNode = {
                                                         items: {
                                                           anyOf: [
                                                             {
-                                                              $ref: "#/$defs/s_88402f3c68c1",
+                                                              $ref: "#/$defs/s_81f0360286f1",
                                                             },
                                                             {
-                                                              $ref: "#/$defs/s_db9cd85a47d3",
+                                                              $ref: "#/$defs/s_58ff7eb0d8f6",
                                                             },
                                                             {
                                                               type: "object",
@@ -12626,10 +12626,10 @@ export const generatedRouteMap: RouteNode = {
                                                                   items: {
                                                                     anyOf: [
                                                                       {
-                                                                        $ref: "#/$defs/s_88402f3c68c1",
+                                                                        $ref: "#/$defs/s_81f0360286f1",
                                                                       },
                                                                       {
-                                                                        $ref: "#/$defs/s_db9cd85a47d3",
+                                                                        $ref: "#/$defs/s_58ff7eb0d8f6",
                                                                       },
                                                                       {
                                                                         type: "object",
@@ -12677,10 +12677,10 @@ export const generatedRouteMap: RouteNode = {
                                                                                     anyOf:
                                                                                       [
                                                                                         {
-                                                                                          $ref: "#/$defs/s_88402f3c68c1",
+                                                                                          $ref: "#/$defs/s_81f0360286f1",
                                                                                         },
                                                                                         {
-                                                                                          $ref: "#/$defs/s_db9cd85a47d3",
+                                                                                          $ref: "#/$defs/s_58ff7eb0d8f6",
                                                                                         },
                                                                                         {
                                                                                           type: "object",
@@ -12728,10 +12728,10 @@ export const generatedRouteMap: RouteNode = {
                                                                                                       anyOf:
                                                                                                         [
                                                                                                           {
-                                                                                                            $ref: "#/$defs/s_88402f3c68c1",
+                                                                                                            $ref: "#/$defs/s_81f0360286f1",
                                                                                                           },
                                                                                                           {
-                                                                                                            $ref: "#/$defs/s_db9cd85a47d3",
+                                                                                                            $ref: "#/$defs/s_58ff7eb0d8f6",
                                                                                                           },
                                                                                                         ],
                                                                                                     },
@@ -12854,7 +12854,51 @@ export const generatedRouteMap: RouteNode = {
                     },
                   },
                   $defs: {
-                    s_88402f3c68c1: {
+                    s_58ff7eb0d8f6: {
+                      type: "object",
+                      required: ["type", "operand", "op"],
+                      properties: {
+                        type: {
+                          const: "predicate",
+                          type: "string",
+                        },
+                        operand: {
+                          $ref: "#/$defs/s_bbc23394f552",
+                        },
+                        op: {
+                          default: "is_empty",
+                          type: "string",
+                          enum: [
+                            "is_empty",
+                            "is_not_empty",
+                            "is_truthy",
+                            "contains",
+                            "not_contains",
+                            "starts_with",
+                            "ends_with",
+                            "contains_all",
+                            "in",
+                          ],
+                        },
+                        value: {
+                          anyOf: [
+                            {
+                              type: "string",
+                            },
+                            {
+                              type: "array",
+                              items: {
+                                type: "string",
+                              },
+                            },
+                            {
+                              type: "undefined",
+                            },
+                          ],
+                        },
+                      },
+                    },
+                    s_81f0360286f1: {
                       type: "object",
                       required: ["type", "left", "op", "right"],
                       properties: {
@@ -12863,7 +12907,7 @@ export const generatedRouteMap: RouteNode = {
                           type: "string",
                         },
                         left: {
-                          $ref: "#/$defs/s_92cd59123f4d",
+                          $ref: "#/$defs/s_bbc23394f552",
                         },
                         op: {
                           default: "eq",
@@ -12871,11 +12915,11 @@ export const generatedRouteMap: RouteNode = {
                           enum: ["eq", "neq", "gt", "lt", "gte", "lte"],
                         },
                         right: {
-                          $ref: "#/$defs/s_92cd59123f4d",
+                          $ref: "#/$defs/s_bbc23394f552",
                         },
                       },
                     },
-                    s_92cd59123f4d: {
+                    s_bbc23394f552: {
                       anyOf: [
                         {
                           type: "object",
@@ -12902,7 +12946,7 @@ export const generatedRouteMap: RouteNode = {
                             field: {
                               default: "status",
                               type: "string",
-                              enum: ["status", "priority"],
+                              enum: ["status", "priority", "agendaKind"],
                             },
                           },
                         },
@@ -12960,50 +13004,6 @@ export const generatedRouteMap: RouteNode = {
                           },
                         },
                       ],
-                    },
-                    s_db9cd85a47d3: {
-                      type: "object",
-                      required: ["type", "operand", "op"],
-                      properties: {
-                        type: {
-                          const: "predicate",
-                          type: "string",
-                        },
-                        operand: {
-                          $ref: "#/$defs/s_92cd59123f4d",
-                        },
-                        op: {
-                          default: "is_empty",
-                          type: "string",
-                          enum: [
-                            "is_empty",
-                            "is_not_empty",
-                            "is_truthy",
-                            "contains",
-                            "not_contains",
-                            "starts_with",
-                            "ends_with",
-                            "contains_all",
-                            "in",
-                          ],
-                        },
-                        value: {
-                          anyOf: [
-                            {
-                              type: "string",
-                            },
-                            {
-                              type: "array",
-                              items: {
-                                type: "string",
-                              },
-                            },
-                            {
-                              type: "undefined",
-                            },
-                          ],
-                        },
-                      },
                     },
                   },
                 },
@@ -13476,10 +13476,10 @@ export const generatedRouteMap: RouteNode = {
                           items: {
                             anyOf: [
                               {
-                                $ref: "#/$defs/s_88402f3c68c1",
+                                $ref: "#/$defs/s_81f0360286f1",
                               },
                               {
-                                $ref: "#/$defs/s_db9cd85a47d3",
+                                $ref: "#/$defs/s_58ff7eb0d8f6",
                               },
                               {
                                 type: "object",
@@ -13510,10 +13510,10 @@ export const generatedRouteMap: RouteNode = {
                                     items: {
                                       anyOf: [
                                         {
-                                          $ref: "#/$defs/s_88402f3c68c1",
+                                          $ref: "#/$defs/s_81f0360286f1",
                                         },
                                         {
-                                          $ref: "#/$defs/s_db9cd85a47d3",
+                                          $ref: "#/$defs/s_58ff7eb0d8f6",
                                         },
                                         {
                                           type: "object",
@@ -13548,10 +13548,10 @@ export const generatedRouteMap: RouteNode = {
                                               items: {
                                                 anyOf: [
                                                   {
-                                                    $ref: "#/$defs/s_88402f3c68c1",
+                                                    $ref: "#/$defs/s_81f0360286f1",
                                                   },
                                                   {
-                                                    $ref: "#/$defs/s_db9cd85a47d3",
+                                                    $ref: "#/$defs/s_58ff7eb0d8f6",
                                                   },
                                                   {
                                                     type: "object",
@@ -13586,10 +13586,10 @@ export const generatedRouteMap: RouteNode = {
                                                         items: {
                                                           anyOf: [
                                                             {
-                                                              $ref: "#/$defs/s_88402f3c68c1",
+                                                              $ref: "#/$defs/s_81f0360286f1",
                                                             },
                                                             {
-                                                              $ref: "#/$defs/s_db9cd85a47d3",
+                                                              $ref: "#/$defs/s_58ff7eb0d8f6",
                                                             },
                                                             {
                                                               type: "object",
@@ -13629,10 +13629,10 @@ export const generatedRouteMap: RouteNode = {
                                                                   items: {
                                                                     anyOf: [
                                                                       {
-                                                                        $ref: "#/$defs/s_88402f3c68c1",
+                                                                        $ref: "#/$defs/s_81f0360286f1",
                                                                       },
                                                                       {
-                                                                        $ref: "#/$defs/s_db9cd85a47d3",
+                                                                        $ref: "#/$defs/s_58ff7eb0d8f6",
                                                                       },
                                                                       {
                                                                         type: "object",
@@ -13680,10 +13680,10 @@ export const generatedRouteMap: RouteNode = {
                                                                                     anyOf:
                                                                                       [
                                                                                         {
-                                                                                          $ref: "#/$defs/s_88402f3c68c1",
+                                                                                          $ref: "#/$defs/s_81f0360286f1",
                                                                                         },
                                                                                         {
-                                                                                          $ref: "#/$defs/s_db9cd85a47d3",
+                                                                                          $ref: "#/$defs/s_58ff7eb0d8f6",
                                                                                         },
                                                                                         {
                                                                                           type: "object",
@@ -13731,10 +13731,10 @@ export const generatedRouteMap: RouteNode = {
                                                                                                       anyOf:
                                                                                                         [
                                                                                                           {
-                                                                                                            $ref: "#/$defs/s_88402f3c68c1",
+                                                                                                            $ref: "#/$defs/s_81f0360286f1",
                                                                                                           },
                                                                                                           {
-                                                                                                            $ref: "#/$defs/s_db9cd85a47d3",
+                                                                                                            $ref: "#/$defs/s_58ff7eb0d8f6",
                                                                                                           },
                                                                                                         ],
                                                                                                     },
@@ -13827,7 +13827,51 @@ export const generatedRouteMap: RouteNode = {
                     },
                   },
                   $defs: {
-                    s_88402f3c68c1: {
+                    s_58ff7eb0d8f6: {
+                      type: "object",
+                      required: ["type", "operand", "op"],
+                      properties: {
+                        type: {
+                          const: "predicate",
+                          type: "string",
+                        },
+                        operand: {
+                          $ref: "#/$defs/s_bbc23394f552",
+                        },
+                        op: {
+                          default: "is_empty",
+                          type: "string",
+                          enum: [
+                            "is_empty",
+                            "is_not_empty",
+                            "is_truthy",
+                            "contains",
+                            "not_contains",
+                            "starts_with",
+                            "ends_with",
+                            "contains_all",
+                            "in",
+                          ],
+                        },
+                        value: {
+                          anyOf: [
+                            {
+                              type: "string",
+                            },
+                            {
+                              type: "array",
+                              items: {
+                                type: "string",
+                              },
+                            },
+                            {
+                              type: "undefined",
+                            },
+                          ],
+                        },
+                      },
+                    },
+                    s_81f0360286f1: {
                       type: "object",
                       required: ["type", "left", "op", "right"],
                       properties: {
@@ -13836,7 +13880,7 @@ export const generatedRouteMap: RouteNode = {
                           type: "string",
                         },
                         left: {
-                          $ref: "#/$defs/s_92cd59123f4d",
+                          $ref: "#/$defs/s_bbc23394f552",
                         },
                         op: {
                           default: "eq",
@@ -13844,11 +13888,11 @@ export const generatedRouteMap: RouteNode = {
                           enum: ["eq", "neq", "gt", "lt", "gte", "lte"],
                         },
                         right: {
-                          $ref: "#/$defs/s_92cd59123f4d",
+                          $ref: "#/$defs/s_bbc23394f552",
                         },
                       },
                     },
-                    s_92cd59123f4d: {
+                    s_bbc23394f552: {
                       anyOf: [
                         {
                           type: "object",
@@ -13875,7 +13919,7 @@ export const generatedRouteMap: RouteNode = {
                             field: {
                               default: "status",
                               type: "string",
-                              enum: ["status", "priority"],
+                              enum: ["status", "priority", "agendaKind"],
                             },
                           },
                         },
@@ -13933,50 +13977,6 @@ export const generatedRouteMap: RouteNode = {
                           },
                         },
                       ],
-                    },
-                    s_db9cd85a47d3: {
-                      type: "object",
-                      required: ["type", "operand", "op"],
-                      properties: {
-                        type: {
-                          const: "predicate",
-                          type: "string",
-                        },
-                        operand: {
-                          $ref: "#/$defs/s_92cd59123f4d",
-                        },
-                        op: {
-                          default: "is_empty",
-                          type: "string",
-                          enum: [
-                            "is_empty",
-                            "is_not_empty",
-                            "is_truthy",
-                            "contains",
-                            "not_contains",
-                            "starts_with",
-                            "ends_with",
-                            "contains_all",
-                            "in",
-                          ],
-                        },
-                        value: {
-                          anyOf: [
-                            {
-                              type: "string",
-                            },
-                            {
-                              type: "array",
-                              items: {
-                                type: "string",
-                              },
-                            },
-                            {
-                              type: "undefined",
-                            },
-                          ],
-                        },
-                      },
                     },
                   },
                 },
@@ -14344,10 +14344,10 @@ export const generatedRouteMap: RouteNode = {
                           items: {
                             anyOf: [
                               {
-                                $ref: "#/$defs/s_88402f3c68c1",
+                                $ref: "#/$defs/s_81f0360286f1",
                               },
                               {
-                                $ref: "#/$defs/s_db9cd85a47d3",
+                                $ref: "#/$defs/s_58ff7eb0d8f6",
                               },
                               {
                                 type: "object",
@@ -14378,10 +14378,10 @@ export const generatedRouteMap: RouteNode = {
                                     items: {
                                       anyOf: [
                                         {
-                                          $ref: "#/$defs/s_88402f3c68c1",
+                                          $ref: "#/$defs/s_81f0360286f1",
                                         },
                                         {
-                                          $ref: "#/$defs/s_db9cd85a47d3",
+                                          $ref: "#/$defs/s_58ff7eb0d8f6",
                                         },
                                         {
                                           type: "object",
@@ -14416,10 +14416,10 @@ export const generatedRouteMap: RouteNode = {
                                               items: {
                                                 anyOf: [
                                                   {
-                                                    $ref: "#/$defs/s_88402f3c68c1",
+                                                    $ref: "#/$defs/s_81f0360286f1",
                                                   },
                                                   {
-                                                    $ref: "#/$defs/s_db9cd85a47d3",
+                                                    $ref: "#/$defs/s_58ff7eb0d8f6",
                                                   },
                                                   {
                                                     type: "object",
@@ -14454,10 +14454,10 @@ export const generatedRouteMap: RouteNode = {
                                                         items: {
                                                           anyOf: [
                                                             {
-                                                              $ref: "#/$defs/s_88402f3c68c1",
+                                                              $ref: "#/$defs/s_81f0360286f1",
                                                             },
                                                             {
-                                                              $ref: "#/$defs/s_db9cd85a47d3",
+                                                              $ref: "#/$defs/s_58ff7eb0d8f6",
                                                             },
                                                             {
                                                               type: "object",
@@ -14497,10 +14497,10 @@ export const generatedRouteMap: RouteNode = {
                                                                   items: {
                                                                     anyOf: [
                                                                       {
-                                                                        $ref: "#/$defs/s_88402f3c68c1",
+                                                                        $ref: "#/$defs/s_81f0360286f1",
                                                                       },
                                                                       {
-                                                                        $ref: "#/$defs/s_db9cd85a47d3",
+                                                                        $ref: "#/$defs/s_58ff7eb0d8f6",
                                                                       },
                                                                       {
                                                                         type: "object",
@@ -14548,10 +14548,10 @@ export const generatedRouteMap: RouteNode = {
                                                                                     anyOf:
                                                                                       [
                                                                                         {
-                                                                                          $ref: "#/$defs/s_88402f3c68c1",
+                                                                                          $ref: "#/$defs/s_81f0360286f1",
                                                                                         },
                                                                                         {
-                                                                                          $ref: "#/$defs/s_db9cd85a47d3",
+                                                                                          $ref: "#/$defs/s_58ff7eb0d8f6",
                                                                                         },
                                                                                         {
                                                                                           type: "object",
@@ -14599,10 +14599,10 @@ export const generatedRouteMap: RouteNode = {
                                                                                                       anyOf:
                                                                                                         [
                                                                                                           {
-                                                                                                            $ref: "#/$defs/s_88402f3c68c1",
+                                                                                                            $ref: "#/$defs/s_81f0360286f1",
                                                                                                           },
                                                                                                           {
-                                                                                                            $ref: "#/$defs/s_db9cd85a47d3",
+                                                                                                            $ref: "#/$defs/s_58ff7eb0d8f6",
                                                                                                           },
                                                                                                         ],
                                                                                                     },
@@ -14772,7 +14772,51 @@ export const generatedRouteMap: RouteNode = {
                     },
                   },
                   $defs: {
-                    s_88402f3c68c1: {
+                    s_58ff7eb0d8f6: {
+                      type: "object",
+                      required: ["type", "operand", "op"],
+                      properties: {
+                        type: {
+                          const: "predicate",
+                          type: "string",
+                        },
+                        operand: {
+                          $ref: "#/$defs/s_bbc23394f552",
+                        },
+                        op: {
+                          default: "is_empty",
+                          type: "string",
+                          enum: [
+                            "is_empty",
+                            "is_not_empty",
+                            "is_truthy",
+                            "contains",
+                            "not_contains",
+                            "starts_with",
+                            "ends_with",
+                            "contains_all",
+                            "in",
+                          ],
+                        },
+                        value: {
+                          anyOf: [
+                            {
+                              type: "string",
+                            },
+                            {
+                              type: "array",
+                              items: {
+                                type: "string",
+                              },
+                            },
+                            {
+                              type: "undefined",
+                            },
+                          ],
+                        },
+                      },
+                    },
+                    s_81f0360286f1: {
                       type: "object",
                       required: ["type", "left", "op", "right"],
                       properties: {
@@ -14781,7 +14825,7 @@ export const generatedRouteMap: RouteNode = {
                           type: "string",
                         },
                         left: {
-                          $ref: "#/$defs/s_92cd59123f4d",
+                          $ref: "#/$defs/s_bbc23394f552",
                         },
                         op: {
                           default: "eq",
@@ -14789,11 +14833,11 @@ export const generatedRouteMap: RouteNode = {
                           enum: ["eq", "neq", "gt", "lt", "gte", "lte"],
                         },
                         right: {
-                          $ref: "#/$defs/s_92cd59123f4d",
+                          $ref: "#/$defs/s_bbc23394f552",
                         },
                       },
                     },
-                    s_92cd59123f4d: {
+                    s_bbc23394f552: {
                       anyOf: [
                         {
                           type: "object",
@@ -14820,7 +14864,7 @@ export const generatedRouteMap: RouteNode = {
                             field: {
                               default: "status",
                               type: "string",
-                              enum: ["status", "priority"],
+                              enum: ["status", "priority", "agendaKind"],
                             },
                           },
                         },
@@ -14878,50 +14922,6 @@ export const generatedRouteMap: RouteNode = {
                           },
                         },
                       ],
-                    },
-                    s_db9cd85a47d3: {
-                      type: "object",
-                      required: ["type", "operand", "op"],
-                      properties: {
-                        type: {
-                          const: "predicate",
-                          type: "string",
-                        },
-                        operand: {
-                          $ref: "#/$defs/s_92cd59123f4d",
-                        },
-                        op: {
-                          default: "is_empty",
-                          type: "string",
-                          enum: [
-                            "is_empty",
-                            "is_not_empty",
-                            "is_truthy",
-                            "contains",
-                            "not_contains",
-                            "starts_with",
-                            "ends_with",
-                            "contains_all",
-                            "in",
-                          ],
-                        },
-                        value: {
-                          anyOf: [
-                            {
-                              type: "string",
-                            },
-                            {
-                              type: "array",
-                              items: {
-                                type: "string",
-                              },
-                            },
-                            {
-                              type: "undefined",
-                            },
-                          ],
-                        },
-                      },
                     },
                   },
                 },
@@ -15432,6 +15432,2602 @@ export const generatedRouteMap: RouteNode = {
                           pattern:
                             "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
                           type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        "entity-views": {
+          kind: "route",
+          children: {
+            create: {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "entity-views", "create"],
+                capabilityId: "entity-views.create",
+                description:
+                  "Save a personal Table or Kanban view across accessible matters. Layout filters and sorts use the same contract as matter views.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--name",
+                    prop: "name",
+                    required: true,
+                    part: "body",
+                    partPath: "name",
+                  },
+                ],
+                inputOnly: ["body.layout"],
+                paginated: false,
+                destructive: false,
+                scope: "matters_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["name", "layout"],
+                      properties: {
+                        name: {
+                          minLength: 1,
+                          maxLength: 256,
+                          pattern: "\\S",
+                          type: "string",
+                        },
+                        layout: {
+                          anyOf: [
+                            {
+                              additionalProperties: false,
+                              type: "object",
+                              required: [
+                                "type",
+                                "version",
+                                "filters",
+                                "sorts",
+                                "hiddenProperties",
+                              ],
+                              properties: {
+                                type: {
+                                  const: "overview",
+                                  type: "string",
+                                },
+                                version: {
+                                  const: 1,
+                                  type: "number",
+                                },
+                                filters: {
+                                  $ref: "#/$defs/s_8b4b71586106",
+                                },
+                                sorts: {
+                                  $ref: "#/$defs/s_a2912d7bfae3",
+                                },
+                                hiddenProperties: {
+                                  type: "array",
+                                  items: {
+                                    type: "string",
+                                  },
+                                },
+                                calculations: {
+                                  $ref: "#/$defs/s_d21ba6521546",
+                                },
+                              },
+                            },
+                            {
+                              additionalProperties: false,
+                              type: "object",
+                              required: [
+                                "type",
+                                "columnOrder",
+                                "columnPinning",
+                                "version",
+                                "filters",
+                                "sorts",
+                                "hiddenProperties",
+                              ],
+                              properties: {
+                                type: {
+                                  const: "table",
+                                  type: "string",
+                                },
+                                columnOrder: {
+                                  type: "array",
+                                  items: {
+                                    type: "string",
+                                  },
+                                },
+                                columnPinning: {
+                                  type: "array",
+                                  items: {
+                                    type: "string",
+                                  },
+                                },
+                                version: {
+                                  const: 1,
+                                  type: "number",
+                                },
+                                filters: {
+                                  $ref: "#/$defs/s_8b4b71586106",
+                                },
+                                sorts: {
+                                  $ref: "#/$defs/s_a2912d7bfae3",
+                                },
+                                hiddenProperties: {
+                                  type: "array",
+                                  items: {
+                                    type: "string",
+                                  },
+                                },
+                                calculations: {
+                                  $ref: "#/$defs/s_d21ba6521546",
+                                },
+                                groupByPropertyId: {
+                                  minLength: 1,
+                                  type: "string",
+                                },
+                              },
+                            },
+                            {
+                              additionalProperties: false,
+                              type: "object",
+                              required: [
+                                "type",
+                                "version",
+                                "filters",
+                                "sorts",
+                                "hiddenProperties",
+                              ],
+                              properties: {
+                                type: {
+                                  const: "filesystem",
+                                  type: "string",
+                                },
+                                version: {
+                                  const: 1,
+                                  type: "number",
+                                },
+                                filters: {
+                                  $ref: "#/$defs/s_8b4b71586106",
+                                },
+                                sorts: {
+                                  $ref: "#/$defs/s_a2912d7bfae3",
+                                },
+                                hiddenProperties: {
+                                  type: "array",
+                                  items: {
+                                    type: "string",
+                                  },
+                                },
+                                calculations: {
+                                  $ref: "#/$defs/s_d21ba6521546",
+                                },
+                              },
+                            },
+                            {
+                              additionalProperties: false,
+                              type: "object",
+                              required: [
+                                "type",
+                                "version",
+                                "filters",
+                                "sorts",
+                                "hiddenProperties",
+                              ],
+                              properties: {
+                                type: {
+                                  const: "kanban",
+                                  type: "string",
+                                },
+                                version: {
+                                  const: 1,
+                                  type: "number",
+                                },
+                                filters: {
+                                  $ref: "#/$defs/s_8b4b71586106",
+                                },
+                                sorts: {
+                                  $ref: "#/$defs/s_a2912d7bfae3",
+                                },
+                                hiddenProperties: {
+                                  type: "array",
+                                  items: {
+                                    type: "string",
+                                  },
+                                },
+                                calculations: {
+                                  $ref: "#/$defs/s_d21ba6521546",
+                                },
+                                groupByPropertyId: {
+                                  minLength: 1,
+                                  type: "string",
+                                },
+                                subgroupByPropertyId: {
+                                  minLength: 1,
+                                  type: "string",
+                                },
+                              },
+                            },
+                            {
+                              additionalProperties: false,
+                              type: "object",
+                              required: [
+                                "type",
+                                "version",
+                                "filters",
+                                "sorts",
+                                "hiddenProperties",
+                                "datePropertyId",
+                                "mode",
+                              ],
+                              properties: {
+                                type: {
+                                  const: "calendar",
+                                  type: "string",
+                                },
+                                version: {
+                                  const: 1,
+                                  type: "number",
+                                },
+                                filters: {
+                                  $ref: "#/$defs/s_8b4b71586106",
+                                },
+                                sorts: {
+                                  $ref: "#/$defs/s_a2912d7bfae3",
+                                },
+                                hiddenProperties: {
+                                  type: "array",
+                                  items: {
+                                    type: "string",
+                                  },
+                                },
+                                calculations: {
+                                  $ref: "#/$defs/s_d21ba6521546",
+                                },
+                                datePropertyId: {
+                                  minLength: 1,
+                                  type: "string",
+                                },
+                                endDatePropertyId: {
+                                  minLength: 1,
+                                  type: "string",
+                                },
+                                additionalDatePropertyIds: {
+                                  type: "array",
+                                  items: {
+                                    minLength: 1,
+                                    type: "string",
+                                  },
+                                },
+                                mode: {
+                                  anyOf: [
+                                    {
+                                      const: "month",
+                                      type: "string",
+                                    },
+                                    {
+                                      const: "week",
+                                      type: "string",
+                                    },
+                                    {
+                                      const: "year",
+                                      type: "string",
+                                    },
+                                  ],
+                                },
+                              },
+                            },
+                            {
+                              additionalProperties: false,
+                              type: "object",
+                              required: [
+                                "type",
+                                "version",
+                                "filters",
+                                "sorts",
+                                "hiddenProperties",
+                                "startDatePropertyId",
+                                "endDatePropertyId",
+                                "zoom",
+                                "showTable",
+                              ],
+                              properties: {
+                                type: {
+                                  const: "timeline",
+                                  type: "string",
+                                },
+                                version: {
+                                  const: 1,
+                                  type: "number",
+                                },
+                                filters: {
+                                  $ref: "#/$defs/s_8b4b71586106",
+                                },
+                                sorts: {
+                                  $ref: "#/$defs/s_a2912d7bfae3",
+                                },
+                                hiddenProperties: {
+                                  type: "array",
+                                  items: {
+                                    type: "string",
+                                  },
+                                },
+                                calculations: {
+                                  $ref: "#/$defs/s_d21ba6521546",
+                                },
+                                startDatePropertyId: {
+                                  minLength: 1,
+                                  type: "string",
+                                },
+                                endDatePropertyId: {
+                                  minLength: 1,
+                                  type: "string",
+                                },
+                                zoom: {
+                                  anyOf: [
+                                    {
+                                      const: "day",
+                                      type: "string",
+                                    },
+                                    {
+                                      const: "week",
+                                      type: "string",
+                                    },
+                                    {
+                                      const: "month",
+                                      type: "string",
+                                    },
+                                    {
+                                      const: "quarter",
+                                      type: "string",
+                                    },
+                                  ],
+                                },
+                                groupByPropertyId: {
+                                  minLength: 1,
+                                  type: "string",
+                                },
+                                showTable: {
+                                  type: "boolean",
+                                },
+                              },
+                            },
+                          ],
+                        },
+                      },
+                    },
+                  },
+                  $defs: {
+                    s_58ff7eb0d8f6: {
+                      type: "object",
+                      required: ["type", "operand", "op"],
+                      properties: {
+                        type: {
+                          const: "predicate",
+                          type: "string",
+                        },
+                        operand: {
+                          $ref: "#/$defs/s_bbc23394f552",
+                        },
+                        op: {
+                          default: "is_empty",
+                          type: "string",
+                          enum: [
+                            "is_empty",
+                            "is_not_empty",
+                            "is_truthy",
+                            "contains",
+                            "not_contains",
+                            "starts_with",
+                            "ends_with",
+                            "contains_all",
+                            "in",
+                          ],
+                        },
+                        value: {
+                          anyOf: [
+                            {
+                              type: "string",
+                            },
+                            {
+                              type: "array",
+                              items: {
+                                type: "string",
+                              },
+                            },
+                            {
+                              type: "undefined",
+                            },
+                          ],
+                        },
+                      },
+                    },
+                    s_81f0360286f1: {
+                      type: "object",
+                      required: ["type", "left", "op", "right"],
+                      properties: {
+                        type: {
+                          const: "compare",
+                          type: "string",
+                        },
+                        left: {
+                          $ref: "#/$defs/s_bbc23394f552",
+                        },
+                        op: {
+                          default: "eq",
+                          type: "string",
+                          enum: ["eq", "neq", "gt", "lt", "gte", "lte"],
+                        },
+                        right: {
+                          $ref: "#/$defs/s_bbc23394f552",
+                        },
+                      },
+                    },
+                    s_8b4b71586106: {
+                      maxItems: 32,
+                      type: "array",
+                      items: {
+                        anyOf: [
+                          {
+                            $ref: "#/$defs/s_81f0360286f1",
+                          },
+                          {
+                            $ref: "#/$defs/s_58ff7eb0d8f6",
+                          },
+                          {
+                            type: "object",
+                            required: ["type", "combinator", "children"],
+                            properties: {
+                              type: {
+                                const: "group",
+                                type: "string",
+                              },
+                              combinator: {
+                                default: "and",
+                                type: "string",
+                                enum: ["and", "or"],
+                              },
+                              negated: {
+                                anyOf: [
+                                  {
+                                    type: "boolean",
+                                  },
+                                  {
+                                    type: "undefined",
+                                  },
+                                ],
+                              },
+                              children: {
+                                maxItems: 32,
+                                type: "array",
+                                items: {
+                                  anyOf: [
+                                    {
+                                      $ref: "#/$defs/s_81f0360286f1",
+                                    },
+                                    {
+                                      $ref: "#/$defs/s_58ff7eb0d8f6",
+                                    },
+                                    {
+                                      type: "object",
+                                      required: [
+                                        "type",
+                                        "combinator",
+                                        "children",
+                                      ],
+                                      properties: {
+                                        type: {
+                                          const: "group",
+                                          type: "string",
+                                        },
+                                        combinator: {
+                                          default: "and",
+                                          type: "string",
+                                          enum: ["and", "or"],
+                                        },
+                                        negated: {
+                                          anyOf: [
+                                            {
+                                              type: "boolean",
+                                            },
+                                            {
+                                              type: "undefined",
+                                            },
+                                          ],
+                                        },
+                                        children: {
+                                          maxItems: 32,
+                                          type: "array",
+                                          items: {
+                                            anyOf: [
+                                              {
+                                                $ref: "#/$defs/s_81f0360286f1",
+                                              },
+                                              {
+                                                $ref: "#/$defs/s_58ff7eb0d8f6",
+                                              },
+                                              {
+                                                type: "object",
+                                                required: [
+                                                  "type",
+                                                  "combinator",
+                                                  "children",
+                                                ],
+                                                properties: {
+                                                  type: {
+                                                    const: "group",
+                                                    type: "string",
+                                                  },
+                                                  combinator: {
+                                                    default: "and",
+                                                    type: "string",
+                                                    enum: ["and", "or"],
+                                                  },
+                                                  negated: {
+                                                    anyOf: [
+                                                      {
+                                                        type: "boolean",
+                                                      },
+                                                      {
+                                                        type: "undefined",
+                                                      },
+                                                    ],
+                                                  },
+                                                  children: {
+                                                    maxItems: 32,
+                                                    type: "array",
+                                                    items: {
+                                                      anyOf: [
+                                                        {
+                                                          $ref: "#/$defs/s_81f0360286f1",
+                                                        },
+                                                        {
+                                                          $ref: "#/$defs/s_58ff7eb0d8f6",
+                                                        },
+                                                        {
+                                                          type: "object",
+                                                          required: [
+                                                            "type",
+                                                            "combinator",
+                                                            "children",
+                                                          ],
+                                                          properties: {
+                                                            type: {
+                                                              const: "group",
+                                                              type: "string",
+                                                            },
+                                                            combinator: {
+                                                              default: "and",
+                                                              type: "string",
+                                                              enum: [
+                                                                "and",
+                                                                "or",
+                                                              ],
+                                                            },
+                                                            negated: {
+                                                              anyOf: [
+                                                                {
+                                                                  type: "boolean",
+                                                                },
+                                                                {
+                                                                  type: "undefined",
+                                                                },
+                                                              ],
+                                                            },
+                                                            children: {
+                                                              maxItems: 32,
+                                                              type: "array",
+                                                              items: {
+                                                                anyOf: [
+                                                                  {
+                                                                    $ref: "#/$defs/s_81f0360286f1",
+                                                                  },
+                                                                  {
+                                                                    $ref: "#/$defs/s_58ff7eb0d8f6",
+                                                                  },
+                                                                  {
+                                                                    type: "object",
+                                                                    required: [
+                                                                      "type",
+                                                                      "combinator",
+                                                                      "children",
+                                                                    ],
+                                                                    properties:
+                                                                      {
+                                                                        type: {
+                                                                          const:
+                                                                            "group",
+                                                                          type: "string",
+                                                                        },
+                                                                        combinator:
+                                                                          {
+                                                                            default:
+                                                                              "and",
+                                                                            type: "string",
+                                                                            enum: [
+                                                                              "and",
+                                                                              "or",
+                                                                            ],
+                                                                          },
+                                                                        negated:
+                                                                          {
+                                                                            anyOf:
+                                                                              [
+                                                                                {
+                                                                                  type: "boolean",
+                                                                                },
+                                                                                {
+                                                                                  type: "undefined",
+                                                                                },
+                                                                              ],
+                                                                          },
+                                                                        children:
+                                                                          {
+                                                                            maxItems: 32,
+                                                                            type: "array",
+                                                                            items:
+                                                                              {
+                                                                                anyOf:
+                                                                                  [
+                                                                                    {
+                                                                                      $ref: "#/$defs/s_81f0360286f1",
+                                                                                    },
+                                                                                    {
+                                                                                      $ref: "#/$defs/s_58ff7eb0d8f6",
+                                                                                    },
+                                                                                    {
+                                                                                      type: "object",
+                                                                                      required:
+                                                                                        [
+                                                                                          "type",
+                                                                                          "combinator",
+                                                                                          "children",
+                                                                                        ],
+                                                                                      properties:
+                                                                                        {
+                                                                                          type: {
+                                                                                            const:
+                                                                                              "group",
+                                                                                            type: "string",
+                                                                                          },
+                                                                                          combinator:
+                                                                                            {
+                                                                                              default:
+                                                                                                "and",
+                                                                                              type: "string",
+                                                                                              enum: [
+                                                                                                "and",
+                                                                                                "or",
+                                                                                              ],
+                                                                                            },
+                                                                                          negated:
+                                                                                            {
+                                                                                              anyOf:
+                                                                                                [
+                                                                                                  {
+                                                                                                    type: "boolean",
+                                                                                                  },
+                                                                                                  {
+                                                                                                    type: "undefined",
+                                                                                                  },
+                                                                                                ],
+                                                                                            },
+                                                                                          children:
+                                                                                            {
+                                                                                              maxItems: 32,
+                                                                                              type: "array",
+                                                                                              items:
+                                                                                                {
+                                                                                                  anyOf:
+                                                                                                    [
+                                                                                                      {
+                                                                                                        $ref: "#/$defs/s_81f0360286f1",
+                                                                                                      },
+                                                                                                      {
+                                                                                                        $ref: "#/$defs/s_58ff7eb0d8f6",
+                                                                                                      },
+                                                                                                    ],
+                                                                                                },
+                                                                                            },
+                                                                                        },
+                                                                                    },
+                                                                                  ],
+                                                                              },
+                                                                          },
+                                                                      },
+                                                                  },
+                                                                ],
+                                                              },
+                                                            },
+                                                          },
+                                                        },
+                                                      ],
+                                                    },
+                                                  },
+                                                },
+                                              },
+                                            ],
+                                          },
+                                        },
+                                      },
+                                    },
+                                  ],
+                                },
+                              },
+                            },
+                          },
+                        ],
+                      },
+                    },
+                    s_a2912d7bfae3: {
+                      maxItems: 8,
+                      type: "array",
+                      items: {
+                        additionalProperties: false,
+                        type: "object",
+                        required: ["propertyId", "desc"],
+                        properties: {
+                          propertyId: {
+                            minLength: 1,
+                            type: "string",
+                          },
+                          desc: {
+                            type: "boolean",
+                          },
+                        },
+                      },
+                    },
+                    s_bbc23394f552: {
+                      anyOf: [
+                        {
+                          type: "object",
+                          required: ["type", "propertyId"],
+                          properties: {
+                            type: {
+                              const: "property",
+                              type: "string",
+                            },
+                            propertyId: {
+                              minLength: 1,
+                              type: "string",
+                            },
+                          },
+                        },
+                        {
+                          type: "object",
+                          required: ["type", "field"],
+                          properties: {
+                            type: {
+                              const: "builtin",
+                              type: "string",
+                            },
+                            field: {
+                              default: "status",
+                              type: "string",
+                              enum: ["status", "priority", "agendaKind"],
+                            },
+                          },
+                        },
+                        {
+                          type: "object",
+                          required: ["type"],
+                          properties: {
+                            type: {
+                              const: "kind",
+                              type: "string",
+                            },
+                          },
+                        },
+                        {
+                          type: "object",
+                          required: ["type", "path"],
+                          properties: {
+                            type: {
+                              const: "path",
+                              type: "string",
+                            },
+                            path: {
+                              minLength: 1,
+                              type: "string",
+                            },
+                          },
+                        },
+                        {
+                          type: "object",
+                          required: ["type", "value"],
+                          properties: {
+                            type: {
+                              const: "literal",
+                              type: "string",
+                            },
+                            value: {
+                              anyOf: [
+                                {
+                                  type: "string",
+                                },
+                                {
+                                  type: "number",
+                                },
+                                {
+                                  type: "boolean",
+                                },
+                                {
+                                  type: "array",
+                                  items: {
+                                    type: "string",
+                                  },
+                                },
+                              ],
+                            },
+                          },
+                        },
+                      ],
+                    },
+                    s_d21ba6521546: {
+                      type: "array",
+                      items: {
+                        additionalProperties: false,
+                        type: "object",
+                        required: ["propertyId", "kind"],
+                        properties: {
+                          propertyId: {
+                            minLength: 1,
+                            type: "string",
+                          },
+                          kind: {
+                            default: "count",
+                            type: "string",
+                            enum: [
+                              "count",
+                              "count-unique",
+                              "count-empty",
+                              "count-filled",
+                              "percent-empty",
+                              "percent-filled",
+                              "sum",
+                              "average",
+                              "median",
+                              "min",
+                              "max",
+                              "range",
+                              "percent-of-total",
+                            ],
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            delete: {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "entity-views", "delete"],
+                capabilityId: "entity-views.delete",
+                description:
+                  "Delete one personal cross-matter view. This does not delete its records or proposals.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--view-id",
+                    prop: "viewId",
+                    required: true,
+                    part: "params",
+                    partPath: "viewId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: true,
+                scope: "matters_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    params: {
+                      type: "object",
+                      required: ["viewId"],
+                      properties: {
+                        viewId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            list: {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "entity-views", "list"],
+                capabilityId: "entity-views.list",
+                description:
+                  "List the current user's saved cross-matter views in tab order. The complete list is bounded by the per-user creation limit.",
+                access: "read",
+                flags: [],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "read",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {},
+                },
+              },
+            },
+            reorder: {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "entity-views", "reorder"],
+                capabilityId: "entity-views.reorder",
+                description:
+                  "Reorder every personal cross-matter view. Supply each of the user's view IDs exactly once.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string-array",
+                    repeatable: true,
+                    flag: "--view-ids",
+                    prop: "viewIds",
+                    required: true,
+                    part: "body",
+                    partPath: "viewIds",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "matters_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["viewIds"],
+                      properties: {
+                        viewIds: {
+                          minItems: 1,
+                          maxItems: 20,
+                          type: "array",
+                          items: {
+                            minLength: 36,
+                            maxLength: 36,
+                            pattern:
+                              "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                            type: "string",
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "rows-list": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "entity-views", "rows-list"],
+                capabilityId: "entity-views.rows.list",
+                description:
+                  "Read a table or Kanban window across accessible matters, with the same filters, sorts, fields and cursors as a matter view.",
+                access: "read",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    description:
+                      "Rank rows by relevance against the asynchronous document-title index, and sort by that relevance. For a literal substring filter over the rendered rows, use `find`.",
+                    flag: "--search",
+                    prop: "search",
+                    required: false,
+                    part: "body",
+                    partPath: "search",
+                  },
+                  {
+                    kind: "enum-array",
+                    enum: ["document", "folder", "task", "message", "link"],
+                    repeatable: true,
+                    flag: "--excluded-kinds",
+                    prop: "excludedKinds",
+                    required: false,
+                    part: "body",
+                    partPath: "excludedKinds",
+                  },
+                  {
+                    kind: "string-array",
+                    repeatable: true,
+                    flag: "--field-ids",
+                    prop: "fieldIds",
+                    required: false,
+                    part: "body",
+                    partPath: "fieldIds",
+                  },
+                  {
+                    kind: "boolean",
+                    repeatable: false,
+                    flag: "--previewable-for-ai",
+                    prop: "previewableForAi",
+                    required: false,
+                    part: "body",
+                    partPath: "previewableForAi",
+                  },
+                  {
+                    kind: "boolean",
+                    repeatable: false,
+                    flag: "--include-assignees",
+                    prop: "includeAssignees",
+                    required: false,
+                    part: "body",
+                    partPath: "includeAssignees",
+                  },
+                ],
+                inputOnly: [
+                  "body.filters",
+                  "body.sorts",
+                  "body.find",
+                  "body.fieldMode",
+                  "body.scope",
+                  "body.group",
+                ],
+                paginated: true,
+                paginationPart: "body",
+                itemsKey: "items",
+                destructive: false,
+                scope: "read",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["scope"],
+                      properties: {
+                        filters: {
+                          maxItems: 32,
+                          type: "array",
+                          items: {
+                            anyOf: [
+                              {
+                                $ref: "#/$defs/s_81f0360286f1",
+                              },
+                              {
+                                $ref: "#/$defs/s_58ff7eb0d8f6",
+                              },
+                              {
+                                type: "object",
+                                required: ["type", "combinator", "children"],
+                                properties: {
+                                  type: {
+                                    const: "group",
+                                    type: "string",
+                                  },
+                                  combinator: {
+                                    default: "and",
+                                    type: "string",
+                                    enum: ["and", "or"],
+                                  },
+                                  negated: {
+                                    anyOf: [
+                                      {
+                                        type: "boolean",
+                                      },
+                                      {
+                                        type: "undefined",
+                                      },
+                                    ],
+                                  },
+                                  children: {
+                                    maxItems: 32,
+                                    type: "array",
+                                    items: {
+                                      anyOf: [
+                                        {
+                                          $ref: "#/$defs/s_81f0360286f1",
+                                        },
+                                        {
+                                          $ref: "#/$defs/s_58ff7eb0d8f6",
+                                        },
+                                        {
+                                          type: "object",
+                                          required: [
+                                            "type",
+                                            "combinator",
+                                            "children",
+                                          ],
+                                          properties: {
+                                            type: {
+                                              const: "group",
+                                              type: "string",
+                                            },
+                                            combinator: {
+                                              default: "and",
+                                              type: "string",
+                                              enum: ["and", "or"],
+                                            },
+                                            negated: {
+                                              anyOf: [
+                                                {
+                                                  type: "boolean",
+                                                },
+                                                {
+                                                  type: "undefined",
+                                                },
+                                              ],
+                                            },
+                                            children: {
+                                              maxItems: 32,
+                                              type: "array",
+                                              items: {
+                                                anyOf: [
+                                                  {
+                                                    $ref: "#/$defs/s_81f0360286f1",
+                                                  },
+                                                  {
+                                                    $ref: "#/$defs/s_58ff7eb0d8f6",
+                                                  },
+                                                  {
+                                                    type: "object",
+                                                    required: [
+                                                      "type",
+                                                      "combinator",
+                                                      "children",
+                                                    ],
+                                                    properties: {
+                                                      type: {
+                                                        const: "group",
+                                                        type: "string",
+                                                      },
+                                                      combinator: {
+                                                        default: "and",
+                                                        type: "string",
+                                                        enum: ["and", "or"],
+                                                      },
+                                                      negated: {
+                                                        anyOf: [
+                                                          {
+                                                            type: "boolean",
+                                                          },
+                                                          {
+                                                            type: "undefined",
+                                                          },
+                                                        ],
+                                                      },
+                                                      children: {
+                                                        maxItems: 32,
+                                                        type: "array",
+                                                        items: {
+                                                          anyOf: [
+                                                            {
+                                                              $ref: "#/$defs/s_81f0360286f1",
+                                                            },
+                                                            {
+                                                              $ref: "#/$defs/s_58ff7eb0d8f6",
+                                                            },
+                                                            {
+                                                              type: "object",
+                                                              required: [
+                                                                "type",
+                                                                "combinator",
+                                                                "children",
+                                                              ],
+                                                              properties: {
+                                                                type: {
+                                                                  const:
+                                                                    "group",
+                                                                  type: "string",
+                                                                },
+                                                                combinator: {
+                                                                  default:
+                                                                    "and",
+                                                                  type: "string",
+                                                                  enum: [
+                                                                    "and",
+                                                                    "or",
+                                                                  ],
+                                                                },
+                                                                negated: {
+                                                                  anyOf: [
+                                                                    {
+                                                                      type: "boolean",
+                                                                    },
+                                                                    {
+                                                                      type: "undefined",
+                                                                    },
+                                                                  ],
+                                                                },
+                                                                children: {
+                                                                  maxItems: 32,
+                                                                  type: "array",
+                                                                  items: {
+                                                                    anyOf: [
+                                                                      {
+                                                                        $ref: "#/$defs/s_81f0360286f1",
+                                                                      },
+                                                                      {
+                                                                        $ref: "#/$defs/s_58ff7eb0d8f6",
+                                                                      },
+                                                                      {
+                                                                        type: "object",
+                                                                        required:
+                                                                          [
+                                                                            "type",
+                                                                            "combinator",
+                                                                            "children",
+                                                                          ],
+                                                                        properties:
+                                                                          {
+                                                                            type: {
+                                                                              const:
+                                                                                "group",
+                                                                              type: "string",
+                                                                            },
+                                                                            combinator:
+                                                                              {
+                                                                                default:
+                                                                                  "and",
+                                                                                type: "string",
+                                                                                enum: [
+                                                                                  "and",
+                                                                                  "or",
+                                                                                ],
+                                                                              },
+                                                                            negated:
+                                                                              {
+                                                                                anyOf:
+                                                                                  [
+                                                                                    {
+                                                                                      type: "boolean",
+                                                                                    },
+                                                                                    {
+                                                                                      type: "undefined",
+                                                                                    },
+                                                                                  ],
+                                                                              },
+                                                                            children:
+                                                                              {
+                                                                                maxItems: 32,
+                                                                                type: "array",
+                                                                                items:
+                                                                                  {
+                                                                                    anyOf:
+                                                                                      [
+                                                                                        {
+                                                                                          $ref: "#/$defs/s_81f0360286f1",
+                                                                                        },
+                                                                                        {
+                                                                                          $ref: "#/$defs/s_58ff7eb0d8f6",
+                                                                                        },
+                                                                                        {
+                                                                                          type: "object",
+                                                                                          required:
+                                                                                            [
+                                                                                              "type",
+                                                                                              "combinator",
+                                                                                              "children",
+                                                                                            ],
+                                                                                          properties:
+                                                                                            {
+                                                                                              type: {
+                                                                                                const:
+                                                                                                  "group",
+                                                                                                type: "string",
+                                                                                              },
+                                                                                              combinator:
+                                                                                                {
+                                                                                                  default:
+                                                                                                    "and",
+                                                                                                  type: "string",
+                                                                                                  enum: [
+                                                                                                    "and",
+                                                                                                    "or",
+                                                                                                  ],
+                                                                                                },
+                                                                                              negated:
+                                                                                                {
+                                                                                                  anyOf:
+                                                                                                    [
+                                                                                                      {
+                                                                                                        type: "boolean",
+                                                                                                      },
+                                                                                                      {
+                                                                                                        type: "undefined",
+                                                                                                      },
+                                                                                                    ],
+                                                                                                },
+                                                                                              children:
+                                                                                                {
+                                                                                                  maxItems: 32,
+                                                                                                  type: "array",
+                                                                                                  items:
+                                                                                                    {
+                                                                                                      anyOf:
+                                                                                                        [
+                                                                                                          {
+                                                                                                            $ref: "#/$defs/s_81f0360286f1",
+                                                                                                          },
+                                                                                                          {
+                                                                                                            $ref: "#/$defs/s_58ff7eb0d8f6",
+                                                                                                          },
+                                                                                                        ],
+                                                                                                    },
+                                                                                                },
+                                                                                            },
+                                                                                        },
+                                                                                      ],
+                                                                                  },
+                                                                              },
+                                                                          },
+                                                                      },
+                                                                    ],
+                                                                  },
+                                                                },
+                                                              },
+                                                            },
+                                                          ],
+                                                        },
+                                                      },
+                                                    },
+                                                  },
+                                                ],
+                                              },
+                                            },
+                                          },
+                                        },
+                                      ],
+                                    },
+                                  },
+                                },
+                              },
+                            ],
+                          },
+                        },
+                        sorts: {
+                          maxItems: 8,
+                          type: "array",
+                          items: {
+                            additionalProperties: false,
+                            type: "object",
+                            required: ["propertyId", "desc"],
+                            properties: {
+                              propertyId: {
+                                minLength: 1,
+                                type: "string",
+                              },
+                              desc: {
+                                type: "boolean",
+                              },
+                            },
+                          },
+                        },
+                        search: {
+                          maxLength: 500,
+                          description:
+                            "Rank rows by relevance against the asynchronous document-title index, and sort by that relevance. For a literal substring filter over the rendered rows, use `find`.",
+                          type: "string",
+                        },
+                        find: {
+                          description:
+                            "Filter rows to those whose displayed name or chosen columns contain this literal substring. Not `search`: that ranks an asynchronous index of document titles, this filters exactly what the grid renders and adds no sort keys. `scope.type` `all` also matches the name, `columns` matches only `scope.propertyIds`. `term` is at least 3 characters once trimmed: the cells are read through a trigram index, which a shorter term cannot use.",
+                          type: "object",
+                          required: ["scope", "term"],
+                          properties: {
+                            scope: {
+                              type: "object",
+                              required: ["propertyIds", "type"],
+                              properties: {
+                                propertyIds: {
+                                  maxItems: 300,
+                                  type: "array",
+                                  items: {
+                                    minLength: 36,
+                                    maxLength: 36,
+                                    pattern:
+                                      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                                    type: "string",
+                                  },
+                                },
+                                type: {
+                                  anyOf: [
+                                    {
+                                      const: "all",
+                                      type: "string",
+                                    },
+                                    {
+                                      const: "columns",
+                                      type: "string",
+                                    },
+                                  ],
+                                },
+                              },
+                            },
+                            term: {
+                              minLength: 3,
+                              maxLength: 500,
+                              pattern: "^\\s*\\S[\\s\\S]{1,}\\S\\s*$",
+                              type: "string",
+                            },
+                          },
+                        },
+                        limit: {
+                          minimum: 1,
+                          maximum: 500,
+                          type: "integer",
+                        },
+                        cursor: {
+                          maxLength: 65368,
+                          description:
+                            "Opaque cursor from a previous page to fetch the next page",
+                          type: "string",
+                        },
+                        excludedKinds: {
+                          maxItems: 5,
+                          type: "array",
+                          items: {
+                            default: "document",
+                            type: "string",
+                            enum: [
+                              "document",
+                              "folder",
+                              "task",
+                              "message",
+                              "link",
+                            ],
+                          },
+                        },
+                        fieldMode: {
+                          anyOf: [
+                            {
+                              const: "full",
+                              type: "string",
+                            },
+                            {
+                              const: "visible",
+                              type: "string",
+                            },
+                          ],
+                        },
+                        fieldIds: {
+                          maxItems: 300,
+                          type: "array",
+                          items: {
+                            minLength: 36,
+                            maxLength: 36,
+                            pattern:
+                              "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                            type: "string",
+                          },
+                        },
+                        previewableForAi: {
+                          type: "boolean",
+                        },
+                        includeAssignees: {
+                          type: "boolean",
+                        },
+                        scope: {
+                          anyOf: [
+                            {
+                              type: "object",
+                              required: ["type"],
+                              properties: {
+                                type: {
+                                  const: "organization",
+                                  type: "string",
+                                },
+                              },
+                            },
+                            {
+                              type: "object",
+                              required: ["type", "matterId"],
+                              properties: {
+                                type: {
+                                  const: "matter",
+                                  type: "string",
+                                },
+                                matterId: {
+                                  minLength: 36,
+                                  maxLength: 36,
+                                  pattern:
+                                    "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                                  type: "string",
+                                },
+                              },
+                            },
+                          ],
+                        },
+                        group: {
+                          type: "object",
+                          required: ["groupByPropertyId", "groupValue"],
+                          properties: {
+                            groupByPropertyId: {
+                              anyOf: [
+                                {
+                                  const: "_status",
+                                  type: "string",
+                                },
+                                {
+                                  const: "_kind",
+                                  type: "string",
+                                },
+                                {
+                                  minLength: 36,
+                                  maxLength: 36,
+                                  pattern:
+                                    "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                                  type: "string",
+                                },
+                              ],
+                            },
+                            groupValue: {
+                              nullable: true,
+                              anyOf: [
+                                {
+                                  maxLength: 1000,
+                                  type: "string",
+                                },
+                                {
+                                  type: "null",
+                                },
+                              ],
+                            },
+                            optionValues: {
+                              maxItems: 300,
+                              type: "array",
+                              items: {
+                                maxLength: 1000,
+                                type: "string",
+                              },
+                            },
+                          },
+                        },
+                      },
+                    },
+                  },
+                  $defs: {
+                    s_58ff7eb0d8f6: {
+                      type: "object",
+                      required: ["type", "operand", "op"],
+                      properties: {
+                        type: {
+                          const: "predicate",
+                          type: "string",
+                        },
+                        operand: {
+                          $ref: "#/$defs/s_bbc23394f552",
+                        },
+                        op: {
+                          default: "is_empty",
+                          type: "string",
+                          enum: [
+                            "is_empty",
+                            "is_not_empty",
+                            "is_truthy",
+                            "contains",
+                            "not_contains",
+                            "starts_with",
+                            "ends_with",
+                            "contains_all",
+                            "in",
+                          ],
+                        },
+                        value: {
+                          anyOf: [
+                            {
+                              type: "string",
+                            },
+                            {
+                              type: "array",
+                              items: {
+                                type: "string",
+                              },
+                            },
+                            {
+                              type: "undefined",
+                            },
+                          ],
+                        },
+                      },
+                    },
+                    s_81f0360286f1: {
+                      type: "object",
+                      required: ["type", "left", "op", "right"],
+                      properties: {
+                        type: {
+                          const: "compare",
+                          type: "string",
+                        },
+                        left: {
+                          $ref: "#/$defs/s_bbc23394f552",
+                        },
+                        op: {
+                          default: "eq",
+                          type: "string",
+                          enum: ["eq", "neq", "gt", "lt", "gte", "lte"],
+                        },
+                        right: {
+                          $ref: "#/$defs/s_bbc23394f552",
+                        },
+                      },
+                    },
+                    s_bbc23394f552: {
+                      anyOf: [
+                        {
+                          type: "object",
+                          required: ["type", "propertyId"],
+                          properties: {
+                            type: {
+                              const: "property",
+                              type: "string",
+                            },
+                            propertyId: {
+                              minLength: 1,
+                              type: "string",
+                            },
+                          },
+                        },
+                        {
+                          type: "object",
+                          required: ["type", "field"],
+                          properties: {
+                            type: {
+                              const: "builtin",
+                              type: "string",
+                            },
+                            field: {
+                              default: "status",
+                              type: "string",
+                              enum: ["status", "priority", "agendaKind"],
+                            },
+                          },
+                        },
+                        {
+                          type: "object",
+                          required: ["type"],
+                          properties: {
+                            type: {
+                              const: "kind",
+                              type: "string",
+                            },
+                          },
+                        },
+                        {
+                          type: "object",
+                          required: ["type", "path"],
+                          properties: {
+                            type: {
+                              const: "path",
+                              type: "string",
+                            },
+                            path: {
+                              minLength: 1,
+                              type: "string",
+                            },
+                          },
+                        },
+                        {
+                          type: "object",
+                          required: ["type", "value"],
+                          properties: {
+                            type: {
+                              const: "literal",
+                              type: "string",
+                            },
+                            value: {
+                              anyOf: [
+                                {
+                                  type: "string",
+                                },
+                                {
+                                  type: "number",
+                                },
+                                {
+                                  type: "boolean",
+                                },
+                                {
+                                  type: "array",
+                                  items: {
+                                    type: "string",
+                                  },
+                                },
+                              ],
+                            },
+                          },
+                        },
+                      ],
+                    },
+                  },
+                },
+              },
+            },
+            update: {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "entity-views", "update"],
+                capabilityId: "entity-views.update",
+                description:
+                  "Change the name or layout of one personal cross-matter view. Other users' views cannot be changed.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--view-id",
+                    prop: "viewId",
+                    required: true,
+                    part: "params",
+                    partPath: "viewId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--name",
+                    prop: "name",
+                    required: false,
+                    part: "body",
+                    partPath: "name",
+                  },
+                ],
+                inputOnly: ["body.layout"],
+                paginated: false,
+                destructive: false,
+                scope: "matters_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      properties: {
+                        name: {
+                          minLength: 1,
+                          maxLength: 256,
+                          pattern: "\\S",
+                          type: "string",
+                        },
+                        layout: {
+                          anyOf: [
+                            {
+                              additionalProperties: false,
+                              type: "object",
+                              required: [
+                                "type",
+                                "version",
+                                "filters",
+                                "sorts",
+                                "hiddenProperties",
+                              ],
+                              properties: {
+                                type: {
+                                  const: "overview",
+                                  type: "string",
+                                },
+                                version: {
+                                  const: 1,
+                                  type: "number",
+                                },
+                                filters: {
+                                  $ref: "#/$defs/s_8b4b71586106",
+                                },
+                                sorts: {
+                                  $ref: "#/$defs/s_a2912d7bfae3",
+                                },
+                                hiddenProperties: {
+                                  type: "array",
+                                  items: {
+                                    type: "string",
+                                  },
+                                },
+                                calculations: {
+                                  $ref: "#/$defs/s_d21ba6521546",
+                                },
+                              },
+                            },
+                            {
+                              additionalProperties: false,
+                              type: "object",
+                              required: [
+                                "type",
+                                "columnOrder",
+                                "columnPinning",
+                                "version",
+                                "filters",
+                                "sorts",
+                                "hiddenProperties",
+                              ],
+                              properties: {
+                                type: {
+                                  const: "table",
+                                  type: "string",
+                                },
+                                columnOrder: {
+                                  type: "array",
+                                  items: {
+                                    type: "string",
+                                  },
+                                },
+                                columnPinning: {
+                                  type: "array",
+                                  items: {
+                                    type: "string",
+                                  },
+                                },
+                                version: {
+                                  const: 1,
+                                  type: "number",
+                                },
+                                filters: {
+                                  $ref: "#/$defs/s_8b4b71586106",
+                                },
+                                sorts: {
+                                  $ref: "#/$defs/s_a2912d7bfae3",
+                                },
+                                hiddenProperties: {
+                                  type: "array",
+                                  items: {
+                                    type: "string",
+                                  },
+                                },
+                                calculations: {
+                                  $ref: "#/$defs/s_d21ba6521546",
+                                },
+                                groupByPropertyId: {
+                                  minLength: 1,
+                                  type: "string",
+                                },
+                              },
+                            },
+                            {
+                              additionalProperties: false,
+                              type: "object",
+                              required: [
+                                "type",
+                                "version",
+                                "filters",
+                                "sorts",
+                                "hiddenProperties",
+                              ],
+                              properties: {
+                                type: {
+                                  const: "filesystem",
+                                  type: "string",
+                                },
+                                version: {
+                                  const: 1,
+                                  type: "number",
+                                },
+                                filters: {
+                                  $ref: "#/$defs/s_8b4b71586106",
+                                },
+                                sorts: {
+                                  $ref: "#/$defs/s_a2912d7bfae3",
+                                },
+                                hiddenProperties: {
+                                  type: "array",
+                                  items: {
+                                    type: "string",
+                                  },
+                                },
+                                calculations: {
+                                  $ref: "#/$defs/s_d21ba6521546",
+                                },
+                              },
+                            },
+                            {
+                              additionalProperties: false,
+                              type: "object",
+                              required: [
+                                "type",
+                                "version",
+                                "filters",
+                                "sorts",
+                                "hiddenProperties",
+                              ],
+                              properties: {
+                                type: {
+                                  const: "kanban",
+                                  type: "string",
+                                },
+                                version: {
+                                  const: 1,
+                                  type: "number",
+                                },
+                                filters: {
+                                  $ref: "#/$defs/s_8b4b71586106",
+                                },
+                                sorts: {
+                                  $ref: "#/$defs/s_a2912d7bfae3",
+                                },
+                                hiddenProperties: {
+                                  type: "array",
+                                  items: {
+                                    type: "string",
+                                  },
+                                },
+                                calculations: {
+                                  $ref: "#/$defs/s_d21ba6521546",
+                                },
+                                groupByPropertyId: {
+                                  minLength: 1,
+                                  type: "string",
+                                },
+                                subgroupByPropertyId: {
+                                  minLength: 1,
+                                  type: "string",
+                                },
+                              },
+                            },
+                            {
+                              additionalProperties: false,
+                              type: "object",
+                              required: [
+                                "type",
+                                "version",
+                                "filters",
+                                "sorts",
+                                "hiddenProperties",
+                                "datePropertyId",
+                                "mode",
+                              ],
+                              properties: {
+                                type: {
+                                  const: "calendar",
+                                  type: "string",
+                                },
+                                version: {
+                                  const: 1,
+                                  type: "number",
+                                },
+                                filters: {
+                                  $ref: "#/$defs/s_8b4b71586106",
+                                },
+                                sorts: {
+                                  $ref: "#/$defs/s_a2912d7bfae3",
+                                },
+                                hiddenProperties: {
+                                  type: "array",
+                                  items: {
+                                    type: "string",
+                                  },
+                                },
+                                calculations: {
+                                  $ref: "#/$defs/s_d21ba6521546",
+                                },
+                                datePropertyId: {
+                                  minLength: 1,
+                                  type: "string",
+                                },
+                                endDatePropertyId: {
+                                  minLength: 1,
+                                  type: "string",
+                                },
+                                additionalDatePropertyIds: {
+                                  type: "array",
+                                  items: {
+                                    minLength: 1,
+                                    type: "string",
+                                  },
+                                },
+                                mode: {
+                                  anyOf: [
+                                    {
+                                      const: "month",
+                                      type: "string",
+                                    },
+                                    {
+                                      const: "week",
+                                      type: "string",
+                                    },
+                                    {
+                                      const: "year",
+                                      type: "string",
+                                    },
+                                  ],
+                                },
+                              },
+                            },
+                            {
+                              additionalProperties: false,
+                              type: "object",
+                              required: [
+                                "type",
+                                "version",
+                                "filters",
+                                "sorts",
+                                "hiddenProperties",
+                                "startDatePropertyId",
+                                "endDatePropertyId",
+                                "zoom",
+                                "showTable",
+                              ],
+                              properties: {
+                                type: {
+                                  const: "timeline",
+                                  type: "string",
+                                },
+                                version: {
+                                  const: 1,
+                                  type: "number",
+                                },
+                                filters: {
+                                  $ref: "#/$defs/s_8b4b71586106",
+                                },
+                                sorts: {
+                                  $ref: "#/$defs/s_a2912d7bfae3",
+                                },
+                                hiddenProperties: {
+                                  type: "array",
+                                  items: {
+                                    type: "string",
+                                  },
+                                },
+                                calculations: {
+                                  $ref: "#/$defs/s_d21ba6521546",
+                                },
+                                startDatePropertyId: {
+                                  minLength: 1,
+                                  type: "string",
+                                },
+                                endDatePropertyId: {
+                                  minLength: 1,
+                                  type: "string",
+                                },
+                                zoom: {
+                                  anyOf: [
+                                    {
+                                      const: "day",
+                                      type: "string",
+                                    },
+                                    {
+                                      const: "week",
+                                      type: "string",
+                                    },
+                                    {
+                                      const: "month",
+                                      type: "string",
+                                    },
+                                    {
+                                      const: "quarter",
+                                      type: "string",
+                                    },
+                                  ],
+                                },
+                                groupByPropertyId: {
+                                  minLength: 1,
+                                  type: "string",
+                                },
+                                showTable: {
+                                  type: "boolean",
+                                },
+                              },
+                            },
+                          ],
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      required: ["viewId"],
+                      properties: {
+                        viewId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                  $defs: {
+                    s_58ff7eb0d8f6: {
+                      type: "object",
+                      required: ["type", "operand", "op"],
+                      properties: {
+                        type: {
+                          const: "predicate",
+                          type: "string",
+                        },
+                        operand: {
+                          $ref: "#/$defs/s_bbc23394f552",
+                        },
+                        op: {
+                          default: "is_empty",
+                          type: "string",
+                          enum: [
+                            "is_empty",
+                            "is_not_empty",
+                            "is_truthy",
+                            "contains",
+                            "not_contains",
+                            "starts_with",
+                            "ends_with",
+                            "contains_all",
+                            "in",
+                          ],
+                        },
+                        value: {
+                          anyOf: [
+                            {
+                              type: "string",
+                            },
+                            {
+                              type: "array",
+                              items: {
+                                type: "string",
+                              },
+                            },
+                            {
+                              type: "undefined",
+                            },
+                          ],
+                        },
+                      },
+                    },
+                    s_81f0360286f1: {
+                      type: "object",
+                      required: ["type", "left", "op", "right"],
+                      properties: {
+                        type: {
+                          const: "compare",
+                          type: "string",
+                        },
+                        left: {
+                          $ref: "#/$defs/s_bbc23394f552",
+                        },
+                        op: {
+                          default: "eq",
+                          type: "string",
+                          enum: ["eq", "neq", "gt", "lt", "gte", "lte"],
+                        },
+                        right: {
+                          $ref: "#/$defs/s_bbc23394f552",
+                        },
+                      },
+                    },
+                    s_8b4b71586106: {
+                      maxItems: 32,
+                      type: "array",
+                      items: {
+                        anyOf: [
+                          {
+                            $ref: "#/$defs/s_81f0360286f1",
+                          },
+                          {
+                            $ref: "#/$defs/s_58ff7eb0d8f6",
+                          },
+                          {
+                            type: "object",
+                            required: ["type", "combinator", "children"],
+                            properties: {
+                              type: {
+                                const: "group",
+                                type: "string",
+                              },
+                              combinator: {
+                                default: "and",
+                                type: "string",
+                                enum: ["and", "or"],
+                              },
+                              negated: {
+                                anyOf: [
+                                  {
+                                    type: "boolean",
+                                  },
+                                  {
+                                    type: "undefined",
+                                  },
+                                ],
+                              },
+                              children: {
+                                maxItems: 32,
+                                type: "array",
+                                items: {
+                                  anyOf: [
+                                    {
+                                      $ref: "#/$defs/s_81f0360286f1",
+                                    },
+                                    {
+                                      $ref: "#/$defs/s_58ff7eb0d8f6",
+                                    },
+                                    {
+                                      type: "object",
+                                      required: [
+                                        "type",
+                                        "combinator",
+                                        "children",
+                                      ],
+                                      properties: {
+                                        type: {
+                                          const: "group",
+                                          type: "string",
+                                        },
+                                        combinator: {
+                                          default: "and",
+                                          type: "string",
+                                          enum: ["and", "or"],
+                                        },
+                                        negated: {
+                                          anyOf: [
+                                            {
+                                              type: "boolean",
+                                            },
+                                            {
+                                              type: "undefined",
+                                            },
+                                          ],
+                                        },
+                                        children: {
+                                          maxItems: 32,
+                                          type: "array",
+                                          items: {
+                                            anyOf: [
+                                              {
+                                                $ref: "#/$defs/s_81f0360286f1",
+                                              },
+                                              {
+                                                $ref: "#/$defs/s_58ff7eb0d8f6",
+                                              },
+                                              {
+                                                type: "object",
+                                                required: [
+                                                  "type",
+                                                  "combinator",
+                                                  "children",
+                                                ],
+                                                properties: {
+                                                  type: {
+                                                    const: "group",
+                                                    type: "string",
+                                                  },
+                                                  combinator: {
+                                                    default: "and",
+                                                    type: "string",
+                                                    enum: ["and", "or"],
+                                                  },
+                                                  negated: {
+                                                    anyOf: [
+                                                      {
+                                                        type: "boolean",
+                                                      },
+                                                      {
+                                                        type: "undefined",
+                                                      },
+                                                    ],
+                                                  },
+                                                  children: {
+                                                    maxItems: 32,
+                                                    type: "array",
+                                                    items: {
+                                                      anyOf: [
+                                                        {
+                                                          $ref: "#/$defs/s_81f0360286f1",
+                                                        },
+                                                        {
+                                                          $ref: "#/$defs/s_58ff7eb0d8f6",
+                                                        },
+                                                        {
+                                                          type: "object",
+                                                          required: [
+                                                            "type",
+                                                            "combinator",
+                                                            "children",
+                                                          ],
+                                                          properties: {
+                                                            type: {
+                                                              const: "group",
+                                                              type: "string",
+                                                            },
+                                                            combinator: {
+                                                              default: "and",
+                                                              type: "string",
+                                                              enum: [
+                                                                "and",
+                                                                "or",
+                                                              ],
+                                                            },
+                                                            negated: {
+                                                              anyOf: [
+                                                                {
+                                                                  type: "boolean",
+                                                                },
+                                                                {
+                                                                  type: "undefined",
+                                                                },
+                                                              ],
+                                                            },
+                                                            children: {
+                                                              maxItems: 32,
+                                                              type: "array",
+                                                              items: {
+                                                                anyOf: [
+                                                                  {
+                                                                    $ref: "#/$defs/s_81f0360286f1",
+                                                                  },
+                                                                  {
+                                                                    $ref: "#/$defs/s_58ff7eb0d8f6",
+                                                                  },
+                                                                  {
+                                                                    type: "object",
+                                                                    required: [
+                                                                      "type",
+                                                                      "combinator",
+                                                                      "children",
+                                                                    ],
+                                                                    properties:
+                                                                      {
+                                                                        type: {
+                                                                          const:
+                                                                            "group",
+                                                                          type: "string",
+                                                                        },
+                                                                        combinator:
+                                                                          {
+                                                                            default:
+                                                                              "and",
+                                                                            type: "string",
+                                                                            enum: [
+                                                                              "and",
+                                                                              "or",
+                                                                            ],
+                                                                          },
+                                                                        negated:
+                                                                          {
+                                                                            anyOf:
+                                                                              [
+                                                                                {
+                                                                                  type: "boolean",
+                                                                                },
+                                                                                {
+                                                                                  type: "undefined",
+                                                                                },
+                                                                              ],
+                                                                          },
+                                                                        children:
+                                                                          {
+                                                                            maxItems: 32,
+                                                                            type: "array",
+                                                                            items:
+                                                                              {
+                                                                                anyOf:
+                                                                                  [
+                                                                                    {
+                                                                                      $ref: "#/$defs/s_81f0360286f1",
+                                                                                    },
+                                                                                    {
+                                                                                      $ref: "#/$defs/s_58ff7eb0d8f6",
+                                                                                    },
+                                                                                    {
+                                                                                      type: "object",
+                                                                                      required:
+                                                                                        [
+                                                                                          "type",
+                                                                                          "combinator",
+                                                                                          "children",
+                                                                                        ],
+                                                                                      properties:
+                                                                                        {
+                                                                                          type: {
+                                                                                            const:
+                                                                                              "group",
+                                                                                            type: "string",
+                                                                                          },
+                                                                                          combinator:
+                                                                                            {
+                                                                                              default:
+                                                                                                "and",
+                                                                                              type: "string",
+                                                                                              enum: [
+                                                                                                "and",
+                                                                                                "or",
+                                                                                              ],
+                                                                                            },
+                                                                                          negated:
+                                                                                            {
+                                                                                              anyOf:
+                                                                                                [
+                                                                                                  {
+                                                                                                    type: "boolean",
+                                                                                                  },
+                                                                                                  {
+                                                                                                    type: "undefined",
+                                                                                                  },
+                                                                                                ],
+                                                                                            },
+                                                                                          children:
+                                                                                            {
+                                                                                              maxItems: 32,
+                                                                                              type: "array",
+                                                                                              items:
+                                                                                                {
+                                                                                                  anyOf:
+                                                                                                    [
+                                                                                                      {
+                                                                                                        $ref: "#/$defs/s_81f0360286f1",
+                                                                                                      },
+                                                                                                      {
+                                                                                                        $ref: "#/$defs/s_58ff7eb0d8f6",
+                                                                                                      },
+                                                                                                    ],
+                                                                                                },
+                                                                                            },
+                                                                                        },
+                                                                                    },
+                                                                                  ],
+                                                                              },
+                                                                          },
+                                                                      },
+                                                                  },
+                                                                ],
+                                                              },
+                                                            },
+                                                          },
+                                                        },
+                                                      ],
+                                                    },
+                                                  },
+                                                },
+                                              },
+                                            ],
+                                          },
+                                        },
+                                      },
+                                    },
+                                  ],
+                                },
+                              },
+                            },
+                          },
+                        ],
+                      },
+                    },
+                    s_a2912d7bfae3: {
+                      maxItems: 8,
+                      type: "array",
+                      items: {
+                        additionalProperties: false,
+                        type: "object",
+                        required: ["propertyId", "desc"],
+                        properties: {
+                          propertyId: {
+                            minLength: 1,
+                            type: "string",
+                          },
+                          desc: {
+                            type: "boolean",
+                          },
+                        },
+                      },
+                    },
+                    s_bbc23394f552: {
+                      anyOf: [
+                        {
+                          type: "object",
+                          required: ["type", "propertyId"],
+                          properties: {
+                            type: {
+                              const: "property",
+                              type: "string",
+                            },
+                            propertyId: {
+                              minLength: 1,
+                              type: "string",
+                            },
+                          },
+                        },
+                        {
+                          type: "object",
+                          required: ["type", "field"],
+                          properties: {
+                            type: {
+                              const: "builtin",
+                              type: "string",
+                            },
+                            field: {
+                              default: "status",
+                              type: "string",
+                              enum: ["status", "priority", "agendaKind"],
+                            },
+                          },
+                        },
+                        {
+                          type: "object",
+                          required: ["type"],
+                          properties: {
+                            type: {
+                              const: "kind",
+                              type: "string",
+                            },
+                          },
+                        },
+                        {
+                          type: "object",
+                          required: ["type", "path"],
+                          properties: {
+                            type: {
+                              const: "path",
+                              type: "string",
+                            },
+                            path: {
+                              minLength: 1,
+                              type: "string",
+                            },
+                          },
+                        },
+                        {
+                          type: "object",
+                          required: ["type", "value"],
+                          properties: {
+                            type: {
+                              const: "literal",
+                              type: "string",
+                            },
+                            value: {
+                              anyOf: [
+                                {
+                                  type: "string",
+                                },
+                                {
+                                  type: "number",
+                                },
+                                {
+                                  type: "boolean",
+                                },
+                                {
+                                  type: "array",
+                                  items: {
+                                    type: "string",
+                                  },
+                                },
+                              ],
+                            },
+                          },
+                        },
+                      ],
+                    },
+                    s_d21ba6521546: {
+                      type: "array",
+                      items: {
+                        additionalProperties: false,
+                        type: "object",
+                        required: ["propertyId", "kind"],
+                        properties: {
+                          propertyId: {
+                            minLength: 1,
+                            type: "string",
+                          },
+                          kind: {
+                            default: "count",
+                            type: "string",
+                            enum: [
+                              "count",
+                              "count-unique",
+                              "count-empty",
+                              "count-filled",
+                              "percent-empty",
+                              "percent-filled",
+                              "sum",
+                              "average",
+                              "median",
+                              "min",
+                              "max",
+                              "range",
+                              "percent-of-total",
+                            ],
+                          },
                         },
                       },
                     },
@@ -16623,10 +19219,10 @@ export const generatedRouteMap: RouteNode = {
                           items: {
                             anyOf: [
                               {
-                                $ref: "#/$defs/s_88402f3c68c1",
+                                $ref: "#/$defs/s_81f0360286f1",
                               },
                               {
-                                $ref: "#/$defs/s_db9cd85a47d3",
+                                $ref: "#/$defs/s_58ff7eb0d8f6",
                               },
                               {
                                 type: "object",
@@ -16657,10 +19253,10 @@ export const generatedRouteMap: RouteNode = {
                                     items: {
                                       anyOf: [
                                         {
-                                          $ref: "#/$defs/s_88402f3c68c1",
+                                          $ref: "#/$defs/s_81f0360286f1",
                                         },
                                         {
-                                          $ref: "#/$defs/s_db9cd85a47d3",
+                                          $ref: "#/$defs/s_58ff7eb0d8f6",
                                         },
                                         {
                                           type: "object",
@@ -16695,10 +19291,10 @@ export const generatedRouteMap: RouteNode = {
                                               items: {
                                                 anyOf: [
                                                   {
-                                                    $ref: "#/$defs/s_88402f3c68c1",
+                                                    $ref: "#/$defs/s_81f0360286f1",
                                                   },
                                                   {
-                                                    $ref: "#/$defs/s_db9cd85a47d3",
+                                                    $ref: "#/$defs/s_58ff7eb0d8f6",
                                                   },
                                                   {
                                                     type: "object",
@@ -16733,10 +19329,10 @@ export const generatedRouteMap: RouteNode = {
                                                         items: {
                                                           anyOf: [
                                                             {
-                                                              $ref: "#/$defs/s_88402f3c68c1",
+                                                              $ref: "#/$defs/s_81f0360286f1",
                                                             },
                                                             {
-                                                              $ref: "#/$defs/s_db9cd85a47d3",
+                                                              $ref: "#/$defs/s_58ff7eb0d8f6",
                                                             },
                                                             {
                                                               type: "object",
@@ -16776,10 +19372,10 @@ export const generatedRouteMap: RouteNode = {
                                                                   items: {
                                                                     anyOf: [
                                                                       {
-                                                                        $ref: "#/$defs/s_88402f3c68c1",
+                                                                        $ref: "#/$defs/s_81f0360286f1",
                                                                       },
                                                                       {
-                                                                        $ref: "#/$defs/s_db9cd85a47d3",
+                                                                        $ref: "#/$defs/s_58ff7eb0d8f6",
                                                                       },
                                                                       {
                                                                         type: "object",
@@ -16827,10 +19423,10 @@ export const generatedRouteMap: RouteNode = {
                                                                                     anyOf:
                                                                                       [
                                                                                         {
-                                                                                          $ref: "#/$defs/s_88402f3c68c1",
+                                                                                          $ref: "#/$defs/s_81f0360286f1",
                                                                                         },
                                                                                         {
-                                                                                          $ref: "#/$defs/s_db9cd85a47d3",
+                                                                                          $ref: "#/$defs/s_58ff7eb0d8f6",
                                                                                         },
                                                                                         {
                                                                                           type: "object",
@@ -16878,10 +19474,10 @@ export const generatedRouteMap: RouteNode = {
                                                                                                       anyOf:
                                                                                                         [
                                                                                                           {
-                                                                                                            $ref: "#/$defs/s_88402f3c68c1",
+                                                                                                            $ref: "#/$defs/s_81f0360286f1",
                                                                                                           },
                                                                                                           {
-                                                                                                            $ref: "#/$defs/s_db9cd85a47d3",
+                                                                                                            $ref: "#/$defs/s_58ff7eb0d8f6",
                                                                                                           },
                                                                                                         ],
                                                                                                     },
@@ -16973,7 +19569,51 @@ export const generatedRouteMap: RouteNode = {
                     },
                   },
                   $defs: {
-                    s_88402f3c68c1: {
+                    s_58ff7eb0d8f6: {
+                      type: "object",
+                      required: ["type", "operand", "op"],
+                      properties: {
+                        type: {
+                          const: "predicate",
+                          type: "string",
+                        },
+                        operand: {
+                          $ref: "#/$defs/s_bbc23394f552",
+                        },
+                        op: {
+                          default: "is_empty",
+                          type: "string",
+                          enum: [
+                            "is_empty",
+                            "is_not_empty",
+                            "is_truthy",
+                            "contains",
+                            "not_contains",
+                            "starts_with",
+                            "ends_with",
+                            "contains_all",
+                            "in",
+                          ],
+                        },
+                        value: {
+                          anyOf: [
+                            {
+                              type: "string",
+                            },
+                            {
+                              type: "array",
+                              items: {
+                                type: "string",
+                              },
+                            },
+                            {
+                              type: "undefined",
+                            },
+                          ],
+                        },
+                      },
+                    },
+                    s_81f0360286f1: {
                       type: "object",
                       required: ["type", "left", "op", "right"],
                       properties: {
@@ -16982,7 +19622,7 @@ export const generatedRouteMap: RouteNode = {
                           type: "string",
                         },
                         left: {
-                          $ref: "#/$defs/s_92cd59123f4d",
+                          $ref: "#/$defs/s_bbc23394f552",
                         },
                         op: {
                           default: "eq",
@@ -16990,11 +19630,11 @@ export const generatedRouteMap: RouteNode = {
                           enum: ["eq", "neq", "gt", "lt", "gte", "lte"],
                         },
                         right: {
-                          $ref: "#/$defs/s_92cd59123f4d",
+                          $ref: "#/$defs/s_bbc23394f552",
                         },
                       },
                     },
-                    s_92cd59123f4d: {
+                    s_bbc23394f552: {
                       anyOf: [
                         {
                           type: "object",
@@ -17021,7 +19661,7 @@ export const generatedRouteMap: RouteNode = {
                             field: {
                               default: "status",
                               type: "string",
-                              enum: ["status", "priority"],
+                              enum: ["status", "priority", "agendaKind"],
                             },
                           },
                         },
@@ -17079,50 +19719,6 @@ export const generatedRouteMap: RouteNode = {
                           },
                         },
                       ],
-                    },
-                    s_db9cd85a47d3: {
-                      type: "object",
-                      required: ["type", "operand", "op"],
-                      properties: {
-                        type: {
-                          const: "predicate",
-                          type: "string",
-                        },
-                        operand: {
-                          $ref: "#/$defs/s_92cd59123f4d",
-                        },
-                        op: {
-                          default: "is_empty",
-                          type: "string",
-                          enum: [
-                            "is_empty",
-                            "is_not_empty",
-                            "is_truthy",
-                            "contains",
-                            "not_contains",
-                            "starts_with",
-                            "ends_with",
-                            "contains_all",
-                            "in",
-                          ],
-                        },
-                        value: {
-                          anyOf: [
-                            {
-                              type: "string",
-                            },
-                            {
-                              type: "array",
-                              items: {
-                                type: "string",
-                              },
-                            },
-                            {
-                              type: "undefined",
-                            },
-                          ],
-                        },
-                      },
                     },
                   },
                 },
@@ -24945,10 +27541,10 @@ export const generatedRouteMap: RouteNode = {
                                               condition: {
                                                 anyOf: [
                                                   {
-                                                    $ref: "#/$defs/s_88402f3c68c1",
+                                                    $ref: "#/$defs/s_81f0360286f1",
                                                   },
                                                   {
-                                                    $ref: "#/$defs/s_db9cd85a47d3",
+                                                    $ref: "#/$defs/s_58ff7eb0d8f6",
                                                   },
                                                   {
                                                     type: "object",
@@ -24983,10 +27579,10 @@ export const generatedRouteMap: RouteNode = {
                                                         items: {
                                                           anyOf: [
                                                             {
-                                                              $ref: "#/$defs/s_88402f3c68c1",
+                                                              $ref: "#/$defs/s_81f0360286f1",
                                                             },
                                                             {
-                                                              $ref: "#/$defs/s_db9cd85a47d3",
+                                                              $ref: "#/$defs/s_58ff7eb0d8f6",
                                                             },
                                                             {
                                                               type: "object",
@@ -25026,10 +27622,10 @@ export const generatedRouteMap: RouteNode = {
                                                                   items: {
                                                                     anyOf: [
                                                                       {
-                                                                        $ref: "#/$defs/s_88402f3c68c1",
+                                                                        $ref: "#/$defs/s_81f0360286f1",
                                                                       },
                                                                       {
-                                                                        $ref: "#/$defs/s_db9cd85a47d3",
+                                                                        $ref: "#/$defs/s_58ff7eb0d8f6",
                                                                       },
                                                                       {
                                                                         type: "object",
@@ -25077,10 +27673,10 @@ export const generatedRouteMap: RouteNode = {
                                                                                     anyOf:
                                                                                       [
                                                                                         {
-                                                                                          $ref: "#/$defs/s_88402f3c68c1",
+                                                                                          $ref: "#/$defs/s_81f0360286f1",
                                                                                         },
                                                                                         {
-                                                                                          $ref: "#/$defs/s_db9cd85a47d3",
+                                                                                          $ref: "#/$defs/s_58ff7eb0d8f6",
                                                                                         },
                                                                                         {
                                                                                           type: "object",
@@ -25128,10 +27724,10 @@ export const generatedRouteMap: RouteNode = {
                                                                                                       anyOf:
                                                                                                         [
                                                                                                           {
-                                                                                                            $ref: "#/$defs/s_88402f3c68c1",
+                                                                                                            $ref: "#/$defs/s_81f0360286f1",
                                                                                                           },
                                                                                                           {
-                                                                                                            $ref: "#/$defs/s_db9cd85a47d3",
+                                                                                                            $ref: "#/$defs/s_58ff7eb0d8f6",
                                                                                                           },
                                                                                                           {
                                                                                                             type: "object",
@@ -25179,10 +27775,10 @@ export const generatedRouteMap: RouteNode = {
                                                                                                                         anyOf:
                                                                                                                           [
                                                                                                                             {
-                                                                                                                              $ref: "#/$defs/s_88402f3c68c1",
+                                                                                                                              $ref: "#/$defs/s_81f0360286f1",
                                                                                                                             },
                                                                                                                             {
-                                                                                                                              $ref: "#/$defs/s_db9cd85a47d3",
+                                                                                                                              $ref: "#/$defs/s_58ff7eb0d8f6",
                                                                                                                             },
                                                                                                                             {
                                                                                                                               type: "object",
@@ -25230,10 +27826,10 @@ export const generatedRouteMap: RouteNode = {
                                                                                                                                           anyOf:
                                                                                                                                             [
                                                                                                                                               {
-                                                                                                                                                $ref: "#/$defs/s_88402f3c68c1",
+                                                                                                                                                $ref: "#/$defs/s_81f0360286f1",
                                                                                                                                               },
                                                                                                                                               {
-                                                                                                                                                $ref: "#/$defs/s_db9cd85a47d3",
+                                                                                                                                                $ref: "#/$defs/s_58ff7eb0d8f6",
                                                                                                                                               },
                                                                                                                                             ],
                                                                                                                                         },
@@ -25553,7 +28149,51 @@ export const generatedRouteMap: RouteNode = {
                         },
                       ],
                     },
-                    s_88402f3c68c1: {
+                    s_58ff7eb0d8f6: {
+                      type: "object",
+                      required: ["type", "operand", "op"],
+                      properties: {
+                        type: {
+                          const: "predicate",
+                          type: "string",
+                        },
+                        operand: {
+                          $ref: "#/$defs/s_bbc23394f552",
+                        },
+                        op: {
+                          default: "is_empty",
+                          type: "string",
+                          enum: [
+                            "is_empty",
+                            "is_not_empty",
+                            "is_truthy",
+                            "contains",
+                            "not_contains",
+                            "starts_with",
+                            "ends_with",
+                            "contains_all",
+                            "in",
+                          ],
+                        },
+                        value: {
+                          anyOf: [
+                            {
+                              type: "string",
+                            },
+                            {
+                              type: "array",
+                              items: {
+                                type: "string",
+                              },
+                            },
+                            {
+                              type: "undefined",
+                            },
+                          ],
+                        },
+                      },
+                    },
+                    s_81f0360286f1: {
                       type: "object",
                       required: ["type", "left", "op", "right"],
                       properties: {
@@ -25562,7 +28202,7 @@ export const generatedRouteMap: RouteNode = {
                           type: "string",
                         },
                         left: {
-                          $ref: "#/$defs/s_92cd59123f4d",
+                          $ref: "#/$defs/s_bbc23394f552",
                         },
                         op: {
                           default: "eq",
@@ -25570,11 +28210,11 @@ export const generatedRouteMap: RouteNode = {
                           enum: ["eq", "neq", "gt", "lt", "gte", "lte"],
                         },
                         right: {
-                          $ref: "#/$defs/s_92cd59123f4d",
+                          $ref: "#/$defs/s_bbc23394f552",
                         },
                       },
                     },
-                    s_92cd59123f4d: {
+                    s_bbc23394f552: {
                       anyOf: [
                         {
                           type: "object",
@@ -25601,7 +28241,7 @@ export const generatedRouteMap: RouteNode = {
                             field: {
                               default: "status",
                               type: "string",
-                              enum: ["status", "priority"],
+                              enum: ["status", "priority", "agendaKind"],
                             },
                           },
                         },
@@ -25659,50 +28299,6 @@ export const generatedRouteMap: RouteNode = {
                           },
                         },
                       ],
-                    },
-                    s_db9cd85a47d3: {
-                      type: "object",
-                      required: ["type", "operand", "op"],
-                      properties: {
-                        type: {
-                          const: "predicate",
-                          type: "string",
-                        },
-                        operand: {
-                          $ref: "#/$defs/s_92cd59123f4d",
-                        },
-                        op: {
-                          default: "is_empty",
-                          type: "string",
-                          enum: [
-                            "is_empty",
-                            "is_not_empty",
-                            "is_truthy",
-                            "contains",
-                            "not_contains",
-                            "starts_with",
-                            "ends_with",
-                            "contains_all",
-                            "in",
-                          ],
-                        },
-                        value: {
-                          anyOf: [
-                            {
-                              type: "string",
-                            },
-                            {
-                              type: "array",
-                              items: {
-                                type: "string",
-                              },
-                            },
-                            {
-                              type: "undefined",
-                            },
-                          ],
-                        },
-                      },
                     },
                   },
                 },
@@ -26677,10 +29273,10 @@ export const generatedRouteMap: RouteNode = {
                                               condition: {
                                                 anyOf: [
                                                   {
-                                                    $ref: "#/$defs/s_88402f3c68c1",
+                                                    $ref: "#/$defs/s_81f0360286f1",
                                                   },
                                                   {
-                                                    $ref: "#/$defs/s_db9cd85a47d3",
+                                                    $ref: "#/$defs/s_58ff7eb0d8f6",
                                                   },
                                                   {
                                                     type: "object",
@@ -26715,10 +29311,10 @@ export const generatedRouteMap: RouteNode = {
                                                         items: {
                                                           anyOf: [
                                                             {
-                                                              $ref: "#/$defs/s_88402f3c68c1",
+                                                              $ref: "#/$defs/s_81f0360286f1",
                                                             },
                                                             {
-                                                              $ref: "#/$defs/s_db9cd85a47d3",
+                                                              $ref: "#/$defs/s_58ff7eb0d8f6",
                                                             },
                                                             {
                                                               type: "object",
@@ -26758,10 +29354,10 @@ export const generatedRouteMap: RouteNode = {
                                                                   items: {
                                                                     anyOf: [
                                                                       {
-                                                                        $ref: "#/$defs/s_88402f3c68c1",
+                                                                        $ref: "#/$defs/s_81f0360286f1",
                                                                       },
                                                                       {
-                                                                        $ref: "#/$defs/s_db9cd85a47d3",
+                                                                        $ref: "#/$defs/s_58ff7eb0d8f6",
                                                                       },
                                                                       {
                                                                         type: "object",
@@ -26809,10 +29405,10 @@ export const generatedRouteMap: RouteNode = {
                                                                                     anyOf:
                                                                                       [
                                                                                         {
-                                                                                          $ref: "#/$defs/s_88402f3c68c1",
+                                                                                          $ref: "#/$defs/s_81f0360286f1",
                                                                                         },
                                                                                         {
-                                                                                          $ref: "#/$defs/s_db9cd85a47d3",
+                                                                                          $ref: "#/$defs/s_58ff7eb0d8f6",
                                                                                         },
                                                                                         {
                                                                                           type: "object",
@@ -26860,10 +29456,10 @@ export const generatedRouteMap: RouteNode = {
                                                                                                       anyOf:
                                                                                                         [
                                                                                                           {
-                                                                                                            $ref: "#/$defs/s_88402f3c68c1",
+                                                                                                            $ref: "#/$defs/s_81f0360286f1",
                                                                                                           },
                                                                                                           {
-                                                                                                            $ref: "#/$defs/s_db9cd85a47d3",
+                                                                                                            $ref: "#/$defs/s_58ff7eb0d8f6",
                                                                                                           },
                                                                                                           {
                                                                                                             type: "object",
@@ -26911,10 +29507,10 @@ export const generatedRouteMap: RouteNode = {
                                                                                                                         anyOf:
                                                                                                                           [
                                                                                                                             {
-                                                                                                                              $ref: "#/$defs/s_88402f3c68c1",
+                                                                                                                              $ref: "#/$defs/s_81f0360286f1",
                                                                                                                             },
                                                                                                                             {
-                                                                                                                              $ref: "#/$defs/s_db9cd85a47d3",
+                                                                                                                              $ref: "#/$defs/s_58ff7eb0d8f6",
                                                                                                                             },
                                                                                                                             {
                                                                                                                               type: "object",
@@ -26962,10 +29558,10 @@ export const generatedRouteMap: RouteNode = {
                                                                                                                                           anyOf:
                                                                                                                                             [
                                                                                                                                               {
-                                                                                                                                                $ref: "#/$defs/s_88402f3c68c1",
+                                                                                                                                                $ref: "#/$defs/s_81f0360286f1",
                                                                                                                                               },
                                                                                                                                               {
-                                                                                                                                                $ref: "#/$defs/s_db9cd85a47d3",
+                                                                                                                                                $ref: "#/$defs/s_58ff7eb0d8f6",
                                                                                                                                               },
                                                                                                                                             ],
                                                                                                                                         },
@@ -27302,7 +29898,51 @@ export const generatedRouteMap: RouteNode = {
                         },
                       ],
                     },
-                    s_88402f3c68c1: {
+                    s_58ff7eb0d8f6: {
+                      type: "object",
+                      required: ["type", "operand", "op"],
+                      properties: {
+                        type: {
+                          const: "predicate",
+                          type: "string",
+                        },
+                        operand: {
+                          $ref: "#/$defs/s_bbc23394f552",
+                        },
+                        op: {
+                          default: "is_empty",
+                          type: "string",
+                          enum: [
+                            "is_empty",
+                            "is_not_empty",
+                            "is_truthy",
+                            "contains",
+                            "not_contains",
+                            "starts_with",
+                            "ends_with",
+                            "contains_all",
+                            "in",
+                          ],
+                        },
+                        value: {
+                          anyOf: [
+                            {
+                              type: "string",
+                            },
+                            {
+                              type: "array",
+                              items: {
+                                type: "string",
+                              },
+                            },
+                            {
+                              type: "undefined",
+                            },
+                          ],
+                        },
+                      },
+                    },
+                    s_81f0360286f1: {
                       type: "object",
                       required: ["type", "left", "op", "right"],
                       properties: {
@@ -27311,7 +29951,7 @@ export const generatedRouteMap: RouteNode = {
                           type: "string",
                         },
                         left: {
-                          $ref: "#/$defs/s_92cd59123f4d",
+                          $ref: "#/$defs/s_bbc23394f552",
                         },
                         op: {
                           default: "eq",
@@ -27319,11 +29959,11 @@ export const generatedRouteMap: RouteNode = {
                           enum: ["eq", "neq", "gt", "lt", "gte", "lte"],
                         },
                         right: {
-                          $ref: "#/$defs/s_92cd59123f4d",
+                          $ref: "#/$defs/s_bbc23394f552",
                         },
                       },
                     },
-                    s_92cd59123f4d: {
+                    s_bbc23394f552: {
                       anyOf: [
                         {
                           type: "object",
@@ -27350,7 +29990,7 @@ export const generatedRouteMap: RouteNode = {
                             field: {
                               default: "status",
                               type: "string",
-                              enum: ["status", "priority"],
+                              enum: ["status", "priority", "agendaKind"],
                             },
                           },
                         },
@@ -27408,50 +30048,6 @@ export const generatedRouteMap: RouteNode = {
                           },
                         },
                       ],
-                    },
-                    s_db9cd85a47d3: {
-                      type: "object",
-                      required: ["type", "operand", "op"],
-                      properties: {
-                        type: {
-                          const: "predicate",
-                          type: "string",
-                        },
-                        operand: {
-                          $ref: "#/$defs/s_92cd59123f4d",
-                        },
-                        op: {
-                          default: "is_empty",
-                          type: "string",
-                          enum: [
-                            "is_empty",
-                            "is_not_empty",
-                            "is_truthy",
-                            "contains",
-                            "not_contains",
-                            "starts_with",
-                            "ends_with",
-                            "contains_all",
-                            "in",
-                          ],
-                        },
-                        value: {
-                          anyOf: [
-                            {
-                              type: "string",
-                            },
-                            {
-                              type: "array",
-                              items: {
-                                type: "string",
-                              },
-                            },
-                            {
-                              type: "undefined",
-                            },
-                          ],
-                        },
-                      },
                     },
                   },
                 },
@@ -27611,10 +30207,10 @@ export const generatedRouteMap: RouteNode = {
                                   {
                                     anyOf: [
                                       {
-                                        $ref: "#/$defs/s_88402f3c68c1",
+                                        $ref: "#/$defs/s_81f0360286f1",
                                       },
                                       {
-                                        $ref: "#/$defs/s_db9cd85a47d3",
+                                        $ref: "#/$defs/s_58ff7eb0d8f6",
                                       },
                                       {
                                         type: "object",
@@ -27649,10 +30245,10 @@ export const generatedRouteMap: RouteNode = {
                                             items: {
                                               anyOf: [
                                                 {
-                                                  $ref: "#/$defs/s_88402f3c68c1",
+                                                  $ref: "#/$defs/s_81f0360286f1",
                                                 },
                                                 {
-                                                  $ref: "#/$defs/s_db9cd85a47d3",
+                                                  $ref: "#/$defs/s_58ff7eb0d8f6",
                                                 },
                                                 {
                                                   type: "object",
@@ -27687,10 +30283,10 @@ export const generatedRouteMap: RouteNode = {
                                                       items: {
                                                         anyOf: [
                                                           {
-                                                            $ref: "#/$defs/s_88402f3c68c1",
+                                                            $ref: "#/$defs/s_81f0360286f1",
                                                           },
                                                           {
-                                                            $ref: "#/$defs/s_db9cd85a47d3",
+                                                            $ref: "#/$defs/s_58ff7eb0d8f6",
                                                           },
                                                           {
                                                             type: "object",
@@ -27728,10 +30324,10 @@ export const generatedRouteMap: RouteNode = {
                                                                 items: {
                                                                   anyOf: [
                                                                     {
-                                                                      $ref: "#/$defs/s_88402f3c68c1",
+                                                                      $ref: "#/$defs/s_81f0360286f1",
                                                                     },
                                                                     {
-                                                                      $ref: "#/$defs/s_db9cd85a47d3",
+                                                                      $ref: "#/$defs/s_58ff7eb0d8f6",
                                                                     },
                                                                     {
                                                                       type: "object",
@@ -27779,10 +30375,10 @@ export const generatedRouteMap: RouteNode = {
                                                                                   anyOf:
                                                                                     [
                                                                                       {
-                                                                                        $ref: "#/$defs/s_88402f3c68c1",
+                                                                                        $ref: "#/$defs/s_81f0360286f1",
                                                                                       },
                                                                                       {
-                                                                                        $ref: "#/$defs/s_db9cd85a47d3",
+                                                                                        $ref: "#/$defs/s_58ff7eb0d8f6",
                                                                                       },
                                                                                       {
                                                                                         type: "object",
@@ -27830,10 +30426,10 @@ export const generatedRouteMap: RouteNode = {
                                                                                                     anyOf:
                                                                                                       [
                                                                                                         {
-                                                                                                          $ref: "#/$defs/s_88402f3c68c1",
+                                                                                                          $ref: "#/$defs/s_81f0360286f1",
                                                                                                         },
                                                                                                         {
-                                                                                                          $ref: "#/$defs/s_db9cd85a47d3",
+                                                                                                          $ref: "#/$defs/s_58ff7eb0d8f6",
                                                                                                         },
                                                                                                         {
                                                                                                           type: "object",
@@ -27881,10 +30477,10 @@ export const generatedRouteMap: RouteNode = {
                                                                                                                       anyOf:
                                                                                                                         [
                                                                                                                           {
-                                                                                                                            $ref: "#/$defs/s_88402f3c68c1",
+                                                                                                                            $ref: "#/$defs/s_81f0360286f1",
                                                                                                                           },
                                                                                                                           {
-                                                                                                                            $ref: "#/$defs/s_db9cd85a47d3",
+                                                                                                                            $ref: "#/$defs/s_58ff7eb0d8f6",
                                                                                                                           },
                                                                                                                         ],
                                                                                                                     },
@@ -27985,7 +30581,51 @@ export const generatedRouteMap: RouteNode = {
                     },
                   },
                   $defs: {
-                    s_88402f3c68c1: {
+                    s_58ff7eb0d8f6: {
+                      type: "object",
+                      required: ["type", "operand", "op"],
+                      properties: {
+                        type: {
+                          const: "predicate",
+                          type: "string",
+                        },
+                        operand: {
+                          $ref: "#/$defs/s_bbc23394f552",
+                        },
+                        op: {
+                          default: "is_empty",
+                          type: "string",
+                          enum: [
+                            "is_empty",
+                            "is_not_empty",
+                            "is_truthy",
+                            "contains",
+                            "not_contains",
+                            "starts_with",
+                            "ends_with",
+                            "contains_all",
+                            "in",
+                          ],
+                        },
+                        value: {
+                          anyOf: [
+                            {
+                              type: "string",
+                            },
+                            {
+                              type: "array",
+                              items: {
+                                type: "string",
+                              },
+                            },
+                            {
+                              type: "undefined",
+                            },
+                          ],
+                        },
+                      },
+                    },
+                    s_81f0360286f1: {
                       type: "object",
                       required: ["type", "left", "op", "right"],
                       properties: {
@@ -27994,7 +30634,7 @@ export const generatedRouteMap: RouteNode = {
                           type: "string",
                         },
                         left: {
-                          $ref: "#/$defs/s_92cd59123f4d",
+                          $ref: "#/$defs/s_bbc23394f552",
                         },
                         op: {
                           default: "eq",
@@ -28002,11 +30642,11 @@ export const generatedRouteMap: RouteNode = {
                           enum: ["eq", "neq", "gt", "lt", "gte", "lte"],
                         },
                         right: {
-                          $ref: "#/$defs/s_92cd59123f4d",
+                          $ref: "#/$defs/s_bbc23394f552",
                         },
                       },
                     },
-                    s_92cd59123f4d: {
+                    s_bbc23394f552: {
                       anyOf: [
                         {
                           type: "object",
@@ -28033,7 +30673,7 @@ export const generatedRouteMap: RouteNode = {
                             field: {
                               default: "status",
                               type: "string",
-                              enum: ["status", "priority"],
+                              enum: ["status", "priority", "agendaKind"],
                             },
                           },
                         },
@@ -28091,50 +30731,6 @@ export const generatedRouteMap: RouteNode = {
                           },
                         },
                       ],
-                    },
-                    s_db9cd85a47d3: {
-                      type: "object",
-                      required: ["type", "operand", "op"],
-                      properties: {
-                        type: {
-                          const: "predicate",
-                          type: "string",
-                        },
-                        operand: {
-                          $ref: "#/$defs/s_92cd59123f4d",
-                        },
-                        op: {
-                          default: "is_empty",
-                          type: "string",
-                          enum: [
-                            "is_empty",
-                            "is_not_empty",
-                            "is_truthy",
-                            "contains",
-                            "not_contains",
-                            "starts_with",
-                            "ends_with",
-                            "contains_all",
-                            "in",
-                          ],
-                        },
-                        value: {
-                          anyOf: [
-                            {
-                              type: "string",
-                            },
-                            {
-                              type: "array",
-                              items: {
-                                type: "string",
-                              },
-                            },
-                            {
-                              type: "undefined",
-                            },
-                          ],
-                        },
-                      },
                     },
                   },
                 },
@@ -28259,10 +30855,10 @@ export const generatedRouteMap: RouteNode = {
                                         {
                                           anyOf: [
                                             {
-                                              $ref: "#/$defs/s_88402f3c68c1",
+                                              $ref: "#/$defs/s_81f0360286f1",
                                             },
                                             {
-                                              $ref: "#/$defs/s_db9cd85a47d3",
+                                              $ref: "#/$defs/s_58ff7eb0d8f6",
                                             },
                                             {
                                               type: "object",
@@ -28297,10 +30893,10 @@ export const generatedRouteMap: RouteNode = {
                                                   items: {
                                                     anyOf: [
                                                       {
-                                                        $ref: "#/$defs/s_88402f3c68c1",
+                                                        $ref: "#/$defs/s_81f0360286f1",
                                                       },
                                                       {
-                                                        $ref: "#/$defs/s_db9cd85a47d3",
+                                                        $ref: "#/$defs/s_58ff7eb0d8f6",
                                                       },
                                                       {
                                                         type: "object",
@@ -28335,10 +30931,10 @@ export const generatedRouteMap: RouteNode = {
                                                             items: {
                                                               anyOf: [
                                                                 {
-                                                                  $ref: "#/$defs/s_88402f3c68c1",
+                                                                  $ref: "#/$defs/s_81f0360286f1",
                                                                 },
                                                                 {
-                                                                  $ref: "#/$defs/s_db9cd85a47d3",
+                                                                  $ref: "#/$defs/s_58ff7eb0d8f6",
                                                                 },
                                                                 {
                                                                   type: "object",
@@ -28379,10 +30975,10 @@ export const generatedRouteMap: RouteNode = {
                                                                       items: {
                                                                         anyOf: [
                                                                           {
-                                                                            $ref: "#/$defs/s_88402f3c68c1",
+                                                                            $ref: "#/$defs/s_81f0360286f1",
                                                                           },
                                                                           {
-                                                                            $ref: "#/$defs/s_db9cd85a47d3",
+                                                                            $ref: "#/$defs/s_58ff7eb0d8f6",
                                                                           },
                                                                           {
                                                                             type: "object",
@@ -28430,10 +31026,10 @@ export const generatedRouteMap: RouteNode = {
                                                                                         anyOf:
                                                                                           [
                                                                                             {
-                                                                                              $ref: "#/$defs/s_88402f3c68c1",
+                                                                                              $ref: "#/$defs/s_81f0360286f1",
                                                                                             },
                                                                                             {
-                                                                                              $ref: "#/$defs/s_db9cd85a47d3",
+                                                                                              $ref: "#/$defs/s_58ff7eb0d8f6",
                                                                                             },
                                                                                             {
                                                                                               type: "object",
@@ -28481,10 +31077,10 @@ export const generatedRouteMap: RouteNode = {
                                                                                                           anyOf:
                                                                                                             [
                                                                                                               {
-                                                                                                                $ref: "#/$defs/s_88402f3c68c1",
+                                                                                                                $ref: "#/$defs/s_81f0360286f1",
                                                                                                               },
                                                                                                               {
-                                                                                                                $ref: "#/$defs/s_db9cd85a47d3",
+                                                                                                                $ref: "#/$defs/s_58ff7eb0d8f6",
                                                                                                               },
                                                                                                               {
                                                                                                                 type: "object",
@@ -28532,10 +31128,10 @@ export const generatedRouteMap: RouteNode = {
                                                                                                                             anyOf:
                                                                                                                               [
                                                                                                                                 {
-                                                                                                                                  $ref: "#/$defs/s_88402f3c68c1",
+                                                                                                                                  $ref: "#/$defs/s_81f0360286f1",
                                                                                                                                 },
                                                                                                                                 {
-                                                                                                                                  $ref: "#/$defs/s_db9cd85a47d3",
+                                                                                                                                  $ref: "#/$defs/s_58ff7eb0d8f6",
                                                                                                                                 },
                                                                                                                               ],
                                                                                                                           },
@@ -28639,7 +31235,51 @@ export const generatedRouteMap: RouteNode = {
                     },
                   },
                   $defs: {
-                    s_88402f3c68c1: {
+                    s_58ff7eb0d8f6: {
+                      type: "object",
+                      required: ["type", "operand", "op"],
+                      properties: {
+                        type: {
+                          const: "predicate",
+                          type: "string",
+                        },
+                        operand: {
+                          $ref: "#/$defs/s_bbc23394f552",
+                        },
+                        op: {
+                          default: "is_empty",
+                          type: "string",
+                          enum: [
+                            "is_empty",
+                            "is_not_empty",
+                            "is_truthy",
+                            "contains",
+                            "not_contains",
+                            "starts_with",
+                            "ends_with",
+                            "contains_all",
+                            "in",
+                          ],
+                        },
+                        value: {
+                          anyOf: [
+                            {
+                              type: "string",
+                            },
+                            {
+                              type: "array",
+                              items: {
+                                type: "string",
+                              },
+                            },
+                            {
+                              type: "undefined",
+                            },
+                          ],
+                        },
+                      },
+                    },
+                    s_81f0360286f1: {
                       type: "object",
                       required: ["type", "left", "op", "right"],
                       properties: {
@@ -28648,7 +31288,7 @@ export const generatedRouteMap: RouteNode = {
                           type: "string",
                         },
                         left: {
-                          $ref: "#/$defs/s_92cd59123f4d",
+                          $ref: "#/$defs/s_bbc23394f552",
                         },
                         op: {
                           default: "eq",
@@ -28656,11 +31296,11 @@ export const generatedRouteMap: RouteNode = {
                           enum: ["eq", "neq", "gt", "lt", "gte", "lte"],
                         },
                         right: {
-                          $ref: "#/$defs/s_92cd59123f4d",
+                          $ref: "#/$defs/s_bbc23394f552",
                         },
                       },
                     },
-                    s_92cd59123f4d: {
+                    s_bbc23394f552: {
                       anyOf: [
                         {
                           type: "object",
@@ -28687,7 +31327,7 @@ export const generatedRouteMap: RouteNode = {
                             field: {
                               default: "status",
                               type: "string",
-                              enum: ["status", "priority"],
+                              enum: ["status", "priority", "agendaKind"],
                             },
                           },
                         },
@@ -28745,50 +31385,6 @@ export const generatedRouteMap: RouteNode = {
                           },
                         },
                       ],
-                    },
-                    s_db9cd85a47d3: {
-                      type: "object",
-                      required: ["type", "operand", "op"],
-                      properties: {
-                        type: {
-                          const: "predicate",
-                          type: "string",
-                        },
-                        operand: {
-                          $ref: "#/$defs/s_92cd59123f4d",
-                        },
-                        op: {
-                          default: "is_empty",
-                          type: "string",
-                          enum: [
-                            "is_empty",
-                            "is_not_empty",
-                            "is_truthy",
-                            "contains",
-                            "not_contains",
-                            "starts_with",
-                            "ends_with",
-                            "contains_all",
-                            "in",
-                          ],
-                        },
-                        value: {
-                          anyOf: [
-                            {
-                              type: "string",
-                            },
-                            {
-                              type: "array",
-                              items: {
-                                type: "string",
-                              },
-                            },
-                            {
-                              type: "undefined",
-                            },
-                          ],
-                        },
-                      },
                     },
                   },
                 },
@@ -29450,10 +32046,10 @@ export const generatedRouteMap: RouteNode = {
                                               {
                                                 anyOf: [
                                                   {
-                                                    $ref: "#/$defs/s_88402f3c68c1",
+                                                    $ref: "#/$defs/s_81f0360286f1",
                                                   },
                                                   {
-                                                    $ref: "#/$defs/s_db9cd85a47d3",
+                                                    $ref: "#/$defs/s_58ff7eb0d8f6",
                                                   },
                                                   {
                                                     type: "object",
@@ -29488,10 +32084,10 @@ export const generatedRouteMap: RouteNode = {
                                                         items: {
                                                           anyOf: [
                                                             {
-                                                              $ref: "#/$defs/s_88402f3c68c1",
+                                                              $ref: "#/$defs/s_81f0360286f1",
                                                             },
                                                             {
-                                                              $ref: "#/$defs/s_db9cd85a47d3",
+                                                              $ref: "#/$defs/s_58ff7eb0d8f6",
                                                             },
                                                             {
                                                               type: "object",
@@ -29531,10 +32127,10 @@ export const generatedRouteMap: RouteNode = {
                                                                   items: {
                                                                     anyOf: [
                                                                       {
-                                                                        $ref: "#/$defs/s_88402f3c68c1",
+                                                                        $ref: "#/$defs/s_81f0360286f1",
                                                                       },
                                                                       {
-                                                                        $ref: "#/$defs/s_db9cd85a47d3",
+                                                                        $ref: "#/$defs/s_58ff7eb0d8f6",
                                                                       },
                                                                       {
                                                                         type: "object",
@@ -29582,10 +32178,10 @@ export const generatedRouteMap: RouteNode = {
                                                                                     anyOf:
                                                                                       [
                                                                                         {
-                                                                                          $ref: "#/$defs/s_88402f3c68c1",
+                                                                                          $ref: "#/$defs/s_81f0360286f1",
                                                                                         },
                                                                                         {
-                                                                                          $ref: "#/$defs/s_db9cd85a47d3",
+                                                                                          $ref: "#/$defs/s_58ff7eb0d8f6",
                                                                                         },
                                                                                         {
                                                                                           type: "object",
@@ -29633,10 +32229,10 @@ export const generatedRouteMap: RouteNode = {
                                                                                                       anyOf:
                                                                                                         [
                                                                                                           {
-                                                                                                            $ref: "#/$defs/s_88402f3c68c1",
+                                                                                                            $ref: "#/$defs/s_81f0360286f1",
                                                                                                           },
                                                                                                           {
-                                                                                                            $ref: "#/$defs/s_db9cd85a47d3",
+                                                                                                            $ref: "#/$defs/s_58ff7eb0d8f6",
                                                                                                           },
                                                                                                           {
                                                                                                             type: "object",
@@ -29684,10 +32280,10 @@ export const generatedRouteMap: RouteNode = {
                                                                                                                         anyOf:
                                                                                                                           [
                                                                                                                             {
-                                                                                                                              $ref: "#/$defs/s_88402f3c68c1",
+                                                                                                                              $ref: "#/$defs/s_81f0360286f1",
                                                                                                                             },
                                                                                                                             {
-                                                                                                                              $ref: "#/$defs/s_db9cd85a47d3",
+                                                                                                                              $ref: "#/$defs/s_58ff7eb0d8f6",
                                                                                                                             },
                                                                                                                             {
                                                                                                                               type: "object",
@@ -29735,10 +32331,10 @@ export const generatedRouteMap: RouteNode = {
                                                                                                                                           anyOf:
                                                                                                                                             [
                                                                                                                                               {
-                                                                                                                                                $ref: "#/$defs/s_88402f3c68c1",
+                                                                                                                                                $ref: "#/$defs/s_81f0360286f1",
                                                                                                                                               },
                                                                                                                                               {
-                                                                                                                                                $ref: "#/$defs/s_db9cd85a47d3",
+                                                                                                                                                $ref: "#/$defs/s_58ff7eb0d8f6",
                                                                                                                                               },
                                                                                                                                             ],
                                                                                                                                         },
@@ -29824,7 +32420,51 @@ export const generatedRouteMap: RouteNode = {
                     },
                   },
                   $defs: {
-                    s_88402f3c68c1: {
+                    s_58ff7eb0d8f6: {
+                      type: "object",
+                      required: ["type", "operand", "op"],
+                      properties: {
+                        type: {
+                          const: "predicate",
+                          type: "string",
+                        },
+                        operand: {
+                          $ref: "#/$defs/s_bbc23394f552",
+                        },
+                        op: {
+                          default: "is_empty",
+                          type: "string",
+                          enum: [
+                            "is_empty",
+                            "is_not_empty",
+                            "is_truthy",
+                            "contains",
+                            "not_contains",
+                            "starts_with",
+                            "ends_with",
+                            "contains_all",
+                            "in",
+                          ],
+                        },
+                        value: {
+                          anyOf: [
+                            {
+                              type: "string",
+                            },
+                            {
+                              type: "array",
+                              items: {
+                                type: "string",
+                              },
+                            },
+                            {
+                              type: "undefined",
+                            },
+                          ],
+                        },
+                      },
+                    },
+                    s_81f0360286f1: {
                       type: "object",
                       required: ["type", "left", "op", "right"],
                       properties: {
@@ -29833,7 +32473,7 @@ export const generatedRouteMap: RouteNode = {
                           type: "string",
                         },
                         left: {
-                          $ref: "#/$defs/s_92cd59123f4d",
+                          $ref: "#/$defs/s_bbc23394f552",
                         },
                         op: {
                           default: "eq",
@@ -29841,11 +32481,11 @@ export const generatedRouteMap: RouteNode = {
                           enum: ["eq", "neq", "gt", "lt", "gte", "lte"],
                         },
                         right: {
-                          $ref: "#/$defs/s_92cd59123f4d",
+                          $ref: "#/$defs/s_bbc23394f552",
                         },
                       },
                     },
-                    s_92cd59123f4d: {
+                    s_bbc23394f552: {
                       anyOf: [
                         {
                           type: "object",
@@ -29872,7 +32512,7 @@ export const generatedRouteMap: RouteNode = {
                             field: {
                               default: "status",
                               type: "string",
-                              enum: ["status", "priority"],
+                              enum: ["status", "priority", "agendaKind"],
                             },
                           },
                         },
@@ -29930,50 +32570,6 @@ export const generatedRouteMap: RouteNode = {
                           },
                         },
                       ],
-                    },
-                    s_db9cd85a47d3: {
-                      type: "object",
-                      required: ["type", "operand", "op"],
-                      properties: {
-                        type: {
-                          const: "predicate",
-                          type: "string",
-                        },
-                        operand: {
-                          $ref: "#/$defs/s_92cd59123f4d",
-                        },
-                        op: {
-                          default: "is_empty",
-                          type: "string",
-                          enum: [
-                            "is_empty",
-                            "is_not_empty",
-                            "is_truthy",
-                            "contains",
-                            "not_contains",
-                            "starts_with",
-                            "ends_with",
-                            "contains_all",
-                            "in",
-                          ],
-                        },
-                        value: {
-                          anyOf: [
-                            {
-                              type: "string",
-                            },
-                            {
-                              type: "array",
-                              items: {
-                                type: "string",
-                              },
-                            },
-                            {
-                              type: "undefined",
-                            },
-                          ],
-                        },
-                      },
                     },
                   },
                 },
@@ -35130,10 +37726,10 @@ export const generatedRouteMap: RouteNode = {
                           items: {
                             anyOf: [
                               {
-                                $ref: "#/$defs/s_88402f3c68c1",
+                                $ref: "#/$defs/s_81f0360286f1",
                               },
                               {
-                                $ref: "#/$defs/s_db9cd85a47d3",
+                                $ref: "#/$defs/s_58ff7eb0d8f6",
                               },
                               {
                                 type: "object",
@@ -35164,10 +37760,10 @@ export const generatedRouteMap: RouteNode = {
                                     items: {
                                       anyOf: [
                                         {
-                                          $ref: "#/$defs/s_88402f3c68c1",
+                                          $ref: "#/$defs/s_81f0360286f1",
                                         },
                                         {
-                                          $ref: "#/$defs/s_db9cd85a47d3",
+                                          $ref: "#/$defs/s_58ff7eb0d8f6",
                                         },
                                         {
                                           type: "object",
@@ -35202,10 +37798,10 @@ export const generatedRouteMap: RouteNode = {
                                               items: {
                                                 anyOf: [
                                                   {
-                                                    $ref: "#/$defs/s_88402f3c68c1",
+                                                    $ref: "#/$defs/s_81f0360286f1",
                                                   },
                                                   {
-                                                    $ref: "#/$defs/s_db9cd85a47d3",
+                                                    $ref: "#/$defs/s_58ff7eb0d8f6",
                                                   },
                                                   {
                                                     type: "object",
@@ -35240,10 +37836,10 @@ export const generatedRouteMap: RouteNode = {
                                                         items: {
                                                           anyOf: [
                                                             {
-                                                              $ref: "#/$defs/s_88402f3c68c1",
+                                                              $ref: "#/$defs/s_81f0360286f1",
                                                             },
                                                             {
-                                                              $ref: "#/$defs/s_db9cd85a47d3",
+                                                              $ref: "#/$defs/s_58ff7eb0d8f6",
                                                             },
                                                             {
                                                               type: "object",
@@ -35283,10 +37879,10 @@ export const generatedRouteMap: RouteNode = {
                                                                   items: {
                                                                     anyOf: [
                                                                       {
-                                                                        $ref: "#/$defs/s_88402f3c68c1",
+                                                                        $ref: "#/$defs/s_81f0360286f1",
                                                                       },
                                                                       {
-                                                                        $ref: "#/$defs/s_db9cd85a47d3",
+                                                                        $ref: "#/$defs/s_58ff7eb0d8f6",
                                                                       },
                                                                       {
                                                                         type: "object",
@@ -35334,10 +37930,10 @@ export const generatedRouteMap: RouteNode = {
                                                                                     anyOf:
                                                                                       [
                                                                                         {
-                                                                                          $ref: "#/$defs/s_88402f3c68c1",
+                                                                                          $ref: "#/$defs/s_81f0360286f1",
                                                                                         },
                                                                                         {
-                                                                                          $ref: "#/$defs/s_db9cd85a47d3",
+                                                                                          $ref: "#/$defs/s_58ff7eb0d8f6",
                                                                                         },
                                                                                         {
                                                                                           type: "object",
@@ -35385,10 +37981,10 @@ export const generatedRouteMap: RouteNode = {
                                                                                                       anyOf:
                                                                                                         [
                                                                                                           {
-                                                                                                            $ref: "#/$defs/s_88402f3c68c1",
+                                                                                                            $ref: "#/$defs/s_81f0360286f1",
                                                                                                           },
                                                                                                           {
-                                                                                                            $ref: "#/$defs/s_db9cd85a47d3",
+                                                                                                            $ref: "#/$defs/s_58ff7eb0d8f6",
                                                                                                           },
                                                                                                         ],
                                                                                                     },
@@ -35454,7 +38050,51 @@ export const generatedRouteMap: RouteNode = {
                     },
                   },
                   $defs: {
-                    s_88402f3c68c1: {
+                    s_58ff7eb0d8f6: {
+                      type: "object",
+                      required: ["type", "operand", "op"],
+                      properties: {
+                        type: {
+                          const: "predicate",
+                          type: "string",
+                        },
+                        operand: {
+                          $ref: "#/$defs/s_bbc23394f552",
+                        },
+                        op: {
+                          default: "is_empty",
+                          type: "string",
+                          enum: [
+                            "is_empty",
+                            "is_not_empty",
+                            "is_truthy",
+                            "contains",
+                            "not_contains",
+                            "starts_with",
+                            "ends_with",
+                            "contains_all",
+                            "in",
+                          ],
+                        },
+                        value: {
+                          anyOf: [
+                            {
+                              type: "string",
+                            },
+                            {
+                              type: "array",
+                              items: {
+                                type: "string",
+                              },
+                            },
+                            {
+                              type: "undefined",
+                            },
+                          ],
+                        },
+                      },
+                    },
+                    s_81f0360286f1: {
                       type: "object",
                       required: ["type", "left", "op", "right"],
                       properties: {
@@ -35463,7 +38103,7 @@ export const generatedRouteMap: RouteNode = {
                           type: "string",
                         },
                         left: {
-                          $ref: "#/$defs/s_92cd59123f4d",
+                          $ref: "#/$defs/s_bbc23394f552",
                         },
                         op: {
                           default: "eq",
@@ -35471,11 +38111,11 @@ export const generatedRouteMap: RouteNode = {
                           enum: ["eq", "neq", "gt", "lt", "gte", "lte"],
                         },
                         right: {
-                          $ref: "#/$defs/s_92cd59123f4d",
+                          $ref: "#/$defs/s_bbc23394f552",
                         },
                       },
                     },
-                    s_92cd59123f4d: {
+                    s_bbc23394f552: {
                       anyOf: [
                         {
                           type: "object",
@@ -35502,7 +38142,7 @@ export const generatedRouteMap: RouteNode = {
                             field: {
                               default: "status",
                               type: "string",
-                              enum: ["status", "priority"],
+                              enum: ["status", "priority", "agendaKind"],
                             },
                           },
                         },
@@ -35560,50 +38200,6 @@ export const generatedRouteMap: RouteNode = {
                           },
                         },
                       ],
-                    },
-                    s_db9cd85a47d3: {
-                      type: "object",
-                      required: ["type", "operand", "op"],
-                      properties: {
-                        type: {
-                          const: "predicate",
-                          type: "string",
-                        },
-                        operand: {
-                          $ref: "#/$defs/s_92cd59123f4d",
-                        },
-                        op: {
-                          default: "is_empty",
-                          type: "string",
-                          enum: [
-                            "is_empty",
-                            "is_not_empty",
-                            "is_truthy",
-                            "contains",
-                            "not_contains",
-                            "starts_with",
-                            "ends_with",
-                            "contains_all",
-                            "in",
-                          ],
-                        },
-                        value: {
-                          anyOf: [
-                            {
-                              type: "string",
-                            },
-                            {
-                              type: "array",
-                              items: {
-                                type: "string",
-                              },
-                            },
-                            {
-                              type: "undefined",
-                            },
-                          ],
-                        },
-                      },
                     },
                   },
                 },
@@ -41773,7 +44369,7 @@ export const generatedRouteMap: RouteNode = {
                                   type: "number",
                                 },
                                 filters: {
-                                  $ref: "#/$defs/s_1a8c704ae4dd",
+                                  $ref: "#/$defs/s_8b4b71586106",
                                 },
                                 sorts: {
                                   $ref: "#/$defs/s_a2912d7bfae3",
@@ -41823,7 +44419,7 @@ export const generatedRouteMap: RouteNode = {
                                   type: "number",
                                 },
                                 filters: {
-                                  $ref: "#/$defs/s_1a8c704ae4dd",
+                                  $ref: "#/$defs/s_8b4b71586106",
                                 },
                                 sorts: {
                                   $ref: "#/$defs/s_a2912d7bfae3",
@@ -41863,7 +44459,7 @@ export const generatedRouteMap: RouteNode = {
                                   type: "number",
                                 },
                                 filters: {
-                                  $ref: "#/$defs/s_1a8c704ae4dd",
+                                  $ref: "#/$defs/s_8b4b71586106",
                                 },
                                 sorts: {
                                   $ref: "#/$defs/s_a2912d7bfae3",
@@ -41899,7 +44495,7 @@ export const generatedRouteMap: RouteNode = {
                                   type: "number",
                                 },
                                 filters: {
-                                  $ref: "#/$defs/s_1a8c704ae4dd",
+                                  $ref: "#/$defs/s_8b4b71586106",
                                 },
                                 sorts: {
                                   $ref: "#/$defs/s_a2912d7bfae3",
@@ -41945,7 +44541,7 @@ export const generatedRouteMap: RouteNode = {
                                   type: "number",
                                 },
                                 filters: {
-                                  $ref: "#/$defs/s_1a8c704ae4dd",
+                                  $ref: "#/$defs/s_8b4b71586106",
                                 },
                                 sorts: {
                                   $ref: "#/$defs/s_a2912d7bfae3",
@@ -42016,7 +44612,7 @@ export const generatedRouteMap: RouteNode = {
                                   type: "number",
                                 },
                                 filters: {
-                                  $ref: "#/$defs/s_1a8c704ae4dd",
+                                  $ref: "#/$defs/s_8b4b71586106",
                                 },
                                 sorts: {
                                   $ref: "#/$defs/s_a2912d7bfae3",
@@ -42082,16 +44678,81 @@ export const generatedRouteMap: RouteNode = {
                     },
                   },
                   $defs: {
-                    s_1a8c704ae4dd: {
+                    s_58ff7eb0d8f6: {
+                      type: "object",
+                      required: ["type", "operand", "op"],
+                      properties: {
+                        type: {
+                          const: "predicate",
+                          type: "string",
+                        },
+                        operand: {
+                          $ref: "#/$defs/s_bbc23394f552",
+                        },
+                        op: {
+                          default: "is_empty",
+                          type: "string",
+                          enum: [
+                            "is_empty",
+                            "is_not_empty",
+                            "is_truthy",
+                            "contains",
+                            "not_contains",
+                            "starts_with",
+                            "ends_with",
+                            "contains_all",
+                            "in",
+                          ],
+                        },
+                        value: {
+                          anyOf: [
+                            {
+                              type: "string",
+                            },
+                            {
+                              type: "array",
+                              items: {
+                                type: "string",
+                              },
+                            },
+                            {
+                              type: "undefined",
+                            },
+                          ],
+                        },
+                      },
+                    },
+                    s_81f0360286f1: {
+                      type: "object",
+                      required: ["type", "left", "op", "right"],
+                      properties: {
+                        type: {
+                          const: "compare",
+                          type: "string",
+                        },
+                        left: {
+                          $ref: "#/$defs/s_bbc23394f552",
+                        },
+                        op: {
+                          default: "eq",
+                          type: "string",
+                          enum: ["eq", "neq", "gt", "lt", "gte", "lte"],
+                        },
+                        right: {
+                          $ref: "#/$defs/s_bbc23394f552",
+                        },
+                      },
+                    },
+                    s_8b4b71586106: {
                       maxItems: 32,
                       type: "array",
                       items: {
                         anyOf: [
                           {
-                            $ref: "#/$defs/s_88402f3c68c1",
+                            $ref: "#/$defs/s_81f0360286f1",
                           },
                           {
-                            $ref: "#/$defs/s_db9cd85a47d3",
+                            $ref: "#/$defs/s_58ff7eb0d8f6",
                           },
                           {
                             type: "object",
@@ -42122,10 +44783,10 @@ export const generatedRouteMap: RouteNode = {
                                 items: {
                                   anyOf: [
                                     {
-                                      $ref: "#/$defs/s_88402f3c68c1",
+                                      $ref: "#/$defs/s_81f0360286f1",
                                     },
                                     {
-                                      $ref: "#/$defs/s_db9cd85a47d3",
+                                      $ref: "#/$defs/s_58ff7eb0d8f6",
                                     },
                                     {
                                       type: "object",
@@ -42160,10 +44821,10 @@ export const generatedRouteMap: RouteNode = {
                                           items: {
                                             anyOf: [
                                               {
-                                                $ref: "#/$defs/s_88402f3c68c1",
+                                                $ref: "#/$defs/s_81f0360286f1",
                                               },
                                               {
-                                                $ref: "#/$defs/s_db9cd85a47d3",
+                                                $ref: "#/$defs/s_58ff7eb0d8f6",
                                               },
                                               {
                                                 type: "object",
@@ -42198,10 +44859,10 @@ export const generatedRouteMap: RouteNode = {
                                                     items: {
                                                       anyOf: [
                                                         {
-                                                          $ref: "#/$defs/s_88402f3c68c1",
+                                                          $ref: "#/$defs/s_81f0360286f1",
                                                         },
                                                         {
-                                                          $ref: "#/$defs/s_db9cd85a47d3",
+                                                          $ref: "#/$defs/s_58ff7eb0d8f6",
                                                         },
                                                         {
                                                           type: "object",
@@ -42239,10 +44900,10 @@ export const generatedRouteMap: RouteNode = {
                                                               items: {
                                                                 anyOf: [
                                                                   {
-                                                                    $ref: "#/$defs/s_88402f3c68c1",
+                                                                    $ref: "#/$defs/s_81f0360286f1",
                                                                   },
                                                                   {
-                                                                    $ref: "#/$defs/s_db9cd85a47d3",
+                                                                    $ref: "#/$defs/s_58ff7eb0d8f6",
                                                                   },
                                                                   {
                                                                     type: "object",
@@ -42289,10 +44950,10 @@ export const generatedRouteMap: RouteNode = {
                                                                                 anyOf:
                                                                                   [
                                                                                     {
-                                                                                      $ref: "#/$defs/s_88402f3c68c1",
+                                                                                      $ref: "#/$defs/s_81f0360286f1",
                                                                                     },
                                                                                     {
-                                                                                      $ref: "#/$defs/s_db9cd85a47d3",
+                                                                                      $ref: "#/$defs/s_58ff7eb0d8f6",
                                                                                     },
                                                                                     {
                                                                                       type: "object",
@@ -42340,10 +45001,10 @@ export const generatedRouteMap: RouteNode = {
                                                                                                   anyOf:
                                                                                                     [
                                                                                                       {
-                                                                                                        $ref: "#/$defs/s_88402f3c68c1",
+                                                                                                        $ref: "#/$defs/s_81f0360286f1",
                                                                                                       },
                                                                                                       {
-                                                                                                        $ref: "#/$defs/s_db9cd85a47d3",
+                                                                                                        $ref: "#/$defs/s_58ff7eb0d8f6",
                                                                                                       },
                                                                                                     ],
                                                                                                 },
@@ -42378,28 +45039,25 @@ export const generatedRouteMap: RouteNode = {
                         ],
                       },
                     },
-                    s_88402f3c68c1: {
-                      type: "object",
-                      required: ["type", "left", "op", "right"],
-                      properties: {
-                        type: {
-                          const: "compare",
-                          type: "string",
-                        },
-                        left: {
-                          $ref: "#/$defs/s_92cd59123f4d",
-                        },
-                        op: {
-                          default: "eq",
-                          type: "string",
-                          enum: ["eq", "neq", "gt", "lt", "gte", "lte"],
-                        },
-                        right: {
-                          $ref: "#/$defs/s_92cd59123f4d",
+                    s_a2912d7bfae3: {
+                      maxItems: 8,
+                      type: "array",
+                      items: {
+                        additionalProperties: false,
+                        type: "object",
+                        required: ["propertyId", "desc"],
+                        properties: {
+                          propertyId: {
+                            minLength: 1,
+                            type: "string",
+                          },
+                          desc: {
+                            type: "boolean",
+                          },
                         },
                       },
                     },
-                    s_92cd59123f4d: {
+                    s_bbc23394f552: {
                       anyOf: [
                         {
                           type: "object",
@@ -42426,7 +45084,7 @@ export const generatedRouteMap: RouteNode = {
                             field: {
                               default: "status",
                               type: "string",
-                              enum: ["status", "priority"],
+                              enum: ["status", "priority", "agendaKind"],
                             },
                           },
                         },
@@ -42485,24 +45143,6 @@ export const generatedRouteMap: RouteNode = {
                         },
                       ],
                     },
-                    s_a2912d7bfae3: {
-                      maxItems: 8,
-                      type: "array",
-                      items: {
-                        additionalProperties: false,
-                        type: "object",
-                        required: ["propertyId", "desc"],
-                        properties: {
-                          propertyId: {
-                            minLength: 1,
-                            type: "string",
-                          },
-                          desc: {
-                            type: "boolean",
-                          },
-                        },
-                      },
-                    },
                     s_d21ba6521546: {
                       type: "array",
                       items: {
@@ -42533,50 +45173,6 @@ export const generatedRouteMap: RouteNode = {
                               "percent-of-total",
                             ],
                           },
-                        },
-                      },
-                    },
-                    s_db9cd85a47d3: {
-                      type: "object",
-                      required: ["type", "operand", "op"],
-                      properties: {
-                        type: {
-                          const: "predicate",
-                          type: "string",
-                        },
-                        operand: {
-                          $ref: "#/$defs/s_92cd59123f4d",
-                        },
-                        op: {
-                          default: "is_empty",
-                          type: "string",
-                          enum: [
-                            "is_empty",
-                            "is_not_empty",
-                            "is_truthy",
-                            "contains",
-                            "not_contains",
-                            "starts_with",
-                            "ends_with",
-                            "contains_all",
-                            "in",
-                          ],
-                        },
-                        value: {
-                          anyOf: [
-                            {
-                              type: "string",
-                            },
-                            {
-                              type: "array",
-                              items: {
-                                type: "string",
-                              },
-                            },
-                            {
-                              type: "undefined",
-                            },
-                          ],
                         },
                       },
                     },
@@ -42864,7 +45460,7 @@ export const generatedRouteMap: RouteNode = {
                                   type: "number",
                                 },
                                 filters: {
-                                  $ref: "#/$defs/s_1a8c704ae4dd",
+                                  $ref: "#/$defs/s_8b4b71586106",
                                 },
                                 sorts: {
                                   $ref: "#/$defs/s_a2912d7bfae3",
@@ -42914,7 +45510,7 @@ export const generatedRouteMap: RouteNode = {
                                   type: "number",
                                 },
                                 filters: {
-                                  $ref: "#/$defs/s_1a8c704ae4dd",
+                                  $ref: "#/$defs/s_8b4b71586106",
                                 },
                                 sorts: {
                                   $ref: "#/$defs/s_a2912d7bfae3",
@@ -42954,7 +45550,7 @@ export const generatedRouteMap: RouteNode = {
                                   type: "number",
                                 },
                                 filters: {
-                                  $ref: "#/$defs/s_1a8c704ae4dd",
+                                  $ref: "#/$defs/s_8b4b71586106",
                                 },
                                 sorts: {
                                   $ref: "#/$defs/s_a2912d7bfae3",
@@ -42990,7 +45586,7 @@ export const generatedRouteMap: RouteNode = {
                                   type: "number",
                                 },
                                 filters: {
-                                  $ref: "#/$defs/s_1a8c704ae4dd",
+                                  $ref: "#/$defs/s_8b4b71586106",
                                 },
                                 sorts: {
                                   $ref: "#/$defs/s_a2912d7bfae3",
@@ -43036,7 +45632,7 @@ export const generatedRouteMap: RouteNode = {
                                   type: "number",
                                 },
                                 filters: {
-                                  $ref: "#/$defs/s_1a8c704ae4dd",
+                                  $ref: "#/$defs/s_8b4b71586106",
                                 },
                                 sorts: {
                                   $ref: "#/$defs/s_a2912d7bfae3",
@@ -43107,7 +45703,7 @@ export const generatedRouteMap: RouteNode = {
                                   type: "number",
                                 },
                                 filters: {
-                                  $ref: "#/$defs/s_1a8c704ae4dd",
+                                  $ref: "#/$defs/s_8b4b71586106",
                                 },
                                 sorts: {
                                   $ref: "#/$defs/s_a2912d7bfae3",
@@ -43438,7 +46034,7 @@ export const generatedRouteMap: RouteNode = {
                                     condition: {
                                       anyOf: [
                                         {
-                                          $ref: "#/$defs/s_c6fc04a7b5ba",
+                                          $ref: "#/$defs/s_77f52a99c008",
                                         },
                                         {
                                           type: "null",
@@ -43464,14 +46060,334 @@ export const generatedRouteMap: RouteNode = {
                     },
                   },
                   $defs: {
-                    s_1a8c704ae4dd: {
-                      maxItems: 32,
-                      type: "array",
-                      items: {
-                        $ref: "#/$defs/s_c6fc04a7b5ba",
+                    s_58ff7eb0d8f6: {
+                      type: "object",
+                      required: ["type", "operand", "op"],
+                      properties: {
+                        type: {
+                          const: "predicate",
+                          type: "string",
+                        },
+                        operand: {
+                          $ref: "#/$defs/s_bbc23394f552",
+                        },
+                        op: {
+                          default: "is_empty",
+                          type: "string",
+                          enum: [
+                            "is_empty",
+                            "is_not_empty",
+                            "is_truthy",
+                            "contains",
+                            "not_contains",
+                            "starts_with",
+                            "ends_with",
+                            "contains_all",
+                            "in",
+                          ],
+                        },
+                        value: {
+                          anyOf: [
+                            {
+                              type: "string",
+                            },
+                            {
+                              type: "array",
+                              items: {
+                                type: "string",
+                              },
+                            },
+                            {
+                              type: "undefined",
+                            },
+                          ],
+                        },
                       },
                     },
-                    s_88402f3c68c1: {
+                    s_77f52a99c008: {
+                      anyOf: [
+                        {
+                          $ref: "#/$defs/s_81f0360286f1",
+                        },
+                        {
+                          $ref: "#/$defs/s_58ff7eb0d8f6",
+                        },
+                        {
+                          type: "object",
+                          required: ["type", "combinator", "children"],
+                          properties: {
+                            type: {
+                              const: "group",
+                              type: "string",
+                            },
+                            combinator: {
+                              default: "and",
+                              type: "string",
+                              enum: ["and", "or"],
+                            },
+                            negated: {
+                              anyOf: [
+                                {
+                                  type: "boolean",
+                                },
+                                {
+                                  type: "undefined",
+                                },
+                              ],
+                            },
+                            children: {
+                              maxItems: 32,
+                              type: "array",
+                              items: {
+                                anyOf: [
+                                  {
+                                    $ref: "#/$defs/s_81f0360286f1",
+                                  },
+                                  {
+                                    $ref: "#/$defs/s_58ff7eb0d8f6",
+                                  },
+                                  {
+                                    type: "object",
+                                    required: [
+                                      "type",
+                                      "combinator",
+                                      "children",
+                                    ],
+                                    properties: {
+                                      type: {
+                                        const: "group",
+                                        type: "string",
+                                      },
+                                      combinator: {
+                                        default: "and",
+                                        type: "string",
+                                        enum: ["and", "or"],
+                                      },
+                                      negated: {
+                                        anyOf: [
+                                          {
+                                            type: "boolean",
+                                          },
+                                          {
+                                            type: "undefined",
+                                          },
+                                        ],
+                                      },
+                                      children: {
+                                        maxItems: 32,
+                                        type: "array",
+                                        items: {
+                                          anyOf: [
+                                            {
+                                              $ref: "#/$defs/s_81f0360286f1",
+                                            },
+                                            {
+                                              $ref: "#/$defs/s_58ff7eb0d8f6",
+                                            },
+                                            {
+                                              type: "object",
+                                              required: [
+                                                "type",
+                                                "combinator",
+                                                "children",
+                                              ],
+                                              properties: {
+                                                type: {
+                                                  const: "group",
+                                                  type: "string",
+                                                },
+                                                combinator: {
+                                                  default: "and",
+                                                  type: "string",
+                                                  enum: ["and", "or"],
+                                                },
+                                                negated: {
+                                                  anyOf: [
+                                                    {
+                                                      type: "boolean",
+                                                    },
+                                                    {
+                                                      type: "undefined",
+                                                    },
+                                                  ],
+                                                },
+                                                children: {
+                                                  maxItems: 32,
+                                                  type: "array",
+                                                  items: {
+                                                    anyOf: [
+                                                      {
+                                                        $ref: "#/$defs/s_81f0360286f1",
+                                                      },
+                                                      {
+                                                        $ref: "#/$defs/s_58ff7eb0d8f6",
+                                                      },
+                                                      {
+                                                        type: "object",
+                                                        required: [
+                                                          "type",
+                                                          "combinator",
+                                                          "children",
+                                                        ],
+                                                        properties: {
+                                                          type: {
+                                                            const: "group",
+                                                            type: "string",
+                                                          },
+                                                          combinator: {
+                                                            default: "and",
+                                                            type: "string",
+                                                            enum: ["and", "or"],
+                                                          },
+                                                          negated: {
+                                                            anyOf: [
+                                                              {
+                                                                type: "boolean",
+                                                              },
+                                                              {
+                                                                type: "undefined",
+                                                              },
+                                                            ],
+                                                          },
+                                                          children: {
+                                                            maxItems: 32,
+                                                            type: "array",
+                                                            items: {
+                                                              anyOf: [
+                                                                {
+                                                                  $ref: "#/$defs/s_81f0360286f1",
+                                                                },
+                                                                {
+                                                                  $ref: "#/$defs/s_58ff7eb0d8f6",
+                                                                },
+                                                                {
+                                                                  type: "object",
+                                                                  required: [
+                                                                    "type",
+                                                                    "combinator",
+                                                                    "children",
+                                                                  ],
+                                                                  properties: {
+                                                                    type: {
+                                                                      const:
+                                                                        "group",
+                                                                      type: "string",
+                                                                    },
+                                                                    combinator:
+                                                                      {
+                                                                        default:
+                                                                          "and",
+                                                                        type: "string",
+                                                                        enum: [
+                                                                          "and",
+                                                                          "or",
+                                                                        ],
+                                                                      },
+                                                                    negated: {
+                                                                      anyOf: [
+                                                                        {
+                                                                          type: "boolean",
+                                                                        },
+                                                                        {
+                                                                          type: "undefined",
+                                                                        },
+                                                                      ],
+                                                                    },
+                                                                    children: {
+                                                                      maxItems: 32,
+                                                                      type: "array",
+                                                                      items: {
+                                                                        anyOf: [
+                                                                          {
+                                                                            $ref: "#/$defs/s_81f0360286f1",
+                                                                          },
+                                                                          {
+                                                                            $ref: "#/$defs/s_58ff7eb0d8f6",
+                                                                          },
+                                                                          {
+                                                                            type: "object",
+                                                                            required:
+                                                                              [
+                                                                                "type",
+                                                                                "combinator",
+                                                                                "children",
+                                                                              ],
+                                                                            properties:
+                                                                              {
+                                                                                type: {
+                                                                                  const:
+                                                                                    "group",
+                                                                                  type: "string",
+                                                                                },
+                                                                                combinator:
+                                                                                  {
+                                                                                    default:
+                                                                                      "and",
+                                                                                    type: "string",
+                                                                                    enum: [
+                                                                                      "and",
+                                                                                      "or",
+                                                                                    ],
+                                                                                  },
+                                                                                negated:
+                                                                                  {
+                                                                                    anyOf:
+                                                                                      [
+                                                                                        {
+                                                                                          type: "boolean",
+                                                                                        },
+                                                                                        {
+                                                                                          type: "undefined",
+                                                                                        },
+                                                                                      ],
+                                                                                  },
+                                                                                children:
+                                                                                  {
+                                                                                    maxItems: 32,
+                                                                                    type: "array",
+                                                                                    items:
+                                                                                      {
+                                                                                        anyOf:
+                                                                                          [
+                                                                                            {
+                                                                                              $ref: "#/$defs/s_81f0360286f1",
+                                                                                            },
+                                                                                            {
+                                                                                              $ref: "#/$defs/s_58ff7eb0d8f6",
+                                                                                            },
+                                                                                          ],
+                                                                                      },
+                                                                                  },
+                                                                              },
+                                                                          },
+                                                                        ],
+                                                                      },
+                                                                    },
+                                                                  },
+                                                                },
+                                                              ],
+                                                            },
+                                                          },
+                                                        },
+                                                      },
+                                                    ],
+                                                  },
+                                                },
+                                              },
+                                            },
+                                          ],
+                                        },
+                                      },
+                                    },
+                                  },
+                                ],
+                              },
+                            },
+                          },
+                        },
+                      ],
+                    },
+                    s_81f0360286f1: {
                       type: "object",
                       required: ["type", "left", "op", "right"],
                       properties: {
@@ -43480,7 +46396,7 @@ export const generatedRouteMap: RouteNode = {
                           type: "string",
                         },
                         left: {
-                          $ref: "#/$defs/s_92cd59123f4d",
+                          $ref: "#/$defs/s_bbc23394f552",
                         },
                         op: {
                           default: "eq",
@@ -43488,11 +46404,36 @@ export const generatedRouteMap: RouteNode = {
                           enum: ["eq", "neq", "gt", "lt", "gte", "lte"],
                         },
                         right: {
-                          $ref: "#/$defs/s_92cd59123f4d",
+                          $ref: "#/$defs/s_bbc23394f552",
                         },
                       },
                     },
-                    s_92cd59123f4d: {
+                    s_8b4b71586106: {
+                      maxItems: 32,
+                      type: "array",
+                      items: {
+                        $ref: "#/$defs/s_77f52a99c008",
+                      },
+                    },
+                    s_a2912d7bfae3: {
+                      maxItems: 8,
+                      type: "array",
+                      items: {
+                        additionalProperties: false,
+                        type: "object",
+                        required: ["propertyId", "desc"],
+                        properties: {
+                          propertyId: {
+                            minLength: 1,
+                            type: "string",
+                          },
+                          desc: {
+                            type: "boolean",
+                          },
+                        },
+                      },
+                    },
+                    s_bbc23394f552: {
                       anyOf: [
                         {
                           type: "object",
@@ -43519,7 +46460,7 @@ export const generatedRouteMap: RouteNode = {
                             field: {
                               default: "status",
                               type: "string",
-                              enum: ["status", "priority"],
+                              enum: ["status", "priority", "agendaKind"],
                             },
                           },
                         },
@@ -43578,307 +46519,6 @@ export const generatedRouteMap: RouteNode = {
                         },
                       ],
                     },
-                    s_a2912d7bfae3: {
-                      maxItems: 8,
-                      type: "array",
-                      items: {
-                        additionalProperties: false,
-                        type: "object",
-                        required: ["propertyId", "desc"],
-                        properties: {
-                          propertyId: {
-                            minLength: 1,
-                            type: "string",
-                          },
-                          desc: {
-                            type: "boolean",
-                          },
-                        },
-                      },
-                    },
-                    s_c6fc04a7b5ba: {
-                      anyOf: [
-                        {
-                          $ref: "#/$defs/s_88402f3c68c1",
-                        },
-                        {
-                          $ref: "#/$defs/s_db9cd85a47d3",
-                        },
-                        {
-                          type: "object",
-                          required: ["type", "combinator", "children"],
-                          properties: {
-                            type: {
-                              const: "group",
-                              type: "string",
-                            },
-                            combinator: {
-                              default: "and",
-                              type: "string",
-                              enum: ["and", "or"],
-                            },
-                            negated: {
-                              anyOf: [
-                                {
-                                  type: "boolean",
-                                },
-                                {
-                                  type: "undefined",
-                                },
-                              ],
-                            },
-                            children: {
-                              maxItems: 32,
-                              type: "array",
-                              items: {
-                                anyOf: [
-                                  {
-                                    $ref: "#/$defs/s_88402f3c68c1",
-                                  },
-                                  {
-                                    $ref: "#/$defs/s_db9cd85a47d3",
-                                  },
-                                  {
-                                    type: "object",
-                                    required: [
-                                      "type",
-                                      "combinator",
-                                      "children",
-                                    ],
-                                    properties: {
-                                      type: {
-                                        const: "group",
-                                        type: "string",
-                                      },
-                                      combinator: {
-                                        default: "and",
-                                        type: "string",
-                                        enum: ["and", "or"],
-                                      },
-                                      negated: {
-                                        anyOf: [
-                                          {
-                                            type: "boolean",
-                                          },
-                                          {
-                                            type: "undefined",
-                                          },
-                                        ],
-                                      },
-                                      children: {
-                                        maxItems: 32,
-                                        type: "array",
-                                        items: {
-                                          anyOf: [
-                                            {
-                                              $ref: "#/$defs/s_88402f3c68c1",
-                                            },
-                                            {
-                                              $ref: "#/$defs/s_db9cd85a47d3",
-                                            },
-                                            {
-                                              type: "object",
-                                              required: [
-                                                "type",
-                                                "combinator",
-                                                "children",
-                                              ],
-                                              properties: {
-                                                type: {
-                                                  const: "group",
-                                                  type: "string",
-                                                },
-                                                combinator: {
-                                                  default: "and",
-                                                  type: "string",
-                                                  enum: ["and", "or"],
-                                                },
-                                                negated: {
-                                                  anyOf: [
-                                                    {
-                                                      type: "boolean",
-                                                    },
-                                                    {
-                                                      type: "undefined",
-                                                    },
-                                                  ],
-                                                },
-                                                children: {
-                                                  maxItems: 32,
-                                                  type: "array",
-                                                  items: {
-                                                    anyOf: [
-                                                      {
-                                                        $ref: "#/$defs/s_88402f3c68c1",
-                                                      },
-                                                      {
-                                                        $ref: "#/$defs/s_db9cd85a47d3",
-                                                      },
-                                                      {
-                                                        type: "object",
-                                                        required: [
-                                                          "type",
-                                                          "combinator",
-                                                          "children",
-                                                        ],
-                                                        properties: {
-                                                          type: {
-                                                            const: "group",
-                                                            type: "string",
-                                                          },
-                                                          combinator: {
-                                                            default: "and",
-                                                            type: "string",
-                                                            enum: ["and", "or"],
-                                                          },
-                                                          negated: {
-                                                            anyOf: [
-                                                              {
-                                                                type: "boolean",
-                                                              },
-                                                              {
-                                                                type: "undefined",
-                                                              },
-                                                            ],
-                                                          },
-                                                          children: {
-                                                            maxItems: 32,
-                                                            type: "array",
-                                                            items: {
-                                                              anyOf: [
-                                                                {
-                                                                  $ref: "#/$defs/s_88402f3c68c1",
-                                                                },
-                                                                {
-                                                                  $ref: "#/$defs/s_db9cd85a47d3",
-                                                                },
-                                                                {
-                                                                  type: "object",
-                                                                  required: [
-                                                                    "type",
-                                                                    "combinator",
-                                                                    "children",
-                                                                  ],
-                                                                  properties: {
-                                                                    type: {
-                                                                      const:
-                                                                        "group",
-                                                                      type: "string",
-                                                                    },
-                                                                    combinator:
-                                                                      {
-                                                                        default:
-                                                                          "and",
-                                                                        type: "string",
-                                                                        enum: [
-                                                                          "and",
-                                                                          "or",
-                                                                        ],
-                                                                      },
-                                                                    negated: {
-                                                                      anyOf: [
-                                                                        {
-                                                                          type: "boolean",
-                                                                        },
-                                                                        {
-                                                                          type: "undefined",
-                                                                        },
-                                                                      ],
-                                                                    },
-                                                                    children: {
-                                                                      maxItems: 32,
-                                                                      type: "array",
-                                                                      items: {
-                                                                        anyOf: [
-                                                                          {
-                                                                            $ref: "#/$defs/s_88402f3c68c1",
-                                                                          },
-                                                                          {
-                                                                            $ref: "#/$defs/s_db9cd85a47d3",
-                                                                          },
-                                                                          {
-                                                                            type: "object",
-                                                                            required:
-                                                                              [
-                                                                                "type",
-                                                                                "combinator",
-                                                                                "children",
-                                                                              ],
-                                                                            properties:
-                                                                              {
-                                                                                type: {
-                                                                                  const:
-                                                                                    "group",
-                                                                                  type: "string",
-                                                                                },
-                                                                                combinator:
-                                                                                  {
-                                                                                    default:
-                                                                                      "and",
-                                                                                    type: "string",
-                                                                                    enum: [
-                                                                                      "and",
-                                                                                      "or",
-                                                                                    ],
-                                                                                  },
-                                                                                negated:
-                                                                                  {
-                                                                                    anyOf:
-                                                                                      [
-                                                                                        {
-                                                                                          type: "boolean",
-                                                                                        },
-                                                                                        {
-                                                                                          type: "undefined",
-                                                                                        },
-                                                                                      ],
-                                                                                  },
-                                                                                children:
-                                                                                  {
-                                                                                    maxItems: 32,
-                                                                                    type: "array",
-                                                                                    items:
-                                                                                      {
-                                                                                        anyOf:
-                                                                                          [
-                                                                                            {
-                                                                                              $ref: "#/$defs/s_88402f3c68c1",
-                                                                                            },
-                                                                                            {
-                                                                                              $ref: "#/$defs/s_db9cd85a47d3",
-                                                                                            },
-                                                                                          ],
-                                                                                      },
-                                                                                  },
-                                                                              },
-                                                                          },
-                                                                        ],
-                                                                      },
-                                                                    },
-                                                                  },
-                                                                },
-                                                              ],
-                                                            },
-                                                          },
-                                                        },
-                                                      },
-                                                    ],
-                                                  },
-                                                },
-                                              },
-                                            },
-                                          ],
-                                        },
-                                      },
-                                    },
-                                  },
-                                ],
-                              },
-                            },
-                          },
-                        },
-                      ],
-                    },
                     s_d21ba6521546: {
                       type: "array",
                       items: {
@@ -43909,50 +46549,6 @@ export const generatedRouteMap: RouteNode = {
                               "percent-of-total",
                             ],
                           },
-                        },
-                      },
-                    },
-                    s_db9cd85a47d3: {
-                      type: "object",
-                      required: ["type", "operand", "op"],
-                      properties: {
-                        type: {
-                          const: "predicate",
-                          type: "string",
-                        },
-                        operand: {
-                          $ref: "#/$defs/s_92cd59123f4d",
-                        },
-                        op: {
-                          default: "is_empty",
-                          type: "string",
-                          enum: [
-                            "is_empty",
-                            "is_not_empty",
-                            "is_truthy",
-                            "contains",
-                            "not_contains",
-                            "starts_with",
-                            "ends_with",
-                            "contains_all",
-                            "in",
-                          ],
-                        },
-                        value: {
-                          anyOf: [
-                            {
-                              type: "string",
-                            },
-                            {
-                              type: "array",
-                              items: {
-                                type: "string",
-                              },
-                            },
-                            {
-                              type: "undefined",
-                            },
-                          ],
                         },
                       },
                     },
@@ -44203,7 +46799,7 @@ export const generatedRouteMap: RouteNode = {
                                   type: "number",
                                 },
                                 filters: {
-                                  $ref: "#/$defs/s_1a8c704ae4dd",
+                                  $ref: "#/$defs/s_8b4b71586106",
                                 },
                                 sorts: {
                                   $ref: "#/$defs/s_a2912d7bfae3",
@@ -44253,7 +46849,7 @@ export const generatedRouteMap: RouteNode = {
                                   type: "number",
                                 },
                                 filters: {
-                                  $ref: "#/$defs/s_1a8c704ae4dd",
+                                  $ref: "#/$defs/s_8b4b71586106",
                                 },
                                 sorts: {
                                   $ref: "#/$defs/s_a2912d7bfae3",
@@ -44293,7 +46889,7 @@ export const generatedRouteMap: RouteNode = {
                                   type: "number",
                                 },
                                 filters: {
-                                  $ref: "#/$defs/s_1a8c704ae4dd",
+                                  $ref: "#/$defs/s_8b4b71586106",
                                 },
                                 sorts: {
                                   $ref: "#/$defs/s_a2912d7bfae3",
@@ -44329,7 +46925,7 @@ export const generatedRouteMap: RouteNode = {
                                   type: "number",
                                 },
                                 filters: {
-                                  $ref: "#/$defs/s_1a8c704ae4dd",
+                                  $ref: "#/$defs/s_8b4b71586106",
                                 },
                                 sorts: {
                                   $ref: "#/$defs/s_a2912d7bfae3",
@@ -44375,7 +46971,7 @@ export const generatedRouteMap: RouteNode = {
                                   type: "number",
                                 },
                                 filters: {
-                                  $ref: "#/$defs/s_1a8c704ae4dd",
+                                  $ref: "#/$defs/s_8b4b71586106",
                                 },
                                 sorts: {
                                   $ref: "#/$defs/s_a2912d7bfae3",
@@ -44446,7 +47042,7 @@ export const generatedRouteMap: RouteNode = {
                                   type: "number",
                                 },
                                 filters: {
-                                  $ref: "#/$defs/s_1a8c704ae4dd",
+                                  $ref: "#/$defs/s_8b4b71586106",
                                 },
                                 sorts: {
                                   $ref: "#/$defs/s_a2912d7bfae3",
@@ -44777,7 +47373,7 @@ export const generatedRouteMap: RouteNode = {
                                     condition: {
                                       anyOf: [
                                         {
-                                          $ref: "#/$defs/s_c6fc04a7b5ba",
+                                          $ref: "#/$defs/s_77f52a99c008",
                                         },
                                         {
                                           type: "null",
@@ -44814,14 +47410,334 @@ export const generatedRouteMap: RouteNode = {
                     },
                   },
                   $defs: {
-                    s_1a8c704ae4dd: {
-                      maxItems: 32,
-                      type: "array",
-                      items: {
-                        $ref: "#/$defs/s_c6fc04a7b5ba",
+                    s_58ff7eb0d8f6: {
+                      type: "object",
+                      required: ["type", "operand", "op"],
+                      properties: {
+                        type: {
+                          const: "predicate",
+                          type: "string",
+                        },
+                        operand: {
+                          $ref: "#/$defs/s_bbc23394f552",
+                        },
+                        op: {
+                          default: "is_empty",
+                          type: "string",
+                          enum: [
+                            "is_empty",
+                            "is_not_empty",
+                            "is_truthy",
+                            "contains",
+                            "not_contains",
+                            "starts_with",
+                            "ends_with",
+                            "contains_all",
+                            "in",
+                          ],
+                        },
+                        value: {
+                          anyOf: [
+                            {
+                              type: "string",
+                            },
+                            {
+                              type: "array",
+                              items: {
+                                type: "string",
+                              },
+                            },
+                            {
+                              type: "undefined",
+                            },
+                          ],
+                        },
                       },
                     },
-                    s_88402f3c68c1: {
+                    s_77f52a99c008: {
+                      anyOf: [
+                        {
+                          $ref: "#/$defs/s_81f0360286f1",
+                        },
+                        {
+                          $ref: "#/$defs/s_58ff7eb0d8f6",
+                        },
+                        {
+                          type: "object",
+                          required: ["type", "combinator", "children"],
+                          properties: {
+                            type: {
+                              const: "group",
+                              type: "string",
+                            },
+                            combinator: {
+                              default: "and",
+                              type: "string",
+                              enum: ["and", "or"],
+                            },
+                            negated: {
+                              anyOf: [
+                                {
+                                  type: "boolean",
+                                },
+                                {
+                                  type: "undefined",
+                                },
+                              ],
+                            },
+                            children: {
+                              maxItems: 32,
+                              type: "array",
+                              items: {
+                                anyOf: [
+                                  {
+                                    $ref: "#/$defs/s_81f0360286f1",
+                                  },
+                                  {
+                                    $ref: "#/$defs/s_58ff7eb0d8f6",
+                                  },
+                                  {
+                                    type: "object",
+                                    required: [
+                                      "type",
+                                      "combinator",
+                                      "children",
+                                    ],
+                                    properties: {
+                                      type: {
+                                        const: "group",
+                                        type: "string",
+                                      },
+                                      combinator: {
+                                        default: "and",
+                                        type: "string",
+                                        enum: ["and", "or"],
+                                      },
+                                      negated: {
+                                        anyOf: [
+                                          {
+                                            type: "boolean",
+                                          },
+                                          {
+                                            type: "undefined",
+                                          },
+                                        ],
+                                      },
+                                      children: {
+                                        maxItems: 32,
+                                        type: "array",
+                                        items: {
+                                          anyOf: [
+                                            {
+                                              $ref: "#/$defs/s_81f0360286f1",
+                                            },
+                                            {
+                                              $ref: "#/$defs/s_58ff7eb0d8f6",
+                                            },
+                                            {
+                                              type: "object",
+                                              required: [
+                                                "type",
+                                                "combinator",
+                                                "children",
+                                              ],
+                                              properties: {
+                                                type: {
+                                                  const: "group",
+                                                  type: "string",
+                                                },
+                                                combinator: {
+                                                  default: "and",
+                                                  type: "string",
+                                                  enum: ["and", "or"],
+                                                },
+                                                negated: {
+                                                  anyOf: [
+                                                    {
+                                                      type: "boolean",
+                                                    },
+                                                    {
+                                                      type: "undefined",
+                                                    },
+                                                  ],
+                                                },
+                                                children: {
+                                                  maxItems: 32,
+                                                  type: "array",
+                                                  items: {
+                                                    anyOf: [
+                                                      {
+                                                        $ref: "#/$defs/s_81f0360286f1",
+                                                      },
+                                                      {
+                                                        $ref: "#/$defs/s_58ff7eb0d8f6",
+                                                      },
+                                                      {
+                                                        type: "object",
+                                                        required: [
+                                                          "type",
+                                                          "combinator",
+                                                          "children",
+                                                        ],
+                                                        properties: {
+                                                          type: {
+                                                            const: "group",
+                                                            type: "string",
+                                                          },
+                                                          combinator: {
+                                                            default: "and",
+                                                            type: "string",
+                                                            enum: ["and", "or"],
+                                                          },
+                                                          negated: {
+                                                            anyOf: [
+                                                              {
+                                                                type: "boolean",
+                                                              },
+                                                              {
+                                                                type: "undefined",
+                                                              },
+                                                            ],
+                                                          },
+                                                          children: {
+                                                            maxItems: 32,
+                                                            type: "array",
+                                                            items: {
+                                                              anyOf: [
+                                                                {
+                                                                  $ref: "#/$defs/s_81f0360286f1",
+                                                                },
+                                                                {
+                                                                  $ref: "#/$defs/s_58ff7eb0d8f6",
+                                                                },
+                                                                {
+                                                                  type: "object",
+                                                                  required: [
+                                                                    "type",
+                                                                    "combinator",
+                                                                    "children",
+                                                                  ],
+                                                                  properties: {
+                                                                    type: {
+                                                                      const:
+                                                                        "group",
+                                                                      type: "string",
+                                                                    },
+                                                                    combinator:
+                                                                      {
+                                                                        default:
+                                                                          "and",
+                                                                        type: "string",
+                                                                        enum: [
+                                                                          "and",
+                                                                          "or",
+                                                                        ],
+                                                                      },
+                                                                    negated: {
+                                                                      anyOf: [
+                                                                        {
+                                                                          type: "boolean",
+                                                                        },
+                                                                        {
+                                                                          type: "undefined",
+                                                                        },
+                                                                      ],
+                                                                    },
+                                                                    children: {
+                                                                      maxItems: 32,
+                                                                      type: "array",
+                                                                      items: {
+                                                                        anyOf: [
+                                                                          {
+                                                                            $ref: "#/$defs/s_81f0360286f1",
+                                                                          },
+                                                                          {
+                                                                            $ref: "#/$defs/s_58ff7eb0d8f6",
+                                                                          },
+                                                                          {
+                                                                            type: "object",
+                                                                            required:
+                                                                              [
+                                                                                "type",
+                                                                                "combinator",
+                                                                                "children",
+                                                                              ],
+                                                                            properties:
+                                                                              {
+                                                                                type: {
+                                                                                  const:
+                                                                                    "group",
+                                                                                  type: "string",
+                                                                                },
+                                                                                combinator:
+                                                                                  {
+                                                                                    default:
+                                                                                      "and",
+                                                                                    type: "string",
+                                                                                    enum: [
+                                                                                      "and",
+                                                                                      "or",
+                                                                                    ],
+                                                                                  },
+                                                                                negated:
+                                                                                  {
+                                                                                    anyOf:
+                                                                                      [
+                                                                                        {
+                                                                                          type: "boolean",
+                                                                                        },
+                                                                                        {
+                                                                                          type: "undefined",
+                                                                                        },
+                                                                                      ],
+                                                                                  },
+                                                                                children:
+                                                                                  {
+                                                                                    maxItems: 32,
+                                                                                    type: "array",
+                                                                                    items:
+                                                                                      {
+                                                                                        anyOf:
+                                                                                          [
+                                                                                            {
+                                                                                              $ref: "#/$defs/s_81f0360286f1",
+                                                                                            },
+                                                                                            {
+                                                                                              $ref: "#/$defs/s_58ff7eb0d8f6",
+                                                                                            },
+                                                                                          ],
+                                                                                      },
+                                                                                  },
+                                                                              },
+                                                                          },
+                                                                        ],
+                                                                      },
+                                                                    },
+                                                                  },
+                                                                },
+                                                              ],
+                                                            },
+                                                          },
+                                                        },
+                                                      },
+                                                    ],
+                                                  },
+                                                },
+                                              },
+                                            },
+                                          ],
+                                        },
+                                      },
+                                    },
+                                  },
+                                ],
+                              },
+                            },
+                          },
+                        },
+                      ],
+                    },
+                    s_81f0360286f1: {
                       type: "object",
                       required: ["type", "left", "op", "right"],
                       properties: {
@@ -44830,7 +47746,7 @@ export const generatedRouteMap: RouteNode = {
                           type: "string",
                         },
                         left: {
-                          $ref: "#/$defs/s_92cd59123f4d",
+                          $ref: "#/$defs/s_bbc23394f552",
                         },
                         op: {
                           default: "eq",
@@ -44838,11 +47754,36 @@ export const generatedRouteMap: RouteNode = {
                           enum: ["eq", "neq", "gt", "lt", "gte", "lte"],
                         },
                         right: {
-                          $ref: "#/$defs/s_92cd59123f4d",
+                          $ref: "#/$defs/s_bbc23394f552",
                         },
                       },
                     },
-                    s_92cd59123f4d: {
+                    s_8b4b71586106: {
+                      maxItems: 32,
+                      type: "array",
+                      items: {
+                        $ref: "#/$defs/s_77f52a99c008",
+                      },
+                    },
+                    s_a2912d7bfae3: {
+                      maxItems: 8,
+                      type: "array",
+                      items: {
+                        additionalProperties: false,
+                        type: "object",
+                        required: ["propertyId", "desc"],
+                        properties: {
+                          propertyId: {
+                            minLength: 1,
+                            type: "string",
+                          },
+                          desc: {
+                            type: "boolean",
+                          },
+                        },
+                      },
+                    },
+                    s_bbc23394f552: {
                       anyOf: [
                         {
                           type: "object",
@@ -44869,7 +47810,7 @@ export const generatedRouteMap: RouteNode = {
                             field: {
                               default: "status",
                               type: "string",
-                              enum: ["status", "priority"],
+                              enum: ["status", "priority", "agendaKind"],
                             },
                           },
                         },
@@ -44928,307 +47869,6 @@ export const generatedRouteMap: RouteNode = {
                         },
                       ],
                     },
-                    s_a2912d7bfae3: {
-                      maxItems: 8,
-                      type: "array",
-                      items: {
-                        additionalProperties: false,
-                        type: "object",
-                        required: ["propertyId", "desc"],
-                        properties: {
-                          propertyId: {
-                            minLength: 1,
-                            type: "string",
-                          },
-                          desc: {
-                            type: "boolean",
-                          },
-                        },
-                      },
-                    },
-                    s_c6fc04a7b5ba: {
-                      anyOf: [
-                        {
-                          $ref: "#/$defs/s_88402f3c68c1",
-                        },
-                        {
-                          $ref: "#/$defs/s_db9cd85a47d3",
-                        },
-                        {
-                          type: "object",
-                          required: ["type", "combinator", "children"],
-                          properties: {
-                            type: {
-                              const: "group",
-                              type: "string",
-                            },
-                            combinator: {
-                              default: "and",
-                              type: "string",
-                              enum: ["and", "or"],
-                            },
-                            negated: {
-                              anyOf: [
-                                {
-                                  type: "boolean",
-                                },
-                                {
-                                  type: "undefined",
-                                },
-                              ],
-                            },
-                            children: {
-                              maxItems: 32,
-                              type: "array",
-                              items: {
-                                anyOf: [
-                                  {
-                                    $ref: "#/$defs/s_88402f3c68c1",
-                                  },
-                                  {
-                                    $ref: "#/$defs/s_db9cd85a47d3",
-                                  },
-                                  {
-                                    type: "object",
-                                    required: [
-                                      "type",
-                                      "combinator",
-                                      "children",
-                                    ],
-                                    properties: {
-                                      type: {
-                                        const: "group",
-                                        type: "string",
-                                      },
-                                      combinator: {
-                                        default: "and",
-                                        type: "string",
-                                        enum: ["and", "or"],
-                                      },
-                                      negated: {
-                                        anyOf: [
-                                          {
-                                            type: "boolean",
-                                          },
-                                          {
-                                            type: "undefined",
-                                          },
-                                        ],
-                                      },
-                                      children: {
-                                        maxItems: 32,
-                                        type: "array",
-                                        items: {
-                                          anyOf: [
-                                            {
-                                              $ref: "#/$defs/s_88402f3c68c1",
-                                            },
-                                            {
-                                              $ref: "#/$defs/s_db9cd85a47d3",
-                                            },
-                                            {
-                                              type: "object",
-                                              required: [
-                                                "type",
-                                                "combinator",
-                                                "children",
-                                              ],
-                                              properties: {
-                                                type: {
-                                                  const: "group",
-                                                  type: "string",
-                                                },
-                                                combinator: {
-                                                  default: "and",
-                                                  type: "string",
-                                                  enum: ["and", "or"],
-                                                },
-                                                negated: {
-                                                  anyOf: [
-                                                    {
-                                                      type: "boolean",
-                                                    },
-                                                    {
-                                                      type: "undefined",
-                                                    },
-                                                  ],
-                                                },
-                                                children: {
-                                                  maxItems: 32,
-                                                  type: "array",
-                                                  items: {
-                                                    anyOf: [
-                                                      {
-                                                        $ref: "#/$defs/s_88402f3c68c1",
-                                                      },
-                                                      {
-                                                        $ref: "#/$defs/s_db9cd85a47d3",
-                                                      },
-                                                      {
-                                                        type: "object",
-                                                        required: [
-                                                          "type",
-                                                          "combinator",
-                                                          "children",
-                                                        ],
-                                                        properties: {
-                                                          type: {
-                                                            const: "group",
-                                                            type: "string",
-                                                          },
-                                                          combinator: {
-                                                            default: "and",
-                                                            type: "string",
-                                                            enum: ["and", "or"],
-                                                          },
-                                                          negated: {
-                                                            anyOf: [
-                                                              {
-                                                                type: "boolean",
-                                                              },
-                                                              {
-                                                                type: "undefined",
-                                                              },
-                                                            ],
-                                                          },
-                                                          children: {
-                                                            maxItems: 32,
-                                                            type: "array",
-                                                            items: {
-                                                              anyOf: [
-                                                                {
-                                                                  $ref: "#/$defs/s_88402f3c68c1",
-                                                                },
-                                                                {
-                                                                  $ref: "#/$defs/s_db9cd85a47d3",
-                                                                },
-                                                                {
-                                                                  type: "object",
-                                                                  required: [
-                                                                    "type",
-                                                                    "combinator",
-                                                                    "children",
-                                                                  ],
-                                                                  properties: {
-                                                                    type: {
-                                                                      const:
-                                                                        "group",
-                                                                      type: "string",
-                                                                    },
-                                                                    combinator:
-                                                                      {
-                                                                        default:
-                                                                          "and",
-                                                                        type: "string",
-                                                                        enum: [
-                                                                          "and",
-                                                                          "or",
-                                                                        ],
-                                                                      },
-                                                                    negated: {
-                                                                      anyOf: [
-                                                                        {
-                                                                          type: "boolean",
-                                                                        },
-                                                                        {
-                                                                          type: "undefined",
-                                                                        },
-                                                                      ],
-                                                                    },
-                                                                    children: {
-                                                                      maxItems: 32,
-                                                                      type: "array",
-                                                                      items: {
-                                                                        anyOf: [
-                                                                          {
-                                                                            $ref: "#/$defs/s_88402f3c68c1",
-                                                                          },
-                                                                          {
-                                                                            $ref: "#/$defs/s_db9cd85a47d3",
-                                                                          },
-                                                                          {
-                                                                            type: "object",
-                                                                            required:
-                                                                              [
-                                                                                "type",
-                                                                                "combinator",
-                                                                                "children",
-                                                                              ],
-                                                                            properties:
-                                                                              {
-                                                                                type: {
-                                                                                  const:
-                                                                                    "group",
-                                                                                  type: "string",
-                                                                                },
-                                                                                combinator:
-                                                                                  {
-                                                                                    default:
-                                                                                      "and",
-                                                                                    type: "string",
-                                                                                    enum: [
-                                                                                      "and",
-                                                                                      "or",
-                                                                                    ],
-                                                                                  },
-                                                                                negated:
-                                                                                  {
-                                                                                    anyOf:
-                                                                                      [
-                                                                                        {
-                                                                                          type: "boolean",
-                                                                                        },
-                                                                                        {
-                                                                                          type: "undefined",
-                                                                                        },
-                                                                                      ],
-                                                                                  },
-                                                                                children:
-                                                                                  {
-                                                                                    maxItems: 32,
-                                                                                    type: "array",
-                                                                                    items:
-                                                                                      {
-                                                                                        anyOf:
-                                                                                          [
-                                                                                            {
-                                                                                              $ref: "#/$defs/s_88402f3c68c1",
-                                                                                            },
-                                                                                            {
-                                                                                              $ref: "#/$defs/s_db9cd85a47d3",
-                                                                                            },
-                                                                                          ],
-                                                                                      },
-                                                                                  },
-                                                                              },
-                                                                          },
-                                                                        ],
-                                                                      },
-                                                                    },
-                                                                  },
-                                                                },
-                                                              ],
-                                                            },
-                                                          },
-                                                        },
-                                                      },
-                                                    ],
-                                                  },
-                                                },
-                                              },
-                                            },
-                                          ],
-                                        },
-                                      },
-                                    },
-                                  },
-                                ],
-                              },
-                            },
-                          },
-                        },
-                      ],
-                    },
                     s_d21ba6521546: {
                       type: "array",
                       items: {
@@ -45259,50 +47899,6 @@ export const generatedRouteMap: RouteNode = {
                               "percent-of-total",
                             ],
                           },
-                        },
-                      },
-                    },
-                    s_db9cd85a47d3: {
-                      type: "object",
-                      required: ["type", "operand", "op"],
-                      properties: {
-                        type: {
-                          const: "predicate",
-                          type: "string",
-                        },
-                        operand: {
-                          $ref: "#/$defs/s_92cd59123f4d",
-                        },
-                        op: {
-                          default: "is_empty",
-                          type: "string",
-                          enum: [
-                            "is_empty",
-                            "is_not_empty",
-                            "is_truthy",
-                            "contains",
-                            "not_contains",
-                            "starts_with",
-                            "ends_with",
-                            "contains_all",
-                            "in",
-                          ],
-                        },
-                        value: {
-                          anyOf: [
-                            {
-                              type: "string",
-                            },
-                            {
-                              type: "array",
-                              items: {
-                                type: "string",
-                              },
-                            },
-                            {
-                              type: "undefined",
-                            },
-                          ],
                         },
                       },
                     },

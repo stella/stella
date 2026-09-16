@@ -114,6 +114,8 @@ const entity = (
   partial: Partial<QueryEntityResult> = {},
 ): QueryEntityResult => ({
   entityId: "entity-1",
+  workspaceId: "workspace-1",
+  workspaceName: "Test matter",
   kind: "document",
   name: "Document",
   parentId: null,

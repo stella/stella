@@ -60,7 +60,7 @@ export const KanbanColumnHeader = ({
         data-kanban-column-title=""
       >
         {swatch}
-        <span className="flex min-w-0 flex-1 items-center gap-1.5 truncate">
+        <span className="flex min-w-0 flex-1 items-center gap-1.5 truncate text-sm font-medium">
           {title}
           {meta !== undefined && (
             <span className="text-muted-foreground text-xs">{meta}</span>

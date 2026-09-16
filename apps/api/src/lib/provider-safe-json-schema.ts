@@ -103,6 +103,20 @@ const ALLOWED_KEYWORDS = new Set<string>(PROVIDER_SAFE_JSON_SCHEMA_KEYWORDS);
 const VALUE_CONSTRAINT_KEYWORDS = new Set<string>(
   VALUE_CONSTRAINT_JSON_SCHEMA_KEYWORDS,
 );
+
+const VALUE_CONSTRAINT_DESCRIPTIONS = {
+  minimum: "Minimum value (inclusive)",
+  maximum: "Maximum value (inclusive)",
+  minItems: "Minimum number of items",
+  maxItems: "Maximum number of items",
+  minLength: "Minimum string length in characters",
+  maxLength: "Maximum string length in characters",
+} as const satisfies Record<ValueConstraintJsonSchemaKeyword, string>;
+
+const isValueConstraintKey = (
+  key: string,
+): key is ValueConstraintJsonSchemaKeyword =>
+  VALUE_CONSTRAINT_KEYWORDS.has(key);
 const ALLOWED_TYPE_VALUES = new Set([
   "array",
   "boolean",
@@ -150,7 +164,7 @@ export const providerSafeJsonSchemaOptionsForTanStackProvider = (
   // request either: an OpenRouter model id resolves to an arbitrary upstream.
   // Constraints are validation, not shape, and the original Standard Schema
   // still validates the returned value locally, so structured output drops
-  // them for every provider.
+  // them for every provider, preserving their guidance in descriptions.
   //
   // The other two purposes have no schema compiler to protect. Tool arguments
   // are sampled directly, so their bounds stay useful guidance. The mock
@@ -629,7 +643,9 @@ const normalizeAllOfKeyword = ({
     const projectedBranch = projectNode({
       node: branch,
       path: `${joinPath(path, "allOf")}[${index}]`,
-      context,
+      // Merge numeric bounds before lowering them into descriptions: separate
+      // branch descriptions would conflict instead of retaining the tighter bound.
+      context: { ...context, valueConstraintStrategy: "preserve" },
       seenRefs,
     });
     if (!isJsonObject(projectedBranch)) {
@@ -977,12 +993,18 @@ const filterProviderSafeKeywords = ({
   seenRefs: ReadonlySet<string>;
 }): JsonObject => {
   const result: JsonObject = {};
+  const constraintDescriptions: string[] = [];
   for (const [key, value] of Object.entries(node)) {
     if (
       context.valueConstraintStrategy === "omit" &&
-      VALUE_CONSTRAINT_KEYWORDS.has(key)
+      isValueConstraintKey(key)
     ) {
       context.dropped.push(joinPath(path, key));
+      if (typeof value === "number" && Number.isFinite(value)) {
+        constraintDescriptions.push(
+          `${VALUE_CONSTRAINT_DESCRIPTIONS[key]}: ${String(value)}.`,
+        );
+      }
       continue;
     }
     if (!ALLOWED_KEYWORDS.has(key)) {
@@ -996,6 +1018,13 @@ const filterProviderSafeKeywords = ({
       context,
       seenRefs,
     });
+  }
+  if (constraintDescriptions.length > 0) {
+    const description = result["description"];
+    result["description"] = [
+      ...(typeof description === "string" ? [description] : []),
+      ...constraintDescriptions,
+    ].join("\n");
   }
   return result;
 };

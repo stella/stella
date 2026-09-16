@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test } from "bun:test";
 
 import { TOOLBAR_ROW_HEIGHT } from "@stll/ui/inspector";
+import { MenuItem } from "@stll/ui/menu";
 
 import { WorkspaceViewSwitcher } from "./view-switcher";
 
@@ -21,9 +22,11 @@ describe("WorkspaceViewSwitcher", () => {
         direction="ltr"
         onViewChange={() => undefined}
         reorder={null}
-        renderActions={(view) =>
-          view.id === "table" ? <button type="button">Actions</button> : null
-        }
+        actionMenu={{
+          label: "Actions",
+          renderItems: (view) =>
+            view.id === "table" ? <MenuItem>Rename</MenuItem> : null,
+        }}
         renderIcon={(view) => <span>{view.kind}</span>}
         views={VIEWS}
       />,
@@ -34,7 +37,9 @@ describe("WorkspaceViewSwitcher", () => {
     expect(markup).toContain("All matters");
     expect(markup).toContain("Deadlines");
     expect(markup).toContain("Add view");
-    expect(markup).toContain("Actions");
+    expect(markup).toContain('aria-label="Actions"');
+    expect(markup).toContain("lucide-ellipsis-vertical");
+    expect(markup).toContain('draggable="false"');
     // One toolbar row, the same height as the frame's top bar and a kanban
     // column header, so the three rows line up in any host.
     expect(markup).toContain(
@@ -63,7 +68,7 @@ describe("WorkspaceViewSwitcher", () => {
           direction="ltr"
           onViewChange={() => undefined}
           reorder={null}
-          renderActions={() => actions}
+          actionMenu={{ label: "Actions", renderItems: () => actions }}
           renderIcon={() => null}
           views={VIEWS}
         />,
@@ -102,7 +107,10 @@ describe("WorkspaceViewSwitcher", () => {
         }}
         onViewChange={() => undefined}
         reorder={null}
-        renderActions={() => <button type="button">Actions</button>}
+        actionMenu={{
+          label: "Actions",
+          renderItems: () => <MenuItem>Rename</MenuItem>,
+        }}
         renderIcon={() => null}
         views={VIEWS.slice(0, 1)}
       />,

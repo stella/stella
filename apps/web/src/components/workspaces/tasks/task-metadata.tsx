@@ -24,6 +24,7 @@ import {
   STATUS_ICONS,
   TASK_PRIORITIES,
   TASK_STATUSES,
+  WORK_TYPES,
 } from "@/components/workspaces/tasks/task-detail-constants";
 import { useLocale } from "@/i18n/formatting-context";
 import {
@@ -36,11 +37,8 @@ import type {
   ListItemType,
   TaskPriority,
   TaskStatus,
+  WorkType,
 } from "./task-detail-constants";
-
-const WORK_TYPES = ["task", "deadline"] as const;
-
-export type WorkType = (typeof WORK_TYPES)[number];
 
 // -- Layout helper --
 
@@ -253,6 +251,7 @@ export const OwnerPicker = ({
   onChange,
 }: OwnerPickerProps) => {
   const t = useTranslations("tasks");
+  const tCommon = useTranslations("common");
   const { data: members } = useQuery(workspaceMembersOptions(workspaceId));
   const selectableMembers = members?.filter(
     (member) => member.user && member.user.id !== owner?.id,
@@ -280,7 +279,7 @@ export const OwnerPicker = ({
             nameClassName="text-sm font-normal"
           />
         ) : (
-          <span className="text-muted-foreground">{t("noOwner")}</span>
+          <span className="text-muted-foreground">{tCommon("unassigned")}</span>
         )}
       </PopoverTrigger>
       <PopoverPopup className="w-64 p-2" side="bottom">

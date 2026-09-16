@@ -1,5 +1,6 @@
+import type { ComponentType } from "react";
+
 import { EyeOffIcon } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
@@ -17,7 +18,7 @@ import type {
 
 type MetadataPopoverProps<TRow extends TableRowData> = {
   column: TableColumn<TRow>;
-  icon: LucideIcon;
+  icon: ComponentType<{ className?: string }>;
   label: string;
   sortHint?: SortHint | undefined;
 };

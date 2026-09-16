@@ -22,6 +22,7 @@ import transitionWorkObligation from "@/api/handlers/work-obligations/transition
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { FlowStep } from "@/api/lib/flows/flow-types";
+import { WORK_OBLIGATION_TRANSITIONS } from "@/api/lib/work-obligations/transitions";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -61,7 +62,9 @@ afterAll(async () => {
   }
 });
 
-const seedAwaitingWork = async () => {
+const seedOpenWork = async (
+  status: (typeof WORK_OBLIGATION_TRANSITIONS.cancel.from)[number] = WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT,
+) => {
   const entityId = createSafeId<"entity">();
   taskIds.push(entityId);
   await testDb.insert(entities).values({
@@ -75,8 +78,13 @@ const seedAwaitingWork = async () => {
   await testDb.insert(workObligations).values({
     entityId,
     workspaceId: ids.wsA1,
-    ownerUserId: ids.userA1,
-    status: WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT,
+    ownerUserId:
+      status === WORK_OBLIGATION_STATUS.UNASSIGNED ? null : ids.userA1,
+    status,
+    acknowledgedAt:
+      status === WORK_OBLIGATION_STATUS.ACTIVE ? new Date() : null,
+    acknowledgedByUserId:
+      status === WORK_OBLIGATION_STATUS.ACTIVE ? ids.userA1 : null,
     createdByUserId: ids.userA2,
   });
   return entityId;
@@ -209,7 +217,7 @@ const transition = async (
 
 describe("work obligation transitions", () => {
   test("acknowledgement is an idempotent fixed point", async () => {
-    const entityId = await seedAwaitingWork();
+    const entityId = await seedOpenWork();
 
     expect(await acknowledge(entityId, ids.userA1)).toEqual({ success: true });
     expect(await acknowledge(entityId, ids.userA1)).toEqual({ success: true });
@@ -224,7 +232,7 @@ describe("work obligation transitions", () => {
   });
 
   test("only the owner can acknowledge or complete work", async () => {
-    const entityId = await seedAwaitingWork();
+    const entityId = await seedOpenWork();
 
     expect(await acknowledge(entityId, ids.userA2)).toEqual({
       code: 403,
@@ -254,6 +262,39 @@ describe("work obligation transitions", () => {
     expect(obligation?.status).toBe(WORK_OBLIGATION_STATUS.COMPLETED);
     expect(task?.status).toBe("done");
   });
+
+  test.each([undefined, "   ", "  No longer needed  "])(
+    "cancellation keeps optional reason %s in the lifecycle event",
+    async (reason) => {
+      for (const status of WORK_OBLIGATION_TRANSITIONS.cancel.from) {
+        const entityId = await seedOpenWork(status);
+        expect(
+          await transition(entityId, ids.userA1, "cancel", {
+            ...(reason === undefined ? {} : { reason }),
+          }),
+        ).toEqual({ success: true });
+
+        const obligation = await testDb.query.workObligations.findFirst({
+          where: { entityId: { eq: entityId } },
+          columns: { status: true },
+        });
+        const task = await testDb.query.entities.findFirst({
+          where: { id: { eq: entityId } },
+          columns: { status: true },
+        });
+        const events = await testDb.query.workObligationEvents.findMany({
+          where: {
+            obligationEntityId: { eq: entityId },
+            type: { eq: "cancelled" },
+          },
+          columns: { reason: true },
+        });
+        expect(obligation?.status).toBe(WORK_OBLIGATION_STATUS.CANCELLED);
+        expect(task?.status).toBe("cancelled");
+        expect(events).toEqual([{ reason: reason?.trim() || null }]);
+      }
+    },
+  );
 
   test("cancelling the task a review gate raised rejects the gate", async () => {
     const { entityId, runId } = await seedFlowReviewWork();

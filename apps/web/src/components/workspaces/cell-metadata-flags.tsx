@@ -24,6 +24,10 @@ import {
 } from "@/components/review-flags";
 import Tooltip from "@/components/tooltip";
 import { UserAvatar } from "@/components/user-avatar";
+import {
+  cellOverrideKey,
+  useCellMetadataOverridesStore,
+} from "@/components/workspaces/cell-metadata-overrides-store";
 import { useMountEffect } from "@/hooks/use-effect";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
@@ -33,10 +37,6 @@ import { formatRelativeTime } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
 import type { WorkspaceCellMetadata } from "@/lib/types";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
-import {
-  cellOverrideKey,
-  useCellMetadataOverridesStore,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-overrides-store";
 
 const NO_MANUAL_FLAGS: readonly ReviewFlag[] = Object.freeze([]);
 

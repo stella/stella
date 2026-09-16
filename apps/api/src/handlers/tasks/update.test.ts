@@ -438,21 +438,27 @@ describe("updateTaskHandler governed lifecycle", () => {
     }
   });
 
-  test("audits a cancellation as a cancellation", async () => {
-    const { auditActions, result, workflowUpdates } = await runStatusWrite({
-      governedWorkflow: true,
-      owner: "caller",
-      requestedStatus: "cancelled",
-      status: WORK_OBLIGATION_STATUS.ACTIVE,
-      workflowReason: "client withdrew the instruction",
-    });
+  test.each([undefined, "   ", "client withdrew the instruction"])(
+    "cancels every eligible work state with optional reason %s",
+    async (workflowReason) => {
+      for (const status of WORK_OBLIGATION_TRANSITIONS.cancel.from) {
+        const { auditActions, result, workflowUpdates } = await runStatusWrite({
+          governedWorkflow: true,
+          owner:
+            status === WORK_OBLIGATION_STATUS.UNASSIGNED ? "none" : "caller",
+          requestedStatus: "cancelled",
+          status,
+          ...(workflowReason === undefined ? {} : { workflowReason }),
+        });
 
-    expect(Result.isOk(result)).toBe(true);
-    expect(workflowUpdates).toEqual([
-      expect.objectContaining({ status: WORK_OBLIGATION_STATUS.CANCELLED }),
-    ]);
-    expect(auditActions).toEqual([AUDIT_ACTION.CANCEL]);
-  });
+        expect(Result.isOk(result)).toBe(true);
+        expect(workflowUpdates).toEqual([
+          expect.objectContaining({ status: WORK_OBLIGATION_STATUS.CANCELLED }),
+        ]);
+        expect(auditActions).toEqual([AUDIT_ACTION.CANCEL]);
+      }
+    },
+  );
 
   test("ungoverned deployments keep flipping closed work freely", async () => {
     const cancelled = await runStatusWrite({

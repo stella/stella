@@ -1512,6 +1512,7 @@
     "tryAgain": "Próbálja újra",
     "type": "Típus",
     "typeNameToConfirm": "A megerősítéshez írja be a nevet",
+    "unassigned": "Nincs hozzárendelve",
     "uncategorized": "Kategória nélküli",
     "undo": "Visszavonás",
     "unexpectedError": "Váratlan hiba történt. Kérjük, lépjen kapcsolatba az ügyfélszolgálattal.",
@@ -2549,7 +2550,7 @@
     },
     "filter": {
       "any": "Bármely",
-      "mine": "Saját"
+      "mine": "Nekem kiosztva"
     },
     "newRequest": "Új kérés",
     "openMatter": "Ügy megnyitása",
@@ -2558,6 +2559,7 @@
       "model": "MI",
       "source": "Külső forrás"
     },
+    "proposalView": "Javaslatok: {view}",
     "request": {
       "created": "Kérés elküldve",
       "description": "Írja le, mit nézzen át a jogi csapat. A kérés a beérkezettek közé kerül feldolgozásra.",
@@ -2586,7 +2588,6 @@
       "fileToWorkspace": "Ügyhöz csatolás",
       "runReview": "Ellenőrzés indítása"
     },
-    "unassigned": "Nincs hozzárendelve",
     "verdict": {
       "safe": "Biztonságos"
     },
@@ -4305,9 +4306,10 @@
       "assignee": "Felelős",
       "reviewer": "Ellenőr"
     },
-    "assignees": "Felelősök",
+    "assignees": "Közreműködők",
     "clearDate": "Dátum törlése",
     "completeWork": "Munka befejezése",
+    "deadlines": "Határidők",
     "delegationReason": "A módosítás oka",
     "deletedAccount": "Törölt fiók",
     "dueDate": "Határidő",
@@ -4319,9 +4321,8 @@
     "myWorkTitle": "Saját munkám",
     "newTask": "Új feladat",
     "noActivity": "Még nincs tevékenység",
-    "noAssignees": "Nincs felelős",
+    "noAssignees": "Nincsenek közreműködők",
     "noLinks": "Nincsenek kapcsolt elemek",
-    "noOwner": "Nincs felelős",
     "noSubtasks": "Nincsenek alfeladatok",
     "noTasksAssigned": "Nincsenek hozzárendelt feladatok",
     "noWorkInQueue": "Nincs munka ebben a sorban",

@@ -10,6 +10,7 @@ import {
   type OperandResolver,
 } from "./evaluate";
 import {
+  BUILTIN_FIELDS,
   COMPARE_OPS,
   type Combinator,
   type ConditionNode,
@@ -21,14 +22,14 @@ import {
 
 // A small fixed key space so generated resolvers actually hold values to
 // return (otherwise nearly every operand resolves to undefined).
-const KEYS = ["a", "b", "c", "status", "priority", "kind"] as const;
+const KEYS = ["a", "b", "c", ...BUILTIN_FIELDS, "kind"] as const;
 
 const refOperandArb: fc.Arbitrary<RefOperand> = fc.oneof(
   fc
     .constantFrom("a", "b", "c")
     .map((propertyId): RefOperand => ({ type: "property", propertyId })),
   fc
-    .constantFrom("status", "priority")
+    .constantFrom(...BUILTIN_FIELDS)
     .map((field): RefOperand => ({ type: "builtin", field })),
   fc.constant<RefOperand>({ type: "kind" }),
   fc

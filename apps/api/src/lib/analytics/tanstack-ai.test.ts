@@ -1,8 +1,15 @@
-import type { ChatMiddlewareContext, TokenUsage } from "@tanstack/ai";
+import type {
+  AnyTextAdapter,
+  ChatMiddlewareContext,
+  StreamChunk,
+  TokenUsage,
+} from "@tanstack/ai";
+import { EventType } from "@tanstack/ai";
 import { describe, expect, spyOn, test } from "bun:test";
 
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { toSafeId } from "@/api/lib/branded-types";
+import { generateChatObject } from "@/api/lib/chat/tanstack-chat-runtime";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import { SERVER_ANALYTICS_EVENTS } from "./types";
@@ -749,6 +756,209 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
       expect(generation?.properties).not.toHaveProperty("$ai_model");
     } finally {
       env.REQUIRE_PERSONAL_AI_KEY = originalRequirePersonalAIKey;
+    }
+  });
+
+  test.each(["iteration", "structured_output"] as const)(
+    "failure metadata stays with its run across the %s boundary",
+    async (boundary) => {
+      const { createTanStackAIAnalyticsCallbacks } =
+        await loadTanStackAIAnalytics();
+      const { logger } = await import("@/api/lib/observability/logger");
+      const errorSpy = spyOn(logger, "error");
+      const callbacks = createTanStackAIAnalyticsCallbacks({
+        analytics: {
+          capture: () => undefined,
+          flush: async () => undefined,
+          identifyOrganizationGroup: () => undefined,
+        },
+        feature: "signals.deadline-scout",
+        orgAIConfig: createOpenAIOrgAIConfig(),
+        traceId: "trace_failure_metadata",
+      });
+      const truncated = createMiddlewareContext({ runId: "truncated" });
+      const another = createMiddlewareContext({ runId: "another" });
+      const nextIteration = createMiddlewareContext({
+        runId: "another",
+        iteration: 1,
+      });
+      const truncatedError = new SyntaxError("private model output");
+      const anotherError = new SyntaxError("another private model output");
+
+      try {
+        await callbacks.middleware.onChunk?.(truncated, {
+          type: EventType.RUN_FINISHED,
+          runId: truncated.runId,
+          threadId: truncated.threadId,
+          metadata: { tanstack: { finishReason: "length" } },
+        });
+        await callbacks.middleware.onUsage?.(truncated, {
+          promptTokens: 500,
+          completionTokens: 2000,
+          totalTokens: 2500,
+        });
+        await callbacks.middleware.onChunk?.(another, {
+          type: EventType.RUN_FINISHED,
+          runId: another.runId,
+          threadId: another.threadId,
+          finishReason: "tool_calls",
+        });
+        await callbacks.middleware.onUsage?.(another, {
+          promptTokens: 100,
+          completionTokens: 300,
+          totalTokens: 400,
+        });
+        switch (boundary) {
+          case "iteration":
+            await callbacks.middleware.onIteration?.(nextIteration, {
+              iteration: 1,
+              messageId: "next_message",
+            });
+            break;
+          case "structured_output":
+            await callbacks.middleware.onStructuredOutputConfig?.(
+              nextIteration,
+              {
+                messages: [],
+                systemPrompts: [],
+                outputSchema: { type: "object" },
+              },
+            );
+            break;
+          default: {
+            boundary satisfies never;
+            throw new Error("Unexpected analytics boundary");
+          }
+        }
+        await callbacks.middleware.onError?.(truncated, {
+          duration: 50,
+          error: truncatedError,
+        });
+        callbacks.captureError(truncatedError);
+        await callbacks.middleware.onError?.(nextIteration, {
+          duration: 60,
+          error: anotherError,
+        });
+        callbacks.captureError(anotherError);
+
+        const failures = errorSpy.mock.calls.filter(
+          ([event]) => event === "tanstack_ai.generation.failed",
+        );
+        expect(failures).toHaveLength(2);
+        expect(failures.at(0)?.at(1)).toMatchObject({
+          "ai.finish_reason": "length",
+          "ai.output_tokens": 2000,
+        });
+        expect(failures.at(1)?.at(1)).not.toHaveProperty("ai.finish_reason");
+        expect(failures.at(1)?.at(1)).not.toHaveProperty("ai.output_tokens");
+        expect(JSON.stringify(failures)).not.toContain("private model output");
+      } finally {
+        errorSpy.mockRestore();
+      }
+    },
+  );
+
+  test("the SDK preserves truncation metadata when combined structured output fails JSON parsing", async () => {
+    const { createTanStackAIAnalyticsCallbacks } =
+      await loadTanStackAIAnalytics();
+    const { logger } = await import("@/api/lib/observability/logger");
+    const errorSpy = spyOn(logger, "error");
+    const callbacks = createTanStackAIAnalyticsCallbacks({
+      analytics: {
+        capture: () => undefined,
+        flush: async () => undefined,
+        identifyOrganizationGroup: () => undefined,
+      },
+      feature: "signals.deadline-scout",
+      orgAIConfig: createOpenAIOrgAIConfig(),
+      traceId: "trace_sdk_truncation",
+    });
+    const adapter = {
+      kind: "text",
+      name: "truncated-json",
+      model: "truncated-json",
+      "~types": {
+        providerOptions: {},
+        inputModalities: ["text"],
+        messageMetadataByModality: {},
+        toolCapabilities: [],
+        toolCallMetadata: {},
+        systemPromptMetadata: undefined,
+      },
+      supportsCombinedToolsAndSchema: () => true,
+      async *chatStream({ runId, threadId }) {
+        const messageId = "truncated-message";
+        yield {
+          type: EventType.RUN_STARTED,
+          runId: runId ?? "truncated-run",
+          threadId: threadId ?? "truncated-thread",
+        } satisfies StreamChunk;
+        yield {
+          type: EventType.TEXT_MESSAGE_START,
+          messageId,
+          role: "assistant",
+        } satisfies StreamChunk;
+        yield {
+          type: EventType.TEXT_MESSAGE_CONTENT,
+          messageId,
+          delta: '{"value":"private unfinished output',
+        } satisfies StreamChunk;
+        yield {
+          type: EventType.TEXT_MESSAGE_END,
+          messageId,
+        } satisfies StreamChunk;
+        yield {
+          type: EventType.RUN_FINISHED,
+          runId: runId ?? "truncated-run",
+          threadId: threadId ?? "truncated-thread",
+          finishReason: "length",
+          usage: {
+            promptTokens: 100,
+            completionTokens: 2000,
+            totalTokens: 2100,
+          },
+        } satisfies StreamChunk;
+      },
+      structuredOutput: () => {
+        throw new Error(
+          "Combined mode must not issue a separate provider call",
+        );
+      },
+    } satisfies AnyTextAdapter;
+
+    try {
+      expect(
+        generateChatObject({
+          adapter,
+          messages: [{ role: "user", content: "Return JSON" }],
+          outputSchema: {
+            type: "object",
+            properties: { value: { type: "string" } },
+            required: ["value"],
+          },
+          middleware: [callbacks.middleware],
+        }).catch((error: unknown) => {
+          callbacks.captureError(error);
+          throw error;
+        }),
+      ).rejects.toThrow("Failed to parse structured output as JSON");
+      expect(
+        errorSpy.mock.calls.filter(
+          ([event]) => event === "tanstack_ai.generation.failed",
+        ),
+      ).toHaveLength(1);
+      expect(errorSpy).toHaveBeenCalledWith(
+        "tanstack_ai.generation.failed",
+        expect.objectContaining({
+          "ai.finish_reason": "length",
+          "ai.output_tokens": 2000,
+        }),
+      );
+      expect(JSON.stringify(errorSpy.mock.calls)).not.toContain(
+        "private unfinished output",
+      );
+    } finally {
+      errorSpy.mockRestore();
     }
   });
 

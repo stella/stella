@@ -11,6 +11,10 @@ import {
 import { cn } from "@stll/ui/utils";
 
 import { UserAvatar } from "@/components/user-avatar";
+import {
+  getCellFlagById,
+  useFlagLabel,
+} from "@/components/workspaces/cell-metadata-flags";
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
 import { getFirstFile } from "@/components/workspaces/entity-utils";
 import { formatRelativeTime } from "@/lib/relative-time";
@@ -22,10 +26,6 @@ import type {
   WorkspaceField,
   WorkspaceJustification,
 } from "@/lib/types";
-import {
-  getCellFlagById,
-  useFlagLabel,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags";
 
 type AICellSourceCardProps = React.PropsWithChildren<{
   entity: WorkspaceEntity;
