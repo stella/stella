@@ -2317,8 +2317,12 @@ describe("OpenAI-compatible MCP tools", () => {
         { anchor: PROVISION_ANCHOR, status: "found" },
       ],
     });
-    const first = (payload as { items: { text?: string }[] }).items.at(0);
-    expect(first?.text?.length).toBe(LIMITS.legislationProvisionTextChars);
+    const items = isRecord(payload) ? payload["items"] : undefined;
+    const first = Array.isArray(items) ? items.at(0) : undefined;
+    const text = isRecord(first) ? first["text"] : undefined;
+    expect(typeof text === "string" ? text.length : null).toBe(
+      LIMITS.legislationProvisionTextChars,
+    );
   });
 
   test("read_statute_provisions withholds one entry's wording without failing the batch", async () => {
