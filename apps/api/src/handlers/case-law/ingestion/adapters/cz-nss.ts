@@ -447,9 +447,9 @@ export type ParsedRow = {
   /** The docket alone, which is what a citation names and what rows key on. */
   caseNumber: string;
   /**
-   * The reference exactly as the portal's citation states it, sheet number
-   * included, so the split back into docket and sheet stays reversible from
-   * what gets stored.
+   * The reference as the portal's visible results cell states it, decoded and
+   * with HTML whitespace normalized. The sheet number stays included so the
+   * split back into docket and sheet is reversible from what gets stored.
    *
    * Absent on rows a version of this parser before the sheet was kept parked
    * as JSONB; those replay with no sheet, as they did when they were listed.
@@ -483,11 +483,19 @@ const czNssSourceDocumentId = ({
 const detailUrl = (documentId: string): string =>
   `${BASE_URL}/DokumentDetail/Index/${documentId}`;
 
+/** Stable columns in one row of the publisher's results table. */
+const CZ_NSS_RESULT_CELL = {
+  CASE_REFERENCE: 3,
+} as const;
+
+const CZ_NSS_CASE_REFERENCE_MAX_LENGTH = 100;
+
 /**
  * Parse result rows from the search response HTML.
  *
- * The 2025 redesign renders results as <tbody> blocks
- * with citation <a title="Citace: ... čj. X"> elements.
+ * The 2025 redesign renders results as one <tbody> block per decision. The
+ * reference is a visible table cell; the neighbouring citation/copy action is
+ * optional and therefore cannot decide whether the row exists.
  *
  * Exported so the crawl, the listing walk and their tests read one parser:
  * a second copy of these patterns would certify itself rather than the
@@ -501,22 +509,36 @@ export const parseResultRows = (html: string): ParsedRow[] => {
 
   while ((tbodyMatch = tbodyPattern.exec(html)) !== null) {
     const block = tbodyMatch.groups?.["block"];
-
-    if (!block?.includes("Citace")) {
+    if (block === undefined) {
       continue;
     }
 
-    // č may appear as literal or HTML entity (&#x10D; &#x10d; &#269;)
-    // Stop at comma to exclude publication reference (e.g. ", č. 421/2004 Sb. NSS")
-    // The sheet number the citation appends is taken by the capture and split
-    // off below, not discarded here: dropped at the regex, the sheet is gone
-    // from the row and nothing downstream can state where the document sits.
-    const citMatch =
-      /title="Citace:[^"]*?(?:čj\.|č\.\s*j\.|&#x10[dD];j\.|&#26[89];j\.)[\s]*(?<reference>[^",\s][^",]*?)[",]/iu.exec(
-        block,
+    const detailMatch =
+      /href="\/DokumentDetail\/Index\/(?<documentId>\d+)"/u.exec(block);
+    const documentId = detailMatch?.groups?.["documentId"];
+    if (
+      documentId === undefined ||
+      !isPersistableSourceDocumentId(documentId)
+    ) {
+      continue;
+    }
+
+    const cells: string[] = [];
+    const cellPattern = /<td[^>]*>(?<cell>[\s\S]*?)<\/td>/giu;
+    let cellMatch: RegExpExecArray | null;
+    while ((cellMatch = cellPattern.exec(block)) !== null) {
+      cells.push(
+        stripHtml(cellMatch.groups?.["cell"] ?? "")
+          .replace(/\s+/gu, " ")
+          .trim(),
       );
-    const publishedCaseNumber = citMatch?.groups?.["reference"]?.trim();
-    if (!publishedCaseNumber || publishedCaseNumber.length > 100) {
+    }
+
+    const publishedCaseNumber = cells.at(CZ_NSS_RESULT_CELL.CASE_REFERENCE);
+    if (
+      !publishedCaseNumber ||
+      publishedCaseNumber.length > CZ_NSS_CASE_REFERENCE_MAX_LENGTH
+    ) {
       // Skip malformed or overly long case numbers
       if (publishedCaseNumber) {
         logger.warn("case_law.ingestion.malformed_case_number_skipped", {
@@ -528,21 +550,7 @@ export const parseResultRows = (html: string): ParsedRow[] => {
       continue;
     }
     const { caseNumber } = splitCaseReference(publishedCaseNumber);
-
-    const detailMatch =
-      /href="\/DokumentDetail\/Index\/(?<documentId>\d+)"/u.exec(block);
-    const documentId = detailMatch?.groups?.["documentId"];
-    const documentUrl = documentId ? detailUrl(documentId) : undefined;
-
-    const cells: string[] = [];
-    const cellPattern = /<td[^>]*>(?<cell>[\s\S]*?)<\/td>/giu;
-    let cellMatch: RegExpExecArray | null;
-    while ((cellMatch = cellPattern.exec(block)) !== null) {
-      const cell = cellMatch.groups?.["cell"];
-      if (cell) {
-        cells.push(stripHtml(cell).trim());
-      }
-    }
+    const documentUrl = detailUrl(documentId);
 
     let decisionDate: string | undefined;
     let decisionType: string | undefined;

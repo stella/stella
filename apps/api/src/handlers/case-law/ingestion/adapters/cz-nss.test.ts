@@ -60,9 +60,9 @@ const BACKSLASH = String.fromCodePoint(92);
 
 /**
  * A results row exactly as the portal renders one: entity-escaped Czech, the
- * docket carrying its sheet number, and the citation anchor the docket is read
- * from. Shortened stand-ins would let a citation or id rule pass here and fail
- * on live traffic.
+ * visible docket carrying its sheet number, and an optional citation action.
+ * Shortened stand-ins would let a cell or id rule pass here and fail on live
+ * traffic.
  */
 type RowFixture = {
   index: number;
@@ -74,14 +74,28 @@ type RowFixture = {
   date: string;
 };
 
-const rowBlock = ({
-  citedCaseNumber,
-  court,
-  date,
-  displayedCaseNumber,
-  documentId,
-  index,
-}: RowFixture): string => `<tbody>
+const CITATION_ACTION = {
+  ABSENT: "absent",
+  PRESENT: "present",
+} as const;
+
+type RowBlockOptions = {
+  citationAction?: (typeof CITATION_ACTION)[keyof typeof CITATION_ACTION];
+};
+
+const rowBlock = (
+  {
+    citedCaseNumber,
+    court,
+    date,
+    displayedCaseNumber,
+    documentId,
+    index,
+  }: RowFixture,
+  options: RowBlockOptions = {},
+): string => {
+  const citationAction = options.citationAction ?? CITATION_ACTION.PRESENT;
+  return `<tbody>
   <tr>
     <td scope="row" rowspan="1" class="font-weight-bold"> ${index + 1} </td>
     <td rowspan="1">
@@ -91,13 +105,18 @@ const rowBlock = ({
     <td> ${displayedCaseNumber} </td>
     <td> ${court} </td>
     <td> Rozsudek </td>
+    <td></td>
+    <td></td>
+    <td></td>
+    <td></td>
     <td rowspan="1" class="text-nowrap">
       <a target="_blank" href="/DokumentOriginal/Html/${documentId}"><span title="Html soubor"></span></a>
       <a target="_blank" href="/DokumentDetail/Index/${documentId}"><span title="Detail dokumentu"></span></a>
-      <a onclick="javascript: return CopyToCB(this);" title="Citace: rozsudek ${court} ze dne ${date}, &#x10D;j. ${citedCaseNumber}"><span></span></a>
+      ${citationAction === CITATION_ACTION.ABSENT ? "" : `<a onclick="javascript: return CopyToCB(this);" title="Citace: rozsudek ${court} ze dne ${date}, &#x10D;j. ${citedCaseNumber}"><span></span></a>`}
     </td>
   </tr>
 </tbody>`;
+};
 
 const MUNICIPAL_ROW = {
   index: 0,
@@ -115,6 +134,15 @@ const REGIONAL_ROW = {
   displayedCaseNumber: "52&#xA0;Af&#xA0;4/2026&#xA0;-&#xA0;66",
   court: "Krajsk&#xE9;ho soudu v Hradci Kr&#xE1;lov&#xE9;",
   date: "10.06.2026",
+} as const satisfies RowFixture;
+
+const OPTIONAL_CITATION_ROW = {
+  index: 2,
+  documentId: "700001",
+  citedCaseNumber: "Xa 123/2003-45",
+  displayedCaseNumber: "Xa&#xA0;123/2003&#xA0;-&#xA0;45",
+  court: "Syntetick&#xFD; soud",
+  date: "27.05.2003",
 } as const satisfies RowFixture;
 
 /**
@@ -487,13 +515,32 @@ describe("cz-nss reconciliation slices", () => {
 // ── Parser and identity ──────────────────────────────────
 
 describe("cz-nss listing rows", () => {
+  test("reads the visible reference with or without a citation action", () => {
+    const withCitation = parseResultRows(rowBlock(OPTIONAL_CITATION_ROW));
+    const withoutCitationHtml = rowBlock(OPTIONAL_CITATION_ROW, {
+      citationAction: CITATION_ACTION.ABSENT,
+    });
+    expect(withoutCitationHtml).not.toContain("Citace");
+    expect(withoutCitationHtml).toContain(
+      `/DokumentDetail/Index/${OPTIONAL_CITATION_ROW.documentId}`,
+    );
+
+    const withoutCitation = parseResultRows(withoutCitationHtml);
+    expect(withoutCitation).toEqual(withCitation);
+    expect(withoutCitation.at(0)).toMatchObject({
+      caseNumber: "Xa 123/2003",
+      documentId: OPTIONAL_CITATION_ROW.documentId,
+      publishedCaseNumber: "Xa 123/2003 - 45",
+    });
+  });
+
   test("reads the docket, the document id and the date off a row", () => {
     const rows = parseResultRows(rowBlock(MUNICIPAL_ROW));
     expect(rows).toHaveLength(1);
-    // The sheet number comes off the docket, because a citation names the
-    // docket alone, and is kept beside it rather than dropped.
+    // The sheet number comes off the docket and is kept beside it rather than
+    // dropped.
     expect(rows.at(0)?.caseNumber).toBe("1 Az 4/2026");
-    expect(rows.at(0)?.publishedCaseNumber).toBe("1 Az 4/2026-79");
+    expect(rows.at(0)?.publishedCaseNumber).toBe("1 Az 4/2026 - 79");
     expect(rows.at(0)?.documentId).toBe("784237");
     expect(rows.at(0)?.documentUrl).toBe(
       `${BASE_URL}/DokumentDetail/Index/784237`,
@@ -501,29 +548,42 @@ describe("cz-nss listing rows", () => {
     expect(rows.at(0)?.decisionDate).toBe("10.06.2026");
   });
 
-  test("reads a docket the citation spaces off its sheet number", () => {
-    // The portal's citations are tight, its documents spaced; both forms name
-    // one case, so both have to reduce to one docket.
-    const rows = parseResultRows(
-      rowBlock({ ...MUNICIPAL_ROW, citedCaseNumber: "1 Az 4/2026 - 79" }),
-    );
+  test("normalizes non-breaking spaces in the visible reference", () => {
+    const rows = parseResultRows(rowBlock(MUNICIPAL_ROW));
 
     expect(rows.at(0)?.caseNumber).toBe("1 Az 4/2026");
     expect(rows.at(0)?.publishedCaseNumber).toBe("1 Az 4/2026 - 79");
   });
 
-  test("keeps a docket the citation states with no sheet number", () => {
+  test("applies the reference length guard to the visible field", () => {
     const rows = parseResultRows(
-      rowBlock({ ...MUNICIPAL_ROW, citedCaseNumber: "1 Az 4/2026" }),
+      rowBlock({
+        ...OPTIONAL_CITATION_ROW,
+        displayedCaseNumber: "X".repeat(101),
+      }),
+    );
+
+    expect(rows).toEqual([]);
+  });
+
+  test("keeps a visible docket with no sheet number", () => {
+    const rows = parseResultRows(
+      rowBlock({
+        ...MUNICIPAL_ROW,
+        citedCaseNumber: "1 Az 4/2026",
+        displayedCaseNumber: "1&#xA0;Az&#xA0;4/2026",
+      }),
     );
 
     expect(rows.at(0)?.caseNumber).toBe("1 Az 4/2026");
     expect(rows.at(0)?.publishedCaseNumber).toBe("1 Az 4/2026");
   });
 
-  test("skips blocks that carry no citation", () => {
+  test("skips table blocks that are not decision rows", () => {
     const rows = parseResultRows(
-      `<tbody><tr><td>Header row</td></tr></tbody>${rowBlock(REGIONAL_ROW)}`,
+      `<tbody><tr>
+        <td>1</td><td></td><td>27.05.2003</td><td>Xa 123/2003 - 45</td>
+      </tr></tbody>${rowBlock(REGIONAL_ROW)}`,
     );
     expect(rows.map((row) => row.caseNumber)).toEqual(["52 Af 4/2026"]);
   });
@@ -569,6 +629,7 @@ describe("cz-nss listing rows", () => {
       rowBlock({
         ...REGIONAL_ROW,
         citedCaseNumber: MUNICIPAL_ROW.citedCaseNumber,
+        displayedCaseNumber: MUNICIPAL_ROW.displayedCaseNumber,
       }),
     ).at(0);
     expect(municipal).toBeDefined();
@@ -728,12 +789,9 @@ describe("cz-nss listSlicePage", () => {
       caseNumber: "1 Az 4/2026",
       // Parked with the row, because the sheet is only recoverable from the
       // reference as published and the build runs days after the listing.
-      publishedCaseNumber: "1 Az 4/2026-79",
+      publishedCaseNumber: "1 Az 4/2026 - 79",
       decisionDate: "10.06.2026",
-      // The results table states no decision type of its own, so the row's
-      // heuristic picks up the displayed reference, non-breaking spaces and
-      // all; the detail page's structured type overrides it in the build.
-      decisionType: "1 Az 4/2026 - 79",
+      decisionType: "1 Az 4/2026 - 79",
       documentUrl: `${BASE_URL}/DokumentDetail/Index/784237`,
       documentId: "784237",
     });
@@ -1132,14 +1190,20 @@ describe("cz-nss buildDecision", () => {
     return throughJsonb(payload);
   };
 
-  /** Crawl one decision whose citation states the reference given. */
-  const crawledWithCitation = async (citedCaseNumber: string) => {
+  /** Crawl one decision whose visible result cell states the reference. */
+  const crawledWithReference = async (reference: string) => {
     installStub({
       search: [
         htmlResponse(
           searchPage({
             statedCount: 1,
-            rows: [{ ...MUNICIPAL_ROW, citedCaseNumber }],
+            rows: [
+              {
+                ...MUNICIPAL_ROW,
+                citedCaseNumber: reference,
+                displayedCaseNumber: reference,
+              },
+            ],
           }),
         ),
       ],
@@ -1173,7 +1237,7 @@ describe("cz-nss buildDecision", () => {
     // so nothing has to guess how the court set the two together.
     expect(built.decision.sheetNumber).toBe("79");
     expect(built.decision.metadata["publishedCaseNumber"]).toBe(
-      "1 Az 4/2026-79",
+      "1 Az 4/2026 - 79",
     );
     expect(built.decision.language).toBe("cs");
     // The portal lists the city court's decision; the ECLI names the court,
@@ -1253,9 +1317,9 @@ describe("cz-nss buildDecision", () => {
    * stored before the sheet was read has to hash differently once its listing
    * states one. Without this the recovered sheet never reaches the row.
    */
-  test("a citation that states a sheet number moves the source hash", async () => {
-    const withSheet = await crawledWithCitation("1 Az 4/2026-79");
-    const withoutSheet = await crawledWithCitation("1 Az 4/2026");
+  test("a visible reference that states a sheet number moves the source hash", async () => {
+    const withSheet = await crawledWithReference("1 Az 4/2026-79");
+    const withoutSheet = await crawledWithReference("1 Az 4/2026");
 
     expect(withSheet.sheetNumber).toBe("79");
     expect(withoutSheet.sheetNumber).toBeUndefined();
@@ -1268,8 +1332,8 @@ describe("cz-nss buildDecision", () => {
    * the hash's pre-existing input, so re-hashing the sheetless corpus cannot
    * happen without editing this line.
    */
-  test("a citation with no sheet number hashes as it did before", async () => {
-    const decision = await crawledWithCitation("1 Az 4/2026");
+  test("a visible reference with no sheet number hashes as before", async () => {
+    const decision = await crawledWithReference("1 Az 4/2026");
 
     expect(decision.rawHash).toBe(
       hashContent("1 Az 4/2026|2026-06-10|rozsudek"),
@@ -1277,8 +1341,8 @@ describe("cz-nss buildDecision", () => {
   });
 
   test("the court's spacing does not move the source hash", async () => {
-    const tight = await crawledWithCitation("1 Az 4/2026-79");
-    const spaced = await crawledWithCitation("1 Az 4/2026 - 79");
+    const tight = await crawledWithReference("1 Az 4/2026-79");
+    const spaced = await crawledWithReference("1 Az 4/2026 - 79");
 
     // Spacing is typography, not the document moving. Were it hashed, a court
     // re-spacing its citations would rewrite its whole corpus, and a legacy
@@ -1339,7 +1403,7 @@ describe("cz-nss buildDecision", () => {
     caseNumber: string;
     metadata: Record<string, unknown>;
   }) => {
-    const decision = await crawledWithCitation("1 Az 4/2026-79");
+    const decision = await crawledWithReference("1 Az 4/2026-79");
     const reparse = czNssAdapter.reparseStoredRaw;
     if (reparse === undefined) {
       throw new TypeError("Expected cz-nss to implement stored-raw replay");
