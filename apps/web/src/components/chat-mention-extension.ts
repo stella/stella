@@ -5,7 +5,13 @@ import {
   ReactNodeViewRenderer,
   ReactRenderer,
 } from "@tiptap/react";
-import type { SuggestionOptions, SuggestionProps } from "@tiptap/suggestion";
+import { findSuggestionMatch } from "@tiptap/suggestion";
+import type {
+  SuggestionMatch,
+  SuggestionOptions,
+  SuggestionProps,
+  Trigger,
+} from "@tiptap/suggestion";
 
 import type { EntityKind, ResourceRef } from "@stll/api-contract";
 
@@ -101,6 +107,24 @@ export const ChatMention = MentionExtension.extend({
 const MAX_SUGGESTIONS_PER_CATEGORY = 5;
 const MAX_TOTAL_SUGGESTIONS = 15;
 
+export const findChatSuggestionMatch = (trigger: Trigger): SuggestionMatch => {
+  const match = findSuggestionMatch({
+    ...trigger,
+    allowedPrefixes: null,
+  });
+  if (match === null || match.range.from === trigger.$position.start()) {
+    return match;
+  }
+
+  const precedingText = trigger.$position.doc.textBetween(
+    match.range.from - 1,
+    match.range.from,
+    "\0",
+    "\0",
+  );
+  return /^\s$/u.test(precedingText) ? match : null;
+};
+
 type SelectChatSuggestionItemsOptions = {
   localItems: ChatMentionOption[];
   query: string;
@@ -147,6 +171,8 @@ export const createChatSuggestion = (
   ) => Promise<ChatMentionOption[]>,
 ): Omit<SuggestionOptions<ChatMentionOption, MentionNodeAttrs>, "editor"> => ({
   allowSpaces: true,
+  allowedPrefixes: null,
+  findSuggestionMatch: findChatSuggestionMatch,
   items: async ({ query }) => {
     const [localItems, searchedItems] = await Promise.all([
       getItems(),

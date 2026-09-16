@@ -45,6 +45,11 @@ const DIRECT_GPT_56_DISPLAY_NAMES = {
   "gpt-5.6-terra": "GPT-5.6 Terra",
   "gpt-5.6-luna": "GPT-5.6 Luna",
 } as const satisfies Record<(typeof DIRECT_GPT_56_MODEL_IDS)[number], string>;
+const OPENROUTER_GPT_56_MODEL_IDS = [
+  "openai/gpt-5.6-sol",
+  "openai/gpt-5.6-terra",
+  "openai/gpt-5.6-luna",
+] as const;
 
 describe("direct OpenAI GPT-5.6 family", () => {
   test("exposes every tier with complete catalog metadata", () => {
@@ -85,6 +90,34 @@ describe("direct OpenAI GPT-5.6 family", () => {
     expect(getContextWindowTokens("gpt-5.6-sol")).toBe(
       getContextWindowTokens("gpt-5.6"),
     );
+  });
+
+  test("exposes the complete family through OpenRouter", () => {
+    expect(
+      BYOK_MODEL_OPTIONS.openrouter.filter((modelId) =>
+        modelId.startsWith("openai/gpt-5.6"),
+      ),
+    ).toEqual([...OPENROUTER_GPT_56_MODEL_IDS]);
+
+    for (const [index, modelId] of OPENROUTER_GPT_56_MODEL_IDS.entries()) {
+      const directModelId = DIRECT_GPT_56_MODEL_IDS[index];
+      if (directModelId === undefined) {
+        throw new Error("GPT-5.6 provider family is not aligned");
+      }
+      expect(getModelDisplayMetadata(modelId)).toEqual(
+        getModelDisplayMetadata(directModelId),
+      );
+      expect(getModelRate(modelId)).toBe(getModelRate(directModelId));
+      expect(getContextWindowTokens(modelId)).toBe(
+        getContextWindowTokens(directModelId),
+      );
+      expect(getModelReasoningEfforts(modelId)).toEqual(
+        getModelReasoningEfforts(directModelId),
+      );
+      expect(shouldEmitTemperature(modelId)).toBe(
+        shouldEmitTemperature(directModelId),
+      );
+    }
   });
 });
 

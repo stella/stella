@@ -8,6 +8,7 @@ import { t } from "elysia";
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import {
   CHAT_EDIT_APPLY_MODE,
+  CHAT_CONTINUATION_REJECTED_ERROR_CODE,
   CHAT_RICH_PART_LIMITS,
   CHAT_RUN_MODE,
   CHAT_TURN_INTENT,
@@ -725,12 +726,10 @@ const applyValidatedContinuationTransitions = ({
       return part;
     }
     const incomingCall = incomingCalls.get(part.id);
-    if (incomingCall === undefined) {
+    if (incomingCall === undefined || incomingCall.state === part.state) {
       return restoreCanonicalToolCallInput({ call: part, canonicalCall: part });
     }
-    if (incomingCall.state !== part.state) {
-      transitionedCallIds.add(part.id);
-    }
+    transitionedCallIds.add(part.id);
     return restoreCanonicalToolCallInput({
       call: incomingCall,
       canonicalCall: part,
@@ -798,14 +797,23 @@ const validateContinuationToolCallIntegrity = ({
   const incomingCalls = incomingParts.filter(
     (part): part is ChatToolCallPart => part.type === "tool-call",
   );
-  if (incomingCalls.length !== canonicalCalls.length) {
-    return invalidContinuationToolCall();
-  }
-  for (const [index, canonicalCall] of canonicalCalls.entries()) {
-    const incomingCall = incomingCalls.at(index);
+  const canonicalCallsById = new Map(
+    canonicalCalls.map((call) => [call.id, call] as const),
+  );
+  const incomingCallsById = new Map<string, ChatToolCallPart>();
+  for (const incomingCall of incomingCalls) {
+    const canonicalCall = canonicalCallsById.get(incomingCall.id);
+    if (canonicalCall === undefined || incomingCallsById.has(incomingCall.id)) {
+      return invalidContinuationToolCall();
+    }
+    incomingCallsById.set(incomingCall.id, incomingCall);
+
+    // Completed historical calls are server-owned history, not continuation
+    // input. TanStack may omit them or reconstruct them from a snapshot with
+    // a different presentation shape. The merge below always restores the
+    // persisted call, so only a state transition needs an integrity check.
     if (
-      incomingCall === undefined ||
-      incomingCall.id !== canonicalCall.id ||
+      incomingCall.state !== canonicalCall.state &&
       !isPermittedContinuationToolCallTransition({
         canonicalCall: toComparableToolCall(canonicalCall),
         incomingCall: toComparableToolCall(incomingCall),
@@ -819,6 +827,13 @@ const validateContinuationToolCallIntegrity = ({
     parts: [...persistedParts],
     role: "assistant",
   });
+  if (
+    awaitedInteractions.some(
+      ({ toolCallId }) => !incomingCallsById.has(toolCallId),
+    )
+  ) {
+    return invalidContinuationToolCall();
+  }
   if (resume !== undefined) {
     const awaitedInterrupts: {
       interaction: (typeof awaitedInteractions)[number];
@@ -846,8 +861,8 @@ const validateContinuationToolCallIntegrity = ({
         interruptId: `client_tool_${call.id}`,
       });
     }
-    const resumedInteractions = incomingCalls.flatMap((call, index) => {
-      const canonicalCall = canonicalCalls.at(index);
+    const resumedInteractions = incomingCalls.flatMap((call) => {
+      const canonicalCall = canonicalCallsById.get(call.id);
       if (canonicalCall === undefined || canonicalCall.state === call.state) {
         return [];
       }
@@ -898,6 +913,7 @@ const validateContinuationToolCallIntegrity = ({
 const invalidContinuationToolCall = (): Result<never, HandlerError<400>> =>
   Result.err(
     new HandlerError({
+      code: CHAT_CONTINUATION_REJECTED_ERROR_CODE,
       status: 400,
       message: "Chat continuation does not match its awaited interaction",
     }),

@@ -263,6 +263,41 @@ describe("create-document drafts", () => {
     expect(selectUnsettledCreateDocumentDrafts(updated)).toEqual([]);
   });
 
+  test("removes a locally ready draft when server settlement is exhausted", () => {
+    const messages = [
+      {
+        id: toSafeId<"chatMessage">("019fc8ee-aea6-7eba-8da3-3ec8d4bda040"),
+        role: "assistant",
+        parts: [
+          {
+            arguments: JSON.stringify({ name: "Draft", source: "@doc" }),
+            id: "tool-ready",
+            input: { name: "Draft", source: "@doc" },
+            name: "create-document",
+            output: {
+              destination: "draft",
+              fileName: "Draft.docx",
+              success: true,
+            },
+            state: "complete",
+            type: "tool-call",
+          },
+        ],
+      },
+    ] satisfies Parameters<typeof terminalizeUnsettledCreateDocumentDraft>[0];
+
+    const updated = terminalizeUnsettledCreateDocumentDraft(
+      messages,
+      "tool-ready",
+    );
+
+    expect(updated[0]?.parts[0]).toMatchObject({ state: "error" });
+    expect(updated[0]?.parts[0]).not.toHaveProperty("output");
+    expect(findReadyCreateDocumentDraftMessageId(updated, "tool-ready")).toBe(
+      null,
+    );
+  });
+
   test("marks failed create-document calls terminal without closing active drafts", () => {
     const messages = [
       {

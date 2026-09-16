@@ -361,7 +361,6 @@ export const ChatThreadPage = ({
     suggestedFollowupPrompt,
     threadRef,
   });
-  const hasSuggestedFollowups = suggestedFollowupPrompts.length > 0;
 
   const openInspectorChat = useInspectorTabsStore((s) => s.openChat);
   const navigate = useNavigate();
@@ -452,8 +451,8 @@ export const ChatThreadPage = ({
   // attachment chips, followup chips), so a static bottom offset cannot
   // keep the scroll-to-bottom button clear of it in every state. Publish
   // the block's live height as a CSS variable on the page container. The
-  // transcript bottom padding and scroll button (inside <Conversation>) both
-  // inherit it, keeping the final content above the block at any height.
+  // transcript bottom padding inherits it, keeping the final content above
+  // the block at any height.
   const pageContainerRef = useRef<HTMLDivElement>(null);
   const composerBlockRef = useRef<HTMLDivElement>(null);
   useExternalSyncEffect(() => {
@@ -637,10 +636,9 @@ export const ChatThreadPage = ({
             Page-level stacking order (bottom → top):
               1. transcript content   — in-flow, z-auto
               2. sticky user headers  — z-10 (capped inside <Conversation>)
-              3. scroll-to-bottom btn — z-10, painted after the headers
-              4. fade gradient        — z-auto sibling, above the isolated
+              3. fade gradient        — z-auto sibling, above the isolated
                                         <Conversation> stacking context
-              5. composer             — z-20, floats above everything
+              4. composer             — z-20, floats above everything
             `isolate` on <Conversation> traps every transcript stacking
             value (sticky headers, scroll button) inside its own context so
             none of them can leak up and overlay the fade or the composer.
@@ -706,12 +704,6 @@ export const ChatThreadPage = ({
                   )}
                 </ConversationContent>
                 <ChatTurnNavigator messages={messages} />
-                <ConversationScrollButton
-                  className={cn(
-                    "bottom-[calc(var(--composer-block-h,7rem)+0.75rem)]",
-                    hasSuggestedFollowups && "hidden",
-                  )}
-                />
               </Conversation>
 
               <ChatAnonymizationLayer
@@ -766,6 +758,7 @@ export const ChatThreadPage = ({
                     );
                   }}
                   prompts={suggestedFollowupPrompts}
+                  scrollAction="none"
                 />
                 {env.VITE_FEATURE_USAGE && <UsageFallbackNotice />}
                 {/* Glass tray behind the composer + status row: the shared
@@ -775,29 +768,22 @@ export const ChatThreadPage = ({
                   scrolled transcript. */}
                 <div className="relative isolate p-2">
                   <ComposerVeil />
-                  <ChatInputSurface
-                    anonymized={anonymized}
-                    autoFocus
-                    context={{ activeOrganizationId, threadRef }}
-                    controller={controller}
-                    guideAnchorsEnabled
-                    isGenerating={isGenerating}
-                    mcpOrganizationId={activeOrganizationId}
-                    models={{
-                      activeOrganizationId,
-                      threadRef,
-                      selectedModel: data.model,
-                      selectedReasoningEffort: data.reasoningEffort,
-                      selectModel: modelSelection.selectModel,
-                    }}
-                    reservedCommands={{
-                      hasPersistedThread: messages.length > 0,
-                    }}
-                    skillsOrganizationId={activeOrganizationId}
-                    dock={
-                      <ChatComposerDock
-                        data={data}
+                  <div className="flex items-center gap-2">
+                    <ConversationScrollButton
+                      className="size-11"
+                      placement="inline"
+                      reserveWhenHidden={false}
+                      surface="overlay"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <ChatInputSurface
+                        anonymized={anonymized}
+                        autoFocus
+                        context={{ activeOrganizationId, threadRef }}
+                        controller={controller}
                         guideAnchorsEnabled
+                        isGenerating={isGenerating}
+                        mcpOrganizationId={activeOrganizationId}
                         models={{
                           activeOrganizationId,
                           threadRef,
@@ -805,32 +791,49 @@ export const ChatThreadPage = ({
                           selectedReasoningEffort: data.reasoningEffort,
                           selectModel: modelSelection.selectModel,
                         }}
-                        leadingContext={
-                          <ChatMatterPicker
-                            matterIds={selectedContextMatterIds}
-                            onChange={(matterIds) =>
-                              setContextMatterIds(
-                                resolveChatContextMatterIds(
-                                  threadRef,
-                                  matterIds,
-                                ),
-                              )
+                        reservedCommands={{
+                          hasPersistedThread: messages.length > 0,
+                        }}
+                        skillsOrganizationId={activeOrganizationId}
+                        dock={
+                          <ChatComposerDock
+                            data={data}
+                            guideAnchorsEnabled
+                            models={{
+                              activeOrganizationId,
+                              threadRef,
+                              selectedModel: data.model,
+                              selectedReasoningEffort: data.reasoningEffort,
+                              selectModel: modelSelection.selectModel,
+                            }}
+                            leadingContext={
+                              <ChatMatterPicker
+                                matterIds={selectedContextMatterIds}
+                                onChange={(matterIds) =>
+                                  setContextMatterIds(
+                                    resolveChatContextMatterIds(
+                                      threadRef,
+                                      matterIds,
+                                    ),
+                                  )
+                                }
+                              />
                             }
+                            onNewThread={
+                              messages.length > 0 ? startNewThread : null
+                            }
+                            status="ready"
+                            threadRef={threadRef}
                           />
                         }
-                        onNewThread={
-                          messages.length > 0 ? startNewThread : null
-                        }
-                        status="ready"
-                        threadRef={threadRef}
+                        onStop={() => {
+                          stop();
+                        }}
+                        onFocusChange={setComposerFocused}
+                        onSubmit={handleSubmit}
                       />
-                    }
-                    onStop={() => {
-                      stop();
-                    }}
-                    onFocusChange={setComposerFocused}
-                    onSubmit={handleSubmit}
-                  />
+                    </div>
+                  </div>
                 </div>
               </div>
             </ChatThreadScrollSurface>

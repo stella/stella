@@ -15,6 +15,7 @@ import type { ChatToolMap } from "@/api/lib/chat/chat-tool-types";
 import { isRecord } from "@/api/lib/type-guards";
 
 const CALL_ID = "call_property_continuation";
+const HISTORICAL_CALL_ID = "call_property_historical";
 const TOOL_NAME = "suggest_changes";
 const OUTPUT = { ok: true };
 const ACCEPTED = "accepted";
@@ -104,6 +105,21 @@ const continuationOutcome = async ({
       parts: [
         {
           type: "tool-call",
+          id: HISTORICAL_CALL_ID,
+          name: TOOL_NAME,
+          arguments: JSON.stringify({ alpha: "history" }),
+          input: { alpha: "history" },
+          output: OUTPUT,
+          state: "complete",
+        },
+        {
+          type: "tool-result",
+          toolCallId: HISTORICAL_CALL_ID,
+          content: JSON.stringify(OUTPUT),
+          state: "complete",
+        },
+        {
+          type: "tool-call",
           id: CALL_ID,
           name: TOOL_NAME,
           arguments: JSON.stringify(canonicalInput),
@@ -152,7 +168,7 @@ const continuationOutcome = async ({
 };
 
 test(
-  "a continuation is judged by its input value, not by how the client spells it",
+  "a continuation is judged only by the awaited call, not historical snapshot shape",
   async () => {
     await fc.assert(
       fc.asyncProperty(inputArbitrary, async (canonicalInput) => {

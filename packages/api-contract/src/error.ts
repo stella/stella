@@ -1,5 +1,9 @@
 export const API_VALIDATION_ERROR_CODE = "validation" as const;
 
+/** The submitted chat continuation does not match the server-owned pending turn. */
+export const CHAT_CONTINUATION_REJECTED_ERROR_CODE =
+  "chat_continuation_rejected" as const;
+
 export const API_FILE_SECURITY_REJECTED_ERROR_CODE =
   "file_security_rejected" as const;
 

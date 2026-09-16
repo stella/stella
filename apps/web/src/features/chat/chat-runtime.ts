@@ -12,7 +12,10 @@ import { panic } from "better-result";
 
 import { CHAT_SEND_MODE, isChatSendMode } from "@stll/anonymize-chat";
 import type { ChatSendMode } from "@stll/anonymize-chat";
-import { CHAT_TURN_INTENT } from "@stll/api-contract";
+import {
+  CHAT_CONTINUATION_REJECTED_ERROR_CODE,
+  CHAT_TURN_INTENT,
+} from "@stll/api-contract";
 import type { ChatSendRequest } from "@stll/api-contract";
 
 import type {
@@ -35,6 +38,7 @@ import type {
 } from "@/lib/chat-edit-mode";
 import { getChatThreadKey } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
+import { APIError } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { toSafeId } from "@/lib/safe-id";
 import type { SafeId } from "@/lib/safe-id";
@@ -146,8 +150,30 @@ type CreateChatRuntimeProps = {
   onFinish: () => void;
 };
 
+type ActiveToolResultOperation = {
+  rejection: Error | undefined;
+};
+
 const toError = (error: unknown): Error =>
   error instanceof Error ? error : new Error(String(error));
+
+const isRejectedChatContinuation = (error: unknown): boolean => {
+  const visited = new Set<Error>();
+  let current = error;
+
+  while (current instanceof Error && !visited.has(current)) {
+    if (
+      APIError.is(current) &&
+      current.code === CHAT_CONTINUATION_REJECTED_ERROR_CODE
+    ) {
+      return true;
+    }
+    visited.add(current);
+    current = current.cause;
+  }
+
+  return false;
+};
 
 const ignoreAbandonedStreamError = (_error: unknown): void => undefined;
 
@@ -183,6 +209,8 @@ export const createChatRuntime = ({
   onFinish,
 }: CreateChatRuntimeProps): ChatRuntime => {
   const listeners = new Set<() => void>();
+  let activeToolResultOperation: ActiveToolResultOperation | undefined;
+  let toolResultQueue = Promise.resolve();
   let snapshot: ChatRuntimeSnapshot = {
     error: undefined,
     isLoading: false,
@@ -214,6 +242,14 @@ export const createChatRuntime = ({
 
   const reportRuntimeError = (error: unknown): void => {
     captureRuntimeError(error);
+  };
+
+  const enqueueToolResult = async (
+    operation: () => Promise<void>,
+  ): Promise<void> => {
+    const queued = toolResultQueue.then(operation);
+    toolResultQueue = queued.catch(ignoreAbandonedStreamError);
+    await queued;
   };
 
   type PendingInterruptResolution = {
@@ -297,6 +333,12 @@ export const createChatRuntime = ({
     initialMessages,
     connection,
     onError: (error) => {
+      if (
+        activeToolResultOperation !== undefined &&
+        isRejectedChatContinuation(error)
+      ) {
+        activeToolResultOperation.rejection = error;
+      }
       onError(error);
       setSnapshot({ error });
     },
@@ -453,16 +495,52 @@ export const createChatRuntime = ({
       });
     },
     addToolResult: async (result, options) => {
-      await withBody(options, async () => {
-        await client.addToolResult({
-          tool: result.tool,
-          toolCallId: result.toolCallId,
-          output: result.output,
-          ...(result.state === undefined ? {} : { state: result.state }),
-          ...(result.errorText === undefined
-            ? {}
-            : { errorText: result.errorText }),
-        });
+      await enqueueToolResult(async () => {
+        const messagesBeforeResult = snapshot.messages;
+        const errorBeforeResult = snapshot.error;
+        const operation: ActiveToolResultOperation = { rejection: undefined };
+        activeToolResultOperation = operation;
+        try {
+          await withBody(options, async () => {
+            try {
+              await client.addToolResult({
+                tool: result.tool,
+                toolCallId: result.toolCallId,
+                output: result.output,
+                ...(result.state === undefined ? {} : { state: result.state }),
+                ...(result.errorText === undefined
+                  ? {}
+                  : { errorText: result.errorText }),
+              });
+              if (
+                snapshot.error !== undefined &&
+                snapshot.error !== errorBeforeResult
+              ) {
+                throw snapshot.error;
+              }
+            } catch (error) {
+              if (
+                operation.rejection !== undefined ||
+                isRejectedChatContinuation(error)
+              ) {
+                // TanStack applies the result optimistically before it sends
+                // the continuation. A rejected request must not leave that
+                // local result looking durable: generated-document saving
+                // uses the completed server message as its authorization
+                // proof. A failure after a successful HTTP response is
+                // different: the server has already persisted the result, so
+                // the optimistic state is true.
+                client.setMessagesManually(messagesBeforeResult);
+                setSnapshot({ messages: messagesBeforeResult });
+              }
+              throw error;
+            }
+          });
+        } finally {
+          if (activeToolResultOperation === operation) {
+            activeToolResultOperation = undefined;
+          }
+        }
       });
     },
     getSnapshot: () => snapshot,
