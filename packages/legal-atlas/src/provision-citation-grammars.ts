@@ -7,7 +7,15 @@
  * jurisdictions: a decision whose jurisdiction has no grammar reads its
  * citations as text, and onboarding one is an entry here, never another
  * country's typography applied by default.
+ *
+ * What is not jurisdiction-bound is the shape of a citation: a path of
+ * levels (section, subsection, letter, point), each a designator plus a
+ * value, and coordination that repeats only the part that changes
+ * (`odst. 1 a 2`, `§§ 60 a 120`, `ust. 1 i 2`). The parser owns that shape;
+ * a grammar supplies the designators, the values, and the connectors.
  */
+import { panic } from "better-result";
+
 import type { CaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
 import type {
   ProvisionReference,
@@ -48,12 +56,30 @@ export type LocatedGazetteCitation = {
 
 type GazetteWork = { number: string; year: string };
 
+/** The subdivisions a citation path can name, outermost first. */
+export type ProvisionLevelKey = "section" | "subsection" | "letter" | "point";
+
+export type ProvisionLevel = {
+  key: ProvisionLevelKey;
+  /** RegExp source for the designator that opens this level (`§§?`, `odst\.`). */
+  marker: string;
+  /**
+   * RegExp source for the value. A `value` group narrows what is kept, so
+   * typography can be matched and dropped (`(?<value>[a-z])\)?`).
+   */
+  value: string;
+};
+
 type ProvisionCitationGrammarSpec<TJurisdiction extends CaseLawJurisdiction> = {
   /** Abbreviations courts of this jurisdiction use for its own acts. */
   abbreviations: readonly StatuteAbbreviationEntry[];
   /** Anchor id in this jurisdiction's statute AST for a parsed reference. */
   anchor: (reference: ProvisionReference) => string;
-  /** RegExp sources that join provisions in one chain (`,`, `a`, `and`). */
+  /**
+   * RegExp sources that join provisions in one citation (`,`, `a`, `i`).
+   * Whitespace around a connector is the parser's; a word connector guards
+   * its own end (`a(?=\s)`) so it does not open a longer word.
+   */
   connectors: readonly string[];
   gazette: {
     eli: (work: GazetteWork) => string;
@@ -62,12 +88,11 @@ type ProvisionCitationGrammarSpec<TJurisdiction extends CaseLawJurisdiction> = {
   };
   jurisdiction: TJurisdiction;
   /**
-   * RegExp source for one provision with the named groups `section`
-   * (required), `sectionSuffix`, `subsection`, `letter`, and `point`. It is
-   * compiled alone to parse and, with its groups stripped, inside the chain
-   * pattern, so it carries no anchors or flags.
+   * The citation path, outermost level first, starting with `section`. A
+   * printed citation names a prefix of it; coordination continues at the
+   * level it names.
    */
-  provisionSource: string;
+  levels: readonly [ProvisionLevel, ...ProvisionLevel[]];
   unit: ProvisionUnit;
 };
 
@@ -86,30 +111,100 @@ export type ProvisionCitationGrammar<
   | SupportedProvisionCitationGrammar<TJurisdiction>
   | { jurisdiction: TJurisdiction; status: "unsupported" };
 
-const NAMED_GROUP = /\(\?<[A-Za-z]+>/gu;
+const SECTION_VALUE = /^(?<number>\d+)(?<suffix>\p{L}*)$/u;
+const WHITESPACE = /\s*/uy;
+/** A bare coordinated value must end where a word ends, or `a) a s. ř. s.` reads `s` as a letter. */
+const VALUE_BOUNDARY = /(?![\p{L}\p{N}])/uy;
 
-const parseReference = (
-  groups: Record<string, string | undefined> | undefined,
+type CompiledLevel = {
+  key: ProvisionLevelKey;
+  marker: RegExp;
+  value: RegExp;
+};
+
+/** One printed element of a chain, with every level it names or inherits. */
+type ChainElement = {
+  end: number;
+  start: number;
+  values: readonly (string | null)[];
+};
+
+const sticky = (source: string): RegExp => new RegExp(source, "iuy");
+
+const matchAt = (
+  pattern: RegExp,
+  text: string,
+  index: number,
+): RegExpExecArray | null => {
+  pattern.lastIndex = index;
+  return pattern.exec(text);
+};
+
+const afterWhitespace = (text: string, index: number): number => {
+  const gap = matchAt(WHITESPACE, text, index);
+  return gap === null ? index : gap.index + gap[0].length;
+};
+
+const valueOf = (match: RegExpExecArray): string =>
+  (match.groups?.["value"] ?? match[0]).toLowerCase();
+
+const referenceOf = (
+  levels: readonly CompiledLevel[],
+  values: readonly (string | null)[],
   unit: ProvisionUnit,
 ): ProvisionReference | null => {
-  const section = groups?.["section"];
-  if (groups === undefined || section === undefined) {
-    return null;
-  }
-  const sectionSuffix = groups["sectionSuffix"];
-  return {
-    letter: groups["letter"]?.toLowerCase() ?? null,
+  const reference: ProvisionReference = {
+    letter: null,
     openEnded: false,
-    point: groups["point"] ?? null,
-    section: Number.parseInt(section, 10),
-    sectionSuffix:
-      sectionSuffix === undefined || sectionSuffix.length === 0
-        ? null
-        : sectionSuffix.toLowerCase(),
+    point: null,
+    section: Number.NaN,
+    sectionSuffix: null,
     sentence: null,
-    subsection: groups["subsection"]?.toLowerCase() ?? null,
+    subsection: null,
     unit,
   };
+  for (const [index, level] of levels.entries()) {
+    const value = values[index] ?? null;
+    if (value === null) {
+      continue;
+    }
+    switch (level.key) {
+      case "section": {
+        const parts = SECTION_VALUE.exec(value)?.groups;
+        const number = parts?.["number"];
+        if (number === undefined) {
+          return null;
+        }
+        reference.section = Number.parseInt(number, 10);
+        const suffix = parts?.["suffix"];
+        reference.sectionSuffix =
+          suffix === undefined || suffix.length === 0 ? null : suffix;
+        break;
+      }
+      case "subsection":
+        reference.subsection = value;
+        break;
+      case "letter":
+        reference.letter = value;
+        break;
+      case "point":
+        reference.point = value;
+        break;
+      default:
+        level.key satisfies never;
+        return panic(`Unknown provision level ${String(level.key)}`);
+    }
+  }
+  return Number.isNaN(reference.section) ? null : reference;
+};
+
+const deepestNamed = (values: readonly (string | null)[]): number => {
+  for (let index = values.length - 1; index >= 0; index -= 1) {
+    if (values[index] !== null) {
+      return index;
+    }
+  }
+  return -1;
 };
 
 /**
@@ -125,20 +220,25 @@ export const createProvisionCitationGrammar = <
   connectors,
   gazette,
   jurisdiction,
-  provisionSource,
+  levels,
   unit,
 }: ProvisionCitationGrammarSpec<TJurisdiction>): SupportedProvisionCitationGrammar<TJurisdiction> => {
-  const provision = new RegExp(provisionSource, "giu");
-  const bareProvision = provisionSource.replaceAll(NAMED_GROUP, "(?:");
-  const abbreviationSource = abbreviations
-    .map(({ patternSource }) => `(?:${patternSource})`)
-    .join("|");
-  const chain =
+  const compiledLevels: CompiledLevel[] = levels.map(
+    ({ key, marker, value }) => ({
+      key,
+      marker: sticky(marker),
+      value: sticky(value),
+    }),
+  );
+  const head = new RegExp(levels[0].marker, "giu");
+  const connector = sticky(`\\s*(?:${connectors.join("|")})\\s*`);
+  const abbreviationAfter =
     abbreviations.length === 0
       ? null
-      : new RegExp(
-          `${bareProvision}(?:\\s*(?:${connectors.join("|")})\\s*${bareProvision})*\\s+(?<abbreviation>${abbreviationSource})`,
-          "giu",
+      : sticky(
+          `\\s+(?<abbreviation>${abbreviations
+            .map(({ patternSource }) => `(?:${patternSource})`)
+            .join("|")})`,
         );
   const matchers = abbreviations.map((entry) => ({
     entry,
@@ -158,36 +258,172 @@ export const createProvisionCitationGrammar = <
         };
   };
 
+  /**
+   * A designator-led element opening at level `from`, inheriting the levels
+   * above it. `§ 46 odst. 1` opens at level 0 with nothing inherited;
+   * `odst. 2` after a connector opens at level 1 inheriting section 46. A
+   * level a citation leaves out (`§ 5 písm. a)`, `art. 7 pkt 3`) stays
+   * unnamed; the element ends at the first designator whose value is missing.
+   */
+  const parseElement = (
+    text: string,
+    index: number,
+    from: number,
+    inherited: readonly (string | null)[],
+  ): ChainElement | null => {
+    const values = [...inherited.slice(0, from)];
+    let position = index;
+    for (const [offset, level] of compiledLevels.slice(from).entries()) {
+      const marker = matchAt(
+        level.marker,
+        text,
+        afterWhitespace(text, position),
+      );
+      if (marker === null) {
+        if (offset === 0) {
+          return null;
+        }
+        values.push(null);
+        continue;
+      }
+      const value = matchAt(
+        level.value,
+        text,
+        afterWhitespace(text, marker.index + marker[0].length),
+      );
+      if (value === null) {
+        if (offset === 0) {
+          return null;
+        }
+        break;
+      }
+      values.push(valueOf(value));
+      position = value.index + value[0].length;
+    }
+    while (values.length < compiledLevels.length) {
+      values.push(null);
+    }
+    return { end: position, start: index, values };
+  };
+
+  /** A bare value continuing the previous element at its deepest level. */
+  const parseCoordinatedValue = (
+    text: string,
+    index: number,
+    previous: ChainElement,
+  ): ChainElement | null => {
+    const depth = deepestNamed(previous.values);
+    const level = compiledLevels[depth];
+    if (level === undefined) {
+      return null;
+    }
+    const value = matchAt(level.value, text, index);
+    if (value === null) {
+      return null;
+    }
+    const end = value.index + value[0].length;
+    if (matchAt(VALUE_BOUNDARY, text, end) === null) {
+      return null;
+    }
+    const values = [...previous.values];
+    values[depth] = valueOf(value);
+    return { end, start: index, values };
+  };
+
+  const parseNext = (
+    text: string,
+    index: number,
+    previous: ChainElement,
+  ): ChainElement | null => {
+    for (let from = 0; from < compiledLevels.length; from += 1) {
+      const element = parseElement(text, index, from, previous.values);
+      if (element !== null) {
+        return element;
+      }
+    }
+    return parseCoordinatedValue(text, index, previous);
+  };
+
+  type Chain = { abbreviation: string; elements: ChainElement[]; end: number };
+
+  /**
+   * The chain opened by a designator at `index`, if an abbreviation closes
+   * it. Coordination is read greedily and given back one element at a time
+   * when no abbreviation follows, so a connector that opened prose rather
+   * than a further provision costs the chain nothing.
+   */
+  const parseChain = (text: string, index: number): Chain | null => {
+    if (abbreviationAfter === null) {
+      return null;
+    }
+    const first = parseElement(text, index, 0, []);
+    if (first === null) {
+      return null;
+    }
+    const elements = [first];
+    let position = first.end;
+    for (;;) {
+      const joined = matchAt(connector, text, position);
+      if (joined === null) {
+        break;
+      }
+      const previous = elements.at(-1);
+      if (previous === undefined) {
+        break;
+      }
+      const next = parseNext(text, joined.index + joined[0].length, previous);
+      if (next === null) {
+        break;
+      }
+      elements.push(next);
+      position = next.end;
+    }
+    while (elements.length > 0) {
+      const last = elements.at(-1);
+      if (last === undefined) {
+        break;
+      }
+      const tail = matchAt(abbreviationAfter, text, last.end);
+      const abbreviation = tail?.groups?.["abbreviation"];
+      if (tail !== null && abbreviation !== undefined) {
+        return { abbreviation, elements, end: tail.index + tail[0].length };
+      }
+      elements.pop();
+    }
+    return null;
+  };
+
   return {
     jurisdiction,
     locateAbbreviatedProvisions: (text) => {
-      if (chain === null) {
-        return [];
-      }
       const citations: LocatedProvisionCitation[] = [];
-      for (const match of text.matchAll(chain)) {
-        const printed = match.groups?.["abbreviation"];
-        if (printed === undefined) {
+      head.lastIndex = 0;
+      for (
+        let opener = head.exec(text);
+        opener !== null;
+        opener = head.exec(text)
+      ) {
+        const chain = parseChain(text, opener.index);
+        if (chain === null) {
           continue;
         }
-        const abbreviation = resolveAbbreviation(printed);
+        head.lastIndex = chain.end;
+        const abbreviation = resolveAbbreviation(chain.abbreviation);
         if (abbreviation === null) {
           continue;
         }
-        const provisionsText = match[0].slice(0, -printed.length);
-        for (const found of provisionsText.matchAll(provision)) {
-          const reference = parseReference(found.groups, unit);
+        for (const element of chain.elements) {
+          const reference = referenceOf(compiledLevels, element.values, unit);
           if (reference === null) {
             continue;
           }
-          const start = match.index + found.index;
           citations.push({
             abbreviation,
             anchor: anchor(reference),
-            end: start + found[0].length,
+            end: element.end,
             jurisdiction,
             reference,
-            start,
+            start: element.start,
           });
         }
       }
@@ -242,7 +478,7 @@ export const PROVISION_CITATION_GRAMMARS = {
       },
     ],
     anchor: czechProvisionAnchor,
-    connectors: [",", "a", String.raw`ve\s+spojení\s+s`],
+    connectors: [",", String.raw`a(?=\s)`, String.raw`ve\s+spojení\s+s(?=\s)`],
     gazette: {
       eli: ({ number, year }) =>
         `https://www.e-sbirka.cz/eli/cz/sb/${year}/${number}`,
@@ -251,7 +487,24 @@ export const PROVISION_CITATION_GRAMMARS = {
       source: String.raw`(?<![\p{L}\p{N}])(?:č\.\s*)?(?<number>\d{1,5})\/(?<year>\d{4})\s+Sb\.(?!\s*(?:m\.\s*s\.|NSS|rozh\.))`,
     },
     jurisdiction: "CZE",
-    provisionSource: String.raw`§\s*(?<section>\d{1,4})(?<sectionSuffix>[a-z]?)(?:\s+odst\.\s*(?<subsection>\d+[a-z]?))?(?:\s+písm\.\s*(?<letter>[a-z])\)?)?`,
+    levels: [
+      { key: "section", marker: "§§?", value: String.raw`\d{1,4}[a-z]?` },
+      {
+        key: "subsection",
+        marker: String.raw`odst\.`,
+        value: String.raw`\d+[a-z]?`,
+      },
+      {
+        key: "letter",
+        marker: String.raw`písm\.`,
+        value: String.raw`(?<value>[a-z])\)?`,
+      },
+      {
+        key: "point",
+        marker: String.raw`bod(?![\p{L}])`,
+        value: String.raw`\d+`,
+      },
+    ],
     unit: "section",
   }),
   EU: unsupported("EU"),
