@@ -25,6 +25,8 @@ registerInspectorView<CaseDecisionViewPayload>({
   type: CASE_DECISION_DETAILS_VIEW,
   render: CaseDecisionDetailsView,
   railIcon: CaseDecisionDetailsRailIcon,
+  // Same court chip as the decision's own tab, so the same exemption.
+  railIconInactive: "legible",
   // The facts of a decision are a tab of that decision, not of the page that
   // opened them: they stay until closed, the way a file tab does.
   navigationPolicy: "persist",

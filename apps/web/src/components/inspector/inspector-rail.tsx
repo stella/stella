@@ -11,6 +11,7 @@ import {
   InspectorEntityTab,
   InspectorRailIconButton,
 } from "@stll/ui/inspector";
+import type { InspectorEntityTabInactiveIcon } from "@stll/ui/inspector";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
 import { WorkspaceEndRail } from "@stll/ui/workspace-shell";
@@ -369,6 +370,19 @@ const tabGlyph = (tab: InspectorTab): string | undefined => {
 };
 
 /**
+ * How the cell draws a tab's icon while inactive. Only a registry-backed view
+ * states it, and it states it on its own registration: the rail cannot tell a
+ * pictorial icon from one made of type, and a list of kinds kept here would
+ * drift from the registrations it mirrors.
+ */
+const tabInactiveIcon = (
+  tab: InspectorTab,
+): InspectorEntityTabInactiveIcon | undefined =>
+  isGenericInspectorTab(tab)
+    ? getInspectorView(tab.viewType)?.railIconInactive
+    : undefined;
+
+/**
  * Muted ghost chip for the main-view-bound tab the user closed
  * while its document/template is still open in the main view.
  * Clicking it revives the exact tab (same id + payload) so per-tab
@@ -548,6 +562,7 @@ const VerticalTab = ({
         draggable
         glyph={tabGlyph(tab)}
         icon={<VerticalTabIcon externalIconHref={externalIconHref} tab={tab} />}
+        inactiveIcon={tabInactiveIcon(tab)}
         label={tooltipLabel}
         onClose={onClose}
         onContextMenu={containedEventHandler(contextMenu.openAt)}

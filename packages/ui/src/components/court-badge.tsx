@@ -22,13 +22,24 @@ const COURT_BADGE_BASE_CLASS =
   // Monospaced and tracked out: these are two to four capitals read as a
   // unit, and a proportional face at this size turns ÚS and NS into blots of
   // different widths down a column.
-  "inline-flex shrink-0 items-center rounded-sm border px-1 py-px font-mono text-[10px] leading-4 font-medium tracking-wide whitespace-nowrap";
+  //
+  // The line box runs a third taller than the type, with padding on top of
+  // that, because these capitals carry diacritics (Ú, Ř, Š) whose ink rises
+  // above cap height; a tighter box sets the acute against the pill's border.
+  "inline-flex shrink-0 items-center rounded-sm border px-1 py-0.5 font-mono text-xs leading-4 font-semibold tracking-wide whitespace-nowrap";
 
+/**
+ * Every weight keeps a border, because `--muted` is a 4% tint: a borderless
+ * tinted chip on a sidebar or a muted row is a pill whose edge nobody can
+ * find. The lighter weights write their text in `foreground-strong-muted`
+ * rather than `muted-foreground`: two capitals are not a paragraph a reader
+ * can infer from context, so they hold body-text contrast in both themes.
+ */
 const WEIGHT_CLASS = {
   solid: "border-foreground bg-foreground text-background",
-  tinted: "border-transparent bg-muted text-foreground",
-  outline: "border-border text-muted-foreground",
-  dashed: "border-border border-dashed text-muted-foreground",
+  tinted: "border-border bg-muted text-foreground",
+  outline: "border-border text-foreground-strong-muted",
+  dashed: "border-border border-dashed text-foreground-strong-muted",
 } as const satisfies Record<CourtBadgeWeight, string>;
 
 /**

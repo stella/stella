@@ -3,6 +3,8 @@ import type { ReactNode } from "react";
 
 import { panic } from "better-result";
 
+import type { InspectorEntityTabInactiveIcon } from "@stll/ui/inspector";
+
 /**
  * Module-global registry of inspector view kinds. Each route (or
  * shared module) registers the renderer + rail icon for the
@@ -95,6 +97,13 @@ export type InspectorViewRegistration<P = unknown> = {
   type: InspectorViewKind;
   render: (props: InspectorViewRenderProps<P>) => ReactNode;
   railIcon: (props: InspectorRailIconProps<P>) => ReactNode;
+  /**
+   * How the rail cell draws `railIcon` on an inactive tab. The registration
+   * is the only place that knows whether its icon is a picture or small type,
+   * so it states it here rather than the rail listing the kinds it must not
+   * fade. Defaults to the shared dim.
+   */
+  railIconInactive?: InspectorEntityTabInactiveIcon | undefined;
   navigationPolicy?: InspectorNavigationPolicy | undefined;
   /**
    * Runtime payload validator. Required for kinds whose payloads

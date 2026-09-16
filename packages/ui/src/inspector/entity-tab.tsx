@@ -23,6 +23,7 @@ export const InspectorEntityTab = ({
   label,
   glyph,
   icon,
+  inactiveIcon = "dim",
   onClose,
   onSelect,
   ...props
@@ -59,10 +60,11 @@ export const InspectorEntityTab = ({
               className={cn(
                 "flex items-center justify-center",
                 SIDE_RAIL_TAB_ICON_SIZE,
-                // No glyph to swap to: dim the persistent icon instead, the
-                // same `!active` treatment a registry-backed rail icon uses
-                // on its own.
-                !active && "opacity-70",
+                // No glyph to swap to: dim the persistent icon instead,
+                // unless it asked to stay legible. The exemption has to be
+                // decided here, on the ancestor: `opacity` composites the
+                // whole subtree, so an icon cannot undo it from inside.
+                !active && inactiveIcon === "dim" && "opacity-70",
               )}
             >
               {icon}
@@ -79,6 +81,18 @@ type InspectorEntityTabPassthroughProps = Omit<
   ComponentProps<"button">,
   "children" | "onAuxClick" | "onClick"
 >;
+
+/**
+ * What an inactive tab does to an `icon` it has no `glyph` to swap to.
+ *
+ * `dim` suits a pictorial or coloured mark (status glyph, matter dot,
+ * connector logo): it survives the fade, and the fade is a second inactive
+ * signal after the cell's own spine and fill. `legible` is for an icon that
+ * is itself small type the reader has to decipher, such as a court's
+ * abbreviation chip, where 70% opacity takes two capitals under the contrast
+ * floor and the tab is already marked inactive twice over.
+ */
+export type InspectorEntityTabInactiveIcon = "dim" | "legible";
 
 export type InspectorEntityTabProps = {
   /** Whether this tab is the one currently shown in the pane. Drives the
@@ -98,8 +112,10 @@ export type InspectorEntityTabProps = {
    */
   glyph?: string | undefined;
   /** Shown in the cell while the tab is active — and, with no `glyph`,
-   * while inactive too (dimmed). */
+   * while inactive too (dimmed, unless `inactiveIcon` says otherwise). */
   icon: ReactNode;
+  /** How `icon` is drawn while the tab is inactive. Defaults to `dim`. */
+  inactiveIcon?: InspectorEntityTabInactiveIcon | undefined;
   /**
    * Middle-click (`onAuxClick` button 1) closes the tab. A keyboard- and
    * pointer-reachable close affordance still has to exist — normally a

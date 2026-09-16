@@ -56,6 +56,20 @@ describe("InspectorEntityTab", () => {
     expect(markup).toContain("opacity-70");
   });
 
+  test("an icon made of type opts out of the inactive dim", () => {
+    const markup = renderToStaticMarkup(
+      <InspectorEntityTab
+        active={false}
+        icon={<span data-testid="entity-icon">ÚS</span>}
+        inactiveIcon="legible"
+        label="Ústavní soud"
+      />,
+    );
+
+    expect(markup).toContain("ÚS");
+    expect(markup).not.toContain("opacity-70");
+  });
+
   test("with no glyph, an active tab renders the icon undimmed", () => {
     const markup = renderToStaticMarkup(
       <InspectorEntityTab
