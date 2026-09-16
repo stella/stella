@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 1.4.1
+
+### Patch Changes
+
+- [#3423](https://github.com/stella/stella/pull/3423) [`a47047b`](https://github.com/stella/stella/commit/a47047b8bcda7b3d5161a48373f362d0f8a40d0c) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Legislation search now documents `CZE` (Czechia) as the supported jurisdiction. Unsupported jurisdiction filters return HTTP 400 with guidance to use `CZE` or omit the filter.
+
 ## 1.4.0
 
 ### Minor Changes
