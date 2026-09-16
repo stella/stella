@@ -63,6 +63,13 @@ export type PublicDecisionSearch = v.InferOutput<
 export type PublicDecisionRouteParams = CaseLawDecisionRouteParams;
 
 type PublicDecisionRouteLoaderOptions = {
+  /**
+   * The block the URL names, without its leading `#`, as the loader's
+   * `location` reports it. Canonicalisation must carry it: the fragment is the
+   * passage the reader came for, and an id-form or cross-language link that
+   * dropped it would land them at the top of the decision instead.
+   */
+  hash: string;
   params: PublicDecisionRouteParams;
   queryClient: QueryClient;
   search: PublicDecisionSearch;
@@ -85,6 +92,7 @@ type PublicLawAlternateLink = {
 
 type RedirectToCanonicalDecisionPathOptions = {
   canonicalParams: CaseLawDecisionRouteParams;
+  hash: string;
   search: PublicDecisionSearch;
 };
 
@@ -192,10 +200,14 @@ const ensureRouteCountryDecision = <T extends { country: string }>(
 
 const redirectToCanonicalDecisionPath = ({
   canonicalParams,
+  hash,
   search,
 }: RedirectToCanonicalDecisionPathOptions) => {
   const redirectSearch: PublicDecisionSearch =
     search.q === undefined ? {} : { q: search.q };
+  // Omitted rather than passed empty, so a decision opened at no passage keeps
+  // a bare canonical URL instead of gaining a trailing `#`.
+  const redirectHash = hash === "" ? {} : { hash };
 
   if (canonicalParams.language) {
     throw redirect({
@@ -208,6 +220,7 @@ const redirectToCanonicalDecisionPath = ({
       },
       replace: true,
       search: redirectSearch,
+      ...redirectHash,
     });
   }
 
@@ -220,6 +233,7 @@ const redirectToCanonicalDecisionPath = ({
     },
     replace: true,
     search: redirectSearch,
+    ...redirectHash,
   });
 };
 
@@ -244,6 +258,7 @@ const createDecisionAlternateLinks = (
   });
 
 export const loadPublicCaseLawDecisionRoute = async ({
+  hash,
   params,
   queryClient,
   search,
@@ -279,7 +294,7 @@ export const loadPublicCaseLawDecisionRoute = async ({
     const canonicalPath = createCaseLawDecisionPath(canonicalParams);
     const currentPath = createCaseLawDecisionPath(params);
     if (currentPath !== canonicalPath) {
-      redirectToCanonicalDecisionPath({ canonicalParams, search });
+      redirectToCanonicalDecisionPath({ canonicalParams, hash, search });
     }
 
     primeDecisionProvisions(queryClient, decision.id);
@@ -321,7 +336,7 @@ export const loadPublicCaseLawDecisionRoute = async ({
   const canonicalPath = createCaseLawDecisionPath(canonicalParams);
   const currentPath = createCaseLawDecisionPath(params);
   if (currentPath !== canonicalPath) {
-    redirectToCanonicalDecisionPath({ canonicalParams, search });
+    redirectToCanonicalDecisionPath({ canonicalParams, hash, search });
   }
 
   primeDecisionProvisions(queryClient, decision.id);

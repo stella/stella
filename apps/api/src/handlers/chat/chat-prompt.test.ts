@@ -1,6 +1,11 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import {
+  CHAT_DECISION_PASSAGE_HREF_PREFIX,
+  toChatDecisionPassageHref,
+} from "@stll/api-contract";
+
 import type { SafeDb } from "@/api/db/safe-db";
 import { selectStatuteProvisions } from "@/api/handlers/chat/active-statute-selection.logic";
 import { createChatAttachmentPart } from "@/api/handlers/chat/chat-message-parts";
@@ -18,6 +23,7 @@ import { DOCX_REVIEW_MARKUP_EXAMPLES } from "@/api/lib/docx-review-markup";
 
 import {
   appendAnonymizedModeHintToChatSafePrompt,
+  buildActiveDecisionPrompt,
   buildActiveDecisionSection,
   buildActiveDraftPrompt,
   buildActiveFileSection,
@@ -310,6 +316,83 @@ describe("active decision section", () => {
     expect(prompt).toContain("22 Cdo 1/2026");
     expect(prompt).toContain("Nejvyšší soud");
     expect(prompt).toContain("Dovolání se zamítá.");
+  });
+
+  test("a row held only as flat text offers no anchor to cite by", async () => {
+    const section = await buildActiveDecisionSection({
+      activeDecision: { decisionId: DECISION_ID },
+      caseLawDb: caseLawReaderHoldingTheDecision(),
+      organizationId: undefined,
+      safeDb: tenantDb,
+      userId: undefined,
+    });
+
+    const prompt = section.unwrap();
+    expect(prompt).toContain("stored as flat text without structure");
+    expect(prompt).toContain("never by an anchor");
+    expect(prompt).not.toContain(CHAT_DECISION_PASSAGE_HREF_PREFIX);
+  });
+});
+
+describe("active decision prompt", () => {
+  const DECISION_ID = createSafeId<"caseLawDecision">();
+  const DECISION = {
+    caseNumber: "22 Cdo 1/2026",
+    country: "CZE",
+    court: "Nejvyšší soud",
+    decisionDate: "2026-01-02",
+    decisionId: DECISION_ID,
+    decisionType: "rozsudek",
+  } as const;
+
+  const anchoredText = (count: number, bodyChars: number): string =>
+    Array.from({ length: count })
+      .map((_unused, index) =>
+        `[p-${String(index + 1)}] ${"w".repeat(bodyChars)}`.trim(),
+      )
+      .join("\n\n");
+
+  test("tells the model to cite an anchored passage by its own href", () => {
+    const prompt = buildActiveDecisionPrompt({
+      ...DECISION,
+      decisionText: {
+        type: "anchored",
+        clipped: false,
+        text: anchoredText(3, 40),
+      },
+    });
+
+    // The href the renderer resolves, spelled with this decision's own id.
+    expect(prompt).toContain(
+      toChatDecisionPassageHref({ anchorId: "p-12", decisionId: DECISION_ID }),
+    );
+    expect(prompt).toContain("Each passage carries its anchor");
+    expect(prompt).toContain("never invent one");
+    expect(prompt).not.toContain("Only the beginning of the decision follows");
+  });
+
+  test("says the text ends early rather than letting the decision end there", () => {
+    const prompt = buildActiveDecisionPrompt({
+      ...DECISION,
+      decisionText: {
+        type: "anchored",
+        clipped: true,
+        text: anchoredText(2, 40),
+      },
+    });
+
+    expect(prompt).toContain("Only the beginning of the decision follows");
+  });
+
+  test("an unanchored decision is quoted by its wording, never by an anchor", () => {
+    const prompt = buildActiveDecisionPrompt({
+      ...DECISION,
+      decisionText: { type: "flat", text: "Dovolání se zamítá." },
+    });
+
+    expect(prompt).toContain("Dovolání se zamítá.");
+    expect(prompt).toContain("stored as flat text without structure");
+    expect(prompt).not.toContain(CHAT_DECISION_PASSAGE_HREF_PREFIX);
   });
 });
 

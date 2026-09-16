@@ -70,6 +70,15 @@ export {
 } from "./chat-edit";
 export type { ChatEditApplyMode, DocxEditRepresentation } from "./chat-edit";
 export {
+  CHAT_DECISION_PASSAGE_HREF_PREFIX,
+  parseChatDecisionPassageHref,
+  toChatDecisionPassageHref,
+} from "./chat-decision-passage-link";
+export type {
+  ChatDecisionPassageHref,
+  ChatDecisionPassageTarget,
+} from "./chat-decision-passage-link";
+export {
   CHAT_MENTION_CATEGORIES,
   CHAT_MENTION_HREF_PREFIXES,
   CHAT_REFERENCE_CATEGORIES,

@@ -1,6 +1,8 @@
 import {
+  CHAT_DECISION_PASSAGE_HREF_PREFIX,
   CHAT_RESOURCE_HREF_PREFIX,
   EMAIL_CITATION_HREF_PREFIX,
+  parseChatDecisionPassageHref,
   parseEmailCitationHref,
   OFFICE_CITATION_HREF_PREFIX,
   parseOfficeCitationHref,
@@ -42,6 +44,7 @@ const isCitationHyperlink = (
     href.startsWith(FOLIO_CITATION_PREFIX) ||
     parseEmailCitationHref(href) !== null ||
     parseOfficeCitationHref(href) !== null ||
+    parseChatDecisionPassageHref(href) !== null ||
     href.startsWith(CHAT_RESOURCE_HREF_PREFIX.case_law_decision) ||
     (internalReferenceMode !== "references" &&
       (href.startsWith(CHAT_RESOURCE_HREF_PREFIX.entity) ||
@@ -104,6 +107,12 @@ type CitationTransformContext = {
   trustedSearchSummaryCitationByNumber: ReadonlyMap<number, string>;
 };
 
+/**
+ * A target a verified search summary minted, and so one the export vouches
+ * for. A decision-passage href is deliberately absent: the model writes it
+ * from the decision in front of the reader, not from a summary's source list,
+ * so it carries the same unverified label as a `#folio:` citation.
+ */
 const isVerifiedSearchSummaryTarget = (
   target: string,
   internalReferenceMode: InternalReferenceMode,
@@ -149,6 +158,12 @@ const transformHyperlink = (
   if (
     hyperlink.href?.startsWith(OFFICE_CITATION_HREF_PREFIX) &&
     parseOfficeCitationHref(hyperlink.href) === null
+  ) {
+    return hyperlink.children;
+  }
+  if (
+    hyperlink.href?.startsWith(CHAT_DECISION_PASSAGE_HREF_PREFIX) &&
+    parseChatDecisionPassageHref(hyperlink.href) === null
   ) {
     return hyperlink.children;
   }
