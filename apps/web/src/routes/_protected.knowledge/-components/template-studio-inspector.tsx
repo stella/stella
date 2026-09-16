@@ -1331,7 +1331,7 @@ export const ClauseDriftPopover = ({
       <PopoverTrigger
         render={
           <Button
-            className="text-warning-foreground h-auto gap-1 px-1.5 py-0.5 text-xs font-normal"
+            className="text-warning-foreground h-auto gap-1 px-1.5 py-0.5"
             size="xs"
             variant="ghost"
           >

@@ -84,7 +84,7 @@ export const InlineEdit = ({
       {suffix}
       {action}
       <Button
-        className="h-6 shrink-0 gap-0.5 px-2 text-xs"
+        className="h-6 shrink-0 gap-0.5 px-2"
         onClick={onCommit}
         onMouseDown={(e) => {
           e.preventDefault();

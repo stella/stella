@@ -5,6 +5,7 @@ import { ChevronRightIcon, CircleHelpIcon } from "lucide-react";
 import { useFormatter, useTranslations } from "use-intl";
 
 import { Temporal } from "@stll/time";
+import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { cn } from "@stll/ui/utils";
@@ -530,7 +531,13 @@ export const ToolCallCard = ({
           <Popover>
             <PopoverTrigger
               aria-label={t("knowledge.mcp.whatIsAnMcpServer")}
-              className="text-muted-foreground hover:text-foreground focus-visible:ring-ring/50 flex size-11 shrink-0 items-center justify-center rounded focus-visible:ring-2 focus-visible:outline-none"
+              render={
+                <Button
+                  className="size-11 shrink-0"
+                  size="icon"
+                  variant="muted"
+                />
+              }
             >
               <CircleHelpIcon className="size-3" />
             </PopoverTrigger>

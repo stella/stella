@@ -228,7 +228,7 @@ export const ActivityPanel = ({ workspaceId }: ActivityPanelProps) => {
           <Menu>
             <MenuTrigger
               aria-label={t("workspaces.overview.activity.filterLabel")}
-              className="h-7 gap-1.5 text-xs [@media(any-pointer:coarse)]:h-11"
+              className="h-7 gap-1.5 [@media(any-pointer:coarse)]:h-11"
               render={<Button size="sm" variant="ghost" />}
             >
               <ListFilterIcon className="size-3.5" />
@@ -352,7 +352,7 @@ const ActivityAdvancedFilters = ({
         render={
           <Button
             aria-label={t("common.filter")}
-            className="h-7 gap-1.5 text-xs [@media(any-pointer:coarse)]:h-11"
+            className="h-7 gap-1.5 [@media(any-pointer:coarse)]:h-11"
             size="sm"
             variant="ghost"
           />

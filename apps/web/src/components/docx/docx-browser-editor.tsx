@@ -2503,7 +2503,7 @@ const DocxLoadingPriorityExtra = () => {
         onMouseDown={(e) => e.preventDefault()}
         aria-pressed={false}
         aria-label={t("toggleTrackChanges")}
-        className="h-8 min-w-[140px] justify-start gap-1.5 rounded-md border-transparent px-2 text-xs text-[var(--doc-text-muted)] shadow-none hover:border-[var(--doc-border)] hover:bg-[var(--doc-primary-light)] hover:text-[var(--doc-text)]"
+        className="h-8 min-w-[140px] justify-start gap-1.5 rounded-md border-transparent px-2 text-[var(--doc-text-muted)] shadow-none hover:border-[var(--doc-border)] hover:bg-[var(--doc-primary-light)] hover:text-[var(--doc-text)]"
         size="xs"
         title={t("toggleTrackChanges")}
         variant="ghost"

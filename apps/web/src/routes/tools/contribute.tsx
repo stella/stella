@@ -468,7 +468,7 @@ function AddSkillForm() {
           <div className="flex flex-wrap gap-1.5">
             {form.jurisdictions.map((code) => (
               <Button
-                className="h-auto gap-1 px-1.5 py-0.5 font-mono text-xs"
+                className="h-auto gap-1 px-1.5 py-0.5 font-mono"
                 key={code}
                 onClick={() => removeJurisdiction(code)}
                 size="sm"

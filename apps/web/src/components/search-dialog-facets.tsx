@@ -100,7 +100,7 @@ export const TimeFacetGroup = ({
           const isActive = time?.mode === "preset" && time.preset === preset;
           return (
             <Button
-              className="h-auto w-full justify-start gap-2 px-2 py-1 text-xs"
+              className="h-auto w-full justify-start gap-2 px-2 py-1"
               key={preset}
               onClick={() => onPresetChange(preset)}
               size="sm"
@@ -114,7 +114,7 @@ export const TimeFacetGroup = ({
           );
         })}
         <Button
-          className="h-auto w-full justify-start gap-2 px-2 py-1 text-xs"
+          className="h-auto w-full justify-start gap-2 px-2 py-1"
           onClick={() => {
             if (isCustom) {
               onClearCustom();
@@ -195,7 +195,7 @@ const FacetBucketList = ({
     <div className="space-y-0.5">
       {buckets.map((bucket) => (
         <Button
-          className="h-auto w-full justify-start gap-2 px-2 py-1 text-xs"
+          className="h-auto w-full justify-start gap-2 px-2 py-1"
           key={bucket.value}
           onClick={() => onChange(bucket.value)}
           size="sm"

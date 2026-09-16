@@ -1069,7 +1069,7 @@ const AssistantMessageActions = ({
       {text && (
         <Button
           aria-label={t("common.copy")}
-          className="text-muted-foreground h-6 px-1.5 text-xs"
+          className="text-muted-foreground h-6 px-1.5"
           onClick={() => {
             detached(handleCopy(), "chat-thread-messages.copy");
           }}
@@ -1083,7 +1083,7 @@ const AssistantMessageActions = ({
       {canRetry && (
         <Button
           aria-label={t("common.retry")}
-          className="text-muted-foreground h-6 px-1.5 text-xs"
+          className="text-muted-foreground h-6 px-1.5"
           onClick={() => {
             detached(
               onResend?.({ messageId: message.id }),

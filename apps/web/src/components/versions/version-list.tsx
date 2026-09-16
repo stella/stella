@@ -239,7 +239,7 @@ export const VersionRow = ({
           {loadDiff && (
             <Button
               aria-expanded={isDiffOpen}
-              className="gap-1 px-1.5 text-xs font-normal"
+              className="gap-1"
               onClick={() => {
                 detached(toggleDiff(), "version-list.toggle-diff");
               }}

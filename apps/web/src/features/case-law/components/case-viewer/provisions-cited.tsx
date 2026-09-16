@@ -107,7 +107,6 @@ export const ProvisionsCited = ({
                 {t("errors.actionFailed")}
               </p>
               <Button
-                className="text-xs"
                 onClick={() => {
                   detached(refetch(), "case-law.provisions-retry");
                 }}
@@ -129,7 +128,7 @@ export const ProvisionsCited = ({
           ))}
           {hasNextPage && (
             <Button
-              className="w-fit text-xs"
+              className="w-fit"
               disabled={isFetchingNextPage}
               onClick={() => {
                 detached(fetchNextPage(), "case-law.provisions-more");

@@ -1,6 +1,7 @@
 import { SquareMinusIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { Button } from "@stll/ui/button";
 import { PopoverTrigger } from "@stll/ui/popover";
 import { cn } from "@stll/ui/utils";
 
@@ -49,7 +50,13 @@ export const PropertyPopoverTrigger = ({
       }
       render={
         <PopoverTrigger
-          className="hover:bg-accent flex h-full w-full items-center gap-1.5 ps-2 pe-3 text-start disabled:pointer-events-none disabled:opacity-64"
+          render={
+            <Button
+              className="h-full w-full justify-start text-start"
+              size="sm"
+              variant="ghost"
+            />
+          }
           disabled={disabled}
         />
       }

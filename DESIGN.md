@@ -190,8 +190,10 @@ Separator, Sheet, Skeleton, Table, Tabs, Textarea, Toast, Tooltip.
 - **destructive-ghost:** destructive text, transparent, tinted on hover
 - **link:** underline, no background
 
-Sizes: `default` (h-9), `sm` (h-8), `lg` (h-10), `xl` (h-11),
-`icon` (square, h-9 w-9).
+Sizes: `default` (h-9), `sm` (h-8, small type), `xs` (h-7, small
+type), `lg` (h-10), `xl` (h-11), `icon` and `icon-*` (square).
+A small control renders small type itself; do not add `text-xs` to
+a `sm` button, select, or input.
 
 ---
 

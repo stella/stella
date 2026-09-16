@@ -284,7 +284,7 @@ export const DecisionFilterChips = ({
         </span>
       ))}
       <Button
-        className="text-muted-foreground h-6 min-h-0 text-xs"
+        className="text-muted-foreground h-6 min-h-0"
         onClick={onClearAll}
         size="sm"
         type="button"

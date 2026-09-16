@@ -7,6 +7,7 @@ import { useTranslations } from "use-intl";
 import type { ReasoningEffort } from "@stll/ai-catalog";
 import { groupReasoningEfforts } from "@stll/chat/model-selector";
 import { BidiText } from "@stll/ui/bidi-text";
+import { Button } from "@stll/ui/button";
 import {
   MenuCheckboxItem,
   MenuRadioGroup,
@@ -342,7 +343,7 @@ const EffortHelp = () => {
     <Popover>
       <PopoverTrigger
         aria-label={t("chat.modelSelector.effortHelpLabel")}
-        className="text-muted-foreground hover:text-foreground focus-visible:ring-ring/50 flex size-11 items-center justify-center rounded focus-visible:ring-2 focus-visible:outline-none"
+        render={<Button className="size-11" size="icon" variant="muted" />}
       >
         <InfoIcon className="size-3.5" />
       </PopoverTrigger>

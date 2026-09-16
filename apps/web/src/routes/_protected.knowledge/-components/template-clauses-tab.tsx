@@ -439,7 +439,7 @@ export const OutdatedChanges = ({
       <div className="flex items-center gap-0.5">
         <Button
           aria-expanded={isDiffOpen}
-          className="gap-1 px-1.5 text-xs font-normal"
+          className="gap-1"
           onClick={() => {
             detached(toggleDiff(), "template-clauses-tab.toggle-diff");
           }}

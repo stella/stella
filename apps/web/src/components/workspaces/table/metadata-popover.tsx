@@ -33,7 +33,15 @@ export const MetadataPopover = <TRow extends TableRowData = TableTreeNode>({
 
   return (
     <Popover modal>
-      <PopoverTrigger className="hover:bg-accent flex h-full w-full items-center gap-1.5 ps-2 pe-3 text-start">
+      <PopoverTrigger
+        render={
+          <Button
+            className="h-full w-full justify-start text-start"
+            size="sm"
+            variant="ghost"
+          />
+        }
+      >
         <Icon className="size-3.5 shrink-0" />
         <span className="w-0 flex-1 truncate">{label}</span>
       </PopoverTrigger>

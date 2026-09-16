@@ -184,7 +184,7 @@ export const SearchSummaryItem = ({
       </div>
       <div className="border-border/70 mt-2 border-t pt-2">
         <Button
-          className="h-auto gap-2 px-1.5 py-1 text-xs"
+          className="h-auto gap-2 px-1.5 py-1"
           disabled={isOpeningChat}
           onClick={onOpenChat}
           size="sm"

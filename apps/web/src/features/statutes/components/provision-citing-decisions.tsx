@@ -116,7 +116,6 @@ export const ProvisionCitingDecisions = ({
           {t("errors.actionFailed")}
         </p>
         <Button
-          className="text-xs"
           onClick={() => {
             detached(refetch(), "statutes.citing-decisions-retry");
           }}
@@ -157,7 +156,7 @@ export const ProvisionCitingDecisions = ({
       </ul>
       {hasNextPage && (
         <Button
-          className="w-full text-xs"
+          className="w-full"
           disabled={isFetchingNextPage}
           onClick={() => {
             detached(fetchNextPage(), "statutes.citing-decisions-more");

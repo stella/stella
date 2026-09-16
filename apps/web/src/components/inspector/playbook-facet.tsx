@@ -3099,7 +3099,7 @@ const ReviewFreshnessNotice = ({
           not something that can be measured again against that playbook. */}
       {freshness.playbook !== "missing" && (
         <Button
-          className="h-auto min-h-0 p-0 text-xs"
+          className="h-auto min-h-0 p-0"
           onClick={onReviewAgain}
           size="xs"
           variant="link"
@@ -3862,7 +3862,7 @@ const ReviewCardActions = ({
       {targetBlockId !== null && (
         <>
           <Button
-            className="text-muted-foreground hover:text-foreground h-7 px-2 text-xs"
+            className="text-muted-foreground hover:text-foreground h-7 px-2"
             disabled={!editorAvailable}
             onClick={() => onScrollToBlock(targetBlockId)}
             size="sm"
@@ -3880,7 +3880,7 @@ const ReviewCardActions = ({
         <FindingFlagMenu flags={item.flags} onSetFlags={onSetFlags} />
       )}
       <Button
-        className="text-muted-foreground hover:text-foreground order-last ms-auto h-7 px-2 text-xs"
+        className="text-muted-foreground hover:text-foreground order-last ms-auto h-7 px-2"
         onClick={onAskInChat}
         size="sm"
         variant="ghost"
@@ -3913,7 +3913,7 @@ const FindingFlagMenu = ({
       <MenuTrigger
         render={
           <Button
-            className="text-muted-foreground hover:text-foreground h-7 px-2 text-xs"
+            className="text-muted-foreground hover:text-foreground h-7 px-2"
             size="sm"
             variant="ghost"
           />
@@ -4013,7 +4013,7 @@ const FindingDecisionButtons = ({
   if (decision !== REVIEW_DECISION.OPEN) {
     return (
       <Button
-        className="h-7 px-2.5 text-xs"
+        className="h-7 px-2.5"
         disabled={pending}
         onClick={() => onDecide(REVIEW_DECISION.OPEN)}
         size="sm"
@@ -4027,7 +4027,7 @@ const FindingDecisionButtons = ({
   return (
     <>
       <Button
-        className="h-7 px-2.5 text-xs"
+        className="h-7 px-2.5"
         disabled={pending}
         onClick={() => onDecide(REVIEW_DECISION.ACCEPTED)}
         size="sm"
@@ -4036,7 +4036,7 @@ const FindingDecisionButtons = ({
         {t("common.accept")}
       </Button>
       <Button
-        className="h-7 px-2.5 text-xs"
+        className="h-7 px-2.5"
         disabled={pending}
         onClick={() => onDecide(REVIEW_DECISION.DISMISSED)}
         size="sm"
@@ -4089,7 +4089,7 @@ const SuggestionButtons = ({
       return (
         <>
           <Button
-            className="h-7 px-2.5 text-xs"
+            className="h-7 px-2.5"
             disabled={!editorAvailable || suggestion.status === "applying"}
             onClick={onAccept}
             size="sm"
@@ -4101,7 +4101,7 @@ const SuggestionButtons = ({
             {t("common.accept")}
           </Button>
           <Button
-            className="h-7 px-2.5 text-xs"
+            className="h-7 px-2.5"
             disabled={suggestion.status === "applying"}
             onClick={onReject}
             size="sm"
@@ -4141,7 +4141,7 @@ const CounterpartyNotePopover = ({
         disabled={disabled}
         render={
           <Button
-            className="text-muted-foreground hover:text-foreground h-7 px-2 text-xs"
+            className="text-muted-foreground hover:text-foreground h-7 px-2"
             size="sm"
             variant="ghost"
           />
@@ -4638,7 +4638,7 @@ const ChatSuggestionCard = ({
             suggestion={first}
           />
           <Button
-            className="text-muted-foreground hover:text-foreground h-7 px-2 text-xs"
+            className="text-muted-foreground hover:text-foreground h-7 px-2"
             disabled={!editorAvailable}
             onClick={() => onScrollToBlock(first.blockId)}
             size="sm"

@@ -318,7 +318,7 @@ export const QuestionColumnControls = ({
       <AddQuestionColumn surface={surface} triggerVariant="labelled" />
       {surface.grants.run && surface.columns.length > 0 && (
         <Button
-          className="text-muted-foreground h-7 min-h-0 text-xs"
+          className="text-muted-foreground h-7 min-h-0"
           disabled={surface.isRunning}
           onClick={controller.onRunAll}
           size="sm"

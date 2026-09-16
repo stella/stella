@@ -538,7 +538,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
               {t("workspaces.overview.upcomingTasks")}
             </h2>
             <Button
-              className="h-7 text-xs"
+              className="h-7"
               onClick={() => {
                 detached(handleCreateTask(), "overview-view.create-task");
               }}
@@ -732,7 +732,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                 {t("workspaces.overview.timeAndTeam")}
               </h2>
               <Button
-                className="min-h-11 shrink-0 text-xs"
+                className="min-h-11 shrink-0"
                 onClick={() => {
                   detached(
                     navigate({
@@ -903,7 +903,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                   {t("workspaces.overview.timeThisWeek")}
                 </h2>
                 <Button
-                  className="min-h-11 shrink-0 text-xs"
+                  className="min-h-11 shrink-0"
                   onClick={() => {
                     detached(
                       navigate({

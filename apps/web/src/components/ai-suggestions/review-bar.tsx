@@ -352,7 +352,7 @@ export const ReviewBar = ({
         <ChevronDownIcon className="size-4" />
       </Button>
       <Button
-        className="text-muted-foreground hover:text-foreground h-7 px-2 text-xs"
+        className="text-muted-foreground hover:text-foreground h-7 px-2"
         onClick={showWhy}
         size="sm"
         variant="ghost"

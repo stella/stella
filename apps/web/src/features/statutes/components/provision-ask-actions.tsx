@@ -157,7 +157,7 @@ export const ProvisionAskActions = ({
   return (
     <div className="flex flex-col gap-2">
       <Button
-        className="h-auto justify-start px-2 py-1.5 text-xs font-normal whitespace-normal"
+        className="h-auto justify-start px-2 py-1.5 whitespace-normal"
         onClick={summarize}
         size="sm"
         variant="outline"
@@ -191,7 +191,7 @@ export const ProvisionAskActions = ({
           value={question}
         />
         <Button
-          className="self-end text-xs"
+          className="self-end"
           disabled={question.trim() === ""}
           size="sm"
           type="submit"

@@ -504,7 +504,7 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
                       {t("errors.api.server")}
                     </p>
                     <Button
-                      className="text-muted-foreground hover:text-foreground hover:bg-muted flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs transition-colors"
+                      className="text-muted-foreground hover:text-foreground hover:bg-muted flex items-center gap-1.5 rounded-md px-2.5 py-1.5 transition-colors"
                       onClick={() => {
                         detached(generate(), "decision-workspace.generate");
                       }}
@@ -664,7 +664,7 @@ const GatedAnalysisInvitation = ({
         </span>
       ) : (
         <Button
-          className="text-muted-foreground hover:text-foreground hover:bg-muted flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs transition-colors"
+          className="text-muted-foreground hover:text-foreground hover:bg-muted flex items-center gap-1.5 rounded-md px-2.5 py-1.5 transition-colors"
           onClick={onRequest}
           size="sm"
           variant="ghost"
