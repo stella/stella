@@ -103,7 +103,7 @@
             "location": "apps/web/src/components/ai-suggestions/use-folio-document-blocks.ts#15"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/use-review-actions.ts#11"
+            "location": "apps/web/src/components/ai-suggestions/use-review-actions.ts#16"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/use-review-start-mode.ts#1"
@@ -178,6 +178,12 @@
             "location": "apps/web/src/components/legal-reader/annotations/use-reader-annotations.ts#1"
           },
           {
+            "location": "apps/web/src/components/legal-reader/use-reader-text-scale.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/legal-reader/use-reader-text-scale.ts#2"
+          },
+          {
             "location": "apps/web/src/components/public-sign-in-request.ts#1"
           },
           {
@@ -209,6 +215,12 @@
           },
           {
             "location": "apps/web/src/features/case-law/components/case-viewer/analysis/use-decision-analysis.ts#8"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/case-viewer/use-decision-annotation-surface.ts#1"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/case-viewer/use-decision-annotation-surface.ts#2"
           },
           {
             "location": "apps/web/src/features/case-law/decision-column-preferences.ts#1"
@@ -323,6 +335,9 @@
           },
           {
             "location": "apps/web/src/lib/law-search-history.ts#1"
+          },
+          {
+            "location": "apps/web/src/lib/matter-colors.ts#1"
           },
           {
             "location": "apps/web/src/lib/pdf/hooks/use-page-visibility.ts#1"
@@ -631,6 +646,9 @@
             "location": "apps/web/src/components/chat/chat-composer-dock.tsx#1"
           },
           {
+            "location": "apps/web/src/components/chat/chat-composer-dock.tsx#2"
+          },
+          {
             "location": "apps/web/src/components/chat/chat-image-attachment.tsx#1"
           },
           {
@@ -847,9 +865,6 @@
             "location": "apps/web/src/components/inspector/external-reference-panel.tsx#1"
           },
           {
-            "location": "apps/web/src/components/inspector/external-reference-panel.tsx#2"
-          },
-          {
             "location": "apps/web/src/components/inspector/file-facets.tsx#1"
           },
           {
@@ -857,6 +872,12 @@
           },
           {
             "location": "apps/web/src/components/inspector/file-tab-panel.tsx#8"
+          },
+          {
+            "location": "apps/web/src/components/inspector/inspector-find.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/inspector/inspector-find.tsx#2"
           },
           {
             "location": "apps/web/src/components/inspector/inspector-group-controls.tsx#1"
@@ -925,6 +946,9 @@
             "location": "apps/web/src/components/inspector/versions-facet.tsx#12"
           },
           {
+            "location": "apps/web/src/components/inspector/viewer-overlay-bar.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/jurisdiction-picker.tsx#1"
           },
           {
@@ -962,6 +986,12 @@
           },
           {
             "location": "apps/web/src/components/legal-reader/document-ast-text.tsx#2"
+          },
+          {
+            "location": "apps/web/src/components/legal-reader/legal-reader-ai-chat.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/legal-reader/legal-reader-ai-chat.tsx#2"
           },
           {
             "location": "apps/web/src/components/markdown/markdown-hybrid-editor.impl.tsx#1"
@@ -1294,6 +1324,9 @@
             "location": "apps/web/src/features/case-law/components/case-decision-inspector-view.tsx#1"
           },
           {
+            "location": "apps/web/src/features/case-law/components/case-decision-inspector-view.tsx#2"
+          },
+          {
             "location": "apps/web/src/features/case-law/components/case-viewer/analysis/analysis-layers.tsx#1"
           },
           {
@@ -1324,6 +1357,12 @@
             "location": "apps/web/src/features/case-law/components/case-viewer/decision-workspace.tsx#1"
           },
           {
+            "location": "apps/web/src/features/case-law/components/case-viewer/headnote-block.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/case-viewer/headnote-block.tsx#2"
+          },
+          {
             "location": "apps/web/src/features/case-law/components/case-viewer/leading-citations.tsx#1"
           },
           {
@@ -1340,6 +1379,9 @@
           },
           {
             "location": "apps/web/src/features/case-law/components/decision-filter-popover.tsx#2"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/decision-main-view-action.tsx#1"
           },
           {
             "location": "apps/web/src/features/case-law/components/decision-pager.tsx#1"
@@ -3050,7 +3092,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-s3@3.1128.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-s3@3.1129.0",
       "description": "AWS SDK for JavaScript S3 Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -3106,13 +3148,13 @@
           "value": "apps/api/node_modules/@aws-sdk/client-s3/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-s3@3.1128.0",
+      "purl": "pkg:npm/%40aws-sdk/client-s3@3.1129.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1128.0"
+      "version": "3.1129.0"
     },
     {
       "authors": [
@@ -3120,7 +3162,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-sesv2@3.1128.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-sesv2@3.1129.0",
       "description": "AWS SDK for JavaScript Sesv2 Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -3173,13 +3215,13 @@
           "value": "apps/api/node_modules/@aws-sdk/client-sesv2/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-sesv2@3.1128.0",
+      "purl": "pkg:npm/%40aws-sdk/client-sesv2@3.1129.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1128.0"
+      "version": "3.1129.0"
     },
     {
       "authors": [
@@ -3187,7 +3229,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-sts@3.1128.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-sts@3.1129.0",
       "description": "AWS SDK for JavaScript Sts Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -3240,13 +3282,13 @@
           "value": "apps/api/node_modules/@aws-sdk/client-sts/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-sts@3.1128.0",
+      "purl": "pkg:npm/%40aws-sdk/client-sts@3.1129.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1128.0"
+      "version": "3.1129.0"
     },
     {
       "authors": [
@@ -3254,7 +3296,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/s3-request-presigner@3.1128.0",
+      "bom-ref": "pkg:npm/@aws-sdk/s3-request-presigner@3.1129.0",
       "evidence": {
         "identity": [
           {
@@ -3306,13 +3348,13 @@
           "value": "apps/api/node_modules/@aws-sdk/s3-request-presigner/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/s3-request-presigner@3.1128.0",
+      "purl": "pkg:npm/%40aws-sdk/s3-request-presigner@3.1129.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1128.0"
+      "version": "3.1129.0"
     },
     {
       "authors": [
@@ -3357,7 +3399,7 @@
             "location": "apps/web/src/components/ai-suggestions/use-folio-document-blocks.ts#15"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/use-review-actions.ts#11"
+            "location": "apps/web/src/components/ai-suggestions/use-review-actions.ts#16"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/use-review-start-mode.ts#1"
@@ -3432,6 +3474,12 @@
             "location": "apps/web/src/components/legal-reader/annotations/use-reader-annotations.ts#1"
           },
           {
+            "location": "apps/web/src/components/legal-reader/use-reader-text-scale.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/legal-reader/use-reader-text-scale.ts#2"
+          },
+          {
             "location": "apps/web/src/components/public-sign-in-request.ts#1"
           },
           {
@@ -3463,6 +3511,12 @@
           },
           {
             "location": "apps/web/src/features/case-law/components/case-viewer/analysis/use-decision-analysis.ts#8"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/case-viewer/use-decision-annotation-surface.ts#1"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/case-viewer/use-decision-annotation-surface.ts#2"
           },
           {
             "location": "apps/web/src/features/case-law/decision-column-preferences.ts#1"
@@ -3577,6 +3631,9 @@
           },
           {
             "location": "apps/web/src/lib/law-search-history.ts#1"
+          },
+          {
+            "location": "apps/web/src/lib/matter-colors.ts#1"
           },
           {
             "location": "apps/web/src/lib/pdf/hooks/use-page-visibility.ts#1"
@@ -3885,6 +3942,9 @@
             "location": "apps/web/src/components/chat/chat-composer-dock.tsx#1"
           },
           {
+            "location": "apps/web/src/components/chat/chat-composer-dock.tsx#2"
+          },
+          {
             "location": "apps/web/src/components/chat/chat-image-attachment.tsx#1"
           },
           {
@@ -4101,9 +4161,6 @@
             "location": "apps/web/src/components/inspector/external-reference-panel.tsx#1"
           },
           {
-            "location": "apps/web/src/components/inspector/external-reference-panel.tsx#2"
-          },
-          {
             "location": "apps/web/src/components/inspector/file-facets.tsx#1"
           },
           {
@@ -4111,6 +4168,12 @@
           },
           {
             "location": "apps/web/src/components/inspector/file-tab-panel.tsx#8"
+          },
+          {
+            "location": "apps/web/src/components/inspector/inspector-find.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/inspector/inspector-find.tsx#2"
           },
           {
             "location": "apps/web/src/components/inspector/inspector-group-controls.tsx#1"
@@ -4179,6 +4242,9 @@
             "location": "apps/web/src/components/inspector/versions-facet.tsx#12"
           },
           {
+            "location": "apps/web/src/components/inspector/viewer-overlay-bar.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/jurisdiction-picker.tsx#1"
           },
           {
@@ -4216,6 +4282,12 @@
           },
           {
             "location": "apps/web/src/components/legal-reader/document-ast-text.tsx#2"
+          },
+          {
+            "location": "apps/web/src/components/legal-reader/legal-reader-ai-chat.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/legal-reader/legal-reader-ai-chat.tsx#2"
           },
           {
             "location": "apps/web/src/components/markdown/markdown-hybrid-editor.impl.tsx#1"
@@ -4548,6 +4620,9 @@
             "location": "apps/web/src/features/case-law/components/case-decision-inspector-view.tsx#1"
           },
           {
+            "location": "apps/web/src/features/case-law/components/case-decision-inspector-view.tsx#2"
+          },
+          {
             "location": "apps/web/src/features/case-law/components/case-viewer/analysis/analysis-layers.tsx#1"
           },
           {
@@ -4578,6 +4653,12 @@
             "location": "apps/web/src/features/case-law/components/case-viewer/decision-workspace.tsx#1"
           },
           {
+            "location": "apps/web/src/features/case-law/components/case-viewer/headnote-block.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/case-viewer/headnote-block.tsx#2"
+          },
+          {
             "location": "apps/web/src/features/case-law/components/case-viewer/leading-citations.tsx#1"
           },
           {
@@ -4594,6 +4675,9 @@
           },
           {
             "location": "apps/web/src/features/case-law/components/decision-filter-popover.tsx#2"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/decision-main-view-action.tsx#1"
           },
           {
             "location": "apps/web/src/features/case-law/components/decision-pager.tsx#1"
@@ -6503,7 +6587,7 @@
       "version": "2.21.0"
     },
     {
-      "bom-ref": "pkg:npm/@hocuspocus/extension-redis@4.6.0",
+      "bom-ref": "pkg:npm/@hocuspocus/extension-redis@4.7.0",
       "description": "Scale Hocuspocus horizontally with Redis",
       "evidence": {
         "identity": [
@@ -6559,13 +6643,13 @@
           "value": "apps/collab/node_modules/@hocuspocus/extension-redis/package.json"
         }
       ],
-      "purl": "pkg:npm/%40hocuspocus/extension-redis@4.6.0",
+      "purl": "pkg:npm/%40hocuspocus/extension-redis@4.7.0",
       "scope": "required",
       "type": "library",
-      "version": "4.6.0"
+      "version": "4.7.0"
     },
     {
-      "bom-ref": "pkg:npm/@hocuspocus/provider@4.6.0",
+      "bom-ref": "pkg:npm/@hocuspocus/provider@4.7.0",
       "description": "hocuspocus provider",
       "evidence": {
         "identity": [
@@ -6625,13 +6709,13 @@
           "value": "apps/collab/node_modules/@hocuspocus/provider/package.json"
         }
       ],
-      "purl": "pkg:npm/%40hocuspocus/provider@4.6.0",
+      "purl": "pkg:npm/%40hocuspocus/provider@4.7.0",
       "scope": "required",
       "type": "library",
-      "version": "4.6.0"
+      "version": "4.7.0"
     },
     {
-      "bom-ref": "pkg:npm/@hocuspocus/server@4.6.0",
+      "bom-ref": "pkg:npm/@hocuspocus/server@4.7.0",
       "description": "plug & play collaboration backend",
       "evidence": {
         "identity": [
@@ -6687,10 +6771,10 @@
           "value": "apps/collab/node_modules/@hocuspocus/server/package.json"
         }
       ],
-      "purl": "pkg:npm/%40hocuspocus/server@4.6.0",
+      "purl": "pkg:npm/%40hocuspocus/server@4.7.0",
       "scope": "required",
       "type": "library",
-      "version": "4.6.0"
+      "version": "4.7.0"
     },
     {
       "authors": [
@@ -7561,7 +7645,7 @@
             "location": "apps/web/src/components/ai-suggestions/use-folio-document-blocks.ts#15"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/use-review-actions.ts#11"
+            "location": "apps/web/src/components/ai-suggestions/use-review-actions.ts#16"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/use-review-start-mode.ts#1"
@@ -7636,6 +7720,12 @@
             "location": "apps/web/src/components/legal-reader/annotations/use-reader-annotations.ts#1"
           },
           {
+            "location": "apps/web/src/components/legal-reader/use-reader-text-scale.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/legal-reader/use-reader-text-scale.ts#2"
+          },
+          {
             "location": "apps/web/src/components/public-sign-in-request.ts#1"
           },
           {
@@ -7667,6 +7757,12 @@
           },
           {
             "location": "apps/web/src/features/case-law/components/case-viewer/analysis/use-decision-analysis.ts#8"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/case-viewer/use-decision-annotation-surface.ts#1"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/case-viewer/use-decision-annotation-surface.ts#2"
           },
           {
             "location": "apps/web/src/features/case-law/decision-column-preferences.ts#1"
@@ -7781,6 +7877,9 @@
           },
           {
             "location": "apps/web/src/lib/law-search-history.ts#1"
+          },
+          {
+            "location": "apps/web/src/lib/matter-colors.ts#1"
           },
           {
             "location": "apps/web/src/lib/pdf/hooks/use-page-visibility.ts#1"
@@ -8089,6 +8188,9 @@
             "location": "apps/web/src/components/chat/chat-composer-dock.tsx#1"
           },
           {
+            "location": "apps/web/src/components/chat/chat-composer-dock.tsx#2"
+          },
+          {
             "location": "apps/web/src/components/chat/chat-image-attachment.tsx#1"
           },
           {
@@ -8305,9 +8407,6 @@
             "location": "apps/web/src/components/inspector/external-reference-panel.tsx#1"
           },
           {
-            "location": "apps/web/src/components/inspector/external-reference-panel.tsx#2"
-          },
-          {
             "location": "apps/web/src/components/inspector/file-facets.tsx#1"
           },
           {
@@ -8315,6 +8414,12 @@
           },
           {
             "location": "apps/web/src/components/inspector/file-tab-panel.tsx#8"
+          },
+          {
+            "location": "apps/web/src/components/inspector/inspector-find.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/inspector/inspector-find.tsx#2"
           },
           {
             "location": "apps/web/src/components/inspector/inspector-group-controls.tsx#1"
@@ -8383,6 +8488,9 @@
             "location": "apps/web/src/components/inspector/versions-facet.tsx#12"
           },
           {
+            "location": "apps/web/src/components/inspector/viewer-overlay-bar.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/jurisdiction-picker.tsx#1"
           },
           {
@@ -8420,6 +8528,12 @@
           },
           {
             "location": "apps/web/src/components/legal-reader/document-ast-text.tsx#2"
+          },
+          {
+            "location": "apps/web/src/components/legal-reader/legal-reader-ai-chat.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/legal-reader/legal-reader-ai-chat.tsx#2"
           },
           {
             "location": "apps/web/src/components/markdown/markdown-hybrid-editor.impl.tsx#1"
@@ -8752,6 +8866,9 @@
             "location": "apps/web/src/features/case-law/components/case-decision-inspector-view.tsx#1"
           },
           {
+            "location": "apps/web/src/features/case-law/components/case-decision-inspector-view.tsx#2"
+          },
+          {
             "location": "apps/web/src/features/case-law/components/case-viewer/analysis/analysis-layers.tsx#1"
           },
           {
@@ -8782,6 +8899,12 @@
             "location": "apps/web/src/features/case-law/components/case-viewer/decision-workspace.tsx#1"
           },
           {
+            "location": "apps/web/src/features/case-law/components/case-viewer/headnote-block.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/case-viewer/headnote-block.tsx#2"
+          },
+          {
             "location": "apps/web/src/features/case-law/components/case-viewer/leading-citations.tsx#1"
           },
           {
@@ -8798,6 +8921,9 @@
           },
           {
             "location": "apps/web/src/features/case-law/components/decision-filter-popover.tsx#2"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/decision-main-view-action.tsx#1"
           },
           {
             "location": "apps/web/src/features/case-law/components/decision-pager.tsx#1"
@@ -11060,6 +11186,9 @@
             "location": "apps/api/src/handlers/chat/chat-message-parts.ts#2"
           },
           {
+            "location": "apps/api/src/handlers/chat/chat-schema.ts#2"
+          },
+          {
             "location": "apps/api/src/handlers/chat/tanstack-chat-lifecycle.ts#18"
           },
           {
@@ -12406,6 +12535,15 @@
             "location": "apps/web/src/components/ai-suggestions/document-review-queries.ts#1"
           },
           {
+            "location": "apps/web/src/components/ai-suggestions/docx-suggestion-cache.ts#11"
+          },
+          {
+            "location": "apps/web/src/components/ai-suggestions/docx-suggestion-persistence.ts#27"
+          },
+          {
+            "location": "apps/web/src/components/ai-suggestions/use-review-actions.ts#18"
+          },
+          {
             "location": "apps/web/src/components/bilingual-translate-queries.ts#10"
           },
           {
@@ -12892,6 +13030,9 @@
             "location": "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx#30"
           },
           {
+            "location": "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx#31"
+          },
+          {
             "location": "apps/web/src/components/app-sidebar.tsx#22"
           },
           {
@@ -13018,7 +13159,7 @@
             "location": "apps/web/src/components/inspector/entity-metadata-panel.tsx#14"
           },
           {
-            "location": "apps/web/src/components/inspector/external-reference-panel.tsx#4"
+            "location": "apps/web/src/components/inspector/external-reference-panel.tsx#3"
           },
           {
             "location": "apps/web/src/components/inspector/file-facets.tsx#3"
@@ -13192,7 +13333,10 @@
             "location": "apps/web/src/features/case-law/components/case-decision-details-inspector-view.tsx#3"
           },
           {
-            "location": "apps/web/src/features/case-law/components/case-decision-inspector-view.tsx#3"
+            "location": "apps/web/src/features/case-law/components/case-decision-inspector-view.tsx#4"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/case-decision-rail-icon.tsx#1"
           },
           {
             "location": "apps/web/src/features/case-law/components/case-viewer/citation-header.tsx#1"
@@ -13812,7 +13956,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-router@1.170.33",
+      "bom-ref": "pkg:npm/@tanstack/react-router@1.170.34",
       "description": "Modern and scalable routing for React applications",
       "evidence": {
         "identity": [
@@ -14095,9 +14239,6 @@
             "location": "apps/web/src/components/workspaces/tasks/task-detail-panel.tsx#4"
           },
           {
-            "location": "apps/web/src/features/case-law/components/case-decision-inspector-view.tsx#4"
-          },
-          {
             "location": "apps/web/src/features/case-law/components/case-viewer/provisions-cited.tsx#4"
           },
           {
@@ -14107,10 +14248,10 @@
             "location": "apps/web/src/features/case-law/components/decision-language-select.tsx#1"
           },
           {
-            "location": "apps/web/src/features/case-law/components/decision-pager.tsx#3"
+            "location": "apps/web/src/features/case-law/components/decision-main-view-action.tsx#3"
           },
           {
-            "location": "apps/web/src/features/case-law/components/top-bar-citations.tsx#2"
+            "location": "apps/web/src/features/case-law/components/decision-pager.tsx#3"
           },
           {
             "location": "apps/web/src/features/case-law/components/top-bar-country.tsx#1"
@@ -14585,10 +14726,10 @@
           "value": "apps/web/node_modules/@tanstack/react-router/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-router@1.170.33",
+      "purl": "pkg:npm/%40tanstack/react-router@1.170.34",
       "scope": "required",
       "type": "library",
-      "version": "1.170.33"
+      "version": "1.170.34"
     },
     {
       "authors": [
@@ -14596,7 +14737,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-start@1.168.50",
+      "bom-ref": "pkg:npm/@tanstack/react-start@1.168.51",
       "description": "Modern and scalable routing for React applications",
       "evidence": {
         "identity": [
@@ -14664,10 +14805,10 @@
           "value": "apps/web/node_modules/@tanstack/react-start/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-start@1.168.50",
+      "purl": "pkg:npm/%40tanstack/react-start@1.168.51",
       "scope": "required",
       "type": "library",
-      "version": "1.168.50"
+      "version": "1.168.51"
     },
     {
       "authors": [
@@ -16061,7 +16202,7 @@
             "location": "apps/web/src/components/ai-suggestions/use-folio-document-blocks.ts#15"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/use-review-actions.ts#11"
+            "location": "apps/web/src/components/ai-suggestions/use-review-actions.ts#16"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/use-review-start-mode.ts#1"
@@ -16136,6 +16277,12 @@
             "location": "apps/web/src/components/legal-reader/annotations/use-reader-annotations.ts#1"
           },
           {
+            "location": "apps/web/src/components/legal-reader/use-reader-text-scale.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/legal-reader/use-reader-text-scale.ts#2"
+          },
+          {
             "location": "apps/web/src/components/public-sign-in-request.ts#1"
           },
           {
@@ -16167,6 +16314,12 @@
           },
           {
             "location": "apps/web/src/features/case-law/components/case-viewer/analysis/use-decision-analysis.ts#8"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/case-viewer/use-decision-annotation-surface.ts#1"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/case-viewer/use-decision-annotation-surface.ts#2"
           },
           {
             "location": "apps/web/src/features/case-law/decision-column-preferences.ts#1"
@@ -16281,6 +16434,9 @@
           },
           {
             "location": "apps/web/src/lib/law-search-history.ts#1"
+          },
+          {
+            "location": "apps/web/src/lib/matter-colors.ts#1"
           },
           {
             "location": "apps/web/src/lib/pdf/hooks/use-page-visibility.ts#1"
@@ -16589,6 +16745,9 @@
             "location": "apps/web/src/components/chat/chat-composer-dock.tsx#1"
           },
           {
+            "location": "apps/web/src/components/chat/chat-composer-dock.tsx#2"
+          },
+          {
             "location": "apps/web/src/components/chat/chat-image-attachment.tsx#1"
           },
           {
@@ -16805,9 +16964,6 @@
             "location": "apps/web/src/components/inspector/external-reference-panel.tsx#1"
           },
           {
-            "location": "apps/web/src/components/inspector/external-reference-panel.tsx#2"
-          },
-          {
             "location": "apps/web/src/components/inspector/file-facets.tsx#1"
           },
           {
@@ -16815,6 +16971,12 @@
           },
           {
             "location": "apps/web/src/components/inspector/file-tab-panel.tsx#8"
+          },
+          {
+            "location": "apps/web/src/components/inspector/inspector-find.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/inspector/inspector-find.tsx#2"
           },
           {
             "location": "apps/web/src/components/inspector/inspector-group-controls.tsx#1"
@@ -16883,6 +17045,9 @@
             "location": "apps/web/src/components/inspector/versions-facet.tsx#12"
           },
           {
+            "location": "apps/web/src/components/inspector/viewer-overlay-bar.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/jurisdiction-picker.tsx#1"
           },
           {
@@ -16920,6 +17085,12 @@
           },
           {
             "location": "apps/web/src/components/legal-reader/document-ast-text.tsx#2"
+          },
+          {
+            "location": "apps/web/src/components/legal-reader/legal-reader-ai-chat.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/legal-reader/legal-reader-ai-chat.tsx#2"
           },
           {
             "location": "apps/web/src/components/markdown/markdown-hybrid-editor.impl.tsx#1"
@@ -17252,6 +17423,9 @@
             "location": "apps/web/src/features/case-law/components/case-decision-inspector-view.tsx#1"
           },
           {
+            "location": "apps/web/src/features/case-law/components/case-decision-inspector-view.tsx#2"
+          },
+          {
             "location": "apps/web/src/features/case-law/components/case-viewer/analysis/analysis-layers.tsx#1"
           },
           {
@@ -17282,6 +17456,12 @@
             "location": "apps/web/src/features/case-law/components/case-viewer/decision-workspace.tsx#1"
           },
           {
+            "location": "apps/web/src/features/case-law/components/case-viewer/headnote-block.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/case-viewer/headnote-block.tsx#2"
+          },
+          {
             "location": "apps/web/src/features/case-law/components/case-viewer/leading-citations.tsx#1"
           },
           {
@@ -17298,6 +17478,9 @@
           },
           {
             "location": "apps/web/src/features/case-law/components/decision-filter-popover.tsx#2"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/decision-main-view-action.tsx#1"
           },
           {
             "location": "apps/web/src/features/case-law/components/decision-pager.tsx#1"
@@ -19357,6 +19540,9 @@
             "location": "apps/api/src/handlers/case-law/court-weight-seed.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/case-law/decisions/citation-passages.ts#17"
+          },
+          {
             "location": "apps/api/src/handlers/case-law/decisions/document-on-demand.ts#35"
           },
           {
@@ -19366,7 +19552,7 @@
             "location": "apps/api/src/handlers/case-law/decisions/get.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/case-law/decisions/public-subject.ts#22"
+            "location": "apps/api/src/handlers/case-law/decisions/public-subject.ts#25"
           },
           {
             "location": "apps/api/src/handlers/case-law/decisions/search-telemetry.ts#1"
@@ -19540,7 +19726,7 @@
             "location": "apps/api/src/handlers/chat/chat-prompt.ts#8"
           },
           {
-            "location": "apps/api/src/handlers/chat/chat-schema.ts#2"
+            "location": "apps/api/src/handlers/chat/chat-schema.ts#3"
           },
           {
             "location": "apps/api/src/handlers/chat/chat-scope.ts#1"
@@ -19922,6 +20108,9 @@
           },
           {
             "location": "apps/api/src/handlers/docx-suggestions/read.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/docx-suggestions/reject-pending.ts#1"
           },
           {
             "location": "apps/api/src/handlers/docx-suggestions/resolve.ts#1"
@@ -22540,13 +22729,22 @@
             "location": "apps/web/scripts/publish-sourcemaps.ts#6"
           },
           {
+            "location": "apps/web/src/components/ai-suggestions/active-legal-document.ts#10"
+          },
+          {
             "location": "apps/web/src/components/ai-suggestions/document-review-proposal-stream.ts#17"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/document-review-run.logic.ts#11"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/docx-suggestion-persistence.ts#25"
+            "location": "apps/web/src/components/ai-suggestions/docx-suggestion-cache.ts#12"
+          },
+          {
+            "location": "apps/web/src/components/ai-suggestions/docx-suggestion-persistence.ts#28"
+          },
+          {
+            "location": "apps/web/src/components/ai-suggestions/docx-suggestion-persistence.ts#29"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/file-review-session.ts#1"
@@ -22556,6 +22754,9 @@
           },
           {
             "location": "apps/web/src/components/ai-suggestions/review-bar.logic.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/ai-suggestions/review-change-apply.logic.ts#6"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/review-folio-decorations.ts#1"
@@ -22573,7 +22774,10 @@
             "location": "apps/web/src/components/ai-suggestions/review-suggestion-builder.ts#14"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/use-review-actions.ts#13"
+            "location": "apps/web/src/components/ai-suggestions/use-review-actions.ts#19"
+          },
+          {
+            "location": "apps/web/src/components/ai-suggestions/use-review-change-summary.ts#1"
           },
           {
             "location": "apps/web/src/components/app-sidebar.logic.ts#1"
@@ -22660,6 +22864,9 @@
             "location": "apps/web/src/components/legal-reader/annotations/use-reader-annotations.ts#4"
           },
           {
+            "location": "apps/web/src/components/legal-reader/use-reader-text-scale.ts#4"
+          },
+          {
             "location": "apps/web/src/components/matter-target-picker.logic.ts#1"
           },
           {
@@ -22708,7 +22915,13 @@
             "location": "apps/web/src/features/case-law/case-law-index-search.logic.ts#13"
           },
           {
+            "location": "apps/web/src/features/case-law/components/case-viewer/analysis/margin-notes.logic.ts#15"
+          },
+          {
             "location": "apps/web/src/features/case-law/components/case-viewer/analysis/use-decision-analysis.ts#11"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/case-viewer/decision-annotation-surface.logic.ts#1"
           },
           {
             "location": "apps/web/src/features/case-law/components/case-viewer/decision-text.logic.ts#1"
@@ -22729,6 +22942,9 @@
             "location": "apps/web/src/features/case-law/use-provision-part-renderer.ts#1"
           },
           {
+            "location": "apps/web/src/features/chat/chat-fetch.ts#1"
+          },
+          {
             "location": "apps/web/src/features/chat/chat-runtime.ts#11"
           },
           {
@@ -22739,6 +22955,9 @@
           },
           {
             "location": "apps/web/src/features/chat/hooks/use-suggest-chat-thread-title.ts#3"
+          },
+          {
+            "location": "apps/web/src/features/chat/legal-document-chat-context.ts#9"
           },
           {
             "location": "apps/web/src/features/chat/lib/suggested-prompts-availability.ts#1"
@@ -22919,6 +23138,9 @@
           },
           {
             "location": "apps/web/src/lib/workspaces/mutations.ts#7"
+          },
+          {
+            "location": "apps/web/src/lib/workspaces/queries/docx-suggestions.ts#2"
           },
           {
             "location": "apps/web/src/lib/workspaces/queries/time-entries.ts#2"
@@ -23443,7 +23665,10 @@
             "location": "apps/web/src/components/ai-provider-icons.tsx#3"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx#31"
+            "location": "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx#32"
+          },
+          {
+            "location": "apps/web/src/components/ai-suggestions/file-viewer-with-ai.impl.tsx#19"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/review-bar.tsx#34"
@@ -23476,7 +23701,7 @@
             "location": "apps/web/src/components/chat/chat-composer-action-button.tsx#3"
           },
           {
-            "location": "apps/web/src/components/chat/chat-composer-dock.tsx#3"
+            "location": "apps/web/src/components/chat/chat-composer-dock.tsx#4"
           },
           {
             "location": "apps/web/src/components/chat/chat-matter-picker.tsx#5"
@@ -23557,7 +23782,7 @@
             "location": "apps/web/src/components/inspector/entity-metadata-panel.tsx#15"
           },
           {
-            "location": "apps/web/src/components/inspector/external-reference-panel.tsx#5"
+            "location": "apps/web/src/components/inspector/external-reference-panel.tsx#4"
           },
           {
             "location": "apps/web/src/components/inspector/inspector-group-controls.tsx#5"
@@ -23585,6 +23810,9 @@
           },
           {
             "location": "apps/web/src/components/legal-reader/annotations/annotation-toolbar.tsx#5"
+          },
+          {
+            "location": "apps/web/src/components/legal-reader/cited-provision-link.tsx#6"
           },
           {
             "location": "apps/web/src/components/legal-reader/document-ast-text.tsx#4"
@@ -23674,7 +23902,7 @@
             "location": "apps/web/src/features/case-law/components/case-viewer/citation-passage-preview.tsx#2"
           },
           {
-            "location": "apps/web/src/features/case-law/components/case-viewer/decision-workspace.tsx#3"
+            "location": "apps/web/src/features/case-law/components/case-viewer/headnote-block.tsx#4"
           },
           {
             "location": "apps/web/src/features/case-law/components/decision-cells.tsx#6"
@@ -25160,6 +25388,9 @@
             "location": "apps/api/src/handlers/case-law/decisions/citation-graph.ts#3"
           },
           {
+            "location": "apps/api/src/handlers/case-law/decisions/citation-passages.ts#18"
+          },
+          {
             "location": "apps/api/src/handlers/case-law/decisions/citations.ts#1"
           },
           {
@@ -25181,7 +25412,7 @@
             "location": "apps/api/src/handlers/case-law/decisions/list.ts#4"
           },
           {
-            "location": "apps/api/src/handlers/case-law/decisions/public-subject.ts#23"
+            "location": "apps/api/src/handlers/case-law/decisions/public-subject.ts#26"
           },
           {
             "location": "apps/api/src/handlers/case-law/decisions/search.ts#2"
@@ -25509,6 +25740,9 @@
           },
           {
             "location": "apps/api/src/handlers/docx-suggestions/read.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/docx-suggestions/reject-pending.ts#2"
           },
           {
             "location": "apps/api/src/handlers/docx-suggestions/resolve.ts#2"
@@ -26501,6 +26735,9 @@
             "location": "apps/api/src/lib/case-law/non-redistributable-sources.ts#2"
           },
           {
+            "location": "apps/api/src/lib/case-law/published-decisions.ts#18"
+          },
+          {
             "location": "apps/api/src/lib/case-law/publisher-summary.ts#2"
           },
           {
@@ -26649,6 +26886,9 @@
           },
           {
             "location": "apps/api/src/lib/docx/resolve-clause-slots.ts#9"
+          },
+          {
+            "location": "apps/api/src/lib/docx/suggestion-pending-capacity.ts#10"
           },
           {
             "location": "apps/api/src/lib/entities/create-from-buffer.ts#2"
@@ -27670,7 +27910,7 @@
             "location": "apps/api/src/handlers/case-law/decisions/list.ts#6"
           },
           {
-            "location": "apps/api/src/handlers/case-law/decisions/public-subject.ts#24"
+            "location": "apps/api/src/handlers/case-law/decisions/public-subject.ts#27"
           },
           {
             "location": "apps/api/src/handlers/case-law/decisions/search-schema.ts#2"
@@ -27748,10 +27988,10 @@
             "location": "apps/api/src/handlers/catalogue/routes.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/chat/chat-schema.ts#4"
+            "location": "apps/api/src/handlers/chat/chat-schema.ts#5"
           },
           {
-            "location": "apps/api/src/handlers/chat/chat-schema.ts#5"
+            "location": "apps/api/src/handlers/chat/chat-schema.ts#6"
           },
           {
             "location": "apps/api/src/handlers/chat/delete-thread.ts#4"
@@ -30547,7 +30787,7 @@
             "location": "apps/web/src/components/ai-suggestions/accept-all-button.tsx#15"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx#32"
+            "location": "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx#33"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/host.tsx#34"
@@ -30592,7 +30832,7 @@
             "location": "apps/web/src/components/chat/chat-composer-action-button.tsx#4"
           },
           {
-            "location": "apps/web/src/components/chat/chat-composer-dock.tsx#4"
+            "location": "apps/web/src/components/chat/chat-composer-dock.tsx#5"
           },
           {
             "location": "apps/web/src/components/chat/chat-draft-attachment-chips.tsx#1"
@@ -30742,10 +30982,13 @@
             "location": "apps/web/src/components/inspector/entity-metadata-panel.tsx#16"
           },
           {
-            "location": "apps/web/src/components/inspector/external-reference-panel.tsx#13"
+            "location": "apps/web/src/components/inspector/external-reference-panel.tsx#5"
           },
           {
             "location": "apps/web/src/components/inspector/file-tab-panel.tsx#18"
+          },
+          {
+            "location": "apps/web/src/components/inspector/inspector-find.tsx#4"
           },
           {
             "location": "apps/web/src/components/inspector/inspector-group-controls.tsx#6"
@@ -30790,6 +31033,9 @@
             "location": "apps/web/src/components/inspector/versions-facet.tsx#17"
           },
           {
+            "location": "apps/web/src/components/inspector/zoom-controls.tsx#6"
+          },
+          {
             "location": "apps/web/src/components/jurisdiction-picker.tsx#3"
           },
           {
@@ -30826,7 +31072,7 @@
             "location": "apps/web/src/components/pdf/page-organizer.tsx#31"
           },
           {
-            "location": "apps/web/src/components/pdf/peek/peek-pdf-viewer.tsx#23"
+            "location": "apps/web/src/components/pdf/peek/peek-pdf-viewer.tsx#19"
           },
           {
             "location": "apps/web/src/components/pdf/versions-sidebar.tsx#13"
@@ -30985,13 +31231,10 @@
             "location": "apps/web/src/components/workspaces/tasks/task-subtasks.tsx#1"
           },
           {
-            "location": "apps/web/src/features/case-law/case-decision-details-inspector-registration.tsx#3"
-          },
-          {
-            "location": "apps/web/src/features/case-law/case-decision-inspector-registration.tsx#3"
-          },
-          {
             "location": "apps/web/src/features/case-law/components/case-decision-inspector-view.tsx#5"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/case-decision-rail-icon.tsx#2"
           },
           {
             "location": "apps/web/src/features/case-law/components/case-viewer/analysis/analysis-layers.tsx#3"
@@ -31009,7 +31252,10 @@
             "location": "apps/web/src/features/case-law/components/case-viewer/decision-facts.tsx#3"
           },
           {
-            "location": "apps/web/src/features/case-law/components/case-viewer/decision-workspace.tsx#4"
+            "location": "apps/web/src/features/case-law/components/case-viewer/decision-workspace.tsx#3"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/case-viewer/headnote-block.tsx#5"
           },
           {
             "location": "apps/web/src/features/case-law/components/case-viewer/leading-citations.tsx#4"
@@ -31022,6 +31268,9 @@
           },
           {
             "location": "apps/web/src/features/case-law/components/decision-filter-popover.tsx#4"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/decision-main-view-action.tsx#4"
           },
           {
             "location": "apps/web/src/features/case-law/components/decision-pager.tsx#4"
@@ -31754,7 +32003,7 @@
           "name": "Andris Reinman"
         }
       ],
-      "bom-ref": "pkg:npm/nodemailer@10.0.1",
+      "bom-ref": "pkg:npm/nodemailer@10.0.3",
       "description": "Easy as cake e-mail sending from your Node.js applications",
       "evidence": {
         "identity": [
@@ -31807,10 +32056,10 @@
           "value": "apps/api/node_modules/nodemailer/package.json"
         }
       ],
-      "purl": "pkg:npm/nodemailer@10.0.1",
+      "purl": "pkg:npm/nodemailer@10.0.3",
       "scope": "required",
       "type": "library",
-      "version": "10.0.1"
+      "version": "10.0.3"
     },
     {
       "authors": [
@@ -32084,7 +32333,7 @@
           "name": "engineering@posthog.com"
         }
       ],
-      "bom-ref": "pkg:npm/posthog-js@1.428.7",
+      "bom-ref": "pkg:npm/posthog-js@1.429.2",
       "description": "Posthog-js allows you to automatically capture usage and send events to PostHog.",
       "evidence": {
         "identity": [
@@ -32143,10 +32392,10 @@
           "value": "apps/web/node_modules/posthog-js/package.json"
         }
       ],
-      "purl": "pkg:npm/posthog-js@1.428.7",
+      "purl": "pkg:npm/posthog-js@1.429.2",
       "scope": "required",
       "type": "library",
-      "version": "1.428.7"
+      "version": "1.429.2"
     },
     {
       "authors": [
@@ -32154,7 +32403,7 @@
           "name": "PostHog <engineering@posthog.com> (https://posthog.com)"
         }
       ],
-      "bom-ref": "pkg:npm/posthog-node@5.51.7",
+      "bom-ref": "pkg:npm/posthog-node@5.51.8",
       "description": "PostHog Node.js integration",
       "evidence": {
         "identity": [
@@ -32203,10 +32452,10 @@
           "value": "apps/api/node_modules/posthog-node/package.json"
         }
       ],
-      "purl": "pkg:npm/posthog-node@5.51.7",
+      "purl": "pkg:npm/posthog-node@5.51.8",
       "scope": "required",
       "type": "library",
-      "version": "5.51.7"
+      "version": "5.51.8"
     },
     {
       "bom-ref": "pkg:npm/prism-react-renderer@2.4.1",
@@ -33230,7 +33479,7 @@
             "location": "apps/web/src/components/ai-suggestions/use-folio-document-blocks.ts#15"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/use-review-actions.ts#11"
+            "location": "apps/web/src/components/ai-suggestions/use-review-actions.ts#16"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/use-review-start-mode.ts#1"
@@ -33305,6 +33554,12 @@
             "location": "apps/web/src/components/legal-reader/annotations/use-reader-annotations.ts#1"
           },
           {
+            "location": "apps/web/src/components/legal-reader/use-reader-text-scale.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/legal-reader/use-reader-text-scale.ts#2"
+          },
+          {
             "location": "apps/web/src/components/public-sign-in-request.ts#1"
           },
           {
@@ -33336,6 +33591,12 @@
           },
           {
             "location": "apps/web/src/features/case-law/components/case-viewer/analysis/use-decision-analysis.ts#8"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/case-viewer/use-decision-annotation-surface.ts#1"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/case-viewer/use-decision-annotation-surface.ts#2"
           },
           {
             "location": "apps/web/src/features/case-law/decision-column-preferences.ts#1"
@@ -33450,6 +33711,9 @@
           },
           {
             "location": "apps/web/src/lib/law-search-history.ts#1"
+          },
+          {
+            "location": "apps/web/src/lib/matter-colors.ts#1"
           },
           {
             "location": "apps/web/src/lib/pdf/hooks/use-page-visibility.ts#1"
@@ -33758,6 +34022,9 @@
             "location": "apps/web/src/components/chat/chat-composer-dock.tsx#1"
           },
           {
+            "location": "apps/web/src/components/chat/chat-composer-dock.tsx#2"
+          },
+          {
             "location": "apps/web/src/components/chat/chat-image-attachment.tsx#1"
           },
           {
@@ -33974,9 +34241,6 @@
             "location": "apps/web/src/components/inspector/external-reference-panel.tsx#1"
           },
           {
-            "location": "apps/web/src/components/inspector/external-reference-panel.tsx#2"
-          },
-          {
             "location": "apps/web/src/components/inspector/file-facets.tsx#1"
           },
           {
@@ -33984,6 +34248,12 @@
           },
           {
             "location": "apps/web/src/components/inspector/file-tab-panel.tsx#8"
+          },
+          {
+            "location": "apps/web/src/components/inspector/inspector-find.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/inspector/inspector-find.tsx#2"
           },
           {
             "location": "apps/web/src/components/inspector/inspector-group-controls.tsx#1"
@@ -34052,6 +34322,9 @@
             "location": "apps/web/src/components/inspector/versions-facet.tsx#12"
           },
           {
+            "location": "apps/web/src/components/inspector/viewer-overlay-bar.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/jurisdiction-picker.tsx#1"
           },
           {
@@ -34089,6 +34362,12 @@
           },
           {
             "location": "apps/web/src/components/legal-reader/document-ast-text.tsx#2"
+          },
+          {
+            "location": "apps/web/src/components/legal-reader/legal-reader-ai-chat.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/legal-reader/legal-reader-ai-chat.tsx#2"
           },
           {
             "location": "apps/web/src/components/markdown/markdown-hybrid-editor.impl.tsx#1"
@@ -34421,6 +34700,9 @@
             "location": "apps/web/src/features/case-law/components/case-decision-inspector-view.tsx#1"
           },
           {
+            "location": "apps/web/src/features/case-law/components/case-decision-inspector-view.tsx#2"
+          },
+          {
             "location": "apps/web/src/features/case-law/components/case-viewer/analysis/analysis-layers.tsx#1"
           },
           {
@@ -34451,6 +34733,12 @@
             "location": "apps/web/src/features/case-law/components/case-viewer/decision-workspace.tsx#1"
           },
           {
+            "location": "apps/web/src/features/case-law/components/case-viewer/headnote-block.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/case-viewer/headnote-block.tsx#2"
+          },
+          {
             "location": "apps/web/src/features/case-law/components/case-viewer/leading-citations.tsx#1"
           },
           {
@@ -34467,6 +34755,9 @@
           },
           {
             "location": "apps/web/src/features/case-law/components/decision-filter-popover.tsx#2"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/decision-main-view-action.tsx#1"
           },
           {
             "location": "apps/web/src/features/case-law/components/decision-pager.tsx#1"
@@ -36849,7 +37140,10 @@
             "location": "apps/web/src/components/ai-suggestions/review-finding-label.ts#15"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/use-review-actions.ts#14"
+            "location": "apps/web/src/components/ai-suggestions/use-review-actions.ts#20"
+          },
+          {
+            "location": "apps/web/src/components/ai-suggestions/use-review-change-summary.ts#2"
           },
           {
             "location": "apps/web/src/components/chat/use-chat-model-selection.ts#4"
@@ -36996,13 +37290,16 @@
             "location": "apps/web/src/components/ai-suggestions/accept-all-button.tsx#16"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx#33"
+            "location": "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx#34"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/file-viewer-with-ai.tsx#3"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/host.tsx#35"
+          },
+          {
+            "location": "apps/web/src/components/ai-suggestions/pending-review-new-thread-prompt.tsx#1"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/review-bar.tsx#36"
@@ -37098,7 +37395,7 @@
             "location": "apps/web/src/components/chat/chat-composer-action-button.tsx#5"
           },
           {
-            "location": "apps/web/src/components/chat/chat-composer-dock.tsx#5"
+            "location": "apps/web/src/components/chat/chat-composer-dock.tsx#6"
           },
           {
             "location": "apps/web/src/components/chat/chat-context-meter.tsx#1"
@@ -37278,7 +37575,7 @@
             "location": "apps/web/src/components/inspector/entity-metadata-panel.tsx#17"
           },
           {
-            "location": "apps/web/src/components/inspector/external-reference-panel.tsx#14"
+            "location": "apps/web/src/components/inspector/external-reference-panel.tsx#6"
           },
           {
             "location": "apps/web/src/components/inspector/file-facets.tsx#4"
@@ -37288,6 +37585,9 @@
           },
           {
             "location": "apps/web/src/components/inspector/inspector-facet-bar.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/inspector/inspector-find.tsx#5"
           },
           {
             "location": "apps/web/src/components/inspector/inspector-group-controls.tsx#7"
@@ -37347,6 +37647,9 @@
             "location": "apps/web/src/components/inspector/versions-facet.tsx#18"
           },
           {
+            "location": "apps/web/src/components/inspector/zoom-controls.tsx#7"
+          },
+          {
             "location": "apps/web/src/components/jurisdiction-picker.tsx#4"
           },
           {
@@ -37360,6 +37663,9 @@
           },
           {
             "location": "apps/web/src/components/legal-reader/cited-decision-link.tsx#5"
+          },
+          {
+            "location": "apps/web/src/components/legal-reader/cited-provision-link.tsx#7"
           },
           {
             "location": "apps/web/src/components/legal-reader/document-ast-text.tsx#5"
@@ -37395,7 +37701,7 @@
             "location": "apps/web/src/components/pdf/page-organizer.tsx#32"
           },
           {
-            "location": "apps/web/src/components/pdf/peek/peek-pdf-viewer.tsx#24"
+            "location": "apps/web/src/components/pdf/peek/peek-pdf-viewer.tsx#20"
           },
           {
             "location": "apps/web/src/components/pdf/versions-sidebar.tsx#14"
@@ -37635,6 +37941,9 @@
             "location": "apps/web/src/features/case-law/components/case-law-search.tsx#1"
           },
           {
+            "location": "apps/web/src/features/case-law/components/case-viewer/analysis/ai-headnotes.tsx#1"
+          },
+          {
             "location": "apps/web/src/features/case-law/components/case-viewer/analysis/analysis-layers.tsx#4"
           },
           {
@@ -37662,7 +37971,10 @@
             "location": "apps/web/src/features/case-law/components/case-viewer/decision-text.tsx#4"
           },
           {
-            "location": "apps/web/src/features/case-law/components/case-viewer/decision-workspace.tsx#5"
+            "location": "apps/web/src/features/case-law/components/case-viewer/decision-workspace.tsx#4"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/case-viewer/headnote-block.tsx#6"
           },
           {
             "location": "apps/web/src/features/case-law/components/case-viewer/leading-citations.tsx#5"
@@ -37686,6 +37998,9 @@
             "location": "apps/web/src/features/case-law/components/decision-language-select.tsx#2"
           },
           {
+            "location": "apps/web/src/features/case-law/components/decision-main-view-action.tsx#5"
+          },
+          {
             "location": "apps/web/src/features/case-law/components/decision-pager.tsx#5"
           },
           {
@@ -37695,7 +38010,7 @@
             "location": "apps/web/src/features/case-law/components/decision-table.tsx#16"
           },
           {
-            "location": "apps/web/src/features/case-law/components/top-bar-citations.tsx#3"
+            "location": "apps/web/src/features/case-law/components/top-bar-citations.tsx#2"
           },
           {
             "location": "apps/web/src/features/case-law/components/top-bar-country.tsx#3"
@@ -38599,7 +38914,7 @@
             "location": "apps/web/src/lib/chat-thread-ref.ts#1"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx#34"
+            "location": "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx#35"
           },
           {
             "location": "apps/web/src/components/inspector/playbook-facet.tsx#31"
@@ -39128,6 +39443,9 @@
           },
           {
             "location": "apps/web/src/components/legal-reader/annotations/guest-annotation-store.logic.ts#2"
+          },
+          {
+            "location": "apps/web/src/components/legal-reader/reader-text-scale.logic.ts#1"
           },
           {
             "location": "apps/web/src/components/templates/template-form.logic.ts#2"
@@ -39696,6 +40014,9 @@
             "location": "apps/web/src/components/inspector/inspector-tabs-store.ts#2"
           },
           {
+            "location": "apps/web/src/features/chat/legal-document-chat-threads.ts#17"
+          },
+          {
             "location": "apps/web/src/features/chat/lib/chat-rename-command-store.ts#1"
           },
           {
@@ -39837,7 +40158,7 @@
             "location": "apps/web/src/components/workspaces/create-matter-dialog.tsx#14"
           },
           {
-            "location": "apps/web/src/features/case-law/components/case-viewer/decision-workspace.tsx#6"
+            "location": "apps/web/src/features/case-law/components/case-viewer/decision-workspace.tsx#5"
           },
           {
             "location": "apps/web/src/lib/chrome-header-actions.tsx#5"
@@ -39921,7 +40242,7 @@
             "location": "apps/web/src/components/pdf/page-citation.tsx#3"
           },
           {
-            "location": "apps/web/src/features/case-law/components/case-viewer/decision-workspace.tsx#6"
+            "location": "apps/web/src/features/case-law/components/case-viewer/decision-workspace.tsx#5"
           },
           {
             "location": "apps/web/src/lib/pdf/pdf-page.tsx#5"
