@@ -73,6 +73,7 @@
     "@stll/folio-core": "catalog:",
     "@stll/folio-react": "catalog:",
     "@stll/legal-ast": "workspace:*",
+    "@stll/legal-atlas": "workspace:*",
     "@stll/locales": "workspace:*",
     "@stll/money": "workspace:*",
     "@stll/permissions": "workspace:*",

@@ -1,8 +1,13 @@
 import { useInfiniteQuery, useQueries } from "@tanstack/react-query";
 
+import { isCaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
+import type { Block } from "@stll/legal-ast/document-ast";
 import { provisionHeadingAnchor } from "@stll/legal-ast/provision-preview";
+import { PROVISION_CITATION_GRAMMARS } from "@stll/legal-atlas/provision-citation-grammars";
+import type { SupportedProvisionCitationGrammar } from "@stll/legal-atlas/provision-citation-grammars";
 
 import type { CitedProvisionTarget } from "@/components/legal-reader/cited-provision-link";
+import { locateAbbreviatedProvisionCitations } from "@/features/case-law/fallback-legal-anchors";
 import type { ProvisionAnchorSource } from "@/features/case-law/provision-anchors";
 import { formatProvisionReference } from "@/features/case-law/provision-label";
 import {
@@ -16,8 +21,10 @@ import {
   versionCoversDate,
 } from "@/features/case-law/statute-version";
 import { useProvisionPartRenderer } from "@/features/case-law/use-provision-part-renderer";
+import { getAnalytics } from "@/lib/analytics/provider";
 import { optionalArray } from "@/lib/arrays";
 import { decisionDateToIso } from "@/lib/decision-date";
+import { ClientTelemetryError } from "@/lib/errors/telemetry";
 import type { SafeId } from "@/lib/safe-id";
 
 /**
@@ -29,6 +36,44 @@ const LINKED_WORKS_LIMIT = 12;
 export type DecisionProvisionAnchor =
   ProvisionAnchorSource<CitedProvisionTarget>;
 
+type UseDecisionProvisionAnchorsOptions = {
+  blocks: readonly Block[];
+  /** The citing court's jurisdiction; null while the decision is loading. */
+  country: string | null;
+  decisionDate: Date | string | null;
+  decisionId: SafeId<"caseLawDecision">;
+};
+
+const REPORTED_UNDECLARED_COUNTRIES = new Set<string>();
+
+/**
+ * The grammar of the citing court, or null where its citations read as text.
+ * A decision row is history and may carry a code no jurisdiction declares;
+ * that is reported once per session rather than parsed by another country's
+ * grammar.
+ */
+const citingProvisionCitationGrammar = (
+  country: string | null,
+): SupportedProvisionCitationGrammar | null => {
+  if (country === null) {
+    return null;
+  }
+  if (!isCaseLawJurisdiction(country)) {
+    if (!REPORTED_UNDECLARED_COUNTRIES.has(country)) {
+      REPORTED_UNDECLARED_COUNTRIES.add(country);
+      getAnalytics().captureError(
+        new ClientTelemetryError({
+          area: "case-law-provision-grammar",
+          message: `[Case-law provision grammar] Undeclared jurisdiction ${country}`,
+        }),
+      );
+    }
+    return null;
+  }
+  const grammar = PROVISION_CITATION_GRAMMARS[country];
+  return grammar.status === "supported" ? grammar : null;
+};
+
 type WorkKey = { asOf: string; eli: string; jurisdiction: string };
 
 /**
@@ -36,7 +81,7 @@ type WorkKey = { asOf: string; eli: string; jurisdiction: string };
  * one the grouping accumulates into, so references seen after the work was
  * collected are in it too.
  */
-type LinkedWork<TRow> = WorkKey & { rows: TRow[] };
+type LinkedWork = WorkKey & { rows: { versionValidFrom: string | null }[] };
 
 const workKeyOf = ({
   eli,
@@ -49,10 +94,12 @@ const workKeyOf = ({
  * the corpus does not hold, or whose cited version is not yet known, is left
  * out: it reads as text until it can link somewhere it belongs.
  */
-export const useDecisionProvisionAnchors = (
-  decisionId: SafeId<"caseLawDecision">,
-  decisionDate: Date | string | null,
-): DecisionProvisionAnchor[] => {
+export const useDecisionProvisionAnchors = ({
+  blocks,
+  country,
+  decisionDate,
+  decisionId,
+}: UseDecisionProvisionAnchorsOptions): DecisionProvisionAnchor[] => {
   const renderPart = useProvisionPartRenderer();
   const { data } = useInfiniteQuery(
     decisionProvisionsInfiniteOptions(decisionId),
@@ -68,7 +115,12 @@ export const useDecisionProvisionAnchors = (
     ),
   );
 
-  const works: LinkedWork<(typeof rows)[number]>[] = [];
+  const grammar = citingProvisionCitationGrammar(country);
+  const fallbackReferences =
+    grammar === null
+      ? []
+      : locateAbbreviatedProvisionCitations(blocks, grammar);
+  const works: LinkedWork[] = [];
   const seen = new Set<string>();
   const rowsByWork = new Map<string, (typeof rows)[number][]>();
   const decisionAsOf = decisionDateToIso(decisionDate);
@@ -96,6 +148,30 @@ export const useDecisionProvisionAnchors = (
       eli: row.workEli,
       jurisdiction: row.jurisdiction,
       rows: workRows,
+    });
+  }
+  for (const reference of fallbackReferences) {
+    if (decisionAsOf === null) {
+      continue;
+    }
+    const key = workKeyOf({
+      eli: reference.abbreviation.eli,
+      jurisdiction: reference.jurisdiction,
+    });
+    const existing = works.find((work) => workKeyOf(work) === key);
+    if (existing !== undefined) {
+      existing.rows.push({ versionValidFrom: decisionAsOf });
+      continue;
+    }
+    if (works.length >= LINKED_WORKS_LIMIT) {
+      continue;
+    }
+    seen.add(key);
+    works.push({
+      asOf: decisionAsOf,
+      eli: reference.abbreviation.eli,
+      jurisdiction: reference.jurisdiction,
+      rows: [{ versionValidFrom: decisionAsOf }],
     });
   }
 
@@ -202,6 +278,59 @@ export const useDecisionProvisionAnchors = (
           versionCount,
           versionValidFrom: document.versionValidFrom,
         },
+      },
+    });
+  }
+
+  for (const reference of fallbackReferences) {
+    if (decisionAsOf === null) {
+      continue;
+    }
+    const { eli } = reference.abbreviation;
+    const key = workKeyOf({ eli, jurisdiction: reference.jurisdiction });
+    const statute = statuteByWork.get(key);
+    if (statute === undefined) {
+      continue;
+    }
+    const document = versionCoversDate(statute, decisionAsOf)
+      ? statute
+      : pickVersionAt(optionalArray(versionsByWork.get(key)), decisionAsOf);
+    if (document === null) {
+      continue;
+    }
+    anchors.push({
+      exactSpan: {
+        blockId: reference.blockId,
+        end: reference.end,
+        start: reference.start,
+      },
+      id: reference.id,
+      reference: reference.reference,
+      sentenceText: reference.sentenceText,
+      spanStart: reference.spanStart,
+      target: {
+        document: {
+          country: document.country,
+          eli: document.eli,
+          id: document.id,
+          slug: document.slug,
+          versionValidFrom: document.versionValidFrom,
+        },
+        payload: {
+          anchorId: provisionHeadingAnchor(reference.anchor),
+          highlightAnchorId: reference.anchor,
+          documentId: document.id,
+          eli,
+          jurisdiction: reference.jurisdiction,
+          provisionLabel: formatProvisionReference(
+            reference.reference,
+            renderPart,
+          ),
+          statuteTitle: document.title,
+          versionCount: versionsByWork.get(key)?.length ?? 1,
+          versionValidFrom: document.versionValidFrom,
+        },
+        preview: null,
       },
     });
   }

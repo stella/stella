@@ -151,6 +151,33 @@ describe("locateProvisionAnchors", () => {
     ).toEqual(["§ 7 odst. 6", "§ 7 odst. 6"]);
   });
 
+  test("an exact local span does not drift to the same section of another act", () => {
+    const text =
+      "Podle § 60 jiného zákona a podle § 60 odst. 3 s. ř. s. rozhodl soud.";
+    const block = paragraph("mixed", text);
+    const start = text.indexOf("§ 60 odst. 3");
+    const located = locateProvisionAnchors({
+      blocks: [block],
+      provisions: [
+        {
+          exactSpan: {
+            blockId: block.id,
+            end: start + "§ 60 odst. 3".length,
+            start,
+          },
+          id: "srs-60",
+          reference: reference(60, "3"),
+          sentenceText: text,
+          spanStart: start,
+          target: "srs",
+        },
+      ],
+    });
+
+    const span = located[block.id]?.at(0);
+    expect(text.slice(span?.start, span?.end)).toBe("§ 60 odst. 3");
+  });
+
   test("a sentence the text no longer carries anchors nowhere", () => {
     expect(
       locateProvisionAnchors({

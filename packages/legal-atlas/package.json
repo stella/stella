@@ -31,6 +31,10 @@
       "types": "./src/corpus.ts",
       "import": "./src/corpus.ts"
     },
+    "./provision-citation-grammars": {
+      "types": "./src/provision-citation-grammars.ts",
+      "import": "./src/provision-citation-grammars.ts"
+    },
     "./runners/registry": {
       "types": "./src/runners/registry.ts",
       "import": "./src/runners/registry.ts"
@@ -45,6 +49,7 @@
     "format": "bun ../../scripts/run-oxfmt.ts ."
   },
   "dependencies": {
+    "@stll/api-contract": "workspace:*",
     "@stll/legal-ast": "workspace:*",
     "better-result": "catalog:"
   },

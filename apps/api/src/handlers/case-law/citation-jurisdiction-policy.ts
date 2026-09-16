@@ -27,7 +27,7 @@
 import {
   CASE_LAW_JURISDICTIONS,
   type CaseLawJurisdiction,
-} from "@/api/lib/legal-search/ingestion-constants";
+} from "@stll/api-contract/case-law-jurisdictions";
 
 export type CitationResolutionJurisdictionPolicy = {
   /**

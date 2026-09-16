@@ -1,5 +1,6 @@
 import { panic, Result } from "better-result";
 
+import type { CaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
 import type {
   DecisionTextFieldKey,
   ReadDecisionTextFields,
@@ -14,10 +15,7 @@ import type {
   DecisionSection,
   EmptyAst,
 } from "@/api/lib/legal-search/document-types";
-import type {
-  AdapterKey,
-  CaseLawJurisdiction,
-} from "@/api/lib/legal-search/ingestion-constants";
+import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
 
 export { EMPTY_AST };
 export type { EmptyAst };

@@ -85,6 +85,20 @@ the corpus internals are extracted into this package.
 - API route handlers and UI code do not live here.
 - Search engine details stay behind provider-neutral indexing code.
 
+## Statute Citation Grammars
+
+`PROVISION_CITATION_GRAMMARS` is total over the case-law jurisdictions: each
+entry declares how that jurisdiction prints a provision, which abbreviations
+its courts use for its own acts, which gazette names a work, and which anchor
+a parsed reference lands on in the statute AST. A jurisdiction without a
+grammar is an explicit `unsupported` entry; its decisions read citations as
+text rather than through another country's typography.
+
+To onboard a jurisdiction, replace its entry with
+`createProvisionCitationGrammar({ … })` and add its fixture sentence to the
+grammar test. A grammar only belongs to a jurisdiction whose acts the
+legislation corpus can open.
+
 ## License
 
 Apache-2.0

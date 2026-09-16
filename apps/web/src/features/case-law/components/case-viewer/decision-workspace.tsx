@@ -172,10 +172,12 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
   // The text links every cited decision the first outgoing page resolves;
   // the panel below pages further, the links stop at what is already read.
   const citationAnchors = useDecisionCitationAnchors(decisionId);
-  const provisionAnchors = useDecisionProvisionAnchors(
+  const provisionAnchors = useDecisionProvisionAnchors({
+    blocks: visibleDecisionBlocks(ast),
+    country: decision.country,
     decisionId,
-    decision.decisionDate,
-  );
+    decisionDate: decision.decisionDate,
+  });
   const statuteCitationAnchors = useDecisionStatuteCitationAnchors(
     visibleDecisionBlocks(ast),
     decision.decisionDate,

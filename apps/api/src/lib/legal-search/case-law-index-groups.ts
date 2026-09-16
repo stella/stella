@@ -18,7 +18,7 @@ import { panic } from "better-result";
 import type { SQL, SQLWrapper } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 
-import type { CaseLawJurisdiction } from "@/api/lib/legal-search/ingestion-constants";
+import type { CaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
 
 /**
  * Index group of every declared jurisdiction. Total over

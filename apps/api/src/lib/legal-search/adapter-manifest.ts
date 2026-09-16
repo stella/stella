@@ -1,4 +1,8 @@
 import {
+  type CaseLawJurisdiction,
+  isCaseLawJurisdiction,
+} from "@stll/api-contract/case-law-jurisdictions";
+import {
   DECISION_DOCKET_GRAMMARS,
   type DecisionDocketGrammar,
 } from "@stll/api-contract/decision-docket-grammar";
@@ -11,8 +15,6 @@ import {
 import {
   ADAPTER_KEYS,
   type AdapterKey,
-  type CaseLawJurisdiction,
-  isCaseLawJurisdiction,
 } from "@/api/lib/legal-search/ingestion-constants";
 
 type SourcePlaceholderPattern = {

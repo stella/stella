@@ -67,6 +67,7 @@
 import { sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
+import type { CaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
 import type { DecisionIdentifierType } from "@stll/legal-ast/decision-identifier";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -96,7 +97,6 @@ import {
   unsettledCitationSql,
 } from "@/api/handlers/case-law/citation-resolution-status";
 import type { SafeId } from "@/api/lib/branded-types";
-import type { CaseLawJurisdiction } from "@/api/lib/legal-search/ingestion-constants";
 import { isRecord } from "@/api/lib/type-guards";
 
 /**

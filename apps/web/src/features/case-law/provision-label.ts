@@ -8,29 +8,10 @@
  * they are the citation, not a translation of it.
  */
 
-export type ProvisionUnit = "article" | "section";
-
-/** Named subdivisions, i.e. everything the catalog has a word for. */
-export type ProvisionPartKey =
-  | "article"
-  | "letter"
-  | "openEnded"
-  | "point"
-  | "sentence"
-  | "subsection";
-
-export type ProvisionReference = {
-  letter: string | null;
-  /** The reference runs on from here (`et seq.`, `a násl.`). */
-  openEnded: boolean;
-  point: string | null;
-  section: number;
-  /** An inserted provision's letter: `265` + `b`. */
-  sectionSuffix: string | null;
-  sentence: string | null;
-  subsection: string | null;
-  unit: ProvisionUnit;
-};
+import type {
+  ProvisionPartKey,
+  ProvisionReference,
+} from "@stll/legal-ast/provision-reference";
 
 /** Renders one named subdivision, e.g. `("subsection", "1") => "para. 1"`. */
 export type RenderProvisionPart = (
