@@ -167,8 +167,12 @@ describe("online migrations", () => {
   });
 
   test("preserves the account issuer index when its replacement is not ready", async () => {
+    // Valid on the index phase's read, not ready on the retirement gate's:
+    // the phase has to pass for the gate to be what refuses, and an invalid
+    // state on both reads would fail during the phase instead, leaving the
+    // legacy drop unreached for the wrong reason.
     const harness = createHarness({
-      indexStates: { [ACCOUNT_INDEX]: [false, false] },
+      indexStates: { [ACCOUNT_INDEX]: [true, false] },
     });
 
     const rejection: unknown = await runOnlineMigrations(harness.pool).then(
@@ -178,6 +182,12 @@ describe("online migrations", () => {
     expect(rejection).toMatchObject({
       message: `Required migration index ${ACCOUNT_INDEX} is not ready`,
     });
+    // The phase found the replacement valid, so it neither rebuilt nor
+    // reindexed it; the gate is the only thing that refused.
+    expect(indexOfStatement(harness.statements, CREATE_INDEX_FRAGMENT)).toBe(
+      -1,
+    );
+    expect(indexOfStatement(harness.statements, REINDEX_FRAGMENT)).toBe(-1);
     expect(indexOfStatement(harness.statements, LEGACY_ACCOUNT_INDEX)).toBe(-1);
   });
 
