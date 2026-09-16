@@ -4936,7 +4936,6 @@
         "uploadAsNewDocument": "Įkelti kaip naują dokumentą"
       },
       "removeMetadata": "Pašalinti dokumento metaduomenis",
-      "removeMetadataHint": "Pašalina autorių, įmonę ir redagavimo istoriją. „<bdi>stella</bdi>“ nuorodų kodai išsaugomi.",
       "renamedToAvoidConflicts": "{count, plural, one {# failas pervadintas siekiant išvengti konfliktų} few {# failai pervadinti siekiant išvengti konfliktų} many {# failų pervadinta siekiant išvengti konfliktų} other {# failų pervadinta siekiant išvengti konfliktų}}",
       "retryFailed": "Kartoti {count, plural, one {# failą} few {# failus} other {# failų}}",
       "runOcr": "Įtraukti OCR į eilę",

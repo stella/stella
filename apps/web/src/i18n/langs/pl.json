@@ -4936,7 +4936,6 @@
         "uploadAsNewDocument": "Prześlij jako nowy dokument"
       },
       "removeMetadata": "Usuń metadane dokumentu",
-      "removeMetadataHint": "Usuwa autora, firmę i historię edycji. Kody referencyjne <bdi>stella</bdi> pozostają zachowane.",
       "renamedToAvoidConflicts": "{count, plural, one {# plik został przemianowany, aby uniknąć konfliktów} few {# pliki zostały przemianowane, aby uniknąć konfliktów} many {# plików zostało przemianowanych, aby uniknąć konfliktów} other {# plików zostało przemianowanych, aby uniknąć konfliktów}}",
       "retryFailed": "Ponów {count, plural, one {# plik} few {# pliki} many {# plików} other {# plików}}",
       "runOcr": "Dodaj OCR do kolejki",

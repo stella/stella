@@ -4936,7 +4936,6 @@
         "uploadAsNewDocument": "Augšupielādēt kā jaunu dokumentu"
       },
       "removeMetadata": "Noņemt dokumenta metadatus",
-      "removeMetadataHint": "Noņem autoru, uzņēmumu un rediģēšanas vēsturi. <bdi>stella</bdi> atsauces kodi tiek saglabāti.",
       "renamedToAvoidConflicts": "{count, plural, zero {# failu pārdēvēti, lai izvairītos no konfliktiem} one {# fails pārdēvēts, lai izvairītos no konfliktiem} other {# faili pārdēvēti, lai izvairītos no konfliktiem}}",
       "retryFailed": "Mēģināt vēlreiz {count, plural, zero {# failu} one {# failu} other {# failus}}",
       "runOcr": "Ievietot OCR rindā",

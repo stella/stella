@@ -4936,7 +4936,6 @@
         "uploadAsNewDocument": "Feltöltés új dokumentumként"
       },
       "removeMetadata": "Dokumentum metaadatainak eltávolítása",
-      "removeMetadataHint": "Eltávolítja a szerzőt, a céget és a szerkesztési előzményeket. A <bdi>stella</bdi> hivatkozási kódjai megmaradnak.",
       "renamedToAvoidConflicts": "{count, plural, one {# fájl átnevezve az ütközések elkerülése érdekében} other {# fájl átnevezve az ütközések elkerülése érdekében}}",
       "retryFailed": "{count, plural, one {# fájl} other {# fájl}} újrapróbálása",
       "runOcr": "OCR sorba állítása",

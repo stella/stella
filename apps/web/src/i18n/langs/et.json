@@ -4936,7 +4936,6 @@
         "uploadAsNewDocument": "Laadi üles uue dokumendina"
       },
       "removeMetadata": "Eemalda dokumendi metaandmed",
-      "removeMetadataHint": "Eemaldab autori, ettevõtte ja muutmisajaloo. <bdi>stella</bdi> viitekoodid säilitatakse.",
       "renamedToAvoidConflicts": "{count, plural, one {# fail nimetati konfliktide vältimiseks ümber} other {# faili nimetati konfliktide vältimiseks ümber}}",
       "retryFailed": "Proovi uuesti {count, plural, one {# faili} other {# faili}}",
       "runOcr": "Lisa OCR järjekorda",
