@@ -997,4 +997,51 @@ describe("cz-ns stored-raw replay", () => {
       DOCKET.SECOND,
     ]);
   });
+
+  test("malformed persisted aliases are rejected instead of dropped", async () => {
+    const outcome = await replay({
+      raw: new Uint8Array(),
+      contentType: "text/html",
+      caseNumber: DOCKET.FIRST,
+      sourceDocumentId: UNID.FIRST,
+      language: "cs",
+      court: "Nejvyšší soud",
+      ecli: null,
+      decisionDate: null,
+      decisionType: null,
+      sourceUrl: null,
+      documentUrl: null,
+      metadata: { additionalCaseNumbers: [DOCKET.SECOND, 7] },
+    });
+
+    expect(outcome).toEqual({
+      type: "rejected",
+      rejection: "incomplete-metadata",
+      detail: "stored additional case numbers are malformed",
+    });
+  });
+
+  test("a historical source URL is not reinterpreted as a Domino id", async () => {
+    const outcome = await replay({
+      raw: new Uint8Array(),
+      contentType: "text/html",
+      caseNumber: DOCKET.FIRST,
+      sourceDocumentId:
+        "https://rozhodnuti.nsoud.cz/Judikatura/judikatura_ns.nsf/WebSearch/record",
+      language: "cs",
+      court: "Nejvyšší soud",
+      ecli: null,
+      decisionDate: null,
+      decisionType: null,
+      sourceUrl: null,
+      documentUrl: null,
+      metadata: {},
+    });
+
+    expect(outcome).toEqual({
+      type: "rejected",
+      rejection: "identity-mismatch",
+      detail: "stored source document id is not a CZ-NS Domino universal id",
+    });
+  });
 });

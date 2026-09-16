@@ -15,7 +15,6 @@ import {
   excludedSourceField,
   EMPTY_AST,
   encodeSourceRawEnvelope,
-  isPersistableSourceDocumentId,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   STORED_RAW_REPARSE_REJECTION,
   SOURCE_TOTAL_PROBE_FAILURE,
@@ -99,6 +98,9 @@ const CZ_NS_RAW_PART = {
   DETAIL: "detail",
   PRINT: "print",
 } as const;
+
+/** The Domino universal id as every NS listing and detail URL states it. */
+const CZ_NS_DOCUMENT_ID_PATTERN = /^[0-9a-f]{32}$/iu;
 
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/u;
 
@@ -532,7 +534,7 @@ const czNsIdentityFields = ({
   caseNumber,
   unid,
 }: CzNsListingRow): CzNsListingRow | null =>
-  caseNumber.length === 0 || !isPersistableSourceDocumentId(unid)
+  caseNumber.length === 0 || !CZ_NS_DOCUMENT_ID_PATTERN.test(unid)
     ? null
     : { caseNumber, unid };
 
@@ -779,14 +781,22 @@ const storedRawParts = (
     : null;
 };
 
+type StoredAdditionalCaseNumbers =
+  | { type: "missing" }
+  | { type: "valid"; value: readonly string[] }
+  | { type: "invalid" };
+
 const storedAdditionalCaseNumbers = (
   metadata: Record<string, unknown>,
-): readonly string[] | undefined => {
+): StoredAdditionalCaseNumbers => {
   const value = metadata["additionalCaseNumbers"];
+  if (value === undefined) {
+    return { type: "missing" };
+  }
   return Array.isArray(value) &&
     value.every((item) => typeof item === "string" && item.trim().length > 0)
-    ? value
-    : undefined;
+    ? { type: "valid", value }
+    : { type: "invalid" };
 };
 
 /**
@@ -814,6 +824,21 @@ const reparseStoredRaw = (
       detail: "missing source document id",
     };
   }
+  if (!CZ_NS_DOCUMENT_ID_PATTERN.test(stored.sourceDocumentId)) {
+    return {
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.IDENTITY_MISMATCH,
+      detail: "stored source document id is not a CZ-NS Domino universal id",
+    };
+  }
+  const additionalCaseNumbers = storedAdditionalCaseNumbers(stored.metadata);
+  if (additionalCaseNumbers.type === "invalid") {
+    return {
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA,
+      detail: "stored additional case numbers are malformed",
+    };
+  }
 
   const raw = new TextDecoder().decode(stored.raw);
   const parts = storedRawParts(raw);
@@ -828,7 +853,10 @@ const reparseStoredRaw = (
     row: {
       unid: stored.sourceDocumentId,
       caseNumber: stored.caseNumber,
-      additionalCaseNumbers: storedAdditionalCaseNumbers(stored.metadata),
+      additionalCaseNumbers:
+        additionalCaseNumbers.type === "valid"
+          ? additionalCaseNumbers.value
+          : undefined,
     },
     webHtml: parts.webHtml,
     printHtml: parts.printHtml,
