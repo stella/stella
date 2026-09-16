@@ -1,5 +1,5 @@
 diff --git a/dist/introspect-6ew7sakf.mjs b/dist/introspect-6ew7sakf.mjs
-index 8786e0d65d7d61e2b1537a959fc43f0a3e624e33..8a14147f46b2d5411c322eab5aab3ae888fb7e0c 100644
+index 8786e0d65d7d61e2b1537a959fc43f0a3e624e33..d53b31df28eaf69839b2a7abdff5a57c3dc87afc 100644
 --- a/dist/introspect-6ew7sakf.mjs
 +++ b/dist/introspect-6ew7sakf.mjs
 @@ -806,6 +806,7 @@ async function seedResources(ctx, opts) {
@@ -10,8 +10,25 @@ index 8786e0d65d7d61e2b1537a959fc43f0a3e624e33..8a14147f46b2d5411c322eab5aab3ae8
  	const modelName = opts.schema?.oauthResource?.modelName ?? "oauthResource";
  	for (const rawInput of inputs) {
  		const check = await checkIdentifier(opts, rawInput.identifier);
+@@ -1088,7 +1089,15 @@ const clientRegistrationRequestSchema = z.object({
+ 	client_name: z.string().refine((value) => value.trim().length > 0, "client_name cannot be empty").optional(),
+ 	client_uri: z.string().optional(),
+ 	logo_uri: z.string().optional(),
+-	contacts: z.array(z.string().min(1)).min(1).optional(),
++	/**
++	 * RFC 7591 §2 makes `contacts` optional, so an empty array states nothing
++	 * that an absent member does not already state. Rejecting it fails the
++	 * registration of clients that always send the key, before authorization can
++	 * start. The empty array therefore normalizes to absent; a non-empty array
++	 * keeps its per-element validation and every other registration check is
++	 * untouched.
++	 */
++	contacts: z.array(z.string().min(1)).optional().transform((value) => value?.length ? value : void 0),
+ 	tos_uri: z.string().optional(),
+ 	policy_uri: z.string().optional(),
+ 	software_id: z.string().optional(),
 diff --git a/dist/oauth-1Ud-hvZY.d.mts b/dist/oauth-1Ud-hvZY.d.mts
-index 130fd5d8f3ddd36d1b776338367af5b8cb7f0e79..131bb887b6fe106aaf3c1ca0987be91764bb7d64 100644
+index 130fd5d8f3ddd36d1b776338367af5b8cb7f0e79..e44e3a50806c1d72a885841319a68145c274f579 100644
 --- a/dist/oauth-1Ud-hvZY.d.mts
 +++ b/dist/oauth-1Ud-hvZY.d.mts
 @@ -1118,6 +1118,8 @@ interface OAuthOptions<Scopes extends readonly Scope[] = InternallySupportedScop
