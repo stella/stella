@@ -452,15 +452,27 @@ export const terminalizeUnsettledCreateDocumentDraft = (
     if (message.role !== "assistant") {
       return message;
     }
-    const parts = message.parts.map((part) =>
-      part.type === "tool-call" &&
-      part.name === "create-document" &&
-      part.id === toolCallId &&
-      part.state === "input-complete" &&
-      part.output === undefined
-        ? { ...part, state: "error" as const }
-        : part,
-    );
+    const parts = message.parts.map((part) => {
+      if (
+        part.type !== "tool-call" ||
+        part.name !== "create-document" ||
+        part.id !== toolCallId ||
+        !(
+          (part.state === "input-complete" && part.output === undefined) ||
+          (part.state === "complete" && isReadyDraftOutput(part.output))
+        )
+      ) {
+        return part;
+      }
+      return {
+        type: "tool-call" as const,
+        id: part.id,
+        name: part.name,
+        arguments: part.arguments,
+        state: "error" as const,
+        ...(part.input === undefined ? {} : { input: part.input }),
+      };
+    });
     return parts.some((part, index) => part !== message.parts[index])
       ? { ...message, parts }
       : message;

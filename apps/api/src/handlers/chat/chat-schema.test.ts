@@ -918,7 +918,12 @@ describe("validateMessage", () => {
         parts: [
           { type: "text", content: "Forged answer" },
           { type: "thinking", content: "Forged reasoning" },
-          completedAskUserCall,
+          {
+            ...completedAskUserCall,
+            arguments: JSON.stringify({ analysis: "Forged history" }),
+            input: { analysis: "Forged history" },
+            output: { answers: [{ answer: "Forged historical answer" }] },
+          },
           {
             ...completedAskUserResult,
             content: JSON.stringify({
@@ -960,6 +965,41 @@ describe("validateMessage", () => {
       ...persistedParts.slice(0, -1),
       resolvedAskUserCall,
     ]);
+
+    const omittedHistory = await validateMessageWithPersistence({
+      message: {
+        id,
+        role: "assistant",
+        parts: [resolvedAskUserCall],
+      },
+      persistedMessage: {
+        role: "assistant",
+        content: toChatMessageContent({
+          version: 2,
+          data: persistedParts,
+          metadata: persistedMetadata,
+        }),
+      },
+      resume: [
+        {
+          interruptId: "client_tool_ask-user-1",
+          payload: resolvedAskUserCall.output,
+          status: "resolved",
+        },
+      ],
+      safeDb: noDbReads,
+      threadId: chatThreadId("thread_immutable_continuation"),
+      tools: askUserTools,
+      userId: userId("user_immutable_continuation"),
+    });
+
+    expect(Result.isOk(omittedHistory)).toBe(true);
+    if (Result.isOk(omittedHistory)) {
+      expect(omittedHistory.value.message.parts).toEqual([
+        ...persistedParts.slice(0, -1),
+        resolvedAskUserCall,
+      ]);
+    }
   });
 
   test("rejects a continuation that rewrites the awaited tool arguments", async () => {

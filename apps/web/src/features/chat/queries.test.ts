@@ -1321,6 +1321,60 @@ describe("chat runtime", () => {
     });
   });
 
+  test("rolls back an optimistic tool result when its continuation is rejected", async () => {
+    const threadId = toChatThreadId("thread-rejected-draft-result");
+    const input = {
+      name: "Power of attorney",
+      source: "@doc kind=other locale=en page=A4",
+    };
+    const pendingMessage = {
+      id: "33333333-3333-4333-8333-333333333334",
+      role: "assistant",
+      parts: [
+        {
+          type: "tool-call",
+          id: "tool-rejected-draft",
+          name: "create-document",
+          state: "input-complete",
+          arguments: JSON.stringify(input),
+          input,
+        },
+      ],
+    } as const satisfies PersistedChatMessage;
+    globalThis.fetch = createFetchMock(
+      async () =>
+        new Response(
+          JSON.stringify({
+            code: API_VALIDATION_ERROR_CODE,
+            message: "Chat continuation does not match its awaited interaction",
+          }),
+          { headers: { "Content-Type": "application/json" }, status: 400 },
+        ),
+    );
+    const runtime = createChatRuntime({
+      context: undefined,
+      initialMessages: [pendingMessage],
+      key: { scope: "global", threadId },
+      onError: () => {},
+      onFinish: () => {},
+    });
+
+    const result = await Result.tryPromise(async () => {
+      await runtime.addToolResult({
+        tool: "create-document",
+        toolCallId: "tool-rejected-draft",
+        output: {
+          success: true,
+          destination: "draft",
+          fileName: "Power of attorney.docx",
+        },
+      });
+    });
+
+    expect(Result.isError(result)).toBe(true);
+    expect(runtime.getSnapshot().messages).toEqual([pendingMessage]);
+  });
+
   test("streams reasoning and final text through tanstack ChatClient", async () => {
     const threadId = toChatThreadId("thread-A");
     const requests: unknown[] = [];

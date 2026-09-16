@@ -453,16 +453,34 @@ export const createChatRuntime = ({
       });
     },
     addToolResult: async (result, options) => {
+      const messagesBeforeResult = snapshot.messages;
+      const errorBeforeResult = snapshot.error;
       await withBody(options, async () => {
-        await client.addToolResult({
-          tool: result.tool,
-          toolCallId: result.toolCallId,
-          output: result.output,
-          ...(result.state === undefined ? {} : { state: result.state }),
-          ...(result.errorText === undefined
-            ? {}
-            : { errorText: result.errorText }),
-        });
+        try {
+          await client.addToolResult({
+            tool: result.tool,
+            toolCallId: result.toolCallId,
+            output: result.output,
+            ...(result.state === undefined ? {} : { state: result.state }),
+            ...(result.errorText === undefined
+              ? {}
+              : { errorText: result.errorText }),
+          });
+          if (
+            snapshot.error !== undefined &&
+            snapshot.error !== errorBeforeResult
+          ) {
+            throw snapshot.error;
+          }
+        } catch (error) {
+          // TanStack applies the result optimistically before it sends the
+          // continuation. A rejected request must not leave that local result
+          // looking durable: generated-document saving uses the completed
+          // server message as its authorization proof.
+          client.setMessagesManually(messagesBeforeResult);
+          setSnapshot({ messages: messagesBeforeResult });
+          throw error;
+        }
       });
     },
     getSnapshot: () => snapshot,
