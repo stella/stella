@@ -988,12 +988,10 @@ const validateContinuationToolCallTransition = ({
       if (incomingCall.state !== "complete" && incomingCall.state !== "error") {
         return invalidContinuationToolCall();
       }
-      const { output: _canonicalOutput, ...canonicalWithoutOutput } = canonical;
+      const output: unknown = incomingCall.output;
       const candidate: unknown = {
-        ...canonicalWithoutOutput,
-        ...(incomingCall.output === undefined
-          ? {}
-          : { output: incomingCall.output }),
+        ...canonical,
+        output,
         state: incomingCall.state,
       };
       if (!isChatPart(candidate) || candidate.type !== "tool-call") {
