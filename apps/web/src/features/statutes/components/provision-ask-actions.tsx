@@ -7,13 +7,20 @@ import { Button } from "@stll/ui/button";
 import { Textarea } from "@stll/ui/textarea";
 
 import type { ActiveLegalDocument } from "@/components/ai-suggestions/active-legal-document";
+import { ACCOUNT_GATE_OUTCOME } from "@/components/auth/require-account.logic";
+import type { AccountGateOutcome } from "@/components/auth/require-account.logic";
 import { openPublicLawChat } from "@/components/public-law-ask";
 import type { ProvisionViewPayload } from "@/features/statutes/provision-inspector.logic";
 import {
+  clearProvisionQuestionDraft,
+  provisionQuestionDraftKey,
   provisionTabLabel,
+  readProvisionQuestionDraft,
   submitsOnEnter,
+  writeProvisionQuestionDraft,
 } from "@/features/statutes/provision-inspector.logic";
 import { formatValidityDate } from "@/features/statutes/statute-format";
+import { useSessionStorage } from "@/hooks/use-session-storage";
 import { useFormatter } from "@/i18n/formatting-context";
 
 const QUESTION_MAX_LENGTH = 2000;
@@ -32,6 +39,12 @@ type ProvisionAskActionsProps = {
    * of opening a second one beside it.
    */
   activeLegal: ActiveLegalDocument;
+  /**
+   * Whether the question may be sent. Anything but `allowed` stops here: the
+   * gate has either opened, or the session is still being read. What the
+   * reader wrote is kept either way.
+   */
+  ensureAccount: () => AccountGateOutcome;
   /** The passages applying the provision in its leading decisions. */
   passages: readonly AskPassage[];
   payload: ProvisionViewPayload;
@@ -47,12 +60,31 @@ type ProvisionAskActionsProps = {
  */
 export const ProvisionAskActions = ({
   activeLegal,
+  ensureAccount,
   passages,
   payload,
 }: ProvisionAskActionsProps) => {
   const t = useTranslations();
   const format = useFormatter();
+  const storage = useSessionStorage();
+  const draftKey = provisionQuestionDraftKey(payload);
   const [question, setQuestion] = useState("");
+  // Storage reads null through the server and hydration passes, so the saved
+  // draft is adopted on the first render that can see it rather than in an
+  // effect. Latching on the key also re-seeds when the reader moves to another
+  // provision, which carries its own unsent question.
+  const [seededKey, setSeededKey] = useState<string | null>(null);
+  if (storage !== null && seededKey !== draftKey) {
+    setSeededKey(draftKey);
+    setQuestion(readProvisionQuestionDraft(storage, draftKey));
+  }
+
+  const editQuestion = (next: string) => {
+    setQuestion(next);
+    if (storage !== null) {
+      writeProvisionQuestionDraft(storage, draftKey, next);
+    }
+  };
 
   const validFrom = formatValidityDate(payload.versionValidFrom, format);
   const subject =
@@ -88,6 +120,9 @@ export const ProvisionAskActions = ({
         });
 
   const summarize = () => {
+    if (ensureAccount() !== ACCOUNT_GATE_OUTCOME.allowed) {
+      return;
+    }
     openPublicLawChat({
       document: activeLegal,
       label,
@@ -100,6 +135,11 @@ export const ProvisionAskActions = ({
     if (trimmed === "") {
       return;
     }
+    // The draft is already in the tab's storage, so the account round trip
+    // brings the reader back to this provision with their question intact.
+    if (ensureAccount() !== ACCOUNT_GATE_OUTCOME.allowed) {
+      return;
+    }
     openPublicLawChat({
       document: activeLegal,
       label,
@@ -109,6 +149,9 @@ export const ProvisionAskActions = ({
       })}${context}`,
     });
     setQuestion("");
+    if (storage !== null) {
+      clearProvisionQuestionDraft(storage, draftKey);
+    }
   };
 
   return (
@@ -133,7 +176,7 @@ export const ProvisionAskActions = ({
           aria-label={t("statutes.provisionAskPlaceholder")}
           className="min-h-16 text-xs"
           maxLength={QUESTION_MAX_LENGTH}
-          onChange={(event) => setQuestion(event.target.value)}
+          onChange={(event) => editQuestion(event.target.value)}
           onKeyDown={(event) => {
             // The native event, not the synthetic one: React does not carry
             // `isComposing`, and an IME confirming a candidate with Enter must

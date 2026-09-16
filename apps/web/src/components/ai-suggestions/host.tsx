@@ -3,19 +3,18 @@
  *
  * The shared building blocks every chat surface mounts: the docked
  * `PromptBar` (rich composer + preset chips + attachment tray + the
- * send/stop/retry action), its `DockedComposer` geometry owner, the
- * floating glass `ChatThreadCard`, the suggestion stepper, and the
- * `SuggestionCard` used to render an edit
+ * send/stop/retry action), the floating glass `ChatThreadCard`, the
+ * suggestion stepper, and the `SuggestionCard` used to render an edit
  * suggestion. Surfaces (the file-chat overlay, Template Studio, the
  * inspector chat tab) own their own thread state and wire these
- * together; this module owns only the presentation and geometry so the
- * surfaces can never drift.
+ * together; this module owns only the presentation so the surfaces can
+ * never drift. The stack's geometry and its box live in
+ * `@/components/chat/docked-composer`, outside the editor bundle.
  */
 
 import "@/components/chat-editor.css";
 import { useCallback, useRef, useState } from "react";
 import type {
-  ComponentProps,
   FocusEvent as ReactFocusEvent,
   KeyboardEvent as ReactKeyboardEvent,
   ReactNode,
@@ -43,13 +42,10 @@ import type {
 import { Button } from "@stll/ui/button";
 import {
   COMPOSER_BOX_ANONYMIZED_CLASS,
-  COMPOSER_BOX_CLASS,
   COMPOSER_BOX_FOCUS_CLASS,
-  COMPOSER_COMPACT_ROW_CLASS,
   COMPOSER_COMPACT_TEXT_CELL_CLASS,
   COMPOSER_CONTROL_BUTTON_SIZE,
   COMPOSER_PLACEHOLDER_CLASS,
-  COMPOSER_TEXT_CLASS,
 } from "@stll/ui/composer";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { OVERLAY_LAYER_CLASS_NAMES } from "@stll/ui/overlay-layer";
@@ -67,7 +63,11 @@ import type { ComposerModelsMenuProps } from "@/components/chat/chat-model-optio
 import { ComposerControlSlot } from "@/components/chat/composer-control-slot";
 import { ComposerPlusMenu } from "@/components/chat/composer-plus-menu";
 import type { ComposerContextMenuProps } from "@/components/chat/composer-plus-menu";
-import { ComposerVeil } from "@/components/chat/composer-veil";
+import {
+  DOC_FLOAT_SURFACE_CLASS,
+  DockedComposer,
+  PromptBarShell,
+} from "@/components/chat/docked-composer";
 import { PromptEditorContent } from "@/components/prompt-editor";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { usePulse } from "@/hooks/use-pulse";
@@ -77,10 +77,7 @@ import { detached } from "@/lib/detached";
 import type { ReservedChatCommandContext } from "@/lib/reserved-chat-commands";
 import { isValueTypeKind, VALUE_TYPE_META } from "@/lib/value-types";
 
-import {
-  DOCKED_COMPOSER_VEIL_WIDTH_CLASS,
-  DOCKED_COMPOSER_WIDTH_CLASS,
-} from "./composer-geometry";
+import { DOCKED_COMPOSER_WIDTH_CLASS } from "./composer-geometry";
 import { shouldShowPromptBarBusyPlaceholder } from "./host.logic";
 import type { FileAIChatStatus } from "./types";
 
@@ -287,110 +284,6 @@ type PromptBarProps = {
 };
 
 /**
- * Styled placeholder label rendered in the prompt bar when the editor
- * is empty. Shared between the live `PromptBar` (via `emptyPlaceholder`)
- * and the loading `PromptBarPlaceholder` shell so both surfaces are
- * pixel-identical and can never drift.
- */
-export const PromptBarPlaceholderContent = ({
-  children,
-}: {
-  children: ReactNode;
-}) => (
-  <span
-    className={cn(
-      "text-foreground-placeholder block min-w-0 truncate",
-      COMPOSER_TEXT_CLASS,
-    )}
-  >
-    {children}
-  </span>
-);
-
-type PromptBarShellProps = {
-  children: ReactNode;
-} & Omit<ComponentProps<"div">, "children">;
-
-/**
- * Background for chrome floating over the document page (prompt bar,
- * suggestion stepper, preset chips). In light mode the rendered page
- * reads as white paper in every accent palette, while `--popover`
- * follows the palette (Flexoki `#fffcf0`, Nord `#eceff4`) — solid but
- * visibly hue-tinted against the document. Anchor these surfaces to
- * the document instead: white in light; in dark the page follows the
- * theme, so the popover token stays correct. (`--doc-canvas` itself
- * is scoped to `.folio-root` and does not reach these elements.)
- */
-const DOC_FLOAT_SURFACE_CLASS =
-  "[--doc-float-surface:var(--color-white)] dark:[--doc-float-surface:var(--popover)] bg-(--doc-float-surface)";
-
-/**
- * The bar box itself — the shared composer box (same radius, border, focus
- * ring and compact row stature as the main chat bar), plus the shadow and
- * doc-anchored surface a bar floating over a document needs — with no
- * positioning or sizing of its own. `DockedComposer` owns where the bar sits
- * and how wide it is; this shell just paints the box and fills the width it
- * is given (`w-full`). Both the live `PromptBar` and the loading
- * `PromptBarPlaceholder` render through it so they can never drift apart.
- *
- * The surface is solid on purpose: the separate pane veil softens document
- * content around the stack while the controls themselves remain crisp.
- */
-const PromptBarShell = ({
-  children,
-  className,
-  ...rest
-}: PromptBarShellProps) => (
-  <div
-    {...rest}
-    className={cn(
-      COMPOSER_BOX_CLASS,
-      "group/bar relative flex w-full transition-[box-shadow,border-color]",
-      COMPOSER_COMPACT_ROW_CLASS,
-      "shadow-[0_0_0_1px_rgb(0_0_0/0.02),0_1px_2px_rgb(0_0_0/0.03),0_8px_20px_rgb(0_0_0/0.05)]",
-      DOC_FLOAT_SURFACE_CLASS,
-      className,
-    )}
-  >
-    {children}
-  </div>
-);
-
-/**
- * Complete prompt row rendered while the live editor hydrates. Known controls
- * stay real and fixed in place; only data-owned content belongs in a skeleton.
- * Keeping this beside `PromptBar` makes the attachment and send affordances a
- * single owned pair instead of asking each loading shell to mirror them.
- */
-export const PromptBarPending = ({ children }: { children: ReactNode }) => (
-  <PromptBarShell aria-hidden="true">
-    <ComposerControlSlot>
-      <ComposerPlusMenu disabled onOpenFilePicker={() => undefined} />
-    </ComposerControlSlot>
-    <div
-      className={cn(
-        COMPOSER_COMPACT_TEXT_CELL_CLASS,
-        "flex flex-1 items-center px-1.5",
-      )}
-    >
-      <PromptBarPlaceholderContent>{children}</PromptBarPlaceholderContent>
-    </div>
-    <ComposerControlSlot>
-      <ChatComposerActionButton
-        canSend={false}
-        isGenerating={false}
-        onSend={() => undefined}
-      />
-    </ComposerControlSlot>
-  </PromptBarShell>
-);
-
-/**
- * Shared width of the docked composer column and any floating thread
- * card that aligns to it. One owner so the bar and the card can never
- * drift to different widths.
- */
-/**
  * Bottom offset for a floating `ChatThreadCard` so it clears the docked
  * composer stack that `DockedComposer` pins at `bottom-3.5` (14px).
  *
@@ -413,74 +306,6 @@ const FLOATING_THREAD_CARD_OFFSET_CLASS = "bottom-26";
  * whenever the entity has pending suggestions driving the review bar.
  */
 export const FLOATING_THREAD_CARD_OFFSET_WITH_REVIEW_CLASS = "bottom-40";
-
-type DockedComposerProps = {
-  /**
-   * Follow-up chips stacked directly above the bar. Owns no offset of
-   * its own — the chips component carries its own bottom spacing and
-   * collapses to nothing when it has nothing to show, so no phantom gap
-   * appears above the bar.
-   */
-  chips?: ReactNode;
-  /** The prompt bar itself (a `PromptBarShell`). */
-  bar: ReactNode;
-  /**
-   * Status row beneath the bar (matter picker, context meter, send-mode
-   * shield). Anchored flush under the bar with the single owned gap.
-   */
-  dock?: ReactNode;
-};
-
-/**
- * The one and only owner of the docked-composer geometry.
- *
- * Every chat surface — the inspector chat tab, the file-overlay chat,
- * the Template Studio chat — mounts its `PromptBar` through this, so the
- * bar's width, its bottom offset from the host pane, the follow-up-chip
- * offset, and the status-row placement live in exactly one place and can
- * never drift between surfaces. The column pins to the bottom of the
- * nearest positioned host pane and centres itself; the wrapper is
- * click-through so scrolled content behind the composer stays reachable
- * in the gaps, while the bar, chips, and dock capture their own clicks.
- *
- * The bar sits above a surface's own thread panel (z-50 vs the panel's
- * z-40) so the two never fight where they meet, and the chips sit below
- * it (z-30) so an open thread wins the overlap.
- */
-export const DockedComposer = ({ chips, bar, dock }: DockedComposerProps) => (
-  <div
-    className={cn(
-      "pointer-events-none absolute inset-x-0 bottom-3.5 flex flex-col items-center",
-      OVERLAY_LAYER_CLASS_NAMES.chrome,
-    )}
-  >
-    <ComposerVeil
-      className={cn("mx-auto", DOCKED_COMPOSER_VEIL_WIDTH_CLASS)}
-      variant="pane"
-    />
-    {chips !== undefined && (
-      <div
-        className={cn(
-          "pointer-events-auto relative z-30 px-1",
-          DOCKED_COMPOSER_WIDTH_CLASS,
-        )}
-      >
-        {chips}
-      </div>
-    )}
-    <div
-      className={cn(
-        "pointer-events-auto relative z-50 flex flex-col",
-        DOCKED_COMPOSER_WIDTH_CLASS,
-      )}
-    >
-      {bar}
-      {/* No extra top margin: `ComposerStatusRow` owns the single
-            bar-to-row gap (mt-1.5), matching the main chat tray's rhythm. */}
-      {dock !== undefined && <div className="px-1">{dock}</div>}
-    </div>
-  </div>
-);
 
 /**
  * Collapse affordance rendered by `ChatThreadCard` in its top end

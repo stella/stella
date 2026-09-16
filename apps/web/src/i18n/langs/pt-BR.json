@@ -89,6 +89,7 @@
     "continueWithMicrosoft": "Continuar com a Microsoft",
     "createFirstAccount": "Criar primeira conta",
     "createFirstOrganization": "Crie sua primeira organização para começar",
+    "createFreeAccount": "Criar conta gratuita",
     "createOrganization": "Criar uma organização",
     "createOrganizationButton": "Criar organização",
     "devQuickStart": {
@@ -131,6 +132,13 @@
     "organizationNamePlaceholder": "Minha organização",
     "password": "Senha",
     "rateLimitExceeded": "Muitas tentativas. Por favor, tente novamente mais tarde.",
+    "requireAccount": {
+      "askAboutDocument": "Crie uma conta gratuita para perguntar sobre este documento",
+      "askInChat": "Crie uma conta gratuita para perguntar isso no chat",
+      "description": "Você voltará a esta página assim que sua conta estiver pronta.",
+      "generateHeadnotes": "Crie uma conta gratuita para gerar ementas com IA",
+      "writeResearchQuestion": "Crie uma conta gratuita para fazer uma pergunta a estes resultados"
+    },
     "resendCode": "Enviar código novamente para <email>{emailAddress}</email>",
     "selectOrganization": "Selecione uma organização",
     "signIn": "Faça login",
@@ -566,6 +574,7 @@
         "procedural-history": "Histórico processual",
         "reasoning": "Fundamentação"
       },
+      "generate": "Gerar ementas com IA",
       "holdingAnchor": "Ir para o parágrafo",
       "topics": "Temas",
       "treatment": "Tratamento posterior"
@@ -3319,7 +3328,6 @@
       "colorViolet": "Violeta",
       "colorYellow": "Amarelo",
       "commentPlaceholder": "Escreva um comentário…",
-      "createFreeAccount": "Criar conta gratuita",
       "guestAuthor": "Você",
       "guestLimitReached": "Esta aba pode conter até {count} destaques e notas. Crie uma conta para salvar mais.",
       "guestMigrationComplete": "Destaques e notas salvos.",
@@ -4144,7 +4152,6 @@
     "provisionAskContextPrompt": "\n\nTrechos que aplicam o dispositivo nas decisões de maior autoridade:\n{passages}\n\nUse as ferramentas de jurisprudência para ler qualquer uma dessas decisões na íntegra ou encontrar outras decisões que citem o dispositivo.",
     "provisionAskPlaceholder": "Pergunte sobre este dispositivo",
     "provisionAskQuestionPrompt": "Sobre {subject}: {question}",
-    "provisionAskSignIn": "Faça login para perguntar sobre este dispositivo.",
     "provisionAskSummarize": "Resumir como os tribunais aplicam este dispositivo",
     "provisionAskSummarizePrompt": "Resuma como os tribunais aplicam {subject}, citando as decisões em que se basear.",
     "provisionDetailsFor": "Detalhes de {provision}",

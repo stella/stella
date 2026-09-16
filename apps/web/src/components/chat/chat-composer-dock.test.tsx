@@ -4,9 +4,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, expect, test } from "bun:test";
 import { IntlProvider } from "use-intl";
 
-import { PromptBarPending } from "@/components/ai-suggestions/host";
 import { ChatComposerDock } from "@/components/chat/chat-composer-dock";
 import { ChatMatterPickerPending } from "@/components/chat/chat-matter-picker";
+import { PromptBarPending } from "@/components/chat/docked-composer";
 import { FormattingProvider } from "@/i18n/formatting-context";
 import en from "@/i18n/langs/en.json";
 import { toChatThreadId } from "@/lib/chat-thread-ref";

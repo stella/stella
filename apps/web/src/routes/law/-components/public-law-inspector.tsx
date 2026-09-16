@@ -10,6 +10,7 @@ import { InspectorRailIconButton, InspectorRailTab } from "@stll/ui/inspector";
 import { WorkspaceEndRail } from "@stll/ui/workspace-shell";
 import type { WorkspaceEndRailChatAction } from "@stll/ui/workspace-shell";
 
+import { useRequireAccount } from "@/components/auth/use-require-account";
 import {
   isGenericInspectorTab,
   useInspectorTabsStore,
@@ -17,7 +18,6 @@ import {
 import type { InspectorTab } from "@/components/inspector/inspector-tabs-store";
 import { getInspectorView } from "@/components/inspector/view-registry";
 import { PublicInspectorDock } from "@/components/public-inspector-rail";
-import { usePublicSignInRequest } from "@/components/public-sign-in-request";
 import Tooltip from "@/components/tooltip";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { publicLawInspectorPresence } from "@/routes/law/-components/public-law-inspector.logic";
@@ -161,8 +161,9 @@ const SessionRailPlaceholder = () => {
 
 /**
  * What a reader without a session gets: the registry views themselves, on the
- * same geometry as the workspace inspector. No chat, no file tabs — the kinds
- * an account owns are never opened from here.
+ * same geometry as the workspace inspector, and the same chat affordance on
+ * the rail. The chat opens the account gate rather than a thread; the tab
+ * kinds an account owns are still never drawn from here.
  */
 const AnonymousViewDock = ({ tabs }: { tabs: readonly GenericTab[] }) => {
   const t = useTranslations();
@@ -171,7 +172,7 @@ const AnonymousViewDock = ({ tabs }: { tabs: readonly GenericTab[] }) => {
   const setActive = useInspectorTabsStore((state) => state.setActive);
   const setMinimized = useInspectorTabsStore((state) => state.setMinimized);
   const closeTab = useInspectorTabsStore((state) => state.closeTab);
-  const requestSignIn = usePublicSignInRequest();
+  const { accountDialog, ensureAccount } = useRequireAccount();
 
   // A tab may have been closed in a peer browser tab between renders, so the
   // active id is not assumed to name one of these.
@@ -182,19 +183,16 @@ const AnonymousViewDock = ({ tabs }: { tabs: readonly GenericTab[] }) => {
     <PublicInspectorDock expanded={expanded}>
       <div className="bg-background flex h-full shadow-lg">
         <PublicLawRail
-          chatAction={
-            requestSignIn === null
-              ? {
-                  label: t("inspector.openChat"),
-                  reason: t("auth.signIn"),
-                  status: "unavailable",
-                }
-              : {
-                  label: t("inspector.openChat"),
-                  onActivate: () => requestSignIn("/chat/new"),
-                  status: "enabled",
-                }
-          }
+          chatAction={{
+            label: t("inspector.openChat"),
+            // The gate returns false for every visitor who reaches this dock,
+            // which is the point: the chat is offered, and the account is
+            // asked for here rather than by hiding the affordance.
+            onActivate: () => {
+              ensureAccount("askInChat");
+            },
+            status: "enabled",
+          }}
           minimized={minimized}
           onToggle={() => setMinimized(!minimized)}
         >
@@ -221,6 +219,7 @@ const AnonymousViewDock = ({ tabs }: { tabs: readonly GenericTab[] }) => {
             <RegisteredView onClose={() => closeTab(active.id)} tab={active} />
           </Suspense>
         )}
+        {accountDialog}
       </div>
     </PublicInspectorDock>
   );

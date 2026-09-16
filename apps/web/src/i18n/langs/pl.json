@@ -89,6 +89,7 @@
     "continueWithMicrosoft": "Kontynuuj przez Microsoft",
     "createFirstAccount": "Utwórz pierwsze konto",
     "createFirstOrganization": "Utwórz swoją pierwszą organizację, aby rozpocząć",
+    "createFreeAccount": "Utwórz bezpłatne konto",
     "createOrganization": "Utwórz organizację",
     "createOrganizationButton": "Utwórz organizację",
     "devQuickStart": {
@@ -131,6 +132,13 @@
     "organizationNamePlaceholder": "Moja organizacja",
     "password": "Hasło",
     "rateLimitExceeded": "Zbyt wiele prób. Spróbuj ponownie później.",
+    "requireAccount": {
+      "askAboutDocument": "Utwórz bezpłatne konto, aby zapytać o ten dokument",
+      "askInChat": "Utwórz bezpłatne konto, aby zadać to pytanie na czacie",
+      "description": "Po utworzeniu konta wrócisz na tę stronę.",
+      "generateHeadnotes": "Utwórz bezpłatne konto, aby AI ułożyła tezy",
+      "writeResearchQuestion": "Utwórz bezpłatne konto, aby zadać pytanie tym wynikom"
+    },
     "resendCode": "Wyślij kod ponownie na <email>{emailAddress}</email>",
     "selectOrganization": "Wybierz organizację",
     "signIn": "Zaloguj się",
@@ -566,6 +574,7 @@
         "procedural-history": "Przebieg postępowania",
         "reasoning": "Rozumowanie"
       },
+      "generate": "Ułóż tezy w AI",
       "holdingAnchor": "Przejdź do akapitu",
       "topics": "Tematy",
       "treatment": "Późniejsze orzecznictwo"
@@ -3319,7 +3328,6 @@
       "colorViolet": "Fioletowy",
       "colorYellow": "Żółty",
       "commentPlaceholder": "Napisz komentarz…",
-      "createFreeAccount": "Utwórz bezpłatne konto",
       "guestAuthor": "Ty",
       "guestLimitReached": "Ta karta może pomieścić do {count} wyróżnień i notatek. Utwórz konto, aby zapisać więcej.",
       "guestMigrationComplete": "Wyróżnienia i notatki zapisane.",
@@ -4144,7 +4152,6 @@
     "provisionAskContextPrompt": "\n\nFragmenty stosujące przepis w najbardziej miarodajnych orzeczeniach:\n{passages}\n\nSkorzystaj z narzędzi orzecznictwa, aby przeczytać w całości którekolwiek z tych orzeczeń lub znaleźć kolejne orzeczenia powołujące ten przepis.",
     "provisionAskPlaceholder": "Zapytaj o ten przepis",
     "provisionAskQuestionPrompt": "W sprawie {subject}: {question}",
-    "provisionAskSignIn": "Zaloguj się, aby zapytać o ten przepis.",
     "provisionAskSummarize": "Podsumuj, jak sądy stosują ten przepis",
     "provisionAskSummarizePrompt": "Podsumuj, jak sądy stosują {subject}, i przywołaj orzeczenia, na których się opierasz.",
     "provisionDetailsFor": "Szczegóły: {provision}",

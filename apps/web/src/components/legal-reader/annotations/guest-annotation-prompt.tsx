@@ -44,7 +44,7 @@ export const GuestAnnotationPrompt = ({
           size="sm"
           variant="outline"
         >
-          {t("legalReader.annotations.createFreeAccount")}
+          {t("auth.createFreeAccount")}
         </Button>
       )}
     </div>

@@ -89,6 +89,7 @@
     "continueWithMicrosoft": "Tęsti su Microsoft",
     "createFirstAccount": "Sukurti pirmą paskyrą",
     "createFirstOrganization": "Sukurkite savo pirmąją organizaciją",
+    "createFreeAccount": "Sukurti nemokamą paskyrą",
     "createOrganization": "Sukurti organizaciją",
     "createOrganizationButton": "Sukurti organizaciją",
     "devQuickStart": {
@@ -131,6 +132,13 @@
     "organizationNamePlaceholder": "Mano organizacija",
     "password": "Slaptažodis",
     "rateLimitExceeded": "Per daug bandymų. Bandykite dar kartą vėliau.",
+    "requireAccount": {
+      "askAboutDocument": "Sukurkite nemokamą paskyrą, kad galėtumėte klausti apie šį dokumentą",
+      "askInChat": "Sukurkite nemokamą paskyrą, kad paklaustumėte to pokalbyje",
+      "description": "Kai paskyra bus paruošta, grįšite į šį puslapį.",
+      "generateHeadnotes": "Sukurkite nemokamą paskyrą, kad DI parengtų santraukas",
+      "writeResearchQuestion": "Sukurkite nemokamą paskyrą, kad užduotumėte klausimą šiems rezultatams"
+    },
     "resendCode": "Siųsti kodą dar kartą adresu <email>{emailAddress}</email>",
     "selectOrganization": "Pasirinkite organizaciją",
     "signIn": "Prisijungti",
@@ -566,6 +574,7 @@
         "procedural-history": "Procesinė eiga",
         "reasoning": "Mąstymas"
       },
+      "generate": "Parengti DI santraukas",
       "holdingAnchor": "Pereiti prie pastraipos",
       "topics": "Temos",
       "treatment": "Vėlesnis vertinimas"
@@ -3319,7 +3328,6 @@
       "colorViolet": "Violetinė",
       "colorYellow": "Geltona",
       "commentPlaceholder": "Rašykite komentarą…",
-      "createFreeAccount": "Sukurti nemokamą paskyrą",
       "guestAuthor": "Jūs",
       "guestLimitReached": "Šiame skirtuke galima laikyti iki {count} paryškinimų ir pastabų. Norėdami išsaugoti daugiau, sukurkite paskyrą.",
       "guestMigrationComplete": "Paryškinimai ir pastabos išsaugoti.",
@@ -4144,7 +4152,6 @@
     "provisionAskContextPrompt": "\n\nIštraukos, kuriose nuostata taikoma autoritetingiausiuose sprendimuose:\n{passages}\n\nNaudok teismų praktikos įrankius, kad perskaitytum bet kurį iš šių sprendimų visą arba rastum daugiau sprendimų, kuriuose nuostata cituojama.",
     "provisionAskPlaceholder": "Klauskite apie šią nuostatą",
     "provisionAskQuestionPrompt": "Dėl {subject}: {question}",
-    "provisionAskSignIn": "Prisijunkite, kad galėtumėte klausti apie šią nuostatą.",
     "provisionAskSummarize": "Apibendrinti, kaip teismai taiko šią nuostatą",
     "provisionAskSummarizePrompt": "Apibendrink, kaip teismai taiko {subject}, ir nurodyk sprendimus, kuriais remiesi.",
     "provisionDetailsFor": "{provision} informacija",

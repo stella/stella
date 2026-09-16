@@ -66,10 +66,7 @@ import type {
   FolioAIEditSeverity,
   FolioAIEditSnapshot,
 } from "@stll/folio-react";
-import { BidiText } from "@stll/ui/bidi-text";
-import { COMPOSER_TEXT_CLASS } from "@stll/ui/composer";
 import { stellaToast } from "@stll/ui/toast";
-import { cn } from "@stll/ui/utils";
 
 import { activeLegalDocumentRef } from "@/components/ai-suggestions/active-legal-document";
 import type { ActiveLegalDocument } from "@/components/ai-suggestions/active-legal-document";
@@ -80,6 +77,10 @@ import {
   resolveDocxSuggestionRequest,
   revertDocxSuggestionRequest,
 } from "@/components/ai-suggestions/docx-suggestion-persistence";
+import {
+  FileChatEmptyPlaceholder,
+  useFileChatPlaceholder,
+} from "@/components/ai-suggestions/file-chat-placeholder";
 import {
   PENDING_REVIEW_CHOICE,
   resolveFileReviewSessionId,
@@ -1161,70 +1162,6 @@ const useFileChatDocxLifecycle = ({
     };
   }, [editorReady, hasDocxEditSurface, docxEditorRef, setEditorReady]);
   return { lastSentDocxEditSnapshotRef };
-};
-
-const useFileChatPlaceholder = ({
-  activeDraft,
-  activeExternal,
-  activeFile,
-  activeLegal,
-  docxEditSafety,
-}: Pick<
-  FileChatOverlayInnerProps,
-  | "activeDraft"
-  | "activeExternal"
-  | "activeFile"
-  | "activeLegal"
-  | "docxEditSafety"
->) => {
-  const t = useTranslations();
-  if (activeDraft !== undefined) {
-    return {
-      placeholder: t("chat.editableFilePlaceholder", {
-        title: activeDraft.fileName,
-      }),
-      placeholderAction: t("chat.editableFilePlaceholderAction"),
-      sourceLabel: activeDraft.fileName,
-    };
-  }
-  if (activeFile !== undefined) {
-    const canOfferEdit =
-      activeFile.editable === true && docxEditSafety !== "unsafe";
-    return {
-      placeholder: t(
-        canOfferEdit
-          ? "chat.editableFilePlaceholder"
-          : "chat.sourcePlaceholder",
-        { title: activeFile.fileName },
-      ),
-      placeholderAction: t(
-        canOfferEdit
-          ? "chat.editableFilePlaceholderAction"
-          : "chat.sourcePlaceholderAction",
-      ),
-      sourceLabel: activeFile.fileName,
-    };
-  }
-  if (activeExternal !== undefined) {
-    return {
-      placeholder: t("chat.sourcePlaceholder", { title: activeExternal.title }),
-      placeholderAction: t("chat.sourcePlaceholderAction"),
-      sourceLabel: activeExternal.title,
-    };
-  }
-  if (activeLegal !== undefined) {
-    const { label } = activeLegalDocumentRef(activeLegal);
-    return {
-      placeholder: t("chat.sourcePlaceholder", { title: label }),
-      placeholderAction: t("chat.sourcePlaceholderAction"),
-      sourceLabel: label,
-    };
-  }
-  return {
-    placeholder: undefined,
-    placeholderAction: undefined,
-    sourceLabel: undefined,
-  };
 };
 
 const FileChatOverlayInner = ({
@@ -2727,22 +2664,10 @@ const FileChatOverlayInner = ({
           reservedCommands={{ hasPersistedThread: hasMessages }}
           skillsOrganizationId={activeOrganizationId}
           emptyPlaceholder={
-            filePlaceholderAction !== undefined ? (
-              <span
-                className={cn(
-                  "text-foreground-ghost flex min-w-0 items-center gap-1.5",
-                  COMPOSER_TEXT_CLASS,
-                )}
-              >
-                <span className="shrink-0">{filePlaceholderAction}</span>
-                <BidiText
-                  as="span"
-                  className="text-foreground-label max-w-64 truncate"
-                >
-                  {filePlaceholderSourceLabel}
-                </BidiText>
-              </span>
-            ) : undefined
+            <FileChatEmptyPlaceholder
+              placeholderAction={filePlaceholderAction}
+              sourceLabel={filePlaceholderSourceLabel}
+            />
           }
           layout="floating"
           onFocusChange={setComposerFocused}

@@ -89,6 +89,7 @@
     "continueWithMicrosoft": "Continuar con Microsoft",
     "createFirstAccount": "Crear primera cuenta",
     "createFirstOrganization": "Cree su primera organización para comenzar",
+    "createFreeAccount": "Crear cuenta gratuita",
     "createOrganization": "Crear una organización",
     "createOrganizationButton": "Crear organización",
     "devQuickStart": {
@@ -131,6 +132,13 @@
     "organizationNamePlaceholder": "Mi Organización",
     "password": "Contraseña",
     "rateLimitExceeded": "Demasiados intentos. Inténtelo de nuevo más tarde.",
+    "requireAccount": {
+      "askAboutDocument": "Cree una cuenta gratuita para preguntar sobre este documento",
+      "askInChat": "Cree una cuenta gratuita para preguntar esto en el chat",
+      "description": "Volverá a esta página en cuanto su cuenta esté lista.",
+      "generateHeadnotes": "Cree una cuenta gratuita para generar sumarios con IA",
+      "writeResearchQuestion": "Cree una cuenta gratuita para hacer una pregunta a estos resultados"
+    },
     "resendCode": "Enviar código de nuevo a <email>{emailAddress}</email>",
     "selectOrganization": "Seleccione una organización",
     "signIn": "Iniciar sesión",
@@ -566,6 +574,7 @@
         "procedural-history": "Antecedentes procesales",
         "reasoning": "Razonamiento"
       },
+      "generate": "Generar sumarios con IA",
       "holdingAnchor": "Ir al párrafo",
       "topics": "Temas",
       "treatment": "Tratamiento posterior"
@@ -3319,7 +3328,6 @@
       "colorViolet": "Violeta",
       "colorYellow": "Amarillo",
       "commentPlaceholder": "Escribe un comentario…",
-      "createFreeAccount": "Crear cuenta gratuita",
       "guestAuthor": "Tú",
       "guestLimitReached": "Esta pestaña puede contener hasta {count} resaltados y notas. Crea una cuenta para guardar más.",
       "guestMigrationComplete": "Resaltados y notas guardados.",
@@ -4144,7 +4152,6 @@
     "provisionAskContextPrompt": "\n\nPasajes que aplican la disposición en las resoluciones de mayor autoridad:\n{passages}\n\nUsa las herramientas de jurisprudencia para leer íntegramente cualquiera de estas resoluciones o para encontrar otras que citen la disposición.",
     "provisionAskPlaceholder": "Pregunte sobre este precepto",
     "provisionAskQuestionPrompt": "Sobre {subject}: {question}",
-    "provisionAskSignIn": "Inicie sesión para preguntar sobre este precepto.",
     "provisionAskSummarize": "Resumir cómo aplican los tribunales este precepto",
     "provisionAskSummarizePrompt": "Resume cómo aplican los tribunales {subject}, citando las resoluciones en las que te bases.",
     "provisionDetailsFor": "Detalles de {provision}",

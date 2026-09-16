@@ -27,6 +27,7 @@ import { stellaToast } from "@stll/ui/toast";
 
 import { BulkAddColumns } from "@/components/workspaces/bulk-add-columns";
 import type { Decision } from "@/features/case-law/components/decision-cells";
+import { AddQuestionColumn } from "@/features/case-law/research/add-question-column";
 import {
   deleteQuestionColumn,
   questionAnswersOptions,
@@ -296,9 +297,9 @@ export const useQuestionColumns = ({
  * The toolbar half of the controller: adding a question, answering the page,
  * and the dialogs those flows and the column headers share.
  *
- * Renders nothing at all for a reader without an organization — the same one
- * answer that hides the columns hides every control over them — and only what
- * the organization grants for a reader who has one.
+ * A surface with nothing to ask of draws nothing; a reader without an
+ * organization gets the add-question trigger alone, because there is no column
+ * of theirs to answer or edit yet.
  */
 export const QuestionColumnControls = ({
   controller,
@@ -308,18 +309,13 @@ export const QuestionColumnControls = ({
   const t = useTranslations();
   const { editing, pendingRun, removing, surface } = controller;
 
-  if (surface.type === "hidden") {
-    return null;
+  if (surface.type !== "available") {
+    return <AddQuestionColumn surface={surface} triggerVariant="labelled" />;
   }
 
   return (
     <>
-      {surface.grants.create && (
-        <BulkAddColumns
-          target={{ kind: "organisation", suggestion: surface.suggestion }}
-          triggerVariant="labelled"
-        />
-      )}
+      <AddQuestionColumn surface={surface} triggerVariant="labelled" />
       {surface.grants.run && surface.columns.length > 0 && (
         <Button
           className="text-muted-foreground h-7 min-h-0 text-xs"

@@ -89,6 +89,7 @@
     "continueWithMicrosoft": "Jätka Microsoftiga",
     "createFirstAccount": "Loo esimene konto",
     "createFirstOrganization": "Alustamiseks looge oma esimene organisatsioon",
+    "createFreeAccount": "Loo tasuta konto",
     "createOrganization": "Loo organisatsioon",
     "createOrganizationButton": "Loo organisatsioon",
     "devQuickStart": {
@@ -131,6 +132,13 @@
     "organizationNamePlaceholder": "Minu organisatsioon",
     "password": "Parool",
     "rateLimitExceeded": "Liiga palju katseid. Palun proovige hiljem uuesti.",
+    "requireAccount": {
+      "askAboutDocument": "Loo tasuta konto, et selle dokumendi kohta küsida",
+      "askInChat": "Loo tasuta konto, et seda vestluses küsida",
+      "description": "Kui konto on valmis, naasete sellele lehele.",
+      "generateHeadnotes": "Loo tasuta konto, et AI koostaks lühikokkuvõtted",
+      "writeResearchQuestion": "Loo tasuta konto, et nende tulemuste kohta küsimus esitada"
+    },
     "resendCode": "Saada kood uuesti aadressile <email>{emailAddress}</email>",
     "selectOrganization": "Valige organisatsioon",
     "signIn": "Logi sisse",
@@ -566,6 +574,7 @@
         "procedural-history": "Menetluskäik",
         "reasoning": "Arutlus"
       },
+      "generate": "Koosta AI lühikokkuvõtted",
       "holdingAnchor": "Mine lõigu juurde",
       "topics": "Teemad",
       "treatment": "Hilisem käsitlus"
@@ -3319,7 +3328,6 @@
       "colorViolet": "Lilla",
       "colorYellow": "Kollane",
       "commentPlaceholder": "Kirjuta kommentaar…",
-      "createFreeAccount": "Loo tasuta konto",
       "guestAuthor": "Teie",
       "guestLimitReached": "See vahekaart mahutab kuni {count} esiletõstmist ja märkust. Rohkema salvestamiseks looge konto.",
       "guestMigrationComplete": "Esiletõstmised ja märkused salvestati.",
@@ -4144,7 +4152,6 @@
     "provisionAskContextPrompt": "\n\nSätet kohaldavad lõigud kõige autoriteetsemates lahendites:\n{passages}\n\nKasuta kohtupraktika tööriistu, et lugeda mõnda neist lahenditest tervikuna või leida teisi sätet viitavaid lahendeid.",
     "provisionAskPlaceholder": "Küsi selle sätte kohta",
     "provisionAskQuestionPrompt": "{subject} kohta: {question}",
-    "provisionAskSignIn": "Sätte kohta küsimiseks logi sisse.",
     "provisionAskSummarize": "Võta kokku, kuidas kohtud seda sätet kohaldavad",
     "provisionAskSummarizePrompt": "Võta kokku, kuidas kohtud kohaldavad sätet {subject}, viidates lahenditele, millele tugined.",
     "provisionDetailsFor": "{provision} üksikasjad",

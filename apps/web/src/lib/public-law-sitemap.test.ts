@@ -1,6 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import nodePath from "node:path";
 
+// Type-only, so the decision reader's component graph never loads here.
+import type { DecisionWorkspaceProps } from "@/features/case-law/components/case-viewer/decision-workspace";
+
+/** Whether an AI-mode branch carries the authenticated availability gate. */
+type CarriesAvailabilityGate<TMode> = "ensureAIAvailable" extends keyof TMode
+  ? true
+  : false;
+
 Object.assign(import.meta.env, {
   VITE_API_URL: "http://localhost:3001",
   VITE_PUBLIC_APP_URL: "http://localhost:3000",
@@ -794,15 +802,35 @@ describe("public law sitemap", () => {
     expect(tableSource).not.toContain("format.dateTime(");
   });
 
-  test("case-law AI mode requires an explicit authenticated availability gate", async () => {
-    const source = await readSource(
-      "apps/web/src/features/case-law/components/case-viewer/decision-workspace.tsx",
-    );
+  test("case-law AI mode requires an explicit authenticated availability gate", () => {
+    // Bound to the component's own props rather than to its source text: a
+    // renamed member, a boolean flag in place of the union, or the gate moved
+    // onto the visitor's branch all fail to compile here, where a text mirror
+    // would have to be hand-updated and would pass until someone noticed.
+    type AiMode = DecisionWorkspaceProps["aiMode"];
+    type AuthenticatedMode = Extract<
+      DecisionWorkspaceProps,
+      { aiMode: "enabled" }
+    >;
+    type VisitorMode = Extract<DecisionWorkspaceProps, { aiMode: "gated" }>;
 
-    expect(source).toContain('aiMode: "locked"');
-    expect(source).toContain('aiMode: "enabled"');
-    expect(source).toContain("ensureAIAvailable: () => Promise<boolean>");
-    expect(source).not.toContain("aiEnabled: boolean");
+    // Total over the union, so a mode added later has to say whether it may
+    // start a run instead of inheriting the authenticated answer.
+    const runsAnalysis = {
+      enabled: true,
+      gated: false,
+    } as const satisfies Record<AiMode, boolean>;
+
+    const authenticatedCarriesGate: CarriesAvailabilityGate<AuthenticatedMode> = true;
+    const visitorCarriesGate: CarriesAvailabilityGate<VisitorMode> = false;
+
+    expect(
+      Object.entries(runsAnalysis)
+        .filter(([, runs]) => runs)
+        .map(([mode]) => mode),
+    ).toEqual(["enabled"]);
+    expect(authenticatedCarriesGate).toBe(true);
+    expect(visitorCarriesGate).toBe(false);
   });
 
   test("public text routes do not import auth or protected modules", async () => {

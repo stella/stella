@@ -39,12 +39,7 @@ import {
   ConversationScrollButton,
   ConversationScrollProvider,
 } from "@/components/ai-elements/conversation";
-import {
-  DockedComposer,
-  PromptBar,
-  PromptBarPending,
-  PromptBarPlaceholderContent,
-} from "@/components/ai-suggestions/host";
+import { PromptBar } from "@/components/ai-suggestions/host";
 import {
   ChatSubmitPreservedError,
   useChatEditor,
@@ -58,6 +53,11 @@ import {
 } from "@/components/chat/chat-matter-picker";
 import { ChatMattersContext } from "@/components/chat/chat-matters-context";
 import { ChatThreadMessages } from "@/components/chat/chat-thread-messages";
+import {
+  DockedComposer,
+  PromptBarPending,
+  PromptBarPlaceholderContent,
+} from "@/components/chat/docked-composer";
 import { PromptSuggestions } from "@/components/chat/prompt-suggestions";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import { InspectorTabHeader } from "@/components/inspector/inspector-tab-header";
