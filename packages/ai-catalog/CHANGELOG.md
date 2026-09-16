@@ -1,5 +1,11 @@
 # @stll/ai-catalog
 
+## 0.1.13
+
+### Patch Changes
+
+- [#3440](https://github.com/stella/stella/pull/3440) [`cd1f728`](https://github.com/stella/stella/commit/cd1f728016e051d5743576194533e04bcafbc8f3) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Expose GPT-5.6 Sol through the OpenRouter model catalogue.
+
 ## 0.1.12
 
 ### Patch Changes
