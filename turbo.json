@@ -11,6 +11,13 @@
     "PROPERTY_TEST_NUM_RUNS_FACTOR",
     "PROPERTY_TEST_SEED"
   ],
+  // A patched dependency changes installed code for every task that resolves
+  // it, but editing a patch file moves neither bun.lock (which records the
+  // patch path, not its contents) nor package.json, so nothing Turbo hashes by
+  // default changes and a cached pass could replay over the edit. Hashing the
+  // patches globally is the honest scope: the blast radius is every dependent
+  // package, not one task's declared inputs.
+  "globalDependencies": ["patches/**"],
   "tasks": {
     "transit": {
       "dependsOn": ["^transit"]
