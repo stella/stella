@@ -16,6 +16,7 @@ import type { SafeDb } from "@/api/db/safe-db";
 import {
   createChatAttachmentPart,
   chatMessageContentFromMessage,
+  isChatPart,
   toChatMessageContent,
   toPersistableChatMessage,
 } from "@/api/handlers/chat/chat-message-parts";
@@ -1080,6 +1081,102 @@ describe("validateMessage", () => {
     expect(result.error.message).toBe(
       "Chat continuation does not match its awaited interaction",
     );
+  });
+
+  test("restores server-owned tool metadata when a client omits or rewrites it", async () => {
+    const id = chatMessageId("msg_tool_metadata_continuation");
+    const callId = "ask-user-with-server-metadata";
+    const input = {
+      analysis: "Need the deletion scope",
+      questions: [
+        {
+          question: "Which clauses should be deleted?",
+          reason: "The request names more than one possible clause",
+        },
+      ],
+    };
+    const output = {
+      answers: [
+        {
+          question: "Which clauses should be deleted?",
+          answer: "Delete both clauses",
+        },
+      ],
+    };
+    const metadata = {
+      tanstack: { index: 0, model: "google/gemini-3.7-flash" },
+    };
+    const persistedCall: unknown = {
+      type: "tool-call",
+      id: callId,
+      name: "ask-user",
+      arguments: JSON.stringify(input),
+      input,
+      metadata,
+      state: "input-complete",
+    };
+    if (!isChatPart(persistedCall) || persistedCall.type !== "tool-call") {
+      throw new Error("The regression fixture is not a valid tool call");
+    }
+    const persistedContent = chatMessageContentFromMessage(
+      toPersistableChatMessage({
+        id,
+        role: "assistant",
+        parts: [persistedCall],
+      }),
+    );
+
+    const clientMetadataCases = [
+      undefined,
+      { tanstack: { index: 99, model: "client-controlled" } },
+    ];
+    for (const clientMetadata of clientMetadataCases) {
+      const clientCall: unknown = {
+        type: "tool-call",
+        id: callId,
+        name: "ask-user",
+        arguments: JSON.stringify(input),
+        input,
+        output,
+        state: "complete",
+        ...(clientMetadata === undefined ? {} : { metadata: clientMetadata }),
+      };
+      if (!isChatPart(clientCall) || clientCall.type !== "tool-call") {
+        throw new Error("The client fixture is not a valid tool call");
+      }
+      const result = await validateMessageWithPersistence({
+        message: {
+          id,
+          role: "assistant",
+          parts: [
+            clientCall,
+            {
+              type: "tool-result",
+              toolCallId: callId,
+              content: JSON.stringify(output),
+              state: "complete",
+            },
+          ],
+        },
+        persistedMessage: { role: "assistant", content: persistedContent },
+        resume: [
+          {
+            interruptId: `client_tool_${callId}`,
+            payload: output,
+            status: "resolved",
+          },
+        ],
+        safeDb: noDbReads,
+        threadId: chatThreadId("thread_tool_metadata_continuation"),
+        tools: askUserTools,
+        userId: userId("user_tool_metadata_continuation"),
+      });
+
+      expect(Result.isOk(result)).toBe(true);
+      if (Result.isOk(result)) {
+        expect(result.value.message.parts.at(0)).toMatchObject({ metadata });
+      }
+    }
   });
 
   test("accepts a client-tool continuation that echoes the provider's raw arguments", async () => {
