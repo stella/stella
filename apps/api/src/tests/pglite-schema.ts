@@ -238,7 +238,7 @@ export const installPgliteStatuteCitationCounts = async (
   for (const statement of readMigrationStatements(
     nodePath.join(
       DRIZZLE_DIR,
-      "20260916010000_published_statute_citation_counts",
+      "20260916110000_published_statute_citation_counts",
       "migration.sql",
     ),
   ).filter((candidate) => !executableSql(candidate).startsWith("SET "))) {
