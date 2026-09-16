@@ -26,7 +26,10 @@ import {
   parsePersistedCorpusAst,
 } from "@/api/lib/legal-search/corpus-storage";
 import type { EmptyAst } from "@/api/lib/legal-search/document-types";
-import { publishedLegislationDocument } from "@/api/lib/legal-search/legislation-redistribution";
+import {
+  derivedAiLegislationSource,
+  publishedLegislationDocument,
+} from "@/api/lib/legal-search/legislation-redistribution";
 import {
   legislationPublicReadDb,
   type LegislationReadDb,
@@ -93,6 +96,12 @@ export const readLegislationHandler = async (
           astS3Key: legislationDocuments.astS3Key,
           textS3Key: legislationDocuments.textS3Key,
           citationCaseCount: statuteCitationCaseCount.as("citation_case_count"),
+          // Whether the publisher permits AI use of this wording, read off
+          // the joined source in the same row rather than by a second query.
+          // Displaying source wording and feeding it to a model are separate
+          // permissions, so a reader that only renders the text ignores this
+          // while an agent read withholds the text when it is false.
+          allowsDerivedAi: derivedAiLegislationSource,
           ...(options.audience === "workspace"
             ? { metadata: legislationDocuments.metadata }
             : {}),
@@ -192,7 +201,7 @@ const config = {
     "structure. Only documents from sources cleared for redistribution are " +
     "returned; anything else reads as not found.",
   permissions: { workspace: ["read"] },
-  mcp: { type: "capability", reason: "legal_corpus_admin" },
+  mcp: { type: "covered", by: "read_statute" },
   access: "read",
   params: t.Object({ documentId: tSafeId("legislationDocument") }),
 } satisfies HandlerConfig;

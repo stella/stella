@@ -75,7 +75,7 @@ const readLegislationShelf = createSafePublicHandler(
 
 const readStatuteByEli = createSafePublicHandler(
   {
-    mcp: { type: "internal", reason: "public_indexing" },
+    mcp: { type: "covered", by: "read_statute" },
     query: readStatuteByEliQuerySchema,
   },
   async function* ({ query }) {
@@ -114,7 +114,7 @@ const readStatuteBySlug = createSafePublicHandler(
 
 const readStatute = createSafePublicHandler(
   {
-    mcp: { type: "internal", reason: "public_indexing" },
+    mcp: { type: "covered", by: "read_statute" },
     params: t.Object({ documentId: tSafeId("legislationDocument") }),
   },
   async function* ({ params: { documentId } }) {
@@ -134,7 +134,7 @@ const readStatute = createSafePublicHandler(
 
 const listStatuteVersions = createSafePublicHandler(
   {
-    mcp: { type: "internal", reason: "public_indexing" },
+    mcp: { type: "covered", by: "read_statute" },
     params: listStatuteVersionsParamsSchema,
     query: listStatuteVersionsQuerySchema,
   },
@@ -156,7 +156,7 @@ const listStatuteVersions = createSafePublicHandler(
 
 const readProvisionHistory = createSafePublicHandler(
   {
-    mcp: { type: "internal", reason: "public_indexing" },
+    mcp: { type: "tool", name: "read_provision_history" },
     params: provisionHistoryParamsSchema,
     query: provisionHistoryQuerySchema,
   },

@@ -59,6 +59,26 @@ export const generatedToolAnnotations: Readonly<
     command: ["organization", "set-jurisdictions"],
     scope: "onboarding",
   },
+  search_legislation: {
+    command: ["legislation", "search"],
+    scope: "search",
+    itemsKey: "results",
+  },
+  read_statute: {
+    command: ["legislation", "read"],
+    scope: "read",
+    windowedText: true,
+  },
+  read_statute_provisions: {
+    command: ["legislation", "provisions"],
+    scope: "read",
+    itemsKey: "items",
+  },
+  read_provision_history: {
+    command: ["legislation", "history"],
+    scope: "read",
+    itemsKey: "items",
+  },
   list_templates: {
     command: ["template", "list"],
     scope: "templates",
@@ -254,8 +274,8 @@ export const generatedToolAnnotations: Readonly<
     command: ["usage", "get"],
     scope: "read",
   },
-  search_legislation: {
-    command: ["legislation", "search"],
+  search_boe_legislation: {
+    command: ["legislation", "boe-search"],
     scope: "read",
     itemsKey: "items",
   },

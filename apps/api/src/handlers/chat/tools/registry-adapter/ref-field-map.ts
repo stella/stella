@@ -23,6 +23,9 @@ import {
   MANAGE_ORGANIZATION_PROJECTION,
   READ_CASE_LAW_CITATIONS_PROJECTION,
   READ_CASE_LAW_DECISION_PROJECTION,
+  READ_PROVISION_HISTORY_PROJECTION,
+  READ_STATUTE_PROJECTION,
+  READ_STATUTE_PROVISIONS_PROJECTION,
   READ_CONTACT_PROJECTION,
   READ_CONTENT_ACROSS_MATTERS_PROJECTION,
   READ_DOCUMENT_PROJECTION,
@@ -37,6 +40,7 @@ import {
   SAVE_TIME_ENTRY_PROJECTION,
   SEARCH_ACROSS_MATTERS_PROJECTION,
   SEARCH_CASE_LAW_PROJECTION,
+  SEARCH_BOE_LEGISLATION_PROJECTION,
   SEARCH_LEGISLATION_PROJECTION,
   SET_FIELD_VALUE_PROJECTION,
   SET_PRACTICE_JURISDICTIONS_PROJECTION,
@@ -272,10 +276,32 @@ export const READ_TOOL_REF_FIELD_MAP = {
     inputRefs: [],
     projection: READ_CASE_LAW_CITATIONS_PROJECTION,
   },
+  search_boe_legislation: {
+    chatProjectable: true,
+    inputRefs: [],
+    projection: SEARCH_BOE_LEGISLATION_PROJECTION,
+  },
+
+  // --- stella legislation corpus: public corpus ids, no tenant refs --------
   search_legislation: {
     chatProjectable: true,
     inputRefs: [],
     projection: SEARCH_LEGISLATION_PROJECTION,
+  },
+  read_statute: {
+    chatProjectable: true,
+    inputRefs: [],
+    projection: READ_STATUTE_PROJECTION,
+  },
+  read_statute_provisions: {
+    chatProjectable: true,
+    inputRefs: [],
+    projection: READ_STATUTE_PROVISIONS_PROJECTION,
+  },
+  read_provision_history: {
+    chatProjectable: true,
+    inputRefs: [],
+    projection: READ_PROVISION_HISTORY_PROJECTION,
   },
   lookup_business_registry: {
     chatProjectable: true,

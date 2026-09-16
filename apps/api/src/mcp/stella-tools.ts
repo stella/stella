@@ -93,7 +93,9 @@ import {
   DEFAULT_SEARCH_LIMIT,
   ensureWorkspaceAccess,
   errorResult,
+  handlerResultMessage,
   ISO_DATE_SCHEMA,
+  MCP_CONTENT_MAX_CHARS,
   MAX_CURSOR_LENGTH,
   MAX_LIST_LIMIT,
   MAX_SEARCH_LIMIT,
@@ -102,6 +104,7 @@ import {
   resolveWindowBounds,
   structuredErrorResult,
   toolDataResult,
+  toPlainCorpusText,
   toPlainTextSnippet,
   uuidInputSchema,
   validationErrorResult,
@@ -150,7 +153,6 @@ const defaultReadWorkspaceMembersHandler: typeof readWorkspaceMembersHandler =
       await import("@/api/handlers/workspaces/workspace-members-read")
     ).readWorkspaceMembersHandler(input);
 
-const MCP_CONTENT_MAX_CHARS = 8000;
 type StellaToolName =
   | "list_matters"
   | "read_case_law_citations"
@@ -1336,28 +1338,6 @@ const handleSearchAcrossMattersTool: TypedMcpToolHandler<
   return { egress: "structured", payload, textFields };
 };
 
-const getResultMessage = (value: unknown): string | null => {
-  if (typeof value !== "object" || value === null) {
-    return null;
-  }
-
-  if ("message" in value && typeof value.message === "string") {
-    return value.message;
-  }
-
-  if (
-    "response" in value &&
-    typeof value.response === "object" &&
-    value.response !== null &&
-    "message" in value.response &&
-    typeof value.response.message === "string"
-  ) {
-    return value.response.message;
-  }
-
-  return null;
-};
-
 type SearchCaseLawSuccess = Extract<
   Awaited<ReturnType<typeof searchDecisionsHandler>>,
   { hits: unknown[] }
@@ -1383,24 +1363,6 @@ const isReadCaseLawDecisionSuccess = (
   Array.isArray(value.citationsFrom) &&
   "citationsTo" in value &&
   Array.isArray(value.citationsTo);
-
-const toPlainDecisionText = (decision: {
-  documentAst: unknown;
-  fulltext: string | null;
-}) => {
-  if (typeof decision.fulltext === "string" && decision.fulltext.length > 0) {
-    return decision.fulltext;
-  }
-  const ast = parseUsableDocumentAst(decision.documentAst);
-  if (ast === null) {
-    return null;
-  }
-  // A block with no text of its own (an unlabelled figure) contributes
-  // nothing rather than a blank paragraph.
-  return ast.blocks
-    .flatMap((block) => (block.plainText === "" ? [] : [block.plainText]))
-    .join("\n\n");
-};
 
 const toIsoDateString = (value: unknown): string | null => {
   if (typeof value === "string") {
@@ -1770,7 +1732,7 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
     caseLawPublicReadDb,
   );
 
-  const resultMessage = getResultMessage(result);
+  const resultMessage = handlerResultMessage(result);
   if (resultMessage) {
     return errorResult(resultMessage);
   }
@@ -1887,7 +1849,7 @@ const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
   if (result === null) {
     return notFoundResult("Decision not found");
   }
-  const resultMessage = getResultMessage(result);
+  const resultMessage = handlerResultMessage(result);
   if (resultMessage) {
     return errorResult(resultMessage);
   }
@@ -1905,10 +1867,10 @@ const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
   });
 
   const plainText = aiTextAllowed
-    ? (toPlainDecisionText({
-        documentAst: result.documentAst,
+    ? toPlainCorpusText({
+        blocks: parseUsableDocumentAst(result.documentAst)?.blocks ?? null,
         fulltext: result.fulltext,
-      }) ?? null)
+      })
     : null;
   const textLength = plainText === null ? 0 : plainText.length;
 

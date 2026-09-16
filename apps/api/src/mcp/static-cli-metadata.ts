@@ -233,6 +233,26 @@ export const DEFAULT_MCP_CLI_ANNOTATIONS = defineMcpCliToolAnnotations(
 
     search_legislation: {
       command: ["legislation", "search"],
+      scope: "search",
+      itemsKey: "results",
+    },
+    read_statute: {
+      command: ["legislation", "read"],
+      scope: "read",
+      windowedText: true,
+    },
+    read_statute_provisions: {
+      command: ["legislation", "provisions"],
+      scope: "read",
+      itemsKey: "items",
+    },
+    read_provision_history: {
+      command: ["legislation", "history"],
+      scope: "read",
+      itemsKey: "items",
+    },
+    search_boe_legislation: {
+      command: ["legislation", "boe-search"],
       scope: "read",
       itemsKey: "items",
     },

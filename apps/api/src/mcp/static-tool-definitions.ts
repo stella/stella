@@ -12,6 +12,7 @@ import type { McpMode } from "@/api/mcp/constants";
 import { DOCUMENT_TOOL_SET } from "@/api/mcp/document-tools";
 import { FEEDBACK_TOOL_SET } from "@/api/mcp/feedback-tools";
 import { KNOWLEDGE_TOOL_SET } from "@/api/mcp/knowledge-tools";
+import { LEGISLATION_TOOL_SET } from "@/api/mcp/legislation-tools";
 import { MATTER_TOOL_SET } from "@/api/mcp/matter-tools";
 import { RESEARCH_ADMIN_TOOL_SET } from "@/api/mcp/research-admin-tools";
 import { STELLA_TOOL_SET } from "@/api/mcp/stella-tools";
@@ -26,6 +27,7 @@ import type {
 export const DEFAULT_MCP_TOOL_SETS = [
   COMPAT_TOOL_SET,
   STELLA_TOOL_SET,
+  LEGISLATION_TOOL_SET,
   TEMPLATE_TOOL_SET,
   DOCUMENT_TOOL_SET,
   MATTER_TOOL_SET,
@@ -44,6 +46,7 @@ export const DEFAULT_MCP_TOOL_SETS = [
 export const DEFAULT_MCP_TOOL_DEFINITIONS = [
   ...COMPAT_TOOL_SET.definitions,
   ...STELLA_TOOL_SET.definitions,
+  ...LEGISLATION_TOOL_SET.definitions,
   ...TEMPLATE_TOOL_SET.definitions,
   ...DOCUMENT_TOOL_SET.definitions,
   ...MATTER_TOOL_SET.definitions,

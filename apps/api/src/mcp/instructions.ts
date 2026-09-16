@@ -10,7 +10,11 @@ import type { McpMode } from "@/api/mcp/constants";
  * Kept terse and factual (no marketing). Hard budgets guard against drift and
  * token bloat and are asserted in `instructions.test.ts`.
  */
-export const MCP_INSTRUCTIONS_DEFAULT_MAX_CHARS = 1600;
+// default bumped 1600 -> 1700 (measured 1670) for the legislation-workflow
+// pointer: the corpus has the same discover-the-order problem templates do,
+// and an agent that never calls resources/list starts at search_legislation
+// without knowing a point-in-time read exists.
+export const MCP_INSTRUCTIONS_DEFAULT_MAX_CHARS = 1700;
 // anonymized bumped 900 -> 1050 and documents 900 -> 1000 for the casing rule
 // below, which every surface must state because it holds for every surface.
 export const MCP_INSTRUCTIONS_ANONYMIZED_MAX_CHARS = 1050;
@@ -35,7 +39,7 @@ Errors: a failed tool returns a single text content of \`{"error":{"code","messa
 
 First-party destructive operations require \`confirm: true\` after human approval; mixed tools request it only for destructive actions. External connector tools follow their owning server's confirmation contract.
 
-Static reference documents are available via \`resources/list\` then \`resources/read\`; driving templates end to end starts at stella://reference/template-workflow.
+Static reference documents are available via \`resources/list\` then \`resources/read\`; driving templates end to end starts at stella://reference/template-workflow, and reading the legislation corpus at stella://reference/legislation-workflow.
 
 Hit a bug or a gap? Prepare a sanitized report with the prepare_feedback tool.`;
 

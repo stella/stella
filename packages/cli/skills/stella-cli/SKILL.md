@@ -106,7 +106,11 @@ requires (request it at `stella auth login --scopes`).
 | document     | `stella document save`                     | documents_write             |                                       |
 | feedback     | `stella feedback prepare`                  | feedback                    |                                       |
 | invoice      | `stella invoice list`                      | read                        | paginated                             |
-| legislation  | `stella legislation search`                | read                        | paginated                             |
+| legislation  | `stella legislation boe-search`            | read                        | paginated                             |
+| legislation  | `stella legislation history`               | read                        | paginated                             |
+| legislation  | `stella legislation provisions`            | read                        |                                       |
+| legislation  | `stella legislation read`                  | read                        | paginated; windowed text              |
+| legislation  | `stella legislation search`                | search                      | paginated                             |
 | matter       | `stella matter delete`                     | matters_write               | destructive (needs `--yes` off a TTY) |
 | matter       | `stella matter link-contact`               | matters_write               |                                       |
 | matter       | `stella matter list`                       | read                        | paginated                             |
@@ -200,8 +204,20 @@ are omitted here.
   - optional: --channel (github)
 - `stella invoice list`
   - optional: --matter-id, --invoice-id
-- `stella legislation search`
+- `stella legislation boe-search`
   - optional: --query, --title, --department-code, --legal-range-code, --matter-code, --date-from, --date-to, --law-id, --block-id, --relation-type (modifies|modifiedBy|derogates|derogatedBy|all), --full-text
+- `stella legislation history`
+  - `--eli` — European Legislation Identifier of the work, exactly as search_legislation returns it (for example /eli/cz/sb/2012/89). It addresses the act, not one consolidation of it. (string)
+  - `--anchor` — Anchor of the provision in the publisher's own scheme (par_1729, par_1729-odst_1). read_statute's outline lists the anchors a consolidation carries; they are not derivable from a section number. (string)
+  - optional: --language
+- `stella legislation provisions` — no flags; pass `--input` with items
+- `stella legislation read`
+  - `--eli` — European Legislation Identifier of the work, exactly as search_legislation returns it (for example /eli/cz/sb/2012/89). It addresses the act, not one consolidation of it. (string)
+  - optional: --language, --as-of
+- `stella legislation search`
+  - `--query` — Search query (string)
+  - `--country` — Required corpus country code, uppercase ISO 3166-1 alpha-3. Admitted: CZE. (string)
+  - optional: --document-type, --status, --language, --date-from, --date-to
 - `stella matter delete`
   - `--matter-id` — Matter ID to delete (string)
 - `stella matter link-contact`

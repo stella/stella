@@ -9,6 +9,7 @@ import {
 } from "bun:test";
 import JSZip from "jszip";
 
+import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
 import {
   countedSearchTotal,
   SEARCH_SORTS,
@@ -109,6 +110,12 @@ const WORKSPACE_ID_3 = "00000000-0000-4000-8000-0000000a0003";
 const CONTACT_ID = "00000000-0000-4000-8000-0000000c0001";
 const DECISION_ID = "00000000-0000-4000-8000-0000000d0001";
 const CITING_DECISION_ID = "00000000-0000-4000-8000-0000000d0002";
+/** A consolidated statute and an older consolidation of the same work. */
+const STATUTE_ID = "00000000-0000-4000-8000-000000021001";
+const STATUTE_PRIOR_ID = "00000000-0000-4000-8000-000000021002";
+const STATUTE_ELI = "/eli/cz/sb/2012/89";
+const STATUTE_TITLE = "89/2012 Sb., obcansky zakonik";
+const PROVISION_ANCHOR = "par_1729";
 /** A document entity, used where a tool is handed one in place of a task. */
 const DOCUMENT_ENTITY_ID = "00000000-0000-4000-8000-0000000e0d01";
 const FOLDER_ENTITY_ID = "00000000-0000-4000-8000-0000000e0f01";
@@ -224,6 +231,13 @@ const searchProviderSearchMock = mock(
   },
 );
 const searchDecisionsHandlerMock = mock();
+const searchLegislationHandlerMock = mock();
+const resolveStatuteExpressionMock = mock();
+const readPublicLegislationHandlerMock = mock();
+const listStatuteVersionsHandlerMock = mock();
+const readProvisionHistoryHandlerMock = mock();
+const readLegislationProvisionVersionsMock = mock();
+const readVersionBlocksMock = mock();
 const readGatedDecisionCitationsMock = mock();
 const readDecisionHandlerMock = mock();
 /** The gate-and-read the tool calls; null is a denied or missing subject. */
@@ -371,6 +385,96 @@ const createReadDecisionResult = () => ({
   },
   sourceUrl: "https://example.test/decision",
   sourceAttributionUrl: "https://example.test/decision",
+});
+
+/**
+ * One provision's heading and body, plus a body long enough that the statute
+ * read has to window it: the cursor contract is only exercised by text that
+ * exceeds one window.
+ */
+const LONG_PROVISION_BODY = "a".repeat(8500);
+
+const createStatuteBlocks = () => [
+  {
+    anchorId: PROVISION_ANCHOR,
+    id: "b-1",
+    inlines: [{ type: "text", text: "\u00a7 1729" }],
+    level: 3,
+    plainText: "\u00a7 1729",
+    type: "heading",
+  },
+  {
+    anchorId: `${PROVISION_ANCHOR}-odst_1`,
+    id: "b-2",
+    inlines: [{ type: "text", text: LONG_PROVISION_BODY }],
+    plainText: LONG_PROVISION_BODY,
+    type: "paragraph",
+  },
+];
+
+/** The statute AST as the corpus stores it (the shared legal-AST schema). */
+const createStatuteAst = () => ({
+  blocks: createStatuteBlocks(),
+  metadata: {
+    caseNumber: null,
+    court: null,
+    decisionDate: null,
+    decisionType: null,
+    ecli: null,
+    keywords: [],
+    statutes: [],
+  },
+  source: { documentId: "", printUrl: "", system: "test", webUrl: "" },
+  version: 1,
+});
+
+/** One consolidation as the public statute read projects it. */
+const createStatuteReadResult = ({
+  allowsDerivedAi = true,
+}: { allowsDerivedAi?: boolean } = {}) => ({
+  allowsDerivedAi,
+  citationCaseCount: 0,
+  country: "CZE",
+  createdAt: new Date("2026-01-01T00:00:00.000Z"),
+  documentAst: createStatuteAst(),
+  documentType: "act",
+  documentUrl: null,
+  effectiveDate: "2014-01-01",
+  eli: STATUTE_ELI,
+  fulltext: null,
+  id: STATUTE_ID,
+  language: "cs",
+  sections: null,
+  slug: "89-2012-sb-obcansky-zakonik",
+  sourceUrl: "https://example.test/89-2012",
+  status: "in_force",
+  title: STATUTE_TITLE,
+  updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+  versionValidFrom: "2014-01-01",
+  versionValidTo: null,
+});
+
+const createStatuteVersionsPage = () => ({
+  items: [
+    { id: STATUTE_ID, versionValidFrom: "2014-01-01", versionValidTo: null },
+    {
+      id: STATUTE_PRIOR_ID,
+      versionValidFrom: "2012-03-22",
+      versionValidTo: "2013-12-31",
+    },
+  ],
+  nextCursor: null,
+});
+
+const createProvisionVersionRow = ({
+  allowsDerivedAi = true,
+}: { allowsDerivedAi?: boolean } = {}) => ({
+  allowsDerivedAi,
+  astS3Key: null,
+  documentAst: createStatuteAst(),
+  id: STATUTE_ID,
+  versionValidFrom: "2014-01-01",
+  versionValidTo: null,
 });
 
 const createSelectBuilder = (rows: unknown[]) => {
@@ -746,6 +850,13 @@ const createContext = ({
     readWorkspaceHandler: readWorkspaceHandlerMock,
     readWorkspaceMembersHandler: readWorkspaceMembersHandlerMock,
     searchDecisionsHandler: searchDecisionsHandlerMock,
+    searchLegislationHandler: searchLegislationHandlerMock,
+    resolveStatuteExpression: resolveStatuteExpressionMock,
+    readPublicLegislationHandler: readPublicLegislationHandlerMock,
+    listStatuteVersionsHandler: listStatuteVersionsHandlerMock,
+    readProvisionHistoryHandler: readProvisionHistoryHandlerMock,
+    readLegislationProvisionVersions: readLegislationProvisionVersionsMock,
+    readVersionBlocks: readVersionBlocksMock,
     withTimeout: withTimeoutDependency,
   },
   userId: toSafeId<"user">("user_1"),
@@ -766,6 +877,13 @@ describe("OpenAI-compatible MCP tools", () => {
     readContentAcrossMattersExecute.mockReset();
     readContactExecute.mockReset();
     searchDecisionsHandlerMock.mockReset();
+    searchLegislationHandlerMock.mockReset();
+    resolveStatuteExpressionMock.mockReset();
+    readPublicLegislationHandlerMock.mockReset();
+    listStatuteVersionsHandlerMock.mockReset();
+    readProvisionHistoryHandlerMock.mockReset();
+    readLegislationProvisionVersionsMock.mockReset();
+    readVersionBlocksMock.mockReset();
     readDecisionHandlerMock.mockReset();
     readGatedDecisionMock.mockReset();
     readGatedDecisionCitationsMock.mockReset();
@@ -1023,6 +1141,10 @@ describe("OpenAI-compatible MCP tools", () => {
       "read_case_law_decision",
       "read_case_law_citations",
       "read_contact",
+      "search_legislation",
+      "read_statute",
+      "read_statute_provisions",
+      "read_provision_history",
       "list_templates",
       "list_documents",
       "read_document",
@@ -1035,7 +1157,7 @@ describe("OpenAI-compatible MCP tools", () => {
       "resolve_rate",
       "list_invoices",
       "get_usage",
-      "search_legislation",
+      "search_boe_legislation",
     ]);
   });
 
@@ -1797,6 +1919,528 @@ describe("OpenAI-compatible MCP tools", () => {
     const error = validationEnvelope(result);
     expect(error["code"]).toBe("validation_error");
     expect(readGatedDecisionCitationsMock).not.toHaveBeenCalled();
+  });
+
+  test("advertises the legislation search with the admitted countries and no facet promise", async () => {
+    const searchTool = (await listMcpTools(createContext())).find(
+      (tool) => tool.name === "search_legislation",
+    );
+    const schema = searchTool?.inputSchema;
+
+    expect(schema?.required).toEqual(["query", "country"]);
+    expect(Object.keys(schema?.properties ?? {})).toEqual([
+      "query",
+      "country",
+      "document_type",
+      "status",
+      "language",
+      "date_from",
+      "date_to",
+      "limit",
+      "cursor",
+    ]);
+    // The admitted set is rendered from the contract, so a new jurisdiction
+    // reaches the advertised schema without an edit here.
+    expect(schema?.properties?.["country"]).toEqual({
+      type: "string",
+      minLength: 2,
+      maxLength: 3,
+      description: `Required corpus country code, uppercase ISO 3166-1 alpha-3. Admitted: ${PUBLIC_LEGISLATION_COUNTRIES.join(", ")}.`,
+    });
+    expect(schema?.properties?.["limit"]).toEqual({
+      type: "integer",
+      minimum: 1,
+      maximum: LIMITS.caseLawSearchPageSizeMax,
+      description: "Max results to return; defaults to 10.",
+    });
+    expect(schema?.additionalProperties).toBe(false);
+    // The corpus search has no as-of filter, so it must not advertise one:
+    // a point-in-time question is answered by read_statute.
+    expect(schema?.properties?.["as_of"]).toBeUndefined();
+    expect(searchTool?.description).toContain("No facets are returned");
+  });
+
+  test("advertises the statute read with the point-in-time date and the text cursor", async () => {
+    const readTool = (await listMcpTools(createContext())).find(
+      (tool) => tool.name === "read_statute",
+    );
+    const schema = readTool?.inputSchema;
+
+    expect(schema?.required).toEqual(["eli"]);
+    expect(Object.keys(schema?.properties ?? {})).toEqual([
+      "eli",
+      "language",
+      "as_of",
+      "cursor",
+    ]);
+    expect(schema?.properties?.["as_of"]).toMatchObject({
+      type: "string",
+      format: "date",
+      maxLength: 10,
+    });
+    expect(schema?.additionalProperties).toBe(false);
+  });
+
+  test("advertises the batch provision read as one bounded items array", async () => {
+    const provisionsTool = (await listMcpTools(createContext())).find(
+      (tool) => tool.name === "read_statute_provisions",
+    );
+
+    expect(provisionsTool?.inputSchema).toEqual({
+      type: "object",
+      properties: {
+        items: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              eli: {
+                type: "string",
+                minLength: 1,
+                maxLength: 512,
+                description:
+                  "European Legislation Identifier of the work, exactly as search_legislation returns it (for example /eli/cz/sb/2012/89). It addresses the act, not one consolidation of it.",
+              },
+              anchor: {
+                type: "string",
+                minLength: 1,
+                maxLength: 256,
+                description:
+                  "Anchor of the provision in the publisher's own scheme (par_1729, par_1729-odst_1). read_statute's outline lists the anchors a consolidation carries; they are not derivable from a section number.",
+              },
+              as_of: {
+                type: "string",
+                format: "date",
+                maxLength: 10,
+                description:
+                  "Read the consolidation in force on this ISO date (YYYY-MM-DD); omit it for the text in force today.",
+              },
+              language: {
+                type: "string",
+                minLength: 2,
+                maxLength: 8,
+                description:
+                  "Language of the consolidation to read. Language is part of the work key, so an act published in two languages has one consolidation in each.",
+              },
+            },
+            required: ["eli", "anchor"],
+            additionalProperties: false,
+          },
+          minItems: 1,
+          maxItems: LIMITS.legislationProvisionBatchMax,
+          description: `The provisions to read, at most ${LIMITS.legislationProvisionBatchMax} per call. Each entry is answered on its own, so one unknown anchor does not sink the rest.`,
+        },
+      },
+      required: ["items"],
+      additionalProperties: false,
+    });
+  });
+
+  test("advertises the provision history with the handler's own page bounds", async () => {
+    const historyTool = (await listMcpTools(createContext())).find(
+      (tool) => tool.name === "read_provision_history",
+    );
+    const schema = historyTool?.inputSchema;
+
+    expect(schema?.required).toEqual(["eli", "anchor"]);
+    expect(schema?.properties?.["limit"]).toEqual({
+      type: "integer",
+      minimum: 1,
+      maximum: LIMITS.legislationProvisionHistoryPageSizeMax,
+      description: `Versions per page; defaults to ${LIMITS.legislationProvisionHistoryPageSizeDefault}, at most ${LIMITS.legislationProvisionHistoryPageSizeMax}.`,
+    });
+    expect(schema?.additionalProperties).toBe(false);
+  });
+
+  test("search_legislation passes the admitted jurisdiction and projects each hit", async () => {
+    searchLegislationHandlerMock.mockResolvedValue({
+      items: [
+        {
+          documentId: STATUTE_ID,
+          effectiveDate: "2014-01-01",
+          eli: STATUTE_ELI,
+          country: "CZE",
+          documentType: "act",
+          headline: "nahrada <mark>skody</mark>",
+          language: "cs",
+          score: 1.5,
+          sourceUrl: "https://example.test/89-2012",
+          status: "in_force",
+          title: STATUTE_TITLE,
+        },
+      ],
+      nextCursor: "legislation_cursor_2",
+      total: { type: SEARCH_TOTAL_TYPE.NOT_COUNTED },
+    });
+
+    const result = await handleMcpToolCall({
+      // Lower case on the wire: the country is folded by the contract, so a
+      // model writing `cze` reaches the same jurisdiction.
+      args: { country: "cze", query: "nahrada skody" },
+      context: createContext(),
+      toolName: "search_legislation",
+    });
+
+    expect(searchLegislationHandlerMock.mock.calls.at(0)?.at(0)).toEqual({
+      jurisdiction: "CZE",
+      limit: 10,
+      query: "nahrada skody",
+    });
+    expect(parseToolPayload(result)).toEqual({
+      nextCursor: "legislation_cursor_2",
+      results: [
+        {
+          // Derived from the ELI and title, because a search hit carries no
+          // persisted slug.
+          appUrl: `${APP_BASE_URL}/law/cze/statutes/89-2012-sb-obcansky-zakonik`,
+          country: "CZE",
+          documentId: STATUTE_ID,
+          documentType: "act",
+          effectiveDate: "2014-01-01",
+          eli: STATUTE_ELI,
+          language: "cs",
+          resourceName: `stella://resource/legislation_document/id=${STATUTE_ID}`,
+          score: 1.5,
+          snippet: "nahrada skody",
+          sourceUrl: "https://example.test/89-2012",
+          status: "in_force",
+          title: STATUTE_TITLE,
+        },
+      ],
+      total: { type: SEARCH_TOTAL_TYPE.NOT_COUNTED },
+    });
+  });
+
+  test("search_legislation names the admitted codes for a country outside the corpus", async () => {
+    const result = await handleMcpToolCall({
+      args: { country: "FRA", query: "responsabilite" },
+      context: createContext(),
+      toolName: "search_legislation",
+    });
+
+    expectErrorEnvelope(result, {
+      code: "not_found",
+      message: "Legislation country not found",
+      hint: `Pass one of the admitted country codes: ${PUBLIC_LEGISLATION_COUNTRIES.join(", ")}.`,
+    });
+    expect(searchLegislationHandlerMock).not.toHaveBeenCalled();
+  });
+
+  test("read_statute windows the text and returns the outline and the work's versions", async () => {
+    resolveStatuteExpressionMock.mockResolvedValue({
+      type: "expression",
+      id: STATUTE_ID,
+    });
+    readPublicLegislationHandlerMock.mockResolvedValue(
+      createStatuteReadResult(),
+    );
+    listStatuteVersionsHandlerMock.mockResolvedValue(
+      createStatuteVersionsPage(),
+    );
+
+    const result = await handleMcpToolCall({
+      args: { as_of: "2020-06-01", eli: STATUTE_ELI },
+      context: createContext(),
+      toolName: "read_statute",
+    });
+
+    expect(resolveStatuteExpressionMock.mock.calls.at(0)?.at(0)).toEqual({
+      asOf: "2020-06-01",
+      eli: STATUTE_ELI,
+    });
+    const expectedText = `\u00a7 1729\n\n${LONG_PROVISION_BODY}`;
+    expect(parseToolPayload(result)).toEqual({
+      nextCursor: encodePaginationCursor([8000]),
+      statute: {
+        appUrl: `${APP_BASE_URL}/law/cze/statutes/89-2012-sb-obcansky-zakonik`,
+        charCount: expectedText.length,
+        country: "CZE",
+        documentId: STATUTE_ID,
+        documentType: "act",
+        effectiveDate: "2014-01-01",
+        eli: STATUTE_ELI,
+        language: "cs",
+        outline: [
+          { anchorId: PROVISION_ANCHOR, level: 3, text: "\u00a7 1729" },
+        ],
+        outlineTruncated: false,
+        resourceName: `stella://resource/legislation_document/id=${STATUTE_ID}`,
+        sourceUrl: "https://example.test/89-2012",
+        status: "in_force",
+        text: expectedText.slice(0, 8000),
+        title: STATUTE_TITLE,
+        truncated: true,
+        versionValidFrom: "2014-01-01",
+        versionValidTo: null,
+        versions: [
+          {
+            documentId: STATUTE_ID,
+            resourceName: `stella://resource/legislation_document/id=${STATUTE_ID}`,
+            versionValidFrom: "2014-01-01",
+            versionValidTo: null,
+          },
+          {
+            documentId: STATUTE_PRIOR_ID,
+            resourceName: `stella://resource/legislation_document/id=${STATUTE_PRIOR_ID}`,
+            versionValidFrom: "2012-03-22",
+            versionValidTo: "2013-12-31",
+          },
+        ],
+      },
+    });
+  });
+
+  test("read_statute tells an unknown act apart from a date the corpus does not cover", async () => {
+    resolveStatuteExpressionMock.mockResolvedValue({ type: "unknown-work" });
+    const unknown = await handleMcpToolCall({
+      args: { eli: "/eli/cz/sb/9999/1" },
+      context: createContext(),
+      toolName: "read_statute",
+    });
+    expectErrorEnvelope(unknown, {
+      code: "not_found",
+      message: "Legislation not found",
+      hint: "Find the ELI with search_legislation and pass it as eli.",
+    });
+
+    resolveStatuteExpressionMock.mockResolvedValue({ type: "uncovered-date" });
+    const uncovered = await handleMcpToolCall({
+      args: { as_of: "1990-01-01", eli: STATUTE_ELI },
+      context: createContext(),
+      toolName: "read_statute",
+    });
+    expectErrorEnvelope(uncovered, {
+      code: "not_found",
+      message: "No version of this legislation was in force on 1990-01-01",
+      hint: "Omit as_of for the current text, or call read_provision_history to see the version windows.",
+    });
+    expect(readPublicLegislationHandlerMock).not.toHaveBeenCalled();
+  });
+
+  test("read_statute withholds the text but not the metadata when AI use is barred", async () => {
+    resolveStatuteExpressionMock.mockResolvedValue({
+      type: "expression",
+      id: STATUTE_ID,
+    });
+    readPublicLegislationHandlerMock.mockResolvedValue(
+      createStatuteReadResult({ allowsDerivedAi: false }),
+    );
+    listStatuteVersionsHandlerMock.mockResolvedValue(
+      createStatuteVersionsPage(),
+    );
+
+    const payload = parseToolPayload(
+      await handleMcpToolCall({
+        args: { eli: STATUTE_ELI },
+        context: createContext(),
+        toolName: "read_statute",
+      }),
+    );
+
+    expect(payload).toMatchObject({
+      nextCursor: null,
+      statute: {
+        charCount: null,
+        outline: [
+          { anchorId: PROVISION_ANCHOR, level: 3, text: "\u00a7 1729" },
+        ],
+        text: null,
+        textWithheldReason:
+          "The source licence does not permit AI use of the full text.",
+        truncated: false,
+      },
+    });
+  });
+
+  test("read_statute_provisions answers each entry in input order and resolves each work once", async () => {
+    resolveStatuteExpressionMock.mockImplementation(
+      async ({ asOf, eli }: { asOf?: string; eli: string }) => {
+        if (eli !== STATUTE_ELI) {
+          return await Promise.resolve({ type: "unknown-work" });
+        }
+        return await Promise.resolve(
+          asOf === undefined
+            ? { type: "expression", id: STATUTE_ID }
+            : { type: "uncovered-date" },
+        );
+      },
+    );
+    readLegislationProvisionVersionsMock.mockResolvedValue([
+      createProvisionVersionRow(),
+    ]);
+    readVersionBlocksMock.mockResolvedValue(createStatuteBlocks());
+
+    const result = await handleMcpToolCall({
+      args: {
+        items: [
+          { anchor: PROVISION_ANCHOR, eli: STATUTE_ELI },
+          { anchor: "par_9999", eli: STATUTE_ELI },
+          { anchor: PROVISION_ANCHOR, as_of: "1990-01-01", eli: STATUTE_ELI },
+          { anchor: "par_1", eli: "/eli/cz/sb/9999/1" },
+          // The same address as the first entry: it must be answered again
+          // without resolving or re-reading the consolidation.
+          { anchor: PROVISION_ANCHOR, eli: STATUTE_ELI },
+        ],
+      },
+      context: createContext(),
+      toolName: "read_statute_provisions",
+    });
+
+    // Five entries, three distinct (eli, language, as_of) addresses, one
+    // consolidation: one resolution per address and one AST read in total.
+    expect(resolveStatuteExpressionMock).toHaveBeenCalledTimes(3);
+    expect(
+      readLegislationProvisionVersionsMock.mock.calls.at(0)?.at(0),
+    ).toMatchObject({ documentIds: [STATUTE_ID] });
+    expect(readVersionBlocksMock).toHaveBeenCalledTimes(1);
+    expect(readVersionBlocksMock.mock.calls.at(0)?.at(0)).toMatchObject({
+      purpose: "derived-ai",
+    });
+
+    const payload = parseToolPayload(result);
+    expect(payload).toMatchObject({
+      items: [
+        {
+          anchor: PROVISION_ANCHOR,
+          documentId: STATUTE_ID,
+          eli: STATUTE_ELI,
+          status: "found",
+          // A provision is bounded far below the document text window, so
+          // this fixture's long body is cut here and says so.
+          truncated: true,
+          versionValidFrom: "2014-01-01",
+          versionValidTo: null,
+        },
+        { anchor: "par_9999", status: "provision_not_found" },
+        { anchor: PROVISION_ANCHOR, status: "uncovered_date" },
+        { anchor: "par_1", status: "not_found" },
+        { anchor: PROVISION_ANCHOR, status: "found" },
+      ],
+    });
+    const first = (payload as { items: { text?: string }[] }).items.at(0);
+    expect(first?.text?.length).toBe(LIMITS.legislationProvisionTextChars);
+  });
+
+  test("read_statute_provisions withholds one entry's wording without failing the batch", async () => {
+    resolveStatuteExpressionMock.mockResolvedValue({
+      type: "expression",
+      id: STATUTE_ID,
+    });
+    readLegislationProvisionVersionsMock.mockResolvedValue([
+      createProvisionVersionRow({ allowsDerivedAi: false }),
+    ]);
+
+    const payload = parseToolPayload(
+      await handleMcpToolCall({
+        args: { items: [{ anchor: PROVISION_ANCHOR, eli: STATUTE_ELI }] },
+        context: createContext(),
+        toolName: "read_statute_provisions",
+      }),
+    );
+
+    // A consolidation barred from derived AI use is never read at all: the
+    // bytes are not fetched only to be dropped.
+    expect(readVersionBlocksMock).not.toHaveBeenCalled();
+    expect(payload).toMatchObject({
+      items: [
+        {
+          anchor: PROVISION_ANCHOR,
+          eli: STATUTE_ELI,
+          message:
+            "The source licence does not permit AI use of this wording. Read it at the statute's appUrl instead.",
+          status: "text_withheld",
+        },
+      ],
+    });
+  });
+
+  test("read_provision_history reads the work from today's consolidation and pages back", async () => {
+    resolveStatuteExpressionMock.mockResolvedValue({
+      type: "expression",
+      id: STATUTE_ID,
+    });
+    readProvisionHistoryHandlerMock.mockResolvedValue({
+      items: [
+        {
+          documentId: STATUTE_ID,
+          text: "\u00a7 1729 as amended",
+          versionValidFrom: "2014-01-01",
+          versionValidTo: null,
+        },
+        {
+          documentId: STATUTE_PRIOR_ID,
+          text: "\u00a7 1729 as enacted",
+          versionValidFrom: "2012-03-22",
+          versionValidTo: "2013-12-31",
+        },
+      ],
+      nextCursor: "history_cursor_2",
+    });
+
+    const result = await handleMcpToolCall({
+      args: { anchor: PROVISION_ANCHOR, eli: STATUTE_ELI },
+      context: createContext(),
+      toolName: "read_provision_history",
+    });
+
+    // No as-of: the history starts from the text in force today.
+    expect(resolveStatuteExpressionMock.mock.calls.at(0)?.at(0)).toEqual({
+      eli: STATUTE_ELI,
+    });
+    expect(
+      readProvisionHistoryHandlerMock.mock.calls.at(0)?.at(0),
+    ).toMatchObject({
+      anchor: PROVISION_ANCHOR,
+      documentId: STATUTE_ID,
+      query: { limit: LIMITS.legislationProvisionHistoryPageSizeDefault },
+    });
+    expect(parseToolPayload(result)).toEqual({
+      anchor: PROVISION_ANCHOR,
+      eli: STATUTE_ELI,
+      items: [
+        {
+          documentId: STATUTE_ID,
+          resourceName: `stella://resource/legislation_document/id=${STATUTE_ID}`,
+          text: "\u00a7 1729 as amended",
+          truncated: false,
+          versionValidFrom: "2014-01-01",
+          versionValidTo: null,
+        },
+        {
+          documentId: STATUTE_PRIOR_ID,
+          resourceName: `stella://resource/legislation_document/id=${STATUTE_PRIOR_ID}`,
+          text: "\u00a7 1729 as enacted",
+          truncated: false,
+          versionValidFrom: "2012-03-22",
+          versionValidTo: "2013-12-31",
+        },
+      ],
+      nextCursor: "history_cursor_2",
+    });
+  });
+
+  test("read_provision_history points at the outline when the anchor is absent", async () => {
+    resolveStatuteExpressionMock.mockResolvedValue({
+      type: "expression",
+      id: STATUTE_ID,
+    });
+    readProvisionHistoryHandlerMock.mockResolvedValue({
+      code: 404,
+      response: { message: "Provision not found" },
+    });
+
+    expectErrorEnvelope(
+      await handleMcpToolCall({
+        args: { anchor: "par_9999", eli: STATUTE_ELI },
+        context: createContext(),
+        toolName: "read_provision_history",
+      }),
+      {
+        code: "not_found",
+        message: "Provision not found",
+        hint: "Call read_statute for this eli and pick an anchorId from its outline.",
+      },
+    );
   });
 
   test("search_case_law rejects invalid ISO dates", async () => {

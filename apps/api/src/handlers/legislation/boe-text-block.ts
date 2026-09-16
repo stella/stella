@@ -18,7 +18,7 @@ const boeTextBlock = createSafeRootHandler(
       "addressed by the law identifier and a block id taken from " +
       "legislation.boe-law-structure.",
     permissions: { workspace: ["read"] },
-    mcp: { type: "covered", by: "search_legislation" },
+    mcp: { type: "covered", by: "search_boe_legislation" },
     access: "read",
     params: paramsSchema,
   },

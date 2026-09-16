@@ -11,6 +11,10 @@ import documentUploadAppHtml from "@/api/mcp/apps/document-upload/generated/app.
 import type { McpMode } from "@/api/mcp/constants";
 import { DOCUMENT_UPLOAD_APP_RESOURCE_URI } from "@/api/mcp/document-file-upload";
 import {
+  buildLegislationWorkflowReference,
+  LEGISLATION_WORKFLOW_REFERENCE_URI,
+} from "@/api/mcp/legislation-workflow-reference";
+import {
   buildFieldReference,
   TEMPLATE_FIELD_REFERENCE_URI,
 } from "@/api/mcp/template-field-reference";
@@ -115,6 +119,19 @@ const STATIC_RESOURCES: readonly StaticResource[] = [
     mimeType: "text/markdown",
     listed: true,
     read: buildWorkflowReference,
+  },
+  {
+    uri: LEGISLATION_WORKFLOW_REFERENCE_URI,
+    name: "legislation-workflow",
+    title: "Legislation workflow",
+    description:
+      "The order to read the stella legislation corpus in: find an act, read " +
+      "the consolidation in force on a date, read named provisions in bulk, " +
+      "follow one provision across amendments. Read this before the first " +
+      "search_legislation call.",
+    mimeType: "text/markdown",
+    listed: true,
+    read: buildLegislationWorkflowReference,
   },
   {
     uri: DOCUMENT_UPLOAD_APP_RESOURCE_URI,

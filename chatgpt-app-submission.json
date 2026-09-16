@@ -196,6 +196,54 @@
         "destructive_justification": "Does not delete, revoke access, overwrite irreversibly, or perform another destructive action."
       }
     },
+    "search_legislation": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves or computes data from the user’s authorized stella workspace or configured source without changing stored records.",
+        "open_world_justification": "Operates within stella’s private workspace and does not change public internet or third-party state.",
+        "destructive_justification": "Does not delete, revoke access, overwrite irreversibly, or perform another destructive action."
+      }
+    },
+    "read_statute": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves or computes data from the user’s authorized stella workspace or configured source without changing stored records.",
+        "open_world_justification": "Operates within stella’s private workspace and does not change public internet or third-party state.",
+        "destructive_justification": "Does not delete, revoke access, overwrite irreversibly, or perform another destructive action."
+      }
+    },
+    "read_statute_provisions": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves or computes data from the user’s authorized stella workspace or configured source without changing stored records.",
+        "open_world_justification": "Operates within stella’s private workspace and does not change public internet or third-party state.",
+        "destructive_justification": "Does not delete, revoke access, overwrite irreversibly, or perform another destructive action."
+      }
+    },
+    "read_provision_history": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves or computes data from the user’s authorized stella workspace or configured source without changing stored records.",
+        "open_world_justification": "Operates within stella’s private workspace and does not change public internet or third-party state.",
+        "destructive_justification": "Does not delete, revoke access, overwrite irreversibly, or perform another destructive action."
+      }
+    },
     "list_templates": {
       "annotations": {
         "readOnlyHint": true,
@@ -604,7 +652,7 @@
         "destructive_justification": "Does not delete, revoke access, overwrite irreversibly, or perform another destructive action."
       }
     },
-    "search_legislation": {
+    "search_boe_legislation": {
       "annotations": {
         "readOnlyHint": true,
         "openWorldHint": true,

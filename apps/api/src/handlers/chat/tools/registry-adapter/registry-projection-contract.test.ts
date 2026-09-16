@@ -75,6 +75,13 @@ const searchDecisionsHandlerMock = mock();
 const readGatedDecisionWithDocumentMock = mock();
 const readGatedDecisionCitationsMock = mock();
 const withRedistributableSubjectMock = mock();
+const searchLegislationHandlerMock = mock();
+const resolveStatuteExpressionMock = mock();
+const readPublicLegislationHandlerMock = mock();
+const listStatuteVersionsHandlerMock = mock();
+const readProvisionHistoryHandlerMock = mock();
+const readLegislationProvisionVersionsMock = mock();
+const readVersionBlocksMock = mock();
 const searchConsolidatedLegislationMock = mock();
 const getLawTextBlockMock = mock();
 const executeRegistryLookupMock = mock();
@@ -186,12 +193,70 @@ const buildContext = (tx: unknown): McpRequestContext => {
       searchDecisionsHandler: searchDecisionsHandlerMock,
       readGatedDecisionWithDocument: readGatedDecisionWithDocumentMock,
       readGatedDecisionCitations: readGatedDecisionCitationsMock,
+      searchLegislationHandler: searchLegislationHandlerMock,
+      resolveStatuteExpression: resolveStatuteExpressionMock,
+      readPublicLegislationHandler: readPublicLegislationHandlerMock,
+      listStatuteVersionsHandler: listStatuteVersionsHandlerMock,
+      readProvisionHistoryHandler: readProvisionHistoryHandlerMock,
+      readLegislationProvisionVersions: readLegislationProvisionVersionsMock,
+      readVersionBlocks: readVersionBlocksMock,
       searchConsolidatedLegislation: searchConsolidatedLegislationMock,
       getLawTextBlock: getLawTextBlockMock,
       executeRegistryLookup: executeRegistryLookupMock,
     },
   });
 };
+
+/**
+ * One consolidation as the public statute read projects it, with the AST the
+ * outline and the plain text are both derived from.
+ */
+const statuteDocumentFixture = (documentId: string) => ({
+  id: documentId,
+  eli: "/eli/cz/sb/2012/89",
+  slug: "89-2012-sb-obcansky-zakonik",
+  title: "89/2012 Sb., občanský zákoník",
+  country: "CZE",
+  language: "cs",
+  documentType: "act",
+  status: "in_force",
+  effectiveDate: "2014-01-01",
+  versionValidFrom: "2014-01-01",
+  versionValidTo: null,
+  sections: null,
+  sourceUrl: "https://example.test/89-2012",
+  documentUrl: null,
+  createdAt: new Date("2026-01-01T00:00:00.000Z"),
+  updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+  citationCaseCount: 0,
+  allowsDerivedAi: true,
+  documentAst: {
+    blocks: provisionBlocksFixture(),
+    metadata: {},
+    source: {},
+    version: 1,
+  },
+  fulltext: null,
+});
+
+/** A heading plus its paragraph, which is what one provision owns. */
+const provisionBlocksFixture = () => [
+  {
+    anchorId: "par_1729",
+    id: "b-1",
+    inlines: [],
+    level: 3,
+    plainText: "§ 1729",
+    type: "heading",
+  },
+  {
+    anchorId: "par_1729-odst_1",
+    id: "b-2",
+    inlines: [],
+    plainText: "Snoubenci si zvolí obřad.",
+    type: "paragraph",
+  },
+];
 
 // --- Path + ref assertions ------------------------------------------------------
 
@@ -1326,6 +1391,110 @@ const CONTRACT_CORPUS = {
   search_legislation: [
     {
       mode: "search",
+      buildArgs: () => ({ country: "CZE", query: "náhrada škody" }),
+      setup: () => {
+        searchLegislationHandlerMock.mockResolvedValue({
+          items: [
+            {
+              documentId: uid(70),
+              eli: "/eli/cz/sb/2012/89",
+              title: "89/2012 Sb., občanský zákoník",
+              country: "CZE",
+              language: "cs",
+              documentType: "act",
+              status: "in_force",
+              effectiveDate: "2014-01-01",
+              sourceUrl: "https://example.test/89-2012",
+              headline: "<mark>náhrada škody</mark>",
+              score: 1.5,
+            },
+          ],
+          nextCursor: null,
+          total: { type: SEARCH_TOTAL_TYPE.NOT_COUNTED },
+        });
+      },
+      expectRefPaths: [],
+    },
+  ],
+  read_statute: [
+    {
+      mode: "read",
+      buildArgs: () => ({ eli: "/eli/cz/sb/2012/89" }),
+      setup: () => {
+        resolveStatuteExpressionMock.mockResolvedValue({
+          type: "expression",
+          id: toSafeId<"legislationDocument">(uid(71)),
+        });
+        readPublicLegislationHandlerMock.mockResolvedValue(
+          statuteDocumentFixture(uid(71)),
+        );
+        listStatuteVersionsHandlerMock.mockResolvedValue({
+          items: [
+            {
+              id: uid(71),
+              versionValidFrom: "2014-01-01",
+              versionValidTo: null,
+            },
+          ],
+          nextCursor: null,
+        });
+      },
+      expectRefPaths: [],
+    },
+  ],
+  read_statute_provisions: [
+    {
+      mode: "batch",
+      buildArgs: () => ({
+        items: [{ anchor: "par_1729", eli: "/eli/cz/sb/2012/89" }],
+      }),
+      setup: () => {
+        resolveStatuteExpressionMock.mockResolvedValue({
+          type: "expression",
+          id: toSafeId<"legislationDocument">(uid(72)),
+        });
+        readLegislationProvisionVersionsMock.mockResolvedValue([
+          {
+            id: toSafeId<"legislationDocument">(uid(72)),
+            astS3Key: null,
+            documentAst: null,
+            versionValidFrom: "2014-01-01",
+            versionValidTo: null,
+            allowsDerivedAi: true,
+          },
+        ]);
+        readVersionBlocksMock.mockResolvedValue(provisionBlocksFixture());
+      },
+      expectRefPaths: [],
+    },
+  ],
+  read_provision_history: [
+    {
+      mode: "history",
+      buildArgs: () => ({ anchor: "par_1729", eli: "/eli/cz/sb/2012/89" }),
+      setup: () => {
+        resolveStatuteExpressionMock.mockResolvedValue({
+          type: "expression",
+          id: toSafeId<"legislationDocument">(uid(73)),
+        });
+        readProvisionHistoryHandlerMock.mockResolvedValue({
+          items: [
+            {
+              documentId: uid(73),
+              versionValidFrom: "2014-01-01",
+              versionValidTo: null,
+              text: "§ 1729\nSnoubenci...",
+            },
+          ],
+          nextCursor: null,
+        });
+      },
+      expectRefPaths: [],
+    },
+  ],
+  search_boe_legislation: [
+    {
+      mode: "search",
       buildArgs: () => ({ query: "impuesto" }),
       setup: () => {
         searchConsolidatedLegislationMock.mockResolvedValue({
@@ -1472,6 +1641,13 @@ const ALL_MOCKS = [
   searchDecisionsHandlerMock,
   readGatedDecisionWithDocumentMock,
   readGatedDecisionCitationsMock,
+  searchLegislationHandlerMock,
+  resolveStatuteExpressionMock,
+  readPublicLegislationHandlerMock,
+  listStatuteVersionsHandlerMock,
+  readProvisionHistoryHandlerMock,
+  readLegislationProvisionVersionsMock,
+  readVersionBlocksMock,
   searchConsolidatedLegislationMock,
   getLawTextBlockMock,
   executeRegistryLookupMock,

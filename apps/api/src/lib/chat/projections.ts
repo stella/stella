@@ -23,6 +23,10 @@ import {
   DOCUMENT_PROCESSING_REQUIRED_STATUS,
 } from "@/api/lib/document-processing-contract";
 import { TEMPLATE_WARNING_CODES } from "@/api/lib/docx/template-warnings";
+import {
+  PROVISION_ABSENCE_STATUSES,
+  PROVISION_STATUS,
+} from "@/api/lib/legal-search/legislation-provision-vocabulary";
 
 import {
   chatEntityRef,
@@ -1511,8 +1515,164 @@ export const READ_CASE_LAW_CITATIONS_PROJECTION = v.strictObject({
 });
 
 /**
- * search_legislation, all four branches (`handleSearchLegislationTool`,
- * `research-admin-tools.ts`). Public BOE statutory data throughout; the BOE
+ * The window of a Work's consolidated versions a statute read returns.
+ * Newest validity window first, bounded by the versions page size: enough to
+ * see which consolidations exist, not the whole amendment history.
+ */
+const STATUTE_VERSION_PROJECTION = v.strictObject({
+  documentId: passthroughId(),
+  resourceName: passthroughId(),
+  versionValidFrom: v.nullable(v.string()),
+  versionValidTo: v.nullable(v.string()),
+});
+
+/**
+ * search_legislation. Source of truth: `handleSearchLegislationTool`
+ * (`legislation-tools.ts`) mapping `searchLegislationHandler` hits. Document
+ * ids are public legislation corpus ids, not tenant refs.
+ */
+export const SEARCH_LEGISLATION_PROJECTION = v.strictObject({
+  // Opaque corpus-search cursor, base64url-encoded.
+  nextCursor: v.nullable(passthroughId()),
+  results: v.array(
+    v.strictObject({
+      // Null while the public-law surface is off (`isPublicLawAppUrlEnabled`)
+      // and null for a statute whose ELI carries no citation tail to mint a
+      // slug from: both are addresses that do not exist, not missing data.
+      appUrl: v.nullable(v.string()),
+      country: v.string(),
+      documentId: passthroughId(),
+      documentType: v.nullable(v.string()),
+      effectiveDate: v.nullable(v.string()),
+      eli: v.string(),
+      language: v.string(),
+      resourceName: passthroughId(),
+      score: v.number(),
+      snippet: v.nullable(v.string()),
+      sourceUrl: v.nullable(v.string()),
+      status: v.string(),
+      title: v.string(),
+    }),
+  ),
+  total: searchTotalProjection,
+});
+
+/**
+ * read_statute. Source of truth: `handleReadStatuteTool`
+ * (`legislation-tools.ts`) over the point-in-time resolver, the public
+ * document read and the version list. All ids are public legislation corpus
+ * ids. The publisher's `metadata` bag never reaches this surface: the public
+ * read strips it.
+ */
+export const READ_STATUTE_PROJECTION = v.strictObject({
+  // Opaque text-window cursor. The version and outline pages describe the
+  // whole consolidation and do not continue, so only the text pages.
+  nextCursor: v.nullable(passthroughId()),
+  statute: v.strictObject({
+    // Nullable for the same reasons as search_legislation's `appUrl`.
+    appUrl: v.nullable(v.string()),
+    charCount: v.nullable(v.number()),
+    country: v.string(),
+    documentId: passthroughId(),
+    documentType: v.nullable(v.string()),
+    effectiveDate: v.nullable(v.string()),
+    eli: v.string(),
+    language: v.string(),
+    // The consolidation's heading blocks in document order. Each `anchorId`
+    // is what read_statute_provisions and read_provision_history take as
+    // `anchor`, in the publisher's own scheme.
+    outline: v.array(
+      v.strictObject({
+        anchorId: passthroughId(),
+        level: v.number(),
+        text: v.string(),
+      }),
+    ),
+    outlineTruncated: v.boolean(),
+    resourceName: passthroughId(),
+    sourceUrl: v.nullable(v.string()),
+    status: v.string(),
+    text: v.nullable(v.string()),
+    // Present only where the source permits displaying wording but bars
+    // derived AI use; the metadata, outline and versions still answer.
+    textWithheldReason: v.optional(v.string()),
+    title: v.string(),
+    truncated: v.boolean(),
+    versionValidFrom: v.nullable(v.string()),
+    versionValidTo: v.nullable(v.string()),
+    versions: v.array(STATUTE_VERSION_PROJECTION),
+  }),
+});
+
+const provisionEntrySubject = {
+  // The publisher's anchor, echoed so a batch reply says which entry it is.
+  anchor: passthroughId(),
+  eli: v.string(),
+} as const;
+
+/**
+ * read_statute_provisions. Source of truth:
+ * `handleReadStatuteProvisionsTool` (`legislation-tools.ts`). One entry per
+ * requested item, in input order: a batch read reports per entry rather than
+ * failing whole, so the union is discriminated on `status` and every absence
+ * carries its own message.
+ */
+export const READ_STATUTE_PROVISIONS_PROJECTION = v.strictObject({
+  items: v.array(
+    v.variant("status", [
+      projectionBranch(
+        v.strictObject({
+          ...provisionEntrySubject,
+          documentId: passthroughId(),
+          resourceName: passthroughId(),
+          status: v.literal(PROVISION_STATUS.found),
+          text: v.string(),
+          truncated: v.boolean(),
+          versionValidFrom: v.nullable(v.string()),
+          versionValidTo: v.nullable(v.string()),
+        }),
+      ),
+      ...PROVISION_ABSENCE_STATUSES.map((status) =>
+        projectionBranch(
+          v.strictObject({
+            ...provisionEntrySubject,
+            message: v.string(),
+            status: v.literal(status),
+          }),
+        ),
+      ),
+    ]),
+  ),
+});
+
+/**
+ * read_provision_history. Source of truth: `handleReadProvisionHistoryTool`
+ * (`legislation-tools.ts`) over `readProvisionHistoryHandler`. A version in
+ * which the anchor is absent is dropped by that handler, so every item here
+ * carries wording.
+ */
+export const READ_PROVISION_HISTORY_PROJECTION = v.strictObject({
+  ...provisionEntrySubject,
+  items: v.array(
+    v.strictObject({
+      documentId: passthroughId(),
+      resourceName: passthroughId(),
+      text: v.string(),
+      truncated: v.boolean(),
+      versionValidFrom: v.nullable(v.string()),
+      versionValidTo: v.nullable(v.string()),
+    }),
+  ),
+  // Opaque `[versionValidFrom, documentId]` cursor, base64url-encoded.
+  nextCursor: v.nullable(passthroughId()),
+});
+
+/**
+ * search_boe_legislation, all four branches
+ * (`handleSearchBoeLegislationTool`, `research-admin-tools.ts`). Live BOE
+ * service, not the stella legislation corpus: that one is
+ * `SEARCH_LEGISLATION_PROJECTION` above. Public BOE statutory data
+ * throughout; the BOE
  * envelopes (`metadata`/`analysis`/`structure`) are deliberately `unknown` in
  * `@stll/boe` (undocumented upstream schema), so they project as
  * unenumerated subtrees the backstop still guards. Ids are BOE identifiers
@@ -1521,7 +1681,7 @@ export const READ_CASE_LAW_CITATIONS_PROJECTION = v.strictObject({
  * licensed defensively since `blockId` is an unvalidated request-argument
  * echo).
  */
-export const SEARCH_LEGISLATION_PROJECTION = v.union([
+export const SEARCH_BOE_LEGISLATION_PROJECTION = v.union([
   // block branch: one article/disposition as raw XML.
   projectionBranch(
     v.strictObject({

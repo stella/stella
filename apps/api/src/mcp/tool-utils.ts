@@ -4,6 +4,7 @@ import * as v from "valibot";
 
 import { env } from "@/api/env";
 import { createCaseLawDecisionSlug } from "@/api/handlers/case-law/decisions/slug";
+import { createStatuteSlug } from "@/api/handlers/legislation/slug";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
@@ -60,6 +61,13 @@ export const MAX_SEARCH_LIMIT = LIMITS.mcpSearchPageSizeMax;
 export const DEFAULT_COMPAT_SEARCH_LIMIT =
   LIMITS.mcpCompatSearchPageSizeDefault;
 export const ISO_DATE_SCHEMA = v.pipe(v.string(), v.isoDate());
+
+/**
+ * Characters of long document text one tool response may carry. Every
+ * corpus read that windows its text (decisions, statutes) uses this one
+ * budget, so an agent paging one surface learns the page size of all of them.
+ */
+export const MCP_CONTENT_MAX_CHARS = 8000;
 
 export const FEATURE_DISABLED_MESSAGE =
   "This feature is not enabled on this deployment";
@@ -602,6 +610,40 @@ export const validationErrorResult = (
       issues.at(0)?.message ??
       "Invalid tool input",
   });
+
+/**
+ * The status a reused backing handler answered with, when it answered with
+ * one rather than a payload. Elysia's `status(code, body)` returns
+ * `{ code, response }`; a bare `{ message }` is accepted too because some
+ * handlers return that shape directly. One reader for both, so a tool that
+ * branches on a handler's refusal cannot read it differently from its
+ * neighbour.
+ */
+export type HandlerStatus = { code: number | null; message: string | null };
+
+export const handlerStatusOf = (value: unknown): HandlerStatus | null => {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  if (typeof value["message"] === "string") {
+    return { code: null, message: value["message"] };
+  }
+
+  const response = value["response"];
+  if (!isRecord(response) || typeof response["message"] !== "string") {
+    return null;
+  }
+
+  return {
+    code: typeof value["code"] === "number" ? value["code"] : null,
+    message: response["message"],
+  };
+};
+
+/** Just the message of {@link handlerStatusOf}, for a caller that only reports it. */
+export const handlerResultMessage = (value: unknown): string | null =>
+  handlerStatusOf(value)?.message ?? null;
 
 /** `not_found` envelope for a resource that does not exist or is inaccessible. */
 export const notFoundResult = (
@@ -1159,6 +1201,73 @@ export const buildCaseLawDecisionUrl = ({
   }
 
   return `${basePath}/${decisionSlug}`;
+};
+
+/**
+ * The plain text of one corpus document: its stored plain-text consolidation
+ * when the corpus holds one, else the text its parsed blocks carry.
+ *
+ * Callers pass the blocks their own read already produced (a decision parses
+ * them out of `documentAst`, a statute read hands over an AST it has parsed),
+ * so nothing is parsed twice; what lives here is the projection both corpora
+ * must agree on. A block with no text of its own (an unlabelled figure)
+ * contributes nothing rather than a blank paragraph.
+ */
+export const toPlainCorpusText = ({
+  blocks,
+  fulltext,
+}: {
+  blocks: readonly { plainText: string }[] | null;
+  fulltext: string | null;
+}): string | null => {
+  if (typeof fulltext === "string" && fulltext.length > 0) {
+    return fulltext;
+  }
+  if (blocks === null) {
+    return null;
+  }
+
+  return blocks
+    .flatMap((block) => (block.plainText === "" ? [] : [block.plainText]))
+    .join("\n\n");
+};
+
+type LegislationDocumentUrlInput = {
+  country: string;
+  eli: string;
+  title: string;
+  /** The persisted slug where a read carries one; a search hit does not. */
+  slug?: string | null | undefined;
+};
+
+/**
+ * A statute's canonical public address: `/law/<country>/statutes/<slug>`,
+ * which always names the latest consolidation of the Work.
+ *
+ * Null when the public-law surface is off, and null when the ELI carries no
+ * citation tail for a slug to be minted from: such a statute has no readable
+ * address, exactly as a case-law decision without a slug does. The slug is
+ * derived through the corpus's own minting function rather than re-spelled
+ * here, so the address a tool reports and the address the corpus stored
+ * cannot diverge.
+ */
+export const buildLegislationDocumentAppUrl = ({
+  country,
+  eli,
+  slug,
+  title,
+}: LegislationDocumentUrlInput): string | null => {
+  if (!isPublicLawAppUrlEnabled()) {
+    return null;
+  }
+  const stored = slug?.trim() ?? "";
+  const segment =
+    stored.length > 0 ? stored : createStatuteSlug({ eli, title });
+  if (segment === null) {
+    return null;
+  }
+
+  return `${getAppBaseUrl()}/law/${country.toLowerCase()}/statutes/${segment}`;
 };
 
 export const invokeAiTool = async <TArgs extends Record<string, unknown>>({

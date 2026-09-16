@@ -7,6 +7,7 @@ import {
   MCP_INSTRUCTIONS_DEFAULT_MAX_CHARS,
   MCP_INSTRUCTIONS_DOCUMENTS_MAX_CHARS,
 } from "@/api/mcp/instructions";
+import { LEGISLATION_WORKFLOW_REFERENCE_URI } from "@/api/mcp/legislation-workflow-reference";
 import { TEMPLATE_WORKFLOW_REFERENCE_URI } from "@/api/mcp/template-workflow-reference";
 
 // The server `instructions` ride on every initialize response, so they are a
@@ -53,6 +54,15 @@ describe("MCP server instructions", () => {
     // The resource is listed, but an agent that never calls resources/list
     // starts at create_template and rediscovers the order by trial.
     expect(MCP_INSTRUCTIONS.default).toContain(TEMPLATE_WORKFLOW_REFERENCE_URI);
+  });
+
+  test("the default surface points at the legislation workflow resource", () => {
+    // Same reason as the template workflow: an agent that never calls
+    // resources/list starts at search_legislation and has to discover by
+    // trial that a point-in-time question is answered by read_statute.
+    expect(MCP_INSTRUCTIONS.default).toContain(
+      LEGISLATION_WORKFLOW_REFERENCE_URI,
+    );
   });
 
   test("the anonymized surface omits the feedback preparation tool", () => {

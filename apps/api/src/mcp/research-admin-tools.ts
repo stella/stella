@@ -27,7 +27,7 @@ import {
   type MANAGE_ORGANIZATION_REMOVE_MEMBER_PROJECTION,
   type MANAGE_ORGANIZATION_SETTINGS_PROJECTION,
   MANAGE_ORGANIZATION_PROJECTION,
-  SEARCH_LEGISLATION_PROJECTION,
+  SEARCH_BOE_LEGISLATION_PROJECTION,
 } from "@/api/lib/chat/projections";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -60,11 +60,11 @@ import {
 } from "@/api/mcp/valibot-tool-definition";
 
 type ResearchAdminToolName =
-  | "search_legislation"
+  | "search_boe_legislation"
   | "list_audit_log"
   | "manage_organization";
 
-/** Consolidated-law relation kinds accepted by search_legislation `relation_type`. */
+/** Consolidated-law relation kinds accepted by search_boe_legislation `relation_type`. */
 const RELATION_TYPE_VALUES = [
   RELATION_TYPES.modifies,
   RELATION_TYPES.modifiedBy,
@@ -242,9 +242,9 @@ const LIST_AUDIT_LOG_OUTPUT_SCHEMA = v.strictObject({
   nextCursor: v.nullable(v.string()),
 });
 
-// --- search_legislation -------------------------------------------------
+// --- search_boe_legislation -------------------------------------------------
 
-const searchLegislationArgsSchema = nullAsAbsent(
+const searchBoeLegislationArgsSchema = nullAsAbsent(
   v.pipe(
     v.strictObject({
       query: v.optional(
@@ -320,7 +320,7 @@ const searchLegislationArgsSchema = nullAsAbsent(
           v.regex(BOE_OFFSET_CURSOR),
           v.maxLength(5),
           v.description(
-            "Opaque cursor from a previous search_legislation call for the next page",
+            "Opaque cursor from a previous search_boe_legislation call for the next page",
           ),
         ),
       ),
@@ -456,9 +456,9 @@ const searchLegislationArgsSchema = nullAsAbsent(
   ),
 );
 
-const SEARCH_LEGISLATION_TOOL_DEFINITION = defineValibotMcpTool({
+const SEARCH_BOE_LEGISLATION_TOOL_DEFINITION = defineValibotMcpTool({
   annotations: {
-    title: "Search legislation",
+    title: "Search BOE legislation",
     destructiveHint: false,
     readOnlyHint: true,
     openWorldHint: true,
@@ -472,7 +472,7 @@ const SEARCH_LEGISLATION_TOOL_DEFINITION = defineValibotMcpTool({
     "full_text to include the consolidated text, block_id to return one " +
     "text block, or relation_type to list related laws instead. Returns " +
     "public statutory data.",
-  inputSchema: searchLegislationArgsSchema,
+  inputSchema: searchBoeLegislationArgsSchema,
   jsonSchemaProjectionWaiver: {
     ignoreActions: ["regex", "partial_check"],
     reason:
@@ -481,18 +481,18 @@ const SEARCH_LEGISLATION_TOOL_DEFINITION = defineValibotMcpTool({
   access: "read",
   anonymized: { exposure: "passthrough" },
   feature: "FEATURE_PUBLIC_LAW",
-  name: "search_legislation",
+  name: "search_boe_legislation",
   scope: "stella:read",
 });
 
-const handleSearchLegislationTool: TypedMcpToolHandler<
-  v.InferInput<typeof SEARCH_LEGISLATION_PROJECTION>
+const handleSearchBoeLegislationTool: TypedMcpToolHandler<
+  v.InferInput<typeof SEARCH_BOE_LEGISLATION_PROJECTION>
 > = async ({ args, context }) => {
   if (!hasEffectiveAuthority(context, { workspace: ["read"] })) {
     return errorResult("Forbidden");
   }
 
-  const parsed = v.safeParse(searchLegislationArgsSchema, args);
+  const parsed = v.safeParse(searchBoeLegislationArgsSchema, args);
   if (!parsed.success) {
     return validationErrorResult(parsed.issues);
   }
@@ -589,7 +589,7 @@ const handleSearchLegislationTool: TypedMcpToolHandler<
   // verbatim, so the projection tie is on the BOE client's return type.
   type SearchLegislationPayload = AssertNoExtraFields<
     typeof result.value,
-    v.InferInput<typeof SEARCH_LEGISLATION_PROJECTION>
+    v.InferInput<typeof SEARCH_BOE_LEGISLATION_PROJECTION>
   >;
   return toolDataResult(result.value satisfies SearchLegislationPayload);
 };
@@ -984,13 +984,13 @@ const handleManageOrganizationTool: TypedMcpToolHandler<
 };
 
 export const RESEARCH_ADMIN_TOOL_DEFINITIONS = [
-  SEARCH_LEGISLATION_TOOL_DEFINITION,
+  SEARCH_BOE_LEGISLATION_TOOL_DEFINITION,
   LIST_AUDIT_LOG_TOOL_DEFINITION,
   MANAGE_ORGANIZATION_TOOL_DEFINITION,
 ] as const satisfies readonly McpToolDefinition[];
 
 export const RESEARCH_ADMIN_TOOL_HANDLERS = {
-  search_legislation: handleSearchLegislationTool,
+  search_boe_legislation: handleSearchBoeLegislationTool,
   list_audit_log: handleListAuditLogTool,
   manage_organization: handleManageOrganizationTool,
 } satisfies Record<ResearchAdminToolName, McpToolHandler>;
@@ -1003,8 +1003,8 @@ export const RESEARCH_ADMIN_TOOL_SET = defineMcpToolSet(
     manage_organization: defineChatProjectionMcpToolOutput(
       MANAGE_ORGANIZATION_PROJECTION,
     ),
-    search_legislation: defineChatProjectionMcpToolOutput(
-      SEARCH_LEGISLATION_PROJECTION,
+    search_boe_legislation: defineChatProjectionMcpToolOutput(
+      SEARCH_BOE_LEGISLATION_PROJECTION,
     ),
   },
 );

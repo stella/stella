@@ -44,8 +44,8 @@ const NON_UUID_ID_INPUTS: Record<string, string> = {
   "save_time_entry.timezone_id": "IANA time zone name",
   // External statute-corpus identifiers, fetched over HTTP and never stored:
   // already shape-checked by their own regexes (e.g. `BOE-A-1889-4763`).
-  "search_legislation.law_id": "external statute corpus identifier",
-  "search_legislation.block_id": "external statute text-block identifier",
+  "search_boe_legislation.law_id": "external statute corpus identifier",
+  "search_boe_legislation.block_id": "external statute text-block identifier",
   // A host-assigned reference from the MCP client's file payload, used only
   // as a display-name fallback.
   "upload_document_version.file.file_id": "host-assigned client file reference",

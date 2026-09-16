@@ -467,7 +467,12 @@ describe("generateRouteMap: Phase 4 domains (S1/S3)", () => {
 
   test("audit-log and legislation carry the items Page envelope key", () => {
     expect(findLeaf(tree, ["audit-log", "list"])?.itemsKey).toBe("items");
-    expect(findLeaf(tree, ["legislation", "search"])?.itemsKey).toBe("items");
+    // Two legislation searches, two envelopes: the BOE connector pages an
+    // `items` array, the stella corpus search a `results` array.
+    expect(findLeaf(tree, ["legislation", "boe-search"])?.itemsKey).toBe(
+      "items",
+    );
+    expect(findLeaf(tree, ["legislation", "search"])?.itemsKey).toBe("results");
     expect(findLeaf(tree, ["legislation", "search"])?.paginated).toBe(true);
   });
 

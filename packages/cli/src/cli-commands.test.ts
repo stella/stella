@@ -1243,7 +1243,7 @@ describe("organization discriminator split (S2/Phase 4)", () => {
   });
 });
 
-describe("legislation multi-shape rendering (Phase 4)", () => {
+describe("BOE legislation multi-shape rendering (Phase 4)", () => {
   test("search-mode list renders the items Page envelope", async () => {
     const server = startMockServer(() => ({
       toolPayload: {
@@ -1252,7 +1252,7 @@ describe("legislation multi-shape rendering (Phase 4)", () => {
       },
     }));
     const result = await runCli({
-      args: ["legislation", "search", "--query", "tax", "--table"],
+      args: ["legislation", "boe-search", "--query", "tax", "--table"],
       url: server.url,
       token: READ,
     });
@@ -1269,7 +1269,7 @@ describe("legislation multi-shape rendering (Phase 4)", () => {
       toolPayload: { law_id: "l1", block_id: "b1", text: "Section text" },
     }));
     const result = await runCli({
-      args: ["legislation", "search", "--law-id", "l1", "--table"],
+      args: ["legislation", "boe-search", "--law-id", "l1", "--table"],
       url: server.url,
       token: READ,
     });

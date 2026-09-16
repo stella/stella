@@ -30,7 +30,7 @@ const boeRelatedLaws = createSafeRootHandler(
       "relationType: modifies, modifiedBy, derogates, derogatedBy, or all " +
       "(the default).",
     permissions: { workspace: ["read"] },
-    mcp: { type: "covered", by: "search_legislation" },
+    mcp: { type: "covered", by: "search_boe_legislation" },
     access: "read",
     params: paramsSchema,
     query: querySchema,

@@ -5,6 +5,7 @@ import type { Static } from "elysia";
 
 import { legislationDocuments, legislationSources } from "@/api/db/schema";
 import { readPublicLegislationHandler } from "@/api/handlers/legislation/get";
+import type { SafeId } from "@/api/lib/branded-types";
 import { publishedLegislationDocument } from "@/api/lib/legal-search/legislation-redistribution";
 import {
   inForceOn,
@@ -22,7 +23,19 @@ export const readStatuteByEliQuerySchema = t.Object({
 type ReadStatuteByEliQuery = Static<typeof readStatuteByEliQuerySchema>;
 
 /**
- * Point-in-time read: the Expression of a Work that applied on a given date.
+ * Which Expression a Work-plus-date address names, or why it names none.
+ *
+ * The three cases are not interchangeable: a caller who asked for a date the
+ * corpus does not cover needs to hear that the act exists, and a caller who
+ * misspelled an ELI needs to hear that it does not.
+ */
+export type StatuteExpressionResolution =
+  | { type: "expression"; id: SafeId<"legislationDocument"> }
+  | { type: "unknown-work" }
+  | { type: "uncovered-date" };
+
+/**
+ * Point-in-time resolution: the Expression of a Work that applied on a date.
  *
  * The identifier addresses the Work, the date picks the Expression. When more
  * than one window covers the date (an older open-ended consolidation the
@@ -30,11 +43,15 @@ type ReadStatuteByEliQuery = Static<typeof readStatuteByEliQuerySchema>;
  * the listing's current-version anti-join applies. Language is part of the
  * Work key, so it is ordered on rather than left to the planner when the
  * caller does not name one.
+ *
+ * Exported because the HTTP read and the agent-facing statute tools address
+ * statutes the same way: one implementation decides what an ELI plus a date
+ * means, so a tool cannot resolve it differently from the reader.
  */
-export const readStatuteByEliHandler = async (
+export const resolveStatuteExpression = async (
   query: ReadStatuteByEliQuery,
   legislationDb: LegislationReadDb,
-) => {
+): Promise<StatuteExpressionResolution> => {
   const asOf =
     query.asOf === undefined ? sql`CURRENT_DATE` : sql`${query.asOf}::date`;
 
@@ -47,7 +64,7 @@ export const readStatuteByEliHandler = async (
     workConditions.push(eq(legislationDocuments.language, query.language));
   }
 
-  const resolved = await legislationDb(async (tx) => {
+  return await legislationDb(async (tx) => {
     const [expression] = await tx
       .select({ id: legislationDocuments.id })
       .from(legislationDocuments)
@@ -93,6 +110,14 @@ export const readStatuteByEliHandler = async (
       ? ({ type: "unknown-work" } as const)
       : ({ type: "uncovered-date" } as const);
   });
+};
+
+/** The unauthenticated point-in-time read: resolve, then project. */
+export const readStatuteByEliHandler = async (
+  query: ReadStatuteByEliQuery,
+  legislationDb: LegislationReadDb,
+) => {
+  const resolved = await resolveStatuteExpression(query, legislationDb);
 
   if (resolved.type === "unknown-work") {
     return status(404, { message: "Legislation document not found" });

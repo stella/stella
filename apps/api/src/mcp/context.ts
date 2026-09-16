@@ -16,6 +16,12 @@ import {
 import type { readGatedDecisionCitations } from "@/api/handlers/case-law/decisions/citation-passages";
 import type { readGatedDecisionWithDocument } from "@/api/handlers/case-law/decisions/get-deferred-document";
 import type { searchDecisionsHandler } from "@/api/handlers/case-law/decisions/search";
+import type { resolveStatuteExpression } from "@/api/handlers/legislation/by-eli";
+import type { readPublicLegislationHandler } from "@/api/handlers/legislation/get";
+import type { readProvisionHistoryHandler } from "@/api/handlers/legislation/provision-history";
+import type { readLegislationProvisionVersions } from "@/api/handlers/legislation/provision-versions";
+import type { searchLegislationHandler } from "@/api/handlers/legislation/search";
+import type { listStatuteVersionsHandler } from "@/api/handlers/legislation/versions";
 import type { configureTemplateFields } from "@/api/handlers/templates/configure-template-fields-service";
 import type { createTimeEntryHandler } from "@/api/handlers/time-entries/create";
 import type { readWorkspaceHandler } from "@/api/handlers/workspaces/get";
@@ -44,6 +50,7 @@ import type {
 } from "@/api/lib/business-registries/dispatch";
 import type { loadLatestApprovedVersion } from "@/api/lib/document-review/approved-playbook-versions";
 import type { createPlaybookTableRuns } from "@/api/lib/document-review/table-run-create";
+import type { readVersionBlocks } from "@/api/lib/legal-search/legislation-version-blocks";
 import { getDisabledNativeToolSlugsFromSettingsRow } from "@/api/lib/mcp-connectors/catalog-metadata";
 import { isMemberRole } from "@/api/lib/member-roles";
 import type { MemberRole } from "@/api/lib/member-roles";
@@ -111,6 +118,13 @@ export type McpRequestContext = {
     searchDecisionsHandler?: typeof searchDecisionsHandler;
     readGatedDecisionCitations?: typeof readGatedDecisionCitations;
     readGatedDecisionWithDocument?: typeof readGatedDecisionWithDocument;
+    searchLegislationHandler?: typeof searchLegislationHandler;
+    resolveStatuteExpression?: typeof resolveStatuteExpression;
+    readPublicLegislationHandler?: typeof readPublicLegislationHandler;
+    listStatuteVersionsHandler?: typeof listStatuteVersionsHandler;
+    readProvisionHistoryHandler?: typeof readProvisionHistoryHandler;
+    readLegislationProvisionVersions?: typeof readLegislationProvisionVersions;
+    readVersionBlocks?: typeof readVersionBlocks;
     readWorkspaceHandler?: typeof readWorkspaceHandler;
     readOverviewHandler?: typeof readOverviewHandler;
     readWorkspaceContactsHandler?: typeof readWorkspaceContactsHandler;

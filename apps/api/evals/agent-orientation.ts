@@ -1,4 +1,3 @@
-import { Value } from "@sinclair/typebox/value";
 import type { StandardJSONSchemaV1 } from "@standard-schema/spec";
 /**
  * Agent-orientation eval: given stella's agent-facing surface, does a model
@@ -49,7 +48,6 @@ import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import * as v from "valibot";
 
-import { searchLegislationBodySchema } from "@/api/handlers/legislation/search-schema";
 import { resolveCaching } from "@/api/lib/ai-config";
 import { toSafeId } from "@/api/lib/branded-types";
 import {
@@ -503,6 +501,12 @@ const DOCUMENT_ID = "d0d0d0d0-0000-4000-8000-000000000042";
 const TRANSLATION_ENTITY_ID = "7f7f7f7f-1111-4222-8333-444444444444";
 const TRANSLATION_FIELD_ID = "5e5e5e5e-1111-4222-8333-444444444444";
 const CASE_LAW_DECISION_ID = "b2b2b2b2-0000-4000-8000-000000000031";
+// A legislation work is addressed by its ELI, and its provisions by the
+// publisher's own anchors; neither is UUID-shaped, and neither is guessable,
+// so the tasks carry them the way a previous call would have returned them.
+const STATUTE_ELI = "/eli/cz/sb/2012/89";
+const STATUTE_ANCHOR = "par_1729";
+const STATUTE_SECOND_ANCHOR = "par_2079";
 
 const TASKS: readonly Task[] = [
   {
@@ -550,30 +554,111 @@ const TASKS: readonly Task[] = [
   {
     id: "search-czech-legislation",
     request:
-      'Search Czech legislation for "náhrada škody" using legislation.search. Set the country filter explicitly so results are restricted to Czechia.',
+      'Search the stella legislation corpus for Czech statutes about "náhrada škody". Restrict the results to Czechia.',
     mcp: {
-      toolName: "invoke_capability",
-      preflight: { type: "capability-described" },
-      exampleArgs: {
-        capability: "legislation.search",
-        input: { body: { query: "náhrada škody", jurisdiction: "CZE" } },
-      },
+      toolName: "search_legislation",
+      exampleArgs: { country: "CZE", query: "náhrada škody" },
       checkArgs: (args) => [
-        ...field(args, "capability", "legislation.search"),
-        ...[
-          ...Value.Errors(
-            searchLegislationBodySchema,
-            nested(args, ["input", "body"]),
-          ),
-        ].map((issue) => `input.body${issue.path}: ${issue.message}`),
-        ...nestedField(args, ["input", "body", "query"], "náhrada škody"),
-        ...nestedField(args, ["input", "body", "jurisdiction"], "CZE"),
+        ...(typeof args["query"] === "string" && args["query"].length > 0
+          ? []
+          : ["query: expected a non-empty string"]),
+        // The handler folds the code (publicLegislationCountry), so `cze` is
+        // as correct as `CZE`.
+        ...(typeof args["country"] === "string" &&
+        args["country"].toUpperCase() === "CZE"
+          ? []
+          : [`country: expected CZE, got ${JSON.stringify(args["country"])}`]),
       ],
     },
     cli: {
       kind: "command",
-      path: ["capability", "legislation", "search"],
-      flags: { query: "náhrada škody", jurisdiction: "CZE" },
+      path: ["legislation", "search"],
+      flags: { country: "CZE" },
+    },
+  },
+  {
+    id: "read-statute-as-of",
+    request: `I need the consolidated text of the act with ELI ${STATUTE_ELI} as it stood on 1 March 2016, not the current one.`,
+    mcp: {
+      toolName: "read_statute",
+      exampleArgs: { as_of: "2016-03-01", eli: STATUTE_ELI },
+      checkArgs: (args) => [
+        ...field(args, "eli", STATUTE_ELI),
+        // The whole point of the task: without as_of the tool answers with
+        // today's consolidation, which is not what was asked.
+        ...field(args, "as_of", "2016-03-01"),
+      ],
+    },
+    cli: {
+      kind: "command",
+      path: ["legislation", "read"],
+      flags: { eli: STATUTE_ELI, "as-of": "2016-03-01" },
+    },
+  },
+  {
+    id: "read-statute-provisions",
+    request: `From the act with ELI ${STATUTE_ELI}, give me the wording of the provisions at anchors ${STATUTE_ANCHOR} and ${STATUTE_SECOND_ANCHOR}. Fetch both in a single call.`,
+    mcp: {
+      toolName: "read_statute_provisions",
+      exampleArgs: {
+        items: [
+          { anchor: STATUTE_ANCHOR, eli: STATUTE_ELI },
+          { anchor: STATUTE_SECOND_ANCHOR, eli: STATUTE_ELI },
+        ],
+      },
+      checkArgs: (args) => {
+        const items = args["items"];
+        if (!Array.isArray(items)) {
+          return ["items: expected an array"];
+        }
+        // Both provisions in one call is the contract this tool exists for;
+        // two single-item calls would each cost a round trip.
+        if (items.length !== 2) {
+          return [`items: expected 2 entries, got ${items.length}`];
+        }
+        return items.flatMap((entry, index) => {
+          if (!isRecord(entry)) {
+            return [`items.${index}: expected an object`];
+          }
+          const expectedAnchor =
+            index === 0 ? STATUTE_ANCHOR : STATUTE_SECOND_ANCHOR;
+          return [
+            ...field(entry, "eli", STATUTE_ELI),
+            ...field(entry, "anchor", expectedAnchor),
+          ].map((issue) => `items.${index}.${issue}`);
+        });
+      },
+    },
+    cli: {
+      kind: "command",
+      path: ["legislation", "provisions"],
+      // The batch is reachable only through `--input`; the scorer compares
+      // the parsed payload, so key order does not matter but the entries do.
+      flags: {
+        input: JSON.stringify({
+          items: [
+            { anchor: STATUTE_ANCHOR, eli: STATUTE_ELI },
+            { anchor: STATUTE_SECOND_ANCHOR, eli: STATUTE_ELI },
+          ],
+        }),
+      },
+    },
+  },
+  {
+    id: "read-provision-history",
+    request: `How has the provision at anchor ${STATUTE_ANCHOR} of ${STATUTE_ELI} been amended over time? I want its wording in each consolidation.`,
+    mcp: {
+      toolName: "read_provision_history",
+      exampleArgs: { anchor: STATUTE_ANCHOR, eli: STATUTE_ELI },
+      checkArgs: (args) => [
+        ...field(args, "eli", STATUTE_ELI),
+        ...field(args, "anchor", STATUTE_ANCHOR),
+      ],
+    },
+    cli: {
+      kind: "command",
+      path: ["legislation", "history"],
+      flags: { anchor: STATUTE_ANCHOR, eli: STATUTE_ELI },
     },
   },
   {

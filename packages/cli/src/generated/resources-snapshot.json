@@ -26,5 +26,12 @@
     "title": "Template workflow",
     "description": "The order to drive stella's templates in: author markers, create the template, read the discovered paths back, configure fields, preview the fill, persist it into a matter. Read this before the first create_template call.",
     "mimeType": "text/markdown"
+  },
+  {
+    "uri": "stella://reference/legislation-workflow",
+    "name": "legislation-workflow",
+    "title": "Legislation workflow",
+    "description": "The order to read the stella legislation corpus in: find an act, read the consolidation in force on a date, read named provisions in bulk, follow one provision across amendments. Read this before the first search_legislation call.",
+    "mimeType": "text/markdown"
   }
 ]
