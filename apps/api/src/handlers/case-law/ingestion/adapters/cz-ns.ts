@@ -1,5 +1,6 @@
 import { Result, panic } from "better-result";
 
+import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import { Temporal } from "@stll/time";
 
 import {
@@ -508,6 +509,8 @@ export type CzNsListingRow = {
   unid: string;
   /** `znacka`, the docket exactly as the publisher writes it. */
   caseNumber: string;
+  /** Other dockets settled by this same publisher document. */
+  additionalCaseNumbers?: readonly string[] | undefined;
 };
 
 /**
@@ -528,6 +531,22 @@ const czNsIdentityFields = ({
   caseNumber.length === 0 || !isPersistableSourceDocumentId(unid)
     ? null
     : { caseNumber, unid };
+
+/**
+ * The Domino view and older parked rows can carry a joined docket label;
+ * HTML listings carry separate aliases. Preserve every docket while the
+ * publisher's universal id continues to identify the document.
+ */
+const caseNumbersOf = ({
+  caseNumber,
+  additionalCaseNumbers,
+}: CzNsListingRow): string[] => {
+  const values =
+    additionalCaseNumbers === undefined
+      ? caseNumber.split(CASE_NUMBER_SEPARATOR)
+      : [caseNumber, ...additionalCaseNumbers];
+  return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
+};
 
 /**
  * What building one listed decision produced. `detail-unavailable` carries
@@ -562,7 +581,17 @@ export const buildCzNsDecision = async (
   if (fields === null) {
     return { type: "unkeyable" };
   }
-  const { caseNumber, unid } = fields;
+  const { unid } = fields;
+  const [caseNumber, ...additionalCaseNumbers] = caseNumbersOf(row);
+  if (caseNumber === undefined) {
+    return { type: "unkeyable" };
+  }
+  const publisherIdentifiers = additionalCaseNumbers.map((value) => ({
+    type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+    value,
+  }));
+  const [firstPublisherIdentifier, ...otherPublisherIdentifiers] =
+    publisherIdentifiers;
 
   const webUrl = `${BASE_URL}/WebSearch/${unid}?openDocument`;
   const printUrl = `${BASE_URL}/WebPrint/${unid}?openDocument`;
@@ -650,6 +679,14 @@ export const buildCzNsDecision = async (
     type: "built",
     decision: {
       caseNumber,
+      ...(firstPublisherIdentifier === undefined
+        ? {}
+        : {
+            identifiers: [
+              firstPublisherIdentifier,
+              ...otherPublisherIdentifiers,
+            ],
+          }),
       sourceDocumentId: unid,
       // What every row this adapter wrote before it stated an id was stored
       // under: one row per docket, carrying the document URL of whichever of
@@ -709,6 +746,8 @@ export const buildCzNsDecision = async (
           const trimmed = s.trim();
           return trimmed ? [trimmed] : [];
         }),
+        additionalCaseNumbers:
+          additionalCaseNumbers.length > 0 ? additionalCaseNumbers : undefined,
       }),
       rawHash: hashContent(raw),
       parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.CZ_NS],
@@ -828,21 +867,16 @@ const LISTING_ROW_PATTERN =
 const CASE_NUMBER_SEPARATOR = ", ";
 
 /**
- * The docket an anchor names, as one field.
- *
- * `stripHtml` turns the publisher's `<br />` between co-settled dockets into
- * a line break; the store holds one case number per decision, so the parts
- * are joined into a single number. Identity is unaffected: this adapter keys
- * a decision on its universal id, and the docket is descriptive.
+ * `stripHtml` preserves the publisher's `<br />` between co-settled dockets
+ * as line breaks. Keep each docket separate for identifier persistence.
  */
-const parseListingCaseNumber = (raw: string): string =>
+const parseListingCaseNumbers = (raw: string): string[] =>
   stripHtml(raw)
     .split("\n")
     .flatMap((part) => {
       const trimmed = part.trim();
       return trimmed.length === 0 ? [] : [trimmed];
-    })
-    .join(CASE_NUMBER_SEPARATOR);
+    });
 
 /**
  * The two counts the publisher may state about a listing, both captured under
@@ -871,10 +905,19 @@ const parseListingCount = (
 };
 
 const parseListingRows = (html: string): CzNsListingRow[] =>
-  [...html.matchAll(LISTING_ROW_PATTERN)].map((match) => ({
-    unid: match.groups?.["unid"] ?? "",
-    caseNumber: parseListingCaseNumber(match.groups?.["caseNumber"] ?? ""),
-  }));
+  [...html.matchAll(LISTING_ROW_PATTERN)].map((match) => {
+    const caseNumbers = parseListingCaseNumbers(
+      match.groups?.["caseNumber"] ?? "",
+    );
+    const caseNumber = caseNumbers.at(0) ?? "";
+    const additionalCaseNumbers = caseNumbers.slice(1);
+    return {
+      unid: match.groups?.["unid"] ?? "",
+      caseNumber,
+      additionalCaseNumbers:
+        additionalCaseNumbers.length > 0 ? additionalCaseNumbers : undefined,
+    };
+  });
 
 /**
  * The identity the ingest would store for a listed row.
@@ -1018,7 +1061,12 @@ const listCzNsSlicePage = async ({
 const isCzNsListingRow = (value: unknown): value is CzNsListingRow =>
   isRecord(value) &&
   typeof value["unid"] === "string" &&
-  typeof value["caseNumber"] === "string";
+  typeof value["caseNumber"] === "string" &&
+  (value["additionalCaseNumbers"] === undefined ||
+    (Array.isArray(value["additionalCaseNumbers"]) &&
+      value["additionalCaseNumbers"].every(
+        (item) => typeof item === "string" && item.trim().length > 0,
+      )));
 
 /**
  * Rebuild a decision from a row the loop stored verbatim. The payload is
