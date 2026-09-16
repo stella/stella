@@ -1,5 +1,5 @@
 /** Better Auth version whose logical schema this contract describes. */
-export const BETTER_AUTH_CONTRACT_VERSION = "1.7.1";
+export const BETTER_AUTH_CONTRACT_VERSION = "1.7.4";
 
 export const ORGANIZATION_ROLE_NAMES = [
   "owner",
@@ -350,10 +350,6 @@ export const BETTER_AUTH_CORE_SCHEMA = {
     primaryKey: ["id"],
     fields: withPhysicalNames({
       id: idField,
-      // Better Auth 1.7.1 still declares and writes this field, so the logical
-      // side stays required. The column is nullable because 1.7.3 retracts the
-      // field, and the database must accept the inserts that follow the bump.
-      issuer: field("string", { database: { notNull: false }, required: true }),
       accountId: field("string", { required: true }),
       providerId: field("string", { required: true }),
       userId: field("string", {
@@ -371,10 +367,7 @@ export const BETTER_AUTH_CORE_SCHEMA = {
       createdAt: runtimeDate,
       updatedAt: updatedDate,
     }),
-    indexes: [
-      { fields: ["providerId", "accountId"], predicate: null, unique: true },
-      { fields: ["userId"], predicate: null, unique: false },
-    ],
+    indexes: [{ fields: ["userId"], predicate: null, unique: false }],
   },
   verification: {
     tableName: "verification",
