@@ -1375,6 +1375,60 @@ describe("chat runtime", () => {
     expect(runtime.getSnapshot().messages).toEqual([pendingMessage]);
   });
 
+  test("preserves an accepted tool result when its downstream stream fails", async () => {
+    const threadId = toChatThreadId("thread-accepted-draft-result");
+    const input = {
+      name: "Power of attorney",
+      source: "@doc kind=other locale=en page=A4",
+    };
+    const pendingMessage = {
+      id: "33333333-3333-4333-8333-333333333335",
+      role: "assistant",
+      parts: [
+        {
+          type: "tool-call",
+          id: "tool-accepted-draft",
+          name: "create-document",
+          state: "input-complete",
+          arguments: JSON.stringify(input),
+          input,
+        },
+      ],
+    } as const satisfies PersistedChatMessage;
+    globalThis.fetch = createFetchMock(async () =>
+      createSseResponse([
+        { type: "RUN_STARTED", threadId, runId: "run-stream-failure" },
+        { type: "RUN_ERROR", message: "upstream failure" },
+      ]),
+    );
+    const runtime = createChatRuntime({
+      context: undefined,
+      initialMessages: [pendingMessage],
+      key: { scope: "global", threadId },
+      onError: () => {},
+      onFinish: () => {},
+    });
+    const output = {
+      success: true,
+      destination: "draft",
+      fileName: "Power of attorney.docx",
+    };
+
+    const result = await Result.tryPromise(async () => {
+      await runtime.addToolResult({
+        tool: "create-document",
+        toolCallId: "tool-accepted-draft",
+        output,
+      });
+    });
+
+    expect(Result.isError(result)).toBe(true);
+    expect(runtime.getSnapshot().messages.at(0)?.parts.at(0)).toMatchObject({
+      state: "complete",
+      output,
+    });
+  });
+
   test("streams reasoning and final text through tanstack ChatClient", async () => {
     const threadId = toChatThreadId("thread-A");
     const requests: unknown[] = [];
