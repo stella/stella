@@ -157,6 +157,17 @@ here as its CLI form). Projected from the same handler enumeration that builds
 | `entities.version-diff`               | read               | stella:read            | —       | covered by `read_document`                                                                                                                                                                                                                                                      |
 | `entities.version-summarize`          | write              | stella:matters_write   | —       | generic invoke → `stella capability entities version-summarize`                                                                                                                                                                                                                 |
 
+## entity-views
+
+| Capability               | Access             | Scope                | Feature | Reachable via                                             |
+| ------------------------ | ------------------ | -------------------- | ------- | --------------------------------------------------------- |
+| `entity-views.create`    | write              | stella:matters_write | —       | generic invoke → `stella capability entity-views create`  |
+| `entity-views.delete`    | write, destructive | stella:matters_write | —       | generic invoke → `stella capability entity-views delete`  |
+| `entity-views.list`      | read               | stella:read          | —       | generic invoke → `stella capability entity-views list`    |
+| `entity-views.reorder`   | write              | stella:matters_write | —       | generic invoke → `stella capability entity-views reorder` |
+| `entity-views.rows.list` | read               | stella:read          | —       | covered by `read_content_across_matters`                  |
+| `entity-views.update`    | write              | stella:matters_write | —       | generic invoke → `stella capability entity-views update`  |
+
 ## expenses
 
 | Capability        | Access             | Scope                | Feature              | Reachable via                                        |

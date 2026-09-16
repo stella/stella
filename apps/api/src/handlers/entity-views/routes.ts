@@ -3,8 +3,8 @@ import Elysia from "elysia";
 import create from "@/api/handlers/entity-views/create";
 import remove from "@/api/handlers/entity-views/delete";
 import list from "@/api/handlers/entity-views/list";
-import queryWindow from "@/api/handlers/entity-views/query-window";
 import reorder from "@/api/handlers/entity-views/reorder";
+import listRows from "@/api/handlers/entity-views/rows/list";
 import update from "@/api/handlers/entity-views/update";
 import { authMacro, permissionMacro } from "@/api/lib/auth";
 
@@ -30,7 +30,7 @@ export const entityViewsRoute = new Elysia({ prefix: "/entity-views" })
     body: reorder.config.body,
     permissions: reorder.config.permissions,
   })
-  .post("/query-window", queryWindow.handler, {
-    body: queryWindow.config.body,
-    permissions: queryWindow.config.permissions,
+  .post("/query-window", listRows.handler, {
+    body: listRows.config.body,
+    permissions: listRows.config.permissions,
   });

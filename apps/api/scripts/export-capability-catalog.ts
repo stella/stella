@@ -192,6 +192,7 @@ const DOMAIN_SCOPE: Record<string, string> = {
   "document-translations": "stella:matters_write",
   documents: "stella:documents_write",
   entities: "stella:matters_write",
+  "entity-views": "stella:matters_write",
   expenses: "stella:billing_write",
   fields: "stella:matters_write",
   // Workflow (flow) definition CRUD plus run start/cancel/review: org-scoped

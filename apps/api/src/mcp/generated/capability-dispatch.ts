@@ -307,6 +307,24 @@ export const CAPABILITY_DISPATCH = {
   "entities.version-summarize": {
     load: async () => await import("@/api/handlers/entities/version-summarize"),
   },
+  "entity-views.create": {
+    load: async () => await import("@/api/handlers/entity-views/create"),
+  },
+  "entity-views.delete": {
+    load: async () => await import("@/api/handlers/entity-views/delete"),
+  },
+  "entity-views.list": {
+    load: async () => await import("@/api/handlers/entity-views/list"),
+  },
+  "entity-views.reorder": {
+    load: async () => await import("@/api/handlers/entity-views/reorder"),
+  },
+  "entity-views.rows.list": {
+    load: async () => await import("@/api/handlers/entity-views/rows/list"),
+  },
+  "entity-views.update": {
+    load: async () => await import("@/api/handlers/entity-views/update"),
+  },
   "expenses.create": {
     load: async () => await import("@/api/handlers/expenses/create"),
   },

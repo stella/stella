@@ -225,41 +225,41 @@ export const EntityViewTable = ({
     },
   });
   // TanStack's controlled table requires stable definitions between state updates.
-  const columns = useMemo(() => {
-    return Object.entries(COLUMN_MODEL).map(
-      ([column, model]): TableColumnDef<EntityViewRow> => {
-        if (!isCollectionColumn(column)) {
-          return panic(`Unknown collection column: ${column}`);
-        }
-        const columnId = column;
-        return {
-          id: columnId,
-          size: model.size,
-          minSize: DEFAULT_TABLE_COLUMN_MIN_SIZE,
-          enableSorting: ENTITY_VIEW_COLUMNS[columnId].sortable,
-          ...(isEntityViewSortColumn(columnId)
-            ? {
-                accessorFn: ({ entry }: EntityViewRow) =>
-                  entityViewSortValues[columnId](entry),
-              }
-            : {}),
-          enableHiding: true,
-          enablePinning: true,
-          enableResizing: true,
-          header: ({ header }) => (
-            <MetadataPopover
-              column={header.column}
-              icon={model.icon}
-              label={t(model.label)}
-            />
-          ),
-          cell: ({ row }) => (
-            <CollectionCell column={columnId} entry={row.original.entry} />
-          ),
-        };
-      },
-    );
-  }, [t]);
+  const columns = useMemo(
+    () =>
+      Object.entries(COLUMN_MODEL).map(
+        ([column, model]): TableColumnDef<EntityViewRow> => {
+          if (!isCollectionColumn(column)) {
+            return panic(`Unknown collection column: ${column}`);
+          }
+          const columnId = column;
+          return {
+            id: columnId,
+            size: model.size,
+            minSize: DEFAULT_TABLE_COLUMN_MIN_SIZE,
+            enableSorting: ENTITY_VIEW_COLUMNS[columnId].sortable,
+            accessorFn: ({ entry }) =>
+              isEntityViewSortColumn(columnId)
+                ? entityViewSortValues[columnId](entry)
+                : null,
+            enableHiding: true,
+            enablePinning: true,
+            enableResizing: true,
+            header: ({ header }) => (
+              <MetadataPopover
+                column={header.column}
+                icon={model.icon}
+                label={t(model.label)}
+              />
+            ),
+            cell: ({ row }) => (
+              <CollectionCell column={columnId} entry={row.original.entry} />
+            ),
+          };
+        },
+      ),
+    [t],
+  );
   const scrollRef = useRef<HTMLDivElement>(null);
   const groups = useEntityTableGroups(rows, layout.groupByPropertyId);
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());

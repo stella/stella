@@ -47,7 +47,7 @@ const config = {
   }),
 } satisfies HandlerConfig;
 
-const queryWindow = createSafeRootHandler(
+const listRows = createSafeRootHandler(
   config,
   async function* ({ safeDb, session, user, body, getWorkspaceAccess }) {
     let scope: EntityQueryScope;
@@ -125,4 +125,4 @@ const queryWindow = createSafeRootHandler(
   },
 );
 
-export default queryWindow;
+export default listRows;
