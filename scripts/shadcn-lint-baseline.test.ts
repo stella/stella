@@ -9,7 +9,6 @@ const backlog = (
 ): ShadcnLintBacklog => ({
   "shadcn/no-restyle": restyle,
   "shadcn/no-arbitrary-values": arbitrary,
-  "shadcn/require-static-classes": {},
 });
 
 test("a count above its baseline regresses, a clean file goes stale, a fall improves", () => {

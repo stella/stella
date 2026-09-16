@@ -56,7 +56,6 @@ const backlogRule = (code: string): ShadcnLintBacklogRule | undefined => {
 const emptyBacklog = (): ShadcnLintBacklog => ({
   "shadcn/no-arbitrary-values": {},
   "shadcn/no-restyle": {},
-  "shadcn/require-static-classes": {},
 });
 
 const sortedCounts = (counts: Record<string, number>): Record<string, number> =>

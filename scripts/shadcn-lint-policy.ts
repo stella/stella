@@ -31,7 +31,6 @@ export const SHADCN_LINT_JS_PLUGINS = [
 export const SHADCN_LINT_BACKLOG_RULES = [
   "shadcn/no-restyle",
   "shadcn/no-arbitrary-values",
-  "shadcn/require-static-classes",
 ] as const;
 
 export type ShadcnLintBacklogRule = (typeof SHADCN_LINT_BACKLOG_RULES)[number];
@@ -62,11 +61,32 @@ export const SHADCN_LINT_RULES = {
           pattern: "^DirectionalIcon$",
           allow: ["layout", "color", "motion"],
         },
+        // Cells carry their content's tone and alignment; a label its
+        // weight. The table and label components own only the structure.
+        {
+          pattern: "^(?:TableCell|TableHead)$",
+          allow: ["layout", "typography", "color"],
+        },
+        { pattern: "^Label$", allow: ["layout", "typography"] },
       ],
     },
   ],
-  "shadcn/no-arbitrary-values": ["error", { allow: ["layout"] }],
-  "shadcn/require-static-classes": "error",
+  "shadcn/no-arbitrary-values": [
+    "error",
+    {
+      allow: [
+        "layout",
+        // The border-offset idiom DESIGN.md documents: inner spacing minus
+        // the 1px border so content aligns with unbordered siblings.
+        "*-[calc(--spacing(*)-1px)]",
+        // The legal reader scales its type with a user setting.
+        "text-[calc(*var(--reader-text-scale))]",
+      ],
+    },
+  ],
+  // Off: the tree hoists class constants and forwards `className` props
+  // through wrappers by convention, which is all this rule can report.
+  "shadcn/require-static-classes": "off",
   // SVG attributes only: `deny: []` exempts every class, which
   // `no-raw-colors/no-raw-colors` owns, and leaves the attribute checks on.
   "shadcn/no-raw-colors": ["error", { deny: [] }],
@@ -81,14 +101,12 @@ export const SHADCN_LINT_SETTINGS = {
 export const SHADCN_LINT_POLICY_OVERRIDES = [
   {
     // The design-system components themselves: they restyle sibling
-    // components, need structural arbitrary values, and pass their own
-    // variant functions as class values. The preset's `**/components/ui/**`
-    // override does not match this layout.
+    // components and need structural arbitrary values. The preset's
+    // `**/components/ui/**` override does not match this layout.
     files: ["packages/ui/src/components/**"],
     rules: {
       "shadcn/no-arbitrary-values": "off",
       "shadcn/no-restyle": "off",
-      "shadcn/require-static-classes": "off",
     },
   },
   {
