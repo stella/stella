@@ -192,8 +192,11 @@ describe("online migrations", () => {
   });
 
   test("preserves a legacy index when a replacement is not ready", async () => {
+    // Valid on the index phase's read, not ready on the retirement gate's, so
+    // the gate is what refuses. Invalid on both reads would fail during the
+    // phase instead and never reach the gate this test is about.
     const harness = createHarness({
-      indexStates: { [SOURCE_CASE_INDEX]: [false, false] },
+      indexStates: { [SOURCE_CASE_INDEX]: [true, false] },
     });
 
     const rejection: unknown = await runOnlineMigrations(harness.pool).then(
@@ -203,6 +206,12 @@ describe("online migrations", () => {
     expect(rejection).toMatchObject({
       message: `Required migration index ${SOURCE_CASE_INDEX} is not ready`,
     });
+    // The phase found both replacements valid, so it neither rebuilt nor
+    // reindexed either one.
+    expect(indexOfStatement(harness.statements, CREATE_INDEX_FRAGMENT)).toBe(
+      -1,
+    );
+    expect(indexOfStatement(harness.statements, REINDEX_FRAGMENT)).toBe(-1);
     expect(indexOfStatement(harness.statements, LEGACY_SOURCE_CASE_INDEX)).toBe(
       -1,
     );
