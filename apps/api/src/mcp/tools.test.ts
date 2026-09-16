@@ -1953,7 +1953,7 @@ describe("OpenAI-compatible MCP tools", () => {
       maximum: LIMITS.caseLawSearchPageSizeMax,
       description: "Max results to return; defaults to 10.",
     });
-    expect(schema?.additionalProperties).toBe(false);
+    expect(schema?.["additionalProperties"]).toBe(false);
     // The corpus search has no as-of filter, so it must not advertise one:
     // a point-in-time question is answered by read_statute.
     expect(schema?.properties?.["as_of"]).toBeUndefined();
@@ -1978,7 +1978,7 @@ describe("OpenAI-compatible MCP tools", () => {
       format: "date",
       maxLength: 10,
     });
-    expect(schema?.additionalProperties).toBe(false);
+    expect(schema?.["additionalProperties"]).toBe(false);
   });
 
   test("advertises the batch provision read as one bounded items array", async () => {
@@ -2049,7 +2049,7 @@ describe("OpenAI-compatible MCP tools", () => {
       maximum: LIMITS.legislationProvisionHistoryPageSizeMax,
       description: `Versions per page; defaults to ${LIMITS.legislationProvisionHistoryPageSizeDefault}, at most ${LIMITS.legislationProvisionHistoryPageSizeMax}.`,
     });
-    expect(schema?.additionalProperties).toBe(false);
+    expect(schema?.["additionalProperties"]).toBe(false);
   });
 
   test("search_legislation passes the admitted jurisdiction and projects each hit", async () => {

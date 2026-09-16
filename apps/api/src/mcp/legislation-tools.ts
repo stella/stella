@@ -658,8 +658,10 @@ const handleReadStatuteTool: TypedMcpToolHandler<
     return notFoundResult("Legislation not found", FIND_THE_ELI_HINT);
   }
 
+  const { outline, outlineTruncated } = hasUsableAst(document.documentAst)
+    ? buildStatuteOutline(document.documentAst.blocks)
+    : { outline: [], outlineTruncated: false };
   const ast = hasUsableAst(document.documentAst) ? document.documentAst : null;
-  const { outline, outlineTruncated } = buildStatuteOutline(ast?.blocks ?? []);
 
   // Displaying the wording and feeding it to a model are separate
   // permissions: a source cleared only for display answers with everything
@@ -782,10 +784,12 @@ const provisionItemResult = ({
         };
       }
 
-      const text = extractProvisionText(
-        blocksByDocumentId.get(String(version.id)) ?? [],
-        item.anchor,
-      );
+      // Every readable consolidation was read above; a miss is a programming
+      // error, never an empty statute.
+      const blocks =
+        blocksByDocumentId.get(String(version.id)) ??
+        panic(`No block list was read for consolidation ${version.id}`);
+      const text = extractProvisionText(blocks, item.anchor);
       if (text === null) {
         return {
           ...subject,
@@ -878,22 +882,21 @@ const handleReadStatuteProvisionsTool: TypedMcpToolHandler<
   const readable = versions.filter((version) => version.allowsDerivedAi);
   const readBlocks =
     context.testDependencies?.readVersionBlocks ?? readVersionBlocks;
-  const blockLists = await mapWithConcurrency({
-    items: readable,
-    limit: LIMITS.legislationProvisionReadConcurrency,
-    operation: async (version) =>
-      await readBlocks({
-        row: version,
-        legislationDb: legislationPublicReadDb,
-        step: PROVISION_READ_STEP,
-        purpose: "derived-ai",
-      }),
-  });
   const blocksByDocumentId = new Map(
-    readable.map((version, index) => [
-      String(version.id),
-      blockLists[index] ?? [],
-    ]),
+    await mapWithConcurrency({
+      items: readable,
+      limit: LIMITS.legislationProvisionReadConcurrency,
+      operation: async (version) =>
+        [
+          String(version.id),
+          await readBlocks({
+            row: version,
+            legislationDb: legislationPublicReadDb,
+            step: PROVISION_READ_STEP,
+            purpose: "derived-ai",
+          }),
+        ] as const,
+    }),
   );
 
   return toolDataResult({
