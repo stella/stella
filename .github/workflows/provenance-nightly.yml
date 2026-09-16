@@ -14,7 +14,7 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
-    uses: stella/.github/.github/workflows/provenance-update.yml@90f2b249f1456155fb8a81af2959df40d5006bef
+    uses: stella/.github/.github/workflows/provenance-update.yml@35506c43f400ed14b8554568d5d9988a49299f0c
     secrets:
       app_id: ${{ secrets.PROVENANCE_APP_ID }}
       app_private_key: ${{ secrets.PROVENANCE_APP_PRIVATE_KEY }}
