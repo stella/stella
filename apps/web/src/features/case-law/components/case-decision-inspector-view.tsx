@@ -204,6 +204,7 @@ export const CaseDecisionInspectorView = ({
                 <CitationHeader
                   decisionDate={decision.decisionDate}
                   decisionId={decisionId}
+                  target={payload}
                 />
                 <DecisionCitations
                   decision={{

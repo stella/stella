@@ -3,12 +3,15 @@ import { useNow, useTranslations } from "use-intl";
 
 import { CASE_LAW_CITATION_TIMELINE_MAX_YEARS } from "@stll/api-contract";
 import { Temporal } from "@stll/time";
+import { Popover, PopoverPanel, PopoverTrigger } from "@stll/ui/popover";
 import { cn } from "@stll/ui/utils";
 
+import type { createCaseDecisionDetailsTab } from "@/components/inspector/case-decision-details-view";
 import { VIEWER_OVERLAY_BAR_CLEARANCE } from "@/components/inspector/viewer-overlay-bar";
 import { decisionYear } from "@/features/case-law/citation-format";
 import { totalCitations } from "@/features/case-law/citation-treatment";
-import type { CitationYearCounts } from "@/features/case-law/citation-treatment";
+import { CitationTimelinePanel } from "@/features/case-law/components/citation-timeline-panel";
+import { lastNegativeYear } from "@/features/case-law/components/citation-timeline.logic";
 import { CitationYearStrip } from "@/features/case-law/components/citation-year-strip";
 import { decisionCitationSummaryOptions } from "@/features/case-law/queries/citations";
 import { useHydrated } from "@/hooks/use-hydrated";
@@ -17,6 +20,8 @@ import type { SafeId } from "@/lib/safe-id";
 type CitationHeaderProps = {
   decisionDate: Date | string | null;
   decisionId: SafeId<"caseLawDecision">;
+  /** The decision, as the citing-decisions tab the panel opens needs it. */
+  target: Parameters<typeof createCaseDecisionDetailsTab>[0];
 };
 
 type CitationStripFromYearOptions = {
@@ -43,18 +48,6 @@ export const citationStripFromYear = ({
   return Math.max(spanStart, earliest);
 };
 
-const lastNegativeYear = (
-  byYear: readonly CitationYearCounts[],
-): number | null => {
-  let last: number | null = null;
-  for (const entry of byYear) {
-    if (entry.negative > 0 && (last === null || entry.year > last)) {
-      last = entry.year;
-    }
-  }
-  return last;
-};
-
 /**
  * The decision's reception at a glance: citations per year since it was
  * decided, and the one figure a reader must not miss, negative treatment.
@@ -65,6 +58,7 @@ const lastNegativeYear = (
 export const CitationHeader = ({
   decisionDate,
   decisionId,
+  target,
 }: CitationHeaderProps) => {
   const t = useTranslations();
   const now = useNow();
@@ -108,22 +102,40 @@ export const CitationHeader = ({
 
   return (
     <div
-      aria-label={summaryText}
       className={cn(
-        "reader-chrome text-muted-foreground mb-3 flex flex-wrap items-center justify-start gap-x-3 gap-y-1 text-xs print:hidden",
+        "reader-chrome mb-3 flex text-xs print:hidden",
         // The zoom bar floats over this first row at the opposite corner; the
         // row keeps that corner free at every reader width and on every scroll
         // position, since the bar does not move with the text.
         VIEWER_OVERLAY_BAR_CLEARANCE,
       )}
-      role="group"
     >
-      <CitationYearStrip
-        byYear={summary.incomingByYear}
-        fromYear={fromYear}
-        toYear={currentYear}
-      />
-      <span aria-hidden="true">{summaryText}</span>
+      <Popover>
+        <PopoverTrigger
+          render={
+            <button
+              aria-label={summaryText}
+              className="text-muted-foreground hover:text-foreground flex flex-wrap items-center gap-x-3 gap-y-1 rounded-sm px-1 py-0.5 text-start transition-colors"
+              type="button"
+            />
+          }
+        >
+          <CitationYearStrip
+            byYear={summary.incomingByYear}
+            fromYear={fromYear}
+            toYear={currentYear}
+          />
+          <span aria-hidden="true">{summaryText}</span>
+        </PopoverTrigger>
+        <PopoverPanel align="start" className="w-80">
+          <CitationTimelinePanel
+            fromYear={fromYear}
+            summary={summary}
+            target={target}
+            toYear={currentYear}
+          />
+        </PopoverPanel>
+      </Popover>
     </div>
   );
 };
