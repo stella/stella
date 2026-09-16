@@ -1371,6 +1371,7 @@ type ReadCaseLawSearchFacetsOptions = {
   indexId: string;
   /** Null when the request has no query the facets could be counted under. */
   queryFor: CorpusFacetQuery | null;
+  timeDbRead: TimeDbRead;
   totalQuery: string;
 };
 
@@ -1397,6 +1398,7 @@ const readCaseLawSearchFacets = async ({
   decisionCountField,
   indexId,
   queryFor,
+  timeDbRead,
   totalQuery,
 }: ReadCaseLawSearchFacetsOptions): Promise<CaseLawSearchFacetsRead | null> => {
   if (queryFor === null) {
@@ -1407,7 +1409,9 @@ const readCaseLawSearchFacets = async ({
   // no facets rather than facets that might still advertise a revoked source.
   // The same read carries the display names, so labelling the buckets costs no
   // further round trip once the counts are back.
-  const registry = await readCaseLawSourceRegistry();
+  const registry = await timeDbRead(
+    async () => await readCaseLawSourceRegistry(),
+  );
   if (Result.isError(registry)) {
     logger.warn("case_law.search_facets.unavailable", {
       "error.type": errorTag(registry.error),
@@ -1481,6 +1485,10 @@ export const searchCorpusIndexDecisions = async (
   // candidates the whole request read, once each.
   const hydrated: HydratedDecisionRows = new Map();
   let pageRowsRead = 0;
+  // The concurrent phase's two numbers, zero until it runs: a request answered
+  // by identity, or one whose entry left nothing to query, never enters it.
+  let facetMs = 0;
+  let scanAndFacetsMs = 0;
   const grammar = decisionDocketGrammarForCountry(body.country);
   const intent = parseDecisionQuery(body.query, { grammar });
   const queryClass = decisionQueryClass(intent);
@@ -1489,9 +1497,11 @@ export const searchCorpusIndexDecisions = async (
       candidatesHydrated: hydrated.size,
       country: body.country,
       db: dbTimer.timing(),
+      facetMs,
       hitsReturned,
       pageRowsRead,
       queryClass,
+      scanAndFacetsMs,
       totalMs: performance.now() - startedAt,
       ...scan,
     });
@@ -1657,40 +1667,43 @@ export const searchCorpusIndexDecisions = async (
   });
   const excerptTokens = tokenizeCorpusFreeText(body.query);
 
-  const [searchPage, facetsAndTotal] = await Promise.all([
-    readCorpusIndexSearchPage({
-      cluster: serving.cluster,
-      indexId,
-      query: scopedQuery,
-      limit,
-      order: corpusSearchOrder(sort),
-      parsedCursor,
-      snippetFields: ["text"],
-      extractId: (hit) => {
-        const id = hit["document_id"];
-        return typeof id === "string" && isUuid(id) ? id : null;
-      },
-      extractSnippet: (snippet, hit) =>
-        corpusExcerpt({
-          engineSnippet: extractCorpusSnippet(snippet),
-          excerpt,
-          language: excerptFields.stemming?.language ?? null,
-          passage: hit["text"],
-          tokens: excerptTokens,
-        }),
-      unseenScoreUpperBound: caseLawUnseenScoreUpperBound(sort),
-      rankCandidates: async (candidates) =>
-        await rehydrateCaseLawCandidates({
-          body,
-          candidates,
-          caseLawDb,
-          courtWeights,
-          generation,
-          hydrated,
-          timeDbRead: async (run) =>
-            await dbTimer.time(CASE_LAW_SEARCH_DB_READ.candidates, run),
-        }),
-    }),
+  const concurrentStartedAt = performance.now();
+  const pageRead = readCorpusIndexSearchPage({
+    cluster: serving.cluster,
+    indexId,
+    query: scopedQuery,
+    limit,
+    order: corpusSearchOrder(sort),
+    parsedCursor,
+    snippetFields: ["text"],
+    extractId: (hit) => {
+      const id = hit["document_id"];
+      return typeof id === "string" && isUuid(id) ? id : null;
+    },
+    extractSnippet: (snippet, hit) =>
+      corpusExcerpt({
+        engineSnippet: extractCorpusSnippet(snippet),
+        excerpt,
+        language: excerptFields.stemming?.language ?? null,
+        passage: hit["text"],
+        tokens: excerptTokens,
+      }),
+    unseenScoreUpperBound: caseLawUnseenScoreUpperBound(sort),
+    rankCandidates: async (candidates) =>
+      await rehydrateCaseLawCandidates({
+        body,
+        candidates,
+        caseLawDb,
+        courtWeights,
+        generation,
+        hydrated,
+        timeDbRead: async (run) =>
+          await dbTimer.time(CASE_LAW_SEARCH_DB_READ.candidates, run),
+      }),
+  });
+  // Stamped where it resolves rather than after the phase: the reader waits on
+  // the slower arm, and which arm that was is the whole point of the pair.
+  const facetRead =
     parsedCursor === null
       ? readCaseLawSearchFacets({
           body,
@@ -1699,10 +1712,16 @@ export const searchCorpusIndexDecisions = async (
           decisionCountField,
           indexId,
           queryFor: facetQueries(),
+          timeDbRead: async (run) =>
+            await dbTimer.time(CASE_LAW_SEARCH_DB_READ.sourceRegistry, run),
           totalQuery: scopedQuery,
+        }).then((read) => {
+          facetMs = performance.now() - concurrentStartedAt;
+          return read;
         })
-      : null,
-  ]);
+      : null;
+  const [searchPage, facetsAndTotal] = await Promise.all([pageRead, facetRead]);
+  scanAndFacetsMs = performance.now() - concurrentStartedAt;
 
   const { anchorIdById, pageRanked, passageCountById, scan, snippetById } =
     searchPage;

@@ -73,6 +73,8 @@ export const CASE_LAW_SEARCH_DB_READ = {
   page: "page",
   /** Which corpus-index generation currently serves. */
   servingGeneration: "servingGeneration",
+  /** The source policy and bucket labels the facet read counts under. */
+  sourceRegistry: "sourceRegistry",
 } as const;
 
 export type CaseLawSearchDbRead =
@@ -90,6 +92,7 @@ const DB_READ_ATTRIBUTE = {
   identity: "dbIdentityMs",
   page: "dbPageMs",
   servingGeneration: "dbServingGenerationMs",
+  sourceRegistry: "dbSourceRegistryMs",
 } as const satisfies Record<CaseLawSearchDbRead, string>;
 
 export type CaseLawSearchDbTiming = {
@@ -125,6 +128,7 @@ export const createCaseLawSearchDbTimer = (): CaseLawSearchDbTimer => {
     identity: 0,
     page: 0,
     servingGeneration: 0,
+    sourceRegistry: 0,
   };
   let reads = 0;
 
@@ -153,8 +157,20 @@ type CaseLawSearchCompletedEvent = {
   db: CaseLawSearchDbTiming;
   /** The scan stopped because no unseen candidate could out-blend the page. */
   earlyStopped: boolean;
+  /**
+   * Wall time of the facet read that runs beside the page read: its engine
+   * aggregation plus the source-registry read it fails closed on, which
+   * `dbSourceRegistryMs` reports as well. Zero when the request asked for no
+   * facets, which a cursor page does.
+   */
+  facetMs: number;
   hitsReturned: number;
-  /** Summed wall time of this request's engine calls. */
+  /**
+   * Summed wall time of the engine calls the page read made: the scan's
+   * rounds and the page's highlight round, which run in sequence. The facet
+   * read runs beside all of them, so `indexMs` and `facetMs` overlap and must
+   * never be added; `scanAndFacetsMs` is what the request waited on the two.
+   */
   indexMs: number;
   /** Wide rows read for the page, after ranking decided which ids it holds. */
   pageRowsRead: number;
@@ -166,6 +182,15 @@ type CaseLawSearchCompletedEvent = {
   rounds: number;
   /** Engine round trips spent highlighting the page: one, or none for an empty page. */
   highlightRounds: number;
+  /**
+   * Wall time of the phase where the page read and the facet read run
+   * together: the critical path through the two, never their sum. It brackets
+   * the phase rather than the engine, so it also covers the candidate
+   * rehydration the scan interleaves between its rounds. Zero for a request
+   * that never entered the phase: one answered by identity, or one whose
+   * entry left nothing to query.
+   */
+  scanAndFacetsMs: number;
   totalMs: number;
 };
 
@@ -179,6 +204,7 @@ export const reportCaseLawSearchCompleted = ({
   country,
   db,
   earlyStopped,
+  facetMs,
   hitsReturned,
   indexMs,
   pageRowsRead,
@@ -187,6 +213,7 @@ export const reportCaseLawSearchCompleted = ({
   roundCapHit,
   rounds,
   highlightRounds,
+  scanAndFacetsMs,
   totalMs,
 }: CaseLawSearchCompletedEvent): void => {
   // Flat, one attribute per read, and the total is what those attributes add
@@ -210,6 +237,8 @@ export const reportCaseLawSearchCompleted = ({
     pageRowsRead,
     hitsReturned,
     indexMs: Math.round(indexMs),
+    facetMs: Math.round(facetMs),
+    scanAndFacetsMs: Math.round(scanAndFacetsMs),
     dbReads: db.reads,
     dbMs,
     ...msByAttribute,
