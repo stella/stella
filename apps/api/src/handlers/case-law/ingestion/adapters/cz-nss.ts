@@ -486,9 +486,12 @@ const detailUrl = (documentId: string): string =>
 /** Stable columns in one row of the publisher's results table. */
 const CZ_NSS_RESULT_CELL = {
   CASE_REFERENCE: 3,
+  DECISION_DATE: 2,
+  DECISION_TYPE: 5,
 } as const;
 
 const CZ_NSS_CASE_REFERENCE_MAX_LENGTH = 100;
+const CZ_NSS_DECISION_TYPE_MAX_LENGTH = 50;
 
 /**
  * Parse result rows from the search response HTML.
@@ -552,21 +555,18 @@ export const parseResultRows = (html: string): ParsedRow[] => {
     const { caseNumber } = splitCaseReference(publishedCaseNumber);
     const documentUrl = detailUrl(documentId);
 
-    let decisionDate: string | undefined;
-    let decisionType: string | undefined;
-    for (const cell of cells) {
-      if (!decisionDate && /\d{1,2}\.\s*\d{1,2}\.\s*\d{4}/u.test(cell)) {
-        decisionDate = cell;
-      } else if (
-        !decisionType &&
-        cell !== caseNumber &&
-        cell.length > 2 &&
-        cell.length < 50 &&
-        !/^\d+$/u.test(cell)
-      ) {
-        decisionType = cell;
-      }
-    }
+    const dateCell = cells.at(CZ_NSS_RESULT_CELL.DECISION_DATE);
+    const decisionDate =
+      dateCell !== undefined && /\d{1,2}\.\s*\d{1,2}\.\s*\d{4}/u.test(dateCell)
+        ? dateCell
+        : undefined;
+    const decisionTypeCell = cells.at(CZ_NSS_RESULT_CELL.DECISION_TYPE);
+    const decisionType =
+      decisionTypeCell !== undefined &&
+      decisionTypeCell.length > 2 &&
+      decisionTypeCell.length < CZ_NSS_DECISION_TYPE_MAX_LENGTH
+        ? decisionTypeCell
+        : undefined;
 
     rows.push({
       caseNumber,
@@ -1970,11 +1970,9 @@ export const buildCzNssDecision = async ({
 }: BuildCzNssDecisionOptions): Promise<CzNssBuildResult> => {
   const documentId = czNssSourceDocumentId(row);
   if (documentId === undefined) {
-    // The row names no document this adapter can address, so nothing can be
-    // read for it — now or on any later attempt. The crawl still stores what
-    // the listing states, under the docket alone; the walk counts such a row
-    // neither held nor missing, since `czNssListingIdentity` has nothing to
-    // key it on.
+    // Only a payload parked by an older parser can reach this branch: current
+    // listing rows require a persistable detail id. Nothing can be read for
+    // the legacy row, now or later, so it remains a listing-only observation.
     return {
       type: "detail-unavailable",
       decision: rowToResult({
@@ -2077,9 +2075,10 @@ const CZ_NSS_LISTING_TIMEOUT_MS = 60_000;
  * walk that keyed rows differently from the ingest would read stored decisions
  * as missing and re-fetch them forever.
  *
- * A row the portal lists without that link is unidentifiable rather than keyed
- * on the docket alone: the ingest cannot read a document for it either, so a
- * slice that counted it would stay short forever.
+ * A payload parked by an older parser without that link remains unidentifiable
+ * rather than keyed on the docket alone. The current listing parser rejects it
+ * before this boundary; keeping the branch lets persisted JSONB replay without
+ * inventing an identity.
  */
 export const czNssListingIdentity = (row: ParsedRow): ListingIdentity => {
   const sourceDocumentId = czNssSourceDocumentId(row);

@@ -203,7 +203,7 @@ const searchPage = ({
   <div id="contenttable"><div class="col-12"><div class="row justify-content-left">
     <h6>Počet nalezených záznamů: ${statedCount}</h6>
   </div></div></div>
-  <table class="infinite-scroll">${rows.map(rowBlock).join("\n")}</table>
+  <table class="infinite-scroll">${rows.map((row) => rowBlock(row)).join("\n")}</table>
   ${withScript ? scriptBlock(scriptParams) : ""}
 </body></html>`;
 
@@ -534,7 +534,7 @@ describe("cz-nss listing rows", () => {
     });
   });
 
-  test("reads the docket, the document id and the date off a row", () => {
+  test("reads the reference, identity, date and type from their columns", () => {
     const rows = parseResultRows(rowBlock(MUNICIPAL_ROW));
     expect(rows).toHaveLength(1);
     // The sheet number comes off the docket and is kept beside it rather than
@@ -546,6 +546,7 @@ describe("cz-nss listing rows", () => {
       `${BASE_URL}/DokumentDetail/Index/784237`,
     );
     expect(rows.at(0)?.decisionDate).toBe("10.06.2026");
+    expect(rows.at(0)?.decisionType).toBe("Rozsudek");
   });
 
   test("normalizes non-breaking spaces in the visible reference", () => {
@@ -643,7 +644,7 @@ describe("cz-nss listing rows", () => {
     );
   });
 
-  test("a row the portal lists without a document link has nothing to key on", () => {
+  test("a legacy payload without a document link has nothing to key on", () => {
     const row: ParsedRow = {
       caseNumber: "1 Az 4/2026",
       publishedCaseNumber: undefined,
@@ -791,7 +792,7 @@ describe("cz-nss listSlicePage", () => {
       // reference as published and the build runs days after the listing.
       publishedCaseNumber: "1 Az 4/2026 - 79",
       decisionDate: "10.06.2026",
-      decisionType: "1 Az 4/2026 - 79",
+      decisionType: "Rozsudek",
       documentUrl: `${BASE_URL}/DokumentDetail/Index/784237`,
       documentId: "784237",
     });
@@ -838,9 +839,15 @@ describe("cz-nss listSlicePage", () => {
       ],
       continuation: [
         htmlResponse(
-          fullPageRows(CZ_NSS_CONTINUATION_PAGE_ROWS).map(rowBlock).join("\n"),
+          fullPageRows(CZ_NSS_CONTINUATION_PAGE_ROWS)
+            .map((row) => rowBlock(row))
+            .join("\n"),
         ),
-        htmlResponse(fullPageRows(8).map(rowBlock).join("\n")),
+        htmlResponse(
+          fullPageRows(8)
+            .map((row) => rowBlock(row))
+            .join("\n"),
+        ),
       ],
     });
 
@@ -1108,7 +1115,9 @@ describe("cz-nss fetchPage", () => {
       ],
       continuation: [
         htmlResponse(
-          fullPageRows(CZ_NSS_CONTINUATION_PAGE_ROWS).map(rowBlock).join("\n"),
+          fullPageRows(CZ_NSS_CONTINUATION_PAGE_ROWS)
+            .map((row) => rowBlock(row))
+            .join("\n"),
         ),
       ],
     });
