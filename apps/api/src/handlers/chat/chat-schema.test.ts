@@ -1314,6 +1314,10 @@ describe("validateMessage", () => {
     if (Result.isOk(rejected)) {
       return;
     }
+    expect(rejected.error).toBeInstanceOf(HandlerError);
+    if (!(rejected.error instanceof HandlerError)) {
+      return;
+    }
     expect(rejected.error.code).toBe(CHAT_CONTINUATION_REJECTED_ERROR_CODE);
     expect(rejected.error.message).toBe(
       "Chat continuation does not match its awaited interaction",
