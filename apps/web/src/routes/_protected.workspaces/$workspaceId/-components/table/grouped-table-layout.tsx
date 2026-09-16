@@ -13,10 +13,7 @@ import {
   useSuspenseQuery,
 } from "@tanstack/react-query";
 import { useTable } from "@tanstack/react-table";
-import {
-  SearchXIcon,
-  TableIcon,
-} from "lucide-react";
+import { SearchXIcon, TableIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { ENTITY_KINDS, VIEW_SORTS_MAX } from "@stll/api-contract";
@@ -34,13 +31,13 @@ import {
   toTableEntities,
 } from "@/components/workspaces/entity-utils";
 import { useSyncJustificationChunks } from "@/components/workspaces/hooks/use-sync-justifications";
-import { TableGroupHeader } from "@/components/workspaces/table/group-header";
 import { FindHighlightScope } from "@/components/workspaces/table/find-highlight";
 import {
   buildDocTypeGateLabels,
   resolveDocumentTypeClassifier,
   selectGroupColumns,
 } from "@/components/workspaces/table/group-columns";
+import { TableGroupHeader } from "@/components/workspaces/table/group-header";
 import { MobileTableOrientationGate } from "@/components/workspaces/table/mobile-table-orientation-gate";
 import { workspaceTableFeatures } from "@/components/workspaces/table/table-features";
 import { DEFAULT_TABLE_COLUMN_MIN_SIZE } from "@/components/workspaces/table/table-schema";

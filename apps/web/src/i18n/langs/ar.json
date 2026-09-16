@@ -1512,6 +1512,7 @@
     "tryAgain": "حاول مرة أخرى",
     "type": "النوع",
     "typeNameToConfirm": "اكتب الاسم للتأكيد",
+    "unassigned": "غير مُسند",
     "uncategorized": "غير مصنّف",
     "undo": "تراجع",
     "unexpectedError": "حدث خطأ غير متوقع. يُرجى التواصل مع الدعم.",
@@ -2558,6 +2559,7 @@
       "model": "ذكاء اصطناعي",
       "source": "مصدر خارجي"
     },
+    "proposalView": "الاقتراحات: {view}",
     "request": {
       "created": "تم إرسال الطلب",
       "description": "صف ما يجب أن يراجعه الفريق القانوني. يصل الطلب إلى صندوق الوارد للفرز.",
@@ -2586,7 +2588,6 @@
       "fileToWorkspace": "حفظ في ملف",
       "runReview": "تشغيل المراجعة"
     },
-    "unassigned": "غير مُسند",
     "verdict": {
       "safe": "آمن"
     },
@@ -4322,7 +4323,6 @@
     "noActivity": "لا يوجد نشاط بعد",
     "noAssignees": "لا يوجد متعاونون",
     "noLinks": "لا توجد عناصر مرتبطة",
-    "noOwner": "غير مسندة",
     "noSubtasks": "لا توجد مهام فرعية",
     "noTasksAssigned": "لا توجد مهام مُكلَّفة إليك",
     "noWorkInQueue": "لا يوجد عمل في هذه القائمة",

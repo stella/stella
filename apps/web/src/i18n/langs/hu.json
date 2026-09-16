@@ -1512,6 +1512,7 @@
     "tryAgain": "Próbálja újra",
     "type": "Típus",
     "typeNameToConfirm": "A megerősítéshez írja be a nevet",
+    "unassigned": "Nincs hozzárendelve",
     "uncategorized": "Kategória nélküli",
     "undo": "Visszavonás",
     "unexpectedError": "Váratlan hiba történt. Kérjük, lépjen kapcsolatba az ügyfélszolgálattal.",
@@ -2558,6 +2559,7 @@
       "model": "MI",
       "source": "Külső forrás"
     },
+    "proposalView": "Javaslatok: {view}",
     "request": {
       "created": "Kérés elküldve",
       "description": "Írja le, mit nézzen át a jogi csapat. A kérés a beérkezettek közé kerül feldolgozásra.",
@@ -2586,7 +2588,6 @@
       "fileToWorkspace": "Ügyhöz csatolás",
       "runReview": "Ellenőrzés indítása"
     },
-    "unassigned": "Nincs hozzárendelve",
     "verdict": {
       "safe": "Biztonságos"
     },
@@ -4322,7 +4323,6 @@
     "noActivity": "Még nincs tevékenység",
     "noAssignees": "Nincsenek közreműködők",
     "noLinks": "Nincsenek kapcsolt elemek",
-    "noOwner": "Nincs kijelölve",
     "noSubtasks": "Nincsenek alfeladatok",
     "noTasksAssigned": "Nincsenek hozzárendelt feladatok",
     "noWorkInQueue": "Nincs munka ebben a sorban",

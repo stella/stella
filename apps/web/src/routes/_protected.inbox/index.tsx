@@ -1,7 +1,10 @@
 import { createFileRoute, getRouteApi, redirect } from "@tanstack/react-router";
 
 import "@/features/inbox/signal-inspector-registration";
-import { EntityViews, EntityViewsPending } from "@/components/entity-views/entity-views";
+import {
+  EntityViews,
+  EntityViewsPending,
+} from "@/components/entity-views/entity-views";
 import { isInboxPreviewEnabled } from "@/hooks/use-inbox-preview";
 import { entityViewsOptions } from "@/lib/entity-views/queries";
 import { pageTitle } from "@/lib/page-title";
@@ -28,5 +31,11 @@ function InboxPage() {
   const organizationId = protectedRouteApi.useRouteContext({
     select: (ctx) => ctx.user.activeOrganizationId,
   });
-  return <EntityViews key={organizationId} organizationId={organizationId} scope={{ type: "organization" }} />;
+  return (
+    <EntityViews
+      key={organizationId}
+      organizationId={organizationId}
+      scope={{ type: "organization" }}
+    />
+  );
 }

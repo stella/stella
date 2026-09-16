@@ -47,85 +47,82 @@ const config = {
   }),
 } satisfies HandlerConfig;
 
-const queryWindow = createSafeRootHandler(config, async function* ({
-  safeDb,
-  session,
-  user,
-  body,
-  getWorkspaceAccess,
-}) {
-  let scope: EntityQueryScope;
-  switch (body.scope.type) {
-    case "organization":
-      scope = {
-        type: "organization",
-        organizationId: session.activeOrganizationId,
-      };
-      break;
-    case "matter": {
-      const { matterId } = body.scope;
-      const access = yield* Result.await(
-        Result.tryPromise(async () => await getWorkspaceAccess(matterId)),
-      );
-      if (!access || access.status === "deleting") {
-        return Result.err(
-          new HandlerError({ status: 404, message: "Matter not found" }),
+const queryWindow = createSafeRootHandler(
+  config,
+  async function* ({ safeDb, session, user, body, getWorkspaceAccess }) {
+    let scope: EntityQueryScope;
+    switch (body.scope.type) {
+      case "organization":
+        scope = {
+          type: "organization",
+          organizationId: session.activeOrganizationId,
+        };
+        break;
+      case "matter": {
+        const { matterId } = body.scope;
+        const access = yield* Result.await(
+          Result.tryPromise(async () => await getWorkspaceAccess(matterId)),
         );
+        if (!access || access.status === "deleting") {
+          return Result.err(
+            new HandlerError({ status: 404, message: "Matter not found" }),
+          );
+        }
+        scope = { type: "matter", workspaceId: access.id };
+        break;
       }
-      scope = { type: "matter", workspaceId: access.id };
-      break;
+      default: {
+        body.scope satisfies never;
+        return panic(`Unhandled view scope: ${String(body.scope)}`);
+      }
     }
-    default: {
-      body.scope satisfies never;
-      return panic(`Unhandled view scope: ${String(body.scope)}`);
+    const cursorResult = decodeEntitiesWindowCursor(body.cursor);
+    if (Result.isError(cursorResult)) {
+      return Result.err(cursorResult.error);
     }
-  }
-  const cursorResult = decodeEntitiesWindowCursor(body.cursor);
-  if (Result.isError(cursorResult)) {
-    return Result.err(cursorResult.error);
-  }
-  const groupCondition = body.group
-    ? buildKanbanGroupCondition({
-        groupByPropertyId: body.group.groupByPropertyId,
-        groupValue: body.group.groupValue,
-        optionValues: body.group.optionValues,
-      })
-    : Result.ok(undefined);
-  if (Result.isError(groupCondition)) {
-    return Result.err(groupCondition.error);
-  }
-  const limit = body.limit ?? LIMITS.entitiesWindowSizeDefault;
-  const result = yield* Result.await(
-    queryEntities({
-      safeDb,
-      scope,
-      currentUserId: user.id,
-      currentOrganizationId: session.activeOrganizationId,
-      filters: arrayOrEmpty(body.filters),
-      sorts: arrayOrEmpty(body.sorts),
-      search: body.search,
-      find: body.find,
-      cursor: cursorResult.value,
-      limit: limit + 1,
-      fieldMode: body.fieldMode ?? "full",
-      fieldIds: arrayOrEmpty(body.fieldIds),
-      excludedKinds: arrayOrEmpty(body.excludedKinds),
-      previewableForAi: body.previewableForAi ?? false,
-      includeAssignees: body.includeAssignees ?? false,
-      extraConditions: groupCondition.value ? [groupCondition.value] : [],
-    }),
-  );
-  return Result.ok(
-    createCursorPage({
-      rows: result.entities,
-      limit,
-      cursorForItem: (item) =>
-        encodeEntitiesWindowCursor(
-          result.cursorValuesByEntityId.get(item.entityId) ??
-            panic("Missing entity view cursor"),
-        ),
-    }),
-  );
-});
+    const groupCondition = body.group
+      ? buildKanbanGroupCondition({
+          groupByPropertyId: body.group.groupByPropertyId,
+          groupValue: body.group.groupValue,
+          optionValues: body.group.optionValues,
+        })
+      : Result.ok(undefined);
+    if (Result.isError(groupCondition)) {
+      return Result.err(groupCondition.error);
+    }
+    const limit = body.limit ?? LIMITS.entitiesWindowSizeDefault;
+    const result = yield* Result.await(
+      queryEntities({
+        safeDb,
+        scope,
+        currentUserId: user.id,
+        currentOrganizationId: session.activeOrganizationId,
+        filters: arrayOrEmpty(body.filters),
+        sorts: arrayOrEmpty(body.sorts),
+        search: body.search,
+        find: body.find,
+        cursor: cursorResult.value,
+        limit: limit + 1,
+        fieldMode: body.fieldMode ?? "full",
+        fieldIds: arrayOrEmpty(body.fieldIds),
+        excludedKinds: arrayOrEmpty(body.excludedKinds),
+        previewableForAi: body.previewableForAi ?? false,
+        includeAssignees: body.includeAssignees ?? false,
+        extraConditions: groupCondition.value ? [groupCondition.value] : [],
+      }),
+    );
+    return Result.ok(
+      createCursorPage({
+        rows: result.entities,
+        limit,
+        cursorForItem: (item) =>
+          encodeEntitiesWindowCursor(
+            result.cursorValuesByEntityId.get(item.entityId) ??
+              panic("Missing entity view cursor"),
+          ),
+      }),
+    );
+  },
+);
 
 export default queryWindow;

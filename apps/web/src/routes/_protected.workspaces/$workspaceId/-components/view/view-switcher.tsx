@@ -300,24 +300,28 @@ export const ViewSwitcher = ({
             if (!open) return;
             viewActions.setTarget({
               view,
-              canDelete: !isRequiredViewLayout(view.layout.type) ||
-                views.filter((candidate) => candidate.layout.type === view.layout.type).length > 1,
+              canDelete:
+                !isRequiredViewLayout(view.layout.type) ||
+                views.filter(
+                  (candidate) => candidate.layout.type === view.layout.type,
+                ).length > 1,
             });
           },
           renderItems: (view) => {
-          if (view.id !== activeViewId) {
-            return null;
-          }
-          const isLastOfLayout =
-            isRequiredViewLayout(view.layout.type) &&
-            views.filter(
-              (candidate) => candidate.layout.type === view.layout.type,
-            ).length <= 1;
-          return viewActions.renderItems({
-            view,
-            canDelete: !isLastOfLayout,
-          });
-        } }}
+            if (view.id !== activeViewId) {
+              return null;
+            }
+            const isLastOfLayout =
+              isRequiredViewLayout(view.layout.type) &&
+              views.filter(
+                (candidate) => candidate.layout.type === view.layout.type,
+              ).length <= 1;
+            return viewActions.renderItems({
+              view,
+              canDelete: !isLastOfLayout,
+            });
+          },
+        }}
         renderIcon={(view) => {
           const Icon = layoutIcons[view.layout.type];
           return <Icon className="size-3.5 shrink-0" />;

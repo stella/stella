@@ -25,7 +25,10 @@ import { createScopedDb } from "@/api/db/scoped";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { TASK_ASSIGNEE_ROLE } from "@/api/lib/entity-constants";
-import { buildFilterConditions, buildFindConditions } from "@/api/lib/entity-filters";
+import {
+  buildFilterConditions,
+  buildFindConditions,
+} from "@/api/lib/entity-filters";
 import { isRecord } from "@/api/lib/type-guards";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
@@ -793,7 +796,6 @@ describe("find in table", () => {
   });
 });
 
-
 describe("work type filters", () => {
   const filterEntityIds: SafeId<"entity">[] = [];
 
@@ -815,18 +817,29 @@ describe("work type filters", () => {
     await testDb.insert(entities).values(rows);
 
     for (const selectedType of ["task", "deadline"] as const) {
-      const matching = await testDb.select({ id: entities.id }).from(entities).where(and(
-        inArray(entities.id, filterEntityIds),
-        ...buildFilterConditions([{
-          type: "predicate",
-          operand: { type: "builtin", field: "agendaKind" },
-          op: "in",
-          value: [selectedType],
-        }]),
-      ));
-      expect(new Set(matching.map((row) => row.id))).toEqual(new Set(
-        rows.filter((row) => (row.agendaKind ?? "task") === selectedType).map((row) => row.id),
-      ));
+      const matching = await testDb
+        .select({ id: entities.id })
+        .from(entities)
+        .where(
+          and(
+            inArray(entities.id, filterEntityIds),
+            ...buildFilterConditions([
+              {
+                type: "predicate",
+                operand: { type: "builtin", field: "agendaKind" },
+                op: "in",
+                value: [selectedType],
+              },
+            ]),
+          ),
+        );
+      expect(new Set(matching.map((row) => row.id))).toEqual(
+        new Set(
+          rows
+            .filter((row) => (row.agendaKind ?? "task") === selectedType)
+            .map((row) => row.id),
+        ),
+      );
     }
   });
 });

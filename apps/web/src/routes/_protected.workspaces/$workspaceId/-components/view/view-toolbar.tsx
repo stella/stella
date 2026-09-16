@@ -1068,9 +1068,13 @@ export const GroupByControl = ({
                 {t("common.assignee")}
               </SelectItem>
             )}
-          {additionalGroups.filter((group) => group.id !== excludedPropertyId).map((group) => (
-            <SelectItem key={group.id} value={group.id}>{group.label}</SelectItem>
-          ))}
+          {additionalGroups
+            .filter((group) => group.id !== excludedPropertyId)
+            .map((group) => (
+              <SelectItem key={group.id} value={group.id}>
+                {group.label}
+              </SelectItem>
+            ))}
           {basicProps.map((prop) => (
             <SelectItem key={prop.id} value={prop.id}>
               {prop.name}

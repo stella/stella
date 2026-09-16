@@ -58,7 +58,10 @@ import {
   useUpsertField,
 } from "@/lib/workspaces/mutations/entities";
 import { useUpdateProperty } from "@/lib/workspaces/mutations/properties";
-import { invalidateTaskQueries, useMoveTaskAssignee } from "@/lib/workspaces/mutations/tasks";
+import {
+  invalidateTaskQueries,
+  useMoveTaskAssignee,
+} from "@/lib/workspaces/mutations/tasks";
 import {
   uploadFileEntitiesBatched,
   useBatchUploadLabels,

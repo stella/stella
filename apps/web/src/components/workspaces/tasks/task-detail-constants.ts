@@ -24,7 +24,6 @@ import {
   LIST_ITEM_TYPES,
 } from "@stll/api-contract/entity-options";
 import type { ListItemType } from "@stll/api-contract/entity-options";
-
 import type { OptionColor } from "@stll/ui/option-color";
 
 import type { TranslationKey } from "@/i18n/types";

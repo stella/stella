@@ -649,13 +649,14 @@ export const KanbanSubgroupBoard = <TRow,>({
       className={cn("flex items-center gap-1 px-3", KANBAN_CHROME_ROW_HEIGHT)}
       data-kanban-lane-column-count={count}
     >
-      {laneCount > 0 && (renderLaneColumnSummary ? (
-        renderLaneColumnSummary({ column, count, lane: group })
-      ) : (
-        <span className="text-muted-foreground text-xs tabular-nums">
-          {formatCount(count)}
-        </span>
-      ))}
+      {laneCount > 0 &&
+        (renderLaneColumnSummary ? (
+          renderLaneColumnSummary({ column, count, lane: group })
+        ) : (
+          <span className="text-muted-foreground text-xs tabular-nums">
+            {formatCount(count)}
+          </span>
+        ))}
       {renderLaneColumnAction === undefined ? null : (
         <span className="ms-auto flex items-center">
           {renderLaneColumnAction({ column, lane: group })}
@@ -875,7 +876,8 @@ export const KanbanSubgroupBoard = <TRow,>({
                   // A folded band stands for several columns at once, so its
                   // slot can only carry the total; there is no room for the
                   // per-column pair the open columns show.
-                  renderFoldedBand: (_band, span) => count > 0 ? foldedCount(span, cells) : null,
+                  renderFoldedBand: (_band, span) =>
+                    count > 0 ? foldedCount(span, cells) : null,
                 })}
               </div>
 

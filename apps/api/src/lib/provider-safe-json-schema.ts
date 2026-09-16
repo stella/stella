@@ -115,7 +115,8 @@ const VALUE_CONSTRAINT_DESCRIPTIONS = {
 
 const isValueConstraintKey = (
   key: string,
-): key is ValueConstraintJsonSchemaKeyword => VALUE_CONSTRAINT_KEYWORDS.has(key);
+): key is ValueConstraintJsonSchemaKeyword =>
+  VALUE_CONSTRAINT_KEYWORDS.has(key);
 const ALLOWED_TYPE_VALUES = new Set([
   "array",
   "boolean",

@@ -2,8 +2,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import { describe, expect, test } from "bun:test";
 
-import { MenuItem } from "@stll/ui/menu";
 import { TOOLBAR_ROW_HEIGHT } from "@stll/ui/inspector";
+import { MenuItem } from "@stll/ui/menu";
 
 import { WorkspaceViewSwitcher } from "./view-switcher";
 
@@ -24,7 +24,8 @@ describe("WorkspaceViewSwitcher", () => {
         reorder={null}
         actionMenu={{
           label: "Actions",
-          renderItems: (view) => view.id === "table" ? <MenuItem>Rename</MenuItem> : null,
+          renderItems: (view) =>
+            view.id === "table" ? <MenuItem>Rename</MenuItem> : null,
         }}
         renderIcon={(view) => <span>{view.kind}</span>}
         views={VIEWS}
@@ -106,7 +107,10 @@ describe("WorkspaceViewSwitcher", () => {
         }}
         onViewChange={() => undefined}
         reorder={null}
-        actionMenu={{ label: "Actions", renderItems: () => <MenuItem>Rename</MenuItem> }}
+        actionMenu={{
+          label: "Actions",
+          renderItems: () => <MenuItem>Rename</MenuItem>,
+        }}
         renderIcon={() => null}
         views={VIEWS.slice(0, 1)}
       />,

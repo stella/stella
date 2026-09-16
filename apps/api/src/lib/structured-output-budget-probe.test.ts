@@ -8,19 +8,10 @@ import { checkStructuredOutputBudget } from "@/api/lib/structured-output-budget"
 import { buildBudgetEdgeSchema } from "@/api/lib/structured-output-budget-probe";
 import { structuredOutputWireJsonSchema } from "@/api/lib/tanstack-ai-generate";
 
-// A whole synthetic property costs roughly 1-1.5 KB projected, so growth
-// moves in coarse steps; "just under the budget" cannot mean "within 5% of
-// it" to the byte for every provider. A measured or documented budget
-// (Anthropic, OpenAI) is expected to land in the top 10%: close enough that
-// one more property would have crossed it, per `buildBudgetEdgeSchema`'s own
-// stopping condition.
-const REAL_BUDGET_TOLERANCE = 0.9;
-
 // Placeholder-budget providers are capped well under their published
 // 100 000-byte ceiling (see `PLACEHOLDER_BUDGET_PROBE_MAX_BYTES`); the probe
-// only has to land close to that self-imposed cap, not the real ceiling.
+// establishes its edge against this self-imposed cap, not the unknown ceiling.
 const PLACEHOLDER_PROBE_CAP_BYTES = 20_000;
-const PLACEHOLDER_PROBE_TOLERANCE = 0.85;
 
 type Target = { provider: TanStackAIProvider; modelId: string };
 
@@ -63,13 +54,15 @@ describe("buildBudgetEdgeSchema", () => {
       expect(result.measured.unionParameters).toBeLessThanOrEqual(
         result.budget.maxUnionParameters,
       );
+      expect(result.rejectedNext.propertyCount).toBe(result.propertyCount + 1);
 
       if (result.budget.basis === "placeholder") {
         expect(result.measured.bytes).toBeLessThanOrEqual(
           PLACEHOLDER_PROBE_CAP_BYTES,
         );
-        expect(result.measured.bytes).toBeGreaterThan(
-          PLACEHOLDER_PROBE_CAP_BYTES * PLACEHOLDER_PROBE_TOLERANCE,
+        expect(result.rejectedNext.reason).toBe("probe_cap");
+        expect(result.rejectedNext.measured.bytes).toBeGreaterThan(
+          PLACEHOLDER_PROBE_CAP_BYTES,
         );
         return;
       }
@@ -77,9 +70,12 @@ describe("buildBudgetEdgeSchema", () => {
       expect(result.measured.bytes).toBeLessThanOrEqual(
         result.budget.maxSchemaBytes,
       );
-      expect(result.measured.bytes).toBeGreaterThan(
-        result.budget.maxSchemaBytes * REAL_BUDGET_TOLERANCE,
-      );
+      expect(result.rejectedNext.reason).toBe("provider_budget");
+      expect(
+        result.rejectedNext.measured.bytes > result.budget.maxSchemaBytes ||
+          result.rejectedNext.measured.unionParameters >
+            result.budget.maxUnionParameters,
+      ).toBe(true);
     },
   );
 

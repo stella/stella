@@ -26,7 +26,10 @@ type ViewFilterButtonProps = Omit<
   label: string;
 };
 
-export const ViewFilterButton = ({ label, ...props }: ViewFilterButtonProps) => (
+export const ViewFilterButton = ({
+  label,
+  ...props
+}: ViewFilterButtonProps) => (
   <Button
     {...props}
     aria-label={label}

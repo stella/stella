@@ -11,12 +11,11 @@ import {
   draggable,
   dropTargetForElements,
 } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
-
 import { EllipsisVerticalIcon } from "lucide-react";
 
 import { Button } from "@stll/ui/button";
-import { Menu, MenuPopup, MenuTrigger } from "@stll/ui/menu";
 import { TOOLBAR_ROW_HEIGHT } from "@stll/ui/inspector";
+import { Menu, MenuPopup, MenuTrigger } from "@stll/ui/menu";
 import { Tabs, TabsList, TabsTab } from "@stll/ui/tabs";
 import { cn } from "@stll/ui/utils";
 
@@ -108,27 +107,30 @@ export const WorkspaceViewSwitcher = <View extends WorkspaceViewSwitcherItem>({
       items !== null && items !== undefined && typeof items !== "boolean";
     return {
       view,
-      actions: actionMenu && hasItems ? (
-        <Menu
-          onOpenChange={(open) => {
-            setOpenMenuId((currentId) => {
-              if (open) {
-                return view.id;
-              }
-              return currentId === view.id ? null : currentId;
-            });
-            actionMenu.onOpenChange?.(view, open);
-          }}
-        >
-          <MenuTrigger
-            aria-label={actionMenu.label}
-            render={<Button draggable={false} size="icon-xs" variant="ghost" />}
+      actions:
+        actionMenu && hasItems ? (
+          <Menu
+            onOpenChange={(open) => {
+              setOpenMenuId((currentId) => {
+                if (open) {
+                  return view.id;
+                }
+                return currentId === view.id ? null : currentId;
+              });
+              actionMenu.onOpenChange?.(view, open);
+            }}
           >
-            <EllipsisVerticalIcon />
-          </MenuTrigger>
-          <MenuPopup>{items}</MenuPopup>
-        </Menu>
-      ) : null,
+            <MenuTrigger
+              aria-label={actionMenu.label}
+              render={
+                <Button draggable={false} size="icon-xs" variant="ghost" />
+              }
+            >
+              <EllipsisVerticalIcon />
+            </MenuTrigger>
+            <MenuPopup>{items}</MenuPopup>
+          </Menu>
+        ) : null,
     };
   });
   const reserveActionSpace = viewTabs.some(

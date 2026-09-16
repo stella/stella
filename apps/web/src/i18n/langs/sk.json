@@ -1512,6 +1512,7 @@
     "tryAgain": "Skúsiť znova",
     "type": "Typ",
     "typeNameToConfirm": "Na potvrdenie napíšte názov",
+    "unassigned": "Nepriradené",
     "uncategorized": "Nekategorizované",
     "undo": "Späť",
     "unexpectedError": "Vyskytla sa neočakávaná chyba. Kontaktujte podporu.",
@@ -2558,6 +2559,7 @@
       "model": "AI",
       "source": "Externý zdroj"
     },
+    "proposalView": "Návrhy: {view}",
     "request": {
       "created": "Požiadavka odoslaná",
       "description": "Opíšte, na čo sa má právny tím pozrieť. Požiadavka sa objaví v doručených na triedenie.",
@@ -2586,7 +2588,6 @@
       "fileToWorkspace": "Založiť do spisu",
       "runReview": "Spustiť kontrolu"
     },
-    "unassigned": "Nepriradené",
     "verdict": {
       "safe": "Bez rizika"
     },
@@ -4322,7 +4323,6 @@
     "noActivity": "Zatiaľ žiadna aktivita",
     "noAssignees": "Žiadni spolupracovníci",
     "noLinks": "Žiadne prepojené položky",
-    "noOwner": "Nepridelené",
     "noSubtasks": "Žiadne podúlohy",
     "noTasksAssigned": "Nemáte priradené žiadne úlohy",
     "noWorkInQueue": "V tomto rade nie je žiadna práca",

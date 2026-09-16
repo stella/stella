@@ -1515,6 +1515,7 @@ type Messages = {
     "tryAgain": "Try again";
     "type": "Type";
     "typeNameToConfirm": "Type the name to confirm";
+    "unassigned": "Unassigned";
     "uncategorized": "Uncategorized";
     "undo": "Undo";
     "unexpectedError": "An unexpected error occurred. Please contact support.";
@@ -2561,6 +2562,7 @@ type Messages = {
       "model": "AI";
       "source": "External source";
     };
+    "proposalView": "Suggestions: {view}";
     "request": {
       "created": "Request posted";
       "description": "Describe what the legal team should look at. It lands in the inbox for triage.";
@@ -2589,7 +2591,6 @@ type Messages = {
       "fileToWorkspace": "File to matter";
       "runReview": "Run review";
     };
-    "unassigned": "Unassigned";
     "verdict": {
       "safe": "Safe";
     };
@@ -4325,7 +4326,6 @@ type Messages = {
     "noActivity": "No activity yet";
     "noAssignees": "No collaborators";
     "noLinks": "No linked items";
-    "noOwner": "Unassigned";
     "noSubtasks": "No subtasks";
     "noTasksAssigned": "No tasks assigned to you";
     "noWorkInQueue": "No work in this queue";

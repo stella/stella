@@ -1512,6 +1512,7 @@
     "tryAgain": "Tente novamente",
     "type": "Tipo",
     "typeNameToConfirm": "Digite o nome para confirmar",
+    "unassigned": "Não atribuído",
     "uncategorized": "Sem categoria",
     "undo": "Desfazer",
     "unexpectedError": "Ocorreu um erro inesperado. Entre em contato com o suporte.",
@@ -2558,6 +2559,7 @@
       "model": "IA",
       "source": "Fonte externa"
     },
+    "proposalView": "Sugestões: {view}",
     "request": {
       "created": "Solicitação enviada",
       "description": "Descreva o que a equipe jurídica deve analisar. A solicitação chega à caixa de entrada para triagem.",
@@ -2586,7 +2588,6 @@
       "fileToWorkspace": "Arquivar no caso",
       "runReview": "Executar revisão"
     },
-    "unassigned": "Não atribuído",
     "verdict": {
       "safe": "Seguro"
     },
@@ -4322,7 +4323,6 @@
     "noActivity": "Ainda não há atividade",
     "noAssignees": "Sem colaboradores",
     "noLinks": "Nenhum item vinculado",
-    "noOwner": "Não atribuído",
     "noSubtasks": "Sem subtarefas",
     "noTasksAssigned": "Nenhuma tarefa atribuída a você",
     "noWorkInQueue": "Não há trabalho nesta fila",

@@ -1,8 +1,8 @@
 import { ChevronDownIcon, ChevronRightIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import type { KanbanGroup } from "@stll/ui/kanban";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
+import type { KanbanGroup } from "@stll/ui/kanban";
 import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
 
@@ -67,7 +67,11 @@ export const TableGroupHeader = ({
           {empty ? (
             <span aria-hidden className="size-3.5 shrink-0" />
           ) : (
-            <DirectionalIcon icon={ChevronIcon} flip={collapsed} className="text-muted-foreground size-3.5 shrink-0" />
+            <DirectionalIcon
+              icon={ChevronIcon}
+              flip={collapsed}
+              className="text-muted-foreground size-3.5 shrink-0"
+            />
           )}
           {group.optionColor !== undefined && (
             <SelectColorIcon className="size-3.5" color={group.optionColor} />

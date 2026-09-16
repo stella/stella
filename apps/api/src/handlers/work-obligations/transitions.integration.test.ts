@@ -63,8 +63,7 @@ afterAll(async () => {
 });
 
 const seedOpenWork = async (
-  status: (typeof WORK_OBLIGATION_TRANSITIONS.cancel.from)[number] =
-    WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT,
+  status: (typeof WORK_OBLIGATION_TRANSITIONS.cancel.from)[number] = WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT,
 ) => {
   const entityId = createSafeId<"entity">();
   taskIds.push(entityId);

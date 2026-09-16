@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 import { and, asc, eq, inArray, isNull, ne, not, or, sql } from "drizzle-orm";
-import type { SQL, SQLWrapper } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
 
 import { ENTITY_FIND_TERM_MIN_LENGTH, isEntityKind } from "@stll/api-contract";
 import type { EntityFind } from "@stll/api-contract";
@@ -415,11 +415,11 @@ const propertyExists = (propertyId: string, opCondition: SQL): SQL =>
   fieldsExist(sql`${fields.propertyId} = ${propertyId}`, opCondition);
 
 const BUILTIN_COLUMNS = {
-  status: entities.status,
-  priority: entities.priority,
+  status: sql`${entities.status}`,
+  priority: sql`${entities.priority}`,
   // Task reads normalize older rows with no agenda kind to a regular task.
   agendaKind: sql`CASE WHEN ${entities.kind} = 'task' THEN COALESCE(${entities.agendaKind}, 'task') ELSE ${entities.agendaKind} END`,
-} satisfies Record<BuiltinField, SQLWrapper>;
+} satisfies Record<BuiltinField, SQL>;
 
 const builtinColumn = (field: BuiltinField) => BUILTIN_COLUMNS[field];
 

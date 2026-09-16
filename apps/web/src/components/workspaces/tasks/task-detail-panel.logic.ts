@@ -4,7 +4,11 @@ import type { TaskStatus } from "@stll/api-contract";
 
 import { toSafeId } from "@/lib/safe-id";
 
-import type { ListItemType, TaskPriority, WorkType } from "./task-detail-constants";
+import type {
+  ListItemType,
+  TaskPriority,
+  WorkType,
+} from "./task-detail-constants";
 
 type TaskDetailIdentity = {
   workspaceId: string;

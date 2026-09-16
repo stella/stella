@@ -1,12 +1,15 @@
 import { useRef, useState } from "react";
+
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
+
 import type { TaskStatus } from "@stll/api-contract";
 import { UserText } from "@stll/ui/bidi-text";
 import { KanbanCellAction } from "@stll/ui/kanban";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
 import { stellaToast } from "@stll/ui/toast";
+
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useAnalytics } from "@/lib/analytics/provider";
@@ -56,7 +59,12 @@ export const NewEntityViewTask = ({
             agendaKind,
             ...(assigneeUserId === undefined
               ? {}
-              : { assigneeIds: assigneeUserId === null ? [] : [toSafeId<"user">(assigneeUserId)] }),
+              : {
+                  assigneeIds:
+                    assigneeUserId === null
+                      ? []
+                      : [toSafeId<"user">(assigneeUserId)],
+                }),
           }),
       ),
     );
@@ -72,13 +80,11 @@ export const NewEntityViewTask = ({
           queryKey: entitiesKeys.all(selectedWorkspaceId),
         }),
       ]);
-      useInspectorTabsStore
-        .getState()
-        .openTask({
-          taskId: result.value.entityId,
-          workspaceId: selectedWorkspaceId,
-          isNew: true,
-        });
+      useInspectorTabsStore.getState().openTask({
+        taskId: result.value.entityId,
+        workspaceId: selectedWorkspaceId,
+        isNew: true,
+      });
     }
     pendingRef.current = false;
     setPending(false);
@@ -90,7 +96,11 @@ export const NewEntityViewTask = ({
         disabled={pending}
         onClick={() => detached(create(workspaceId), "entity-view.create-task")}
       >
-        {t(agendaKind === "deadline" ? "inbox.suggestion.createDeadline" : "tasks.newTask")}
+        {t(
+          agendaKind === "deadline"
+            ? "inbox.suggestion.createDeadline"
+            : "tasks.newTask",
+        )}
       </KanbanCellAction>
     );
   return (
@@ -100,13 +110,19 @@ export const NewEntityViewTask = ({
           <KanbanCellAction disabled={pending || !data?.workspaces.length} />
         }
       >
-        {t(agendaKind === "deadline" ? "inbox.suggestion.createDeadline" : "tasks.newTask")}
+        {t(
+          agendaKind === "deadline"
+            ? "inbox.suggestion.createDeadline"
+            : "tasks.newTask",
+        )}
       </MenuTrigger>
       <MenuPopup>
         {(data?.workspaces ?? []).map((workspace) => (
           <MenuItem
             key={workspace.id}
-            onClick={() => detached(create(workspace.id), "entity-view.create-task")}
+            onClick={() =>
+              detached(create(workspace.id), "entity-view.create-task")
+            }
           >
             <UserText>{workspace.name}</UserText>
           </MenuItem>

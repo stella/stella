@@ -93,7 +93,9 @@ type RawWorkspaceEntity = Omit<
   }[];
 };
 
-export const toWorkspaceEntity = (entity: RawWorkspaceEntity): WorkspaceEntity => {
+export const toWorkspaceEntity = (
+  entity: RawWorkspaceEntity,
+): WorkspaceEntity => {
   const { fields: rawFields } = entity;
   const fields: WorkspaceEntity["fields"] = {};
   for (const field of rawFields) {

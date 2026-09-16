@@ -10,6 +10,7 @@ import {
 import { compareByLocale } from "@stll/collation";
 import type { BuiltinField, ConditionNode } from "@stll/conditions";
 import { propertyConfig } from "@stll/property-testing";
+
 import { toSafeId } from "@/api/lib/branded-types";
 
 import {

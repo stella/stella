@@ -10,7 +10,8 @@ import { toWorkspaceEntity } from "@/lib/workspaces/queries/entities";
 import { myWorkKeys } from "@/lib/workspaces/queries/my-work";
 
 export const entityViewKeys = {
-  all: (organizationId: string) => [...myWorkKeys.all, "entity-views", organizationId] as const,
+  all: (organizationId: string) =>
+    [...myWorkKeys.all, "entity-views", organizationId] as const,
 };
 
 type EntityViewRowsOptions = {
@@ -19,33 +20,56 @@ type EntityViewRowsOptions = {
   layout: ViewLayout;
 };
 
-export const entityViewRowsOptions = ({ organizationId, scope, layout }: EntityViewRowsOptions) =>
+export const entityViewRowsOptions = ({
+  organizationId,
+  scope,
+  layout,
+}: EntityViewRowsOptions) =>
   infiniteQueryOptions({
-    queryKey: [...entityViewKeys.all(organizationId), scope, layout.filters, layout.sorts],
+    queryKey: [
+      ...entityViewKeys.all(organizationId),
+      scope,
+      layout.filters,
+      layout.sorts,
+    ],
     initialPageParam: stringCursorSeed(),
     queryFn: async ({ signal, pageParam }) => {
-      const page = unwrapEden(await api["entity-views"]["query-window"].post({
-        scope: scope.type === "matter"
-          ? { type: "matter", matterId: toSafeId<"workspace">(scope.matterId) }
-          : { type: "organization" },
-        filters: layout.filters,
-        sorts: layout.sorts,
-        includeAssignees: true,
-        fieldMode: "full",
-        ...(pageParam ? { cursor: pageParam } : {}),
-      }, { fetch: { signal } }));
-      return { ...page, items: page.items.map((item) => ({
-        type: "entity" as const,
-        entity: toWorkspaceEntity(item),
-        workspaceId: item.workspaceId,
-        workspaceName: item.workspaceName,
-      })) };
+      const page = unwrapEden(
+        await api["entity-views"]["query-window"].post(
+          {
+            scope:
+              scope.type === "matter"
+                ? {
+                    type: "matter",
+                    matterId: toSafeId<"workspace">(scope.matterId),
+                  }
+                : { type: "organization" },
+            filters: layout.filters,
+            sorts: layout.sorts,
+            includeAssignees: true,
+            fieldMode: "full",
+            ...(pageParam ? { cursor: pageParam } : {}),
+          },
+          { fetch: { signal } },
+        ),
+      );
+      return {
+        ...page,
+        items: page.items.map((item) => ({
+          type: "entity" as const,
+          entity: toWorkspaceEntity(item),
+          workspaceId: item.workspaceId,
+          workspaceName: item.workspaceName,
+        })),
+      };
     },
     getNextPageParam: ({ nextCursor }) => nextCursor ?? undefined,
     staleTime: 60_000,
   });
 
-export const entityViewsOptions = (organizationId: string) => queryOptions({
-  queryKey: ["entity-view-layouts", organizationId],
-  queryFn: async ({ signal }) => unwrapEden(await api["entity-views"].get({ fetch: { signal } })),
-});
+export const entityViewsOptions = (organizationId: string) =>
+  queryOptions({
+    queryKey: ["entity-view-layouts", organizationId],
+    queryFn: async ({ signal }) =>
+      unwrapEden(await api["entity-views"].get({ fetch: { signal } })),
+  });

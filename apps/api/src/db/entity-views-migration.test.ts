@@ -15,9 +15,7 @@ test("entity view migration grants CRUD access and preserves user/org RLS", asyn
   `);
 
   await db.exec(
-    await migration(
-      "../../drizzle/20260915090000_entity_views/migration.sql",
-    ),
+    await migration("../../drizzle/20260916100000_entity_views/migration.sql"),
   );
   expect(
     (
@@ -29,7 +27,7 @@ test("entity view migration grants CRUD access and preserves user/org RLS", asyn
 
   await db.exec(
     await migration(
-      "../../drizzle/20260916070000_entity_views_grants/migration.sql",
+      "../../drizzle/20260916100100_entity_views_grants/migration.sql",
     ),
   );
   expect(

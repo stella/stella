@@ -2,9 +2,10 @@ import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 
 import { DirectionProvider } from "@base-ui/react";
+
 import { WorkspaceViewSwitcher } from "../../../../workspace-ui/src/view-switcher";
+import { MenuItem } from "../../components/menu";
 import { InspectorContent, InspectorRailContent } from "../../inspector";
-import { MenuItem } from "../../menu";
 
 const WorkspaceViewSwitcherFixture = () => {
   const query = new URLSearchParams(window.location.search);

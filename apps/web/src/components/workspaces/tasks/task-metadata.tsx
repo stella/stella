@@ -251,6 +251,7 @@ export const OwnerPicker = ({
   onChange,
 }: OwnerPickerProps) => {
   const t = useTranslations("tasks");
+  const tCommon = useTranslations("common");
   const { data: members } = useQuery(workspaceMembersOptions(workspaceId));
   const selectableMembers = members?.filter(
     (member) => member.user && member.user.id !== owner?.id,
@@ -278,7 +279,7 @@ export const OwnerPicker = ({
             nameClassName="text-sm font-normal"
           />
         ) : (
-          <span className="text-muted-foreground">{t("noOwner")}</span>
+          <span className="text-muted-foreground">{tCommon("unassigned")}</span>
         )}
       </PopoverTrigger>
       <PopoverPopup className="w-64 p-2" side="bottom">

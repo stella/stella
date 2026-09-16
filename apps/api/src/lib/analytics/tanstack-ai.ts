@@ -473,7 +473,8 @@ export const createTanStackAIAnalyticsCallbacks = ({
         // the construction-time clock is the catch-path fallback and can
         // include setup work.
         $ai_latency:
-          (context?.durationMs ?? performance.now() - startedAt) / ONE_SECOND_MS,
+          (context?.durationMs ?? performance.now() - startedAt) /
+          ONE_SECOND_MS,
         $ai_trace_id: config.traceId,
         feature: config.feature,
         ...(resolvedModelInfo

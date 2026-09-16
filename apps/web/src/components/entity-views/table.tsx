@@ -1,4 +1,5 @@
 import { createContext, use, useMemo, useRef, useState } from "react";
+import type { ReactNode, RefObject } from "react";
 
 import { flexRender, useTable } from "@tanstack/react-table";
 import type { RowSelectionState } from "@tanstack/react-table";
@@ -15,15 +16,13 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import type { ReactNode, RefObject } from "react";
-
 import { isTaskStatus, TASK_STATUS } from "@stll/api-contract";
 import { ENTITY_VIEW_COLUMNS } from "@stll/api-contract/entity-views";
-import type { SortableProperty } from "@stll/workspace-ui/sorts";
-import { Button } from "@stll/ui/button";
 import { UserText } from "@stll/ui/bidi-text";
-import { cn } from "@stll/ui/utils";
+import { Button } from "@stll/ui/button";
 import { ReviewStatusBadge } from "@stll/ui/review-status-badge";
+import { cn } from "@stll/ui/utils";
+import type { SortableProperty } from "@stll/workspace-ui/sorts";
 
 import { openInspectorSelection } from "@/components/inspector/inspector-actions";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
@@ -31,22 +30,34 @@ import { MatterRefLink } from "@/components/matter-ref-link";
 import { UserIdentity } from "@/components/user-avatar";
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
 import { getEntityName } from "@/components/workspaces/entity-utils";
-import { TableGroupHeader } from "@/components/workspaces/table/group-header";
 import { ColumnToggle } from "@/components/workspaces/table/column-toggle";
+import { TableGroupHeader } from "@/components/workspaces/table/group-header";
 import { MetadataPopover } from "@/components/workspaces/table/metadata-popover";
 import { MobileTableOrientationGate } from "@/components/workspaces/table/mobile-table-orientation-gate";
-import type { TableRowHost, TableRowRenderInput } from "@/components/workspaces/table/row-host";
+import type {
+  TableRowHost,
+  TableRowRenderInput,
+} from "@/components/workspaces/table/row-host";
 import { workspaceTableFeatures } from "@/components/workspaces/table/table-features";
 import { DEFAULT_TABLE_COLUMN_MIN_SIZE } from "@/components/workspaces/table/table-schema";
 import type { TableColumnDef } from "@/components/workspaces/table/types";
 import { useTableState } from "@/components/workspaces/table/use-table-state";
-import { WorkspaceGridCell, WorkspaceGridRow } from "@/components/workspaces/table/workspace-grid";
+import {
+  WorkspaceGridCell,
+  WorkspaceGridRow,
+} from "@/components/workspaces/table/workspace-grid";
 import { getOrderedCells } from "@/components/workspaces/table/workspace-grid-order";
 import { RowEndFillerCell } from "@/components/workspaces/table/workspace-table/end-fillers";
 import { PinnedBoundary } from "@/components/workspaces/table/workspace-table/internals";
-import { getGridPinningStyles, isPinnedBoundaryColumn } from "@/components/workspaces/table/workspace-table/internals-helpers";
+import {
+  getGridPinningStyles,
+  isPinnedBoundaryColumn,
+} from "@/components/workspaces/table/workspace-table/internals-helpers";
 import { WorkspaceTable } from "@/components/workspaces/table/workspace-table/workspace-table";
-import { INBOX_SIGNAL_VIEW, inboxSignalTabId } from "@/features/inbox/signal-inspector.logic";
+import {
+  INBOX_SIGNAL_VIEW,
+  inboxSignalTabId,
+} from "@/features/inbox/signal-inspector.logic";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import type { WorkspaceView } from "@/lib/types";
@@ -54,7 +65,15 @@ import type { TableContentMode } from "@/lib/workspaces/table-store";
 import { useTableStore } from "@/lib/workspaces/table-store";
 import { SignalCard } from "@/routes/_protected.inbox/-signal-card";
 
-import { ENTITY_VIEW_GROUP, entryId, entryStatus, entrySuggestion, entryType } from "./model";
+import {
+  ENTITY_VIEW_GROUP,
+  entryId,
+  entryStatus,
+  entrySuggestion,
+  entryType,
+  entityViewSortValues,
+  isEntityViewSortColumn,
+} from "./model";
 import { NewEntityViewTask } from "./new-task";
 import { useEntityTableGroups } from "./table-groups";
 import type { EntityViewEntry, EntityViewRow, EntityViewScope } from "./types";
@@ -68,32 +87,22 @@ const COLUMN_MODEL = {
   "_due-date": { label: "tasks.dueDate", icon: CalendarIcon, size: 150 },
   _assignee: { label: "common.assignee", icon: UsersIcon, size: 180 },
   _actions: { label: "common.actions", icon: ListChecksIcon, size: 240 },
-} as const satisfies Record<keyof typeof ENTITY_VIEW_COLUMNS, { label: TranslationKey; icon: typeof TextIcon; size: number }>;
+} as const satisfies Record<
+  keyof typeof ENTITY_VIEW_COLUMNS,
+  { label: TranslationKey; icon: typeof TextIcon; size: number }
+>;
 type CollectionColumn = keyof typeof COLUMN_MODEL;
-type SortableColumn = {
-  [Key in keyof typeof ENTITY_VIEW_COLUMNS]: typeof ENTITY_VIEW_COLUMNS[Key]["sortable"] extends true ? Key : never;
-}[keyof typeof ENTITY_VIEW_COLUMNS];
-
-const SORT_ACCESSORS = {
-  _name: (entry: EntityViewEntry) => entry.type === "entity" ? getEntityName(entry.entity) : entry.signal.title,
-  _status: entryStatus,
-  _priority: (entry: EntityViewEntry) => entry.type === "entity" ? entry.entity.priority : null,
-  "_due-date": (entry: EntityViewEntry) => entry.type === "entity" ? entry.entity.dueDate : entrySuggestion(entry)?.dueAt,
-} as const satisfies Record<SortableColumn, (entry: EntityViewEntry) => unknown>;
-
-const isSortableColumn = (column: CollectionColumn): column is SortableColumn =>
-  ENTITY_VIEW_COLUMNS[column].sortable;
-
 export const useEntityViewSortProperties = (): SortableProperty[] => {
   const t = useTranslations();
   const properties: SortableProperty[] = [];
   for (const id in COLUMN_MODEL) {
     if (!isCollectionColumn(id)) panic(`Unknown collection column: ${id}`);
-    if (!isSortableColumn(id)) continue;
+    if (!isEntityViewSortColumn(id)) continue;
     properties.push({
       id,
       name: t(COLUMN_MODEL[id].label),
-      type: id === "_due-date" ? "date" : id === "_name" ? "text" : "single-select",
+      type:
+        id === "_due-date" ? "date" : id === "_name" ? "text" : "single-select",
     });
   }
   return properties;
@@ -105,7 +114,8 @@ type CollectionRenderContextValue = {
   organizationId: string;
   onChanged: () => Promise<void>;
 };
-const CollectionRenderContext = createContext<CollectionRenderContextValue | null>(null);
+const CollectionRenderContext =
+  createContext<CollectionRenderContextValue | null>(null);
 
 export const EntityViewColumnToggle = ({
   view,
@@ -114,17 +124,21 @@ export const EntityViewColumnToggle = ({
   const t = useTranslations();
   return (
     <ColumnToggle
-      groups={[{
-        id: "entity-view",
-        label: t("common.columns"),
-        columns: Object.entries(COLUMN_MODEL).map(([id, model]) => ({
-          id,
-          name: t(model.label),
-          icon: <model.icon className="size-3.5" />,
-        })),
-      }]}
+      groups={[
+        {
+          id: "entity-view",
+          label: t("common.columns"),
+          columns: Object.entries(COLUMN_MODEL).map(([id, model]) => ({
+            id,
+            name: t(model.label),
+            icon: <model.icon className="size-3.5" />,
+          })),
+        },
+      ]}
       hidden={view.layout.hiddenProperties}
-      onChange={(hiddenProperties) => onLayoutChange({ ...view.layout, hiddenProperties })}
+      onChange={(hiddenProperties) =>
+        onLayoutChange({ ...view.layout, hiddenProperties })
+      }
     />
   );
 };
@@ -156,9 +170,13 @@ export const EntityViewTable = ({
 }: EntityViewTableProps) => {
   const t = useTranslations();
   const scopeId = `entity-view:${organizationId}`;
-  const sizing = useTableStore((state) => state.columnSizing[scopeId]?.[view.id] ?? EMPTY_SIZING);
+  const sizing = useTableStore(
+    (state) => state.columnSizing[scopeId]?.[view.id] ?? EMPTY_SIZING,
+  );
   const setSizing = useTableStore((state) => state.setColumnSizing);
-  const contentMode = useTableStore((state) => state.contentMode[scopeId]?.[view.id] ?? "tight");
+  const contentMode = useTableStore(
+    (state) => state.contentMode[scopeId]?.[view.id] ?? "tight",
+  );
   const [selection, setSelection] = useState<RowSelectionState>({});
   const { layout } = view;
   const tableState = useTableState({
@@ -166,24 +184,30 @@ export const EntityViewTable = ({
       hidden: layout.hiddenProperties,
       order: layout.columnOrder,
       pinned: layout.columnPinning,
-      onChange: ({ hidden, order, pinned }) => onLayoutChange({
-        ...layout,
-        ...(hidden === undefined ? {} : { hiddenProperties: [...hidden] }),
-        ...(order === undefined ? {} : { columnOrder: [...order] }),
-        ...(pinned === undefined ? {} : { columnPinning: [...pinned] }),
-      }),
+      onChange: ({ hidden, order, pinned }) =>
+        onLayoutChange({
+          ...layout,
+          ...(hidden === undefined ? {} : { hiddenProperties: [...hidden] }),
+          ...(order === undefined ? {} : { columnOrder: [...order] }),
+          ...(pinned === undefined ? {} : { columnPinning: [...pinned] }),
+        }),
     },
     columnSizing: {
       sizing,
-      onChange: (next) => setSizing({ workspaceId: scopeId, viewId: view.id }, next),
+      onChange: (next) =>
+        setSizing({ workspaceId: scopeId, viewId: view.id }, next),
     },
     rowSelection: { selection, onChange: setSelection },
     sorting: {
-      sorts: layout.sorts.map(({ propertyId, desc }) => ({ id: propertyId, desc })),
-      onChange: (sorts) => onLayoutChange({
-        ...layout,
-        sorts: sorts.map(({ id, desc }) => ({ propertyId: id, desc })),
-      }),
+      sorts: layout.sorts.map(({ propertyId, desc }) => ({
+        id: propertyId,
+        desc,
+      })),
+      onChange: (sorts) =>
+        onLayoutChange({
+          ...layout,
+          sorts: sorts.map(({ id, desc }) => ({ propertyId: id, desc })),
+        }),
     },
   });
   // TanStack's controlled table requires stable definitions between state updates.
@@ -200,14 +224,21 @@ export const EntityViewTable = ({
         size: model.size,
         minSize: DEFAULT_TABLE_COLUMN_MIN_SIZE,
         enableSorting: ENTITY_VIEW_COLUMNS[columnId].sortable,
-        ...(isSortableColumn(columnId)
-          ? { accessorFn: ({ entry }: EntityViewRow) => SORT_ACCESSORS[columnId](entry) }
+        ...(isEntityViewSortColumn(columnId)
+          ? {
+              accessorFn: ({ entry }: EntityViewRow) =>
+                entityViewSortValues[columnId](entry),
+            }
           : {}),
         enableHiding: true,
         enablePinning: true,
         enableResizing: true,
         header: ({ header }) => (
-          <MetadataPopover column={header.column} icon={model.icon} label={t(model.label)} />
+          <MetadataPopover
+            column={header.column}
+            icon={model.icon}
+            label={t(model.label)}
+          />
         ),
         cell: ({ row }) => (
           <CollectionCell column={columnId} entry={row.original.entry} />
@@ -219,11 +250,12 @@ export const EntityViewTable = ({
   const scrollRef = useRef<HTMLDivElement>(null);
   const groups = useEntityTableGroups(rows, layout.groupByPropertyId);
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
-  const toggle = (key: string) => setCollapsed((current) => {
-    const next = new Set(current);
-    if (!next.delete(key)) next.add(key);
-    return next;
-  });
+  const toggle = (key: string) =>
+    setCollapsed((current) => {
+      const next = new Set(current);
+      if (!next.delete(key)) next.add(key);
+      return next;
+    });
   const sectionProps = { columns, tableState, contentMode };
 
   return (
@@ -235,13 +267,21 @@ export const EntityViewTable = ({
               {...sectionProps}
               rows={rows}
               loading={loading}
-              bottomRow={<TableCreateTask organizationId={organizationId} scope={scope} onChanged={onChanged} />}
+              bottomRow={
+                <TableCreateTask
+                  organizationId={organizationId}
+                  scope={scope}
+                  onChanged={onChanged}
+                />
+              }
               hasNextPage={hasNextPage}
               loadingMore={loadingMore}
               onLoadMore={onLoadMore}
             />
             {!loading && rows.length === 0 && (
-              <p className="text-muted-foreground p-4 text-sm">{t("common.noResults")}</p>
+              <p className="text-muted-foreground p-4 text-sm">
+                {t("common.noResults")}
+              </p>
             )}
           </div>
         ) : (
@@ -265,7 +305,7 @@ export const EntityViewTable = ({
                   totalCount={null}
                   onToggle={() => toggle(key)}
                 />
-                {!collapsed.has(key) && (
+                {(!collapsed.has(key) || groupRows.length === 0) && (
                   <TableSection
                     {...sectionProps}
                     rows={groupRows}
@@ -276,7 +316,10 @@ export const EntityViewTable = ({
                         organizationId={organizationId}
                         scope={scope}
                         onChanged={onChanged}
-                        group={{ field: layout.groupByPropertyId ?? "", value: group.value }}
+                        group={{
+                          field: layout.groupByPropertyId ?? "",
+                          value: group.value,
+                        }}
                       />
                     }
                   />
@@ -284,12 +327,20 @@ export const EntityViewTable = ({
               </section>
             ))}
             {hasNextPage && (
-              <Button disabled={loadingMore} onClick={onLoadMore} variant="ghost">
+              <Button
+                disabled={loadingMore}
+                onClick={onLoadMore}
+                variant="ghost"
+              >
                 {t(loadingMore ? "common.loading" : "common.loadMore")}
               </Button>
             )}
             {!loading && groups.length === 0 && (
-              <TableCreateTask organizationId={organizationId} scope={scope} onChanged={onChanged} />
+              <TableCreateTask
+                organizationId={organizationId}
+                scope={scope}
+                onChanged={onChanged}
+              />
             )}
           </div>
         )}
@@ -312,8 +363,16 @@ type TableSectionProps = {
 };
 
 const TableSection = ({
-  rows, columns, tableState, contentMode, loading,
-  hasNextPage = false, loadingMore = false, onLoadMore, outerScrollRef, bottomRow,
+  rows,
+  columns,
+  tableState,
+  contentMode,
+  loading,
+  hasNextPage = false,
+  loadingMore = false,
+  onLoadMore,
+  outerScrollRef,
+  bottomRow,
 }: TableSectionProps) => {
   const table = useTable({
     features: workspaceTableFeatures,
@@ -337,7 +396,9 @@ const TableSection = ({
       hasNextPage={hasNextPage}
       isFetchingNextPage={loadingMore}
       {...(onLoadMore === undefined ? {} : { onLoadMore })}
-      {...(outerScrollRef === undefined ? {} : { outerScrollRef, stickyColumnHeader: false })}
+      {...(outerScrollRef === undefined
+        ? {}
+        : { outerScrollRef, stickyColumnHeader: false })}
       rowHost={rowHost}
       skeletonRowCount={loading ? 8 : 0}
       table={table}
@@ -357,12 +418,13 @@ const entryOpener = (entry: EntityViewEntry): (() => void) | undefined => {
         workspaceId: entry.workspaceId,
       });
     case "proposal":
-      return () => useInspectorTabsStore.getState().openView({
-        type: INBOX_SIGNAL_VIEW,
-        id: inboxSignalTabId(entry.signal.id),
-        label: entry.signal.title,
-        payload: { signalId: entry.signal.id },
-      });
+      return () =>
+        useInspectorTabsStore.getState().openView({
+          type: INBOX_SIGNAL_VIEW,
+          id: inboxSignalTabId(entry.signal.id),
+          label: entry.signal.title,
+          payload: { signalId: entry.signal.id },
+        });
     default:
       entry satisfies never;
       return panic("Unknown collection entry");
@@ -392,9 +454,16 @@ const CollectionCell = ({ column, entry }: CollectionCellProps) => {
           onClick={open}
           type="button"
         >
-          {entry.type === "entity" && <EntityKindIcon kind={entry.entity.kind} status={entry.entity.status ?? undefined} />}
+          {entry.type === "entity" && (
+            <EntityKindIcon
+              kind={entry.entity.kind}
+              status={entry.entity.status ?? undefined}
+            />
+          )}
           <UserText className="truncate font-medium">
-            {entry.type === "entity" ? getEntityName(entry.entity) : entry.signal.title}
+            {entry.type === "entity"
+              ? getEntityName(entry.entity)
+              : entry.signal.title}
           </UserText>
           {entry.type === "proposal" && (
             <ReviewStatusBadge tone="neutral">
@@ -405,20 +474,35 @@ const CollectionCell = ({ column, entry }: CollectionCellProps) => {
       );
     }
     case "_matter": {
-      const workspaceId = entry.type === "entity" ? entry.workspaceId : entry.signal.workspaceId;
-      const name = entry.type === "entity" ? entry.workspaceName : entry.signal.workspaceName;
-      return workspaceId ? <MatterRefLink workspaceId={workspaceId}><UserText>{name ?? t("common.matter")}</UserText></MatterRefLink> : null;
+      const workspaceId =
+        entry.type === "entity" ? entry.workspaceId : entry.signal.workspaceId;
+      const name =
+        entry.type === "entity"
+          ? entry.workspaceName
+          : entry.signal.workspaceName;
+      return workspaceId ? (
+        <MatterRefLink workspaceId={workspaceId}>
+          <UserText>{name ?? t("common.matter")}</UserText>
+        </MatterRefLink>
+      ) : null;
     }
     case "_agenda-kind": {
       const itemType = entryType(entry);
       switch (itemType) {
-        case "deadline": return t("tasks.workTypeValues.deadline");
-        case "task": return t("search.kinds.task");
-        case "document": return t("common.document");
-        case "folder": return t("search.kinds.folder");
-        case null: return null;
-        case "message": return t("search.kinds.message");
-        case "link": return t("search.kinds.link");
+        case "deadline":
+          return t("tasks.workTypeValues.deadline");
+        case "task":
+          return t("search.kinds.task");
+        case "document":
+          return t("common.document");
+        case "folder":
+          return t("search.kinds.folder");
+        case null:
+          return null;
+        case "message":
+          return t("search.kinds.message");
+        case "link":
+          return t("search.kinds.link");
         default:
           itemType satisfies never;
           return panic("Unknown entry type");
@@ -429,71 +513,143 @@ const CollectionCell = ({ column, entry }: CollectionCellProps) => {
       return status ? t(`tasks.statusValues.${status}`) : null;
     }
     case "_priority":
-      return entry.type === "entity" && entry.entity.priority ? t(`tasks.priorityValues.${entry.entity.priority}`) : null;
+      return entry.type === "entity" && entry.entity.priority
+        ? t(`tasks.priorityValues.${entry.entity.priority}`)
+        : null;
     case "_due-date": {
-      const date = entry.type === "entity" ? entry.entity.dueDate : entrySuggestion(entry)?.dueAt;
-      return date ? format.dateTime(new Date(`${date.slice(0, 10)}T00:00:00Z`), { dateStyle: "medium", timeZone: "UTC" }) : null;
+      const date =
+        entry.type === "entity"
+          ? entry.entity.dueDate
+          : entrySuggestion(entry)?.dueAt;
+      return date
+        ? format.dateTime(new Date(`${date.slice(0, 10)}T00:00:00Z`), {
+            dateStyle: "medium",
+            timeZone: "UTC",
+          })
+        : null;
     }
     case "_assignee":
       return entry.type === "entity" ? (
         <div className="flex flex-col gap-1">
-          {entry.entity.assignees.map((person) => <UserIdentity avatarClassName="size-5" key={person.userId} image={person.image} name={person.name} />)}
+          {entry.entity.assignees.map((person) => (
+            <UserIdentity
+              avatarClassName="size-5"
+              key={person.userId}
+              image={person.image}
+              name={person.name}
+            />
+          ))}
         </div>
       ) : entry.signal.assigneeUserId ? (
-        <UserIdentity avatarClassName="size-5" image={entry.signal.assigneeUserImage} name={entry.signal.assigneeUserName} />
+        <UserIdentity
+          avatarClassName="size-5"
+          image={entry.signal.assigneeUserImage}
+          name={entry.signal.assigneeUserName}
+        />
       ) : null;
     case "_actions":
-      return entry.type === "proposal" ? <SignalCard onChanged={onChanged} organizationId={organizationId} presentation="actions" signal={entry.signal} /> : null;
+      return entry.type === "proposal" ? (
+        <SignalCard
+          onChanged={onChanged}
+          organizationId={organizationId}
+          presentation="actions"
+          signal={entry.signal}
+        />
+      ) : null;
     default:
       column satisfies never;
       return panic("Unknown collection column");
   }
 };
 
-const CollectionRow = ({ row, index, renderColumns, addPropertyColumn, measureElement }: TableRowRenderInput<EntityViewRow>) => (
-  <WorkspaceGridRow aria-rowindex={index + 2} data-index={index} ref={measureElement}>
-    {getOrderedCells(row.getVisibleCells(), renderColumns).map((cell, columnIndex) => (
-      <WorkspaceGridCell
-        aria-colindex={columnIndex + 1}
-        className={cn(
-          isPinnedBoundaryColumn(cell.column) && "border-e-0",
-          row.original.entry.type === "proposal" && "border-dashed",
-        )}
-        key={cell.id}
-        style={{ gridColumn: columnIndex + 1, ...getGridPinningStyles(cell.column) }}
-      >
-        <PinnedBoundary column={cell.column} />
-        {flexRender(cell.column.columnDef.cell, cell.getContext())}
-      </WorkspaceGridCell>
-    ))}
-    <RowEndFillerCell addPropertyColumn={addPropertyColumn} renderColumns={renderColumns} selected={false} />
+const CollectionRow = ({
+  row,
+  index,
+  renderColumns,
+  addPropertyColumn,
+  measureElement,
+}: TableRowRenderInput<EntityViewRow>) => (
+  <WorkspaceGridRow
+    aria-rowindex={index + 2}
+    data-index={index}
+    ref={measureElement}
+  >
+    {getOrderedCells(row.getVisibleCells(), renderColumns).map(
+      (cell, columnIndex) => (
+        <WorkspaceGridCell
+          aria-colindex={columnIndex + 1}
+          className={cn(
+            isPinnedBoundaryColumn(cell.column) && "border-e-0",
+            row.original.entry.type === "proposal" && "border-dashed",
+          )}
+          key={cell.id}
+          style={{
+            gridColumn: columnIndex + 1,
+            ...getGridPinningStyles(cell.column),
+          }}
+        >
+          <PinnedBoundary column={cell.column} />
+          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+        </WorkspaceGridCell>
+      ),
+    )}
+    <RowEndFillerCell
+      addPropertyColumn={addPropertyColumn}
+      renderColumns={renderColumns}
+      selected={false}
+    />
   </WorkspaceGridRow>
 );
 
-
-type TableCreateTaskProps = Pick<EntityViewTableProps, "organizationId" | "scope" | "onChanged"> & {
+type TableCreateTaskProps = Pick<
+  EntityViewTableProps,
+  "organizationId" | "scope" | "onChanged"
+> & {
   group?: { field: string; value: string | null };
 };
 
-const TableCreateTask = ({ organizationId, scope, onChanged, group }: TableCreateTaskProps) => {
+const TableCreateTask = ({
+  organizationId,
+  scope,
+  onChanged,
+  group,
+}: TableCreateTaskProps) => {
   if (group?.field === ENTITY_VIEW_GROUP.AUTHOR) return null;
   if (
-    (group?.field === ENTITY_VIEW_GROUP.KIND || group?.field === ENTITY_VIEW_GROUP.TYPE) &&
-    group.value !== "task" && group.value !== "deadline"
-  ) return null;
-  if (group?.field === ENTITY_VIEW_GROUP.STATUS && !isTaskStatus(group.value)) return null;
-  if (group?.field === ENTITY_VIEW_GROUP.MATTER && group.value === null) return null;
-  const workspaceId = group?.field === ENTITY_VIEW_GROUP.MATTER
-    ? group.value
-    : scope.type === "matter" ? scope.matterId : null;
+    (group?.field === ENTITY_VIEW_GROUP.KIND ||
+      group?.field === ENTITY_VIEW_GROUP.TYPE) &&
+    group.value !== "task" &&
+    group.value !== "deadline"
+  )
+    return null;
+  if (group?.field === ENTITY_VIEW_GROUP.STATUS && !isTaskStatus(group.value))
+    return null;
+  if (group?.field === ENTITY_VIEW_GROUP.MATTER && group.value === null)
+    return null;
+  const workspaceId =
+    group?.field === ENTITY_VIEW_GROUP.MATTER
+      ? group.value
+      : scope.type === "matter"
+        ? scope.matterId
+        : null;
   return (
     <div className="p-2" style={{ gridColumn: "1 / -1" }}>
       <NewEntityViewTask
         organizationId={organizationId}
         workspaceId={workspaceId}
-        status={group?.field === ENTITY_VIEW_GROUP.STATUS && isTaskStatus(group.value) ? group.value : TASK_STATUS.OPEN}
-        agendaKind={group?.field === ENTITY_VIEW_GROUP.TYPE && group.value === "deadline" ? "deadline" : "task"}
-        {...(group?.field === ENTITY_VIEW_GROUP.ASSIGNEE ? { assigneeUserId: group.value } : {})}
+        status={
+          group?.field === ENTITY_VIEW_GROUP.STATUS && isTaskStatus(group.value)
+            ? group.value
+            : TASK_STATUS.OPEN
+        }
+        agendaKind={
+          group?.field === ENTITY_VIEW_GROUP.TYPE && group.value === "deadline"
+            ? "deadline"
+            : "task"
+        }
+        {...(group?.field === ENTITY_VIEW_GROUP.ASSIGNEE
+          ? { assigneeUserId: group.value }
+          : {})}
         onChanged={onChanged}
       />
     </div>

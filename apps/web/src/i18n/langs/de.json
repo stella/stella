@@ -1512,6 +1512,7 @@
     "tryAgain": "Erneut versuchen",
     "type": "Typ",
     "typeNameToConfirm": "Geben Sie zur Bestätigung den Namen ein",
+    "unassigned": "Nicht zugewiesen",
     "uncategorized": "Nicht kategorisiert",
     "undo": "Rückgängig",
     "unexpectedError": "Ein unerwarteter Fehler ist aufgetreten. Bitte kontaktieren Sie den Support.",
@@ -2558,6 +2559,7 @@
       "model": "KI",
       "source": "Externe Quelle"
     },
+    "proposalView": "Vorschläge: {view}",
     "request": {
       "created": "Anfrage gesendet",
       "description": "Beschreiben Sie, was das Rechtsteam prüfen soll. Die Anfrage landet zur Sichtung im Posteingang.",
@@ -2586,7 +2588,6 @@
       "fileToWorkspace": "In Akte ablegen",
       "runReview": "Prüfung starten"
     },
-    "unassigned": "Nicht zugewiesen",
     "verdict": {
       "safe": "Unbedenklich"
     },
@@ -4322,7 +4323,6 @@
     "noActivity": "Noch keine Aktivität",
     "noAssignees": "Keine Mitwirkenden",
     "noLinks": "Keine verknüpften Einträge",
-    "noOwner": "Nicht zugewiesen",
     "noSubtasks": "Keine Unteraufgaben",
     "noTasksAssigned": "Keine Aufgaben zugewiesen",
     "noWorkInQueue": "Keine Arbeit in dieser Warteschlange",

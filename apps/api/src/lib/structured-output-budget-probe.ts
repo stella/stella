@@ -91,6 +91,12 @@ export type BudgetEdgeSchema = {
   budget: ReturnType<typeof resolveStructuredOutputBudget>["budget"];
   /** The provider whose grammar compiler the schema was sized against. */
   compiler: StructuredOutputTarget["provider"];
+  /** The immediately next production-shaped batch, which establishes maximality. */
+  rejectedNext: {
+    propertyCount: number;
+    measured: StructuredOutputMeasure;
+    reason: "provider_budget" | "probe_cap";
+  };
 };
 
 /**
@@ -132,6 +138,7 @@ export const buildBudgetEdgeSchema = ({
     outputSchema: ReturnType<typeof buildBatchSchema>;
     measured: StructuredOutputMeasure;
   } | null = null;
+  let rejectedNext: BudgetEdgeSchema["rejectedNext"] | null = null;
 
   for (let index = 0; ; index += 1) {
     const candidateProperties = [...properties, syntheticProperty(index)];
@@ -145,7 +152,20 @@ export const buildBudgetEdgeSchema = ({
       modelId,
       schema: wireSchema,
     });
-    if (Result.isError(check) || check.value.bytes > byteCeiling) {
+    if (Result.isError(check)) {
+      rejectedNext = {
+        propertyCount: candidateProperties.length,
+        measured: check.error.measured,
+        reason: "provider_budget",
+      };
+      break;
+    }
+    if (check.value.bytes > byteCeiling) {
+      rejectedNext = {
+        propertyCount: candidateProperties.length,
+        measured: check.value,
+        reason: "probe_cap",
+      };
       break;
     }
     properties = candidateProperties;
@@ -162,6 +182,9 @@ export const buildBudgetEdgeSchema = ({
         `(${byteCeiling} bytes); the budget-edge probe cannot build a schema.`,
     );
   }
+  if (rejectedNext === null) {
+    return panic("Budget-edge probe terminated without finding its boundary.");
+  }
 
   return {
     outputSchema: accepted.outputSchema,
@@ -169,5 +192,6 @@ export const buildBudgetEdgeSchema = ({
     measured: accepted.measured,
     budget,
     compiler,
+    rejectedNext,
   };
 };

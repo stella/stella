@@ -38,8 +38,8 @@ import {
   getInternalPropertyId,
   resolveKanbanGroupBy,
 } from "@/components/workspaces/entity-utils";
-import { TASK_STATUS_OPTION_COLORS } from "@/components/workspaces/tasks/task-detail-constants";
 import { resolveOptionColor } from "@/components/workspaces/property-utils";
+import { TASK_STATUS_OPTION_COLORS } from "@/components/workspaces/tasks/task-detail-constants";
 import { getFormattingLocale } from "@/i18n/i18n-store";
 import type { OptionColor } from "@/lib/api-contract";
 import type {

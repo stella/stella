@@ -8,13 +8,18 @@ import {
 } from "bun:test";
 import { inArray } from "drizzle-orm";
 
+import type { SafeDb } from "@/api/db/safe-db";
 import { entities } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
 import type { SafeId } from "@/api/lib/branded-types";
 import { queryEntities } from "@/api/lib/entities/query-entities";
 import type { EntityQueryScope } from "@/api/lib/entities/query-scope";
 import type { EntitiesWindowCursorValues } from "@/api/lib/entities/window-cursor";
-import { getRlsFixture, releaseRlsFixture } from "@/api/tests/security/rls-fixture";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import {
+  getRlsFixture,
+  releaseRlsFixture,
+} from "@/api/tests/security/rls-fixture";
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
@@ -45,7 +50,9 @@ const readScope = async ({
   limit = 10,
 }: ReadScopeOptions) => {
   const result = await queryEntities({
-    safeDb: createSafeDb(testDb, workspaceIds, ids.orgA, ids.userA1),
+    safeDb: asTestRaw<SafeDb>(
+      createSafeDb(testDb, workspaceIds, ids.orgA, ids.userA1),
+    ),
     scope,
     currentUserId: ids.userA1,
     currentOrganizationId: ids.orgA,
@@ -79,9 +86,13 @@ describe("canonical entity query scope", () => {
       new Set(organization.entities.map(({ entityId }) => entityId)),
     ).toEqual(new Set([ids.entityA1, ids.entityA2]));
     for (const row of organization.entities) {
-      expect(row).toEqual(
-        expected.find(({ entityId }) => entityId === row.entityId),
+      const expectedRow = expected.find(
+        ({ entityId }) => entityId === row.entityId,
       );
+      expect(expectedRow).toBeDefined();
+      if (!expectedRow)
+        return expect.unreachable("Expected matching matter row");
+      expect(row).toEqual(expectedRow);
       expect(row.workspaceName.length).toBeGreaterThan(0);
       expect(row.fields.length).toBeGreaterThan(0);
     }
@@ -92,7 +103,9 @@ describe("canonical entity query scope", () => {
       scope: { type: "organization", organizationId: ids.orgA },
       workspaceIds: [ids.wsA2],
     });
-    expect(page.entities.map(({ entityId }) => entityId)).toEqual([ids.entityA2]);
+    expect(page.entities.map(({ entityId }) => entityId)).toEqual([
+      ids.entityA2,
+    ]);
     expect(page.entities.at(0)?.workspaceId).toBe(ids.wsA2);
   });
 
@@ -103,7 +116,8 @@ describe("canonical entity query scope", () => {
     const boundary = first.entities.at(0);
     if (!boundary) return expect.unreachable("Expected a first entity");
     const cursor = first.cursorValuesByEntityId.get(boundary.entityId);
-    if (!cursor) return expect.unreachable("Expected a cursor for the first entity");
+    if (!cursor)
+      return expect.unreachable("Expected a cursor for the first entity");
     const second = await readScope({ scope, cursor, limit: 1 });
     expect(
       [...first.entities, ...second.entities].map(({ entityId }) => entityId),

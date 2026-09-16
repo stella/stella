@@ -239,13 +239,15 @@ describe("projectToProviderSafeJsonSchema", () => {
             const input = { type: "object", properties: { field } };
             const options = { valueConstraintStrategy: "omit" } as const;
             const projected = projectToProviderSafeJsonSchema(input, options);
-            const expectedField = { ...field };
-            delete expectedField[keyword];
             const expectedDescription = `${guidance}: ${String(bound)}.`;
-            expectedField.description =
-              description === undefined
-                ? expectedDescription
-                : `${description}\n${expectedDescription}`;
+            const expectedField = {
+              type,
+              ...(type === "array" ? { items: { type: "string" } } : {}),
+              description:
+                description === undefined
+                  ? expectedDescription
+                  : `${description}\n${expectedDescription}`,
+            };
 
             expect(projected.schema).toEqual({
               type: "object",

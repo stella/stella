@@ -70,12 +70,12 @@ import {
   pendingUploads,
   taskAssignees,
 } from "./entities";
+import { entityViews } from "./entity-views";
 import {
   userFiles,
   workspaceViewTemplates,
   workspaceViews,
 } from "./files-views";
-import { entityViews } from "./entity-views";
 import { flowDefinitions, flowRunSteps, flowRuns } from "./flows";
 import {
   legalListColumns,

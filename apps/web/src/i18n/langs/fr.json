@@ -1512,6 +1512,7 @@
     "tryAgain": "Réessayer",
     "type": "Type",
     "typeNameToConfirm": "Saisissez le nom pour confirmer",
+    "unassigned": "Non attribué",
     "uncategorized": "Non catégorisé",
     "undo": "Annuler",
     "unexpectedError": "Une erreur inattendue est survenue. Veuillez contacter le support.",
@@ -2558,6 +2559,7 @@
       "model": "IA",
       "source": "Source externe"
     },
+    "proposalView": "Suggestions : {view}",
     "request": {
       "created": "Demande envoyée",
       "description": "Décrivez ce que l'équipe juridique doit examiner. La demande arrive dans la boîte de réception pour tri.",
@@ -2586,7 +2588,6 @@
       "fileToWorkspace": "Classer dans un dossier",
       "runReview": "Lancer la revue"
     },
-    "unassigned": "Non attribué",
     "verdict": {
       "safe": "Sans risque"
     },
@@ -4322,7 +4323,6 @@
     "noActivity": "Aucune activité pour le moment",
     "noAssignees": "Aucun collaborateur",
     "noLinks": "Aucun élément lié",
-    "noOwner": "Non attribué",
     "noSubtasks": "Aucune sous-tâche",
     "noTasksAssigned": "Aucune tâche ne vous est assignée",
     "noWorkInQueue": "Aucun travail dans cette file",

@@ -787,7 +787,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
 
       try {
         await callbacks.middleware.onChunk?.(truncated, {
-          type: "RUN_FINISHED",
+          type: EventType.RUN_FINISHED,
           runId: truncated.runId,
           threadId: truncated.threadId,
           metadata: { tanstack: { finishReason: "length" } },
@@ -798,7 +798,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
           totalTokens: 2500,
         });
         await callbacks.middleware.onChunk?.(another, {
-          type: "RUN_FINISHED",
+          type: EventType.RUN_FINISHED,
           runId: another.runId,
           threadId: another.threadId,
           finishReason: "tool_calls",
@@ -816,11 +816,14 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
             });
             break;
           case "structured_output":
-            await callbacks.middleware.onStructuredOutputConfig?.(nextIteration, {
-              messages: [],
-              systemPrompts: [],
-              outputSchema: { type: "object" },
-            });
+            await callbacks.middleware.onStructuredOutputConfig?.(
+              nextIteration,
+              {
+                messages: [],
+                systemPrompts: [],
+                outputSchema: { type: "object" },
+              },
+            );
             break;
           default: {
             const exhaustive: never = boundary;
@@ -917,7 +920,9 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
         } satisfies StreamChunk;
       },
       structuredOutput: () => {
-        throw new Error("Combined mode must not issue a separate provider call");
+        throw new Error(
+          "Combined mode must not issue a separate provider call",
+        );
       },
     } satisfies AnyTextAdapter;
 

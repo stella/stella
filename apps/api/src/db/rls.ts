@@ -977,10 +977,27 @@ export const savedSearchPolicies = () => [
 
 const entityViewCheck = sql`(${organizationCheck} AND ${userCheck})`;
 export const entityViewPolicies = () => [
-  p.pgPolicy("entity_view_select", { for: "select", to: stella, using: entityViewCheck }),
-  p.pgPolicy("entity_view_insert", { for: "insert", to: stella, withCheck: entityViewCheck }),
-  p.pgPolicy("entity_view_update", { for: "update", to: stella, using: entityViewCheck, withCheck: entityViewCheck }),
-  p.pgPolicy("entity_view_delete", { for: "delete", to: stella, using: entityViewCheck }),
+  p.pgPolicy("entity_view_select", {
+    for: "select",
+    to: stella,
+    using: entityViewCheck,
+  }),
+  p.pgPolicy("entity_view_insert", {
+    for: "insert",
+    to: stella,
+    withCheck: entityViewCheck,
+  }),
+  p.pgPolicy("entity_view_update", {
+    for: "update",
+    to: stella,
+    using: entityViewCheck,
+    withCheck: entityViewCheck,
+  }),
+  p.pgPolicy("entity_view_delete", {
+    for: "delete",
+    to: stella,
+    using: entityViewCheck,
+  }),
 ];
 
 const agentSkillVisibleCheck = sql`(

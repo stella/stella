@@ -24,7 +24,6 @@ import {
   CommandSeparator,
 } from "@stll/ui/command";
 import { Input } from "@stll/ui/input";
-import { ViewFilterButton, ViewFilterChip } from "@stll/ui/view-toolbar";
 import {
   Menu,
   MenuItem,
@@ -40,6 +39,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/select";
+import { ViewFilterButton, ViewFilterChip } from "@stll/ui/view-toolbar";
 
 import type {
   ConditionOperator,
@@ -63,9 +63,9 @@ import {
   MultiSelectValue,
   SingleSelectValue,
 } from "@/components/workspaces/conditions/condition-select-values";
-import { WORK_TYPES } from "@/components/workspaces/tasks/task-detail-constants";
 import { SelectColorIcon } from "@/components/workspaces/properties/shared";
 import { PropertyIcon } from "@/components/workspaces/property-helpers";
+import { WORK_TYPES } from "@/components/workspaces/tasks/task-detail-constants";
 import type { TranslationKey } from "@/i18n/types";
 import type { WorkspaceProperty } from "@/lib/types";
 
@@ -226,11 +226,7 @@ const FilterChip = ({
 
   return (
     <Popover onOpenChange={onOpenChange} open={open}>
-      <PopoverTrigger
-        render={
-          <ViewFilterChip />
-        }
-      >
+      <PopoverTrigger render={<ViewFilterChip />}>
         <FieldTypeIcon field={field} />
         <span className="text-foreground">{field.label}</span>
         {valueColor !== undefined && (
@@ -465,11 +461,7 @@ const AdvancedFilterChip = ({
 
   return (
     <Popover onOpenChange={onOpenChange} open={open}>
-      <PopoverTrigger
-        render={
-          <ViewFilterChip />
-        }
-      >
+      <PopoverTrigger render={<ViewFilterChip />}>
         <SlidersHorizontalIcon className="size-3.5" />
         <span className="text-foreground">
           {t("workspaces.views.advancedFilter")}

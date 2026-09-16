@@ -736,53 +736,53 @@ const TaskDetailPanelContent = ({
             workflow.status === "completed" ||
             workflow.status === "cancelled" ||
             hardDeadlineOverdue) && (
-          <div className="border-t px-4 py-3">
-            {workflow.status === "awaiting_acknowledgement" &&
-              workflow.ownerUserId === userId && (
-                <div className="bg-warning/10 mb-3 flex items-center gap-2 rounded-md p-2 text-sm">
-                  <InboxIcon className="text-warning size-4 shrink-0" />
-                  <span className="min-w-0 flex-1">
-                    {t("acknowledgementRequired")}
-                  </span>
+            <div className="border-t px-4 py-3">
+              {workflow.status === "awaiting_acknowledgement" &&
+                workflow.ownerUserId === userId && (
+                  <div className="bg-warning/10 mb-3 flex items-center gap-2 rounded-md p-2 text-sm">
+                    <InboxIcon className="text-warning size-4 shrink-0" />
+                    <span className="min-w-0 flex-1">
+                      {t("acknowledgementRequired")}
+                    </span>
+                    <Button
+                      disabled={workflowActionMutation.isPending}
+                      onClick={() =>
+                        workflowActionMutation.mutate({ type: "acknowledge" })
+                      }
+                      size="sm"
+                    >
+                      {t("acknowledge")}
+                    </Button>
+                  </div>
+                )}
+
+              <div className="flex flex-wrap gap-2">
+                {(workflow.status === "completed" ||
+                  workflow.status === "cancelled") && (
                   <Button
                     disabled={workflowActionMutation.isPending}
                     onClick={() =>
-                      workflowActionMutation.mutate({ type: "acknowledge" })
+                      workflowActionMutation.mutate({
+                        type: "transition",
+                        action: "reopen",
+                      })
                     }
                     size="sm"
+                    variant="outline"
                   >
-                    {t("acknowledge")}
+                    <RotateCcwIcon />
+                    {t("reopenWork")}
                   </Button>
-                </div>
-              )}
-
-            <div className="flex flex-wrap gap-2">
-              {(workflow.status === "completed" ||
-                workflow.status === "cancelled") && (
-                <Button
-                  disabled={workflowActionMutation.isPending}
-                  onClick={() =>
-                    workflowActionMutation.mutate({
-                      type: "transition",
-                      action: "reopen",
-                    })
-                  }
-                  size="sm"
-                  variant="outline"
-                >
-                  <RotateCcwIcon />
-                  {t("reopenWork")}
-                </Button>
-              )}
-              {hardDeadlineOverdue && (
-                <span className="text-destructive flex items-center gap-1 text-xs">
-                  <ShieldAlertIcon className="size-3.5" />
-                  {t("hardDeadlineOverdue")}
-                </span>
-              )}
+                )}
+                {hardDeadlineOverdue && (
+                  <span className="text-destructive flex items-center gap-1 text-xs">
+                    <ShieldAlertIcon className="size-3.5" />
+                    {t("hardDeadlineOverdue")}
+                  </span>
+                )}
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
         {workflow && (
           <div className="border-t px-4 py-3">
