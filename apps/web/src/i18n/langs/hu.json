@@ -3973,6 +3973,8 @@
       "mcpAnonymizedLabel": "Anonimizált végpont",
       "mcpAnonymizedNote": "Egy anonimizált végpont is elérhető; ugyanazokat az eszközöket kínálja, elrejtett személyes adatokkal.",
       "mcpDescription": "Csatlakoztasson egy MCP-kompatibilis klienst, például a Claude-ot vagy a Cursort, a stella-fiókjához ezzel a szerver-URL-lel.",
+      "mcpLawLabel": "Jogi korpusz végpont",
+      "mcpLawNote": "Egy jogi korpusz végpont is elérhető; csak nyilvános ítélkezési gyakorlatot és jogszabályokat kínál, és nem fér hozzá az ügyek adataihoz.",
       "mcpStep1": "Adja hozzá a fenti URL-t egyéni konnektorként vagy MCP-szerverként a kliensében.",
       "mcpStep2": "Jelentkezzen be, amikor a böngésző erre kéri.",
       "mcpStep3": "Hagyja jóvá a hozzáférést a hozzájárulási képernyőn.",

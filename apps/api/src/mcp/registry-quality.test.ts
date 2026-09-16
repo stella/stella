@@ -17,6 +17,7 @@ import {
   DEFAULT_MCP_TOOL_DEFINITIONS,
   DEFAULT_MCP_TOOL_SETS,
   getStaticMcpToolOutputContract,
+  LAW_MCP_TOOL_DEFINITIONS,
 } from "@/api/mcp/static-tool-definitions";
 import type { McpToolDefinition } from "@/api/mcp/tool-types";
 import { defineMcpToolOutput } from "@/api/mcp/valibot-tool-definition";
@@ -36,6 +37,7 @@ import { defineMcpToolOutput } from "@/api/mcp/valibot-tool-definition";
 const SURFACES = [
   { mode: "default", definitions: DEFAULT_MCP_TOOL_DEFINITIONS },
   { mode: "anonymized", definitions: ANONYMIZED_MCP_TOOL_DEFINITIONS },
+  { mode: "law", definitions: LAW_MCP_TOOL_DEFINITIONS },
 ] as const;
 
 type SurfaceMode = (typeof SURFACES)[number]["mode"];
@@ -87,9 +89,14 @@ type SurfaceMode = (typeof SURFACES)[number]["mode"];
 // call per provision, and the history answers "what changed". All four are
 // public-corpus `passthrough`, so both surfaces carry them. The BOE rename
 // (search_legislation -> search_boe_legislation) is count-neutral.
+// law is pinned at its exact measured 7. That audience exists because host
+// guidance puts a workable budget at 25-30 tools per agent while the default
+// surface lists 55, so a growing law list defeats its own purpose: an eighth
+// tool is argued for here, not absorbed.
 const TOOL_COUNT_CEILING: Record<SurfaceMode, number> = {
   default: 55,
   anonymized: 26,
+  law: 7,
 };
 
 // Serialized `tools/list` tool array (the wire payload produced by
@@ -159,9 +166,14 @@ const TOOL_COUNT_CEILING: Record<SurfaceMode, number> = {
 // model: that a subdivision anchor is accepted, and that an entry is
 // validated on its own so a malformed one comes back with its own status
 // instead of sinking the call.
+// law is pinned exactly: what a client downloads on connect is the property
+// this audience sells, so growth here is the thing being ratcheted, not an
+// incidental cost. It carries the same four legislation schemas, so the two
+// facts above account for its size too.
 const TOOLS_LIST_PAYLOAD_CHAR_CEILING: Record<SurfaceMode, number> = {
   default: 130_800,
   anonymized: 66_800,
+  law: 22_067,
 };
 
 // default bumped 42_000 -> 42_300 for the two fields read_case_law_citations
@@ -179,10 +191,12 @@ const TOOLS_LIST_PAYLOAD_CHAR_CEILING: Record<SurfaceMode, number> = {
 // and 32_161) for the two branches the provision reads gained: an `invalid`
 // entry carrying its own `issues[]`, and a history item discriminated on the
 // same status vocabulary so a version whose source bars derived AI use
-// answers `text_withheld` rather than its wording.
+// answers `text_withheld` rather than its wording. law carries the same
+// schemas and is pinned exactly.
 const OUTPUT_SCHEMA_TOTAL_CHAR_CEILING: Record<SurfaceMode, number> = {
   default: 46_600,
   anonymized: 32_300,
+  law: 9_298,
 };
 
 // Largest measured schema is read_document at 3_434 chars. A single tool must

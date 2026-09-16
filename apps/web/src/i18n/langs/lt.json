@@ -3973,6 +3973,8 @@
       "mcpAnonymizedLabel": "Anonimizuotas galutinis taškas",
       "mcpAnonymizedNote": "Taip pat yra anonimizuotas galutinis taškas; jis siūlo tuos pačius įrankius su paslėptais asmens duomenimis.",
       "mcpDescription": "Prijunkite MCP suderinamą klientą, pvz., Claude ar Cursor, prie savo stella paskyros naudodami šį serverio URL.",
+      "mcpLawLabel": "Teisės korpuso galutinis taškas",
+      "mcpLawNote": "Taip pat yra teisės korpuso galutinis taškas; jis siūlo tik viešą teismų praktiką ir teisės aktus ir neprieina prie bylų duomenų.",
       "mcpStep1": "Savo kliente pridėkite aukščiau esantį URL kaip pasirinktinį jungtį arba MCP serverį.",
       "mcpStep2": "Prisijunkite, kai to paprašys naršyklė.",
       "mcpStep3": "Patvirtinkite prieigą sutikimo lange.",

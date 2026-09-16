@@ -6,6 +6,7 @@ import {
   MCP_ANONYMIZED_RESOURCE_SCOPES,
   MCP_DEFAULT_RESOURCE_SCOPES,
   MCP_DOCUMENTS_RESOURCE_SCOPES,
+  MCP_LAW_RESOURCE_SCOPES,
   MCP_OAUTH_SCOPES,
 } from "@/api/mcp/constants";
 
@@ -23,15 +24,20 @@ describe("MCP OAuth scope surface", () => {
     expect(MCP_DEFAULT_RESOURCE_SCOPES).not.toContain("offline_access");
     expect(MCP_ANONYMIZED_RESOURCE_SCOPES).not.toContain("offline_access");
     expect(MCP_DOCUMENTS_RESOURCE_SCOPES).not.toContain("offline_access");
+    expect(MCP_LAW_RESOURCE_SCOPES).not.toContain("offline_access");
   });
 
-  test("resource metadata scope lists exclude offline_access in both modes", () => {
+  test("resource metadata scope lists stay least-privilege per audience", () => {
     expect(getMcpResourceScopes("default")).not.toContain("offline_access");
     expect(getMcpResourceScopes("anonymized")).not.toContain("offline_access");
     expect(getMcpResourceScopes("documents")).toEqual([
       "stella:read",
       "stella:documents_write",
       "stella:matters_write",
+    ]);
+    expect(getMcpResourceScopes("law")).toEqual([
+      "stella:search",
+      "stella:read",
     ]);
   });
 });

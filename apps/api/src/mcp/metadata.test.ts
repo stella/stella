@@ -5,6 +5,7 @@ import { getAuthIssuerUrl } from "@/api/lib/auth-paths";
 import {
   MCP_ANONYMIZED_RESOURCE_SCOPES,
   MCP_DEFAULT_RESOURCE_SCOPES,
+  MCP_LAW_RESOURCE_SCOPES,
   MCP_STATELESS_ALLOW_HEADER,
   STELLA_API_CONTRACT,
   getMcpProtectedResourceMetadataUrl,
@@ -73,6 +74,42 @@ describe("MCP protected resource metadata", () => {
         },
       },
     });
+  });
+
+  test("advertises the law MCP metadata with only search and read", () => {
+    expect(getMcpProtectedResourceMetadata("law")).toEqual({
+      authorization_servers: [getAuthIssuerUrl()],
+      bearer_methods_supported: ["header"],
+      resource: getMcpResourceUrl("law"),
+      resource_name: "stella",
+      resource_logo_uri: new URL(
+        "favicon.svg",
+        `${env.FRONTEND_URL.replace(/\/$/u, "")}/`,
+      ).toString(),
+      scopes_supported: ["stella:search", "stella:read"],
+      stella_contract: {
+        capabilities: { ...STELLA_API_CONTRACT.capabilities },
+        protocol: STELLA_API_CONTRACT.protocol,
+        revision: STELLA_API_CONTRACT.revision,
+      },
+      stella_compatibility: {
+        api_contract_version: STELLA_MCP_API_CONTRACT_VERSION,
+        cli_version: {
+          maximum: STELLA_CLI_MAXIMUM_VERSION,
+          minimum: STELLA_CLI_MINIMUM_VERSION,
+        },
+      },
+    });
+    // The public-corpus audience carries no write grant and no anonymized
+    // pairing, so the advertised list is exactly the two read grants.
+    expect(MCP_LAW_RESOURCE_SCOPES).toEqual(["stella:search", "stella:read"]);
+  });
+
+  test("resolves the law resource and its discovery document on /mcp-law", () => {
+    expect(getMcpResourceUrl("law")).toEndWith("/mcp-law");
+    expect(getMcpProtectedResourceMetadataUrl("law")).toEndWith(
+      "/.well-known/oauth-protected-resource/mcp-law",
+    );
   });
 
   test("returns browser-friendly discovery headers", () => {

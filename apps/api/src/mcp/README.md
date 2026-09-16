@@ -14,7 +14,9 @@ case law, skills and connected tools. The same gateway can expose anonymized
 read/search surfaces for clients that should not receive raw legal or personal
 data.
 
-The server exposes two MCP endpoints:
+One server, one registry, several audiences. Each audience is its own HTTP
+path with its own tool list, server name, resource scopes and connect-time
+instructions, because an orchestrator picks tools from the names it was handed:
 
 - `/mcp`: the default stella MCP. It includes first-party stella tools,
   OpenAI-compatible `search` / `fetch` tools, user-managed skills, and enabled
@@ -25,20 +27,36 @@ The server exposes two MCP endpoints:
   `search`/`fetch` tools) for clients that should receive anonymized results.
   Tenant and personal text is redacted on egress; mutating tools and the dynamic
   gateway are not exposed.
+- `/mcp-documents`: the least-privilege document surface. Document tools plus
+  the version-upload lifecycle through `invoke_capability`, whose capability IDs
+  are allowlisted for that surface.
+- `/mcp-law`: the public legal corpus. Exactly seven read tools
+  (`search_case_law`, `read_case_law_decision`, `read_case_law_citations`,
+  `search_legislation`, `read_statute`, `read_statute_provisions`,
+  `read_provision_history`) under `stella:search` and `stella:read`. No matter,
+  document, contact or billing data is reachable through it. Authentication is
+  the same as every other audience: an OAuth bearer token or an API key
+  carrying those two scopes.
 
-Both endpoints expose static MCP resources through `resources/list` and
-`resources/read`: `stella://about` for canonical product identity and official
-URLs, `stella://reference/template-markers` for the DOCX template marker
-grammar, `stella://reference/template-fields` for the `configure_template_fields`
-overlay, and `stella://reference/template-workflow` for the order those two are
-used in (author, create, read the discovered paths back, configure, preview,
-persist).
+Every audience authenticates the same way and exposes static MCP resources
+through `resources/list` and `resources/read`: `stella://about` for canonical
+product identity and official URLs, `stella://reference/template-markers` for
+the DOCX template marker grammar, `stella://reference/template-fields` for the
+`configure_template_fields` overlay, `stella://reference/template-workflow` for
+the order those two are used in (author, create, read the discovered paths
+back, configure, preview, persist), and
+`stella://reference/legislation-workflow` for the corpus-reading order. The law
+audience serves the product identity and the legislation workflow only: a
+reference for a workflow it carries no tool for is context an agent pays for
+and cannot use.
 
 OAuth protected-resource discovery is served from:
 
 - `/.well-known/oauth-protected-resource`
 - `/.well-known/oauth-protected-resource/mcp`
 - `/.well-known/oauth-protected-resource/mcp-anonymized`
+- `/.well-known/oauth-protected-resource/mcp-documents`
+- `/.well-known/oauth-protected-resource/mcp-law`
 
 ## Single registry, derived anonymized projection
 

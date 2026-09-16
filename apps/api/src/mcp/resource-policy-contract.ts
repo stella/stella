@@ -4,6 +4,7 @@ import {
   MCP_DEFAULT_RESOURCE_SCOPES,
   MCP_DOCUMENTS_HTTP_PATH,
   MCP_HTTP_PATH,
+  MCP_LAW_HTTP_PATH,
 } from "@stll/api-contract";
 
 /**
@@ -21,6 +22,18 @@ export const MCP_DOCUMENTS_RESOURCE_SCOPES = [
   "stella:matters_write",
 ] as const;
 
+/**
+ * The public legal corpus audience reads and searches shared case law and
+ * legislation; no matter, document, contact or billing data is reachable
+ * through it, so it advertises no write grant and no anonymized pairing.
+ * `registry.test.ts` pins this list to the scopes its projected tools actually
+ * carry, so a tool added to that surface cannot widen the grant silently.
+ */
+export const MCP_LAW_RESOURCE_SCOPES = [
+  "stella:search",
+  "stella:read",
+] as const;
+
 export const ROOT_MCP_DISCOVERY_PATH =
   "/.well-known/oauth-protected-resource" as const;
 export const MCP_DISCOVERY_PATH =
@@ -29,6 +42,8 @@ export const MCP_DOCUMENTS_DISCOVERY_PATH =
   `/.well-known/oauth-protected-resource${MCP_DOCUMENTS_HTTP_PATH}` as const;
 export const MCP_ANONYMIZED_DISCOVERY_PATH =
   `/.well-known/oauth-protected-resource${MCP_ANONYMIZED_HTTP_PATH}` as const;
+export const MCP_LAW_DISCOVERY_PATH =
+  `/.well-known/oauth-protected-resource${MCP_LAW_HTTP_PATH}` as const;
 
 export const MCP_RESOURCE_MODE_CONFIG = {
   default: {
@@ -49,6 +64,12 @@ export const MCP_RESOURCE_MODE_CONFIG = {
     resourceName: "Stella MCP anonymized",
     resourceScopes: MCP_ANONYMIZED_RESOURCE_SCOPES,
   },
+  law: {
+    discoveryPath: MCP_LAW_DISCOVERY_PATH,
+    httpPath: MCP_LAW_HTTP_PATH,
+    resourceName: "Stella MCP law",
+    resourceScopes: MCP_LAW_RESOURCE_SCOPES,
+  },
 } as const;
 
 export type McpMode = keyof typeof MCP_RESOURCE_MODE_CONFIG;
@@ -57,6 +78,7 @@ export const MCP_MODES = [
   "default",
   "documents",
   "anonymized",
+  "law",
 ] as const satisfies readonly McpMode[];
 
 type MissingMcpMode = Exclude<McpMode, (typeof MCP_MODES)[number]>;

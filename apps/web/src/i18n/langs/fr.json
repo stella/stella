@@ -3973,6 +3973,8 @@
       "mcpAnonymizedLabel": "Point de terminaison anonymisé",
       "mcpAnonymizedNote": "Un point de terminaison anonymisé est également disponible ; il expose les mêmes outils avec les données personnelles masquées.",
       "mcpDescription": "Connectez un client compatible MCP, comme Claude ou Cursor, à votre compte stella à l’aide de cette URL de serveur.",
+      "mcpLawLabel": "Point de terminaison du corpus juridique",
+      "mcpLawNote": "Un point de terminaison du corpus juridique est également disponible ; il expose uniquement la jurisprudence et la législation publiques et n'accède à aucune donnée des dossiers.",
       "mcpStep1": "Ajoutez l’URL ci-dessus comme connecteur personnalisé ou serveur MCP dans votre client.",
       "mcpStep2": "Connectez-vous lorsque le navigateur vous y invite.",
       "mcpStep3": "Approuvez l’accès sur l’écran de consentement.",

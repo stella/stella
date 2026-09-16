@@ -11,6 +11,8 @@ import {
   MCP_DOCUMENTS_DISCOVERY_PATH,
   MCP_DOCUMENTS_HTTP_PATH,
   MCP_HTTP_PATH,
+  MCP_LAW_DISCOVERY_PATH,
+  MCP_LAW_HTTP_PATH,
   MCP_STATELESS_ALLOW_HEADER,
   ROOT_MCP_DISCOVERY_PATH,
   STELLA_API_CONTRACT,
@@ -86,6 +88,19 @@ describe("MCP protected resource discovery routes", () => {
     expect(await response.json()).toEqual(
       getMcpProtectedResourceMetadata("documents"),
     );
+  });
+
+  test("serves the two read scopes from the law path", async () => {
+    const response = await mcpRoute.handle(
+      new Request(`http://localhost${MCP_LAW_DISCOVERY_PATH}`),
+    );
+
+    expect(response.status).toBe(200);
+    const metadata = await response.json();
+    expect(metadata).toEqual(getMcpProtectedResourceMetadata("law"));
+    expect(metadata).toMatchObject({
+      scopes_supported: ["stella:search", "stella:read"],
+    });
   });
 
   test("answers CORS preflight requests on the root compatibility path", async () => {
@@ -206,6 +221,30 @@ describe("MCP protected resource discovery routes", () => {
     ]);
   });
 
+  test("forwards law MCP HTTP methods with law mode", async () => {
+    const calls: { method: string; mode: string | undefined }[] = [];
+    const route = createMcpRoute({
+      handleMcpHttpRequest: async (request, options) => {
+        calls.push({ method: request.method, mode: options?.mode });
+        return new Response("ok");
+      },
+    });
+
+    for (const method of ["OPTIONS", "GET", "POST", "DELETE"]) {
+      const response = await route.handle(
+        new Request(`http://localhost${MCP_LAW_HTTP_PATH}`, { method }),
+      );
+      expect(response.status).toBe(200);
+    }
+
+    expect(calls).toEqual([
+      { method: "OPTIONS", mode: "law" },
+      { method: "GET", mode: "law" },
+      { method: "POST", mode: "law" },
+      { method: "DELETE", mode: "law" },
+    ]);
+  });
+
   test("owns the preflight for every MCP path ahead of the global CORS layer", async () => {
     const transportPreflight = handleMcpPreflightRequest(
       new Request(`http://localhost${MCP_HTTP_PATH}`, { method: "OPTIONS" }),
@@ -274,6 +313,7 @@ describe("MCP protected resource discovery routes", () => {
       MCP_HTTP_PATH,
       MCP_DOCUMENTS_HTTP_PATH,
       MCP_ANONYMIZED_HTTP_PATH,
+      MCP_LAW_HTTP_PATH,
     ]) {
       for (const method of ["PATCH", "PUT"]) {
         const response = await route.handle(

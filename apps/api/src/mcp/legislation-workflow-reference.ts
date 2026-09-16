@@ -1,6 +1,11 @@
 import type { McpToolName } from "@/api/lib/api-handlers";
 import { PROVISION_READ_STATUSES } from "@/api/lib/legal-search/legislation-provision-vocabulary";
 import { LIMITS } from "@/api/lib/limits";
+import type { McpMode } from "@/api/mcp/constants";
+import {
+  listStaticMcpToolDefinitions,
+  MCP_STATIC_TOOL_NAMES,
+} from "@/api/mcp/static-tool-definitions";
 
 /**
  * The order to drive the stella legislation corpus in. The tool descriptions
@@ -14,6 +19,11 @@ import { LIMITS } from "@/api/lib/limits";
  * number is rendered from the limit the code enforces, so a rename or a
  * re-bound limit is a compile error here rather than prose that has quietly
  * stopped being true.
+ *
+ * The document is rendered per audience. Which tools a section names is read
+ * off the rendered text against the registry, never declared beside it, and a
+ * section survives only where the surface lists every tool it names: no
+ * audience is pointed at a tool its own `tools/list` does not carry.
  */
 
 /**
@@ -25,9 +35,9 @@ export const LEGISLATION_WORKFLOW_REFERENCE_URI =
   "stella://reference/legislation-workflow";
 
 /**
- * The tools the procedure below names. Typed against the registry union, and
- * asserted present in the rendered text by `resources.test.ts`, so neither
- * half can drift from the other.
+ * Every tool the procedure below can name. Typed against the registry union,
+ * and asserted present in the default-surface text by `resources.test.ts`, so
+ * neither half can drift from the other.
  */
 const TOOL = {
   searchLegislation: "search_legislation",
@@ -49,14 +59,14 @@ const {
   searchLegislation: SEARCH_LEGISLATION,
 } = TOOL;
 
-type WorkflowStep = {
-  /** Short label shown as the step heading. */
+type ReferenceSection = {
+  /** Short label shown as the step or fact heading. */
   title: string;
   /** What to call, with the inputs and response fields that matter. */
   detail: string;
 };
 
-const WORKFLOW_STEPS: readonly WorkflowStep[] = [
+const WORKFLOW_STEPS: readonly ReferenceSection[] = [
   {
     title: "Find the act",
     detail:
@@ -126,7 +136,7 @@ const WORKFLOW_STEPS: readonly WorkflowStep[] = [
   },
 ];
 
-const FACTS = [
+const FACTS: readonly ReferenceSection[] = [
   {
     title: "The corpus is not every jurisdiction",
     detail:
@@ -155,17 +165,77 @@ const FACTS = [
       "BOE identifiers (`BOE-A-1889-4763`) and YYYYMMDD dates. It is not " +
       "part of this corpus, and its ids are not ELIs.",
   },
-] as const;
+];
 
-const renderStep = ({ detail, title }: WorkflowStep, index: number): string =>
-  `${index + 1}. ${title}. ${detail}`;
+/**
+ * A multi-word snake_case token is what reads as a tool name to an agent, and
+ * it is the same shape `resources.test.ts` scans this prose for. Single-word
+ * registry names (`search`, `fetch`) are deliberately out of scope: they are
+ * ordinary English words, and matching them here would read "no as-of filter
+ * on the search" as naming a tool.
+ */
+const TOOL_NAME_TOKEN = /\b[a-z][a-z0-9]*(?:_[a-z0-9]+)+\b/gu;
 
-const renderFact = (fact: { title: string; detail: string }): string =>
-  `- ${fact.title}: ${fact.detail}`;
+const REGISTRY_TOOL_NAMES: ReadonlySet<string> = new Set(MCP_STATIC_TOOL_NAMES);
 
-/** Build the legislation-workflow reference text. */
-export const buildLegislationWorkflowReference = (): string =>
-  [
+/** Every registry tool the text names, read off the text itself. */
+const namedToolNames = (text: string): readonly string[] => [
+  ...new Set(
+    [...text.matchAll(TOOL_NAME_TOKEN)]
+      .map(([token]) => token)
+      .filter((token) => REGISTRY_TOOL_NAMES.has(token)),
+  ),
+];
+
+const isServedOnSurface = (
+  { detail, title }: ReferenceSection,
+  listedToolNames: ReadonlySet<string>,
+): boolean =>
+  namedToolNames(`${title}. ${detail}`).every((toolName) =>
+    listedToolNames.has(toolName),
+  );
+
+const renderStep = (
+  { detail, title }: ReferenceSection,
+  index: number,
+): string => `${index + 1}. ${title}. ${detail}`;
+
+const renderFact = ({ detail, title }: ReferenceSection): string =>
+  `- ${title}: ${detail}`;
+
+const listedToolNamesFor = (mode: McpMode): ReadonlySet<string> =>
+  new Set(listStaticMcpToolDefinitions(mode).map(({ name }) => name));
+
+const servedWorkflowSteps = (mode: McpMode): readonly ReferenceSection[] => {
+  const listedToolNames = listedToolNamesFor(mode);
+  return WORKFLOW_STEPS.filter((step) =>
+    isServedOnSurface(step, listedToolNames),
+  );
+};
+
+/**
+ * Whether this audience can drive any part of the corpus at all. A workflow
+ * document whose every step was filtered out is not a reference, so the
+ * resource is not served there rather than shipping a title and no procedure.
+ */
+export const hasLegislationWorkflowContent = (mode: McpMode): boolean =>
+  servedWorkflowSteps(mode).length > 0;
+
+/**
+ * Build the legislation-workflow reference text for one audience: only the
+ * steps and facts whose tools that surface lists, and the feedback line only
+ * where the feedback tool is reachable.
+ */
+export const buildLegislationWorkflowReference = (
+  mode: McpMode = "default",
+): string => {
+  const listedToolNames = listedToolNamesFor(mode);
+  const steps = servedWorkflowSteps(mode);
+  const facts = FACTS.filter((fact) =>
+    isServedOnSurface(fact, listedToolNames),
+  );
+
+  return [
     "stella legislation workflow (search, read as of a date, read provisions, follow amendments)",
     "",
     "The order to call things in. The corpus holds consolidated statutes: " +
@@ -175,14 +245,23 @@ export const buildLegislationWorkflowReference = (): string =>
       "steps.",
     "",
     "Procedure:",
-    WORKFLOW_STEPS.map(renderStep).join("\n"),
-    "",
-    "Facts that are easy to get wrong:",
-    FACTS.map(renderFact).join("\n"),
+    steps.map(renderStep).join("\n"),
+    ...(facts.length === 0
+      ? []
+      : [
+          "",
+          "Facts that are easy to get wrong:",
+          facts.map(renderFact).join("\n"),
+        ]),
     "",
     "Errors: a failed tool returns one text content of " +
       '`{"error":{"code","message","hint"}}` with isError set. Read `hint`: ' +
       "it names the next call.",
-    "",
-    `Something missing or wrong here? Prepare a report with ${PREPARE_FEEDBACK}.`,
+    ...(listedToolNames.has(PREPARE_FEEDBACK)
+      ? [
+          "",
+          `Something missing or wrong here? Prepare a report with ${PREPARE_FEEDBACK}.`,
+        ]
+      : []),
   ].join("\n");
+};

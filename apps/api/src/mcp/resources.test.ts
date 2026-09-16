@@ -8,6 +8,7 @@ import { MCP_APP_RESOURCE_MIME_TYPE } from "@stll/api-contract";
 import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
 import { LIMITS } from "@/api/lib/limits";
+import { MCP_MODES } from "@/api/mcp/constants";
 import { DOCUMENT_UPLOAD_APP_RESOURCE_URI } from "@/api/mcp/document-file-upload";
 import {
   buildLegislationWorkflowReference,
@@ -16,6 +17,7 @@ import {
 import { listMcpResources, readMcpResource } from "@/api/mcp/resources";
 import {
   DEFAULT_MCP_TOOL_DEFINITIONS,
+  listStaticMcpToolDefinitions,
   MCP_STATIC_TOOL_NAMES,
 } from "@/api/mcp/static-tool-definitions";
 import { buildFieldReference } from "@/api/mcp/template-field-reference";
@@ -56,8 +58,8 @@ describe("MCP resources", () => {
     expect(MCP_APP_RESOURCE_MIME_TYPE).toBe(RESOURCE_MIME_TYPE);
   });
 
-  test("lists the public static resources in every mode", () => {
-    for (const mode of ["default", "documents", "anonymized"] as const) {
+  test("lists the public static resources on every matter-bearing surface", () => {
+    for (const mode of ["default", "anonymized"] as const) {
       const resources = listMcpResources(mode);
       const uris = resources.map((resource) => resource.uri);
       expect(uris).toContain(PRODUCT_IDENTITY_URI);
@@ -66,8 +68,58 @@ describe("MCP resources", () => {
       expect(uris).toContain(WORKFLOW_REFERENCE_URI);
       expect(uris).toContain(LEGISLATION_WORKFLOW_REFERENCE_URI);
       // The reference documents are static, public, and tenant-independent, so
-      // the set is identical across modes.
+      // the set is identical across these modes.
       expect(uris).toEqual(listMcpResources("default").map((r) => r.uri));
+    }
+  });
+
+  test("the documents surface drops the reference it cannot drive", () => {
+    // The documents audience lists no corpus tool, so every procedure step
+    // filters out and the document would be a title with no procedure.
+    const uris = listMcpResources("documents").map((resource) => resource.uri);
+    expect(uris).not.toContain(LEGISLATION_WORKFLOW_REFERENCE_URI);
+    expect(uris).toEqual(
+      listMcpResources("default")
+        .map((resource) => resource.uri)
+        .filter((uri) => uri !== LEGISLATION_WORKFLOW_REFERENCE_URI),
+    );
+  });
+
+  test("the law surface lists only the identity and the corpus workflow", () => {
+    expect(listMcpResources("law").map((resource) => resource.uri)).toEqual([
+      PRODUCT_IDENTITY_URI,
+      LEGISLATION_WORKFLOW_REFERENCE_URI,
+    ]);
+  });
+
+  test("the law surface reads exactly what it lists", async () => {
+    for (const uri of [
+      PRODUCT_IDENTITY_URI,
+      LEGISLATION_WORKFLOW_REFERENCE_URI,
+    ]) {
+      const result = await readMcpResource(uri, "law");
+      expect(result.contents.at(0)?.uri).toBe(uri);
+    }
+
+    // A reference for a workflow this surface carries no tool for is context an
+    // agent pays for and cannot use, so the read refuses it like any unknown
+    // uri rather than serving something unlisted.
+    for (const uri of [
+      MARKER_REFERENCE_URI,
+      FIELD_REFERENCE_URI,
+      WORKFLOW_REFERENCE_URI,
+      DOCUMENT_UPLOAD_APP_RESOURCE_URI,
+    ]) {
+      let caught: unknown;
+      try {
+        await readMcpResource(uri, "law");
+      } catch (error) {
+        caught = error;
+      }
+      expect(
+        caught,
+        `${uri} must not be readable on the law surface`,
+      ).toBeInstanceOf(ProtocolError);
     }
   });
 
@@ -226,6 +278,67 @@ describe("MCP resources", () => {
         (token) => !registryNames.has(token) && !advertisedValues.has(token),
       ),
     ).toEqual([]);
+  });
+
+  test("the legislation reference names only tools the audience lists", () => {
+    // The reference is copied into model context as the complete contract, so
+    // a step naming a tool the surface does not carry is a dead end. Scanned
+    // the same way the other reference guards in this file scan: a multi-word
+    // snake_case token is what reads as a tool name to an agent.
+    const registryNames = new Set<string>(MCP_STATIC_TOOL_NAMES);
+    const servingModes = MCP_MODES.filter((mode) =>
+      listMcpResources(mode).some(
+        ({ uri }) => uri === LEGISLATION_WORKFLOW_REFERENCE_URI,
+      ),
+    );
+    expect(servingModes).toEqual(["default", "anonymized", "law"]);
+
+    for (const mode of servingModes) {
+      const listed = new Set(
+        listStaticMcpToolDefinitions(mode).map(({ name }) => name),
+      );
+      const unreachable = [
+        ...new Set(
+          [
+            ...buildLegislationWorkflowReference(mode).matchAll(
+              /\b[a-z]+(?:_[a-z]+)+\b/gu,
+            ),
+          ].map(([token]) => token),
+        ),
+      ].filter((token) => registryNames.has(token) && !listed.has(token));
+
+      expect(
+        unreachable,
+        `The ${mode} legislation reference names tools that surface does not list`,
+      ).toEqual([]);
+    }
+  });
+
+  test("the law reference keeps the corpus steps and drops the rest", async () => {
+    const text = buildLegislationWorkflowReference("law");
+
+    for (const name of [
+      "search_legislation",
+      "read_statute",
+      "read_statute_provisions",
+      "read_provision_history",
+    ]) {
+      expect(text, `${name} is served on the law surface`).toContain(name);
+    }
+    // The live upstream connector and the feedback tool are not on this
+    // surface, so their step and the report line are not rendered.
+    expect(text).not.toContain("search_boe_legislation");
+    expect(text).not.toContain("prepare_feedback");
+
+    const result = await readMcpResource(
+      LEGISLATION_WORKFLOW_REFERENCE_URI,
+      "law",
+    );
+    const content = result.contents.at(0);
+    if (!content || !("text" in content)) {
+      throw new Error("Expected a text resource content entry");
+    }
+    expect(content.text).toBe(text);
   });
 
   test("every stella:// uri the legislation reference names is a listed resource", () => {

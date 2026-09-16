@@ -1,6 +1,10 @@
 import { useTranslations } from "use-intl";
 
-import { MCP_ANONYMIZED_HTTP_PATH, MCP_HTTP_PATH } from "@stll/api-contract";
+import {
+  MCP_ANONYMIZED_HTTP_PATH,
+  MCP_HTTP_PATH,
+  MCP_LAW_HTTP_PATH,
+} from "@stll/api-contract";
 import { Frame, FramePanel } from "@stll/ui/frame";
 
 import { CopyField } from "@/components/copy-field";
@@ -14,6 +18,7 @@ export const McpServerCard = ({ apiOrigin }: McpServerCardProps) => {
   const baseUrl = apiOrigin.replace(/\/$/u, "");
   const mcpUrl = `${baseUrl}${MCP_HTTP_PATH}`;
   const anonymizedUrl = `${baseUrl}${MCP_ANONYMIZED_HTTP_PATH}`;
+  const lawUrl = `${baseUrl}${MCP_LAW_HTTP_PATH}`;
 
   return (
     <Frame>
@@ -36,6 +41,13 @@ export const McpServerCard = ({ apiOrigin }: McpServerCardProps) => {
         <CopyField
           label={t("settings.connections.mcpAnonymizedLabel")}
           value={anonymizedUrl}
+        />
+        <p className="text-muted-foreground text-sm">
+          {t("settings.connections.mcpLawNote")}
+        </p>
+        <CopyField
+          label={t("settings.connections.mcpLawLabel")}
+          value={lawUrl}
         />
         <ol className="text-muted-foreground list-decimal space-y-1 ps-4 text-sm">
           <li>{t("settings.connections.mcpStep1")}</li>

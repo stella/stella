@@ -1164,6 +1164,48 @@ describe("OpenAI-compatible MCP tools", () => {
     ]);
   });
 
+  test("lists exactly the public corpus tools in law mode", async () => {
+    // The audience exists so an orchestrator can take a short, stable tool
+    // list: seven public-corpus reads, in registry order, and nothing else.
+    expect(
+      (await listMcpTools(createContext(), "law")).map((tool) => tool.name),
+    ).toEqual([
+      "search_case_law",
+      "read_case_law_decision",
+      "read_case_law_citations",
+      "search_legislation",
+      "read_statute",
+      "read_statute_provisions",
+      "read_provision_history",
+    ]);
+  });
+
+  test("law mode resolves no write tool and no capability tool", async () => {
+    for (const toolName of [
+      "invoke_capability",
+      "list_capabilities",
+      "create_document",
+      "search_boe_legislation",
+      "prepare_feedback",
+    ]) {
+      expect(
+        await getMcpToolDefinition(toolName, createContext(), "law"),
+        `${toolName} must not resolve on the law surface`,
+      ).toBeUndefined();
+    }
+  });
+
+  test("law mode keeps the corpus tools on their unremapped read scopes", async () => {
+    expect(
+      (await getMcpToolDefinition("search_case_law", createContext(), "law"))
+        ?.scope,
+    ).toBe("stella:search");
+    expect(
+      (await getMcpToolDefinition("read_statute", createContext(), "law"))
+        ?.scope,
+    ).toBe("stella:read");
+  });
+
   describe("lookup_business_registry org narrowing", () => {
     const registryTool = async (context: McpRequestContext) =>
       (await listMcpTools(context)).find(
@@ -5875,6 +5917,26 @@ describe("OpenAI-compatible MCP tools", () => {
       message: "Unknown tool: not_a_real_tool",
       hint: "Call tools/list for the tools available to this session.",
     });
+  });
+
+  test("law mode answers a write or capability call with unknown_tool", async () => {
+    // Not `feature_disabled`: the surface never advertised these, so the
+    // registry's standard miss is the honest answer and the hint points the
+    // agent back at tools/list.
+    for (const toolName of ["invoke_capability", "create_document"]) {
+      const result = await handleMcpToolCall({
+        args: {},
+        context: createContext(),
+        mode: "law",
+        toolName,
+      });
+
+      expectErrorEnvelope(result, {
+        code: "unknown_tool",
+        message: `Unknown tool: ${toolName}`,
+        hint: "Call tools/list for the tools available to this session.",
+      });
+    }
   });
 
   test("documents mode admits only the canonical version-upload lifecycle", async () => {

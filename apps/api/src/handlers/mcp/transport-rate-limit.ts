@@ -9,6 +9,7 @@ import {
   MCP_ANONYMIZED_HTTP_PATH,
   MCP_DOCUMENTS_HTTP_PATH,
   MCP_HTTP_PATH,
+  MCP_LAW_HTTP_PATH,
 } from "@/api/mcp/constants";
 
 const MCP_TRANSPORT_RATE_LIMIT_SCOPE = "mcp-transport";
@@ -18,6 +19,7 @@ const MCP_TRANSPORT_PATHS: ReadonlySet<string> = new Set([
   MCP_ANONYMIZED_HTTP_PATH,
   MCP_DOCUMENTS_HTTP_PATH,
   MCP_HTTP_PATH,
+  MCP_LAW_HTTP_PATH,
 ]);
 
 /**

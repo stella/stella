@@ -4,12 +4,15 @@ import { CAPABILITY_TOOL_SET } from "@/api/mcp/capability-tools";
 import {
   MCP_ANONYMIZED_RESOURCE_SCOPES,
   MCP_DEFAULT_RESOURCE_SCOPES,
+  MCP_LAW_RESOURCE_SCOPES,
 } from "@/api/mcp/constants";
 import { DOCUMENT_TOOL_SET } from "@/api/mcp/document-tools";
 import {
   ANONYMIZED_MCP_TOOL_DEFINITIONS,
   DEFAULT_MCP_TOOL_DEFINITIONS,
   DOCUMENTS_MCP_TOOL_DEFINITIONS,
+  LAW_MCP_TOOL_DEFINITIONS,
+  LAW_MCP_TOOL_DISPOSITION,
 } from "@/api/mcp/static-tool-definitions";
 import type { McpToolDefinition, ToolScope } from "@/api/mcp/tool-types";
 
@@ -109,6 +112,62 @@ describe("MCP tool registry", () => {
           toolName === "invoke_capability",
       ).toBe(true);
     }
+  });
+
+  test("every public-corpus tool carries a law-audience disposition", () => {
+    const definitions: readonly McpToolDefinition[] =
+      DEFAULT_MCP_TOOL_DEFINITIONS;
+    const publicLawNames = definitions
+      .filter(
+        (tool) =>
+          tool.feature === "FEATURE_PUBLIC_LAW" &&
+          tool.anonymized.exposure === "passthrough",
+      )
+      .map((tool) => tool.name);
+
+    // The disposition map's `satisfies Record<PublicLawToolName, ...>` is the
+    // real gate, but it goes vacuous if that union ever resolves to `never`
+    // (`Record<never, T>` accepts anything), so the census also runs here.
+    expect(publicLawNames.length).toBeGreaterThan(0);
+    expect(Object.keys(LAW_MCP_TOOL_DISPOSITION).sort()).toEqual(
+      [...publicLawNames].sort(),
+    );
+  });
+
+  test("law projection is the public corpus in registry order", () => {
+    expect(LAW_MCP_TOOL_DEFINITIONS.map((tool) => tool.name)).toEqual([
+      "search_case_law",
+      "read_case_law_decision",
+      "read_case_law_citations",
+      "search_legislation",
+      "read_statute",
+      "read_statute_provisions",
+      "read_provision_history",
+    ]);
+  });
+
+  test("every law tool is a read of the gated public corpus", () => {
+    const definitions: readonly McpToolDefinition[] = LAW_MCP_TOOL_DEFINITIONS;
+    for (const tool of definitions) {
+      expect(tool.access, `${tool.name} is not a read`).toBe("read");
+      expect(tool.feature, `${tool.name} is not corpus-gated`).toBe(
+        "FEATURE_PUBLIC_LAW",
+      );
+      // Passthrough is what "carries no tenant or personal text" means in the
+      // registry, and it is why this surface needs no egress redaction.
+      expect(tool.anonymized.exposure, `${tool.name} is not passthrough`).toBe(
+        "passthrough",
+      );
+      expect(tool.additionalScopes).toBeUndefined();
+    }
+  });
+
+  test("advertises exactly the scopes the law projection uses", () => {
+    const projectedScopes = [
+      ...new Set(LAW_MCP_TOOL_DEFINITIONS.map((tool) => tool.scope)),
+    ].sort();
+
+    expect(projectedScopes).toEqual([...MCP_LAW_RESOURCE_SCOPES].sort());
   });
 
   test("tool names are unique across the registry", () => {
