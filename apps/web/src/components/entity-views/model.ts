@@ -38,7 +38,7 @@ export const entryId = (entry: EntityViewEntry) =>
 export const entryMatterId = (entry: EntityViewEntry) =>
   entry.type === "entity" ? entry.workspaceId : entry.signal.workspaceId;
 
-export const entryKind = (entry: EntityViewEntry) => {
+const entryKind = (entry: EntityViewEntry) => {
   if (entry.type === "entity") {
     return entry.entity.kind;
   }

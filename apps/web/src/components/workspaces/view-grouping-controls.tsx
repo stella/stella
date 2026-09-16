@@ -28,7 +28,7 @@ import { isPlaybookVerdictProperty } from "@/lib/workspaces/playbook-verdicts";
 
 const GROUP_BY_NONE_VALUE = "_none";
 
-export type AdditionalViewGroup = { id: string; label: string };
+type AdditionalViewGroup = { id: string; label: string };
 const EMPTY_ADDITIONAL_GROUPS: readonly AdditionalViewGroup[] = [];
 
 type GroupByControlProps = {
