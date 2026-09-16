@@ -40,7 +40,7 @@ export const CaseDecisionDetailsInspectorView = ({
         label={tab.label}
         onClose={onClose}
       />
-      <ScrollArea className="min-h-0 flex-1">
+      <ScrollArea axis="vertical" className="min-h-0 flex-1">
         <div className="px-4 py-4 font-sans">
           {/* The header names the decision; repeating it above the facts
               would say the same thing twice on a bounded width. */}

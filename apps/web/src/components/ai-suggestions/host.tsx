@@ -611,7 +611,10 @@ export const SuggestionStepper = ({
       className={cn(
         DOC_FLOAT_SURFACE_CLASS,
         OVERLAY_LAYER_CLASS_NAMES["chrome-raised"],
-        "border-foreground/15 absolute start-1/2 bottom-26 flex -translate-x-1/2 items-center gap-1 rounded-full border px-1.5 py-1 shadow-[0_0_0_1px_rgb(0_0_0/0.02),0_1px_2px_rgb(0_0_0/0.03),0_8px_20px_rgb(0_0_0/0.05)]",
+        // Centred on the host and shrink-to-fit, so in a 320px pane a verbose
+        // locale's labels would spill past both edges: the row wraps and the
+        // counter gives up its floor instead.
+        "border-foreground/15 absolute start-1/2 bottom-26 flex max-w-[calc(100%-1rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-1 rounded-full border px-1.5 py-1 shadow-[0_0_0_1px_rgb(0_0_0/0.02),0_1px_2px_rgb(0_0_0/0.03),0_8px_20px_rgb(0_0_0/0.05)]",
       )}
     >
       <Button

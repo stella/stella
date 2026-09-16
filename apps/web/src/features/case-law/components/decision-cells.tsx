@@ -632,6 +632,11 @@ const HighlightedPassage = ({
   <p
     className={cn(
       SUMMARY_TEXT_CLASS_NAME,
+      // The grid cell sets `whitespace-nowrap` for the scannable columns, so
+      // a passage that does not turn it back off is one long line clipped at
+      // the cell's edge, and the clamp below has a single line to count.
+      // `wrap-break-word` keeps an unbroken citation inside the cell.
+      "wrap-break-word whitespace-normal",
       decisionClampClassName(contentMode),
       SEARCH_MARK_DESCENDANT_CLASS_NAME,
     )}

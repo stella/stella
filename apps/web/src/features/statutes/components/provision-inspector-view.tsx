@@ -136,7 +136,7 @@ export const ProvisionInspectorView = ({
       {/* The bar floats over the provision the way it floats over a PDF page;
           the scroll area below it moves, the corner does not. */}
       <LegalReaderAIChat activeLegal={activeLegal} className="min-h-0 flex-1">
-        <ScrollArea className="h-full">
+        <ScrollArea axis="vertical" className="h-full">
           {/* The gutter and the trailing room the composer needs belong to the
               column; the text root inside it carries the reader's own scale. */}
           <div data-slot="reader-document-column">

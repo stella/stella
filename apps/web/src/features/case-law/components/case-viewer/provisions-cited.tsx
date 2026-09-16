@@ -269,8 +269,11 @@ const ProvisionRowItem = ({
   const count = provision.occurrences.length;
 
   return (
-    <li className={cn("flex flex-col", showPassages && "basis-full")}>
-      <span className="flex items-baseline gap-1.5 whitespace-nowrap">
+    <li className={cn("flex min-w-0 flex-col", showPassages && "basis-full")}>
+      {/* A full reference ("§ 2958 odst. 1 písm. b) bod 2 věta druhá") is
+          wider than the inspector's reading column, so the row wraps at its
+          spaces instead of scrolling the pane sideways. */}
+      <span className="flex min-w-0 flex-wrap items-baseline gap-1.5">
         {linkTarget === null ? (
           <span className="text-foreground-strong-muted text-xs">{label}</span>
         ) : (
