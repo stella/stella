@@ -19,7 +19,7 @@ import {
   PENDING_SOURCE_FIELD_INVENTORY,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type { SourceAdapter } from "@/api/handlers/case-law/ingestion/adapter";
-import { czNsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
+import { czRegionalAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-regional";
 import {
   CASE_LAW_REPLAY_SCOPE,
   countReplayability,
@@ -347,7 +347,7 @@ describe("replay of a source", () => {
 
     const refusedReads: string[] = [];
     const refused = await replayCaseLawSource({
-      adapter: czNsAdapter,
+      adapter: czRegionalAdapter,
       scopedDb,
       sourceId,
       scope: CASE_LAW_REPLAY_SCOPE.SOURCE,
@@ -359,7 +359,7 @@ describe("replay of a source", () => {
 
     expect(refused).toEqual({
       type: "unsupported",
-      adapterKey: czNsAdapter.key,
+      adapterKey: czRegionalAdapter.key,
     });
     expect(refusedReads).toEqual([]);
 

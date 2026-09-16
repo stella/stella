@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 /* eslint-disable typescript-eslint/promise-function-async -- fetch mock callbacks return Promise.resolve without being async */
 import {
   afterAll,
@@ -9,6 +10,9 @@ import {
   test,
 } from "bun:test";
 
+import { isDecisionIdentifier } from "@stll/legal-ast/decision-identifier";
+
+import { caseLawDecisions } from "@/api/db/schema";
 import {
   listingIdentityKey,
   parseListingIdentityKey,
@@ -23,6 +27,10 @@ import {
 import type { CzNsListingRow } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
 import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
 import { hashContent } from "@/api/handlers/case-law/ingestion/adapters/utils";
+import {
+  citationKeyOf,
+  decisionIdentifiersFromMetadata,
+} from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { tipWindowSlices } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
 import {
   TEXT_ABSENCE_REASON,
@@ -53,8 +61,6 @@ const DOCKET = {
   SUFFIXED: "21 Cdo 288/2026- III.",
   /** Two dockets in one anchor, with the publisher's own separator markup. */
   CO_SETTLED: "22 Cdo 807/2025<br />22 ND 148/2025",
-  /** Those two dockets as the single case number the store holds. */
-  CO_SETTLED_JOINED: "22 Cdo 807/2025, 22 ND 148/2025",
 } as const;
 
 /** The anchor the search view prints for one result row. */
@@ -459,11 +465,108 @@ describe("cz-ns listSlicePage", () => {
 
     expect(listed.items.map(({ payload }) => payload)).toEqual([
       { unid: UNID.FIRST, caseNumber: DOCKET.FIRST },
-      { unid: UNID.CO_SETTLED, caseNumber: DOCKET.CO_SETTLED_JOINED },
+      {
+        unid: UNID.CO_SETTLED,
+        caseNumber: "22 Cdo 807/2025",
+        additionalCaseNumbers: ["22 ND 148/2025"],
+      },
     ]);
     expect(listed.items.map(({ identity }) => identity)).toEqual([
       { type: "document", sourceDocumentId: UNID.FIRST },
       { type: "document", sourceDocumentId: UNID.CO_SETTLED },
+    ]);
+  });
+
+  test("preserves every co-settled docket across listing, parked payloads and direct builds", async () => {
+    const storageLimits = [
+      caseLawDecisions.citationKey.length,
+      caseLawDecisions.caseNumber.length,
+    ];
+    for (const size of [1, 10, 24]) {
+      const dockets = Array.from(
+        { length: size },
+        (_, index) => `30 Cdo ${String(index + 1)}/2025`,
+      );
+      const joined = dockets.join(", ");
+      if (size > 1) {
+        const limit = storageLimits.at(size === 10 ? 0 : 1);
+        expect(limit).toBeDefined();
+        expect(joined.length).toBeGreaterThan(
+          limit ?? Number.POSITIVE_INFINITY,
+        );
+      }
+      mockFetch({
+        listing: {
+          body: listingPageHtml({
+            rows: [[UNID.CO_SETTLED, dockets.join("<br />")]],
+          }),
+        },
+      });
+      const listed = await listSlice("2026-06-10");
+      expect(listed.items).toHaveLength(1);
+      const item = listed.items.at(0);
+      expect(item?.identity).toEqual({
+        type: "document",
+        sourceDocumentId: UNID.CO_SETTLED,
+      });
+      const persistedPayload = JSON.stringify(item?.payload);
+      const parked: unknown = JSON.parse(persistedPayload);
+      const legacy = { unid: UNID.CO_SETTLED, caseNumber: joined };
+      const builds = [
+        await reconciliation.buildDecision(parked),
+        await reconciliation.buildDecision(legacy),
+        await buildCzNsDecision(legacy),
+      ];
+      for (const built of builds) {
+        expect(built.type).toBe("built");
+        if (built.type !== "built") {
+          continue;
+        }
+        expect(dockets.at(0)).toBe(built.decision.caseNumber);
+        const identifiers = decisionIdentifiersFromMetadata({
+          caseNumber: built.decision.caseNumber,
+          identifiers: built.decision.identifiers,
+        });
+        expect(identifiers.map(({ value }) => value)).toEqual(dockets);
+        expect(identifiers.every(isDecisionIdentifier)).toBe(true);
+        expect(built.decision.metadata["additionalCaseNumbers"] ?? []).toEqual(
+          dockets.slice(1),
+        );
+        expect(built.decision.sourceDocumentId).toBe(UNID.CO_SETTLED);
+        expect(built.decision.caseNumber.length).toBeLessThanOrEqual(
+          caseLawDecisions.caseNumber.length ?? 0,
+        );
+        const citationKey =
+          citationKeyOf(built.decision.caseNumber) ??
+          panic("Synthetic docket must have a citation key");
+        expect(citationKey.length).toBeLessThanOrEqual(
+          caseLawDecisions.citationKey.length ?? 0,
+        );
+      }
+    }
+  });
+
+  test("co-settled docket aliases converge after duplicate delivery and JSON replay", async () => {
+    mockFetch({});
+    const row = {
+      unid: UNID.CO_SETTLED,
+      caseNumber: DOCKET.FIRST,
+      additionalCaseNumbers: [DOCKET.FIRST, DOCKET.SECOND, DOCKET.SECOND],
+    };
+    const first = await reconciliation.buildDecision(row);
+    const persistedPayload = JSON.stringify(row);
+    const replayed: unknown = JSON.parse(persistedPayload);
+    const second = await reconciliation.buildDecision(replayed);
+    expect(first.type).toBe("built");
+    expect(second).toEqual(first);
+    if (first.type !== "built") {
+      return;
+    }
+    expect(first.decision.identifiers?.map(({ value }) => value)).toEqual([
+      DOCKET.SECOND,
+    ]);
+    expect(first.decision.metadata["additionalCaseNumbers"]).toEqual([
+      DOCKET.SECOND,
     ]);
   });
 
@@ -737,9 +840,31 @@ describe("cz-ns buildDecision", () => {
     expect(decision.metadata["zverejnenoNaWebu"]).toBe("2026-06-10");
     expect(decision.rawHash).toBe(
       hashContent(
-        `${DOCKET.FIRST}|ECLI:CZ:NS:2026:30.CDO.3000.2025.1|Nejvyšší soud|28. 5. 2026|2026-06-10`,
+        `${JSON.stringify([DOCKET.FIRST])}|ECLI:CZ:NS:2026:30.CDO.3000.2025.1|Nejvyšší soud|28. 5. 2026|2026-06-10`,
       ),
     );
+  });
+
+  test("alias-only publisher changes move the source hash", async () => {
+    mockFetch({ printStatus: 404 });
+    const hashes: string[] = [];
+    for (const additionalCaseNumbers of [
+      undefined,
+      [DOCKET.SECOND],
+      [DOCKET.SECOND, DOCKET.SUFFIXED],
+      [DOCKET.SUFFIXED, DOCKET.SECOND],
+    ]) {
+      const built = await reconciliation.buildDecision({
+        unid: UNID.FIRST,
+        caseNumber: DOCKET.FIRST,
+        additionalCaseNumbers,
+      });
+      expect(built.type).toBe("built");
+      if (built.type === "built") {
+        hashes.push(built.decision.rawHash);
+      }
+    }
+    expect(new Set(hashes).size).toBe(4);
   });
 
   test("a detail page that does not come back is reported, never written", async () => {
@@ -769,6 +894,13 @@ describe("cz-ns buildDecision", () => {
       "05D11F4FB3ACC585C1258E27004D2F09",
       { unid: UNID.FIRST },
       { unid: 7, caseNumber: DOCKET.FIRST },
+      ...[null, "another docket", [7], [""], [" "]].map(
+        (additionalCaseNumbers) => ({
+          unid: UNID.FIRST,
+          caseNumber: DOCKET.FIRST,
+          additionalCaseNumbers,
+        }),
+      ),
     ]) {
       expect(await reconciliation.buildDecision(payload)).toEqual({
         type: "unkeyable",
@@ -787,5 +919,129 @@ describe("cz-ns buildDecision", () => {
       }),
     ).toEqual({ type: "unkeyable" });
     expect(requestedUrls).toHaveLength(0);
+  });
+});
+
+describe("cz-ns stored-raw replay", () => {
+  const replay = czNsAdapter.reparseStoredRaw;
+  if (replay === undefined) {
+    throw new TypeError("Expected cz-ns to implement reparseStoredRaw");
+  }
+
+  test("current envelopes rebuild to a fixed point without the network", async () => {
+    mockFetch({ printStatus: 404 });
+    const built = await reconciliation.buildDecision({
+      unid: UNID.CO_SETTLED,
+      caseNumber: DOCKET.FIRST,
+      additionalCaseNumbers: [DOCKET.SECOND],
+    });
+    if (built.type !== "built") {
+      throw new TypeError("Expected the fixture decision to build");
+    }
+    globalThis.fetch = asFetchMock(async () => {
+      throw new Error("a replay must not contact the publisher");
+    });
+
+    const outcome = await replay({
+      raw: new TextEncoder().encode(built.decision.sourceRaw ?? ""),
+      contentType: built.decision.sourceRawContentType ?? null,
+      caseNumber: built.decision.caseNumber,
+      sourceDocumentId: built.decision.sourceDocumentId ?? null,
+      language: built.decision.language,
+      court: built.decision.court,
+      ecli: built.decision.ecli ?? null,
+      decisionDate: built.decision.decisionDate ?? null,
+      decisionType: built.decision.decisionType ?? null,
+      sourceUrl: built.decision.sourceUrl ?? null,
+      documentUrl: built.decision.documentUrl ?? null,
+      metadata: built.decision.metadata,
+    });
+
+    expect(outcome).toEqual({ type: "parsed", result: built.decision });
+  });
+
+  test("legacy joined dockets recover every identity from the saved pages", async () => {
+    globalThis.fetch = asFetchMock(async () => {
+      throw new Error("a replay must not contact the publisher");
+    });
+    const joined = `${DOCKET.FIRST}, ${DOCKET.SECOND}`;
+    const outcome = await replay({
+      raw: new TextEncoder().encode(
+        JSON.stringify({
+          webHtml: detailPageHtml(DOCKET.FIRST),
+          printHtml: "",
+        }),
+      ),
+      contentType: "text/html",
+      caseNumber: joined,
+      sourceDocumentId: UNID.CO_SETTLED,
+      language: "cs",
+      court: "Nejvyšší soud",
+      ecli: null,
+      decisionDate: null,
+      decisionType: null,
+      sourceUrl: null,
+      documentUrl: null,
+      metadata: { caseNumber: joined },
+    });
+
+    expect(outcome.type).toBe("parsed");
+    if (outcome.type !== "parsed") {
+      return;
+    }
+    expect(outcome.result.caseNumber).toBe(DOCKET.FIRST);
+    expect(outcome.result.identifiers?.map(({ value }) => value)).toEqual([
+      DOCKET.SECOND,
+    ]);
+    expect(outcome.result.metadata["additionalCaseNumbers"]).toEqual([
+      DOCKET.SECOND,
+    ]);
+  });
+
+  test("malformed persisted aliases are rejected instead of dropped", async () => {
+    const outcome = await replay({
+      raw: new Uint8Array(),
+      contentType: "text/html",
+      caseNumber: DOCKET.FIRST,
+      sourceDocumentId: UNID.FIRST,
+      language: "cs",
+      court: "Nejvyšší soud",
+      ecli: null,
+      decisionDate: null,
+      decisionType: null,
+      sourceUrl: null,
+      documentUrl: null,
+      metadata: { additionalCaseNumbers: [DOCKET.SECOND, 7] },
+    });
+
+    expect(outcome).toEqual({
+      type: "rejected",
+      rejection: "incomplete-metadata",
+      detail: "stored additional case numbers are malformed",
+    });
+  });
+
+  test("a historical source URL is not reinterpreted as a Domino id", async () => {
+    const outcome = await replay({
+      raw: new Uint8Array(),
+      contentType: "text/html",
+      caseNumber: DOCKET.FIRST,
+      sourceDocumentId:
+        "https://rozhodnuti.nsoud.cz/Judikatura/judikatura_ns.nsf/WebSearch/record",
+      language: "cs",
+      court: "Nejvyšší soud",
+      ecli: null,
+      decisionDate: null,
+      decisionType: null,
+      sourceUrl: null,
+      documentUrl: null,
+      metadata: {},
+    });
+
+    expect(outcome).toEqual({
+      type: "rejected",
+      rejection: "identity-mismatch",
+      detail: "stored source document id is not a CZ-NS Domino universal id",
+    });
   });
 });
