@@ -42,3 +42,22 @@ test("rejects mixed image and vector content before export", async ({
     await page.evaluate(async () => await window.runUnsupportedExportCheck()),
   ).toEqual([true, true]);
 });
+
+test("rejects oversized pages and cumulative document rasters", async ({
+  page,
+}) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  expect(
+    await page.evaluate(
+      async () =>
+        await window.runExportLimitCheck({ pageCount: 1, pageSize: 2001 }),
+    ),
+  ).toBe("A page exceeds the anonymized export size limit");
+  // Each page fits the individual limit; only their combined size is excessive.
+  expect(
+    await page.evaluate(
+      async () =>
+        await window.runExportLimitCheck({ pageCount: 5, pageSize: 2000 }),
+    ),
+  ).toBe("The document exceeds the anonymized export size limit");
+});

@@ -10,6 +10,8 @@ import { loadPdfjs } from "@/lib/pdf/pdfjs-loader";
 const EXPORT_SCALE = 2;
 const MASK_PADDING_PT = 1;
 const MAX_PAGE_PIXELS = 16_000_000;
+// Embedded page images remain in memory until the output PDF is saved.
+const MAX_DOCUMENT_PIXELS = 64_000_000;
 const NO_MASKS: readonly PDFSearchBox[] = [];
 
 export const rasterizeAnonymizedPdf = async (
@@ -25,6 +27,36 @@ export const rasterizeAnonymizedPdf = async (
       const loadingTask = pdfjs.getDocument({ data: buffer.slice(0) });
       try {
         const pdfDocument = await loadingTask.promise;
+        let documentPixels = 0;
+        // Check the complete document before allocating any raster canvases.
+        for (
+          let pageNumber = 1;
+          pageNumber <= pdfDocument.numPages;
+          pageNumber += 1
+        ) {
+          const page = await pdfDocument.getPage(pageNumber);
+          const viewport = page.getViewport({ scale: EXPORT_SCALE });
+          const pagePixels =
+            Math.ceil(viewport.width) * Math.ceil(viewport.height);
+          if (pagePixels > MAX_PAGE_PIXELS) {
+            return Result.err(
+              new ClientOperationError({
+                action: "anonymized-export",
+                message: "A page exceeds the anonymized export size limit",
+              }),
+            );
+          }
+          documentPixels += pagePixels;
+          if (documentPixels > MAX_DOCUMENT_PIXELS) {
+            return Result.err(
+              new ClientOperationError({
+                action: "anonymized-export",
+                message:
+                  "The document exceeds the anonymized export size limit",
+              }),
+            );
+          }
+        }
         const output = PDF.create();
         // Rebuild from masked pixels only: copying source pages would preserve
         // covered text, annotations, attachments, and hidden document metadata.
@@ -48,14 +80,6 @@ export const rasterizeAnonymizedPdf = async (
             );
           }
           const viewport = page.getViewport({ scale: EXPORT_SCALE });
-          if (viewport.width * viewport.height > MAX_PAGE_PIXELS) {
-            return Result.err(
-              new ClientOperationError({
-                action: "anonymized-export",
-                message: "A page exceeds the anonymized export size limit",
-              }),
-            );
-          }
           const canvas = document.createElement("canvas");
           canvas.width = Math.ceil(viewport.width);
           canvas.height = Math.ceil(viewport.height);

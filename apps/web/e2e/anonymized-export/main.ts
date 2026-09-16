@@ -49,6 +49,10 @@ declare global {
   interface Window {
     runAnonymizedExportCheck: () => Promise<AnonymizedExportCheck>;
     runUnsupportedExportCheck: () => Promise<boolean[]>;
+    runExportLimitCheck: (options: {
+      pageCount: number;
+      pageSize: number;
+    }) => Promise<string | null>;
   }
 }
 
@@ -282,4 +286,17 @@ window.runUnsupportedExportCheck = async () => {
     results.push(result.isErr());
   }
   return results;
+};
+
+window.runExportLimitCheck = async ({ pageCount, pageSize }) => {
+  const pdf = PDF.create();
+  for (let index = 0; index < pageCount; index += 1) {
+    pdf.addPage({ width: pageSize, height: pageSize });
+  }
+  const bytes = await pdf.save();
+  const result = await rasterizeAnonymizedPdf(
+    Uint8Array.from(bytes).buffer,
+    new Map(),
+  );
+  return result.isErr() ? result.error.message : null;
 };
