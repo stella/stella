@@ -8,6 +8,7 @@ import { t } from "elysia";
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import {
   CHAT_EDIT_APPLY_MODE,
+  CHAT_CONTINUATION_REJECTED_ERROR_CODE,
   CHAT_RICH_PART_LIMITS,
   CHAT_RUN_MODE,
   CHAT_TURN_INTENT,
@@ -912,6 +913,7 @@ const validateContinuationToolCallIntegrity = ({
 const invalidContinuationToolCall = (): Result<never, HandlerError<400>> =>
   Result.err(
     new HandlerError({
+      code: CHAT_CONTINUATION_REJECTED_ERROR_CODE,
       status: 400,
       message: "Chat continuation does not match its awaited interaction",
     }),

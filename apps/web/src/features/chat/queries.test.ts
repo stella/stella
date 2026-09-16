@@ -8,9 +8,12 @@ import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import type { ReasoningEffort } from "@stll/ai-catalog";
-import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import {
-  API_VALIDATION_ERROR_CODE,
+  CHAT_SEND_MODE,
+  CHAT_TRANSPORT_ERROR_CODE,
+} from "@stll/anonymize-chat";
+import {
+  CHAT_CONTINUATION_REJECTED_ERROR_CODE,
   CHAT_TURN_INTENT,
 } from "@stll/api-contract";
 
@@ -1345,7 +1348,7 @@ describe("chat runtime", () => {
       async () =>
         new Response(
           JSON.stringify({
-            code: API_VALIDATION_ERROR_CODE,
+            code: CHAT_CONTINUATION_REJECTED_ERROR_CODE,
             message: "Chat continuation does not match its awaited interaction",
           }),
           { headers: { "Content-Type": "application/json" }, status: 400 },
@@ -1429,6 +1432,64 @@ describe("chat runtime", () => {
     });
   });
 
+  test("preserves an accepted tool result when post-accept processing is refused", async () => {
+    const threadId = toChatThreadId("thread-accepted-refused-draft-result");
+    const input = {
+      name: "Power of attorney",
+      source: "@doc kind=other locale=en page=A4",
+    };
+    const pendingMessage = {
+      id: "33333333-3333-4333-8333-333333333337",
+      role: "assistant",
+      parts: [
+        {
+          type: "tool-call",
+          id: "tool-accepted-refused-draft",
+          name: "create-document",
+          state: "input-complete",
+          arguments: JSON.stringify(input),
+          input,
+        },
+      ],
+    } as const satisfies PersistedChatMessage;
+    globalThis.fetch = createFetchMock(
+      async () =>
+        new Response(
+          JSON.stringify({
+            code: CHAT_TRANSPORT_ERROR_CODE.thirdPartyBoundaryRefusal,
+            message: "This request cannot cross the configured AI boundary",
+          }),
+          { headers: { "Content-Type": "application/json" }, status: 422 },
+        ),
+    );
+    const runtime = createChatRuntime({
+      context: undefined,
+      initialMessages: [pendingMessage],
+      key: { scope: "global", threadId },
+      onError: () => {},
+      onFinish: () => {},
+    });
+    const output = {
+      success: true,
+      destination: "draft",
+      fileName: "Power of attorney.docx",
+    };
+
+    const result = await Result.tryPromise(async () => {
+      await runtime.addToolResult({
+        tool: "create-document",
+        toolCallId: "tool-accepted-refused-draft",
+        output,
+      });
+    });
+
+    expect(Result.isError(result)).toBe(true);
+    expect(runtime.getSnapshot().messages.at(0)?.parts.at(0)).toMatchObject({
+      state: "complete",
+      output,
+    });
+  });
+
   test("isolates a rejected tool-result attempt from its queued retry", async () => {
     const threadId = toChatThreadId("thread-queued-draft-result-retry");
     const input = {
@@ -1465,7 +1526,7 @@ describe("chat runtime", () => {
         await firstRequestMayFinish;
         return new Response(
           JSON.stringify({
-            code: API_VALIDATION_ERROR_CODE,
+            code: CHAT_CONTINUATION_REJECTED_ERROR_CODE,
             message: "Chat continuation does not match its awaited interaction",
           }),
           { headers: { "Content-Type": "application/json" }, status: 400 },
@@ -2134,7 +2195,7 @@ describe("chat runtime", () => {
       async () =>
         new Response(
           JSON.stringify({
-            code: API_VALIDATION_ERROR_CODE,
+            code: CHAT_CONTINUATION_REJECTED_ERROR_CODE,
             message: "Chat continuation does not match its awaited interaction",
           }),
           { headers: { "Content-Type": "application/json" }, status: 400 },
@@ -2163,7 +2224,7 @@ describe("chat runtime", () => {
     expect(APIError.is(refusal)).toBe(true);
     if (APIError.is(refusal)) {
       expect(refusal.status).toBe(400);
-      expect(refusal.code).toBe(API_VALIDATION_ERROR_CODE);
+      expect(refusal.code).toBe(CHAT_CONTINUATION_REJECTED_ERROR_CODE);
       expect(refusal.rawMessage).toBe(
         "Chat continuation does not match its awaited interaction",
       );

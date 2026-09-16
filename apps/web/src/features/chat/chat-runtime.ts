@@ -12,7 +12,10 @@ import { panic } from "better-result";
 
 import { CHAT_SEND_MODE, isChatSendMode } from "@stll/anonymize-chat";
 import type { ChatSendMode } from "@stll/anonymize-chat";
-import { CHAT_TURN_INTENT } from "@stll/api-contract";
+import {
+  CHAT_CONTINUATION_REJECTED_ERROR_CODE,
+  CHAT_TURN_INTENT,
+} from "@stll/api-contract";
 import type { ChatSendRequest } from "@stll/api-contract";
 
 import type {
@@ -159,7 +162,10 @@ const isRejectedChatContinuation = (error: unknown): boolean => {
   let current = error;
 
   while (current instanceof Error && !visited.has(current)) {
-    if (APIError.is(current)) {
+    if (
+      APIError.is(current) &&
+      current.code === CHAT_CONTINUATION_REJECTED_ERROR_CODE
+    ) {
       return true;
     }
     visited.add(current);

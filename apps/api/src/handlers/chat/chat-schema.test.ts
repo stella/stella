@@ -5,6 +5,7 @@ import * as v from "valibot";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import {
+  CHAT_CONTINUATION_REJECTED_ERROR_CODE,
   CHAT_RICH_PART_LIMITS,
   CHAT_TURN_INTENT,
   resourceRef,
@@ -1075,6 +1076,7 @@ describe("validateMessage", () => {
     if (!(result.error instanceof HandlerError)) {
       return;
     }
+    expect(result.error.code).toBe(CHAT_CONTINUATION_REJECTED_ERROR_CODE);
     expect(result.error.message).toBe(
       "Chat continuation does not match its awaited interaction",
     );
@@ -1312,6 +1314,7 @@ describe("validateMessage", () => {
     if (Result.isOk(rejected)) {
       return;
     }
+    expect(rejected.error.code).toBe(CHAT_CONTINUATION_REJECTED_ERROR_CODE);
     expect(rejected.error.message).toBe(
       "Chat continuation does not match its awaited interaction",
     );
