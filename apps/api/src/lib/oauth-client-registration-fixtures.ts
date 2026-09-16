@@ -26,11 +26,13 @@ type OAuthClientRegistrationFixture = {
   client: string;
   /**
    * Where the body came from: `captured` is evidence from a client in the
-   * wild, `repository` is a body this repository itself sends, and `synthetic`
-   * is a shape the endpoint must accept for which no capture exists yet. It
-   * rides the test name so a failure says whether a real client regressed.
+   * wild, `repository` is a body this repository itself sends, `documented`
+   * is reconstructed from a vendor's published registration constraints
+   * because the payload is not public, and `synthetic` is a shape the endpoint
+   * must accept for which no capture exists yet. It rides the test name so a
+   * failure says whether a real client regressed.
    */
-  origin: "captured" | "repository" | "synthetic";
+  origin: "captured" | "documented" | "repository" | "synthetic";
   body: Record<string, unknown>;
 };
 
@@ -160,6 +162,35 @@ export const OAUTH_CLIENT_REGISTRATION_FIXTURES = {
       scope: "openid profile offline_access",
       software_id: "stella-example-connector",
       token_endpoint_auth_method: "none",
+    },
+  },
+  microsoftEnterpriseTokenStore: {
+    /**
+     * Microsoft 365 Copilot and Copilot Studio register through Microsoft's
+     * Enterprise token store, not from the end user's client, and the exact
+     * payload is not published. This encodes the constraints their
+     * documentation does state (learn.microsoft.com,
+     * plugin-authentication-dynamic-client-registration, updated 2026-08-31):
+     * registration must issue a client secret, because "DCR without a client
+     * secret isn't supported yet"; PKCE is on by default; and the callbacks are
+     * the fixed Teams and Copilot Studio consent hosts. Replace it with a
+     * capture once one exists.
+     *
+     * `token_endpoint_auth_method` is deliberately absent: their side supports
+     * only `client_secret_post` and `client_secret_basic`, and a registrar that
+     * omits the field must land on the provider's confidential-client default
+     * rather than on a public client that can never be issued a secret.
+     */
+    client: "Microsoft 365 Copilot (documented constraints)",
+    origin: "documented",
+    body: {
+      client_name: "Microsoft 365 Copilot (documented constraints)",
+      grant_types: ["authorization_code", "refresh_token"],
+      redirect_uris: [
+        "https://teams.microsoft.com/api/platform/v1.0/oAuthRedirect",
+        "https://global.consent.azure-apim.net/redirect",
+      ],
+      response_types: ["code"],
     },
   },
   mcpInspector: {

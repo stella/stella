@@ -136,6 +136,26 @@ describe("OAuth dynamic client registration", () => {
     expect(registered.software_version).toBe(body.software_version);
   });
 
+  test("issues a client secret to a registrar that states no auth method", async () => {
+    const { body } =
+      OAUTH_CLIENT_REGISTRATION_FIXTURES.microsoftEnterpriseTokenStore;
+    // The default only applies while the request stays silent about it.
+    expect(body).not.toHaveProperty("token_endpoint_auth_method");
+
+    const response = await registerClient(body);
+
+    expect(response.status).toBe(201);
+    const registered = v.parse(
+      v.looseObject({
+        client_id: v.pipe(v.string(), v.minLength(1)),
+        client_secret: v.pipe(v.string(), v.minLength(1)),
+        token_endpoint_auth_method: v.literal("client_secret_basic"),
+      }),
+      await response.json(),
+    );
+    expect(registered.token_endpoint_auth_method).toBe("client_secret_basic");
+  });
+
   test.each(
     Object.values(OAUTH_CLIENT_REGISTRATION_REJECTION_FIXTURES).map(
       (fixture) => [fixture.client, fixture] as const,
