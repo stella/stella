@@ -93,6 +93,7 @@ type MarketingViewRoutes = {
 // mirrors the document into a hidden off-screen ProseMirror layer whose runs
 // carry `.docx-insertion` too, and scrolling that mirror moves nothing.
 const PAINTED_REDLINE_SELECTOR = ".layout-run-text.docx-insertion";
+const EDITOR_RASTER_SETTLE_MS = 1600;
 
 // Folio's painted template-directive overlays in the template studio: the
 // {{ … }} value markers, the {% if %} conditional-section tags, and
@@ -939,6 +940,16 @@ const recordCapture = async ({
     await document.fonts.ready;
   });
   await page.waitForTimeout(450);
+  if (capture.id === "editor" || capture.id === "editor-doc") {
+    // Prepaint the high-DPR scroll path before the marker: cold raster tiles
+    // can leave grey rectangles in the screencast during the first glide.
+    await scrollElementToCenter(page.locator(PAINTED_REDLINE_SELECTOR).first());
+    await page.waitForTimeout(EDITOR_RASTER_SETTLE_MS);
+    await page.screenshot({ scale: "device" });
+    await scrollDocumentTo(page, 0);
+    await page.waitForTimeout(EDITOR_RASTER_SETTLE_MS);
+    await page.screenshot({ scale: "device" });
+  }
 
   // Ready marker: wall-clock deltas cannot be trusted against the screencast
   // timeline (frames only flow once the page paints), so the ready moment is
