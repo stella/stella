@@ -46,9 +46,7 @@ export const generatedToolAnnotations: Readonly<
   read_case_law_decision: {
     command: ["case-law", "read"],
     scope: "read",
-    windowedText: {
-      textPath: "decision.text",
-    },
+    itemsKey: "items",
   },
   read_case_law_citations: {
     command: ["case-law", "citations"],

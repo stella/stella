@@ -1226,7 +1226,7 @@ const CONTRACT_CORPUS = {
   search_case_law: [
     {
       mode: "search",
-      buildArgs: () => ({ country: "CZE", query: "dobré mravy" }),
+      buildArgs: () => ({ country: "CZE", queries: ["dobré mravy"] }),
       setup: () => {
         searchDecisionsHandlerMock.mockResolvedValue({
           facets: null,
@@ -1274,7 +1274,7 @@ const CONTRACT_CORPUS = {
   read_case_law_decision: [
     {
       mode: "read",
-      buildArgs: () => ({ decision_id: uid(54) }),
+      buildArgs: () => ({ decision_ids: [uid(54)] }),
       setup: () => {
         readGatedDecisionWithDocumentMock.mockResolvedValue({
           documentPending: false,

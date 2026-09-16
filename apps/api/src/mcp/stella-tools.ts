@@ -3,8 +3,16 @@ import { and, desc, eq, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
-import { publicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
-import { DEFAULT_SEARCH_SORT, SEARCH_SORTS } from "@stll/api-contract/search";
+import {
+  PUBLIC_CASE_LAW_COUNTRIES,
+  publicCaseLawCountry,
+} from "@stll/api-contract/case-law-launch-readiness";
+import {
+  DEFAULT_SEARCH_SORT,
+  SEARCH_SORTS,
+  SEARCH_TOTAL_TYPE,
+} from "@stll/api-contract/search";
+import { mapWithConcurrency } from "@stll/concurrency";
 import { COUNTRY_CODES } from "@stll/country-codes";
 import { docxToMarkdown } from "@stll/folio-core/server";
 
@@ -16,7 +24,11 @@ import type {
   FieldContent,
 } from "@/api/db/schema-validators";
 import type { readGatedDecisionCitations } from "@/api/handlers/case-law/decisions/citation-passages";
-import type { readGatedDecisionWithDocument } from "@/api/handlers/case-law/decisions/get-deferred-document";
+import {
+  DECISION_DOCUMENT_HYDRATION,
+  type DecisionDocumentHydration,
+  type readGatedDecisionWithDocument,
+} from "@/api/handlers/case-law/decisions/get-deferred-document";
 import type { searchDecisionsHandler } from "@/api/handlers/case-law/decisions/search";
 import { parseUsableDocumentAst } from "@/api/handlers/case-law/document-ast";
 import {
@@ -32,6 +44,7 @@ import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { CITATION_READ_DIRECTIONS } from "@/api/lib/case-law/citation-vocabulary";
+import { DECISION_READ_STATUS } from "@/api/lib/case-law/decision-read-vocabulary";
 import {
   type AssertNoExtraFields,
   type LIST_MATTERS_DETAIL_PROJECTION,
@@ -576,13 +589,47 @@ const searchAcrossMattersArgsSchema = nullAsAbsent(
   }),
 );
 
+/**
+ * The corpus countries `search_case_law` answers for. Rendered into both the
+ * input description and the rejection hint, so a model reading either knows
+ * the spelling: asked for German case law, a model wrote `DEU` where the
+ * orientation eval expected `DE`, and the corpus admits neither.
+ */
+const ADMITTED_CASE_LAW_COUNTRIES = PUBLIC_CASE_LAW_COUNTRIES.join(", ");
+
+/** One query's own keyset cursor, as the search engine issues it. */
+const CASE_LAW_SEARCH_SUB_CURSOR_MAX_LENGTH = 128;
+
+/**
+ * A merged cursor carries one sub-cursor per query, JSON-wrapped and
+ * base64url-encoded. Derived from the two bounds it is built out of (three
+ * characters of JSON per entry, two for the brackets, four base64 characters
+ * per three bytes) so the advertised cap cannot drift from what the encoder
+ * can produce.
+ */
+const CASE_LAW_SEARCH_CURSOR_MAX_LENGTH = Math.ceil(
+  (((CASE_LAW_SEARCH_SUB_CURSOR_MAX_LENGTH + 3) *
+    LIMITS.caseLawSearchQueriesMax +
+    2) *
+    4) /
+    3,
+);
+
 const searchCaseLawArgsSchema = nullAsAbsent(
   v.strictObject({
-    query: v.pipe(
-      v.string(),
+    queries: v.pipe(
+      v.array(
+        v.pipe(
+          v.string(),
+          v.minLength(1),
+          v.maxLength(LIMITS.searchQueryMaxLength),
+        ),
+      ),
       v.minLength(1),
-      v.maxLength(LIMITS.searchQueryMaxLength),
-      v.description("Search query"),
+      v.maxLength(LIMITS.caseLawSearchQueriesMax),
+      v.description(
+        `Several phrasings of ONE question, at most ${LIMITS.caseLawSearchQueriesMax}. Their pages are merged and deduplicated, so a reformulation costs no extra round trip; one phrasing is a valid call.`,
+      ),
     ),
     limit: v.optional(
       v.pipe(
@@ -590,14 +637,18 @@ const searchCaseLawArgsSchema = nullAsAbsent(
         v.integer(),
         v.minValue(1),
         v.maxValue(MAX_SEARCH_LIMIT),
-        v.description("Max results to return"),
+        v.description(
+          "Merged-page size, split evenly across the queries (at least one hit each)",
+        ),
       ),
     ),
     cursor: v.optional(
       v.pipe(
         v.string(),
-        v.maxLength(128),
-        v.description("Opaque cursor from a previous search_case_law call"),
+        v.maxLength(CASE_LAW_SEARCH_CURSOR_MAX_LENGTH),
+        v.description(
+          "Opaque cursor from a previous search_case_law call. It continues the same queries, in the same order.",
+        ),
       ),
     ),
     court: v.optional(
@@ -611,7 +662,9 @@ const searchCaseLawArgsSchema = nullAsAbsent(
       v.string(),
       v.minLength(2),
       v.maxLength(3),
-      v.description("Required corpus country code"),
+      v.description(
+        `Required corpus country code, uppercase ISO 3166-1 alpha-3. Admitted: ${ADMITTED_CASE_LAW_COUNTRIES}.`,
+      ),
     ),
     language: v.optional(
       v.pipe(
@@ -671,14 +724,21 @@ const readContentAcrossMattersArgsSchema = nullAsAbsent(
 
 const readCaseLawDecisionArgsSchema = nullAsAbsent(
   v.strictObject({
-    decision_id: uuidInputSchema("Case-law decision ID"),
+    decision_ids: v.pipe(
+      v.array(uuidInputSchema("Case-law decision ID")),
+      v.minLength(1),
+      v.maxLength(LIMITS.caseLawDecisionBatchMax),
+      v.description(
+        `The decisions to read, at most ${LIMITS.caseLawDecisionBatchMax} per call. Each id is answered on its own, so one unknown id does not sink the rest.`,
+      ),
+    ),
     cursor: v.optional(
       v.pipe(
         v.string(),
         v.minLength(1),
         v.maxLength(MAX_CURSOR_LENGTH),
         v.description(
-          "Opaque cursor from a previous call to read the next window of decision text and citations",
+          "Opaque cursor from a previous call to read the next window of one decision's text and citations. Accepted only alongside a single decision id.",
         ),
       ),
     ),
@@ -816,15 +876,19 @@ export const STELLA_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     description:
-      "Search case law within one country. Filters: court, language, dates " +
-      "(ISO YYYY-MM-DD), decision type, and source_id (the id a `facets." +
-      "source` bucket carries in `value`). `sort` defaults to '" +
-      `${DEFAULT_SEARCH_SORT}'. Facets and total are returned on the first ` +
-      "page only, and describe the whole result set. Each hit carries " +
-      "citationAuthority (the score the ranking blends in), matchingPassages " +
-      "(how many of its passages matched, at least 1) and a route-independent " +
-      "resourceName. Call read_case_law_citations for how a decision was " +
-      "treated by the courts citing it.",
+      "Search case law within one country. `queries` carries several " +
+      "phrasings of one question and merges their results; matchedQueries " +
+      "names the phrasings that returned each hit. `limit` is the merged " +
+      "page, split evenly across the phrasings, so a page they agree on is " +
+      "shorter. Filters: court, language, dates " +
+      "(ISO YYYY-MM-DD), decision type, and source_id (the id a " +
+      "`facets.source` bucket carries in `value`). `sort` defaults to " +
+      `'${DEFAULT_SEARCH_SORT}'. Facets and total describe ONE query's whole ` +
+      "set: first page of a single-query call only, null otherwise. Each " +
+      "hit also carries citationAuthority (the score the ranking blends in), " +
+      "matchingPassages (its passages that matched, at least 1) and a " +
+      "route-independent resourceName. Call read_case_law_citations for how " +
+      "the citing courts treated one.",
     inputSchema: searchCaseLawArgsSchema,
     access: "read",
     anonymized: { exposure: "passthrough" },
@@ -866,16 +930,19 @@ export const STELLA_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     description:
-      "Read a single case-law decision by its decision ID: its own text. " +
-      "Returns metadata, explicit decision text fields, plain text, source " +
-      "URLs, its route-independent resourceName, and bare citation ids. " +
-      "It does NOT say how other courts have treated this decision, and " +
-      "its citation entries carry no treatment and no surrounding text: " +
-      "to learn what the citing courts said, or what this decision relied " +
-      "on, call read_case_law_citations ({ decision_id: '<uuid>', " +
-      "direction: 'cited_by' }) instead. Long decision text and large " +
-      "citation lists are returned in windows; pass the returned " +
-      "nextCursor back as cursor to read more.",
+      "Read case-law decisions by id. Every `decision_ids[]` " +
+      "entry is answered on its own, in input order, under `status`: `found` " +
+      "carries the decision (metadata, text fields, plain text, source " +
+      "URLs, resourceName, citation ids), while `not_found` (no such public " +
+      "decision) and `pending` (its publisher document is not stored yet) " +
+      "carry a message. Prefer one batched call over one per decision; the " +
+      "call's text budget is shared, so read one id alone for a whole " +
+      "decision's text. It does NOT say how the citing courts treated a " +
+      "decision: its citation entries carry no treatment and no surrounding " +
+      "text. For that call read_case_law_citations ({ decision_id: " +
+      "'<uuid>', direction: 'cited_by' }). Long text and citation lists " +
+      "come back in windows; pass an entry's nextCursor back as cursor with " +
+      "that one id.",
     inputSchema: readCaseLawDecisionArgsSchema,
     access: "read",
     anonymized: { exposure: "passthrough" },
@@ -1685,6 +1752,108 @@ const handleReadContentAcrossMattersTool: TypedMcpToolHandler<
   };
 };
 
+type CaseLawSearchHit = SearchCaseLawSuccess["hits"][number];
+
+/**
+ * One decision in the merged page: the hit as the best-ranking query returned
+ * it, that rank, and which queries returned it at all.
+ */
+type MergedCaseLawHit = {
+  hit: CaseLawSearchHit;
+  matchedQueries: number[];
+  rank: number;
+};
+
+/**
+ * Merge one page per query into one page of distinct decisions.
+ *
+ * A hit carries no score on the wire, so its rank position within its own
+ * query's page is the only comparable signal: a decision keeps the hit from
+ * the query that ranked it highest, and ties go to the decision more
+ * phrasings agree on, then to its id so the order is total.
+ */
+const mergeCaseLawSearchHits = (
+  pagesByQuery: readonly (readonly CaseLawSearchHit[])[],
+): readonly MergedCaseLawHit[] => {
+  const merged = new Map<string, MergedCaseLawHit>();
+  for (const [queryIndex, hits] of pagesByQuery.entries()) {
+    for (const [rank, hit] of hits.entries()) {
+      const seen = merged.get(hit.decisionId);
+      if (seen === undefined) {
+        merged.set(hit.decisionId, { hit, matchedQueries: [queryIndex], rank });
+        continue;
+      }
+      // Queries are walked in index order, so this stays ascending.
+      seen.matchedQueries.push(queryIndex);
+      if (rank < seen.rank) {
+        seen.hit = hit;
+        seen.rank = rank;
+      }
+    }
+  }
+  // The id tiebreak is a code-unit comparison, not a collation: a decision id
+  // is an opaque key, and all the order has to be is total and stable.
+  return [...merged.values()].toSorted(
+    (left, right) =>
+      left.rank - right.rank ||
+      right.matchedQueries.length - left.matchedQueries.length ||
+      (left.hit.decisionId < right.hit.decisionId ? -1 : 1),
+  );
+};
+
+/**
+ * The per-query cursors a call resumes from. `null` is a query whose page
+ * ended, which is not re-run; `undefined` is a query on its first page.
+ */
+type CaseLawSearchCursors =
+  | { type: "cursors"; cursors: readonly (string | null | undefined)[] }
+  | { type: "invalid" }
+  | { type: "count_mismatch"; encoded: number };
+
+/**
+ * A single query pages on the engine's own cursor, passed through verbatim;
+ * several queries page on one envelope carrying a sub-cursor each. The two
+ * grammars are disjoint (an engine cursor never decodes to a JSON array), so
+ * one decode tells them apart and a cursor issued for a different number of
+ * queries is rejected rather than silently continuing the wrong one.
+ */
+const resolveCaseLawSearchCursors = ({
+  cursor,
+  queryCount,
+}: {
+  cursor: string | undefined;
+  queryCount: number;
+}): CaseLawSearchCursors => {
+  if (cursor === undefined) {
+    return {
+      type: "cursors",
+      cursors: Array.from({ length: queryCount }, () => undefined),
+    };
+  }
+  const parts = decodePaginationCursor(cursor);
+  if (parts === null) {
+    return queryCount === 1
+      ? { type: "cursors", cursors: [cursor] }
+      : { type: "count_mismatch", encoded: 1 };
+  }
+  if (
+    !parts.every(
+      (part): part is string | null =>
+        part === null || typeof part === "string",
+    )
+  ) {
+    return { type: "invalid" };
+  }
+  return parts.length === queryCount
+    ? { type: "cursors", cursors: parts }
+    : { type: "count_mismatch", encoded: parts.length };
+};
+
+/** One query's page, or the mark of a query whose page had already ended. */
+type CaseLawQueryOutcome =
+  | { exhausted: true }
+  | { exhausted: false; page: SearchCaseLawSuccess };
+
 const handleSearchCaseLawTool: TypedMcpToolHandler<
   v.InferInput<typeof SEARCH_CASE_LAW_PROJECTION>
 > = async ({ args, context }) => {
@@ -1700,55 +1869,137 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
     date_to: dateTo,
     decision_type: decisionType,
     language,
-    query,
+    queries,
     sort,
     source_id: sourceId,
   } = parsed.output;
   const limit = parsed.output.limit ?? DEFAULT_SEARCH_LIMIT;
   const publicCountry = publicCaseLawCountry(country);
   if (publicCountry === null) {
-    return notFoundResult("Case-law country not found");
+    return notFoundResult(
+      "Case-law country not found",
+      `Pass one of the admitted country codes: ${ADMITTED_CASE_LAW_COUNTRIES}.`,
+    );
   }
 
-  const result = await (
+  const resolved = resolveCaseLawSearchCursors({
+    cursor,
+    queryCount: queries.length,
+  });
+  if (resolved.type === "invalid") {
+    return structuredErrorResult({
+      code: "validation_error",
+      message: "Invalid cursor",
+      issues: [{ path: "cursor", message: "Invalid cursor" }],
+      hint: "Pass the 'cursor' verbatim as returned by a previous search_case_law call, or omit it for the first page.",
+    });
+  }
+  if (resolved.type === "count_mismatch") {
+    return structuredErrorResult({
+      code: "validation_error",
+      message: "Cursor was issued for a different set of queries",
+      issues: [
+        {
+          path: "cursor",
+          message: `This cursor continues ${String(resolved.encoded)} queries; the call carries ${String(queries.length)}.`,
+        },
+      ],
+      hint: `Send the same ${String(resolved.encoded)} queries this cursor was issued for, in the same order, or omit 'cursor' to start a new search.`,
+    });
+  }
+
+  // `limit` bounds the MERGED page, so each query is asked for its share of
+  // it and every hit a query returns is emitted. Slicing the merge instead
+  // would drop decisions no continuation could reach: a sub-cursor sits at
+  // its query's page end, so anything cut from that page is gone. One hit per
+  // query is the floor, which is the one case a merged page can exceed
+  // `limit`.
+  const perQueryLimit = Math.max(1, Math.floor(limit / queries.length));
+
+  const search =
     context.testDependencies?.searchDecisionsHandler ??
-    defaultSearchDecisionsHandler
-  )(
-    {
+    defaultSearchDecisionsHandler;
+  const outcomes = await mapWithConcurrency({
+    items: queries.map((query, index) => ({
       query,
-      limit,
-      ...(cursor === undefined ? {} : { cursor }),
-      ...(court === undefined ? {} : { court }),
-      country: publicCountry,
-      ...(language === undefined ? {} : { language }),
-      ...(decisionType === undefined ? {} : { decisionType }),
-      ...(sourceId === undefined
-        ? {}
-        : { sourceId: brandPersistedCaseLawSourceId(sourceId) }),
-      ...(dateFrom === undefined ? {} : { dateFrom }),
-      ...(dateTo === undefined ? {} : { dateTo }),
-      ...(sort === undefined ? {} : { sort }),
+      subCursor: resolved.cursors[index],
+    })),
+    limit: LIMITS.caseLawSearchQueriesMax,
+    operation: async ({ query, subCursor }) => {
+      if (subCursor === null) {
+        return { exhausted: true } as const;
+      }
+      return {
+        exhausted: false as const,
+        result: await search(
+          {
+            query,
+            limit: perQueryLimit,
+            ...(subCursor === undefined ? {} : { cursor: subCursor }),
+            ...(court === undefined ? {} : { court }),
+            country: publicCountry,
+            ...(language === undefined ? {} : { language }),
+            ...(decisionType === undefined ? {} : { decisionType }),
+            ...(sourceId === undefined
+              ? {}
+              : { sourceId: brandPersistedCaseLawSourceId(sourceId) }),
+            ...(dateFrom === undefined ? {} : { dateFrom }),
+            ...(dateTo === undefined ? {} : { dateTo }),
+            ...(sort === undefined ? {} : { sort }),
+          },
+          caseLawPublicReadDb,
+        ),
+      };
     },
-    caseLawPublicReadDb,
+  });
+
+  // A query that failed sinks the call: a merged page silently missing one
+  // phrasing reads as "that phrasing found nothing", which is a different
+  // answer.
+  const pages: CaseLawQueryOutcome[] = [];
+  for (const outcome of outcomes) {
+    if (outcome.exhausted) {
+      pages.push({ exhausted: true });
+      continue;
+    }
+    const resultMessage = handlerResultMessage(outcome.result);
+    if (resultMessage) {
+      return errorResult(resultMessage);
+    }
+    if (!isSearchCaseLawSuccess(outcome.result)) {
+      return errorResult("Case-law search failed");
+    }
+    pages.push({ exhausted: false, page: outcome.result });
+  }
+
+  const merged = mergeCaseLawSearchHits(
+    pages.map((outcome) => (outcome.exhausted ? [] : outcome.page.hits)),
   );
 
-  const resultMessage = handlerResultMessage(result);
-  if (resultMessage) {
-    return errorResult(resultMessage);
-  }
-  if (!isSearchCaseLawSuccess(result)) {
-    return errorResult("Case-law search failed");
-  }
+  // Facets and a total count describe ONE query's result set. A merged page
+  // spans several, and no count the engine can give describes their union.
+  const first = pages.at(0) ?? panic("Case-law search ran no query");
+  const single =
+    queries.length === 1 && !first.exhausted ? first.page : undefined;
+  const subCursors = pages.map((outcome) =>
+    outcome.exhausted ? null : outcome.page.nextCursor,
+  );
+  // Every query exhausted means the merged page is the last one; otherwise the
+  // envelope carries each query's own continuation.
+  const mergedCursor = subCursors.every((subCursor) => subCursor === null)
+    ? null
+    : encodePaginationCursor(subCursors);
 
   const payload = toolDataResult({
-    facets: result.facets,
-    nextCursor: result.nextCursor,
-    results: result.hits.map((hit) => {
+    facets: single === undefined ? null : single.facets,
+    nextCursor: single === undefined ? mergedCursor : single.nextCursor,
+    results: merged.map(({ hit, matchedQueries }) => {
       const resource = resourceRef({
         type: RESOURCE_TYPE.CASE_LAW_DECISION,
         id: brandPersistedCaseLawDecisionId(hit.decisionId),
       });
       return {
+        matchedQueries,
         appUrl: buildCaseLawDecisionAppUrl({
           caseNumber: hit.caseNumber,
           country: hit.country,
@@ -1774,12 +2025,15 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
         sourceUrl: hit.sourceUrl,
       };
     }),
-    total: result.total,
+    total:
+      single === undefined
+        ? { type: SEARCH_TOTAL_TYPE.NOT_COUNTED }
+        : single.total,
   } satisfies v.InferInput<typeof SEARCH_CASE_LAW_PROJECTION>);
 
   return await withOnboardingHintIfApplicable({
     context,
-    isEmpty: result.hits.length === 0,
+    isEmpty: merged.length === 0,
     result: payload,
   });
 };
@@ -1813,107 +2067,114 @@ const decodeDecisionCursor = (
   return { citations, text };
 };
 
-const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
-  v.InferInput<typeof READ_CASE_LAW_DECISION_PROJECTION>
-> = async ({ args, context }) => {
-  const parsed = v.safeParse(readCaseLawDecisionArgsSchema, args);
-  if (!parsed.success) {
-    return validationErrorResult(parsed.issues);
-  }
-  const { cursor, decision_id: decisionId } = parsed.output;
+type GatedDecisionRead = Awaited<
+  ReturnType<typeof readGatedDecisionWithDocument>
+>;
 
-  const offsets = decodeDecisionCursor(cursor);
-  if (offsets === null) {
-    return structuredErrorResult({
-      code: "validation_error",
-      message: "Invalid cursor",
-      issues: [{ path: "cursor", message: "Invalid cursor" }],
-      hint: "Pass the 'cursor' verbatim as returned by a previous call, or omit it for the first page.",
-    });
-  }
+type DecisionItemResult = v.InferInput<
+  typeof READ_CASE_LAW_DECISION_PROJECTION
+>["items"][number];
 
-  // The same gate the public route applies, in the same shape: a
-  // restricted decision does not exist for any caller, and the read that
-  // answers shares the transaction that approved it.
-  const result = await (
-    context.testDependencies?.readGatedDecisionWithDocument ??
-    defaultReadGatedDecisionWithDocument
-  )({
-    caseLawDb: caseLawPublicReadDb,
-    locator: { kind: "id", id: brandPersistedCaseLawDecisionId(decisionId) },
-    citationsCursor: offsets.citations,
-    // An agent holding a token is a reader we can attribute, so its
-    // interest counts as demand.
-    caller: "attributed",
-  });
-  if (result === null) {
-    return notFoundResult("Decision not found");
+/**
+ * Whether the publisher document is still to be fetched. A stored-only read
+ * reports it instead of crawling, so the batch decides how many crawls this
+ * one call is worth.
+ */
+const isDecisionDocumentPending = (read: GatedDecisionRead): boolean =>
+  read !== null &&
+  "documentPending" in read &&
+  read.documentPending &&
+  isReadCaseLawDecisionSuccess(read);
+
+const decisionNotFoundItem = (decisionId: string): DecisionItemResult => ({
+  decisionId,
+  message:
+    "No decision the public may read has this id. Find one with search_case_law and pass its decisionId.",
+  status: DECISION_READ_STATUS.notFound,
+});
+
+type DecisionItemOptions = {
+  decisionId: string;
+  /** The window this entry's share of the call's text budget allows. */
+  maxTextChars: number;
+  read: GatedDecisionRead;
+  /** The entry the fetch budget did not reach. */
+  pendingBeyondBudget: boolean;
+  textOffset: number;
+};
+
+const decisionItemResult = ({
+  decisionId,
+  maxTextChars,
+  read,
+  pendingBeyondBudget,
+  textOffset,
+}: DecisionItemOptions): DecisionItemResult => {
+  if (pendingBeyondBudget) {
+    return {
+      decisionId,
+      message: `The publisher document for this decision is not stored yet, and this call's fetch budget of ${String(LIMITS.caseLawDecisionBatchHydrationsMax)} was spent on earlier entries. Read this decision id on its own to fetch it.`,
+      status: DECISION_READ_STATUS.pending,
+    };
   }
-  const resultMessage = handlerResultMessage(result);
-  if (resultMessage) {
-    return errorResult(resultMessage);
-  }
-  if (!isReadCaseLawDecisionSuccess(result)) {
-    return notFoundResult("Decision not found");
+  if (read === null || !isReadCaseLawDecisionSuccess(read)) {
+    return decisionNotFoundItem(decisionId);
   }
 
   // allowsRedistribution gates whether the decision is publicly
   // readable; allowsDerivedAi additionally gates feeding full text to a
   // model, which is exactly this tool's context.
-  const aiTextAllowed = result.source.allowsDerivedAi;
+  const aiTextAllowed = read.source.allowsDerivedAi;
   const resource = resourceRef({
     type: RESOURCE_TYPE.CASE_LAW_DECISION,
-    id: brandPersistedCaseLawDecisionId(result.id),
+    id: brandPersistedCaseLawDecisionId(read.id),
   });
 
   const plainText = aiTextAllowed
     ? toPlainCorpusText({
-        blocks: parseUsableDocumentAst(result.documentAst)?.blocks ?? null,
-        fulltext: result.fulltext,
+        blocks: parseUsableDocumentAst(read.documentAst)?.blocks ?? null,
+        fulltext: read.fulltext,
       })
     : null;
   const textLength = plainText === null ? 0 : plainText.length;
 
-  const textBounds = resolveWindowBounds(
-    textLength,
-    offsets.text,
-    MCP_CONTENT_MAX_CHARS,
-  );
+  const textBounds = resolveWindowBounds(textLength, textOffset, maxTextChars);
   const hasMore =
-    textBounds.nextOffset !== null || result.citationsNextCursor !== null;
-  const nextCursor = hasMore
-    ? encodePaginationCursor([textBounds.end, result.citationsNextCursor])
-    : null;
+    textBounds.nextOffset !== null || read.citationsNextCursor !== null;
 
-  return toolDataResult({
-    nextCursor,
+  return {
+    decisionId,
+    nextCursor: hasMore
+      ? encodePaginationCursor([textBounds.end, read.citationsNextCursor])
+      : null,
+    status: DECISION_READ_STATUS.found,
     decision: {
       appUrl: buildCaseLawDecisionAppUrl({
-        caseNumber: result.caseNumber,
-        country: result.country,
-        court: result.court,
-        language: result.language,
-        languageAlternates: result.languageAlternates,
-        slug: result.slug,
+        caseNumber: read.caseNumber,
+        country: read.country,
+        court: read.court,
+        language: read.language,
+        languageAlternates: read.languageAlternates,
+        slug: read.slug,
       }),
-      caseNumber: result.caseNumber,
-      citationsFrom: result.citationsFrom,
-      citationsTo: result.citationsTo,
-      country: result.country,
-      court: result.court,
-      courtAbbreviation: result.courtAbbreviation,
-      decisionDate: toIsoDateString(result.decisionDate),
-      decisionId: result.id,
+      caseNumber: read.caseNumber,
+      citationsFrom: read.citationsFrom,
+      citationsTo: read.citationsTo,
+      country: read.country,
+      court: read.court,
+      courtAbbreviation: read.courtAbbreviation,
+      decisionDate: toIsoDateString(read.decisionDate),
+      decisionId: read.id,
       resourceName: serializeAuthorizedCorpusMcpResourceName(resource),
-      decisionType: result.decisionType,
-      documentUrl: result.documentUrl,
-      ecli: result.ecli,
-      language: result.language,
-      metadata: result.metadata,
-      textFields: result.textFields,
-      source: result.source,
-      sourceUrl: result.sourceUrl,
-      sourceAttributionUrl: result.sourceAttributionUrl,
+      decisionType: read.decisionType,
+      documentUrl: read.documentUrl,
+      ecli: read.ecli,
+      language: read.language,
+      metadata: read.metadata,
+      textFields: read.textFields,
+      source: read.source,
+      sourceUrl: read.sourceUrl,
+      sourceAttributionUrl: read.sourceAttributionUrl,
       text:
         plainText === null || textBounds.start >= textBounds.end
           ? null
@@ -1927,6 +2188,153 @@ const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
               "The source licence does not permit AI use of the full text.",
           }),
     },
+  };
+};
+
+const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
+  v.InferInput<typeof READ_CASE_LAW_DECISION_PROJECTION>
+> = async ({ args, context }) => {
+  const parsed = v.safeParse(readCaseLawDecisionArgsSchema, args);
+  if (!parsed.success) {
+    return validationErrorResult(parsed.issues);
+  }
+  const { cursor, decision_ids: decisionIds } = parsed.output;
+
+  // A window cursor belongs to ONE decision's text and citation lists, so it
+  // cannot say which entry of a batch it continues.
+  if (cursor !== undefined && decisionIds.length > 1) {
+    return structuredErrorResult({
+      code: "validation_error",
+      message: "A cursor continues one decision",
+      issues: [
+        {
+          path: "cursor",
+          message: `A cursor continues one decision's text; the call carries ${String(decisionIds.length)} decision ids.`,
+        },
+      ],
+      hint: "Pass one decision id with a cursor to continue its text.",
+    });
+  }
+
+  const offsets = decodeDecisionCursor(cursor);
+  if (offsets === null) {
+    return structuredErrorResult({
+      code: "validation_error",
+      message: "Invalid cursor",
+      issues: [{ path: "cursor", message: "Invalid cursor" }],
+      hint: "Pass the 'cursor' verbatim as returned by a previous call, or omit it for the first page.",
+    });
+  }
+
+  // The same gate the public route applies, in the same shape: a
+  // restricted decision does not exist for any caller, and the read that
+  // answers shares the transaction that approved it. Documents are NOT
+  // hydrated here: a batch decides below how many publisher fetches it is
+  // worth.
+  const read =
+    context.testDependencies?.readGatedDecisionWithDocument ??
+    defaultReadGatedDecisionWithDocument;
+  const readDecision = async (
+    decisionId: string,
+    documentHydration: DecisionDocumentHydration,
+  ): Promise<GatedDecisionRead> =>
+    await read({
+      caseLawDb: caseLawPublicReadDb,
+      locator: { kind: "id", id: brandPersistedCaseLawDecisionId(decisionId) },
+      citationsCursor: offsets.citations,
+      // An agent holding a token is a reader we can attribute, so its
+      // interest counts as demand.
+      caller: "attributed",
+      documentHydration,
+    });
+
+  // One read per distinct id: a batch naming the same decision twice reads it
+  // once and answers both of its positions.
+  const uniqueIds = [...new Set(decisionIds)];
+  const reads = new Map(
+    await mapWithConcurrency({
+      items: uniqueIds,
+      limit: LIMITS.caseLawCitationPassageConcurrency,
+      operation: async (decisionId) =>
+        [
+          decisionId,
+          await readDecision(
+            decisionId,
+            DECISION_DOCUMENT_HYDRATION.storedOnly,
+          ),
+        ] as const,
+    }),
+  );
+
+  // An error the read itself reports (a rejected cursor) is about the call,
+  // not about one entry, so it answers for the call.
+  const failure = uniqueIds
+    .flatMap((decisionId) => {
+      const value = reads.get(decisionId);
+      const message =
+        value === null || value === undefined
+          ? null
+          : handlerResultMessage(value);
+      return message === null ? [] : [message];
+    })
+    .at(0);
+  if (failure !== undefined) {
+    return errorResult(failure);
+  }
+
+  // The pending entries this call fetches, in input order, and the ones the
+  // budget did not reach.
+  const readOf = (decisionId: string): GatedDecisionRead => {
+    if (!reads.has(decisionId)) {
+      return panic(`No gated read ran for decision ${decisionId}`);
+    }
+    return reads.get(decisionId) ?? null;
+  };
+
+  const pendingIds = uniqueIds.filter((decisionId) =>
+    isDecisionDocumentPending(readOf(decisionId)),
+  );
+  const fetchedIds = pendingIds.slice(
+    0,
+    LIMITS.caseLawDecisionBatchHydrationsMax,
+  );
+  const deferredIds = new Set(
+    pendingIds.slice(LIMITS.caseLawDecisionBatchHydrationsMax),
+  );
+  // The re-read runs the gate again rather than hydrating the row it already
+  // holds: a publisher fetch must not run inside the read transaction, and
+  // the content that answers has to come from a state the gate approved.
+  for (const [index, hydrated] of (
+    await mapWithConcurrency({
+      items: fetchedIds,
+      limit: LIMITS.caseLawDecisionBatchHydrationsMax,
+      operation: async (decisionId) =>
+        await readDecision(decisionId, DECISION_DOCUMENT_HYDRATION.onDemand),
+    })
+  ).entries()) {
+    const decisionId =
+      fetchedIds[index] ?? panic("Lost a hydrated case-law decision id");
+    reads.set(decisionId, hydrated);
+  }
+
+  // The call's text budget is shared across the entries, so a batch cannot
+  // answer with twenty full windows of decision text. A single id keeps the
+  // whole window, which is what a caller reading one decision asked for.
+  const maxTextChars = Math.max(
+    1,
+    Math.floor(MCP_CONTENT_MAX_CHARS / decisionIds.length),
+  );
+
+  return toolDataResult({
+    items: decisionIds.map((decisionId) =>
+      decisionItemResult({
+        decisionId,
+        maxTextChars,
+        pendingBeyondBudget: deferredIds.has(decisionId),
+        read: readOf(decisionId),
+        textOffset: offsets.text,
+      }),
+    ),
   } satisfies v.InferInput<typeof READ_CASE_LAW_DECISION_PROJECTION>);
 };
 

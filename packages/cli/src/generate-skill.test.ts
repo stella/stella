@@ -88,7 +88,7 @@ describe("generateCliSkill (TanStack Intent)", () => {
     // Annotated command path, its scope, and a windowed-text marker.
     expect(skill).toContain("`stella matter save`");
     expect(skill).toContain(
-      "| case-law | `stella case-law read` | read | paginated; windowed text |",
+      "| document | `stella document content` | read | paginated; windowed text |",
     );
     // A discriminator subcommand marked destructive.
     expect(skill).toContain(

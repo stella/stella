@@ -18,6 +18,10 @@ import {
 } from "@/api/lib/case-law/citation-vocabulary";
 import { COURT_TIER_LABELS } from "@/api/lib/case-law/court-tiers";
 import {
+  DECISION_READ_ABSENCE_STATUSES,
+  DECISION_READ_STATUS,
+} from "@/api/lib/case-law/decision-read-vocabulary";
+import {
   DOCUMENT_PROCESSING_FAILURE_CODE,
   DOCUMENT_PROCESSING_KIND,
   DOCUMENT_PROCESSING_REQUIRED_STATUS,
@@ -1319,12 +1323,14 @@ const searchTotalProjection = v.variant("type", [
 
 /**
  * search_case_law. Source of truth: `handleSearchCaseLawTool`
- * (`stella-tools.ts`) mapping `searchDecisionsHandler` hits. Decision ids are
- * public case-law corpus ids, not tenant refs.
+ * (`stella-tools.ts`) merging one `searchDecisionsHandler` page per query.
+ * Decision ids are public case-law corpus ids, not tenant refs.
  */
 export const SEARCH_CASE_LAW_PROJECTION = v.strictObject({
-  // Page one only: the counts describe the whole result set, so they do not
-  // change as an agent pages and are null on every page after the first.
+  // Page one of a single query only: the counts describe one query's whole
+  // result set, so they do not change as an agent pages, are null on every
+  // page after the first, and are null throughout for a call carrying
+  // several queries, whose merged result set no count describes.
   facets: v.nullable(
     v.strictObject({
       court: v.array(caseLawCourtTierProjection),
@@ -1337,7 +1343,9 @@ export const SEARCH_CASE_LAW_PROJECTION = v.strictObject({
       language: v.array(caseLawFacetBucketProjection),
     }),
   ),
-  // Opaque `[score, decisionId]` cursor, base64url-encoded.
+  // One query: the engine's own opaque `[score, decisionId]` cursor. Several
+  // queries: one sub-cursor per query, base64url-encoded together, so a
+  // continuation resumes each query where its own page ended.
   nextCursor: v.nullable(passthroughId()),
   results: v.array(
     v.strictObject({
@@ -1363,6 +1371,9 @@ export const SEARCH_CASE_LAW_PROJECTION = v.strictObject({
       decisionType: v.nullable(v.string()),
       ecli: v.nullable(v.string()),
       language: v.string(),
+      // Which of the call's `queries` returned this decision, by index,
+      // ascending. A decision several phrasings agree on carries several.
+      matchedQueries: v.array(v.number()),
       // Passages of the decision that matched, within the scanned window.
       matchingPassages: v.number(),
       snippet: v.nullable(v.string()),
@@ -1397,69 +1408,95 @@ const decisionTextFieldProjections = {
   typeof decisionTextFieldProjection
 >;
 
+const caseLawDecisionProjection = v.strictObject({
+  // Nullable for the same reason as search_case_law's `results[].appUrl`.
+  appUrl: v.nullable(v.string()),
+  caseNumber: v.string(),
+  citationsFrom: v.array(
+    v.strictObject({
+      id: passthroughId(),
+      citationText: v.string(),
+      citedDecisionId: v.nullable(passthroughId()),
+      sectionIndex: v.nullable(v.number()),
+    }),
+  ),
+  citationsTo: v.array(
+    v.strictObject({
+      id: passthroughId(),
+      citationText: v.string(),
+      citingDecisionId: passthroughId(),
+      sectionIndex: v.nullable(v.number()),
+    }),
+  ),
+  country: v.string(),
+  court: v.string(),
+  // The court's short form as a lawyer writes it (ÚS, NS, NSS, SN, CJEU),
+  // derived from the decision's ECLI or the jurisdiction's apex-court
+  // names. Null where nothing states one: it is never guessed, so a
+  // caller quoting it is quoting the court's own abbreviation.
+  courtAbbreviation: v.nullable(v.string()),
+  decisionDate: v.nullable(v.string()),
+  decisionId: passthroughId(),
+  resourceName: passthroughId(),
+  decisionType: v.nullable(v.string()),
+  documentUrl: v.nullable(v.string()),
+  ecli: v.nullable(v.string()),
+  language: v.string(),
+  metadata: unenumeratedJson(),
+  textFields: v.strictObject(decisionTextFieldProjections),
+  source: v.strictObject({
+    id: passthroughId(),
+    name: v.string(),
+    adapterKey: v.string(),
+    allowsDerivedAi: v.boolean(),
+  }),
+  sourceUrl: v.nullable(v.string()),
+  // Where this decision's data is freely available. An agent quoting the
+  // decision has to be able to attribute it, and some courts make the
+  // attribution a condition of reuse, so the tool states the page rather
+  // than leaving the caller to derive one from `source.adapterKey`.
+  sourceAttributionUrl: v.nullable(v.string()),
+  text: v.nullable(v.string()),
+  charCount: v.nullable(v.number()),
+  truncated: v.boolean(),
+  textWithheldReason: v.optional(v.string()),
+});
+
 /**
  * read_case_law_decision. Source of truth: `handleReadCaseLawDecisionTool`
- * (`stella-tools.ts`) mapping `readGatedDecisionWithDocument`. All ids are
- * public case-law corpus ids (decision, citation, source). `metadata` is an
- * unenumerated public jsonb subtree; publisher-authored decision text is
- * declared separately under `textFields`.
+ * (`stella-tools.ts`) over `readGatedDecisionWithDocument`. One entry per
+ * requested decision id, in input order: a batch read reports per entry
+ * rather than failing whole, so the union is discriminated on `status` and
+ * every absence carries its own message. All ids are public case-law corpus
+ * ids (decision, citation, source). `metadata` is an unenumerated public
+ * jsonb subtree; publisher-authored decision text is declared separately
+ * under `textFields`.
  */
 export const READ_CASE_LAW_DECISION_PROJECTION = v.strictObject({
-  // Opaque compound `[textOffset, citationsCursor]` cursor.
-  nextCursor: v.nullable(passthroughId()),
-  decision: v.strictObject({
-    // Nullable for the same reason as search_case_law's `results[].appUrl`.
-    appUrl: v.nullable(v.string()),
-    caseNumber: v.string(),
-    citationsFrom: v.array(
-      v.strictObject({
-        id: passthroughId(),
-        citationText: v.string(),
-        citedDecisionId: v.nullable(passthroughId()),
-        sectionIndex: v.nullable(v.number()),
-      }),
-    ),
-    citationsTo: v.array(
-      v.strictObject({
-        id: passthroughId(),
-        citationText: v.string(),
-        citingDecisionId: passthroughId(),
-        sectionIndex: v.nullable(v.number()),
-      }),
-    ),
-    country: v.string(),
-    court: v.string(),
-    // The court's short form as a lawyer writes it (ÚS, NS, NSS, SN, CJEU),
-    // derived from the decision's ECLI or the jurisdiction's apex-court
-    // names. Null where nothing states one: it is never guessed, so a
-    // caller quoting it is quoting the court's own abbreviation.
-    courtAbbreviation: v.nullable(v.string()),
-    decisionDate: v.nullable(v.string()),
-    decisionId: passthroughId(),
-    resourceName: passthroughId(),
-    decisionType: v.nullable(v.string()),
-    documentUrl: v.nullable(v.string()),
-    ecli: v.nullable(v.string()),
-    language: v.string(),
-    metadata: unenumeratedJson(),
-    textFields: v.strictObject(decisionTextFieldProjections),
-    source: v.strictObject({
-      id: passthroughId(),
-      name: v.string(),
-      adapterKey: v.string(),
-      allowsDerivedAi: v.boolean(),
-    }),
-    sourceUrl: v.nullable(v.string()),
-    // Where this decision's data is freely available. An agent quoting the
-    // decision has to be able to attribute it, and some courts make the
-    // attribution a condition of reuse, so the tool states the page rather
-    // than leaving the caller to derive one from `source.adapterKey`.
-    sourceAttributionUrl: v.nullable(v.string()),
-    text: v.nullable(v.string()),
-    charCount: v.nullable(v.number()),
-    truncated: v.boolean(),
-    textWithheldReason: v.optional(v.string()),
-  }),
+  items: v.array(
+    v.variant("status", [
+      projectionBranch(
+        v.strictObject({
+          decision: caseLawDecisionProjection,
+          decisionId: passthroughId(),
+          // Opaque compound `[textOffset, citationsCursor]` cursor for THIS
+          // decision's remaining text and citations. A continuation takes one
+          // decision id, so it is per entry and not per call.
+          nextCursor: v.nullable(passthroughId()),
+          status: v.literal(DECISION_READ_STATUS.found),
+        }),
+      ),
+      ...DECISION_READ_ABSENCE_STATUSES.map((status) =>
+        projectionBranch(
+          v.strictObject({
+            decisionId: passthroughId(),
+            message: v.string(),
+            status: v.literal(status),
+          }),
+        ),
+      ),
+    ]),
+  ),
 });
 
 /**

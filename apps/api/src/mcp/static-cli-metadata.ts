@@ -130,10 +130,15 @@ export const DEFAULT_MCP_CLI_ANNOTATIONS = defineMcpCliToolAnnotations(
       scope: "search",
       itemsKey: "results",
     },
+    // A batch read answers per entry, so the leaf renders `items`. It cannot
+    // be a `windowedText` leaf: that annotation names one text and one
+    // top-level `nextCursor`, and here both are per entry, so `--all` would
+    // have nothing to follow and nothing to concatenate. A caller continuing
+    // one decision's text passes that decision id with its own entry cursor.
     read_case_law_decision: {
       command: ["case-law", "read"],
       scope: "read",
-      windowedText: { textPath: "decision.text" },
+      itemsKey: "items",
     },
     read_case_law_citations: {
       command: ["case-law", "citations"],

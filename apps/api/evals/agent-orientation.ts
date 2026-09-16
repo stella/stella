@@ -527,6 +527,7 @@ const DOCUMENT_ID = "d0d0d0d0-0000-4000-8000-000000000042";
 const TRANSLATION_ENTITY_ID = "7f7f7f7f-1111-4222-8333-444444444444";
 const TRANSLATION_FIELD_ID = "5e5e5e5e-1111-4222-8333-444444444444";
 const CASE_LAW_DECISION_ID = "b2b2b2b2-0000-4000-8000-000000000031";
+const CASE_LAW_SECOND_DECISION_ID = "b2b2b2b2-0000-4000-8000-000000000032";
 // A legislation work is addressed by its ELI, and its provisions by the
 // publisher's own anchors; neither is UUID-shaped, and neither is guessable,
 // so the tasks carry them the way a previous call would have returned them.
@@ -553,30 +554,79 @@ const TASKS: readonly Task[] = [
   },
   {
     id: "search-case-law",
+    // The corpus admits alpha-3 codes only, and the tool's `country` input
+    // now names the admitted ones, so the task asks for a jurisdiction the
+    // corpus carries: a task naming one it does not measures a guess rather
+    // than orientation.
     request:
-      "Search the case-law corpus for decisions about breach of a duty of care in negligence, restricted to German courts.",
+      "Search the Czech case-law corpus for decisions about breach of a duty of care in negligence. Try a couple of phrasings in the same call.",
     mcp: {
       toolName: "search_case_law",
       exampleArgs: {
-        query: "breach of duty of care negligence",
-        country: "DE",
+        queries: ["breach of duty of care negligence", "negligent breach"],
+        country: "CZE",
       },
-      checkArgs: (args) => [
-        ...(typeof args["query"] === "string" && args["query"].length > 0
-          ? []
-          : ["query: expected a non-empty string"]),
-        // The handler folds the code to upper case (publicCaseLawCountry), so
-        // `de` is as correct as `DE`.
-        ...(typeof args["country"] === "string" &&
-        args["country"].toUpperCase() === "DE"
-          ? []
-          : [`country: expected DE, got ${JSON.stringify(args["country"])}`]),
-      ],
+      checkArgs: (args) => {
+        const queries = args["queries"];
+        return [
+          ...(Array.isArray(queries) &&
+          queries.length > 0 &&
+          queries.every(
+            (query) => typeof query === "string" && query.length > 0,
+          )
+            ? []
+            : ["queries: expected a non-empty array of non-empty strings"]),
+          // The handler folds the code to upper case (publicCaseLawCountry),
+          // so `cze` is as correct as `CZE`.
+          ...(typeof args["country"] === "string" &&
+          args["country"].toUpperCase() === "CZE"
+            ? []
+            : [
+                `country: expected CZE, got ${JSON.stringify(args["country"])}`,
+              ]),
+        ];
+      },
     },
     cli: {
       kind: "command",
       path: ["case-law", "search"],
-      flags: { country: "DE" },
+      flags: { country: "CZE" },
+    },
+  },
+  {
+    id: "read-case-law-decisions",
+    request: `Give me the text of decisions ${CASE_LAW_DECISION_ID} and ${CASE_LAW_SECOND_DECISION_ID}. Fetch both in a single call.`,
+    mcp: {
+      toolName: "read_case_law_decision",
+      exampleArgs: {
+        decision_ids: [CASE_LAW_DECISION_ID, CASE_LAW_SECOND_DECISION_ID],
+      },
+      checkArgs: (args) => {
+        const ids = args["decision_ids"];
+        if (!Array.isArray(ids)) {
+          return ["decision_ids: expected an array"];
+        }
+        // Both decisions in one call is the contract this tool exists for;
+        // two single-id calls would each cost a round trip.
+        if (ids.length !== 2) {
+          return [`decision_ids: expected 2 entries, got ${ids.length}`];
+        }
+        return [CASE_LAW_DECISION_ID, CASE_LAW_SECOND_DECISION_ID].flatMap(
+          (expected, index) =>
+            ids[index] === expected
+              ? []
+              : [
+                  `decision_ids.${index}: expected ${expected}, got ${JSON.stringify(ids[index])}`,
+                ],
+        );
+      },
+    },
+    cli: {
+      kind: "command",
+      path: ["case-law", "read"],
+      // `--decision-ids` repeats, and the scorer keeps one value per flag, so
+      // the assertion is the last id a correct command carries.
+      flags: { "decision-ids": CASE_LAW_SECOND_DECISION_ID },
     },
   },
   {

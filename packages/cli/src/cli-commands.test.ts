@@ -663,26 +663,55 @@ describe("windowed text (S4)", () => {
     });
   });
 
-  test("a case-law decision read prints its nested text too", async () => {
+  test("a case-law decision read renders one entry per requested id", async () => {
+    // Not a windowed-text leaf: the read answers per entry, so both the text
+    // and its continuation cursor are per entry and there is no one window to
+    // print or to follow. The two statute reads above cover `textPath`.
     const server = startMockServer(() => ({
       toolPayload: {
-        nextCursor: null,
-        decision: { caseNumber: "29 Cdo 1/2024", text: "THE DECISION BODY" },
+        items: [
+          {
+            decisionId: "00000000-0000-4000-8000-000000000001",
+            nextCursor: null,
+            status: "found",
+            decision: {
+              caseNumber: "29 Cdo 1/2024",
+              text: "THE DECISION BODY",
+            },
+          },
+          {
+            decisionId: "00000000-0000-4000-8000-000000000002",
+            message: "No decision the public may read has this id.",
+            status: "not_found",
+          },
+        ],
       },
     }));
     const result = await runCli({
       args: [
         "case-law",
         "read",
-        "--decision-id",
+        "--decision-ids",
         "00000000-0000-4000-8000-000000000001",
+        "--decision-ids",
+        "00000000-0000-4000-8000-000000000002",
       ],
       url: server.url,
       token: READ,
     });
     server.stop();
     expect(result.exitCode).toBe(0);
-    expect(result.stdout.trim()).toBe("THE DECISION BODY");
+    expect(
+      JSON.parse(result.stdout).items.map(
+        (item: { status: string }) => item.status,
+      ),
+    ).toEqual(["found", "not_found"]);
+    expect(server.requests.at(0)?.params.arguments).toMatchObject({
+      decision_ids: [
+        "00000000-0000-4000-8000-000000000001",
+        "00000000-0000-4000-8000-000000000002",
+      ],
+    });
   });
 });
 

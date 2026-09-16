@@ -176,10 +176,16 @@ const TOOL_COUNT_CEILING: Record<SurfaceMode, number> = {
 // there answered unknown_tool. Measured 130_687, 66_687 and 22_001; the two
 // wider ceilings keep the same 47-char margin they were set with, and law
 // stays pinned exactly.
+// The case-law batch cutover (search takes `queries[]`, the decision read
+// takes `decision_ids[]`, and the case-law `country` input names the admitted
+// codes) then measures 130_130 default, 66_130 anonymized and 21_444 law, down
+// from 130_687, 66_687 and 22_001: the array inputs cost less than the prose
+// the two descriptions gave back. Tightened to the new measurement, since a
+// ratchet only moves down without a reviewed reason.
 const TOOLS_LIST_PAYLOAD_CHAR_CEILING: Record<SurfaceMode, number> = {
-  default: 130_734,
-  anonymized: 66_734,
-  law: 22_001,
+  default: 130_200,
+  anonymized: 66_200,
+  law: 21_444,
 };
 
 // default bumped 42_000 -> 42_300 for the two fields read_case_law_citations
@@ -199,10 +205,15 @@ const TOOLS_LIST_PAYLOAD_CHAR_CEILING: Record<SurfaceMode, number> = {
 // same status vocabulary so a version whose source bars derived AI use
 // answers `text_withheld` rather than its wording. law carries the same
 // schemas and is pinned exactly.
+// The case-law batch cutover then measures 44_960 default, 30_596 anonymized
+// and 7_733 law, down from 46_525, 32_161 and 9_298: the decision read
+// declares its decision once inside an `items[]` variant whose absence
+// branches are three fields each, and search_case_law adds only
+// `matchedQueries`. Tightened to the new measurement.
 const OUTPUT_SCHEMA_TOTAL_CHAR_CEILING: Record<SurfaceMode, number> = {
-  default: 46_600,
-  anonymized: 32_300,
-  law: 9298,
+  default: 45_100,
+  anonymized: 30_700,
+  law: 7733,
 };
 
 // Largest measured schema is read_document at 3_434 chars. A single tool must

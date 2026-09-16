@@ -131,11 +131,28 @@ export const hydrateDeferredDocument = async (
  */
 export type DecisionReadCaller = "anonymous" | "attributed";
 
+/**
+ * Whether this read may fetch a document the ingestion queue has not stored
+ * yet. A fetch is a publisher crawl, so a caller reading many decisions at
+ * once reads the stored state first and spends its own fetch budget
+ * deliberately, rather than crawling once per id.
+ */
+export const DECISION_DOCUMENT_HYDRATION = {
+  /** Fetch the document when the read finds one pending. */
+  onDemand: "on-demand",
+  /** Answer from what is stored; a pending document stays pending. */
+  storedOnly: "stored-only",
+} as const;
+
+export type DecisionDocumentHydration =
+  (typeof DECISION_DOCUMENT_HYDRATION)[keyof typeof DECISION_DOCUMENT_HYDRATION];
+
 export type ReadGatedDecisionOptions = {
   caseLawDb: CaseLawPublicReadDb;
   locator: DecisionSubjectLocator;
   caller: DecisionReadCaller;
   citationsCursor?: string | null | undefined;
+  documentHydration: DecisionDocumentHydration;
 };
 
 /**
@@ -154,6 +171,7 @@ export const readGatedDecisionWithDocument = async ({
   locator,
   caller,
   citationsCursor,
+  documentHydration,
 }: ReadGatedDecisionOptions): Promise<DecisionRead | null> => {
   const read = await withRedistributableSubject(
     caseLawDb,
@@ -161,7 +179,10 @@ export const readGatedDecisionWithDocument = async ({
     async (subject) => await readDecisionHandler({ citationsCursor, subject }),
   );
 
-  return read === null
-    ? null
+  if (read === null) {
+    return null;
+  }
+  return documentHydration === DECISION_DOCUMENT_HYDRATION.storedOnly
+    ? read
     : await hydrateDeferredDocument(read, caller === "attributed");
 };

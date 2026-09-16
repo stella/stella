@@ -87,7 +87,7 @@ requires (request it at `stella auth login --scopes`).
 | capability   | `stella capability invoke`                 | read                        |                                       |
 | capability   | `stella capability list`                   | read                        | paginated                             |
 | case-law     | `stella case-law citations`                | read                        | paginated                             |
-| case-law     | `stella case-law read`                     | read                        | paginated; windowed text              |
+| case-law     | `stella case-law read`                     | read                        | paginated                             |
 | case-law     | `stella case-law search`                   | search                      | paginated                             |
 | clause       | `stella clause delete`                     | knowledge_write             | destructive (needs `--yes` off a TTY) |
 | clause       | `stella clause list`                       | read                        | paginated                             |
@@ -157,10 +157,10 @@ are omitted here.
   - `--decision-id` — Case-law decision ID (string)
   - `--direction` — Which side of the citation graph to read: 'cites' for the decisions this decision cites, 'cited_by' for the decisions that cite it. Citing is not agreeing: both sides carry negative treatments. (enum: cites, cited_by)
 - `stella case-law read`
-  - `--decision-id` — Case-law decision ID (string)
+  - `--decision-ids` — The decisions to read, at most 20 per call. Each id is answered on its own, so one unknown id does not sink the rest. (string-array, repeatable)
 - `stella case-law search`
-  - `--query` — Search query (string)
-  - `--country` — Required corpus country code (string)
+  - `--queries` — Several phrasings of ONE question, at most 5. Their pages are merged and deduplicated, so a reformulation costs no extra round trip; one phrasing is a valid call. (string-array, repeatable)
+  - `--country` — Required corpus country code, uppercase ISO 3166-1 alpha-3. Admitted: CZE. (string)
   - optional: --court, --language, --decision-type, --source-id, --date-from, --date-to, --sort (relevance|newest)
 - `stella clause delete`
   - `--clause-id` — Clause id to delete (string)

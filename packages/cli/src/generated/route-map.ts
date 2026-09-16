@@ -409,11 +409,12 @@ export const generatedRouteMap: RouteNode = {
             description: "Search case law within one country.",
             flags: [
               {
-                flag: "--query",
-                prop: "query",
-                kind: "string",
-                repeatable: false,
-                description: "Search query",
+                flag: "--queries",
+                prop: "queries",
+                kind: "string-array",
+                repeatable: true,
+                description:
+                  "Several phrasings of ONE question, at most 5. Their pages are merged and deduplicated, so a reformulation costs no extra round trip; one phrasing is a valid call.",
                 required: true,
               },
               {
@@ -429,7 +430,8 @@ export const generatedRouteMap: RouteNode = {
                 prop: "country",
                 kind: "string",
                 repeatable: false,
-                description: "Required corpus country code",
+                description:
+                  "Required corpus country code, uppercase ISO 3166-1 alpha-3. Admitted: CZE.",
                 required: true,
               },
               {
@@ -492,26 +494,33 @@ export const generatedRouteMap: RouteNode = {
             scope: "search",
             inputSchema: {
               type: "object",
-              required: ["query", "country"],
+              required: ["queries", "country"],
               additionalProperties: false,
               properties: {
-                query: {
-                  type: "string",
-                  minLength: 1,
-                  maxLength: 500,
-                  description: "Search query",
+                queries: {
+                  type: "array",
+                  items: {
+                    type: "string",
+                    minLength: 1,
+                    maxLength: 500,
+                  },
+                  minItems: 1,
+                  maxItems: 5,
+                  description:
+                    "Several phrasings of ONE question, at most 5. Their pages are merged and deduplicated, so a reformulation costs no extra round trip; one phrasing is a valid call.",
                 },
                 limit: {
                   type: "integer",
                   minimum: 1,
                   maximum: 20,
-                  description: "Max results to return",
+                  description:
+                    "Merged-page size, split evenly across the queries (at least one hit each)",
                 },
                 cursor: {
                   type: "string",
-                  maxLength: 128,
+                  maxLength: 876,
                   description:
-                    "Opaque cursor from a previous search_case_law call",
+                    "Opaque cursor from a previous search_case_law call. It continues the same queries, in the same order.",
                 },
                 court: {
                   type: "string",
@@ -522,7 +531,8 @@ export const generatedRouteMap: RouteNode = {
                   type: "string",
                   minLength: 2,
                   maxLength: 3,
-                  description: "Required corpus country code",
+                  description:
+                    "Required corpus country code, uppercase ISO 3166-1 alpha-3. Admitted: CZE.",
                 },
                 language: {
                   type: "string",
@@ -568,40 +578,47 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["case-law", "read"],
             toolName: "read_case_law_decision",
-            description:
-              "Read a single case-law decision by its decision ID: its own text.",
+            description: "Read case-law decisions by id.",
             flags: [
               {
-                flag: "--decision-id",
-                prop: "decision_id",
-                kind: "string",
-                repeatable: false,
-                description: "Case-law decision ID",
+                flag: "--decision-ids",
+                prop: "decision_ids",
+                kind: "string-array",
+                repeatable: true,
+                description:
+                  "The decisions to read, at most 20 per call. Each id is answered on its own, so one unknown id does not sink the rest.",
                 required: true,
               },
             ],
             inputOnly: [],
             paginated: true,
-            windowedText: true,
-            textPath: "decision.text",
+            windowedText: false,
+            itemsKey: "items",
             destructive: false,
             scope: "read",
             inputSchema: {
               type: "object",
-              required: ["decision_id"],
+              required: ["decision_ids"],
               additionalProperties: false,
               properties: {
-                decision_id: {
-                  type: "string",
-                  format: "uuid",
-                  description: "Case-law decision ID",
+                decision_ids: {
+                  type: "array",
+                  items: {
+                    type: "string",
+                    format: "uuid",
+                    description: "Case-law decision ID",
+                  },
+                  minItems: 1,
+                  maxItems: 20,
+                  description:
+                    "The decisions to read, at most 20 per call. Each id is answered on its own, so one unknown id does not sink the rest.",
                 },
                 cursor: {
                   type: "string",
                   minLength: 1,
                   maxLength: 512,
                   description:
-                    "Opaque cursor from a previous call to read the next window of decision text and citations",
+                    "Opaque cursor from a previous call to read the next window of one decision's text and citations. Accepted only alongside a single decision id.",
                 },
               },
             },
