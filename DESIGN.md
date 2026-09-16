@@ -154,8 +154,12 @@ Separator, Sheet, Skeleton, Table, Tabs, Textarea, Toast, Tooltip.
 
 ### Component Conventions
 
-- Use existing coss components with `className` overrides; do not
-  write raw `<button>`, `<input>`, etc.
+- Use existing coss components; do not write raw `<button>`,
+  `<input>`, etc. `className` places a component (margin, width,
+  flex, position); its appearance (padding, colour, typography,
+  shape) comes from a variant, added in `packages/ui` when the design
+  calls for one. The `shadcn/*` lint rules enforce this; their
+  messages name the variant, size, or token to use.
 - Use semantic HTML (`<nav>`, `<main>`, `<section>`) over generic
   `<div>` with ARIA roles.
 - All interactive elements require a 44x44px minimum touch target

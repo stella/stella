@@ -21,6 +21,8 @@ export const BASELINE_PATHS = {
   ratchet: "scripts/ratchet-baseline.json",
   /** scripts/rc-bailouts.ts */
   reactCompilerBailouts: "scripts/react-compiler-bailouts.json",
+  /** scripts/shadcn-lint-baseline.ts */
+  shadcnLint: "scripts/shadcn-lint-baseline.json",
   /** scripts/typecheck-baseline.ts */
   typecheck: "scripts/typecheck-baseline.json",
   /** apps/api/scripts/mcp-coverage-guard.ts */

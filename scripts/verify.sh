@@ -309,6 +309,7 @@ else
   run_step "Result consumption" bun run check:result-consumption -- --all
 fi
 run_step "React Compiler bailout guard" bun scripts/rc-bailouts.ts --check
+run_step "Design-system lint backlog" bun scripts/shadcn-lint-baseline.ts --check
 run_step "Oxlint override union guard" bun test \
   scripts/oxlint-override-union.test.ts
 run_step "Ratchet guard" run_ratchet_guard

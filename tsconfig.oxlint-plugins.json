@@ -16,7 +16,8 @@
   "include": [
     ".oxlint-plugins/**/*.ts",
     "oxlint.config.ts",
-    "oxlint.result-boundary.config.ts"
+    "oxlint.result-boundary.config.ts",
+    "oxlint.shadcn.config.ts"
   ],
   "exclude": [".oxlint-plugins/__fixtures__"]
 }
