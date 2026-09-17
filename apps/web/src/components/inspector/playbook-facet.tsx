@@ -171,6 +171,8 @@ import { useReviewActions } from "@/components/ai-suggestions/use-review-actions
 import { useReviewChangeSummary } from "@/components/ai-suggestions/use-review-change-summary";
 import { useReviewStartMode } from "@/components/ai-suggestions/use-review-start-mode";
 import { DocumentIcon } from "@/components/document-icon";
+import { reportCounterpartyNote } from "@/components/inspector/counterparty-note.logic";
+import type { CounterpartyNoteOutcome } from "@/components/inspector/counterparty-note.logic";
 import { DOCUMENT_PANE } from "@/components/inspector/document-pane";
 import type {
   DocumentPane,
@@ -465,6 +467,25 @@ export const PlaybookFacet = ({
   };
 
   /**
+   * Say how the note ended, and answer whether it is in the document: the
+   * popover keeps the reviewer's text until it is.
+   */
+  const reportNote = (outcome: CounterpartyNoteOutcome, blockId: string) => {
+    const { applied, tone, title, description } =
+      reportCounterpartyNote(outcome);
+    stellaToast[tone](t(title), {
+      ...(description !== undefined && { description: t(description) }),
+      ...(applied && {
+        action: {
+          label: t("inspector.review.showInDocument"),
+          onClick: () => scrollToBlock(blockId),
+        },
+      }),
+    });
+    return applied;
+  };
+
+  /**
    * Write the reviewer's note on the cited clause as a DOCX comment.
    *
    * The reviewer's own text is the whole input: nothing derived from the
@@ -477,18 +498,18 @@ export const PlaybookFacet = ({
   ): Promise<boolean> => {
     const editor = registration?.editorRef.current;
     if (registration === undefined || !editor) {
-      return false;
+      return reportNote({ type: "failed" }, blockId);
     }
     const application = await Result.tryPromise(async () => {
-      const unlocked = registration.editable
-        ? true
-        : await registration.requestEditMode();
-      if (!unlocked) {
-        return "cancelled" as const;
+      if (!registration.editable) {
+        const editMode = await registration.requestEditMode();
+        if (editMode.type === "blocked") {
+          return { type: "blocked", reason: editMode.reason } as const;
+        }
       }
       const snapshot = editor.createAIEditSnapshot();
       if (!snapshot) {
-        return "failed" as const;
+        return { type: "failed" } as const;
       }
       const result = editor.applyAIEditOperations({
         snapshot,
@@ -503,34 +524,15 @@ export const PlaybookFacet = ({
         mode: "tracked-changes",
         ...(author.length > 0 && { author }),
       });
-      return result.applied.length === 0 ? "failed" : "applied";
+      return result.applied.length === 0
+        ? ({ type: "failed" } as const)
+        : ({ type: "applied" } as const);
     });
     if (Result.isError(application)) {
       analytics.captureError(application.error);
-      stellaToast.add({
-        type: "error",
-        title: t("inspector.review.commentFailed"),
-      });
-      return false;
+      return reportNote({ type: "failed" }, blockId);
     }
-    if (application.value === "applied") {
-      stellaToast.add({
-        type: "success",
-        title: t("inspector.review.noteAdded"),
-        action: {
-          label: t("inspector.review.showInDocument"),
-          onClick: () => scrollToBlock(blockId),
-        },
-      });
-      return true;
-    }
-    if (application.value === "failed") {
-      stellaToast.add({
-        type: "error",
-        title: t("inspector.review.commentFailed"),
-      });
-    }
-    return false;
+    return reportNote(application.value, blockId);
   };
 
   const acceptChange = (change: ReviewChange) => {
@@ -1200,19 +1202,16 @@ const ReviewRunPanel = ({
       // Writing the note into the draft is the reviewer's answer to the
       // finding, so a write that lands also records the decision; nothing is
       // recorded for one that did not.
-      onAddCounterpartyNote={(findingId, blockId, note) => {
-        detached(
-          (async () => {
-            if (await onAddCounterpartyNote(blockId, note)) {
-              decide.mutate({
-                workspaceId,
-                findingId,
-                decision: REVIEW_DECISION.ACCEPTED,
-              });
-            }
-          })(),
-          "playbook-facet.add-counterparty-note",
-        );
+      onAddCounterpartyNote={async (findingId, blockId, note) => {
+        const added = await onAddCounterpartyNote(blockId, note);
+        if (added) {
+          decide.mutate({
+            workspaceId,
+            findingId,
+            decision: REVIEW_DECISION.ACCEPTED,
+          });
+        }
+        return added;
       }}
       onDecide={(findingId, decision) => {
         decide.mutate({ workspaceId, findingId, decision });
@@ -2529,7 +2528,7 @@ type ResultsViewProps = {
     findingId: DocumentReviewFindingRow["id"],
     blockId: string,
     note: string,
-  ) => void;
+  ) => Promise<boolean>;
   onDecide: (
     findingId: DocumentReviewFindingRow["id"],
     decision: DocumentReviewDecision,
@@ -3143,7 +3142,7 @@ type ReviewResultListProps = {
     findingId: DocumentReviewFindingRow["id"],
     blockId: string,
     note: string,
-  ) => void;
+  ) => Promise<boolean>;
   onDecide: (
     findingId: DocumentReviewFindingRow["id"],
     decision: DocumentReviewDecision,
@@ -3442,7 +3441,7 @@ type ReviewResultCardProps = {
     findingId: DocumentReviewFindingRow["id"],
     blockId: string,
     note: string,
-  ) => void;
+  ) => Promise<boolean>;
   onDecide: (
     findingId: DocumentReviewFindingRow["id"],
     decision: DocumentReviewDecision,
@@ -3643,11 +3642,10 @@ const ReviewResultCard = ({
             item={item}
             readOnly={readOnly}
             onAcceptSuggestion={onAcceptSuggestion}
-            onAddCounterpartyNote={(note) => {
-              if (targetBlockId !== null) {
-                onAddCounterpartyNote(item.id, targetBlockId, note);
-              }
-            }}
+            onAddCounterpartyNote={async (note) =>
+              targetBlockId !== null &&
+              (await onAddCounterpartyNote(item.id, targetBlockId, note))
+            }
             onAskInChat={() =>
               useInspectorCommandStore.getState().requestFileChatDraft({
                 fileFieldId: targetFileFieldId,
@@ -3807,7 +3805,7 @@ type ReviewCardActionsProps = {
   targetBlockId: string | null;
   onAcceptSuggestion: (suggestion: ReviewSuggestion) => void;
   onRejectSuggestion: (suggestion: ReviewSuggestion) => void;
-  onAddCounterpartyNote: (note: string) => void;
+  onAddCounterpartyNote: (note: string) => Promise<boolean>;
   onAskInChat: () => void;
   onDecide: (decision: DocumentReviewDecision) => void;
   onSetFlags: (flags: readonly ReviewFlag[]) => void;
@@ -4128,11 +4126,12 @@ const CounterpartyNotePopover = ({
   onSubmit,
 }: {
   disabled: boolean;
-  onSubmit: (note: string) => void;
+  onSubmit: (note: string) => Promise<boolean>;
 }) => {
   const t = useTranslations();
   const [open, setOpen] = useState(false);
   const [note, setNote] = useState("");
+  const [submitting, setSubmitting] = useState(false);
   const trimmed = note.trim();
 
   return (
@@ -4163,11 +4162,22 @@ const CounterpartyNotePopover = ({
           />
           <Button
             className="w-full"
-            disabled={trimmed.length === 0}
+            disabled={trimmed.length === 0 || submitting}
             onClick={() => {
-              onSubmit(trimmed);
-              setNote("");
-              setOpen(false);
+              setSubmitting(true);
+              detached(
+                (async () => {
+                  const added = await onSubmit(trimmed);
+                  setSubmitting(false);
+                  // The text is the reviewer's only copy: clear it and close
+                  // the popover once it is in the document, never before.
+                  if (added) {
+                    setNote("");
+                    setOpen(false);
+                  }
+                })(),
+                "playbook-facet.add-counterparty-note",
+              );
             }}
             size="sm"
           >

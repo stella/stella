@@ -147,6 +147,7 @@ import {
 } from "@/components/chat/create-document-draft-runtime";
 import { useChatModelSelection } from "@/components/chat/use-chat-model-selection";
 import type { DocxComments } from "@/components/docx/app-docx-editor";
+import type { DocxEditModeResult } from "@/components/docx/docx-browser-editor.logic";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { useAIKeyGate } from "@/components/require-ai-key";
@@ -769,7 +770,7 @@ type FileChatOverlayProps = {
    * window can't auto-edit an eventually-unsafe document. Defaults to `safe`.
    */
   docxEditSafety?: DocxEditSafety | undefined;
-  requestDocxEditMode?: (() => boolean | Promise<boolean>) | undefined;
+  requestDocxEditMode?: (() => Promise<DocxEditModeResult>) | undefined;
   /**
    * The host's controlled `DocxEditor` `comments` state. The folio-agents
    * comment tools (`read_comments`, `add_comment`, `reply_comment`,

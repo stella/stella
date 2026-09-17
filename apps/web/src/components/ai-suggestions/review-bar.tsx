@@ -71,6 +71,7 @@ import type { ReviewSuggestion } from "@/components/ai-suggestions/review-store"
 import { useFolioDocumentBlocks } from "@/components/ai-suggestions/use-folio-document-blocks";
 import { useReviewActions } from "@/components/ai-suggestions/use-review-actions";
 import { useReviewChangeSummary } from "@/components/ai-suggestions/use-review-change-summary";
+import type { DocxEditModeResult } from "@/components/docx/docx-browser-editor.logic";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useHydrationSafeHotkeyPlatform } from "@/hooks/use-hydration-safe-hotkey-platform";
@@ -90,7 +91,7 @@ type ReviewBarProps = {
   docxEditorRef: RefObject<DocxEditorRef | null>;
   /** Whether the editor currently accepts edit operations. */
   docxEditable: boolean;
-  requestDocxEditMode?: (() => boolean | Promise<boolean>) | undefined;
+  requestDocxEditMode?: (() => Promise<DocxEditModeResult>) | undefined;
 };
 
 export const ReviewBar = ({

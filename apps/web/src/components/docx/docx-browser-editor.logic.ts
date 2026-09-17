@@ -196,6 +196,25 @@ type ShouldBlockDocxEditOptions = {
 
 export type DocxEditBlockReason = "pendingCompatibility" | "unsafe";
 
+/**
+ * Why a request to enter edit mode did not reach it. `collaboration` and
+ * `opening` are the waits the editor cannot answer synchronously: the shared
+ * session is being joined, or an edit session is already opening.
+ */
+export type DocxEditModeBlockReason =
+  | DocxEditBlockReason
+  | "collaboration"
+  | "opening";
+
+/**
+ * The answer to "put this document into edit mode". A caller holding the
+ * user's unsaved input needs the reason, not a bare false: every block here
+ * is something to tell the user before their input is thrown away.
+ */
+export type DocxEditModeResult =
+  | { type: "editing" }
+  | { type: "blocked"; reason: DocxEditModeBlockReason };
+
 export const getDocxEditBlockReason = ({
   canSafelyEdit,
 }: ShouldBlockDocxEditOptions): DocxEditBlockReason | null => {

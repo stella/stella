@@ -22,6 +22,8 @@ import { create } from "zustand";
 
 import type { DocxEditorRef } from "@stll/folio-react";
 
+import type { DocxEditModeResult } from "@/components/docx/docx-browser-editor.logic";
+
 // Registrations are keyed per (entity, file field): an entity can hold multiple
 // file fields, each a distinct document with its own live editor. Mirrors
 // `reviewSessionKey` in playbook-review-store.ts.
@@ -30,7 +32,7 @@ export const activeDocxKey = (entityId: string, fileFieldId: string): string =>
 
 export type ActiveDocxRegistration = {
   editorRef: RefObject<DocxEditorRef | null>;
-  requestEditMode: () => boolean | Promise<boolean>;
+  requestEditMode: () => Promise<DocxEditModeResult>;
   editable: boolean;
 };
 

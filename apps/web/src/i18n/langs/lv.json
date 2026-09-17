@@ -2821,6 +2821,10 @@
       "notCompared": "Nav salīdzināts",
       "notComparedCount": "Nav salīdzināts: {count, number}",
       "noteAdded": "Pretpusei pievienota piezīme",
+      "noteBlockedChecking": "stella vēl pārbauda, vai šo dokumentu var droši rediģēt. Jūsu piezīme ir saglabāta; mēģiniet vēlreiz pēc brīža.",
+      "noteBlockedCollaboration": "Koplietotā rediģēšanas sesija vēl tiek atvērta. Jūsu piezīme ir saglabāta; mēģiniet vēlreiz pēc brīža.",
+      "noteBlockedOpening": "Dokuments vēl tiek atvērts. Jūsu piezīme ir saglabāta; mēģiniet vēlreiz pēc brīža.",
+      "noteNotAdded": "Piezīme nav pievienota",
       "openPlaybooks": "Atvērt pārbaudes ceļvežus",
       "pane": {
         "document": "Panelis: secinājumi blakus dokumentam",

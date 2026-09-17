@@ -62,6 +62,7 @@ import type {
   ReviewSuggestion,
   ReviewSuggestionStatus,
 } from "@/components/ai-suggestions/review-store";
+import type { DocxEditModeResult } from "@/components/docx/docx-browser-editor.logic";
 import { getWordEditAuthorName } from "@/features/chat/hooks/use-chat-user-context";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { getAnalytics } from "@/lib/analytics/provider";
@@ -75,11 +76,11 @@ export type UseReviewActionsOptions = {
   /** Whether the editor currently accepts edit operations. */
   docxEditable: boolean;
   /**
-   * Prompt the user to unlock the document. Resolves to true on
-   * success, false if the user cancels. Called before an apply while
-   * the editor is locked.
+   * Prompt the user to unlock the document. Resolves to the edit-mode
+   * outcome, which carries why a request was blocked. Called before an
+   * apply while the editor is locked.
    */
-  requestDocxEditMode?: (() => boolean | Promise<boolean>) | undefined;
+  requestDocxEditMode?: (() => Promise<DocxEditModeResult>) | undefined;
 };
 
 export type ReviewActions = {
@@ -142,7 +143,7 @@ export const useReviewActions = ({
     if (!requestDocxEditMode) {
       return false;
     }
-    return await requestDocxEditMode();
+    return (await requestDocxEditMode()).type === "editing";
   });
 
   // Read the CURRENT store row for an id captured before an await. Follows a

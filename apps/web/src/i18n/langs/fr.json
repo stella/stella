@@ -2821,6 +2821,10 @@
       "notCompared": "Non comparé",
       "notComparedCount": "Non comparé : {count, number}",
       "noteAdded": "Note ajoutée pour la contrepartie",
+      "noteBlockedChecking": "stella vérifie encore si ce document peut être modifié sans risque. Votre note est conservée ; réessayez dans un instant.",
+      "noteBlockedCollaboration": "La session d'édition partagée est en cours d'ouverture. Votre note est conservée ; réessayez dans un instant.",
+      "noteBlockedOpening": "Le document est en cours d'ouverture. Votre note est conservée ; réessayez dans un instant.",
+      "noteNotAdded": "Note non ajoutée",
       "openPlaybooks": "Ouvrir les playbooks",
       "pane": {
         "document": "Panneau : constats à côté du document",

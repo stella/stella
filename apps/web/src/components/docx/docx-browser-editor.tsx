@@ -122,7 +122,10 @@ import {
   shouldRequestEditFromMouseDown,
   shouldReuseCollaborationPublication,
 } from "./docx-browser-editor.logic";
-import type { OptimisticPreviewFile } from "./docx-browser-editor.logic";
+import type {
+  DocxEditModeResult,
+  OptimisticPreviewFile,
+} from "./docx-browser-editor.logic";
 import {
   aggregateAnonymizationMatches,
   buildAnonymizationDetectionKey,
@@ -937,13 +940,13 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
     onClose();
   }, [onClose]);
 
-  const requestEditMode = useCallback(async () => {
+  const requestEditMode = useCallback(async (): Promise<DocxEditModeResult> => {
     if (isCollaborativeEditing) {
-      return true;
+      return { type: "editing" };
     }
 
     if (state.status === "editing") {
-      return true;
+      return { type: "editing" };
     }
 
     const blockReason = getDocxEditBlockReason({
@@ -957,21 +960,21 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
       // `canSafelyEdit` resolves and silently enters edit mode then.
       pendingEditRequestRef.current = true;
       useInspectorCommandStore.getState().requestDocxEdit(fieldId);
-      return false;
+      return { type: "blocked", reason: "pendingCompatibility" };
     }
 
     if (blockReason === "unsafe") {
       abandonUnsafeEditAttempt();
-      return false;
+      return { type: "blocked", reason: "unsafe" };
     }
 
     if (previewFile === null || state.status !== "idle" || didOpenRef.current) {
-      return false;
+      return { type: "blocked", reason: "opening" };
     }
 
     if (collaborationEnabled) {
       requestCollaboration();
-      return false;
+      return { type: "blocked", reason: "collaboration" };
     }
 
     didOpenRef.current = true;
@@ -979,9 +982,10 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
     const opened = await open();
     if (!opened) {
       didOpenRef.current = false;
+      return { type: "blocked", reason: "opening" };
     }
 
-    return opened;
+    return { type: "editing" };
   }, [
     compatibility?.canSafelyEdit,
     collaborationEnabled,

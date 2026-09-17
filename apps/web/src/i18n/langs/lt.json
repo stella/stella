@@ -2821,6 +2821,10 @@
       "notCompared": "Nepalyginta",
       "notComparedCount": "Nepalyginta: {count, number}",
       "noteAdded": "Priešingai šaliai pridėta pastaba",
+      "noteBlockedChecking": "stella dar tikrina, ar šį dokumentą galima saugiai redaguoti. Jūsų pastaba išsaugota; pabandykite dar kartą po akimirkos.",
+      "noteBlockedCollaboration": "Bendro redagavimo sesija dar atveriama. Jūsų pastaba išsaugota; pabandykite dar kartą po akimirkos.",
+      "noteBlockedOpening": "Dokumentas dar atveriamas. Jūsų pastaba išsaugota; pabandykite dar kartą po akimirkos.",
+      "noteNotAdded": "Pastaba nepridėta",
       "openPlaybooks": "Atverti peržiūros vadovus",
       "pane": {
         "document": "Skydelis: išvados šalia dokumento",

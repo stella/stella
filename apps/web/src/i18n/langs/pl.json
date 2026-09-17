@@ -2821,6 +2821,10 @@
       "notCompared": "Nieporównane",
       "notComparedCount": "Nieporównane: {count, number}",
       "noteAdded": "Dodano notatkę dla kontrahenta",
+      "noteBlockedChecking": "stella nadal sprawdza, czy ten dokument można bezpiecznie edytować. Notatka została zachowana; spróbuj ponownie za chwilę.",
+      "noteBlockedCollaboration": "Sesja wspólnej edycji dopiero się otwiera. Notatka została zachowana; spróbuj ponownie za chwilę.",
+      "noteBlockedOpening": "Dokument dopiero się otwiera. Notatka została zachowana; spróbuj ponownie za chwilę.",
+      "noteNotAdded": "Notatka nie została dodana",
       "openPlaybooks": "Otwórz playbooki",
       "pane": {
         "document": "Panel: ustalenia obok dokumentu",

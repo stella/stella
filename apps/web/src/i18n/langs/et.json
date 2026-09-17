@@ -2821,6 +2821,10 @@
       "notCompared": "Võrdlemata",
       "notComparedCount": "Võrdlemata: {count, number}",
       "noteAdded": "Vastaspoolele lisati märkus",
+      "noteBlockedChecking": "stella kontrollib veel, kas seda dokumenti saab ohutult muuta. Sinu märkus on alles; proovi hetke pärast uuesti.",
+      "noteBlockedCollaboration": "Jagatud muutmisseanss on veel avanemas. Sinu märkus on alles; proovi hetke pärast uuesti.",
+      "noteBlockedOpening": "Dokument on veel avanemas. Sinu märkus on alles; proovi hetke pärast uuesti.",
+      "noteNotAdded": "Märkust ei lisatud",
       "openPlaybooks": "Ava playbookid",
       "pane": {
         "document": "Paneel: leiud dokumendi kõrval",

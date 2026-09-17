@@ -2821,6 +2821,10 @@
       "notCompared": "Nicht verglichen",
       "notComparedCount": "Nicht verglichen: {count, number}",
       "noteAdded": "Notiz für die Gegenpartei hinzugefügt",
+      "noteBlockedChecking": "stella prüft noch, ob dieses Dokument sicher bearbeitet werden kann. Ihre Notiz bleibt erhalten; versuchen Sie es gleich noch einmal.",
+      "noteBlockedCollaboration": "Die gemeinsame Bearbeitungssitzung wird noch geöffnet. Ihre Notiz bleibt erhalten; versuchen Sie es gleich noch einmal.",
+      "noteBlockedOpening": "Das Dokument wird noch geöffnet. Ihre Notiz bleibt erhalten; versuchen Sie es gleich noch einmal.",
+      "noteNotAdded": "Notiz nicht hinzugefügt",
       "openPlaybooks": "Playbooks öffnen",
       "pane": {
         "document": "Panel: Ergebnisse neben dem Dokument",

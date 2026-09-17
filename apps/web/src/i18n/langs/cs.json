@@ -2821,6 +2821,10 @@
       "notCompared": "Neporovnáno",
       "notComparedCount": "Neporovnáno: {count, number}",
       "noteAdded": "Poznámka pro protistranu přidána",
+      "noteBlockedChecking": "stella ještě ověřuje, zda lze dokument bezpečně upravovat. Poznámka zůstává zachována; zkuste to za chvíli znovu.",
+      "noteBlockedCollaboration": "Sdílená úprava se teprve otevírá. Poznámka zůstává zachována; zkuste to za chvíli znovu.",
+      "noteBlockedOpening": "Dokument se teprve otevírá. Poznámka zůstává zachována; zkuste to za chvíli znovu.",
+      "noteNotAdded": "Poznámka nebyla přidána",
       "openPlaybooks": "Otevřít playbooky",
       "pane": {
         "document": "Panel: zjištění vedle dokumentu",

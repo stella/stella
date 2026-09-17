@@ -2821,6 +2821,10 @@
       "notCompared": "Nem összevetve",
       "notComparedCount": "Nem összevetve: {count, number}",
       "noteAdded": "Megjegyzés hozzáadva az ellenfélnek",
+      "noteBlockedChecking": "A stella még ellenőrzi, hogy a dokumentum biztonságosan szerkeszthető-e. A jegyzete megmarad; próbálja meg újra egy pillanat múlva.",
+      "noteBlockedCollaboration": "A közös szerkesztési munkamenet még betöltődik. A jegyzete megmarad; próbálja meg újra egy pillanat múlva.",
+      "noteBlockedOpening": "A dokumentum még betöltődik. A jegyzete megmarad; próbálja meg újra egy pillanat múlva.",
+      "noteNotAdded": "A jegyzet nem lett hozzáadva",
       "openPlaybooks": "Playbookok megnyitása",
       "pane": {
         "document": "Panel: megállapítások a dokumentum mellett",

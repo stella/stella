@@ -2821,6 +2821,10 @@
       "notCompared": "Não comparado",
       "notComparedCount": "Não comparado: {count, number}",
       "noteAdded": "Nota adicionada para a contraparte",
+      "noteBlockedChecking": "A stella ainda está verificando se este documento pode ser editado com segurança. Sua nota foi mantida; tente novamente em instantes.",
+      "noteBlockedCollaboration": "A sessão de edição compartilhada ainda está abrindo. Sua nota foi mantida; tente novamente em instantes.",
+      "noteBlockedOpening": "O documento ainda está abrindo. Sua nota foi mantida; tente novamente em instantes.",
+      "noteNotAdded": "Nota não adicionada",
       "openPlaybooks": "Abrir playbooks",
       "pane": {
         "document": "Painel: constatações ao lado do documento",

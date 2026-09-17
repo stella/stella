@@ -2821,6 +2821,10 @@
       "notCompared": "Not compared",
       "notComparedCount": "Not compared: {count, number}",
       "noteAdded": "Note added for the counterparty",
+      "noteBlockedChecking": "stella is still checking whether this document can be edited safely. Your note is kept; try again in a moment.",
+      "noteBlockedCollaboration": "The shared editing session is still opening. Your note is kept; try again in a moment.",
+      "noteBlockedOpening": "The document is still opening. Your note is kept; try again in a moment.",
+      "noteNotAdded": "Note not added",
       "openPlaybooks": "Open playbooks",
       "pane": {
         "document": "Panel: findings beside the document",

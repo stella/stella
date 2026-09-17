@@ -28,7 +28,7 @@ import {
 
 const makeRegistration = () => ({
   editorRef: createRef<DocxEditorRef | null>(),
-  requestEditMode: () => true,
+  requestEditMode: () => Promise.resolve({ type: "editing" } as const),
   editable: false,
 });
 
