@@ -437,6 +437,7 @@ const listTimeEntriesArgsSchema = nullAsAbsent(
       cursor: v.optional(
         v.pipe(
           v.string(),
+          v.minLength(1),
           v.maxLength(512),
           v.description(
             "Opaque cursor from a previous list_time_entries call to fetch the next page",
@@ -1160,6 +1161,7 @@ const listInvoicesArgsSchema = nullAsAbsent(
       cursor: v.optional(
         v.pipe(
           v.string(),
+          v.minLength(1),
           v.maxLength(512),
           v.description(
             "Opaque cursor from a previous list_invoices call to fetch the next page",

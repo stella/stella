@@ -209,6 +209,7 @@ const searchLegislationArgsSchema = nullAsAbsent(
     document_type: v.optional(
       v.pipe(
         v.string(),
+        v.minLength(1),
         v.maxLength(128),
         v.description("Filter by document type"),
       ),
@@ -216,6 +217,7 @@ const searchLegislationArgsSchema = nullAsAbsent(
     status: v.optional(
       v.pipe(
         v.string(),
+        v.minLength(1),
         v.maxLength(32),
         v.description("Filter by publication status"),
       ),
@@ -223,6 +225,7 @@ const searchLegislationArgsSchema = nullAsAbsent(
     language: v.optional(
       v.pipe(
         v.string(),
+        v.minLength(1),
         v.maxLength(8),
         v.description("Filter by language code"),
       ),

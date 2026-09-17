@@ -639,6 +639,7 @@ const listClausesArgsSchema = nullAsAbsent(
       cursor: v.optional(
         v.pipe(
           v.string(),
+          v.minLength(1),
           v.maxLength(512),
           v.description(
             "Opaque cursor from a previous list_clauses call to fetch the next page",
@@ -1317,6 +1318,7 @@ const listPlaybooksArgsSchema = nullAsAbsent(
       cursor: v.optional(
         v.pipe(
           v.string(),
+          v.minLength(1),
           v.maxLength(512),
           v.description(
             "Opaque cursor from a previous list_playbooks call to fetch the next page",
