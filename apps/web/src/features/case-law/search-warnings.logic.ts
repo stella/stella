@@ -104,20 +104,14 @@ export const caseLawWarningSurfaces = (
   for (const { code } of answered.warnings) {
     const display = CASE_LAW_SEARCH_WARNING_DISPLAY[code];
     switch (display.surface) {
+      // Both branches carry the narrowed entry itself rather than a new
+      // object listing its fields: rebuilt field by field, the keys widen to
+      // the union of every code's keys, which no single branch admits.
       case "resultsLine":
-        resultsLine = {
-          actionKey: display.actionKey,
-          messageKey: display.messageKey,
-          query: answered.queryUsed,
-          surface: display.surface,
-        };
+        resultsLine = { ...display, query: answered.queryUsed };
         break;
       case "emptyState":
-        emptyState = {
-          hintKey: display.hintKey,
-          messageKey: display.messageKey,
-          surface: display.surface,
-        };
+        emptyState = display;
         break;
       default:
         display satisfies never;

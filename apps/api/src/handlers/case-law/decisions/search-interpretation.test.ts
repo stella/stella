@@ -96,6 +96,17 @@ describe("interpretDecisionQuery", () => {
     expect(clauseOf(body)).toBe('("dluh" AND "výpověď z nájmu" AND "náhrada")');
   });
 
+  test("a negated question keeps what makes it negative", () => {
+    // Dropping "není" or "bez" here would hand a reader researching invalid
+    // contracts the decisions about valid ones, which is the other side of
+    // their question rather than a wider answer to it.
+    const body = request({ query: "smlouva není platná bez podpisu" });
+    const { droppedFunctionWords, queryUsed } = interpret(body);
+
+    expect(queryUsed).toBe("smlouva není platná bez podpisu");
+    expect(droppedFunctionWords).toEqual([]);
+  });
+
   test("a query with no resolved language drops nothing", () => {
     // The European index spans 24 languages under one jurisdiction, so no one
     // list describes the reader's words unless the request names a language.

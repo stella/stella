@@ -2122,6 +2122,59 @@ describe("OpenAI-compatible MCP tools", () => {
     );
   });
 
+  test("search_case_law reports what an exhausted phrasing required", async () => {
+    // A phrasing that ended on an earlier page runs nothing here, so there is
+    // no page to read `queryUsed` off. Echoing the phrasing as sent would
+    // claim every one of its words was required, which is the opposite of
+    // what page one did with it.
+    searchDecisionsHandlerMock.mockImplementation(
+      async ({ query }: { query: string }) => ({
+        facets: null,
+        hits: [createCaseLawHit(`dec-${query}`, query)],
+        nextCursor: query.startsWith("dluh") ? "engine-dluh-2" : null,
+        total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 1),
+        queryUsed: query,
+        warnings: [],
+      }),
+    );
+    const queries = ["dluh na nájemném", "výpověď z nájmu"];
+
+    const firstPage = asTestRaw<MergedSearchPage>(
+      parseToolPayload(
+        await handleMcpToolCall({
+          args: { country: "CZE", queries },
+          context: createContext(),
+          toolName: "search_case_law",
+        }),
+      ),
+    );
+
+    const secondPage = asTestRaw<{
+      searches: {
+        query: string;
+        queryUsed: string;
+        warnings: readonly unknown[];
+      }[];
+    }>(
+      parseToolPayload(
+        await handleMcpToolCall({
+          args: { country: "CZE", cursor: firstPage.nextCursor, queries },
+          context: createContext(),
+          toolName: "search_case_law",
+        }),
+      ),
+    );
+
+    expect(secondPage.searches).toEqual([
+      {
+        query: "dluh na nájemném",
+        queryUsed: "dluh na nájemném",
+        warnings: [],
+      },
+      { query: "výpověď z nájmu", queryUsed: "výpověď nájmu", warnings: [] },
+    ]);
+  });
+
   test("search_case_law accepts back the longest cursor its engine can emit", async () => {
     // Under query expansion an engine cursor carries a 64-character dictionary
     // identity. Five of them at the codec's own maximum is the largest

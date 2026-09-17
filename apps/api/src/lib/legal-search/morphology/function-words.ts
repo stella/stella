@@ -28,6 +28,18 @@
  * the noun. `function-words.test.ts` pins the collision so the rule cannot
  * be "simplified" back to folding.
  *
+ * ## Polarity words are never function words
+ *
+ * A word whose removal can make the query match decisions asserting the
+ * OPPOSITE proposition stays required, however grammatical it looks. So the
+ * negations ("ne", "není", "nie", "nicht", "not") and the privatives ("bez",
+ * "kromě", "ohne", "without") are deliberately absent from every list below:
+ * "smlouva je neplatná bez podpisu" read without "bez" is a claim about
+ * contracts WITH a signature, and a reader researching one proposition must
+ * never be handed the other. Loosening a query is the point of this module;
+ * inverting one is a different thing entirely, and `function-words.test.ts`
+ * holds the class out of every language.
+ *
  * ## Coverage, not discrimination
  *
  * Words shared by Czech and Slovak appear in both lists. This is the
@@ -86,13 +98,11 @@ const CZECH_FUNCTION_WORDS = [
   "čím",
   "koho",
   "komu",
-  "bez",
   "během",
   "do",
   "k",
   "ke",
   "kolem",
-  "kromě",
   "mezi",
   "na",
   "nad",
@@ -120,8 +130,6 @@ const CZECH_FUNCTION_WORDS = [
   "ačkoli",
   "ale",
   "anebo",
-  "ani",
-  "aniž",
   "či",
   "i",
   "jestliže",
@@ -149,7 +157,6 @@ const CZECH_FUNCTION_WORDS = [
   "může",
   "musel",
   "musí",
-  "není",
   "ho",
   "jeho",
   "jej",
@@ -178,7 +185,6 @@ const CZECH_FUNCTION_WORDS = [
   "již",
   "ještě",
   "jen",
-  "ne",
   "pouze",
   "tak",
   "také",
@@ -203,7 +209,6 @@ const SLOVAK_FUNCTION_WORDS = [
   "čo",
   "koho",
   "komu",
-  "bez",
   "cez",
   "do",
   "k",
@@ -214,7 +219,6 @@ const SLOVAK_FUNCTION_WORDS = [
   "o",
   "od",
   "okolo",
-  "okrem",
   "po",
   "počas",
   "pod",
@@ -237,7 +241,6 @@ const SLOVAK_FUNCTION_WORDS = [
   "ak",
   "ale",
   "alebo",
-  "ani",
   "či",
   "hoci",
   "i",
@@ -258,7 +261,6 @@ const SLOVAK_FUNCTION_WORDS = [
   "musel",
   "musí",
   "môže",
-  "nie",
   "som",
   "ste",
   "sú",
@@ -308,7 +310,6 @@ const POLISH_FUNCTION_WORDS = [
   "która",
   "które",
   "który",
-  "bez",
   "dla",
   "do",
   "ku",
@@ -318,7 +319,6 @@ const POLISH_FUNCTION_WORDS = [
   "o",
   "od",
   "około",
-  "oprócz",
   "po",
   "pod",
   "podczas",
@@ -337,7 +337,6 @@ const POLISH_FUNCTION_WORDS = [
   "aby",
   "albo",
   "ale",
-  "ani",
   "chociaż",
   "gdy",
   "i",
@@ -380,7 +379,6 @@ const POLISH_FUNCTION_WORDS = [
   "tym",
   "już",
   "jeszcze",
-  "nie",
   "tak",
   "także",
   "tylko",
@@ -418,7 +416,6 @@ const GERMAN_FUNCTION_WORDS = [
   "mit",
   "nach",
   "neben",
-  "ohne",
   "seit",
   "trotz",
   "um",
@@ -490,7 +487,6 @@ const GERMAN_FUNCTION_WORDS = [
   "ich",
   "ihr",
   "man",
-  "nicht",
   "noch",
   "nur",
   "schon",
@@ -527,7 +523,6 @@ const ENGLISH_FUNCTION_WORDS = [
   "upon",
   "with",
   "within",
-  "without",
   "although",
   "and",
   "as",
@@ -583,8 +578,6 @@ const ENGLISH_FUNCTION_WORDS = [
   "its",
   "more",
   "most",
-  "no",
-  "not",
   "only",
   "she",
   "some",

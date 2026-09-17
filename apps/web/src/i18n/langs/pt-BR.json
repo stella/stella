@@ -716,7 +716,7 @@
         "hint": "Remova ou amplie um filtro e pesquise novamente.",
         "message": "Nada corresponde aos filtros aplicados."
       },
-      "resultsFor": "Resultados de: {query}",
+      "resultsFor": "Resultados de: <bdi>{query}</bdi>",
       "searchEveryWord": "Pesquisar todas as palavras"
     },
     "showWholeHeadnote": "Mostrar a ementa completa",

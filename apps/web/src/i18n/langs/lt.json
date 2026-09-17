@@ -716,7 +716,7 @@
         "hint": "Pašalinkite filtrą arba jį išplėskite ir ieškokite dar kartą.",
         "message": "Niekas neatitiko pasirinktų filtrų."
       },
-      "resultsFor": "Rezultatai pagal: {query}",
+      "resultsFor": "Rezultatai pagal: <bdi>{query}</bdi>",
       "searchEveryWord": "Ieškoti visų žodžių"
     },
     "showWholeHeadnote": "Rodyti visą santrauką",

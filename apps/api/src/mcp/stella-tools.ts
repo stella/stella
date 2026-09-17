@@ -42,6 +42,7 @@ import type {
   lookupDecisionsByIdentity,
 } from "@/api/handlers/case-law/decisions/lookup-by-identity";
 import type { searchDecisionsHandler } from "@/api/handlers/case-law/decisions/search";
+import { interpretDecisionQuery } from "@/api/handlers/case-law/decisions/search-interpretation";
 import { parseUsableDocumentAst } from "@/api/handlers/case-law/document-ast";
 import {
   identifyOrganizationJurisdictions,
@@ -2043,37 +2044,52 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
   const search =
     context.testDependencies?.searchDecisionsHandler ??
     defaultSearchDecisionsHandler;
-  const outcomes = await mapWithConcurrency({
-    items: queries.map((query, index) => ({
+  // One request per phrasing, assembled once. A phrasing whose cursor says it
+  // is exhausted runs nothing, and still has to report which of its words the
+  // search required, so the request it would have made is what answers that
+  // rather than a second reading of the filters.
+  const grammar = decisionDocketGrammarForCountry(publicCountry);
+  const requests = queries.map((query, index) => {
+    // Three states, not two: a string continues this phrasing, `undefined` is
+    // its first page, and `null` means it ended on an earlier one. Only a
+    // string is a cursor the search can be given.
+    const subCursor = resolved.cursors[index];
+    const body = {
       query,
-      subCursor: resolved.cursors[index],
-    })),
+      limit: perQueryLimit,
+      ...(typeof subCursor === "string" ? { cursor: subCursor } : {}),
+      ...(court === undefined ? {} : { court }),
+      country: publicCountry,
+      ...(language === undefined ? {} : { language }),
+      ...(decisionType === undefined ? {} : { decisionType }),
+      ...(sourceId === undefined
+        ? {}
+        : { sourceId: brandPersistedCaseLawSourceId(sourceId) }),
+      ...(dateFrom === undefined ? {} : { dateFrom }),
+      ...(dateTo === undefined ? {} : { dateTo }),
+      ...(sort === undefined ? {} : { sort }),
+      ...(strict === undefined ? {} : { strict }),
+    };
+    return {
+      body,
+      query,
+      subCursor,
+      interpretation: interpretDecisionQuery(
+        body,
+        parseDecisionQuery(query, { grammar }),
+      ),
+    };
+  });
+  const outcomes = await mapWithConcurrency({
+    items: requests,
     limit: LIMITS.caseLawSearchQueriesMax,
-    operation: async ({ query, subCursor }) => {
+    operation: async ({ body, subCursor }) => {
       if (subCursor === null) {
         return { exhausted: true } as const;
       }
       return {
         exhausted: false as const,
-        result: await search(
-          {
-            query,
-            limit: perQueryLimit,
-            ...(subCursor === undefined ? {} : { cursor: subCursor }),
-            ...(court === undefined ? {} : { court }),
-            country: publicCountry,
-            ...(language === undefined ? {} : { language }),
-            ...(decisionType === undefined ? {} : { decisionType }),
-            ...(sourceId === undefined
-              ? {}
-              : { sourceId: brandPersistedCaseLawSourceId(sourceId) }),
-            ...(dateFrom === undefined ? {} : { dateFrom }),
-            ...(dateTo === undefined ? {} : { dateTo }),
-            ...(sort === undefined ? {} : { sort }),
-            ...(strict === undefined ? {} : { strict }),
-          },
-          caseLawPublicReadDb,
-        ),
+        result: await search(body, caseLawPublicReadDb),
       };
     },
   });
@@ -2119,12 +2135,14 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
   // describe one query's result set, so a merged page carries none; which
   // words a phrasing required is a property of that phrasing alone, so every
   // phrasing reports its own.
-  const searches = queries.map((query, index) => {
+  const searches = requests.map(({ interpretation, query }, index) => {
     const outcome = pages.at(index);
     if (outcome === undefined || outcome.exhausted) {
       // A phrasing its cursor declared exhausted ran nothing this call, so it
-      // required exactly the words it carries.
-      return { query, queryUsed: query, warnings: [] };
+      // carries no warning about a page. What it required is still what it
+      // required on the page that exhausted it, which is why `queryUsed`
+      // comes from the interpretation rather than from the phrasing as sent.
+      return { query, queryUsed: interpretation.queryUsed, warnings: [] };
     }
     return {
       query,

@@ -17,6 +17,7 @@ import {
   strictSearchValue,
   validDecisionDate,
   withPendingQuery,
+  withQuery,
   yearDateRange,
 } from "@/features/case-law/case-law-index-search.logic";
 
@@ -200,6 +201,57 @@ describe("how many filters the badge reports", () => {
   });
 });
 
+describe("a query edit", () => {
+  // Requiring every word is asked for beside one query's results, and the
+  // reader is offered no way back. Carried into the next query it would keep
+  // answering nothing, with nothing on screen to say why.
+  test("drops the strict search it was asked of", () => {
+    expect(
+      withQuery(
+        {
+          country: "cz",
+          q: "jak vypovědět nájem",
+          strict: STRICT_SEARCH_VALUE,
+        },
+        "výpověď nájmu",
+      ),
+    ).toEqual({ country: "cz", q: "výpověď nájmu", strict: undefined });
+  });
+
+  test("drops it when the box is emptied too", () => {
+    expect(
+      withQuery({ country: "cz", q: "nájem", strict: STRICT_SEARCH_VALUE }, ""),
+    ).toEqual({ country: "cz", q: undefined, strict: undefined });
+  });
+
+  // The link that turns strict matching on runs through this same transition,
+  // so text that did not change must not cancel the choice being made of it.
+  test("keeps it while the query text stands", () => {
+    const previous = {
+      country: "cz",
+      q: "nájem",
+      strict: STRICT_SEARCH_VALUE,
+    } as const;
+
+    expect(withQuery(previous, "nájem")).toBe(previous);
+  });
+
+  test("keeps every other field of the URL", () => {
+    expect(
+      withQuery(
+        { country: "cz", court: "Nejvyšší soud", from: "2024-01-01" },
+        "nájem",
+      ),
+    ).toEqual({
+      country: "cz",
+      court: "Nejvyšší soud",
+      from: "2024-01-01",
+      q: "nájem",
+      strict: undefined,
+    });
+  });
+});
+
 describe("a query edit still pending when something else changes", () => {
   test("carries the typed text into the change instead of losing it", () => {
     expect(
@@ -231,7 +283,19 @@ describe("a query edit still pending when something else changes", () => {
       court: "Nejvyšší soud",
       sort: "newest",
       q: "nájem",
+      strict: undefined,
     });
+  });
+
+  // A filter applied while the box holds text the URL has not seen is still a
+  // query edit, so it drops the strict search the previous query was asked of.
+  test("drops the strict search along with the text it was asked of", () => {
+    expect(
+      withPendingQuery(
+        { country: "cz", q: "nájem", strict: STRICT_SEARCH_VALUE },
+        "nájem bytu",
+      ),
+    ).toEqual({ country: "cz", q: "nájem bytu", strict: undefined });
   });
 });
 

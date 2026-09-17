@@ -716,7 +716,7 @@
         "hint": "Noņemiet vai paplašiniet filtru un meklējiet vēlreiz.",
         "message": "Nekas neatbilst izvēlētajiem filtriem."
       },
-      "resultsFor": "Rezultāti vaicājumam: {query}",
+      "resultsFor": "Rezultāti vaicājumam: <bdi>{query}</bdi>",
       "searchEveryWord": "Meklēt visus vārdus"
     },
     "showWholeHeadnote": "Rādīt visu kopsavilkumu",

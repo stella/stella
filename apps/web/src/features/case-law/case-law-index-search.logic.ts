@@ -27,7 +27,8 @@ export type CaseLawIndexSearch = {
   sort?: SearchSort | undefined;
   /**
    * Require every word the query carries, as a link beside the results asks
-   * for it. Absent while the search may drop a word, which is the default.
+   * for it. Absent while the search may drop a word, which is the default,
+   * and dropped again by the next edit of the query it was asked of.
    */
   strict?: StrictSearchValue | undefined;
   /** The end of the decision-date range, inclusive. */
@@ -157,6 +158,27 @@ export const clearedCaseLawFilters = (): Record<CaseLawFilterKey, undefined> &
 });
 
 /**
+ * The URL a query edit lands on, with `strict` dropped.
+ *
+ * Requiring every word is asked of one query, by a link beside that query's
+ * results, and nothing on screen gives it back once it is on. Carried into the
+ * next query it would silently require every word of text the reader never
+ * asked that of, and the question-shaped searches the widening exists for
+ * would answer nothing. So the drop belongs to the transition rather than to
+ * each caller: no place that writes `q` can forget it.
+ */
+export const withQuery = (
+  previous: CaseLawIndexSearch,
+  query: string,
+): CaseLawIndexSearch => {
+  const q = query.trim().length > 0 ? query : undefined;
+  if (q === previous.q) {
+    return previous;
+  }
+  return { ...previous, q, strict: undefined };
+};
+
+/**
  * The URL a navigation should start from while the search field holds text the
  * URL has not been told about yet.
  *
@@ -169,15 +191,8 @@ export const clearedCaseLawFilters = (): Record<CaseLawFilterKey, undefined> &
 export const withPendingQuery = (
   previous: CaseLawIndexSearch,
   pendingQuery: string | null,
-): CaseLawIndexSearch => {
-  if (pendingQuery === null) {
-    return previous;
-  }
-  return {
-    ...previous,
-    q: pendingQuery.trim().length > 0 ? pendingQuery : undefined,
-  };
-};
+): CaseLawIndexSearch =>
+  pendingQuery === null ? previous : withQuery(previous, pendingQuery);
 
 /**
  * How many filters are on. The date span counts as one whichever ends it

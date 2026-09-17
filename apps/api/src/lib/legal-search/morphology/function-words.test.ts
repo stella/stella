@@ -16,6 +16,20 @@ import {
  * contract vocabulary the reported query was about, plus the near-collision
  * ("byt", "mieszkanie", "Wohnung") that makes the folding rule matter.
  */
+/**
+ * Words whose removal can turn a query into one about the opposite
+ * proposition: the negations, and the privatives that take the thing away
+ * rather than deny it. They are grammar by every other measure, which is
+ * exactly why the class needs a guard rather than an author's care.
+ */
+const POLARITY_WORDS = {
+  cs: ["ne", "není", "nejsou", "ani", "aniž", "bez", "kromě", "nikoli"],
+  de: ["nicht", "kein", "keine", "ohne", "außer", "niemals"],
+  en: ["no", "not", "never", "neither", "nor", "without", "except"],
+  pl: ["nie", "ani", "bez", "oprócz", "żaden"],
+  sk: ["nie", "nie sú", "ani", "bez", "okrem", "nikdy"],
+} as const satisfies Record<FunctionWordLanguage, readonly string[]>;
+
 const CONTENT_WORDS = {
   cs: [
     "nájem",
@@ -110,6 +124,21 @@ describe("function word lists", () => {
     }
   });
 
+  test("no entry can invert what a query asks", () => {
+    // Loosening a query is what this module is for; inverting one is not.
+    // "smlouva je neplatná bez podpisu" read without "bez" is a claim about
+    // contracts WITH a signature, which is the other side of the research
+    // question, so no list may carry a negation or a privative.
+    for (const language of FUNCTION_WORD_LANGUAGES) {
+      for (const polarity of POLARITY_WORDS[language]) {
+        expect(
+          FUNCTION_WORDS[language].has(functionWordKey(polarity)),
+          `${language} would drop "${polarity}", which changes what the query asks rather than how much it requires`,
+        ).toBe(false);
+      }
+    }
+  });
+
   test("the comparison key keeps the accents that separate the two", () => {
     // Why the key is not the index's folded form. Czech "být" and Slovak
     // "byť" (to be) fold onto "byt" (a flat), which is the subject of most
@@ -129,7 +158,7 @@ describe("function word lists", () => {
     // The opposite property to `LANGUAGE_STOPWORDS`, whose sets are
     // pairwise disjoint because it detects a document's language. This list
     // is for coverage, so a word both languages use is dropped in both.
-    for (const shared of ["na", "do", "od", "po", "za", "bez", "a", "i"]) {
+    for (const shared of ["na", "do", "od", "po", "za", "a", "i"]) {
       expect(FUNCTION_WORDS.cs.has(shared)).toBe(true);
       expect(FUNCTION_WORDS.sk.has(shared)).toBe(true);
     }

@@ -719,7 +719,7 @@ type Messages = {
         "hint": "Drop or widen a filter and search again.";
         "message": "Nothing matched under the filters you narrowed with.";
       };
-      "resultsFor": "Results for: {query}";
+      "resultsFor": "Results for: <bdi>{query}</bdi>";
       "searchEveryWord": "Search every word";
     };
     "showWholeHeadnote": "Show whole headnote";

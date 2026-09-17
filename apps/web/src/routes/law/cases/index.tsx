@@ -48,6 +48,7 @@ import {
   strictSearchValue,
   validDecisionDate,
   withPendingQuery,
+  withQuery,
 } from "@/features/case-law/case-law-index-search.logic";
 import type {
   CaseLawFilterKey,
@@ -89,6 +90,7 @@ import {
   decisionsLoadMode,
   decisionsSearchOutage,
   queryAnsweredByRows,
+  rowsAnswerRequestedSearch,
 } from "@/features/case-law/decisions-load-mode.logic";
 import type { DecisionRouteState } from "@/features/case-law/decisions-load-mode.logic";
 import {
@@ -636,10 +638,7 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
     detached(
       navigate({
         replace: true,
-        search: (previous) => ({
-          ...previous,
-          q: value.trim() ? value : undefined,
-        }),
+        search: (previous) => withQuery(previous, value),
       }),
       "cases.search-navigate",
     );
@@ -1066,7 +1065,9 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
             {warnings.resultsLine === null ? null : (
               <SearchWidenedLine
                 line={warnings.resultsLine}
-                onSearchEveryWord={searchEveryWord}
+                onSearchEveryWord={
+                  rowsAnswerRequestedSearch(rows) ? searchEveryWord : null
+                }
               />
             )}
             <DecisionTable
@@ -1103,7 +1104,8 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
 
 type SearchWidenedLineProps = {
   line: CaseLawResultsLine;
-  onSearchEveryWord: () => void;
+  /** Null while the rows below answer an earlier search than the URL does. */
+  onSearchEveryWord: (() => void) | null;
 };
 
 /**
@@ -1122,12 +1124,23 @@ function SearchWidenedLine({
 
   return (
     <div className="text-muted-foreground flex flex-wrap items-baseline gap-x-2 text-xs">
-      <BidiText as="p" className="min-w-0">
-        {t(line.messageKey, { query: line.query })}
-      </BidiText>
-      <Button onClick={onSearchEveryWord} size="xs" variant="link">
-        {t(line.actionKey)}
-      </Button>
+      {/*
+        The sentence reads in the interface's own direction; only the query is
+        isolated, because it is the reader's text and may run the other way.
+        Isolating the whole line instead would let a Latin query set the
+        direction of an Arabic sentence.
+      */}
+      <p className="min-w-0">
+        {t.rich(line.messageKey, {
+          bdi: (chunks) => <BidiText>{chunks}</BidiText>,
+          query: line.query,
+        })}
+      </p>
+      {onSearchEveryWord === null ? null : (
+        <Button onClick={onSearchEveryWord} size="xs" variant="link">
+          {t(line.actionKey)}
+        </Button>
+      )}
     </div>
   );
 }

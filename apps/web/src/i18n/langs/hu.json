@@ -716,7 +716,7 @@
         "hint": "Töröljön vagy bővítsen egy szűrőt, és keressen újra.",
         "message": "Semmi nem felel meg a beállított szűrőknek."
       },
-      "resultsFor": "Találatok erre: {query}",
+      "resultsFor": "Találatok erre: <bdi>{query}</bdi>",
       "searchEveryWord": "Minden szó keresése"
     },
     "showWholeHeadnote": "A teljes jogi tétel megjelenítése",

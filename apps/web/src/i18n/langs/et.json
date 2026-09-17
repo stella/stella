@@ -716,7 +716,7 @@
         "hint": "Eemaldage filter või laiendage seda ja otsige uuesti.",
         "message": "Miski ei vasta valitud filtritele."
       },
-      "resultsFor": "Tulemused päringule: {query}",
+      "resultsFor": "Tulemused päringule: <bdi>{query}</bdi>",
       "searchEveryWord": "Otsi kõiki sõnu"
     },
     "showWholeHeadnote": "Näita kogu lühikokkuvõtet",

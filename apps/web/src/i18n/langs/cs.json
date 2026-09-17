@@ -716,7 +716,7 @@
         "hint": "Zrušte nebo rozšiřte filtr a hledejte znovu.",
         "message": "Zvoleným filtrům nic neodpovídá."
       },
-      "resultsFor": "Výsledky pro: {query}",
+      "resultsFor": "Výsledky pro: <bdi>{query}</bdi>",
       "searchEveryWord": "Hledat všechna slova"
     },
     "showWholeHeadnote": "Zobrazit celou právní větu",

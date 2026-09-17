@@ -716,7 +716,7 @@
         "hint": "Usuń lub poszerz filtr i wyszukaj ponownie.",
         "message": "Nic nie odpowiada wybranym filtrom."
       },
-      "resultsFor": "Wyniki dla: {query}",
+      "resultsFor": "Wyniki dla: <bdi>{query}</bdi>",
       "searchEveryWord": "Szukaj wszystkich słów"
     },
     "showWholeHeadnote": "Pokaż całą tezę",

@@ -716,7 +716,7 @@
         "hint": "Supprimez ou élargissez un filtre, puis relancez la recherche.",
         "message": "Aucun résultat ne correspond aux filtres appliqués."
       },
-      "resultsFor": "Résultats pour : {query}",
+      "resultsFor": "Résultats pour : <bdi>{query}</bdi>",
       "searchEveryWord": "Rechercher tous les mots"
     },
     "showWholeHeadnote": "Afficher le sommaire complet",
