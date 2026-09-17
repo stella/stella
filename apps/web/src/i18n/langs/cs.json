@@ -1796,6 +1796,7 @@
     "checking": "Ověřuji {citation} …",
     "contradicts": "Odporuje",
     "doesNotAddress": "Neřeší",
+    "earlier": "Dřívější kontroly",
     "failed": "Ověření citace se nezdařilo. Zkuste to znovu.",
     "goToParagraph": "Přejít na odstavec",
     "noPassage": "Žádná jednotlivá pasáž rozhodnutí tento závěr nenese.",

@@ -1796,6 +1796,7 @@
     "checking": "Pārbaudu {citation} …",
     "contradicts": "Ir pretrunā",
     "doesNotAddress": "Neskar",
+    "earlier": "Iepriekšējās pārbaudes",
     "failed": "Atsauces pārbaude netika pabeigta. Mēģiniet vēlreiz.",
     "goToParagraph": "Pāriet uz rindkopu",
     "noPassage": "Neviens atsevišķs nolēmuma fragments šo secinājumu neietver.",

@@ -1799,6 +1799,7 @@ type Messages = {
     "checking": "Checking {citation} …";
     "contradicts": "Contradicts";
     "doesNotAddress": "Does not address";
+    "earlier": "Earlier checks";
     "failed": "The citation check did not complete. Try again.";
     "goToParagraph": "Go to the paragraph";
     "noPassage": "No single passage in the decision carries this reading.";

@@ -1796,6 +1796,7 @@
     "checking": "Tikrinama {citation} …",
     "contradicts": "Prieštarauja",
     "doesNotAddress": "Nenagrinėja",
+    "earlier": "Ankstesni patikrinimai",
     "failed": "Citatos patikra nebaigta. Bandykite dar kartą.",
     "goToParagraph": "Eiti į pastraipą",
     "noPassage": "Nė viena atskira sprendimo ištrauka šios išvados neparemia.",
