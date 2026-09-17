@@ -85,7 +85,7 @@ const reparsedForDev = async (
  * may crawl a publisher or write through the local ingestion database, so the
  * parser in this tree is applied to what is stored instead.
  */
-const readsSharedPublicLawCorpus = (): boolean =>
+export const readsSharedPublicLawCorpus = (): boolean =>
   envBase.PUBLIC_LAW_DATABASE_URL !== undefined;
 
 const hydrate = async (
@@ -201,6 +201,13 @@ export type DecisionDocumentState =
 
 export const decisionDocumentState = (
   read: DecisionRead,
+  /**
+   * Whether this process reads a shared corpus, passed in rather than read
+   * here: it is the one part of the answer that belongs to the deployment
+   * rather than to the row, and a caller that has it already should not make
+   * this a second reader of the environment.
+   */
+  readsSharedCorpus: boolean,
 ): DecisionDocumentState => {
   if (!("documentPending" in read) || !read.documentPending) {
     return DECISION_DOCUMENT_STATE.available;
@@ -208,7 +215,7 @@ export const decisionDocumentState = (
   // A shared-corpus process is strictly read-side: the only thing that can
   // change a stored document here is the development reparse, and a decision
   // still pending after `hydrate` ran is one it did not apply to.
-  if (readsSharedPublicLawCorpus()) {
+  if (readsSharedCorpus) {
     return DECISION_DOCUMENT_STATE.unavailable;
   }
   return isDeferredDocumentFetchable({

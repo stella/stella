@@ -28,6 +28,7 @@ import {
   DECISION_DOCUMENT_HYDRATION,
   DECISION_DOCUMENT_STATE,
   decisionDocumentState,
+  readsSharedPublicLawCorpus,
   type DecisionDocumentHydration,
   type readGatedDecisionWithDocument,
 } from "@/api/handlers/case-law/decisions/get-deferred-document";
@@ -2093,10 +2094,14 @@ type DecisionItemResult = v.InferInput<
  * could ever land is not one of those decisions, and `decisionDocumentState`
  * is what tells the two apart.
  */
-const isDecisionDocumentPending = (read: GatedDecisionRead): boolean =>
+const isDecisionDocumentPending = (
+  read: GatedDecisionRead,
+  readsSharedCorpus: boolean,
+): boolean =>
   read !== null &&
   isReadCaseLawDecisionSuccess(read) &&
-  decisionDocumentState(read) === DECISION_DOCUMENT_STATE.pending;
+  decisionDocumentState(read, readsSharedCorpus) ===
+    DECISION_DOCUMENT_STATE.pending;
 
 const decisionNotFoundItem = (decisionId: string): DecisionItemResult => ({
   decisionId,
@@ -2107,6 +2112,8 @@ const decisionNotFoundItem = (decisionId: string): DecisionItemResult => ({
 
 type DecisionItemOptions = {
   decisionId: string;
+  /** See `decisionDocumentState`: the deployment's half of the answer. */
+  readsSharedCorpus: boolean;
   /** The window this entry's share of the call's text budget allows. */
   maxTextChars: number;
   read: GatedDecisionRead;
@@ -2117,6 +2124,7 @@ const decisionItemResult = ({
   decisionId,
   maxTextChars,
   read,
+  readsSharedCorpus,
   textOffset,
 }: DecisionItemOptions): DecisionItemResult => {
   if (read === null || !isReadCaseLawDecisionSuccess(read)) {
@@ -2128,7 +2136,7 @@ const decisionItemResult = ({
   // caller's next move is the same, so neither is a `found` with nothing in
   // it. A document no fetch can land is the other answer entirely, and falls
   // through to `found` below so its metadata and citations stay readable.
-  if (isDecisionDocumentPending(read)) {
+  if (isDecisionDocumentPending(read, readsSharedCorpus)) {
     return {
       decisionId,
       message: `The publisher document for this decision is not stored yet. Read this decision id on its own to fetch it; this call's fetch budget is ${String(LIMITS.caseLawDecisionBatchHydrationsMax)} documents.`,
@@ -2205,7 +2213,8 @@ const decisionItemResult = ({
       // The licence and the missing document are different answers, and a
       // caller that conflated them would retry one that will never change.
       ...(aiTextAllowed &&
-      decisionDocumentState(read) === DECISION_DOCUMENT_STATE.unavailable
+      decisionDocumentState(read, readsSharedCorpus) ===
+        DECISION_DOCUMENT_STATE.unavailable
         ? {
             textUnavailableReason:
               "The publisher's document for this decision is not available from this corpus, so the metadata and citations here are all it carries.",
@@ -2272,6 +2281,13 @@ const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
       documentHydration,
     });
 
+  // The deployment's half of every document-state answer, resolved once for
+  // the call rather than per entry.
+  const readsSharedCorpus = (
+    context.testDependencies?.readsSharedPublicLawCorpus ??
+    readsSharedPublicLawCorpus
+  )();
+
   // One read per distinct id: a batch naming the same decision twice reads it
   // once and answers both of its positions.
   const uniqueIds = [...new Set(decisionIds)];
@@ -2317,7 +2333,9 @@ const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
   // budget, and anything whose fetch does not finish, stays pending and is
   // reported as such.
   const fetchedIds = uniqueIds
-    .filter((decisionId) => isDecisionDocumentPending(readOf(decisionId)))
+    .filter((decisionId) =>
+      isDecisionDocumentPending(readOf(decisionId), readsSharedCorpus),
+    )
     .slice(0, LIMITS.caseLawDecisionBatchHydrationsMax);
   // The re-read runs the gate again rather than hydrating the row it already
   // holds: a publisher fetch must not run inside the read transaction, and
@@ -2349,6 +2367,7 @@ const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
         decisionId,
         maxTextChars,
         read: readOf(decisionId),
+        readsSharedCorpus,
         textOffset: offsets.text,
       }),
     ),

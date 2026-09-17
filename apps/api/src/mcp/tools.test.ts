@@ -816,11 +816,15 @@ const createContext = ({
   archivedWorkspaceIds = [],
   recordAuditEvent = createRecordAuditEventMock(),
   scopedDb = createScopedDb(),
+  testDependencies = {},
 }: {
   accessibleWorkspaceIds?: string[];
   archivedWorkspaceIds?: string[];
   recordAuditEvent?: AuditRecorder;
   scopedDb?: McpRequestContext["scopedDb"];
+  /** Overrides merged over the suite's own seams, for the few tests that
+   *  need a different answer from one of them. */
+  testDependencies?: McpRequestContext["testDependencies"];
 } = {}): McpRequestContext => ({
   accessibleWorkspaceIds: accessibleWorkspaceIds.map((workspaceId) =>
     toSafeId<"workspace">(workspaceId),
@@ -840,6 +844,7 @@ const createContext = ({
   safeDb: toSafeDbMock(scopedDb),
   scopedDb,
   testDependencies: {
+    ...testDependencies,
     anonymizeTextFields: anonymizeTextFieldsMock,
     getSearchProvider: () => ({
       ...pgFtsProvider,
@@ -3312,10 +3317,7 @@ describe("OpenAI-compatible MCP tools", () => {
       source: { ...base.source, adapterKey: "sk-courts" },
     });
 
-    const payload = await withSharedCorpus(
-      "postgres://shared-corpus/readonly",
-      async () => await readBatch([DECISION_ID]),
-    );
+    const payload = await readBatchIn(true, [DECISION_ID]);
     const entry = payload.items.at(0) ?? panic("Missing lookup entry");
 
     expect(entry.status).toBe("found");
@@ -3339,10 +3341,7 @@ describe("OpenAI-compatible MCP tools", () => {
       }),
     );
 
-    const payload = await withSharedCorpus(
-      undefined,
-      async () => await readBatch([DECISION_ID]),
-    );
+    const payload = await readBatchIn(false, [DECISION_ID]);
 
     expect(payload.items.map(({ status }) => status)).toEqual(["pending"]);
     expect(payload.items.at(0)?.message).toContain("on its own");
@@ -3360,20 +3359,27 @@ describe("OpenAI-compatible MCP tools", () => {
   /**
    * Whether this process reads a shared public-law corpus decides whether a
    * pending document can still be fetched at all, so a test about that
-   * distinction sets it rather than inheriting the developer's `.env`.
+   * distinction states it rather than inheriting the developer's `.env`.
+   * `envBase` is a parsed snapshot and read-only, so the mode arrives the way
+   * every other dependency in this suite does.
    */
-  const withSharedCorpus = async <T>(
-    url: string | undefined,
-    body: () => Promise<T>,
-  ): Promise<T> => {
-    const previous = envBase.PUBLIC_LAW_DATABASE_URL;
-    envBase.PUBLIC_LAW_DATABASE_URL = url;
-    try {
-      return await body();
-    } finally {
-      envBase.PUBLIC_LAW_DATABASE_URL = previous;
-    }
-  };
+  const readBatchIn = async (
+    readsSharedCorpus: boolean,
+    decisionIds: readonly string[],
+  ) =>
+    asTestRaw<BatchDecisionPage>(
+      parseToolPayload(
+        await handleMcpToolCall({
+          args: { decision_ids: [...decisionIds] },
+          context: createContext({
+            testDependencies: {
+              readsSharedPublicLawCorpus: () => readsSharedCorpus,
+            },
+          }),
+          toolName: "read_case_law_decision",
+        }),
+      ),
+    );
 
   // Every way a document can be absent for good. `documentPending` stays set
   // on all of them, and reporting them `pending` would send a caller back for
@@ -3411,10 +3417,7 @@ describe("OpenAI-compatible MCP tools", () => {
         fulltext: null,
       });
 
-      const payload = await withSharedCorpus(
-        undefined,
-        async () => await readBatch([DECISION_ID]),
-      );
+      const payload = await readBatchIn(false, [DECISION_ID]);
       const entry = payload.items.at(0) ?? panic("Missing lookup entry");
 
       expect(entry.status).toBe("found");
@@ -3443,10 +3446,7 @@ describe("OpenAI-compatible MCP tools", () => {
       },
     });
 
-    const payload = await withSharedCorpus(
-      undefined,
-      async () => await readBatch([DECISION_ID]),
-    );
+    const payload = await readBatchIn(false, [DECISION_ID]);
     const entry = payload.items.at(0) ?? panic("Missing lookup entry");
 
     expect(entry.status).toBe("found");
@@ -3478,10 +3478,10 @@ describe("OpenAI-compatible MCP tools", () => {
       }),
     );
 
-    const payload = await withSharedCorpus(
-      undefined,
-      async () => await readBatch([DECISION_ID, ...PENDING_DECISION_IDS]),
-    );
+    const payload = await readBatchIn(false, [
+      DECISION_ID,
+      ...PENDING_DECISION_IDS,
+    ]);
 
     // The stored read answers every id; the fetch budget covers the first
     // three pending ones and the fourth says to read it on its own.
