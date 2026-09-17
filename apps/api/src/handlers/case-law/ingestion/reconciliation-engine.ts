@@ -125,7 +125,17 @@ const SHORT_SLICE_CANDIDATES = 25;
  * hit a publisher harder than the crawl it reconciles.
  */
 const LIST_DELAY_MS = 200;
-const LIST_TIMEOUT_MS = 60_000;
+/**
+ * One listing request, wire time and queueing together.
+ *
+ * Behind a publisher request gate most of this is the queue: a Czech
+ * Constitutional Court listing is three requests, each waiting its NALUS slot
+ * at eighteen seconds. A timeout that did not clear the gate would abort every
+ * listing of a gated source and leave it unreconcilable rather than merely
+ * slow, which is the failure this walk's deliberately missing clock exists to
+ * avoid.
+ */
+const LIST_TIMEOUT_MS = 5 * 60_000;
 /**
  * Pages requested for one slice before the walk gives up on it.
  *
@@ -138,8 +148,13 @@ const LIST_TIMEOUT_MS = 60_000;
 const MAX_SLICE_PAGES = 200;
 /** Terminal rows examined when pruning a walked slice. */
 const PRUNE_ROW_LIMIT = 1000;
-/** One document; nothing in an item's build should take longer. */
-const ITEM_FETCH_TIMEOUT_MS = 2 * 60_000;
+/**
+ * One item's build; nothing in it should take longer. Sized like
+ * {@link LIST_TIMEOUT_MS} for the same reason: a gated source's item is
+ * several requests, and each waits its publisher slot behind whatever the
+ * crawl has already reserved.
+ */
+const ITEM_FETCH_TIMEOUT_MS = 5 * 60_000;
 /**
  * Wall-clock the INGEST phase may spend before it stops fetching documents.
  *
