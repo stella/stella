@@ -20,7 +20,6 @@ import { mapWithConcurrency } from "@stll/concurrency";
 import { COUNTRY_CODES } from "@stll/country-codes";
 import { docxToMarkdown } from "@stll/folio-core/server";
 
-import type { PracticeJurisdiction } from "@/api/db/schema";
 import { workspaces } from "@/api/db/schema";
 import type {
   ContactEmail,
@@ -28,7 +27,6 @@ import type {
   FieldContent,
 } from "@/api/db/schema-validators";
 import { splitCaseReference } from "@/api/handlers/case-law/case-number";
-import type { readGatedDecisionCitations } from "@/api/handlers/case-law/decisions/citation-passages";
 import {
   DECISION_DOCUMENT_HYDRATION,
   DECISION_DOCUMENT_STATE,
@@ -37,11 +35,7 @@ import {
   type DecisionDocumentHydration,
   type readGatedDecisionWithDocument,
 } from "@/api/handlers/case-law/decisions/get-deferred-document";
-import type {
-  DecisionIdentityRow,
-  lookupDecisionsByIdentity,
-} from "@/api/handlers/case-law/decisions/lookup-by-identity";
-import type { searchDecisionsHandler } from "@/api/handlers/case-law/decisions/search";
+import type { DecisionIdentityRow } from "@/api/handlers/case-law/decisions/lookup-by-identity";
 import { interpretDecisionQuery } from "@/api/handlers/case-law/decisions/search-interpretation";
 import { parseUsableDocumentAst } from "@/api/handlers/case-law/document-ast";
 import {
@@ -107,6 +101,16 @@ import { getSearchProvider } from "@/api/lib/search/provider";
 import { withTimeout } from "@/api/lib/with-timeout";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
+import { loadPracticeJurisdictions } from "@/api/mcp/practice-jurisdictions";
+import {
+  defaultLookupDecisionsByIdentity,
+  defaultReadGatedDecisionCitations,
+  defaultReadGatedDecisionWithDocument,
+  defaultSearchDecisionsHandler,
+  isReadCaseLawDecisionSuccess,
+  isSearchCaseLawSuccess,
+  type SearchCaseLawSuccess,
+} from "@/api/mcp/public-law-handlers";
 import { serializeAuthorizedCorpusMcpResourceName } from "@/api/mcp/resource-serialization";
 import {
   defineTextFieldSpec,
@@ -151,28 +155,6 @@ import {
 } from "@/api/mcp/valibot-tool-definition";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
-const defaultReadGatedDecisionWithDocument: typeof readGatedDecisionWithDocument =
-  async (input) =>
-    await (
-      await import("@/api/handlers/case-law/decisions/get-deferred-document")
-    ).readGatedDecisionWithDocument(input);
-const defaultReadGatedDecisionCitations: typeof readGatedDecisionCitations =
-  async (input) =>
-    await (
-      await import("@/api/handlers/case-law/decisions/citation-passages")
-    ).readGatedDecisionCitations(input);
-const defaultLookupDecisionsByIdentity: typeof lookupDecisionsByIdentity =
-  async (input) =>
-    await (
-      await import("@/api/handlers/case-law/decisions/lookup-by-identity")
-    ).lookupDecisionsByIdentity(input);
-const defaultSearchDecisionsHandler: typeof searchDecisionsHandler = async (
-  input,
-  database,
-) =>
-  await (
-    await import("@/api/handlers/case-law/decisions/search")
-  ).searchDecisionsHandler(input, database);
 const defaultReadWorkspaceHandler: typeof readWorkspaceHandler = async (
   input,
 ) =>
@@ -1144,18 +1126,6 @@ export const STELLA_TOOL_DEFINITIONS = [
   }),
 ] as const satisfies readonly McpToolDefinition[];
 
-const loadPracticeJurisdictions = async (
-  context: McpRequestContext,
-): Promise<readonly PracticeJurisdiction[]> => {
-  const row = await context.scopedDb((tx) =>
-    tx.query.organizationSettings.findFirst({
-      where: { organizationId: { eq: context.organizationId } },
-      columns: { practiceJurisdictions: true },
-    }),
-  );
-  return arrayOrEmpty(row?.practiceJurisdictions);
-};
-
 const buildOnboardingHintText = () =>
   `Your stella organization has not configured its practice jurisdictions ` +
   `yet. Call \`set_practice_jurisdictions\` (input: array of ` +
@@ -1518,32 +1488,6 @@ const handleSearchAcrossMattersTool: TypedMcpToolHandler<
 
   return { egress: "structured", payload, textFields };
 };
-
-type SearchCaseLawSuccess = Extract<
-  Awaited<ReturnType<typeof searchDecisionsHandler>>,
-  { hits: unknown[] }
->;
-
-const isSearchCaseLawSuccess = (
-  value: Awaited<ReturnType<typeof searchDecisionsHandler>>,
-): value is SearchCaseLawSuccess =>
-  typeof value === "object" && "hits" in value && Array.isArray(value.hits);
-
-type ReadCaseLawDecisionSuccess = Extract<
-  NonNullable<Awaited<ReturnType<typeof readGatedDecisionWithDocument>>>,
-  { caseNumber: string; citationsFrom: unknown[]; citationsTo: unknown[] }
->;
-
-const isReadCaseLawDecisionSuccess = (
-  value: NonNullable<Awaited<ReturnType<typeof readGatedDecisionWithDocument>>>,
-): value is ReadCaseLawDecisionSuccess =>
-  typeof value === "object" &&
-  "caseNumber" in value &&
-  typeof value.caseNumber === "string" &&
-  "citationsFrom" in value &&
-  Array.isArray(value.citationsFrom) &&
-  "citationsTo" in value &&
-  Array.isArray(value.citationsTo);
 
 const toIsoDateString = (value: unknown): string | null => {
   if (typeof value === "string") {
