@@ -74,22 +74,23 @@ type FetchWithRetryOptions = {
 
 /**
  * Whether a response status warrants a retry.
- * 429 (rate limit) and 5xx (server error) are retryable.
+ *
+ * A 5xx is the publisher failing to answer; a 429 is the publisher answering
+ * that the budget is spent. Retrying the refusal spends the budget the halt
+ * protects, so it is returned to the caller after exactly one request.
  */
-const isRetryableStatus = (status: number): boolean =>
-  status === 429 || status >= 500;
+const isRetryableStatus = (status: number): boolean => status >= 500;
 
 /**
  * Fetch with exponential backoff retry.
  *
  * Retries on:
  * - Timeout errors (AbortSignal.timeout)
- * - HTTP 429 (rate limited)
  * - HTTP 5xx (server errors)
  *
  * Does NOT retry on:
  * - Parent signal abort (cycle/page timeout)
- * - HTTP 4xx (client errors, except 429)
+ * - HTTP 4xx, the publisher's rate-limit refusal included (rule 19a)
  * - Network errors (DNS, connection refused)
  *
  * Returns the response even for retryable statuses after
@@ -133,11 +134,7 @@ export const fetchWithRetry = async (
       }
 
       // Retryable status: back off and retry
-      const delay = backoffMs(
-        attempt,
-        response.status === 429 ? baseDelayMs * 2 : baseDelayMs,
-        maxDelayMs,
-      );
+      const delay = backoffMs(attempt, baseDelayMs, maxDelayMs);
       logger.warn("case_law.ingestion.fetch_retry", {
         adapterKey,
         url,

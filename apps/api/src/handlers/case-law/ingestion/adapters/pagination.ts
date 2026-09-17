@@ -808,9 +808,9 @@ export const createPagePaginatedFetch = <TResponse>(
         if (!response.ok) {
           // A 5xx the origin itself produced, after all retries: skip this
           // page and advance.
-          // 429 is NOT skipped — it's transient throttling, not
-          // a page error. The cursor stays put so the page is
-          // retried in the next cycle. 502 joins it for the same reason
+          // 429 is NOT skipped — it is the publisher's rate-limit refusal,
+          // reached after exactly one request (rule 19a). The cursor stays
+          // put so the page is read next cycle. 502 joins it for the reason
           // (see BAD_GATEWAY_STATUS): nothing was read, so there is nothing
           // to advance past.
           if (
