@@ -5,6 +5,8 @@ import {
   CHAT_DECISION_PASSAGE_HREF_PREFIX,
   toChatDecisionPassageHref,
 } from "@stll/api-contract";
+import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
+import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { selectStatuteProvisions } from "@/api/handlers/chat/active-statute-selection.logic";
@@ -35,6 +37,7 @@ import {
   buildChatPromptCacheKey,
   buildGlobalPrompt,
   buildGlobalPromptParts,
+  buildCorpusOnlyCaseLawSection,
   buildUserContextBlock,
   buildWorkspacePromptParts,
   buildWorkspacePromptText,
@@ -1310,11 +1313,50 @@ describe("system prompt tool-reference guard", () => {
   // answers from recollection, which for case law means a docket number that
   // resolves to nothing. The rule has to reach every assembled prompt, not
   // only the ones that happen to carry a corpus tool.
-  test("every assembled prompt forbids answering case law from recollection", () => {
+  test("every assembled prompt forbids answering covered case law from recollection", () => {
     for (const prompt of buildAssembledPrompts(FULL_TOOL_AVAILABILITY)) {
       expect(prompt).toContain("CORPUS-ONLY CASE LAW");
-      expect(prompt).toContain("Retry with reformulated input");
-      expect(prompt).toContain("no flagged fallback");
+      expect(prompt).toContain("retry with reformulated input");
+      expect(prompt).toContain(
+        "never present a decision, docket number, or ECLI as verified",
+      );
+    }
+  });
+
+  // The rule binds recollection only where the corpus can contradict it, so
+  // the covered jurisdictions come from the constants the tools admit. Both
+  // admitted lists are a single country today, which a hand-written `CZE`
+  // would satisfy just as well, so the binding is asserted as an identity
+  // against the renderer rather than as a substring: a constant that gains a
+  // jurisdiction changes the prompt, and a list written into the prompt by
+  // hand stops matching.
+  test("the covered jurisdictions are rendered from the admitted constants", () => {
+    const rendered = buildCorpusOnlyCaseLawSection({
+      caseLawCountries: PUBLIC_CASE_LAW_COUNTRIES,
+      legislationCountries: PUBLIC_LEGISLATION_COUNTRIES,
+    });
+    for (const prompt of buildAssembledPrompts(FULL_TOOL_AVAILABILITY)) {
+      expect(prompt).toContain(rendered);
+    }
+  });
+
+  test("the renderer names whichever jurisdictions it is given", () => {
+    const rendered = buildCorpusOnlyCaseLawSection({
+      caseLawCountries: ["POL", "SVK"],
+      legislationCountries: ["AUT"],
+    });
+    expect(rendered).toContain("case law for POL, SVK");
+    expect(rendered).toContain("legislation for AUT");
+    expect(rendered).not.toContain("CZE");
+  });
+
+  // Outside the corpus, an empty result says nothing about the law, so the
+  // flagged fallback stays available rather than the model refusing.
+  test("a jurisdiction the corpus lacks keeps the flagged fallback", () => {
+    for (const prompt of buildAssembledPrompts(FULL_TOOL_AVAILABILITY)) {
+      expect(prompt).toContain("For any other jurisdiction");
+      expect(prompt).toContain("say the corpus does not cover it");
+      expect(prompt).toContain("EXTERNAL-FACT SOURCING then applies");
     }
   });
 
