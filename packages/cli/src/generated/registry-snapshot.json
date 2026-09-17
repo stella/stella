@@ -6,7 +6,7 @@
       "scope": "search"
     },
     "name": "search",
-    "description": "Search knowledge across accessible matters using the OpenAI-compatible search tool shape. Returns results with id, title, and url for follow-up fetch calls.",
+    "description": "Search knowledge across accessible matters using the OpenAI-compatible search tool shape. Where this deployment enables the public legal corpus, the same query also returns case-law decisions and statutes for the jurisdictions the organization practises in. An id is a bare UUID (a matter document), `decision:<uuid>` (a case-law decision), or `statute:<eli>` (a statute). Pass an id back to fetch verbatim.",
     "inputSchema": {
       "type": "object",
       "required": ["query"],
@@ -40,7 +40,7 @@
       "scope": "read"
     },
     "name": "fetch",
-    "description": "Fetch a knowledge document by id using the OpenAI-compatible fetch tool shape. Use ids returned by the search tool. Long documents are returned in windows; pass the returned nextCursor back as cursor to read more.",
+    "description": "Fetch one search result by id using the OpenAI-compatible fetch tool shape. An id is a bare UUID (a matter document), `decision:<uuid>` (a case-law decision), or `statute:<eli>` (a statute). `metadata.kind` says which of the three the answer is. Long text is returned in windows; pass the returned nextCursor back as cursor to read more.",
     "inputSchema": {
       "type": "object",
       "required": ["id"],
@@ -48,8 +48,10 @@
       "properties": {
         "id": {
           "type": "string",
-          "format": "uuid",
-          "description": "Document/entity ID"
+          "minLength": 1,
+          "maxLength": 520,
+          "pattern": "^(?:[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}|decision:[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}|statute:.+)$",
+          "description": "Result id from search. An id is a bare UUID (a matter document), `decision:<uuid>` (a case-law decision), or `statute:<eli>` (a statute)."
         },
         "cursor": {
           "type": "string",

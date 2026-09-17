@@ -933,6 +933,18 @@ describe("OpenAI-compatible MCP tools", () => {
       ) => await read({ id: locator.id }),
     );
     withTimeoutMock.mockClear();
+    // `search` asks the public corpus on every call where the corpus gate is
+    // open, which it is in dev and test. These tests are about the matter half,
+    // so both corpora answer an empty page unless a test says otherwise.
+    searchDecisionsHandlerMock.mockResolvedValue({
+      hits: [],
+      nextCursor: null,
+    });
+    searchLegislationHandlerMock.mockResolvedValue({
+      items: [],
+      nextCursor: null,
+      total: { type: "exact", value: 0 },
+    });
     fake = startFakeS3();
   });
 
@@ -1221,10 +1233,14 @@ describe("OpenAI-compatible MCP tools", () => {
 
   test("lists exactly the public corpus tools in law mode", async () => {
     // The audience exists so an orchestrator can take a short, stable tool
-    // list: seven public-corpus reads, in registry order, and nothing else.
+    // list: public-corpus reads only, in wire order, and nothing else. The
+    // OpenAI-compatible pair leads it, because a client that can drive only
+    // those two names reaches the corpus through them alone.
     expect(
       (await listMcpTools(createContext(), "law")).map((tool) => tool.name),
     ).toEqual([
+      "search",
+      "fetch",
       "search_case_law",
       "lookup_case_law",
       "read_case_law_decision",
@@ -1430,6 +1446,7 @@ describe("OpenAI-compatible MCP tools", () => {
       url: `${APP_BASE_URL}/workspaces/${WORKSPACE_ID}/all/pdf?entity=00000000-0000-4000-8000-0000000e0001&field=field_1`,
       nextCursor: null,
       metadata: {
+        kind: "document",
         charCount: "Full document text".length,
         source: "stella",
         truncated: false,
@@ -1440,8 +1457,8 @@ describe("OpenAI-compatible MCP tools", () => {
 
   test("fetch rejects a resource URI passed as an id", async () => {
     // A client that hands the fetch tool a `stella://` resource URI must get a
-    // validation_error naming `id` and pointing at resources/read. The id is
-    // matched against a uuid column, so reaching the query at all is the
+    // validation_error naming `id` and pointing at resources/read. A document
+    // id is matched against a uuid column, so reaching the query at all is the
     // Postgres cast failure this once surfaced as internal_error.
     const result = await handleMcpToolCall({
       args: { id: "stella://reference/template-markers" },
@@ -1458,10 +1475,13 @@ describe("OpenAI-compatible MCP tools", () => {
     expect(error["issues"]).toEqual([
       {
         path: "id",
-        message: 'Invalid UUID: Received "stella://reference/template-markers"',
+        message: "Expected an id returned by search",
       },
     ]);
     expect(error["hint"]).toContain("resources/read");
+    // The hint has to name the vocabulary, or a model that guessed an id once
+    // has nothing to correct towards.
+    expect(error["hint"]).toContain("decision:<uuid>");
   });
 
   test("fetch pages long document text via the returned cursor", async () => {
@@ -4660,6 +4680,7 @@ describe("OpenAI-compatible MCP tools", () => {
       url: `${APP_BASE_URL}/workspaces/${WORKSPACE_ID}/all/pdf?entity=00000000-0000-4000-8000-0000000e0001&field=field_1`,
       nextCursor: null,
       metadata: {
+        kind: "document",
         anonymized: true,
         anonymizedEntityCount: 2,
         charCount: "[PERSON_1] signed the agreement".length,
@@ -4699,6 +4720,7 @@ describe("OpenAI-compatible MCP tools", () => {
       url: `${APP_BASE_URL}/workspaces/${WORKSPACE_ID}/all/pdf?entity=00000000-0000-4000-8000-0000000e0001&field=field_1`,
       nextCursor: null,
       metadata: {
+        kind: "document",
         anonymized: true,
         anonymizedEntityCount: 1,
         charCount: 0,
@@ -4738,6 +4760,7 @@ describe("OpenAI-compatible MCP tools", () => {
       url: `${APP_BASE_URL}/workspaces/${WORKSPACE_ID}/all/pdf?entity=00000000-0000-4000-8000-0000000e0001&field=field_1`,
       nextCursor: null,
       metadata: {
+        kind: "document",
         anonymized: true,
         anonymizedEntityCount: 1,
         charCount: "[REDACTED]".length,

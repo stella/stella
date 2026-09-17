@@ -99,10 +99,16 @@ type SurfaceMode = (typeof SURFACES)[number]["mode"];
 // a tool whose meaning depends on which argument is present. It answers from
 // the identity columns, so its failure modes (no such docket, a docket used at
 // two courts) are not a ranking's.
+// law 8 -> 10 for the OpenAI-compatible `search`/`fetch` pair. Argued for, not
+// absorbed: a client that can only drive those two names (an OpenAI-compatible
+// connector outside developer mode) could not reach the corpus at all, and the
+// eight named tools are unreachable to it however short the list is. The
+// default and anonymized counts are unchanged, because that audience already
+// carried the pair.
 const TOOL_COUNT_CEILING: Record<SurfaceMode, number> = {
   default: 56,
   anonymized: 27,
-  law: 8,
+  law: 10,
 };
 
 // Serialized `tools/list` tool array (the wire payload produced by
@@ -218,10 +224,16 @@ const TOOL_COUNT_CEILING: Record<SurfaceMode, number> = {
 // required terms, and the descriptions of its filters and of
 // read_case_law_citations were trimmed to pay part of it back. A model that
 // cannot see which words were required reads an empty page as an empty corpus.
+// The corpus reaching the OpenAI-compatible pair then measures 135_038
+// default, 70_857 anonymized and 28_194 law. The wider surfaces pay for the id
+// vocabulary both descriptions state and for the `fetch` id pattern that
+// replaces a bare uuid format; law pays for the pair itself, which is what the
+// audience gained. A vocabulary a model cannot see is a vocabulary it guesses,
+// and a guessed id is a not_found the model reads as an empty corpus.
 const TOOLS_LIST_PAYLOAD_CHAR_CEILING: Record<SurfaceMode, number> = {
-  default: 134_300,
-  anonymized: 70_100,
-  law: 25_250,
+  default: 135_100,
+  anonymized: 70_900,
+  law: 28_250,
 };
 
 // default bumped 42_000 -> 42_300 for the two fields read_case_law_citations
@@ -256,10 +268,16 @@ const TOOLS_LIST_PAYLOAD_CHAR_CEILING: Record<SurfaceMode, number> = {
 // as sent, the `queryUsed` the engine answered, and that phrasing's warnings.
 // Per phrasing rather than per call because each is interpreted on its own,
 // and a caller that cannot tell which phrasing was widened cannot act on it.
+// The compat `fetch` metadata then measures 46_223 default, 31_859 anonymized
+// and 9_981 law. It is a discriminated union on `kind` rather than one object:
+// only a matter document belongs to a workspace, so a strict object with an
+// optional `workspaceId` would let a corpus read answer with a tenant field.
+// Law also gains the pair's two schemas, its `fetch` union carrying the two
+// corpus branches alone.
 const OUTPUT_SCHEMA_TOTAL_CHAR_CEILING: Record<SurfaceMode, number> = {
-  default: 46_100,
-  anonymized: 31_800,
-  law: 8880,
+  default: 46_300,
+  anonymized: 31_900,
+  law: 10_050,
 };
 
 // Largest measured schema is read_document at 3_434 chars. A single tool must

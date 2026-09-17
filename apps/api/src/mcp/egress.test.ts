@@ -157,10 +157,10 @@ describe("finalizeMcpEgress", () => {
       cursor: undefined,
       id: "entity_1",
       maxChars: 8000,
+      subject: { kind: "document", workspaceId: "ws_1" },
       text: rawText,
       title: "John Smith SPA",
       url: "https://example.test/doc",
-      workspaceId: "ws_1",
     };
 
     const payload = parsePayload(
@@ -194,10 +194,10 @@ describe("finalizeMcpEgress", () => {
       id: "entity_1",
       maxChars: 20,
       // Raw text contains the real name; it must never appear in any window.
+      subject: { kind: "document" as const, workspaceId: "ws_1" },
       text: "John Smith met John Smith at the office to sign the SPA.",
       title: "John Smith SPA",
       url: "https://example.test/doc",
-      workspaceId: "ws_1",
     };
 
     const context = createContext();
@@ -260,6 +260,7 @@ describe("finalizeMcpEgress", () => {
   test("compatSearch strips workspaceId in default mode and anonymizes titles in anonymized mode", async () => {
     const results = [
       {
+        kind: "matter" as const,
         id: "entity_1",
         title: "John Smith SPA",
         url: "https://example.test/1",
@@ -549,6 +550,7 @@ describe("finalizeMcpEgress", () => {
     givenWorkspaceScopedTerm();
     const results = [
       {
+        kind: "matter" as const,
         id: "entity_2",
         title: `${WORKSPACE_TERM} SPA`,
         url: "https://example.test/2",

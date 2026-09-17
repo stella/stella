@@ -247,6 +247,17 @@ const buildContext = ({
     testDependencies: {
       getSearchProvider: () =>
         asTestRaw({ ...pgFtsProvider, search: searchProviderSearchMock }),
+      // The canary is about tenant text leaving the pipeline. `search` also
+      // asks the public corpus, whose hits carry no tenant text at all, so
+      // both corpora answer an empty page here.
+      searchDecisionsHandler: asTestRaw(
+        mock(async () => await Promise.resolve({ hits: [], nextCursor: null })),
+      ),
+      searchLegislationHandler: asTestRaw(
+        mock(
+          async () => await Promise.resolve({ items: [], nextCursor: null }),
+        ),
+      ),
       readWorkspaceHandler: readWorkspaceHandlerMock,
       readOverviewHandler: readOverviewHandlerMock,
       readWorkspaceContactsHandler: readWorkspaceContactsHandlerMock,
@@ -377,6 +388,7 @@ describe("MCP anonymization canary corpus", () => {
       totalCount: 1,
     });
     const tx = {
+      query: { organizationSettings: { findFirst: async () => undefined } },
       select: () =>
         chainableJoinRows([
           {

@@ -3,6 +3,7 @@ import type { McpDefaultResourceScope } from "@stll/api-contract";
 import { unreachable } from "@/api/lib/errors/tagged-errors";
 import { BILLING_TOOL_SET } from "@/api/mcp/billing-tools";
 import { CAPABILITY_TOOL_SET } from "@/api/mcp/capability-tools";
+import { LAW_COMPAT_TOOL_SET } from "@/api/mcp/compat-law-tools";
 import { COMPAT_TOOL_SET } from "@/api/mcp/compat-tools";
 import {
   MCP_ANONYMIZED_SCOPE_BY_DEFAULT_SCOPE,
@@ -19,6 +20,7 @@ import { STELLA_TOOL_SET } from "@/api/mcp/stella-tools";
 import { TEMPLATE_TOOL_SET } from "@/api/mcp/template-tools";
 import type {
   McpToolDefinition,
+  McpToolHandler,
   RuntimeMcpToolOutputContract,
   McpToolSet,
   ToolScope,
@@ -208,13 +210,45 @@ export const DOCUMENTS_MCP_TOOL_DEFINITIONS =
   ) satisfies readonly McpToolDefinition[];
 
 /**
+ * The tool sets only the law audience serves.
+ *
+ * The OpenAI-compatible pair is on this surface under the same wire names it
+ * carries on the default one, and a handler never sees the request mode, so
+ * the law audience's `search`/`fetch` are different definitions bound to
+ * different handlers rather than the default pair with a branch inside it.
+ * They cannot join `DEFAULT_MCP_TOOL_SETS`, whose names are unique.
+ */
+const LAW_ONLY_MCP_TOOL_SETS = [
+  LAW_COMPAT_TOOL_SET,
+] as const satisfies readonly McpToolSet<readonly McpToolDefinition[]>[];
+
+const LAW_ONLY_MCP_TOOL_DEFINITIONS = [
+  ...LAW_COMPAT_TOOL_SET.definitions,
+] as const satisfies readonly McpToolDefinition[];
+
+const LAW_ONLY_MCP_TOOL_NAMES: ReadonlySet<string> = new Set(
+  LAW_ONLY_MCP_TOOL_DEFINITIONS.map((tool) => tool.name),
+);
+
+/**
+ * Every advertised tool definition, both audiences' copies of a shared wire
+ * name included. Registry-wide guards (id formats, null tolerance, string
+ * constraints) walk this rather than the default registry, so a tool that only
+ * the law audience serves is held to the same contract rules.
+ */
+export const ALL_MCP_TOOL_DEFINITIONS = [
+  ...DEFAULT_MCP_TOOL_DEFINITIONS,
+  ...LAW_ONLY_MCP_TOOL_DEFINITIONS,
+] as const satisfies readonly McpToolDefinition[];
+
+/**
  * Every tool backed by the shared public legal corpus: the deployment gate and
  * the passthrough egress policy together are what "carries no tenant data"
  * means structurally. The law audience is built from this union, so a new
  * gated corpus tool cannot land without a disposition below.
  */
 type PublicLawToolName = Extract<
-  (typeof DEFAULT_MCP_TOOL_DEFINITIONS)[number],
+  (typeof ALL_MCP_TOOL_DEFINITIONS)[number],
   { anonymized: { exposure: "passthrough" }; feature: "FEATURE_PUBLIC_LAW" }
 >["name"];
 
@@ -224,6 +258,8 @@ type PublicLawToolName = Extract<
  * decision here instead of letting it default onto (or off) the surface.
  */
 export const LAW_MCP_TOOL_DISPOSITION = {
+  search: "corpus",
+  fetch: "corpus",
   search_case_law: "corpus",
   lookup_case_law: "corpus",
   read_case_law_decision: "corpus",
@@ -252,13 +288,18 @@ const LAW_MCP_TOOL_NAMES: ReadonlySet<string> = new Set(
 );
 
 /**
- * Projection from the canonical registry, in registry order; no host-specific
- * tool copies and no scope remap (the corpus tools already read under
- * `stella:search`/`stella:read`).
+ * The law audience's own OpenAI-compatible pair first, then the named corpus
+ * tools projected from the canonical registry in registry order. No scope
+ * remap: every tool here already reads under `stella:search`/`stella:read`.
  */
-export const LAW_MCP_TOOL_DEFINITIONS = DEFAULT_MCP_TOOL_DEFINITIONS.filter(
-  (tool) => LAW_MCP_TOOL_NAMES.has(tool.name),
-) satisfies readonly McpToolDefinition[];
+export const LAW_MCP_TOOL_DEFINITIONS = [
+  ...LAW_ONLY_MCP_TOOL_DEFINITIONS,
+  ...DEFAULT_MCP_TOOL_DEFINITIONS.filter(
+    (tool) =>
+      LAW_MCP_TOOL_NAMES.has(tool.name) &&
+      !LAW_ONLY_MCP_TOOL_NAMES.has(tool.name),
+  ),
+] satisfies readonly McpToolDefinition[];
 
 /**
  * The advertised tool list per audience, in wire order. Total over `McpMode`:
@@ -284,17 +325,55 @@ const MCP_TOOL_DEFINITION_MAPS = {
   law: toToolDefinitionMap(MCP_TOOL_DEFINITIONS_BY_MODE.law),
 } satisfies Record<McpMode, Map<string, McpToolDefinition>>;
 
-const MCP_TOOL_OUTPUT_CONTRACTS = new Map<string, RuntimeMcpToolOutputContract>(
-  DEFAULT_MCP_TOOL_SETS.flatMap((toolSet) => Object.entries(toolSet.outputs)),
-);
+const toOutputContractMap = (
+  toolSets: readonly McpToolSet<readonly McpToolDefinition[]>[],
+) =>
+  new Map<string, RuntimeMcpToolOutputContract>(
+    toolSets.flatMap((toolSet) => Object.entries(toolSet.outputs)),
+  );
+
+const toHandlerMap = (
+  toolSets: readonly McpToolSet<readonly McpToolDefinition[]>[],
+) =>
+  new Map<string, McpToolHandler>(
+    toolSets.flatMap((toolSet) => Object.entries(toolSet.handlers)),
+  );
+
+/**
+ * Handlers and output contracts resolve per audience, not per name alone: two
+ * audiences advertise a `search` and a `fetch`, and they are different tools
+ * with different contracts. The law audience's own sets are looked up first
+ * and the shared registry answers for everything else, so a name it does not
+ * override keeps exactly one implementation.
+ */
+const MCP_TOOL_OUTPUT_CONTRACTS = {
+  default: toOutputContractMap(DEFAULT_MCP_TOOL_SETS),
+  law: toOutputContractMap(LAW_ONLY_MCP_TOOL_SETS),
+} as const;
+
+const MCP_TOOL_HANDLERS = {
+  default: toHandlerMap(DEFAULT_MCP_TOOL_SETS),
+  law: toHandlerMap(LAW_ONLY_MCP_TOOL_SETS),
+} as const;
 
 export const getStaticMcpToolDefinition = (
   toolName: string,
   mode: McpMode = "default",
 ) => MCP_TOOL_DEFINITION_MAPS[mode].get(toolName);
 
-export const getStaticMcpToolOutputContract = (toolName: string) =>
-  MCP_TOOL_OUTPUT_CONTRACTS.get(toolName);
+export const getStaticMcpToolOutputContract = (
+  toolName: string,
+  mode: McpMode = "default",
+) =>
+  (mode === "law" ? MCP_TOOL_OUTPUT_CONTRACTS.law.get(toolName) : undefined) ??
+  MCP_TOOL_OUTPUT_CONTRACTS.default.get(toolName);
+
+export const getStaticMcpToolHandler = (
+  toolName: string,
+  mode: McpMode = "default",
+) =>
+  (mode === "law" ? MCP_TOOL_HANDLERS.law.get(toolName) : undefined) ??
+  MCP_TOOL_HANDLERS.default.get(toolName);
 
 export const listStaticMcpToolDefinitions = (
   mode: McpMode = "default",

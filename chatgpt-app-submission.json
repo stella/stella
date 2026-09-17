@@ -33,6 +33,14 @@
       "expected_output_url": null
     },
     {
+      "description": "Research case law through the compatibility search tool.",
+      "user_prompt": "Using stella, find Czech case law on the limitation period for a damages claim.",
+      "file_attachment_urls": null,
+      "tools_triggered": "search",
+      "expected_output": "Returns case-law results from the public legal corpus, each with an id, a court and docket title, and a url, without exposing matter data.",
+      "expected_output_url": null
+    },
+    {
       "description": "Discover available document templates.",
       "user_prompt": "Using stella, list the document templates available to my organization and identify their fillable fields.",
       "file_attachment_urls": null,

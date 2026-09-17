@@ -561,6 +561,8 @@ describe("handleMcpHttpRequest", () => {
 
       const listed = await client.listTools(undefined, { timeout: 2000 });
       expect(listed.tools.map(({ name }) => name)).toEqual([
+        "search",
+        "fetch",
         "search_case_law",
         "lookup_case_law",
         "read_case_law_decision",

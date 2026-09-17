@@ -6,7 +6,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "name": "search",
     "scope": "stella:search",
     "access": "read",
-    "description": "Search knowledge across accessible matters using the OpenAI-compatible search tool shape. Returns results with id, title, and url for follow-up fetch calls.",
+    "description": "Search knowledge across accessible matters using the OpenAI-compatible search tool shape. Where this deployment enables the public legal corpus, the same query also returns case-law decisions and statutes for the jurisdictions the organization practises in. An id is a bare UUID (a matter document), \`decision:<uuid>\` (a case-law decision), or \`statute:<eli>\` (a statute). Pass an id back to fetch verbatim.",
     "annotations": {
       "title": "Search",
       "destructiveHint": false,
@@ -39,7 +39,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "name": "fetch",
     "scope": "stella:read",
     "access": "read",
-    "description": "Fetch a knowledge document by id using the OpenAI-compatible fetch tool shape. Use ids returned by the search tool. Long documents are returned in windows; pass the returned nextCursor back as cursor to read more.",
+    "description": "Fetch one search result by id using the OpenAI-compatible fetch tool shape. An id is a bare UUID (a matter document), \`decision:<uuid>\` (a case-law decision), or \`statute:<eli>\` (a statute). \`metadata.kind\` says which of the three the answer is. Long text is returned in windows; pass the returned nextCursor back as cursor to read more.",
     "annotations": {
       "title": "Fetch",
       "destructiveHint": false,
@@ -55,8 +55,10 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "properties": {
         "id": {
           "type": "string",
-          "format": "uuid",
-          "description": "Document/entity ID"
+          "minLength": 1,
+          "maxLength": 520,
+          "pattern": "^(?:[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}|decision:[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}|statute:.+)$",
+          "description": "Result id from search. An id is a bare UUID (a matter document), \`decision:<uuid>\` (a case-law decision), or \`statute:<eli>\` (a statute)."
         },
         "cursor": {
           "type": "string",
@@ -3839,7 +3841,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     "name": "search",
     "scope": "stella:search_anonymized",
     "access": "read",
-    "description": "Search anonymized knowledge across accessible matters using the OpenAI-compatible search tool shape. Returns anonymized titles with ids and urls for follow-up fetch calls.",
+    "description": "Search anonymized knowledge across accessible matters using the OpenAI-compatible search tool shape. Where this deployment enables the public legal corpus, the same query also returns case-law decisions and statutes, which are published law and are returned as written. An id is a bare UUID (a matter document), \`decision:<uuid>\` (a case-law decision), or \`statute:<eli>\` (a statute). Pass an id back to fetch verbatim.",
     "annotations": {
       "title": "Search",
       "destructiveHint": false,
@@ -3872,7 +3874,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     "name": "fetch",
     "scope": "stella:read_anonymized",
     "access": "read",
-    "description": "Fetch anonymized document text by id using the OpenAI-compatible fetch tool shape. Use ids returned by the anonymized search tool. Long documents are returned in windows; pass the returned nextCursor back as cursor to read more.",
+    "description": "Fetch one search result by id using the OpenAI-compatible fetch tool shape. An id is a bare UUID (a matter document), \`decision:<uuid>\` (a case-law decision), or \`statute:<eli>\` (a statute). A matter document is returned anonymized; a decision or a statute is published law and is returned as written. Long text is returned in windows; pass the returned nextCursor back as cursor to read more.",
     "annotations": {
       "title": "Fetch",
       "destructiveHint": false,
@@ -3888,8 +3890,10 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
       "properties": {
         "id": {
           "type": "string",
-          "format": "uuid",
-          "description": "Document/entity ID"
+          "minLength": 1,
+          "maxLength": 520,
+          "pattern": "^(?:[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}|decision:[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}|statute:.+)$",
+          "description": "Result id from search. An id is a bare UUID (a matter document), \`decision:<uuid>\` (a case-law decision), or \`statute:<eli>\` (a statute)."
         },
         "cursor": {
           "type": "string",
@@ -5166,6 +5170,75 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
 
 exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, description, annotations, inputSchema) 1`] = `
 "[
+  {
+    "name": "search",
+    "scope": "stella:search",
+    "access": "read",
+    "feature": "FEATURE_PUBLIC_LAW",
+    "description": "Search the public legal corpus (case-law decisions and statutes) using the OpenAI-compatible search tool shape, over the jurisdictions the organization practises in. An id is \`decision:<uuid>\` (a case-law decision) or \`statute:<eli>\` (a statute). Pass an id back to fetch verbatim. No matter, document, contact or billing data is reachable here.",
+    "annotations": {
+      "title": "Search",
+      "destructiveHint": false,
+      "readOnlyHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "query"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "query": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500,
+          "description": "Search query"
+        },
+        "cursor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "description": "Opaque cursor from a previous search call to fetch the next page"
+        }
+      }
+    }
+  },
+  {
+    "name": "fetch",
+    "scope": "stella:read",
+    "access": "read",
+    "feature": "FEATURE_PUBLIC_LAW",
+    "description": "Fetch one public-corpus document by id using the OpenAI-compatible fetch tool shape. An id is \`decision:<uuid>\` (a case-law decision) or \`statute:<eli>\` (a statute). A decision answers with its text, a statute with the text in force today, and \`metadata.kind\` says which. Long text is returned in windows; pass the returned nextCursor back as cursor to read more.",
+    "annotations": {
+      "title": "Fetch",
+      "destructiveHint": false,
+      "readOnlyHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "id"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 520,
+          "pattern": "^(?:decision:[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}|statute:.+)$",
+          "description": "Result id from search. An id is \`decision:<uuid>\` (a case-law decision) or \`statute:<eli>\` (a statute)."
+        },
+        "cursor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "description": "Opaque cursor from a previous fetch call to read the next window of text"
+        }
+      }
+    }
+  },
   {
     "name": "search_case_law",
     "scope": "stella:search",

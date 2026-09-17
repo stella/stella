@@ -137,7 +137,7 @@ describe("MCP server instructions", () => {
 
   test("the law surface names its tools only while the gate is open", () => {
     // The whole law tool list rides the public-law gate, so a gate-off
-    // deployment serves an empty tools/list there: naming the seven tools
+    // deployment serves an empty tools/list there: naming its tools
     // would be the same dead end the default surface avoids above.
     withPublicLaw({ featurePublicLaw: true, isDev: false }, () => {
       expect(getMcpInstructions("law")).toBe(MCP_INSTRUCTIONS.law);

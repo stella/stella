@@ -395,8 +395,20 @@ const schemaCheck = (
 
 type McpTaskSpec = {
   toolName: string;
-  /** The eval starts after a read-only capability description, not at discovery. */
-  preflight?: { type: "capability-described" };
+  /**
+   * The eval starts after a call that already happened, not at discovery: a
+   * read-only capability description, or a compat `search` whose results the
+   * model is asked to read.
+   */
+  preflight?:
+    | { type: "capability-described" }
+    | { type: "compat-search-returned" };
+  /**
+   * The tool names this task exposes, for a task about a client that carries
+   * fewer tools than the surface has. Absent exposes the whole default
+   * surface, which is what every other task measures.
+   */
+  exposedTools?: readonly string[];
   destructive?: true;
   /**
    * One call that passes: it must parse through the tool's own input schema
@@ -733,6 +745,50 @@ const TASKS: readonly Task[] = [
       flags: { country: "CZE" },
       repeatedAtLeast: { queries: 2 },
     },
+  },
+  {
+    id: "compat-search-case-law",
+    // An OpenAI-compatible client outside developer mode carries `search` and
+    // `fetch` and nothing else, so this task exposes those two alone. What it
+    // measures is whether a model handed only that pair reaches for the corpus
+    // at all, rather than answering a case-law question from memory.
+    request:
+      "Find Czech case law on the limitation period for a claim for damages.",
+    mcp: {
+      toolName: "search",
+      exposedTools: ["search", "fetch"],
+      exampleArgs: { query: `promlčení ${CZECH_DAMAGES_QUERY}` },
+      checkArgs: (args) => {
+        const query = args["query"];
+        // The wording is the model's own; a corpus search it did not make is
+        // what this task is looking for.
+        return typeof query === "string" && query.trim().length > 0
+          ? []
+          : [
+              `query: expected a non-empty string, got ${JSON.stringify(query)}`,
+            ];
+      },
+    },
+    // The CLI excludes this pair deliberately: it has named corpus commands,
+    // so there is no leaf for a client that only drives `search`.
+    cli: { kind: "declined" },
+  },
+  {
+    id: "compat-fetch-decision",
+    // The second call of the same client's loop. `search` has already
+    // answered, so what is measured is whether the model passes the id it was
+    // handed back verbatim rather than re-spelling it as a bare UUID or a
+    // docket number.
+    request: "Read the decision that search returned.",
+    mcp: {
+      toolName: "fetch",
+      exposedTools: ["search", "fetch"],
+      preflight: { type: "compat-search-returned" },
+      exampleArgs: { id: `decision:${CASE_LAW_DECISION_ID}` },
+      checkArgs: (args) =>
+        field(args, "id", `decision:${CASE_LAW_DECISION_ID}`),
+    },
+    cli: { kind: "declined" },
   },
   {
     id: "read-case-law-decisions",
@@ -1221,6 +1277,14 @@ const assertMcpTaskFixtures = (tasks: readonly Task[]): void => {
       failures.push(`${task.id}: unknown tool ${task.mcp.toolName}`);
       continue;
     }
+    const unknownExposed = (task.mcp.exposedTools ?? []).filter(
+      (name) => !mcpDefinitionsByName.has(name),
+    );
+    if (unknownExposed.length > 0) {
+      failures.push(
+        `${task.id}: unknown exposed tools ${unknownExposed.join(", ")}`,
+      );
+    }
     const schema = schemaCheck(definition, task.mcp.exampleArgs);
     const issues = [
       ...schema.issues,
@@ -1480,8 +1544,12 @@ const listMcpSurfaceDefinitions = (): McpToolDefinition[] => [
   ...SKILL_FIXTURES.map(skillToolDefinition),
 ];
 
-const buildMcpClientTools = (): AnyClientTool[] => {
-  const wireTools = toMcpTools(listMcpSurfaceDefinitions());
+const buildMcpClientTools = (
+  exposed?: ReadonlySet<string>,
+): AnyClientTool[] => {
+  const wireTools = toMcpTools(listMcpSurfaceDefinitions()).filter(
+    (tool) => exposed === undefined || exposed.has(tool.name),
+  );
   return wireTools.map((tool) =>
     toolDefinition({
       name: tool.name,
@@ -1918,7 +1986,24 @@ const scoreCliRun = ({
   };
 };
 
+const COMPAT_SEARCH_PREFLIGHT = [
+  "Eval scope: post-search first-call authoring. A `search` call has already run and returned this result. Do not call `search` again; make the one `fetch` call that reads the decision it names. This eval captures the call but never executes it.",
+  JSON.stringify({
+    results: [
+      {
+        id: `decision:${CASE_LAW_DECISION_ID}`,
+        title: "Nejvyssi soud 25 Cdo 1234/2020",
+        url: "https://stll.app/law/cze/cases/nejvyssi-soud/25-cdo-1234-2020",
+      },
+    ],
+    nextCursor: null,
+  }),
+].join("\n");
+
 const mcpPreflightContext = (task: Task): string => {
+  if (task.mcp.preflight?.type === "compat-search-returned") {
+    return COMPAT_SEARCH_PREFLIGHT;
+  }
   if (task.mcp.preflight?.type !== "capability-described") {
     return "";
   }
@@ -1945,9 +2030,7 @@ const mcpPreflightContext = (task: Task): string => {
 };
 
 const mcpWorkflowScope = (task: Task): WorkflowScope =>
-  task.mcp.preflight?.type === "capability-described"
-    ? "post-discovery-first-call"
-    : "first-call";
+  task.mcp.preflight === undefined ? "first-call" : "post-discovery-first-call";
 
 // --- run orchestration -------------------------------------------------------
 
@@ -2123,7 +2206,16 @@ const main = async () => {
             `${id} · ${surface} · ${task.id} · run ${String(repeat)}\n`,
           );
           const run = await (surface === "mcp"
-            ? runMcpTask({ model, modelId: id, task, repeat, tools: mcpTools })
+            ? runMcpTask({
+                model,
+                modelId: id,
+                task,
+                repeat,
+                tools:
+                  task.mcp.exposedTools === undefined
+                    ? mcpTools
+                    : buildMcpClientTools(new Set(task.mcp.exposedTools)),
+              })
             : runCliTask({ model, modelId: id, task, repeat, skill }));
           runs.push(run);
         }

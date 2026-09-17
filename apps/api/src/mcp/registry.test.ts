@@ -8,9 +8,13 @@ import {
 } from "@/api/mcp/constants";
 import { DOCUMENT_TOOL_SET } from "@/api/mcp/document-tools";
 import {
+  ALL_MCP_TOOL_DEFINITIONS,
   ANONYMIZED_MCP_TOOL_DEFINITIONS,
   DEFAULT_MCP_TOOL_DEFINITIONS,
   DOCUMENTS_MCP_TOOL_DEFINITIONS,
+  getStaticMcpToolDefinition,
+  getStaticMcpToolHandler,
+  getStaticMcpToolOutputContract,
   LAW_MCP_TOOL_DEFINITIONS,
   LAW_MCP_TOOL_DISPOSITION,
 } from "@/api/mcp/static-tool-definitions";
@@ -115,8 +119,10 @@ describe("MCP tool registry", () => {
   });
 
   test("every public-corpus tool carries a law-audience disposition", () => {
-    const definitions: readonly McpToolDefinition[] =
-      DEFAULT_MCP_TOOL_DEFINITIONS;
+    // Every advertised definition, the law audience's own copies of the
+    // OpenAI-compatible pair included: a corpus tool only that audience serves
+    // still needs a disposition, and the census is what says so.
+    const definitions: readonly McpToolDefinition[] = ALL_MCP_TOOL_DEFINITIONS;
     const publicLawNames = definitions
       .filter(
         (tool) =>
@@ -134,8 +140,12 @@ describe("MCP tool registry", () => {
     );
   });
 
-  test("law projection is the public corpus in registry order", () => {
+  test("law projection is the public corpus in wire order", () => {
     expect(LAW_MCP_TOOL_DEFINITIONS.map((tool) => tool.name)).toEqual([
+      // The audience's own corpus-only pair, then the named corpus tools in
+      // registry order.
+      "search",
+      "fetch",
       "search_case_law",
       "lookup_case_law",
       "read_case_law_decision",
@@ -174,5 +184,20 @@ describe("MCP tool registry", () => {
   test("tool names are unique across the registry", () => {
     const names = DEFAULT_MCP_TOOL_DEFINITIONS.map((tool) => tool.name);
     expect(new Set(names).size).toBe(names.length);
+  });
+
+  test("a law-only tool sharing a wire name resolves to its own definition", () => {
+    // Both audiences advertise a `search` and a `fetch`. Resolution is per
+    // audience, so the law one must never be the matter-reading one; the
+    // corpus gate is what tells the two apart.
+    for (const toolName of ["search", "fetch"]) {
+      const lawTool = getStaticMcpToolDefinition(toolName, "law");
+      expect(lawTool?.feature, `law ${toolName}`).toBe("FEATURE_PUBLIC_LAW");
+      expect(lawTool).not.toBe(getStaticMcpToolDefinition(toolName, "default"));
+      expect(getStaticMcpToolHandler(toolName, "law")).not.toBe(
+        getStaticMcpToolHandler(toolName, "default"),
+      );
+      expect(getStaticMcpToolOutputContract(toolName, "law")).toBeDefined();
+    }
   });
 });

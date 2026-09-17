@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
-import { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
+import { ALL_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
 
 /**
  * A model that fills every property it sees sends `""` for the optional ones
@@ -17,7 +17,7 @@ import { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions"
  * requires the property to hold, tool by tool, instead of trusting each new
  * filter to opt in.
  */
-const definitionsWithRuntimeSchema = DEFAULT_MCP_TOOL_DEFINITIONS.filter(
+const definitionsWithRuntimeSchema = ALL_MCP_TOOL_DEFINITIONS.filter(
   (definition) => "inputSchemaSource" in definition,
 );
 

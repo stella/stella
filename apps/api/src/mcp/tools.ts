@@ -30,12 +30,11 @@ import {
   normalizeObjectInputAtBoundary,
 } from "@/api/mcp/input-normalization";
 import {
-  DEFAULT_MCP_TOOL_SETS,
   getStaticMcpToolDefinition,
+  getStaticMcpToolHandler,
 } from "@/api/mcp/static-tool-definitions";
 import type {
   McpToolDefinition,
-  McpToolHandler,
   McpToolInputSchema,
   ToolScope,
 } from "@/api/mcp/tool-types";
@@ -46,10 +45,6 @@ import {
   FEATURE_DISABLED_MESSAGE,
   featureDisabledHint,
 } from "@/api/mcp/tool-utils";
-
-const MCP_TOOL_HANDLERS = new Map<string, McpToolHandler>(
-  DEFAULT_MCP_TOOL_SETS.flatMap((toolSet) => Object.entries(toolSet.handlers)),
-);
 
 const DOCUMENTS_MCP_CAPABILITY_IDS: ReadonlySet<string> = new Set(
   DOCUMENT_VERSION_UPLOAD_CAPABILITY_IDS,
@@ -186,11 +181,15 @@ export const listMcpTools = async (
   scopes?: readonly string[],
 ): Promise<McpTool[]> => {
   if (scopes === undefined) {
-    return toMcpTools(await listGatewayMcpToolDefinitions({ context, mode }));
+    return toMcpTools(
+      await listGatewayMcpToolDefinitions({ context, mode }),
+      mode,
+    );
   }
 
   return toMcpTools(
     await listGatewayMcpToolDefinitions({ context, mode, scopes }),
+    mode,
   );
 };
 
@@ -241,7 +240,7 @@ export const handleMcpToolCall = async ({
       }),
     );
   }
-  const outputContract = resolveMcpToolOutputContract(toolName);
+  const outputContract = resolveMcpToolOutputContract(toolName, mode);
   if (outputContract === undefined) {
     panic(`Static MCP tool is missing its output contract: ${toolName}`);
   }
@@ -325,7 +324,7 @@ export const handleMcpToolCall = async ({
     );
   }
 
-  const handler = MCP_TOOL_HANDLERS.get(toolName);
+  const handler = getStaticMcpToolHandler(toolName, mode);
   if (!handler) {
     return serializeToolResult(
       structuredErrorResult({

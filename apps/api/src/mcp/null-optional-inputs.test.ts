@@ -6,7 +6,7 @@ import * as v from "valibot";
 import capabilityCatalog from "@stll/cli/capability-catalog.json";
 
 import { withNullOptionalsOmitted } from "@/api/mcp/input-normalization";
-import { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
+import { ALL_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
 
 /**
  * A strict tool-schema client must send every property a tool declares, so it
@@ -18,7 +18,7 @@ import { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions"
  * This walks the registry and requires the property to hold, tool by tool,
  * instead of trusting that each new tool opts in.
  */
-const definitionsWithRuntimeSchema = DEFAULT_MCP_TOOL_DEFINITIONS.filter(
+const definitionsWithRuntimeSchema = ALL_MCP_TOOL_DEFINITIONS.filter(
   (definition) => "inputSchemaSource" in definition,
 );
 
