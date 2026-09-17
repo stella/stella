@@ -27,7 +27,10 @@ import type {
   ReconciliationSlicePageOptions,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/adapters/calendar-day-slice-walk";
-import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
+import {
+  fetchPublisher,
+  fetchWithRetry,
+} from "@/api/handlers/case-law/ingestion/adapters/retry";
 import {
   INGESTION_USER_AGENT,
   adapterCatch,
@@ -52,7 +55,6 @@ import {
   FetchBoundaryError,
 } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
-import { fetchWithTimeout } from "@/api/lib/fetch";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { restrictCzRegionalFinaldocUrl } from "@/api/lib/legal-search/cz-regional-finaldoc-url";
 import { logger } from "@/api/lib/observability/logger";
@@ -97,7 +99,6 @@ const CZ_REGIONAL_TIP_WINDOW_DAYS = 14;
  * so we can safely push higher concurrency and self-correct.
  */
 const FINALDOC_CONCURRENCY = 15;
-const FINALDOC_BATCH_DELAY_MS = 50;
 
 const arrayOrEmpty = <T>(value: T[] | null | undefined): T[] => {
   if (value === undefined || value === null) {
@@ -673,7 +674,8 @@ const fetchListPage = async ({ cursor, signal, state }: FetchListPageOptions) =>
           .split("-")
           .map(Number);
         const url = `${BASE_URL}/opendata/${year}/${month}/${day}?page=${state.page}`;
-        const response = await fetchWithTimeout(url, {
+        const response = await fetchPublisher(url, {
+          adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
           signal: attemptSignal,
           headers: {
             Accept: "application/json",
@@ -920,9 +922,13 @@ export const czRegionalAdapter = defineSourceAdapter({
       );
       const perYear = await Promise.all(
         years.map(async (year) => {
-          const response = await fetchWithTimeout(
+          const response = await fetchPublisher(
             `${BASE_URL}/opendata/${year}`,
-            { signal, timeoutMs: ADAPTER_TIMEOUT.REQUEST },
+            {
+              adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
+              signal,
+              timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+            },
           );
           if (!response.ok) {
             return null;
@@ -1051,8 +1057,7 @@ export const czRegionalAdapter = defineSourceAdapter({
         }
 
         // Enrich decisions with fulltext + AST from /api/finaldoc.
-        // Fetches run concurrently (batches of 10) to speed up
-        // bulk ingestion while respecting the court server.
+        // Fetches run concurrently, in batches of FINALDOC_CONCURRENCY.
         const enrichDecision = async (decision: IngestionResult) => {
           if (!decision.documentUrl) {
             return;
@@ -1065,9 +1070,6 @@ export const czRegionalAdapter = defineSourceAdapter({
         };
 
         for (let i = 0; i < decisions.length; i += FINALDOC_CONCURRENCY) {
-          if (i > 0) {
-            await Bun.sleep(FINALDOC_BATCH_DELAY_MS);
-          }
           await Promise.all(
             decisions.slice(i, i + FINALDOC_CONCURRENCY).map(enrichDecision),
           );

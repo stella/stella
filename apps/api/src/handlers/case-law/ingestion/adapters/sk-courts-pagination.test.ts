@@ -16,9 +16,6 @@ import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 const PAGE_SIZE = 100;
 
-/** How far the newest-first walk reaches before returning to the head. */
-const LIVE_WINDOW_ITEMS = 5000;
-
 /**
  * Items shaped like the API answers: a two-UUID `guid`, a docket written the
  * way the register writes it, and the deciding court by name.
@@ -127,36 +124,17 @@ describe("sk-courts crawl pagination", () => {
     // cursor persisted before this fix still names the item it named then.
     expect((await fetchAt("backfill:0")).nextCursor).toBe("backfill:100");
     expect((await fetchAt("backfill:100")).nextCursor).toBe("backfill:200");
-    expect((await fetchAt("live:1200")).nextCursor).toBe("live:1300");
     // A null cursor starts the first walk at its own beginning.
     expect((await fetchAt(null)).nextCursor).toBe("backfill:100");
   });
 
-  test("the live walk covers its whole window before turning back", async () => {
+  test("the backfill hands over to the frontier at the end of the collection", async () => {
     endpoint = mockListEndpoint();
 
-    const pages: number[] = [];
-    const collected: string[] = [];
-    let cursor: string | null = "live:0";
-    for (let step = 0; step < LIVE_WINDOW_ITEMS / PAGE_SIZE; step += 1) {
-      const page = await fetchAt(cursor);
-      pages.push(...endpoint.requestedPages.splice(0));
-      collected.push(...page.decisions.map(({ caseNumber }) => caseNumber));
-      cursor = page.nextCursor;
-    }
+    // The last page of the collection: 6,000 items, 100 to a page.
+    const last = await fetchAt(`backfill:${CORPUS_SIZE - PAGE_SIZE}`);
 
-    // One lap reads the window exactly once: five thousand decisions, not
-    // forty-nine pages of them plus the first page over again.
-    expect(collected).toHaveLength(LIVE_WINDOW_ITEMS);
-    expect(new Set(collected).size).toBe(LIVE_WINDOW_ITEMS);
-    expect(collected.at(0)).toBe(listItem(CORPUS_SIZE - 1).spisovaZnacka);
-    expect(collected.at(-1)).toBe(
-      listItem(CORPUS_SIZE - LIVE_WINDOW_ITEMS).spisovaZnacka,
-    );
-    expect(pages).toHaveLength(LIVE_WINDOW_ITEMS / PAGE_SIZE);
-    expect(pages.at(0)).toBe(1);
-    expect(pages.at(-1)).toBe(LIVE_WINDOW_ITEMS / PAGE_SIZE);
-    // And then returns to the head, which is where the new decisions are.
-    expect(cursor).toBe("live:0");
-  }, 120_000);
+    expect(last.nextCursor).toMatch(/^frontier:\d{4}-\d{2}-\d{2}:0$/u);
+    // What the frontier costs from there is `sk-courts-frontier.test.ts`.
+  });
 });

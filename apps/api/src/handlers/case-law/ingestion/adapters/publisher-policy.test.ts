@@ -1,9 +1,16 @@
 import { describe, expect, it } from "bun:test";
 
-import { createAtRisRequestSlot } from "@/api/handlers/case-law/ingestion/adapters/at-ris-throttle";
+import {
+  ADAPTER_PUBLISHER_GATES,
+  createPublisherSlot,
+  publisherRequestIntervalMs,
+  publisherRequestsPerDay,
+  PUBLISHER_GATES,
+} from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { rejectionOf } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
+import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 
-describe("Austrian RIS publisher gate", () => {
+describe("the shared publisher gate", () => {
   it("does not validate Redis configuration until a deployed request", () => {
     const environment = {
       ...Object.fromEntries(
@@ -30,7 +37,7 @@ describe("Austrian RIS publisher gate", () => {
     const waits = [0, 5000, 10_000];
     const commands: string[][] = [];
     const sleeps: number[] = [];
-    const reserve = createAtRisRequestSlot({
+    const reserve = createPublisherSlot(ADAPTER_KEYS.AT_COURTS, {
       redis: () => ({
         send: async (_command, args) => {
           commands.push(args);
@@ -55,8 +62,53 @@ describe("Austrian RIS publisher gate", () => {
     }
   });
 
+  it("spends one budget for every adapter naming the same publisher", async () => {
+    const keys: string[] = [];
+    const reserveFor = (
+      adapterKey: Parameters<typeof createPublisherSlot>[0],
+    ) =>
+      createPublisherSlot(adapterKey, {
+        redis: () => ({
+          send: (_command, args) => {
+            keys.push(args[2] ?? "");
+            return 0;
+          },
+        }),
+        sleep: async () => {},
+      });
+
+    await reserveFor(ADAPTER_KEYS.AT_VFGH)();
+    await reserveFor(ADAPTER_KEYS.AT_BKS)();
+    await reserveFor(ADAPTER_KEYS.AT_FINDOK)();
+
+    expect(keys).toEqual([
+      "case-law:publisher-gate:ris-bka",
+      "case-law:publisher-gate:ris-bka",
+      "case-law:publisher-gate:findok-bmf",
+    ]);
+  });
+
+  it("keeps the intervals the Austrian and Polish publishers agreed to", () => {
+    expect(publisherRequestIntervalMs(ADAPTER_KEYS.AT_COURTS)).toBe(5000);
+    expect(publisherRequestIntervalMs(ADAPTER_KEYS.AT_FINDOK)).toBe(1500);
+    expect(publisherRequestIntervalMs(ADAPTER_KEYS.PL_SN)).toBe(1000);
+  });
+
+  it("derives a daily ceiling from the interval it enforces", () => {
+    for (const adapterKey of Object.values(ADAPTER_KEYS)) {
+      const gateId = ADAPTER_PUBLISHER_GATES[adapterKey];
+      expect(PUBLISHER_GATES[gateId]).toBeDefined();
+      expect(publisherRequestsPerDay(gateId)).toBe(
+        Math.floor(86_400_000 / publisherRequestIntervalMs(adapterKey)),
+      );
+    }
+    // NALUS is the one publisher that stated a total rather than a gap, and
+    // the interval derived from it has to stay under what the court allows.
+    expect(publisherRequestsPerDay("nalus-usoud")).toBeLessThan(5000);
+  });
+
   it("fails closed when Redis returns an invalid reservation", async () => {
-    const reserve = createAtRisRequestSlot({
+    const reserve = createPublisherSlot(ADAPTER_KEYS.AT_COURTS, {
       redis: () => ({ send: async () => "not-a-number" }),
       sleep: async () => {
         throw new Error("invalid reservations must not reach sleep");
@@ -72,7 +124,7 @@ describe("Austrian RIS publisher gate", () => {
 
   it("abandons a Redis reservation when the ingestion signal aborts", async () => {
     const controller = new AbortController();
-    const reserve = createAtRisRequestSlot({
+    const reserve = createPublisherSlot(ADAPTER_KEYS.AT_COURTS, {
       redis: () => ({ send: async () => await new Promise(() => {}) }),
       sleep: async () => {
         throw new Error("an unreserved request must not sleep");

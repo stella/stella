@@ -1,5 +1,8 @@
 import { panic, Result } from "better-result";
 
+import { mapWithConcurrency } from "@stll/concurrency";
+import { parsePlainDate, Temporal } from "@stll/time";
+
 import {
   ADAPTER_KEYS,
   ADAPTER_TIMEOUT,
@@ -20,11 +23,14 @@ import type {
   ReconciliationBuildOutcome,
   ReconciliationSlicePage,
   ReconciliationSlicePageOptions,
+  SyncPage,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/adapters/calendar-day-slice-walk";
 import { createPagePaginatedFetch } from "@/api/handlers/case-law/ingestion/adapters/pagination";
+import { fetchPublisher } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import {
   INGESTION_USER_AGENT,
+  adapterCatch,
   hashContent,
   isArrayOf,
   isNullishArrayOf,
@@ -39,7 +45,6 @@ import {
   absentDecisionTextFields,
 } from "@/api/lib/case-law/decision-text";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
-import { fetchWithTimeout } from "@/api/lib/fetch";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { restrictSkCourtDocumentUrl } from "@/api/lib/legal-search/sk-court-document-url";
 import { logger } from "@/api/lib/observability/logger";
@@ -55,9 +60,12 @@ import { isRecord } from "@/api/lib/type-guards";
  * Each list item is enriched with a detail fetch for
  * ECLI, document URL, and referenced legislation.
  *
- * Cursor format: the walk and an item offset within it
- * ("backfill:1200", "live:0"); a bare "offset:100" predates
- * the walks and restarts the first of them.
+ * Cursor formats:
+ *   backfill:<item offset>      the oldest-first sweep of the collection
+ *   frontier:<day>:<page>       the steady-state walk of closed days
+ *
+ * A bare "offset:100" predates the walks and restarts the backfill; a "live:"
+ * cursor names the newest-first lap the frontier replaced and starts it.
  *
  * The same list endpoint is addressable by a decision-date range, which is
  * what makes this source reconcilable: one date can be listed on its own,
@@ -84,14 +92,6 @@ const PAGE_SIZE = 100;
 const LEGACY_PAGE_SIZE = 100;
 const ITEM_CONCURRENCY = 10;
 const LIST_TIMEOUT_MS = 60_000;
-/**
- * How far back the newest-first walk reaches before returning to the head.
- * Comfortably more than this source publishes between cycles, so a slow or
- * skipped cycle still cannot let a decision slip past unseen; already-stored
- * decisions in the overlap cost a list read and are then deduplicated.
- */
-const LIVE_WINDOW_ITEMS = 5000;
-
 /** The only language this source publishes; half of the fallback identity. */
 export const SK_COURTS_LANGUAGE = "sk";
 
@@ -241,7 +241,8 @@ const fetchDetail = async (
   signal?: AbortSignal,
 ): Promise<SkDetailItem | null> => {
   const url = `${BASE_URL}/${encodeURIComponent(guid)}`;
-  const response = await fetchWithTimeout(url, {
+  const response = await fetchPublisher(url, {
+    adapterKey: ADAPTER_KEYS.SK_COURTS,
     signal,
     timeoutMs: ADAPTER_TIMEOUT.REQUEST,
     headers: { Accept: "application/json" },
@@ -566,11 +567,9 @@ export const SK_COURTS_FIRST_SLICE =
  *
  * Known limit, stated because it is invisible otherwise: a decision published
  * past the window is not recovered. Its slice is settled, so no reconciliation
- * unit selects it again, and the crawl does not reach it either — the
- * newest-first lap orders by decision date and stops after
- * {@link LIVE_WINDOW_ITEMS}, which at this source's volume spans about two
- * months of dates, so an old-dated new record is nowhere near the head it
- * walks. Closing it needs the loop to re-survey settled slices on a slow
+ * unit selects it again, and the crawl does not reach it either — the frontier
+ * has passed that date and does not go back. Closing it needs the loop to
+ * re-survey settled slices on a slow
  * cadence, which is the engine's decision to make, not an adapter's: the
  * capability's only lever over what gets re-walked is this number, and buying
  * the last few percent with it would mean re-walking hundreds of dates daily
@@ -662,25 +661,56 @@ const isSkSliceResponse = (value: unknown): value is SkSliceResponse =>
  * and everything else — a 5xx, a timeout, a body without a count — is an error
  * the engine retries on a later pass.
  */
-const listSkCourtsSlicePage = async ({
+type ListDayPageOptions = {
+  day: string;
+  page: number;
+  pageSize: number;
+  signal?: AbortSignal | undefined;
+};
+
+/** What one page of a day's listing states: its rows, and the day's size. */
+type ListedDayPage = {
+  listed: Record<string, unknown>[];
+  total: number;
+};
+
+/**
+ * One page of the publisher's own listing for a decision date.
+ *
+ * Both the steady-state frontier and the reconciliation ledger read a date
+ * through this, at their own page sizes: the frontier enriches every row it
+ * takes, so it asks for a page it can finish, while the ledger fetches
+ * nothing per row and asks for the largest page the endpoint answers quickly.
+ *
+ * A failed request is thrown, never flattened into an empty page. The crawl
+ * can afford to read a dead page as "nothing here" because a cursor that moves
+ * on can be walked again; a ledger row cannot, since an outage recorded as an
+ * empty date settles that date and it is never revisited. So only a body that
+ * states a count answers what a date holds: `numFound: 0` is an empty slice,
+ * and everything else — a 5xx, a timeout, a body without a count — is an error
+ * the engine retries on a later pass.
+ */
+const listSkCourtsDayPage = async ({
+  day,
   page,
+  pageSize,
   signal,
-  slice,
-}: ReconciliationSlicePageOptions): Promise<ReconciliationSlicePage> => {
+}: ListDayPageOptions): Promise<ListedDayPage> => {
   // Refused here rather than at the publisher: this endpoint ignores a date it
   // cannot parse and answers the whole 4.6M-decision collection instead, which
   // a walk would read as one date holding all of it.
-  skCourtsDaySlices.dayStart(slice);
+  skCourtsDaySlices.dayStart(day);
   const url = `${BASE_URL}?${new URLSearchParams({
     page: String(page + LISTING_FIRST_PAGE),
-    size: String(LISTING_PAGE_SIZE),
+    size: String(pageSize),
     sortProperty: SLICE_SORT_PROPERTY,
     sortDirection: SLICE_SORT_DIRECTION,
-    vydaniaOd: slice,
-    vydaniaDo: slice,
+    vydaniaOd: day,
+    vydaniaDo: day,
   }).toString()}`;
 
-  const response = await fetchWithTimeout(url, {
+  const response = await fetchPublisher(url, {
+    adapterKey: ADAPTER_KEYS.SK_COURTS,
     signal,
     timeoutMs: LIST_TIMEOUT_MS,
     headers: {
@@ -693,7 +723,7 @@ const listSkCourtsSlicePage = async ({
     throw new AdapterFetchError({
       message: `SK courts listing API error: ${response.status}`,
       adapterKey: ADAPTER_KEYS.SK_COURTS,
-      cursor: slice,
+      cursor: day,
       httpStatus: response.status,
     });
   }
@@ -704,7 +734,7 @@ const listSkCourtsSlicePage = async ({
       message:
         "SK courts listing API stated no count and item list for the slice",
       adapterKey: ADAPTER_KEYS.SK_COURTS,
-      cursor: slice,
+      cursor: day,
     });
   }
 
@@ -714,14 +744,28 @@ const listSkCourtsSlicePage = async ({
   // with nothing is the publisher contradicting itself, not a date running out
   // — and a page dropped here is not merely lost, it is written to the ledger
   // as part of what the date holds.
-  if (total > page * LISTING_PAGE_SIZE && listed.length === 0) {
+  if (total > page * pageSize && listed.length === 0) {
     throw new AdapterFetchError({
-      message: `SK courts listing API stated ${total} for ${slice} but listed nothing at page ${page}`,
+      message: `SK courts listing API stated ${total} for ${day} but listed nothing at page ${page}`,
       adapterKey: ADAPTER_KEYS.SK_COURTS,
-      cursor: slice,
+      cursor: day,
     });
   }
 
+  return { listed, total };
+};
+
+const listSkCourtsSlicePage = async ({
+  page,
+  signal,
+  slice,
+}: ReconciliationSlicePageOptions): Promise<ReconciliationSlicePage> => {
+  const { listed, total } = await listSkCourtsDayPage({
+    day: slice,
+    page,
+    pageSize: LISTING_PAGE_SIZE,
+    signal,
+  });
   return {
     items: listed.map((item) => ({
       identity: skCourtsListingIdentity(item),
@@ -763,6 +807,148 @@ const buildSkCourtsFromPayload = async (
   }
 };
 
+// ── Steady-state frontier ────────────────────────────────
+
+/**
+ * What the newest-first lap used to be called, and what replaced it.
+ *
+ * The lap re-listed the newest five thousand decisions every cycle — fifty
+ * pages of a hundred, all of them already held — so an hour in which the
+ * publisher indexed nothing cost the same fifty requests as an hour in which
+ * it indexed a thousand. The frontier costs requests only for days
+ * that have closed since the last one it listed, and nothing at all for a day
+ * that has not closed yet.
+ */
+const LIVE_PHASE = "live";
+const FRONTIER_PHASE = "frontier";
+
+const FRONTIER_CURSOR =
+  /^frontier:(?<day>\d{4}-\d{2}-\d{2}):(?<page>\d{1,6})$/u;
+
+/**
+ * Where the frontier picks up when the backfill hands over, or when a `live:`
+ * cursor from the lap this replaced arrives: two days back, so the first
+ * cycle lists yesterday rather than standing still for a day.
+ *
+ * The lap had been re-reading about two months of decision dates every hour
+ * up to that point, so nothing between the handover and here is unseen, and
+ * what the publisher indexes late against an already-listed date is the
+ * ledger's to find within its {@link SK_COURTS_TIP_WINDOW_DAYS} window —
+ * which reaches further back than the lap ever did.
+ */
+const FRONTIER_HANDOVER_LOOKBACK_DAYS = 2;
+
+/** The last day the frontier listed to the end, and where it is in the next. */
+type SkCourtsFrontier = { verifiedThrough: string; page: number };
+
+const encodeFrontierCursor = ({
+  verifiedThrough,
+  page,
+}: SkCourtsFrontier): string => `${FRONTIER_PHASE}:${verifiedThrough}:${page}`;
+
+const handoverFrontier = (): SkCourtsFrontier => ({
+  verifiedThrough: Temporal.Now.plainDateISO("UTC")
+    .subtract({ days: FRONTIER_HANDOVER_LOOKBACK_DAYS })
+    .toString(),
+  page: 0,
+});
+
+/**
+ * The frontier a cursor names, or `null` when the cursor belongs to the
+ * backfill walk instead.
+ *
+ * A `live:` cursor and the bare `frontier:0` the backfill hands over with
+ * both start the frontier: neither states a day, and both mean the
+ * collection has been seen.
+ */
+const decodeFrontierCursor = (
+  cursor: string | null,
+): SkCourtsFrontier | null => {
+  if (cursor === null) {
+    return null;
+  }
+  const groups = FRONTIER_CURSOR.exec(cursor)?.groups;
+  const day = groups?.["day"];
+  const page = groups?.["page"];
+  if (day !== undefined && page !== undefined) {
+    return { verifiedThrough: day, page: Number.parseInt(page, 10) };
+  }
+  return cursor.startsWith(`${FRONTIER_PHASE}:`) ||
+    cursor.startsWith(`${LIVE_PHASE}:`)
+    ? handoverFrontier()
+    : null;
+};
+
+/**
+ * The next publisher day that has closed, or `null` while none has.
+ *
+ * Closed, not merely elapsed: a day still in progress would be listed at a
+ * fraction of what it ends up holding and then never listed again, so the
+ * frontier waits for UTC midnight to pass before it takes a day.
+ */
+const nextClosedDay = (verifiedThrough: string): string | null => {
+  const day = parsePlainDate(verifiedThrough);
+  if (day === null) {
+    return panic(
+      `sk-courts frontier is not a calendar day: ${verifiedThrough}`,
+    );
+  }
+  const next = day.add({ days: 1 }).toString();
+  return next < Temporal.Now.plainDateISO("UTC").toString() ? next : null;
+};
+
+/**
+ * One page of the frontier.
+ *
+ * A cycle on which no day has closed returns the cursor it was given and
+ * spends nothing, which is what lets the runner tell "caught up" from
+ * "working". Completeness is not this phase's claim: what the publisher
+ * indexes against a date after the frontier has passed it is found by the
+ * reconciliation ledger, which walks the same date listing this does.
+ */
+const collectFrontierPage = async (
+  frontier: SkCourtsFrontier,
+  signal?: AbortSignal,
+): Promise<SyncPage> => {
+  const day = nextClosedDay(frontier.verifiedThrough);
+  if (day === null) {
+    return {
+      decisions: [],
+      nextCursor: encodeFrontierCursor({
+        verifiedThrough: frontier.verifiedThrough,
+        page: 0,
+      }),
+    };
+  }
+
+  const { listed, total } = await listSkCourtsDayPage({
+    day,
+    page: frontier.page,
+    pageSize: PAGE_SIZE,
+    signal,
+  });
+  const built = await mapWithConcurrency({
+    items: listed,
+    limit: ITEM_CONCURRENCY,
+    operation: async (item) => await parseItemWithDetail(item, signal),
+  });
+  const decisions = built.filter(
+    (decision): decision is IngestionResult => decision !== null,
+  );
+
+  const nextPage = frontier.page + 1;
+  return {
+    decisions,
+    nextCursor:
+      nextPage * PAGE_SIZE < total
+        ? encodeFrontierCursor({
+            verifiedThrough: frontier.verifiedThrough,
+            page: nextPage,
+          })
+        : encodeFrontierCursor({ verifiedThrough: day, page: 0 }),
+  };
+};
+
 export const skCourtsAdapter = defineSourceAdapter({
   key: ADAPTER_KEYS.SK_COURTS,
   sourceFields: PENDING_SOURCE_FIELD_INVENTORY,
@@ -783,9 +969,10 @@ export const skCourtsAdapter = defineSourceAdapter({
    * largest we hold — has no completeness signal at all.
    */
   async getTotalCount(signal) {
-    const response = await fetchWithTimeout(
+    const response = await fetchPublisher(
       `${BASE_URL}?${new URLSearchParams({ page: "0", size: "1" }).toString()}`,
       {
+        adapterKey: ADAPTER_KEYS.SK_COURTS,
         signal,
         headers: { Accept: "application/json" },
         timeoutMs: ADAPTER_TIMEOUT.REQUEST,
@@ -820,48 +1007,72 @@ export const skCourtsAdapter = defineSourceAdapter({
     buildDecision: buildSkCourtsFromPayload,
   },
 
-  fetchPage: createPagePaginatedFetch<SkApiResponse>({
-    adapterKey: ADAPTER_KEYS.SK_COURTS,
-    pageSize: PAGE_SIZE,
-    legacyPageSize: LEGACY_PAGE_SIZE,
-    firstPage: FIRST_PAGE,
-    listTimeoutMs: 60_000,
-    itemConcurrency: ITEM_CONCURRENCY,
+  fetchPage: async (cursor, config, signal) => {
+    const frontier = decodeFrontierCursor(cursor);
+    if (frontier === null) {
+      const page = await backfillPage(cursor, config, signal);
+      // The walk names its successor and nothing else, so the handover
+      // cursor it writes states no day. Give it one here rather than
+      // persisting a cursor in neither phase's grammar.
+      if (page.isErr()) {
+        return page;
+      }
+      const next = page.value.nextCursor;
+      if (
+        next === null ||
+        FRONTIER_CURSOR.test(next) ||
+        decodeFrontierCursor(next) === null
+      ) {
+        return page;
+      }
+      return Result.ok({
+        ...page.value,
+        nextCursor: encodeFrontierCursor(handoverFrontier()),
+      });
+    }
+    return await Result.tryPromise({
+      try: async () => await collectFrontierPage(frontier, signal),
+      catch: adapterCatch(ADAPTER_KEYS.SK_COURTS, cursor),
+    });
+  },
+});
 
-    buildRequest: (page) => listRequest(page, "DESC"),
+/**
+ * The oldest-first sweep of the whole collection, and only that.
+ *
+ * Walking this source newest-first from the start cannot catch up: it
+ * publishes continuously, and each new decision shifts every later offset, so
+ * items slide past the cursor unseen. Oldest-first converges because new
+ * decisions land at the end, behind the cursor — and when it reaches that
+ * end, the frontier takes over.
+ */
+const backfillPage = createPagePaginatedFetch<SkApiResponse>({
+  adapterKey: ADAPTER_KEYS.SK_COURTS,
+  pageSize: PAGE_SIZE,
+  legacyPageSize: LEGACY_PAGE_SIZE,
+  firstPage: FIRST_PAGE,
+  listTimeoutMs: 60_000,
+  itemConcurrency: ITEM_CONCURRENCY,
 
-    // Oldest-first until the collection has been seen, then newest-first.
-    // Walking this source newest-first from the start cannot catch up: it
-    // publishes continuously, and each new decision shifts every later
-    // offset, so items slide past the cursor unseen. Oldest-first converges
-    // because new decisions land at the end, behind the cursor.
-    traversal: [
-      {
-        name: "backfill",
-        buildRequest: (page) => listRequest(page, "ASC"),
-        followedBy: "live",
-      },
-      {
-        name: "live",
-        buildRequest: (page) => listRequest(page, "DESC"),
-        followedBy: null,
-        // Newest-first only has to reach as far back as what was published
-        // since the last cycle. Walking further would drift into history
-        // this source has already been caught up on.
-        windowItems: LIVE_WINDOW_ITEMS,
-      },
-    ],
+  buildRequest: (page) => listRequest(page, "ASC"),
 
-    parseResponse: async (response) => {
-      const json: unknown = await response.json();
-      return Result.ok(isSkApiResponse(json) ? json : {});
+  traversal: [
+    {
+      name: "backfill",
+      buildRequest: (page) => listRequest(page, "ASC"),
+      followedBy: FRONTIER_PHASE,
     },
+  ],
 
-    extractItems: (data) => ({
-      items: arrayOrEmpty(data.rozhodnutieList),
-      total: toOptionalValue(data.numFound),
-    }),
+  parseResponse: async (response) => {
+    const json: unknown = await response.json();
+    return Result.ok(isSkApiResponse(json) ? json : {});
+  },
 
-    parseItem: parseItemWithDetail,
+  extractItems: (data) => ({
+    items: arrayOrEmpty(data.rozhodnutieList),
+    total: toOptionalValue(data.numFound),
   }),
+
+  parseItem: parseItemWithDetail,
 });

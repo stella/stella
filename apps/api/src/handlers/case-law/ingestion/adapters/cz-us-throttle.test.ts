@@ -5,10 +5,10 @@ import { DAY_IN_MS } from "@stll/time";
 
 import {
   createNalusFetch,
-  NALUS_DAILY_REQUEST_LIMIT,
   NALUS_REQUEST_INTERVAL_MS,
   NalusRateLimitedError,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-us-throttle";
+import { NALUS_DAILY_REQUEST_LIMIT } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { rejectionOf } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 

@@ -93,6 +93,18 @@ const defaultDependencies = (
   };
 };
 
+/**
+ * Whether a reservation is worth making at all.
+ *
+ * Under `bun test` every request is a stub, so a slot only buys wall clock —
+ * and outside a deployment the gate paces off the process clock, which suites
+ * move (`setSystemTime`): one set backwards parks a stubbed request until the
+ * reservation it already made comes round, which is weeks. What a reservation
+ * does is asserted through this module's injected dependencies instead.
+ */
+export const publisherGateReserves = (): boolean =>
+  process.env.NODE_ENV !== "test";
+
 export const createPublisherRequestSlot =
   (
     { intervalMs, key, publisher }: PublisherRequestGateConfig,

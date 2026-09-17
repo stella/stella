@@ -60,6 +60,9 @@ const GATED_ADAPTER_ENTRYPOINTS = await gatedAdapterEntrypoints();
 const BASE_ENVIRONMENT_ENTRYPOINTS = [
   "lib/redis-client.ts",
   PUBLISHER_REQUEST_GATE,
+  // Every gated request resolves its budget through here, so whatever this
+  // module reaches is reached by every adapter the first time it fetches.
+  `${ADAPTER_DIRECTORY}/publisher-policy.ts`,
   ...GATED_ADAPTER_ENTRYPOINTS,
 ];
 

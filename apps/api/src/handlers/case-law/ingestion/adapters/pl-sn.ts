@@ -74,7 +74,7 @@ import type {
   SyncPage,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/adapters/calendar-day-slice-walk";
-import { createPublisherRequestSlot } from "@/api/handlers/case-law/ingestion/adapters/publisher-request-gate";
+import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import {
   adapterCatch,
@@ -116,21 +116,10 @@ const PROXY_TASK = {
 type ProxyTask = (typeof PROXY_TASK)[keyof typeof PROXY_TASK];
 
 /**
- * Shortest gap between two requests to this publisher.
- *
- * The proxy rate-limits: a dozen requests in quick succession earned
- * `{"error":"Brak tokenu","debug":{"json_status":429}}` — the upstream's 429
- * dressed up as a missing token — and the same pacing then answered normally.
- * A second is the floor this adapter holds to, across the listing, the detail
- * and the document alike, through one shared slot.
+ * Shortest gap between two requests to this publisher, read off the policy
+ * map that states why it is a second and enforces it on every request.
  */
-const MIN_REQUEST_INTERVAL_MS = 1000;
-
-const reservePlSnRequestSlot = createPublisherRequestSlot({
-  intervalMs: MIN_REQUEST_INTERVAL_MS,
-  key: "case-law:publisher-gate:sn-pl",
-  publisher: "Sąd Najwyższy",
-});
+const MIN_REQUEST_INTERVAL_MS = publisherRequestIntervalMs(ADAPTER_KEYS.PL_SN);
 
 /**
  * Decisions the crawl lists at a time.
@@ -358,7 +347,6 @@ const requestProxy = async ({
     { headers: { Accept: "application/json" }, redirect: "error" },
     {
       adapterKey: ADAPTER_KEYS.PL_SN,
-      beforeAttempt: async () => await reservePlSnRequestSlot(signal),
       signal,
       timeoutMs,
     },
@@ -1325,7 +1313,17 @@ const plSnFetchPage = async (
     sourceUrl: window.url,
     nextCursor:
       next === null
-        ? encodePlSnCursor(window)
+        ? // The current month's tail, which is where the crawl lives once it
+          // is caught up. The cursor stops where the listing stopped rather
+          // than on the rows it just read: standing still re-served the same
+          // tail every cycle and spent a detail and a document request on
+          // each of its rows again, for decisions already held. Read the same
+          // way the offsets within a month are walked at all — the window
+          // appends — and what lands behind it is the day slices' to find.
+          encodePlSnCursor({
+            month: window.month,
+            offset: window.offset + window.served,
+          })
         : encodePlSnCursor({ month: next, offset: 0 }),
   });
 };

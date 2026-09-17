@@ -35,6 +35,7 @@ import type {
   StoredRawReparseOutcome,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/adapters/calendar-day-slice-walk";
+import { fetchPublisher } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import {
   INGESTION_USER_AGENT,
   adapterCatch,
@@ -56,7 +57,6 @@ import {
 import { addUtcDays } from "@/api/lib/dates";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
-import { fetchWithTimeout } from "@/api/lib/fetch";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { logger } from "@/api/lib/observability/logger";
 import { isRecord } from "@/api/lib/type-guards";
@@ -683,9 +683,10 @@ const fetchDecisionContent = async (
 ): Promise<DecisionContent> => {
   // Try rich HTML first
   try {
-    const response = await fetchWithTimeout(
+    const response = await fetchPublisher(
       `${BASE_URL}/DokumentOriginal/Html/${documentId}`,
       {
+        adapterKey: ADAPTER_KEYS.CZ_NSS,
         signal,
         headers: {
           ...COMMON_HEADERS,
@@ -733,9 +734,10 @@ const fetchDecisionContent = async (
 
   // Fallback: plain text from /Text/{id}
   try {
-    const response = await fetchWithTimeout(
+    const response = await fetchPublisher(
       `${BASE_URL}/DokumentOriginal/Text/${documentId}`,
       {
+        adapterKey: ADAPTER_KEYS.CZ_NSS,
         signal,
         headers: {
           ...COMMON_HEADERS,
@@ -1238,9 +1240,10 @@ const fetchDetailMetadata = async (
   signal: AbortSignal,
 ): Promise<DetailFetch> => {
   try {
-    const response = await fetchWithTimeout(
+    const response = await fetchPublisher(
       `${BASE_URL}/DokumentDetail/Index/${documentId}`,
       {
+        adapterKey: ADAPTER_KEYS.CZ_NSS,
         signal,
         headers: {
           ...COMMON_HEADERS,
@@ -1695,7 +1698,8 @@ let cachedSession: {
 } | null = null;
 
 const initSession = async (signal: AbortSignal): Promise<SessionState> => {
-  const response = await fetchWithTimeout(BASE_URL, {
+  const response = await fetchPublisher(BASE_URL, {
+    adapterKey: ADAPTER_KEYS.CZ_NSS,
     signal,
     redirect: "follow",
     headers: COMMON_HEADERS,
@@ -1795,7 +1799,8 @@ const executeSearch = async (
   formData.set(DATE_FROM_FIELD, czDate);
   formData.set(DATE_TO_FIELD, czDate);
 
-  const response = await fetchWithTimeout(`${BASE_URL}/Home/Index`, {
+  const response = await fetchPublisher(`${BASE_URL}/Home/Index`, {
+    adapterKey: ADAPTER_KEYS.CZ_NSS,
     method: "POST",
     signal,
     headers: {
@@ -1875,7 +1880,8 @@ const fetchResultPage = async ({
   formData.set("pageNum", String(page));
   formData.set("resultOrder", continuation.order);
 
-  const response = await fetchWithTimeout(`${BASE_URL}/Home/MyResTRowsCont`, {
+  const response = await fetchPublisher(`${BASE_URL}/Home/MyResTRowsCont`, {
+    adapterKey: ADAPTER_KEYS.CZ_NSS,
     method: "POST",
     signal,
     headers: {
@@ -2337,7 +2343,8 @@ export const czNssAdapter = defineSourceAdapter({
         `31.12.${Temporal.Now.plainDateISO().year + 1}`,
       );
 
-      const response = await fetchWithTimeout(`${BASE_URL}/Home/Index`, {
+      const response = await fetchPublisher(`${BASE_URL}/Home/Index`, {
+        adapterKey: ADAPTER_KEYS.CZ_NSS,
         method: "POST",
         signal,
         headers: {

@@ -11,6 +11,7 @@ import {
   absentDecisionTextFields,
 } from "@/api/lib/case-law/decision-text";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
+import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { asTestRaw, readTestJson } from "@/api/tests/helpers/test-tool-set";
 
 import type { FirstPageNumber } from "./pagination";
@@ -52,7 +53,7 @@ const createTestFetch = (opts?: {
   const pageSize = opts?.pageSize ?? 3;
 
   return createPagePaginatedFetch<TestResponse>({
-    adapterKey: "test",
+    adapterKey: ADAPTER_KEYS.PL_COURTS,
     pageSize,
     legacyPageSize: opts?.legacyPageSize,
     firstPage: opts?.firstPage ?? 1,
@@ -229,11 +230,11 @@ describe("createPagePaginatedFetch", () => {
 
     const refusal = new AdapterFetchError({
       message: "test: the body states no results array",
-      adapterKey: "test",
+      adapterKey: ADAPTER_KEYS.PL_COURTS,
       cursor: null,
     });
     const fetchPage = createPagePaginatedFetch<TestResponse>({
-      adapterKey: "test",
+      adapterKey: ADAPTER_KEYS.PL_COURTS,
       pageSize: 3,
       firstPage: 1,
       buildRequest: (page) => ({
@@ -320,7 +321,7 @@ describe("createPagePaginatedFetch", () => {
     restore = mockedFetch.restore;
 
     const fetchAtPageSize20 = createPagePaginatedFetch<TestResponse>({
-      adapterKey: "test",
+      adapterKey: ADAPTER_KEYS.PL_COURTS,
       pageSize: 20,
       firstPage: 0,
       buildRequest: (page) => ({
@@ -345,7 +346,7 @@ describe("createPagePaginatedFetch", () => {
     expect(cursor).toBe("offset:60");
 
     const fetchAtPageSize100 = createPagePaginatedFetch<TestResponse>({
-      adapterKey: "test",
+      adapterKey: ADAPTER_KEYS.PL_COURTS,
       pageSize: 100,
       legacyPageSize: 20,
       firstPage: 0,
@@ -382,7 +383,7 @@ describe("createPagePaginatedFetch", () => {
     let parseCount = 0;
 
     const fetchPage = createPagePaginatedFetch<TestResponse>({
-      adapterKey: "test",
+      adapterKey: ADAPTER_KEYS.PL_COURTS,
       pageSize: 10,
       firstPage: 0,
       itemConcurrency: 3,
@@ -785,7 +786,7 @@ describe("traversal cursors survive the paths that write them", () => {
 test("a walk whose name carries the cursor separator is refused", () => {
   const withName = (name: string) =>
     createPagePaginatedFetch<TestResponse>({
-      adapterKey: "test",
+      adapterKey: ADAPTER_KEYS.PL_COURTS,
       pageSize: 3,
       firstPage: 0,
       buildRequest: () => ({ url: "https://example.com/test-api?page=0" }),
@@ -824,7 +825,7 @@ describe("a walk that names itself as its successor", () => {
 
   const selfRestartingFetch = (followedBy: string | null) =>
     createPagePaginatedFetch<TestResponse>({
-      adapterKey: "test",
+      adapterKey: ADAPTER_KEYS.PL_COURTS,
       pageSize: 3,
       firstPage: 0,
       buildRequest: (page) => ({
@@ -879,7 +880,7 @@ describe("walks configured by the source", () => {
 
   const configurableFetch = () =>
     createPagePaginatedFetch<TestResponse>({
-      adapterKey: "test",
+      adapterKey: ADAPTER_KEYS.PL_COURTS,
       pageSize: 3,
       firstPage: 0,
       buildRequest: (page) => ({
@@ -1071,7 +1072,7 @@ describe("the plain walk recovers from what a configured one left behind", () =>
 
   const plainFetch = () =>
     createPagePaginatedFetch<TestResponse>({
-      adapterKey: "test",
+      adapterKey: ADAPTER_KEYS.PL_COURTS,
       pageSize: 3,
       firstPage: 0,
       buildRequest: (page) => ({
@@ -1139,7 +1140,7 @@ describe("the plain walk recovers from what a configured one left behind", () =>
 test("a walk may not take the name a plain cursor carries", () => {
   const withName = (name: string) =>
     createPagePaginatedFetch<TestResponse>({
-      adapterKey: "test",
+      adapterKey: ADAPTER_KEYS.PL_COURTS,
       pageSize: 3,
       firstPage: 0,
       buildRequest: () => ({ url: "https://example.com/test-api?page=0" }),

@@ -33,6 +33,7 @@ import type {
   StoredRawReparseOutcome,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/adapters/calendar-day-slice-walk";
+import { fetchPublisher } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import {
   INGESTION_USER_AGENT,
   adapterCatch,
@@ -55,7 +56,6 @@ import {
 } from "@/api/lib/case-law/decision-text";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
-import { fetchWithTimeout } from "@/api/lib/fetch";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { logger } from "@/api/lib/observability/logger";
 import { isRecord } from "@/api/lib/type-guards";
@@ -727,14 +727,16 @@ export const buildCzNsDecision = async (
   const printUrl = `${BASE_URL}/WebPrint/${unid}?openDocument`;
 
   // Detail and print pages in parallel; the pair is one document's worth of
-  // work, and the caller paces the requests between documents.
+  // work.
   const [detailResponse, printResponse] = await Promise.all([
-    fetchWithTimeout(webUrl, {
+    fetchPublisher(webUrl, {
+      adapterKey: ADAPTER_KEYS.CZ_NS,
       signal,
       headers: COMMON_HEADERS,
       timeoutMs: ADAPTER_TIMEOUT.REQUEST,
     }),
-    fetchWithTimeout(printUrl, {
+    fetchPublisher(printUrl, {
+      adapterKey: ADAPTER_KEYS.CZ_NS,
       signal,
       headers: COMMON_HEADERS,
       timeoutMs: ADAPTER_TIMEOUT.REQUEST,
@@ -1096,7 +1098,8 @@ const listCzNsSlicePage = async ({
     `&SearchOrder=${SEARCH_ORDER_VIEW}` +
     `&Start=1&Count=${CZ_NS_LISTING_WINDOW}`;
 
-  const response = await fetchWithTimeout(url, {
+  const response = await fetchPublisher(url, {
+    adapterKey: ADAPTER_KEYS.CZ_NS,
     signal,
     headers: COMMON_HEADERS,
     timeoutMs: ADAPTER_TIMEOUT.REQUEST,
@@ -1246,7 +1249,8 @@ export const czNsAdapter = defineSourceAdapter({
         `${BASE_URL}/WebSearch?ReadViewEntries` +
         `&Count=1&Start=1&OutputFormat=JSON`;
 
-      const response = await fetchWithTimeout(url, {
+      const response = await fetchPublisher(url, {
+        adapterKey: ADAPTER_KEYS.CZ_NS,
         signal,
         headers: COMMON_HEADERS,
         timeoutMs: ADAPTER_TIMEOUT.REQUEST,
@@ -1285,7 +1289,8 @@ export const czNsAdapter = defineSourceAdapter({
           `&Start=${start}` +
           `&OutputFormat=JSON`;
 
-        const listResponse = await fetchWithTimeout(listUrl, {
+        const listResponse = await fetchPublisher(listUrl, {
+          adapterKey: ADAPTER_KEYS.CZ_NS,
           headers: COMMON_HEADERS,
           signal,
           timeoutMs: ADAPTER_TIMEOUT.REQUEST,
@@ -1375,29 +1380,18 @@ export const czNsAdapter = defineSourceAdapter({
             }
             throw error;
           }
-
-          // Rate limit between detail fetches (skip for last entry)
-          if (i < entries.length - 1) {
-            await Bun.sleep(50);
-          }
         }
 
-        const totalEntries = json["@toplevelentries"]
-          ? Number.parseInt(json["@toplevelentries"], 10)
-          : undefined;
-
-        const hasMore =
-          totalEntries !== undefined
-            ? start + entries.length <= totalEntries
-            : entries.length >= PAGE_SIZE;
-
-        // When exhausted, park the cursor one page back from the
-        // end so the next cycle only re-checks recent entries for
-        // new additions. Never return null — that restarts the
-        // full scan from position 1.
-        const nextCursor = hasMore
-          ? String(start + entries.length)
-          : String(Math.max(1, start + entries.length - PAGE_SIZE));
+        // Exhausted or not, the cursor stops where the view stopped. Parking
+        // a page back instead re-read the same forty entries every cycle and
+        // spent two detail requests on each of them — eighty requests an hour
+        // for decisions already held — and it bought nothing: this view is
+        // ordered by document id, so what the court adds lands after the
+        // cursor, not behind it. A record that does land behind it is the
+        // reconciliation ledger's to find, which lists a date in one request.
+        //
+        // Never null — that restarts the full scan from position 1.
+        const nextCursor = String(start + entries.length);
 
         return { decisions, nextCursor, sourceUrl: listUrl };
       },

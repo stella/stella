@@ -33,6 +33,7 @@ import {
   defineWalkKind,
 } from "@/api/handlers/case-law/ingestion/adapters/pagination";
 import type { WalkKind } from "@/api/handlers/case-law/ingestion/adapters/pagination";
+import { fetchPublisher } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import {
   hashContent,
   INGESTION_USER_AGENT,
@@ -53,7 +54,6 @@ import {
 } from "@/api/lib/case-law/decision-text";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
-import { fetchWithTimeout } from "@/api/lib/fetch";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -723,7 +723,8 @@ const fetchDetail = async (
 ): Promise<SaosItem | null> => {
   let response: Response;
   try {
-    response = await fetchWithTimeout(`${DETAIL_URL}/${id}`, {
+    response = await fetchPublisher(`${DETAIL_URL}/${id}`, {
+      adapterKey: ADAPTER_KEYS.PL_COURTS,
       signal,
       timeoutMs: ADAPTER_TIMEOUT.REQUEST,
       headers: {
@@ -1184,7 +1185,8 @@ export const listPlCourtsDayPage = async ({
     judgmentDateTo: date,
   }).toString()}`;
 
-  const response = await fetchWithTimeout(url, {
+  const response = await fetchPublisher(url, {
+    adapterKey: ADAPTER_KEYS.PL_COURTS,
     signal,
     timeoutMs: SLICE_LIST_TIMEOUT_MS,
     headers: {
@@ -1325,7 +1327,7 @@ export const plCourtsAdapter = defineSourceAdapter({
 
   async getTotalCount(signal) {
     try {
-      const response = await fetchWithTimeout(
+      const response = await fetchPublisher(
         `${SEARCH_URL}?${new URLSearchParams({
           pageSize: "1",
           pageNumber: String(FIRST_PAGE),
@@ -1333,6 +1335,7 @@ export const plCourtsAdapter = defineSourceAdapter({
           sortingDirection: "DESC",
         }).toString()}`,
         {
+          adapterKey: ADAPTER_KEYS.PL_COURTS,
           signal,
           timeoutMs: ADAPTER_TIMEOUT.LIST,
           headers: {

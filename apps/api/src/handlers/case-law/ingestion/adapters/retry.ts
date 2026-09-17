@@ -1,17 +1,40 @@
 /**
- * Shared retry and backoff utilities for case-law adapters.
+ * The only way a case-law adapter reaches its publisher.
  *
- * Provides consistent exponential backoff with jitter across
- * all adapters, replacing ad-hoc linear/fixed delays.
+ * {@link fetchPublisher} is one gated request; {@link fetchWithRetry} adds
+ * exponential backoff with jitter over it. Both reserve the publisher's slot
+ * first, so an adapter cannot spend a request the budget in
+ * `publisher-policy.ts` never saw, and neither can forget to.
  */
 
 import { panic } from "better-result";
 
 import { ADAPTER_TIMEOUT } from "@/api/handlers/case-law/consts";
-import { fetchWithTimeout } from "@/api/lib/fetch";
+import { reservePublisherSlot } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
+import { fetchWithTimeout, type FetchWithTimeoutInit } from "@/api/lib/fetch";
+import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
 import { logger } from "@/api/lib/observability/logger";
 
 import { INGESTION_USER_AGENT, isTimeoutError } from "./utils";
+
+export type PublisherFetchInit = FetchWithTimeoutInit & {
+  /** Whose publisher budget this request spends. */
+  adapterKey: AdapterKey;
+};
+
+/**
+ * One request to a case-law publisher, behind that publisher's gate.
+ *
+ * The slot is reserved before the request, not after it: a reservation that
+ * followed the call would pace the loop while letting the burst through.
+ */
+export const fetchPublisher = async (
+  url: string | URL,
+  { adapterKey, ...init }: PublisherFetchInit,
+): Promise<Response> => {
+  await reservePublisherSlot(adapterKey, init.signal);
+  return await fetchWithTimeout(url, init);
+};
 
 /**
  * Compute exponential backoff delay with jitter.
@@ -28,8 +51,12 @@ export const backoffMs = (
 ): number => Math.min(baseMs * 2 ** attempt + Math.random() * baseMs, maxMs);
 
 type FetchWithRetryOptions = {
-  /** Optional publisher-wide gate run before every network attempt. */
-  beforeAttempt?: (() => Promise<void>) | undefined;
+  /**
+   * Whose publisher budget every attempt spends. Required: the gate is
+   * reserved per attempt, and an attempt that named no publisher would be a
+   * request the budget never saw.
+   */
+  adapterKey: AdapterKey;
   /** Maximum retry attempts (default: 2). */
   maxRetries?: number;
   /** Per-request timeout in ms (default: ADAPTER_TIMEOUT.REQUEST). */
@@ -43,8 +70,6 @@ type FetchWithRetryOptions = {
    * stop immediately and the abort error propagates.
    */
   signal?: AbortSignal | undefined;
-  /** Adapter key for structured log context. */
-  adapterKey?: string;
 };
 
 /**
@@ -74,7 +99,7 @@ const isRetryableStatus = (status: number): boolean =>
 export const fetchWithRetry = async (
   url: string,
   init: RequestInit | undefined,
-  opts: FetchWithRetryOptions = {},
+  opts: FetchWithRetryOptions,
 ): Promise<Response> => {
   const {
     maxRetries = 2,
@@ -83,7 +108,6 @@ export const fetchWithRetry = async (
     maxDelayMs = 30_000,
     signal,
     adapterKey,
-    beforeAttempt,
   } = opts;
 
   const headers = new Headers(init?.headers);
@@ -96,15 +120,13 @@ export const fetchWithRetry = async (
       throw signal.reason ?? new DOMException("Aborted", "AbortError");
     }
     try {
-      const response = await (beforeAttempt?.() ?? Promise.resolve()).then(
-        async () =>
-          await fetchWithTimeout(url, {
-            ...init,
-            headers,
-            timeoutMs,
-            signal,
-          }),
-      );
+      const response = await fetchPublisher(url, {
+        ...init,
+        adapterKey,
+        headers,
+        timeoutMs,
+        signal,
+      });
 
       if (!isRetryableStatus(response.status) || attempt >= maxRetries) {
         return response;
@@ -116,16 +138,14 @@ export const fetchWithRetry = async (
         response.status === 429 ? baseDelayMs * 2 : baseDelayMs,
         maxDelayMs,
       );
-      if (adapterKey) {
-        logger.warn("case_law.ingestion.fetch_retry", {
-          adapterKey,
-          url,
-          httpStatus: response.status,
-          attempt: attempt + 1,
-          maxRetries,
-          delayMs: Math.round(delay),
-        });
-      }
+      logger.warn("case_law.ingestion.fetch_retry", {
+        adapterKey,
+        url,
+        httpStatus: response.status,
+        attempt: attempt + 1,
+        maxRetries,
+        delayMs: Math.round(delay),
+      });
       await Bun.sleep(delay);
     } catch (error) {
       // Parent signal aborted: propagate immediately
@@ -136,15 +156,13 @@ export const fetchWithRetry = async (
       // Per-request timeout: retry with backoff
       if (isTimeoutError(error) && attempt < maxRetries) {
         const delay = backoffMs(attempt, baseDelayMs, maxDelayMs);
-        if (adapterKey) {
-          logger.warn("case_law.ingestion.fetch_timeout_retry", {
-            adapterKey,
-            url,
-            attempt: attempt + 1,
-            maxRetries,
-            delayMs: Math.round(delay),
-          });
-        }
+        logger.warn("case_law.ingestion.fetch_timeout_retry", {
+          adapterKey,
+          url,
+          attempt: attempt + 1,
+          maxRetries,
+          delayMs: Math.round(delay),
+        });
         await Bun.sleep(delay);
         continue;
       }
