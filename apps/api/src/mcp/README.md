@@ -30,13 +30,13 @@ instructions, because an orchestrator picks tools from the names it was handed:
 - `/mcp-documents`: the least-privilege document surface. Document tools plus
   the version-upload lifecycle through `invoke_capability`, whose capability IDs
   are allowlisted for that surface.
-- `/mcp-law`: the public legal corpus. Exactly seven read tools
-  (`search_case_law`, `read_case_law_decision`, `read_case_law_citations`,
-  `search_legislation`, `read_statute`, `read_statute_provisions`,
-  `read_provision_history`) under `stella:search` and `stella:read`. No matter,
-  document, contact or billing data is reachable through it. Authentication is
-  the same as every other audience: an OAuth bearer token or an API key
-  carrying those two scopes.
+- `/mcp-law`: the public legal corpus. Exactly eight read tools
+  (`search_case_law`, `lookup_case_law`, `read_case_law_decision`,
+  `read_case_law_citations`, `search_legislation`, `read_statute`,
+  `read_statute_provisions`, `read_provision_history`) under `stella:search`
+  and `stella:read`. No matter, document, contact or billing data is reachable
+  through it. Authentication is the same as every other audience: an OAuth
+  bearer token or an API key carrying those two scopes.
 
 Every audience authenticates the same way and serves static MCP resources
 through `resources/list` and `resources/read`, but each serves a filtered
