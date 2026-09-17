@@ -123,6 +123,10 @@ import {
   useChatEditor,
 } from "@/components/chat-editor-provider";
 import type { ChatDraftAttachment } from "@/components/chat-editor-provider";
+import {
+  composerMarkdown,
+  composerText,
+} from "@/components/chat-editor-source";
 import { ChatApprovalContext } from "@/components/chat/chat-approval-context";
 import { ChatComposerDock } from "@/components/chat/chat-composer-dock";
 import { ComposerEditModeControl } from "@/components/chat/chat-edit-mode-selector";
@@ -2131,7 +2135,7 @@ const FileChatOverlayInner = ({
     ) {
       return undefined;
     }
-    editorController.setContent(pendingFileChatDraft.html);
+    editorController.setContent(pendingFileChatDraft.markdown);
     editorController.focus();
     setPanelOpen(true);
     useInspectorCommandStore
@@ -2427,10 +2431,10 @@ const FileChatOverlayInner = ({
             requestNewThreadRotation(),
             "file-chat-overlay.request-new-thread",
           );
-          editorController.setContent("");
+          editorController.setContent(composerText(""));
         },
         "rename-chat": (args) => {
-          editorController.setContent("");
+          editorController.setContent(composerText(""));
           if (!hasMessages) {
             stellaToast.add({
               title: t("chat.renameUnavailableEmptyThread"),
@@ -2615,7 +2619,7 @@ const FileChatOverlayInner = ({
                 ) {
                   return;
                 }
-                editorController.setContent(prompt);
+                editorController.setContent(composerMarkdown(prompt));
                 detached(
                   editorController.submit(async (draft) => {
                     if (!(await ensureAIAvailable())) {

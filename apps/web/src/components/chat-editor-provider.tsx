@@ -45,6 +45,7 @@ import {
   updateCarriesDraftEcho,
 } from "@/components/chat-editor-echo";
 import { createChatComposerDocument } from "@/components/chat-editor-markdown.logic";
+import type { ComposerSource } from "@/components/chat-editor-source";
 import {
   ChatMention,
   createChatSuggestion,
@@ -192,8 +193,12 @@ export type ChatEditorController = {
    */
   placeholder: string;
   removeFile: (id: string) => void;
-  /** Replace the prompt with plain text or inline Markdown source. */
-  setContent: (content: string) => void;
+  /**
+   * Replace the prompt. The composer parses its own inline Markdown and has
+   * no HTML path, so the input is minted by `composerText` (prose, verbatim)
+   * or `composerMarkdown` (Markdown written for this grammar).
+   */
+  setContent: (content: ComposerSource) => void;
   setEditable: (editable: boolean) => void;
   setSubmitHandler: (handler: (() => Promise<void>) | null) => void;
   submit: (
@@ -1265,7 +1270,7 @@ export const useChatEditor = ({
   );
 
   const setContent = useCallback(
-    (content: string) => {
+    (content: ComposerSource) => {
       if (!isUsableEditor(editor)) {
         return;
       }

@@ -14,6 +14,7 @@ import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { stellaToast } from "@stll/ui/toast";
 
 import type { ChatEditorController } from "@/components/chat-editor-provider";
+import { composerMarkdown } from "@/components/chat-editor-source";
 import type { TranslationKey } from "@/i18n/types";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -114,7 +115,7 @@ export const ChatPromptImproveButton = ({
       return;
     }
 
-    controller.setContent(result.value.prompt);
+    controller.setContent(composerMarkdown(result.value.prompt));
     controller.focus();
   };
 

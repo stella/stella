@@ -170,6 +170,11 @@ import { useFolioDocumentBlocks } from "@/components/ai-suggestions/use-folio-do
 import { useReviewActions } from "@/components/ai-suggestions/use-review-actions";
 import { useReviewChangeSummary } from "@/components/ai-suggestions/use-review-change-summary";
 import { useReviewStartMode } from "@/components/ai-suggestions/use-review-start-mode";
+import {
+  composerMarkdown,
+  composerText,
+} from "@/components/chat-editor-source";
+import type { ComposerSource } from "@/components/chat-editor-source";
 import { DocumentIcon } from "@/components/document-icon";
 import { reportCounterpartyNote } from "@/components/inspector/counterparty-note.logic";
 import type { CounterpartyNoteOutcome } from "@/components/inspector/counterparty-note.logic";
@@ -1281,14 +1286,10 @@ const REFERENCE_SUGGESTION_LIMIT = 3;
 const SECTION_LABEL_CLASS = REVIEW_SECTION_LABEL_CLASS;
 const CHAT_DRAFT_PASSAGES_PER_DOCUMENT = 2;
 
-const escapeHtml = (value: string): string =>
-  value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;");
-
+// The bold token is the builder's own; the words around it are the reviewer's
+// and the document's, so they are escaped rather than parsed.
 const paragraph = (label: string, value: string): string =>
-  `<p><strong>${escapeHtml(label)}</strong> ${escapeHtml(value)}</p>`;
+  `**${composerText(label)}** ${composerText(value)}`;
 
 /**
  * The finding as a chat draft: the issue, the cited passages of each document,
@@ -1327,7 +1328,7 @@ const buildFindingChatDraft = ({
   /** The words behind the reference passages. A quote this reader never
    *  received is left out of the draft rather than sent as an empty line. */
   passageTextById: ReadonlyMap<string, string>;
-}): string => {
+}): ComposerSource => {
   const { finding } = item;
   const parts: string[] = [paragraph(labels.issue, item.title)];
   for (const citation of finding.citations.slice(
@@ -1360,8 +1361,8 @@ const buildFindingChatDraft = ({
   if (typeof finding.recommendation === "string") {
     parts.push(paragraph(labels.recommendation, finding.recommendation));
   }
-  parts.push(`<p>${escapeHtml(labels.question)}</p>`);
-  return parts.join("");
+  parts.push(composerText(labels.question));
+  return composerMarkdown(parts.join("\n\n"));
 };
 
 type LauncherPlaybook = Pick<PlaybookListItem, "id" | "name" | "status">;
@@ -3664,7 +3665,7 @@ const ReviewResultCard = ({
             onAskInChat={() =>
               useInspectorCommandStore.getState().requestFileChatDraft({
                 fileFieldId: targetFileFieldId,
-                html: buildFindingChatDraft({
+                markdown: buildFindingChatDraft({
                   item,
                   passageTextById: passageTexts.textById,
                   references,

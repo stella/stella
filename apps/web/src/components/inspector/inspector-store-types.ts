@@ -2,6 +2,7 @@ import type { Draft } from "immer";
 
 import type { TaskStatus } from "@stll/api-contract";
 
+import type { ComposerSource } from "@/components/chat-editor-source";
 import type { StructuredCloneable } from "@/components/inspector/view-registry";
 import type { LegalDocumentChatKey } from "@/features/chat/legal-document-chat-key";
 import type { ChatThreadId } from "@/lib/chat-thread-ref";
@@ -193,7 +194,8 @@ export type InspectorCommandState = {
    *  finding to discuss); the overlay for that file consumes it. */
   pendingFileChatDraft: {
     fileFieldId: string;
-    html: string;
+    /** What the composer takes: prose or its own inline Markdown. */
+    markdown: ComposerSource;
     sequence: number;
   } | null;
 };
@@ -337,7 +339,7 @@ export type InspectorCommandActions = {
   clearDocxEditRequest: () => void;
   requestFileChatDraft: (request: {
     fileFieldId: string;
-    html: string;
+    markdown: ComposerSource;
   }) => void;
   clearFileChatDraft: (sequence: number) => void;
   requestBlockScroll: (request: {
