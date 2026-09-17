@@ -403,10 +403,14 @@ const provisionEntrySet = (entries: readonly unknown[]): string =>
     entries
       .map((entry) =>
         isRecord(entry)
-          ? JSON.stringify(Object.entries(entry).sort())
+          ? JSON.stringify(
+              Object.entries(entry).sort(([left], [right]) =>
+                left.localeCompare(right),
+              ),
+            )
           : JSON.stringify(entry),
       )
-      .sort(),
+      .sort((left, right) => left.localeCompare(right)),
   );
 
 const nestedField = (

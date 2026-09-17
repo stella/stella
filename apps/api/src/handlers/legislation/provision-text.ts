@@ -55,11 +55,9 @@ export const extractProvisionText = (
   // A provision heading first, because that is what the anchor usually is and
   // a heading anchor may itself contain a hyphen (`sec-1-a`): the anchor
   // grammar is not a reliable way to tell the two apart, but the document is.
-  const provision = provisionBlocks(blocks, anchorId);
   const owned =
-    provision === null
-      ? subdivisionBlocks(blocks, provisionHeadingAnchor(anchorId), anchorId)
-      : provision;
+    provisionBlocks(blocks, anchorId) ??
+    subdivisionBlocks(blocks, provisionHeadingAnchor(anchorId), anchorId);
   if (owned === null) {
     return null;
   }
