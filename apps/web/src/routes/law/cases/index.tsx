@@ -31,6 +31,7 @@ import {
   type SearchTotal,
 } from "@stll/api-contract/search";
 import { Temporal } from "@stll/time";
+import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { cn } from "@stll/ui/utils";
 
@@ -43,8 +44,11 @@ import {
   decisionDateRange,
   decisionSortOrder,
   hasActiveCaseLawFilter,
+  STRICT_SEARCH_VALUE,
+  strictSearchValue,
   validDecisionDate,
   withPendingQuery,
+  withQuery,
 } from "@/features/case-law/case-law-index-search.logic";
 import type {
   CaseLawFilterKey,
@@ -86,6 +90,7 @@ import {
   decisionsLoadMode,
   decisionsSearchOutage,
   queryAnsweredByRows,
+  rowsAnswerRequestedSearch,
 } from "@/features/case-law/decisions-load-mode.logic";
 import type { DecisionRouteState } from "@/features/case-law/decisions-load-mode.logic";
 import {
@@ -103,6 +108,11 @@ import {
   QuestionColumnControls,
   useQuestionColumns,
 } from "@/features/case-law/research/question-columns-controller";
+import { caseLawWarningSurfaces } from "@/features/case-law/search-warnings.logic";
+import type {
+  CaseLawEmptyState,
+  CaseLawResultsLine,
+} from "@/features/case-law/search-warnings.logic";
 import { useDecisionFind } from "@/features/case-law/use-decision-find";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
@@ -170,6 +180,21 @@ const optionalDateSchema = v.fallback(
 );
 
 /**
+ * Whether the search requires every word its query carries. Read leniently
+ * like the rest: any spelling but the one the link writes is the default
+ * search, which is what a hand-typed or crawled URL gets.
+ */
+const optionalStrictSchema = v.fallback(
+  v.optional(
+    v.pipe(
+      v.string(),
+      v.transform((value) => strictSearchValue(value)),
+    ),
+  ),
+  undefined,
+);
+
+/**
  * Which page of the results, and how large a page is. Both are dropped from
  * the URL at their default, and both are read leniently: a public link may be
  * typed or crawled, and a page number nobody can reach is the first page, not
@@ -208,6 +233,7 @@ const searchSchema = v.object({
   // A link is public and may be edited by hand or by a crawler; an order this
   // build does not know is not an error page, it is the default order.
   sort: v.fallback(v.optional(v.picklist(SEARCH_SORTS)), undefined),
+  strict: optionalStrictSchema,
   to: optionalDateSchema,
   type: optionalBrowseStringSchema(128),
   // Accepted, never written: links made before the range existed still work,
@@ -566,6 +592,7 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
       pageSize,
       q,
       sort,
+      strict,
       to,
       type,
       year,
@@ -578,6 +605,7 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
       pageSize,
       q,
       sort,
+      strict,
       to,
       type,
       year,
@@ -610,10 +638,7 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
     detached(
       navigate({
         replace: true,
-        search: (previous) => ({
-          ...previous,
-          q: value.trim() ? value : undefined,
-        }),
+        search: (previous) => withQuery(previous, value),
       }),
       "cases.search-navigate",
     );
@@ -738,6 +763,11 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
       : [...exact, ...decisions.filter((d) => !exactIds.has(d.id))];
 
   const searchTotal = data?.pages.at(0)?.total ?? SEARCH_TOTAL_NOT_COUNTED;
+  // What the search said about itself, read off the first page: a warning is
+  // about the result set, not about the page of it the reader is looking at.
+  // The wire's own English sentences are never drawn; the code picks the keys
+  // and the reader's language renders them.
+  const warnings = caseLawWarningSurfaces(data?.pages.at(0)?.answered ?? null);
   const facets: DecisionFilterFacets = decisionFilterFacets({
     browse: browseFacets ?? NO_BROWSE_FACETS,
     search: data?.pages.at(0)?.facets ?? null,
@@ -836,6 +866,19 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
         pageSize: decisionPageSizeSearchValue(next),
       })),
       "cases.page-size-navigate",
+    );
+  };
+
+  // The same search with every word required. It leaves the URL like every
+  // other change here — the pending field text folded in, the page dropped —
+  // because the words it requires are a different result set.
+  const searchEveryWord = () => {
+    detached(
+      searchNavigation((previous) => ({
+        ...previous,
+        strict: STRICT_SEARCH_VALUE,
+      })),
+      "cases.strict-navigate",
     );
   };
 
@@ -1019,8 +1062,21 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
           />
         ) : (
           <>
+            {warnings.resultsLine === null ? null : (
+              <SearchWidenedLine
+                line={warnings.resultsLine}
+                onSearchEveryWord={
+                  rowsAnswerRequestedSearch(rows) ? searchEveryWord : null
+                }
+              />
+            )}
             <DecisionTable
               decisions={find.decisions}
+              emptyState={
+                warnings.emptyState === null ? undefined : (
+                  <NoResultsReason state={warnings.emptyState} />
+                )
+              }
               expectedRowCount={pageSize}
               findHighlight={find.highlight}
               isLoading={rows === "skeleton"}
@@ -1043,6 +1099,72 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
         )}
       </div>
     </main>
+  );
+}
+
+type SearchWidenedLineProps = {
+  line: CaseLawResultsLine;
+  /** Null while the rows below answer an earlier search than the URL does. */
+  onSearchEveryWord: (() => void) | null;
+};
+
+/**
+ * What the search required, when it required less than the reader typed: no
+ * judgment is written the way a question is asked, so the words that carry
+ * the grammar of the question are not required of it.
+ *
+ * One muted line above the results and the way back to a search that does
+ * require them. The results below are the answer, so the line stays chrome.
+ */
+function SearchWidenedLine({
+  line,
+  onSearchEveryWord,
+}: SearchWidenedLineProps) {
+  const t = useTranslations();
+
+  return (
+    <div className="text-muted-foreground flex flex-wrap items-baseline gap-x-2 text-xs">
+      {/*
+        The sentence reads in the interface's own direction; only the query is
+        isolated, because it is the reader's text and may run the other way.
+        Isolating the whole line instead would let a Latin query set the
+        direction of an Arabic sentence.
+      */}
+      <p className="min-w-0">
+        {t.rich(line.messageKey, {
+          bdi: (chunks) => <BidiText>{chunks}</BidiText>,
+          query: line.query,
+        })}
+      </p>
+      {onSearchEveryWord === null ? null : (
+        <Button onClick={onSearchEveryWord} size="xs" variant="link">
+          {t(line.actionKey)}
+        </Button>
+      )}
+    </div>
+  );
+}
+
+type NoResultsReasonProps = {
+  state: CaseLawEmptyState;
+};
+
+/**
+ * Why the table is empty, where its rows would be. Two readings a blank table
+ * cannot tell apart: the words matched nothing, or the filters cut away what
+ * they matched. Only the second is something the reader can undo, so each
+ * says which one it is and what to do about it.
+ */
+function NoResultsReason({ state }: NoResultsReasonProps) {
+  const t = useTranslations();
+
+  return (
+    <div className="max-w-prose p-4">
+      <p className="text-sm">{t(state.messageKey)}</p>
+      <p className="text-foreground-strong-muted mt-1 text-xs">
+        {t(state.hintKey)}
+      </p>
+    </div>
   );
 }
 

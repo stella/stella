@@ -707,6 +707,18 @@
       "description": "La recherche dans la jurisprudence n’a pas pu être jointe. Votre requête reste dans la barre d’adresse : réessayez dans un instant.",
       "title": "La recherche est temporairement indisponible"
     },
+    "searchWarnings": {
+      "noHits": {
+        "hint": "Essayez moins de mots ou d’autres mots : les termes qu’emploierait une décision, et non la phrase dans laquelle une question est posée.",
+        "message": "Aucun résultat ne correspond aux mots exigés par cette recherche."
+      },
+      "noHitsFiltered": {
+        "hint": "Supprimez ou élargissez un filtre, puis relancez la recherche.",
+        "message": "Aucun résultat ne correspond aux filtres appliqués."
+      },
+      "resultsFor": "Résultats pour : <bdi>{query}</bdi>",
+      "searchEveryWord": "Rechercher tous les mots"
+    },
     "showWholeHeadnote": "Afficher le sommaire complet",
     "sort": {
       "newest": "Les plus récentes",

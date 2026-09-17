@@ -212,10 +212,16 @@ const TOOL_COUNT_CEILING: Record<SurfaceMode, number> = {
 // The marker also carries the admitted codes and the tool name so a rejection
 // names the call to change rather than only the field that was wrong.
 // Measured 133_357 default, 69_168 anonymized and 24_482 law.
+// Reporting what a search required then measures 134_215 default, 69_996
+// anonymized and 25_198 law, on top of the country reader above: search_case_law
+// gains a `strict` input and the sentence saying function words are not
+// required terms, and the descriptions of its filters and of
+// read_case_law_citations were trimmed to pay part of it back. A model that
+// cannot see which words were required reads an empty page as an empty corpus.
 const TOOLS_LIST_PAYLOAD_CHAR_CEILING: Record<SurfaceMode, number> = {
-  default: 133_450,
-  anonymized: 69_260,
-  law: 24_482,
+  default: 134_300,
+  anonymized: 70_100,
+  law: 25_250,
 };
 
 // default bumped 42_000 -> 42_300 for the two fields read_case_law_citations
@@ -245,10 +251,15 @@ const TOOLS_LIST_PAYLOAD_CHAR_CEILING: Record<SurfaceMode, number> = {
 // `found` entry and an `ambiguous` entry's candidates, so the two remaining
 // branches cost a message, a hint, and the `lookup_failed` entry that keeps a
 // failed reference from taking the batch down with it.
+// search_case_law's `searches[]` then measures 46_098 default, 31_734
+// anonymized and 8_871 law, up 291: one entry per phrasing carrying the query
+// as sent, the `queryUsed` the engine answered, and that phrasing's warnings.
+// Per phrasing rather than per call because each is interpreted on its own,
+// and a caller that cannot tell which phrasing was widened cannot act on it.
 const OUTPUT_SCHEMA_TOTAL_CHAR_CEILING: Record<SurfaceMode, number> = {
-  default: 45_900,
-  anonymized: 31_500,
-  law: 8580,
+  default: 46_100,
+  anonymized: 31_800,
+  law: 8880,
 };
 
 // Largest measured schema is read_document at 3_434 chars. A single tool must

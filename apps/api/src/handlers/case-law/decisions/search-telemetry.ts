@@ -55,6 +55,40 @@ export const decisionQueryClass = (
   }
 };
 
+type CaseLawFunctionWordsExcludedEvent = {
+  country: string;
+  /** Tokens the reader typed. */
+  queryTokens: number;
+  /** Of those, the function words the search did not require. */
+  excludedTokens: number;
+  /** Hits the page carried under the words it did require. */
+  hitsReturned: number;
+};
+
+/**
+ * One record per search that stopped requiring a function word.
+ *
+ * Counts only, never the words: a query's terms are the reader's own
+ * question, and a public-corpus search is answered for anonymous readers, so
+ * the record says how much was dropped rather than what. The shape answers
+ * the one question the change raises — whether dropping function words turns
+ * empty pages into pages — from `excludedTokens > 0` against
+ * `hitsReturned`, per jurisdiction.
+ */
+export const reportCaseLawFunctionWordsExcluded = ({
+  country,
+  queryTokens,
+  excludedTokens,
+  hitsReturned,
+}: CaseLawFunctionWordsExcludedEvent): void => {
+  logger.info("case_law.search.function_words_excluded", {
+    country,
+    queryTokens,
+    excludedTokens,
+    hitsReturned,
+  });
+};
+
 /**
  * The Postgres reads one corpus-index search makes, named so a record can say
  * which one a slow request waited on rather than only how long it waited in

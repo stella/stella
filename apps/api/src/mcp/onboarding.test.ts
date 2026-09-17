@@ -482,6 +482,8 @@ describe("empty-result onboarding hints", () => {
       hits: [],
       nextCursor: null,
       total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 0),
+      queryUsed: "anything",
+      warnings: [],
     });
 
     const context = createContext({
@@ -528,6 +530,8 @@ describe("empty-result onboarding hints", () => {
       ],
       nextCursor: null,
       total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 1),
+      queryUsed: "shareholder",
+      warnings: [],
     });
 
     const context = createContext({
@@ -551,6 +555,8 @@ describe("empty-result onboarding hints", () => {
       hits: [],
       nextCursor: null,
       total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 0),
+      queryUsed: "shareholder",
+      warnings: [],
     });
 
     const context = createContext({

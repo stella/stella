@@ -25,6 +25,12 @@ export type CaseLawIndexSearch = {
   lang?: string | undefined;
   q?: string | undefined;
   sort?: SearchSort | undefined;
+  /**
+   * Require every word the query carries, as a link beside the results asks
+   * for it. Absent while the search may drop a word, which is the default,
+   * and dropped again by the next edit of the query it was asked of.
+   */
+  strict?: StrictSearchValue | undefined;
   /** The end of the decision-date range, inclusive. */
   to?: string | undefined;
   type?: string | undefined;
@@ -40,6 +46,32 @@ export type CaseLawIndexSearch = {
 export const CASE_LAW_FILTER_KEYS = ["court", "lang", "type"] as const;
 
 export type CaseLawFilterKey = (typeof CASE_LAW_FILTER_KEYS)[number];
+
+/**
+ * How the URL spells a search that requires every word it carries.
+ *
+ * A switch a reader lands on from a link beside their results, so it is
+ * spelled the way a link spells one rather than the way a caller serialises a
+ * boolean; and it is absent while it is off, so the lenient search everyone
+ * gets by default keeps one address.
+ */
+export const STRICT_SEARCH_VALUE = "1";
+
+export type StrictSearchValue = typeof STRICT_SEARCH_VALUE;
+
+/**
+ * The value a URL asks strict matching with. A public link may be typed or
+ * crawled, so any other spelling is the default search rather than an error.
+ */
+export const strictSearchValue = (
+  value: string | undefined,
+): StrictSearchValue | undefined =>
+  value === STRICT_SEARCH_VALUE ? STRICT_SEARCH_VALUE : undefined;
+
+/** Whether a URL asks the search to require every word its query carries. */
+export const isStrictSearch = (
+  strict: StrictSearchValue | undefined,
+): boolean => strict !== undefined;
 
 const validDecisionYear = (year: string | undefined): string | undefined =>
   /^\d{4}$/u.test(year ?? "") ? year : undefined;
@@ -126,6 +158,27 @@ export const clearedCaseLawFilters = (): Record<CaseLawFilterKey, undefined> &
 });
 
 /**
+ * The URL a query edit lands on, with `strict` dropped.
+ *
+ * Requiring every word is asked of one query, by a link beside that query's
+ * results, and nothing on screen gives it back once it is on. Carried into the
+ * next query it would silently require every word of text the reader never
+ * asked that of, and the question-shaped searches the widening exists for
+ * would answer nothing. So the drop belongs to the transition rather than to
+ * each caller: no place that writes `q` can forget it.
+ */
+export const withQuery = (
+  previous: CaseLawIndexSearch,
+  query: string,
+): CaseLawIndexSearch => {
+  const q = query.trim().length > 0 ? query : undefined;
+  if (q === previous.q) {
+    return previous;
+  }
+  return { ...previous, q, strict: undefined };
+};
+
+/**
  * The URL a navigation should start from while the search field holds text the
  * URL has not been told about yet.
  *
@@ -138,15 +191,8 @@ export const clearedCaseLawFilters = (): Record<CaseLawFilterKey, undefined> &
 export const withPendingQuery = (
   previous: CaseLawIndexSearch,
   pendingQuery: string | null,
-): CaseLawIndexSearch => {
-  if (pendingQuery === null) {
-    return previous;
-  }
-  return {
-    ...previous,
-    q: pendingQuery.trim().length > 0 ? pendingQuery : undefined,
-  };
-};
+): CaseLawIndexSearch =>
+  pendingQuery === null ? previous : withQuery(previous, pendingQuery);
 
 /**
  * How many filters are on. The date span counts as one whichever ends it
@@ -176,7 +222,7 @@ export const decisionSortOrder = (sort: SearchSort | undefined): SearchSort =>
 export const createCaseLawIndexPath = (
   search: CaseLawIndexSearch,
 ): `/law/cases${string}` => {
-  const { country, court, lang, q, sort, type } = search;
+  const { country, court, lang, q, sort, strict, type } = search;
   const params = new URLSearchParams();
   const range = decisionDateRange(search);
   if (country) {
@@ -201,6 +247,11 @@ export const createCaseLawIndexPath = (
   }
   if (q) {
     params.set("q", q);
+  }
+  // A strict search requires words the same query answered without, so it is
+  // a different result set and its address says so.
+  if (isStrictSearch(strict)) {
+    params.set("strict", STRICT_SEARCH_VALUE);
   }
   const sortParam = decisionSortParam(sort);
   if (sortParam !== undefined) {

@@ -155,7 +155,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "scope": "stella:search",
     "access": "read",
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Search case law within one country. \`queries\` carries several phrasings of one question and merges their results; matchedQueries names the phrasings that returned each hit. \`limit\` is the merged page, split evenly across the phrasings, so a page they agree on is shorter. Filters: court, language, dates (ISO YYYY-MM-DD), decision type, and source_id (the id a \`facets.source\` bucket carries in \`value\`). \`sort\` defaults to 'relevance'. Facets and total describe ONE query's whole set: first page of a single-query call only, null otherwise. Each hit also carries citationAuthority (the score the ranking blends in), matchingPassages (its passages that matched, at least 1) and a route-independent resourceName. Call read_case_law_citations for how the citing courts treated one.",
+    "description": "Search case law within one country. \`queries\` carries several phrasings of one question and merges their results; matchedQueries names the phrasings that returned each hit. \`limit\` is the merged page, split evenly across them. Filters: court, language, dates, decision type, source_id (a \`facets.source\` bucket's \`value\`). \`sort\` defaults to 'relevance'. Facets and total describe ONE query's whole set: first page of a single-query call only, null otherwise. Function words are not required terms; \`searches[]\` gives each phrasing's \`queryUsed\` and warnings, and \`strict\` requires every word. Each hit carries citationAuthority (the score the ranking blends in), matchingPassages (at least 1) and a route-independent resourceName. read_case_law_citations gives the polarity of the citing decisions.",
     "annotations": {
       "title": "Search case law",
       "destructiveHint": false,
@@ -189,11 +189,13 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         },
         "cursor": {
           "type": "string",
+          "minLength": 1,
           "maxLength": 1330,
           "description": "Opaque cursor from a previous search_case_law call. It continues the same queries, in the same order. It carries each query's own position and not what earlier pages emitted, so a decision several queries return can appear on more than one page: key results by decisionId."
         },
         "court": {
           "type": "string",
+          "minLength": 1,
           "maxLength": 512,
           "description": "Filter by court name"
         },
@@ -214,11 +216,13 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         },
         "language": {
           "type": "string",
+          "minLength": 1,
           "maxLength": 8,
           "description": "Filter by language code"
         },
         "decision_type": {
           "type": "string",
+          "minLength": 1,
           "maxLength": 128,
           "description": "Filter by decision type"
         },
@@ -246,6 +250,10 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           ],
           "type": "string",
           "description": "Result order; defaults to 'relevance'. 'relevance' blends text match with citation authority and court rank; 'newest' orders by decision date and returns only dated decisions. A query naming a decision outright (docket number, ECLI) is answered by identity lookup, which ignores this option."
+        },
+        "strict": {
+          "type": "boolean",
+          "description": "Require every word of each query, function words included. Off by default: a query phrased as a question carries words no judgment is written with, and \`searches[].queryUsed\` reports what was required. Pass true when every word matters."
         }
       }
     }
@@ -375,7 +383,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "scope": "stella:read",
     "access": "read",
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "What the courts citing a decision said about it (followed, distinguished, overruled), or what it cited. One page of citations, each with the citing court's treatment and an excerpt of the paragraph the citation sits in. \`cited_by\` returns the decisions that cite this one, \`cites\` the ones it cites; neither means agreement, both carry negative treatments. \`polarity\` is the classified reading, or 'unclassified' where there is none. \`passage.text\` is at most 1200 characters centred on the citation, cut when \`passage.truncated\`; \`passage.mention\` is 'sole', 'classified_section' (the mention the treatment was read from), or 'latest_of_several' (it may not be). Example: { decision_id: '<uuid>', direction: 'cited_by', limit: 20 }. Pass the returned nextCursor back as cursor.",
+    "description": "How the decisions citing one stood to it, or what it cited. One page of citations, each with a polarity and an excerpt of the paragraph the citation sits in. \`cited_by\` returns the decisions that cite this one, \`cites\` the ones it cites; neither means agreement. \`polarity\` is one of negative, neutral, positive, supportive, unclassified: a stance, not a doctrinal act, so it never says followed, distinguished or overruled. 'unclassified' means none was read. \`passage.text\` is at most 1200 characters centred on the citation, cut when \`passage.truncated\`; \`passage.mention\` is 'sole', 'classified_section' (the mention the polarity was read from), or 'latest_of_several' (it may not be). Example: { decision_id: '<uuid>', direction: 'cited_by', limit: 20 }. Pass the returned nextCursor back as cursor.",
     "annotations": {
       "title": "Read case-law citations",
       "destructiveHint": false,
@@ -792,16 +800,19 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         },
         "document_type": {
           "type": "string",
+          "minLength": 1,
           "maxLength": 128,
           "description": "Filter by document type"
         },
         "status": {
           "type": "string",
+          "minLength": 1,
           "maxLength": 32,
           "description": "Filter by publication status"
         },
         "language": {
           "type": "string",
+          "minLength": 1,
           "maxLength": 8,
           "description": "Filter by language code"
         },
@@ -1722,6 +1733,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         },
         "cursor": {
           "type": "string",
+          "minLength": 1,
           "maxLength": 512,
           "description": "Opaque cursor from a previous list_documents call to fetch the next page"
         }
@@ -1767,6 +1779,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         },
         "versions_cursor": {
           "type": "string",
+          "minLength": 1,
           "maxLength": 512,
           "description": "Cursor from a previous call for the next page of version history"
         }
@@ -2006,6 +2019,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         },
         "cursor": {
           "type": "string",
+          "minLength": 1,
           "maxLength": 512,
           "description": "Opaque cursor from a previous list_properties call to fetch the next page"
         }
@@ -2312,6 +2326,8 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         },
         "cursor": {
           "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
           "description": "Opaque cursor from the previous page"
         },
         "limit": {
@@ -2537,6 +2553,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         },
         "cursor": {
           "type": "string",
+          "minLength": 1,
           "maxLength": 512,
           "description": "Opaque cursor from a previous list_tasks call to fetch the next page"
         }
@@ -2804,6 +2821,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         },
         "cursor": {
           "type": "string",
+          "minLength": 1,
           "maxLength": 512,
           "description": "Opaque cursor from a previous list_clauses call to fetch the next page"
         }
@@ -3049,6 +3067,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         },
         "cursor": {
           "type": "string",
+          "minLength": 1,
           "maxLength": 512,
           "description": "Opaque cursor from a previous list_playbooks call to fetch the next page"
         }
@@ -3155,6 +3174,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         },
         "cursor": {
           "type": "string",
+          "minLength": 1,
           "maxLength": 512,
           "description": "Opaque cursor from a previous list_time_entries call to fetch the next page"
         }
@@ -3378,6 +3398,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         },
         "cursor": {
           "type": "string",
+          "minLength": 1,
           "maxLength": 512,
           "description": "Opaque cursor from a previous list_invoices call to fetch the next page"
         }
@@ -3967,7 +3988,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     "scope": "stella:search_anonymized",
     "access": "read",
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Search case law within one country. \`queries\` carries several phrasings of one question and merges their results; matchedQueries names the phrasings that returned each hit. \`limit\` is the merged page, split evenly across the phrasings, so a page they agree on is shorter. Filters: court, language, dates (ISO YYYY-MM-DD), decision type, and source_id (the id a \`facets.source\` bucket carries in \`value\`). \`sort\` defaults to 'relevance'. Facets and total describe ONE query's whole set: first page of a single-query call only, null otherwise. Each hit also carries citationAuthority (the score the ranking blends in), matchingPassages (its passages that matched, at least 1) and a route-independent resourceName. Call read_case_law_citations for how the citing courts treated one.",
+    "description": "Search case law within one country. \`queries\` carries several phrasings of one question and merges their results; matchedQueries names the phrasings that returned each hit. \`limit\` is the merged page, split evenly across them. Filters: court, language, dates, decision type, source_id (a \`facets.source\` bucket's \`value\`). \`sort\` defaults to 'relevance'. Facets and total describe ONE query's whole set: first page of a single-query call only, null otherwise. Function words are not required terms; \`searches[]\` gives each phrasing's \`queryUsed\` and warnings, and \`strict\` requires every word. Each hit carries citationAuthority (the score the ranking blends in), matchingPassages (at least 1) and a route-independent resourceName. read_case_law_citations gives the polarity of the citing decisions.",
     "annotations": {
       "title": "Search case law",
       "destructiveHint": false,
@@ -4001,11 +4022,13 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
         },
         "cursor": {
           "type": "string",
+          "minLength": 1,
           "maxLength": 1330,
           "description": "Opaque cursor from a previous search_case_law call. It continues the same queries, in the same order. It carries each query's own position and not what earlier pages emitted, so a decision several queries return can appear on more than one page: key results by decisionId."
         },
         "court": {
           "type": "string",
+          "minLength": 1,
           "maxLength": 512,
           "description": "Filter by court name"
         },
@@ -4026,11 +4049,13 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
         },
         "language": {
           "type": "string",
+          "minLength": 1,
           "maxLength": 8,
           "description": "Filter by language code"
         },
         "decision_type": {
           "type": "string",
+          "minLength": 1,
           "maxLength": 128,
           "description": "Filter by decision type"
         },
@@ -4058,6 +4083,10 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
           ],
           "type": "string",
           "description": "Result order; defaults to 'relevance'. 'relevance' blends text match with citation authority and court rank; 'newest' orders by decision date and returns only dated decisions. A query naming a decision outright (docket number, ECLI) is answered by identity lookup, which ignores this option."
+        },
+        "strict": {
+          "type": "boolean",
+          "description": "Require every word of each query, function words included. Off by default: a query phrased as a question carries words no judgment is written with, and \`searches[].queryUsed\` reports what was required. Pass true when every word matters."
         }
       }
     }
@@ -4187,7 +4216,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     "scope": "stella:read_anonymized",
     "access": "read",
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "What the courts citing a decision said about it (followed, distinguished, overruled), or what it cited. One page of citations, each with the citing court's treatment and an excerpt of the paragraph the citation sits in. \`cited_by\` returns the decisions that cite this one, \`cites\` the ones it cites; neither means agreement, both carry negative treatments. \`polarity\` is the classified reading, or 'unclassified' where there is none. \`passage.text\` is at most 1200 characters centred on the citation, cut when \`passage.truncated\`; \`passage.mention\` is 'sole', 'classified_section' (the mention the treatment was read from), or 'latest_of_several' (it may not be). Example: { decision_id: '<uuid>', direction: 'cited_by', limit: 20 }. Pass the returned nextCursor back as cursor.",
+    "description": "How the decisions citing one stood to it, or what it cited. One page of citations, each with a polarity and an excerpt of the paragraph the citation sits in. \`cited_by\` returns the decisions that cite this one, \`cites\` the ones it cites; neither means agreement. \`polarity\` is one of negative, neutral, positive, supportive, unclassified: a stance, not a doctrinal act, so it never says followed, distinguished or overruled. 'unclassified' means none was read. \`passage.text\` is at most 1200 characters centred on the citation, cut when \`passage.truncated\`; \`passage.mention\` is 'sole', 'classified_section' (the mention the polarity was read from), or 'latest_of_several' (it may not be). Example: { decision_id: '<uuid>', direction: 'cited_by', limit: 20 }. Pass the returned nextCursor back as cursor.",
     "annotations": {
       "title": "Read case-law citations",
       "destructiveHint": false,
@@ -4299,16 +4328,19 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
         },
         "document_type": {
           "type": "string",
+          "minLength": 1,
           "maxLength": 128,
           "description": "Filter by document type"
         },
         "status": {
           "type": "string",
+          "minLength": 1,
           "maxLength": 32,
           "description": "Filter by publication status"
         },
         "language": {
           "type": "string",
+          "minLength": 1,
           "maxLength": 8,
           "description": "Filter by language code"
         },
@@ -4572,6 +4604,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
         },
         "cursor": {
           "type": "string",
+          "minLength": 1,
           "maxLength": 512,
           "description": "Opaque cursor from a previous list_documents call to fetch the next page"
         }
@@ -4617,6 +4650,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
         },
         "versions_cursor": {
           "type": "string",
+          "minLength": 1,
           "maxLength": 512,
           "description": "Cursor from a previous call for the next page of version history"
         }
@@ -4654,6 +4688,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
         },
         "cursor": {
           "type": "string",
+          "minLength": 1,
           "maxLength": 512,
           "description": "Opaque cursor from a previous list_properties call to fetch the next page"
         }
@@ -4757,6 +4792,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
         },
         "cursor": {
           "type": "string",
+          "minLength": 1,
           "maxLength": 512,
           "description": "Opaque cursor from a previous list_tasks call to fetch the next page"
         }
@@ -4811,6 +4847,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
         },
         "cursor": {
           "type": "string",
+          "minLength": 1,
           "maxLength": 512,
           "description": "Opaque cursor from a previous list_clauses call to fetch the next page"
         }
@@ -4846,6 +4883,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
         },
         "cursor": {
           "type": "string",
+          "minLength": 1,
           "maxLength": 512,
           "description": "Opaque cursor from a previous list_playbooks call to fetch the next page"
         }
@@ -4919,6 +4957,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
         },
         "cursor": {
           "type": "string",
+          "minLength": 1,
           "maxLength": 512,
           "description": "Opaque cursor from a previous list_time_entries call to fetch the next page"
         }
@@ -5000,6 +5039,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
         },
         "cursor": {
           "type": "string",
+          "minLength": 1,
           "maxLength": 512,
           "description": "Opaque cursor from a previous list_invoices call to fetch the next page"
         }
@@ -5131,7 +5171,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
     "scope": "stella:search",
     "access": "read",
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Search case law within one country. \`queries\` carries several phrasings of one question and merges their results; matchedQueries names the phrasings that returned each hit. \`limit\` is the merged page, split evenly across the phrasings, so a page they agree on is shorter. Filters: court, language, dates (ISO YYYY-MM-DD), decision type, and source_id (the id a \`facets.source\` bucket carries in \`value\`). \`sort\` defaults to 'relevance'. Facets and total describe ONE query's whole set: first page of a single-query call only, null otherwise. Each hit also carries citationAuthority (the score the ranking blends in), matchingPassages (its passages that matched, at least 1) and a route-independent resourceName. Call read_case_law_citations for how the citing courts treated one.",
+    "description": "Search case law within one country. \`queries\` carries several phrasings of one question and merges their results; matchedQueries names the phrasings that returned each hit. \`limit\` is the merged page, split evenly across them. Filters: court, language, dates, decision type, source_id (a \`facets.source\` bucket's \`value\`). \`sort\` defaults to 'relevance'. Facets and total describe ONE query's whole set: first page of a single-query call only, null otherwise. Function words are not required terms; \`searches[]\` gives each phrasing's \`queryUsed\` and warnings, and \`strict\` requires every word. Each hit carries citationAuthority (the score the ranking blends in), matchingPassages (at least 1) and a route-independent resourceName. read_case_law_citations gives the polarity of the citing decisions.",
     "annotations": {
       "title": "Search case law",
       "destructiveHint": false,
@@ -5165,11 +5205,13 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
         },
         "cursor": {
           "type": "string",
+          "minLength": 1,
           "maxLength": 1330,
           "description": "Opaque cursor from a previous search_case_law call. It continues the same queries, in the same order. It carries each query's own position and not what earlier pages emitted, so a decision several queries return can appear on more than one page: key results by decisionId."
         },
         "court": {
           "type": "string",
+          "minLength": 1,
           "maxLength": 512,
           "description": "Filter by court name"
         },
@@ -5190,11 +5232,13 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
         },
         "language": {
           "type": "string",
+          "minLength": 1,
           "maxLength": 8,
           "description": "Filter by language code"
         },
         "decision_type": {
           "type": "string",
+          "minLength": 1,
           "maxLength": 128,
           "description": "Filter by decision type"
         },
@@ -5222,6 +5266,10 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
           ],
           "type": "string",
           "description": "Result order; defaults to 'relevance'. 'relevance' blends text match with citation authority and court rank; 'newest' orders by decision date and returns only dated decisions. A query naming a decision outright (docket number, ECLI) is answered by identity lookup, which ignores this option."
+        },
+        "strict": {
+          "type": "boolean",
+          "description": "Require every word of each query, function words included. Off by default: a query phrased as a question carries words no judgment is written with, and \`searches[].queryUsed\` reports what was required. Pass true when every word matters."
         }
       }
     }
@@ -5319,7 +5367,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
     "scope": "stella:read",
     "access": "read",
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "What the courts citing a decision said about it (followed, distinguished, overruled), or what it cited. One page of citations, each with the citing court's treatment and an excerpt of the paragraph the citation sits in. \`cited_by\` returns the decisions that cite this one, \`cites\` the ones it cites; neither means agreement, both carry negative treatments. \`polarity\` is the classified reading, or 'unclassified' where there is none. \`passage.text\` is at most 1200 characters centred on the citation, cut when \`passage.truncated\`; \`passage.mention\` is 'sole', 'classified_section' (the mention the treatment was read from), or 'latest_of_several' (it may not be). Example: { decision_id: '<uuid>', direction: 'cited_by', limit: 20 }. Pass the returned nextCursor back as cursor.",
+    "description": "How the decisions citing one stood to it, or what it cited. One page of citations, each with a polarity and an excerpt of the paragraph the citation sits in. \`cited_by\` returns the decisions that cite this one, \`cites\` the ones it cites; neither means agreement. \`polarity\` is one of negative, neutral, positive, supportive, unclassified: a stance, not a doctrinal act, so it never says followed, distinguished or overruled. 'unclassified' means none was read. \`passage.text\` is at most 1200 characters centred on the citation, cut when \`passage.truncated\`; \`passage.mention\` is 'sole', 'classified_section' (the mention the polarity was read from), or 'latest_of_several' (it may not be). Example: { decision_id: '<uuid>', direction: 'cited_by', limit: 20 }. Pass the returned nextCursor back as cursor.",
     "annotations": {
       "title": "Read case-law citations",
       "destructiveHint": false,
@@ -5405,16 +5453,19 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
         },
         "document_type": {
           "type": "string",
+          "minLength": 1,
           "maxLength": 128,
           "description": "Filter by document type"
         },
         "status": {
           "type": "string",
+          "minLength": 1,
           "maxLength": 32,
           "description": "Filter by publication status"
         },
         "language": {
           "type": "string",
+          "minLength": 1,
           "maxLength": 8,
           "description": "Filter by language code"
         },

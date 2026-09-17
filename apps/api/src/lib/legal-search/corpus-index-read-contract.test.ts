@@ -7,6 +7,7 @@ import {
   requireCaseLawDecisionCountField,
 } from "@/api/lib/legal-search/corpus-index-read-contract";
 import { corpusFreeTextClause } from "@/api/lib/legal-search/corpus-query";
+import { FUNCTION_WORDS } from "@/api/lib/legal-search/morphology/function-words";
 
 test("case-law reads use their generation's declared schema", () => {
   expect(corpusIndexReadContract("case_law", "case_law_v5")).toEqual({
@@ -59,6 +60,7 @@ test("extra fields and stemming both need a generation that maps them", () => {
   ).toEqual({
     surfaceFields: ["headnote"],
     keywordFields: [],
+    functionWords: FUNCTION_WORDS.cs,
     stemming: { language: "cs", fields: ["text_stem", "headnote_stem"] },
   });
   expect(
@@ -70,6 +72,7 @@ test("extra fields and stemming both need a generation that maps them", () => {
   ).toEqual({
     surfaceFields: ["headnote"],
     keywordFields: ["keywords"],
+    functionWords: FUNCTION_WORDS.cs,
     stemming: { language: "cs", fields: ["text_stem", "headnote_stem"] },
   });
   // Slovak has a stemmer but no published expansion dictionary; the two are
@@ -89,7 +92,14 @@ test("extra fields and stemming both need a generation that maps them", () => {
       jurisdiction: "CZE",
       language: undefined,
     }),
-  ).toEqual({ surfaceFields: [], keywordFields: [], stemming: null });
+    // A generation that maps no stem companion still drops function words:
+    // that is a decision about the reader's text, not about a field.
+  ).toEqual({
+    surfaceFields: [],
+    keywordFields: [],
+    functionWords: FUNCTION_WORDS.cs,
+    stemming: null,
+  });
   // The European index carries 24 languages under one jurisdiction, so the
   // jurisdiction alone names none of them.
   expect(

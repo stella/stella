@@ -658,6 +658,7 @@ const listDocumentsArgsSchema = nullAsAbsent(
       cursor: v.optional(
         v.pipe(
           v.string(),
+          v.minLength(1),
           v.maxLength(512),
           v.description(
             "Opaque cursor from a previous list_documents call to fetch the next page",
@@ -832,6 +833,7 @@ const readDocumentArgsSchema = nullAsAbsent(
       versions_cursor: v.optional(
         v.pipe(
           v.string(),
+          v.minLength(1),
           v.maxLength(512),
           v.description(
             "Cursor from a previous call for the next page of version history",
@@ -2232,6 +2234,7 @@ const listPropertiesArgsSchema = nullAsAbsent(
     cursor: v.optional(
       v.pipe(
         v.string(),
+        v.minLength(1),
         v.maxLength(512),
         v.description(
           "Opaque cursor from a previous list_properties call to fetch the next page",

@@ -707,6 +707,18 @@
       "description": "Não foi possível acessar a pesquisa de jurisprudência. Sua consulta permanece na barra de endereços; tente novamente em instantes.",
       "title": "A pesquisa está temporariamente indisponível"
     },
+    "searchWarnings": {
+      "noHits": {
+        "hint": "Tente menos palavras ou outras: os termos que uma decisão usaria, não a frase em que se faz uma pergunta.",
+        "message": "Nada corresponde às palavras exigidas por esta pesquisa."
+      },
+      "noHitsFiltered": {
+        "hint": "Remova ou amplie um filtro e pesquise novamente.",
+        "message": "Nada corresponde aos filtros aplicados."
+      },
+      "resultsFor": "Resultados de: <bdi>{query}</bdi>",
+      "searchEveryWord": "Pesquisar todas as palavras"
+    },
     "showWholeHeadnote": "Mostrar a ementa completa",
     "sort": {
       "newest": "Mais recentes",

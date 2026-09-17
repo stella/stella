@@ -6,6 +6,7 @@ import {
   decisionsLoadMode,
   decisionsSearchOutage,
   queryAnsweredByRows,
+  rowsAnswerRequestedSearch,
 } from "./decisions-load-mode.logic";
 
 describe("whether the results route waits for its rows", () => {
@@ -199,5 +200,22 @@ describe("which search the rows on screen answer", () => {
         shown: "smlouva",
       }),
     ).toBeUndefined();
+  });
+});
+
+describe("whether an action beside the rows may act on the URL's search", () => {
+  // The line above the rows names the search those rows answered, while the
+  // action on it reads the URL. Between the two searches those are different
+  // queries, so the action would widen words the reader has seen no answer to.
+  test("stale rows withhold it, because the URL has moved past them", () => {
+    expect(rowsAnswerRequestedSearch("stale")).toBe(false);
+  });
+
+  test("a skeleton has no rows to offer an action beside", () => {
+    expect(rowsAnswerRequestedSearch("skeleton")).toBe(false);
+  });
+
+  test("settled rows and the URL are one search, so it is offered", () => {
+    expect(rowsAnswerRequestedSearch("rows")).toBe(true);
   });
 });

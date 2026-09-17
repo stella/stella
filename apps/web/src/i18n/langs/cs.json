@@ -707,6 +707,18 @@
       "description": "Vyhledávání v judikatuře se nepodařilo kontaktovat. Váš dotaz zůstává v adresním řádku, zkuste to prosím za chvíli znovu.",
       "title": "Vyhledávání je dočasně nedostupné"
     },
+    "searchWarnings": {
+      "noHits": {
+        "hint": "Zkuste méně slov nebo jiná: výrazy, které by použilo rozhodnutí, ne větu, kterou se otázka pokládá.",
+        "message": "Slovům, která hledání vyžadovalo, nic neodpovídá."
+      },
+      "noHitsFiltered": {
+        "hint": "Zrušte nebo rozšiřte filtr a hledejte znovu.",
+        "message": "Zvoleným filtrům nic neodpovídá."
+      },
+      "resultsFor": "Výsledky pro: <bdi>{query}</bdi>",
+      "searchEveryWord": "Hledat všechna slova"
+    },
     "showWholeHeadnote": "Zobrazit celou právní větu",
     "sort": {
       "newest": "Nejnovější",

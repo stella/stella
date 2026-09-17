@@ -707,6 +707,18 @@
       "description": "Nepavyko pasiekti teismų praktikos paieškos. Jūsų užklausa lieka adreso juostoje, pabandykite po akimirkos dar kartą.",
       "title": "Paieška laikinai nepasiekiama"
     },
+    "searchWarnings": {
+      "noHits": {
+        "hint": "Pabandykite mažiau arba kitų žodžių: terminų, kuriuos vartotų teismo sprendimas, o ne sakinio, kuriuo užduodamas klausimas.",
+        "message": "Niekas neatitiko žodžių, kurių reikalavo ši paieška."
+      },
+      "noHitsFiltered": {
+        "hint": "Pašalinkite filtrą arba jį išplėskite ir ieškokite dar kartą.",
+        "message": "Niekas neatitiko pasirinktų filtrų."
+      },
+      "resultsFor": "Rezultatai pagal: <bdi>{query}</bdi>",
+      "searchEveryWord": "Ieškoti visų žodžių"
+    },
     "showWholeHeadnote": "Rodyti visą santrauką",
     "sort": {
       "newest": "Naujausi",

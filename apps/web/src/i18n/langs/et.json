@@ -707,6 +707,18 @@
       "description": "Kohtupraktika otsinguga ei õnnestunud ühendust saada. Sinu päring säilib aadressiribal, proovi hetke pärast uuesti.",
       "title": "Otsing pole ajutiselt saadaval"
     },
+    "searchWarnings": {
+      "noHits": {
+        "hint": "Proovige vähem või teisi sõnu: mõisteid, mida kasutaks kohtulahend, mitte lauset, millega küsimus esitatakse.",
+        "message": "Miski ei vasta sõnadele, mida see otsing nõudis."
+      },
+      "noHitsFiltered": {
+        "hint": "Eemaldage filter või laiendage seda ja otsige uuesti.",
+        "message": "Miski ei vasta valitud filtritele."
+      },
+      "resultsFor": "Tulemused päringule: <bdi>{query}</bdi>",
+      "searchEveryWord": "Otsi kõiki sõnu"
+    },
     "showWholeHeadnote": "Näita kogu lühikokkuvõtet",
     "sort": {
       "newest": "Uusimad",

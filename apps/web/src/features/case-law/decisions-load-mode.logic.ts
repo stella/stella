@@ -107,6 +107,18 @@ export const decisionsSearchOutage = ({
 }: DecisionsSearchOutageInput): boolean =>
   isQueryOutage || (!hasPages && loaded === DECISIONS_SEARCH_STATE.unavailable);
 
+/**
+ * Whether an action beside the rows may act on the search the URL asks for.
+ *
+ * Stale rows, and the line above them naming what their search required, are
+ * the previous search's while the URL has already moved on. An action offered
+ * there reads the URL, so it would run the query whose answer the reader
+ * cannot see yet: it is withheld until the rows and the URL are one search
+ * again.
+ */
+export const rowsAnswerRequestedSearch = (phase: DecisionRowsPhase): boolean =>
+  phase === "rows";
+
 type QueryAnsweredByRowsInput = {
   phase: DecisionRowsPhase;
   /** What the URL asks for now. */

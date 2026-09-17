@@ -37,6 +37,12 @@ export type DecisionListFilters = {
   search?: string;
   /** How a search orders its hits; absent while there is nothing to rank. */
   sort?: SearchSort;
+  /**
+   * Require every word the query carries, function words included. Present
+   * only when the reader asked for it: the endpoint's default is the lenient
+   * search, and sending `false` would claim a choice nobody made.
+   */
+  strict?: true;
 };
 
 /** Root segment every cached read of a public decision shares. */
@@ -73,6 +79,7 @@ const caseLawDecisionKeys = {
       pageSize: key.pageSize,
       search: key.search,
       sort: key.sort,
+      strict: key.strict,
     },
   ],
   byId: (decisionId: string) => [...caseLawDecisionKeys.all, decisionId],
@@ -213,6 +220,9 @@ export const decisionsInfiniteOptions = (
             }),
             excerpt: listFilters.excerpt,
             ...(listFilters.sort !== undefined && { sort: listFilters.sort }),
+            ...(listFilters.strict !== undefined && {
+              strict: listFilters.strict,
+            }),
           },
           { fetch: { signal } },
         );
@@ -251,6 +261,9 @@ export const decisionsInfiniteOptions = (
           facets: data.facets,
           nextCursor: data.nextCursor,
           total: data.total,
+          // What the search answered, beside what it found: the query it
+          // required and what it did not require of the one it was given.
+          answered: { queryUsed: data.queryUsed, warnings: data.warnings },
         };
       }
 
@@ -287,6 +300,9 @@ export const decisionsInfiniteOptions = (
         decisions: items,
         facets,
         total: SEARCH_TOTAL_NOT_COUNTED,
+        // A listing answers no query, so there is nothing it could have
+        // required less of and nothing to report about it.
+        answered: null,
       };
     },
     initialPageParam: nullableStringCursorSeed(),

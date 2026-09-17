@@ -710,6 +710,18 @@ type Messages = {
       "description": "The case-law search could not be reached. Your query is kept in the address bar, so try again in a moment.";
       "title": "Search is temporarily unavailable";
     };
+    "searchWarnings": {
+      "noHits": {
+        "hint": "Try fewer or different words: the terms a judgment would use, not the sentence a question is asked in.";
+        "message": "Nothing matched the words this search required.";
+      };
+      "noHitsFiltered": {
+        "hint": "Drop or widen a filter and search again.";
+        "message": "Nothing matched under the filters you narrowed with.";
+      };
+      "resultsFor": "Results for: <bdi>{query}</bdi>";
+      "searchEveryWord": "Search every word";
+    };
     "showWholeHeadnote": "Show whole headnote";
     "sort": {
       "newest": "Newest";

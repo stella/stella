@@ -1273,6 +1273,8 @@ const CONTRACT_CORPUS = {
           ],
           nextCursor: null,
           total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 1),
+          queryUsed: "dobré mravy",
+          warnings: [],
         } satisfies Awaited<ReturnType<typeof searchDecisionsHandler>>);
       },
       expectRefPaths: [],

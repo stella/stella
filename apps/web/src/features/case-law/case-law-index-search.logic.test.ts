@@ -12,8 +12,12 @@ import {
   decisionSortOrder,
   decisionSortParam,
   hasActiveCaseLawFilter,
+  isStrictSearch,
+  STRICT_SEARCH_VALUE,
+  strictSearchValue,
   validDecisionDate,
   withPendingQuery,
+  withQuery,
   yearDateRange,
 } from "@/features/case-law/case-law-index-search.logic";
 
@@ -49,6 +53,41 @@ describe("the sort the URL carries", () => {
       );
       const parsed = SEARCH_SORTS.find((order) => order === carried);
       expect(decisionSortOrder(parsed)).toBe(sort);
+    }
+  });
+});
+
+describe("the strict search the URL carries", () => {
+  test("writes the one spelling a link uses, and reads it back", () => {
+    const path = createCaseLawIndexPath({
+      country: "cz",
+      q: "jak vypovědět nájem",
+      strict: STRICT_SEARCH_VALUE,
+    });
+
+    expect(path).toBe(
+      "/law/cases?country=cz&q=jak+vypov%C4%9Bd%C4%9Bt+n%C3%A1jem&strict=1",
+    );
+    const carried = new URL(path, "https://example.test").searchParams.get(
+      "strict",
+    );
+    expect(isStrictSearch(strictSearchValue(carried ?? undefined))).toBe(true);
+  });
+
+  test("the default search keeps one address", () => {
+    expect(strictSearchValue(undefined)).toBeUndefined();
+    expect(isStrictSearch(undefined)).toBe(false);
+    expect(
+      createCaseLawIndexPath({ country: "cz", q: "nájem", strict: undefined }),
+    ).toBe(createCaseLawIndexPath({ country: "cz", q: "nájem" }));
+  });
+
+  // A public link may be typed or crawled: any other spelling is the search
+  // everyone gets by default, not an error screen.
+  test("a spelling the link never writes is the default search", () => {
+    for (const value of ["true", "0", "yes", "1 ", ""]) {
+      expect(strictSearchValue(value)).toBeUndefined();
+      expect(isStrictSearch(strictSearchValue(value))).toBe(false);
     }
   });
 });
@@ -162,6 +201,57 @@ describe("how many filters the badge reports", () => {
   });
 });
 
+describe("a query edit", () => {
+  // Requiring every word is asked for beside one query's results, and the
+  // reader is offered no way back. Carried into the next query it would keep
+  // answering nothing, with nothing on screen to say why.
+  test("drops the strict search it was asked of", () => {
+    expect(
+      withQuery(
+        {
+          country: "cz",
+          q: "jak vypovědět nájem",
+          strict: STRICT_SEARCH_VALUE,
+        },
+        "výpověď nájmu",
+      ),
+    ).toEqual({ country: "cz", q: "výpověď nájmu", strict: undefined });
+  });
+
+  test("drops it when the box is emptied too", () => {
+    expect(
+      withQuery({ country: "cz", q: "nájem", strict: STRICT_SEARCH_VALUE }, ""),
+    ).toEqual({ country: "cz", q: undefined, strict: undefined });
+  });
+
+  // The link that turns strict matching on runs through this same transition,
+  // so text that did not change must not cancel the choice being made of it.
+  test("keeps it while the query text stands", () => {
+    const previous = {
+      country: "cz",
+      q: "nájem",
+      strict: STRICT_SEARCH_VALUE,
+    } as const;
+
+    expect(withQuery(previous, "nájem")).toBe(previous);
+  });
+
+  test("keeps every other field of the URL", () => {
+    expect(
+      withQuery(
+        { country: "cz", court: "Nejvyšší soud", from: "2024-01-01" },
+        "nájem",
+      ),
+    ).toEqual({
+      country: "cz",
+      court: "Nejvyšší soud",
+      from: "2024-01-01",
+      q: "nájem",
+      strict: undefined,
+    });
+  });
+});
+
 describe("a query edit still pending when something else changes", () => {
   test("carries the typed text into the change instead of losing it", () => {
     expect(
@@ -193,7 +283,19 @@ describe("a query edit still pending when something else changes", () => {
       court: "Nejvyšší soud",
       sort: "newest",
       q: "nájem",
+      strict: undefined,
     });
+  });
+
+  // A filter applied while the box holds text the URL has not seen is still a
+  // query edit, so it drops the strict search the previous query was asked of.
+  test("drops the strict search along with the text it was asked of", () => {
+    expect(
+      withPendingQuery(
+        { country: "cz", q: "nájem", strict: STRICT_SEARCH_VALUE },
+        "nájem bytu",
+      ),
+    ).toEqual({ country: "cz", q: "nájem bytu", strict: undefined });
   });
 });
 

@@ -32,11 +32,16 @@ import {
   courtWeightSql,
   polarityWeightSql,
 } from "@/api/handlers/case-law/citation-score";
+import {
+  interpretDecisionQuery,
+  searchAnswer,
+} from "@/api/handlers/case-law/decisions/search-interpretation";
 import type { searchDecisionsBodySchema } from "@/api/handlers/case-law/decisions/search-schema";
 import {
   CASE_LAW_SEARCH_DB_READ,
   createCaseLawSearchDbTimer,
   decisionQueryClass,
+  reportCaseLawFunctionWordsExcluded,
   reportCaseLawSearchCompleted,
 } from "@/api/handlers/case-law/decisions/search-telemetry";
 import { bareCitationKey } from "@/api/handlers/case-law/ingestion/citation-extractor";
@@ -247,9 +252,22 @@ const searchPostgresDecisions = async (
     }
   }
 
+  // Resolved here as well as on the corpus branch, through the same helper:
+  // which words a search required is a property of the request, not of the
+  // engine that answered it, so both providers must answer it identically.
+  const interpretation = interpretDecisionQuery(
+    body,
+    parseDecisionQuery(body.query, {
+      grammar: decisionDocketGrammarForCountry(body.country),
+    }),
+  );
+
   const ftsSearch = buildPgFtsSearchSql({
     configs: await loadFtsSearchConfigs(),
-    query: body.query,
+    // The words the search requires, not the sentence they were typed in.
+    // `plainto_tsquery` AND-s what it is given, so this is the same
+    // exclusion the corpus branch applies, applied at the same boundary.
+    query: interpretation.queryUsed,
     refs: {
       language: sql`sd.language`,
       regconfig: sql`sd.regconfig`,
@@ -682,6 +700,12 @@ const searchPostgresDecisions = async (
     facets,
     total,
     nextCursor,
+    ...searchAnswer({
+      body,
+      interpretation,
+      hitCount: hits.length,
+      countsResultSet: parsedCursor === null,
+    }),
   };
 };
 
@@ -694,6 +718,12 @@ type CorpusIndexQueryOptions = {
   jurisdictionClause: string | undefined;
   fields: CaseLawCorpusQueryFields;
   expand?: CorpusTermExpander | undefined;
+  /**
+   * Passed in rather than read off `fields`, because the request can refuse
+   * the exclusion the language allows: `strict` asks for every word, and an
+   * identifier has no function words to drop.
+   */
+  functionWords: ReadonlySet<string> | null;
 };
 
 const buildCorpusIndexQuery = ({
@@ -701,9 +731,11 @@ const buildCorpusIndexQuery = ({
   jurisdictionClause,
   fields,
   expand,
+  functionWords,
 }: CorpusIndexQueryOptions): string | null =>
   caseLawCorpusQuery({
     text: body.query,
+    functionWords,
     filters: {
       court: body.court,
       dateFrom: body.dateFrom,
@@ -763,6 +795,7 @@ type ResolveCorpusIndexQueryOptions = {
   body: SearchDecisionsBody;
   generation: string;
   jurisdictionClause: string | undefined;
+  functionWords: ReadonlySet<string> | null;
 };
 
 type ResolvedCorpusIndexQuery = {
@@ -782,6 +815,7 @@ const resolveCorpusIndexQuery = async ({
   body,
   generation,
   jurisdictionClause,
+  functionWords,
 }: ResolveCorpusIndexQueryOptions): Promise<ResolvedCorpusIndexQuery> => {
   const sort = body.sort ?? DEFAULT_SEARCH_SORT;
   const fields = caseLawCorpusQueryFields({
@@ -801,6 +835,7 @@ const resolveCorpusIndexQuery = async ({
         jurisdictionClause,
         fields,
         expand,
+        functionWords,
       });
       if (query !== null) {
         expanderByQuery.set(query, expand);
@@ -829,6 +864,10 @@ const resolveCorpusIndexQuery = async ({
           jurisdictionClause,
           fields,
           expand,
+          // The same exclusion the page was built with: a facet counted over
+          // a query that required different words would describe a different
+          // result set than the page it sits beside.
+          functionWords,
         }) ??
           // Dropping a filter only ever widens the query. What can build to
           // nothing is the reader's text, and it did not, or the resolver
@@ -1501,6 +1540,7 @@ export const searchCorpusIndexDecisions = async (
   let scanAndFacetsMs = 0;
   const grammar = decisionDocketGrammarForCountry(body.country);
   const intent = parseDecisionQuery(body.query, { grammar });
+  const interpretation = interpretDecisionQuery(body, intent);
   const queryClass = decisionQueryClass(intent);
   const report = (hitsReturned: number, scan: CorpusIndexScanReport): void => {
     reportCaseLawSearchCompleted({
@@ -1619,7 +1659,17 @@ export const searchCorpusIndexDecisions = async (
           ),
         });
         report(page.hits.length, emptyCorpusIndexScan());
-        return page;
+        // An entry that names decisions dropped nothing to find them, so the
+        // answer echoes the entry and carries no function-word warning.
+        return {
+          ...page,
+          ...searchAnswer({
+            body,
+            interpretation,
+            hitCount: page.hits.length,
+            countsResultSet: true,
+          }),
+        };
       }
     }
   }
@@ -1635,6 +1685,7 @@ export const searchCorpusIndexDecisions = async (
     body,
     generation,
     jurisdictionClause,
+    functionWords: interpretation.functionWords,
   });
   if (resolved.type === "empty") {
     report(0, emptyCorpusIndexScan());
@@ -1643,6 +1694,12 @@ export const searchCorpusIndexDecisions = async (
       facets: null,
       total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 0),
       nextCursor: null,
+      ...searchAnswer({
+        body,
+        interpretation,
+        hitCount: 0,
+        countsResultSet: parsedCursor === null,
+      }),
     };
   }
   // A page boundary only means something inside the ranking that produced it,
@@ -1774,5 +1831,23 @@ export const searchCorpusIndexDecisions = async (
     total: facetsAndTotal?.total ?? SEARCH_TOTAL_NOT_COUNTED,
   });
   report(page.hits.length, scan);
-  return page;
+  if (interpretation.droppedFunctionWords.length > 0) {
+    reportCaseLawFunctionWordsExcluded({
+      country: body.country,
+      excludedTokens: interpretation.droppedFunctionWords.length,
+      hitsReturned: page.hits.length,
+      queryTokens:
+        tokenizeCorpusFreeText(interpretation.queryUsed).length +
+        interpretation.droppedFunctionWords.length,
+    });
+  }
+  return {
+    ...page,
+    ...searchAnswer({
+      body,
+      interpretation,
+      hitCount: page.hits.length,
+      countsResultSet: parsedCursor === null,
+    }),
+  };
 };

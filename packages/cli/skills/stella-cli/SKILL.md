@@ -165,7 +165,7 @@ are omitted here.
 - `stella case-law search`
   - `--queries` — Several phrasings of ONE question, at most 5. Their pages are merged and deduplicated within the page, so a reformulation costs no extra round trip; one phrasing is a valid call. (string-array, repeatable)
   - `--country` — Required corpus country. Admitted: CZE. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read. (string)
-  - optional: --court, --language, --decision-type, --source-id, --date-from, --date-to, --sort (relevance|newest)
+  - optional: --court, --language, --decision-type, --source-id, --date-from, --date-to, --sort (relevance|newest), --strict
 - `stella clause delete`
   - `--clause-id` — Clause id to delete (string)
 - `stella clause list`
