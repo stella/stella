@@ -1,5 +1,14 @@
 # @stll/cli
 
+## 1.7.1
+
+### Patch Changes
+
+- [#3493](https://github.com/stella/stella/pull/3493) [`264593e`](https://github.com/stella/stella/commit/264593e2729be0a11aff8a206ad38451fdb56377) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `--country` on `case-law search` and `legislation search` states what it
+  accepts: an ISO 3166-1 alpha-3 or alpha-2 code, or the country's name in a
+  language the corpus serves. The admitted list is unchanged; only the help text
+  and the generated contract now describe the spellings the server reads.
+
 ## 1.7.0
 
 ### Minor Changes
