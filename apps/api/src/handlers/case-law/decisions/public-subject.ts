@@ -26,7 +26,7 @@ type NotFoundStatus = ReturnType<typeof notFound>;
  * correct, so it carries the reader's ask instead of joining the one answer
  * missing and restricted subjects share.
  */
-export type UnreadableSubjectAddress = { kind: "unreadable"; message: string };
+type UnreadableSubjectAddress = { kind: "unreadable"; message: string };
 
 const unreadableAddress = (message: string) => status(400, { message });
 type UnreadableAddressStatus = ReturnType<typeof unreadableAddress>;
