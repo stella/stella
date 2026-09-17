@@ -16,6 +16,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 
 import { cn } from "@stll/ui/utils";
 
+import { addColumnRailStyle } from "@/components/workspaces/table/add-column-rail";
 import type { TableRowHost } from "@/components/workspaces/table/row-host";
 import {
   getNextSelectAllRowSelection,
@@ -68,6 +69,7 @@ import {
 } from "@/components/workspaces/table/workspace-table/internals-helpers";
 import { WorkspaceTableSkeletonRows } from "@/components/workspaces/table/workspace-table/skeleton-rows";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { TOOLBAR_ROW_HEIGHT_PX } from "@/lib/consts";
 import type { TableContentMode } from "@/lib/workspaces/table-store";
 
 type WorkspaceTableProps<TRow extends TableRowData> = {
@@ -122,6 +124,7 @@ export const WorkspaceTable = <TRow extends TableRowData = TableTreeNode>({
 }: WorkspaceTableProps<TRow>) => {
   const inlineFlow = outerScrollRef !== undefined;
   const tableWrapperRef = useRef<HTMLDivElement>(null);
+  const headerRowsRef = useRef<HTMLDivElement>(null);
   const loadMoreSentinelRef = useRef<HTMLDivElement>(null);
   const lastSelectedIndex = useRef<number | null>(null);
   const previousScrollMetrics = useRef<HorizontalScrollMetrics | null>(null);
@@ -130,6 +133,12 @@ export const WorkspaceTable = <TRow extends TableRowData = TableTreeNode>({
     useState<ExpandedTableCell | null>(null);
   const [wrapperWidth, setWrapperWidth] = useState(0);
   const [verticalScrollbarWidth, setVerticalScrollbarWidth] = useState(0);
+  // What the rail's "+" centres on. Starts at the height the header cells
+  // carry as a class and then follows what this table's header row measures:
+  // a header that wraps or stacks is taller than one line of text.
+  const [headerHeight, setHeaderHeight] = useState<number>(
+    TOOLBAR_ROW_HEIGHT_PX,
+  );
   // Offset of this section's rows within the shared grouped scroll, so the
   // virtualizer windows the right rows. Stays 0 for the flat table (it owns its
   // own scroll); measured + kept current by the effect below for grouped.
@@ -139,6 +148,12 @@ export const WorkspaceTable = <TRow extends TableRowData = TableTreeNode>({
   const updateWrapperWidth = useCallback((nextWrapperWidth: number) => {
     setWrapperWidth((current) =>
       current === nextWrapperWidth ? current : nextWrapperWidth,
+    );
+  }, []);
+
+  const updateHeaderHeight = useCallback((nextHeaderHeight: number) => {
+    setHeaderHeight((current) =>
+      current === nextHeaderHeight ? current : nextHeaderHeight,
     );
   }, []);
 
@@ -501,7 +516,8 @@ export const WorkspaceTable = <TRow extends TableRowData = TableTreeNode>({
 
   useExternalSyncEffect(() => {
     const element = tableWrapperRef.current;
-    if (!element) {
+    const headerRows = headerRowsRef.current;
+    if (!element || !headerRows) {
       return undefined;
     }
 
@@ -510,14 +526,21 @@ export const WorkspaceTable = <TRow extends TableRowData = TableTreeNode>({
       const nextVerticalScrollbarWidth = getVerticalScrollbarWidth(element);
       updateWrapperWidth(nextWrapperWidth);
       updateVerticalScrollbarWidth(nextVerticalScrollbarWidth);
+      updateHeaderHeight(headerRows.getBoundingClientRect().height);
     };
 
     updateMetrics();
     const resizeObserver = new ResizeObserver(updateMetrics);
     resizeObserver.observe(element);
+    resizeObserver.observe(headerRows);
 
     return () => resizeObserver.disconnect();
-  }, [inlineFlow, updateVerticalScrollbarWidth, updateWrapperWidth]);
+  }, [
+    inlineFlow,
+    updateHeaderHeight,
+    updateVerticalScrollbarWidth,
+    updateWrapperWidth,
+  ]);
 
   useLayoutEffect(() => {
     const element = tableWrapperRef.current;
@@ -570,6 +593,7 @@ export const WorkspaceTable = <TRow extends TableRowData = TableTreeNode>({
               "bg-background z-30",
               stickyColumnHeader && "sticky top-0",
             )}
+            ref={headerRowsRef}
           >
             {table.getHeaderGroups().map((headerGroup) => (
               <WorkspaceGridRow key={headerGroup.id}>
@@ -691,7 +715,10 @@ export const WorkspaceTable = <TRow extends TableRowData = TableTreeNode>({
       {addPropertyColumn !== null && rowHost.addColumnRail !== undefined && (
         <div
           className="absolute top-0 bottom-12 z-40 w-12"
-          style={{ right: verticalScrollbarWidth }}
+          style={addColumnRailStyle({
+            headerHeightPx: headerHeight,
+            scrollbarWidthPx: verticalScrollbarWidth,
+          })}
         >
           {rowHost.addColumnRail}
         </div>
