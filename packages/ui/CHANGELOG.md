@@ -1,5 +1,11 @@
 # @stll/ui
 
+## 0.28.2
+
+### Patch Changes
+
+- [#3461](https://github.com/stella/stella/pull/3461) [`4cd7250`](https://github.com/stella/stella/commit/4cd725073dd7db4f0874040482bdd513cc92bcb2) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `ScrollArea` takes an `axis` prop, so a surface whose inline size belongs to the reader can refuse the horizontal axis.
+
 ## 0.28.1
 
 ### Patch Changes
