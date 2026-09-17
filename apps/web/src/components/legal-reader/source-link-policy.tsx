@@ -22,7 +22,9 @@
  * consult it sit five components deep in layout code that has nothing to do
  * with links, and the default is deny: a reader that forgets the provider
  * renders link text without the link, which is a visible degradation rather
- * than a leak.
+ * than a leak. The rule has no exceptions — every absolute URL, `mailto:`
+ * included, has to belong to the publisher — because an exception is the shape
+ * a source document would be written to fit.
  */
 
 import { createContext, useContext } from "react";
@@ -97,13 +99,15 @@ export const readerHref = (
     return undefined;
   }
   // In-document and in-app targets: a fragment jump, or a route this reader
-  // owns. Neither leaves the corpus.
+  // owns. Neither leaves the corpus, and `sanitizeHref` has already refused a
+  // scheme-relative URL wearing a path's leading slash.
   if (safe.startsWith("#") || safe.startsWith("/")) {
     return safe;
   }
-  if (safe.startsWith("mailto:")) {
-    return safe;
-  }
+  // Everything else answers to the publisher, `mailto:` included: it has no
+  // host to belong to one, so a source document's mail link renders as the
+  // address it prints. The alternative is a second exception to a rule whose
+  // whole value is having none.
   const host = hostOf(safe);
   return host !== null &&
     policy.publisherHosts.some((publisherHost) =>

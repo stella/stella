@@ -109,6 +109,10 @@ describe("hyperlinks a source document carries", () => {
     );
     // A protocol `sanitizeHref` rejects stays rejected here.
     expect(readerHref("data:text/html,<p>x</p>", policy)).toBeUndefined();
+    // A scheme-relative URL is not the in-app path its slash suggests.
+    expect(readerHref("//example.com/act", policy)).toBeUndefined();
+    // No exception for a mail link either: it has no host to be published at.
+    expect(readerHref("mailto:clerk@example.gov", policy)).toBeUndefined();
   });
 
   test("a reader that names no publisher renders no outside link", () => {

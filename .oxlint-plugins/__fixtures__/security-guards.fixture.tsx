@@ -6,6 +6,7 @@ import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { secureDocumentResponse } from "@/api/lib/secure-document-response";
 // oxlint-disable-next-line security-guards/require-secure-document-response -- fixture: handlers must not assemble the document security policy manually
 import { RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS } from "@/api/lib/security-headers";
+import { readerHref } from "@/components/legal-reader/source-link-policy";
 import { sanitizeHref } from "@/lib/sanitize-href";
 
 declare const file: { name: string };
@@ -47,6 +48,15 @@ export const UnsafeBuiltLink = () => (
   <a href={buildHref(item.url)}>Open</a>
 );
 export const SafeLink = () => <a href={sanitizeHref(item.url)}>Open</a>;
+export const SafeReaderLink = () => (
+  <a href={readerHref(item.url, { publisherHosts: [] })}>Open</a>
+);
+// oxlint-disable-next-line eslint/no-shadow -- fixture: a local binding must not satisfy the sanitizer scope guard
+const localReaderHref = (readerHref: (value: string) => string | undefined) => (
+  // oxlint-disable-next-line security-guards/no-unsanitized-href -- fixture: a sanitizer name bound to anything but its import is not a sanitizer
+  <a href={readerHref(item.url)}>Open</a>
+);
+export const ShadowedReaderLink = () => localReaderHref((value) => value);
 
 // oxlint-disable-next-line eslint/no-shadow -- fixture: a shadowed binding must not satisfy the imported-member scope guard
 const shadowedMemberReferences = (member: {
