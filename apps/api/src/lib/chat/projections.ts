@@ -1564,6 +1564,13 @@ export const LOOKUP_CASE_LAW_PROJECTION = v.strictObject({
           status: v.literal(DECISION_LOOKUP_STATUS.notFound),
         }),
       ),
+      projectionBranch(
+        v.strictObject({
+          ...decisionLookupSubject,
+          message: v.string(),
+          status: v.literal(DECISION_LOOKUP_STATUS.lookupFailed),
+        }),
+      ),
     ]),
   ),
 });

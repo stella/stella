@@ -17,4 +17,10 @@ export const DECISION_LOOKUP_STATUS = {
   ambiguous: "ambiguous",
   /** None does, or the identifier is not one the corpus's grammars claim. */
   notFound: "not_found",
+  /**
+   * The read for this reference failed. Its own answer, not the call's: a
+   * batch of fifty references is worth keeping the forty-nine that resolved,
+   * and a failure is not evidence that the corpus lacks the decision.
+   */
+  lookupFailed: "lookup_failed",
 } as const;

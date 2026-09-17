@@ -193,13 +193,15 @@ const TOOL_COUNT_CEILING: Record<SurfaceMode, number> = {
 // caller paging keys on `decisionId`. Neither is inferable from the shape, and
 // a client that assumed otherwise would drop results silently. Measured
 // 130_318 default, 66_318 anonymized and 21_632 law.
-// lookup_case_law then measures 132_666 default, 68_666 anonymized and 23_980
-// law, up 2_348 on every surface: its own input schema, its description, and
-// an output schema whose branches each say what the caller does next.
+// lookup_case_law then measures 132_709 default, 68_709 anonymized and 24_023
+// law, up 2_391 on every surface: its own input schema, its description, and
+// an output schema whose four branches each say what the caller does next. The
+// fourth keeps a reference whose read failed from taking the batch down with
+// it.
 const TOOLS_LIST_PAYLOAD_CHAR_CEILING: Record<SurfaceMode, number> = {
-  default: 132_750,
-  anonymized: 68_750,
-  law: 23_980,
+  default: 132_800,
+  anonymized: 68_800,
+  law: 24_023,
 };
 
 // default bumped 42_000 -> 42_300 for the two fields read_case_law_citations
@@ -224,14 +226,15 @@ const TOOLS_LIST_PAYLOAD_CHAR_CEILING: Record<SurfaceMode, number> = {
 // declares its decision once inside an `items[]` variant whose absence
 // branches are three fields each, and search_case_law adds only
 // `matchedQueries`. Tightened to the new measurement.
-// lookup_case_law then measures 45_764 default, 31_400 anonymized and 8_537
-// law, up 804: the identity fields are declared once and shared between the
-// `found` entry and an `ambiguous` entry's candidates, so the third branch
-// costs a message and a hint.
+// lookup_case_law then measures 45_807 default, 31_443 anonymized and 8_580
+// law, up 847: the identity fields are declared once and shared between the
+// `found` entry and an `ambiguous` entry's candidates, so the two remaining
+// branches cost a message, a hint, and the `lookup_failed` entry that keeps a
+// failed reference from taking the batch down with it.
 const OUTPUT_SCHEMA_TOTAL_CHAR_CEILING: Record<SurfaceMode, number> = {
   default: 45_900,
   anonymized: 31_500,
-  law: 8537,
+  law: 8580,
 };
 
 // Largest measured schema is read_document at 3_434 chars. A single tool must

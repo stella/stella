@@ -234,6 +234,7 @@ const searchProviderSearchMock = mock(
     };
   },
 );
+const lookupDecisionsByIdentityMock = mock();
 const searchDecisionsHandlerMock = mock();
 const searchLegislationHandlerMock = mock();
 const resolveStatuteExpressionMock = mock();
@@ -854,6 +855,7 @@ const createContext = ({
       loadAllowlistByWorkspaceMock,
     loadAnonymizationGazetteerEntriesByWorkspace: loadGazetteerByWorkspaceMock,
     readGatedDecisionCitations: readGatedDecisionCitationsMock,
+    lookupDecisionsByIdentity: lookupDecisionsByIdentityMock,
     readGatedDecisionWithDocument: readGatedDecisionMock,
     readOverviewHandler: readOverviewHandlerMock,
     readWorkspaceContactsHandler: readWorkspaceContactsHandlerMock,
@@ -887,6 +889,7 @@ describe("OpenAI-compatible MCP tools", () => {
     searchProviderSearchMock.mockClear();
     readContentAcrossMattersExecute.mockReset();
     readContactExecute.mockReset();
+    lookupDecisionsByIdentityMock.mockReset();
     searchDecisionsHandlerMock.mockReset();
     searchLegislationHandlerMock.mockReset();
     resolveStatuteExpressionMock.mockReset();
@@ -1701,24 +1704,16 @@ describe("OpenAI-compatible MCP tools", () => {
     }[];
   };
 
-  const createLookupHit = (decisionId: string, court: string) => ({
+  const createLookupRow = (decisionId: string, court: string) => ({
     caseNumber: CZ_DOCKET,
-    citationAuthority: 1,
-    citationCount: 0,
     country: "CZE",
     court,
-    courtAbbreviation: null,
     decisionDate: "2020-05-01",
-    decisionId,
-    decisionType: "judgment",
     ecli: null,
-    headline: null,
+    id: toSafeId<"caseLawDecision">(decisionId),
     identifiers: [],
     language: "cs",
-    languageAlternates: [],
-    matchingPassages: 1,
     slug: `slug-${decisionId}`,
-    sourceUrl: "https://example.test/decision",
   });
 
   const lookup = async (identifiers: readonly string[]) =>
@@ -1732,13 +1727,10 @@ describe("OpenAI-compatible MCP tools", () => {
       ),
     );
 
-  test("lookup_case_law resolves a docket through the identity branch", async () => {
-    searchDecisionsHandlerMock.mockResolvedValue({
-      facets: null,
-      hits: [createLookupHit(DECISION_ID, "Nejvyšší soud")],
-      nextCursor: null,
-      total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 1),
-    });
+  test("lookup_case_law resolves a docket through the identity columns", async () => {
+    lookupDecisionsByIdentityMock.mockResolvedValue([
+      createLookupRow(DECISION_ID, "Nejvyšší soud"),
+    ]);
 
     // The sheet number names a page of the court file, not the decision, so
     // the reference resolves with or without it.
@@ -1757,23 +1749,21 @@ describe("OpenAI-compatible MCP tools", () => {
         status: "found",
       },
     ]);
-    // The docket reaches the handler canonicalised, and never as free text.
-    expect(searchDecisionsHandlerMock).toHaveBeenCalledWith(
-      expect.objectContaining({ country: "CZE", query: CZ_DOCKET }),
-      caseLawPublicReadDb,
-    );
+    // The docket reaches the identity read canonicalised, as a locator rather
+    // than as a query, and the ranked search is not consulted at all.
+    expect(lookupDecisionsByIdentityMock).toHaveBeenCalledWith({
+      caseLawDb: caseLawPublicReadDb,
+      country: "CZE",
+      locator: { kind: "docket", value: CZ_DOCKET },
+    });
+    expect(searchDecisionsHandlerMock).not.toHaveBeenCalled();
   });
 
   test("lookup_case_law reports several courts as ambiguous", async () => {
-    searchDecisionsHandlerMock.mockResolvedValue({
-      facets: null,
-      hits: [
-        createLookupHit(DECISION_ID, "Nejvyšší soud"),
-        createLookupHit("00000000-0000-4000-8000-0000000d0042", "Městský soud"),
-      ],
-      nextCursor: null,
-      total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 2),
-    });
+    lookupDecisionsByIdentityMock.mockResolvedValue([
+      createLookupRow(DECISION_ID, "Nejvyšší soud"),
+      createLookupRow("00000000-0000-4000-8000-0000000d0042", "Městský soud"),
+    ]);
 
     const payload = await lookup([CZ_DOCKET]);
 
@@ -1788,20 +1778,16 @@ describe("OpenAI-compatible MCP tools", () => {
     expect(entry.decisionId).toBeUndefined();
   });
 
-  test("lookup_case_law keeps a loose lexical match out of found", async () => {
-    // The identity read answered nothing, so the handler fell through to the
-    // text index and ranked a decision that merely mentions the docket.
-    searchDecisionsHandlerMock.mockResolvedValue({
-      facets: null,
-      hits: [
-        {
-          ...createLookupHit(DECISION_ID, "Nejvyšší soud"),
-          caseNumber: "29 Cdo 7/2019",
-        },
-      ],
-      nextCursor: null,
-      total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 1),
-    });
+  test("lookup_case_law keeps a row that answers to another reference out of found", async () => {
+    // The second guard behind the identity statement: a row whose own
+    // identifiers do not carry the reference is not the decision named, and
+    // reporting it would cite the wrong case.
+    lookupDecisionsByIdentityMock.mockResolvedValue([
+      {
+        ...createLookupRow(DECISION_ID, "Nejvyšší soud"),
+        caseNumber: "29 Cdo 7/2019",
+      },
+    ]);
 
     const payload = await lookup([CZ_DOCKET]);
 
@@ -1810,17 +1796,34 @@ describe("OpenAI-compatible MCP tools", () => {
     expect(entry.hint).toContain("search_case_law");
   });
 
+  test("lookup_case_law keeps the entries beside a failed one", async () => {
+    lookupDecisionsByIdentityMock.mockImplementation(
+      async ({ locator }: { locator: { kind: string; value: string } }) => {
+        if (locator.value === CZ_ECLI) {
+          throw new Error("connection reset");
+        }
+        return [createLookupRow(DECISION_ID, "Nejvyšší soud")];
+      },
+    );
+
+    const payload = await lookup([CZ_DOCKET, CZ_ECLI]);
+
+    // One reference's read failing is that reference's answer. A batch of
+    // fifty is worth the forty-nine that resolved, and a failure is not
+    // evidence that the corpus lacks the decision.
+    expect(payload.items.map(({ status }) => status)).toEqual([
+      "found",
+      "lookup_failed",
+    ]);
+    expect(payload.items.at(1)?.message).toContain("Retry this reference");
+  });
+
   test("lookup_case_law answers every position and resolves each reference once", async () => {
-    searchDecisionsHandlerMock.mockImplementation(
-      async ({ query }: { query: string }) => ({
-        facets: null,
-        hits:
-          query === CZ_DOCKET
-            ? [createLookupHit(DECISION_ID, "Nejvyšší soud")]
-            : [],
-        nextCursor: null,
-        total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 0),
-      }),
+    lookupDecisionsByIdentityMock.mockImplementation(
+      async ({ locator }: { locator: { kind: string; value: string } }) =>
+        locator.value === CZ_DOCKET
+          ? [createLookupRow(DECISION_ID, "Nejvyšší soud")]
+          : [],
     );
 
     // A reference the grammars decline never reaches the corpus at all.
@@ -1844,13 +1847,18 @@ describe("OpenAI-compatible MCP tools", () => {
       CZ_ECLI,
     ]);
     // Three distinct references, one of which the grammars declined: two
-    // resolutions, and the repeat is answered from the first. Each reaches the
-    // handler in the identifier grammar's own canonical spelling.
+    // reads, and the repeat is answered from the first. Each reaches the read
+    // in the identifier grammar's own canonical spelling.
     expect(
-      searchDecisionsHandlerMock.mock.calls.map(
-        (call) => asTestRaw<{ query: string }>(call.at(0)).query,
+      lookupDecisionsByIdentityMock.mock.calls.map(
+        (call) =>
+          asTestRaw<{ locator: { kind: string; value: string } }>(call.at(0))
+            .locator,
       ),
-    ).toEqual([CZ_DOCKET, CZ_ECLI]);
+    ).toEqual([
+      { kind: "docket", value: CZ_DOCKET },
+      { kind: "ecli", value: CZ_ECLI },
+    ]);
   });
 
   test("lookup_case_law rejects a country outside the public list", async () => {
@@ -1865,7 +1873,7 @@ describe("OpenAI-compatible MCP tools", () => {
       message: "Case-law country not found",
       hint: `Pass one of the admitted country codes: ${PUBLIC_CASE_LAW_COUNTRIES.join(", ")}.`,
     });
-    expect(searchDecisionsHandlerMock).not.toHaveBeenCalled();
+    expect(lookupDecisionsByIdentityMock).not.toHaveBeenCalled();
   });
 
   // --- several phrasings in one call ---------------------------------------

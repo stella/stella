@@ -37,6 +37,10 @@ import {
   type DecisionDocumentHydration,
   type readGatedDecisionWithDocument,
 } from "@/api/handlers/case-law/decisions/get-deferred-document";
+import type {
+  DecisionIdentityRow,
+  lookupDecisionsByIdentity,
+} from "@/api/handlers/case-law/decisions/lookup-by-identity";
 import type { searchDecisionsHandler } from "@/api/handlers/case-law/decisions/search";
 import { parseUsableDocumentAst } from "@/api/handlers/case-law/document-ast";
 import {
@@ -48,6 +52,7 @@ import type { readWorkspaceHandler } from "@/api/handlers/workspaces/get";
 import type { readOverviewHandler } from "@/api/handlers/workspaces/read-overview";
 import type { readWorkspaceContactsHandler } from "@/api/handlers/workspaces/workspace-contacts-read";
 import type { readWorkspaceMembersHandler } from "@/api/handlers/workspaces/workspace-members-read";
+import { captureError } from "@/api/lib/analytics/capture";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
@@ -150,6 +155,11 @@ const defaultReadGatedDecisionCitations: typeof readGatedDecisionCitations =
     await (
       await import("@/api/handlers/case-law/decisions/citation-passages")
     ).readGatedDecisionCitations(input);
+const defaultLookupDecisionsByIdentity: typeof lookupDecisionsByIdentity =
+  async (input) =>
+    await (
+      await import("@/api/handlers/case-law/decisions/lookup-by-identity")
+    ).lookupDecisionsByIdentity(input);
 const defaultSearchDecisionsHandler: typeof searchDecisionsHandler = async (
   input,
   database,
@@ -2448,24 +2458,23 @@ type DecisionLookupItem = v.InferInput<
 const SEARCH_INSTEAD_HINT =
   "Search the decision's text with search_case_law instead, or pass the docket exactly as the court wrote it.";
 
-const decisionIdentityOf = (hit: CaseLawSearchHit) => ({
+const decisionIdentityOf = (row: DecisionIdentityRow) => ({
   appUrl: buildCaseLawDecisionAppUrl({
-    caseNumber: hit.caseNumber,
-    country: hit.country,
-    court: hit.court,
-    language: hit.language,
-    languageAlternates: hit.languageAlternates,
-    slug: hit.slug,
+    caseNumber: row.caseNumber,
+    country: row.country,
+    court: row.court,
+    language: row.language,
+    slug: row.slug,
   }),
-  caseNumber: hit.caseNumber,
-  court: hit.court,
-  decisionDate: hit.decisionDate,
-  decisionId: hit.decisionId,
-  ecli: hit.ecli,
+  caseNumber: row.caseNumber,
+  court: row.court,
+  decisionDate: row.decisionDate,
+  decisionId: row.id,
+  ecli: row.ecli,
   resourceName: serializeAuthorizedCorpusMcpResourceName(
     resourceRef({
       type: RESOURCE_TYPE.CASE_LAW_DECISION,
-      id: brandPersistedCaseLawDecisionId(hit.decisionId),
+      id: brandPersistedCaseLawDecisionId(row.id),
     }),
   ),
 });
@@ -2478,7 +2487,7 @@ const decisionIdentityOf = (hit: CaseLawSearchHit) => ({
 type DecisionLookupOutcome =
   | { type: "not_an_identifier" }
   | { type: "failed"; message: string }
-  | { type: "matches"; matches: readonly CaseLawSearchHit[] };
+  | { type: "matches"; matches: readonly DecisionIdentityRow[] };
 
 const lookupItemResult = ({
   identifier,
@@ -2488,9 +2497,11 @@ const lookupItemResult = ({
   outcome: DecisionLookupOutcome;
 }): DecisionLookupItem => {
   if (outcome.type === "failed") {
-    // The caller-level guard below answers for a failed resolution, so no
-    // entry is ever built from one.
-    return panic("A failed identifier lookup must answer for the call");
+    return {
+      identifier,
+      message: `Resolving this reference failed: ${outcome.message}. Retry this reference; the entries beside it are unaffected.`,
+      status: DECISION_LOOKUP_STATUS.lookupFailed,
+    };
   }
   if (outcome.type === "not_an_identifier") {
     return {
@@ -2552,12 +2563,12 @@ const handleLookupCaseLawTool: TypedMcpToolHandler<
 
   // The jurisdiction's own docket grammar, read the way `searchDecisionsHandler`
   // reads it: `11 C 153/2025` is a docket in Czechia and not in Poland, and a
-  // lookup that classified an identifier differently from the branch it
-  // delegates to would answer `not_found` for a decision that search finds.
+  // lookup that classified an identifier differently from the search beside it
+  // would decline a reference that search resolves.
   const grammar = decisionDocketGrammarForCountry(publicCountry);
-  const search =
-    context.testDependencies?.searchDecisionsHandler ??
-    defaultSearchDecisionsHandler;
+  const lookup =
+    context.testDependencies?.lookupDecisionsByIdentity ??
+    defaultLookupDecisionsByIdentity;
 
   // One resolution per distinct identifier; a list naming the same decision
   // twice resolves it once and answers both of its positions.
@@ -2576,44 +2587,34 @@ const handleLookupCaseLawTool: TypedMcpToolHandler<
         if (intent.type !== "identifier") {
           return [identifier, { type: "not_an_identifier" }];
         }
-        const result = await search(
-          {
-            query: intent.value,
-            country: publicCountry,
-            // One more than the reply lists, so a full list can say there may
-            // be more.
-            limit: LIMITS.caseLawLookupCandidatesMax + 1,
-          },
-          caseLawPublicReadDb,
-        );
-        // A failed resolution is not evidence that the corpus lacks the
-        // decision, so it answers for the call rather than as this entry's
-        // `not_found`.
-        const resultMessage = handlerResultMessage(result);
-        if (resultMessage) {
-          return [identifier, { type: "failed", message: resultMessage }];
-        }
-        if (!isSearchCaseLawSuccess(result)) {
+        // The identity columns, not the text index: a ranked page of the
+        // decisions that MENTION a docket can leave out the decision that IS
+        // it, and which provider a deployment runs decides whether the search
+        // handler has an identity branch at all.
+        const read = await Result.tryPromise({
+          try: async () =>
+            await lookup({
+              caseLawDb: caseLawPublicReadDb,
+              country: publicCountry,
+              locator: { kind: intent.kind, value: intent.value },
+            }),
+          catch: (cause) => cause,
+        });
+        if (Result.isError(read)) {
+          captureError(read.error);
           return [
             identifier,
-            { type: "failed", message: "Case-law lookup failed" },
+            { type: "failed", message: "the corpus read did not complete" },
           ];
         }
-        // The handler answers an identifier from the identity columns, and
-        // falls through to the text index when nothing answers to it. A
-        // ranked hit is not the decision the caller named, so only exact
-        // identity matches survive: this is what keeps a loose lexical match
-        // out of `found`.
-        //
-        // Widened at the boundary: the two search branches differ in whether a
-        // hit carries a passage anchor, so the page arrives as a union of
-        // arrays that no single inference covers.
-        const hits: readonly CaseLawSearchHit[] = result.hits;
+        // A second guard, cheap and independent of the statement above: an
+        // entry only reports a decision that answers to the reference by one
+        // of its own identifiers.
         return [
           identifier,
           {
             type: "matches",
-            matches: exactDecisionMatches(intent.value, hits),
+            matches: exactDecisionMatches(intent.value, read.value),
           },
         ];
       },
@@ -2623,16 +2624,6 @@ const handleLookupCaseLawTool: TypedMcpToolHandler<
   const outcomeOf = (identifier: string): DecisionLookupOutcome =>
     outcomes.get(identifier) ??
     panic(`No lookup ran for identifier ${identifier}`);
-
-  const failure = uniqueIdentifiers
-    .flatMap((identifier) => {
-      const outcome = outcomeOf(identifier);
-      return outcome.type === "failed" ? [outcome.message] : [];
-    })
-    .at(0);
-  if (failure !== undefined) {
-    return errorResult(failure);
-  }
 
   return toolDataResult({
     items: identifiers.map((identifier) =>
