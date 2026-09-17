@@ -148,7 +148,11 @@ export const ChatComposerDock = (props: ChatComposerDockProps) => {
       end={
         <div
           aria-hidden={disabled ? true : undefined}
-          className="flex shrink-0 items-center gap-0.5"
+          // Shrinkable, not fixed: in a 320px inspector pane this cluster and
+          // the one opposite it are together wider than the row, and a
+          // `shrink-0` here would spend the difference on a horizontal
+          // scrollbar. The model label truncates instead.
+          className="flex min-w-0 items-center gap-0.5"
         >
           {/* An open prompt keeps the button that anchors it, disabled while
               the surface offers no new thread (a rotation is under way). */}

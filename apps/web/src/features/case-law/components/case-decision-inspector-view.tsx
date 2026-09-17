@@ -138,7 +138,12 @@ export const CaseDecisionInspectorView = ({
   })();
   return (
     <div
-      className="bg-background flex min-h-0 flex-1 flex-col overflow-hidden"
+      // The pane is resizable down to 320px and nothing inside it may widen
+      // it: `min-w-0` lets this column shrink past its content's intrinsic
+      // width, and the clip is the backstop for a child that still refuses.
+      // A child that needs the room wraps or truncates; it never scrolls the
+      // pane sideways.
+      className="bg-background flex min-h-0 min-w-0 flex-1 flex-col overflow-x-clip overflow-y-hidden"
       ref={panelRef}
     >
       <InspectorTabHeader
@@ -173,7 +178,10 @@ export const CaseDecisionInspectorView = ({
         activeLegal={activeLegalFromReaderTarget(annotationTarget)}
         className="min-h-0 flex-1"
       >
-        <ScrollArea className="h-full">
+        {/* The pane's width is the reader's to drag; nothing the court's file
+            contains may take it. A table that needs the axis scrolls inside
+            its own box. */}
+        <ScrollArea axis="vertical" className="h-full">
           <main
             className="reader-paper min-h-full px-4 py-6"
             ref={contentRef}

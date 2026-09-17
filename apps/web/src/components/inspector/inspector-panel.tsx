@@ -491,7 +491,13 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
           chrome, including panes added later. Without a matter of its own the
           inspector inherits the route's tint variables. */}
       <div
-        className="flex h-full bg-(--matter-background-tint) shadow-lg [--background:var(--matter-background-tint)]"
+        // Every pane is a flex child of this row, and a flex child's automatic
+        // minimum is its content: one unshrinkable cell, chip row or fixed
+        // width would set the pane's floor and scroll it sideways. `*:min-w-0`
+        // holds the invariant for every view at once, including views added
+        // later — the pane's width is the reader's to choose, never the
+        // content's to demand.
+        className="flex h-full bg-(--matter-background-tint) shadow-lg [--background:var(--matter-background-tint)] *:min-w-0"
         style={
           inspectorMatterColor === null
             ? undefined

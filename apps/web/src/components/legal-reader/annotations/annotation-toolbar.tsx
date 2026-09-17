@@ -707,7 +707,9 @@ export const AnnotationToolbar = ({
             >
               <MenuPreviewLayout
                 preview={
-                  <PreviewPane className="w-72">
+                  // The submenu paints over the pane rather than in it, so its
+                  // floor is the viewport's, not the pane's.
+                  <PreviewPane className="w-[min(18rem,calc(100vw-9rem))]">
                     {copyPreviewMode !== null && (
                       <p className="text-foreground text-[0.7rem] leading-snug whitespace-pre-wrap">
                         {copyTextFor(

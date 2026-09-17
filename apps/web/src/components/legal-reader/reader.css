@@ -97,6 +97,19 @@
     var(--color-card) 99%,
     var(--color-foreground)
   );
+
+  /* The text is whatever the court's file contained, and some of it is not
+     language: an embedded-object identifier survives ingestion as one
+     1400px-wide unbreakable token, which in a 512px inspector pane becomes a
+     horizontal scrollbar over the whole document. `anywhere` gives such a
+     token break opportunities without touching how real words break, and the
+     `min-width` lets the column honour them when it is a flex or grid child. */
+  min-width: 0;
+  overflow-wrap: anywhere;
+
+  /* Queried by the page marker below, which hangs in a margin this canvas
+     only has when it is wider than the measure. */
+  container: reader-canvas / inline-size;
 }
 
 /* One document canvas for every public-law reader: width, centering and
@@ -324,6 +337,21 @@ div:has(> p[data-note="footnote"]) + div > p[data-note="footnote"]:first-child {
   text-decoration: none;
   user-select: none;
   white-space: nowrap;
+}
+
+/* Below the measure plus two margins there is no margin to hang in, and a
+   marker positioned into one that does not exist hangs outside the text: off
+   the unreachable start edge in LTR, and past the scrollable end edge in RTL.
+   So it comes back into the line, which is where a number nobody can reach is
+   no use at all. */
+@container reader-canvas (max-width: 44rem) {
+  .reader-page-marker {
+    position: static;
+    margin-inline: 0 0.4rem;
+    padding-top: 0;
+    border-top: 0;
+    border-bottom: 1px solid var(--color-border);
+  }
 }
 
 .reader-page-marker:hover {

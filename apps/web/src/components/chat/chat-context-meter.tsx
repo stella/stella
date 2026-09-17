@@ -132,7 +132,11 @@ export const ChatContextMeter = (props: ChatContextMeterProps) => {
       >
         <ContextRing percent={percent} />
       </PopoverTrigger>
-      <PopoverPopup align="end" className="w-96" side="top">
+      <PopoverPopup
+        align="end"
+        className="w-[min(24rem,calc(100vw-2rem))]"
+        side="top"
+      >
         <div className="flex flex-col gap-3">
           <PopoverTitle className="text-sm">{t("title")}</PopoverTitle>
           <div className="flex items-baseline justify-between gap-2">

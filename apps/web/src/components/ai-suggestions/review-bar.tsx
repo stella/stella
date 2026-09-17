@@ -300,7 +300,11 @@ export const ReviewBar = ({
       aria-label={t("docxReview.barLabel")}
       data-docx-review-bar=""
       className={cn(
-        "text-popover-foreground border-foreground/15 pointer-events-auto absolute start-1/2 bottom-24 flex -translate-x-1/2 items-center gap-1 rounded-2xl border py-0.5 ps-1.5 pe-1",
+        // The bar is its own container: it is docked over a document on one
+        // surface and inside a 320px inspector pane on another, and what it
+        // can show depends on the width it actually got, not on the width of
+        // whatever it floats over.
+        "text-popover-foreground border-foreground/15 @container/review-bar pointer-events-auto absolute start-1/2 bottom-24 flex -translate-x-1/2 items-center gap-1 rounded-2xl border py-0.5 ps-1.5 pe-1",
         OVERLAY_LAYER_CLASS_NAMES["chrome-raised"],
         DOCKED_COMPOSER_WIDTH_CLASS,
         "bg-(--doc-float-surface) [--doc-float-surface:var(--color-white)] dark:[--doc-float-surface:var(--popover)]",
@@ -370,7 +374,7 @@ export const ReviewBar = ({
       {activeAction !== "revert" && activeAction !== "resolved" && (
         <ReviewDecisionActions
           acceptLabel={
-            <span className="@max-[80rem]/file-viewer:hidden">
+            <span className="@max-[30rem]/review-bar:hidden">
               {t("common.accept")}
             </span>
           }
@@ -383,7 +387,7 @@ export const ReviewBar = ({
           }}
           onReject={rejectAndAdvance}
           rejectLabel={
-            <span className="@max-[80rem]/file-viewer:hidden">
+            <span className="@max-[30rem]/review-bar:hidden">
               {t("docxReview.reject")}
             </span>
           }
@@ -403,7 +407,7 @@ export const ReviewBar = ({
           size="sm"
           variant="ghost"
         >
-          <span className="@max-[80rem]/file-viewer:hidden">
+          <span className="@max-[30rem]/review-bar:hidden">
             {t("docxReview.acceptAll")}
           </span>
         </AcceptAllButton>
@@ -419,7 +423,7 @@ export const ReviewBar = ({
       >
         <SelectTrigger
           aria-label={t("docxReview.applyAs")}
-          className="hover:bg-muted h-7 w-auto max-w-64 min-w-0 justify-between gap-1 rounded-full border-0 bg-transparent px-2 text-xs font-medium @max-[36rem]/file-viewer:max-w-36"
+          className="hover:bg-muted h-7 w-auto max-w-64 min-w-0 justify-between gap-1 rounded-full border-0 bg-transparent px-2 text-xs font-medium @max-[26rem]/review-bar:max-w-36"
         >
           <SelectValue />
         </SelectTrigger>
@@ -468,7 +472,7 @@ const ChangeLabel = ({ change, onActivate }: ChangeLabelProps) => {
 
   return (
     <button
-      className="hover:bg-muted focus-visible:ring-ring min-w-0 flex-1 rounded-md px-1.5 py-0.5 text-start transition-colors outline-none focus-visible:ring-2 @max-[42rem]/file-viewer:hidden"
+      className="hover:bg-muted focus-visible:ring-ring min-w-0 flex-1 rounded-md px-1.5 py-0.5 text-start transition-colors outline-none focus-visible:ring-2 @max-[24rem]/review-bar:hidden"
       onClick={onActivate}
       title={heading}
       type="button"

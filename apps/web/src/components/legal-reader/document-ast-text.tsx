@@ -1145,7 +1145,11 @@ export const BlockRenderer = ({
   // the wrapper carries it. The anchor id stays on the table itself: it is
   // what every deep link already written points at.
   return (
-    <div className="group relative">
+    // A court's table has the columns it has, and a narrow reader (the
+    // inspector pane at its minimum) cannot always hold them. It scrolls
+    // inside its own box rather than widening the pane, and never on paper,
+    // where the page is as wide as it will ever be.
+    <div className="group relative max-w-full overflow-x-auto print:overflow-x-visible">
       {permalink}
       <table
         className="reader-chrome my-4 w-full border-collapse scroll-mt-[var(--reader-anchor-offset)] text-[calc(0.88rem*var(--reader-text-scale))]"

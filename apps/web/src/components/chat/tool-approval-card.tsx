@@ -754,7 +754,7 @@ const RegistryWriteSummaryRow = ({
   matter: SummaryMatter | undefined;
   value: string;
 }) => (
-  <div className="grid gap-1 sm:grid-cols-[9rem_1fr]">
+  <div className="grid gap-1 sm:grid-cols-[minmax(0,9rem)_minmax(0,1fr)]">
     <dt className="text-muted-foreground text-xs">
       {matter ? stripIdSuffix(label) : label}
     </dt>
@@ -851,7 +851,10 @@ const ExternalMcpInputSummary = ({
         <div className="bg-background/60 mt-2 rounded-md border p-2">
           <dl className="space-y-1.5">
             {rows.map((row) => (
-              <div className="grid gap-1 sm:grid-cols-[9rem_1fr]" key={row.key}>
+              <div
+                className="grid gap-1 sm:grid-cols-[minmax(0,9rem)_minmax(0,1fr)]"
+                key={row.key}
+              >
                 <dt className="text-muted-foreground text-xs">{row.label}</dt>
                 <dd className="text-xs wrap-break-word">{row.value}</dd>
               </div>

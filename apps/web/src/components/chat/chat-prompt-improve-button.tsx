@@ -187,7 +187,11 @@ export const ChatPromptImproveButton = ({
             className="size-3 ltr:-translate-x-1 rtl:translate-x-1"
           />
         </PopoverTrigger>
-        <PopoverPopup align="end" className="w-80 p-1" side="bottom">
+        <PopoverPopup
+          align="end"
+          className="w-[min(20rem,calc(100vw-2rem))] p-1"
+          side="bottom"
+        >
           <div className="flex flex-col gap-0.5">
             {PROMPT_IMPROVEMENT_OPTIONS.map((option) => (
               <Button
