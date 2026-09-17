@@ -7,10 +7,12 @@ import { panic, Result } from "better-result";
 
 import { resolveCaching } from "@/api/lib/ai-config";
 import type { AIRequestServiceTier, OrgAIConfig } from "@/api/lib/ai-config";
+import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { AIUsageMetering } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
+import { logger } from "@/api/lib/observability/logger";
 import { sanitizeForPrompt, untrustedText } from "@/api/lib/prompt-safety";
 import { splitPropertiesForBudget } from "@/api/lib/structured-output-budget";
 import { markTanStackCacheBreakpoint } from "@/api/lib/tanstack-ai-caching";
@@ -19,6 +21,12 @@ import {
   streamTanStackObjectForRole,
   structuredOutputWireJsonSchema,
 } from "@/api/lib/tanstack-ai-generate";
+import {
+  decodeSystemOneAnswers,
+  planSystemOneAnswers,
+} from "@/api/lib/typesafe/answer-questions";
+import type { SystemOneClient } from "@/api/lib/typesafe/system-one";
+import { getSystemOneClient } from "@/api/lib/typesafe/system-one-runtime";
 import type { Answer } from "@/api/lib/workflow/ai-answer-schema";
 import {
   buildBatchSchema,
@@ -39,8 +47,17 @@ import { getWorkflowBatchAITimeoutMs } from "@/api/lib/workflow/run-logic";
 import {
   consumePartialAnswers,
   consumeTanStackPartialAnswer,
+  formatPartialAnswer,
 } from "@/api/lib/workflow/streaming-answer";
 import type { PartialAnswerUpdate } from "@/api/lib/workflow/streaming-answer";
+import {
+  outputFromSystemOneOutcomes,
+  questionsFromProperties,
+  sourcesFromPreparedFiles,
+  splitPropertiesForSystemOne,
+  SYSTEM_ONE_BATCH_LANGUAGE,
+  systemOneDocumentHeader,
+} from "@/api/lib/workflow/system-one-batch";
 
 type GenerateWorkflowDataProps = {
   files: PreparedInputFile[];
@@ -58,9 +75,11 @@ type GenerateWorkflowDataProps = {
   onPartialAnswer?:
     | ((update: PartialAnswerUpdate) => Promise<void> | void)
     | undefined;
+  /** Injected by tests; the deployment's client (or none) otherwise. */
+  systemOne?: SystemOneClient | null | undefined;
 };
 
-type WorkflowDataOutput = Record<
+export type WorkflowDataOutput = Record<
   string,
   { answer: Answer; justification: AIJustificationOutput }
 >;
@@ -136,6 +155,130 @@ export const buildWorkflowAIAnalyticsProps = ({
   ...(usageMetering ? { usageMetering } : {}),
 });
 
+/** One Jev call reads the whole batch; the caller's signal still bounds it. */
+const SYSTEM_ONE_TIMEOUT_MS = 60_000;
+const SYSTEM_ONE_ERROR_SOURCE = "workflow.generate-batch.system-one";
+
+type SystemOnePhaseOptions = {
+  client: SystemOneClient;
+  properties: AIBatchProperty[];
+  files: PreparedInputFile[];
+  textInputs: TextInput[];
+  abortSignal: AbortSignal;
+  onPartialAnswer:
+    | ((update: PartialAnswerUpdate) => Promise<void> | void)
+    | undefined;
+};
+
+type SystemOnePhaseResult = {
+  output: WorkflowDataOutput;
+  /** What the generative model still owes, in batch order. */
+  generative: AIBatchProperty[];
+};
+
+/**
+ * Jev answers the closed-answer properties of one batch. Anything it does not
+ * settle — a text property, a question the plan could not ask, an answer
+ * under the confidence floor, a failed call — is left to the generative model,
+ * so this phase can only add answers, never lose a property.
+ */
+const askSystemOne = async ({
+  client,
+  properties,
+  files,
+  textInputs,
+  abortSignal,
+  onPartialAnswer,
+}: SystemOnePhaseOptions): Promise<SystemOnePhaseResult> => {
+  const fallbackAll: SystemOnePhaseResult = {
+    output: {},
+    generative: properties,
+  };
+  const { systemOne } = splitPropertiesForSystemOne(properties);
+  if (systemOne.length === 0) {
+    return fallbackAll;
+  }
+
+  const prepared = await Result.tryPromise({
+    try: async () => await sourcesFromPreparedFiles(files, textInputs),
+    catch: (cause) =>
+      new WorkflowIntegrationError({
+        message: "Workflow System One source preparation failed",
+        cause,
+      }),
+  });
+  if (Result.isError(prepared)) {
+    captureError(prepared.error, { source: SYSTEM_ONE_ERROR_SOURCE });
+    return fallbackAll;
+  }
+  const { sources, locators } = prepared.value;
+  if (sources.length === 0) {
+    return fallbackAll;
+  }
+
+  const questions = questionsFromProperties(systemOne);
+  const plan = planSystemOneAnswers({
+    document: systemOneDocumentHeader(files),
+    sources,
+    language: SYSTEM_ONE_BATCH_LANGUAGE,
+    questions,
+  });
+  if (Object.keys(plan.questions).length === 0) {
+    return fallbackAll;
+  }
+
+  const asked = await client.ask({
+    state: plan.state,
+    questions: plan.questions,
+    abortSignal: AbortSignal.any([
+      abortSignal,
+      AbortSignal.timeout(SYSTEM_ONE_TIMEOUT_MS),
+    ]),
+  });
+  if (Result.isError(asked)) {
+    captureError(asked.error, { source: SYSTEM_ONE_ERROR_SOURCE });
+    return fallbackAll;
+  }
+
+  const { output, fallbackPropertyIds } = outputFromSystemOneOutcomes({
+    properties: systemOne,
+    outcomes: decodeSystemOneAnswers({
+      plan,
+      questions,
+      answers: asked.value.answers,
+    }),
+    locators,
+  });
+
+  logger.info("workflow.generate_batch.system_one", {
+    model: asked.value.model,
+    propertyCount: systemOne.length,
+    inputTokens: asked.value.usage.inputTokens,
+    latencyMs: asked.value.latencyMs,
+    answeredCount: systemOne.length - fallbackPropertyIds.length,
+    fallbackCount: fallbackPropertyIds.length,
+  });
+
+  if (onPartialAnswer) {
+    for (const property of systemOne) {
+      const entry = output[property.id];
+      const answer =
+        entry === undefined ? null : formatPartialAnswer(entry.answer);
+      if (answer === null) {
+        continue;
+      }
+      await onPartialAnswer({ propertyId: property.id, answer });
+    }
+  }
+
+  return {
+    output,
+    generative: properties.filter(
+      (property) => output[property.id] === undefined,
+    ),
+  };
+};
+
 export const generateWorkflowData = async ({
   files,
   properties,
@@ -150,9 +293,29 @@ export const generateWorkflowData = async ({
   serviceTier,
   usageMetering,
   onPartialAnswer,
+  systemOne,
 }: GenerateWorkflowDataProps): Promise<
   Result<WorkflowDataOutput, WorkflowIntegrationError>
 > => {
+  const systemOneClient =
+    systemOne === undefined ? getSystemOneClient() : systemOne;
+  const { output: systemOneOutput, generative: generativeProperties } =
+    systemOneClient === null
+      ? ({ output: {}, generative: properties } satisfies SystemOnePhaseResult)
+      : await askSystemOne({
+          client: systemOneClient,
+          properties,
+          files,
+          textInputs,
+          abortSignal,
+          onPartialAnswer,
+        });
+  // Only a batch System One answered in full ends here; an empty batch takes
+  // the generative path it has always taken.
+  if (properties.length > 0 && generativeProperties.length === 0) {
+    return Result.ok(systemOneOutput);
+  }
+
   // Resolved up front because the schema budget is a property of the provider,
   // not of the batch: the planner groups properties by dependency signature
   // and cannot know how many of them one request may carry.
@@ -173,7 +336,7 @@ export const generateWorkflowData = async ({
   const chunks = splitPropertiesForBudget({
     provider,
     modelId,
-    properties,
+    properties: generativeProperties,
     buildSchema: (chunkProperties) =>
       structuredOutputWireJsonSchema({
         outputSchema: buildBatchSchema(chunkProperties, filenames),
@@ -383,5 +546,7 @@ export const generateWorkflowData = async ({
     return await runFromChunk(index + 1, merged);
   };
 
-  return await runFromChunk(0, {});
+  // Chunk answers accumulate onto the System One answers; the two sets of
+  // property ids are disjoint, so neither overwrites the other.
+  return await runFromChunk(0, systemOneOutput);
 };
