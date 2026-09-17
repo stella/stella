@@ -436,6 +436,28 @@ describe("runSandbox", () => {
     }
   });
 
+  it("charges a busy loop that spins beside an unawaited host call", async () => {
+    // Starting a host call and discarding its promise must not buy script
+    // time: only the interval the host loop spends parked on host work is
+    // suspended, and no guest code runs during it.
+    const result = await runSandbox({
+      source: `
+        read.slow({ ms: 3000 });
+        const until = Date.now() + 2000;
+        while (Date.now() < until) {}
+        return "spun";
+      `,
+      registry: baseRegistry,
+      limits: { maxDurationMs: 500, maxTotalDurationMs: 30_000 },
+    });
+
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error.reason).toBe("timeout");
+      expect(result.error.message).toContain("maxDurationMs");
+    }
+  });
+
   it("stops host calls that together outlast maxTotalDurationMs", async () => {
     // Each call is well inside the script budget and the host-call cap; only
     // the hard ceiling can end this run, and it says so.

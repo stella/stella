@@ -283,24 +283,22 @@ const buildSandboxScript = (transpiledBody: string): string =>
   `${buildHostBridgePrelude()}\n${transpiledBody}`;
 
 /**
- * Whether the script is spending its own budget or waiting on host calls.
- * Concurrent calls (`Promise.all` over several reads) share one suspension:
- * the script spends its own time again only once the last of them settles.
+ * Whether the script is spending its own budget or parked in
+ * {@link waitForHostProgress}, which owns the only suspension.
  */
 type SandboxScriptBudget =
   | { status: "spending" }
-  | { status: "suspended"; hostCalls: number; suspendedAtMs: number };
+  | { status: "suspended"; suspendedAtMs: number };
 
 /**
  * The two wall clocks a run answers to. `scriptDeadlineMs` is the script's own
- * budget (`maxDurationMs`) and moves: awaiting a host call suspends it, and
- * settling the call pushes the deadline out by the call's measured duration, so
- * tool time never counts as script time. `totalDeadlineMs`
- * (`maxTotalDurationMs`) never moves and bounds the run outright.
- *
- * Suspending rather than crediting after the fact keeps a mid-call check from
- * reading as expired. Guest code that spins WHILE a host call is outstanding
- * therefore spends no script time either; the total ceiling bounds that shape.
+ * budget (`maxDurationMs`) and moves: the interval the host loop spends blocked
+ * on an in-flight host call is suspended and then added back, so tool time
+ * never counts as script time. Guest code cannot run during that interval, so
+ * everything charged to the script deadline really is the script's own work —
+ * including a busy loop that starts a host call and never awaits it.
+ * `totalDeadlineMs` (`maxTotalDurationMs`) never moves and bounds the run
+ * outright.
  */
 type SandboxClock = {
   scriptDeadlineMs: number;
@@ -325,36 +323,21 @@ const createSandboxClock = ({
   budget: { status: "spending" },
 });
 
-const beginHostCall = (clock: SandboxClock): void => {
-  const { budget } = clock;
-  clock.budget =
-    budget.status === "suspended"
-      ? {
-          status: "suspended",
-          hostCalls: budget.hostCalls + 1,
-          suspendedAtMs: budget.suspendedAtMs,
-        }
-      : {
-          status: "suspended",
-          hostCalls: 1,
-          suspendedAtMs: Temporal.Now.instant().epochMilliseconds,
-        };
+const suspendScriptBudget = (clock: SandboxClock): void => {
+  if (clock.budget.status === "suspended") {
+    return panic("Sandbox script budget was suspended twice");
+  }
+
+  clock.budget = {
+    status: "suspended",
+    suspendedAtMs: Temporal.Now.instant().epochMilliseconds,
+  };
 };
 
-const endHostCall = (clock: SandboxClock): void => {
+const resumeScriptBudget = (clock: SandboxClock): void => {
   const { budget } = clock;
   if (budget.status === "spending") {
-    return panic(
-      "Sandbox host call settled without suspending the script budget",
-    );
-  }
-  if (budget.hostCalls > 1) {
-    clock.budget = {
-      status: "suspended",
-      hostCalls: budget.hostCalls - 1,
-      suspendedAtMs: budget.suspendedAtMs,
-    };
-    return;
+    return panic("Sandbox script budget was resumed without a suspension");
   }
 
   clock.scriptDeadlineMs +=
@@ -1043,9 +1026,6 @@ const runHostCall = ({
   parsedArgs,
 }: RunHostCallProps): Promise<void> => {
   const workPromise = (async () => {
-    // Suspend the script's own budget for exactly as long as the tool runs:
-    // the tool owns its timeout and `maxHostCalls` owns how many may run.
-    beginHostCall(clock);
     const hostResult = await Result.tryPromise({
       try: async () =>
         await fn.execute({
@@ -1054,8 +1034,6 @@ const runHostCall = ({
         }),
       catch: (cause) =>
         createVmBridgeError("SandboxHostError", errorMessageFromUnknown(cause)),
-    }).finally(() => {
-      endHostCall(clock);
     });
 
     if (Result.isError(hostResult)) {
@@ -1233,8 +1211,8 @@ const driveVmUntilSettled = async ({
         pendingHostWork: state.pendingHostWork,
         clock,
       });
-      if (waitResult !== "progress") {
-        return Result.err(createTimeoutError(limits, waitResult.exceeded));
+      if (waitResult === "timeout") {
+        return Result.err(createTimeoutError(limits, "total"));
       }
       continue;
     }
@@ -1252,55 +1230,52 @@ const driveVmUntilSettled = async ({
   }
 };
 
-type HostProgressTimeout = { kind: "timeout"; exceeded: SandboxLimitExceeded };
-type HostProgress = "progress" | HostProgressTimeout;
+type HostProgress = "progress" | "timeout";
 type WaitForHostProgressProps = {
   pendingHostWork: Set<Promise<void>>;
   clock: SandboxClock;
 };
 
 /**
- * Which clock the wait may not outlive. With the script budget suspended (a
- * host call is in flight, the usual case here) only the total ceiling applies;
- * the script deadline bounds the brief window between a call settling and its
- * promise leaving `pendingHostWork`.
+ * Park until an in-flight host call settles, or the total ceiling passes. This
+ * interval is the whole of what the script deadline excludes, and suspending
+ * it here is what makes that exclusion honest: guest code only runs while the
+ * loop drives the VM, never while the loop is parked, so the tool's own time is
+ * the only thing taken off the script's clock. The tool bounds its duration and
+ * `maxHostCalls` bounds how many may run, so only the total ceiling bounds the
+ * wait.
  */
-const hostProgressTimeout = (clock: SandboxClock): HostProgressTimeout =>
-  clock.budget.status === "spending" &&
-  clock.scriptDeadlineMs < clock.totalDeadlineMs
-    ? { kind: "timeout", exceeded: "script" }
-    : { kind: "timeout", exceeded: "total" };
-
 const waitForHostProgress = async ({
   pendingHostWork,
   clock,
 }: WaitForHostProgressProps): Promise<HostProgress> => {
-  const timeout = hostProgressTimeout(clock);
-  const deadline =
-    timeout.exceeded === "script"
-      ? clock.scriptDeadlineMs
-      : clock.totalDeadlineMs;
-  const remainingMs = deadline - Temporal.Now.instant().epochMilliseconds;
-  if (remainingMs <= 0) {
-    return timeout;
+  suspendScriptBudget(clock);
+  try {
+    const remainingMs =
+      clock.totalDeadlineMs - Temporal.Now.instant().epochMilliseconds;
+    if (remainingMs <= 0) {
+      return "timeout";
+    }
+
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    const timeoutPromise = new Promise<"timeout">((resolve) => {
+      timeoutId = setTimeout(() => {
+        resolve("timeout");
+      }, remainingMs);
+    });
+    const progressPromise = Promise.race(Array.from(pendingHostWork)).then(
+      () => "progress" as const,
+    );
+
+    const result = await Promise.race([progressPromise, timeoutPromise]);
+    if (timeoutId !== undefined) {
+      clearTimeout(timeoutId);
+    }
+
+    return result;
+  } finally {
+    resumeScriptBudget(clock);
   }
-
-  let timeoutId: ReturnType<typeof setTimeout> | undefined;
-  const timeoutPromise = new Promise<HostProgressTimeout>((resolve) => {
-    timeoutId = setTimeout(() => {
-      resolve(timeout);
-    }, remainingMs);
-  });
-  const progressPromise = Promise.race(Array.from(pendingHostWork)).then(
-    () => "progress" as const,
-  );
-
-  const result = await Promise.race([progressPromise, timeoutPromise]);
-  if (timeoutId !== undefined) {
-    clearTimeout(timeoutId);
-  }
-
-  return result;
 };
 
 const classifyVmError = (
