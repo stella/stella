@@ -415,6 +415,15 @@ restart from page zero, not retry the invalid offset forever. The follow-up
 window must begin at the snapshot boundary plus one, not at a fresh rolling
 lookback, or a long crawl/outage creates a permanent gap.
 
+One exception, and only where the source's completeness is owned by a
+reconciliation ledger that enumerates independently of the crawl cursor: a
+frontier over already-closed publication days records the divergence as
+telemetry and advances instead of holding. Holding there re-lists the same
+window every cycle without ever confirming it, because the mismatch means the
+publisher changed a closed day rather than that the walk raced its own
+pagination. The ledger, not the cursor, then repairs the window. A source with
+no such ledger holds or restarts, as above.
+
 ### 20. A listed document survives detail and parser failures
 
 Once the publisher's list states that a document exists, a missing, withdrawn
