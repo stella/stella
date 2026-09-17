@@ -15,6 +15,7 @@ describe("Better Auth OAuth resource policy contract", () => {
       "https://api.stll.app/mcp",
       "https://api.stll.app/mcp-documents",
       "https://api.stll.app/mcp-anonymized",
+      "https://api.stll.app/mcp-law",
     ]);
   });
 

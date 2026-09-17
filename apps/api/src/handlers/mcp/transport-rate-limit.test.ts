@@ -21,6 +21,7 @@ import {
   MCP_DISCOVERY_PATH,
   MCP_DOCUMENTS_HTTP_PATH,
   MCP_HTTP_PATH,
+  MCP_LAW_HTTP_PATH,
 } from "@/api/mcp/constants";
 
 const TOKEN = "stella_at_top_secret_value";
@@ -86,6 +87,7 @@ describe("isMcpTransportRateLimitedRequest", () => {
       MCP_HTTP_PATH,
       MCP_ANONYMIZED_HTTP_PATH,
       MCP_DOCUMENTS_HTTP_PATH,
+      MCP_LAW_HTTP_PATH,
     ]) {
       expect(isMcpTransportRateLimitedRequest(transportRequest({ path }))).toBe(
         true,

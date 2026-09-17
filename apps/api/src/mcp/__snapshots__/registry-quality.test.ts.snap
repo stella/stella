@@ -678,7 +678,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "scope": "stella:search",
     "access": "read",
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Search the stella legislation corpus within one country: consolidated statutes, each with its ELI, title, language, document type, publication status, effective date and a matched snippet. Filters: document type, status, language, and an effective-date range (ISO YYYY-MM-DD). No facets are returned and \`total\` is not counted, so page with the returned nextCursor instead of reasoning about a result count. A hit is metadata only: pass its \`eli\` to read_statute for the text, the outline of anchors and the consolidated versions. For Spanish BOE legislation, call search_boe_legislation instead.",
+    "description": "Search the stella legislation corpus within one country: consolidated statutes, each with its ELI, title, language, document type, publication status, effective date and a matched snippet. Filters: document type, status, language, and an effective-date range (ISO YYYY-MM-DD). No facets are returned and \`total\` is not counted, so page with the returned nextCursor instead of reasoning about a result count. A hit is metadata only: pass its \`eli\` to read_statute for the text, the outline of anchors and the consolidated versions.",
     "annotations": {
       "title": "Search legislation",
       "destructiveHint": false,
@@ -4107,7 +4107,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     "scope": "stella:search_anonymized",
     "access": "read",
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Search the stella legislation corpus within one country: consolidated statutes, each with its ELI, title, language, document type, publication status, effective date and a matched snippet. Filters: document type, status, language, and an effective-date range (ISO YYYY-MM-DD). No facets are returned and \`total\` is not counted, so page with the returned nextCursor instead of reasoning about a result count. A hit is metadata only: pass its \`eli\` to read_statute for the text, the outline of anchors and the consolidated versions. For Spanish BOE legislation, call search_boe_legislation instead.",
+    "description": "Search the stella legislation corpus within one country: consolidated statutes, each with its ELI, title, language, document type, publication status, effective date and a matched snippet. Filters: document type, status, language, and an effective-date range (ISO YYYY-MM-DD). No facets are returned and \`total\` is not counted, so page with the returned nextCursor instead of reasoning about a result count. A hit is metadata only: pass its \`eli\` to read_statute for the text, the outline of anchors and the consolidated versions.",
     "annotations": {
       "title": "Search legislation",
       "destructiveHint": false,
@@ -4954,6 +4954,413 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
         "full_text": {
           "type": "boolean",
           "description": "With law_id (no block_id/relation_type), include the consolidated full text"
+        }
+      }
+    }
+  }
+]"
+`;
+
+exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, description, annotations, inputSchema) 1`] = `
+"[
+  {
+    "name": "search_case_law",
+    "scope": "stella:search",
+    "access": "read",
+    "feature": "FEATURE_PUBLIC_LAW",
+    "description": "Search case law within one country. Filters: court, language, dates (ISO YYYY-MM-DD), decision type, and source_id (the id a \`facets.source\` bucket carries in \`value\`). \`sort\` defaults to 'relevance'. Facets and total are returned on the first page only, and describe the whole result set. Each hit carries citationAuthority (the score the ranking blends in), matchingPassages (how many of its passages matched, at least 1) and a route-independent resourceName. Call read_case_law_citations for how a decision was treated by the courts citing it.",
+    "annotations": {
+      "title": "Search case law",
+      "destructiveHint": false,
+      "readOnlyHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "query",
+        "country"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "query": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500,
+          "description": "Search query"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 20,
+          "description": "Max results to return"
+        },
+        "cursor": {
+          "type": "string",
+          "maxLength": 128,
+          "description": "Opaque cursor from a previous search_case_law call"
+        },
+        "court": {
+          "type": "string",
+          "maxLength": 512,
+          "description": "Filter by court name"
+        },
+        "country": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 3,
+          "description": "Required corpus country code"
+        },
+        "language": {
+          "type": "string",
+          "maxLength": 8,
+          "description": "Filter by language code"
+        },
+        "decision_type": {
+          "type": "string",
+          "maxLength": 128,
+          "description": "Filter by decision type"
+        },
+        "source_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Filter by source ID"
+        },
+        "date_from": {
+          "type": "string",
+          "format": "date",
+          "maxLength": 10,
+          "description": "Filter decisions from this ISO date (YYYY-MM-DD)"
+        },
+        "date_to": {
+          "type": "string",
+          "format": "date",
+          "maxLength": 10,
+          "description": "Filter decisions up to this ISO date (YYYY-MM-DD)"
+        },
+        "sort": {
+          "enum": [
+            "relevance",
+            "newest"
+          ],
+          "type": "string",
+          "description": "Result order; defaults to 'relevance'. 'relevance' blends text match with citation authority and court rank; 'newest' orders by decision date and returns only dated decisions. A query naming a decision outright (docket number, ECLI) is answered by identity lookup, which ignores this option."
+        }
+      }
+    }
+  },
+  {
+    "name": "read_case_law_decision",
+    "scope": "stella:read",
+    "access": "read",
+    "feature": "FEATURE_PUBLIC_LAW",
+    "description": "Read a single case-law decision by its decision ID: its own text. Returns metadata, explicit decision text fields, plain text, source URLs, its route-independent resourceName, and bare citation ids. It does NOT say how other courts have treated this decision, and its citation entries carry no treatment and no surrounding text: to learn what the citing courts said, or what this decision relied on, call read_case_law_citations ({ decision_id: '<uuid>', direction: 'cited_by' }) instead. Long decision text and large citation lists are returned in windows; pass the returned nextCursor back as cursor to read more.",
+    "annotations": {
+      "title": "Read case-law decision",
+      "destructiveHint": false,
+      "readOnlyHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "decision_id"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "decision_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Case-law decision ID"
+        },
+        "cursor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "description": "Opaque cursor from a previous call to read the next window of decision text and citations"
+        }
+      }
+    }
+  },
+  {
+    "name": "read_case_law_citations",
+    "scope": "stella:read",
+    "access": "read",
+    "feature": "FEATURE_PUBLIC_LAW",
+    "description": "What the courts citing a decision said about it (followed, distinguished, overruled), or what it cited. One page of citations, each with the citing court's treatment and an excerpt of the paragraph the citation sits in. \`cited_by\` returns the decisions that cite this one, \`cites\` the ones it cites; neither means agreement, both carry negative treatments. \`polarity\` is the classified reading, or 'unclassified' where there is none. \`passage.text\` is at most 1200 characters centred on the citation, cut when \`passage.truncated\`; \`passage.mention\` is 'sole', 'classified_section' (the mention the treatment was read from), or 'latest_of_several' (it may not be). Example: { decision_id: '<uuid>', direction: 'cited_by', limit: 20 }. Pass the returned nextCursor back as cursor.",
+    "annotations": {
+      "title": "Read case-law citations",
+      "destructiveHint": false,
+      "readOnlyHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "decision_id",
+        "direction"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "decision_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Case-law decision ID"
+        },
+        "direction": {
+          "enum": [
+            "cites",
+            "cited_by"
+          ],
+          "type": "string",
+          "description": "Which side of the citation graph to read: 'cites' for the decisions this decision cites, 'cited_by' for the decisions that cite it. Citing is not agreeing: both sides carry negative treatments."
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 50,
+          "description": "Citations per page; defaults to 20, at most 50."
+        },
+        "cursor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "description": "Opaque cursor from a previous read_case_law_citations call to read the next page"
+        }
+      }
+    }
+  },
+  {
+    "name": "search_legislation",
+    "scope": "stella:search",
+    "access": "read",
+    "feature": "FEATURE_PUBLIC_LAW",
+    "description": "Search the stella legislation corpus within one country: consolidated statutes, each with its ELI, title, language, document type, publication status, effective date and a matched snippet. Filters: document type, status, language, and an effective-date range (ISO YYYY-MM-DD). No facets are returned and \`total\` is not counted, so page with the returned nextCursor instead of reasoning about a result count. A hit is metadata only: pass its \`eli\` to read_statute for the text, the outline of anchors and the consolidated versions.",
+    "annotations": {
+      "title": "Search legislation",
+      "destructiveHint": false,
+      "readOnlyHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "query",
+        "country"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "query": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500,
+          "description": "Search query"
+        },
+        "country": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 3,
+          "description": "Required corpus country code, uppercase ISO 3166-1 alpha-3. Admitted: CZE."
+        },
+        "document_type": {
+          "type": "string",
+          "maxLength": 128,
+          "description": "Filter by document type"
+        },
+        "status": {
+          "type": "string",
+          "maxLength": 32,
+          "description": "Filter by publication status"
+        },
+        "language": {
+          "type": "string",
+          "maxLength": 8,
+          "description": "Filter by language code"
+        },
+        "date_from": {
+          "type": "string",
+          "format": "date",
+          "maxLength": 10,
+          "description": "Filter statutes effective from this ISO date (YYYY-MM-DD)"
+        },
+        "date_to": {
+          "type": "string",
+          "format": "date",
+          "maxLength": 10,
+          "description": "Filter statutes effective up to this ISO date (YYYY-MM-DD)"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "description": "Max results to return; defaults to 10."
+        },
+        "cursor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "description": "Opaque cursor from a previous search_legislation call"
+        }
+      }
+    }
+  },
+  {
+    "name": "read_statute",
+    "scope": "stella:read",
+    "access": "read",
+    "feature": "FEATURE_PUBLIC_LAW",
+    "description": "Read one statute by ELI as it stood on a date: \`as_of\` picks the consolidation in force that day, and omitting it reads the text in force today. Returns that consolidation's metadata and validity window, \`versions\` (the newest page of the work's consolidations), \`outline\` (its heading anchors, the input read_statute_provisions takes) and its plain text. Long text comes back in windows; pass the returned nextCursor back as cursor to read more. A source that bars AI use of its wording still answers with metadata, versions and outline, and \`textWithheldReason\` in place of the text.",
+    "annotations": {
+      "title": "Read statute",
+      "destructiveHint": false,
+      "readOnlyHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "eli"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "eli": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "description": "European Legislation Identifier of the work, exactly as search_legislation returns it (for example /eli/cz/sb/2012/89). It addresses the act, not one consolidation of it."
+        },
+        "language": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 8,
+          "description": "Language of the consolidation to read. Language is part of the work key, so an act published in two languages has one consolidation in each."
+        },
+        "as_of": {
+          "type": "string",
+          "format": "date",
+          "maxLength": 10,
+          "description": "Read the consolidation in force on this ISO date (YYYY-MM-DD); omit it for the text in force today."
+        },
+        "cursor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "description": "Opaque cursor from a previous read_statute call to read the next window of statute text"
+        }
+      }
+    }
+  },
+  {
+    "name": "read_statute_provisions",
+    "scope": "stella:read",
+    "access": "read",
+    "feature": "FEATURE_PUBLIC_LAW",
+    "description": "Read named provisions of one or more statutes in one call: each \`items[]\` entry is { eli, anchor } plus an optional as_of and language. An anchor is the publisher's own (par_1729, par_1729-odst_1) and read_statute's \`outline\` lists them. Every entry is answered separately, in input order, under \`status\`: \`found\` carries the provision's text, while \`not_found\` (no such ELI), \`uncovered_date\` (no consolidation covers that day), \`provision_not_found\` (that consolidation has no such anchor) and \`text_withheld\` (the source bars AI use of its wording) each carry a message. Prefer one batched call over one call per provision.",
+    "annotations": {
+      "title": "Read statute provisions",
+      "destructiveHint": false,
+      "readOnlyHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "items"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "eli": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 512,
+                "description": "European Legislation Identifier of the work, exactly as search_legislation returns it (for example /eli/cz/sb/2012/89). It addresses the act, not one consolidation of it."
+              },
+              "anchor": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256,
+                "description": "Anchor of the provision in the publisher's own scheme. read_statute's outline lists a consolidation's provision anchors (par_1729); a subdivision of one of them is accepted too and narrows the answer to that subdivision (par_1729-odst_1, par_1729-odst_2-pism_a). Anchors are not derivable from a section number."
+              },
+              "as_of": {
+                "type": "string",
+                "format": "date",
+                "maxLength": 10,
+                "description": "Read the consolidation in force on this ISO date (YYYY-MM-DD); omit it for the text in force today."
+              },
+              "language": {
+                "type": "string",
+                "minLength": 2,
+                "maxLength": 8,
+                "description": "Language of the consolidation to read. Language is part of the work key, so an act published in two languages has one consolidation in each."
+              }
+            },
+            "required": [
+              "eli",
+              "anchor"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 1,
+          "maxItems": 20,
+          "description": "The provisions to read, at most 20 per call. Each entry is validated and answered on its own, so a malformed or unresolvable entry does not sink the rest: it comes back with its own status."
+        }
+      }
+    }
+  },
+  {
+    "name": "read_provision_history",
+    "scope": "stella:read",
+    "access": "read",
+    "feature": "FEATURE_PUBLIC_LAW",
+    "description": "How one provision's wording changed: its text in each consolidation of the work, newest validity window first, so two wordings can be compared without downloading whole statutes. Takes the work's \`eli\` and an \`anchor\` from read_statute's outline. A consolidation that does not carry the anchor is left out of \`items\`. Pass the returned nextCursor back as cursor for older windows.",
+    "annotations": {
+      "title": "Read provision history",
+      "destructiveHint": false,
+      "readOnlyHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "eli",
+        "anchor"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "eli": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "description": "European Legislation Identifier of the work, exactly as search_legislation returns it (for example /eli/cz/sb/2012/89). It addresses the act, not one consolidation of it."
+        },
+        "anchor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "description": "Anchor of the provision in the publisher's own scheme. read_statute's outline lists a consolidation's provision anchors (par_1729); a subdivision of one of them is accepted too and narrows the answer to that subdivision (par_1729-odst_1, par_1729-odst_2-pism_a). Anchors are not derivable from a section number."
+        },
+        "language": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 8,
+          "description": "Language of the consolidation to read. Language is part of the work key, so an act published in two languages has one consolidation in each."
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 20,
+          "description": "Versions per page; defaults to 5, at most 20."
+        },
+        "cursor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "description": "Opaque cursor from a previous read_provision_history call to read the next page"
         }
       }
     }

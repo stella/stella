@@ -37,12 +37,14 @@ import {
   McpTokenVerificationError,
 } from "@/api/mcp/errors";
 import { toMcpTools } from "@/api/mcp/gateway/list-tools";
+import { MCP_INSTRUCTIONS } from "@/api/mcp/instructions";
 import {
   createMcpHttpRequestHandler,
   mcpOmittedToolNamesByReason,
 } from "@/api/mcp/server-core";
 import {
   DOCUMENTS_MCP_TOOL_DEFINITIONS,
+  LAW_MCP_TOOL_DEFINITIONS,
   listStaticMcpToolDefinitions,
 } from "@/api/mcp/static-tool-definitions";
 import type { ToolScope } from "@/api/mcp/tool-types";
@@ -520,6 +522,59 @@ describe("handleMcpHttpRequest", () => {
             toolName: "open_document_version_upload",
           },
         ],
+      ]);
+    } finally {
+      await client.close();
+    }
+  });
+
+  test("the law audience serves seven corpus tools under its own server name", async () => {
+    const context = { type: "law-mcp-context" };
+    authenticateMcpRequestMock.mockResolvedValue({
+      organizationId: "org_1",
+      scopes: ["stella:search", "stella:read"],
+      userId: "user_1",
+    });
+    resolveMcpSessionContextMock.mockResolvedValue(context);
+    listMcpToolsMock.mockResolvedValue(toMcpTools(LAW_MCP_TOOL_DEFINITIONS));
+
+    const transportFetch: FetchLike = async (input, init) =>
+      await handleMcpHttpRequest(new Request(input.toString(), init), {
+        mode: "law",
+      });
+    const transport = new StreamableHTTPClientTransport(
+      new URL("http://localhost/mcp-law"),
+      {
+        fetch: transportFetch,
+        requestInit: { headers: { authorization: "Bearer token" } },
+      },
+    );
+    const client = new Client({ name: "stella-e2e-test", version: "1.0.0" });
+
+    try {
+      await client.connect(transport, { timeout: 2000 });
+
+      // A client keys its saved server entry off this name, so each audience
+      // is distinguishable without comparing tool lists.
+      expect(client.getServerVersion()?.name).toBe("stella (law)");
+      expect(client.getInstructions()).toBe(MCP_INSTRUCTIONS.law);
+
+      const listed = await client.listTools(undefined, { timeout: 2000 });
+      expect(listed.tools.map(({ name }) => name)).toEqual([
+        "search_case_law",
+        "read_case_law_decision",
+        "read_case_law_citations",
+        "search_legislation",
+        "read_statute",
+        "read_statute_provisions",
+        "read_provision_history",
+      ]);
+      expect(authenticateMcpRequestMock).toHaveBeenCalledWith("token", {
+        mode: "law",
+      });
+      expect(listMcpToolsMock).toHaveBeenCalledWith(context, "law", [
+        "stella:search",
+        "stella:read",
       ]);
     } finally {
       await client.close();

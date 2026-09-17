@@ -8,6 +8,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   MACHINE_API_KEY_CONFIG_ID,
   MACHINE_API_KEY_EXPIRY,
+  MACHINE_API_KEY_GRANTABLE_AUDIENCES,
   MACHINE_API_KEY_GRANTABLE_SCOPES,
   MACHINE_API_KEY_NAME_MAX_LENGTH,
   machineApiKeyMetadataSchema,
@@ -19,6 +20,7 @@ import { findOrganizationMachineApiKey } from "@/api/lib/machine-api-key-queries
 import type { MachineApiKeyRow } from "@/api/lib/machine-api-key-queries";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
+import type { McpMode } from "@/api/mcp/constants";
 
 const SECONDS_PER_DAY = 24 * 60 * 60;
 
@@ -67,6 +69,22 @@ export const machineApiKeyScopesSchema = t.Array(
 export const machineApiKeyPermissionsBodySchema = t.Record(
   t.String(),
   t.Array(t.String({ minLength: 1 }), { minItems: 1 }),
+);
+
+/**
+ * The MCP audience the key may be presented on. Optional at the boundary: an
+ * omitted audience mints the unbound key this endpoint has always produced,
+ * which every audience accepts. Naming one holds the credential to that path,
+ * so a key minted for the public legal corpus cannot be replayed against the
+ * default surface and reach matter data.
+ */
+export const machineApiKeyAudienceSchema = t.Optional(
+  // `t.Union` of literals rather than `t.UnionEnum`: the latter coerces an
+  // absent field to its first member, which would silently bind every key that
+  // named no audience to the default one instead of leaving it unbound.
+  t.Union(
+    MACHINE_API_KEY_GRANTABLE_AUDIENCES.map((audience) => t.Literal(audience)),
+  ),
 );
 
 export const machineApiKeyExpiresInDaysSchema = t.Optional(
@@ -161,6 +179,8 @@ type MintMachineApiKeyOptions = {
   scopes: MachineApiKeyScope[];
   permissions: Record<string, string[]>;
   expiresInDays: number | undefined;
+  /** Omitted for a key usable on every audience; see the boundary schema. */
+  audience: McpMode | undefined;
   /** Always the caller (`ctx.user.id`); never a body-supplied id. */
   userId: SafeId<"user">;
   /** Always `ctx.session.activeOrganizationId`; never body-supplied. */
@@ -179,6 +199,7 @@ export type MintedMachineApiKey = {
   key: string;
   scopes: MachineApiKeyScope[];
   permissions: Record<string, string[]>;
+  audience: McpMode | undefined;
   expiresAt: Date | null;
 };
 
@@ -196,6 +217,7 @@ export const mintMachineApiKey = async ({
   scopes,
   permissions,
   expiresInDays,
+  audience,
   userId,
   organizationId,
 }: MintMachineApiKeyOptions): Promise<
@@ -209,7 +231,14 @@ export const mintMachineApiKey = async ({
           name,
           userId,
           permissions,
-          metadata: { organizationId, scopes },
+          // The audience key is omitted rather than written as null when the
+          // caller named none: the metadata schema is strict, and an unbound
+          // key's row stays byte-identical to what this endpoint wrote before.
+          metadata: {
+            ...(audience === undefined ? {} : { audience }),
+            organizationId,
+            scopes,
+          },
           ...(expiresInDays === undefined
             ? {}
             : { expiresIn: expiresInDays * SECONDS_PER_DAY }),
@@ -237,6 +266,7 @@ export const mintMachineApiKey = async ({
     key: apiKey.key,
     scopes,
     permissions,
+    audience,
     expiresAt: apiKey.expiresAt,
   });
 };
@@ -246,6 +276,11 @@ export type LoadedMachineApiKey = {
   name: string;
   scopes: MachineApiKeyScope[];
   permissions: Record<string, string[]>;
+  /**
+   * The audience the key is bound to, carried so a rotation reproduces it.
+   * Rotating a bound key into an unbound one would widen the credential.
+   */
+  audience: McpMode | undefined;
   enabled: boolean;
   /**
    * The member who minted the key. Lifecycle is organization-scoped, so this is
@@ -343,6 +378,7 @@ export const toMachineApiKeySummary = (
   }
 
   return {
+    audience: metadata.output.audience,
     enabled: row.enabled,
     id: row.id,
     name,

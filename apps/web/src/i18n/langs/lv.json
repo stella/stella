@@ -3981,6 +3981,8 @@
       "mcpAnonymizedLabel": "Anonimizēts galapunkts",
       "mcpAnonymizedNote": "Pieejams arī anonimizēts galapunkts; tas piedāvā tos pašus rīkus ar slēptiem personas datiem.",
       "mcpDescription": "Savienojiet ar MCP saderīgu klientu, piemēram, Claude vai Cursor, ar savu stella kontu, izmantojot šo servera URL.",
+      "mcpLawLabel": "Tiesību korpusa galapunkts",
+      "mcpLawNote": "Pieejams arī tiesību korpusa galapunkts; tas piedāvā tikai publisku tiesu praksi un tiesību aktus un nepiekļūst lietu datiem.",
       "mcpStep1": "Pievienojiet iepriekš minēto URL kā pielāgotu konektoru vai MCP serveri savā klientā.",
       "mcpStep2": "Piesakieties, kad pārlūkprogramma to pieprasa.",
       "mcpStep3": "Apstipriniet piekļuvi piekrišanas ekrānā.",

@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import {
+  machineApiKeyAudienceSchema,
   machineApiKeyExpiresInDaysSchema,
   machineApiKeyNameSchema,
   machineApiKeyPermissionsBodySchema,
@@ -18,6 +19,7 @@ const createApiKeyBody = t.Object({
   scopes: machineApiKeyScopesSchema,
   permissions: machineApiKeyPermissionsBodySchema,
   expiresInDays: machineApiKeyExpiresInDaysSchema,
+  audience: machineApiKeyAudienceSchema,
 });
 
 const config = {
@@ -66,6 +68,7 @@ const createMachineApiKey = createSafeRootHandler(
         scopes: [...body.scopes],
         permissions: body.permissions,
         expiresInDays: body.expiresInDays,
+        audience: body.audience,
         // Ownership never comes from the body: the key belongs to the caller,
         // in the organization the session says they are acting in.
         userId: user.id,
@@ -83,6 +86,7 @@ const createMachineApiKey = createSafeRootHandler(
             name: minted.name,
             scopes: minted.scopes,
             permissions: minted.permissions,
+            audience: minted.audience ?? null,
           },
         });
       }),
@@ -94,6 +98,7 @@ const createMachineApiKey = createSafeRootHandler(
       start: minted.start,
       key: minted.key,
       scopes: minted.scopes,
+      audience: minted.audience,
       expiresAt: minted.expiresAt,
     });
   },

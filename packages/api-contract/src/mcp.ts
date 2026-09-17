@@ -2,6 +2,7 @@
 export const MCP_HTTP_PATH = "/mcp" as const;
 export const MCP_DOCUMENTS_HTTP_PATH = "/mcp-documents" as const;
 export const MCP_ANONYMIZED_HTTP_PATH = "/mcp-anonymized" as const;
+export const MCP_LAW_HTTP_PATH = "/mcp-law" as const;
 
 export const MCP_DEFAULT_RESOURCE_SCOPES = [
   "stella:search",

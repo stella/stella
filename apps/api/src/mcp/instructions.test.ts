@@ -7,8 +7,10 @@ import {
   MCP_INSTRUCTIONS_ANONYMIZED_MAX_CHARS,
   MCP_INSTRUCTIONS_DEFAULT_MAX_CHARS,
   MCP_INSTRUCTIONS_DOCUMENTS_MAX_CHARS,
+  MCP_INSTRUCTIONS_LAW_MAX_CHARS,
 } from "@/api/mcp/instructions";
 import { LEGISLATION_WORKFLOW_REFERENCE_URI } from "@/api/mcp/legislation-workflow-reference";
+import { LAW_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
 import { TEMPLATE_WORKFLOW_REFERENCE_URI } from "@/api/mcp/template-workflow-reference";
 
 // The server `instructions` ride on every initialize response, so they are a
@@ -33,12 +35,20 @@ describe("MCP server instructions", () => {
     );
   });
 
+  test("law instructions stay within the tighter budget", () => {
+    expect(MCP_INSTRUCTIONS.law.length).toBeLessThanOrEqual(
+      MCP_INSTRUCTIONS_LAW_MAX_CHARS,
+    );
+  });
+
   test("all surfaces are non-empty and selected by mode", () => {
     expect(MCP_INSTRUCTIONS.default.length).toBeGreaterThan(0);
     expect(MCP_INSTRUCTIONS.anonymized.length).toBeGreaterThan(0);
     expect(MCP_INSTRUCTIONS.documents.length).toBeGreaterThan(0);
     expect(getMcpInstructions("anonymized")).toBe(MCP_INSTRUCTIONS.anonymized);
     expect(getMcpInstructions("documents")).toBe(MCP_INSTRUCTIONS.documents);
+    expect(MCP_INSTRUCTIONS.law.length).toBeGreaterThan(0);
+    expect(getMcpInstructions("law")).toBe(MCP_INSTRUCTIONS.law);
   });
 
   test("all surfaces provide canonical product identity without inference", () => {
@@ -104,6 +114,49 @@ describe("MCP server instructions", () => {
       expect(getMcpInstructions("default")).toContain(
         LEGISLATION_WORKFLOW_REFERENCE_URI,
       );
+    });
+  });
+
+  test("the law surface names every tool it serves and nothing it does not", () => {
+    // The whole point of this audience is a tool list an orchestrator can hold
+    // in one prompt, so the connect text names it rather than making the agent
+    // infer it from tools/list.
+    for (const { name } of LAW_MCP_TOOL_DEFINITIONS) {
+      expect(
+        MCP_INSTRUCTIONS.law,
+        `${name} is served but never named`,
+      ).toContain(name);
+    }
+    expect(MCP_INSTRUCTIONS.law).toContain(LEGISLATION_WORKFLOW_REFERENCE_URI);
+    expect(MCP_INSTRUCTIONS.law).toContain(
+      "no matter, document, contact or billing data is reachable here",
+    );
+    expect(MCP_INSTRUCTIONS.law).not.toContain("prepare_feedback");
+    expect(MCP_INSTRUCTIONS.law).not.toContain("invoke_capability");
+  });
+
+  test("the law surface names its tools only while the gate is open", () => {
+    // The whole law tool list rides the public-law gate, so a gate-off
+    // deployment serves an empty tools/list there: naming the seven tools
+    // would be the same dead end the default surface avoids above.
+    withPublicLaw({ featurePublicLaw: true, isDev: false }, () => {
+      expect(getMcpInstructions("law")).toBe(MCP_INSTRUCTIONS.law);
+    });
+
+    withPublicLaw({ featurePublicLaw: false, isDev: false }, () => {
+      const served = getMcpInstructions("law");
+      for (const { name } of LAW_MCP_TOOL_DEFINITIONS) {
+        expect(
+          served,
+          `${name} must not be named while the gate is closed`,
+        ).not.toContain(name);
+      }
+      expect(served).not.toContain(LEGISLATION_WORKFLOW_REFERENCE_URI);
+      expect(served).toContain("not enabled on this deployment");
+    });
+
+    withPublicLaw({ featurePublicLaw: false, isDev: true }, () => {
+      expect(getMcpInstructions("law")).toBe(MCP_INSTRUCTIONS.law);
     });
   });
 

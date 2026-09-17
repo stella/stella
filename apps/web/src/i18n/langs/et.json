@@ -3981,6 +3981,8 @@
       "mcpAnonymizedLabel": "Anonüümitud lõpp-punkt",
       "mcpAnonymizedNote": "Saadaval on ka anonüümitud lõpp-punkt; see pakub samu tööriistu peidetud isikuandmetega.",
       "mcpDescription": "Ühendage MCP-ga ühilduv klient, näiteks Claude või Cursor, selle serveri URL-i abil oma stella kontoga.",
+      "mcpLawLabel": "Õigusallikate lõpp-punkt",
+      "mcpLawNote": "Saadaval on ka õigusallikate lõpp-punkt; see pakub ainult avalikku kohtupraktikat ja õigusakte ning ei pääse toimikute andmetele ligi.",
       "mcpStep1": "Lisage ülaltoodud URL oma kliendis kohandatud liidesena või MCP-serverina.",
       "mcpStep2": "Logige sisse, kui brauser seda küsib.",
       "mcpStep3": "Kinnitage juurdepääs nõusoleku ekraanil.",

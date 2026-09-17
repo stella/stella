@@ -70,12 +70,31 @@ const assertCount = (decisions: number): void => {
  * rows reference, and the numbered decision list the dependents join.
  * The temporary table is per session, so the runner keeps one connection.
  */
+/**
+ * The registration the OAuth-policy online repair links. Its id is a fixture
+ * name, never a real client.
+ */
+const REHEARSAL_OAUTH_CLIENT_ID = "rehearsal-oauth-client";
+
 export const rehearsalFixtureStatements = (): readonly string[] => [
   `INSERT INTO case_law_sources (id, adapter_key, name)
    VALUES ('${SOURCE_ID}', 'rehearsal', 'Migration rehearsal')
    ON CONFLICT DO NOTHING`,
   `INSERT INTO corpus_index_generations (family, generation, cluster, manifest_digest, status)
    VALUES ('case_law', '${CORPUS_GENERATION}', 'q09', ${ZERO_DIGEST}, 'building')
+   ON CONFLICT DO NOTHING`,
+  // One OAuth client registration, deliberately linked to no resource.
+  //
+  // The rehearsal starts from the promoted release's schema with an empty auth
+  // policy, so without a registration the `clientsLinked` half of the startup
+  // census passes vacuously and the `better-auth-oauth-resources` online repair
+  // has no client to link. This row makes the repair do both halves of its
+  // work against the previous release's database: seed every configured
+  // resource, then link an existing registration to each. Nothing here names a
+  // resource identifier, so adding or renaming an audience cannot make the
+  // fixture stale.
+  `INSERT INTO oauth_client (id, client_id, redirect_uris)
+   VALUES ('${REHEARSAL_OAUTH_CLIENT_ID}', '${REHEARSAL_OAUTH_CLIENT_ID}', ARRAY['https://rehearsal.example.invalid/callback'])
    ON CONFLICT DO NOTHING`,
 ];
 

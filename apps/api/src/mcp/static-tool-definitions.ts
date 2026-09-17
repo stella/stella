@@ -207,16 +207,80 @@ export const DOCUMENTS_MCP_TOOL_DEFINITIONS =
       tool === invokeCapabilityDefinition,
   ) satisfies readonly McpToolDefinition[];
 
+/**
+ * Every tool backed by the shared public legal corpus: the deployment gate and
+ * the passthrough egress policy together are what "carries no tenant data"
+ * means structurally. The law audience is built from this union, so a new
+ * gated corpus tool cannot land without a disposition below.
+ */
+type PublicLawToolName = Extract<
+  (typeof DEFAULT_MCP_TOOL_DEFINITIONS)[number],
+  { anonymized: { exposure: "passthrough" }; feature: "FEATURE_PUBLIC_LAW" }
+>["name"];
+
+/**
+ * What each public-law tool is to the law audience. Total over
+ * `PublicLawToolName`, so the compiler names a new corpus tool that has no
+ * decision here instead of letting it default onto (or off) the surface.
+ */
+export const LAW_MCP_TOOL_DISPOSITION = {
+  search_case_law: "corpus",
+  read_case_law_decision: "corpus",
+  read_case_law_citations: "corpus",
+  search_legislation: "corpus",
+  read_statute: "corpus",
+  read_statute_provisions: "corpus",
+  read_provision_history: "corpus",
+  // Excluded deliberately: this one queries a live upstream publisher rather
+  // than the stella corpus, so its availability, latency and coverage are not
+  // properties of this surface. An agent told "these tools are the corpus"
+  // would read an upstream outage as the corpus being down.
+  search_boe_legislation: "upstream_connector",
+} as const satisfies Record<PublicLawToolName, "corpus" | "upstream_connector">;
+
+type MissingLawMcpToolDisposition = Exclude<
+  PublicLawToolName,
+  keyof typeof LAW_MCP_TOOL_DISPOSITION
+>;
+true satisfies MissingLawMcpToolDisposition extends never ? true : never;
+
+const LAW_MCP_TOOL_NAMES: ReadonlySet<string> = new Set(
+  Object.entries(LAW_MCP_TOOL_DISPOSITION)
+    .filter(([, disposition]) => disposition === "corpus")
+    .map(([name]) => name),
+);
+
+/**
+ * Projection from the canonical registry, in registry order; no host-specific
+ * tool copies and no scope remap (the corpus tools already read under
+ * `stella:search`/`stella:read`).
+ */
+export const LAW_MCP_TOOL_DEFINITIONS = DEFAULT_MCP_TOOL_DEFINITIONS.filter(
+  (tool) => LAW_MCP_TOOL_NAMES.has(tool.name),
+) satisfies readonly McpToolDefinition[];
+
+/**
+ * The advertised tool list per audience, in wire order. Total over `McpMode`:
+ * a new audience states its projection here rather than inheriting another
+ * one's by falling through a conditional.
+ */
+const MCP_TOOL_DEFINITIONS_BY_MODE = {
+  default: DEFAULT_MCP_TOOL_DEFINITIONS,
+  anonymized: ANONYMIZED_MCP_TOOL_DEFINITIONS,
+  documents: DOCUMENTS_MCP_TOOL_DEFINITIONS,
+  law: LAW_MCP_TOOL_DEFINITIONS,
+} as const satisfies Record<McpMode, readonly McpToolDefinition[]>;
+
+const toToolDefinitionMap = (definitions: readonly McpToolDefinition[]) =>
+  new Map<string, McpToolDefinition>(
+    definitions.map((tool) => [tool.name, tool]),
+  );
+
 const MCP_TOOL_DEFINITION_MAPS = {
-  default: new Map<string, McpToolDefinition>(
-    DEFAULT_MCP_TOOL_DEFINITIONS.map((tool) => [tool.name, tool]),
-  ),
-  anonymized: new Map<string, McpToolDefinition>(
-    ANONYMIZED_MCP_TOOL_DEFINITIONS.map((tool) => [tool.name, tool]),
-  ),
-  documents: new Map<string, McpToolDefinition>(
-    DOCUMENTS_MCP_TOOL_DEFINITIONS.map((tool) => [tool.name, tool]),
-  ),
+  default: toToolDefinitionMap(MCP_TOOL_DEFINITIONS_BY_MODE.default),
+  anonymized: toToolDefinitionMap(MCP_TOOL_DEFINITIONS_BY_MODE.anonymized),
+  documents: toToolDefinitionMap(MCP_TOOL_DEFINITIONS_BY_MODE.documents),
+  law: toToolDefinitionMap(MCP_TOOL_DEFINITIONS_BY_MODE.law),
 } satisfies Record<McpMode, Map<string, McpToolDefinition>>;
 
 const MCP_TOOL_OUTPUT_CONTRACTS = new Map<string, RuntimeMcpToolOutputContract>(
@@ -233,12 +297,4 @@ export const getStaticMcpToolOutputContract = (toolName: string) =>
 
 export const listStaticMcpToolDefinitions = (
   mode: McpMode = "default",
-): readonly McpToolDefinition[] => {
-  if (mode === "default") {
-    return DEFAULT_MCP_TOOL_DEFINITIONS;
-  }
-  if (mode === "documents") {
-    return DOCUMENTS_MCP_TOOL_DEFINITIONS;
-  }
-  return ANONYMIZED_MCP_TOOL_DEFINITIONS;
-};
+): readonly McpToolDefinition[] => MCP_TOOL_DEFINITIONS_BY_MODE[mode];

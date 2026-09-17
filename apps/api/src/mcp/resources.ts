@@ -12,6 +12,7 @@ import type { McpMode } from "@/api/mcp/constants";
 import { DOCUMENT_UPLOAD_APP_RESOURCE_URI } from "@/api/mcp/document-file-upload";
 import {
   buildLegislationWorkflowReference,
+  hasLegislationWorkflowContent,
   LEGISLATION_WORKFLOW_REFERENCE_URI,
 } from "@/api/mcp/legislation-workflow-reference";
 import {
@@ -36,13 +37,10 @@ import type { McpToolFeatureFlag } from "@/api/mcp/tool-types";
  * previously a `passthrough` tool (`template_marker_reference`) that carried no
  * tenant data. Both belong off the tool ceiling.
  *
- * The set is identical across all MCP modes. `tools/list` projects a different
- * tool set per mode because tools touch tenant data under mode-specific scopes;
- * these resources are public, static, and tenant-independent, so there is
- * nothing to project — an anonymized-mode client that could previously call the
- * passthrough marker tool keeps the same reach through the resource. Each
- * accessor still takes the mode for symmetry with the tool surface and so a
- * future tenant-scoped resource can branch on it.
+ * Every resource is public, static and tenant-independent, so a mode projects
+ * the set only to keep it answerable: the law audience carries seven corpus
+ * tools and no template or upload tool, and a reference for a workflow it
+ * cannot drive is context an agent pays for and cannot use.
  */
 type StaticResource = {
   uri: string;
@@ -59,7 +57,14 @@ type StaticResource = {
    * predicate, on both surfaces.
    */
   feature?: McpToolFeatureFlag;
-  read: () => string | Promise<string>;
+  /**
+   * Whether this audience serves the resource at all, beyond the deployment
+   * gate and the per-mode URI allowlist below. A reference that renders to
+   * nothing on a surface is not a reference there.
+   */
+  isServedInMode?: (mode: McpMode) => boolean;
+  /** Rendered for one audience; a reference may omit what that surface lacks. */
+  read: (mode: McpMode) => string | Promise<string>;
   resourceMeta?: () => Record<string, unknown>;
 };
 
@@ -145,6 +150,7 @@ const STATIC_RESOURCES: readonly StaticResource[] = [
     mimeType: "text/markdown",
     listed: true,
     feature: "FEATURE_PUBLIC_LAW",
+    isServedInMode: hasLegislationWorkflowContent,
     read: buildLegislationWorkflowReference,
   },
   {
@@ -185,9 +191,43 @@ const documentUploadResourceMeta = (): Record<string, unknown> => {
   };
 };
 
-export const listMcpResources = (_mode: McpMode): Resource[] =>
+/**
+ * Which resources an audience serves, for both `resources/list` and
+ * `resources/read`, so a listing and a read can never disagree about what the
+ * surface has. Total over `McpMode`: `"all"` is a decision a new audience
+ * states, not a default it inherits.
+ */
+const MCP_RESOURCE_URIS_BY_MODE = {
+  default: "all",
+  documents: "all",
+  anonymized: "all",
+  law: [PRODUCT_IDENTITY_URI, LEGISLATION_WORKFLOW_REFERENCE_URI],
+} as const satisfies Record<McpMode, "all" | readonly string[]>;
+
+/**
+ * Three independent reasons a resource is absent, all applied in one place so
+ * a listing and a read cannot disagree: the deployment gate is closed, this
+ * audience does not carry the resource, or the resource renders to nothing
+ * here.
+ */
+const isResourceServedInMode = (
+  resource: StaticResource,
+  mode: McpMode,
+): boolean => {
+  if (!isAvailable(resource)) {
+    return false;
+  }
+  const served = MCP_RESOURCE_URIS_BY_MODE[mode];
+  if (served !== "all" && !served.some((entry) => entry === resource.uri)) {
+    return false;
+  }
+  const { isServedInMode } = resource;
+  return isServedInMode === undefined || isServedInMode(mode);
+};
+
+export const listMcpResources = (mode: McpMode): Resource[] =>
   STATIC_RESOURCES.filter(
-    (resource) => resource.listed && isAvailable(resource),
+    (resource) => resource.listed && isResourceServedInMode(resource, mode),
   ).map(({ description, mimeType, name, title, uri }) => ({
     uri,
     name,
@@ -198,10 +238,10 @@ export const listMcpResources = (_mode: McpMode): Resource[] =>
 
 export const readMcpResource = async (
   uri: string,
-  _mode: McpMode,
+  mode: McpMode,
 ): Promise<ReadResourceResult> => {
   const resource = STATIC_RESOURCES.find((entry) => entry.uri === uri);
-  if (!resource || !isAvailable(resource)) {
+  if (!resource || !isResourceServedInMode(resource, mode)) {
     throw new ProtocolError(
       ProtocolErrorCode.InvalidParams,
       `Unknown resource: ${uri}`,
@@ -212,7 +252,7 @@ export const readMcpResource = async (
       {
         uri: resource.uri,
         mimeType: resource.mimeType,
-        text: await resource.read(),
+        text: await resource.read(mode),
         ...(resource.resourceMeta === undefined
           ? {}
           : { _meta: resource.resourceMeta() }),

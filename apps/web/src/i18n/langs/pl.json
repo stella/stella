@@ -3981,6 +3981,8 @@
       "mcpAnonymizedLabel": "Zanonimizowany punkt końcowy",
       "mcpAnonymizedNote": "Dostępny jest również zanonimizowany punkt końcowy; udostępnia te same narzędzia z zamaskowanymi danymi osobowymi.",
       "mcpDescription": "Połącz klienta zgodnego z MCP, na przykład Claude lub Cursor, z kontem stella za pomocą tego adresu URL serwera.",
+      "mcpLawLabel": "Punkt końcowy korpusu prawnego",
+      "mcpLawNote": "Dostępny jest również punkt końcowy korpusu prawnego; udostępnia wyłącznie publiczne orzecznictwo i przepisy prawa i nie ma dostępu do danych spraw.",
       "mcpStep1": "Dodaj powyższy adres URL jako niestandardowy konektor lub serwer MCP w swoim kliencie.",
       "mcpStep2": "Zaloguj się, gdy przeglądarka o to poprosi.",
       "mcpStep3": "Zatwierdź dostęp na ekranie zgody.",

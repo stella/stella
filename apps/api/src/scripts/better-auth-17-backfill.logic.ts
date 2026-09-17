@@ -344,7 +344,13 @@ const backfillAccounts = async (
   return readNextPage();
 };
 
-const seedOAuthResources = async (
+/**
+ * Exported for the online repair in `db/better-auth-oauth-resource-repair.ts`,
+ * which runs the OAuth-policy half of this backfill on every deploy. The
+ * identity half stays private to the cutover command: it needs the operator's
+ * trusted-identity manifest and a write freeze.
+ */
+export const seedOAuthResources = async (
   transaction: BetterAuthBackfillTransaction,
   expectedResources: readonly BetterAuthExpectedOAuthResource[],
 ) => {
@@ -562,7 +568,8 @@ const backfillOAuthClientPage = async ({
   });
 };
 
-const backfillOAuthClients = async (
+/** Exported for the same online repair as `seedOAuthResources`. */
+export const backfillOAuthClients = async (
   transaction: BetterAuthBackfillTransaction,
   batchSize: number,
   expectedResources: readonly BetterAuthExpectedOAuthResource[],

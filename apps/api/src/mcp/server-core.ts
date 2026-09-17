@@ -164,15 +164,18 @@ type McpServerDependencies = {
 // logs `serverInfo.version` then sees the same protocol/revision the CLI
 // negotiates against in discovery, and the value cannot go stale on its own.
 const MCP_SERVER_VERSION = `${STELLA_API_CONTRACT.protocol}.${STELLA_API_CONTRACT.revision}`;
-const getMcpServerName = (mode: McpMode) => {
-  if (mode === "anonymized") {
-    return "stella (anonymized)";
-  }
-  if (mode === "documents") {
-    return "stella (documents)";
-  }
-  return "stella";
-};
+/**
+ * `serverInfo.name` per audience: clients key their saved server entry and
+ * their logs off it, so each audience is named, not left to a fallback.
+ */
+const MCP_SERVER_NAME_BY_MODE = {
+  default: "stella",
+  documents: "stella (documents)",
+  anonymized: "stella (anonymized)",
+  law: "stella (law)",
+} as const satisfies Record<McpMode, string>;
+
+const getMcpServerName = (mode: McpMode) => MCP_SERVER_NAME_BY_MODE[mode];
 
 const extractBearerToken = (request: Request): string | undefined => {
   const header = request.headers.get("authorization");

@@ -3981,6 +3981,8 @@
       "mcpAnonymizedLabel": "Anonymisierter Endpunkt",
       "mcpAnonymizedNote": "Es ist auch ein anonymisierter Endpunkt verfügbar; er bietet dieselben Werkzeuge mit maskierten personenbezogenen Daten.",
       "mcpDescription": "Verbinden Sie einen MCP-kompatiblen Client, etwa Claude oder Cursor, über diese Server-URL mit Ihrem stella-Konto.",
+      "mcpLawLabel": "Endpunkt für Rechtsquellen",
+      "mcpLawNote": "Es ist auch ein Endpunkt für Rechtsquellen verfügbar; er bietet ausschließlich öffentliche Rechtsprechung und Gesetze und greift auf keine Aktendaten zu.",
       "mcpStep1": "Fügen Sie die obige URL in Ihrem Client als benutzerdefinierten Connector oder MCP-Server hinzu.",
       "mcpStep2": "Melden Sie sich an, sobald der Browser dazu auffordert.",
       "mcpStep3": "Bestätigen Sie den Zugriff auf dem Einwilligungsbildschirm.",

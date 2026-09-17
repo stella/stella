@@ -8,6 +8,8 @@ import {
   MCP_DOCUMENTS_DISCOVERY_PATH,
   MCP_DOCUMENTS_HTTP_PATH,
   MCP_HTTP_PATH,
+  MCP_LAW_DISCOVERY_PATH,
+  MCP_LAW_HTTP_PATH,
   ROOT_MCP_DISCOVERY_PATH,
 } from "@/api/mcp/constants";
 import type { McpMode } from "@/api/mcp/constants";
@@ -72,10 +74,12 @@ const MCP_PREFLIGHT_HEADERS_BY_PATH = new Map<string, () => Headers>([
   [MCP_HTTP_PATH, createMcpPreflightHeaders],
   [MCP_ANONYMIZED_HTTP_PATH, createMcpPreflightHeaders],
   [MCP_DOCUMENTS_HTTP_PATH, createMcpPreflightHeaders],
+  [MCP_LAW_HTTP_PATH, createMcpPreflightHeaders],
   [ROOT_MCP_DISCOVERY_PATH, createMcpDiscoveryPreflightHeaders],
   [MCP_DISCOVERY_PATH, createMcpDiscoveryPreflightHeaders],
   [MCP_ANONYMIZED_DISCOVERY_PATH, createMcpDiscoveryPreflightHeaders],
   [MCP_DOCUMENTS_DISCOVERY_PATH, createMcpDiscoveryPreflightHeaders],
+  [MCP_LAW_DISCOVERY_PATH, createMcpDiscoveryPreflightHeaders],
 ]);
 
 export const handleMcpPreflightRequest = (
@@ -150,6 +154,8 @@ export const createMcpRoute = ({
     .get(MCP_DISCOVERY_PATH, discoveryHandler())
     .options(MCP_DOCUMENTS_DISCOVERY_PATH, discoveryOptionsHandler)
     .get(MCP_DOCUMENTS_DISCOVERY_PATH, discoveryHandler("documents"))
+    .options(MCP_LAW_DISCOVERY_PATH, discoveryOptionsHandler)
+    .get(MCP_LAW_DISCOVERY_PATH, discoveryHandler("law"))
     .all(
       MCP_HTTP_PATH,
       async ({ request, server, set }) =>
@@ -183,6 +189,19 @@ export const createMcpRoute = ({
           options: {
             clientIp: resolveClientIp(request, server ?? null),
             mode: "anonymized",
+          },
+          request,
+          set,
+        }),
+      { parse: "none" },
+    )
+    .all(
+      MCP_LAW_HTTP_PATH,
+      async ({ request, server, set }) =>
+        await handleMcpTransportRoute({
+          options: {
+            clientIp: resolveClientIp(request, server ?? null),
+            mode: "law",
           },
           request,
           set,

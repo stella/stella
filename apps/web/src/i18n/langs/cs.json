@@ -3981,6 +3981,8 @@
       "mcpAnonymizedLabel": "Anonymizovaný koncový bod",
       "mcpAnonymizedNote": "K dispozici je i anonymizovaný koncový bod; nabízí stejné nástroje se skrytými osobními údaji.",
       "mcpDescription": "Pomocí této adresy URL serveru připojte ke svému účtu stella klienta kompatibilního s MCP, například Claude nebo Cursor.",
+      "mcpLawLabel": "Koncový bod právního korpusu",
+      "mcpLawNote": "K dispozici je i koncový bod právního korpusu; nabízí pouze veřejnou judikaturu a právní předpisy a nedostane se k datům ve spisech.",
       "mcpStep1": "Přidejte adresu URL výše jako vlastní konektor nebo server MCP ve svém klientovi.",
       "mcpStep2": "Přihlaste se, jakmile vás k tomu prohlížeč vyzve.",
       "mcpStep3": "Na obrazovce souhlasu schvalte přístup.",

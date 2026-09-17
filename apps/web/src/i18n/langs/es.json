@@ -3981,6 +3981,8 @@
       "mcpAnonymizedLabel": "Endpoint anonimizado",
       "mcpAnonymizedNote": "También hay disponible un endpoint anonimizado; expone las mismas herramientas con los datos personales enmascarados.",
       "mcpDescription": "Conecte un cliente compatible con MCP, como Claude o Cursor, a su cuenta de stella mediante esta URL de servidor.",
+      "mcpLawLabel": "Endpoint del corpus jurídico",
+      "mcpLawNote": "También hay disponible un endpoint del corpus jurídico; expone solo jurisprudencia y legislación públicas y no accede a los datos de los asuntos.",
       "mcpStep1": "Añada la URL anterior como conector personalizado o servidor MCP en su cliente.",
       "mcpStep2": "Inicie sesión cuando el navegador se lo solicite.",
       "mcpStep3": "Apruebe el acceso en la pantalla de consentimiento.",

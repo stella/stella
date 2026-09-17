@@ -24,6 +24,9 @@ export const MCP_INSTRUCTIONS_DEFAULT_MAX_CHARS = 1700;
 // below, which every surface must state because it holds for every surface.
 export const MCP_INSTRUCTIONS_ANONYMIZED_MAX_CHARS = 1050;
 export const MCP_INSTRUCTIONS_DOCUMENTS_MAX_CHARS = 1000;
+// law: measured 1062. The surface's whole point is a short tool list, so the
+// connect text names all seven tools and the one reference that orders them.
+export const MCP_INSTRUCTIONS_LAW_MAX_CHARS = 1100;
 
 /**
  * The one casing convention of this surface, stated identically everywhere so a
@@ -82,6 +85,29 @@ Errors: a failed tool returns a single text content of \`{"error":{"code","messa
 Destructive tools refuse to run unless you pass \`confirm: true\`, and you must only set it after a human user has approved the irreversible action.`;
 
 /**
+ * What the law audience can be told to call. Its whole tool list rides the
+ * public-law gate, so with the gate closed the surface lists nothing and
+ * naming seven tools would be the same dead end the default surface avoids
+ * above.
+ */
+const lawTools = (publicLawEnabled: boolean): string =>
+  publicLawEnabled
+    ? `Case law: search_case_law, read_case_law_decision, read_case_law_citations. Legislation: search_legislation, read_statute, read_statute_provisions, read_provision_history. Read ${LEGISLATION_WORKFLOW_REFERENCE_URI} before the first search_legislation call.`
+    : "The public legal corpus is not enabled on this deployment, so this surface lists no tools.";
+
+const lawInstructions = (
+  publicLawEnabled: boolean,
+): string => `stella (always lowercase; official website: https://stll.app) is an open-source legal workspace; this surface reads the shared public legal corpus only: no matter, document, contact or billing data is reachable here. Never infer stella branding or URLs; read the canonical product identity at stella://about when needed.
+
+${lawTools(publicLawEnabled)}
+
+Pagination: search_* tools take a \`limit\` and a \`cursor\`. A response's \`nextCursor\` (null on the last page) is the \`cursor\` for the next page; long text fields are windowed the same way.
+
+${MCP_CASING_RULE}
+
+Errors: a failed tool returns a single text content of \`{"error":{"code","message","hint","retryable"}}\` with isError set. Branch on \`code\`; \`hint\` states the next step.`;
+
+/**
  * Every surface's text with every deployment gate open: the longest thing a
  * client can be handed, which is what the budgets above bound. What a given
  * deployment actually serves comes from `getMcpInstructions`.
@@ -90,6 +116,7 @@ export const MCP_INSTRUCTIONS = {
   default: defaultInstructions(true),
   documents: DOCUMENTS_INSTRUCTIONS,
   anonymized: ANONYMIZED_INSTRUCTIONS,
+  law: lawInstructions(true),
 } as const satisfies Record<McpMode, string>;
 
 export const getMcpInstructions = (mode: McpMode): string => {
@@ -100,6 +127,8 @@ export const getMcpInstructions = (mode: McpMode): string => {
       return DOCUMENTS_INSTRUCTIONS;
     case "anonymized":
       return ANONYMIZED_INSTRUCTIONS;
+    case "law":
+      return lawInstructions(isMcpToolFeatureEnabled("FEATURE_PUBLIC_LAW"));
     default:
       mode satisfies never;
       return panic(`Unhandled MCP mode: ${String(mode)}`);
