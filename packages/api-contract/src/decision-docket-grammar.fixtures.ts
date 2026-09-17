@@ -34,6 +34,10 @@ export const DECISION_DOCKET_GRAMMAR_FIXTURES = {
       canonical: "IV. XÝ 999/99",
       variants: ["iv.xy 999/99-999", " IV. XÝ 999/99 ", "iv xy 999/99"],
     },
+    {
+      canonical: "Xyz 999999/2099",
+      variants: ["Xyz 999999/2099-999", " Xyz 999999/2099 "],
+    },
   ],
   EU: [
     {

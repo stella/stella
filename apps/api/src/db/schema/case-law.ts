@@ -30,6 +30,7 @@ import {
   settledCitationSql,
   unsettledCitationSql,
 } from "@/api/handlers/case-law/citation-resolution-status";
+import { CITATION_SHEET_NUMBER_MAX_LENGTH } from "@/api/handlers/case-law/citation-sheet-number";
 import {
   POLARITIES,
   RULE_SOURCE,
@@ -1126,6 +1127,26 @@ export const caseLawCitations = p.pgTable(
      */
     citedCourtHint: p.varchar("cited_court_hint", { length: 128 }),
     /**
+     * The sheet within the case file the citing text named ("č. j. 8 As
+     * 287/2020-33"); null when it printed none. See
+     * `citation-sheet-number.ts`. One docket names a file, which can hold
+     * several decisions, and the sheet is the last segment of the one
+     * decision's ECLI — so this is what tells them apart where the docket
+     * cannot. Kept off the dedup key on purpose: the same judgment cites one
+     * decision by docket where it invokes the ruling and by file number
+     * where it names the file, and those are one citation.
+     */
+    citedSheetNumber: p.varchar("cited_sheet_number", {
+      length: CITATION_SHEET_NUMBER_MAX_LENGTH,
+    }),
+    /**
+     * The decision date the citing sentence named ("ze dne 17. 2. 2021");
+     * null when it named none. See `citation-decision-date.ts`. The resolver
+     * compares it to each candidate's own `decision_date`, which separates
+     * two decisions in one file that no sheet number accompanies.
+     */
+    citedDecisionDate: p.date("cited_decision_date"),
+    /**
      * Outcome of the last resolution attempt. Split from the nullability of
      * `citedDecisionId` because a null foreign key cannot tell "not examined"
      * from "examined, nothing honest to link to": with both meanings on one
@@ -1214,6 +1235,12 @@ export const caseLawCitations = p.pgTable(
     p.check(
       "citations_kind_values",
       sql`${t.kind} IN (${sql.join(CITATION_KIND_SQL_VALUES, sql.raw(","))})`,
+    ),
+    p.check(
+      // Digits only, so the column holds a sheet number and never the tail of
+      // whatever else a dash happened to precede.
+      "citations_cited_sheet_number_shape",
+      sql`${t.citedSheetNumber} ~ '^[0-9]+$'`,
     ),
     p.check(
       "citations_cited_decision_type_hint_values",

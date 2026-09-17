@@ -460,10 +460,12 @@ const buildCitationRows = async ({
       identifierType: citation.identifierType,
       normalizedIdentifierValue: normalizeDecisionIdentifierValue(
         citation.identifierType,
-        citation.citationText,
+        citation.identifierValue,
       ),
       citedDecisionTypeHint: citation.citedDecisionTypeHint,
       citedCourtHint: citation.citedCourtHint,
+      citedSheetNumber: citation.citedSheetNumber,
+      citedDecisionDate: citation.citedDecisionDate,
       kind,
       sectionIndex: citation.sectionIndex,
       polarity: match?.polarity ?? null,

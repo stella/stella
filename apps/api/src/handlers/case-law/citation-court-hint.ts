@@ -18,6 +18,11 @@
 import { sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
+import {
+  CITATION_MARKER_SOURCE,
+  DECISION_DATE_SOURCE,
+} from "@/api/handlers/case-law/citation-decision-date";
+
 /** Fits the column; a court name is a few words, not a paragraph. */
 export const CITATION_COURT_HINT_MAX_LENGTH = 128;
 
@@ -48,11 +53,6 @@ const BRANCH = String.raw`\s+[–-]\s+pobo\p{Ll}+\s+(?:v|ve)\s+${PLACE}`;
 const STATE = String.raw`\s+(?:Slovensk|Česk)\p{Ll}+\s+republik\p{Ll}+`;
 const COURT_PHRASE = String.raw`${QUALIFIER}\s+${MORE_QUALIFIERS}${COURT_NOUN}(?:${SEAT}(?:${BRANCH})?|${STATE})?`;
 
-/** `ze dne 21. 5. 2025`, `zo dňa 25. 3. 2015`, `z 12. 1. 2020`. */
-const DECISION_DATE = String.raw`\s+(?:ze|zo|z)\s+(?:d[nň][eaě]\s+)?\d{1,2}\.\s*\d{1,2}\.\s*\d{4}`;
-/** What the extractor's number pattern starts right after. */
-const CITATION_MARKER = String.raw`(?:č\.\s*j\.|čj\.|sp\.\s*zn\.|spis\.\s*zn\.)`;
-
 /**
  * The court phrase that introduces a citation, followed by at most a date and
  * the marker before the number. The date is optional: "usnesení Nejvyššího
@@ -61,7 +61,7 @@ const CITATION_MARKER = String.raw`(?:č\.\s*j\.|čj\.|sp\.\s*zn\.|spis\.\s*zn\.
  * same sentence cannot bind.
  */
 const COURT_PHRASE_BEFORE_CITATION = new RegExp(
-  String.raw`(?<court>${COURT_PHRASE})(?:${DECISION_DATE})?,?\s*(?:${CITATION_MARKER})?\s*$`,
+  String.raw`(?<court>${COURT_PHRASE})(?:${DECISION_DATE_SOURCE})?,?\s*(?:${CITATION_MARKER_SOURCE})?\s*$`,
   "u",
 );
 

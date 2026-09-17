@@ -99,7 +99,10 @@ describe("cited decision type hint", () => {
         sectionIndex: 3,
         citedDecisionTypeHint: CITATION_DECISION_TYPE_HINT.MERITS,
         citedCourtHint: null,
+        citedDecisionDate: null,
+        citedSheetNumber: null,
         identifierType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+        identifierValue: "II. ÚS 2766/14",
       },
     ]);
   });

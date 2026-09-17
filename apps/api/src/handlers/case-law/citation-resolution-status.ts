@@ -58,6 +58,8 @@ export const CITATION_RESOLUTION_STATUS = {
  */
 export const CITATION_RESOLUTION_RULES = [
   "unique-key",
+  "sheet-number",
+  "decision-date",
   "type-hint",
   "court-hint",
   "one-file-merits",
@@ -68,6 +70,14 @@ export type CitationResolutionRule = (typeof CITATION_RESOLUTION_RULES)[number];
 export const CITATION_RESOLUTION_RULE = {
   /** The key matched exactly one decision that passed every rule. */
   UNIQUE_KEY: "unique-key",
+  /**
+   * Several holders; the text named the sheet, and exactly one holder's ECLI
+   * ends on it. The sheet is part of the decision's published identity rather
+   * than a word about it, so it is asked before the hints.
+   */
+  SHEET_NUMBER: "sheet-number",
+  /** Several holders; the sentence named the date, and one holder carries it. */
+  DECISION_DATE: "decision-date",
   /** Several holders; the text named the type, and one holder had it. */
   TYPE_HINT: "type-hint",
   /** Several holders; the text named the court, and one holder sits there. */
@@ -83,6 +93,12 @@ export const countsByRule = (
 ): Record<CitationResolutionRule, number> => ({
   [CITATION_RESOLUTION_RULE.UNIQUE_KEY]: read(
     CITATION_RESOLUTION_RULE.UNIQUE_KEY,
+  ),
+  [CITATION_RESOLUTION_RULE.SHEET_NUMBER]: read(
+    CITATION_RESOLUTION_RULE.SHEET_NUMBER,
+  ),
+  [CITATION_RESOLUTION_RULE.DECISION_DATE]: read(
+    CITATION_RESOLUTION_RULE.DECISION_DATE,
   ),
   [CITATION_RESOLUTION_RULE.TYPE_HINT]: read(
     CITATION_RESOLUTION_RULE.TYPE_HINT,

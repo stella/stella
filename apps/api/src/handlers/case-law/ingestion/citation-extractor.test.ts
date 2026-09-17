@@ -545,11 +545,17 @@ describe("extractCitations", () => {
       "č.j. 3 Ads 110/2009-49, č. 2018/2010 Sb. NSS (všechna rozhodnutí " +
       "Nejvyššího správního soudu citovaná v tomto rozsudku jsou " +
       "publikována na www.nssoud.cz)";
-    const texts = extractCitations([{ index: 0, text }]).map(
-      (c) => c.citationText,
-    );
-    expect(texts).toContain("č. 2018/2010 Sb. NSS");
-    expect(texts).not.toContain("č. 2018/2010 Sb. NS");
+    // The docket and the collection number name one decision, so they are
+    // one citation: the entry anchors on the docket and resolves by the
+    // collection number.
+    const citations = extractCitations([{ index: 0, text }]);
+    expect(citations).toHaveLength(1);
+    expect(citations[0]).toMatchObject({
+      citationText: "č.j. 3 Ads 110/2009",
+      citedSheetNumber: "49",
+      identifierType: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+      identifierValue: "č. 2018/2010 Sb. NSS",
+    });
   });
 
   test("extracts a bare Cpjn plenary-opinion citation without sp. zn.", () => {
@@ -2222,5 +2228,100 @@ describe("isSelfCitation", () => {
     ] as const satisfies DecisionIdentifiers;
 
     expect(isSelfCitation("[2026] Example Court 12", identifiers)).toBe(true);
+  });
+});
+
+describe("the sheet number and date a citation names", () => {
+  // One docket names a case file, and a court can rule in it more than once,
+  // so what the sentence adds to the docket is what identifies the decision.
+  const CITED =
+    "rozsudek Nejvyššího správního soudu ze dne 17. 2. 2021, č. j. 8 As 287/2020";
+
+  test("keeps the sheet number and the date beside the docket", () => {
+    const citations = extractCitations([{ index: 0, text: `${CITED}-33` }]);
+
+    expect(citations).toHaveLength(1);
+    expect(citations[0]).toMatchObject({
+      // The docket alone stays the text and the key: the same judgment cites
+      // this decision as "sp. zn. 8 As 287/2020" where it invokes the ruling.
+      citationText: "č. j. 8 As 287/2020",
+      citedSheetNumber: "33",
+      citedDecisionDate: "2021-02-17",
+    });
+  });
+
+  test("reads every dash a court typesets the separator with", () => {
+    for (const dash of ["-", "‐", "‑", "‒", "–", "−"]) {
+      const citations = extractCitations([
+        { index: 0, text: `${CITED}${dash}33` },
+      ]);
+      expect(citations.map((citation) => citation.citedSheetNumber)).toEqual([
+        "33",
+      ]);
+    }
+  });
+
+  test("a dash joining two dockets is not a sheet number", () => {
+    const citations = extractCitations([
+      { index: 0, text: "srov. rozsudek č. j. 5 As 123/2020 – 5 As 124/2020" },
+    ]);
+
+    expect(citations.map((citation) => citation.citedSheetNumber)).toEqual([
+      null,
+    ]);
+  });
+
+  test("two sheets or two dates for one docket leave it with neither", () => {
+    const citations = extractCitations([
+      { index: 0, text: `${CITED}-33` },
+      {
+        index: 1,
+        text:
+          "rozsudek Nejvyššího správního soudu ze dne 25. 3. 2021, " +
+          "č. j. 8 As 287/2020-48",
+      },
+    ]);
+
+    expect(citations).toHaveLength(1);
+    expect(citations[0]).toMatchObject({
+      citedSheetNumber: null,
+      citedDecisionDate: null,
+    });
+  });
+
+  test("a date the calendar does not have is no hint", () => {
+    const citations = extractCitations([
+      { index: 0, text: "rozsudek ze dne 31. 2. 2021, č. j. 8 As 287/2020-33" },
+    ]);
+
+    expect(citations.map((citation) => citation.citedDecisionDate)).toEqual([
+      null,
+    ]);
+  });
+});
+
+describe("captures the docket grammar rejects", () => {
+  test("a ministry file number under č. j. is not a case-law citation", () => {
+    // Verbatim shape from a prod decision: a Czech ministry labels its own
+    // file number with the same "č. j." a court labels a docket with.
+    const text =
+      "rozhodnutí Ministerstva zdravotnictví ze dne 1. 4. 2025, " +
+      "č. j. MZDR 6206/2025";
+
+    expect(extractCitations([{ index: 0, text }])).toHaveLength(0);
+    expect(
+      extractCitations([{ index: 0, text: "usnesení sp. zn. MZDR 6206/2025" }]),
+    ).toHaveLength(0);
+  });
+
+  test("a court's own letter-first registry still is one", () => {
+    const texts = extractCitations([
+      {
+        index: 0,
+        text: "usnesení č.j. Nad 224/2014-53 a rozhodnutí sp. zn. A 9/2003",
+      },
+    ]).map((citation) => citation.citationText);
+
+    expect(texts).toEqual(["sp. zn. A 9/2003", "č.j. Nad 224/2014"]);
   });
 });

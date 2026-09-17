@@ -1,6 +1,10 @@
 import { panic } from "better-result";
 
 import {
+  DECISION_DASH_CLASS_SOURCE,
+  DECISION_DOCKET_GRAMMARS,
+} from "@stll/api-contract/decision-docket-grammar";
+import {
   CZ_FILE_NUMBER_PREFIX_SOURCE,
   stripCitationPrefix,
 } from "@stll/legal-ast/citation-prefix";
@@ -17,10 +21,12 @@ import type {
 } from "@stll/legal-ast/decision-identifier";
 
 import { detectCitationCourtHint } from "@/api/handlers/case-law/citation-court-hint";
+import { detectCitationDecisionDate } from "@/api/handlers/case-law/citation-decision-date";
 import {
   type CitationDecisionTypeHint,
   detectCitationDecisionTypeHint,
 } from "@/api/handlers/case-law/citation-decision-type-hint";
+import { detectCitationSheetNumber } from "@/api/handlers/case-law/citation-sheet-number";
 import { decisionIdentifiersFromPersistedMetadata } from "@/api/lib/legal-search/decision-identifier-metadata";
 
 /**
@@ -39,12 +45,33 @@ type ExtractedCitation = {
   citedDecisionTypeHint: CitationDecisionTypeHint | null;
   identifierType: DecisionIdentifierType;
   /**
+   * The spelling the identity is read from, which is `citationText` except
+   * where a sentence names one decision twice over — by docket and by
+   * collection number. There the entry anchors on the docket the reader sees
+   * and takes its identity from the collection number, which names exactly
+   * one decision where a docket may name a file's worth.
+   */
+  identifierValue: string;
+  /**
    * The court phrase the text introduced the number with, verbatim, when
    * the sentence takes the standard form; see `citation-court-hint.ts`.
    * Null is "the text did not say", and also what two occurrences naming
    * different courts collapse to.
    */
   citedCourtHint: string | null;
+  /**
+   * The sheet the text names the decision on, when it prints one; see
+   * `citation-sheet-number.ts`. Null is "the text did not say", and also
+   * what two occurrences naming different sheets of one file collapse to.
+   */
+  citedSheetNumber: string | null;
+  /**
+   * The decision date the sentence names, as `YYYY-MM-DD`; see
+   * `citation-decision-date.ts`. Same rule for a conflict: one docket dated
+   * two ways in one text names two decisions, and a single hint would pick
+   * one of them by occurrence order.
+   */
+  citedDecisionDate: string | null;
 };
 
 /**
@@ -74,6 +101,19 @@ type ExtractedCitation = {
  *  - Slovak "R NN/YYYY" reporter citations: needs proximity anchoring to
  *    the citing court to avoid collisions; future work.
  */
+
+/**
+ * Every dash a citation may separate a docket's parts with: the grammars'
+ * own class, plus the soft hyphen (U+00AD) a PDF-to-text pass leaves behind
+ * at a line-wrap boundary, invisible when rendered.
+ *
+ * Written once because it appears in three patterns, in the sheet-number
+ * reader, and in the dedup key's folding. A hand-copied class is how one dash spelling silently stops
+ * matching in one of them: the publications office typesets CJEU numbers
+ * with U+2011, and a Czech court typesets the sheet separator in
+ * `8 As 287/2020-33` with U+2011 as readily as with an ASCII hyphen.
+ */
+const CITATION_DASH_CLASS = `${DECISION_DASH_CLASS_SOURCE}\u00AD`;
 
 // Shared body for Czech/Slovak numeric-first case numbers: chamber
 // number, registry letters (diacritics included, e.g. Slovak "Sžf"),
@@ -212,6 +252,40 @@ const PL_NSA_WSA_PATTERN = new RegExp(
   "gu",
 );
 
+/**
+ * Czech registries whose mark stands alone, with no senate number in front:
+ * "sp. zn. Nt 408/2023" (criminal auxiliary), "sp. zn. A 9/2003" (pre-2003
+ * administrative), "č.j. Nad 224/2014" (delegation/jurisdiction disputes),
+ * "č.j. Konf 4/2011-12" (jurisdiction-conflict panel).
+ *
+ * These two are the only patterns whose capture is a bare letter run with no
+ * senate number, which is also the shape of an agency file number under the
+ * same label: a ministry writes "č. j. MZDR 6206/2025" exactly as a court
+ * writes a docket. The prefix alone therefore does not make a capture a case
+ * number, so a capture from either pattern is put to the Czech docket grammar
+ * and dropped when it does not parse (`CZE_GATED_PATTERNS` below). The "Spr"
+ * exclusion stays in the pattern: the court-administration agenda is a real
+ * docket the grammar accepts, and it is not adjudication.
+ */
+const CZ_SP_ZN_LETTER_FIRST_PATTERN =
+  /sp\.\s*zn\.:?\s*(?![Ss][Pp][Rr]\.?\s)(?<caseNumber>\p{L}{1,4}\.?\s+\d{1,6}\/\d{2,4})(?!\d)/gu;
+
+const CZ_FILE_NUMBER_LETTER_FIRST_PATTERN = new RegExp(
+  String.raw`${CZ_FILE_NUMBER_PREFIX_SOURCE}(?<caseNumber>\p{L}{1,6}\s+\d{1,6}\/\d{2,4})(?!\d)`,
+  "gu",
+);
+
+/**
+ * Patterns whose capture only counts as a citation when the Czech docket
+ * grammar reads it as a docket. Holds the pattern objects themselves, not
+ * copies of their sources, so the gate cannot come to name a pattern that no
+ * longer exists or miss one that does.
+ */
+const CZE_GATED_PATTERNS: ReadonlySet<RegExp> = new Set([
+  CZ_SP_ZN_LETTER_FIRST_PATTERN,
+  CZ_FILE_NUMBER_LETTER_FIRST_PATTERN,
+]);
+
 const CITATION_PATTERNS: RegExp[] = [
   // Czech/Slovak case number: "sp. zn. 21 Cdo 1234/2020", "sp. zn.
   // 33 Cb/209/2010", "sp.zn.: 38Csp/281/2025", "sp. zn 5Obdo/23/2016" (no
@@ -252,14 +326,7 @@ const CITATION_PATTERNS: RegExp[] = [
   // insolvency). Same shape as sp. zn. under a different prefix.
   new RegExp(String.raw`sen\.\s*zn\.:?\s*${CASE_NUMBER_BODY}`, "gu"),
 
-  // Czech letter-first registries without a senate number: "sp. zn. Nt
-  // 408/2023" (criminal auxiliary), "sp. zn. A 9/2003" (pre-2003
-  // administrative). The registry run is short with an optional trailing
-  // dot, then a space and digits, which keeps agency file numbers
-  // ("MSP-725/2022") out; "Spr"/"Spr." is the court-administration
-  // agenda, not adjudication, and stays excluded regardless of casing
-  // ("SPR.", "spr.").
-  /sp\.\s*zn\.:?\s*(?![Ss][Pp][Rr]\.?\s)(?<caseNumber>\p{L}{1,4}\.?\s+\d{1,6}\/\d{2,4})(?!\d)/gu,
+  CZ_SP_ZN_LETTER_FIRST_PATTERN,
 
   // Czech Supreme Court plenary/collegium opinions ("stanoviska"), civil
   // (Cpjn) and criminal (Tpjn), are routinely cited bare after the first
@@ -282,7 +349,7 @@ const CITATION_PATTERNS: RegExp[] = [
   // matches these either way. The bare form also covers the "sp. zn.
   // IV. ÚS 23/05" spelling.
   new RegExp(
-    String.raw`\b(?<caseNumber>(?:[IVX]{1,4}|Pl|PL)\.?\s*${US_MARK_SOURCE}(?:\s{0,3}[-‑–—]\s{0,3}st\.)?[\s/]+\d{1,5}\/\d{2,4})(?!\d)`,
+    String.raw`\b(?<caseNumber>(?:[IVX]{1,4}|Pl|PL)\.?\s*${US_MARK_SOURCE}(?:\s{0,3}[${CITATION_DASH_CLASS}]\s{0,3}st\.)?[\s/]+\d{1,5}\/\d{2,4})(?!\d)`,
     "gu",
   ),
 
@@ -298,7 +365,10 @@ const CITATION_PATTERNS: RegExp[] = [
   // is never dropped: a bare "C679/18" would collide with the Czech civil
   // "C" registry ("21 C 1234/2020"), so it is intentionally out of scope
   // (see the module-level exclusion list).
-  /\b(?<caseNumber>[CTF]\s{0,3}[-‑–—­]\s{0,3}\d{1,4}\/\d{2})(?!\d)/gu,
+  new RegExp(
+    String.raw`\b(?<caseNumber>[CTF]\s{0,3}[${CITATION_DASH_CLASS}]\s{0,3}\d{1,4}\/\d{2})(?!\d)`,
+    "gu",
+  ),
 
   // ECLI: "ECLI:CZ:NS:2020:21.CDO.1234.2020.1"
   /ECLI:[A-Z]{2}:[A-Z]{1,8}:\d{4}:[\w.]+/gu,
@@ -328,7 +398,10 @@ const CITATION_PATTERNS: RegExp[] = [
   // yield a phantom "679/18"), en/em dash ("C–128/22" must not also yield
   // a phantom "128/22"), and soft hyphen ("C­128/22" must not also yield a
   // phantom "128/22").
-  /(?<![CTF]\s{0,4}[-‑–—­]\s{0,4})\b(?<caseNumber>\d{1,4}\/\d{2})(?!\d)(?=[\s,]*(?:(?:and|e)\s+\d{1,4}\/\d{2}(?!\d)[\s,]*)?EU:[CTF]:\d{4}:\d+)/gu,
+  new RegExp(
+    String.raw`(?<![CTF]\s{0,4}[${CITATION_DASH_CLASS}]\s{0,4})\b(?<caseNumber>\d{1,4}\/\d{2})(?!\d)(?=[\s,]*(?:(?:and|e)\s+\d{1,4}\/\d{2}(?!\d)[\s,]*)?EU:[CTF]:\d{4}:\d+)`,
+    "gu",
+  ),
 
   // Czech collection: "č. 123/2020 Sb. rozh. tr." (Nejvyšší soud, civil or
   // criminal) or "č. 2018/2010 Sb. NSS" (Nejvyšší správní soud, a
@@ -347,14 +420,7 @@ const CITATION_PATTERNS: RegExp[] = [
     "gu",
   ),
 
-  // Czech letter-first registries under č.j. without a senate number:
-  // "č.j. Nad 224/2014" (delegation/jurisdiction disputes), "č.j. Konf
-  // 4/2011-12" (jurisdiction-conflict panel). Mirrors the sp. zn.
-  // letter-first fallback above.
-  new RegExp(
-    String.raw`${CZ_FILE_NUMBER_PREFIX_SOURCE}(?<caseNumber>\p{L}{1,6}\s+\d{1,6}\/\d{2,4})(?!\d)`,
-    "gu",
-  ),
+  CZ_FILE_NUMBER_LETTER_FIRST_PATTERN,
 
   // Insolvency filings cite another court's case with that court's own
   // registry code before the docket: "č. j. KSCB 26 INS 8270/2018"
@@ -411,12 +477,14 @@ const CITATION_PATTERNS: RegExp[] = [
   /\[\d{4}\]\s+[A-Z][A-Za-z]{1,9}(?:\s+[A-Z][A-Za-z]{1,9}){0,2}\s+\d{1,6}\b/gu,
 ];
 
+const DASH_RE = new RegExp(`[${DECISION_DASH_CLASS_SOURCE}]`, "gu");
+
 /**
  * The publications office typesets CJEU numbers with U+2011 or an em/en
  * dash; the corpus stores the ASCII form. Comparisons and dedup keys must
  * not treat the different spellings as different citations.
  */
-const normalizeDashes = (text: string): string => text.replace(/[‑–—]/gu, "-");
+const normalizeDashes = (text: string): string => text.replace(DASH_RE, "-");
 
 /**
  * Matches a Czech/Slovak numeric-first case number after whitespace and
@@ -901,6 +969,96 @@ export const decisionIdentifierTypeOfCitation = (
 };
 
 /**
+ * Hints that must agree across every occurrence of one key.
+ *
+ * A docket attributed to two courts, printed on two sheets, or dated two ways
+ * in one text names two decisions. A single value would pick one of them by
+ * occurrence order, so a disagreement leaves the key carrying none. Listed
+ * rather than settled per field, so a hint added later cannot be the one that
+ * quietly keeps whichever spelling it saw first.
+ */
+const AGREEING_HINTS = [
+  "citedCourtHint",
+  "citedSheetNumber",
+  "citedDecisionDate",
+] as const satisfies readonly (keyof ExtractedCitation)[];
+
+type AgreeingHint = (typeof AGREEING_HINTS)[number];
+
+/** Where one key's recorded occurrence sits, for the merge pass below. */
+type CitationPosition = {
+  sectionIndex: number;
+  start: number;
+  end: number;
+};
+
+/**
+ * What may sit between a docket and the collection number naming the same
+ * decision: the docket's own sheet suffix, then the comma that joins them.
+ * "č.j. 3 Ads 110/2009-49, č. 2018/2010 Sb. NSS" is one citation written
+ * twice over; a collection number further away in the sentence is not.
+ */
+const COLLECTION_AFTER_DOCKET = new RegExp(
+  String.raw`^(?: ?[${CITATION_DASH_CLASS}] ?\d{1,4})?\s*[,;]\s*$`,
+  "u",
+);
+
+/**
+ * Fold a collection citation into the docket citation that names the same
+ * decision beside it.
+ *
+ * Both spellings resolve to that decision, so leaving them as two rows puts
+ * two edges in the citation graph for one endorsement — and the graph is read
+ * for how often a decision is endorsed. The docket keeps the text, because
+ * that is the span the reader sees and what the passage anchors on; the
+ * collection number becomes the identity, because it names exactly one
+ * decision where a docket names a whole file.
+ */
+const mergeCollectionCitations = ({
+  byKey,
+  positions,
+  sectionText,
+}: {
+  byKey: Map<string, ExtractedCitation>;
+  positions: Map<string, CitationPosition>;
+  sectionText: Map<number, string>;
+}): void => {
+  for (const [reporterKey, reporter] of byKey) {
+    if (
+      reporter.identifierType !== DECISION_IDENTIFIER_TYPES.REPORTER_CITATION
+    ) {
+      continue;
+    }
+    const reporterAt = positions.get(reporterKey);
+    const text =
+      reporterAt === undefined
+        ? undefined
+        : sectionText.get(reporterAt.sectionIndex);
+    if (reporterAt === undefined || text === undefined) {
+      continue;
+    }
+    for (const [docketKey, docket] of byKey) {
+      const docketAt = positions.get(docketKey);
+      if (
+        docket.identifierType !== DECISION_IDENTIFIER_TYPES.CASE_NUMBER ||
+        docketAt === undefined ||
+        docketAt.sectionIndex !== reporterAt.sectionIndex ||
+        docketAt.end > reporterAt.start ||
+        !COLLECTION_AFTER_DOCKET.test(
+          text.slice(docketAt.end, reporterAt.start),
+        )
+      ) {
+        continue;
+      }
+      docket.identifierType = reporter.identifierType;
+      docket.identifierValue = reporter.identifierValue;
+      byKey.delete(reporterKey);
+      break;
+    }
+  }
+};
+
+/**
  * Extract citation references from decision text.
  *
  * Scans each section of the decision for patterns matching known
@@ -911,13 +1069,17 @@ export const extractCitations = (
   sections: { index: number; text: string }[],
 ): ExtractedCitation[] => {
   const byKey = new Map<string, ExtractedCitation>();
+  const positions = new Map<string, CitationPosition>();
+  const sectionText = new Map(
+    sections.map((section) => [section.index, section.text] as const),
+  );
   // Keys whose occurrences named two different types. One text calling the
   // same docket both a nález and an usnesení is naming two documents, and a
   // single hint would pick one of them by occurrence order.
   const conflictingHints = new Set<string>();
-  // Same rule for the court: one docket number attributed to two courts in
-  // one text names two files, and a single hint would pick one by order.
-  const conflictingCourtHints = new Set<string>();
+  // The same rule for every hint that must agree with itself, keyed by hint
+  // and dedup key so one field's disagreement never silences another's.
+  const conflictingAgreeingHints = new Set<string>();
 
   for (const section of sections) {
     for (const pattern of CITATION_PATTERNS) {
@@ -934,6 +1096,17 @@ export const extractCitations = (
         // embedded line-wrap newline. Only the dedup key below is
         // canonicalized.
         const citationText = match[0].trim();
+        const caseNumber = match.groups?.["caseNumber"]?.trim();
+        // A bare letter run under a court's label is also how a ministry
+        // writes a file number, so the docket grammar decides whether this
+        // capture is a case number at all.
+        if (
+          CZE_GATED_PATTERNS.has(pattern) &&
+          (caseNumber === undefined ||
+            DECISION_DOCKET_GRAMMARS.CZE.parse(caseNumber) === null)
+        ) {
+          continue;
+        }
         const identifierType = decisionIdentifierTypeOfCitation(citationText);
         // For patterns with a capture group (e.g. the Polish prefixed
         // pattern), use the bare case number as the canonical dedup key
@@ -942,17 +1115,29 @@ export const extractCitations = (
         // canonicalizeDedupKey further folds whitespace/separator/case
         // spelling variance so the same real case number never fractures
         // into two keys.
-        const dedupValue = match.groups?.["caseNumber"]?.trim() ?? citationText;
+        const dedupValue = caseNumber ?? citationText;
         const dedupKey = `${identifierType}:${normalizeDecisionIdentifierValue(identifierType, dedupValue)}`;
 
         const citedDecisionTypeHint = detectCitationDecisionTypeHint(
           section.text,
           match.index,
         );
-        const citedCourtHint = detectCitationCourtHint(
-          section.text,
-          match.index,
-        );
+        const observed: Record<AgreeingHint, string | null> = {
+          citedCourtHint: detectCitationCourtHint(section.text, match.index),
+          citedSheetNumber: detectCitationSheetNumber(
+            section.text,
+            match.index + match[0].length,
+          ),
+          citedDecisionDate: detectCitationDecisionDate(
+            section.text,
+            match.index,
+          ),
+        };
+        const position: CitationPosition = {
+          sectionIndex: section.index,
+          start: match.index,
+          end: match.index + match[0].length,
+        };
 
         const existing = byKey.get(dedupKey);
         if (!existing) {
@@ -961,20 +1146,24 @@ export const extractCitations = (
             sectionIndex: section.index,
             citedDecisionTypeHint,
             identifierType,
-            citedCourtHint,
+            identifierValue: citationText,
+            ...observed,
           });
+          positions.set(dedupKey, position);
           continue;
         }
-        if (citedCourtHint !== null && !conflictingCourtHints.has(dedupKey)) {
-          if (
-            existing.citedCourtHint !== null &&
-            existing.citedCourtHint !== citedCourtHint
-          ) {
-            conflictingCourtHints.add(dedupKey);
-            existing.citedCourtHint = null;
-          } else {
-            existing.citedCourtHint = citedCourtHint;
+        for (const hint of AGREEING_HINTS) {
+          const value = observed[hint];
+          const conflictKey = `${hint}:${dedupKey}`;
+          if (value === null || conflictingAgreeingHints.has(conflictKey)) {
+            continue;
           }
+          if (existing[hint] !== null && existing[hint] !== value) {
+            conflictingAgreeingHints.add(conflictKey);
+            existing[hint] = null;
+            continue;
+          }
+          existing[hint] = value;
         }
         // Prefer a later occurrence over an earlier one: a case is often
         // listed bare in the header (low section index) and then discussed
@@ -989,7 +1178,9 @@ export const extractCitations = (
           section.index > existing.sectionIndex
         ) {
           existing.citationText = citationText;
+          existing.identifierValue = citationText;
           existing.sectionIndex = section.index;
+          positions.set(dedupKey, position);
         }
         if (citedDecisionTypeHint === null || conflictingHints.has(dedupKey)) {
           continue;
@@ -1006,6 +1197,8 @@ export const extractCitations = (
       }
     }
   }
+
+  mergeCollectionCitations({ byKey, positions, sectionText });
 
   return [...byKey.values()];
 };

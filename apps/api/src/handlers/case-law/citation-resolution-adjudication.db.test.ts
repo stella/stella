@@ -18,6 +18,7 @@ import {
 import {
   CITATION_CANDIDATE_SCAN_CAP,
   CITATION_RESOLUTION_RULE,
+  countsByRule,
   MERITS_DECISION_TYPES,
   PROCEDURAL_DECISION_TYPES,
   CITATION_RESOLUTION_STATUS,
@@ -351,15 +352,23 @@ const rowOf = async (id: SafeId<"caseLawCitation">) => {
 
 const byRule = (counts: {
   courtHint?: number;
+  decisionDate?: number;
+  sheetNumber?: number;
   uniqueKey?: number;
   typeHint?: number;
   oneFileMerits?: number;
-}) => ({
-  [CITATION_RESOLUTION_RULE.UNIQUE_KEY]: counts.uniqueKey ?? 0,
-  [CITATION_RESOLUTION_RULE.TYPE_HINT]: counts.typeHint ?? 0,
-  [CITATION_RESOLUTION_RULE.COURT_HINT]: counts.courtHint ?? 0,
-  [CITATION_RESOLUTION_RULE.ONE_FILE_MERITS]: counts.oneFileMerits ?? 0,
-});
+}) =>
+  countsByRule(
+    (rule) =>
+      ({
+        [CITATION_RESOLUTION_RULE.UNIQUE_KEY]: counts.uniqueKey,
+        [CITATION_RESOLUTION_RULE.SHEET_NUMBER]: counts.sheetNumber,
+        [CITATION_RESOLUTION_RULE.DECISION_DATE]: counts.decisionDate,
+        [CITATION_RESOLUTION_RULE.TYPE_HINT]: counts.typeHint,
+        [CITATION_RESOLUTION_RULE.COURT_HINT]: counts.courtHint,
+        [CITATION_RESOLUTION_RULE.ONE_FILE_MERITS]: counts.oneFileMerits,
+      })[rule] ?? 0,
+  );
 
 test("a key held by one nález and its procedural orders resolves to the nález", async () => {
   const counts = await resolveCitationsForDecision(asTx(), citing);
