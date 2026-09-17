@@ -6,29 +6,30 @@ import { CourtBadge } from "./court-badge";
 import type { CourtBadgeWeight } from "./court-badge";
 
 /**
- * What each weight writes its text in. Total over the union, so a weight
- * added to the badge cannot compile until it has decided this — which is the
- * gap this file closes. The weights were only ever checked one at a time, and
- * that is how the apex kept an inverted ink block while the other three were
- * brought to body-text contrast.
+ * Every weight, and the foreground token it writes its text in.
+ *
+ * A record rather than a list, because both halves of the coverage have to
+ * hold. Total over the union, so a weight added to the badge cannot compile
+ * until it appears here; and the cases below iterate these values, so whatever
+ * appears is exercised. A separate list would only ever be checked for the
+ * names on it, which is the one-weight gap this file exists to close: the
+ * weights were looked at one at a time, and that is how the apex kept an
+ * inverted ink block while the other three were brought to body-text contrast.
+ *
+ * The mapped type binds each entry's `weight` to its own key, so an entry
+ * cannot name a weight other than the one it is filed under.
  */
-const EXPECTED_TEXT_TOKEN = {
-  solid: "text-foreground",
-  tinted: "text-foreground",
-  outline: "text-foreground-strong-muted",
-  dashed: "text-foreground-strong-muted",
-} as const satisfies Record<CourtBadgeWeight, string>;
+const WEIGHT_CASES = {
+  solid: { weight: "solid", textToken: "text-foreground" },
+  tinted: { weight: "tinted", textToken: "text-foreground" },
+  outline: { weight: "outline", textToken: "text-foreground-strong-muted" },
+  dashed: { weight: "dashed", textToken: "text-foreground-strong-muted" },
+} as const satisfies {
+  [W in CourtBadgeWeight]: { weight: W; textToken: string };
+};
 
-/**
- * The weights every case below iterates, derived from the record rather than
- * listed again. A second list would only be checked for the names on it, so a
- * fifth weight could decide its token and still be skipped by every loop —
- * the one-weight coverage gap this file exists to close.
- */
-// SAFETY: the keys of a record literal declared `as const` in this file, whose
-// `satisfies` above already binds them to `CourtBadgeWeight`. `Object.keys`
-// loses that in its signature; nothing else can put a key in this object.
-const WEIGHTS = Object.keys(EXPECTED_TEXT_TOKEN) as readonly CourtBadgeWeight[];
+/** Values, not keys: `Object.values` keeps the entry types without a cast. */
+const EVERY_WEIGHT = Object.values(WEIGHT_CASES);
 
 const classesOf = (weight: CourtBadgeWeight) => {
   const markup = renderToStaticMarkup(
@@ -51,7 +52,7 @@ describe("CourtBadge legibility", () => {
   test("no weight inverts its text onto a fill", () => {
     // The ÚS defect: the apex wrote `text-background` on `bg-foreground`, the
     // one treatment whose contrast collapses if anything touches either token.
-    for (const weight of WEIGHTS) {
+    for (const { weight } of EVERY_WEIGHT) {
       const classes = classesOf(weight);
 
       expect(classes).not.toContain("text-background");
@@ -60,13 +61,13 @@ describe("CourtBadge legibility", () => {
   });
 
   test("every weight writes its text in the foreground token it decided on", () => {
-    for (const weight of WEIGHTS) {
-      expect(classesOf(weight)).toContain(EXPECTED_TEXT_TOKEN[weight]);
+    for (const { textToken, weight } of EVERY_WEIGHT) {
+      expect(classesOf(weight)).toContain(textToken);
     }
   });
 
   test("every weight keeps an edge, because the tint alone has none", () => {
-    for (const weight of WEIGHTS) {
+    for (const { weight } of EVERY_WEIGHT) {
       const classes = classesOf(weight);
 
       expect(classes).toContain("border");
