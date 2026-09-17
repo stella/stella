@@ -1,5 +1,12 @@
 # @stll/business-registries
 
+## 0.8.1
+
+### Patch Changes
+
+- Updated dependencies [[`264593e`](https://github.com/stella/stella/commit/264593e2729be0a11aff8a206ad38451fdb56377)]:
+  - @stll/country-codes@0.2.0
+
 ## 0.8.0
 
 ### Minor Changes

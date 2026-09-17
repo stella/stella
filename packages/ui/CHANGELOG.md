@@ -1,5 +1,11 @@
 # @stll/ui
 
+## 0.29.2
+
+### Patch Changes
+
+- [#3497](https://github.com/stella/stella/pull/3497) [`4ae60ab`](https://github.com/stella/stella/commit/4ae60ab4ca96d6c2e84f454e28e5e04511d9eb99) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Court badges: the apex weight is an edge, not a block of inverted ink
+
 ## 0.29.1
 
 ### Patch Changes
