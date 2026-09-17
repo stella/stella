@@ -187,6 +187,13 @@ const installRawMock = (
   );
 };
 
+/** Answers every NALUS request with a 302 to `location`, followed by nothing. */
+const installRedirectMock = (location: string): void => {
+  installRawMock(
+    () => new Response(null, { status: 302, headers: { Location: location } }),
+  );
+};
+
 const installSearchMock = ({
   rows = [],
   rangeFrom = 1,
@@ -1614,5 +1621,52 @@ describe("czUsAdapter.fetchPage", () => {
     const result = await czUsAdapter.fetchPage(historicalCursor(2024), {});
 
     expect(Result.isOk(result)).toBe(true);
+  });
+
+  test("names where a redirected request was sent, without its query", async () => {
+    installRedirectMock(
+      "https://nalus.usoud.cz/Error/Unavailable.aspx?ret=%2FSearch%2FSearch.aspx",
+    );
+
+    const result = await czUsAdapter.fetchPage(historicalCursor(2024), {});
+
+    if (!Result.isError(result)) {
+      throw new TypeError("an unfollowed redirect must not produce a page");
+    }
+    expect(result.error.message).toBe(
+      "NALUS search form returned HTTP 302 to https://nalus.usoud.cz/Error/Unavailable.aspx",
+    );
+  });
+
+  test.each([
+    ["mailto:ops@example.com", "(mailto:)"],
+    ["data:text/html,<b>payload</b>", "(data:)"],
+  ])(
+    "names the scheme, never the body, of an opaque redirect (%s)",
+    async (location, expected) => {
+      installRedirectMock(location);
+
+      const result = await czUsAdapter.fetchPage(historicalCursor(2024), {});
+
+      if (!Result.isError(result)) {
+        throw new TypeError("an unfollowed redirect must not produce a page");
+      }
+      expect(result.error.message).toBe(
+        `NALUS search form returned HTTP 302 to a non-HTTP Location ${expected}`,
+      );
+    },
+  );
+
+  test("truncates an overlong redirect path", async () => {
+    installRedirectMock(`https://nalus.usoud.cz/${"a".repeat(500)}`);
+
+    const result = await czUsAdapter.fetchPage(historicalCursor(2024), {});
+
+    if (!Result.isError(result)) {
+      throw new TypeError("an unfollowed redirect must not produce a page");
+    }
+    expect(result.error.message).toBe(
+      `NALUS search form returned HTTP 302 to https://nalus.usoud.cz/${"a".repeat(199)}…`,
+    );
   });
 });

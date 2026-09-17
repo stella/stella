@@ -1216,6 +1216,54 @@ const parseResultPage = ({
 };
 
 /**
+ * The longest redirect path this names. A court's own paths are far shorter;
+ * the cap exists because the value is publisher-controlled and ends up in a
+ * log line.
+ */
+const REDIRECT_PATH_MAX_CHARS = 200;
+
+/**
+ * Why a response this adapter will not follow failed.
+ *
+ * Every NALUS request is sent with `redirect: "manual"`, because the WebForms
+ * search states its result as a 302 that has to be read rather than followed.
+ * The gate names the one redirect the court itself defines, its rate-limit
+ * refusal; every other redirect reaches a failure branch, where the status
+ * alone cannot tell a session bounce from the publisher sending the caller
+ * somewhere else entirely.
+ *
+ * The target is publisher input, so it is named and never fetched (rule 21),
+ * and only ever three bounded parts of it are named. Origin and path, never
+ * the query, which carries the caller's own request back. Only `http(s)`,
+ * because every other scheme has an opaque origin that stringifies to `"null"`
+ * and would both misname the target and paste an inline `data:` payload into
+ * the log; a scheme is bounded by the URL grammar, so naming it is safe where
+ * naming its body is not. And a path truncated to a fixed width, because a
+ * redirect can point anywhere and nothing else bounds it.
+ */
+const httpFailureReason = (response: Response, requestUrl: string): string => {
+  if (response.status < 300 || response.status > 399) {
+    return `HTTP ${response.status}`;
+  }
+  const location = response.headers.get("location");
+  if (location === null) {
+    return `HTTP ${response.status} with no Location`;
+  }
+  if (!URL.canParse(location, requestUrl)) {
+    return `HTTP ${response.status} to an unreadable Location`;
+  }
+  const { protocol, origin, pathname } = new URL(location, requestUrl);
+  if (protocol !== "http:" && protocol !== "https:") {
+    return `HTTP ${response.status} to a non-HTTP Location (${protocol})`;
+  }
+  const path =
+    pathname.length > REDIRECT_PATH_MAX_CHARS
+      ? `${pathname.slice(0, REDIRECT_PATH_MAX_CHARS)}…`
+      : pathname;
+  return `HTTP ${response.status} to ${origin}${path}`;
+};
+
+/**
  * One NALUS response, with the court's rate-limit refusal raised as the halt
  * it is.
  *
@@ -1236,7 +1284,7 @@ const nalusResponse = async (
 };
 
 type NalusReadOptions = NalusRequestInit & {
-  /** What the failure names: "NALUS <subject> returned HTTP …". */
+  /** What the failure names: "NALUS <subject> returned …". */
   subject: string;
   url: string;
 };
@@ -1249,7 +1297,9 @@ const nalusOkResponse = async ({
 }: NalusReadOptions): Promise<Response> => {
   const response = await nalusResponse(url, init);
   if (!response.ok) {
-    throw new TypeError(`NALUS ${subject} returned HTTP ${response.status}`);
+    throw new TypeError(
+      `NALUS ${subject} returned ${httpFailureReason(response, url)}`,
+    );
   }
   return response;
 };
@@ -1318,7 +1368,9 @@ const fetchSearchPage = async ({
       }
       throw new TypeError("NALUS search did not confirm an empty result set");
     }
-    throw new TypeError(`NALUS search returned HTTP ${submit.status}`);
+    throw new TypeError(
+      `NALUS search returned ${httpFailureReason(submit, SEARCH_URL)}`,
+    );
   }
 
   const cookies = cookieHeader([first, submit]);
@@ -1380,7 +1432,10 @@ const fetchListedDecision = async (
       };
     }
     throw new TypeError(
-      `NALUS decision ${listed.sourceDocumentId} returned HTTP ${response.status}`,
+      `NALUS decision ${listed.sourceDocumentId} returned ${httpFailureReason(
+        response,
+        listed.sourceUrl,
+      )}`,
     );
   }
   const responseHtml = await response.text();
