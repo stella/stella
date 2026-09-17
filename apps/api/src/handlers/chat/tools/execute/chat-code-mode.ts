@@ -26,6 +26,10 @@ import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import type { ChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
 import { knownDefectRefusalMessage } from "@/api/lib/chat/tool-defect-memo";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
+import {
+  hasToolSchemaInputs,
+  type WithToolSchemaInputs,
+} from "@/api/lib/tanstack-ai-schema";
 import { isRecord } from "@/api/lib/type-guards";
 import {
   DEFAULT_MCP_TOOL_DEFINITIONS,
@@ -205,26 +209,29 @@ export const buildChatCodeMode = (
  * discovery companion.
  */
 export type ChatCodeModeToolMap = {
-  execute_typescript: ServerTool<
-    SchemaInput,
-    SchemaInput,
-    "execute_typescript"
+  execute_typescript: WithToolSchemaInputs<
+    ServerTool<SchemaInput, SchemaInput, "execute_typescript">
   >;
-  discover_tools: ServerTool<SchemaInput, SchemaInput, "discover_tools">;
+  discover_tools: WithToolSchemaInputs<
+    ServerTool<SchemaInput, SchemaInput, "discover_tools">
+  >;
 };
 
 export const buildChatCodeModeTools = (
   props: BuildChatCodeModeProps,
 ): ChatCodeModeToolMap => {
   const { tool, discoveryTool } = buildChatCodeMode(props);
-  return {
-    execute_typescript: tool,
-    discover_tools:
-      discoveryTool ??
-      panic(
-        "chat code mode always has lazy read tools, so discover_tools must exist",
-      ),
-  };
+  const discovery =
+    discoveryTool ??
+    panic(
+      "chat code mode always has lazy read tools, so discover_tools must exist",
+    );
+  // Code Mode types its schemas as TanStack's broad `SchemaInput`; at runtime
+  // they are zod validators, which the chat tool boundary accepts.
+  if (!hasToolSchemaInputs(tool) || !hasToolSchemaInputs(discovery)) {
+    return panic("code mode tool schemas are not chat tool schemas");
+  }
+  return { execute_typescript: tool, discover_tools: discovery };
 };
 
 /**

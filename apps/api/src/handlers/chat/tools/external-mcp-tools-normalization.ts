@@ -1,3 +1,5 @@
+import type { SchemaInput } from "@tanstack/ai";
+
 import {
   applyChatToolPolicies,
   CHAT_TOOL_POLICY_KIND,
@@ -7,6 +9,8 @@ import { namespaceMcpToolName } from "@/api/lib/mcp-upstream/namespace";
 import { logger } from "@/api/lib/observability/logger";
 import type { NullUnionStrategy } from "@/api/lib/provider-safe-json-schema";
 import { projectToProviderSafeJsonSchema } from "@/api/lib/provider-safe-json-schema";
+import type { ToolSchemaInput } from "@/api/lib/tanstack-ai-schema";
+import { isStandardSchemaInput } from "@/api/lib/tanstack-ai-schema";
 
 // External MCP tools arrive with a raw JSON Schema `inputSchema` straight from
 // the upstream server (see `toServerTools` in @tanstack/ai-mcp). Providers such
@@ -17,31 +21,16 @@ import { projectToProviderSafeJsonSchema } from "@/api/lib/provider-safe-json-sc
 const isPlainJsonSchema = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
-const isStandardSchemaInput = (value: unknown): boolean => {
-  if (!isPlainJsonSchema(value)) {
-    return false;
-  }
-  const standard = value["~standard"];
-  return (
-    isPlainJsonSchema(standard) && typeof standard["validate"] === "function"
-  );
-};
-
-const projectExternalMcpToolSchema = (
-  tool: ChatTool,
+const toChatToolSchema = (
+  schema: Record<string, unknown> | undefined,
   nullUnionStrategy: NullUnionStrategy,
-): ChatTool => {
-  const { inputSchema } = tool;
-  if (!isPlainJsonSchema(inputSchema) || isStandardSchemaInput(inputSchema)) {
-    return tool;
+): ToolSchemaInput | undefined => {
+  if (schema === undefined || isStandardSchemaInput(schema)) {
+    return schema;
   }
 
-  const { schema, droppedKeywords } = projectToProviderSafeJsonSchema(
-    inputSchema,
-    {
-      nullUnionStrategy,
-    },
-  );
+  const { schema: projected, droppedKeywords } =
+    projectToProviderSafeJsonSchema(schema, { nullUnionStrategy });
   if (droppedKeywords.length > 0) {
     // Telemetry only: never throw. External MCP metadata is user-configured, so
     // log only aggregate projection data.
@@ -49,15 +38,54 @@ const projectExternalMcpToolSchema = (
       "schema.dropped_keyword_count": droppedKeywords.length,
     });
   }
+  return projected;
+};
 
-  return { ...tool, inputSchema: schema };
+/**
+ * A tool as an upstream MCP server or the `@tanstack/ai-mcp` client hands it
+ * over: schemas typed as the library's broad `SchemaInput`, before the chat
+ * boundary narrows them.
+ */
+type ExternalMcpTool = Omit<ChatTool, "inputSchema" | "outputSchema"> & {
+  inputSchema?: SchemaInput | undefined;
+  outputSchema?: SchemaInput | undefined;
+};
+
+const isExternalSchema = (
+  value: unknown,
+): value is Record<string, unknown> | undefined =>
+  value === undefined || isPlainJsonSchema(value);
+
+/**
+ * The chat-side tool, or `null` when a schema is neither an object nor absent:
+ * the chat loop cannot carry such a schema, so the tool is not offered.
+ */
+const projectExternalMcpTool = (
+  tool: ExternalMcpTool,
+  exposedToolName: string,
+  nullUnionStrategy: NullUnionStrategy,
+): ChatTool | null => {
+  const { inputSchema, outputSchema } = tool;
+  if (!isExternalSchema(inputSchema) || !isExternalSchema(outputSchema)) {
+    // Telemetry only, and no tool name: external MCP metadata is user-configured.
+    logger.warn("Skipped external MCP tool with a non-object schema");
+    return null;
+  }
+
+  return {
+    ...tool,
+    name: exposedToolName,
+    lazy: true,
+    inputSchema: toChatToolSchema(inputSchema, nullUnionStrategy),
+    outputSchema: toChatToolSchema(outputSchema, nullUnionStrategy),
+  };
 };
 
 type NormalizeExternalMcpToolsForChatInput = {
   allowedTools: readonly string[] | null;
   connectorSlug: string;
   nullUnionStrategy: NullUnionStrategy;
-  tools: readonly ChatTool[];
+  tools: readonly ExternalMcpTool[];
 };
 
 type NormalizedExternalMcpToolsForChat = {
@@ -81,19 +109,20 @@ export const normalizeExternalMcpToolsForChat = ({
       continue;
     }
 
-    toolNames.push(rawToolName);
     const exposedToolName = namespaceMcpToolName({
       connectorSlug,
       toolName: rawToolName,
     });
-    loadedTools[exposedToolName] = projectExternalMcpToolSchema(
-      {
-        ...toolDefinition,
-        name: exposedToolName,
-        lazy: true,
-      },
+    const chatTool = projectExternalMcpTool(
+      toolDefinition,
+      exposedToolName,
       nullUnionStrategy,
     );
+    if (chatTool === null) {
+      continue;
+    }
+    toolNames.push(rawToolName);
+    loadedTools[exposedToolName] = chatTool;
   }
 
   // External MCP tools must always require approval here, regardless of the

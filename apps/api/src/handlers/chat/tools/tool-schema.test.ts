@@ -1,6 +1,8 @@
 import {
   convertSchemaToJsonSchema,
   EventType,
+  hashSchemaInput,
+  normalizeApprovalSchema,
   parseWithStandardSchema,
   toolDefinition,
   type StreamChunk,
@@ -21,9 +23,11 @@ import {
   DuplicateToolNameError,
   resolveDebugOption,
 } from "@tanstack/ai/adapter-internals";
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import { TANSTACK_AI_PROVIDERS } from "@stll/ai-catalog";
 import {
   DOCX_SUGGEST_CHANGES_OPTIONS_BY_SURFACE,
   DOCX_SUGGESTION_SURFACE,
@@ -66,6 +70,8 @@ import {
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { BUSINESS_REGISTRY_DISPATCH } from "@/api/lib/business-registries/dispatch";
+import { chatToolMapToArray } from "@/api/lib/chat/chat-tool-types";
+import { projectChatToolSchemasForProvider } from "@/api/lib/chat/provider-tool-projection";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
@@ -294,6 +300,56 @@ const buildFullCoverageChatTools = (
     ],
   });
 };
+
+/**
+ * Registration fixture for the automatic-apply `suggest_changes` variant:
+ * an editable active DOCX file, pinned to a known current version. Shared
+ * between the interrupt-boundary matrix and the authorization tests below,
+ * the two places the apply variant has to be built the way the request path
+ * builds it.
+ */
+const autoApplyActiveFile = {
+  entityId: toSafeId<"entity">("77777777-7777-4777-8777-777777777777"),
+  currentVersionId: toSafeId<"entityVersion">(
+    "99999999-9999-4999-8999-999999999998",
+  ),
+  fileFieldId: toSafeId<"field">("88888888-8888-4888-8888-888888888888"),
+  supportsDocxEdits: true,
+} as const;
+
+const autoApplyBaseArgs = {
+  orgAIConfig: null,
+  organizationId,
+  requestWorkspaceId: workspaceId,
+  thirdPartyBoundary: { type: "raw" },
+  refRegistry: createChatRefRegistry(),
+  toolDefectMemo: createChatToolDefectMemo(),
+  safeDb: unusedSafeDb,
+  scopedDb: unusedScopedDb,
+  threadId,
+  userId,
+  webSearchEnabled: false,
+  webSearchProviders: { webSearchProvider: null, urlFetcher: null },
+  hasActiveDocxEditClient: false,
+  hasActiveDocxFileClient: false,
+  docxSuggestionSurface: "template-studio",
+  recordAuditEvent: noopAuditRecorder,
+  activeFile: autoApplyActiveFile,
+  workspaceId: null,
+  toolWorkspaceIds: resolveToolWorkspaceIds({
+    pinnedIds: [],
+    accessibleWorkspaceIds: [workspaceId],
+  }),
+} as const;
+
+/** The server-executed, approval-gated `suggest_changes` registration. */
+const buildAutoApplySuggestChangesChatTools = () =>
+  getChatTools({
+    ...autoApplyBaseArgs,
+    memberRole: "owner",
+    editApplyMode: "auto",
+    workspaceStatusById: new Map([[workspaceId, "active"]]),
+  });
 
 const serializeFullCoverageChatTools = (): Tool[] =>
   Object.entries(buildFullCoverageChatTools()).map(([name, tool]) => {
@@ -1276,6 +1332,112 @@ describe("chat tool schemas", () => {
     expect(violations).toEqual([]);
   });
 
+  // TanStack's approval interrupt and its tool-schema cache normalize every
+  // registered schema through `normalizeApprovalSchema` / `hashSchemaInput`,
+  // which accept a Standard Schema validator or a raw JSON Schema and throw
+  // `TypeError: Expected a supported SchemaInput.` on a Standard JSON Schema
+  // carrying neither. The provider-safe test above only reads the serialized
+  // shape, so a schema that serializes fine can still crash the stream at the
+  // first tool call. Both `suggest_changes` registrations are covered: the
+  // apply variant is the approval-gated one, so it is the only tool whose
+  // `normalizeApprovalSchema` call the loop actually makes.
+  test("every registered chat tool survives TanStack's interrupt boundary for every provider", () => {
+    const queueVariantTools = buildFullCoverageChatTools();
+    const applyVariantTools = buildAutoApplySuggestChangesChatTools();
+
+    // Both variants carry the SAME tool name, so presence proves nothing.
+    // Without this the matrix below could silently cover only the queue
+    // variant, whose raw JSON Schema input never reaches the approval path.
+    const applyVariant = applyVariantTools[SUGGEST_CHANGES_TOOL_NAME];
+    const queueVariant = queueVariantTools[SUGGEST_CHANGES_TOOL_NAME];
+    if (!applyVariant || !queueVariant) {
+      throw new Error("Expected both suggest_changes variants to register");
+    }
+    expect(applyVariant.execute).toBeDefined();
+    expect(applyVariant.needsApproval).toBe(true);
+    expect(queueVariant.execute).toBeUndefined();
+
+    const violations: string[] = [];
+    const runBoundary = ({
+      boundary,
+      provider,
+      run,
+      toolName,
+    }: {
+      boundary: string;
+      provider: string;
+      run: () => void;
+      toolName: string;
+    }): void => {
+      const attempt = Result.try({
+        try: run,
+        catch: (cause) =>
+          cause instanceof Error ? cause.message : String(cause),
+      });
+      if (Result.isError(attempt)) {
+        violations.push(
+          `${toolName} / ${provider} / ${boundary}: ${attempt.error}`,
+        );
+      }
+    };
+
+    for (const tools of [queueVariantTools, applyVariantTools]) {
+      const modelTools = chatToolMapToArray(tools);
+      // TANSTACK_AI_PROVIDERS is the canonical list of providers whose tool
+      // schemas go through this projection: it is derived from the same
+      // adapter-kind map `providerSafeJsonSchemaOptionsForTanStackProvider`
+      // serves, and the custom-adapter providers never reach TanStack's loop.
+      for (const provider of TANSTACK_AI_PROVIDERS) {
+        for (const tool of projectChatToolSchemasForProvider({
+          modelTools,
+          provider,
+        })) {
+          const toolName = tool.name;
+          runBoundary({
+            boundary: "hashSchemaInput(inputSchema)",
+            provider,
+            toolName,
+            run: () => {
+              hashSchemaInput(tool.inputSchema);
+            },
+          });
+          runBoundary({
+            boundary: "hashSchemaInput(outputSchema)",
+            provider,
+            toolName,
+            run: () => {
+              hashSchemaInput(tool.outputSchema);
+            },
+          });
+          if (tool.needsApproval === true) {
+            runBoundary({
+              boundary: "normalizeApprovalSchema",
+              provider,
+              toolName,
+              run: () => {
+                normalizeApprovalSchema(tool.approvalSchema, tool.inputSchema);
+              },
+            });
+          }
+          if (!tool.execute) {
+            // A client tool's output schema is serialized for the client
+            // contract; a server tool's never leaves the process.
+            runBoundary({
+              boundary: "convertSchemaToJsonSchema(outputSchema)",
+              provider,
+              toolName,
+              run: () => {
+                convertSchemaToJsonSchema(tool.outputSchema);
+              },
+            });
+          }
+        }
+      }
+    }
+
+    expect(violations).toEqual([]);
+  });
+
   test("keeps DOCX deletion inputs valid while omitting empty provider enums", () => {
     const suggestChanges =
       buildFullCoverageChatTools()[SUGGEST_CHANGES_TOOL_NAME];
@@ -2079,40 +2241,6 @@ describe("chat tool schemas", () => {
   // client-executed with no chat-level approval (no `execute`, no
   // `needsApproval`, policy kind "internal").
   describe("suggest_changes automatic apply registration", () => {
-    const activeFile = {
-      entityId: toSafeId<"entity">("77777777-7777-4777-8777-777777777777"),
-      currentVersionId: toSafeId<"entityVersion">(
-        "99999999-9999-4999-8999-999999999998",
-      ),
-      fileFieldId: toSafeId<"field">("88888888-8888-4888-8888-888888888888"),
-      supportsDocxEdits: true,
-    } as const;
-
-    const baseArgs = {
-      orgAIConfig: null,
-      organizationId,
-      requestWorkspaceId: workspaceId,
-      thirdPartyBoundary: { type: "raw" },
-      refRegistry: createChatRefRegistry(),
-      toolDefectMemo: createChatToolDefectMemo(),
-      safeDb: unusedSafeDb,
-      scopedDb: unusedScopedDb,
-      threadId,
-      userId,
-      webSearchEnabled: false,
-      webSearchProviders: { webSearchProvider: null, urlFetcher: null },
-      hasActiveDocxEditClient: false,
-      hasActiveDocxFileClient: false,
-      docxSuggestionSurface: "template-studio",
-      recordAuditEvent: noopAuditRecorder,
-      activeFile,
-      workspaceId: null,
-      toolWorkspaceIds: resolveToolWorkspaceIds({
-        pinnedIds: [],
-        accessibleWorkspaceIds: [workspaceId],
-      }),
-    } as const;
-
     const expectApplyVariant = (tools: ReturnType<typeof getChatTools>) => {
       const tool = tools[SUGGEST_CHANGES_TOOL_NAME];
       if (!tool) {
@@ -2136,7 +2264,7 @@ describe("chat tool schemas", () => {
     test("registers the apply variant for an updater on an active matter with an editable active file", () => {
       expectApplyVariant(
         getChatTools({
-          ...baseArgs,
+          ...autoApplyBaseArgs,
           memberRole: "owner",
           editApplyMode: "auto",
           workspaceStatusById: new Map([[workspaceId, "active"]]),
@@ -2149,7 +2277,7 @@ describe("chat tool schemas", () => {
     // entity-update-less role overwrite documents through chat alone.
     test("does not register suggest_changes for a role without entity:update", () => {
       const tools = getChatTools({
-        ...baseArgs,
+        ...autoApplyBaseArgs,
         memberRole: "intern",
         editApplyMode: "auto",
         workspaceStatusById: new Map([[workspaceId, "active"]]),
@@ -2159,7 +2287,7 @@ describe("chat tool schemas", () => {
 
     test("does not register suggest_changes for an archived matter", () => {
       const tools = getChatTools({
-        ...baseArgs,
+        ...autoApplyBaseArgs,
         memberRole: "owner",
         editApplyMode: "auto",
         workspaceStatusById: new Map([[workspaceId, "archived"]]),
@@ -2170,7 +2298,7 @@ describe("chat tool schemas", () => {
     // Fail-closed: an unknown workspace status must NOT default to "active".
     test("does not register suggest_changes when no workspace status is known", () => {
       const tools = getChatTools({
-        ...baseArgs,
+        ...autoApplyBaseArgs,
         memberRole: "owner",
         editApplyMode: "auto",
       });
@@ -2179,8 +2307,8 @@ describe("chat tool schemas", () => {
 
     test("does not register suggest_changes without an editable active DOCX file", () => {
       const tools = getChatTools({
-        ...baseArgs,
-        activeFile: { entityId: activeFile.entityId },
+        ...autoApplyBaseArgs,
+        activeFile: { entityId: autoApplyActiveFile.entityId },
         memberRole: "owner",
         editApplyMode: "auto",
         workspaceStatusById: new Map([[workspaceId, "active"]]),
@@ -2190,9 +2318,9 @@ describe("chat tool schemas", () => {
 
     test("does not register suggest_changes without the exact active file field", () => {
       const tools = getChatTools({
-        ...baseArgs,
+        ...autoApplyBaseArgs,
         activeFile: {
-          entityId: activeFile.entityId,
+          entityId: autoApplyActiveFile.entityId,
           supportsDocxEdits: true,
         },
         memberRole: "owner",
@@ -2207,7 +2335,7 @@ describe("chat tool schemas", () => {
     // queue-for-review registration on the same turn.
     describe("mutual exclusion between the apply and queue variants", () => {
       const mutualExclusionArgs = {
-        ...baseArgs,
+        ...autoApplyBaseArgs,
         memberRole: "owner" as const,
         hasActiveDocxEditClient: true,
         workspaceStatusById: new Map([[workspaceId, "active" as const]]),

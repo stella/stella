@@ -29,9 +29,15 @@ import {
 } from "@/api/handlers/chat/chat-message-parts";
 import { CHAT_RUN_MODE } from "@/api/handlers/chat/chat-schema";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
+import { createAutoApplySuggestChangesTools } from "@/api/handlers/chat/tools/auto-apply-suggest-changes-tools";
+import { SUGGEST_CHANGES_TOOL_NAME } from "@/api/handlers/chat/tools/folio-agent-tools";
 import { resolveRegistryToolInputRefs } from "@/api/handlers/chat/tools/registry-adapter/input-ref-hydration";
 import { resolveRegistryToolOutputRefs } from "@/api/handlers/chat/tools/registry-adapter/output-ref-resolution";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
+import {
+  applyChatToolPolicy,
+  CHAT_TOOL_POLICY_KIND,
+} from "@/api/handlers/chat/tools/tool-policy";
 import type {
   ChatAnonRestoration,
   ChatMessage,
@@ -406,6 +412,80 @@ describe("native interrupt boundary persistence", () => {
       {
         id: "call-1",
         name: "mcp__external__delete",
+        state: "approval-requested",
+        type: "tool-call",
+      },
+    ]);
+  });
+
+  // The same pause, driven by the real `suggest_changes` apply tool rather
+  // than a fixture: it carries folio's raw JSON Schema wrapped as a Standard
+  // Schema, so its `inputSchema` has to survive `normalizeApprovalSchema`
+  // before the loop can request approval at all. The DB is untouched before
+  // approval, so the tool only needs props that type-check.
+  test("pauses for approval on the automatic-apply suggest_changes tool", async () => {
+    const expectedCurrentVersionId = toSafeId<"entityVersion">(
+      "66666666-6666-4666-8666-666666666666",
+    );
+    const { safeDb } = createScopedDbMock({});
+    const tools = createAutoApplySuggestChangesTools({
+      safeDb,
+      organizationId: toSafeId<"organization">(
+        "22222222-2222-4222-8222-222222222222",
+      ),
+      userId: toSafeId<"user">("33333333-3333-4333-8333-333333333333"),
+      workspaceId: toSafeId<"workspace">(
+        "44444444-4444-4444-8444-444444444444",
+      ),
+      entityId: toSafeId<"entity">("55555555-5555-4555-8555-555555555555"),
+      fileFieldId: toSafeId<"field">("77777777-7777-4777-8777-777777777777"),
+      recordAuditEvent: async () => undefined,
+      docxEditRepresentation: "tracked-changes",
+      expectedCurrentVersionId,
+    });
+    const suggestChanges = applyChatToolPolicy(
+      tools[SUGGEST_CHANGES_TOOL_NAME],
+      CHAT_TOOL_POLICY_KIND.mutation,
+    );
+    // The fixture must express the fault: without an approval gate the loop
+    // would execute the tool instead of pausing, and the outcome assertion
+    // below would never reach the interrupt boundary.
+    expect(suggestChanges).toMatchObject({ needsApproval: true });
+
+    const { emitted, finish } = await persistNativeInterruptTurn(
+      chat({
+        adapter: createSingleToolCallAdapter({
+          arguments: JSON.stringify({
+            documentVersion: expectedCurrentVersionId,
+            operations: [
+              {
+                type: "replaceInBlock",
+                blockId: "block-1",
+                find: "quick",
+                replace: "slow",
+              },
+            ],
+          }),
+          toolName: SUGGEST_CHANGES_TOOL_NAME,
+        }),
+        agentLoopStrategy: maxIterations(3),
+        messages: [{ role: "user", content: "Replace quick with slow" }],
+        threadId: "thread-1",
+        tools: [suggestChanges],
+      }),
+    );
+
+    expect(emitted.some((chunk) => chunk.type === EventType.RUN_ERROR)).toBe(
+      false,
+    );
+    expect(finish?.outcome).toMatchObject({
+      type: "awaiting-user",
+      interaction: { type: "approval", toolCallId: "call-1" },
+    });
+    expect(finish?.responseMessage.parts).toMatchObject([
+      {
+        id: "call-1",
+        name: SUGGEST_CHANGES_TOOL_NAME,
         state: "approval-requested",
         type: "tool-call",
       },
