@@ -122,9 +122,18 @@ test.describe("workspace view switcher chrome", () => {
         .toBe("1px");
 
       const before = await addView.boundingBox();
-      await tabList.evaluate((element, isRTL) => {
+      const scrolled = await tabList.evaluate((element, isRTL) => {
         element.scrollLeft = isRTL ? -element.scrollWidth : element.scrollWidth;
+        return element.scrollLeft;
       }, direction === "rtl");
+      // The add action sits outside the scroll container, so its position
+      // would hold even if the assignment never moved the strip. Chromium
+      // counts RTL offsets down from zero, so the far end is -overflow there
+      // and +overflow in LTR; scrollWidth and clientWidth round to integers
+      // while scrollLeft does not, hence the tolerance.
+      const scrollEnd = direction === "rtl" ? -overflow : overflow;
+      expect(Math.abs(scrolled - scrollEnd)).toBeLessThanOrEqual(TOLERANCE_PX);
+
       const after = await addView.boundingBox();
 
       expect(before).not.toBeNull();
