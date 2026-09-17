@@ -1,5 +1,11 @@
 # @stll/ui
 
+## 0.29.1
+
+### Patch Changes
+
+- [#3477](https://github.com/stella/stella/pull/3477) [`26ecb15`](https://github.com/stella/stella/commit/26ecb155f894000172424d27d2e30d38f88288c3) Thanks [@dependabot](https://github.com/apps/dependabot)! - Require `@tanstack/react-virtual` 3.14.12 or newer for the virtualized UI components.
+
 ## 0.29.0
 
 ### Minor Changes
