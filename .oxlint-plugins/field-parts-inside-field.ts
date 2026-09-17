@@ -33,6 +33,8 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
 import {
+  elementName,
+  everyNode,
   getImportLocalName,
   getImportedName,
   isAstNode,
@@ -70,58 +72,6 @@ const FUNCTION_TYPES = new Set([
   "FunctionDeclaration",
   "FunctionExpression",
 ]);
-
-const jsxName = (node: unknown): string | null => {
-  if (!isAstNode(node)) {
-    return null;
-  }
-  if (node.type === "JSXIdentifier" && typeof node.name === "string") {
-    return node.name;
-  }
-  if (node.type === "JSXMemberExpression") {
-    return jsxName(node.property);
-  }
-  if (node.type === "JSXNamespacedName") {
-    return jsxName(node.name);
-  }
-  return null;
-};
-
-const elementName = (element: unknown): string | null => {
-  if (!isAstNode(element) || element.type !== "JSXElement") {
-    return null;
-  }
-  return isAstNode(element.openingElement)
-    ? jsxName(element.openingElement.name)
-    : null;
-};
-
-// Every node under `root`, reached without assuming a shape: a component's
-// `Field` can sit behind a branch, a helper call, or an early return.
-const everyNode = (root: AstNode): AstNode[] => {
-  const out: AstNode[] = [];
-  const seen = new Set<unknown>();
-  const pending: unknown[] = [root];
-  while (pending.length > 0) {
-    const current = pending.pop();
-    if (Array.isArray(current)) {
-      pending.push(...current);
-      continue;
-    }
-    if (!isAstNode(current) || seen.has(current)) {
-      continue;
-    }
-    seen.add(current);
-    out.push(current);
-    for (const [key, value] of Object.entries(current)) {
-      // `parent` walks back out of the subtree under inspection.
-      if (key !== "parent" && typeof value === "object") {
-        pending.push(value);
-      }
-    }
-  }
-  return out;
-};
 
 // The name a component is declared under: `function Row()` and
 // `const Row = () => …` both name `Row`, while a callback names nothing.

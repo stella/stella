@@ -234,3 +234,61 @@ export const resolveChainRootName = (node: unknown): string | null => {
   }
   return isIdentifier(current) ? current.name : null;
 };
+
+// --- JSX shape, shared by the rules that read markup ------------------------
+
+// The name a JSX element is written under, descending through the member and
+// namespaced forms: `Dialog.Footer` names `Footer`, `svg:path` names `path`.
+export const jsxName = (node: unknown): string | null => {
+  if (!isAstNode(node)) {
+    return null;
+  }
+  if (node.type === "JSXIdentifier" && typeof node.name === "string") {
+    return node.name;
+  }
+  if (node.type === "JSXMemberExpression") {
+    return jsxName(node.property);
+  }
+  if (node.type === "JSXNamespacedName") {
+    return jsxName(node.name);
+  }
+  return null;
+};
+
+// The name a JSXElement renders, or null for anything that is not one.
+export const elementName = (element: unknown): string | null => {
+  if (!isAstNode(element) || element.type !== "JSXElement") {
+    return null;
+  }
+  return isAstNode(element.openingElement)
+    ? jsxName(element.openingElement.name)
+    : null;
+};
+
+// Every node under `root`, reached without assuming a shape: asking what a
+// component renders means crossing statements, branches, and helper calls that
+// a JSX-only traversal never sees.
+export const everyNode = (root: AstNode): AstNode[] => {
+  const out: AstNode[] = [];
+  const seen = new Set<unknown>();
+  const pending: unknown[] = [root];
+  while (pending.length > 0) {
+    const current = pending.pop();
+    if (Array.isArray(current)) {
+      pending.push(...current);
+      continue;
+    }
+    if (!isAstNode(current) || seen.has(current)) {
+      continue;
+    }
+    seen.add(current);
+    out.push(current);
+    for (const [key, value] of Object.entries(current)) {
+      // `parent` walks back out of the subtree under inspection.
+      if (key !== "parent" && typeof value === "object") {
+        pending.push(value);
+      }
+    }
+  }
+  return out;
+};
