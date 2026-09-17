@@ -3,14 +3,11 @@ import type {
   StandardSchemaV1,
 } from "@standard-schema/spec";
 import type { JSONSchema, SchemaInput } from "@tanstack/ai";
-import {
-  type ConversionConfig,
-  toJsonSchema,
-  toStandardJsonSchema,
-} from "@valibot/to-json-schema";
+import type { ConversionConfig } from "@valibot/to-json-schema";
 import { panic } from "better-result";
 import type { GenericSchema, InferInput, InferOutput } from "valibot";
 
+import { toJsonSchema } from "@/api/lib/json-schema/valibot-to-json-schema";
 import type { ProviderSafeJsonSchemaProjectionOptions } from "@/api/lib/provider-safe-json-schema";
 import { projectToProviderSafeJsonSchema } from "@/api/lib/provider-safe-json-schema";
 
@@ -174,14 +171,12 @@ export const toTanStackValibotSchema = <TSchema extends GenericSchema>(
   schema: TSchema,
   projectionOptions?: ProviderSafeJsonSchemaProjectionOptions,
 ): TanStackValibotSchema<TSchema> => {
-  const standardSchema = toStandardJsonSchema(schema);
   const providerProjectionOptions = projectionOptions ?? {
     nullUnionStrategy: "json-schema",
   };
   return {
-    ...standardSchema,
     "~standard": {
-      ...standardSchema["~standard"],
+      ...schema["~standard"],
       jsonSchema: {
         input: (options) =>
           toProviderSafeJsonSchema(

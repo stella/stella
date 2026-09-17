@@ -50,6 +50,13 @@ const DELIBERATE_NARROWINGS = [
   },
   {
     rule: "no-restricted-imports",
+    scope: "apps/api/src/lib/json-schema/valibot-to-json-schema.ts",
+    drops: ["path:@valibot/to-json-schema+types"],
+    reason:
+      "This module is the converter's one owner: it wraps toJsonSchema so every other API module gets internal v.metadata stripped.",
+  },
+  {
+    rule: "no-restricted-imports",
     scope:
       "apps/api/src/lib/auth.ts, apps/api/src/lib/search/**, apps/api/src/lib/safe-id-boundaries.ts",
     drops: ["path:@/api/lib/branded-types#toSafeId"],
@@ -115,10 +122,19 @@ const ruleIsOff = (value: unknown) => {
   return severity === "off" || severity === 0;
 };
 
-const pathKey = (name: string, importNames: string[]) =>
-  importNames.length === 0
-    ? `path:${name}`
-    : `path:${name}#${[...importNames].sort((a, b) => a.localeCompare(b)).join(",")}`;
+const pathKey = (
+  name: string,
+  importNames: string[],
+  allowTypeImports: boolean,
+) => {
+  const scope =
+    importNames.length === 0
+      ? `path:${name}`
+      : `path:${name}#${[...importNames].sort((a, b) => a.localeCompare(b)).join(",")}`;
+  // A ban that lets type-only imports through forbids less than one that does
+  // not, so the two must never compare equal.
+  return allowTypeImports ? `${scope}+types` : scope;
+};
 
 /**
  * Fields the comparison keys above account for. `message` carries no
@@ -131,7 +147,12 @@ const pathKey = (name: string, importNames: string[]) =>
  * carries it. The guard fails closed on an unknown field rather than compare
  * on a key that no longer describes the entry: teach the key builder first.
  */
-const KNOWN_PATH_FIELDS = new Set(["name", "importNames", "message"]);
+const KNOWN_PATH_FIELDS = new Set([
+  "name",
+  "importNames",
+  "allowTypeImports",
+  "message",
+]);
 const KNOWN_PATTERN_FIELDS = new Set(["group", "regex", "message"]);
 
 const unhandledEntryFields: string[] = [];
@@ -152,7 +173,7 @@ const restrictedImportKeys = (options: unknown): string[] => {
   const keys: string[] = [];
   const collectPath = (entry: unknown) => {
     if (typeof entry === "string") {
-      keys.push(pathKey(entry, []));
+      keys.push(pathKey(entry, [], false));
       return;
     }
     if (!isRecord(entry)) {
@@ -163,7 +184,13 @@ const restrictedImportKeys = (options: unknown): string[] => {
     if (name === undefined) {
       return;
     }
-    keys.push(pathKey(name, stringArray(entry["importNames"])));
+    keys.push(
+      pathKey(
+        name,
+        stringArray(entry["importNames"]),
+        entry["allowTypeImports"] === true,
+      ),
+    );
   };
   const collectPattern = (entry: unknown) => {
     if (typeof entry === "string") {

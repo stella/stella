@@ -12,7 +12,6 @@
  * quietly stripped.
  */
 
-import { toJsonSchema } from "@valibot/to-json-schema";
 import type { JsonSchema } from "@valibot/to-json-schema";
 import * as v from "valibot";
 
@@ -27,6 +26,8 @@ import {
   analysisTopicsSchema,
   CURRENT_ANALYSIS_VERSION,
 } from "@stll/legal-ast/analysis";
+
+import { toJsonSchema } from "@/api/lib/json-schema/valibot-to-json-schema";
 
 import { normalizeAnalysisHeadingLabels } from "./category-catalog";
 

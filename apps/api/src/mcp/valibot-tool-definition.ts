@@ -1,4 +1,3 @@
-import { toJsonSchema } from "@valibot/to-json-schema";
 import { panic } from "better-result";
 import type * as v from "valibot";
 
@@ -7,6 +6,7 @@ import {
   type AgentInputNormalizationAnnotation,
 } from "@stll/agent-input";
 
+import { toJsonSchema } from "@/api/lib/json-schema/valibot-to-json-schema";
 import type {
   McpToolDefinition,
   McpToolInputSchema,

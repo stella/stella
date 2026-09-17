@@ -426,6 +426,16 @@ const apiSafeIdBrandingImport = {
     "Only approved boundary modules and tests may brand raw IDs with toSafeId.",
 };
 
+// `@valibot/to-json-schema` copies every `v.metadata` key into the schema it
+// emits, internal annotations included. The API converts through one owner
+// that strips them; type-only imports stay allowed.
+const apiValibotJsonSchemaImport = {
+  name: "@valibot/to-json-schema",
+  allowTypeImports: true,
+  message:
+    "Convert through '@/api/lib/json-schema/valibot-to-json-schema', which keeps internal v.metadata out of emitted schemas.",
+};
+
 // The portable contract helper brands any string for any id kind, so reaching
 // it directly would route around both the sanctioned boundaries above and the
 // SafeIdType union. apps/web re-exports it once; apps/api never imports it.
@@ -3415,7 +3425,7 @@ export default defineConfig({
           "error",
           {
             paths: [
-              noZodImport,
+              noZodImport, apiValibotJsonSchemaImport,
               apiSafeIdBrandingImport,
               apiPortableSafeIdBrandingImport,
             ],
@@ -3469,7 +3479,24 @@ export default defineConfig({
       rules: {
         "no-restricted-imports": [
           "error",
-          { paths: [noZodImport, apiPortableSafeIdBrandingImport] },
+          { paths: [noZodImport, apiValibotJsonSchemaImport, apiPortableSafeIdBrandingImport] },
+        ],
+      },
+    },
+    {
+      // The converter's one owner: it wraps `toJsonSchema` so every caller gets
+      // internal metadata stripped. Only that restriction is lifted.
+      files: ["apps/api/src/lib/json-schema/valibot-to-json-schema.ts"],
+      rules: {
+        "no-restricted-imports": [
+          "error",
+          {
+            paths: [
+              noZodImport,
+              apiSafeIdBrandingImport,
+              apiPortableSafeIdBrandingImport,
+            ],
+          },
         ],
       },
     },
@@ -3688,7 +3715,7 @@ export default defineConfig({
           "error",
           {
             paths: [
-              noZodImport,
+              noZodImport, apiValibotJsonSchemaImport,
               {
                 name: "@/api/lib/api-handlers",
                 importNames: ["createHandler", "createRootHandler"],
@@ -3741,7 +3768,7 @@ export default defineConfig({
         "apps/api/**/__tests__/**/*.{ts,tsx,js,jsx}",
       ],
       rules: {
-        "no-restricted-imports": ["error", { paths: [noZodImport] }],
+        "no-restricted-imports": ["error", { paths: [noZodImport, apiValibotJsonSchemaImport] }],
       },
     },
     {
@@ -3796,7 +3823,7 @@ export default defineConfig({
           "error",
           {
             paths: [
-              noZodImport,
+              noZodImport, apiValibotJsonSchemaImport,
               apiSafeIdBrandingImport,
               apiPortableSafeIdBrandingImport,
               {
