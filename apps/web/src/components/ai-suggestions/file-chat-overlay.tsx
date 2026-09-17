@@ -124,7 +124,7 @@ import {
 } from "@/components/chat-editor-provider";
 import type { ChatDraftAttachment } from "@/components/chat-editor-provider";
 import {
-  composerMarkdown,
+  composerStoredMarkdown,
   composerText,
 } from "@/components/chat-editor-source";
 import { ChatApprovalContext } from "@/components/chat/chat-approval-context";
@@ -2634,7 +2634,7 @@ const FileChatOverlayInner = ({
                 ) {
                   return;
                 }
-                editorController.setContent(composerMarkdown(prompt));
+                editorController.setContent(composerStoredMarkdown(prompt));
                 detached(
                   editorController.submit(async (draft) => {
                     if (!(await ensureAIAvailable())) {

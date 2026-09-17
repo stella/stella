@@ -11,6 +11,7 @@ import { describe, expect, test } from "bun:test";
 import { createChatComposerDocument } from "@/components/chat-editor-markdown.logic";
 import {
   composerMarkdown,
+  composerStoredMarkdown,
   composerText,
 } from "@/components/chat-editor-source";
 
@@ -65,5 +66,36 @@ describe("composerMarkdown", () => {
     expect(() => composerMarkdown("<br/>")).toThrow(
       "The chat composer renders Markdown, not HTML.",
     );
+  });
+});
+
+describe("composerStoredMarkdown", () => {
+  // A saved prompt is the author's words: a tag in it is something they typed,
+  // not a defect in a builder, and losing their prompt to a panic would be the
+  // worse answer.
+  const storedPrompt = "Draft a reply for **<Seller>** about <3 open points";
+
+  test("a tag in stored content reads as the text it is", () => {
+    expect(
+      rendered(
+        createChatComposerDocument(composerStoredMarkdown(storedPrompt)),
+      ),
+    ).toBe("Draft a reply for <Seller> about <3 open points");
+  });
+
+  test("Markdown in the same string still renders", () => {
+    expect(
+      isBold(
+        createChatComposerDocument(composerStoredMarkdown(storedPrompt)),
+        "<Seller>",
+      ),
+    ).toBe(true);
+  });
+
+  test("content is never refused and never dropped", () => {
+    expect(() => composerStoredMarkdown("<p>x</p>")).not.toThrow();
+    expect(
+      rendered(createChatComposerDocument(composerStoredMarkdown("<p>x</p>"))),
+    ).toBe("<p>x</p>");
   });
 });

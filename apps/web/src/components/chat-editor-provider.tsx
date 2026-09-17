@@ -196,7 +196,7 @@ export type ChatEditorController = {
   /**
    * Replace the prompt. The composer parses its own inline Markdown and has
    * no HTML path, so the input is minted by `composerText` (prose, verbatim)
-   * or `composerMarkdown` (Markdown written for this grammar).
+   * or one of the Markdown constructors beside it.
    */
   setContent: (content: ComposerSource) => void;
   setEditable: (editable: boolean) => void;

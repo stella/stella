@@ -29,7 +29,7 @@ import {
 } from "@/components/chat-editor-provider";
 import type { ChatInputDraft } from "@/components/chat-editor-provider";
 import {
-  composerMarkdown,
+  composerStoredMarkdown,
   composerText,
 } from "@/components/chat-editor-source";
 import { ChatInputSurface } from "@/components/chat-input-surface";
@@ -423,7 +423,7 @@ export const ChatThreadPage = ({
   };
 
   const selectPrompt = (prompt: ChatPrompt) => {
-    controller.setContent(composerMarkdown(prompt.body));
+    controller.setContent(composerStoredMarkdown(prompt.body));
     controller.focus();
   };
   const sendWithoutAnonymization = useLatestCallback(async () => {
@@ -749,7 +749,7 @@ export const ChatThreadPage = ({
                 <SuggestedFollowupChips
                   className="px-2 pb-0"
                   onSelect={(prompt) => {
-                    controller.setContent(composerMarkdown(prompt));
+                    controller.setContent(composerStoredMarkdown(prompt));
                     detached(
                       controller.submit(async (draft) => {
                         if (!(await ensureAIAvailable())) {
