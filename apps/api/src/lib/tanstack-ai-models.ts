@@ -212,6 +212,17 @@ export type ResolvedTanStackTextModelInfo = Pick<
   "keySource" | "modelId" | "provider" | "region"
 >;
 
+/**
+ * The model identity as a run records it: provider and model in one string, so
+ * a stored `model_ref` reads the same wherever it was written. A model id is
+ * only unique within its provider, so the provider is part of the identity.
+ */
+export const formatModelRef = ({
+  modelId,
+  provider,
+}: Pick<ResolvedTanStackTextModelInfo, "modelId" | "provider">): string =>
+  `${provider}/${modelId}`;
+
 export const isBYOKProvider = (
   provider: AIProvider,
 ): provider is BYOKProvider => provider in BYOK_MODEL_OPTIONS;

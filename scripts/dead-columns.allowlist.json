@@ -10,21 +10,6 @@
     "reason": "unreferenced as of 2026-09-02; decide: wire or drop"
   },
   {
-    "table": "bilingual_translation_runs",
-    "column": "modelRef",
-    "reason": "unreferenced as of 2026-09-02; decide: wire or drop"
-  },
-  {
-    "table": "document_review_runs",
-    "column": "modelRef",
-    "reason": "unreferenced as of 2026-09-02; decide: wire or drop"
-  },
-  {
-    "table": "document_translation_runs",
-    "column": "modelRef",
-    "reason": "unreferenced as of 2026-09-02; decide: wire or drop"
-  },
-  {
     "table": "usage_provider_webhook_events",
     "column": "processedAt",
     "reason": "unreferenced as of 2026-09-02; decide: wire or drop"

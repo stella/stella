@@ -35,6 +35,8 @@ import type {
   DocumentReviewRunBasis,
   DocumentReviewRunStatus,
 } from "@/api/lib/document-review/run-contract";
+import { recordDocumentReviewRunModel } from "@/api/lib/document-review/run-queue";
+import { formatModelRef } from "@/api/lib/tanstack-ai-models";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -661,5 +663,34 @@ describe("document review run persistence", () => {
     expect(rows).toEqual([
       { decision: "open", decidedBy: null, decidedAt: null },
     ]);
+  });
+
+  test("records the model the run grades with, provider included", async () => {
+    const target = reviewTarget();
+    const runId = toSafeId<"documentReviewRun">(Bun.randomUUIDv7());
+    await seedRun({ runId, status: "running", target });
+
+    const modelRefOf = async () =>
+      (
+        await testDb
+          .select({ modelRef: documentReviewRuns.modelRef })
+          .from(documentReviewRuns)
+          .where(eq(documentReviewRuns.id, runId))
+      ).at(0)?.modelRef;
+
+    // A run carries no model until grading resolves one.
+    expect(await modelRefOf()).toBeNull();
+
+    await recordDocumentReviewRunModel({
+      tx: asTestRaw<Transaction>(testDb),
+      workspaceId: ids.wsA1,
+      runId,
+      modelRef: formatModelRef({
+        provider: "anthropic",
+        modelId: "claude-sonnet-4-5",
+      }),
+    });
+
+    expect(await modelRefOf()).toBe("anthropic/claude-sonnet-4-5");
   });
 });
