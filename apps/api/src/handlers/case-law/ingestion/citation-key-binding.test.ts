@@ -65,6 +65,9 @@ test("nothing derives a key from the raw canonicalizer", () => {
   // returns '' for a text that does not canonicalize. Callers that compare
   // keys may use it; a caller that stores one must not.
   expect(modulesCalling("bareCitationKey(")).toEqual([
+    // Compares: the identifier lookup keys a docket to find the decisions that
+    // answer to it, and stores nothing.
+    "handlers/case-law/decisions/lookup-by-identity.ts",
     "handlers/case-law/decisions/search.ts",
     "handlers/case-law/ingestion/citation-extractor.ts",
     "handlers/case-law/ingestion/citation-recall.ts",

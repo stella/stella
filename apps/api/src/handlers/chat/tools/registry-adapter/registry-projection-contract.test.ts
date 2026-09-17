@@ -11,6 +11,7 @@ import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { ScopedDb } from "@/api/db/safe-db";
 import type { readGatedDecisionCitations } from "@/api/handlers/case-law/decisions/citation-passages";
 import type { readGatedDecisionWithDocument } from "@/api/handlers/case-law/decisions/get-deferred-document";
+import type { lookupDecisionsByIdentity } from "@/api/handlers/case-law/decisions/lookup-by-identity";
 import type { searchDecisionsHandler } from "@/api/handlers/case-law/decisions/search";
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
 import type { readWorkspaceHandler } from "@/api/handlers/workspaces/get";
@@ -71,6 +72,7 @@ const readWorkspaceContactsHandlerMock = mock();
 const readWorkspaceMembersHandlerMock = mock();
 const describeStoredTemplateMock = mock();
 const searchProviderSearchMock = mock();
+const lookupDecisionsByIdentityMock = mock();
 const searchDecisionsHandlerMock = mock();
 const readGatedDecisionWithDocumentMock = mock();
 const readGatedDecisionCitationsMock = mock();
@@ -191,6 +193,7 @@ const buildContext = (tx: unknown): McpRequestContext => {
       readWorkspaceMembersHandler: readWorkspaceMembersHandlerMock,
       describeStoredTemplate: describeStoredTemplateMock,
       getSearchProvider: () => asTestRaw({ search: searchProviderSearchMock }),
+      lookupDecisionsByIdentity: lookupDecisionsByIdentityMock,
       searchDecisionsHandler: searchDecisionsHandlerMock,
       readGatedDecisionWithDocument: readGatedDecisionWithDocumentMock,
       readGatedDecisionCitations: readGatedDecisionCitationsMock,
@@ -1279,41 +1282,21 @@ const CONTRACT_CORPUS = {
         identifiers: ["22 Cdo 1000/2020"],
       }),
       setup: () => {
-        searchDecisionsHandlerMock.mockResolvedValue({
-          facets: null,
-          hits: [
-            {
-              anchorId: null,
-              caseNumber: "22 Cdo 1000/2020",
-              citationAuthority: 1.4,
-              citationCount: 3,
-              country: "CZ",
-              court: "Nejvyšší soud",
-              courtAbbreviation: "NS",
-              courtTier: "supreme",
-              createdAt: "2020-05-01T00:00:00.000Z",
-              decisionDate: "2020-05-01",
-              decisionId: uid(53),
-              decisionType: "judgment",
-              ecli: "ECLI:CZ:NS:2020:22.CDO.1000.2020.1",
-              identifiers: [
-                {
-                  type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
-                  value: "22 Cdo 1000/2020",
-                },
-              ],
-              headline: null,
-              language: "cs",
-              matchingPassages: 1,
-              headnote: { type: "absent", reason: "not_published" },
-              languageAlternates: [],
-              slug: "ns-22-cdo-1000-2020",
-              sourceUrl: "https://example.test/decision",
-            },
-          ],
-          nextCursor: null,
-          total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 1),
-        } satisfies Awaited<ReturnType<typeof searchDecisionsHandler>>);
+        // The identity read, not the ranked search: this tool resolves a
+        // reference off the identity columns and never consults a provider.
+        lookupDecisionsByIdentityMock.mockResolvedValue([
+          {
+            caseNumber: "22 Cdo 1000/2020",
+            country: "CZ",
+            court: "Nejvyšší soud",
+            decisionDate: "2020-05-01",
+            ecli: "ECLI:CZ:NS:2020:22.CDO.1000.2020.1",
+            id: toSafeId<"caseLawDecision">(uid(53)),
+            identifiers: [{ value: "22 Cdo 1000/2020" }],
+            language: "cs",
+            slug: "ns-22-cdo-1000-2020",
+          },
+        ] satisfies Awaited<ReturnType<typeof lookupDecisionsByIdentity>>);
       },
       expectRefPaths: [],
     },
@@ -1688,6 +1671,7 @@ const ALL_MOCKS = [
   readWorkspaceMembersHandlerMock,
   describeStoredTemplateMock,
   searchProviderSearchMock,
+  lookupDecisionsByIdentityMock,
   searchDecisionsHandlerMock,
   readGatedDecisionWithDocumentMock,
   readGatedDecisionCitationsMock,
