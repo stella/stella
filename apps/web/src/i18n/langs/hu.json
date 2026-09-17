@@ -5456,7 +5456,7 @@
       "sortAscendingDate": "Legrégebbi elöl",
       "sortDescending": "Csökkenő rendezés",
       "sortDescendingDate": "Legújabb elöl",
-      "splitOptions": "{count, plural, one {Split into # option} other {Split into # options}}",
+      "splitOptions": "{count, plural, one {Felosztás # lehetőségre} other {Felosztás # lehetőségre}}",
       "suggestWithAI": "Javaslat AI-val",
       "text": "Szöveg",
       "typeChangeWarning": "A meglévő adatok törlődnek, és mentéskor újraépülnek.",

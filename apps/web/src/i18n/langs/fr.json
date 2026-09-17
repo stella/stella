@@ -5456,7 +5456,7 @@
       "sortAscendingDate": "Plus anciens en premier",
       "sortDescending": "Tri décroissant",
       "sortDescendingDate": "Plus récents en premier",
-      "splitOptions": "{count, plural, one {Split into # option} other {Split into # options}}",
+      "splitOptions": "{count, plural, one {Diviser en # option} other {Diviser en # options}}",
       "suggestWithAI": "Suggérer avec l’IA",
       "text": "Texte",
       "typeChangeWarning": "Les données existantes seront effacées et reconstruites à l’enregistrement.",
