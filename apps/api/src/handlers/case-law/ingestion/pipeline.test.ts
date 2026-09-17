@@ -25,6 +25,7 @@ import {
   decisionIdentifiersFromStoredMetadata,
 } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import {
+  CYCLE_HALT_REASON,
   wrappedErrorDetail,
   processDecision,
   runIngestionPipeline,
@@ -671,7 +672,7 @@ describe("runIngestionPipeline — empty-page cursor progress", () => {
       source,
       sourceLease: testSourceLease(source),
       scopedDb,
-      signal: controller.signal,
+      cycle: { budgetMs: 60_000, abortEarlyOn: [controller.signal] },
       maxPages: 1,
       dbSlot,
     });
@@ -681,6 +682,143 @@ describe("runIngestionPipeline — empty-page cursor progress", () => {
     expect(result.pagesProcessed).toBe(1);
     expect(result.nextCursor).toBe("cursor-2");
     expect(persistedCursor).toBe("cursor-2");
+  });
+});
+
+describe("runIngestionPipeline — cycle deadline", () => {
+  /**
+   * The cursor advance is the only database work these cases reach: neither
+   * starts a page that returns decisions.
+   */
+  const cursorOnlyDb =
+    (onCursor: (cursor: string | null | undefined) => void): ScopedDb =>
+    async (callback) => {
+      const tx = {
+        select: () => ({
+          from: () => ({
+            where: () => ({
+              for: () => ({ limit: async () => await Promise.resolve([]) }),
+              limit: async () => await Promise.resolve([]),
+            }),
+          }),
+        }),
+        execute: async () => await Promise.resolve([]),
+        update: (table: unknown) => ({
+          set: (values: { syncCursor?: string | null }) => {
+            if (table === caseLawSources) {
+              onCursor(values.syncCursor);
+            }
+
+            return {
+              where: () => ({
+                returning: async () => [
+                  { cursor: values.syncCursor ?? null, order: 1n },
+                ],
+              }),
+            };
+          },
+        }),
+      };
+
+      // SAFETY: these cases exercise only the case_law_sources cursor update;
+      // the fake implements that chain.
+      // eslint-disable-next-line typescript/no-unsafe-type-assertion
+      return await callback(tx as unknown as Transaction);
+    };
+
+  test("stops before a page the remaining budget cannot cover", async () => {
+    const source = caseLawSourceRow({ name: "Short-budget source" });
+
+    let fetches = 0;
+    czNsAdapter.fetchPage = async () => {
+      fetches++;
+      return Result.ok({ decisions: [], nextCursor: "cursor-2" });
+    };
+
+    let persistedCursor: string | null | undefined;
+    // cz-ns takes the default 30s page timeout, so this page is aborted at
+    // the cycle deadline long before it can finish. The deadline has not
+    // fired yet: it is the remaining budget, not the abort, that decides.
+    const result = await runIngestionPipeline({
+      source,
+      sourceLease: testSourceLease(source),
+      scopedDb: cursorOnlyDb((cursor) => {
+        persistedCursor = cursor;
+      }),
+      cycle: { budgetMs: 10 },
+    });
+
+    expect(fetches).toBe(0);
+    expect(result.pagesProcessed).toBe(0);
+    expect(result.haltReason).toBe(CYCLE_HALT_REASON.TIMEOUT);
+    expect(result.nextCursor).toBe("cursor-1");
+    expect(persistedCursor).toBe("cursor-1");
+  });
+
+  test("stops when the lease renewal spends the rest of the budget", async () => {
+    const source = caseLawSourceRow({ name: "Renewal source" });
+
+    let fetches = 0;
+    czNsAdapter.fetchPage = async () => {
+      fetches++;
+      return Result.ok({ decisions: [], nextCursor: "cursor-2" });
+    };
+
+    // The production lease renews itself before the request. This one ends
+    // the cycle while doing so, which is what a renewal that outlasts the
+    // remaining budget looks like from the page loop.
+    const drain = new AbortController();
+    let renewals = 0;
+    const lease: CaseLawSourceIngestionLease = {
+      ...testSourceLease(source),
+      beforeRemoteEffect: async (effect) => {
+        renewals++;
+        drain.abort();
+        return await effect();
+      },
+    };
+
+    let persistedCursor: string | null | undefined;
+    const result = await runIngestionPipeline({
+      source,
+      sourceLease: lease,
+      scopedDb: cursorOnlyDb((cursor) => {
+        persistedCursor = cursor;
+      }),
+      cycle: { budgetMs: 60_000, abortEarlyOn: [drain.signal] },
+    });
+
+    // The page was admitted — the renewal ran — and refused after it.
+    expect(renewals).toBe(1);
+    expect(fetches).toBe(0);
+    expect(result.pagesProcessed).toBe(0);
+    expect(result.haltReason).toBe(CYCLE_HALT_REASON.TIMEOUT);
+    expect(persistedCursor).toBe("cursor-1");
+  });
+
+  test("runs a page that fits in the remaining budget", async () => {
+    const source = caseLawSourceRow({ name: "Full-budget source" });
+
+    let fetches = 0;
+    czNsAdapter.fetchPage = async () => {
+      fetches++;
+      return Result.ok({ decisions: [], nextCursor: null });
+    };
+
+    let persistedCursor: string | null | undefined;
+    const result = await runIngestionPipeline({
+      source,
+      sourceLease: testSourceLease(source),
+      scopedDb: cursorOnlyDb((cursor) => {
+        persistedCursor = cursor;
+      }),
+      cycle: { budgetMs: 60_000 },
+    });
+
+    expect(fetches).toBe(1);
+    expect(result.pagesProcessed).toBe(1);
+    expect(result.haltReason).toBeNull();
+    expect(persistedCursor).toBeNull();
   });
 });
 

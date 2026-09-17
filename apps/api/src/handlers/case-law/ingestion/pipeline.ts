@@ -101,6 +101,12 @@ import {
   TRIMMED_CORPUS_PAYLOAD_COLUMNS,
   writeCorpusDocument,
 } from "@/api/lib/legal-search/corpus-storage";
+import {
+  type StartCycleDeadlineOptions,
+  canStartCyclePage,
+  remainingCycleMs,
+  startCycleDeadline,
+} from "@/api/lib/legal-search/cycle-deadline";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import {
   partialObservationFromMetadata,
@@ -135,8 +141,13 @@ type PipelineInput = {
   source: typeof caseLawSources.$inferSelect;
   sourceLease: CaseLawSourceIngestionLease;
   scopedDb: ScopedDb;
-  /** Per-cycle abort signal. Fires when the adapter's time budget is exhausted. */
-  signal?: AbortSignal;
+  /**
+   * The cycle's time budget, and the signals that end it early. The loop
+   * starts a page only while enough of the budget is left for the page to
+   * finish, and stops when it is exhausted. Absent in tests and bounded
+   * sample runs, which stop on their own page and decision caps.
+   */
+  cycle?: StartCycleDeadlineOptions;
   /**
    * Hard caps for bounded sample runs (staging smoke): stop after this
    * many pages / newly stored decisions without advancing the cursor
@@ -168,6 +179,15 @@ type PipelineResult = {
   /** Non-null if the adapter was halted early due to repeated failures. */
   haltReason: string | null;
 };
+
+/**
+ * Halt reasons the operator loop classifies on. The runner reads the timeout
+ * one to separate a cycle that ran out of budget from one that failed, so the
+ * text is a shared constant rather than a literal on both sides.
+ */
+export const CYCLE_HALT_REASON = {
+  TIMEOUT: "Cycle timeout exceeded",
+} as const;
 
 const databaseTimeoutHaltReason = (error: TimeoutError): string =>
   `Database timeout; cursor held for retry: ${error.message.slice(0, 200)}`;
@@ -2440,7 +2460,7 @@ export const runIngestionPipeline = async ({
   source,
   sourceLease,
   scopedDb,
-  signal,
+  cycle,
   maxPages: maxPagesOverride,
   maxDecisions,
   dbSlot,
@@ -2451,6 +2471,10 @@ export const runIngestionPipeline = async ({
   if (!adapter) {
     panic(`Unknown adapter: ${source.adapterKey}`);
   }
+
+  // Started here rather than passed in, so the budget the loop measures a page
+  // against is the same one the abort it would get is derived from.
+  const deadline = cycle === undefined ? undefined : startCycleDeadline(cycle);
 
   let cursor = source.syncCursor;
   let inserted = 0;
@@ -2477,6 +2501,7 @@ export const runIngestionPipeline = async ({
   const polarityRules: RuleCache = new Map();
 
   const maxPages = maxPagesOverride ?? adapter.maxSyncPages ?? MAX_SYNC_PAGES;
+  const pageTimeout = adapter.pageTimeoutMs ?? ADAPTER_TIMEOUT.PAGE;
 
   const fetchObservedPage = async (
     fetchCursor: string | null,
@@ -2485,6 +2510,12 @@ export const runIngestionPipeline = async ({
     await Result.tryPromise({
       try: async () =>
         await sourceLease.beforeRemoteEffect(async () => {
+          // The lease renewal this callback runs behind spends budget of its
+          // own, so the page admitted a moment ago may no longer fit. This is
+          // the last point before the request where that can still be read.
+          if (deadline && !canStartCyclePage(deadline, pageTimeout)) {
+            return { type: "budget-exhausted" } as const;
+          }
           const pageResult = await adapter.fetchPage(
             fetchCursor,
             source.config ?? {},
@@ -2506,20 +2537,30 @@ export const runIngestionPipeline = async ({
       catch: (cause) => cause,
     });
 
+  const cycleTimeoutHalt = () => {
+    logger.warn("case_law.ingestion.cycle_timeout", {
+      adapterKey: adapter.key,
+      cursor: cursor ?? "",
+      pagesProcessed,
+      inserted,
+      skipped,
+      remainingMs: deadline ? Math.round(remainingCycleMs(deadline)) : 0,
+      pageTimeoutMs: pageTimeout,
+    });
+    return { type: "halt", reason: CYCLE_HALT_REASON.TIMEOUT } as const;
+  };
+
   const fetchNextObservedPage = async () => {
-    if (signal?.aborted) {
-      logger.warn("case_law.ingestion.cycle_timeout", {
-        adapterKey: adapter.key,
-        cursor: cursor ?? "",
-        pagesProcessed,
-        inserted,
-        skipped,
-      });
-      return { type: "halt", reason: "Cycle timeout exceeded" } as const;
+    // Starting a page the remaining budget cannot cover buys nothing: the
+    // cycle deadline aborts it mid-flight, its work is discarded and the
+    // cycle is reported as an adapter failure instead of a timeout. Stop on
+    // the last completed page, which is where the cursor already stands, and
+    // spend no lease renewal on the attempt.
+    if (deadline && !canStartCyclePage(deadline, pageTimeout)) {
+      return cycleTimeoutHalt();
     }
-    const pageTimeout = adapter.pageTimeoutMs ?? ADAPTER_TIMEOUT.PAGE;
-    const pageSignal = signal
-      ? AbortSignal.any([signal, AbortSignal.timeout(pageTimeout)])
+    const pageSignal = deadline
+      ? AbortSignal.any([deadline.signal, AbortSignal.timeout(pageTimeout)])
       : AbortSignal.timeout(pageTimeout);
     recentCursors.add(cursor);
     const observedPageResult = await fetchObservedPage(cursor, pageSignal);
@@ -2536,6 +2577,9 @@ export const runIngestionPipeline = async ({
       throw new ConcurrentModificationError({
         message: "Case-law source observation failed",
       });
+    }
+    if (observedPageResult.value.type === "budget-exhausted") {
+      return cycleTimeoutHalt();
     }
     if (observedPageResult.value.type === "fetch-error") {
       // Expected operational failure: record one halt in the event/log path;
@@ -2609,11 +2653,11 @@ export const runIngestionPipeline = async ({
     let pageHoldsDbSlot = false;
     if (dbSlot && page.decisions.length > 0) {
       try {
-        await dbSlot.acquire(signal);
+        await dbSlot.acquire(deadline?.signal);
         pageHoldsDbSlot = true;
       } catch (error) {
         if (error instanceof DOMException && error.name === "AbortError") {
-          haltReason = "Cycle timeout exceeded";
+          haltReason = CYCLE_HALT_REASON.TIMEOUT;
           break;
         }
         throw error;

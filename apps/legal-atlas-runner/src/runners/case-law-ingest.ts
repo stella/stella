@@ -41,7 +41,10 @@ import {
   getAdapter,
   listAdapters,
 } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
-import { runIngestionPipeline } from "@/api/handlers/case-law/ingestion/pipeline";
+import {
+  CYCLE_HALT_REASON,
+  runIngestionPipeline,
+} from "@/api/handlers/case-law/ingestion/pipeline";
 import type { SliceRetrySchedule } from "@/api/handlers/case-law/ingestion/reconciliation-engine";
 import {
   RECONCILIATION_INGEST_BUDGET_MS,
@@ -654,18 +657,16 @@ const runOneCycle = async (
 
   try {
     const adapter = getAdapter(adapterKey);
-    const cycleMs = adapter?.maxCycleMs ?? MAX_CYCLE_MS;
-    const signal = AbortSignal.any([
-      AbortSignal.timeout(cycleMs),
-      drainController.signal,
-    ]);
 
     result = await runIngestionPipeline({
       source,
       sourceLease,
       scopedDb: ingestionDb,
       dbSlot: dbWriteSemaphore,
-      signal,
+      cycle: {
+        budgetMs: adapter?.maxCycleMs ?? MAX_CYCLE_MS,
+        abortEarlyOn: [drainController.signal],
+      },
       ...(bounds.maxPages !== undefined && { maxPages: bounds.maxPages }),
       ...(bounds.maxDecisions !== undefined && {
         maxDecisions: bounds.maxDecisions,
@@ -680,7 +681,7 @@ const runOneCycle = async (
       logInfo(`[${adapterKey}] ${result.haltReason}`);
     } else if (result.haltReason) {
       outcome =
-        result.haltReason === "Cycle timeout exceeded"
+        result.haltReason === CYCLE_HALT_REASON.TIMEOUT
           ? CYCLE_OUTCOME.TIMEOUT
           : CYCLE_OUTCOME.FAILED;
       errorMessage = result.haltReason.slice(0, 2048);
