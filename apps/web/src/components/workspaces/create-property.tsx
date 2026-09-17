@@ -44,6 +44,7 @@ import { InlineOptionEditor } from "@/components/workspaces/properties/inline-op
 import { PropertyPromptInput } from "@/components/workspaces/properties/property-input/input";
 import type { PropertyPromptFieldHandle } from "@/components/workspaces/properties/property-input/input";
 import { isCreatableContentType } from "@/components/workspaces/property-utils";
+import { ADD_COLUMN_RAIL_PLUS_CLASS_NAME } from "@/components/workspaces/table/add-column-rail";
 import {
   buildDocTypeGate,
   docTypeGateLabel,
@@ -276,7 +277,7 @@ export const CreateProperty = ({
                       }}
                       type="button"
                     >
-                      <PlusIcon className="text-muted-foreground group-hover/add-column-rail:text-foreground group-focus-visible/add-column-rail:text-foreground absolute start-1/2 top-5 size-4 -translate-x-1/2 -translate-y-1/2 transition-colors rtl:translate-x-1/2" />
+                      <PlusIcon className={ADD_COLUMN_RAIL_PLUS_CLASS_NAME} />
                     </button>
                   }
                 />
