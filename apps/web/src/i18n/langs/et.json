@@ -1787,6 +1787,7 @@
     "barLabel": "Soovituste ülevaatus",
     "blockedCollaboration": "Jagatud muutmisseanss on veel avanemas. Proovi hetke pärast uuesti.",
     "blockedOpening": "Dokument on veel avanemas. Proovi hetke pärast uuesti.",
+    "blockedReadOnly": "See jagatud dokument on avatud ainult lugemiseks.",
     "change": {
       "deleteParagraph": "Kustuta lõik",
       "replacement": "„{find}“ → „{replace}“"
@@ -2828,6 +2829,7 @@
       "noteBlockedChecking": "stella kontrollib veel, kas seda dokumenti saab ohutult muuta. Sinu märkus on alles; proovi hetke pärast uuesti.",
       "noteBlockedCollaboration": "Jagatud muutmisseanss on veel avanemas. Sinu märkus on alles; proovi hetke pärast uuesti.",
       "noteBlockedOpening": "Dokument on veel avanemas. Sinu märkus on alles; proovi hetke pärast uuesti.",
+      "noteBlockedReadOnly": "See jagatud dokument on avatud ainult lugemiseks. Sinu märkus on alles; proovi uuesti, kui saad seda muuta.",
       "noteNotAdded": "Märkust ei lisatud",
       "openPlaybooks": "Ava playbookid",
       "pane": {

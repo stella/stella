@@ -1787,6 +1787,7 @@
     "barLabel": "Revize návrhů",
     "blockedCollaboration": "Sdílená úprava se teprve otevírá. Zkuste to za chvíli znovu.",
     "blockedOpening": "Dokument se teprve otevírá. Zkuste to za chvíli znovu.",
+    "blockedReadOnly": "Tento sdílený dokument je otevřený jen ke čtení.",
     "change": {
       "deleteParagraph": "Smazat odstavec",
       "replacement": "„{find}“ → „{replace}“"
@@ -2828,6 +2829,7 @@
       "noteBlockedChecking": "stella ještě ověřuje, zda lze dokument bezpečně upravovat. Poznámka zůstává zachována; zkuste to za chvíli znovu.",
       "noteBlockedCollaboration": "Sdílená úprava se teprve otevírá. Poznámka zůstává zachována; zkuste to za chvíli znovu.",
       "noteBlockedOpening": "Dokument se teprve otevírá. Poznámka zůstává zachována; zkuste to za chvíli znovu.",
+      "noteBlockedReadOnly": "Tento sdílený dokument je otevřený jen ke čtení. Poznámka zůstává zachována; zkuste to znovu, až budete moci dokument upravovat.",
       "noteNotAdded": "Poznámka nebyla přidána",
       "openPlaybooks": "Otevřít playbooky",
       "pane": {

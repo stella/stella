@@ -1787,6 +1787,7 @@
     "barLabel": "Przegląd sugestii",
     "blockedCollaboration": "Sesja wspólnej edycji dopiero się otwiera. Spróbuj ponownie za chwilę.",
     "blockedOpening": "Dokument dopiero się otwiera. Spróbuj ponownie za chwilę.",
+    "blockedReadOnly": "Ten udostępniony dokument jest otwarty tylko do odczytu.",
     "change": {
       "deleteParagraph": "Usuń akapit",
       "replacement": "„{find}” → „{replace}”"
@@ -2828,6 +2829,7 @@
       "noteBlockedChecking": "stella nadal sprawdza, czy ten dokument można bezpiecznie edytować. Notatka została zachowana; spróbuj ponownie za chwilę.",
       "noteBlockedCollaboration": "Sesja wspólnej edycji dopiero się otwiera. Notatka została zachowana; spróbuj ponownie za chwilę.",
       "noteBlockedOpening": "Dokument dopiero się otwiera. Notatka została zachowana; spróbuj ponownie za chwilę.",
+      "noteBlockedReadOnly": "Ten udostępniony dokument jest otwarty tylko do odczytu. Notatka została zachowana; spróbuj ponownie, gdy będziesz móc go edytować.",
       "noteNotAdded": "Notatka nie została dodana",
       "openPlaybooks": "Otwórz playbooki",
       "pane": {

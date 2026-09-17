@@ -942,7 +942,12 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
 
   const requestEditMode = useCallback(async (): Promise<DocxEditModeResult> => {
     if (isCollaborativeEditing) {
-      return { type: "editing" };
+      // A joined session can still be read-only, and `isUnlocked` is false
+      // then: reporting it as editing sends the caller into an apply the
+      // editor silently refuses.
+      return canEditCollaboratively
+        ? { type: "editing" }
+        : { type: "blocked", reason: "collaborationReadOnly" };
     }
 
     if (state.status === "editing") {
@@ -988,6 +993,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
     return { type: "editing" };
   }, [
     compatibility?.canSafelyEdit,
+    canEditCollaboratively,
     collaborationEnabled,
     fieldId,
     isCollaborativeEditing,

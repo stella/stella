@@ -1790,6 +1790,7 @@ type Messages = {
     "barLabel": "Suggestion review";
     "blockedCollaboration": "The shared editing session is still opening. Try again in a moment.";
     "blockedOpening": "The document is still opening. Try again in a moment.";
+    "blockedReadOnly": "This shared document is open for viewing only.";
     "change": {
       "deleteParagraph": "Delete paragraph";
       "replacement": "“{find}” → “{replace}”";
@@ -2831,6 +2832,7 @@ type Messages = {
       "noteBlockedChecking": "stella is still checking whether this document can be edited safely. Your note is kept; try again in a moment.";
       "noteBlockedCollaboration": "The shared editing session is still opening. Your note is kept; try again in a moment.";
       "noteBlockedOpening": "The document is still opening. Your note is kept; try again in a moment.";
+      "noteBlockedReadOnly": "This shared document is open for viewing only. Your note is kept; try again once you can edit it.";
       "noteNotAdded": "Note not added";
       "openPlaybooks": "Open playbooks";
       "pane": {

@@ -1787,6 +1787,7 @@
     "barLabel": "Revízia návrhov",
     "blockedCollaboration": "Zdieľaná úprava sa ešte otvára. Skúste to o chvíľu znova.",
     "blockedOpening": "Dokument sa ešte otvára. Skúste to o chvíľu znova.",
+    "blockedReadOnly": "Tento zdieľaný dokument je otvorený len na čítanie.",
     "change": {
       "deleteParagraph": "Vymazať odsek",
       "replacement": "„{find}“ → „{replace}“"
@@ -2828,6 +2829,7 @@
       "noteBlockedChecking": "stella ešte overuje, či sa dokument dá bezpečne upravovať. Poznámka zostáva zachovaná; skúste to o chvíľu znova.",
       "noteBlockedCollaboration": "Zdieľaná úprava sa ešte otvára. Poznámka zostáva zachovaná; skúste to o chvíľu znova.",
       "noteBlockedOpening": "Dokument sa ešte otvára. Poznámka zostáva zachovaná; skúste to o chvíľu znova.",
+      "noteBlockedReadOnly": "Tento zdieľaný dokument je otvorený len na čítanie. Poznámka zostáva zachovaná; skúste to znova, keď budete môcť dokument upravovať.",
       "noteNotAdded": "Poznámka nebola pridaná",
       "openPlaybooks": "Otvoriť playbooky",
       "pane": {

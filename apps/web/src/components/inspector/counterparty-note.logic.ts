@@ -36,6 +36,7 @@ type CounterpartyNoteDescriptionKey = Extract<
   | "inspector.review.noteBlockedChecking"
   | "inspector.review.noteBlockedCollaboration"
   | "inspector.review.noteBlockedOpening"
+  | "inspector.review.noteBlockedReadOnly"
 >;
 
 type CounterpartyNoteMessage = {
@@ -69,6 +70,11 @@ export const COUNTERPARTY_NOTE_BLOCKED_MESSAGES = {
     tone: "info",
     title: "inspector.review.noteNotAdded",
     description: "inspector.review.noteBlockedCollaboration",
+  },
+  collaborationReadOnly: {
+    tone: "warning",
+    title: "inspector.review.noteNotAdded",
+    description: "inspector.review.noteBlockedReadOnly",
   },
   opening: {
     tone: "info",

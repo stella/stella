@@ -19,6 +19,7 @@ const EVERY_BLOCK_REASON = [
   "pendingCompatibility",
   "unsafe",
   "collaboration",
+  "collaborationReadOnly",
   "opening",
 ] as const satisfies readonly DocxEditModeBlockReason[];
 

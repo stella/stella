@@ -1787,6 +1787,7 @@
     "barLabel": "Revisión de sugerencias",
     "blockedCollaboration": "La sesión de edición compartida aún se está abriendo. Inténtalo de nuevo en un momento.",
     "blockedOpening": "El documento aún se está abriendo. Inténtalo de nuevo en un momento.",
+    "blockedReadOnly": "Este documento compartido está abierto solo para lectura.",
     "change": {
       "deleteParagraph": "Eliminar párrafo",
       "replacement": "“{find}” → “{replace}”"
@@ -2828,6 +2829,7 @@
       "noteBlockedChecking": "stella todavía está comprobando si este documento se puede editar de forma segura. Tu nota se conserva; inténtalo de nuevo en un momento.",
       "noteBlockedCollaboration": "La sesión de edición compartida aún se está abriendo. Tu nota se conserva; inténtalo de nuevo en un momento.",
       "noteBlockedOpening": "El documento aún se está abriendo. Tu nota se conserva; inténtalo de nuevo en un momento.",
+      "noteBlockedReadOnly": "Este documento compartido está abierto solo para lectura. Tu nota se conserva; inténtalo de nuevo cuando puedas editarlo.",
       "noteNotAdded": "Nota no añadida",
       "openPlaybooks": "Abrir playbooks",
       "pane": {

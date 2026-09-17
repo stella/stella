@@ -1787,6 +1787,7 @@
     "barLabel": "Révision des suggestions",
     "blockedCollaboration": "La session d'édition partagée est en cours d'ouverture. Réessayez dans un instant.",
     "blockedOpening": "Le document est en cours d'ouverture. Réessayez dans un instant.",
+    "blockedReadOnly": "Ce document partagé est ouvert en lecture seule.",
     "change": {
       "deleteParagraph": "Supprimer le paragraphe",
       "replacement": "« {find} » → « {replace} »"
@@ -2828,6 +2829,7 @@
       "noteBlockedChecking": "stella vérifie encore si ce document peut être modifié sans risque. Votre note est conservée ; réessayez dans un instant.",
       "noteBlockedCollaboration": "La session d'édition partagée est en cours d'ouverture. Votre note est conservée ; réessayez dans un instant.",
       "noteBlockedOpening": "Le document est en cours d'ouverture. Votre note est conservée ; réessayez dans un instant.",
+      "noteBlockedReadOnly": "Ce document partagé est ouvert en lecture seule. Votre note est conservée ; réessayez une fois que vous pourrez le modifier.",
       "noteNotAdded": "Note non ajoutée",
       "openPlaybooks": "Ouvrir les playbooks",
       "pane": {

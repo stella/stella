@@ -92,6 +92,10 @@ const EDIT_MODE_BLOCKED_MESSAGES = {
     title: "docxReview.notApplied",
     description: "docxReview.blockedCollaboration",
   },
+  collaborationReadOnly: {
+    title: "docxReview.notApplied",
+    description: "docxReview.blockedReadOnly",
+  },
   opening: {
     title: "docxReview.notApplied",
     description: "docxReview.blockedOpening",
@@ -109,6 +113,7 @@ const EDIT_MODE_BLOCKED_MESSAGES = {
       TranslationKey,
       | "docxReview.blockedCollaboration"
       | "docxReview.blockedOpening"
+      | "docxReview.blockedReadOnly"
       | "folio.checkingDocxEditDescription"
       | "folio.unsupportedDocxEditDescription"
     >;

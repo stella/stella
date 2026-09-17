@@ -1787,6 +1787,7 @@
     "barLabel": "Vorschlagsprüfung",
     "blockedCollaboration": "Die gemeinsame Bearbeitungssitzung wird noch geöffnet. Versuchen Sie es gleich noch einmal.",
     "blockedOpening": "Das Dokument wird noch geöffnet. Versuchen Sie es gleich noch einmal.",
+    "blockedReadOnly": "Dieses geteilte Dokument ist nur zum Lesen geöffnet.",
     "change": {
       "deleteParagraph": "Absatz löschen",
       "replacement": "„{find}“ → „{replace}“"
@@ -2828,6 +2829,7 @@
       "noteBlockedChecking": "stella prüft noch, ob dieses Dokument sicher bearbeitet werden kann. Ihre Notiz bleibt erhalten; versuchen Sie es gleich noch einmal.",
       "noteBlockedCollaboration": "Die gemeinsame Bearbeitungssitzung wird noch geöffnet. Ihre Notiz bleibt erhalten; versuchen Sie es gleich noch einmal.",
       "noteBlockedOpening": "Das Dokument wird noch geöffnet. Ihre Notiz bleibt erhalten; versuchen Sie es gleich noch einmal.",
+      "noteBlockedReadOnly": "Dieses geteilte Dokument ist nur zum Lesen geöffnet. Ihre Notiz bleibt erhalten; versuchen Sie es erneut, sobald Sie es bearbeiten können.",
       "noteNotAdded": "Notiz nicht hinzugefügt",
       "openPlaybooks": "Playbooks öffnen",
       "pane": {

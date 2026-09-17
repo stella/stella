@@ -1787,6 +1787,7 @@
     "barLabel": "Pasiūlymų peržiūra",
     "blockedCollaboration": "Bendro redagavimo sesija dar atveriama. Pabandykite dar kartą po akimirkos.",
     "blockedOpening": "Dokumentas dar atveriamas. Pabandykite dar kartą po akimirkos.",
+    "blockedReadOnly": "Šis bendrinamas dokumentas atvertas tik skaityti.",
     "change": {
       "deleteParagraph": "Ištrinti pastraipą",
       "replacement": "„{find}“ → „{replace}“"
@@ -2828,6 +2829,7 @@
       "noteBlockedChecking": "stella dar tikrina, ar šį dokumentą galima saugiai redaguoti. Jūsų pastaba išsaugota; pabandykite dar kartą po akimirkos.",
       "noteBlockedCollaboration": "Bendro redagavimo sesija dar atveriama. Jūsų pastaba išsaugota; pabandykite dar kartą po akimirkos.",
       "noteBlockedOpening": "Dokumentas dar atveriamas. Jūsų pastaba išsaugota; pabandykite dar kartą po akimirkos.",
+      "noteBlockedReadOnly": "Šis bendrinamas dokumentas atvertas tik skaityti. Jūsų pastaba išsaugota; pabandykite dar kartą, kai galėsite jį redaguoti.",
       "noteNotAdded": "Pastaba nepridėta",
       "openPlaybooks": "Atverti peržiūros vadovus",
       "pane": {

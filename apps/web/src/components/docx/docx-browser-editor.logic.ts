@@ -200,10 +200,13 @@ export type DocxEditBlockReason = "pendingCompatibility" | "unsafe";
  * Why a request to enter edit mode did not reach it. `collaboration` and
  * `opening` are the waits the editor cannot answer synchronously: the shared
  * session is being joined, or an edit session is already opening.
+ * `collaborationReadOnly` is not a wait: the shared session this reader joined
+ * does not take edits at all.
  */
 export type DocxEditModeBlockReason =
   | DocxEditBlockReason
   | "collaboration"
+  | "collaborationReadOnly"
   | "opening";
 
 /**
