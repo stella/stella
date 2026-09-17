@@ -4160,6 +4160,10 @@ const CounterpartyNotePopover = ({
             aria-label={t("inspector.review.addNote")}
             autoFocus
             className="min-h-[72px] text-sm"
+            // Frozen while the write is in flight: an edit typed during the
+            // wait would be cleared below by a submission that never carried
+            // it, which is the loss this whole path exists to prevent.
+            disabled={submitting}
             maxLength={2000}
             onChange={(event) => setNote(event.target.value)}
             placeholder={t("inspector.review.addNotePlaceholder")}
