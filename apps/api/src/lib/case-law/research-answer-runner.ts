@@ -67,6 +67,7 @@ import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 import { getTanStackTextModelForRole } from "@/api/lib/tanstack-ai-models";
 import {
   decodeSystemOneAnswers,
+  describeSystemOneReadings,
   planSystemOneAnswers,
 } from "@/api/lib/typesafe/answer-questions";
 import type { SystemOneClient } from "@/api/lib/typesafe/system-one";
@@ -691,13 +692,14 @@ const answerWithSystemOne = async ({
     });
     return untouched;
   }
+  const readings = decodeSystemOneAnswers({
+    plan,
+    questions: asked,
+    answers: answered.value.answers,
+  });
   const resolved = resolveSystemOneOutcomes({
     questions: asked,
-    outcomes: decodeSystemOneAnswers({
-      plan,
-      questions: asked,
-      answers: answered.value.answers,
-    }),
+    outcomes: readings,
     excerptByAnchor: new Map(sources.map((source) => [source.id, source.text])),
     run: {
       model: answered.value.model,
@@ -714,6 +716,10 @@ const answerWithSystemOne = async ({
     latencyMs: answered.value.latencyMs,
     answeredCount: resolved.settled.length,
     fallbackCount: resolved.fallbackColumnIds.length,
+    readings: describeSystemOneReadings({
+      questions: asked,
+      outcomes: readings,
+    }),
   });
   const byColumn = new Map(
     resolved.settled.map((entry) => [entry.columnId, entry.outcome]),

@@ -6,6 +6,7 @@ import type {
 } from "@/api/lib/typesafe/answer-questions";
 import {
   decodeSystemOneAnswers,
+  describeSystemOneReadings,
   isSystemOneAnswerable,
   planSystemOneAnswers,
 } from "@/api/lib/typesafe/answer-questions";
@@ -355,5 +356,46 @@ describe("decodeSystemOneAnswers", () => {
       answer: { amount: 1_250_000, currency: "CZK" },
       sourceId: "p2",
     });
+  });
+});
+
+describe("describeSystemOneReadings", () => {
+  test("lists every question with what was chosen and how sure the model was", () => {
+    const plan = planSystemOneAnswers({
+      document,
+      sources,
+      language: "cs",
+      questions: [contractType],
+    });
+    const outcomes = decodeSystemOneAnswers({
+      plan,
+      questions: [contractType],
+      answers: {
+        "col-type:value": choiceAnswer("o1", {
+          o1: 0.93,
+          o2: 0.04,
+          __not_stated: 0.03,
+        }),
+        "col-type:where": choiceAnswer("p1", {
+          p1: 0.8,
+          p2: 0.15,
+          __none: 0.05,
+        }),
+      },
+    });
+    const readings: unknown = JSON.parse(
+      describeSystemOneReadings({ questions: [contractType], outcomes }),
+    );
+    expect(readings).toEqual([
+      {
+        kind: "single-select",
+        q: "What kind of contract is this?",
+        state: "answered",
+        value: "Purchase agreement",
+        probability: 0.93,
+        confidence: 0.9,
+        source: "p1",
+      },
+    ]);
   });
 });
