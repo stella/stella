@@ -28,6 +28,13 @@ const WORKFLOW_FILE = ".github/workflows/ci.yml";
 const TREE_SUFFIX = "/**";
 /** What `bun run changeset --empty` writes: no frontmatter, no summary. */
 const EMPTY_CHANGESET = "---\n---\n";
+const CHANGESET_POLICY_ACTION = "changeset-policy";
+const CHANGESET_POLICY_PIN = new RegExp(
+  `${CHANGESET_POLICY_ACTION}@[0-9a-f]{40} # v(\\d+)\\.(\\d+)\\.(\\d+)`,
+  "u",
+);
+/** The first shared-gate version that reads a renamed entry as an added one. */
+const MINIMUM_CHANGESET_POLICY_VERSION = [1, 7, 1];
 /** Release metadata that belongs to the repository, not to one package. */
 const REPO_LEVEL_GENERATED = new Set(["bun.lock"]);
 
@@ -401,6 +408,20 @@ describe("changeset policy file", () => {
   });
 });
 
+/** Negative when `version` precedes `minimum`, zero when they are equal. */
+const compareVersions = (
+  version: readonly number[],
+  minimum: readonly number[],
+): number => {
+  for (const [index, part] of version.entries()) {
+    const floor = minimum[index] ?? 0;
+    if (part !== floor) {
+      return part - floor;
+    }
+  }
+  return 0;
+};
+
 describe("workflow and pre-push read the same policy", () => {
   test("the workflow job feeds every list from the policy file", () => {
     const job = changesetJob();
@@ -408,6 +429,23 @@ describe("workflow and pre-push read the same policy", () => {
     for (const key of ["releasePaths", "generatedPaths", "packageFiles"]) {
       expect(job).toContain(`.${key}[]`);
     }
+  });
+
+  test("pins the shared gate to a version that reads renames as this guard does", () => {
+    // The shared action counted a renamed changeset entry as no entry at all
+    // until this version, so an older pin would refuse a release commit that
+    // pre-push accepts. Dependabot rewrites the comment with the SHA, so the
+    // comment is the readable side of the pin; it may only move forward.
+    const pin = CHANGESET_POLICY_PIN.exec(readFile(WORKFLOW_FILE));
+    if (pin === null) {
+      throw new Error(
+        `${WORKFLOW_FILE} must pin ${CHANGESET_POLICY_ACTION} to a 40-character SHA commented with its version.`,
+      );
+    }
+    const pinned = [pin.at(1), pin.at(2), pin.at(3)].map(Number);
+    expect(
+      compareVersions(pinned, MINIMUM_CHANGESET_POLICY_VERSION),
+    ).toBeGreaterThanOrEqual(0);
   });
 
   test("the workflow job inlines no pathspecs of its own", () => {
