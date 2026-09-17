@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 1.6.0
+
+### Minor Changes
+
+- [#3465](https://github.com/stella/stella/pull/3465) [`cbe581f`](https://github.com/stella/stella/commit/cbe581f2aedd1fa831eb32221a52daaca5cfcb46) Thanks [@jan-kubica](https://github.com/jan-kubica)! - case-law search takes several queries; case-law read takes several decision ids.
+
 ## 1.5.1
 
 ### Patch Changes
