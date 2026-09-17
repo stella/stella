@@ -44,6 +44,18 @@ const resolveApiModule = (
   );
 };
 
+/** The modules `entrypoint` imports itself, static and dynamic alike. */
+export const collectApiImports = async (
+  entrypoint: string,
+): Promise<string[]> => {
+  const source = await Bun.file(entrypoint).text();
+  const loader = entrypoint.endsWith(".tsx") ? "tsx" : "ts";
+  const imports = new Bun.Transpiler({ loader }).scan(source).imports;
+  return imports
+    .map(({ path }) => resolveApiModule(path, entrypoint))
+    .filter((path): path is string => path !== null);
+};
+
 export const collectApiModuleGraph = async (
   entrypoint: string,
   visited = new Set<string>(),
@@ -52,12 +64,7 @@ export const collectApiModuleGraph = async (
     return visited;
   }
   visited.add(entrypoint);
-  const source = await Bun.file(entrypoint).text();
-  const loader = entrypoint.endsWith(".tsx") ? "tsx" : "ts";
-  const imports = new Bun.Transpiler({ loader }).scan(source).imports;
-  const dependencies = imports
-    .map(({ path }) => resolveApiModule(path, entrypoint))
-    .filter((path): path is string => path !== null);
+  const dependencies = await collectApiImports(entrypoint);
   await Promise.all(
     dependencies.map(
       async (dependency) => await collectApiModuleGraph(dependency, visited),
