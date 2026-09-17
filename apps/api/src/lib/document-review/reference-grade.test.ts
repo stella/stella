@@ -203,6 +203,74 @@ describe("deriveParameterImpact", () => {
   });
 });
 
+// The model is told to cite in `targetCitations`, yet it also writes block ids
+// into its prose. People read that prose in the panel, the memo and the chat
+// draft, so the markers come out; a block cited only there still counts.
+describe("block-id markers in prose", () => {
+  test("strips known ids from the prose and keeps them as citations", () => {
+    const grading = normalizeReferenceGrading({
+      raw: raw({
+        rationale:
+          "The target allows twice as long. [p-1] [p-2] The standard allows six months. [r-9]",
+        recommendation: "Shorten the period [p-2].",
+        targetCitations: [{ blockId: "p-1" }],
+      }),
+      position: position(),
+      targetBlocks,
+      targetLanguage: "EN-GB",
+      perspective: buyer,
+    });
+    expect(grading.explanation).toEqual({
+      type: "comparison",
+      text: "The target allows twice as long. The standard allows six months.",
+    });
+    expect(grading.recommendation).toBe("Shorten the period.");
+    expect(grading.citations.map((citation) => citation.blockId)).toEqual([
+      "p-1",
+      "p-2",
+    ]);
+  });
+
+  test("strips every wrapper the model puts around a known id", () => {
+    const grading = normalizeReferenceGrading({
+      raw: raw({
+        rationale:
+          "The target names the Verification Persons (block p-1). The standard does not [block r-9]; see block p-2 for the definition.",
+        targetCitations: [],
+      }),
+      position: position(),
+      targetBlocks,
+      targetLanguage: "EN-GB",
+      perspective: buyer,
+    });
+    expect(grading.explanation).toEqual({
+      type: "comparison",
+      text: "The target names the Verification Persons. The standard does not; see for the definition.",
+    });
+    expect(grading.citations.map((citation) => citation.blockId)).toEqual([
+      "p-1",
+      "p-2",
+    ]);
+  });
+
+  test("leaves the document's own bracketed drafting alone", () => {
+    const grading = normalizeReferenceGrading({
+      raw: raw({
+        rationale:
+          "The target leaves the cap at [●]% and the date at [insert].",
+      }),
+      position: position(),
+      targetBlocks,
+      targetLanguage: "EN-GB",
+      perspective: buyer,
+    });
+    expect(grading.explanation).toEqual({
+      type: "comparison",
+      text: "The target leaves the cap at [●]% and the date at [insert].",
+    });
+  });
+});
+
 describe("normalizeReferenceGrading", () => {
   test("maps the assessment to a verdict and grounds a parameter fix", () => {
     const grading = normalizeReferenceGrading({

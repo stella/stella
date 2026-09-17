@@ -206,6 +206,49 @@ const citationFor = (
   return text === undefined ? null : { blockId, text };
 };
 
+type StrippedProse = { text: string; blockIds: string[] };
+
+const escapeRegExp = (value: string): string =>
+  value.replaceAll(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+
+/**
+ * Remove block-id markers from prose the reader sees, keeping the ids so a
+ * block the model named only there still becomes a citation.
+ *
+ * The model writes a marker in whichever shape it likes: `[373A0010]`,
+ * `(block 373A0010)`, `[block 373A0010]`, or a bare `block 373A0010`. Only
+ * ids the input actually supplied are markers, so the pattern is built from
+ * them; any other bracketed token is the document's own drafting ("[●]",
+ * "[12 (twelve) months]") and stays.
+ */
+const stripBlockIdMarkers = (
+  prose: string,
+  knownBlockIds: ReadonlySet<string>,
+): StrippedProse => {
+  const blockIds: string[] = [];
+  if (knownBlockIds.size === 0) {
+    return { text: prose.trim(), blockIds };
+  }
+  const ids = Array.from(knownBlockIds, escapeRegExp).join("|");
+  // Ids match exactly as supplied: a citation is looked up by that string.
+  const pattern = new RegExp(
+    `\\s*(?:[\\[(]\\s*(?:[Bb]lock\\s+)?(${ids})\\s*[\\])]|\\b[Bb]lock\\s+(${ids})\\b)`,
+    "gu",
+  );
+  const text = prose
+    .replaceAll(pattern, (_marker, wrapped?: string, bare?: string) => {
+      const blockId = wrapped ?? bare;
+      if (blockId !== undefined) {
+        blockIds.push(blockId);
+      }
+      return "";
+    })
+    .replaceAll(/[ \t]+([.,;:])/gu, "$1")
+    .replaceAll(/[ \t]{2,}/gu, " ")
+    .trim();
+  return { text, blockIds };
+};
+
 const verifiedTargetCitations = (
   raw: readonly { blockId: string }[],
   blocks: BlockLookup,
@@ -498,7 +541,27 @@ export const normalizeReferenceGrading = ({
   perspective,
   targetLanguage,
 }: NormalizeArgs): ReferenceGrading => {
-  const citations = verifiedTargetCitations(raw.targetCitations, targetBlocks);
+  // The model is told to cite in `targetCitations`, but it also writes block
+  // ids into its prose ("… at the Purchase Price. [373A0010]"). Prose is read
+  // by people, in the panel, the memo and the chat draft, so the markers come
+  // out; a target block named only there still counts as a citation.
+  const knownBlockIds = new Set([
+    ...targetBlocks.keys(),
+    ...position.passages.map((passage) => passage.blockId),
+  ]);
+  const rationaleProse = stripBlockIdMarkers(raw.rationale, knownBlockIds);
+  const recommendationProse = stripBlockIdMarkers(
+    raw.recommendation,
+    knownBlockIds,
+  );
+  const citations = verifiedTargetCitations(
+    [
+      ...raw.targetCitations,
+      ...rationaleProse.blockIds.map((blockId) => ({ blockId })),
+      ...recommendationProse.blockIds.map((blockId) => ({ blockId })),
+    ],
+    targetBlocks,
+  );
   const grounded = isGrounded(raw.assessment, citations.length > 0);
   if (!grounded) {
     return ungradedReferenceGrading(position);
@@ -514,7 +577,7 @@ export const normalizeReferenceGrading = ({
     standardBlocks,
   );
   const impact = referenceImpact({ delta, raw, perspective });
-  const recommendation = raw.recommendation.trim();
+  const recommendation = recommendationProse.text;
   const verdict = ASSESSMENT_VERDICTS[raw.assessment];
 
   return {
@@ -525,7 +588,7 @@ export const normalizeReferenceGrading = ({
       new Set(position.passages.map((passage) => passage.fileFieldId)).size,
     ),
     impact,
-    explanation: { type: "comparison", text: raw.rationale.trim() },
+    explanation: { type: "comparison", text: rationaleProse.text },
     recommendation: recommendation.length > 0 ? recommendation : null,
     citations,
     referenceCitations: passageCitations(position.passages),
@@ -548,7 +611,7 @@ Each position names one term, says what KIND of term it is, and gives the passag
 
 Answer every supplied position exactly once, preserving its positionId. Classify the target as aligned, different, missing-from-target, additional-in-target, deal-specific, or not-comparable. Prefer deal-specific or not-comparable over a strained comparison: when the target's clause serves a different function from the standard's, say so in rationale rather than treating it as a deviation. Set consensus to mixed when the standard's own passages materially disagree.
 
-Cite only exact block IDs supplied in the input; target citations must be blocks of the target document, and any standard block ID must be one of that position's passages. In rationale and recommendation write "the target" and "the standard", never source keys. rationale states what each side does with the term and how they differ. recommendation is one imperative sentence, or empty when nothing should change.
+Cite only exact block IDs supplied in the input; target citations must be blocks of the target document, and any standard block ID must be one of that position's passages. Block IDs belong in targetCitations and delta fields only; never write one inside rationale or recommendation, which a person reads. In rationale and recommendation write "the target" and "the standard", never source keys. rationale states what each side does with the term and how they differ. recommendation is one imperative sentence, or empty when nothing should change.
 
 Fill only the delta fields the position's termKind needs; leave the rest null, empty or false:
 - parameter: targetValue and standardValue. text is the term exactly as that side's block writes it, character for character, including any words in brackets ("12 (twelve) months", "EUR 1,000,000"); value is its number, unit its unit ("months", "EUR", "%"); blockId is the block stating it. Null on a side that states no such term. Do not paraphrase text — it is matched against the block.

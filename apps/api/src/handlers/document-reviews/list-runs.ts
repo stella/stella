@@ -21,11 +21,15 @@
  */
 
 import { Result } from "better-result";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { t } from "elysia";
 
-import { documentReviewFindings, documentReviewRuns } from "@/api/db/schema";
+import {
+  documentReviewFindings,
+  documentReviewRuns,
+  fields,
+} from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import {
@@ -151,11 +155,38 @@ const listDocumentReviewRuns = createSafeHandler(
               eq(documentReviewFindings.workspaceId, workspaceId),
             ),
           )
+          // A file field is a row of one entity version, so the id the
+          // caller holds names only the version it is looking at. A run is a
+          // record of the document, not of a version of it: every run whose
+          // field sits on the same property of this entity belongs to this
+          // history, and its own `entityVersionId` says which version it read.
           .where(
             and(
               eq(documentReviewRuns.workspaceId, workspaceId),
               eq(documentReviewRuns.entityId, query.entityId),
-              eq(documentReviewRuns.fileFieldId, query.fileFieldId),
+              inArray(
+                documentReviewRuns.fileFieldId,
+                tx
+                  .select({ id: fields.id })
+                  .from(fields)
+                  .where(
+                    and(
+                      eq(fields.workspaceId, workspaceId),
+                      eq(
+                        fields.propertyId,
+                        tx
+                          .select({ propertyId: fields.propertyId })
+                          .from(fields)
+                          .where(
+                            and(
+                              eq(fields.workspaceId, workspaceId),
+                              eq(fields.id, query.fileFieldId),
+                            ),
+                          ),
+                      ),
+                    ),
+                  ),
+              ),
               cursorCondition,
             ),
           )
