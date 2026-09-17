@@ -888,7 +888,7 @@
     "files": {}
   },
   "lint-suppression-directives": {
-    "count": 281,
+    "count": 282,
     "files": {
       "apps/api/scripts/lib/compact-schema-defs.ts": 1,
       "apps/api/scripts/seed-case-law.ts": 1,
@@ -963,6 +963,7 @@
       "apps/api/src/lib/skills/skill-package.ts": 2,
       "apps/api/src/lib/tanstack-ai-models.ts": 8,
       "apps/api/src/lib/usage/usage-ledger.ts": 4,
+      "apps/api/src/mcp/compat-ids.ts": 1,
       "apps/api/src/mcp/gateway/skills.ts": 1,
       "apps/api/src/mcp/server-core.ts": 1,
       "apps/api/src/mcp/template-persistence.ts": 1,

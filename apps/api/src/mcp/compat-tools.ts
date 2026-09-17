@@ -378,6 +378,64 @@ const matterOnlyPosition = (
     : { matter: cursor, corpus: EMPTY_CORPUS_CURSORS };
 };
 
+type MatterSearchPage = {
+  /** Passed through as the provider spelled it; absent is its own answer. */
+  nextCursor: string | null | undefined;
+  results: McpCompatSearchResult[];
+};
+
+/** What a matter source whose cursor said its pages ended answers with. */
+const EXHAUSTED_MATTER_PAGE: MatterSearchPage = {
+  nextCursor: null,
+  results: [],
+};
+
+/**
+ * One page of matter knowledge.
+ *
+ * Request exactly the page size and pass the provider cursor through so
+ * pagination stays correct: the keyset cursor tracks the provider's hit
+ * position, so over-fetching and post-filtering would desync it and skip
+ * results. Non-fetchable hits are dropped, so a page may be smaller than the
+ * page size; callers keep paging while `nextCursor` is non-null.
+ */
+const searchMatterKnowledge = async ({
+  context,
+  cursor,
+  query,
+}: {
+  context: McpRequestContext;
+  cursor: string | undefined;
+  query: string;
+}): Promise<MatterSearchPage> => {
+  const page = await (
+    context.testDependencies?.getSearchProvider ?? getSearchProvider
+  )().search({
+    query,
+    organizationId: context.organizationId,
+    workspaceIds: context.accessibleWorkspaceIds,
+    limit: DEFAULT_COMPAT_SEARCH_LIMIT,
+    ...(cursor === undefined ? {} : { cursor }),
+  });
+
+  const hits = getCompatSearchHits({
+    hits: page.hits.map((hit) => ({
+      entityId: hit.entityId,
+      workspaceId: hit.workspaceId,
+      name: hit.title,
+    })),
+  });
+  const fetchableMap = await getFetchableEntityMap({
+    context,
+    entityIds: getCompatSearchEntityIds(hits),
+  });
+
+  return {
+    nextCursor: page.nextCursor,
+    results: mapCompatSearchResults({ fetchableMap, hits }),
+  };
+};
+
 const handleCompatSearchTool: McpToolHandler<
   v.InferInput<typeof COMPAT_SEARCH_OUTPUT_SCHEMA>
 > = async ({ args, context }) => {
@@ -395,45 +453,20 @@ const handleCompatSearchTool: McpToolHandler<
     return compatSearchCursorError();
   }
 
-  // Request exactly the page size and pass the provider cursor through so
-  // pagination stays correct: the keyset cursor tracks the provider's hit
-  // position, so over-fetching and post-filtering would desync it and skip
-  // results. Non-fetchable hits are dropped, so a page may be smaller than
-  // the page size; callers keep paging while `nextCursor` is non-null.
-  const matterPage =
+  const matter =
     position.matter === null
-      ? null
-      : await (
-          context.testDependencies?.getSearchProvider ?? getSearchProvider
-        )().search({
+      ? EXHAUSTED_MATTER_PAGE
+      : await searchMatterKnowledge({
+          context,
+          cursor: position.matter,
           query,
-          organizationId: context.organizationId,
-          workspaceIds: context.accessibleWorkspaceIds,
-          limit: DEFAULT_COMPAT_SEARCH_LIMIT,
-          ...(position.matter === undefined ? {} : { cursor: position.matter }),
         });
-
-  const hits = getCompatSearchHits({
-    hits: (matterPage?.hits ?? []).map((hit) => ({
-      entityId: hit.entityId,
-      workspaceId: hit.workspaceId,
-      name: hit.title,
-    })),
-  });
-  const fetchableMap = await getFetchableEntityMap({
-    context,
-    entityIds: getCompatSearchEntityIds(hits),
-  });
-  const matterResults = mapCompatSearchResults({
-    fetchableMap,
-    hits,
-  });
 
   if (!corpusEnabled) {
     return {
       egress: "compatSearch",
-      nextCursor: matterPage?.nextCursor,
-      results: matterResults,
+      nextCursor: matter.nextCursor,
+      results: matter.results,
     };
   }
 
@@ -450,7 +483,10 @@ const handleCompatSearchTool: McpToolHandler<
   // Matter hits first, then decisions, then statutes: a caller asking this
   // pair about its own matters must not have the answer pushed below public
   // law it did not ask for.
-  const matterNext = matterPage?.nextCursor ?? null;
+  // The merged cursor has no "not asked yet" state to carry, so a provider
+  // that answered without one has ended: `undefined` and `null` are the same
+  // position to a caller paging this page.
+  const matterNext = matter.nextCursor ?? null;
   const exhausted = matterNext === null && !hasMoreCorpusPages(corpus.cursors);
 
   // Return the full per-workspace results (title included); the egress pipeline
@@ -464,7 +500,7 @@ const handleCompatSearchTool: McpToolHandler<
           matter: matterNext,
           corpus: corpus.cursors,
         }),
-    results: [...matterResults, ...corpus.results],
+    results: [...matter.results, ...corpus.results],
   };
 };
 
