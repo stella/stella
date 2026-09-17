@@ -151,6 +151,12 @@
             "location": "apps/web/src/components/docx-preview-zoom.ts#2"
           },
           {
+            "location": "apps/web/src/components/entity-views/table-groups.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/entity-views/use-grouping-schema.ts#1"
+          },
+          {
             "location": "apps/web/src/components/inspector/skill-history/use-skill-history-actions.ts#1"
           },
           {
@@ -196,7 +202,19 @@
             "location": "apps/web/src/components/workspaces/hooks/use-create-b-boxes.ts#1"
           },
           {
+            "location": "apps/web/src/components/workspaces/hooks/use-inspector-flash.ts#1"
+          },
+          {
             "location": "apps/web/src/components/workspaces/hooks/use-sync-justifications.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/workspaces/kanban/use-kanban-drop-targets.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/workspaces/kanban/use-kanban-drop-targets.ts#2"
+          },
+          {
+            "location": "apps/web/src/components/workspaces/kanban/use-kanban-schema.ts#1"
           },
           {
             "location": "apps/web/src/components/workspaces/properties/property-input/custom-mention.ts#1"
@@ -379,19 +397,10 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio-preview.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/use-kanban-drop-targets.ts#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/use-kanban-drop-targets.ts#2"
-          },
-          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/group-scope.ts#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-default-view-redirect.ts#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-inspector-flash.ts#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-version-or-new-file-drop.ts#1"
@@ -547,7 +556,7 @@
             "location": "apps/web/src/components/ai-suggestions/host.tsx#16"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/host.tsx#23"
+            "location": "apps/web/src/components/ai-suggestions/host.tsx#22"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/review-bar.tsx#30"
@@ -599,6 +608,12 @@
           },
           {
             "location": "apps/web/src/components/auth/two-factor-panel.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/auth/use-require-account.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/auth/use-require-account.tsx#2"
           },
           {
             "location": "apps/web/src/components/authenticated-case-law-workspace.tsx#1"
@@ -695,6 +710,9 @@
           },
           {
             "location": "apps/web/src/components/chat/create-document-draft-inspector-view.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/chat/docked-composer.tsx#7"
           },
           {
             "location": "apps/web/src/components/chat/message-export-menu.tsx#1"
@@ -814,6 +832,24 @@
             "location": "apps/web/src/components/empty-screen.tsx#1"
           },
           {
+            "location": "apps/web/src/components/entity-views/entity-views.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/entity-views/kanban.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/entity-views/kanban.tsx#2"
+          },
+          {
+            "location": "apps/web/src/components/entity-views/new-task.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/entity-views/table.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/entity-views/table.tsx#2"
+          },
+          {
             "location": "apps/web/src/components/file-drop-zone.tsx#1"
           },
           {
@@ -823,13 +859,16 @@
             "location": "apps/web/src/components/file-tree/folder-expand-toggle.tsx#1"
           },
           {
+            "location": "apps/web/src/components/inbox/signal-card.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/inline-pill.tsx#6"
           },
           {
             "location": "apps/web/src/components/inspector/anonymization-context-menu.tsx#13"
           },
           {
-            "location": "apps/web/src/components/inspector/anonymization-facet.tsx#16"
+            "location": "apps/web/src/components/inspector/anonymization-facet.tsx#14"
           },
           {
             "location": "apps/web/src/components/inspector/chat-tab-panel.tsx#18"
@@ -1183,6 +1222,9 @@
             "location": "apps/web/src/components/workspaces/bulk-add-columns.tsx#8"
           },
           {
+            "location": "apps/web/src/components/workspaces/cell-metadata-flags.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/workspaces/conditions/condition-select-values.tsx#1"
           },
           {
@@ -1205,6 +1247,12 @@
           },
           {
             "location": "apps/web/src/components/workspaces/editable-field.tsx#12"
+          },
+          {
+            "location": "apps/web/src/components/workspaces/kanban/kanban-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/workspaces/kanban/kanban-card.tsx#2"
           },
           {
             "location": "apps/web/src/components/workspaces/matter-color-picker.tsx#1"
@@ -1261,6 +1309,9 @@
             "location": "apps/web/src/components/workspaces/reference-change-confirmation.tsx#1"
           },
           {
+            "location": "apps/web/src/components/workspaces/row-actions.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/workspaces/table/column-toggle.tsx#1"
           },
           {
@@ -1271,6 +1322,9 @@
           },
           {
             "location": "apps/web/src/components/workspaces/table/find-highlight.tsx#2"
+          },
+          {
+            "location": "apps/web/src/components/workspaces/table/metadata-popover.tsx#1"
           },
           {
             "location": "apps/web/src/components/workspaces/table/mobile-table-orientation-gate.tsx#1"
@@ -1298,6 +1352,9 @@
           },
           {
             "location": "apps/web/src/components/workspaces/tasks/task-detail-panel.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/workspaces/view-toolbar-filters.tsx#1"
           },
           {
             "location": "apps/web/src/components/workspaces/workflow-service-tier-prompt.tsx#1"
@@ -1369,6 +1426,9 @@
             "location": "apps/web/src/features/case-law/components/case-viewer/provisions-cited.tsx#1"
           },
           {
+            "location": "apps/web/src/features/case-law/components/citation-negative-hatch.tsx#1"
+          },
+          {
             "location": "apps/web/src/features/case-law/components/decision-cells.tsx#1"
           },
           {
@@ -1424,9 +1484,6 @@
           },
           {
             "location": "apps/web/src/features/command-palette/components/upload-document-dialog.tsx#1"
-          },
-          {
-            "location": "apps/web/src/features/inbox/components/my-work-view.tsx#1"
           },
           {
             "location": "apps/web/src/features/inbox/signal-inspector-registration.tsx#1"
@@ -1607,15 +1664,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.dev_.autocomplete.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.inbox/-new-request-dialog.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.inbox/-signal-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.inbox/index.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/blueprint-gallery-sheet.tsx#1"
@@ -1906,9 +1954,6 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/current-time-indicator.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags.tsx#1"
-          },
-          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/empty-state.tsx#1"
           },
           {
@@ -1922,9 +1967,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/flows/run-launcher.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-card.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column.tsx#1"
@@ -1952,9 +1994,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/property-popover.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/row-actions.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/entity-row-cells.tsx#1"
@@ -1997,9 +2036,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar-filters.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar-search.tsx#1"
@@ -2369,6 +2405,9 @@
           },
           {
             "location": "packages/ui/src/components/tooltip-trigger-helper.tsx#3"
+          },
+          {
+            "location": "packages/ui/src/components/view-toolbar.tsx#1"
           },
           {
             "location": "packages/ui/src/components/workspace-shell.tsx#3"
@@ -2732,13 +2771,13 @@
         ],
         "occurrences": [
           {
+            "location": "apps/web/src/components/workspaces/kanban/use-kanban-drop-targets.ts#7"
+          },
+          {
+            "location": "apps/web/src/components/workspaces/kanban/use-kanban-drop-targets.ts#8"
+          },
+          {
             "location": "apps/web/src/components/workspaces/table/workspace-table/internals-helpers.ts#3"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/use-kanban-drop-targets.ts#7"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/use-kanban-drop-targets.ts#8"
           },
           {
             "location": "packages/workspace-ui/src/view-switcher.logic.ts#1"
@@ -2889,19 +2928,7 @@
         ],
         "occurrences": [
           {
-            "location": "apps/web/src/hooks/use-external-file-drop.ts#3"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#10"
-          },
-          {
-            "location": "apps/web/src/hooks/use-external-file-drop.ts#4"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#11"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/use-kanban-drop-targets.ts#9"
+            "location": "apps/web/src/components/workspaces/kanban/use-kanban-drop-targets.ts#9"
           },
           {
             "location": "packages/ui/src/kanban/drag-interactions.ts#3"
@@ -2916,7 +2943,7 @@
             "location": "packages/workspace-ui/src/view-switcher.tsx#9"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/use-kanban-drop-targets.ts#13"
+            "location": "apps/web/src/components/workspaces/kanban/use-kanban-drop-targets.ts#13"
           },
           {
             "location": "packages/ui/src/kanban/drag-interactions.ts#4"
@@ -2929,6 +2956,18 @@
           },
           {
             "location": "packages/workspace-ui/src/view-switcher.tsx#13"
+          },
+          {
+            "location": "apps/web/src/hooks/use-external-file-drop.ts#3"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#10"
+          },
+          {
+            "location": "apps/web/src/hooks/use-external-file-drop.ts#4"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#11"
           },
           {
             "location": "packages/ui/src/kanban/drag-interactions.ts#5"
@@ -3092,7 +3131,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-s3@3.1129.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-s3@3.1130.0",
       "description": "AWS SDK for JavaScript S3 Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -3148,13 +3187,13 @@
           "value": "apps/api/node_modules/@aws-sdk/client-s3/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-s3@3.1129.0",
+      "purl": "pkg:npm/%40aws-sdk/client-s3@3.1130.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1129.0"
+      "version": "3.1130.0"
     },
     {
       "authors": [
@@ -3162,7 +3201,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-sesv2@3.1129.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-sesv2@3.1130.0",
       "description": "AWS SDK for JavaScript Sesv2 Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -3215,13 +3254,13 @@
           "value": "apps/api/node_modules/@aws-sdk/client-sesv2/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-sesv2@3.1129.0",
+      "purl": "pkg:npm/%40aws-sdk/client-sesv2@3.1130.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1129.0"
+      "version": "3.1130.0"
     },
     {
       "authors": [
@@ -3229,7 +3268,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-sts@3.1129.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-sts@3.1130.0",
       "description": "AWS SDK for JavaScript Sts Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -3282,13 +3321,13 @@
           "value": "apps/api/node_modules/@aws-sdk/client-sts/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-sts@3.1129.0",
+      "purl": "pkg:npm/%40aws-sdk/client-sts@3.1130.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1129.0"
+      "version": "3.1130.0"
     },
     {
       "authors": [
@@ -3296,7 +3335,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/s3-request-presigner@3.1129.0",
+      "bom-ref": "pkg:npm/@aws-sdk/s3-request-presigner@3.1130.0",
       "evidence": {
         "identity": [
           {
@@ -3348,13 +3387,13 @@
           "value": "apps/api/node_modules/@aws-sdk/s3-request-presigner/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/s3-request-presigner@3.1129.0",
+      "purl": "pkg:npm/%40aws-sdk/s3-request-presigner@3.1130.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1129.0"
+      "version": "3.1130.0"
     },
     {
       "authors": [
@@ -3447,6 +3486,12 @@
             "location": "apps/web/src/components/docx-preview-zoom.ts#2"
           },
           {
+            "location": "apps/web/src/components/entity-views/table-groups.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/entity-views/use-grouping-schema.ts#1"
+          },
+          {
             "location": "apps/web/src/components/inspector/skill-history/use-skill-history-actions.ts#1"
           },
           {
@@ -3492,7 +3537,19 @@
             "location": "apps/web/src/components/workspaces/hooks/use-create-b-boxes.ts#1"
           },
           {
+            "location": "apps/web/src/components/workspaces/hooks/use-inspector-flash.ts#1"
+          },
+          {
             "location": "apps/web/src/components/workspaces/hooks/use-sync-justifications.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/workspaces/kanban/use-kanban-drop-targets.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/workspaces/kanban/use-kanban-drop-targets.ts#2"
+          },
+          {
+            "location": "apps/web/src/components/workspaces/kanban/use-kanban-schema.ts#1"
           },
           {
             "location": "apps/web/src/components/workspaces/properties/property-input/custom-mention.ts#1"
@@ -3675,19 +3732,10 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio-preview.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/use-kanban-drop-targets.ts#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/use-kanban-drop-targets.ts#2"
-          },
-          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/group-scope.ts#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-default-view-redirect.ts#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-inspector-flash.ts#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-version-or-new-file-drop.ts#1"
@@ -3843,7 +3891,7 @@
             "location": "apps/web/src/components/ai-suggestions/host.tsx#16"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/host.tsx#23"
+            "location": "apps/web/src/components/ai-suggestions/host.tsx#22"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/review-bar.tsx#30"
@@ -3895,6 +3943,12 @@
           },
           {
             "location": "apps/web/src/components/auth/two-factor-panel.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/auth/use-require-account.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/auth/use-require-account.tsx#2"
           },
           {
             "location": "apps/web/src/components/authenticated-case-law-workspace.tsx#1"
@@ -3991,6 +4045,9 @@
           },
           {
             "location": "apps/web/src/components/chat/create-document-draft-inspector-view.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/chat/docked-composer.tsx#7"
           },
           {
             "location": "apps/web/src/components/chat/message-export-menu.tsx#1"
@@ -4110,6 +4167,24 @@
             "location": "apps/web/src/components/empty-screen.tsx#1"
           },
           {
+            "location": "apps/web/src/components/entity-views/entity-views.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/entity-views/kanban.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/entity-views/kanban.tsx#2"
+          },
+          {
+            "location": "apps/web/src/components/entity-views/new-task.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/entity-views/table.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/entity-views/table.tsx#2"
+          },
+          {
             "location": "apps/web/src/components/file-drop-zone.tsx#1"
           },
           {
@@ -4119,13 +4194,16 @@
             "location": "apps/web/src/components/file-tree/folder-expand-toggle.tsx#1"
           },
           {
+            "location": "apps/web/src/components/inbox/signal-card.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/inline-pill.tsx#6"
           },
           {
             "location": "apps/web/src/components/inspector/anonymization-context-menu.tsx#13"
           },
           {
-            "location": "apps/web/src/components/inspector/anonymization-facet.tsx#16"
+            "location": "apps/web/src/components/inspector/anonymization-facet.tsx#14"
           },
           {
             "location": "apps/web/src/components/inspector/chat-tab-panel.tsx#18"
@@ -4479,6 +4557,9 @@
             "location": "apps/web/src/components/workspaces/bulk-add-columns.tsx#8"
           },
           {
+            "location": "apps/web/src/components/workspaces/cell-metadata-flags.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/workspaces/conditions/condition-select-values.tsx#1"
           },
           {
@@ -4501,6 +4582,12 @@
           },
           {
             "location": "apps/web/src/components/workspaces/editable-field.tsx#12"
+          },
+          {
+            "location": "apps/web/src/components/workspaces/kanban/kanban-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/workspaces/kanban/kanban-card.tsx#2"
           },
           {
             "location": "apps/web/src/components/workspaces/matter-color-picker.tsx#1"
@@ -4557,6 +4644,9 @@
             "location": "apps/web/src/components/workspaces/reference-change-confirmation.tsx#1"
           },
           {
+            "location": "apps/web/src/components/workspaces/row-actions.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/workspaces/table/column-toggle.tsx#1"
           },
           {
@@ -4567,6 +4657,9 @@
           },
           {
             "location": "apps/web/src/components/workspaces/table/find-highlight.tsx#2"
+          },
+          {
+            "location": "apps/web/src/components/workspaces/table/metadata-popover.tsx#1"
           },
           {
             "location": "apps/web/src/components/workspaces/table/mobile-table-orientation-gate.tsx#1"
@@ -4594,6 +4687,9 @@
           },
           {
             "location": "apps/web/src/components/workspaces/tasks/task-detail-panel.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/workspaces/view-toolbar-filters.tsx#1"
           },
           {
             "location": "apps/web/src/components/workspaces/workflow-service-tier-prompt.tsx#1"
@@ -4665,6 +4761,9 @@
             "location": "apps/web/src/features/case-law/components/case-viewer/provisions-cited.tsx#1"
           },
           {
+            "location": "apps/web/src/features/case-law/components/citation-negative-hatch.tsx#1"
+          },
+          {
             "location": "apps/web/src/features/case-law/components/decision-cells.tsx#1"
           },
           {
@@ -4720,9 +4819,6 @@
           },
           {
             "location": "apps/web/src/features/command-palette/components/upload-document-dialog.tsx#1"
-          },
-          {
-            "location": "apps/web/src/features/inbox/components/my-work-view.tsx#1"
           },
           {
             "location": "apps/web/src/features/inbox/signal-inspector-registration.tsx#1"
@@ -4903,15 +4999,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.dev_.autocomplete.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.inbox/-new-request-dialog.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.inbox/-signal-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.inbox/index.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/blueprint-gallery-sheet.tsx#1"
@@ -5202,9 +5289,6 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/current-time-indicator.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags.tsx#1"
-          },
-          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/empty-state.tsx#1"
           },
           {
@@ -5218,9 +5302,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/flows/run-launcher.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-card.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column.tsx#1"
@@ -5248,9 +5329,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/property-popover.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/row-actions.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/entity-row-cells.tsx#1"
@@ -5293,9 +5371,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar-filters.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar-search.tsx#1"
@@ -5665,6 +5740,9 @@
           },
           {
             "location": "packages/ui/src/components/tooltip-trigger-helper.tsx#3"
+          },
+          {
+            "location": "packages/ui/src/components/view-toolbar.tsx#1"
           },
           {
             "location": "packages/ui/src/components/workspace-shell.tsx#3"
@@ -6328,7 +6406,7 @@
             "location": "apps/web/src/components/inspector/anonymization-context-menu.tsx#14"
           },
           {
-            "location": "apps/web/src/components/inspector/anonymization-facet.tsx#17"
+            "location": "apps/web/src/components/inspector/anonymization-facet.tsx#15"
           },
           {
             "location": "apps/web/src/components/legal-reader/annotations/annotation-toolbar.tsx#3"
@@ -6529,7 +6607,7 @@
       "version": "3.5.17"
     },
     {
-      "bom-ref": "pkg:npm/@google/genai@2.21.0",
+      "bom-ref": "pkg:npm/@google/genai@2.22.0",
       "evidence": {
         "identity": [
           {
@@ -6581,10 +6659,10 @@
           "value": "apps/api/node_modules/@google/genai/package.json"
         }
       ],
-      "purl": "pkg:npm/%40google/genai@2.21.0",
+      "purl": "pkg:npm/%40google/genai@2.22.0",
       "scope": "required",
       "type": "library",
-      "version": "2.21.0"
+      "version": "2.22.0"
     },
     {
       "bom-ref": "pkg:npm/@hocuspocus/extension-redis@4.7.0",
@@ -6883,6 +6961,9 @@
           },
           {
             "location": "apps/web/src/lib/anonymize/pdf-coords.ts#1"
+          },
+          {
+            "location": "apps/web/src/lib/pdf/anonymized-export.logic.ts#1"
           },
           {
             "location": "apps/web/src/lib/pdf/page-editor/page-editor-transform.ts#1"
@@ -7693,6 +7774,12 @@
             "location": "apps/web/src/components/docx-preview-zoom.ts#2"
           },
           {
+            "location": "apps/web/src/components/entity-views/table-groups.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/entity-views/use-grouping-schema.ts#1"
+          },
+          {
             "location": "apps/web/src/components/inspector/skill-history/use-skill-history-actions.ts#1"
           },
           {
@@ -7738,7 +7825,19 @@
             "location": "apps/web/src/components/workspaces/hooks/use-create-b-boxes.ts#1"
           },
           {
+            "location": "apps/web/src/components/workspaces/hooks/use-inspector-flash.ts#1"
+          },
+          {
             "location": "apps/web/src/components/workspaces/hooks/use-sync-justifications.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/workspaces/kanban/use-kanban-drop-targets.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/workspaces/kanban/use-kanban-drop-targets.ts#2"
+          },
+          {
+            "location": "apps/web/src/components/workspaces/kanban/use-kanban-schema.ts#1"
           },
           {
             "location": "apps/web/src/components/workspaces/properties/property-input/custom-mention.ts#1"
@@ -7921,19 +8020,10 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio-preview.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/use-kanban-drop-targets.ts#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/use-kanban-drop-targets.ts#2"
-          },
-          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/group-scope.ts#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-default-view-redirect.ts#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-inspector-flash.ts#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-version-or-new-file-drop.ts#1"
@@ -8089,7 +8179,7 @@
             "location": "apps/web/src/components/ai-suggestions/host.tsx#16"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/host.tsx#23"
+            "location": "apps/web/src/components/ai-suggestions/host.tsx#22"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/review-bar.tsx#30"
@@ -8141,6 +8231,12 @@
           },
           {
             "location": "apps/web/src/components/auth/two-factor-panel.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/auth/use-require-account.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/auth/use-require-account.tsx#2"
           },
           {
             "location": "apps/web/src/components/authenticated-case-law-workspace.tsx#1"
@@ -8237,6 +8333,9 @@
           },
           {
             "location": "apps/web/src/components/chat/create-document-draft-inspector-view.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/chat/docked-composer.tsx#7"
           },
           {
             "location": "apps/web/src/components/chat/message-export-menu.tsx#1"
@@ -8356,6 +8455,24 @@
             "location": "apps/web/src/components/empty-screen.tsx#1"
           },
           {
+            "location": "apps/web/src/components/entity-views/entity-views.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/entity-views/kanban.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/entity-views/kanban.tsx#2"
+          },
+          {
+            "location": "apps/web/src/components/entity-views/new-task.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/entity-views/table.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/entity-views/table.tsx#2"
+          },
+          {
             "location": "apps/web/src/components/file-drop-zone.tsx#1"
           },
           {
@@ -8365,13 +8482,16 @@
             "location": "apps/web/src/components/file-tree/folder-expand-toggle.tsx#1"
           },
           {
+            "location": "apps/web/src/components/inbox/signal-card.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/inline-pill.tsx#6"
           },
           {
             "location": "apps/web/src/components/inspector/anonymization-context-menu.tsx#13"
           },
           {
-            "location": "apps/web/src/components/inspector/anonymization-facet.tsx#16"
+            "location": "apps/web/src/components/inspector/anonymization-facet.tsx#14"
           },
           {
             "location": "apps/web/src/components/inspector/chat-tab-panel.tsx#18"
@@ -8725,6 +8845,9 @@
             "location": "apps/web/src/components/workspaces/bulk-add-columns.tsx#8"
           },
           {
+            "location": "apps/web/src/components/workspaces/cell-metadata-flags.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/workspaces/conditions/condition-select-values.tsx#1"
           },
           {
@@ -8747,6 +8870,12 @@
           },
           {
             "location": "apps/web/src/components/workspaces/editable-field.tsx#12"
+          },
+          {
+            "location": "apps/web/src/components/workspaces/kanban/kanban-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/workspaces/kanban/kanban-card.tsx#2"
           },
           {
             "location": "apps/web/src/components/workspaces/matter-color-picker.tsx#1"
@@ -8803,6 +8932,9 @@
             "location": "apps/web/src/components/workspaces/reference-change-confirmation.tsx#1"
           },
           {
+            "location": "apps/web/src/components/workspaces/row-actions.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/workspaces/table/column-toggle.tsx#1"
           },
           {
@@ -8813,6 +8945,9 @@
           },
           {
             "location": "apps/web/src/components/workspaces/table/find-highlight.tsx#2"
+          },
+          {
+            "location": "apps/web/src/components/workspaces/table/metadata-popover.tsx#1"
           },
           {
             "location": "apps/web/src/components/workspaces/table/mobile-table-orientation-gate.tsx#1"
@@ -8840,6 +8975,9 @@
           },
           {
             "location": "apps/web/src/components/workspaces/tasks/task-detail-panel.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/workspaces/view-toolbar-filters.tsx#1"
           },
           {
             "location": "apps/web/src/components/workspaces/workflow-service-tier-prompt.tsx#1"
@@ -8911,6 +9049,9 @@
             "location": "apps/web/src/features/case-law/components/case-viewer/provisions-cited.tsx#1"
           },
           {
+            "location": "apps/web/src/features/case-law/components/citation-negative-hatch.tsx#1"
+          },
+          {
             "location": "apps/web/src/features/case-law/components/decision-cells.tsx#1"
           },
           {
@@ -8966,9 +9107,6 @@
           },
           {
             "location": "apps/web/src/features/command-palette/components/upload-document-dialog.tsx#1"
-          },
-          {
-            "location": "apps/web/src/features/inbox/components/my-work-view.tsx#1"
           },
           {
             "location": "apps/web/src/features/inbox/signal-inspector-registration.tsx#1"
@@ -9149,15 +9287,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.dev_.autocomplete.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.inbox/-new-request-dialog.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.inbox/-signal-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.inbox/index.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/blueprint-gallery-sheet.tsx#1"
@@ -9448,9 +9577,6 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/current-time-indicator.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags.tsx#1"
-          },
-          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/empty-state.tsx#1"
           },
           {
@@ -9464,9 +9590,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/flows/run-launcher.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-card.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column.tsx#1"
@@ -9494,9 +9617,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/property-popover.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/row-actions.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/entity-row-cells.tsx#1"
@@ -9539,9 +9659,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar-filters.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar-search.tsx#1"
@@ -9911,6 +10028,9 @@
           },
           {
             "location": "packages/ui/src/components/tooltip-trigger-helper.tsx#3"
+          },
+          {
+            "location": "packages/ui/src/components/view-toolbar.tsx#1"
           },
           {
             "location": "packages/ui/src/components/workspace-shell.tsx#3"
@@ -11186,9 +11306,6 @@
             "location": "apps/api/src/handlers/chat/chat-message-parts.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/chat/chat-schema.ts#2"
-          },
-          {
             "location": "apps/api/src/handlers/chat/tanstack-chat-lifecycle.ts#18"
           },
           {
@@ -12013,7 +12130,7 @@
             "location": "apps/api/src/lib/agent-skills/skill-tools.ts#1"
           },
           {
-            "location": "apps/api/src/lib/analytics/tanstack-ai.ts#5"
+            "location": "apps/api/src/lib/analytics/tanstack-ai.ts#6"
           },
           {
             "location": "apps/api/src/lib/bbox/ai-generate-b-boxes.ts#1"
@@ -12251,9 +12368,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.contacts/index.tsx#4"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.inbox/-new-request-dialog.tsx#3"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/profile-card.tsx#3"
@@ -12565,6 +12679,12 @@
             "location": "apps/web/src/components/docx/use-sync-docx-suggestions.ts#16"
           },
           {
+            "location": "apps/web/src/components/inspector/anonymize-pdf.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/inspector/anonymized-file-download.ts#1"
+          },
+          {
             "location": "apps/web/src/components/inspector/maximize-tab.ts#1"
           },
           {
@@ -12590,6 +12710,9 @@
           },
           {
             "location": "apps/web/src/components/workspaces/hooks/use-limits.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/workspaces/hooks/use-retry-cell.ts#1"
           },
           {
             "location": "apps/web/src/components/workspaces/hooks/use-start-workflow.ts#1"
@@ -12727,6 +12850,9 @@
             "location": "apps/web/src/lib/analytics/posthog.ts#1"
           },
           {
+            "location": "apps/web/src/lib/anonymize/file-anonymization-policy.ts#1"
+          },
+          {
             "location": "apps/web/src/lib/anonymize/use-chat-anonymize.ts#3"
           },
           {
@@ -12743,6 +12869,9 @@
           },
           {
             "location": "apps/web/src/lib/deepl/queries.ts#1"
+          },
+          {
+            "location": "apps/web/src/lib/files/array-buffer-utils.ts#1"
           },
           {
             "location": "apps/web/src/lib/files/document-reference-queries.ts#7"
@@ -12865,6 +12994,9 @@
             "location": "apps/web/src/lib/workspaces/queries/entities.ts#3"
           },
           {
+            "location": "apps/web/src/lib/workspaces/queries/entity-views.ts#1"
+          },
+          {
             "location": "apps/web/src/lib/workspaces/queries/expenses.ts#1"
           },
           {
@@ -12875,9 +13007,6 @@
           },
           {
             "location": "apps/web/src/lib/workspaces/queries/legal-lists.ts#1"
-          },
-          {
-            "location": "apps/web/src/lib/workspaces/queries/my-work.ts#1"
           },
           {
             "location": "apps/web/src/lib/workspaces/queries/properties.ts#1"
@@ -12983,9 +13112,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-document-loader.ts#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-retry-cell.ts#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-version-or-new-file-drop.ts#4"
@@ -13135,7 +13261,19 @@
             "location": "apps/web/src/components/docx/evidence-references.tsx#3"
           },
           {
-            "location": "apps/web/src/components/inspector/anonymization-facet.tsx#19"
+            "location": "apps/web/src/components/entity-views/entity-views.tsx#8"
+          },
+          {
+            "location": "apps/web/src/components/entity-views/kanban.tsx#4"
+          },
+          {
+            "location": "apps/web/src/components/entity-views/new-task.tsx#3"
+          },
+          {
+            "location": "apps/web/src/components/inbox/signal-card.tsx#3"
+          },
+          {
+            "location": "apps/web/src/components/inspector/anonymization-facet.tsx#17"
           },
           {
             "location": "apps/web/src/components/inspector/chat-tab-panel.tsx#25"
@@ -13282,6 +13420,9 @@
             "location": "apps/web/src/components/workspaces/bulk-add-columns.tsx#14"
           },
           {
+            "location": "apps/web/src/components/workspaces/cell-metadata-flags.tsx#3"
+          },
+          {
             "location": "apps/web/src/components/workspaces/conditions/condition-select-values.tsx#3"
           },
           {
@@ -13324,6 +13465,9 @@
             "location": "apps/web/src/components/workspaces/properties/property-input/mention-node.tsx#1"
           },
           {
+            "location": "apps/web/src/components/workspaces/row-actions.tsx#3"
+          },
+          {
             "location": "apps/web/src/components/workspaces/tasks/task-detail-panel.tsx#3"
           },
           {
@@ -13357,6 +13501,9 @@
             "location": "apps/web/src/features/case-law/components/case-viewer/provisions-cited.tsx#3"
           },
           {
+            "location": "apps/web/src/features/case-law/components/citation-timeline-panel.tsx#1"
+          },
+          {
             "location": "apps/web/src/features/case-law/components/decision-cells.tsx#4"
           },
           {
@@ -13376,9 +13523,6 @@
           },
           {
             "location": "apps/web/src/features/guides/guide-help-drawer.tsx#1"
-          },
-          {
-            "location": "apps/web/src/features/inbox/components/my-work-view.tsx#7"
           },
           {
             "location": "apps/web/src/features/inbox/components/signal-inspector-view.tsx#1"
@@ -13442,15 +13586,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.contacts/index.tsx#9"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.inbox/-new-request-dialog.tsx#4"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.inbox/-signal-card.tsx#3"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.inbox/index.tsx#3"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/blueprint-gallery-sheet.tsx#3"
@@ -13666,9 +13801,6 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-view.tsx#4"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags.tsx#3"
-          },
-          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog.tsx#8"
           },
           {
@@ -13691,9 +13823,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/property-popover.tsx#3"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/row-actions.tsx#3"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/grouped-table-layout.tsx#14"
@@ -13956,7 +14085,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-router@1.170.34",
+      "bom-ref": "pkg:npm/@tanstack/react-router@1.170.35",
       "description": "Modern and scalable routing for React applications",
       "evidence": {
         "identity": [
@@ -14089,6 +14218,9 @@
             "location": "apps/web/src/components/auth/sign-in-panel.tsx#6"
           },
           {
+            "location": "apps/web/src/components/auth/use-require-account.tsx#4"
+          },
+          {
             "location": "apps/web/src/components/bilingual-document-dialog.tsx#12"
           },
           {
@@ -14194,9 +14326,6 @@
             "location": "apps/web/src/components/pdf/pdf-viewer.tsx#2"
           },
           {
-            "location": "apps/web/src/components/public-law-search.tsx#1"
-          },
-          {
             "location": "apps/web/src/components/public-workspace-shell.tsx#10"
           },
           {
@@ -14236,6 +14365,9 @@
             "location": "apps/web/src/components/workspaces/parties-section.tsx#4"
           },
           {
+            "location": "apps/web/src/components/workspaces/row-actions.tsx#4"
+          },
+          {
             "location": "apps/web/src/components/workspaces/tasks/task-detail-panel.tsx#4"
           },
           {
@@ -14255,9 +14387,6 @@
           },
           {
             "location": "apps/web/src/features/case-law/components/top-bar-country.tsx#1"
-          },
-          {
-            "location": "apps/web/src/features/inbox/components/my-work-view.tsx#8"
           },
           {
             "location": "apps/web/src/features/inbox/components/signal-inspector-view.tsx#2"
@@ -14335,7 +14464,7 @@
             "location": "apps/web/src/routes/_protected.dev_.autocomplete.tsx#3"
           },
           {
-            "location": "apps/web/src/routes/_protected.inbox/index.tsx#4"
+            "location": "apps/web/src/routes/_protected.inbox/index.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/catalogue/catalogue-browser.tsx#4"
@@ -14513,9 +14642,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/overview-view.tsx#10"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/row-actions.tsx#4"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/table-devtools-gate.tsx#3"
@@ -14726,10 +14852,10 @@
           "value": "apps/web/node_modules/@tanstack/react-router/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-router@1.170.34",
+      "purl": "pkg:npm/%40tanstack/react-router@1.170.35",
       "scope": "required",
       "type": "library",
-      "version": "1.170.34"
+      "version": "1.170.35"
     },
     {
       "authors": [
@@ -14737,7 +14863,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-start@1.168.51",
+      "bom-ref": "pkg:npm/@tanstack/react-start@1.168.52",
       "description": "Modern and scalable routing for React applications",
       "evidence": {
         "identity": [
@@ -14805,10 +14931,10 @@
           "value": "apps/web/node_modules/@tanstack/react-start/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-start@1.168.51",
+      "purl": "pkg:npm/%40tanstack/react-start@1.168.52",
       "scope": "required",
       "type": "library",
-      "version": "1.168.51"
+      "version": "1.168.52"
     },
     {
       "authors": [
@@ -14845,9 +14971,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.contacts/index.tsx#16"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.inbox/-new-request-dialog.tsx#5"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/profile-card.tsx#5"
@@ -15024,6 +15147,12 @@
           },
           {
             "location": "apps/web/src/lib/workspaces/table-store.ts#6"
+          },
+          {
+            "location": "apps/web/src/components/entity-views/table.tsx#4"
+          },
+          {
+            "location": "apps/web/src/components/entity-views/table.tsx#5"
           },
           {
             "location": "apps/web/src/components/workspaces/properties/pin-property.tsx#2"
@@ -16250,6 +16379,12 @@
             "location": "apps/web/src/components/docx-preview-zoom.ts#2"
           },
           {
+            "location": "apps/web/src/components/entity-views/table-groups.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/entity-views/use-grouping-schema.ts#1"
+          },
+          {
             "location": "apps/web/src/components/inspector/skill-history/use-skill-history-actions.ts#1"
           },
           {
@@ -16295,7 +16430,19 @@
             "location": "apps/web/src/components/workspaces/hooks/use-create-b-boxes.ts#1"
           },
           {
+            "location": "apps/web/src/components/workspaces/hooks/use-inspector-flash.ts#1"
+          },
+          {
             "location": "apps/web/src/components/workspaces/hooks/use-sync-justifications.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/workspaces/kanban/use-kanban-drop-targets.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/workspaces/kanban/use-kanban-drop-targets.ts#2"
+          },
+          {
+            "location": "apps/web/src/components/workspaces/kanban/use-kanban-schema.ts#1"
           },
           {
             "location": "apps/web/src/components/workspaces/properties/property-input/custom-mention.ts#1"
@@ -16478,19 +16625,10 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio-preview.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/use-kanban-drop-targets.ts#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/use-kanban-drop-targets.ts#2"
-          },
-          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/group-scope.ts#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-default-view-redirect.ts#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-inspector-flash.ts#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-version-or-new-file-drop.ts#1"
@@ -16646,7 +16784,7 @@
             "location": "apps/web/src/components/ai-suggestions/host.tsx#16"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/host.tsx#23"
+            "location": "apps/web/src/components/ai-suggestions/host.tsx#22"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/review-bar.tsx#30"
@@ -16698,6 +16836,12 @@
           },
           {
             "location": "apps/web/src/components/auth/two-factor-panel.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/auth/use-require-account.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/auth/use-require-account.tsx#2"
           },
           {
             "location": "apps/web/src/components/authenticated-case-law-workspace.tsx#1"
@@ -16794,6 +16938,9 @@
           },
           {
             "location": "apps/web/src/components/chat/create-document-draft-inspector-view.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/chat/docked-composer.tsx#7"
           },
           {
             "location": "apps/web/src/components/chat/message-export-menu.tsx#1"
@@ -16913,6 +17060,24 @@
             "location": "apps/web/src/components/empty-screen.tsx#1"
           },
           {
+            "location": "apps/web/src/components/entity-views/entity-views.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/entity-views/kanban.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/entity-views/kanban.tsx#2"
+          },
+          {
+            "location": "apps/web/src/components/entity-views/new-task.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/entity-views/table.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/entity-views/table.tsx#2"
+          },
+          {
             "location": "apps/web/src/components/file-drop-zone.tsx#1"
           },
           {
@@ -16922,13 +17087,16 @@
             "location": "apps/web/src/components/file-tree/folder-expand-toggle.tsx#1"
           },
           {
+            "location": "apps/web/src/components/inbox/signal-card.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/inline-pill.tsx#6"
           },
           {
             "location": "apps/web/src/components/inspector/anonymization-context-menu.tsx#13"
           },
           {
-            "location": "apps/web/src/components/inspector/anonymization-facet.tsx#16"
+            "location": "apps/web/src/components/inspector/anonymization-facet.tsx#14"
           },
           {
             "location": "apps/web/src/components/inspector/chat-tab-panel.tsx#18"
@@ -17282,6 +17450,9 @@
             "location": "apps/web/src/components/workspaces/bulk-add-columns.tsx#8"
           },
           {
+            "location": "apps/web/src/components/workspaces/cell-metadata-flags.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/workspaces/conditions/condition-select-values.tsx#1"
           },
           {
@@ -17304,6 +17475,12 @@
           },
           {
             "location": "apps/web/src/components/workspaces/editable-field.tsx#12"
+          },
+          {
+            "location": "apps/web/src/components/workspaces/kanban/kanban-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/workspaces/kanban/kanban-card.tsx#2"
           },
           {
             "location": "apps/web/src/components/workspaces/matter-color-picker.tsx#1"
@@ -17360,6 +17537,9 @@
             "location": "apps/web/src/components/workspaces/reference-change-confirmation.tsx#1"
           },
           {
+            "location": "apps/web/src/components/workspaces/row-actions.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/workspaces/table/column-toggle.tsx#1"
           },
           {
@@ -17370,6 +17550,9 @@
           },
           {
             "location": "apps/web/src/components/workspaces/table/find-highlight.tsx#2"
+          },
+          {
+            "location": "apps/web/src/components/workspaces/table/metadata-popover.tsx#1"
           },
           {
             "location": "apps/web/src/components/workspaces/table/mobile-table-orientation-gate.tsx#1"
@@ -17397,6 +17580,9 @@
           },
           {
             "location": "apps/web/src/components/workspaces/tasks/task-detail-panel.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/workspaces/view-toolbar-filters.tsx#1"
           },
           {
             "location": "apps/web/src/components/workspaces/workflow-service-tier-prompt.tsx#1"
@@ -17468,6 +17654,9 @@
             "location": "apps/web/src/features/case-law/components/case-viewer/provisions-cited.tsx#1"
           },
           {
+            "location": "apps/web/src/features/case-law/components/citation-negative-hatch.tsx#1"
+          },
+          {
             "location": "apps/web/src/features/case-law/components/decision-cells.tsx#1"
           },
           {
@@ -17523,9 +17712,6 @@
           },
           {
             "location": "apps/web/src/features/command-palette/components/upload-document-dialog.tsx#1"
-          },
-          {
-            "location": "apps/web/src/features/inbox/components/my-work-view.tsx#1"
           },
           {
             "location": "apps/web/src/features/inbox/signal-inspector-registration.tsx#1"
@@ -17706,15 +17892,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.dev_.autocomplete.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.inbox/-new-request-dialog.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.inbox/-signal-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.inbox/index.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/blueprint-gallery-sheet.tsx#1"
@@ -18005,9 +18182,6 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/current-time-indicator.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags.tsx#1"
-          },
-          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/empty-state.tsx#1"
           },
           {
@@ -18021,9 +18195,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/flows/run-launcher.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-card.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column.tsx#1"
@@ -18051,9 +18222,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/property-popover.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/row-actions.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/entity-row-cells.tsx#1"
@@ -18096,9 +18264,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar-filters.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar-search.tsx#1"
@@ -18470,6 +18635,9 @@
             "location": "packages/ui/src/components/tooltip-trigger-helper.tsx#3"
           },
           {
+            "location": "packages/ui/src/components/view-toolbar.tsx#1"
+          },
+          {
             "location": "packages/ui/src/components/workspace-shell.tsx#3"
           },
           {
@@ -18635,6 +18803,9 @@
           },
           {
             "location": "apps/web/src/components/chat-mention-extension.ts#8"
+          },
+          {
+            "location": "apps/web/src/components/chat-mention-extension.ts#14"
           },
           {
             "location": "apps/web/src/components/workspaces/properties/property-input/custom-mention.ts#10"
@@ -18914,7 +19085,7 @@
       "version": "0.0.2-0"
     },
     {
-      "bom-ref": "pkg:npm/@vscode/markdown-editor@0.0.2-91",
+      "bom-ref": "pkg:npm/@vscode/markdown-editor@0.0.2-95",
       "evidence": {
         "identity": [
           {
@@ -18978,10 +19149,10 @@
           "value": "apps/web/node_modules/@vscode/markdown-editor/package.json"
         }
       ],
-      "purl": "pkg:npm/%40vscode/markdown-editor@0.0.2-91",
+      "purl": "pkg:npm/%40vscode/markdown-editor@0.0.2-95",
       "scope": "required",
       "type": "library",
-      "version": "0.0.2-91"
+      "version": "0.0.2-95"
     },
     {
       "authors": [
@@ -19552,7 +19723,7 @@
             "location": "apps/api/src/handlers/case-law/decisions/get.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/case-law/decisions/public-subject.ts#25"
+            "location": "apps/api/src/handlers/case-law/decisions/public-subject.ts#2"
           },
           {
             "location": "apps/api/src/handlers/case-law/decisions/search-telemetry.ts#1"
@@ -19660,6 +19831,9 @@
             "location": "apps/api/src/handlers/case-law/polarity/llm-classifier.ts#10"
           },
           {
+            "location": "apps/api/src/handlers/case-law/provisions/citation-count-repair.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/case-law/provisions/previews-for-decision.ts#1"
           },
           {
@@ -19726,7 +19900,7 @@
             "location": "apps/api/src/handlers/chat/chat-prompt.ts#8"
           },
           {
-            "location": "apps/api/src/handlers/chat/chat-schema.ts#3"
+            "location": "apps/api/src/handlers/chat/chat-schema.ts#2"
           },
           {
             "location": "apps/api/src/handlers/chat/chat-scope.ts#1"
@@ -20267,6 +20441,27 @@
           },
           {
             "location": "apps/api/src/handlers/entities/version-summarize.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/entity-views/create.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/entity-views/delete.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/entity-views/list.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/entity-views/reorder.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/entity-views/rows/list.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/entity-views/shared.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/entity-views/update.ts#1"
           },
           {
             "location": "apps/api/src/handlers/expenses/create.ts#1"
@@ -21478,7 +21673,7 @@
             "location": "apps/api/src/lib/ai-provider-probe.ts#8"
           },
           {
-            "location": "apps/api/src/lib/analytics/tanstack-ai.ts#6"
+            "location": "apps/api/src/lib/analytics/tanstack-ai.ts#7"
           },
           {
             "location": "apps/api/src/lib/anonymization-allowlist.ts#1"
@@ -21563,6 +21758,9 @@
           },
           {
             "location": "apps/api/src/lib/case-law/non-redistributable-sources.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/case-law/public-subject.ts#25"
           },
           {
             "location": "apps/api/src/lib/case-law/publisher-summary.ts#1"
@@ -21779,6 +21977,9 @@
           },
           {
             "location": "apps/api/src/lib/entities/query-entities.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/entities/query-scope.ts#1"
           },
           {
             "location": "apps/api/src/lib/entities/window-cursor.ts#1"
@@ -22501,7 +22702,13 @@
             "location": "apps/api/src/mcp/input-normalization.ts#1"
           },
           {
+            "location": "apps/api/src/mcp/instructions.ts#1"
+          },
+          {
             "location": "apps/api/src/mcp/knowledge-tools.ts#1"
+          },
+          {
+            "location": "apps/api/src/mcp/legislation-tools.ts#1"
           },
           {
             "location": "apps/api/src/mcp/matter-tools.ts#1"
@@ -22541,9 +22748,6 @@
           },
           {
             "location": "apps/api/src/scripts/backfill-decision-identifiers.ts#11"
-          },
-          {
-            "location": "apps/api/src/scripts/backfill-statute-citation-counts.ts#7"
           },
           {
             "location": "apps/api/src/scripts/better-auth-17-backfill.logic.ts#1"
@@ -22834,6 +23038,24 @@
             "location": "apps/web/src/components/drag-and-drop-live-region.logic.ts#1"
           },
           {
+            "location": "apps/web/src/components/entity-views/model.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/entity-views/table-groups.ts#3"
+          },
+          {
+            "location": "apps/web/src/components/entity-views/use-grouping-schema.ts#3"
+          },
+          {
+            "location": "apps/web/src/components/inbox/signal-actions.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/inspector/anonymize-pdf.ts#2"
+          },
+          {
+            "location": "apps/web/src/components/inspector/anonymized-file-download.ts#2"
+          },
+          {
             "location": "apps/web/src/components/inspector/email-html-viewer.logic.ts#1"
           },
           {
@@ -22898,6 +23120,12 @@
           },
           {
             "location": "apps/web/src/components/workspaces/hooks/use-sync-justifications.ts#4"
+          },
+          {
+            "location": "apps/web/src/components/workspaces/kanban/use-kanban-drop-targets.ts#14"
+          },
+          {
+            "location": "apps/web/src/components/workspaces/row-actions.logic.ts#1"
           },
           {
             "location": "apps/web/src/components/workspaces/table/workspace-table/internals-helpers.ts#4"
@@ -22981,6 +23209,9 @@
             "location": "apps/web/src/features/statutes/provision-diff.ts#1"
           },
           {
+            "location": "apps/web/src/features/statutes/provision-inspector.logic.ts#1"
+          },
+          {
             "location": "apps/web/src/features/statutes/statute-sitemap.ts#1"
           },
           {
@@ -23006,6 +23237,12 @@
           },
           {
             "location": "apps/web/src/lib/analytics/posthog.ts#2"
+          },
+          {
+            "location": "apps/web/src/lib/anonymize/anonymize-chat-worker-client.logic.ts#1"
+          },
+          {
+            "location": "apps/web/src/lib/anonymize/file-anonymization-matches.logic.ts#1"
           },
           {
             "location": "apps/web/src/lib/auth.ts#11"
@@ -23066,6 +23303,15 @@
           },
           {
             "location": "apps/web/src/lib/organization/utils.ts#1"
+          },
+          {
+            "location": "apps/web/src/lib/pdf/anonymized-export-errors.ts#1"
+          },
+          {
+            "location": "apps/web/src/lib/pdf/anonymized-export.logic.ts#2"
+          },
+          {
+            "location": "apps/web/src/lib/pdf/anonymized-export.ts#1"
           },
           {
             "location": "apps/web/src/lib/pdf/hooks/use-pdf-document.ts#3"
@@ -23161,9 +23407,6 @@
             "location": "apps/web/src/routes/_protected.contacts/-contact-import-request.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.inbox/-signal-actions.ts#1"
-          },
-          {
             "location": "apps/web/src/routes/_protected.knowledge/-components/clause-import-dialog.logic.ts#1"
           },
           {
@@ -23186,12 +23429,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/import-organizer.logic.ts#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/use-kanban-drop-targets.ts#14"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/row-actions.logic.ts#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-kind-filters.ts#1"
@@ -23252,6 +23489,9 @@
           },
           {
             "location": "packages/api-contract/src/case-law-text-field.ts#1"
+          },
+          {
+            "location": "packages/api-contract/src/chat-decision-passage-link.ts#11"
           },
           {
             "location": "packages/api-contract/src/chat-source-citations.ts#1"
@@ -23444,6 +23684,9 @@
           },
           {
             "location": "packages/legal-ast/src/document-ast.ts#1"
+          },
+          {
+            "location": "packages/legal-atlas/src/provision-citation-grammars.ts#17"
           },
           {
             "location": "packages/legal-atlas/src/runners/registry.ts#1"
@@ -23767,6 +24010,24 @@
             "location": "apps/web/src/components/drag-and-drop-live-region.tsx#8"
           },
           {
+            "location": "apps/web/src/components/entity-views/kanban.tsx#5"
+          },
+          {
+            "location": "apps/web/src/components/entity-views/new-task.tsx#4"
+          },
+          {
+            "location": "apps/web/src/components/entity-views/table.tsx#6"
+          },
+          {
+            "location": "apps/web/src/components/inbox/signal-card.tsx#4"
+          },
+          {
+            "location": "apps/web/src/components/inspector/anonymization-facet.tsx#18"
+          },
+          {
+            "location": "apps/web/src/components/inspector/anonymization-match-status.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/inspector/compare-versions-panel.tsx#5"
           },
           {
@@ -23893,6 +24154,9 @@
             "location": "apps/web/src/components/workspaces/properties/inline-option-editor.tsx#3"
           },
           {
+            "location": "apps/web/src/components/workspaces/row-actions.tsx#5"
+          },
+          {
             "location": "apps/web/src/components/workspaces/tasks/task-detail-panel.tsx#5"
           },
           {
@@ -23914,6 +24178,9 @@
             "location": "apps/web/src/features/case-law/decision-table-columns.tsx#13"
           },
           {
+            "location": "apps/web/src/features/case-law/research/add-question-column.tsx#1"
+          },
+          {
             "location": "apps/web/src/features/case-law/research/question-cell.tsx#12"
           },
           {
@@ -23927,9 +24194,6 @@
           },
           {
             "location": "apps/web/src/features/guides/guide-tour-preview.tsx#1"
-          },
-          {
-            "location": "apps/web/src/features/inbox/components/my-work-view.tsx#9"
           },
           {
             "location": "apps/web/src/features/inbox/components/signal-inspector-view.tsx#3"
@@ -23978,12 +24242,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.contacts/index.tsx#25"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.inbox/-new-request-dialog.tsx#6"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.inbox/-signal-card.tsx#4"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/paragraph-rendering.tsx#1"
@@ -24038,9 +24296,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/property-popover.tsx#4"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/row-actions.tsx#5"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/table-columns.tsx#3"
@@ -25412,9 +25667,6 @@
             "location": "apps/api/src/handlers/case-law/decisions/list.ts#4"
           },
           {
-            "location": "apps/api/src/handlers/case-law/decisions/public-subject.ts#26"
-          },
-          {
             "location": "apps/api/src/handlers/case-law/decisions/search.ts#2"
           },
           {
@@ -25485,6 +25737,9 @@
           },
           {
             "location": "apps/api/src/handlers/case-law/polarity/rule-engine.ts#14"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/provisions/citation-count-repair.ts#2"
           },
           {
             "location": "apps/api/src/handlers/case-law/provisions/citation-counts.ts#1"
@@ -25856,6 +26111,24 @@
             "location": "apps/api/src/handlers/entities/version-diff-sources.ts#11"
           },
           {
+            "location": "apps/api/src/handlers/entity-views/create.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/entity-views/delete.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/entity-views/list.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/entity-views/reorder.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/entity-views/shared.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/entity-views/update.ts#2"
+          },
+          {
             "location": "apps/api/src/handlers/expenses/create.ts#2"
           },
           {
@@ -25989,6 +26262,9 @@
           },
           {
             "location": "apps/api/src/handlers/legislation/provision-preview.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/legislation/provision-versions.ts#1"
           },
           {
             "location": "apps/api/src/handlers/legislation/search-index.ts#13"
@@ -26735,6 +27011,9 @@
             "location": "apps/api/src/lib/case-law/non-redistributable-sources.ts#2"
           },
           {
+            "location": "apps/api/src/lib/case-law/public-subject.ts#26"
+          },
+          {
             "location": "apps/api/src/lib/case-law/published-decisions.ts#18"
           },
           {
@@ -26913,6 +27192,12 @@
           },
           {
             "location": "apps/api/src/lib/entities/query-entities.ts#14"
+          },
+          {
+            "location": "apps/api/src/lib/entities/query-scope.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/entities/query-scope.ts#3"
           },
           {
             "location": "apps/api/src/lib/entities/validate-parent-id.ts#1"
@@ -27099,6 +27384,9 @@
           },
           {
             "location": "apps/api/src/lib/legal-search/legislation-redistribution.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/legislation-redistribution.ts#2"
           },
           {
             "location": "apps/api/src/lib/legal-search/legislation-validity-window.ts#1"
@@ -27506,9 +27794,6 @@
             "location": "apps/api/src/scripts/backfill-source-document-ids.ts#24"
           },
           {
-            "location": "apps/api/src/scripts/backfill-statute-citation-counts.ts#8"
-          },
-          {
             "location": "apps/api/src/scripts/better-auth-17-backfill.logic.ts#2"
           },
           {
@@ -27675,6 +27960,9 @@
           },
           {
             "location": "apps/api/src/lib/entities/query-entities.ts#14"
+          },
+          {
+            "location": "apps/api/src/lib/entities/query-scope.ts#3"
           },
           {
             "location": "apps/api/src/lib/entity-versions/document-reference-lookup.ts#18"
@@ -27910,7 +28198,7 @@
             "location": "apps/api/src/handlers/case-law/decisions/list.ts#6"
           },
           {
-            "location": "apps/api/src/handlers/case-law/decisions/public-subject.ts#27"
+            "location": "apps/api/src/handlers/case-law/decisions/public-subject.ts#3"
           },
           {
             "location": "apps/api/src/handlers/case-law/decisions/search-schema.ts#2"
@@ -27988,10 +28276,10 @@
             "location": "apps/api/src/handlers/catalogue/routes.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/chat/chat-schema.ts#5"
+            "location": "apps/api/src/handlers/chat/chat-schema.ts#4"
           },
           {
-            "location": "apps/api/src/handlers/chat/chat-schema.ts#6"
+            "location": "apps/api/src/handlers/chat/chat-schema.ts#5"
           },
           {
             "location": "apps/api/src/handlers/chat/delete-thread.ts#4"
@@ -28396,9 +28684,6 @@
             "location": "apps/api/src/handlers/entities/read-versions.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/entities/read-window.ts#2"
-          },
-          {
             "location": "apps/api/src/handlers/entities/release-desktop-edit-lock.ts#3"
           },
           {
@@ -28433,6 +28718,15 @@
           },
           {
             "location": "apps/api/src/handlers/entities/upload.ts#4"
+          },
+          {
+            "location": "apps/api/src/handlers/entity-views/routes.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/entity-views/rows/list.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/entity-views/shared.ts#3"
           },
           {
             "location": "apps/api/src/handlers/expenses/create.ts#3"
@@ -28625,6 +28919,9 @@
           },
           {
             "location": "apps/api/src/handlers/legislation/search-schema.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/legislation/search-schema.ts#2"
           },
           {
             "location": "apps/api/src/handlers/legislation/search.ts#4"
@@ -29566,6 +29863,9 @@
             "location": "apps/api/src/lib/entities/kanban-group-condition.ts#4"
           },
           {
+            "location": "apps/api/src/lib/entities/query-window-schema.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/files/read-file.ts#2"
           },
           {
@@ -30171,9 +30471,6 @@
           }
         ],
         "occurrences": [
-          {
-            "location": "apps/web/src/components/inspector/inspector-anonymization-slice.ts#1"
-          },
           {
             "location": "apps/web/src/components/inspector/inspector-store-types.ts#1"
           },
@@ -30790,7 +31087,7 @@
             "location": "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx#33"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/host.tsx#34"
+            "location": "apps/web/src/components/ai-suggestions/host.tsx#33"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/review-bar.tsx#35"
@@ -30946,6 +31243,12 @@
             "location": "apps/web/src/components/empty-screen.tsx#4"
           },
           {
+            "location": "apps/web/src/components/entity-views/entity-views.tsx#15"
+          },
+          {
+            "location": "apps/web/src/components/entity-views/table.tsx#15"
+          },
+          {
             "location": "apps/web/src/components/feedback-dialog.tsx#2"
           },
           {
@@ -30953,6 +31256,9 @@
           },
           {
             "location": "apps/web/src/components/file-tree/file-tree.tsx#3"
+          },
+          {
+            "location": "apps/web/src/components/inbox/signal-card.tsx#5"
           },
           {
             "location": "apps/web/src/components/inspector/anonymization-facet.tsx#27"
@@ -31081,7 +31387,7 @@
             "location": "apps/web/src/components/public-inspector-rail.tsx#3"
           },
           {
-            "location": "apps/web/src/components/public-law-search.tsx#2"
+            "location": "apps/web/src/components/public-law-search.tsx#1"
           },
           {
             "location": "apps/web/src/components/public-workspace-shell.tsx#11"
@@ -31138,7 +31444,13 @@
             "location": "apps/web/src/components/versions/version-list.tsx#19"
           },
           {
+            "location": "apps/web/src/components/workspaces/active-edit-badge.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/workspaces/bulk-add-columns.tsx#17"
+          },
+          {
+            "location": "apps/web/src/components/workspaces/cell-metadata-flags.tsx#4"
           },
           {
             "location": "apps/web/src/components/workspaces/create-matter-dialog.tsx#12"
@@ -31151,6 +31463,9 @@
           },
           {
             "location": "apps/web/src/components/workspaces/field-value.tsx#2"
+          },
+          {
+            "location": "apps/web/src/components/workspaces/kanban/kanban-card.tsx#4"
           },
           {
             "location": "apps/web/src/components/workspaces/lead-section.tsx#2"
@@ -31198,13 +31513,16 @@
             "location": "apps/web/src/components/workspaces/properties/sort-property.tsx#1"
           },
           {
+            "location": "apps/web/src/components/workspaces/row-actions.tsx#28"
+          },
+          {
             "location": "apps/web/src/components/workspaces/table/column-toggle.tsx#4"
           },
           {
-            "location": "apps/web/src/components/workspaces/table/metadata-popover.tsx#1"
+            "location": "apps/web/src/components/workspaces/table/group-header.tsx#1"
           },
           {
-            "location": "apps/web/src/components/workspaces/table/metadata-popover.tsx#2"
+            "location": "apps/web/src/components/workspaces/table/metadata-popover.tsx#3"
           },
           {
             "location": "apps/web/src/components/workspaces/table/mobile-table-orientation-gate.tsx#3"
@@ -31219,7 +31537,7 @@
             "location": "apps/web/src/components/workspaces/tasks/task-badges.tsx#7"
           },
           {
-            "location": "apps/web/src/components/workspaces/tasks/task-detail-panel.tsx#14"
+            "location": "apps/web/src/components/workspaces/tasks/task-detail-panel.tsx#13"
           },
           {
             "location": "apps/web/src/components/workspaces/tasks/task-links.tsx#1"
@@ -31229,6 +31547,12 @@
           },
           {
             "location": "apps/web/src/components/workspaces/tasks/task-subtasks.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/workspaces/view-grouping-controls.tsx#6"
+          },
+          {
+            "location": "apps/web/src/components/workspaces/view-toolbar-filters.tsx#9"
           },
           {
             "location": "apps/web/src/features/case-law/components/case-decision-inspector-view.tsx#5"
@@ -31318,9 +31642,6 @@
             "location": "apps/web/src/features/guides/guide-tour-preview.tsx#8"
           },
           {
-            "location": "apps/web/src/features/inbox/components/my-work-view.tsx#20"
-          },
-          {
             "location": "apps/web/src/features/inbox/components/signal-inspector-view.tsx#4"
           },
           {
@@ -31379,15 +31700,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.contacts/index.tsx#34"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.inbox/-new-request-dialog.tsx#7"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.inbox/-signal-card.tsx#5"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.inbox/index.tsx#5"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/blueprint-gallery-sheet.tsx#9"
@@ -31549,9 +31861,6 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#26"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/active-edit-badge.tsx#1"
-          },
-          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/activity/activity-panel.tsx#21"
           },
           {
@@ -31600,9 +31909,6 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-view.tsx#6"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags.tsx#4"
-          },
-          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/empty-state.tsx#3"
           },
           {
@@ -31627,9 +31933,6 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/flows/runs-list.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-card.tsx#3"
-          },
-          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column.tsx#15"
           },
           {
@@ -31648,13 +31951,10 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/property-popover.tsx#11"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/row-actions.tsx#28"
-          },
-          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/entity-row-cells.tsx#11"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/grouped-table-layout.tsx#21"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/grouped-table-layout.tsx#16"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/table-columns.tsx#13"
@@ -31678,16 +31978,13 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-layout-preview.tsx#8"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher.tsx#18"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar-filters.tsx#10"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher.tsx#17"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar-search.tsx#3"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar.tsx#22"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar.tsx#20"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/expenses.tsx#4"
@@ -31882,6 +32179,9 @@
             "location": "packages/ui/src/components/toast.tsx#14"
           },
           {
+            "location": "packages/ui/src/components/view-toolbar.tsx#3"
+          },
+          {
             "location": "packages/ui/src/components/workspace-shell.tsx#6"
           },
           {
@@ -31909,9 +32209,6 @@
             "location": "packages/ui/src/review/review-decision-actions.tsx#4"
           },
           {
-            "location": "packages/ui/src/workspace/fixtures/view-switcher.fixture.tsx#5"
-          },
-          {
             "location": "packages/workspace-ui/src/calculations.tsx#3"
           },
           {
@@ -31928,6 +32225,9 @@
           },
           {
             "location": "packages/workspace-ui/src/sorts.tsx#6"
+          },
+          {
+            "location": "packages/workspace-ui/src/view-switcher.tsx#14"
           },
           {
             "location": "packages/workspace-ui/src/workspace-frame.tsx#5"
@@ -32208,6 +32508,9 @@
         ],
         "occurrences": [
           {
+            "location": "apps/web/src/lib/pdf/anonymized-export-content.logic.ts#1"
+          },
+          {
             "location": "apps/web/src/lib/pdf/pdf-loader.ts#2"
           },
           {
@@ -32333,7 +32636,7 @@
           "name": "engineering@posthog.com"
         }
       ],
-      "bom-ref": "pkg:npm/posthog-js@1.429.2",
+      "bom-ref": "pkg:npm/posthog-js@1.429.5",
       "description": "Posthog-js allows you to automatically capture usage and send events to PostHog.",
       "evidence": {
         "identity": [
@@ -32392,10 +32695,10 @@
           "value": "apps/web/node_modules/posthog-js/package.json"
         }
       ],
-      "purl": "pkg:npm/posthog-js@1.429.2",
+      "purl": "pkg:npm/posthog-js@1.429.5",
       "scope": "required",
       "type": "library",
-      "version": "1.429.2"
+      "version": "1.429.5"
     },
     {
       "authors": [
@@ -32403,7 +32706,7 @@
           "name": "PostHog <engineering@posthog.com> (https://posthog.com)"
         }
       ],
-      "bom-ref": "pkg:npm/posthog-node@5.51.8",
+      "bom-ref": "pkg:npm/posthog-node@5.52.1",
       "description": "PostHog Node.js integration",
       "evidence": {
         "identity": [
@@ -32452,10 +32755,10 @@
           "value": "apps/api/node_modules/posthog-node/package.json"
         }
       ],
-      "purl": "pkg:npm/posthog-node@5.51.8",
+      "purl": "pkg:npm/posthog-node@5.52.1",
       "scope": "required",
       "type": "library",
-      "version": "5.51.8"
+      "version": "5.52.1"
     },
     {
       "bom-ref": "pkg:npm/prism-react-renderer@2.4.1",
@@ -33131,7 +33434,7 @@
             "location": "apps/web/src/components/inspector/anonymization-context-menu.tsx#14"
           },
           {
-            "location": "apps/web/src/components/inspector/anonymization-facet.tsx#17"
+            "location": "apps/web/src/components/inspector/anonymization-facet.tsx#15"
           },
           {
             "location": "apps/web/src/components/legal-reader/annotations/annotation-toolbar.tsx#3"
@@ -33527,6 +33830,12 @@
             "location": "apps/web/src/components/docx-preview-zoom.ts#2"
           },
           {
+            "location": "apps/web/src/components/entity-views/table-groups.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/entity-views/use-grouping-schema.ts#1"
+          },
+          {
             "location": "apps/web/src/components/inspector/skill-history/use-skill-history-actions.ts#1"
           },
           {
@@ -33572,7 +33881,19 @@
             "location": "apps/web/src/components/workspaces/hooks/use-create-b-boxes.ts#1"
           },
           {
+            "location": "apps/web/src/components/workspaces/hooks/use-inspector-flash.ts#1"
+          },
+          {
             "location": "apps/web/src/components/workspaces/hooks/use-sync-justifications.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/workspaces/kanban/use-kanban-drop-targets.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/workspaces/kanban/use-kanban-drop-targets.ts#2"
+          },
+          {
+            "location": "apps/web/src/components/workspaces/kanban/use-kanban-schema.ts#1"
           },
           {
             "location": "apps/web/src/components/workspaces/properties/property-input/custom-mention.ts#1"
@@ -33755,19 +34076,10 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio-preview.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/use-kanban-drop-targets.ts#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/use-kanban-drop-targets.ts#2"
-          },
-          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/group-scope.ts#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-default-view-redirect.ts#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-inspector-flash.ts#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-version-or-new-file-drop.ts#1"
@@ -33923,7 +34235,7 @@
             "location": "apps/web/src/components/ai-suggestions/host.tsx#16"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/host.tsx#23"
+            "location": "apps/web/src/components/ai-suggestions/host.tsx#22"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/review-bar.tsx#30"
@@ -33975,6 +34287,12 @@
           },
           {
             "location": "apps/web/src/components/auth/two-factor-panel.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/auth/use-require-account.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/auth/use-require-account.tsx#2"
           },
           {
             "location": "apps/web/src/components/authenticated-case-law-workspace.tsx#1"
@@ -34071,6 +34389,9 @@
           },
           {
             "location": "apps/web/src/components/chat/create-document-draft-inspector-view.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/chat/docked-composer.tsx#7"
           },
           {
             "location": "apps/web/src/components/chat/message-export-menu.tsx#1"
@@ -34190,6 +34511,24 @@
             "location": "apps/web/src/components/empty-screen.tsx#1"
           },
           {
+            "location": "apps/web/src/components/entity-views/entity-views.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/entity-views/kanban.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/entity-views/kanban.tsx#2"
+          },
+          {
+            "location": "apps/web/src/components/entity-views/new-task.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/entity-views/table.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/entity-views/table.tsx#2"
+          },
+          {
             "location": "apps/web/src/components/file-drop-zone.tsx#1"
           },
           {
@@ -34199,13 +34538,16 @@
             "location": "apps/web/src/components/file-tree/folder-expand-toggle.tsx#1"
           },
           {
+            "location": "apps/web/src/components/inbox/signal-card.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/inline-pill.tsx#6"
           },
           {
             "location": "apps/web/src/components/inspector/anonymization-context-menu.tsx#13"
           },
           {
-            "location": "apps/web/src/components/inspector/anonymization-facet.tsx#16"
+            "location": "apps/web/src/components/inspector/anonymization-facet.tsx#14"
           },
           {
             "location": "apps/web/src/components/inspector/chat-tab-panel.tsx#18"
@@ -34559,6 +34901,9 @@
             "location": "apps/web/src/components/workspaces/bulk-add-columns.tsx#8"
           },
           {
+            "location": "apps/web/src/components/workspaces/cell-metadata-flags.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/workspaces/conditions/condition-select-values.tsx#1"
           },
           {
@@ -34581,6 +34926,12 @@
           },
           {
             "location": "apps/web/src/components/workspaces/editable-field.tsx#12"
+          },
+          {
+            "location": "apps/web/src/components/workspaces/kanban/kanban-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/workspaces/kanban/kanban-card.tsx#2"
           },
           {
             "location": "apps/web/src/components/workspaces/matter-color-picker.tsx#1"
@@ -34637,6 +34988,9 @@
             "location": "apps/web/src/components/workspaces/reference-change-confirmation.tsx#1"
           },
           {
+            "location": "apps/web/src/components/workspaces/row-actions.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/workspaces/table/column-toggle.tsx#1"
           },
           {
@@ -34647,6 +35001,9 @@
           },
           {
             "location": "apps/web/src/components/workspaces/table/find-highlight.tsx#2"
+          },
+          {
+            "location": "apps/web/src/components/workspaces/table/metadata-popover.tsx#1"
           },
           {
             "location": "apps/web/src/components/workspaces/table/mobile-table-orientation-gate.tsx#1"
@@ -34674,6 +35031,9 @@
           },
           {
             "location": "apps/web/src/components/workspaces/tasks/task-detail-panel.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/workspaces/view-toolbar-filters.tsx#1"
           },
           {
             "location": "apps/web/src/components/workspaces/workflow-service-tier-prompt.tsx#1"
@@ -34745,6 +35105,9 @@
             "location": "apps/web/src/features/case-law/components/case-viewer/provisions-cited.tsx#1"
           },
           {
+            "location": "apps/web/src/features/case-law/components/citation-negative-hatch.tsx#1"
+          },
+          {
             "location": "apps/web/src/features/case-law/components/decision-cells.tsx#1"
           },
           {
@@ -34800,9 +35163,6 @@
           },
           {
             "location": "apps/web/src/features/command-palette/components/upload-document-dialog.tsx#1"
-          },
-          {
-            "location": "apps/web/src/features/inbox/components/my-work-view.tsx#1"
           },
           {
             "location": "apps/web/src/features/inbox/signal-inspector-registration.tsx#1"
@@ -34983,15 +35343,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.dev_.autocomplete.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.inbox/-new-request-dialog.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.inbox/-signal-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.inbox/index.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/blueprint-gallery-sheet.tsx#1"
@@ -35282,9 +35633,6 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/current-time-indicator.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags.tsx#1"
-          },
-          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/empty-state.tsx#1"
           },
           {
@@ -35298,9 +35646,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/flows/run-launcher.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-card.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column.tsx#1"
@@ -35328,9 +35673,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/property-popover.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/row-actions.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/entity-row-cells.tsx#1"
@@ -35373,9 +35715,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar-filters.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar-search.tsx#1"
@@ -35745,6 +36084,9 @@
           },
           {
             "location": "packages/ui/src/components/tooltip-trigger-helper.tsx#3"
+          },
+          {
+            "location": "packages/ui/src/components/view-toolbar.tsx#1"
           },
           {
             "location": "packages/ui/src/components/workspace-shell.tsx#3"
@@ -37018,6 +37360,9 @@
             "location": "apps/web/src/components/search-dialog.tsx#27"
           },
           {
+            "location": "apps/web/src/components/workspaces/cell-metadata-flags.tsx#5"
+          },
+          {
             "location": "apps/web/src/components/workspaces/table/table-find-bar.tsx#17"
           },
           {
@@ -37055,9 +37400,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/activity/activity-panel.tsx#22"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags.tsx#5"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view.tsx#23"
@@ -37152,6 +37494,12 @@
             "location": "apps/web/src/components/docx/use-folio-collaboration-room.ts#6"
           },
           {
+            "location": "apps/web/src/components/entity-views/table-groups.ts#4"
+          },
+          {
+            "location": "apps/web/src/components/entity-views/use-grouping-schema.ts#4"
+          },
+          {
             "location": "apps/web/src/components/inspector/skill-history/use-skill-history-actions.ts#4"
           },
           {
@@ -37161,7 +37509,16 @@
             "location": "apps/web/src/components/legal-reader/annotations/use-reader-annotations.ts#5"
           },
           {
+            "location": "apps/web/src/components/workspaces/hooks/use-retry-cell.ts#2"
+          },
+          {
             "location": "apps/web/src/components/workspaces/hooks/use-start-workflow.ts#3"
+          },
+          {
+            "location": "apps/web/src/components/workspaces/kanban/use-kanban-schema.ts#3"
+          },
+          {
+            "location": "apps/web/src/features/case-law/citation-format.ts#1"
           },
           {
             "location": "apps/web/src/features/case-law/use-provision-part-renderer.ts#2"
@@ -37230,12 +37587,6 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/use-clause-field-save.ts#2"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/use-kanban-schema.ts#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-retry-cell.ts#2"
-          },
-          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-workspace-calculation-labels.ts#1"
           },
           {
@@ -37293,10 +37644,13 @@
             "location": "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx#34"
           },
           {
+            "location": "apps/web/src/components/ai-suggestions/file-chat-placeholder.tsx#11"
+          },
+          {
             "location": "apps/web/src/components/ai-suggestions/file-viewer-with-ai.tsx#3"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/host.tsx#35"
+            "location": "apps/web/src/components/ai-suggestions/host.tsx#34"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/pending-review-new-thread-prompt.tsx#1"
@@ -37339,6 +37693,9 @@
           },
           {
             "location": "apps/web/src/components/auth/two-factor-panel.tsx#4"
+          },
+          {
+            "location": "apps/web/src/components/auth/use-require-account.tsx#5"
           },
           {
             "location": "apps/web/src/components/authenticated-case-law-workspace.tsx#4"
@@ -37530,6 +37887,18 @@
             "location": "apps/web/src/components/empty-screen.tsx#5"
           },
           {
+            "location": "apps/web/src/components/entity-views/entity-views.tsx#16"
+          },
+          {
+            "location": "apps/web/src/components/entity-views/kanban.tsx#6"
+          },
+          {
+            "location": "apps/web/src/components/entity-views/new-task.tsx#5"
+          },
+          {
+            "location": "apps/web/src/components/entity-views/table.tsx#16"
+          },
+          {
             "location": "apps/web/src/components/feedback-dialog.tsx#3"
           },
           {
@@ -37539,6 +37908,9 @@
             "location": "apps/web/src/components/flows/flow-badges.tsx#1"
           },
           {
+            "location": "apps/web/src/components/inbox/signal-card.tsx#6"
+          },
+          {
             "location": "apps/web/src/components/inline-edit.tsx#1"
           },
           {
@@ -37546,6 +37918,9 @@
           },
           {
             "location": "apps/web/src/components/inspector/anonymization-facet.tsx#28"
+          },
+          {
+            "location": "apps/web/src/components/inspector/anonymization-match-status.tsx#2"
           },
           {
             "location": "apps/web/src/components/inspector/chat-tab-panel.tsx#28"
@@ -37713,7 +38088,7 @@
             "location": "apps/web/src/components/public-inspector-rail.tsx#4"
           },
           {
-            "location": "apps/web/src/components/public-law-search.tsx#3"
+            "location": "apps/web/src/components/public-law-search.tsx#2"
           },
           {
             "location": "apps/web/src/components/public-workspace-shell.tsx#12"
@@ -37806,10 +38181,16 @@
             "location": "apps/web/src/components/versions/version-list.tsx#20"
           },
           {
+            "location": "apps/web/src/components/workspaces/advanced-filter-editor.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/workspaces/attached-template-upload-dialog.tsx#1"
           },
           {
             "location": "apps/web/src/components/workspaces/bulk-add-columns.tsx#18"
+          },
+          {
+            "location": "apps/web/src/components/workspaces/cell-metadata-flags.tsx#6"
           },
           {
             "location": "apps/web/src/components/workspaces/conditions/condition-select-values.tsx#4"
@@ -37840,6 +38221,9 @@
           },
           {
             "location": "apps/web/src/components/workspaces/justification.tsx#4"
+          },
+          {
+            "location": "apps/web/src/components/workspaces/kanban/kanban-card.tsx#5"
           },
           {
             "location": "apps/web/src/components/workspaces/lead-section.tsx#3"
@@ -37899,10 +38283,16 @@
             "location": "apps/web/src/components/workspaces/reference-change-confirmation.tsx#3"
           },
           {
+            "location": "apps/web/src/components/workspaces/row-actions.tsx#29"
+          },
+          {
             "location": "apps/web/src/components/workspaces/table/column-toggle.tsx#5"
           },
           {
-            "location": "apps/web/src/components/workspaces/table/metadata-popover.tsx#3"
+            "location": "apps/web/src/components/workspaces/table/group-header.tsx#2"
+          },
+          {
+            "location": "apps/web/src/components/workspaces/table/metadata-popover.tsx#4"
           },
           {
             "location": "apps/web/src/components/workspaces/table/mobile-table-orientation-gate.tsx#4"
@@ -37914,7 +38304,7 @@
             "location": "apps/web/src/components/workspaces/tasks/task-badges.tsx#8"
           },
           {
-            "location": "apps/web/src/components/workspaces/tasks/task-detail-panel.tsx#15"
+            "location": "apps/web/src/components/workspaces/tasks/task-detail-panel.tsx#14"
           },
           {
             "location": "apps/web/src/components/workspaces/tasks/task-links.tsx#2"
@@ -37924,6 +38314,12 @@
           },
           {
             "location": "apps/web/src/components/workspaces/tasks/task-subtasks.tsx#2"
+          },
+          {
+            "location": "apps/web/src/components/workspaces/view-grouping-controls.tsx#7"
+          },
+          {
+            "location": "apps/web/src/components/workspaces/view-toolbar-filters.tsx#10"
           },
           {
             "location": "apps/web/src/components/workspaces/workflow-service-tier-prompt.tsx#4"
@@ -37981,6 +38377,12 @@
           },
           {
             "location": "apps/web/src/features/case-law/components/case-viewer/provisions-cited.tsx#6"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/citation-timeline-panel.tsx#2"
+          },
+          {
+            "location": "apps/web/src/features/case-law/components/citation-treatment-bar.tsx#1"
           },
           {
             "location": "apps/web/src/features/case-law/components/citation-year-strip.tsx#1"
@@ -38056,9 +38458,6 @@
           },
           {
             "location": "apps/web/src/features/guides/guide-nudge.tsx#2"
-          },
-          {
-            "location": "apps/web/src/features/inbox/components/my-work-view.tsx#21"
           },
           {
             "location": "apps/web/src/features/inbox/components/signal-inspector-view.tsx#5"
@@ -38167,15 +38566,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.contacts/index.tsx#36"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.inbox/-new-request-dialog.tsx#8"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.inbox/-signal-card.tsx#6"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.inbox/index.tsx#6"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/blueprint-gallery-sheet.tsx#10"
@@ -38517,9 +38907,6 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-view.tsx#7"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags.tsx#6"
-          },
-          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/empty-state.tsx#5"
           },
           {
@@ -38541,9 +38928,6 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/flows/runs-list.tsx#2"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-card.tsx#4"
-          },
-          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column.tsx#16"
           },
           {
@@ -38562,13 +38946,10 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/property-popover.tsx#12"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/row-actions.tsx#29"
-          },
-          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/entity-row-cells.tsx#12"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/grouped-table-layout.tsx#22"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/grouped-table-layout.tsx#17"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/table-columns.tsx#15"
@@ -38581,9 +38962,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/version-or-new-file-dialog.tsx#4"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/advanced-filter-editor.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/export-report-dialog.tsx#6"
@@ -38604,10 +38982,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-layout-preview.tsx#9"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher.tsx#19"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar-filters.tsx#11"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher.tsx#18"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar-search.tsx#4"
@@ -38616,7 +38991,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar-sorts.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar.tsx#23"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar.tsx#21"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/workspace-drop-zone.tsx#5"
@@ -38812,6 +39187,9 @@
           },
           {
             "location": "packages/workspace-ui/src/field-value.tsx#4"
+          },
+          {
+            "location": "apps/web/src/features/case-law/citation-format.ts#1"
           },
           {
             "location": "apps/web/src/features/statutes/statute-format.ts#1"
@@ -39364,6 +39742,9 @@
             "location": "apps/api/src/mcp/knowledge-tools.ts#2"
           },
           {
+            "location": "apps/api/src/mcp/legislation-tools.ts#2"
+          },
+          {
             "location": "apps/api/src/mcp/matter-tools.ts#3"
           },
           {
@@ -39451,6 +39832,9 @@
             "location": "apps/web/src/components/templates/template-form.logic.ts#2"
           },
           {
+            "location": "apps/web/src/components/workspaces/request-manual-ocr.ts#1"
+          },
+          {
             "location": "apps/web/src/env-schema.ts#1"
           },
           {
@@ -39512,9 +39896,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio-model.ts#2"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/request-manual-ocr.ts#1"
           },
           {
             "location": "apps/web/src/routes/auth/-components/dev-quick-start-storage.ts#1"
@@ -39644,9 +40025,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.contacts/index.tsx#37"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.inbox/-new-request-dialog.tsx#9"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio-conditions.tsx#14"
@@ -40014,6 +40392,9 @@
             "location": "apps/web/src/components/inspector/inspector-tabs-store.ts#2"
           },
           {
+            "location": "apps/web/src/components/workspaces/cell-metadata-overrides-store.ts#1"
+          },
+          {
             "location": "apps/web/src/features/chat/legal-document-chat-threads.ts#17"
           },
           {
@@ -40105,9 +40486,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio-store.ts#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-overrides-store.ts#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/report-export-tracking.ts#1"
