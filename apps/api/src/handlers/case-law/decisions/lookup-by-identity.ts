@@ -24,7 +24,8 @@
  */
 
 import { panic } from "better-result";
-import { and, eq, exists, inArray, or, sql } from "drizzle-orm";
+import { and, eq, inArray, or } from "drizzle-orm";
+import { unionAll } from "drizzle-orm/pg-core";
 
 import {
   DECISION_IDENTIFIER_TYPES,
@@ -95,60 +96,70 @@ type IdentifierRowMatchOptions = {
 };
 
 /**
- * A publisher-supplied identifier row carrying the reference, normalized by
- * the function ingestion writes that column with. Correlated rather than
- * joined: a decision with several matching rows stays one candidate, so the
- * bound above counts decisions and not identifier rows.
+ * The decision ids a publisher-supplied identifier row points at, normalized
+ * by the function ingestion writes that column with. A set, not a correlated
+ * `EXISTS`: joined to the decision's own column by `OR`, a correlated
+ * subquery leaves the planner no index to drive and the read walks the
+ * whole table.
  */
-const identifierRowMatches = ({ tx, type, value }: IdentifierRowMatchOptions) =>
-  exists(
-    tx
-      .select({ one: sql`1` })
-      .from(caseLawDecisionIdentifiers)
-      .where(
-        and(
-          eq(caseLawDecisionIdentifiers.decisionId, caseLawDecisions.id),
-          eq(caseLawDecisionIdentifiers.type, type),
-          eq(
-            caseLawDecisionIdentifiers.normalizedValue,
-            normalizeDecisionIdentifierValue(type, value),
-          ),
+const identifierRowDecisionIds = ({
+  tx,
+  type,
+  value,
+}: IdentifierRowMatchOptions) =>
+  tx
+    .select({ id: caseLawDecisionIdentifiers.decisionId })
+    .from(caseLawDecisionIdentifiers)
+    .where(
+      and(
+        eq(caseLawDecisionIdentifiers.type, type),
+        eq(
+          caseLawDecisionIdentifiers.normalizedValue,
+          normalizeDecisionIdentifierValue(type, value),
         ),
       ),
-  );
+    );
 
 /**
  * ECLIs are published in one case but cited in another, and the column stores
  * the published spelling. The docket's identity is its citation key, which
  * `bareCitationKey` already normalizes: the same function that writes the
- * column.
+ * column. The two sources of identity are unioned into one id set so the
+ * outer read is a membership test that the primary key answers; each side
+ * of the union has its own index.
  */
 const identityCondition = ({
+  country,
   locator,
   tx,
 }: {
+  country: string;
   locator: DecisionIdentityLocator;
   tx: CaseLawPublicReadTransaction;
 }) => {
-  if (locator.kind === "ecli") {
-    return or(
-      eq(caseLawDecisions.ecli, locator.value),
-      eq(caseLawDecisions.ecli, locator.value.toUpperCase()),
-      identifierRowMatches({
-        tx,
-        type: DECISION_IDENTIFIER_TYPES.ECLI,
-        value: locator.value,
-      }),
+  const own = tx
+    .select({ id: caseLawDecisions.id })
+    .from(caseLawDecisions)
+    .where(
+      and(
+        eq(caseLawDecisions.country, country),
+        locator.kind === "ecli"
+          ? or(
+              eq(caseLawDecisions.ecli, locator.value),
+              eq(caseLawDecisions.ecli, locator.value.toUpperCase()),
+            )
+          : eq(caseLawDecisions.citationKey, bareCitationKey(locator.value)),
+      ),
     );
-  }
-  return or(
-    eq(caseLawDecisions.citationKey, bareCitationKey(locator.value)),
-    identifierRowMatches({
-      tx,
-      type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
-      value: locator.value,
-    }),
-  );
+  const published = identifierRowDecisionIds({
+    tx,
+    type:
+      locator.kind === "ecli"
+        ? DECISION_IDENTIFIER_TYPES.ECLI
+        : DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+    value: locator.value,
+  });
+  return inArray(caseLawDecisions.id, unionAll(own, published));
 };
 
 export const lookupDecisionsByIdentity = async ({
@@ -175,7 +186,7 @@ export const lookupDecisionsByIdentity = async ({
       )
       .where(
         and(
-          identityCondition({ locator, tx }),
+          identityCondition({ country, locator, tx }),
           eq(caseLawDecisions.country, country),
           publishedCaseLawDecision,
           redistributableCaseLawSourceFor(caseLawSources.descriptor),
