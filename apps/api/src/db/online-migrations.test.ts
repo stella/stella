@@ -339,7 +339,9 @@ describe("online migrations", () => {
   });
 
   test("validates the decision-date constraint after the index steps, once the repair finds nothing", async () => {
-    const harness = createHarness();
+    const harness = createHarness({
+      unvalidatedConstraints: [DECISION_DATE_CONSTRAINT],
+    });
 
     await runOnlineMigrations(harness.pool);
 
@@ -364,7 +366,9 @@ describe("online migrations", () => {
   });
 
   test("validates the delete-receipt constraint after walking the intents", async () => {
-    const harness = createHarness();
+    const harness = createHarness({
+      unvalidatedConstraints: [DELETE_RECEIPT_CONSTRAINT],
+    });
 
     await runOnlineMigrations(harness.pool);
 
@@ -378,6 +382,33 @@ describe("online migrations", () => {
         'UPDATE public."corpus_index_projection_intents"',
       ),
     );
+    expect(harness.released()).toBe(true);
+  });
+
+  test("skips a repair whose completion already holds", async () => {
+    const harness = createHarness();
+
+    await runOnlineMigrations(harness.pool);
+
+    // Every repair reports itself complete, so none of them opens a
+    // transaction: no walk over the intents, no decision-date selection, and
+    // nothing revalidated.
+    expect(indexOfStatement(harness.statements, "BEGIN")).toBe(-1);
+    expect(
+      indexOfStatement(
+        harness.statements,
+        'UPDATE public."corpus_index_projection_intents"',
+      ),
+    ).toBe(-1);
+    expect(
+      indexOfStatement(harness.statements, VALIDATE_DELETE_RECEIPT_FRAGMENT),
+    ).toBe(-1);
+    expect(
+      indexOfStatement(harness.statements, "corrupt AS MATERIALIZED"),
+    ).toBe(-1);
+    expect(
+      indexOfStatement(harness.statements, VALIDATE_CONSTRAINT_FRAGMENT),
+    ).toBe(-1);
     expect(harness.released()).toBe(true);
   });
 
@@ -434,7 +465,10 @@ type Artifacts = Readonly<Record<string, Artifact[]>>;
 
 type HarnessOptions = {
   artifacts?: Artifacts;
-  /** Constraints `pg_constraint` reports as not validated; the rest are. */
+  /**
+   * Constraints `pg_constraint` reports as not validated until a repair's
+   * VALIDATE statement runs; the rest are validated from the start.
+   */
   unvalidatedConstraints?: readonly string[];
   indexStates?: IndexStates;
 };
@@ -450,6 +484,7 @@ const createHarness = ({
   indexStates = {},
 }: HarnessOptions = {}) => {
   const statements: string[] = [];
+  const pendingConstraints = new Set(unvalidatedConstraints);
   const indexOffsets = new Map<string, number>();
   const remainingArtifacts = new Map(
     Object.entries(artifacts).map(([name, values]) => [name, [...values]]),
@@ -468,6 +503,11 @@ const createHarness = ({
       reserve: async () => ({
         execute: async (query: string) => {
           statements.push(query);
+          for (const constraint of pendingConstraints) {
+            if (query.includes(`VALIDATE CONSTRAINT "${constraint}"`)) {
+              pendingConstraints.delete(constraint);
+            }
+          }
           if (!query.includes(DROP_INDEX_FRAGMENT)) {
             return;
           }
@@ -488,9 +528,7 @@ const createHarness = ({
             if (typeof constraintName !== "string") {
               throw new TypeError("Expected constraint name query parameter");
             }
-            return [
-              { isValidated: !unvalidatedConstraints.includes(constraintName) },
-            ];
+            return [{ isValidated: !pendingConstraints.has(constraintName) }];
           }
           // The decision-date repair's selection: nothing left to repair.
           if (query.includes("corrupt AS MATERIALIZED")) {

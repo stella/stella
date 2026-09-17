@@ -11,6 +11,7 @@ import type {
   OnlineMigrationConnection,
   OnlineMigrationPool,
   OnlineRepair,
+  OnlineRepairCompletion,
 } from "./online-migration-connection";
 
 // Sized for index builds: a DDL lock that queues behind live traffic fails
@@ -254,16 +255,17 @@ export const ONLINE_VALIDATED_INDEX_NAMES: ReadonlySet<string> = new Set([
 /**
  * Data repairs a schema migration left to this phase, run after the index
  * steps so an index a repair walks is one that already exists. Each is
- * self-checkpointing (see `OnlineRepair`); the phase only sequences them and
- * validates their completion.
+ * self-checkpointing (see `OnlineRepair`); the phase only sequences them,
+ * skips the ones already complete, and validates their completion.
  */
 export const ONLINE_MIGRATION_REPAIRS: readonly OnlineRepair[] = [
   DECISION_DATE_CEILING_REPAIR,
   CORPUS_PROJECTION_DELETE_RECEIPT_REPAIR,
   // Not behind one migration: the OAuth resource set is derived from the MCP
   // audiences in application code, so it is the code that moves and the rows
-  // that follow. Every deploy reconciles them, which is what lets an audience
-  // be added without an operator step.
+  // that follow. Its completion is the startup census, so the deploy that
+  // widens the audience set is the one that reconciles them, without an
+  // operator step.
   BETTER_AUTH_OAUTH_RESOURCE_REPAIR,
 ];
 
@@ -367,12 +369,27 @@ const processOnlineRepairAt = async (
     return;
   }
 
-  if (operation === "repair") {
+  const completion = await repair.readCompletion(connection);
+  if (operation === "repair" && completion.type === "incomplete") {
     await repair.repair(connection);
     await connection.execute(ONLINE_MIGRATION_LOCK_TIMEOUT_SQL);
+    assertRepairComplete(repair, await repair.readCompletion(connection));
+  } else {
+    assertRepairComplete(repair, completion);
   }
-  await repair.assertComplete(connection);
   await processOnlineRepairAt(connection, operation, offset + 1);
+};
+
+const assertRepairComplete = (
+  { name }: OnlineRepair,
+  completion: OnlineRepairCompletion,
+): void => {
+  if (completion.type === "incomplete") {
+    panic(
+      `Online repair ${name} is not complete: ${completion.reason}`,
+      completion.cause,
+    );
+  }
 };
 
 const retireReplacedIndexAt = async (

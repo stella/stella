@@ -266,11 +266,16 @@ test("the migration swaps the CHECK untouched, the repair clears and reopens, bo
   // Schema only: every row and every edge is as it was.
   expect(await snapshot(db)).toEqual(before);
   expect(
-    await rejectionOf(DECISION_DATE_CEILING_REPAIR.assertComplete(connection)),
-  ).toContain("is not validated");
+    await DECISION_DATE_CEILING_REPAIR.readCompletion(connection),
+  ).toMatchObject({
+    reason: expect.stringContaining("is not validated"),
+    type: "incomplete",
+  });
 
   await DECISION_DATE_CEILING_REPAIR.repair(connection);
-  await DECISION_DATE_CEILING_REPAIR.assertComplete(connection);
+  expect(await DECISION_DATE_CEILING_REPAIR.readCompletion(connection)).toEqual(
+    { type: "complete" },
+  );
   expect((await constraintState(db))?.isValidated).toBe(true);
   const repaired = await snapshot(db);
   const decisionsById = new Map(repaired.decisions.map((row) => [row.id, row]));
@@ -373,9 +378,10 @@ test("an interrupted repair keeps its committed batches and resumes by running a
   );
   expect(await corruptCount(db)).toBe(population - 50);
   expect((await constraintState(db))?.isValidated).toBe(false);
-  expect(
-    await rejectionOf(DECISION_DATE_CEILING_REPAIR.assertComplete(dropped)),
-  ).toContain("is not validated");
+  expect(await DECISION_DATE_CEILING_REPAIR.readCompletion(dropped)).toEqual({
+    reason: expect.stringContaining("is not validated"),
+    type: "incomplete",
+  });
 
   await DECISION_DATE_CEILING_REPAIR.repair(connectionOver(client));
   expect(await corruptCount(db)).toBe(0);

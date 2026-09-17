@@ -32,9 +32,10 @@
  *
  * Idempotent and self-checkpointing without bookkeeping: both functions decide
  * per row from the database's current state, so an interrupted run resumes by
- * running again and a completed run inserts and links nothing. `assertComplete`
- * is the same census the API runs at startup, so a partial repair fails the
- * deploy rather than the boot.
+ * running again and a completed run inserts and links nothing. Completion is
+ * the same census the API runs at startup: every deploy reads it, a deploy
+ * whose code widened the audience set fails it and repairs, and a partial
+ * repair fails the deploy rather than the boot.
  *
  * Nothing here reads the API's environment. The migrate entrypoint runs with a
  * database-only environment (the ECS `api-migrate` task definition injects
@@ -63,6 +64,7 @@ import {
 import type {
   OnlineMigrationConnection,
   OnlineRepair,
+  OnlineRepairCompletion,
 } from "./online-migration-connection";
 
 const REPAIR_NAME = "better-auth-oauth-resources";
@@ -177,14 +179,14 @@ const repair = async (connection: OnlineMigrationConnection): Promise<void> => {
   }
 };
 
-const assertComplete = async (
+const readCompletion = async (
   connection: OnlineMigrationConnection,
-): Promise<void> => {
+): Promise<OnlineRepairCompletion> => {
   const origin = await readStoredOrigin(connection);
   if (origin === null) {
     // Nothing was owed, so nothing is incomplete. The API's own startup gate
     // seeds and then verifies a fresh database.
-    return;
+    return { type: "complete" };
   }
   const census = await Result.tryPromise({
     try: async () =>
@@ -194,19 +196,20 @@ const assertComplete = async (
       ),
     catch: (cause) => cause,
   });
-  if (Result.isError(census)) {
-    // The same check the API runs before it serves. Failing here means the
-    // deploy stops with the repair named, instead of every API task
-    // crash-looping on its boot gate.
-    panic(
-      `Online repair ${REPAIR_NAME} is not complete: the Better Auth OAuth policy census failed`,
-      census.error,
-    );
-  }
+  // The same check the API runs before it serves. A failing census is what the
+  // repair is for; one that still fails after it stops the deploy with the
+  // repair named, instead of every API task crash-looping on its boot gate.
+  return Result.isError(census)
+    ? {
+        cause: census.error,
+        reason: "the Better Auth OAuth policy census failed",
+        type: "incomplete",
+      }
+    : { type: "complete" };
 };
 
 export const BETTER_AUTH_OAUTH_RESOURCE_REPAIR: OnlineRepair = {
-  assertComplete,
   name: REPAIR_NAME,
+  readCompletion,
   repair,
 };
