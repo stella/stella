@@ -216,8 +216,7 @@
         "treatAsGoverning": "Considerar prevalente {id}"
       },
       "relation": {
-        "conflicts": "Contradice",
-        "supports": "Respalda"
+        "conflicts": "Contradice"
       },
       "reopened": "Reabierta, comprobación pendiente",
       "reopenedTooltip": "Un revisor la reclasificó como hecho comprobable; aún está pendiente la comprobación en vivo del registro.",
@@ -1528,6 +1527,7 @@
     "stepCount": "{count, plural, one {# paso} other {# pasos}}",
     "stepProgress": "{current} de {total}",
     "summarizeChanges": "Resumir cambios",
+    "supports": "Respalda",
     "timeBilling": "Tiempo y facturación",
     "today": "Hoy",
     "translate": "Traducir",
@@ -1789,6 +1789,23 @@
       "organization": "Organización",
       "person": "Persona"
     }
+  },
+  "docxCitationCheck": {
+    "action": "Comprobar la cita",
+    "alternatives": "{count, plural, one {# resolución más responde a esta referencia} other {# resoluciones más responden a esta referencia}}",
+    "checking": "Comprobando {citation} …",
+    "contradicts": "Contradice",
+    "doesNotAddress": "No aborda",
+    "failed": "La comprobación de la cita no se completó. Inténtalo de nuevo.",
+    "goToParagraph": "Ir al párrafo",
+    "noPassage": "Ningún pasaje concreto de la resolución sostiene esta lectura.",
+    "notFound": "No hay ninguna resolución que corresponda a {citation} en la base de jurisprudencia",
+    "probability": "{probability, number, percent} de probabilidad",
+    "showPassage": "Mostrar el pasaje",
+    "title": "Comprobación de la cita",
+    "unavailableDerivedAi": "El editor de esta resolución no permite el análisis de su texto mediante IA.",
+    "unavailableNoText": "Se encontró la resolución, pero su texto no está disponible para comprobarla.",
+    "uncertain": "Incierto"
   },
   "docxReview": {
     "acceptAll": "Aceptar todo",

@@ -216,8 +216,7 @@
         "treatAsGoverning": "A(z) {id} legyen irányadó"
       },
       "relation": {
-        "conflicts": "Ellentmond",
-        "supports": "Alátámasztja"
+        "conflicts": "Ellentmond"
       },
       "reopened": "Újranyitva, ellenőrzésre vár",
       "reopenedTooltip": "Egy ellenőr ellenőrizhető ténynek minősítette át ezt az állítást; a működő nyilvántartással való összevetés még várat magára.",
@@ -1528,6 +1527,7 @@
     "stepCount": "{count, plural, one {# lépés} other {# lépés}}",
     "stepProgress": "{current} / {total}",
     "summarizeChanges": "Változtatások összefoglalása",
+    "supports": "Alátámasztja",
     "timeBilling": "Idő és számlázás",
     "today": "Ma",
     "translate": "Fordítás",
@@ -1789,6 +1789,23 @@
       "organization": "Szervezet",
       "person": "Személy"
     }
+  },
+  "docxCitationCheck": {
+    "action": "Hivatkozás ellenőrzése",
+    "alternatives": "{count, plural, one {Erre a jelzetre még # határozat felel} other {Erre a jelzetre még # határozat felel}}",
+    "checking": "{citation} ellenőrzése …",
+    "contradicts": "Ellentmond",
+    "doesNotAddress": "Nem foglalkozik vele",
+    "failed": "A hivatkozás ellenőrzése nem fejeződött be. Próbálja újra.",
+    "goToParagraph": "Ugrás a bekezdésre",
+    "noPassage": "A határozat egyetlen szövegrésze sem hordozza ezt a megállapítást.",
+    "notFound": "Nincs {citation} jelzetű határozat az ítélkezési adatbázisban",
+    "probability": "{probability, number, percent} valószínűség",
+    "showPassage": "Szövegrész megjelenítése",
+    "title": "Hivatkozás ellenőrzése",
+    "unavailableDerivedAi": "A határozat kiadója nem engedélyezi a szöveg mesterséges intelligenciával végzett elemzését.",
+    "unavailableNoText": "A határozat megvan, de a szövege nem érhető el az ellenőrzéshez.",
+    "uncertain": "Bizonytalan"
   },
   "docxReview": {
     "acceptAll": "Összes elfogadása",

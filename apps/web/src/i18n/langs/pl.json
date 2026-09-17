@@ -216,8 +216,7 @@
         "treatAsGoverning": "Uznaj {id} za nadrzędny"
       },
       "relation": {
-        "conflicts": "Przeczy",
-        "supports": "Potwierdza"
+        "conflicts": "Przeczy"
       },
       "reopened": "Otwarto ponownie, oczekuje na sprawdzenie",
       "reopenedTooltip": "Osoba weryfikująca przeklasyfikowała to twierdzenie jako możliwy do sprawdzenia fakt; porównanie z rzeczywistym rejestrem nadal oczekuje na wykonanie.",
@@ -1528,6 +1527,7 @@
     "stepCount": "{count, plural, one {# krok} few {# kroki} many {# kroków} other {# kroku}}",
     "stepProgress": "{current} z {total}",
     "summarizeChanges": "Podsumuj zmiany",
+    "supports": "Potwierdza",
     "timeBilling": "Czas i rozliczenia",
     "today": "Dzisiaj",
     "translate": "Przetłumacz",
@@ -1789,6 +1789,23 @@
       "organization": "Organizacja",
       "person": "Osoba"
     }
+  },
+  "docxCitationCheck": {
+    "action": "Sprawdź powołanie",
+    "alternatives": "{count, plural, one {Temu oznaczeniu odpowiada jeszcze # orzeczenie} few {Temu oznaczeniu odpowiadają jeszcze # orzeczenia} many {Temu oznaczeniu odpowiada jeszcze # orzeczeń} other {Temu oznaczeniu odpowiada jeszcze # orzeczenia}}",
+    "checking": "Sprawdzam {citation} …",
+    "contradicts": "Przeczy",
+    "doesNotAddress": "Nie odnosi się",
+    "failed": "Sprawdzenie powołania nie powiodło się. Spróbuj ponownie.",
+    "goToParagraph": "Przejdź do akapitu",
+    "noPassage": "Żaden pojedynczy fragment orzeczenia nie zawiera tego wniosku.",
+    "notFound": "W bazie orzecznictwa nie ma orzeczenia odpowiadającego {citation}",
+    "probability": "prawdopodobieństwo {probability, number, percent}",
+    "showPassage": "Pokaż fragment",
+    "title": "Sprawdzenie powołania",
+    "unavailableDerivedAi": "Wydawca tego orzeczenia nie zezwala na analizę jego tekstu przez sztuczną inteligencję.",
+    "unavailableNoText": "Orzeczenie zostało odnalezione, ale jego tekst nie jest dostępny do sprawdzenia.",
+    "uncertain": "Niepewne"
   },
   "docxReview": {
     "acceptAll": "Zaakceptuj wszystkie",

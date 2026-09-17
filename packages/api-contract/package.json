@@ -13,6 +13,7 @@
     "./case-law-launch-readiness": "./src/case-law-launch-readiness.ts",
     "./case-law-jurisdictions": "./src/case-law-jurisdictions.ts",
     "./case-law-text-field": "./src/case-law-text-field.ts",
+    "./citation-check": "./src/citation-check.ts",
     "./decision-docket-grammar": "./src/decision-docket-grammar.ts",
     "./decision-query-intent": "./src/decision-query-intent.ts",
     "./desktop-registry": "./src/desktop-registry.ts",

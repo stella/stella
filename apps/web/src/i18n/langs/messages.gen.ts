@@ -220,7 +220,6 @@ type Messages = {
       };
       "relation": {
         "conflicts": "Conflicts";
-        "supports": "Supports";
       };
       "reopened": "Re-opened, check pending";
       "reopenedTooltip": "A reviewer re-classified this as a checkable fact; a live record check is still pending.";
@@ -1531,6 +1530,7 @@ type Messages = {
     "stepCount": "{count, plural, one {# step} other {# steps}}";
     "stepProgress": "{current} of {total}";
     "summarizeChanges": "Summarize changes";
+    "supports": "Supports";
     "timeBilling": "Time & Billing";
     "today": "Today";
     "translate": "Translate";
@@ -1792,6 +1792,23 @@ type Messages = {
       "organization": "Organization";
       "person": "Person";
     };
+  };
+  "docxCitationCheck": {
+    "action": "Check citation";
+    "alternatives": "{count, plural, one {# other decision answers to this reference} other {# other decisions answer to this reference}}";
+    "checking": "Checking {citation} …";
+    "contradicts": "Contradicts";
+    "doesNotAddress": "Does not address";
+    "failed": "The citation check did not complete. Try again.";
+    "goToParagraph": "Go to the paragraph";
+    "noPassage": "No single passage in the decision carries this reading.";
+    "notFound": "No decision matching {citation} in the case-law database";
+    "probability": "{probability, number, percent} likely";
+    "showPassage": "Show the passage";
+    "title": "Citation check";
+    "unavailableDerivedAi": "The publisher of this decision does not permit AI analysis of its text.";
+    "unavailableNoText": "The decision was found, but its text is not available to check against.";
+    "uncertain": "Uncertain";
   };
   "docxReview": {
     "acceptAll": "Accept all";

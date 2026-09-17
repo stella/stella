@@ -216,8 +216,7 @@
         "treatAsGoverning": "Considérer {id} comme faisant foi"
       },
       "relation": {
-        "conflicts": "Contredit",
-        "supports": "Étaye"
+        "conflicts": "Contredit"
       },
       "reopened": "Rouverte, vérification en attente",
       "reopenedTooltip": "Un relecteur a requalifié cette affirmation en fait vérifiable ; une vérification en direct du dossier est encore en attente.",
@@ -1528,6 +1527,7 @@
     "stepCount": "{count, plural, one {# étape} other {# étapes}}",
     "stepProgress": "{current} sur {total}",
     "summarizeChanges": "Résumer les modifications",
+    "supports": "Confirme",
     "timeBilling": "Temps et facturation",
     "today": "Aujourd'hui",
     "translate": "Traduire",
@@ -1789,6 +1789,23 @@
       "organization": "Organisation",
       "person": "Personne"
     }
+  },
+  "docxCitationCheck": {
+    "action": "Vérifier la citation",
+    "alternatives": "{count, plural, one {# autre décision porte cette référence} other {# autres décisions portent cette référence}}",
+    "checking": "Vérification de {citation} …",
+    "contradicts": "Contredit",
+    "doesNotAddress": "Ne traite pas",
+    "failed": "La vérification de la citation n’a pas abouti. Réessayez.",
+    "goToParagraph": "Aller au paragraphe",
+    "noPassage": "Aucun passage isolé de la décision ne porte cette lecture.",
+    "notFound": "Aucune décision correspondant à {citation} dans la base de jurisprudence",
+    "probability": "probabilité de {probability, number, percent}",
+    "showPassage": "Afficher le passage",
+    "title": "Vérification de la citation",
+    "unavailableDerivedAi": "L’éditeur de cette décision n’autorise pas l’analyse de son texte par l’IA.",
+    "unavailableNoText": "La décision a été trouvée, mais son texte n’est pas disponible pour la vérification.",
+    "uncertain": "Incertain"
   },
   "docxReview": {
     "acceptAll": "Tout accepter",

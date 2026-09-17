@@ -26,6 +26,7 @@ import { panic, Result, TaggedError } from "better-result";
 import {
   CheckCircle2Icon,
   EyeIcon,
+  FileSearchIcon,
   GitCommitHorizontalIcon,
   PenLineIcon,
   RefreshCwIcon,
@@ -72,6 +73,9 @@ import {
 } from "@/components/docx-preview-zoom";
 import { DocxEditor } from "@/components/docx/app-docx-editor";
 import type { DocxComments } from "@/components/docx/app-docx-editor";
+import { CitationCheckCard } from "@/components/docx/citation-check/citation-check-card";
+import { findDecisionReference } from "@/components/docx/citation-check/citation-check.logic";
+import { useCitationCheck } from "@/components/docx/citation-check/use-citation-check";
 import { DocxFindBar } from "@/components/docx/docx-find-bar";
 import { DocxLoadingShell } from "@/components/docx/docx-loading-shell";
 import {
@@ -205,6 +209,28 @@ const canInsertEvidenceReference = (
   canUnlock: boolean,
   compatibility: DocxCompatibility | null,
 ) => canUnlock && compatibility?.canSafelyEdit !== false;
+
+const CHECK_CITATION_CONTEXT_ID = "stella.check-citation";
+
+/**
+ * The paragraph a document position sits in, so a citation check's answer can
+ * be shown against the paragraph it was asked about. Null when the editor has
+ * no live view or the position falls between anchors, which costs the answer
+ * its anchor and nothing else.
+ */
+const blockIdContaining = (
+  editor: DocxEditorRef | null,
+  position: number,
+): string | null => {
+  const snapshot = editor?.createAIEditSnapshot() ?? null;
+  if (snapshot === null) {
+    return null;
+  }
+  const anchor = Object.values(snapshot.anchors).find(
+    (candidate) => candidate.from <= position && position <= candidate.to,
+  );
+  return anchor?.id ?? null;
+};
 
 type DocxBrowserEditorContentProps = DocxBrowserEditorProps & {
   evidenceReferencesDialogState: EvidenceReferencesDialogState;
@@ -643,6 +669,16 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
     };
   }, [fieldId, isAnonymizationActive]);
 
+  // The decision reference the current selection names, if any: what decides
+  // whether the context menu offers a citation check.
+  const [citedReference, setCitedReference] = useState<string | null>(null);
+  const lastSelectionRef = useRef<{
+    from: number;
+    to: number;
+    text: string;
+  } | null>(null);
+  const citationCheck = useCitationCheck();
+
   // Bridge document selections → inspector "Term to anonymize"
   // input. Folio fires `onSelectionTextChange` with the range
   // and the resolved text on every selection-bearing
@@ -651,6 +687,17 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
   // facet doesn't see a stale prefill from the previous file.
   const handleSelectionTextChange = useCallback(
     (selection: { from: number; to: number; text: string }) => {
+      // Held in a ref, not in state: right-click can collapse the live
+      // selection before the context action fires, so the sentence the
+      // writer had highlighted is read from here rather than from the view.
+      lastSelectionRef.current = selection;
+      // Only the reference itself reaches state, so the editor re-renders
+      // when the "Check citation" entry appears or disappears and not on
+      // every selection-bearing transaction.
+      const reference = findDecisionReference(selection.text);
+      setCitedReference((current) =>
+        current === reference ? current : reference,
+      );
       if (selection.from === selection.to) {
         return;
       }
@@ -1832,6 +1879,38 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
   /* eslint-enable react/refs */
   const createVersionLabel = t("folio.createVersion");
 
+  // Offered only where there is something to check: no entry appears on a
+  // selection that names no decision, so the menu never carries an action
+  // that can only answer "nothing here".
+  const citationContextItems =
+    citedReference === null
+      ? undefined
+      : [
+          {
+            id: CHECK_CITATION_CONTEXT_ID,
+            label: t("docxCitationCheck.action"),
+            requiresSelection: true,
+            icon: <FileSearchIcon size={14} />,
+          },
+        ];
+
+  const runCitationCheck = (range: { from: number; to: number }) => {
+    const selection = lastSelectionRef.current;
+    if (citedReference === null || selection === null) {
+      return;
+    }
+    detached(
+      citationCheck.run({
+        citation: citedReference,
+        // The writer's own selection is the sentence being checked; the
+        // editor never widens it, so what is judged is what was highlighted.
+        claim: selection.text,
+        blockId: blockIdContaining(editorRef.current, range.from),
+      }),
+      "docx.citation-check",
+    );
+  };
+
   const toolbarExtra = (() => {
     if (showActionBar || actionBarControls !== undefined) {
       return (
@@ -2070,6 +2149,14 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
             onCompatibilityChange={handleCompatibilityChange}
             onAnonymizationMatchesChange={handleAnonymizationMatchesChange}
             onSelectionTextChange={handleSelectionTextChange}
+            {...(citationContextItems === undefined
+              ? {}
+              : { customContextMenuItems: citationContextItems })}
+            onCustomContextAction={(id, range) => {
+              if (id === CHECK_CITATION_CONTEXT_ID) {
+                runCitationCheck(range);
+              }
+            }}
             onAnonymizationTermClick={handleAnonymizationTermClick}
             selectedAnonymizationCanonical={sidebarSelectedCanonical}
             anonymizationSelectionSeq={sidebarSelectionSeq}
@@ -2111,6 +2198,16 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
             entityId={entityId}
             persistence={{ type: "workspace", workspaceId }}
             requestDocxEditMode={requestEditMode}
+          />
+          {/* The citation check's answer, docked to the inline start so it
+              clears the review stepper's bottom-centre lane. Returns null
+              until a check has been asked for. */}
+          <CitationCheckCard
+            onDismiss={citationCheck.dismiss}
+            onRevealParagraph={(blockId) => {
+              editorRef.current?.scrollToBlock(blockId);
+            }}
+            state={citationCheck.state}
           />
         </FileViewerWithAI>
       </div>

@@ -18,7 +18,6 @@ import type {
 } from "@/api/lib/typesafe/system-one";
 import { choice } from "@/api/lib/typesafe/system-one";
 
-import { CLASSIFIABLE_POLARITIES } from "./consts";
 import type { ClassifiablePolarity } from "./consts";
 import { POLARITY_GUIDANCE } from "./guidance";
 
@@ -60,12 +59,9 @@ const POLARITY_QUESTION = choice(
     language_note:
       "`language` names the language of `excerpt`; the criteria quote phrases in Czech, Slovak and English.",
   },
-  Object.fromEntries(
-    CLASSIFIABLE_POLARITIES.map((polarity) => [
-      polarity,
-      POLARITY_GUIDANCE[polarity],
-    ]),
-  ) as Record<ClassifiablePolarity, string>,
+  // The guidance map is already total over the vocabulary, so it is the
+  // criteria: rebuilding it entry by entry only lost the key type.
+  POLARITY_GUIDANCE,
 );
 
 export const classifyWithSystemOne = async ({

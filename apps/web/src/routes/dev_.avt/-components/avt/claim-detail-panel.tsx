@@ -147,9 +147,7 @@ function FactCard({ fact, rel }: { fact: AnchorFact; rel: ClaimFactRelation }) {
             <XCircleIcon className="size-3.5" />
           )}
           {t(
-            supports
-              ? "avt.claimDetail.relation.supports"
-              : "avt.claimDetail.relation.conflicts",
+            supports ? "common.supports" : "avt.claimDetail.relation.conflicts",
           )}
         </span>
         <ConfBadge level={fact.confidence} />

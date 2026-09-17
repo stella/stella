@@ -216,8 +216,7 @@
         "treatAsGoverning": "Uzskatīt {id} par noteicošo"
       },
       "relation": {
-        "conflicts": "Ir pretrunā",
-        "supports": "Pamato"
+        "conflicts": "Ir pretrunā"
       },
       "reopened": "Atvērts vēlreiz, gaida pārbaudi",
       "reopenedTooltip": "Pārbaudītājs to pārklasificēja par pārbaudāmu faktu; tiešā pārbaude pret reģistru vēl nav veikta.",
@@ -1528,6 +1527,7 @@
     "stepCount": "{count, plural, zero {# soļu} one {# solis} other {# soļi}}",
     "stepProgress": "{current} no {total}",
     "summarizeChanges": "Apkopot izmaiņas",
+    "supports": "Apstiprina",
     "timeBilling": "Laiks un norēķini",
     "today": "Šodien",
     "translate": "Tulkot",
@@ -1789,6 +1789,23 @@
       "organization": "Organizācija",
       "person": "Persona"
     }
+  },
+  "docxCitationCheck": {
+    "action": "Pārbaudīt atsauci",
+    "alternatives": "{count, plural, zero {Šai atsaucei atbilst vēl # nolēmumu} one {Šai atsaucei atbilst vēl # nolēmums} other {Šai atsaucei atbilst vēl # nolēmumi}}",
+    "checking": "Pārbaudu {citation} …",
+    "contradicts": "Ir pretrunā",
+    "doesNotAddress": "Neskar",
+    "failed": "Atsauces pārbaude netika pabeigta. Mēģiniet vēlreiz.",
+    "goToParagraph": "Pāriet uz rindkopu",
+    "noPassage": "Neviens atsevišķs nolēmuma fragments šo secinājumu neietver.",
+    "notFound": "Judikatūras datubāzē nav nolēmuma, kas atbilstu {citation}",
+    "probability": "{probability, number, percent} varbūtība",
+    "showPassage": "Rādīt fragmentu",
+    "title": "Atsauces pārbaude",
+    "unavailableDerivedAi": "Šā nolēmuma izdevējs neatļauj tā teksta analīzi ar mākslīgo intelektu.",
+    "unavailableNoText": "Nolēmums ir atrasts, taču tā teksts pārbaudei nav pieejams.",
+    "uncertain": "Nenoteikts"
   },
   "docxReview": {
     "acceptAll": "Pieņemt visu",
