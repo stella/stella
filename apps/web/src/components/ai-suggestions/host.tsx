@@ -439,7 +439,7 @@ export const SuggestionStepper = ({
         // Centred on the host and shrink-to-fit, so in a 320px pane a verbose
         // locale's labels would spill past both edges: the row wraps and the
         // counter gives up its floor instead.
-        "border-foreground/15 absolute start-1/2 bottom-26 flex max-w-[calc(100%-1rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-1 rounded-full border px-1.5 py-1 shadow-floating-ring",
+        "border-foreground/15 shadow-floating-ring absolute start-1/2 bottom-26 flex max-w-[calc(100%-1rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-1 rounded-full border px-1.5 py-1",
       )}
     >
       <Button
