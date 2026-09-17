@@ -392,6 +392,20 @@ describe("deal-specific values", () => {
     ).toBe(true);
   });
 
+  test("keeps a bracketed value still under negotiation", () => {
+    expect(
+      statesComparableValue(
+        "The Parties shall notify each other within [10 (ten) Business Days] of becoming aware of any Leakage.",
+      ),
+    ).toBe(true);
+    expect(
+      statesComparableValue("The cap is [5]% of the Purchase Price."),
+    ).toBe(true);
+    expect(
+      statesComparableValue("The cap is [●]% of the Purchase Price."),
+    ).toBe(false);
+  });
+
   test("demotes a parameter that quotes only a date or a blank", () => {
     const { positions, skipped } = normalizeProposal({
       output: {
