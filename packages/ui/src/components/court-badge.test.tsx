@@ -19,13 +19,16 @@ const EXPECTED_TEXT_TOKEN = {
   dashed: "text-foreground-strong-muted",
 } as const satisfies Record<CourtBadgeWeight, string>;
 
-/** Every name here is a real weight; the record above holds the converse. */
-const WEIGHTS = [
-  "solid",
-  "tinted",
-  "outline",
-  "dashed",
-] as const satisfies readonly CourtBadgeWeight[];
+/**
+ * The weights every case below iterates, derived from the record rather than
+ * listed again. A second list would only be checked for the names on it, so a
+ * fifth weight could decide its token and still be skipped by every loop —
+ * the one-weight coverage gap this file exists to close.
+ */
+// SAFETY: the keys of a record literal declared `as const` in this file, whose
+// `satisfies` above already binds them to `CourtBadgeWeight`. `Object.keys`
+// loses that in its signature; nothing else can put a key in this object.
+const WEIGHTS = Object.keys(EXPECTED_TEXT_TOKEN) as readonly CourtBadgeWeight[];
 
 const classesOf = (weight: CourtBadgeWeight) => {
   const markup = renderToStaticMarkup(
