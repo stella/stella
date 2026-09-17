@@ -13,7 +13,6 @@ import {
   BetterAuthOAuthPolicyCensusError,
   ensureBetterAuthOAuthPolicy,
 } from "@/api/lib/db/better-auth-oauth-policy-census";
-import { runBetterAuth17BackfillInTransaction } from "@/api/scripts/better-auth-17-backfill.logic";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 
@@ -173,94 +172,6 @@ test("startup rejects incomplete Better Auth OAuth resource migrations", async (
       expect(unexpectedLink).toBeInstanceOf(BetterAuthOAuthPolicyCensusError);
       expect(unexpectedLink).toMatchObject({
         failedChecks: ["resources-match", "links-use-configured-resources"],
-      });
-
-      transaction.rollback();
-    });
-  } catch (error) {
-    if (!(error instanceof TransactionRollbackError)) {
-      throw error;
-    }
-  }
-});
-
-// A new MCP audience widens `buildBetterAuthOAuthResources`. Startup does not
-// repair an existing database: `initializePristineBetterAuthOAuthPolicy` is a
-// no-op unless the whole auth database is empty, so the API fails closed until
-// the deployment backfill has seeded the row. This pins both halves of that
-// ordering, because the failure mode is a boot failure on upgrade.
-test("a new audience reaches an existing database through the backfill, not startup", async () => {
-  const ADDED_RESOURCE = {
-    allowedScopes: ["stella:search", "stella:read"],
-    identifier: "https://startup-census.example.invalid/mcp-law",
-    name: "Startup census law MCP",
-  } as const;
-  const UPGRADED_RESOURCES = [...EXPECTED_RESOURCES, ADDED_RESOURCE] as const;
-
-  try {
-    await database.transaction(async (transaction) => {
-      await transaction.execute(sql`
-        TRUNCATE "user", account, oauth_client_resource, oauth_resource,
-                 oauth_client CASCADE
-      `);
-
-      // The pre-upgrade deployment: the resources it already serves, and a
-      // registration linked to them.
-      await transaction.insert(oauthResource).values(
-        EXPECTED_RESOURCES.map((resource, index) => ({
-          ...resource,
-          allowedScopes: [...resource.allowedScopes],
-          id: `startup-census-upgrade-resource-${index}`,
-        })),
-      );
-      await transaction.insert(oauthClient).values({
-        clientId: "startup-census-upgrade-client",
-        id: "startup-census-upgrade-client-row",
-        redirectUris: ["https://client.example.invalid/callback"],
-      });
-      await transaction.insert(oauthClientResource).values(
-        EXPECTED_RESOURCES.map((resource, index) => ({
-          clientId: "startup-census-upgrade-client",
-          id: `startup-census-upgrade-link-${index}`,
-          resourceId: resource.identifier,
-        })),
-      );
-      await assertBetterAuthOAuthPolicyCensus(transaction, EXPECTED_RESOURCES);
-
-      // Booting the new image before the backfill runs refuses to start, and
-      // inserts nothing while refusing.
-      expect(
-        await captureCensusRejection(
-          ensureBetterAuthOAuthPolicy(transaction, UPGRADED_RESOURCES),
-        ),
-      ).toMatchObject({ failedChecks: ["resources-match"] });
-      const resourcesAfterBoot = await transaction.execute(sql`
-        SELECT identifier FROM oauth_resource ORDER BY identifier
-      `);
-      expect(resourcesAfterBoot.rows).not.toContainEqual({
-        identifier: ADDED_RESOURCE.identifier,
-      });
-
-      // The deployment backfill owns resource creation, and links every
-      // existing registration to the new audience so a client issued before
-      // the upgrade can still request it.
-      const backfilled = await runBetterAuth17BackfillInTransaction({
-        batchSize: 100,
-        expectedOAuthResources: UPGRADED_RESOURCES,
-        transaction,
-        trustedIdentityMap: { formatVersion: 1, microsoftAccounts: [] },
-      });
-      expect(backfilled.status).toBe("ok");
-
-      await assertBetterAuthOAuthPolicyCensus(transaction, UPGRADED_RESOURCES);
-      const links = await transaction.execute(sql`
-        SELECT resource_id AS "resourceId"
-          FROM oauth_client_resource
-         WHERE client_id = 'startup-census-upgrade-client'
-         ORDER BY resource_id
-      `);
-      expect(links.rows).toContainEqual({
-        resourceId: ADDED_RESOURCE.identifier,
       });
 
       transaction.rollback();

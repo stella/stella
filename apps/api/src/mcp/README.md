@@ -50,11 +50,15 @@ audience serves the product identity and the legislation workflow only: a
 reference for a workflow it carries no tool for is context an agent pays for
 and cannot use.
 
-Each audience is also an OAuth resource. Adding one widens the resource set the
-startup census requires, and startup never seeds an existing database, so a
-release that adds an audience runs the `better-auth-17-backfill` deployment step
-before the new image serves traffic: it inserts the resource and links existing
-client registrations to it.
+Each audience is also an OAuth resource, and adding one needs no operator step.
+It widens the resource set the startup census requires, and startup never seeds
+an existing database, so the reconciliation belongs to the deploy: the migrate
+task's `better-auth-oauth-resources` online repair inserts any configured
+resource the table lacks and links every existing client registration to it,
+before the API rolls. It refuses a stored definition that disagrees with the
+configured one rather than overwriting it, and its completion check is the same
+census the API runs at startup, so a partial repair fails the deploy instead of
+the boot.
 
 OAuth protected-resource discovery is served from:
 

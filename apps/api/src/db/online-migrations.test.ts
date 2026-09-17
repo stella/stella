@@ -452,6 +452,26 @@ const createHarness = ({
           if (query.includes("corpus_index_projection_intents")) {
             return [];
           }
+          // The OAuth-policy repair's completion census: a complete policy.
+          // Checked before the table branch below, because the census names
+          // both its own CTE and the tables.
+          if (query.includes("expected_resource")) {
+            return [
+              {
+                clientsLinked: true,
+                linksUseConfiguredResources: true,
+                resourcesMatch: true,
+              },
+            ];
+          }
+          // Its resource seed and its client walk: nothing stored yet, and no
+          // registration to link, so both converge on the first pass.
+          if (
+            query.includes("oauth_resource") ||
+            query.includes("oauth_client")
+          ) {
+            return [];
+          }
           if (query.includes("starts_with")) {
             const newPrefix = params.at(2);
             const oldPrefix = params.at(3);

@@ -96,13 +96,18 @@ export const getMcpResourceScopes = (mode: McpMode) =>
  *
  * Adding an audience widens this set, and the startup census
  * (`ensureBetterAuthOAuthPolicy`) refuses to boot until the database matches
- * it. Startup does not repair an existing database on its own: seeding only
- * runs against an entirely empty auth database, and `resourceSeedMode: "none"`
- * in `lib/auth.ts` keeps resource creation with the deployment backfill. So a
- * release that adds an audience runs `better-auth-17-backfill` before the new
- * image serves traffic; the backfill inserts the missing resource and links
- * every existing registration to it. `better-auth-oauth-policy-census.db.test.ts`
- * pins both halves of that ordering.
+ * it. Startup does not repair an existing database on its own: seeding runs
+ * only against an entirely empty auth database, and `resourceSeedMode: "none"`
+ * in `lib/auth.ts` keeps resource creation out of the request path.
+ *
+ * Reconciling them is the deploy's job, and it needs no operator step: the
+ * `better-auth-oauth-resources` online repair
+ * (`db/better-auth-oauth-resource-repair.ts`, registered in
+ * `db/online-migrations.ts`) runs on the migrate entrypoint before the API
+ * rolls, inserts any resource this set names and the table lacks, and links
+ * every existing client registration to it.
+ * `better-auth-oauth-policy-census.db.test.ts` pins that, the idempotence, and
+ * the refusal to overwrite a conflicting definition.
  */
 export const buildBetterAuthOAuthResources = (baseUrl: string) =>
   MCP_MODES.map((mode) => {
