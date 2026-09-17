@@ -36,6 +36,11 @@ export const generatedToolAnnotations: Readonly<
     scope: "search",
     itemsKey: "results",
   },
+  lookup_case_law: {
+    command: ["case-law", "lookup"],
+    scope: "read",
+    itemsKey: "items",
+  },
   read_content_across_matters: {
     command: ["document", "content"],
     scope: "read",

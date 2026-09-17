@@ -1155,6 +1155,7 @@ describe("OpenAI-compatible MCP tools", () => {
       "list_matters",
       "search_across_matters",
       "search_case_law",
+      "lookup_case_law",
       "read_content_across_matters",
       "read_case_law_decision",
       "read_case_law_citations",
@@ -1186,6 +1187,7 @@ describe("OpenAI-compatible MCP tools", () => {
       (await listMcpTools(createContext(), "law")).map((tool) => tool.name),
     ).toEqual([
       "search_case_law",
+      "lookup_case_law",
       "read_case_law_decision",
       "read_case_law_citations",
       "search_legislation",
@@ -1675,6 +1677,195 @@ describe("OpenAI-compatible MCP tools", () => {
       total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 1),
     });
     expect(anonymizeTextFieldsMock).not.toHaveBeenCalled();
+  });
+
+  // --- lookup_case_law -----------------------------------------------------
+
+  const CZ_DOCKET = "22 Cdo 1000/2020";
+  const CZ_ECLI = "ECLI:CZ:NS:2020:22.CDO.1000.2020.1";
+
+  type LookupPage = {
+    items: {
+      appUrl?: string | null;
+      candidates?: { court: string }[];
+      caseNumber?: string;
+      court?: string;
+      decisionDate?: string | null;
+      decisionId?: string;
+      ecli?: string | null;
+      hint?: string;
+      identifier: string;
+      message?: string;
+      resourceName?: string;
+      status: string;
+    }[];
+  };
+
+  const createLookupHit = (decisionId: string, court: string) => ({
+    caseNumber: CZ_DOCKET,
+    citationAuthority: 1,
+    citationCount: 0,
+    country: "CZE",
+    court,
+    courtAbbreviation: null,
+    decisionDate: "2020-05-01",
+    decisionId,
+    decisionType: "judgment",
+    ecli: null,
+    headline: null,
+    identifiers: [],
+    language: "cs",
+    languageAlternates: [],
+    matchingPassages: 1,
+    slug: `slug-${decisionId}`,
+    sourceUrl: "https://example.test/decision",
+  });
+
+  const lookup = async (identifiers: readonly string[]) =>
+    asTestRaw<LookupPage>(
+      parseToolPayload(
+        await handleMcpToolCall({
+          args: { country: "CZE", identifiers: [...identifiers] },
+          context: createContext(),
+          toolName: "lookup_case_law",
+        }),
+      ),
+    );
+
+  test("lookup_case_law resolves a docket through the identity branch", async () => {
+    searchDecisionsHandlerMock.mockResolvedValue({
+      facets: null,
+      hits: [createLookupHit(DECISION_ID, "Nejvyšší soud")],
+      nextCursor: null,
+      total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 1),
+    });
+
+    // The sheet number names a page of the court file, not the decision, so
+    // the reference resolves with or without it.
+    const payload = await lookup([`${CZ_DOCKET}-28`]);
+
+    expect(payload.items).toEqual([
+      {
+        appUrl: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/slug-${DECISION_ID}`,
+        caseNumber: CZ_DOCKET,
+        court: "Nejvyšší soud",
+        decisionDate: "2020-05-01",
+        decisionId: DECISION_ID,
+        ecli: null,
+        identifier: `${CZ_DOCKET}-28`,
+        resourceName: `stella://resource/case_law_decision/id=${DECISION_ID}`,
+        status: "found",
+      },
+    ]);
+    // The docket reaches the handler canonicalised, and never as free text.
+    expect(searchDecisionsHandlerMock).toHaveBeenCalledWith(
+      expect.objectContaining({ country: "CZE", query: CZ_DOCKET }),
+      caseLawPublicReadDb,
+    );
+  });
+
+  test("lookup_case_law reports several courts as ambiguous", async () => {
+    searchDecisionsHandlerMock.mockResolvedValue({
+      facets: null,
+      hits: [
+        createLookupHit(DECISION_ID, "Nejvyšší soud"),
+        createLookupHit("00000000-0000-4000-8000-0000000d0042", "Městský soud"),
+      ],
+      nextCursor: null,
+      total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 2),
+    });
+
+    const payload = await lookup([CZ_DOCKET]);
+
+    // Never a best match: a docket is unique to a court, not to the corpus.
+    const entry = payload.items.at(0) ?? panic("Missing lookup entry");
+    expect(entry.status).toBe("ambiguous");
+    expect(entry.candidates?.map(({ court }) => court)).toEqual([
+      "Nejvyšší soud",
+      "Městský soud",
+    ]);
+    expect(entry.message).toContain("2 decisions");
+    expect(entry.decisionId).toBeUndefined();
+  });
+
+  test("lookup_case_law keeps a loose lexical match out of found", async () => {
+    // The identity read answered nothing, so the handler fell through to the
+    // text index and ranked a decision that merely mentions the docket.
+    searchDecisionsHandlerMock.mockResolvedValue({
+      facets: null,
+      hits: [
+        {
+          ...createLookupHit(DECISION_ID, "Nejvyšší soud"),
+          caseNumber: "29 Cdo 7/2019",
+        },
+      ],
+      nextCursor: null,
+      total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 1),
+    });
+
+    const payload = await lookup([CZ_DOCKET]);
+
+    const entry = payload.items.at(0) ?? panic("Missing lookup entry");
+    expect(entry.status).toBe("not_found");
+    expect(entry.hint).toContain("search_case_law");
+  });
+
+  test("lookup_case_law answers every position and resolves each reference once", async () => {
+    searchDecisionsHandlerMock.mockImplementation(
+      async ({ query }: { query: string }) => ({
+        facets: null,
+        hits:
+          query === CZ_DOCKET
+            ? [createLookupHit(DECISION_ID, "Nejvyšší soud")]
+            : [],
+        nextCursor: null,
+        total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 0),
+      }),
+    );
+
+    // A reference the grammars decline never reaches the corpus at all.
+    const payload = await lookup([
+      CZ_DOCKET,
+      "the one about good morals",
+      CZ_DOCKET,
+      CZ_ECLI,
+    ]);
+
+    expect(payload.items.map(({ status }) => status)).toEqual([
+      "found",
+      "not_found",
+      "found",
+      "not_found",
+    ]);
+    expect(payload.items.map(({ identifier }) => identifier)).toEqual([
+      CZ_DOCKET,
+      "the one about good morals",
+      CZ_DOCKET,
+      CZ_ECLI,
+    ]);
+    // Three distinct references, one of which the grammars declined: two
+    // resolutions, and the repeat is answered from the first. Each reaches the
+    // handler in the identifier grammar's own canonical spelling.
+    expect(
+      searchDecisionsHandlerMock.mock.calls.map(
+        (call) => asTestRaw<{ query: string }>(call.at(0)).query,
+      ),
+    ).toEqual([CZ_DOCKET, CZ_ECLI]);
+  });
+
+  test("lookup_case_law rejects a country outside the public list", async () => {
+    const result = await handleMcpToolCall({
+      args: { country: "XAA", identifiers: [CZ_DOCKET] },
+      context: createContext(),
+      toolName: "lookup_case_law",
+    });
+
+    expectErrorEnvelope(result, {
+      code: "not_found",
+      message: "Case-law country not found",
+      hint: `Pass one of the admitted country codes: ${PUBLIC_CASE_LAW_COUNTRIES.join(", ")}.`,
+    });
+    expect(searchDecisionsHandlerMock).not.toHaveBeenCalled();
   });
 
   // --- several phrasings in one call ---------------------------------------

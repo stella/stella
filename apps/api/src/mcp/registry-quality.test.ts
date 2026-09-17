@@ -93,10 +93,16 @@ type SurfaceMode = (typeof SURFACES)[number]["mode"];
 // guidance puts a workable budget at 25-30 tools per agent while the default
 // surface lists 55, so a growing law list defeats its own purpose: an eighth
 // tool is argued for here, not absorbed.
+// default 55 -> 56, anonymized 26 -> 27 and law 7 -> 8 for lookup_case_law:
+// resolving a case reference to a decision is a different intent from
+// searching for one, and search_case_law could not absorb it without becoming
+// a tool whose meaning depends on which argument is present. It answers from
+// the identity columns, so its failure modes (no such docket, a docket used at
+// two courts) are not a ranking's.
 const TOOL_COUNT_CEILING: Record<SurfaceMode, number> = {
-  default: 55,
-  anonymized: 26,
-  law: 7,
+  default: 56,
+  anonymized: 27,
+  law: 8,
 };
 
 // Serialized `tools/list` tool array (the wire payload produced by
@@ -187,10 +193,13 @@ const TOOL_COUNT_CEILING: Record<SurfaceMode, number> = {
 // caller paging keys on `decisionId`. Neither is inferable from the shape, and
 // a client that assumed otherwise would drop results silently. Measured
 // 130_318 default, 66_318 anonymized and 21_632 law.
+// lookup_case_law then measures 132_666 default, 68_666 anonymized and 23_980
+// law, up 2_348 on every surface: its own input schema, its description, and
+// an output schema whose branches each say what the caller does next.
 const TOOLS_LIST_PAYLOAD_CHAR_CEILING: Record<SurfaceMode, number> = {
-  default: 130_400,
-  anonymized: 66_400,
-  law: 21_632,
+  default: 132_750,
+  anonymized: 68_750,
+  law: 23_980,
 };
 
 // default bumped 42_000 -> 42_300 for the two fields read_case_law_citations
@@ -215,10 +224,14 @@ const TOOLS_LIST_PAYLOAD_CHAR_CEILING: Record<SurfaceMode, number> = {
 // declares its decision once inside an `items[]` variant whose absence
 // branches are three fields each, and search_case_law adds only
 // `matchedQueries`. Tightened to the new measurement.
+// lookup_case_law then measures 45_764 default, 31_400 anonymized and 8_537
+// law, up 804: the identity fields are declared once and shared between the
+// `found` entry and an `ambiguous` entry's candidates, so the third branch
+// costs a message and a hint.
 const OUTPUT_SCHEMA_TOTAL_CHAR_CEILING: Record<SurfaceMode, number> = {
-  default: 45_100,
-  anonymized: 30_700,
-  law: 7733,
+  default: 45_900,
+  anonymized: 31_500,
+  law: 8537,
 };
 
 // Largest measured schema is read_document at 3_434 chars. A single tool must

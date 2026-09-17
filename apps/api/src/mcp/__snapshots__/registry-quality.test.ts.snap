@@ -242,6 +242,46 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     }
   },
   {
+    "name": "lookup_case_law",
+    "scope": "stella:read",
+    "access": "read",
+    "feature": "FEATURE_PUBLIC_LAW",
+    "description": "Resolve case references to decisions: docket numbers as the courts write them (a trailing sheet number is ignored) and ECLIs. Answered from the corpus's identity columns, never by ranking text, so a hit is the decision the reference names. Every \`identifiers[]\` entry is answered on its own, in input order, under \`status\`: \`found\` carries that decision's id, resourceName, appUrl, docket, court, date and ECLI; \`ambiguous\` carries the candidates, because a docket is unique to a court and not to the corpus, and picking one of them would cite the wrong court; \`not_found\` carries a message and what to call instead. Use this when the user names a case; use search_case_law when they describe one. Pass a \`found\` decisionId to read_case_law_decision for the text.",
+    "annotations": {
+      "title": "Look up case law by identifier",
+      "destructiveHint": false,
+      "readOnlyHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "identifiers",
+        "country"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "identifiers": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "minItems": 1,
+          "maxItems": 50,
+          "description": "The references to resolve, at most 50 per call: a docket number as the court writes it (the sheet number after it is ignored) or an ECLI. Each is answered on its own."
+        },
+        "country": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 3,
+          "description": "Required corpus country code, uppercase ISO 3166-1 alpha-3. Admitted: CZE."
+        }
+      }
+    }
+  },
+  {
     "name": "read_content_across_matters",
     "scope": "stella:read",
     "access": "read",
@@ -3980,6 +4020,46 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     }
   },
   {
+    "name": "lookup_case_law",
+    "scope": "stella:read_anonymized",
+    "access": "read",
+    "feature": "FEATURE_PUBLIC_LAW",
+    "description": "Resolve case references to decisions: docket numbers as the courts write them (a trailing sheet number is ignored) and ECLIs. Answered from the corpus's identity columns, never by ranking text, so a hit is the decision the reference names. Every \`identifiers[]\` entry is answered on its own, in input order, under \`status\`: \`found\` carries that decision's id, resourceName, appUrl, docket, court, date and ECLI; \`ambiguous\` carries the candidates, because a docket is unique to a court and not to the corpus, and picking one of them would cite the wrong court; \`not_found\` carries a message and what to call instead. Use this when the user names a case; use search_case_law when they describe one. Pass a \`found\` decisionId to read_case_law_decision for the text.",
+    "annotations": {
+      "title": "Look up case law by identifier",
+      "destructiveHint": false,
+      "readOnlyHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "identifiers",
+        "country"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "identifiers": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "minItems": 1,
+          "maxItems": 50,
+          "description": "The references to resolve, at most 50 per call: a docket number as the court writes it (the sheet number after it is ignored) or an ECLI. Each is answered on its own."
+        },
+        "country": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 3,
+          "description": "Required corpus country code, uppercase ISO 3166-1 alpha-3. Admitted: CZE."
+        }
+      }
+    }
+  },
+  {
     "name": "read_content_across_matters",
     "scope": "stella:read_anonymized",
     "access": "read",
@@ -5072,6 +5152,46 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
           ],
           "type": "string",
           "description": "Result order; defaults to 'relevance'. 'relevance' blends text match with citation authority and court rank; 'newest' orders by decision date and returns only dated decisions. A query naming a decision outright (docket number, ECLI) is answered by identity lookup, which ignores this option."
+        }
+      }
+    }
+  },
+  {
+    "name": "lookup_case_law",
+    "scope": "stella:read",
+    "access": "read",
+    "feature": "FEATURE_PUBLIC_LAW",
+    "description": "Resolve case references to decisions: docket numbers as the courts write them (a trailing sheet number is ignored) and ECLIs. Answered from the corpus's identity columns, never by ranking text, so a hit is the decision the reference names. Every \`identifiers[]\` entry is answered on its own, in input order, under \`status\`: \`found\` carries that decision's id, resourceName, appUrl, docket, court, date and ECLI; \`ambiguous\` carries the candidates, because a docket is unique to a court and not to the corpus, and picking one of them would cite the wrong court; \`not_found\` carries a message and what to call instead. Use this when the user names a case; use search_case_law when they describe one. Pass a \`found\` decisionId to read_case_law_decision for the text.",
+    "annotations": {
+      "title": "Look up case law by identifier",
+      "destructiveHint": false,
+      "readOnlyHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "identifiers",
+        "country"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "identifiers": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "minItems": 1,
+          "maxItems": 50,
+          "description": "The references to resolve, at most 50 per call: a docket number as the court writes it (the sheet number after it is ignored) or an ECLI. Each is answered on its own."
+        },
+        "country": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 3,
+          "description": "Required corpus country code, uppercase ISO 3166-1 alpha-3. Admitted: CZE."
         }
       }
     }

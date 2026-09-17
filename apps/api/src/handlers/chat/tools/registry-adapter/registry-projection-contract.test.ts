@@ -1271,6 +1271,53 @@ const CONTRACT_CORPUS = {
       expectRefPaths: [],
     },
   ],
+  lookup_case_law: [
+    {
+      mode: "search",
+      buildArgs: () => ({
+        country: "CZE",
+        identifiers: ["22 Cdo 1000/2020"],
+      }),
+      setup: () => {
+        searchDecisionsHandlerMock.mockResolvedValue({
+          facets: null,
+          hits: [
+            {
+              anchorId: null,
+              caseNumber: "22 Cdo 1000/2020",
+              citationAuthority: 1.4,
+              citationCount: 3,
+              country: "CZ",
+              court: "Nejvyšší soud",
+              courtAbbreviation: "NS",
+              courtTier: "supreme",
+              createdAt: "2020-05-01T00:00:00.000Z",
+              decisionDate: "2020-05-01",
+              decisionId: uid(53),
+              decisionType: "judgment",
+              ecli: "ECLI:CZ:NS:2020:22.CDO.1000.2020.1",
+              identifiers: [
+                {
+                  type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+                  value: "22 Cdo 1000/2020",
+                },
+              ],
+              headline: null,
+              language: "cs",
+              matchingPassages: 1,
+              headnote: { type: "absent", reason: "not_published" },
+              languageAlternates: [],
+              slug: "ns-22-cdo-1000-2020",
+              sourceUrl: "https://example.test/decision",
+            },
+          ],
+          nextCursor: null,
+          total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 1),
+        } satisfies Awaited<ReturnType<typeof searchDecisionsHandler>>);
+      },
+      expectRefPaths: [],
+    },
+  ],
   read_case_law_decision: [
     {
       mode: "read",

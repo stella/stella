@@ -107,6 +107,8 @@ const TOOLS_WITHOUT_ENUMERABLE_ENDPOINT: Record<string, string> = {
     "inline endpoint: apps/api/src/handlers/search/routes.ts POST /search (same backing as `search`)",
   search_case_law:
     "inline endpoint: apps/api/src/handlers/case-law/public-routes.ts POST /case/decisions/search",
+  lookup_case_law:
+    "no dedicated endpoint: MCP handler resolves references through the same identity branch the search endpoint takes (findDecisionIdsByIdentity in apps/api/src/handlers/case-law/decisions/search.ts); the browser reaches it by typing the docket into the public search box",
   read_case_law_decision:
     "inline endpoint: apps/api/src/handlers/case-law/public-routes.ts GET /case/decisions/:decisionId",
   read_case_law_citations:

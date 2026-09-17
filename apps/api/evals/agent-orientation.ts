@@ -534,6 +534,9 @@ const TRANSLATION_ENTITY_ID = "7f7f7f7f-1111-4222-8333-444444444444";
 const TRANSLATION_FIELD_ID = "5e5e5e5e-1111-4222-8333-444444444444";
 const CASE_LAW_DECISION_ID = "b2b2b2b2-0000-4000-8000-000000000031";
 const CASE_LAW_SECOND_DECISION_ID = "b2b2b2b2-0000-4000-8000-000000000032";
+// A published Czech docket, the way a brief cites one. Not UUID-shaped and not
+// guessable, so the task carries it the way a citation in a document would.
+const CASE_LAW_DOCKET = "Pl. ÚS 33/97";
 // A legislation work is addressed by its ELI, and its provisions by the
 // publisher's own anchors; neither is UUID-shaped, and neither is guessable,
 // so the tasks carry them the way a previous call would have returned them.
@@ -605,6 +608,40 @@ const TASKS: readonly Task[] = [
       // `--queries` repeats; the task is about carrying several, not about
       // which words, so the expectation is the count and nothing else.
       repeatedAtLeast: { queries: 2 },
+    },
+  },
+  {
+    id: "lookup-case-law",
+    request: `A brief cites ${CASE_LAW_DOCKET}. Find that decision in the Czech corpus so I can open it.`,
+    mcp: {
+      toolName: "lookup_case_law",
+      exampleArgs: { country: "CZE", identifiers: [CASE_LAW_DOCKET] },
+      checkArgs: (args) => {
+        const identifiers = args["identifiers"];
+        if (!Array.isArray(identifiers)) {
+          return ["identifiers: expected an array"];
+        }
+        return [
+          // The docket is the whole point: a paraphrase is a text search, and
+          // search_case_law is the tool for that.
+          ...(identifiers.length === 1 && identifiers.at(0) === CASE_LAW_DOCKET
+            ? []
+            : [
+                `identifiers: expected [${JSON.stringify(CASE_LAW_DOCKET)}], got ${JSON.stringify(identifiers)}`,
+              ]),
+          ...(typeof args["country"] === "string" &&
+          args["country"].toUpperCase() === "CZE"
+            ? []
+            : [
+                `country: expected CZE, got ${JSON.stringify(args["country"])}`,
+              ]),
+        ];
+      },
+    },
+    cli: {
+      kind: "command",
+      path: ["case-law", "lookup"],
+      flags: { country: "CZE", identifiers: CASE_LAW_DOCKET },
     },
   },
   {

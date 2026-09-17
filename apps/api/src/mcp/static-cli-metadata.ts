@@ -130,6 +130,11 @@ export const DEFAULT_MCP_CLI_ANNOTATIONS = defineMcpCliToolAnnotations(
       scope: "search",
       itemsKey: "results",
     },
+    lookup_case_law: {
+      command: ["case-law", "lookup"],
+      scope: "read",
+      itemsKey: "items",
+    },
     // A batch read answers per entry, so the leaf renders `items`. It cannot
     // be a `windowedText` leaf: that annotation names one text and one
     // top-level `nextCursor`, and here both are per entry. `perEntryCursor`

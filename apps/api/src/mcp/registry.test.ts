@@ -137,6 +137,7 @@ describe("MCP tool registry", () => {
   test("law projection is the public corpus in registry order", () => {
     expect(LAW_MCP_TOOL_DEFINITIONS.map((tool) => tool.name)).toEqual([
       "search_case_law",
+      "lookup_case_law",
       "read_case_law_decision",
       "read_case_law_citations",
       "search_legislation",

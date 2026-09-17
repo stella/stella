@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
-import { DECISION_DOCKET_GRAMMARS } from "@stll/api-contract/decision-docket-grammar";
+import {
+  DECISION_DOCKET_GRAMMARS,
+  decisionDocketGrammarForJurisdiction,
+} from "@stll/api-contract/decision-docket-grammar";
 import { Temporal, parsePlainDate } from "@stll/time";
 
 import {
@@ -99,5 +102,54 @@ describe("case-law adapter manifests", () => {
     expect(ADAPTER_MANIFESTS[ADAPTER_KEYS.EU_ECJ].ecliCourtCodes).toBe(
       EU_ECLI_COURTS,
     );
+  });
+});
+
+/**
+ * Two readers answer "which docket grammar does this jurisdiction use": this
+ * module's, keyed off the adapter manifest, and the contract package's, which
+ * searches the grammar list. The API is the canonical owner — `search_case_law`
+ * and `lookup_case_law` both classify an identifier through it, and a lookup
+ * that classified one differently from the search it delegates to would answer
+ * `not_found` for a decision the search finds — but the web reads the contract
+ * one, so the pair can drift silently. Until they are collapsed into one
+ * reader, this binds them: changing either alone fails here.
+ */
+describe("docket grammar readers agree", () => {
+  test("answer alike for every jurisdiction either side declares", () => {
+    // The union, so a jurisdiction added to one side alone fails here: a
+    // grammar the contract knows and no manifest does leaves the API unable to
+    // classify what the web classifies, and the reverse leaves the web unable
+    // to classify what the API does.
+    const jurisdictions = [
+      ...new Set([
+        ...Object.values(ADAPTER_MANIFESTS).map(({ country }) => country),
+        ...Object.keys(DECISION_DOCKET_GRAMMARS),
+      ]),
+    ];
+    expect(jurisdictions.length).toBeGreaterThan(0);
+
+    for (const jurisdiction of jurisdictions) {
+      const fromManifest = decisionDocketGrammarForCountry(jurisdiction);
+      const fromContract = decisionDocketGrammarForJurisdiction(jurisdiction);
+      expect(fromManifest, `${jurisdiction} has no manifest grammar`).not.toBe(
+        null,
+      );
+      // Deep rather than identity: a grammar copied instead of shared is still
+      // correct, and a rule changed on one side is what this has to catch.
+      expect(fromContract, `${jurisdiction} has no contract grammar`).toEqual(
+        fromManifest,
+      );
+    }
+  });
+
+  test("fold case the same way and decline the same unknown jurisdiction", () => {
+    for (const { country } of Object.values(ADAPTER_MANIFESTS)) {
+      expect(decisionDocketGrammarForJurisdiction(country.toLowerCase())).toBe(
+        decisionDocketGrammarForJurisdiction(country),
+      );
+    }
+    expect(decisionDocketGrammarForCountry("unknown")).toBeNull();
+    expect(decisionDocketGrammarForJurisdiction("unknown")).toBeNull();
   });
 });

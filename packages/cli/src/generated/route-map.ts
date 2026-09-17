@@ -579,6 +579,68 @@ export const generatedRouteMap: RouteNode = {
             },
           },
         },
+        lookup: {
+          kind: "leaf",
+          spec: {
+            commandPath: ["case-law", "lookup"],
+            toolName: "lookup_case_law",
+            description:
+              "Resolve case references to decisions: docket numbers as the courts write them (a trailing sheet number is ignored) and ECLIs.",
+            flags: [
+              {
+                flag: "--identifiers",
+                prop: "identifiers",
+                kind: "string-array",
+                repeatable: true,
+                description:
+                  "The references to resolve, at most 50 per call: a docket number as the court writes it (the sheet number after it is ignored) or an ECLI. Each is answered on its own.",
+                required: true,
+              },
+              {
+                flag: "--country",
+                prop: "country",
+                kind: "string",
+                repeatable: false,
+                description:
+                  "Required corpus country code, uppercase ISO 3166-1 alpha-3. Admitted: CZE.",
+                required: true,
+              },
+            ],
+            inputOnly: [],
+            paginated: false,
+            followable: true,
+            windowedText: false,
+            itemsKey: "items",
+            destructive: false,
+            scope: "read",
+            inputSchema: {
+              type: "object",
+              required: ["identifiers", "country"],
+              additionalProperties: false,
+              properties: {
+                identifiers: {
+                  type: "array",
+                  items: {
+                    type: "string",
+                    minLength: 1,
+                    maxLength: 256,
+                  },
+                  minItems: 1,
+                  maxItems: 50,
+                  description:
+                    "The references to resolve, at most 50 per call: a docket number as the court writes it (the sheet number after it is ignored) or an ECLI. Each is answered on its own.",
+                },
+                country: {
+                  type: "string",
+                  minLength: 2,
+                  maxLength: 3,
+                  description:
+                    "Required corpus country code, uppercase ISO 3166-1 alpha-3. Admitted: CZE.",
+                },
+              },
+            },
+          },
+        },
         read: {
           kind: "leaf",
           spec: {
