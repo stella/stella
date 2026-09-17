@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 1.5.1
+
+### Patch Changes
+
+- [#3459](https://github.com/stella/stella/pull/3459) [`6253a8f`](https://github.com/stella/stella/commit/6253a8f4dd77aab29d375350d39f0f626f1ce760) Thanks [@jan-kubica](https://github.com/jan-kubica)! - A fourth MCP audience at `/mcp-law` lists only the public legal-corpus tools; the corpus legislation search no longer names the BOE connector.
+
 ## 1.5.0
 
 ### Minor Changes
