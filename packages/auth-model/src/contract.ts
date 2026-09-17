@@ -350,7 +350,10 @@ export const BETTER_AUTH_CORE_SCHEMA = {
     primaryKey: ["id"],
     fields: withPhysicalNames({
       id: idField,
-      issuer: field("string", { required: true }),
+      // Better Auth 1.7.1 still declares and writes this field, so the logical
+      // side stays required. The column is nullable because 1.7.3 retracts the
+      // field, and the database must accept the inserts that follow the bump.
+      issuer: field("string", { database: { notNull: false }, required: true }),
       accountId: field("string", { required: true }),
       providerId: field("string", { required: true }),
       userId: field("string", {
@@ -369,7 +372,7 @@ export const BETTER_AUTH_CORE_SCHEMA = {
       updatedAt: updatedDate,
     }),
     indexes: [
-      { fields: ["issuer", "accountId"], predicate: null, unique: true },
+      { fields: ["providerId", "accountId"], predicate: null, unique: true },
       { fields: ["userId"], predicate: null, unique: false },
     ],
   },

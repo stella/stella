@@ -67,10 +67,10 @@ type OnlineIndex = RequiredMigrationIndex & {
 export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
   {
     createSql:
-      'CREATE UNIQUE INDEX CONCURRENTLY "account_issuer_account_id_uidx" ON public."account" USING btree ("issuer", "account_id")',
-    definitionBody: "ON public.account USING btree (issuer, account_id)",
+      'CREATE UNIQUE INDEX CONCURRENTLY "account_provider_account_id_uidx" ON public."account" USING btree ("provider_id", "account_id")',
+    definitionBody: "ON public.account USING btree (provider_id, account_id)",
     isUnique: true,
-    name: "account_issuer_account_id_uidx",
+    name: "account_provider_account_id_uidx",
     tableName: "account",
   },
   {
@@ -208,14 +208,6 @@ export const ONLINE_MIGRATION_INDEX_CUTOVERS: readonly OnlineIndexCutover[] = [
   },
 ];
 
-export const ONLINE_VALIDATED_INDEX_NAMES: ReadonlySet<string> = new Set([
-  ...ONLINE_MIGRATION_INDEXES.map(({ name }) => name),
-  ...ONLINE_MIGRATION_INDEX_CUTOVERS.flatMap(({ final, staged }) => [
-    final.name,
-    staged.name,
-  ]),
-]);
-
 type OnlineIndexReplacement = {
   legacyName: string;
   replacementNames: readonly string[];
@@ -229,7 +221,34 @@ const ONLINE_INDEX_REPLACEMENTS: readonly OnlineIndexReplacement[] = [
       "case_law_decisions_source_case_lang_null_idx",
     ],
   },
+  // Better Auth 1.7.3 stopped writing `issuer`, so the account identity key is
+  // (provider_id, account_id): the pair the library links accounts by. The
+  // replacement is proven ready before this retires the legacy index, so no
+  // window exists where neither enforces uniqueness.
+  {
+    legacyName: "account_issuer_account_id_uidx",
+    replacementNames: ["account_provider_account_id_uidx"],
+  },
 ];
+
+/**
+ * Index names a concurrent `IF NOT EXISTS` build may rely on, because this
+ * phase reconciles them on every boot.
+ *
+ * Retired legacy names count: a replacement is proven ready before the legacy
+ * index is dropped, and the drop reconciles an `INVALID` leftover from an
+ * interrupted historical build as surely as a rebuild would. A name with
+ * neither a registry entry, a cutover, nor a retirement still has no
+ * postcondition and is still rejected.
+ */
+export const ONLINE_VALIDATED_INDEX_NAMES: ReadonlySet<string> = new Set([
+  ...ONLINE_MIGRATION_INDEXES.map(({ name }) => name),
+  ...ONLINE_MIGRATION_INDEX_CUTOVERS.flatMap(({ final, staged }) => [
+    final.name,
+    staged.name,
+  ]),
+  ...ONLINE_INDEX_REPLACEMENTS.map(({ legacyName }) => legacyName),
+]);
 
 /**
  * Data repairs a schema migration left to this phase, run after the index

@@ -345,6 +345,13 @@ one-time backfill when updating: the auth schema migration stops with
 `issuer backfill is incomplete` until existing account rows carry their
 identity provider issuer. Fresh deployments are unaffected.
 
+This backfill is historical from v0.9.25 on. Better Auth 1.7.3 stopped writing
+`account.issuer`, and the migration `20260916140000_account_issuer_nullable`
+answers that by making the column nullable and adding the
+`(provider_id, account_id)` identity index. These scripts and their audit
+assertions still describe the older cutover, which is what an instance updating
+across v0.7.28 has to pass through; they are not rerun afterwards.
+
 Run this during a quiet window: the running pre-v0.7.28 API keeps serving
 while the backfill executes, and a sign-in that lands between the backfill and
 the final migration can make that migration report the guard again (rerun the
