@@ -1,5 +1,11 @@
 # @stll/auth-model
 
+## 0.2.3
+
+### Patch Changes
+
+- [#3458](https://github.com/stella/stella/pull/3458) [`b27b4c2`](https://github.com/stella/stella/commit/b27b4c27edd2d9bfa896c58982eeb16f6b1c6c6c) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Pin the contract to Better Auth 1.7.4 and drop `account.issuer`, which the library no longer declares; the retained column is now a host field.
+
 ## 0.2.2
 
 ### Patch Changes
