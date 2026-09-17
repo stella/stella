@@ -232,6 +232,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("dialog-footer-owns-actions.fixture.tsx", [
     "dialog-footer-owns-actions/dialog-footer-owns-actions",
   ]),
+  fixtureRuleOverride("field-parts-inside-field.fixture.tsx", [
+    "field-parts-inside-field/field-parts-inside-field",
+  ]),
   fixtureRuleOverride("no-secret-in-log-sink.fixture.ts", [
     "no-secret-in-log-sink/no-secret-in-log-sink",
   ]),
@@ -1161,6 +1164,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-decorated-search-input.ts",
     "./.oxlint-plugins/no-font-utility-in-reader.ts",
     "./.oxlint-plugins/dialog-footer-owns-actions.ts",
+    "./.oxlint-plugins/field-parts-inside-field.ts",
     "./.oxlint-plugins/no-document-cookie.ts",
     "./.oxlint-plugins/require-safe-window-open.ts",
     "./.oxlint-plugins/require-safe-outbound-target.ts",
@@ -2318,6 +2322,19 @@ export default defineConfig({
       ],
       rules: {
         "dialog-footer-owns-actions/dialog-footer-owns-actions": "error",
+      },
+    },
+    {
+      // Base UI's Field parts read a context only `Field` provides. A part
+      // mounted without that root throws while rendering, so the route goes
+      // down with the control.
+      files: [
+        "apps/*/src/**/*.tsx",
+        "packages/*/src/**/*.tsx",
+        ".oxlint-plugins/__fixtures__/field-parts-inside-field.fixture.tsx",
+      ],
+      rules: {
+        "field-parts-inside-field/field-parts-inside-field": "error",
       },
     },
     {

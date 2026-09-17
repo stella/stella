@@ -38,6 +38,8 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
 import {
+  elementName,
+  everyNode,
   getImportLocalName,
   getImportedName,
   isAstNode,
@@ -75,31 +77,6 @@ const FUNCTION_BOUNDARIES = new Set([
   "FunctionExpression",
 ]);
 
-const jsxName = (node: unknown): string | null => {
-  if (!isAstNode(node)) {
-    return null;
-  }
-  if (node.type === "JSXIdentifier" && typeof node.name === "string") {
-    return node.name;
-  }
-  if (node.type === "JSXMemberExpression") {
-    return jsxName(node.property);
-  }
-  if (node.type === "JSXNamespacedName") {
-    return jsxName(node.name);
-  }
-  return null;
-};
-
-const elementName = (element: unknown): string | null => {
-  if (!isAstNode(element) || element.type !== "JSXElement") {
-    return null;
-  }
-  return isAstNode(element.openingElement)
-    ? jsxName(element.openingElement.name)
-    : null;
-};
-
 // The name a function is declared under, so a component boundary can be told
 // from an anonymous callback: `function Body()` and `const Body = () => …`
 // both name `Body`, while a `.map(...)` argument names nothing.
@@ -119,33 +96,6 @@ const functionName = (node: AstNode): string | null => {
     typeof parent.id.name === "string"
     ? parent.id.name
     : null;
-};
-
-// Every node under `root`, reached without assuming a shape: the walk has to
-// cross statements and expressions a JSX-only traversal never sees.
-const everyNode = (root: AstNode): AstNode[] => {
-  const out: AstNode[] = [];
-  const seen = new Set<unknown>();
-  const pending: unknown[] = [root];
-  while (pending.length > 0) {
-    const current = pending.pop();
-    if (Array.isArray(current)) {
-      pending.push(...current);
-      continue;
-    }
-    if (!isAstNode(current) || seen.has(current)) {
-      continue;
-    }
-    seen.add(current);
-    out.push(current);
-    for (const [key, value] of Object.entries(current)) {
-      // `parent` walks back out of the subtree under inspection.
-      if (key !== "parent" && typeof value === "object") {
-        pending.push(value);
-      }
-    }
-  }
-  return out;
 };
 
 // JSX resolves a capitalised name to a component and a lowercase one to a host
