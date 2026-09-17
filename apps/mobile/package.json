@@ -21,12 +21,12 @@
     "web": "expo start --web"
   },
   "dependencies": {
-    "expo": "~57.0.21",
-    "expo-constants": "~57.0.17",
-    "expo-linking": "~57.0.9",
-    "expo-router": "~57.0.20",
+    "expo": "~57.0.22",
+    "expo-constants": "~57.0.18",
+    "expo-linking": "~57.0.10",
+    "expo-router": "~57.0.21",
     "expo-status-bar": "~57.0.1",
-    "expo-system-ui": "~57.0.3",
+    "expo-system-ui": "~57.0.4",
     "react": "catalog:react19",
     "react-dom": "catalog:react19",
     "react-native": "0.86.3",
