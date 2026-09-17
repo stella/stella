@@ -27,6 +27,7 @@ import {
   STATUTE_OUTLINE_COLLAPSE_LEVEL,
   statuteOutlineFromHeadings,
 } from "@/components/legal-reader/reader-outline";
+import { SourceLinkPolicyProvider } from "@/components/legal-reader/source-link-policy";
 import { AnnotatedStatuteText } from "@/features/statutes/components/annotated-statute-text";
 import { StatuteVersionMenu } from "@/features/statutes/components/statute-version-menu";
 import { statuteCitationCountsOptions } from "@/features/statutes/queries/citing-decisions";
@@ -258,21 +259,28 @@ export const PublicStatuteViewer = ({
             {t("statutes.noVersionInForce")}
           </p>
         ) : (
-          <AnnotatedStatuteText
-            blocks={blocks}
-            citationWork={citationWork}
-            country={statute.country}
-            documentId={statute.id}
-            eli={statute.eli}
-            fulltext={statute.fulltext}
-            language={statute.language}
-            masthead={preparedReader.masthead}
-            provisionCitationCounts={provisionCitationCounts}
-            scrollContainerRef={readerRef}
-            statuteTitle={statute.title}
-            versionCount={versions.length}
-            versionValidFrom={statute.versionValidFrom}
-          />
+          // The act's own publisher is the only host its markup may link to;
+          // a consolidation typeset with links into a commercial database
+          // renders those references as text, or as our own statute link.
+          <SourceLinkPolicyProvider
+            urls={[statute.documentUrl, statute.sourceUrl]}
+          >
+            <AnnotatedStatuteText
+              blocks={blocks}
+              citationWork={citationWork}
+              country={statute.country}
+              documentId={statute.id}
+              eli={statute.eli}
+              fulltext={statute.fulltext}
+              language={statute.language}
+              masthead={preparedReader.masthead}
+              provisionCitationCounts={provisionCitationCounts}
+              scrollContainerRef={readerRef}
+              statuteTitle={statute.title}
+              versionCount={versions.length}
+              versionValidFrom={statute.versionValidFrom}
+            />
+          </SourceLinkPolicyProvider>
         )}
       </div>
     </div>

@@ -6,6 +6,16 @@ import type { Inline } from "@stll/legal-ast/document-ast";
 
 import { InlineContent } from "@/components/legal-reader/document-ast-text";
 import type { TextAnchor } from "@/components/legal-reader/document-ast-text";
+import { SourceLinkPolicyProvider } from "@/components/legal-reader/source-link-policy";
+
+/**
+ * A source document's own hyperlinks render only for the publisher that
+ * served it, so every case below that expects a link names the host it is
+ * exercising; see `source-link-policy.tsx`.
+ */
+const publishedAt = (urls: readonly string[], node: React.ReactNode) => (
+  <SourceLinkPolicyProvider urls={urls}>{node}</SourceLinkPolicyProvider>
+);
 
 const inlines: Inline[] = [
   { text: "srov. ", type: "text" },
@@ -91,20 +101,23 @@ describe("InlineContent anchors", () => {
     const text = "srov. nález I. ÚS 2447/13";
     const start = text.indexOf("I. ÚS");
     const html = renderToStaticMarkup(
-      <InlineContent
-        activeMatchIndex={-1}
-        anchors={[
-          {
-            end: start + "I. ÚS 2447/13".length,
-            key: "cited",
-            render: (children) => <a href="/cited">{children}</a>,
-            start,
-          },
-        ]}
-        inlines={linked}
-        pieceId="p"
-        ranges={[]}
-      />,
+      publishedAt(
+        ["https://example.test/source"],
+        <InlineContent
+          activeMatchIndex={-1}
+          anchors={[
+            {
+              end: start + "I. ÚS 2447/13".length,
+              key: "cited",
+              render: (children) => <a href="/cited">{children}</a>,
+              start,
+            },
+          ]}
+          inlines={linked}
+          pieceId="p"
+          ranges={[]}
+        />,
+      ),
     );
 
     expect(html).toContain('href="https://example.test/source"');
@@ -130,24 +143,33 @@ describe("InlineContent anchors", () => {
   });
 });
 
-const renderInlines = (nodes: Inline[]) =>
+const renderInlines = (
+  nodes: Inline[],
+  publisherUrls: readonly string[] = [],
+) =>
   renderToStaticMarkup(
-    <InlineContent
-      activeMatchIndex={-1}
-      inlines={nodes}
-      pieceId="p"
-      ranges={[]}
-    />,
+    publishedAt(
+      publisherUrls,
+      <InlineContent
+        activeMatchIndex={-1}
+        inlines={nodes}
+        pieceId="p"
+        ranges={[]}
+      />,
+    ),
   );
 
 describe("InlineContent kinds", () => {
   test("turns a bare external URL into a distinguished safe link", () => {
-    const html = renderInlines([
-      {
-        text: "Data jsou na http://example.test/report/1). Další text.",
-        type: "text",
-      },
-    ]);
+    const html = renderInlines(
+      [
+        {
+          text: "Data jsou na http://example.test/report/1). Další text.",
+          type: "text",
+        },
+      ],
+      ["http://example.test/report/1"],
+    );
 
     expect(html).toContain(
       'href="http://example.test/report/1" rel="noopener noreferrer" target="_blank"',
@@ -157,13 +179,16 @@ describe("InlineContent kinds", () => {
   });
 
   test("does not nest an automatic URL inside an existing source link", () => {
-    const html = renderInlines([
-      {
-        children: [{ text: "https://example.test/report", type: "text" }],
-        href: "https://example.test/report",
-        type: "link",
-      },
-    ]);
+    const html = renderInlines(
+      [
+        {
+          children: [{ text: "https://example.test/report", type: "text" }],
+          href: "https://example.test/report",
+          type: "link",
+        },
+      ],
+      ["https://example.test/report"],
+    );
 
     expect(html.match(/<a /gu)).toHaveLength(1);
   });
@@ -194,14 +219,17 @@ describe("InlineContent kinds", () => {
   });
 
   test("a linked citation renders as a link and still carries the reference", () => {
-    const html = renderInlines([
-      {
-        children: [{ text: "the earlier case", type: "text" }],
-        cite: "Rep. 2019, 412",
-        href: "https://reports.test/2019/412",
-        type: "citation",
-      },
-    ]);
+    const html = renderInlines(
+      [
+        {
+          children: [{ text: "the earlier case", type: "text" }],
+          cite: "Rep. 2019, 412",
+          href: "https://reports.test/2019/412",
+          type: "citation",
+        },
+      ],
+      ["https://reports.test/2019/412"],
+    );
 
     expect(html).toContain('href="https://reports.test/2019/412"');
     expect(html).toContain('data-cite="Rep. 2019, 412"');

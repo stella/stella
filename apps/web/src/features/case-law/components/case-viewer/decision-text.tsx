@@ -37,6 +37,7 @@ import type {
   SearchPiece,
 } from "@/components/legal-reader/reader-search";
 import { buildSearchResults } from "@/components/legal-reader/reader-search";
+import { SourceLinkPolicyProvider } from "@/components/legal-reader/source-link-policy";
 import type { CitationAnchorSource } from "@/features/case-law/citation-anchors";
 import { decisionReferenceTintClassName } from "@/features/case-law/citation-treatment";
 import { DecisionBodyUnavailable } from "@/features/case-law/components/case-viewer/decision-body-state";
@@ -1150,13 +1151,28 @@ export const DecisionText = ({
 
   // `reader-case-law` caps the measure: the decision and the attribution line
   // under it are read at a line length, not at the width of the pane.
+  //
+  // The publisher named here is the only host the court's own markup may link
+  // to; every other link in the document renders as its own words. The
+  // attribution URL is the sources registry's answer for this decision, and
+  // the AST carries the publisher's own page and print URLs for it, so a
+  // publisher serving its catalogue and its documents from sibling hosts
+  // keeps its own links.
   return (
-    <div className="reader-case-law">
-      {body}
-      {trailingNotes.map(([anchorId, note]) => (
-        <Fragment key={anchorId}>{note}</Fragment>
-      ))}
-      <DecisionSourceAttribution url={decision.sourceAttributionUrl} />
-    </div>
+    <SourceLinkPolicyProvider
+      urls={[
+        decision.sourceAttributionUrl,
+        ast?.source.webUrl,
+        ast?.source.printUrl,
+      ]}
+    >
+      <div className="reader-case-law">
+        {body}
+        {trailingNotes.map(([anchorId, note]) => (
+          <Fragment key={anchorId}>{note}</Fragment>
+        ))}
+        <DecisionSourceAttribution url={decision.sourceAttributionUrl} />
+      </div>
+    </SourceLinkPolicyProvider>
   );
 };

@@ -11,6 +11,7 @@ import { provisionBlocks } from "@stll/legal-ast/provision-preview";
 import { Skeleton } from "@stll/ui/skeleton";
 
 import { BlockRenderer } from "@/components/legal-reader/document-ast-text";
+import { SourceLinkPolicyProvider } from "@/components/legal-reader/source-link-policy";
 import { statuteOptions } from "@/features/statutes/queries/statutes";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { forceReflow } from "@/lib/utils";
@@ -96,23 +97,27 @@ export const ProvisionWording = ({
     );
   }
 
+  // The wording is unfolded inside another document's reader, so it names its
+  // own publisher rather than inheriting the citing decision's.
   return (
-    <article
-      className="reader-paper reader-statute text-card-foreground text-start"
-      lang={statute.language}
-      ref={containerRef}
-      style={READER_STYLE}
-    >
-      {blocks.map((block) => (
-        <BlockRenderer
-          activeMatchIndex={NO_ACTIVE_MATCH}
-          anchorPresentation="embedded"
-          block={block}
-          key={block.id}
-          rangesByPieceId={NO_RANGES}
-          variant="statute"
-        />
-      ))}
-    </article>
+    <SourceLinkPolicyProvider urls={[statute.documentUrl, statute.sourceUrl]}>
+      <article
+        className="reader-paper reader-statute text-card-foreground text-start"
+        lang={statute.language}
+        ref={containerRef}
+        style={READER_STYLE}
+      >
+        {blocks.map((block) => (
+          <BlockRenderer
+            activeMatchIndex={NO_ACTIVE_MATCH}
+            anchorPresentation="embedded"
+            block={block}
+            key={block.id}
+            rangesByPieceId={NO_RANGES}
+            variant="statute"
+          />
+        ))}
+      </article>
+    </SourceLinkPolicyProvider>
   );
 };

@@ -63,6 +63,9 @@ const RAW_NAME_PROPS = new Set(["name", "filename", "fileName"]);
 //   href="https://..."                  (string literal)
 //   href={`/path/${id}`}                (template literal)
 //   href={sanitizeHref(url)}            (sanitizer call)
+//   href={readerHref(url, policy)}      (sanitizer call; it calls sanitizeHref
+//                                        and then withholds a host the
+//                                        document may not link to)
 // Flagged:
 //   href={node.href}       (data object property access)
 //   href={item.url}        (data object property access)
@@ -91,7 +94,46 @@ const isSafeTemplateLiteral = (node): boolean => {
   );
 };
 
-const isSanitizeHrefCall = (node): boolean => isCallTo(node, "sanitizeHref");
+// The sanitizers a sink may be fed from. `readerHref` is the legal reader's
+// own gate: it returns `sanitizeHref`'s answer and then withholds any host
+// outside the document's publisher, so it is never weaker than `sanitizeHref`.
+// A helper only earns a place here by calling one of these itself.
+const HREF_SANITIZERS = ["sanitizeHref", "readerHref"];
+
+const isIdentifierReference = (
+  node: unknown,
+): node is ESTree.IdentifierReference => isIdentifier(node);
+
+/**
+ * A sanitizer call, resolved through its binding rather than its spelling.
+ *
+ * Matching the callee's name alone leaves the rule defeatable by the file it
+ * guards: `const sanitizeHref = (url) => url` above the sink satisfies a name
+ * check, and the anchor renders whatever it was handed. So the name has to
+ * resolve to an import, which only the module that owns the sanitizer can
+ * provide; a local, a parameter and a shadowing binding all report.
+ */
+const isSanitizeHrefCall = (
+  node: unknown,
+  resolveVariable: (identifier: ESTree.IdentifierReference) => Variable | null,
+): boolean => {
+  if (
+    !isAstNode(node) ||
+    node.type !== "CallExpression" ||
+    !HREF_SANITIZERS.some((sanitizer) => isCallTo(node, sanitizer))
+  ) {
+    return false;
+  }
+  const callee = unwrapExpression(node.callee);
+  if (!isIdentifierReference(callee)) {
+    return false;
+  }
+  return (
+    resolveVariable(callee)?.defs.some(
+      (def) => def.type === "ImportBinding",
+    ) === true
+  );
+};
 
 // ── Rule 3: no-unscoped-user-query ─────────────────────────────
 //
@@ -176,10 +218,6 @@ export default eslintCompatPlugin({
         },
       },
       createOnce(context) {
-        const isIdentifierReference = (
-          node: unknown,
-        ): node is ESTree.IdentifierReference => isIdentifier(node);
-
         const resolveVariable = (
           identifier: ESTree.IdentifierReference,
         ): Variable | null => {
@@ -316,6 +354,20 @@ export default eslintCompatPlugin({
         },
       },
       createOnce(context) {
+        const resolveVariable = (
+          identifier: ESTree.IdentifierReference,
+        ): Variable | null => {
+          let scope: Scope | null = context.sourceCode.getScope(identifier);
+          while (scope !== null) {
+            const variable = scope.set.get(identifier.name);
+            if (variable !== undefined) {
+              return variable;
+            }
+            scope = scope.upper;
+          }
+          return null;
+        };
+
         return {
           JSXAttribute(node) {
             // Only check href attributes
@@ -372,8 +424,8 @@ export default eslintCompatPlugin({
               return;
             }
 
-            // Allow sanitizeHref() calls
-            if (isSanitizeHrefCall(expr)) {
+            // Allow a sanitizer imported from the module that owns it
+            if (isSanitizeHrefCall(expr, resolveVariable)) {
               return;
             }
 
