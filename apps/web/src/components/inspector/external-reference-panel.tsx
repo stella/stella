@@ -77,7 +77,7 @@ export const ExternalSourceLogo = ({
       >
         <img
           alt=""
-          className="size-3 rounded-[2px] object-contain"
+          className="size-3 rounded-xs object-contain"
           height={12}
           src={iconHref}
           width={12}
@@ -498,12 +498,12 @@ const GenericExternalReferencePanel = ({
                   </p>
                 )}
                 {connectorSlug && (
-                  <span className="bg-muted text-muted-foreground max-w-24 truncate rounded px-1.5 py-0.5 font-mono text-[10px]">
+                  <span className="bg-muted text-muted-foreground text-3xs max-w-24 truncate rounded px-1.5 py-0.5 font-mono">
                     {connectorSlug}
                   </span>
                 )}
                 {sourceToolName && (
-                  <span className="bg-muted text-muted-foreground min-w-0 truncate rounded px-1.5 py-0.5 font-mono text-[10px]">
+                  <span className="bg-muted text-muted-foreground text-3xs min-w-0 truncate rounded px-1.5 py-0.5 font-mono">
                     {sourceToolName}
                   </span>
                 )}

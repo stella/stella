@@ -110,7 +110,7 @@ export const DecisionResultsToolbar = ({
             >
               <SelectTrigger
                 aria-label={t("common.sort")}
-                className="h-7 min-h-0 w-auto min-w-28 text-xs"
+                className="h-7 min-h-0 w-auto min-w-28"
                 size="sm"
               >
                 <SelectValue>{t(SORT_LABEL_KEYS[sort])}</SelectValue>
@@ -154,7 +154,7 @@ export const DecisionResultsToolbar = ({
             >
               <SelectTrigger
                 aria-label={t("caseLaw.results.excerpt.label")}
-                className="h-7 min-h-0 w-auto min-w-28 text-xs"
+                className="h-7 min-h-0 w-auto min-w-28"
                 size="sm"
               >
                 <SelectValue />
@@ -284,7 +284,7 @@ export const DecisionFilterChips = ({
         </span>
       ))}
       <Button
-        className="text-muted-foreground h-6 min-h-0 text-xs"
+        className="text-muted-foreground h-6 min-h-0"
         onClick={onClearAll}
         size="sm"
         type="button"

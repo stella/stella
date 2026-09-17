@@ -28,7 +28,7 @@ export const ToolCatalogueCard = ({ entry }: ToolCatalogueCardProps) => {
 
   return (
     <Link
-      className="bg-background group hover:bg-muted/25 flex min-h-32 cursor-pointer items-start gap-4 rounded-xl p-4 text-start shadow-[0_1px_2px_rgb(0_0_0/0.035),0_7px_22px_rgb(0_0_0/0.04)] transition-transform duration-150 hover:-translate-y-px"
+      className="bg-background group hover:bg-muted/25 shadow-floating flex min-h-32 cursor-pointer items-start gap-4 rounded-xl p-4 text-start transition-transform duration-150 hover:-translate-y-px"
       from="/tools/"
       params={{ slug: entry.slug }}
       to="/tools/$slug"

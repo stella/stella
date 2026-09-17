@@ -246,8 +246,9 @@ export const ChatMentionList = ({
       <PopoverPopup
         align="start"
         anchor={anchor}
-        className="w-96 max-w-[min(24rem,calc(100vw-2rem))] *:data-[slot=popover-positioner]:transition-none! *:data-[slot=popover-viewport]:p-1!"
+        className="w-96 max-w-[min(24rem,calc(100vw-2rem))] *:data-[slot=popover-positioner]:transition-none!"
         initialFocus={false}
+        padding="xs"
         side="top"
       >
         <div
@@ -256,10 +257,10 @@ export const ChatMentionList = ({
         >
           {drillTarget && (
             <Button
-              className="text-muted-foreground justify-start gap-2 font-normal"
+              className="justify-start gap-2 font-normal"
               onClick={handleBack}
               size="sm"
-              variant="ghost"
+              variant="muted"
             >
               <DirectionalIcon
                 className="size-3.5 shrink-0"
@@ -340,10 +341,10 @@ export const ChatMentionList = ({
                         {isWorkspace && (
                           <Button
                             aria-label={t("common.open")}
-                            className="text-muted-foreground size-7 shrink-0"
+                            className="size-7 shrink-0"
                             onClick={() => handleDrillDown(item)}
                             size="icon-sm"
-                            variant="ghost"
+                            variant="muted"
                           >
                             <DirectionalIcon
                               className="size-3.5"

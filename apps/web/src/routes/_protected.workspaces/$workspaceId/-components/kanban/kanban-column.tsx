@@ -526,11 +526,7 @@ export const KanbanColumnActions = ({
       {/* Outside the menu so the menu can close under the picker. */}
       {onChangeColor && (
         <Popover modal onOpenChange={setColorPickerOpen} open={colorPickerOpen}>
-          <PopoverPopup
-            anchor={menuTriggerRef}
-            className="*:data-[slot=popover-viewport]:p-1!"
-            side="right"
-          >
+          <PopoverPopup anchor={menuTriggerRef} padding="xs" side="right">
             <ColorPickerContent
               columns={9}
               defaultExpanded={false}

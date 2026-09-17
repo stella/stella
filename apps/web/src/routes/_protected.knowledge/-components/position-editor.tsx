@@ -181,18 +181,13 @@ const contentForType = (
 
 // ── Inline action (muted text-only ghost button) ──────
 // Tier "+ add" affordances read as plain muted text until hover, not filled
-// controls. A ghost xs Button with a muted text
-// override keeps focus rings, sizing, and keyboard behaviour consistent.
+// controls. The muted xs Button keeps focus rings, sizing, and keyboard
+// behaviour consistent.
 const InlineAction = ({
   className,
   ...props
 }: React.ComponentProps<typeof Button>) => (
-  <Button
-    className={cn("text-muted-foreground hover:text-foreground", className)}
-    size="xs"
-    variant="ghost"
-    {...props}
-  />
+  <Button className={className} size="xs" variant="muted" {...props} />
 );
 
 // ── Root: position card ───────────────────────────────
@@ -960,7 +955,7 @@ const RuleRow = ({
   const t = useTranslations();
   return (
     <div className="flex items-start gap-2">
-      <span className="text-muted-foreground w-11 shrink-0 pt-2 text-[10px] tracking-wide uppercase tabular-nums">
+      <span className="text-muted-foreground text-3xs w-11 shrink-0 pt-2 tracking-wide uppercase tabular-nums">
         {label}
       </span>
       <Input
@@ -1005,7 +1000,7 @@ const FallbackEntryRow = ({
   const t = useTranslations();
   return (
     <div className="flex items-start gap-2">
-      <span className="text-muted-foreground w-11 shrink-0 pt-2 text-[10px] tracking-wide uppercase tabular-nums">
+      <span className="text-muted-foreground text-3xs w-11 shrink-0 pt-2 tracking-wide uppercase tabular-nums">
         {t("knowledge.playbooks.entryRank", { index: String(index + 1) })}
       </span>
       <div className="flex-1 space-y-1.5">
@@ -1077,7 +1072,7 @@ const IdealEditor = ({
   return (
     <div className="border-border ms-11 space-y-2 border-s-2 ps-3">
       <div className="flex items-center gap-2">
-        <span className="text-muted-foreground text-[10px] tracking-wide uppercase">
+        <span className="text-muted-foreground text-3xs tracking-wide uppercase">
           {t("knowledge.playbooks.idealLanguage")}
         </span>
         <Select
@@ -1290,7 +1285,7 @@ const NegotiationSection = ({
                 // eslint-disable-next-line react/no-array-index-key -- talkingPoints is a persisted string[] (playbook negotiation data) with no id field and duplicate values allowed; each Input is fully controlled by its string value, so index-keyed reuse never mismatches rendered content.
                 <div className="flex items-center gap-2" key={index}>
                   <Input
-                    className="h-8 flex-1 text-sm"
+                    className="flex-1"
                     onChange={(e) =>
                       setTalkingPoints(
                         talkingPoints.map((existing, i) =>
@@ -1301,6 +1296,7 @@ const NegotiationSection = ({
                     placeholder={t(
                       "knowledge.playbooks.negotiation.talkingPointPlaceholder",
                     )}
+                    size="sm"
                     value={point}
                   />
                   <Button
@@ -1339,7 +1335,6 @@ const NegotiationSection = ({
               {t("knowledge.playbooks.negotiation.escalationLabel")}
             </Label>
             <Input
-              className="h-8 text-sm"
               id={`position-negotiation-escalation-${position.sourceId}`}
               maxLength={NEGOTIATION_FIELD_LIMITS.escalation}
               onChange={(e) =>
@@ -1350,6 +1345,7 @@ const NegotiationSection = ({
               placeholder={t(
                 "knowledge.playbooks.negotiation.escalationPlaceholder",
               )}
+              size="sm"
               value={negotiation?.escalation ?? ""}
             />
           </div>
@@ -1509,7 +1505,7 @@ const ExtractionAdvanced = ({
         {ask.derived ? (
           <dl className="border-border/60 divide-border/60 divide-y rounded-md border">
             <div className="space-y-1 p-2.5">
-              <dt className="text-foreground-label text-[11px] font-medium">
+              <dt className="text-foreground-label text-2xs font-medium">
                 {t("knowledge.playbooks.derivedQuestion")}
               </dt>
               <dd className="text-foreground text-sm leading-5 text-pretty">
@@ -1611,7 +1607,7 @@ const CheckEditor = ({
           <p className="text-foreground text-xs font-medium">
             {t("knowledge.playbooks.check")}
           </p>
-          <p className="text-muted-foreground text-[11px] text-pretty">
+          <p className="text-muted-foreground text-2xs text-pretty">
             {t("knowledge.playbooks.checkHint")}
           </p>
         </div>
@@ -1962,7 +1958,7 @@ const SelectOptionsEditor = ({
               style={{ backgroundColor: optionSwatch(option.color) }}
             />
             <Input
-              className="h-7 flex-1 text-sm"
+              className="flex-1"
               onChange={(e) =>
                 setOptions(
                   content.options.map((o, i) =>
@@ -1971,6 +1967,7 @@ const SelectOptionsEditor = ({
                 )
               }
               placeholder={t("knowledge.playbooks.optionPlaceholder")}
+              size="sm"
               value={option.value}
             />
             <Button

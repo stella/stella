@@ -200,7 +200,8 @@ export const MessageExportMenu = ({
       <PopoverPopup
         align="start"
         anchor={anchor}
-        className="w-64 p-3"
+        className="w-64"
+        padding="md"
         side="top"
       >
         <div className="flex flex-col gap-3">

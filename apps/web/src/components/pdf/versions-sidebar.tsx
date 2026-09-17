@@ -594,14 +594,14 @@ const VersionItem = ({
                 <Tooltip
                   content={t("common.documentReference")}
                   render={
-                    <span className="text-muted-foreground truncate font-mono text-[10px]" />
+                    <span className="text-muted-foreground text-3xs truncate font-mono" />
                   }
                 >
                   <BidiText direction="ltr">{version.stamp}</BidiText>
                 </Tooltip>
               )}
               {version.label !== null && (
-                <span className="text-accent-foreground inline-flex w-fit items-center gap-1.5 truncate text-[10px] font-medium">
+                <span className="text-accent-foreground text-3xs inline-flex w-fit items-center gap-1.5 truncate font-medium">
                   <span
                     className={cn(
                       "size-2 shrink-0 rounded-full",

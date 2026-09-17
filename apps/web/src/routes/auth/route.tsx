@@ -40,7 +40,7 @@ function AuthLayout() {
             >
               <StellaWordmark className="text-foreground h-6 w-auto" />
             </a>
-            <span className="border-border text-muted-foreground rounded-sm border px-1.5 py-0.5 text-[0.625rem] font-medium tracking-[0.1em] uppercase">
+            <span className="border-border text-muted-foreground text-3xs rounded-sm border px-1.5 py-0.5 font-medium tracking-[0.1em] uppercase">
               {t("auth.betaNoticeTitle")}
             </span>
           </div>

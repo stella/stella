@@ -259,10 +259,10 @@ const PublicSidebar = ({
           {!isCollapsed && <StellaWordmark className="h-5 w-auto" />}
           <Button
             aria-label={t("navigation.toggleSidebar")}
-            className="text-muted-foreground size-7"
+            className="size-7"
             onClick={toggleSidebar}
             size="icon"
-            variant="ghost"
+            variant="muted"
           >
             <PanelLeftIcon className="size-4" />
             <span className="sr-only">{t("navigation.toggleSidebar")}</span>
@@ -289,7 +289,7 @@ const PublicSidebar = ({
                       <span>{label}</span>
                     </SidebarMenuButton>
                     <SidebarMenuBadge>
-                      <kbd className="text-muted-foreground text-[0.625rem]">
+                      <kbd className="text-muted-foreground text-3xs">
                         {searchHotkeyLabel}
                       </kbd>
                     </SidebarMenuBadge>

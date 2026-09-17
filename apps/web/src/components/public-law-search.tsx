@@ -170,7 +170,7 @@ export const PublicLawAskInChat = ({
   return (
     <>
       <Button
-        className="text-muted-foreground text-xs"
+        className="text-muted-foreground"
         onClick={() => {
           if (ensureAccount("askInChat") !== ACCOUNT_GATE_OUTCOME.allowed) {
             return;

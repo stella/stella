@@ -609,12 +609,7 @@ const DatePickerPopoverContent = ({
           <span className="text-destructive text-xs">{overdueLabel}</span>
         )}
       </PopoverTrigger>
-      <PopoverPopup
-        className="*:data-[slot=popover-viewport]:p-2!"
-        layer={layer}
-        side="bottom"
-        sideOffset={4}
-      >
+      <PopoverPopup layer={layer} padding="sm" side="bottom" sideOffset={4}>
         <div className="w-60" role="dialog" aria-label="Date picker">
           {/* Shared header: [<] label [>] */}
           <div className="flex items-center justify-between gap-1 pb-1">
@@ -676,7 +671,7 @@ const DatePickerPopoverContent = ({
                 {weekdays.map((weekday) => (
                   <span
                     className={cn(
-                      "py-1 text-center text-[10px]",
+                      "text-3xs py-1 text-center",
                       weekday.isWeekend
                         ? "text-muted-foreground"
                         : "text-foreground-label",
@@ -883,7 +878,7 @@ const MonthGrid = ({
                   <span
                     aria-hidden="true"
                     className={cn(
-                      "me-1 text-[10px] tabular-nums opacity-50",
+                      "text-3xs me-1 tabular-nums opacity-50",
                       !isSelected && "text-muted-foreground",
                     )}
                   >

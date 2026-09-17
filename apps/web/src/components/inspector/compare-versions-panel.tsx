@@ -476,7 +476,7 @@ export const CompareVersionsPanel = ({
           <p className="text-muted-foreground mt-1 text-xs text-pretty">
             {outcome.result.error.hint}
           </p>
-          <bdi className="text-muted-foreground mt-2 block font-mono text-[10px]">
+          <bdi className="text-muted-foreground text-3xs mt-2 block font-mono">
             {outcome.result.error.code}
           </bdi>
         </div>

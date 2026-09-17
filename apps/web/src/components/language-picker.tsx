@@ -1,5 +1,6 @@
 import { GlobeIcon } from "lucide-react";
 
+import { Button } from "@stll/ui/button";
 import {
   Menu,
   MenuPopup,
@@ -21,10 +22,7 @@ export const LanguagePicker = () => {
 
   return (
     <Menu>
-      <MenuTrigger
-        className="text-muted-foreground hover:text-foreground hover:bg-accent/50 flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm transition-colors"
-        render={<button type="button" />}
-      >
+      <MenuTrigger render={<Button size="sm" variant="outline" />}>
         <GlobeIcon className="size-4" />
         {LANG_ENDONYMS[lang]}
       </MenuTrigger>

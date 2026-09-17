@@ -135,7 +135,7 @@ export const SidebarPreview = ({
           icon={SearchIcon}
           label={t("navigation.search")}
           trailing={
-            <kbd className="text-foreground-strong-muted text-[0.625rem]">
+            <kbd className="text-foreground-strong-muted text-3xs">
               {formatHotkeyForPlatform(HOTKEYS.SEARCH, hotkeyPlatform)}
             </kbd>
           }
@@ -155,7 +155,7 @@ export const SidebarPreview = ({
 
       {/* Documents section — placeholder skeleton when no matter exists */}
       <div className="px-3 py-2">
-        <div className="text-muted-foreground px-2 pb-1.5 text-[11px] font-medium tracking-wide uppercase">
+        <div className="text-muted-foreground text-2xs px-2 pb-1.5 font-medium tracking-wide uppercase">
           {t("common.matters")}
         </div>
 
@@ -206,7 +206,7 @@ export const SidebarPreview = ({
                     )}
                     style={{ opacity: dotShouldPulse && !pulseOn ? 0.3 : 1 }}
                   />
-                  <span className="text-foreground-strong-muted text-[10px] tracking-wide uppercase">
+                  <span className="text-foreground-strong-muted text-3xs tracking-wide uppercase">
                     {statusLabel}
                   </span>
                 </span>

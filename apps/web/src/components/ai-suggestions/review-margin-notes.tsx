@@ -287,7 +287,7 @@ export const ReviewMarginNotes = ({
       </div>
       {unanchored.length > 0 && (
         <section className="max-h-48 shrink-0 overflow-y-auto border-t px-2 py-2">
-          <h3 className="text-muted-foreground mb-1 px-1 text-[11px] font-medium tracking-wide uppercase">
+          <h3 className="text-muted-foreground text-2xs mb-1 px-1 font-medium tracking-wide uppercase">
             {t("inspector.review.marginNotes.unanchored")}
           </h3>
           <ul className="space-y-1">
@@ -344,13 +344,13 @@ const MarginNoteBody = ({
     >
       {note.title}
     </BidiText>
-    <span className="text-muted-foreground text-[11px] leading-4">
+    <span className="text-muted-foreground text-2xs leading-4">
       {note.label}
     </span>
     {note.caption !== null && (
       <BidiText
         as="span"
-        className="text-muted-foreground line-clamp-3 text-[11px] leading-4 text-pretty"
+        className="text-muted-foreground text-2xs line-clamp-3 leading-4 text-pretty"
       >
         {note.caption}
       </BidiText>
@@ -407,7 +407,7 @@ const EdgePill = ({
       <button
         // The pill stays small; its target does not. The pseudo-element
         // widens the hit area without moving the pill or its neighbours.
-        className="bg-background/90 text-muted-foreground hover:text-foreground focus-visible:ring-ring pointer-events-auto relative flex items-center gap-1 rounded-full border px-2 py-1 text-[11px] tabular-nums shadow-xs backdrop-blur transition-colors before:absolute before:-inset-2.5 before:content-[''] focus-visible:ring-2 focus-visible:outline-none"
+        className="bg-background/90 text-muted-foreground hover:text-foreground focus-visible:ring-ring text-2xs pointer-events-auto relative flex items-center gap-1 rounded-full border px-2 py-1 tabular-nums shadow-xs backdrop-blur transition-colors before:absolute before:-inset-2.5 before:content-[''] focus-visible:ring-2 focus-visible:outline-none"
         onClick={() => onScrollTo(nearest)}
         type="button"
       >

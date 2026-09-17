@@ -117,7 +117,7 @@ export const CitedDecisionPreview = ({
       )}
       {passage !== undefined && <CitingPassage passage={passage} />}
       <Button
-        className="h-6 w-fit px-2 text-xs"
+        className="h-6 w-fit px-2"
         onClick={onOpen}
         size="sm"
         variant="outline"

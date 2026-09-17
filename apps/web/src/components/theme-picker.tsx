@@ -1,6 +1,7 @@
 import { MonitorIcon, MoonIcon, SunIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { Button } from "@stll/ui/button";
 import {
   Menu,
   MenuPopup,
@@ -26,8 +27,7 @@ export const ThemePicker = () => {
     <Menu>
       <MenuTrigger
         aria-label={t("appearance.theme")}
-        className="text-muted-foreground hover:text-foreground hover:bg-accent/50 flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm transition-colors"
-        render={<button type="button" />}
+        render={<Button size="sm" variant="outline" />}
       >
         <TriggerIcon className="size-4" />
         {t(`appearance.${theme}`)}

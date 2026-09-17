@@ -108,7 +108,7 @@ export const SpawnSubagentsSubtaskList = ({
 
             {subagent.model ? (
               <div className="flex items-center gap-1.5">
-                <span className="bg-muted/40 text-muted-foreground rounded px-1.5 py-0.5 text-[11px] font-medium">
+                <span className="bg-muted/40 text-muted-foreground text-2xs rounded px-1.5 py-0.5 font-medium">
                   {subagent.model}
                 </span>
               </div>
@@ -121,7 +121,7 @@ export const SpawnSubagentsSubtaskList = ({
             )}
 
             {result?.status === "failed" && result.error && (
-              <p className="text-destructive max-h-40 overflow-auto text-[11px] whitespace-pre-wrap">
+              <p className="text-destructive text-2xs max-h-40 overflow-auto whitespace-pre-wrap">
                 {result.error}
               </p>
             )}
@@ -142,7 +142,7 @@ const SubtaskStatus = ({ isAwaitingApproval, status }: SubtaskStatusProps) => {
 
   if (status === "completed") {
     return (
-      <span className="bg-muted/40 text-muted-foreground flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium">
+      <span className="bg-muted/40 text-muted-foreground text-2xs flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 font-medium">
         <CheckIcon className="size-3" />
         {t("common.done")}
       </span>
@@ -151,7 +151,7 @@ const SubtaskStatus = ({ isAwaitingApproval, status }: SubtaskStatusProps) => {
 
   if (status === "failed") {
     return (
-      <span className="bg-destructive/10 text-destructive border-destructive/60 flex shrink-0 items-center gap-1 rounded border px-1.5 py-0.5 text-[11px] font-medium">
+      <span className="bg-destructive/10 text-destructive border-destructive/60 text-2xs flex shrink-0 items-center gap-1 rounded border px-1.5 py-0.5 font-medium">
         {t("chat.spawnSubagents.failed")}
       </span>
     );
@@ -159,14 +159,14 @@ const SubtaskStatus = ({ isAwaitingApproval, status }: SubtaskStatusProps) => {
 
   if (isAwaitingApproval) {
     return (
-      <span className="bg-muted/40 text-muted-foreground flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium">
+      <span className="bg-muted/40 text-muted-foreground text-2xs flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 font-medium">
         <CircleDashedIcon className="size-3" />
       </span>
     );
   }
 
   return (
-    <span className="bg-muted/40 text-muted-foreground flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium">
+    <span className="bg-muted/40 text-muted-foreground text-2xs flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 font-medium">
       <LoaderIcon className="size-3 animate-spin" />
       {t("tasks.statusValues.in_progress")}
     </span>

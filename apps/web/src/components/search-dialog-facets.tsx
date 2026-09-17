@@ -100,7 +100,7 @@ export const TimeFacetGroup = ({
           const isActive = time?.mode === "preset" && time.preset === preset;
           return (
             <Button
-              className="h-auto w-full justify-start gap-2 px-2 py-1 text-xs"
+              className="h-auto w-full justify-start gap-2 px-2 py-1"
               key={preset}
               onClick={() => onPresetChange(preset)}
               size="sm"
@@ -114,7 +114,7 @@ export const TimeFacetGroup = ({
           );
         })}
         <Button
-          className="h-auto w-full justify-start gap-2 px-2 py-1 text-xs"
+          className="h-auto w-full justify-start gap-2 px-2 py-1"
           onClick={() => {
             if (isCustom) {
               onClearCustom();
@@ -134,7 +134,7 @@ export const TimeFacetGroup = ({
       {isCustom && (
         <div className="mt-2 space-y-1 px-2">
           <div>
-            <p className="text-muted-foreground text-[0.625rem] font-medium tracking-wide uppercase">
+            <p className="text-muted-foreground text-3xs font-medium tracking-wide uppercase">
               {t("search.dateFrom")}
             </p>
             <DatePickerPopover
@@ -146,7 +146,7 @@ export const TimeFacetGroup = ({
             />
           </div>
           <div>
-            <p className="text-muted-foreground text-[0.625rem] font-medium tracking-wide uppercase">
+            <p className="text-muted-foreground text-3xs font-medium tracking-wide uppercase">
               {t("search.dateTo")}
             </p>
             <DatePickerPopover
@@ -195,7 +195,7 @@ const FacetBucketList = ({
     <div className="space-y-0.5">
       {buckets.map((bucket) => (
         <Button
-          className="h-auto w-full justify-start gap-2 px-2 py-1 text-xs"
+          className="h-auto w-full justify-start gap-2 px-2 py-1"
           key={bucket.value}
           onClick={() => onChange(bucket.value)}
           size="sm"

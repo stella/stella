@@ -596,7 +596,7 @@ export const AddMemberDialog = ({
 
                   return (
                     <UserIdentity
-                      avatarClassName="size-7 shrink-0 text-[0.625rem]"
+                      avatarClassName="size-7 shrink-0 text-3xs"
                       className="min-w-0"
                       image={found.image}
                       name={found.name}
@@ -610,7 +610,7 @@ export const AddMemberDialog = ({
               {memberItems.map((item) => (
                 <SelectItem key={item.value} value={item.value}>
                   <UserIdentity
-                    avatarClassName="size-7 shrink-0 text-[0.625rem]"
+                    avatarClassName="size-7 shrink-0 text-3xs"
                     className="min-w-0"
                     image={item.image}
                     name={item.name}

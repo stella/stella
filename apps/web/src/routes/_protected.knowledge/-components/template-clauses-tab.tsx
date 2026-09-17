@@ -439,12 +439,12 @@ export const OutdatedChanges = ({
       <div className="flex items-center gap-0.5">
         <Button
           aria-expanded={isDiffOpen}
-          className="text-muted-foreground hover:text-foreground gap-1 px-1.5 text-xs font-normal"
+          className="gap-1"
           onClick={() => {
             detached(toggleDiff(), "template-clauses-tab.toggle-diff");
           }}
           size="xs"
-          variant="ghost"
+          variant="muted"
         >
           {isDiffOpen ? (
             <ChevronDownIcon className="size-3" />
@@ -455,14 +455,13 @@ export const OutdatedChanges = ({
         </Button>
         <Button
           aria-label={t("common.summarizeChanges")}
-          className="text-muted-foreground hover:text-foreground"
           disabled={summary.status === "loading"}
           onClick={() => {
             detached(handleSummarize(), "template-clauses-tab.summarize");
           }}
           size="icon-xs"
           title={t("common.summarizeChanges")}
-          variant="ghost"
+          variant="muted"
         >
           {summary.status === "loading" ? (
             <Loader2Icon className="size-3.5 animate-spin" />
@@ -544,13 +543,10 @@ export const UnlinkButton = ({
   return (
     <AlertDialog onOpenChange={setUnlinkOpen} open={unlinkOpen}>
       <Button
-        className={cn(
-          "shrink-0",
-          destructive && "text-destructive hover:text-destructive",
-        )}
+        className="shrink-0"
         onClick={() => setUnlinkOpen(true)}
         size="sm"
-        variant="ghost"
+        variant={destructive ? "destructive-ghost" : "ghost"}
       >
         <XIcon className="size-3.5" />
         {t("clauses.unlinkClause")}

@@ -15,7 +15,6 @@ export * from "./components/bidi-text";
 export * from "./components/brand-icons";
 export * from "./components/breadcrumb";
 export * from "./components/button";
-export * from "./components/button-variants";
 export * from "./components/checkbox";
 export * from "./components/color-picker";
 export * from "./components/combobox";

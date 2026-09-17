@@ -163,12 +163,11 @@ export const ChatComposerDock = (props: ChatComposerDockProps) => {
               <span className="inline-flex" ref={newThreadAnchorRef}>
                 <Button
                   aria-label={t("chat.newChat")}
-                  className="text-muted-foreground hover:text-foreground"
                   disabled={onNewThread === null}
                   onClick={onNewThread ?? undefined}
                   size="icon-xs"
                   tooltip={t("chat.newChat")}
-                  variant="ghost"
+                  variant="muted"
                 >
                   <MessageSquarePlusIcon className="size-3.5" />
                 </Button>

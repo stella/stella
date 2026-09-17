@@ -79,7 +79,7 @@ const ScopeHeader = ({
       )}
       <div className="min-w-0 flex-1">
         {title === undefined ? null : (
-          <p className="text-muted-foreground text-[11px] font-medium tracking-wide uppercase">
+          <p className="text-muted-foreground text-2xs font-medium tracking-wide uppercase">
             {title}
           </p>
         )}
@@ -240,7 +240,7 @@ export const ConditionFace = ({
                 </Button>
               }
             />
-            <PopoverPopup className="max-w-xs p-3">
+            <PopoverPopup className="max-w-xs" padding="md">
               <p className="text-xs">
                 {t("templates.studio.conditionHelpTooltip")}
               </p>
@@ -732,7 +732,7 @@ const ConditionReusePicker = ({
               type="button"
             >
               <span className="min-w-0 flex-1 truncate">{option.label}</span>
-              <code className="text-muted-foreground shrink-0 text-[10px]">
+              <code className="text-muted-foreground text-3xs shrink-0">
                 {option.ref}
               </code>
             </button>

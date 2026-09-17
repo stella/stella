@@ -124,7 +124,7 @@ const DirectionSection = ({
         }
         return (
           <div className="flex flex-col gap-1" key={treatment}>
-            <p className="text-muted-foreground flex items-center gap-1.5 text-[0.7rem] tracking-wide uppercase">
+            <p className="text-muted-foreground text-2xs flex items-center gap-1.5 tracking-wide uppercase">
               <span
                 aria-hidden="true"
                 className={cn(
@@ -165,7 +165,7 @@ const DirectionSection = ({
         </div>
       ) : (
         <Button
-          className="text-muted-foreground hover:text-foreground h-auto w-fit p-0 text-xs font-normal"
+          className="text-muted-foreground hover:text-foreground h-auto w-fit p-0"
           onClick={() => setShowingAll(true)}
           size="sm"
           variant="link"
@@ -231,7 +231,7 @@ const LeadingRow = ({
           >
             {citedDecisionLabel(row.decision)}
           </BidiText>
-          <span className="text-muted-foreground text-[0.7rem]">
+          <span className="text-muted-foreground text-2xs">
             {decided === null
               ? row.decision.court
               : `${row.decision.court} · ${decided}`}
@@ -307,7 +307,7 @@ const LeadingPassage = ({
       <CitationPassageQuote read={read} />
       {read.status === "found" && (
         <Button
-          className="h-6 px-2 text-xs"
+          className="h-6 px-2"
           onClick={() => onOpen(read.passage)}
           size="sm"
           variant="outline"

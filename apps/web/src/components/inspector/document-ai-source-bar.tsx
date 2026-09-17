@@ -452,7 +452,7 @@ export const DocumentAiSourceBar = ({
         >
           <DirectionalIcon className="size-3.5" icon={ChevronLeftIcon} />
         </Button>
-        <span className="text-muted-foreground min-w-8 text-center text-[10px] tabular-nums">
+        <span className="text-muted-foreground text-3xs min-w-8 text-center tabular-nums">
           {format.number(currentIdx + 1)} / {format.number(slots.length)}
         </span>
         <Button
@@ -531,12 +531,12 @@ const useFolioBlockPage = (
 };
 
 const SOURCE_CITATION_CHIP_CLASS =
-  "border-border bg-muted/64 text-foreground-strong-muted hover:bg-muted hover:text-foreground hover:border-foreground/24 inline-flex shrink-0 items-center rounded-md border px-1.5 py-0.5 align-middle text-[10.5px] font-medium tracking-tight transition-colors";
+  "border-border bg-muted/64 text-foreground-strong-muted hover:bg-muted hover:text-foreground hover:border-foreground/24 inline-flex shrink-0 items-center rounded-md border px-1.5 py-0.5 align-middle text-2xs font-medium tracking-tight transition-colors";
 
 // Unverified: no border, no hover affordance, dashed underline so it
 // reads as plain text the reader must not trust as a source anchor.
 const UNVERIFIED_CITATION_CHIP_CLASS =
-  "text-muted-foreground inline-flex shrink-0 items-center gap-1 align-middle text-[10.5px] font-medium tracking-tight italic underline decoration-dotted underline-offset-2";
+  "text-muted-foreground inline-flex shrink-0 items-center gap-1 align-middle text-2xs font-medium tracking-tight italic underline decoration-dotted underline-offset-2";
 
 const SourceCitationChip = ({
   citation,

@@ -12,7 +12,7 @@ import {
 
 import { cn } from "../lib/utils";
 import type { Button } from "./button";
-import { buttonVariants } from "./button-variants";
+import { buttonVariants } from "./button";
 import { DirectionalIcon } from "./directional-icon";
 
 const Pagination = ({ className, ...props }: React.ComponentProps<"nav">) => (

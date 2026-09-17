@@ -135,7 +135,7 @@ export const TemplateStudioSlashMenu = ({
           />
         </div>
       </MenuPreviewLayout>
-      <div className="text-muted-foreground border-t px-3 py-1 text-[11px] leading-snug">
+      <div className="text-muted-foreground text-2xs border-t px-3 py-1 leading-snug">
         {t("templates.studio.slashFooter")}
       </div>
     </div>
@@ -781,7 +781,7 @@ const SlashMenuHeader = ({
   const t = useTranslations();
   if (view === "root") {
     return (
-      <p className="text-muted-foreground truncate border-b px-3 py-1.5 text-[11px] leading-snug">
+      <p className="text-muted-foreground text-2xs truncate border-b px-3 py-1.5 leading-snug">
         {query === "" ? t("templates.studio.slashHint") : `/${query}`}
       </p>
     );
@@ -792,7 +792,7 @@ const SlashMenuHeader = ({
       : t("common.clauses");
   return (
     <button
-      className="text-muted-foreground hover:text-foreground flex items-center gap-1 border-b px-3 py-1.5 text-start text-[11px] leading-snug"
+      className="text-muted-foreground hover:text-foreground text-2xs flex items-center gap-1 border-b px-3 py-1.5 text-start leading-snug"
       onClick={onBack}
       onMouseDown={keepEditorFocus}
       type="button"
@@ -902,7 +902,7 @@ const SlashRootRows = ({
         return (
           <div key={slashRootKey(item)}>
             {showLabel && (
-              <p className="text-muted-foreground px-2 pt-1.5 pb-0.5 text-[10px] font-medium tracking-wide uppercase">
+              <p className="text-muted-foreground text-3xs px-2 pt-1.5 pb-0.5 font-medium tracking-wide uppercase">
                 {t(SLASH_GROUP_LABEL[group])}
               </p>
             )}
@@ -970,7 +970,7 @@ const SlashMenuRow = ({
         {label}
       </span>
       {hint !== undefined && (
-        <span className="text-muted-foreground shrink-0 truncate font-mono text-[10px]">
+        <span className="text-muted-foreground text-3xs shrink-0 truncate font-mono">
           {hint}
         </span>
       )}
@@ -1078,7 +1078,7 @@ const SlashTextPreview = ({
   body: string;
 }) => (
   <div className="flex h-full flex-col gap-1.5 overflow-hidden text-xs">
-    <code className="bg-primary/10 text-primary w-fit rounded px-1 py-0.5 text-[10px]">
+    <code className="bg-primary/10 text-primary text-3xs w-fit rounded px-1 py-0.5">
       {marker}
     </code>
     <p className="text-foreground font-medium">{title}</p>

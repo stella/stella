@@ -84,7 +84,7 @@ export const InlineEdit = ({
       {suffix}
       {action}
       <Button
-        className="h-6 shrink-0 gap-0.5 px-2 text-xs"
+        className="h-6 shrink-0 gap-0.5 px-2"
         onClick={onCommit}
         onMouseDown={(e) => {
           e.preventDefault();
@@ -94,7 +94,7 @@ export const InlineEdit = ({
         variant="default"
       >
         {t("common.done")}
-        <kbd className="text-[10px] opacity-70">{t("common.enterKey")}</kbd>
+        <kbd className="text-3xs opacity-70">{t("common.enterKey")}</kbd>
       </Button>
     </span>
   );

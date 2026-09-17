@@ -132,6 +132,17 @@ is `text-sm`; headings step up to `text-base` or `text-lg`. The
 full Tailwind type scale is available but sizes above `text-xl`
 are rare outside of marketing pages.
 
+Two tokens extend the scale downwards for badges, counts, and
+captions: `text-2xs` (11px) and `text-3xs` (10px). Use them instead
+of arbitrary values such as `text-[10px]`.
+
+### Elevation
+
+Floating surfaces (cards, previews, docked bars) use `shadow-floating`;
+`shadow-floating-ring` adds a hairline ring for surfaces without a
+border. Tailwind's `shadow-xs` to `shadow-lg` remain for controls and
+popups. Do not write a shadow recipe inline.
+
 ---
 
 ## 4. Component Stylings
@@ -154,8 +165,12 @@ Separator, Sheet, Skeleton, Table, Tabs, Textarea, Toast, Tooltip.
 
 ### Component Conventions
 
-- Use existing coss components with `className` overrides; do not
-  write raw `<button>`, `<input>`, etc.
+- Use existing coss components; do not write raw `<button>`,
+  `<input>`, etc. `className` places a component (margin, width,
+  flex, position); its appearance (padding, colour, typography,
+  shape) comes from a variant, added in `packages/ui` when the design
+  calls for one. The `shadcn/*` lint rules enforce this; their
+  messages name the variant, size, or token to use.
 - Use semantic HTML (`<nav>`, `<main>`, `<section>`) over generic
   `<div>` with ARIA roles.
 - All interactive elements require a 44x44px minimum touch target
@@ -170,10 +185,15 @@ Separator, Sheet, Skeleton, Table, Tabs, Textarea, Toast, Tooltip.
 - **outline:** border + transparent background
 - **secondary:** secondary surface
 - **ghost:** transparent, accent on hover
+- **muted:** muted text, foreground text and accent on hover (quiet
+  actions in toolbars and rows)
+- **destructive-ghost:** destructive text, transparent, tinted on hover
 - **link:** underline, no background
 
-Sizes: `default` (h-9), `sm` (h-8), `lg` (h-10), `xl` (h-11),
-`icon` (square, h-9 w-9).
+Sizes: `default` (h-9), `sm` (h-8, small type), `xs` (h-7, small
+type), `lg` (h-10), `xl` (h-11), `icon` and `icon-*` (square).
+A small control renders small type itself; do not add `text-xs` to
+a `sm` button, select, or input.
 
 ---
 

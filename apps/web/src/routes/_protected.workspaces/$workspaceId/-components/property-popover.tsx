@@ -297,7 +297,8 @@ export const PropertyPopover = ({
         />
         <PopoverPopup
           align="start"
-          className="min-w-64 overflow-clip *:data-[slot=popover-viewport]:p-0!"
+          className="min-w-64 overflow-clip"
+          padding="none"
         >
           <div className="bg-popover flex flex-col">
             {canEditViaComposer && (

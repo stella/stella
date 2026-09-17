@@ -2282,7 +2282,7 @@ const SearchDialogFooter = ({
         <SearchFooterHint translationKey="search.hintNavigate" />
         {mode === "pick" ? (
           <span className="hidden items-center gap-1 sm:inline-flex">
-            <kbd className="border-border bg-muted rounded border px-1 py-0.5 text-[0.625rem] leading-none">
+            <kbd className="border-border bg-muted text-3xs rounded border px-1 py-0.5 leading-none">
               ↵
             </kbd>
             {PICK_HINT_LABEL}
@@ -2293,10 +2293,11 @@ const SearchDialogFooter = ({
         {canAskAI && mode === "browse" && scope !== "registries" && (
           <Button
             aria-keyshortcuts="Tab"
-            className="text-muted-foreground hover:text-foreground h-auto gap-1.5 px-1 py-0.5 text-xs font-normal sm:text-xs"
+            className="h-auto gap-1.5"
             disabled={isAskingAI}
             onClick={onAskAI}
-            variant="ghost"
+            size="xs"
+            variant="muted"
           >
             {isAskingAI && <LoaderIcon className="size-3 animate-spin" />}
             <span className="sm:hidden">{t("common.askAI")}</span>

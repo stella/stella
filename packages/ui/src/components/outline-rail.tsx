@@ -585,7 +585,7 @@ export const OutlineRail = ({
             <TooltipPopup>{outlineEntryText(node.item)}</TooltipPopup>
           </Tooltip>
           {node.item.meta !== undefined && (
-            <span className="text-foreground-placeholder shrink-0 ps-2 text-[11px] tabular-nums">
+            <span className="text-foreground-placeholder text-2xs shrink-0 ps-2 tabular-nums">
               {node.item.meta}
             </span>
           )}

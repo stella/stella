@@ -212,12 +212,7 @@ export const SignalCard = ({
         ))}
       <span className="flex-1" />
       {canChat && (
-        <Button
-          className="text-muted-foreground"
-          onClick={askAboutThis}
-          size="sm"
-          variant="ghost"
-        >
+        <Button onClick={askAboutThis} size="sm" variant="muted">
           <MessageSquareIcon />
           {t("inbox.ask")}
         </Button>
@@ -229,10 +224,9 @@ export const SignalCard = ({
               render={
                 <Button
                   aria-label={t("inbox.snooze")}
-                  className="text-muted-foreground"
                   disabled={busy}
                   size="sm"
-                  variant="ghost"
+                  variant="muted"
                 />
               }
             >
@@ -582,10 +576,9 @@ const DismissPopover = ({ disabled, onDismiss }: DismissPopoverProps) => {
         render={
           <Button
             aria-label={t("inspector.review.dismiss")}
-            className="text-muted-foreground"
             disabled={disabled}
             size="sm"
-            variant="ghost"
+            variant="muted"
           />
         }
       >

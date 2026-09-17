@@ -66,8 +66,9 @@ export const MentionList = ({
       <PopoverPopup
         align="start"
         anchor={decorationNode}
-        className="max-h-72 w-72 max-w-[min(18rem,var(--available-width))] *:data-[slot=popover-positioner]:transition-none! *:data-[slot=popover-viewport]:p-1!"
+        className="max-h-72 w-72 max-w-[min(18rem,var(--available-width))] *:data-[slot=popover-positioner]:transition-none!"
         initialFocus={false}
+        padding="xs"
       >
         <div className="flex min-w-0 flex-col gap-1">
           {items.length === 0 && (

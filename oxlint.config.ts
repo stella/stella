@@ -2,6 +2,7 @@ import { defineConfig } from "oxlint";
 import type { OxlintOverride } from "oxlint";
 import core from "ultracite/oxlint/core";
 import react from "ultracite/oxlint/react";
+import shadcn from "ultracite/oxlint/shadcn";
 
 import {
   libraryIgnorePatterns,
@@ -15,6 +16,14 @@ import {
   RESULT_CONVENTION_ENABLED_GLOBS,
   RESULT_CONVENTION_EXCLUDE_GLOBS,
 } from "./scripts/result-boundary-globs.ts";
+import shadcnLintBaseline from "./scripts/shadcn-lint-baseline.json" with { type: "json" };
+import {
+  SHADCN_LINT_JS_PLUGINS,
+  SHADCN_LINT_POLICY_OVERRIDES,
+  SHADCN_LINT_RULES,
+  SHADCN_LINT_SETTINGS,
+  shadcnBacklogOverrides,
+} from "./scripts/shadcn-lint-policy.ts";
 
 // All workspaces run oxlint from the repo root via:
 //   cd ../.. && oxlint -c oxlint.config.ts --type-aware <workspace-dir>
@@ -577,8 +586,9 @@ const customCssClassNames = [
 ] satisfies string[];
 
 export default defineConfig({
-  extends: [core, react],
+  extends: [core, react, shadcn],
   settings: {
+    shadcn: SHADCN_LINT_SETTINGS,
     tailwindcss: {
       entryPoint: [
         { files: "apps/web/**", use: "apps/web/src/styles/app.css" },
@@ -611,6 +621,9 @@ export default defineConfig({
   },
   rules: {
     ...libraryRules,
+    // Design-system rules (@shadcn/lint): policy, overlap resolution, and
+    // backlog handling live in scripts/shadcn-lint-policy.ts.
+    ...SHADCN_LINT_RULES,
     // Override ultracite defaults for Stella
     // The generic rule fires on every sequential await, including the ones a
     // stream, a cursor, a rate limit, or an ordered write requires; it was
@@ -1009,6 +1022,7 @@ export default defineConfig({
   ],
 
   jsPlugins: [
+    ...SHADCN_LINT_JS_PLUGINS,
     stellaLowercasePluginSpecifier,
     "@tanstack/eslint-plugin-query",
     "@tanstack/eslint-plugin-router",
@@ -1174,6 +1188,8 @@ export default defineConfig({
   ],
 
   overrides: [
+    ...SHADCN_LINT_POLICY_OVERRIDES,
+    ...shadcnBacklogOverrides(shadcnLintBaseline),
     ...(core.overrides ?? []),
     ...libraryOverrides,
     {
@@ -2907,13 +2923,7 @@ export default defineConfig({
       rules: { "no-raw-colors/no-raw-colors": "off" },
     },
     {
-      // button-variants.ts(x) holds the variant styles that used to live
-      // in button.tsx (moved for only-export-components); the exemption
-      // follows the code.
-      files: [
-        "packages/ui/src/**/button.tsx",
-        "packages/ui/src/**/button-variants.tsx",
-      ],
+      files: ["packages/ui/src/**/button.tsx"],
       rules: {
         "no-raw-colors/no-raw-colors": "off",
         "no-inline-style-colors/no-inline-style-colors": "off",

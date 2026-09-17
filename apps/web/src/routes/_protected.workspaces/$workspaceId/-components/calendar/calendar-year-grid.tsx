@@ -125,7 +125,7 @@ const MiniMonth = ({
         {weekdayLabels.map((wd, i) => (
           <span
             className={cn(
-              "text-center text-[10px] leading-4",
+              "text-3xs text-center leading-4",
               "text-foreground-muted",
               weekend.has((firstWeekday + i) % 7) && "text-foreground-disabled",
             )}
@@ -169,7 +169,7 @@ const MiniDay = ({
     <span
       className={cn(
         "relative flex aspect-square items-center justify-center",
-        "text-[11px] leading-none",
+        "text-2xs leading-none",
         day.isToday &&
           "bg-primary text-primary-foreground rounded-full font-bold",
         day.isWeekend && !day.isToday && "text-foreground-muted",

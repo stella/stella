@@ -648,7 +648,7 @@ const ClipboardCard = ({
           </Button>
         ) : null}
         {index < 9 ? (
-          <kbd className="bg-muted text-muted-foreground shrink-0 rounded-md px-1.5 py-0.5 font-mono text-[10px] tabular-nums">
+          <kbd className="bg-muted text-muted-foreground text-3xs shrink-0 rounded-md px-1.5 py-0.5 font-mono tabular-nums">
             {PRIMARY_MODIFIER_LABEL}
             {index + 1}
           </kbd>
@@ -2497,7 +2497,7 @@ const ClipboardApp = () => {
                   align="inline-end"
                   className="pe-4 [&>kbd]:me-0"
                 >
-                  <kbd className="text-foreground-muted me-0 font-mono text-[10px]">
+                  <kbd className="text-foreground-muted text-3xs me-0 font-mono">
                     {PRIMARY_MODIFIER_LABEL}K
                   </kbd>
                 </InputGroupAddon>

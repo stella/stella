@@ -447,7 +447,7 @@ export function VerificationView() {
             >
               {stat.value}
             </div>
-            <div className="text-muted-foreground flex items-center gap-1.5 text-[11px]">
+            <div className="text-muted-foreground text-2xs flex items-center gap-1.5">
               {stat.state && <StateSwatch state={stat.state} />}
               {stat.label}
             </div>

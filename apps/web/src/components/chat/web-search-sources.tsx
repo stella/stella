@@ -54,7 +54,7 @@ export const WebSearchSources = ({ parts }: WebSearchSourcesProps) => {
           )}
         />
         <GlobeIcon className="text-muted-foreground size-3.5 shrink-0" />
-        <span className="text-muted-foreground text-[11px] font-medium tracking-wide uppercase">
+        <span className="text-muted-foreground text-2xs font-medium tracking-wide uppercase">
           {t("chat.webSearch.answer")}
         </span>
       </summary>
@@ -68,7 +68,7 @@ export const WebSearchSources = ({ parts }: WebSearchSourcesProps) => {
             {answer}
           </p>
         ))}
-        <p className="text-muted-foreground text-[11px] italic">
+        <p className="text-muted-foreground text-2xs italic">
           {t("chat.webSearch.answerDisclaimer")}
         </p>
       </div>

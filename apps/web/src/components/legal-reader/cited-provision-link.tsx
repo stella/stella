@@ -167,7 +167,7 @@ const CitedProvisionExpansion = ({
       {hasWording && <ProvisionWording wording={wording} />}
       {wording === undefined && isPending && <ProvisionWordingSkeleton />}
       <Button
-        className="h-6 w-fit px-2 text-xs"
+        className="h-6 w-fit px-2"
         onClick={onOpenProvision}
         size="sm"
         variant="outline"

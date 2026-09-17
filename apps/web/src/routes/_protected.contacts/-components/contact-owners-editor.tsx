@@ -164,7 +164,7 @@ const OwnerSelect = ({
               if (selectedOwner) {
                 return (
                   <UserIdentity
-                    avatarClassName="size-7 shrink-0 text-[0.625rem]"
+                    avatarClassName="size-7 shrink-0 text-3xs"
                     className="min-w-0"
                     image={selectedOwner.image}
                     name={selectedOwner.name}
@@ -177,7 +177,7 @@ const OwnerSelect = ({
 
             return (
               <UserIdentity
-                avatarClassName="size-7 shrink-0 text-[0.625rem]"
+                avatarClassName="size-7 shrink-0 text-3xs"
                 className="min-w-0"
                 image={member.image}
                 name={member.name}
@@ -194,7 +194,7 @@ const OwnerSelect = ({
         {members.map((member) => (
           <SelectItem key={member.value} value={member.value}>
             <UserIdentity
-              avatarClassName="size-7 shrink-0 text-[0.625rem]"
+              avatarClassName="size-7 shrink-0 text-3xs"
               className="min-w-0"
               image={member.image}
               name={member.name}

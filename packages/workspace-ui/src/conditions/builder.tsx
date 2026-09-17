@@ -313,7 +313,7 @@ const ConditionGutter = ({
       >
         <SelectTrigger
           aria-label={labels.match}
-          className="h-7 min-h-0 w-20 min-w-0 shrink-0 text-xs"
+          className="h-7 min-h-0 w-20 min-w-0 shrink-0"
           size="sm"
         >
           <SelectValue />
@@ -474,10 +474,7 @@ const LeafRow = ({
           }}
           value={String(fieldIndex)}
         >
-          <SelectTrigger
-            className="h-7 min-h-0 w-auto max-w-56 text-xs"
-            size="sm"
-          >
+          <SelectTrigger className="h-7 min-h-0 w-auto max-w-56" size="sm">
             <SelectValue placeholder={labels.fieldPlaceholder}>
               {field.label}
             </SelectValue>
@@ -644,7 +641,7 @@ const OperatorSelect = ({
       }}
       value={operator}
     >
-      <SelectTrigger className="h-7 min-h-0 w-auto min-w-24 text-xs" size="sm">
+      <SelectTrigger className="h-7 min-h-0 w-auto min-w-24" size="sm">
         <SelectValue>
           {() => labels.operator(field.valueType, operator)}
         </SelectValue>
@@ -692,7 +689,7 @@ const OperatorSelectFormula = ({
       }}
       value={operator}
     >
-      <SelectTrigger className="h-7 min-h-0 w-auto min-w-24 text-xs" size="sm">
+      <SelectTrigger className="h-7 min-h-0 w-auto min-w-24" size="sm">
         <SelectValue>
           {() => labels.operator(FORMULA_VALUE_TYPE, operator)}
         </SelectValue>
@@ -774,10 +771,7 @@ const LeafValueEditor = ({
           isMultiValue(operator) ? leafValueList(node) : leafValueString(node)
         }
       >
-        <SelectTrigger
-          className="h-7 min-h-0 w-auto min-w-28 text-xs"
-          size="sm"
-        >
+        <SelectTrigger className="h-7 min-h-0 w-auto min-w-28" size="sm">
           <SelectValue placeholder={labels.valuePlaceholder} />
         </SelectTrigger>
         <SelectPopup alignItemWithTrigger={false}>

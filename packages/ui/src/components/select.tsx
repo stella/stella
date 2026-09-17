@@ -107,7 +107,8 @@ const SelectTrigger = ({
 );
 
 const SELECT_TRIGGER_SIZE_CLASS_NAMES = {
-  [CONTROL_SIZE.sm]: "min-h-8 gap-1.5 px-[calc(--spacing(2.5)-1px)] sm:min-h-7",
+  [CONTROL_SIZE.sm]:
+    "min-h-8 gap-1.5 px-[calc(--spacing(2.5)-1px)] text-sm sm:min-h-7 sm:text-xs",
   [CONTROL_SIZE.default]: undefined,
   [CONTROL_SIZE.lg]: "min-h-10 sm:min-h-9",
 } as const satisfies Record<ControlSize, string | undefined>;

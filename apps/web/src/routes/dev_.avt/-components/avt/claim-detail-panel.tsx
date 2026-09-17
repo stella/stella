@@ -418,7 +418,7 @@ function ConflictDateline({
           }}
         />
         <div
-          className="absolute -bottom-5 flex -translate-x-1/2 items-center gap-1 text-[10px] font-semibold whitespace-nowrap"
+          className="text-3xs absolute -bottom-5 flex -translate-x-1/2 items-center gap-1 font-semibold whitespace-nowrap"
           style={{ left: `${pct(boundary.day)}%`, color: RECORD_CONFLICT_VAR }}
         >
           <FlagIcon className="size-3" />
@@ -433,7 +433,7 @@ function ConflictDateline({
               key={id}
               style={{ left: `${pct(day)}%` }}
             >
-              <span className="text-[10px] font-bold whitespace-nowrap">
+              <span className="text-3xs font-bold whitespace-nowrap">
                 {values[index]}
               </span>
               <span
@@ -453,10 +453,10 @@ function ConflictDateline({
             </div>
           );
         })}
-        <span className="text-muted-foreground absolute start-0 top-full text-[10px]">
+        <span className="text-muted-foreground text-3xs absolute start-0 top-full">
           {lo} {month}
         </span>
-        <span className="text-muted-foreground absolute end-0 top-full text-[10px]">
+        <span className="text-muted-foreground text-3xs absolute end-0 top-full">
           {hi} {month}
         </span>
       </div>
@@ -472,7 +472,7 @@ function ConflictDateline({
           </span>
         </div>
       ) : (
-        <p className="text-muted-foreground text-[11.5px] leading-relaxed">
+        <p className="text-muted-foreground text-2xs leading-relaxed">
           {t.rich("avt.claimDetail.recordConflict.oppositeSides", {
             emphasis: (chunks) => <i>{chunks}</i>,
           })}
@@ -522,7 +522,7 @@ function ReconcileTimeline() {
         type="range"
         value={day}
       />
-      <p className="text-muted-foreground text-[11px] leading-relaxed">
+      <p className="text-muted-foreground text-2xs leading-relaxed">
         {t.rich("avt.claimDetail.timeline.preview", {
           emphasis: (chunks) => <i>{chunks}</i>,
           strong: (chunks) => <b>{chunks}</b>,
@@ -783,14 +783,14 @@ export function ClaimDetailPanel({
         <p className="border-foreground-disabled border-s-2 py-0.5 ps-3 font-serif text-base leading-relaxed">
           &ldquo;{text}&rdquo;
         </p>
-        <p className="text-muted-foreground text-[11.5px] leading-relaxed">
+        <p className="text-muted-foreground text-2xs leading-relaxed">
           {t(CLAIM_TYPE_META[claim.type].hintKey)}
         </p>
 
         {review.override && (
           <div
             className={cn(
-              "flex items-start gap-1.5 rounded-md border px-2.5 py-2 text-[11.5px] leading-relaxed",
+              "text-2xs flex items-start gap-1.5 rounded-md border px-2.5 py-2 leading-relaxed",
               STATE_COLOR[review.override].chipClass,
             )}
             style={STATE_COLOR[review.override].chipStyle}
@@ -861,7 +861,7 @@ export function ClaimDetailPanel({
             {!settled && !isEscalated && (
               <span
                 className={cn(
-                  "rounded border px-2 py-0.5 text-[10.5px] font-bold tracking-wide uppercase",
+                  "text-2xs rounded border px-2 py-0.5 font-bold tracking-wide uppercase",
                   DISPOSITION_TONE_STYLE[guidance.tone].badgeClass,
                 )}
                 style={DISPOSITION_TONE_STYLE[guidance.tone].badgeStyle}
@@ -969,7 +969,7 @@ export function ClaimDetailPanel({
                 {t("avt.claimDetail.notVerifiable.reopen")}
               </Button>
               {review.reopened && (
-                <p className="text-muted-foreground text-[11px] leading-relaxed">
+                <p className="text-muted-foreground text-2xs leading-relaxed">
                   {t.rich("avt.claimDetail.notVerifiable.pending", {
                     strong: (chunks) => <b>{chunks}</b>,
                   })}

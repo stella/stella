@@ -169,8 +169,8 @@ export const AlphabetIndex = ({
           >
             <span
               className={cn(
-                "truncate rounded-full px-2.5 py-1 text-[0.65rem] leading-none font-semibold shadow-sm transition-[max-width,opacity,font-size] duration-150",
-                isHovered ? "max-w-72 text-[0.7rem] opacity-100" : "max-w-52",
+                "text-3xs truncate rounded-full px-2.5 py-1 leading-none font-semibold shadow-sm transition-[max-width,opacity,font-size] duration-150",
+                isHovered ? "text-2xs max-w-72 opacity-100" : "max-w-52",
                 (() => {
                   if (active) {
                     return (() => {

@@ -250,11 +250,11 @@ const BulkTrigger = ({ triggerVariant }: BulkTriggerProps) => {
         render={
           <Button
             aria-label={t("workspaces.properties.newColumn")}
-            className="text-muted-foreground hover:bg-accent gap-1 px-2 font-normal"
+            className="gap-1"
             size="xs"
             title={t("workspaces.properties.newColumn")}
             type="button"
-            variant="ghost"
+            variant="muted"
             {...guideAnchor(GUIDE_ANCHORS.tabularReviewAddColumn)}
           />
         }
@@ -645,10 +645,7 @@ const PropertyColumnsBody = ({
               }
               value={scopeDocType ?? SCOPE_ALL_VALUE}
             >
-              <SelectTrigger
-                className="h-7 min-h-0 w-auto min-w-36 text-xs"
-                size="sm"
-              >
+              <SelectTrigger className="h-7 min-h-0 w-auto min-w-36" size="sm">
                 <SelectValue />
               </SelectTrigger>
               <SelectPopup>

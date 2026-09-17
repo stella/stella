@@ -591,7 +591,7 @@ const ComposerNote = ({
         </Tooltip>
         <div className="flex items-center gap-1">
           <Button
-            className="h-6 px-2 text-[0.7rem]"
+            className="text-2xs h-6 px-2"
             onClick={item.onCancel}
             size="sm"
             type="button"
@@ -600,7 +600,7 @@ const ComposerNote = ({
             {t("common.cancel")}
           </Button>
           <Button
-            className="h-6 px-2 text-[0.7rem]"
+            className="text-2xs h-6 px-2"
             disabled={body.trim() === ""}
             size="sm"
             type="submit"

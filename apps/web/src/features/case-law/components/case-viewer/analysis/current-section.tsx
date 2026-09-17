@@ -136,7 +136,7 @@ export const CurrentSection = ({
         >
           <span className="min-w-0 flex-1">
             {parent !== undefined && parent !== null && (
-              <span className="text-muted-foreground block text-[0.7rem]">
+              <span className="text-muted-foreground text-2xs block">
                 {parent.label}
               </span>
             )}

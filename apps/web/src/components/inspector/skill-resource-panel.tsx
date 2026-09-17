@@ -300,7 +300,7 @@ export const SkillResourcePanel = ({
           <Tooltip
             content={`${tab.skillName} · ${tab.resourcePath}`}
             render={
-              <span className="text-muted-foreground truncate font-mono text-[10px]">
+              <span className="text-muted-foreground text-3xs truncate font-mono">
                 {tab.skillName}
               </span>
             }

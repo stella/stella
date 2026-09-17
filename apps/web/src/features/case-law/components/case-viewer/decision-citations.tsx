@@ -81,7 +81,6 @@ export const DecisionCitations = ({
             {t("errors.actionFailed")}
           </p>
           <Button
-            className="text-xs"
             onClick={() => {
               detached(refetch(), "case-law.citations-retry");
             }}
@@ -250,7 +249,6 @@ export const CitationList = ({
             {t("errors.actionFailed")}
           </p>
           <Button
-            className="text-xs"
             onClick={() => {
               detached(refetch(), "case-law.citations-retry");
             }}
@@ -287,7 +285,7 @@ export const CitationList = ({
       ))}
       {hasNextPage && (
         <Button
-          className="w-fit text-xs"
+          className="w-fit"
           disabled={isFetchingNextPage}
           onClick={() => {
             detached(fetchNextPage(), "case-law.citations-more");

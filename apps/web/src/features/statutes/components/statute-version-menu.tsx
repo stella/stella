@@ -65,7 +65,8 @@ export const StatuteVersionMenu = ({
       />
       <PopoverPopup
         align="end"
-        className="w-[min(28rem,var(--available-width))] p-0"
+        className="w-[min(28rem,var(--available-width))]"
+        padding="none"
         side="bottom"
       >
         <ol className="relative py-1">
@@ -111,7 +112,7 @@ export const StatuteVersionMenu = ({
                     >
                       {versionLabel(version)}
                     </span>
-                    <span className="text-muted-foreground mt-0.5 block text-[0.7rem] font-medium tracking-wide uppercase">
+                    <span className="text-muted-foreground text-2xs mt-0.5 block font-medium tracking-wide uppercase">
                       {statusLabel}
                     </span>
                   </span>

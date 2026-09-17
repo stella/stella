@@ -9,8 +9,7 @@ import {
 } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/button";
-import { buttonVariants } from "@stll/ui/button-variants";
+import { Button, buttonVariants } from "@stll/ui/button";
 import {
   Frame,
   FrameDescription,

@@ -4,8 +4,7 @@ import { CircleHelpIcon, ExternalLinkIcon } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/button";
-import { buttonVariants } from "@stll/ui/button-variants";
+import { Button, buttonVariants } from "@stll/ui/button";
 import { cn } from "@stll/ui/utils";
 
 import type { GuideAnchorProps } from "@/features/guides/guide-anchor";

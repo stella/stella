@@ -140,7 +140,7 @@ export const GroupByControl = ({
       >
         <SelectTrigger
           aria-label={ariaLabel ?? label ?? t("workspaces.views.groupBy")}
-          className="h-7 min-h-0 w-28 text-xs sm:h-6 sm:w-auto sm:min-w-24"
+          className="h-7 min-h-0 w-28 sm:h-6 sm:w-auto sm:min-w-24"
           size="sm"
         >
           <SelectValue placeholder={resolvedLabel}>{resolvedLabel}</SelectValue>
@@ -257,7 +257,7 @@ export const KanbanGroupingSettings = ({
         <Settings2Icon className="size-3.5" />
         <span className="hidden sm:inline">{t("common.settings")}</span>
       </PopoverTrigger>
-      <PopoverPopup align="end" className="w-80 p-2" side="bottom">
+      <PopoverPopup align="end" className="w-80" padding="sm" side="bottom">
         <div className="px-2 py-1.5 text-sm font-medium">
           {t("workspaces.views.viewSettings")}
         </div>

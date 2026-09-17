@@ -141,8 +141,9 @@ export const PromptSlashList = ({
         <PopoverPopup
           align="start"
           anchor={decorationNode}
-          className="w-72 max-w-[min(20rem,calc(100vw-2rem))] *:data-[slot=popover-viewport]:p-2!"
+          className="w-72 max-w-[min(20rem,calc(100vw-2rem))]"
           initialFocus={false}
+          padding="sm"
           side="top"
         >
           <p className="text-muted-foreground text-xs">
@@ -160,14 +161,15 @@ export const PromptSlashList = ({
       <PopoverPopup
         align="start"
         anchor={decorationNode}
-        className="w-80 max-w-[min(22rem,calc(100vw-2rem))] *:data-[slot=popover-viewport]:p-1!"
+        className="w-80 max-w-[min(22rem,calc(100vw-2rem))]"
         initialFocus={false}
+        padding="xs"
         side="top"
       >
         <div className="max-h-72 space-y-1 overflow-y-auto" ref={listRef}>
           {groups.map((group) => (
             <div key={group.section}>
-              <div className="text-muted-foreground px-2 py-1 text-[11px] font-medium tracking-wide uppercase">
+              <div className="text-muted-foreground text-2xs px-2 py-1 font-medium tracking-wide uppercase">
                 {t(SECTION_LABEL_KEYS[group.section])}
               </div>
               {group.items.map((item) => {
@@ -195,7 +197,7 @@ export const PromptSlashList = ({
                     <p className="text-foreground text-xs font-medium">
                       {getItemName(item)}
                     </p>
-                    <p className="text-muted-foreground line-clamp-2 text-[11px] leading-snug">
+                    <p className="text-muted-foreground text-2xs line-clamp-2 leading-snug">
                       {getItemSecondary(item)}
                     </p>
                   </button>

@@ -327,7 +327,7 @@ export const ChatMatterPicker = ({
           extra={
             extraCount > 0 ? (
               <span
-                className="bg-muted text-foreground rounded-sm px-1 text-[10px] font-medium tabular-nums"
+                className="bg-muted text-foreground text-3xs rounded-sm px-1 font-medium tabular-nums"
                 style={extraCountStyle}
               >
                 +{format.number(extraCount)}
@@ -508,7 +508,7 @@ const ClientMatterToggle = ({
       <span className="flex min-w-0 items-center gap-2">
         <span className="min-w-0 truncate">{group.label}</span>
         {groupSelectedCount > 0 && !groupAllSelected && (
-          <span className="text-muted-foreground ms-auto shrink-0 text-[10px] tabular-nums">
+          <span className="text-muted-foreground text-3xs ms-auto shrink-0 tabular-nums">
             {format.number(groupSelectedCount)}/
             {format.number(group.allMatters.length)}
           </span>

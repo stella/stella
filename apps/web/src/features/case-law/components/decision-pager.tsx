@@ -73,7 +73,7 @@ export const DecisionPager = ({
                 </span>
               ) : (
                 <PageLink
-                  className="h-7 min-h-0 min-w-7 px-1.5 text-xs tabular-nums"
+                  className="h-7 min-h-0 min-w-7 px-1.5 tabular-nums"
                   label={t("caseLaw.pagination.goToPage", {
                     page: String(page),
                   })}
@@ -89,7 +89,7 @@ export const DecisionPager = ({
         {model.nextPage !== null && model.nextPage > walkedCount ? (
           <Button
             aria-busy={isWalking}
-            className="h-7 min-h-0 text-xs"
+            className="h-7 min-h-0"
             disabled={isWalking}
             onClick={onWalkForward}
             size="sm"
@@ -125,7 +125,7 @@ export const DecisionPager = ({
         >
           <SelectTrigger
             aria-label={t("caseLaw.pagination.perPage")}
-            className="h-7 min-h-0 w-auto min-w-16 text-xs"
+            className="h-7 min-h-0 w-auto min-w-16"
             size="sm"
           >
             <SelectValue>{String(pageSize)}</SelectValue>
@@ -211,18 +211,13 @@ const StepLink = ({
 
   if (page === null) {
     return (
-      <Button
-        className="h-7 min-h-0 text-xs"
-        disabled
-        size="sm"
-        variant="ghost"
-      >
+      <Button className="h-7 min-h-0" disabled size="sm" variant="ghost">
         {body}
       </Button>
     );
   }
   return (
-    <PageLink className="h-7 min-h-0 text-xs" label={label} page={page}>
+    <PageLink className="h-7 min-h-0" label={label} page={page}>
       {body}
     </PageLink>
   );

@@ -14,6 +14,7 @@ import {
   type TextField,
 } from "@stll/api-contract/case-law-text-field";
 import { BidiText } from "@stll/ui/bidi-text";
+import { Button } from "@stll/ui/button";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
 import { cn } from "@stll/ui/utils";
 
@@ -724,9 +725,9 @@ const DecisionLanguageMenu = ({
     <Menu>
       <MenuTrigger
         aria-label={t("common.language")}
-        // Visually a quiet tag; the vertical padding extends the hit area
-        // without growing the row.
-        className="text-muted-foreground hover:text-foreground -my-2 inline-flex items-center gap-1 rounded-sm px-1.5 py-2 text-xs transition-colors"
+        // The negative margin keeps the button's own height out of the row:
+        // it reads as a quiet tag, not as a control.
+        render={<Button className="-my-2" size="xs" variant="muted" />}
       >
         <span className="uppercase">{displayLanguage}</span>
         <span aria-hidden="true">·</span>

@@ -128,7 +128,7 @@ const TeamMemberRow = ({
 }) => (
   <div className="bg-background flex items-center gap-2 rounded-md border px-3 py-2">
     <UserIdentity
-      avatarClassName="size-8 shrink-0 text-[0.625rem]"
+      avatarClassName="size-8 shrink-0 text-3xs"
       className="min-w-0 flex-1"
       image={image}
       name={name}
@@ -554,7 +554,7 @@ const CreateMatterDialogBody = ({
                             <ComboboxItem key={member.userId} value={member}>
                               <div className="flex items-center gap-2">
                                 <UserIdentity
-                                  avatarClassName="size-8 shrink-0 text-[0.625rem]"
+                                  avatarClassName="size-8 shrink-0 text-3xs"
                                   className="min-w-0 flex-1"
                                   image={member.user.image}
                                   name={member.user.name}

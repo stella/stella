@@ -218,7 +218,7 @@ export const BillingCodesDialog = ({
                     </span>
                     <span className="truncate text-sm">{code.label}</span>
                     {!code.active && (
-                      <span className="bg-muted text-muted-foreground shrink-0 rounded px-1.5 py-0.5 text-[0.625rem]">
+                      <span className="bg-muted text-muted-foreground text-3xs shrink-0 rounded px-1.5 py-0.5">
                         {t("billing.codes.inactive")}
                       </span>
                     )}
@@ -239,10 +239,10 @@ export const BillingCodesDialog = ({
                     </Button>
                     <Button
                       aria-label={t("common.delete")}
-                      className="text-destructive size-7"
+                      className="size-7"
                       onClick={() => handleDelete(code.id)}
                       size="icon"
-                      variant="ghost"
+                      variant="destructive-ghost"
                     >
                       <TrashIcon className="size-3.5" />
                     </Button>

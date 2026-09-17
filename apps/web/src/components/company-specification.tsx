@@ -192,7 +192,7 @@ const CompanySpecificationEditor = ({
             </span>
             {REGISTRY_RETURN_FIELDS[registry].map((token) => (
               <Button
-                className="h-auto min-h-11 px-2 py-1 text-xs"
+                className="h-auto min-h-11 px-2 py-1"
                 key={token}
                 onClick={() => insertToken(token)}
                 size="sm"

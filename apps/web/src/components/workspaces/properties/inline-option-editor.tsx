@@ -92,7 +92,7 @@ export const InlineOptionEditor = ({
   return (
     <div className="bg-muted/64 flex flex-col gap-2 rounded-[9px] border p-3">
       <div className="flex items-center gap-1.5">
-        <span className="text-muted-foreground text-[11px] font-medium tracking-[0.08em] uppercase">
+        <span className="text-muted-foreground text-2xs font-medium tracking-[0.08em] uppercase">
           {t("workspaces.properties.optionsLabel")}
         </span>
       </div>
@@ -185,10 +185,7 @@ const OptionRow = ({
             style={{ backgroundColor: resolveOptionColor(option.color).color }}
           />
         </PopoverTrigger>
-        <PopoverPopup
-          className="*:data-[slot=popover-viewport]:p-1!"
-          side="top"
-        >
+        <PopoverPopup padding="xs" side="top">
           <div className="grid grid-cols-8 gap-0.5">
             {optionColors.map((color) => (
               <PopoverClose

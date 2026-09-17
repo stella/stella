@@ -21,7 +21,7 @@ import type { JustificationContent, WorkspaceJustification } from "@/lib/types";
 import { useWorkspaceStore } from "@/lib/workspaces/store";
 
 const CITATION_CHIP_CLASSES =
-  "bg-primary/10 text-primary hover:bg-primary/20 inline-flex items-center align-baseline rounded-md px-1.5 py-0.5 text-[11px] font-medium not-italic transition-colors";
+  "bg-primary/10 text-primary hover:bg-primary/20 inline-flex items-center align-baseline rounded-md px-1.5 py-0.5 text-2xs font-medium not-italic transition-colors";
 
 const DOCX_CHIP_PREVIEW_CHARS = 32;
 
@@ -233,7 +233,7 @@ const DocxQuote = ({ citation }: DocxQuoteProps) => {
       <Tooltip
         content={t("common.unverifiedCitationHint")}
         render={
-          <span className="text-muted-foreground inline-flex max-w-[16rem] items-center gap-1 truncate align-baseline text-[11px] font-medium italic underline decoration-dotted underline-offset-2">
+          <span className="text-muted-foreground text-2xs inline-flex max-w-[16rem] items-center gap-1 truncate align-baseline font-medium italic underline decoration-dotted underline-offset-2">
             “{preview}” · {t("common.unverified")}
           </span>
         }

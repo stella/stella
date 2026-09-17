@@ -896,7 +896,7 @@ const ToolApprovalLeadingIcon = ({
       <span className="bg-background flex size-4 shrink-0 items-center justify-center rounded-sm border">
         <img
           alt=""
-          className="size-3 rounded-[2px] object-contain"
+          className="size-3 rounded-xs object-contain"
           height={12}
           src={iconHref}
           width={12}

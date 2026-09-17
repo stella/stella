@@ -262,7 +262,7 @@ const ExternalSourceIcon = ({
 }) => {
   if (iconHref) {
     return (
-      <span className="bg-background flex size-3 shrink-0 items-center justify-center rounded-[2px] border">
+      <span className="bg-background flex size-3 shrink-0 items-center justify-center rounded-xs border">
         <img
           alt=""
           className="size-2.5 rounded-[1px] object-contain"

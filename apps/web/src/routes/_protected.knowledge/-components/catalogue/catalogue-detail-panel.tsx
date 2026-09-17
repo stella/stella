@@ -275,7 +275,7 @@ const ExpandableText = ({ text }: { text: string }) => {
       </p>
       {(overflowing || expanded) && (
         <Button
-          className="text-muted-foreground h-auto p-0 text-xs"
+          className="text-muted-foreground h-auto p-0"
           onClick={() => setExpanded((prev) => !prev)}
           size="sm"
           type="button"

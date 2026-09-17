@@ -244,7 +244,7 @@ const TeamCell = ({ workspace }: CellProps) => (
       maxVisible={MAX_VISIBLE_AVATARS}
       members={workspace.members}
       size="size-5 sm:size-6"
-      textSize="text-[0.55rem] sm:text-[0.625rem]"
+      textSize="text-[0.55rem] sm:text-3xs"
     />
   </div>
 );
@@ -473,7 +473,7 @@ const MattersTableGroup = ({
                 aria-hidden
                 className={cn(
                   "bg-background ring-border flex size-5 shrink-0",
-                  "items-center justify-center rounded-full text-[0.625rem]",
+                  "text-3xs items-center justify-center rounded-full",
                   "font-medium tracking-tight ring-1",
                 )}
               >
@@ -495,7 +495,7 @@ const MattersTableGroup = ({
             <span
               className={cn(
                 "bg-background ring-border rounded-full px-1.5 py-0.5 ring-1",
-                "text-muted-foreground text-[0.625rem] tabular-nums",
+                "text-muted-foreground text-3xs tabular-nums",
               )}
             >
               {format.number(group.workspaces.length)}

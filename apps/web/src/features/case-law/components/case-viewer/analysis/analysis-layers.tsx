@@ -28,7 +28,7 @@ const Layer = ({
   const t = useTranslations();
   return (
     <section className="px-2 pt-4">
-      <h3 className="text-foreground-disabled flex items-center gap-1 pb-1 text-[0.6rem] font-medium tracking-wider uppercase">
+      <h3 className="text-foreground-disabled text-3xs flex items-center gap-1 pb-1 font-medium tracking-wider uppercase">
         <SparklesIcon aria-hidden className="size-3" />
         {t("caseLaw.analysis.aiLayer", { layer: label })}
       </h3>
@@ -61,7 +61,7 @@ export const AnalysisLayers = ({ analysis }: AnalysisLayersProps) => {
           <ul className="flex flex-wrap gap-1">
             {topics.map((topic) => (
               <li
-                className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-[0.65rem]"
+                className="bg-muted text-muted-foreground text-3xs rounded px-1.5 py-0.5"
                 key={topic}
               >
                 {topic}

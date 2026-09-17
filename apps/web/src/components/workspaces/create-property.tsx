@@ -186,10 +186,10 @@ export const CreateProperty = ({
             <DialogTrigger
               render={
                 <Button
-                  className="text-muted-foreground hover:bg-accent gap-1 px-2 font-normal"
+                  className="gap-1"
                   size="xs"
                   type="button"
-                  variant="ghost"
+                  variant="muted"
                 />
               }
             >
@@ -1000,10 +1000,7 @@ const DocumentTypeScopeRow = ({
         }
         value={value ?? SCOPE_ALL_VALUE}
       >
-        <SelectTrigger
-          className="h-7 min-h-0 w-auto min-w-40 text-xs"
-          size="sm"
-        >
+        <SelectTrigger className="h-7 min-h-0 w-auto min-w-40" size="sm">
           <SelectValue />
         </SelectTrigger>
         <SelectPopup>

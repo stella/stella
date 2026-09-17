@@ -198,7 +198,8 @@ export const TableFindBar = ({
           effect depended on where focus happened to be. */}
       <PopoverPopup
         align="end"
-        className="w-72 flex-col gap-2 p-2"
+        className="w-72 flex-col gap-2"
+        padding="sm"
         ref={popupRef}
       >
         <div className="flex items-center gap-1">

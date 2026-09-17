@@ -411,7 +411,7 @@ const EntityMetadataContent = ({
       <>
         <span
           className={cn(
-            "text-foreground-strong-muted inline-flex items-center gap-1 text-[10px] font-medium tracking-wide uppercase",
+            "text-foreground-strong-muted text-3xs inline-flex items-center gap-1 font-medium tracking-wide uppercase",
             isPending && "opacity-60",
           )}
         >
@@ -474,7 +474,7 @@ const EntityMetadataContent = ({
           </button>
           {isActive && activeJustification && fileFieldId !== null && (
             <div className="border-s-primary mx-2 mb-2 max-h-48 overflow-y-auto border-s-2 ps-3">
-              <div className="text-primary mb-1 text-[10px] font-semibold tracking-wide uppercase">
+              <div className="text-primary text-3xs mb-1 font-semibold tracking-wide uppercase">
                 {t("workspaces.justification")}
               </div>
               <div className="text-foreground-strong-muted text-xs leading-relaxed wrap-break-word">
@@ -661,7 +661,7 @@ const DocumentReferenceChip = ({ reference }: { reference: string }) => {
           // The `before` box widens the hit area without growing the chip;
           // it stays narrower horizontally so it cannot swallow clicks meant
           // for the row's other content.
-          className="bg-muted/60 text-foreground-strong-muted hover:bg-muted hover:text-foreground focus-visible:ring-ring relative inline-flex items-center rounded-sm px-1.5 py-0.5 font-mono text-[11px] transition-colors outline-none before:absolute before:-inset-x-2 before:-inset-y-3 before:content-[''] focus-visible:ring-2"
+          className="bg-muted/60 text-foreground-strong-muted hover:bg-muted hover:text-foreground focus-visible:ring-ring text-2xs relative inline-flex items-center rounded-sm px-1.5 py-0.5 font-mono transition-colors outline-none before:absolute before:-inset-x-2 before:-inset-y-3 before:content-[''] focus-visible:ring-2"
           onClick={() => {
             detached(copy(), "entity-metadata-panel.copy-document-reference");
           }}

@@ -66,10 +66,7 @@ export const CalendarHeader = ({
         >
           {headerLabel}
         </PopoverTrigger>
-        <PopoverPopup
-          className="*:data-[slot=popover-viewport]:p-2!"
-          side="bottom"
-        >
+        <PopoverPopup padding="sm" side="bottom">
           <div className="flex items-center justify-between pb-1">
             <Button
               aria-label={t("common.previous")}

@@ -57,7 +57,12 @@ export const SearchScopeFilter = ({
       >
         <ListFilterIcon className="size-4" />
       </PopoverTrigger>
-      <PopoverPopup layer="search-child" align="end" className="w-56 p-1">
+      <PopoverPopup
+        layer="search-child"
+        align="end"
+        className="w-56"
+        padding="xs"
+      >
         {Object.entries(SCOPE_LABELS).map(([value, label]) => (
           <Button
             key={value}

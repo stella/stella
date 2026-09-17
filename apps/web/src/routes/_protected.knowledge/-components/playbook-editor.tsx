@@ -1133,7 +1133,7 @@ const PlaybookStatusBadge = ({
             : undefined
         }
         render={
-          <span className="bg-success/15 text-success inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-medium tracking-wider uppercase" />
+          <span className="bg-success/15 text-success text-3xs inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 font-medium tracking-wider uppercase" />
         }
       >
         {t("knowledge.playbooks.approval.statusApproved")}
@@ -1142,7 +1142,7 @@ const PlaybookStatusBadge = ({
   }
 
   return (
-    <span className="bg-muted text-muted-foreground inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-medium tracking-wider uppercase">
+    <span className="bg-muted text-muted-foreground text-3xs inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 font-medium tracking-wider uppercase">
       {t("knowledge.playbooks.approval.statusDraft")}
     </span>
   );
@@ -1237,7 +1237,7 @@ const OutlineRail = ({
                 size="xs"
                 variant="ghost"
               >
-                <span className="text-foreground-ghost w-5 shrink-0 text-[10px] font-semibold tracking-[0.04em] tabular-nums">
+                <span className="text-foreground-ghost text-3xs w-5 shrink-0 font-semibold tracking-[0.04em] tabular-nums">
                   {String(index + 1).padStart(2, "0")}
                 </span>
                 <span

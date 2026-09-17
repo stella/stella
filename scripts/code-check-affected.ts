@@ -89,14 +89,19 @@ export const ALL_WORKSPACE_TYPECHECK_CACHE_INPUTS = [
   ...ALL_WORKSPACE_CACHE_INPUTS,
   ...TYPECHECK_ONLY_CACHE_INPUTS,
 ] as const;
-const OXLINT_CONFIGURATION_CACHE_INPUTS = [
+// Every module `oxlint.config.ts` imports is rule configuration: a row edited
+// in the ownership table, a glob in the result-boundary scope, or a file in the
+// design-system backlog changes what every workspace lint reports.
+// scripts/oxlint-config-inputs.test.ts holds this list to the config's imports
+// and to turbo.json.
+export const OXLINT_CONFIGURATION_CACHE_INPUTS = [
   "$TURBO_ROOT$/oxlint.config.ts",
   "$TURBO_ROOT$/oxlint.result-boundary.config.ts",
   "$TURBO_ROOT$/.oxlint-plugins/**",
-  // The ownership table is rule configuration: `oxlint.config.ts` builds
-  // `confine-owner`'s options from it, so a row edited here changes what every
-  // workspace lint reports.
   "$TURBO_ROOT$/scripts/ownership.ts",
+  "$TURBO_ROOT$/scripts/result-boundary-globs.ts",
+  "$TURBO_ROOT$/scripts/shadcn-lint-policy.ts",
+  "$TURBO_ROOT$/scripts/shadcn-lint-baseline.json",
 ] as const;
 export const LINT_ONLY_CACHE_INPUTS = [
   ...OXLINT_CONFIGURATION_CACHE_INPUTS,

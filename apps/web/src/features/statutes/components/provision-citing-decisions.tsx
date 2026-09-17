@@ -50,11 +50,11 @@ export const CitingDecisionItem = ({
       <BidiText as="span" className="text-foreground text-xs font-medium">
         {decision.caseNumber}
       </BidiText>
-      <span className="text-muted-foreground text-[0.7rem]">
+      <span className="text-muted-foreground text-2xs">
         {decided === null ? decision.court : `${decision.court} · ${decided}`}
       </span>
       {decision.sentenceText === null ? null : (
-        <span className="text-foreground-strong-muted line-clamp-3 text-[0.72rem] leading-snug">
+        <span className="text-foreground-strong-muted text-2xs line-clamp-3 leading-snug">
           {decision.sentenceText}
         </span>
       )}
@@ -116,7 +116,6 @@ export const ProvisionCitingDecisions = ({
           {t("errors.actionFailed")}
         </p>
         <Button
-          className="text-xs"
           onClick={() => {
             detached(refetch(), "statutes.citing-decisions-retry");
           }}
@@ -157,7 +156,7 @@ export const ProvisionCitingDecisions = ({
       </ul>
       {hasNextPage && (
         <Button
-          className="w-full text-xs"
+          className="w-full"
           disabled={isFetchingNextPage}
           onClick={() => {
             detached(fetchNextPage(), "statutes.citing-decisions-more");

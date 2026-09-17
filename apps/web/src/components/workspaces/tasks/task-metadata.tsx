@@ -271,7 +271,7 @@ export const OwnerPicker = ({
         {owner ? (
           <UserIdentity
             as="span"
-            avatarClassName="size-4 shrink-0 text-[10px]"
+            avatarClassName="size-4 shrink-0 text-3xs"
             className="gap-1.5"
             deleted={hasDeletedAccount(owner.deletedAt)}
             image={owner.image}
@@ -282,7 +282,7 @@ export const OwnerPicker = ({
           <span className="text-muted-foreground">{tCommon("unassigned")}</span>
         )}
       </PopoverTrigger>
-      <PopoverPopup className="w-64 p-2" side="bottom">
+      <PopoverPopup className="w-64" padding="sm" side="bottom">
         <div className="flex flex-col gap-2">
           <div className="flex max-h-56 flex-col overflow-y-auto">
             {selectableMembers?.map((member) => {
@@ -302,7 +302,7 @@ export const OwnerPicker = ({
                 >
                   <UserIdentity
                     as="span"
-                    avatarClassName="size-5 text-[10px]"
+                    avatarClassName="size-5 text-3xs"
                     image={candidate.image}
                     name={candidate.name}
                     nameClassName="text-sm font-normal"
@@ -358,7 +358,7 @@ export const AssigneePicker = ({
           key={a.user.id}
         >
           <UserIdentity
-            avatarClassName="size-4 text-[10px]"
+            avatarClassName="size-4 text-3xs"
             className="flex-1 gap-1.5"
             deleted={hasDeletedAccount(a.user.deletedAt)}
             image={a.user.image}
@@ -366,7 +366,7 @@ export const AssigneePicker = ({
             nameClassName="text-sm font-normal"
           />
           {hasDeletedAccount(a.user.deletedAt) ? (
-            <span className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-[10px]">
+            <span className="bg-muted text-muted-foreground text-3xs rounded px-1.5 py-0.5">
               {t("deletedAccount")}
             </span>
           ) : null}
@@ -395,10 +395,7 @@ export const AssigneePicker = ({
             <PlusIcon className="size-3.5" />
             <span>{t("addAssignee")}</span>
           </PopoverTrigger>
-          <PopoverPopup
-            className="*:data-[slot=popover-viewport]:p-1!"
-            side="bottom"
-          >
+          <PopoverPopup padding="xs" side="bottom">
             <div className="flex w-48 flex-col">
               {unassignedMembers.map((m) => {
                 const user = m.user;
@@ -416,7 +413,7 @@ export const AssigneePicker = ({
                   >
                     <UserIdentity
                       as="span"
-                      avatarClassName="size-5 text-[10px]"
+                      avatarClassName="size-5 text-3xs"
                       image={user.image}
                       name={user.name.trim() || tCommon("unknownUser")}
                       nameClassName="text-sm font-normal"

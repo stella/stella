@@ -5,6 +5,7 @@ import { ChevronRightIcon, CircleHelpIcon } from "lucide-react";
 import { useFormatter, useTranslations } from "use-intl";
 
 import { Temporal } from "@stll/time";
+import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { cn } from "@stll/ui/utils";
@@ -530,7 +531,13 @@ export const ToolCallCard = ({
           <Popover>
             <PopoverTrigger
               aria-label={t("knowledge.mcp.whatIsAnMcpServer")}
-              className="text-muted-foreground hover:text-foreground focus-visible:ring-ring/50 flex size-11 shrink-0 items-center justify-center rounded focus-visible:ring-2 focus-visible:outline-none"
+              render={
+                <Button
+                  className="size-11 shrink-0"
+                  size="icon"
+                  variant="muted"
+                />
+              }
             >
               <CircleHelpIcon className="size-3" />
             </PopoverTrigger>
@@ -575,7 +582,7 @@ export const ToolCallCard = ({
           <div className="bg-muted/25 space-y-3 rounded-b-lg px-3 pt-1 pb-3">
             {showMcpExactCall && (
               <div>
-                <div className="text-muted-foreground mb-1 text-[11px] font-medium">
+                <div className="text-muted-foreground text-2xs mb-1 font-medium">
                   {t("chat.toolCall.exactCall")}
                 </div>
                 <ToolCallCodeBlock
@@ -592,7 +599,7 @@ export const ToolCallCard = ({
               codeToolSource === undefined &&
               toolInput !== undefined && (
                 <div>
-                  <div className="text-muted-foreground mb-1 text-[11px] font-medium">
+                  <div className="text-muted-foreground text-2xs mb-1 font-medium">
                     {t("chat.toolCall.input")}
                   </div>
                   <ToolCallCodeBlock
@@ -603,7 +610,7 @@ export const ToolCallCard = ({
               )}
             {codeToolSource !== undefined && (
               <div>
-                <div className="text-muted-foreground mb-1 text-[11px] font-medium">
+                <div className="text-muted-foreground text-2xs mb-1 font-medium">
                   {t("chat.toolCall.sourceCode")}
                 </div>
                 <ToolCallCodeBlock
@@ -615,7 +622,7 @@ export const ToolCallCard = ({
             )}
             {codeToolLogs.length > 0 && (
               <div>
-                <div className="text-muted-foreground mb-1 text-[11px] font-medium">
+                <div className="text-muted-foreground text-2xs mb-1 font-medium">
                   {t("chat.toolCall.consoleLogs")}
                 </div>
                 <ToolCallCodeBlock
@@ -626,7 +633,7 @@ export const ToolCallCard = ({
             )}
             {hasOutput && "output" in part && (
               <div>
-                <div className="text-muted-foreground mb-1 text-[11px] font-medium">
+                <div className="text-muted-foreground text-2xs mb-1 font-medium">
                   {t("chat.toolCall.output")}
                 </div>
                 <ToolCallCodeBlock
@@ -639,12 +646,12 @@ export const ToolCallCard = ({
         )}
       {hasError && errorMessage && (
         <div className="max-w-xl py-1">
-          <p className="text-destructive text-[11px] leading-relaxed">
+          <p className="text-destructive text-2xs leading-relaxed">
             {errorMessage}
           </p>
           {rawErrorDetails !== undefined && (
             <details className="group">
-              <summary className="text-muted-foreground hover:text-foreground cursor-pointer text-[11px]">
+              <summary className="text-muted-foreground hover:text-foreground text-2xs cursor-pointer">
                 <span className="group-open:hidden">
                   {t("common.showDetails")}
                 </span>

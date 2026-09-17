@@ -421,7 +421,7 @@ export const AutocompletePlayground = () => {
         spellCheck="false"
       />
       <aside className="border-border bg-muted/30 text-muted-foreground rounded-md border p-3 font-mono text-xs">
-        <div className="text-foreground mb-1 font-sans text-[11px] tracking-wide uppercase">
+        <div className="text-foreground text-2xs mb-1 font-sans tracking-wide uppercase">
           last request sent to model
         </div>
         {debugInfo === null ? (

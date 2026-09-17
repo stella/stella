@@ -62,10 +62,7 @@ export const ChatTitleSuggestButton = ({
   return (
     <Button
       aria-label={label}
-      className={cn(
-        "text-muted-foreground hover:text-foreground shrink-0",
-        className,
-      )}
+      className={cn("shrink-0", className)}
       disabled={usedAnonymization || !hasMessages || isPending}
       onClick={onTrigger}
       onMouseDown={(event) => {
@@ -74,7 +71,7 @@ export const ChatTitleSuggestButton = ({
       size="icon-xs"
       tooltip={label}
       type="button"
-      variant="ghost"
+      variant="muted"
     >
       {isPending ? (
         <Loader2Icon aria-hidden="true" className="size-3.5 animate-spin" />
