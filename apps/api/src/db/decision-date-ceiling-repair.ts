@@ -21,18 +21,17 @@
  * Self-checkpointing: a repaired row leaves the selection predicate, so an
  * interrupted run resumes by running again, a completed run finds nothing, and
  * there is no cursor or bookkeeping table to keep. Completion is a catalog
- * fact, `pg_constraint.convalidated`, which is also what the API's startup gate
- * reads.
+ * fact, `pg_constraint.convalidated`, which the phase reads before it repairs
+ * anything and the API's startup gate reads before it serves.
  */
 
-import { panic } from "better-result";
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
 import { CASE_LAW_DECISION_DATE_BOUNDS_CONSTRAINT } from "../lib/decision-date-bounds-sql";
-import { isRecord } from "../lib/type-guards";
 import type { CorruptDecisionDateRow } from "../scripts/repair-decision-dates-plan";
 import { repairDecisionDateBatch } from "../scripts/repair-decision-dates-plan";
+import { readConstraintCompletion } from "./online-constraint-completion";
 import type {
   OnlineMigrationConnection,
   OnlineRepair,
@@ -63,18 +62,6 @@ const BATCH_STATEMENT_TIMEOUT = "5min";
  * its own setting afterwards.
  */
 const VALIDATE_LOCK_TIMEOUT = "1min";
-
-const READ_CONSTRAINT_STATE_SQL = `
-  SELECT constraint_state.convalidated AS "isValidated"
-  FROM pg_catalog.pg_constraint constraint_state
-  JOIN pg_catalog.pg_class table_relation
-    ON table_relation.oid = constraint_state.conrelid
-  JOIN pg_catalog.pg_namespace table_namespace
-    ON table_namespace.oid = table_relation.relnamespace
-  WHERE table_namespace.nspname = $1
-    AND table_relation.relname = $2
-    AND constraint_state.conname = $3
-`;
 
 const dialect = new PgDialect();
 
@@ -169,38 +156,17 @@ const validateConstraint = async (
   );
 };
 
-const assertConstraintValidated = async (
-  connection: OnlineMigrationConnection,
-): Promise<void> => {
-  const row = (
-    await connection.query(READ_CONSTRAINT_STATE_SQL, [
-      "public",
-      TABLE_NAME,
-      CASE_LAW_DECISION_DATE_BOUNDS_CONSTRAINT,
-    ])
-  ).at(0);
-  if (row === undefined) {
-    panic(
-      `Online repair ${REPAIR_NAME}: constraint ${CASE_LAW_DECISION_DATE_BOUNDS_CONSTRAINT} is missing`,
-    );
-  }
-  if (!isRecord(row) || typeof row["isValidated"] !== "boolean") {
-    panic(
-      `Online repair ${REPAIR_NAME}: constraint state has an invalid shape`,
-    );
-  }
-  if (!row["isValidated"]) {
-    panic(
-      `Online repair ${REPAIR_NAME} is not complete: constraint ${CASE_LAW_DECISION_DATE_BOUNDS_CONSTRAINT} is not validated`,
-    );
-  }
-};
-
 export const DECISION_DATE_CEILING_REPAIR: OnlineRepair = {
   name: REPAIR_NAME,
+  readCompletion: async (connection) =>
+    await readConstraintCompletion({
+      connection,
+      constraintName: CASE_LAW_DECISION_DATE_BOUNDS_CONSTRAINT,
+      repairName: REPAIR_NAME,
+      tableName: TABLE_NAME,
+    }),
   repair: async (connection) => {
     await repairUntilEmpty(connection);
     await validateConstraint(connection);
   },
-  assertComplete: assertConstraintValidated,
 };

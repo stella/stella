@@ -181,7 +181,7 @@ const linkedResourceIds = async (
     `)
   ).rows;
 
-test("the repair is registered, so every deploy runs it", () => {
+test("the repair is registered, so every deploy reconciles the policy", () => {
   // The registry is what makes this automatic. A repair module nobody lists is
   // an operator script with extra steps, which is the defect being fixed.
   expect(ONLINE_MIGRATION_REPAIRS).toContain(BETTER_AUTH_OAUTH_RESOURCE_REPAIR);
@@ -218,7 +218,9 @@ test("the deploy repair adds a new audience to an existing database", async () =
 
       // The deploy's repair, through the entry the migrator calls.
       await BETTER_AUTH_OAUTH_RESOURCE_REPAIR.repair(connection);
-      await BETTER_AUTH_OAUTH_RESOURCE_REPAIR.assertComplete(connection);
+      expect(
+        await BETTER_AUTH_OAUTH_RESOURCE_REPAIR.readCompletion(connection),
+      ).toEqual({ type: "complete" });
 
       // The boot census the API runs now passes, so the API would serve.
       await ensureBetterAuthOAuthPolicy(
@@ -253,7 +255,9 @@ test("a second repair run changes nothing", async () => {
       const links = await linkedResourceIds(transaction);
 
       await BETTER_AUTH_OAUTH_RESOURCE_REPAIR.repair(connection);
-      await BETTER_AUTH_OAUTH_RESOURCE_REPAIR.assertComplete(connection);
+      expect(
+        await BETTER_AUTH_OAUTH_RESOURCE_REPAIR.readCompletion(connection),
+      ).toEqual({ type: "complete" });
 
       expect(await resourceIdentifiers(transaction)).toEqual(resources);
       expect(await linkedResourceIds(transaction)).toEqual(links);
@@ -299,13 +303,11 @@ test("the repair refuses a conflicting resource definition", async () => {
           `)
         ).rows,
       ).toEqual([{ name: "conflicting resource name" }]);
-      // Refusing leaves the deploy to fail on the completion check rather than
+      // Refusing leaves the deploy to fail on the completion read rather than
       // on a half-written policy.
       expect(
-        await captureRejection(
-          BETTER_AUTH_OAUTH_RESOURCE_REPAIR.assertComplete(connection),
-        ),
-      ).toBeInstanceOf(Error);
+        await BETTER_AUTH_OAUTH_RESOURCE_REPAIR.readCompletion(connection),
+      ).toMatchObject({ type: "incomplete" });
 
       transaction.rollback();
     });

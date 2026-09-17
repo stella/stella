@@ -20,13 +20,14 @@
  * predicate, so a completed run changes nothing and an interrupted run
  * resumes by running again, and every row written after the migration
  * satisfies the constraint already. Completion is a catalog fact,
- * `pg_constraint.convalidated`, which is also what the API's startup gate
- * reads.
+ * `pg_constraint.convalidated`, which the phase reads before it walks anything
+ * and the API's startup gate reads before it serves.
  */
 
 import { panic } from "better-result";
 
 import { isRecord } from "../lib/type-guards";
+import { readConstraintCompletion } from "./online-constraint-completion";
 import type {
   OnlineMigrationConnection,
   OnlineRepair,
@@ -80,18 +81,6 @@ const REPAIR_TAIL_SQL = `
   WHERE id > $1
     AND "delete_opstamp" IS NOT NULL
     AND "delete_task_created_at" IS NULL
-`;
-
-const READ_CONSTRAINT_STATE_SQL = `
-  SELECT constraint_state.convalidated AS "isValidated"
-  FROM pg_catalog.pg_constraint constraint_state
-  JOIN pg_catalog.pg_class table_relation
-    ON table_relation.oid = constraint_state.conrelid
-  JOIN pg_catalog.pg_namespace table_namespace
-    ON table_namespace.oid = table_relation.relnamespace
-  WHERE table_namespace.nspname = $1
-    AND table_relation.relname = $2
-    AND constraint_state.conname = $3
 `;
 
 const readBatchBoundary = async (
@@ -171,38 +160,17 @@ const validateConstraint = async (
   );
 };
 
-const assertConstraintValidated = async (
-  connection: OnlineMigrationConnection,
-): Promise<void> => {
-  const row = (
-    await connection.query(READ_CONSTRAINT_STATE_SQL, [
-      "public",
-      TABLE_NAME,
-      CONSTRAINT_NAME,
-    ])
-  ).at(0);
-  if (row === undefined) {
-    panic(
-      `Online repair ${REPAIR_NAME}: constraint ${CONSTRAINT_NAME} is missing`,
-    );
-  }
-  if (!isRecord(row) || typeof row["isValidated"] !== "boolean") {
-    panic(
-      `Online repair ${REPAIR_NAME}: constraint state has an invalid shape`,
-    );
-  }
-  if (!row["isValidated"]) {
-    panic(
-      `Online repair ${REPAIR_NAME} is not complete: constraint ${CONSTRAINT_NAME} is not validated`,
-    );
-  }
-};
-
 export const CORPUS_PROJECTION_DELETE_RECEIPT_REPAIR: OnlineRepair = {
   name: REPAIR_NAME,
+  readCompletion: async (connection) =>
+    await readConstraintCompletion({
+      connection,
+      constraintName: CONSTRAINT_NAME,
+      repairName: REPAIR_NAME,
+      tableName: TABLE_NAME,
+    }),
   repair: async (connection) => {
     await repairFrom(connection, ID_FLOOR);
     await validateConstraint(connection);
   },
-  assertComplete: assertConstraintValidated,
 };
