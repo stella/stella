@@ -15,13 +15,32 @@ type DecisionDocketGrammarFor<TJurisdiction extends string> = {
 };
 
 /**
+ * Every dash a publisher types where a docket means a hyphen, as a character
+ * class body.
+ *
+ * The range is U+2010 HYPHEN through U+2015 HORIZONTAL BAR plus U+2212 MINUS
+ * SIGN: a court's typesetter writes the sheet separator in `8 As 287/2020-33`
+ * with the non-breaking U+2011 as readily as with an ASCII hyphen, and a
+ * PDF-to-text pass leaves any of the others behind. Exported as a source
+ * rather than a helper because the consumers are regular expressions as often
+ * as they are string replacements, and a second hand-written class is the way
+ * one spelling silently stops matching.
+ *
+ * The ASCII hyphen leads, where a character class reads it as a literal, so a
+ * consumer can append its own members without minting a reversed range.
+ */
+export const DECISION_DASH_CLASS_SOURCE = String.raw`-‐-―−`;
+
+const DECISION_DASH_RE = new RegExp(`[${DECISION_DASH_CLASS_SOURCE}]`, "gu");
+
+/**
  * Normalize compatibility characters, dash styles, and whitespace before a
  * jurisdiction grammar reads an identifier.
  */
 export const foldDecisionIdentifierInput = (raw: string): string =>
   raw
     .normalize("NFKC")
-    .replace(/[‐-―−]/gu, "-")
+    .replace(DECISION_DASH_RE, "-")
     .replace(/\s+/gu, " ")
     .trim();
 
@@ -60,8 +79,34 @@ const createDecisionDocketGrammar = <const TJurisdiction extends string>({
   },
 });
 
+/**
+ * A Czech docket introduced by a senate number or a chamber numeral: `21 Cdo
+ * 1234/2020`, `29 NSČR 55/2013`, `IV. ÚS 23/05`. Case-insensitive, because the
+ * registry mark is written all-caps (`NSČR`, `ÚS`) and title-case (`Cdo`,
+ * `As`) by different courts and lowercase by a reader typing a query.
+ */
+const CZE_SENATE_DOCKET_RE =
+  /^(?:(?:pl|i|ii|iii|iv)\.? ?|\d{1,3} ?)(?:\d{1,3} ?)?\p{L}{1,7}\.? \d{1,6}\/\d{2}(?:\d{2})?(?:-\d{1,4})?$/iu;
+
+/**
+ * A Czech docket whose registry mark stands alone, with no senate number in
+ * front: `Nad 224/2014`, `Konf 4/2011`, `Nt 408/2023`, `A 9/2003`.
+ *
+ * Case-sensitive on purpose, and this is the one place in the grammars where
+ * casing carries meaning. Court registry marks are title-case in this
+ * position, while an agency file number under the same `č. j.` label is an
+ * all-caps ministry acronym (`MZDR 6206/2025`). Nothing else in the shape
+ * tells the two apart, so a case-insensitive pattern here accepts every
+ * ministry reference as a court docket. The cost is that a reader typing such
+ * a docket all-lowercase reaches full-text search instead of the exact-docket
+ * branch.
+ */
+const CZE_LETTER_FIRST_DOCKET_RE =
+  /^\p{Lu}\p{Ll}{0,6}\.? \d{1,6}\/\d{2}(?:\d{2})?(?:-\d{1,4})?$/u;
+
 const CZE_DOCKET_PATTERNS = [
-  /^(?:(?:pl|i|ii|iii|iv)\.? ?)?(?:\d{1,3} ?)?\p{L}{1,7}\.? \d{1,6}\/\d{2}(?:\d{2})?(?:-\d{1,4})?$/iu,
+  CZE_SENATE_DOCKET_RE,
+  CZE_LETTER_FIRST_DOCKET_RE,
 ] as const;
 const SVK_DOCKET_RE =
   /^(?<senate>\d{1,3}) ?(?<registry>\p{L}{1,7})(?: ?\/ ?| )(?<ordinal>\d{1,6})\/(?<year>\d{4})$/iu;

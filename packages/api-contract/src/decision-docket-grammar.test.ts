@@ -9,6 +9,7 @@ import {
   DECISION_DOCKET_GRAMMARS,
   decisionDocketGrammarForJurisdiction,
   formatDecisionDocket,
+  parseDecisionDocket,
 } from "./decision-docket-grammar";
 import type { DecisionDocketJurisdiction } from "./decision-docket-grammar";
 import { DECISION_DOCKET_GRAMMAR_FIXTURES } from "./decision-docket-grammar.fixtures";
@@ -95,6 +96,28 @@ describe("declared decision docket grammars", () => {
       DECISION_DOCKET_GRAMMARS.POL,
     );
     expect(decisionDocketGrammarForJurisdiction("unknown")).toBeNull();
+  });
+
+  test("a Czech registry mark standing alone is a court docket, an acronym is not", () => {
+    for (const docket of ["Nad 224/2014", "Konf 4/2011", "A 9/2003"]) {
+      expect(DECISION_DOCKET_GRAMMARS.CZE.parse(docket)).not.toBeNull();
+    }
+    // Ministries label their file numbers with the same `č. j.` as a court
+    // labels a docket, so only the all-caps acronym separates the two.
+    for (const fileNumber of ["MZDR 6206/2025", "MFCR 12/2024"]) {
+      expect(DECISION_DOCKET_GRAMMARS.CZE.parse(fileNumber)).toBeNull();
+      expect(parseDecisionDocket(fileNumber)).toBeNull();
+    }
+  });
+
+  test("every dash spelling of a sheet separator folds to one docket", () => {
+    const canonical = DECISION_DOCKET_GRAMMARS.CZE.parse("8 As 287/2020-33");
+    expect(canonical).not.toBeNull();
+    for (const dash of ["‐", "‑", "‒", "–", "−"]) {
+      expect(
+        DECISION_DOCKET_GRAMMARS.CZE.parse(`8 As 287/2020${dash}33`),
+      ).toEqual(canonical);
+    }
   });
 
   for (const grammar of Object.values(DECISION_DOCKET_GRAMMARS)) {

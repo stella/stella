@@ -24,6 +24,26 @@ describe("splitCaseReference", () => {
     }
   });
 
+  test("takes the sheet number off however the court typesets the dash", () => {
+    // A court typesets the separator with the non-breaking U+2011 as readily
+    // as with an ASCII hyphen; reading only the hyphen leaves the sheet fused
+    // to the docket for that publisher, which is the fragmentation this
+    // exists to stop.
+    for (const dash of [
+      "\u2010",
+      "\u2011",
+      "\u2012",
+      "\u2013",
+      "\u2014",
+      "\u2212",
+    ]) {
+      expect(splitCaseReference(`10 A 46/2015${dash}66`)).toEqual({
+        caseNumber: "10 A 46/2015",
+        sheetNumber: "66",
+      });
+    }
+  });
+
   test("keeps a dash inside the docket itself", () => {
     expect(splitCaseReference("C-123/20-5")).toEqual({
       caseNumber: "C-123/20",

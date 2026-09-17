@@ -8,6 +8,8 @@
  * matches, because a citation names the docket alone.
  */
 
+import { DECISION_DASH_CLASS_SOURCE } from "@stll/api-contract/decision-docket-grammar";
+
 /**
  * Trailing `-<digits>` on a reference whose docket already carries a year.
  *
@@ -21,8 +23,16 @@
  * header prints `10 A 46/2015 - 66`. A single space on either side is part of
  * the suffix, not of the docket, so both forms reduce to one docket. The
  * docket group ends on a digit, so no spacing can survive into what is stored.
+ *
+ * Every dash spelling counts, through the grammars' own class: a publisher
+ * typesetting the separator as U+2011 names the same sheet as one typing an
+ * ASCII hyphen, and reading only the hyphen leaves the sheet fused to the
+ * docket for that publisher — which is the fragmentation this exists to stop.
  */
-const SHEET_SUFFIX = /^(?<docket>.*\/\d{2,4}) ?- ?(?<sheet>\d+)$/u;
+const SHEET_SUFFIX = new RegExp(
+  String.raw`^(?<docket>.*\/\d{2,4}) ?[${DECISION_DASH_CLASS_SOURCE}] ?(?<sheet>\d+)$`,
+  "u",
+);
 
 type CaseReference = {
   caseNumber: string;

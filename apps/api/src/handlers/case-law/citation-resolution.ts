@@ -7,8 +7,8 @@
  * than a scan. The work happens inside one statement per batch: nothing about
  * it scales with corpus size, and a run can stop and resume anywhere.
  *
- * Three rules keep a link honest, and each of them is a filter in the join
- * rather than a check afterwards:
+ * Every rule that keeps a link honest is a filter in the join rather than a
+ * check afterwards:
  *
  * - **Jurisdiction.** A case number is only unique within its own court
  *   system; the same string means different cases in different countries.
@@ -21,7 +21,19 @@
  *   an ambiguous link is worse than none: it puts a wrong edge in the
  *   citation graph and thus a wrong number in the authority ranking. Those
  *   rows are recorded as `ambiguous` for the adjudication tier to pick up.
- * - **The text names the type.** The first adjudication rule. A citation is
+ * - **The text names the sheet.** The first adjudication rule, and the only
+ *   one that reads an identity rather than a word. One docket names a case
+ *   file, and a court can rule in it more than once, so the docket alone
+ *   leaves those decisions indistinguishable. The court names the one it
+ *   means by the sheet the document sits on — "č. j. 8 As 287/2020-33" — and
+ *   that sheet is the last segment of the decision's ECLI. When exactly one
+ *   time-valid candidate answers to it, the link goes there.
+ * - **The text names the date.** The second adjudication rule, for the
+ *   citations that print no sheet: "rozsudek … ze dne 17. 2. 2021, č. j. …".
+ *   When exactly one candidate carries that date, the link goes there. Two
+ *   decisions of one file issued on one day leave the row ambiguous, which is
+ *   what it is.
+ * - **The text names the type.** The third adjudication rule. A citation is
  *   usually introduced with the decision's type ("nález sp. zn. …",
  *   "usnesením … č. j. …"); the extractor keeps that word as
  *   `cited_decision_type_hint`. When the key has several time-valid holders
@@ -29,7 +41,7 @@
  *   the citing court said so. A hint that names none of them is a word the
  *   corpus cannot use and the next rule applies; one that names several
  *   leaves the row ambiguous, since the next rule would contradict the text.
- * - **The text names the court.** The second adjudication rule. Regional
+ * - **The text names the court.** The fourth adjudication rule. Regional
  *   courts number files independently, so `65 A 3/2025` exists at several of
  *   them and the key alone never links a citation of a regional decision.
  *   The citing sentence says which court ("rozsudek Krajského soudu v
@@ -38,7 +50,7 @@
  *   sits at that court the link goes there. Both sides are compared through
  *   one normalization (`courtNameKeySql`), since the phrase is inflected and
  *   the stored name is not.
- * - **One file, one merits decision.** The third adjudication rule, and the
+ * - **One file, one merits decision.** The fifth adjudication rule, and the
  *   one structural exception to uniqueness. A constitutional court keeps one
  *   docket number for a whole file, so the nález on the merits and the
  *   procedural orders issued along the way all canonicalize to the same key.
@@ -114,6 +126,32 @@ const decisionTypeArray = (types: readonly string[]): SQL =>
     types.map((type) => sql`${type}`),
     sql`, `,
   )}]::varchar[]`;
+
+/**
+ * A candidate that answers to the sheet number the citing text printed.
+ *
+ * Two published spellings carry it, and a court uses whichever it uses. The
+ * ECLI's last segment is the sheet
+ * (`ECLI:CZ:NSS:2021:8.As.287.2020.33` is sheet 33 of `8 As 287/2020`), and a
+ * publisher that supplies the full file number instead leaves it on a
+ * `case-number` identifier row, where docket normalisation keeps the sheet on
+ * the key. Both are matched by concatenation rather than a pattern built from
+ * the column, so the sheet travels as a bind parameter; the column's CHECK
+ * keeps it to digits, which carry no `LIKE` metacharacter.
+ */
+const sheetMatchSql = sql`
+  b.cited_sheet_number IS NOT NULL
+  AND (
+        k.ecli LIKE ('%.' || b.cited_sheet_number)
+     OR EXISTS (
+          SELECT 1
+          FROM ${caseLawDecisionIdentifiers} sheet_identifier
+          WHERE sheet_identifier.decision_id = k.id
+            AND sheet_identifier.type = 'case-number'
+            AND sheet_identifier.normalized_value
+                  LIKE ('%-' || b.cited_sheet_number)
+        )
+      )`;
 
 /**
  * The hint vocabulary as a CTE, one row per family: which stored
@@ -322,11 +360,17 @@ const citationMatchingHoldersSql = ({
   limit,
 }: CitationMatchingHoldersSqlOptions): SQL => sql`
   SELECT DISTINCT ON (candidate.work_key)
-         candidate.id, candidate.court, candidate.decision_type
+         candidate.id,
+         candidate.court,
+         candidate.decision_type,
+         candidate.ecli,
+         candidate.decision_date
   FROM (
     SELECT ${holder}.id,
            ${holder}.court,
            ${holder}.decision_type,
+           ${holder}.ecli,
+           ${holder}.decision_date,
            ${holder}.language,
            CASE
              WHEN ${holder}.language_group_key IS NULL
@@ -349,6 +393,8 @@ const citationMatchingHoldersSql = ({
     SELECT ${holder}.id,
            ${holder}.court,
            ${holder}.decision_type,
+           ${holder}.ecli,
+           ${holder}.decision_date,
            ${holder}.language,
            CASE
              WHEN ${holder}.language_group_key IS NULL
@@ -402,6 +448,8 @@ const resolutionStatement = (selection: SQL): SQL => sql`
            c.citing_decision_id,
            c.cited_decision_type_hint,
            c.cited_court_hint,
+           c.cited_sheet_number,
+           c.cited_decision_date,
            citing.country AS citing_country,
            citing.decision_date AS citing_date,
            citing.language AS citing_language
@@ -423,7 +471,39 @@ const resolutionStatement = (selection: SQL): SQL => sql`
            m.merits_id,
            m.hinted_id,
            m.court_id,
+           m.sheet_id,
+           m.date_id,
            j.blocked,
+           -- The text named the sheet the decision sits on, and exactly one
+           -- candidate answers to it. The sheet is the last segment of the
+           -- decision's ECLI, so this is the decision's own published
+           -- identity rather than a word about it, and it is asked before
+           -- every hint. Bounded like the rules below: a count taken on a
+           -- truncated candidate set is a guess.
+           (
+                 m.n > 1
+             AND m.n < ${CITATION_CANDIDATE_SCAN_CAP}
+             AND b.cited_sheet_number IS NOT NULL
+             AND m.sheet_n = 1
+           ) AS sheet_matched,
+           -- The sentence dated the decision and exactly one candidate
+           -- carries that date. Read after the sheet, which is the more
+           -- specific of the two.
+           (
+                 m.n > 1
+             AND m.n < ${CITATION_CANDIDATE_SCAN_CAP}
+             AND b.cited_decision_date IS NOT NULL
+             AND m.date_n = 1
+           ) AS date_matched,
+           -- The sheet or the date named several candidates, so it narrowed
+           -- the file without naming a decision in it. Every rule below
+           -- reads a word rather than an identity, and a word that picks a
+           -- candidate the date excluded contradicts the citing court: two
+           -- decisions of one file issued on one day, one of them a nález,
+           -- would otherwise take the link on the one-file rule although the
+           -- text dated the citation to neither. The same withholding the
+           -- type hint already gets when it names several holders.
+           (m.sheet_n > 1 OR m.date_n > 1) AS identity_contradicted,
            -- The text said which decision it meant, and exactly one
            -- candidate is of that type: the link goes there, whatever the
            -- rest of the file looks like. Bounded like the one-file rule,
@@ -485,6 +565,18 @@ const resolutionStatement = (selection: SQL): SQL => sql`
                    AND ${courtNameKeySql(sql.raw("k.court"))}
                      = ${courtNameKeySql(sql.raw("b.cited_court_hint"))}
                ))[1] AS court_id,
+               count(*) FILTER (WHERE ${sheetMatchSql}
+               )::int AS sheet_n,
+               (array_agg(k.id) FILTER (WHERE ${sheetMatchSql}
+               ))[1] AS sheet_id,
+               count(*) FILTER (
+                 WHERE b.cited_decision_date IS NOT NULL
+                   AND k.decision_date = b.cited_decision_date
+               )::int AS date_n,
+               (array_agg(k.id) FILTER (
+                 WHERE b.cited_decision_date IS NOT NULL
+                   AND k.decision_date = b.cited_decision_date
+               ))[1] AS date_id,
                count(*) FILTER (
                  WHERE lower(k.decision_type) = ANY (${decisionTypeArray(MERITS_DECISION_TYPES)})
                )::int AS merits_n,
@@ -539,6 +631,9 @@ const resolutionStatement = (selection: SQL): SQL => sql`
            c.blocked,
            CASE
              WHEN c.n = 1 THEN c.sole_id
+             WHEN c.sheet_matched THEN c.sheet_id
+             WHEN c.date_matched THEN c.date_id
+             WHEN c.identity_contradicted THEN NULL
              WHEN c.hinted THEN c.hinted_id
              WHEN c.court_hinted THEN c.court_id
              WHEN c.one_file THEN c.merits_id
@@ -547,6 +642,11 @@ const resolutionStatement = (selection: SQL): SQL => sql`
            -- the arm that drew its edge, an unresolved row names none.
            CASE
              WHEN c.n = 1 THEN ${CITATION_RESOLUTION_RULE.UNIQUE_KEY}::text
+             WHEN c.sheet_matched
+               THEN ${CITATION_RESOLUTION_RULE.SHEET_NUMBER}::text
+             WHEN c.date_matched
+               THEN ${CITATION_RESOLUTION_RULE.DECISION_DATE}::text
+             WHEN c.identity_contradicted THEN NULL
              WHEN c.hinted THEN ${CITATION_RESOLUTION_RULE.TYPE_HINT}::text
              WHEN c.court_hinted
                THEN ${CITATION_RESOLUTION_RULE.COURT_HINT}::text
@@ -554,7 +654,11 @@ const resolutionStatement = (selection: SQL): SQL => sql`
                THEN ${CITATION_RESOLUTION_RULE.ONE_FILE_MERITS}::text
            END AS rule_id,
            CASE
-             WHEN c.n = 1 OR c.hinted OR c.court_hinted OR c.one_file
+             WHEN c.n = 1 OR c.sheet_matched OR c.date_matched
+               THEN ${CITATION_RESOLUTION_STATUS.RESOLVED}::text
+             WHEN c.identity_contradicted
+               THEN ${CITATION_RESOLUTION_STATUS.AMBIGUOUS}::text
+             WHEN c.hinted OR c.court_hinted OR c.one_file
                THEN ${CITATION_RESOLUTION_STATUS.RESOLVED}::text
              WHEN c.n > 1 THEN ${CITATION_RESOLUTION_STATUS.AMBIGUOUS}::text
              ELSE ${CITATION_RESOLUTION_STATUS.UNMATCHED}::text
