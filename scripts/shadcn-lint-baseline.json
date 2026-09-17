@@ -88,7 +88,6 @@
     "apps/web/src/components/chat/chat-composer-action-button.tsx": 1,
     "apps/web/src/components/chat/chat-context-meter.tsx": 1,
     "apps/web/src/components/chat/chat-draft-attachment-chips.tsx": 1,
-    "apps/web/src/components/chat/chat-edit-mode-selector.tsx": 9,
     "apps/web/src/components/chat/chat-image-attachment.tsx": 1,
     "apps/web/src/components/chat/chat-matter-picker.tsx": 15,
     "apps/web/src/components/chat/chat-message-actions-menu.tsx": 1,

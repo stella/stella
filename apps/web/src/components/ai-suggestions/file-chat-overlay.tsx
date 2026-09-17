@@ -2753,7 +2753,9 @@ const FileChatOverlayInner = ({
                   />
                 ) : undefined
               }
-              endExtras={<DocxEditSafetyChip safety={docxEditSafety} />}
+              endExtras={
+                <DocxEditSafetyChip safety={docxEditSafety ?? "safe"} />
+              }
               status="ready"
               threadRef={threadRef}
             />
