@@ -74,7 +74,6 @@ import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorSystemFields, errorTag } from "@/api/lib/errors/utils";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
-import { storedObservationHasDetail } from "@/api/lib/legal-search/ingestion-normalization";
 import type {
   ListingIdentity,
   ReconciliationListingItem,
@@ -84,6 +83,7 @@ import {
   listingIdentityKey,
   parseListingIdentityKey,
 } from "@/api/lib/legal-search/ingestion-types";
+import { storedObservationHasDetail } from "@/api/lib/legal-search/partial-observation-sql";
 import {
   countTerminalReconciliationItemsBySlice,
   parkReconciliationItem,

@@ -217,6 +217,10 @@ const PUBLIC_DECISION_READ_GATES = {
   "apps/api/src/lib/case-law/published-decisions.ts": {
     gate: PUBLIC_DECISION_READ_GATE.PREDICATE,
   },
+  "apps/api/src/lib/case-law/search-candidate-row-bound-sql.ts": {
+    gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
+    reason: "The candidate index's byte budget as a CHECK fragment; no query.",
+  },
   "apps/api/src/lib/case-law/search-sql.ts": {
     gate: PUBLIC_DECISION_READ_GATE.PREDICATE,
   },
@@ -243,6 +247,11 @@ const PUBLIC_DECISION_READ_GATES = {
   },
   "apps/api/src/lib/legal-search/document-context.ts": {
     gate: PUBLIC_DECISION_READ_GATE.PREDICATE,
+  },
+  "apps/api/src/lib/legal-search/partial-observation-sql.ts": {
+    gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
+    reason:
+      "States the listing-only predicate the readers and the index share; issues no query.",
   },
   [PG_FTS_FACETS_FILE]: { gate: PUBLIC_DECISION_READ_GATE.PREDICATE },
   "apps/api/src/lib/legal-search/pg-fts-legal-provider.ts": {

@@ -1,6 +1,4 @@
 import { panic } from "better-result";
-import type { Column, SQL } from "drizzle-orm";
-import { sql } from "drizzle-orm";
 
 import {
   DECISION_IDENTIFIER_MAX_COUNT,
@@ -36,15 +34,12 @@ import {
   isPersistableSourceDocumentId,
   type IngestionResult,
 } from "@/api/lib/legal-search/ingestion-types";
+import {
+  PARTIAL_OBSERVATION_FIELD,
+  PARTIAL_OBSERVATION_KEY,
+  type PartialObservation,
+} from "@/api/lib/legal-search/partial-observation-sql";
 import { isRecord } from "@/api/lib/type-guards";
-
-/** Pipeline-owned quality marker persisted with partial source observations. */
-const PARTIAL_OBSERVATION_KEY = "_stellaPartialObservation";
-
-export type PartialObservation = {
-  caseNumberIsPlaceholder: boolean;
-  isListingOnly: boolean;
-};
 
 const sanitizeDecisionIdentifier = (
   identifier: DecisionIdentifier,
@@ -75,17 +70,6 @@ const sanitizeDecisionIdentifiers = (
   ];
 };
 
-/**
- * The marker's own field names, spelled once. The reader below and the SQL
- * predicate beside it address the same stored path, and a literal repeated in
- * both would be free to drift: a query looking under a key the pipeline stopped
- * writing answers `false` for every row and says nothing about it.
- */
-const PARTIAL_OBSERVATION_FIELD = {
-  CASE_NUMBER_IS_PLACEHOLDER: "caseNumberIsPlaceholder",
-  IS_LISTING_ONLY: "isListingOnly",
-} as const satisfies Record<string, keyof PartialObservation>;
-
 export const partialObservationFromMetadata = (
   metadata: unknown,
 ): PartialObservation => {
@@ -101,43 +85,6 @@ export const partialObservationFromMetadata = (
       value[PARTIAL_OBSERVATION_FIELD.IS_LISTING_ONLY] === true,
   };
 };
-
-/**
- * Rows this reader would answer `isListingOnly: false` for, as a predicate
- * over a decision's metadata column.
- *
- * The marker lives inside the metadata blob rather than in a column of its
- * own, so this is a JSONB path extraction. Written as
- * `jsonb_extract_path_text` rather than `-> ... ->>` because the key is a
- * bound parameter and Postgres cannot resolve `jsonb -> unknown` — the
- * function's variadic `text[]` can.
- *
- * `IS DISTINCT FROM` rather than `<>`: the marker is written only when it is
- * true, so almost every row has no such key and the extraction yields NULL.
- * A row with no marker is a row that carries detail.
- *
- * It never drives an index. The reconciliation walk applies it inside an
- * already-bounded lookup (identities the publisher just listed, a hundred at
- * a time); the public reads in `published-decisions.ts` apply it beside their
- * own country, source and keyset predicates, so it filters candidate rows
- * those have already selected rather than choosing them.
- */
-export const storedObservationHasDetail = (metadata: Column): SQL =>
-  sql`jsonb_extract_path_text(${metadata}, ${PARTIAL_OBSERVATION_KEY}, ${PARTIAL_OBSERVATION_FIELD.IS_LISTING_ONLY}) is distinct from 'true'`;
-
-/**
- * The same predicate as raw SQL, for the lateral joins that address the
- * decision table under an alias and never see a Drizzle column.
- *
- * `metadataColumn` is a code constant (`"d.metadata"`), never request input.
- * The marker's path is interpolated as literals here because raw SQL carries
- * no parameters, and it is spelled from the same two constants the Drizzle
- * form and the JavaScript reader use, so the three cannot drift.
- */
-export const storedObservationHasDetailSqlFor = (
-  metadataColumn: string,
-): string =>
-  `jsonb_extract_path_text(${metadataColumn}, '${PARTIAL_OBSERVATION_KEY}', '${PARTIAL_OBSERVATION_FIELD.IS_LISTING_ONLY}') is distinct from 'true'`;
 
 /**
  * Sanitize text fields before DB insertion. Postgres rejects null bytes in

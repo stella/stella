@@ -44,11 +44,16 @@ import type {
   CaseLawResearchAnswerRun,
   CaseLawResearchColumnContent,
 } from "@/api/lib/case-law/research-answers";
+import {
+  CASE_LAW_SEARCH_CANDIDATE_ROW_BOUND_CONSTRAINT,
+  searchCandidateRowWithinBoundsSql,
+} from "@/api/lib/case-law/search-candidate-row-bound-sql";
 import type { ConstantMap } from "@/api/lib/constant-map";
 import {
   CASE_LAW_DECISION_DATE_BOUNDS_CONSTRAINT,
   decisionDateWithinBoundsSql,
 } from "@/api/lib/decision-date-bounds-sql";
+import { storedObservationHasDetail } from "@/api/lib/legal-search/partial-observation-sql";
 
 import {
   caseLawAnalysisWriterPolicies,
@@ -502,6 +507,17 @@ export const caseLawDecisions = p.pgTable(
       CASE_LAW_DECISION_DATE_BOUNDS_CONSTRAINT,
       sql`${t.decisionDate} IS NULL OR ${decisionDateWithinBoundsSql(t.decisionDate)}`,
     ),
+    // The byte budget `case_law_decisions_search_candidate_idx` needs its
+    // variable-width columns to stay inside; `varchar(n)` bounds characters,
+    // and a B-tree tuple is bounded in bytes.
+    p.check(
+      CASE_LAW_SEARCH_CANDIDATE_ROW_BOUND_CONSTRAINT,
+      searchCandidateRowWithinBoundsSql({
+        court: t.court,
+        decisionType: t.decisionType,
+        languageGroupKey: t.languageGroupKey,
+      }),
+    ),
     // Identity, in two halves that together cover every row exactly once.
     // Where the publisher states an id, that is the key. Where it does not,
     // the case number still serves, because such a source holds one court
@@ -614,6 +630,41 @@ export const caseLawDecisions = p.pgTable(
       .index("case_law_decisions_citation_candidate_idx")
       .on(t.citationKey, t.country, t.decisionDate, t.id)
       .where(isNotNull(t.citationKey)),
+    // The search's candidate read, answered entirely from the index. A page of
+    // ten is blended from a few hundred candidates the engine proposed, and
+    // each one was a random fetch into a heap far too large to cache: the ids
+    // arrive in engine-rank order, so the fetches are scattered and a cold
+    // request paid for every one of them.
+    //
+    // `id` is the lookup. Everything the request applies or reads rides along
+    // as a trailing key: the filters it may add (`country` always, the rest
+    // when the reader narrows) and the five columns the blend reads. Trailing
+    // keys rather than an INCLUDE payload for the same reason as
+    // `case_law_decisions_citation_candidate_idx`.
+    //
+    // Partial on the publication gate because that gate reads `metadata`, a
+    // JSONB blob no index can carry: as a predicate it costs nothing per row
+    // and drops the listing-only rows the read discards anyway. The predicate
+    // is built from `storedObservationHasDetail`, the same function the reads
+    // apply, so the two texts cannot drift apart and leave the index unusable.
+    //
+    // The three variable-width columns it carries are bounded by
+    // `case_law_decisions_search_candidate_row_bound` below, so no row can
+    // build a tuple this index cannot hold.
+    p
+      .index("case_law_decisions_search_candidate_idx")
+      .on(
+        t.id,
+        t.country,
+        t.sourceId,
+        t.court,
+        t.decisionDate,
+        t.decisionType,
+        t.language,
+        t.citationAuthority,
+        t.languageGroupKey,
+      )
+      .where(storedObservationHasDetail(t.metadata)),
     // Deferred-document queue, priority tier: decisions a reader asked
     // for, oldest request first. Partial on the pending predicate, so
     // the index stays proportional to the queue, not to the corpus.
