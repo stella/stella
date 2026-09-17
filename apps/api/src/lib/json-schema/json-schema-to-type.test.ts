@@ -1,7 +1,8 @@
-import { toJsonSchema } from "@valibot/to-json-schema";
 import type { JsonSchema } from "@valibot/to-json-schema";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
+
+import { toJsonSchema } from "@/api/lib/json-schema/valibot-to-json-schema";
 
 import {
   jsonSchemaToAsyncFnType,

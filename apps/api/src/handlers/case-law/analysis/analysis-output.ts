@@ -12,7 +12,6 @@
  * quietly stripped.
  */
 
-import { toJsonSchema } from "@valibot/to-json-schema";
 import type { JsonSchema } from "@valibot/to-json-schema";
 import * as v from "valibot";
 
@@ -28,7 +27,7 @@ import {
   CURRENT_ANALYSIS_VERSION,
 } from "@stll/legal-ast/analysis";
 
-import { stripInternalMetadata } from "@/api/lib/json-schema/valibot-json-schema-config";
+import { toJsonSchema } from "@/api/lib/json-schema/valibot-to-json-schema";
 
 import { normalizeAnalysisHeadingLabels } from "./category-catalog";
 
@@ -55,7 +54,7 @@ export type AnalysisOutput = v.InferOutput<typeof analysisOutputSchema>;
  */
 export const ANALYSIS_OUTPUT_JSON_SCHEMA: JsonSchema = toJsonSchema(
   analysisOutputSchema,
-  { errorMode: "throw", overrideAction: stripInternalMetadata },
+  { errorMode: "throw" },
 );
 
 type BuildAnalysisOptions = {

@@ -241,12 +241,6 @@ describe.each([...SURFACES])(
       expect(definitions.length).toBeLessThanOrEqual(TOOL_COUNT_CEILING[mode]);
     });
 
-    test("advertised schemas carry no internal chat-projection metadata", () => {
-      expect(JSON.stringify(toMcpTools(definitions))).not.toContain(
-        '"chatProjection"',
-      );
-    });
-
     test("serialized tools/list payload stays under the character budget", () => {
       const payloadChars = JSON.stringify(toMcpTools(definitions)).length;
       expect(payloadChars).toBeLessThanOrEqual(

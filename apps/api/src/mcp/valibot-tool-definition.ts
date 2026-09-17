@@ -1,4 +1,3 @@
-import { toJsonSchema } from "@valibot/to-json-schema";
 import { panic } from "better-result";
 import type * as v from "valibot";
 
@@ -7,7 +6,7 @@ import {
   type AgentInputNormalizationAnnotation,
 } from "@stll/agent-input";
 
-import { stripInternalMetadata } from "@/api/lib/json-schema/valibot-json-schema-config";
+import { toJsonSchema } from "@/api/lib/json-schema/valibot-to-json-schema";
 import type {
   McpToolDefinition,
   McpToolInputSchema,
@@ -20,7 +19,6 @@ const VALIBOT_MCP_JSON_SCHEMA_CONFIG = {
   errorMode: "throw",
   target: "draft-07",
   typeMode: "input",
-  overrideAction: stripInternalMetadata,
 } as const;
 
 const CHAT_STRING_ID_CUSTOM_SCHEMA_MESSAGES = new Set([

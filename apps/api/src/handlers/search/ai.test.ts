@@ -1,4 +1,3 @@
-import { toJsonSchema } from "@valibot/to-json-schema";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { resourceRef, RESOURCE_TYPE, toResourceName } from "@stll/api-contract";
@@ -10,6 +9,7 @@ import {
 } from "@/api/handlers/search/ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
+import { toJsonSchema } from "@/api/lib/json-schema/valibot-to-json-schema";
 import {
   clearRootDbMocks,
   rootDbSelectMock,
