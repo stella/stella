@@ -1,5 +1,13 @@
 # @stll/ui
 
+## 0.29.0
+
+### Minor Changes
+
+- [#3453](https://github.com/stella/stella/pull/3453) [`15b8cb3`](https://github.com/stella/stella/commit/15b8cb3b3ea8acbf7a99dca23751709aed7c852e) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add the `muted` and `destructive-ghost` Button variants and the `text-2xs` and `text-3xs` theme tokens. `buttonVariants` and `buttonAccessibleDisabledClass` now export from `@stll/ui/button`; the `@stll/ui/button-variants` entry is gone.
+
+- [#3453](https://github.com/stella/stella/pull/3453) [`15b8cb3`](https://github.com/stella/stella/commit/15b8cb3b3ea8acbf7a99dca23751709aed7c852e) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `PopoverPopup` takes a `padding` prop (`none`, `xs`, `sm`, `md`, `default`) for its viewport instead of callers reaching into the `popover-viewport` slot. `SelectTrigger size="sm"` and `Button size="sm"` render small text themselves. Theme tokens `shadow-floating` and `shadow-floating-ring` replace inline shadow recipes.
+
 ## 0.28.2
 
 ### Patch Changes
