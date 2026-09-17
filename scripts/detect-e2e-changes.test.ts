@@ -415,40 +415,48 @@ describe("detect-e2e-changes", () => {
     }
   });
 
-  test("checks the generated model rates only when their inputs change", () => {
+  test("checks the generated model snapshots only when their inputs change", () => {
     const plan = workflowJob("ci-plan");
     expect(plan).toContain(
-      `model_rates_drift_required: ${githubExpression("steps.changed-files.outputs.model_rates_drift_required")}`,
+      `model_catalog_drift_required: ${githubExpression("steps.changed-files.outputs.model_catalog_drift_required")}`,
     );
-    expect(plan).toContain('echo "model_rates_drift_required=true"');
-    expect(plan).toContain('echo "model_rates_drift_required=false"');
+    expect(plan).toContain('echo "model_catalog_drift_required=true"');
+    expect(plan).toContain('echo "model_catalog_drift_required=false"');
 
     const selector =
-      /\n *([^\n)]+)\)\n *model_rates_drift_required=true\n/u.exec(plan)?.[1];
+      /\n *([^\n)]+)\)\n *model_catalog_drift_required=true\n/u.exec(plan)?.[1];
     if (selector === undefined) {
-      throw new Error("ci-plan has no model-rate drift path selector");
+      throw new Error("ci-plan has no model-catalog drift path selector");
     }
     expect(new Set(selector.split("|"))).toEqual(
       new Set([
         ".github/workflows/ci.yml",
         "packages/ai-catalog/package.json",
+        "packages/ai-catalog/src/capabilities-overrides.ts",
+        "packages/ai-catalog/src/capabilities.gen.ts",
+        "packages/ai-catalog/src/document-input-overrides.ts",
         "packages/ai-catalog/src/index.ts",
         "packages/ai-catalog/src/model-rate-policy.ts",
         "packages/ai-catalog/src/model-rate.ts",
         "packages/ai-catalog/src/model-rates.gen.ts",
+        "packages/scripts/src/model-catalog-capabilities-gen.ts",
+        "packages/scripts/src/model-catalog-capabilities.ts",
         "packages/scripts/src/model-catalog-rates-gen.ts",
       ]),
     );
 
     const driftGuard = workflowStep(
       workflowJob("ci-checks"),
-      "Model rate snapshot drift guard",
+      "Model catalog snapshot drift guard",
     );
     expect(driftGuard).toContain(
-      "needs.ci-plan.outputs.model_rates_drift_required == 'true'",
+      "needs.ci-plan.outputs.model_catalog_drift_required == 'true'",
     );
     expect(driftGuard).toContain(
-      "run: bun --filter @stll/ai-catalog gen:rates --check",
+      "bun --filter @stll/ai-catalog gen:rates --check",
+    );
+    expect(driftGuard).toContain(
+      "bun --filter @stll/ai-catalog gen:capabilities --check",
     );
     expect(driftGuard).not.toContain("package_checks_required");
   });

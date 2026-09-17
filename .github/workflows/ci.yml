@@ -46,7 +46,7 @@ jobs:
       marketing_screenshots_required: ${{ steps.changed-files.outputs.marketing_screenshots_required }}
       migration_rehearsal_required: ${{ steps.changed-files.outputs.migration_rehearsal_required }}
       mobile_build_required: ${{ steps.changed-files.outputs.mobile_build_required }}
-      model_rates_drift_required: ${{ steps.changed-files.outputs.model_rates_drift_required }}
+      model_catalog_drift_required: ${{ steps.changed-files.outputs.model_catalog_drift_required }}
       package_checks_required: ${{ steps.changed-files.outputs.package_checks_required }}
       release_typecheck_required: ${{ steps.changed-files.outputs.release_typecheck_required }}
       stack_redaction_browsers_required: ${{ steps.changed-files.outputs.stack_redaction_browsers_required }}
@@ -142,7 +142,7 @@ jobs:
               echo "marketing_screenshots_required=true"
               echo "migration_rehearsal_required=true"
               echo "mobile_build_required=true"
-              echo "model_rates_drift_required=true"
+              echo "model_catalog_drift_required=true"
               echo "package_checks_required=true"
               echo "release_typecheck_required=false"
               echo "stack_redaction_browsers_required=true"
@@ -170,7 +170,7 @@ jobs:
               echo "marketing_screenshots_required=false"
               echo "migration_rehearsal_required=false"
               echo "mobile_build_required=false"
-              echo "model_rates_drift_required=false"
+              echo "model_catalog_drift_required=false"
               echo "package_checks_required=true"
               echo "release_typecheck_required=false"
               echo "stack_redaction_browsers_required=false"
@@ -210,7 +210,7 @@ jobs:
           legal_atlas_image_required=false
           migration_rehearsal_required=false
           mobile_build_required=false
-          model_rates_drift_required=false
+          model_catalog_drift_required=false
           release_typecheck_required=false
           stack_redaction_browsers_required=false
           web_build_required=false
@@ -283,12 +283,13 @@ jobs:
                 windows_scripts_required=true
                 ;;
             esac
-            # The committed rate snapshot is regenerated from models.dev. Run
-            # its network-backed byte comparison only when a PR changes the
-            # catalog inputs, generator, generated output, or this selector.
+            # The committed rate and capability snapshots are regenerated from
+            # models.dev and OpenRouter. Run their network-backed byte
+            # comparison only when a PR changes the catalog inputs, either
+            # generator, either generated output, or this selector.
             case "$file" in
-              .github/workflows/ci.yml|packages/ai-catalog/package.json|packages/ai-catalog/src/index.ts|packages/ai-catalog/src/model-rate-policy.ts|packages/ai-catalog/src/model-rate.ts|packages/ai-catalog/src/model-rates.gen.ts|packages/scripts/src/model-catalog-rates-gen.ts)
-                model_rates_drift_required=true
+              .github/workflows/ci.yml|packages/ai-catalog/package.json|packages/ai-catalog/src/capabilities-overrides.ts|packages/ai-catalog/src/capabilities.gen.ts|packages/ai-catalog/src/document-input-overrides.ts|packages/ai-catalog/src/index.ts|packages/ai-catalog/src/model-rate-policy.ts|packages/ai-catalog/src/model-rate.ts|packages/ai-catalog/src/model-rates.gen.ts|packages/scripts/src/model-catalog-capabilities-gen.ts|packages/scripts/src/model-catalog-capabilities.ts|packages/scripts/src/model-catalog-rates-gen.ts)
+                model_catalog_drift_required=true
                 ;;
             esac
             # The runner-image filesystem boundary: anything that changes what
@@ -325,7 +326,7 @@ jobs:
             echo "marketing_screenshots_required=$marketing_screenshots_required"
             echo "migration_rehearsal_required=$migration_rehearsal_required"
             echo "mobile_build_required=$mobile_build_required"
-            echo "model_rates_drift_required=$model_rates_drift_required"
+            echo "model_catalog_drift_required=$model_catalog_drift_required"
             echo "package_checks_required=$package_checks_required"
             echo "release_typecheck_required=$release_typecheck_required"
             echo "stack_redaction_browsers_required=$stack_redaction_browsers_required"
@@ -895,12 +896,16 @@ jobs:
         run: |
           bun apps/api/scripts/export-capability-catalog.ts --check
 
-      - name: Model rate snapshot drift guard
-        if: needs.ci-plan.outputs.model_rates_drift_required == 'true'
-        # This fetches models.dev and byte-compares the deterministic output
-        # with the committed snapshot. Keeping it path-scoped avoids adding a
-        # network dependency to unrelated pull requests.
-        run: bun --filter @stll/ai-catalog gen:rates --check
+      - name: Model catalog snapshot drift guard
+        if: needs.ci-plan.outputs.model_catalog_drift_required == 'true'
+        # These fetch models.dev and OpenRouter and byte-compare the
+        # deterministic output with the committed snapshots, so hand-editing a
+        # `.gen.ts` row instead of regenerating it cannot ship: only the
+        # nightly catalog job caught that before. Keeping them path-scoped
+        # avoids adding a network dependency to unrelated pull requests.
+        run: |
+          bun --filter @stll/ai-catalog gen:rates --check
+          bun --filter @stll/ai-catalog gen:capabilities --check
 
       - name: Capability description ledger
         if: needs.ci-plan.outputs.package_checks_required == 'true'
