@@ -629,6 +629,9 @@
     "inspector.review.passagesCount": [
       "fr"
     ],
+    "inspector.review.passagesToggle": [
+      "fr"
+    ],
     "inspector.review.playbookSection": [
       "cs",
       "es",

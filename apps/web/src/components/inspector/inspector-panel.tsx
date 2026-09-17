@@ -51,7 +51,7 @@ import { getInspectorView } from "@/components/inspector/view-registry";
 import { RenderStormRegion } from "@/components/render-storm-canary";
 import { MatterMetadataPanel } from "@/components/workspaces/matter-metadata-sheet";
 import { TaskDetailPanel } from "@/components/workspaces/tasks/task-detail-panel";
-import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { usePermissions } from "@/hooks/use-permissions";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -253,16 +253,6 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
     setDocxScrollTopByTab,
     setEditingDocxTabId,
   } = useDocxTabEditSession({ tabs });
-  // Pulse the fullscreen header's "Minimize" button briefly when the
-  // user lands on Full view with the Preview facet active — we drop
-  // them onto Metadata silently so we need a way to signal where to
-  // click if they actually wanted Preview.
-  const [flashingMinimizeTabId, setFlashingMinimizeTabId] = useState<
-    string | null
-  >(null);
-  const flashMinimizeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
-    null,
-  );
   const {
     commitRename,
     editingTabId,
@@ -303,23 +293,6 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
     },
     [closeTab, docxActionsRef.current, editingDocxTabId, setEditingDocxTabId],
   );
-
-  const flashMinimizeButton = useCallback((tabId: string) => {
-    if (flashMinimizeTimerRef.current !== null) {
-      clearTimeout(flashMinimizeTimerRef.current);
-    }
-    setFlashingMinimizeTabId(tabId);
-    flashMinimizeTimerRef.current = setTimeout(() => {
-      setFlashingMinimizeTabId(null);
-      flashMinimizeTimerRef.current = null;
-    }, 2200);
-  }, []);
-
-  useMountEffect(() => () => {
-    if (flashMinimizeTimerRef.current !== null) {
-      clearTimeout(flashMinimizeTimerRef.current);
-    }
-  });
 
   const handleOpenFullView = useCallback(async () => {
     if (!activeTab || activeTab.type !== "pdf") {
@@ -628,8 +601,6 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
             editingDocxTabId={editingDocxTabId}
             editingTabId={editingTabId}
             editValue={editValue}
-            flashMinimizeButton={flashMinimizeButton}
-            flashingMinimizeTabId={flashingMinimizeTabId}
             handleCloseTab={handleCloseTab}
             handleMinimizeFromFullView={handleMinimizeFromFullView}
             handleOpenFullView={handleOpenFullView}

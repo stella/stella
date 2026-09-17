@@ -2661,8 +2661,7 @@
       "unavailable": "Die verlinkte Website erlaubt keine sichere Vorschau. Wenn das Tool Dokumenttext zurückgegeben hat, erscheint er hier; andernfalls öffnen Sie das Original."
     },
     "facet": {
-      "anonymization": "Anonymisierung",
-      "previewInFullViewToast": "Die Vorschau ist hier die Hauptansicht. Klicken Sie auf die Schaltfläche zum Minimieren, um sie neben den Metadaten anzuzeigen."
+      "anonymization": "Anonymisierung"
     },
     "groups": {
       "addContext": "Kontext hinzufügen",
@@ -2763,6 +2762,7 @@
       "basisDivider": "und / oder",
       "basisPlaybook": "Prüfung anhand von {name}",
       "basisReferences": "{count, plural, one {Vergleich mit # Referenzdokument} other {Vergleich mit # Referenzdokumenten}}",
+      "basisToggle": "Was verglichen wurde",
       "changeBasis": "Prüfgrundlage ändern",
       "chatDraft": {
         "finding": "Ergebnis:",
@@ -2852,6 +2852,7 @@
       },
       "passageUnavailable": "Referenztext nicht verfügbar",
       "passagesCount": "{count, plural, one {# Passage} other {# Passagen}}",
+      "passagesToggle": "Passagen",
       "pendingCount": "{count, plural, one {# ausstehend} other {# ausstehend}}",
       "perspective": {
         "neutral": "Nicht angegeben",
@@ -2869,6 +2870,7 @@
         "present": "Ja"
       },
       "progressPositions": "{total, plural, one {{completed, number} von # Standpunkt} other {{completed, number} von # Standpunkten}}",
+      "proposedChange": "Vorgeschlagene Änderung",
       "proposing": "Standpunkte werden vorgeschlagen… {count, number}",
       "readOnlyRun": "In dieser Prüfung entschieden",
       "recommendation": "Empfehlung:",

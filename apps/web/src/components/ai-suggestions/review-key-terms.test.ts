@@ -262,6 +262,36 @@ describe("buildMarkedPair", () => {
     expect(segmentTexts(target.at(0)?.segments ?? [], "term")).toEqual([]);
   });
 
+  // A named phrase carries its side alone: the diff runs and the defined
+  // terms around it would bury the one phrase the finding is about.
+  test("a parameter delta silences the diff and the key terms", () => {
+    const { standard, target } = buildMarkedPair({
+      deltaStandardText: "PLN 1",
+      deltaTargetText: "the Purchase Price",
+      standard: [
+        {
+          blockId: "s1",
+          text: "The Seller's Warranties liability is limited to PLN 1 under the W&I Policy.",
+        },
+      ],
+      target: [
+        {
+          blockId: "t1",
+          text: "The Parties agree the aggregate liability shall not exceed the Purchase Price.",
+        },
+      ],
+    });
+    const targetSegments = target.at(0)?.segments ?? [];
+    expect(segmentTexts(targetSegments, "delta")).toEqual([
+      "the Purchase Price",
+    ]);
+    expect(segmentTexts(targetSegments, "diff")).toEqual([]);
+    expect(segmentTexts(targetSegments, "term")).toEqual([]);
+    const standardSegments = standard.at(0)?.segments ?? [];
+    expect(segmentTexts(standardSegments, "delta")).toEqual(["PLN 1"]);
+    expect(segmentTexts(standardSegments, "term")).toEqual([]);
+  });
+
   test("every side reconstructs its own block text", () => {
     const passages = [
       { blockId: "t1", text: "2.1 Cena činí 1 000 000 Kč." },

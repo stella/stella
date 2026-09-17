@@ -2661,8 +2661,7 @@
       "unavailable": "Wskazana strona nie pozwala na bezpieczny podgląd. Jeśli narzędzie zwróciło tekst dokumentu, pojawi się tutaj; w przeciwnym razie otwórz oryginał."
     },
     "facet": {
-      "anonymization": "Anonimizacja",
-      "previewInFullViewToast": "Podgląd jest tutaj widokiem głównym. Kliknij przycisk minimalizacji, aby wyświetlić go obok metadanych."
+      "anonymization": "Anonimizacja"
     },
     "groups": {
       "addContext": "Dodaj kontekst",
@@ -2763,6 +2762,7 @@
       "basisDivider": "i / lub",
       "basisPlaybook": "Kontrola według {name}",
       "basisReferences": "{count, plural, one {Porównanie z # dokumentem referencyjnym} few {Porównanie z # dokumentami referencyjnymi} many {Porównanie z # dokumentami referencyjnymi} other {Porównanie z # dokumentami referencyjnymi}}",
+      "basisToggle": "Co zostało porównane",
       "changeBasis": "Zmień podstawę weryfikacji",
       "chatDraft": {
         "finding": "Ustalenie:",
@@ -2852,6 +2852,7 @@
       },
       "passageUnavailable": "Tekst referencyjny niedostępny",
       "passagesCount": "{count, plural, one {# fragment} few {# fragmenty} many {# fragmentów} other {# fragmentu}}",
+      "passagesToggle": "Fragmenty",
       "pendingCount": "{count, plural, one {# oczekujące} few {# oczekujące} many {# oczekujących} other {# oczekujących}}",
       "perspective": {
         "neutral": "Nie określono",
@@ -2869,6 +2870,7 @@
         "present": "Tak"
       },
       "progressPositions": "{total, plural, one {{completed, number} z # stanowiska} few {{completed, number} z # stanowisk} many {{completed, number} z # stanowisk} other {{completed, number} z # stanowisk}}",
+      "proposedChange": "Proponowana zmiana",
       "proposing": "Proponowanie stanowisk… {count, number}",
       "readOnlyRun": "Rozstrzygnięto w tej weryfikacji",
       "recommendation": "Rekomendacja:",

@@ -2661,8 +2661,7 @@
       "unavailable": "El sitio referenciado no permite una vista previa segura. Si la herramienta devolvió el texto del documento, aparecerá aquí; si no, abra el original."
     },
     "facet": {
-      "anonymization": "Anonimización",
-      "previewInFullViewToast": "Aquí la vista previa es la vista principal. Haz clic en el botón de minimizar para verla junto a los metadatos."
+      "anonymization": "Anonimización"
     },
     "groups": {
       "addContext": "Añadir contexto",
@@ -2763,6 +2762,7 @@
       "basisDivider": "y / o",
       "basisPlaybook": "Revisión según {name}",
       "basisReferences": "{count, plural, one {Comparación con # documento de referencia} other {Comparación con # documentos de referencia}}",
+      "basisToggle": "Qué se comparó",
       "changeBasis": "Cambiar la base de revisión",
       "chatDraft": {
         "finding": "Hallazgo:",
@@ -2852,6 +2852,7 @@
       },
       "passageUnavailable": "Texto de referencia no disponible",
       "passagesCount": "{count, plural, one {# pasaje} other {# pasajes}}",
+      "passagesToggle": "Pasajes",
       "pendingCount": "{count, plural, one {# pendiente} other {# pendiente}}",
       "perspective": {
         "neutral": "No especificado",
@@ -2869,6 +2870,7 @@
         "present": "Presente"
       },
       "progressPositions": "{total, plural, one {{completed, number} de # posición} other {{completed, number} de # posiciones}}",
+      "proposedChange": "Cambio propuesto",
       "proposing": "Proponiendo posiciones… {count, number}",
       "readOnlyRun": "Decidido en esta revisión",
       "recommendation": "Recomendación:",

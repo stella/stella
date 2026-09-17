@@ -302,7 +302,10 @@ export const ReviewBar = ({
     };
   });
 
-  if (total === 0) {
+  // Nothing to step through, or nothing to step through it in: until the
+  // editor has painted the document there are no blocks to walk, and a bar
+  // floating over an empty pane promises actions that cannot land yet.
+  if (total === 0 || documentBlocks.length === 0) {
     return null;
   }
 

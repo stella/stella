@@ -4,7 +4,10 @@ import { describe, expect, test } from "bun:test";
 
 import { ReviewAlignedPair } from "@/components/ai-suggestions/review-aligned-pair";
 import type { ReviewDelta } from "@/components/ai-suggestions/review-delta";
-import { ReviewDeltaView } from "@/components/ai-suggestions/review-delta-view";
+import {
+  PassagesDisclosure,
+  ReviewDeltaView,
+} from "@/components/ai-suggestions/review-delta-view";
 import { ReviewPresenceMatrix } from "@/components/ai-suggestions/review-presence-matrix";
 import { ReviewTermTable } from "@/components/ai-suggestions/review-term-row";
 
@@ -47,12 +50,10 @@ describe("review delta view dispatch", () => {
     };
     const element = ReviewDeltaView({
       delta,
-      impact: "unfavourable",
-      label: "Notice period",
       standard: side,
       target: side,
     });
-    expect(childTypes(element)).toEqual([ReviewTermTable, ReviewAlignedPair]);
+    expect(childTypes(element)).toEqual([ReviewTermTable, PassagesDisclosure]);
   });
 
   // The delta names the exact phrase that differs, which is what the pair
@@ -65,14 +66,15 @@ describe("review delta view dispatch", () => {
     };
     const element = ReviewDeltaView({
       delta,
-      impact: "unfavourable",
-      label: "Notice period",
       standard: side,
       target: side,
     });
-    const pair = childElements(element).find(
-      (child) => child.type === ReviewAlignedPair,
+    // The pair sits behind the passages disclosure, as its children.
+    const disclosure = childElements(element).find(
+      (child) => child.type === PassagesDisclosure,
     );
+    const pair = readProp(disclosure, "children");
+    expect(isValidElement(pair) && pair.type).toBe(ReviewAlignedPair);
     expect(readProp(pair, "delta")).toBe(delta);
   });
 
@@ -82,14 +84,12 @@ describe("review delta view dispatch", () => {
     const delta: ReviewDelta = { items: [], kind: "enumeration" };
     const element = ReviewDeltaView({
       delta,
-      impact: "neutral",
-      label: "Leakage definition",
       standard: side,
       target: side,
     });
     expect(childTypes(element)).toEqual([
       ReviewPresenceMatrix,
-      ReviewAlignedPair,
+      PassagesDisclosure,
     ]);
   });
 
@@ -102,14 +102,12 @@ describe("review delta view dispatch", () => {
     };
     const element = ReviewDeltaView({
       delta,
-      impact: "unfavourable",
-      label: "Losses",
       standard: side,
       target: side,
     });
     expect(childTypes(element)).toEqual([
       ReviewPresenceMatrix,
-      ReviewAlignedPair,
+      PassagesDisclosure,
     ]);
   });
 
@@ -117,8 +115,6 @@ describe("review delta view dispatch", () => {
     const delta: ReviewDelta = { kind: "language" };
     const element = ReviewDeltaView({
       delta,
-      impact: "unfavourable",
-      label: "Fairly Disclosed",
       standard: side,
       target: side,
     });
@@ -129,8 +125,6 @@ describe("review delta view dispatch", () => {
   test("the reference name overrides the standard column label", () => {
     const element = ReviewDeltaView({
       delta: { kind: "language" },
-      impact: "neutral",
-      label: "Governing law",
       standard: side,
       standardLabel: "Standard (Master NDA)",
       target: side,

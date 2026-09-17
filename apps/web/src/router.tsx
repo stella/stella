@@ -3,6 +3,7 @@ import { createRouter } from "@tanstack/react-router";
 import { setupRouterSsrQueryIntegration } from "@tanstack/react-router-ssr-query";
 import { enableMapSet } from "immer";
 
+import { installDocxDocumentCacheInvalidation } from "@/components/docx/docx-document-cache";
 import {
   DefaultErrorComponent,
   DefaultNotFoundComponent,
@@ -34,6 +35,7 @@ export function getRouter() {
     },
   });
   installPDFDocumentCleanup(queryClient);
+  installDocxDocumentCacheInvalidation(queryClient);
   installChatRuntimeCleanup(queryClient);
   installTableStoreReconcile(queryClient);
   let readCaughtRouteTemplate = () => "unknown";

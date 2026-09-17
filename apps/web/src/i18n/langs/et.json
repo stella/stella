@@ -2661,8 +2661,7 @@
       "unavailable": "Viidatud sait ei luba turvalist eelvaadet. Kui tööriist tagastas dokumendi teksti, kuvatakse see siin; muul juhul avage originaal."
     },
     "facet": {
-      "anonymization": "Anonüümimine",
-      "previewInFullViewToast": "Eelvaade on siin põhivaade. Klõpsa minimeerimisnuppu, et näha seda metaandmete kõrval."
+      "anonymization": "Anonüümimine"
     },
     "groups": {
       "addContext": "Lisa kontekst",
@@ -2763,6 +2762,7 @@
       "basisDivider": "ja / või",
       "basisPlaybook": "Kontroll juhendi {name} alusel",
       "basisReferences": "{count, plural, one {Võrdlus # võrdlusdokumendiga} other {Võrdlus # võrdlusdokumendiga}}",
+      "basisToggle": "Mida võrreldi",
       "changeBasis": "Muuda ülevaatuse alust",
       "chatDraft": {
         "finding": "Leid:",
@@ -2852,6 +2852,7 @@
       },
       "passageUnavailable": "Võrdlusteksti pole saadaval",
       "passagesCount": "{count, plural, one {# lõik} other {# lõiku}}",
+      "passagesToggle": "Lõigud",
       "pendingCount": "{count, plural, one {# ootel leid} other {# ootel leidu}}",
       "perspective": {
         "neutral": "Täpsustamata",
@@ -2869,6 +2870,7 @@
         "present": "Jah"
       },
       "progressPositions": "{total, plural, one {{completed, number} ühest seisukohast} other {{completed, number} #-st seisukohast}}",
+      "proposedChange": "Kavandatav muudatus",
       "proposing": "Seisukohtade pakkumine… {count, number}",
       "readOnlyRun": "Otsustatud selle ülevaatuse käigus",
       "recommendation": "Soovitus:",

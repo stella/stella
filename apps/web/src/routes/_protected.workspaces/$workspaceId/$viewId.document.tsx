@@ -53,6 +53,10 @@ import {
 } from "@/components/docx-preview-zoom";
 import type { DocxBrowserEditorActions } from "@/components/docx/docx-browser-editor";
 import { shouldUseDocxBrowserEditor } from "@/components/docx/docx-browser-editor.logic";
+import { DocxEditorActionBar } from "@/components/docx/docx-editor-action-bar";
+import { DocxEditorSlot } from "@/components/docx/docx-editor-host";
+import { DOCX_EDITOR_SLOT } from "@/components/docx/docx-editor-host.logic";
+import type { DocxEditorSlotBindings } from "@/components/docx/docx-editor-host.logic";
 import { DocxLoadingShell } from "@/components/docx/docx-loading-shell";
 import {
   DOCUMENT_PANE,
@@ -112,16 +116,6 @@ import { loadDocumentEntityWithChatPrefetch } from "./-document-loader";
 const ReadOnlyDocxViewer = lazy(async () => {
   const m = await import("@/components/docx/app-docx-editor");
   return { default: m.DocxEditor };
-});
-
-// Lazy-load DocxBrowserEditor so the @stll/folio-react editor graph
-// (DocxEditor, FormattingBar, prosemirror-tables, yjs, utif2, …)
-// stays out of the eager preload list. Without this the static
-// import below pulled the whole vendor-folio chunk (~490 KB gz)
-// into every page load via the route tree.
-const DocxBrowserEditor = lazy(async () => {
-  const m = await import("@/components/docx/docx-browser-editor");
-  return { default: m.DocxBrowserEditor };
 });
 
 const OfficeFileViewer = lazy(async () => {
@@ -654,6 +648,53 @@ function RouteComponentInner({
   });
   const [docxLatestVersionDialogOpen, setDocxLatestVersionDialogOpen] =
     useState(false);
+
+  // What the hosted editor tells this pane. Stable for the route's lifetime:
+  // the registry rewrites a claim only when something in it actually changed,
+  // and a claim rewritten every render would churn the host on every keystroke.
+  const handleDocxBlockedUnlock = useLatestCallback(() => {
+    setDocxLatestVersionDialogOpen(true);
+  });
+  const handleDocxClose = useLatestCallback(() => {
+    setDocxUnlocked(false);
+    if (isLeavingDocxRef.current) {
+      return;
+    }
+    detached(
+      navigate({ search: (prev) => ({ ...prev, editing: undefined }) }),
+      "document.navigate",
+    );
+  });
+  const handleDocxSaved = useLatestCallback((savedFieldId: string) => {
+    setDocxUnlocked(false);
+    setActiveFieldId(savedFieldId);
+    if (isLeavingDocxRef.current) {
+      return;
+    }
+    detached(
+      navigate({
+        replace: true,
+        search: (prev) => ({
+          ...prev,
+          editing: undefined,
+          field: savedFieldId,
+          pdfPage: undefined,
+        }),
+      }),
+      "document.navigate",
+    );
+  });
+  const docxEditorBindings = useMemo(
+    () =>
+      ({
+        actionsRef: docxActionsRef,
+        onBlockedUnlock: handleDocxBlockedUnlock,
+        onClose: handleDocxClose,
+        onSaved: handleDocxSaved,
+        onUnlockedChange: setDocxUnlocked,
+      }) satisfies DocxEditorSlotBindings,
+    [handleDocxBlockedUnlock, handleDocxClose, handleDocxSaved],
+  );
   const setIsPDFPageOrganizerOpen = (open: boolean) => {
     detached(
       navigate({
@@ -840,7 +881,10 @@ function RouteComponentInner({
           facet={inspectorFacet}
           fieldId={fieldId}
           fileLabel={activeFileLabel}
-          key={`${fieldId}:${filePropertyId}:${activeMimeType}:${activePdfFileId}:${activeFileLabel}:${pane}`}
+          // No `pane` here: the arrangement decides which slot reads the
+          // document, never which document is open, and keying on it
+          // reopened the inspector tab (a fresh `renderId`) on every swap.
+          key={`${fieldId}:${filePropertyId}:${activeMimeType}:${activePdfFileId}:${activeFileLabel}`}
           mimeType={activeMimeType}
           pdfFileId={activePdfFileId}
           propertyId={filePropertyId}
@@ -928,85 +972,50 @@ function RouteComponentInner({
               }
 
               if (shouldRenderDocxBrowserShell && filePropertyId) {
+                const docxDocument = {
+                  entityId,
+                  fileFieldId: fieldId,
+                  propertyId: filePropertyId,
+                  workspaceId,
+                };
                 return (
                   <VersionDropZone
                     disabled={false}
                     entityId={entityId}
                     workspaceId={workspaceId}
                   >
-                    <Suspense
+                    <DocxEditorSlot
+                      bindings={docxEditorBindings}
+                      canUnlock={canUpdateEntity && useDocxBrowserEditor}
+                      document={docxDocument}
                       fallback={<DocxLoadingShell scaleOffset={scaleOffset} />}
-                    >
-                      <DocxBrowserEditor
-                        actionsRef={docxActionsRef}
-                        actionBarControls={
-                          <PdfViewerControls
-                            currentPage={pageNumber}
-                            downloadRenditions={downloadRenditions}
-                            extraControls={
-                              <TranslateDocumentDialog
-                                disabled={!canCreateEntity}
-                                entityId={entityId}
-                                entityVersionKey={entity.currentVersionId}
-                                fieldId={fieldId}
-                                isDocx
-                                viewId={viewId}
-                                workspaceId={workspaceId}
-                              />
-                            }
+                      isEditing={initialEditing}
+                      scaleOffset={scaleOffset}
+                      slot={DOCX_EDITOR_SLOT.main}
+                    />
+                    {/* The toolbar's controls read route state, so they stay
+                        in this subtree and are published into the hosted
+                        editor's action bar. */}
+                    <DocxEditorActionBar document={docxDocument}>
+                      <PdfViewerControls
+                        currentPage={pageNumber}
+                        downloadRenditions={downloadRenditions}
+                        extraControls={
+                          <TranslateDocumentDialog
+                            disabled={!canCreateEntity}
+                            entityId={entityId}
+                            entityVersionKey={entity.currentVersionId}
                             fieldId={fieldId}
-                            variant="inline"
+                            isDocx
+                            viewId={viewId}
                             workspaceId={workspaceId}
                           />
                         }
-                        canUnlock={canUpdateEntity && useDocxBrowserEditor}
-                        entityId={entityId}
                         fieldId={fieldId}
-                        isEditing={initialEditing}
-                        onBlockedUnlock={() => {
-                          setDocxLatestVersionDialogOpen(true);
-                        }}
-                        onClose={() => {
-                          setDocxUnlocked(false);
-                          if (isLeavingDocxRef.current) {
-                            return;
-                          }
-                          detached(
-                            navigate({
-                              search: (prev) => ({
-                                ...prev,
-                                editing: undefined,
-                              }),
-                            }),
-                            "document.navigate",
-                          );
-                        }}
-                        onSaved={(savedFieldId) => {
-                          setDocxUnlocked(false);
-                          setActiveFieldId(savedFieldId);
-                          if (isLeavingDocxRef.current) {
-                            return;
-                          }
-                          detached(
-                            navigate({
-                              replace: true,
-                              search: (prev) => ({
-                                ...prev,
-                                editing: undefined,
-                                field: savedFieldId,
-                                pdfPage: undefined,
-                              }),
-                            }),
-                            "document.navigate",
-                          );
-                        }}
-                        onUnlockedChange={setDocxUnlocked}
-                        propertyId={filePropertyId}
-                        scaleOffset={scaleOffset}
-                        surface="fullView"
+                        variant="inline"
                         workspaceId={workspaceId}
                       />
-                    </Suspense>
+                    </DocxEditorActionBar>
                   </VersionDropZone>
                 );
               }

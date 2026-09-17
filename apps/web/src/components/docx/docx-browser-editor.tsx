@@ -72,6 +72,10 @@ import {
 } from "@/components/docx-preview-zoom";
 import { DocxEditor } from "@/components/docx/app-docx-editor";
 import type { DocxComments } from "@/components/docx/app-docx-editor";
+import {
+  readDocxDocument,
+  writeDocxDocument,
+} from "@/components/docx/docx-document-cache";
 import { DocxFindBar } from "@/components/docx/docx-find-bar";
 import { DocxLoadingShell } from "@/components/docx/docx-loading-shell";
 import {
@@ -784,7 +788,36 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
   const previewFileQuery = useQuery({
     ...fileOptions({ workspaceId, fieldId, purpose: "native-display" }),
     placeholderData: previewPlaceholderData,
+    // A reopened document starts from the bytes it was last loaded with —
+    // real data, not a placeholder, and the same `ArrayBuffer` object, so
+    // `shareFileData` can hand it straight back and Folio does not reparse a
+    // document it already had. The original fetch time rides along, so the
+    // query applies its own staleness rules rather than treating a cached copy
+    // as fresh.
+    initialData: () =>
+      readDocxDocument({ fileFieldId: fieldId, workspaceId })?.value,
+    initialDataUpdatedAt: () =>
+      readDocxDocument({ fileFieldId: fieldId, workspaceId })?.dataUpdatedAt,
   });
+  // Only the pristine server copy is cached. The edit-session buffers
+  // (`lastEditingBufferRef`, `preservedLoadedBufferRef`) are selected further
+  // down and always win, so a cached document can never replace live input.
+  const loadedPreviewFile = previewFileQuery.isPlaceholderData
+    ? null
+    : (previewFileQuery.data ?? null);
+  const loadedPreviewFileUpdatedAt = previewFileQuery.dataUpdatedAt;
+  useExternalSyncEffect(() => {
+    if (loadedPreviewFile === null) {
+      return;
+    }
+    writeDocxDocument(
+      { fileFieldId: fieldId, workspaceId },
+      {
+        dataUpdatedAt: loadedPreviewFileUpdatedAt,
+        value: loadedPreviewFile,
+      },
+    );
+  }, [fieldId, loadedPreviewFile, loadedPreviewFileUpdatedAt, workspaceId]);
   const canAutoRequestCollaboration =
     isEditing &&
     !previewFileQuery.isPlaceholderData &&

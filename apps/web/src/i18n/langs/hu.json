@@ -2661,8 +2661,7 @@
       "unavailable": "A hivatkozott webhely nem engedélyez biztonságos előnézetet. Ha az eszköz visszaadta a dokumentum szövegét, az itt jelenik meg; ellenkező esetben nyissa meg az eredetit."
     },
     "facet": {
-      "anonymization": "Anonimizálás",
-      "previewInFullViewToast": "Az előnézet itt a fő nézet. Kattintson a kis méretre gombra, hogy a metaadatok mellett jelenjen meg."
+      "anonymization": "Anonimizálás"
     },
     "groups": {
       "addContext": "Kontextus hozzáadása",
@@ -2763,6 +2762,7 @@
       "basisDivider": "és / vagy",
       "basisPlaybook": "Ellenőrzés a(z) {name} alapján",
       "basisReferences": "{count, plural, one {Összevetés # referenciadokumentummal} other {Összevetés # referenciadokumentummal}}",
+      "basisToggle": "Mit vetettünk össze",
       "changeBasis": "Ellenőrzési alap módosítása",
       "chatDraft": {
         "finding": "Megállapítás:",
@@ -2852,6 +2852,7 @@
       },
       "passageUnavailable": "A referenciaszöveg nem érhető el",
       "passagesCount": "{count, plural, one {# szövegrész} other {# szövegrész}}",
+      "passagesToggle": "Szövegrészek",
       "pendingCount": "{count, plural, one {# függőben} other {# függőben}}",
       "perspective": {
         "neutral": "Nincs megadva",
@@ -2869,6 +2870,7 @@
         "present": "Igen"
       },
       "progressPositions": "{total, plural, one {{completed, number} / # álláspont} other {{completed, number} / # álláspont}}",
+      "proposedChange": "Javasolt módosítás",
       "proposing": "Álláspontok javaslása… {count, number}",
       "readOnlyRun": "Ebben az ellenőrzésben eldöntve",
       "recommendation": "Ajánlás:",

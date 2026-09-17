@@ -2661,8 +2661,7 @@
       "unavailable": "Odkazovaný web nepovoluje bezpečný náhled. Pokud nástroj vrátil text dokumentu, zobrazí se tady; jinak otevřete originál."
     },
     "facet": {
-      "anonymization": "Anonymizace",
-      "previewInFullViewToast": "Náhled je zde hlavní zobrazení. Klikni na tlačítko minimalizace pro zobrazení vedle metadat."
+      "anonymization": "Anonymizace"
     },
     "groups": {
       "addContext": "Přidat kontext",
@@ -2745,9 +2744,9 @@
     "review": {
       "actionNeeded": "K řešení",
       "addComment": "Přidat jako komentář",
-      "addNote": "Přidat poznámku pro protistranu",
+      "addNote": "Přidat komentář pro protistranu",
       "addNotePlaceholder": "Co má protistrana vidět",
-      "addNoteSubmit": "Přidat poznámku",
+      "addNoteSubmit": "Přidat komentář",
       "addReference": "Přidat {name} jako referenci",
       "addTopic": "Přidat téma",
       "allDecided": "Všechna zjištění zde jsou rozhodnutá.",
@@ -2763,6 +2762,7 @@
       "basisDivider": "a / nebo",
       "basisPlaybook": "Kontrola podle {name}",
       "basisReferences": "{count, plural, one {Porovnání s # referenčním dokumentem} few {Porovnání s # referenčními dokumenty} other {Porovnání s # referenčními dokumenty}}",
+      "basisToggle": "Podklady kontroly",
       "changeBasis": "Změnit podklady kontroly",
       "chatDraft": {
         "finding": "Zjištění:",
@@ -2838,12 +2838,12 @@
       "noReferencesFound": "Nenalezeny žádné odpovídající dokumenty DOCX.",
       "notCompared": "Neporovnáno",
       "notComparedCount": "Neporovnáno: {count, number}",
-      "noteAdded": "Poznámka pro protistranu přidána",
-      "noteBlockedChecking": "stella ještě ověřuje, zda lze dokument bezpečně upravovat. Poznámka zůstává zachována; zkuste to za chvíli znovu.",
-      "noteBlockedCollaboration": "Sdílená úprava se teprve otevírá. Poznámka zůstává zachována; zkuste to za chvíli znovu.",
-      "noteBlockedOpening": "Dokument se teprve otevírá. Poznámka zůstává zachována; zkuste to za chvíli znovu.",
-      "noteBlockedReadOnly": "Tento sdílený dokument je otevřený jen ke čtení. Poznámka zůstává zachována; zkuste to znovu, až budete moci dokument upravovat.",
-      "noteNotAdded": "Poznámka nebyla přidána",
+      "noteAdded": "Komentář pro protistranu přidán",
+      "noteBlockedChecking": "stella ještě ověřuje, zda lze dokument bezpečně upravovat. Komentář zůstává zachován; zkuste to za chvíli znovu.",
+      "noteBlockedCollaboration": "Sdílená úprava se teprve otevírá. Komentář zůstává zachován; zkuste to za chvíli znovu.",
+      "noteBlockedOpening": "Dokument se teprve otevírá. Komentář zůstává zachován; zkuste to za chvíli znovu.",
+      "noteBlockedReadOnly": "Tento sdílený dokument je otevřený jen ke čtení. Komentář zůstává zachován; zkuste to znovu, až budete moci dokument upravovat.",
+      "noteNotAdded": "Komentář nebyl přidán",
       "openPlaybooks": "Otevřít playbooky",
       "pane": {
         "document": "Panel: zjištění vedle dokumentu",
@@ -2852,6 +2852,7 @@
       },
       "passageUnavailable": "Text reference není dostupný",
       "passagesCount": "{count, plural, one {# pasáž} few {# pasáže} other {# pasáží}}",
+      "passagesToggle": "Pasáže",
       "pendingCount": "{count, plural, one {# čeká} few {# čekají} other {# čeká}}",
       "perspective": {
         "neutral": "Neuvedeno",
@@ -2869,6 +2870,7 @@
         "present": "Ano"
       },
       "progressPositions": "{total, plural, one {{completed, number} z # pozice} few {{completed, number} z # pozic} other {{completed, number} z # pozic}}",
+      "proposedChange": "Navrhovaná změna",
       "proposing": "Navrhují se pozice… {count, number}",
       "readOnlyRun": "Rozhodnuto v této kontrole",
       "recommendation": "Doporučení:",

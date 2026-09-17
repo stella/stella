@@ -53,6 +53,7 @@ import { resolveSidebarWorkspaceId } from "@/components/app-sidebar.logic";
 import { AppBreadcrumbs } from "@/components/breadcrumbs/app-breadcrumbs";
 import { ChatEditorProvider } from "@/components/chat-editor-provider";
 import { ChatMentionProviders } from "@/components/chat-mention-providers";
+import { DocxEditorHost } from "@/components/docx/docx-editor-host";
 import { DragAndDropLiveRegion } from "@/components/drag-and-drop-live-region";
 import {
   initializeInspectorTabBroadcast,
@@ -429,6 +430,10 @@ function ProtectedComponent() {
                 >
                   <Outlet />
                 </WorkspaceFrame>
+                {/* Above both the outlet and the inspector: the DOCX editor
+                    moves between their two slots instead of being rebuilt
+                    when the document and the review trade panes. */}
+                <DocxEditorHost />
                 <CreateMatterDialog />
                 <AttachedTemplateUploadDialog />
                 <DocumentReferenceUploadDialog />
