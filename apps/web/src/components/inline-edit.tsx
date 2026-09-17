@@ -19,6 +19,11 @@ type InlineEditProps = {
    * could land in the draft, while the prevented press still emits `click`.
    */
   action?: React.ReactNode | undefined;
+  /**
+   * Accessible name for the field, naming what is being renamed
+   * ("Document name"). Defaults to the bare "Rename" verb.
+   */
+  inputAriaLabel?: string | undefined;
   className?: string | undefined;
   inputClassName?: string | undefined;
 };
@@ -40,6 +45,7 @@ export const InlineEdit = ({
   onCancel,
   suffix,
   action,
+  inputAriaLabel,
   className,
   inputClassName,
 }: InlineEditProps) => {
@@ -60,6 +66,7 @@ export const InlineEdit = ({
       }}
     >
       <input
+        aria-label={inputAriaLabel ?? t("common.rename")}
         autoFocus
         className={cn(
           "border-input bg-background text-foreground h-6 min-w-0 rounded-sm border px-1.5 text-xs leading-none transition-[box-shadow,border-color] duration-150 outline-none",
@@ -69,6 +76,10 @@ export const InlineEdit = ({
         dir={contentDir(value)}
         onChange={(e) => onChange(e.target.value)}
         onClick={(e) => e.stopPropagation()}
+        // The editor opens seeded with the current name, so selecting it on
+        // focus makes typing replace it. A click inside collapses the
+        // selection to the caret, leaving pointer editing untouched.
+        onFocus={(e) => e.currentTarget.select()}
         onKeyDown={(e) => {
           e.stopPropagation();
           if (e.key === "Enter") {

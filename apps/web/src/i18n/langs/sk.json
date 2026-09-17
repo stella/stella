@@ -1352,10 +1352,12 @@
     "disconnect": "Odpojiť",
     "displayName": "Zobrazované meno",
     "document": "Dokument",
+    "documentName": "Názov dokumentu",
     "documentReference": "Referenčné číslo dokumentu",
     "documentTitle": "Názov dokumentu",
     "documentation": "Dokumentácia",
     "done": "Hotovo",
+    "doubleClickToRename": "Dvojklikom premenujete",
     "download": "Stiahnuť",
     "dragAndDrop": {
       "cancelled": "{count, plural, one {Presun bol zrušený. Položka {itemName} nebola presunutá.} few {Presun bol zrušený. {itemName} neboli presunuté.} other {Presun bol zrušený. {itemName} nebolo presunutých.}}",

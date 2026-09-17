@@ -1352,10 +1352,12 @@
     "disconnect": "Desconectar",
     "displayName": "Nome de exibição",
     "document": "Documento",
+    "documentName": "Nome do documento",
     "documentReference": "Referência do documento",
     "documentTitle": "Título do documento",
     "documentation": "Documentação",
     "done": "Concluído",
+    "doubleClickToRename": "Clique duas vezes para renomear",
     "download": "Baixar",
     "dragAndDrop": {
       "cancelled": "{count, plural, one {Movimentação cancelada. {itemName} não foi movido.} other {Movimentação cancelada. {itemName} não foram movidos.}}",

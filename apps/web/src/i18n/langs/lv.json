@@ -1352,10 +1352,12 @@
     "disconnect": "Atvienot",
     "displayName": "Attēlojamais vārds",
     "document": "Dokuments",
+    "documentName": "Dokumenta nosaukums",
     "documentReference": "Dokumenta atsauces numurs",
     "documentTitle": "Dokumenta nosaukums",
     "documentation": "Dokumentācija",
     "done": "Gatavs",
+    "doubleClickToRename": "Veiciet dubultklikšķi, lai pārdēvētu",
     "download": "Lejupielādēt",
     "dragAndDrop": {
       "cancelled": "{count, plural, zero {Pārvietošana atcelta: {itemName}.} one {Pārvietošana atcelta: {itemName}.} other {Pārvietošana atcelta: {itemName}.}}",

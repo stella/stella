@@ -1352,10 +1352,12 @@
     "disconnect": "Leválasztás",
     "displayName": "Megjelenítendő név",
     "document": "Dokumentum",
+    "documentName": "Dokumentum neve",
     "documentReference": "A dokumentum hivatkozási száma",
     "documentTitle": "Dokumentum címe",
     "documentation": "Dokumentáció",
     "done": "Kész",
+    "doubleClickToRename": "Kattintson duplán az átnevezéshez",
     "download": "Letöltés",
     "dragAndDrop": {
       "cancelled": "{count, plural, one {Az áthelyezés megszakadt. A(z) {itemName} nem lett áthelyezve.} other {Az áthelyezés megszakadt. A(z) {itemName} nem lett áthelyezve.}}",
