@@ -833,6 +833,7 @@
     "choosePromptImprovementStrategy": "Uzvednes uzlabošanas iespējas",
     "composerMenu": {
       "context": "Konteksts",
+      "editMode": "Rediģēšanas režīms",
       "mcpServers": "MCP serveri",
       "models": "Modeļi",
       "noFiles": "Šajā lietā nav failu",

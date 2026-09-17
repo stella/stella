@@ -833,6 +833,7 @@
     "choosePromptImprovementStrategy": "Možnosti vylepšení zadání",
     "composerMenu": {
       "context": "Kontext",
+      "editMode": "Režim úprav",
       "mcpServers": "MCP servery",
       "models": "Modely",
       "noFiles": "V tomto spisu nejsou žádné soubory",

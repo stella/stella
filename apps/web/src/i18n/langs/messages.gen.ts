@@ -836,6 +836,7 @@ type Messages = {
     "choosePromptImprovementStrategy": "Prompt improvement options";
     "composerMenu": {
       "context": "Context";
+      "editMode": "Edit mode";
       "mcpServers": "MCP servers";
       "models": "Models";
       "noFiles": "No files in this matter";

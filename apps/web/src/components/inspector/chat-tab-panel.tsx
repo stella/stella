@@ -713,6 +713,7 @@ export const ChatTabPanel = ({
             onStop={() => {
               stop();
             }}
+            onNewThread={messages.length > 0 ? startNewThread : null}
             onSubmit={handleComposerSubmit}
             pendingCount={0}
             queueWhileGenerating

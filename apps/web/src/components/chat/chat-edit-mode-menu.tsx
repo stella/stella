@@ -1,5 +1,4 @@
 import {
-  ChevronDownIcon,
   FileDiffIcon,
   LockIcon,
   UserCheckIcon,
@@ -9,15 +8,19 @@ import type { LucideIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import {
-  Menu,
-  MenuPopup,
   MenuRadioGroup,
   MenuRadioItem,
-  MenuTrigger,
+  MenuSub,
+  MenuSubPopup,
+  MenuSubTrigger,
 } from "@stll/ui/menu";
 
 import type { TranslationKey } from "@/i18n/types";
-import type { ChatEditModeOptionId } from "@/lib/chat-edit-mode";
+import type {
+  ActiveDocxEditModeState,
+  ChatEditModeOptionId,
+  DocxEditSafety,
+} from "@/lib/chat-edit-mode";
 import {
   CHAT_EDIT_MODE_OPTION_ID,
   CHAT_EDIT_MODE_OPTION_IDS,
@@ -46,47 +49,18 @@ const OPTION_DESCRIPTION_KEY = {
   [CHAT_EDIT_MODE_OPTION_ID.manual]: "chat.editMode.manualDescription",
 } as const satisfies Record<ChatEditModeOptionId, TranslationKey>;
 
-type ComposerEditModeControlProps = {
-  /**
-   * Editing is blocked because Folio cannot safely rewrite this DOCX. Wins
-   * over `selectable`: the mode picker would imply edits are possible.
-   */
-  unsafe: boolean;
-  /** The edit mode is user-selectable (a locked, safely-editable current file). */
-  selectable: boolean;
-  optionId: ChatEditModeOptionId;
-  onChange: (optionId: ChatEditModeOptionId) => void;
-};
-
 /**
- * The composer dock's edit-mode control. Picks the right chip for the current
- * DOCX edit state: a quiet "View only" indicator when editing is unsafe, the
- * mode picker when the mode is selectable, nothing otherwise. Owning the
- * decision here keeps the "unsafe" state a subtle inline chip instead of a
- * disruptive toast on every blocked edit attempt.
+ * Quiet, non-interactive dock chip shown when the DOCX cannot be edited
+ * safely; renders nothing for any other safety state. The mode picker itself
+ * lives in the composer's (+) menu ({@link ComposerEditModeSubmenu}); this
+ * chip is the only edit-mode presence the dock keeps, so the tooltip carries
+ * the reason editing is off.
  */
-export const ComposerEditModeControl = ({
-  unsafe,
-  selectable,
-  optionId,
-  onChange,
-}: ComposerEditModeControlProps) => {
-  if (unsafe) {
-    return <ViewOnlyEditModeChip />;
-  }
-  if (!selectable) {
+export const DocxEditSafetyChip = ({ safety }: { safety: DocxEditSafety }) => {
+  const t = useTranslations();
+  if (safety !== "unsafe") {
     return null;
   }
-  return <ChatEditModeSelector onChange={onChange} optionId={optionId} />;
-};
-
-/**
- * Quiet, non-interactive counterpart to {@link ChatEditModeSelector}, shown
- * when the DOCX cannot be edited safely. Mirrors the selector's chip shape so
- * the dock reads consistently; the tooltip carries the reason.
- */
-const ViewOnlyEditModeChip = () => {
-  const t = useTranslations();
   return (
     <span
       className="text-muted-foreground text-2xs inline-flex max-w-[180px] min-w-0 items-center gap-1 rounded-md px-1.5 py-0.5"
@@ -101,45 +75,49 @@ const ViewOnlyEditModeChip = () => {
   );
 };
 
-type ChatEditModeSelectorProps = {
+/** Enables and drives the (+) menu's Edit mode submenu. */
+export type ComposerEditModeMenuProps = {
   optionId: ChatEditModeOptionId;
   onChange: (optionId: ChatEditModeOptionId) => void;
 };
 
-/**
- * Composer toolbar control for the DOCX auto-edit review mode: "auto ·
- * track changes" (default), "auto · rewrite", or "manual review". Mirrors
- * `ChatMatterPicker`'s inline chip-trigger shape (icon + short label +
- * chevron) so it sits at home among the composer dock's other quiet,
- * borderless controls. Only rendered by callers where an editable DOCX is
- * actually open (see `hasDocxEditSurface`/`docxEditable` in
- * `file-chat-overlay.tsx`) -- Template Studio never renders this and pins
- * `editApplyMode: "manual"` directly instead, since it has no entity-backed
- * active file for the automatic `suggest_changes` apply to target.
- */
-const ChatEditModeSelector = ({
+type ComposerEditModeMenuForOptions = ComposerEditModeMenuProps & {
+  state: ActiveDocxEditModeState;
+};
+
+/** The (+) menu's Edit mode props for the current DOCX state: only a
+ *  selectable state (locked, safely-editable current file) offers the picker. */
+export const composerEditModeMenuFor = ({
+  state,
   optionId,
   onChange,
-}: ChatEditModeSelectorProps) => {
+}: ComposerEditModeMenuForOptions): ComposerEditModeMenuProps | undefined =>
+  state.type === "selectable" ? { optionId, onChange } : undefined;
+
+/**
+ * The (+) menu's DOCX auto-edit review mode submenu: "auto · track changes"
+ * (default), "auto · rewrite", or "manual review". The trigger carries the
+ * current option's icon so the mode stays readable without opening it. Only
+ * rendered by callers where a locked, safely-editable DOCX is open (see
+ * `resolveActiveDocxEditModeState`); Template Studio never renders this and
+ * pins `editApplyMode: "manual"` directly instead, since it has no
+ * entity-backed active file for the automatic `suggest_changes` apply to
+ * target.
+ */
+export const ComposerEditModeSubmenu = ({
+  optionId,
+  onChange,
+}: ComposerEditModeMenuProps) => {
   const t = useTranslations();
   const TriggerIcon = OPTION_ICON[optionId];
 
   return (
-    <Menu>
-      <MenuTrigger
-        className="text-muted-foreground hover:text-foreground hover:bg-accent text-2xs inline-flex max-w-[180px] min-w-0 items-center gap-1 rounded-md px-1.5 py-0.5 transition-colors"
-        title={t(OPTION_LABEL_KEY[optionId])}
-      >
-        <TriggerIcon aria-hidden="true" className="size-3 shrink-0" />
-        <span className="min-w-0 truncate">
-          {t(OPTION_LABEL_KEY[optionId])}
-        </span>
-        <ChevronDownIcon
-          aria-hidden="true"
-          className="size-3 shrink-0 opacity-70"
-        />
-      </MenuTrigger>
-      <MenuPopup align="start" className="w-64" sideOffset={6}>
+    <MenuSub>
+      <MenuSubTrigger>
+        <TriggerIcon />
+        {t("chat.composerMenu.editMode")}
+      </MenuSubTrigger>
+      <MenuSubPopup className="w-64">
         <MenuRadioGroup value={optionId}>
           {CHAT_EDIT_MODE_OPTION_IDS.map((option) => {
             const Icon = OPTION_ICON[option];
@@ -164,7 +142,7 @@ const ChatEditModeSelector = ({
             );
           })}
         </MenuRadioGroup>
-      </MenuPopup>
-    </Menu>
+      </MenuSubPopup>
+    </MenuSub>
   );
 };

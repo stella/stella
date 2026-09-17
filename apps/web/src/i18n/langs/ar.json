@@ -833,6 +833,7 @@
     "choosePromptImprovementStrategy": "خيارات تحسين الطلب",
     "composerMenu": {
       "context": "السياق",
+      "editMode": "وضع التحرير",
       "mcpServers": "خوادم MCP",
       "models": "النماذج",
       "noFiles": "لا توجد مستندات في هذا الملف القانوني",

@@ -794,6 +794,9 @@ export const ChatThreadPage = ({
                           hasPersistedThread: messages.length > 0,
                         }}
                         skillsOrganizationId={activeOrganizationId}
+                        onNewThread={
+                          messages.length > 0 ? startNewThread : null
+                        }
                         dock={
                           <ChatComposerDock
                             data={data}

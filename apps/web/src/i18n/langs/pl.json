@@ -833,6 +833,7 @@
     "choosePromptImprovementStrategy": "Opcje ulepszania promptu",
     "composerMenu": {
       "context": "Kontekst",
+      "editMode": "Tryb edycji",
       "mcpServers": "Serwery MCP",
       "models": "Modele",
       "noFiles": "Brak plików w tej sprawie",
