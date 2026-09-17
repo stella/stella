@@ -379,8 +379,7 @@ const LEGISLATION_TOOL_DEFINITIONS = [
       "YYYY-MM-DD). No facets are returned and `total` is not counted, so " +
       "page with the returned nextCursor instead of reasoning about a result " +
       "count. A hit is metadata only: pass its `eli` to read_statute for the " +
-      "text, the outline of anchors and the consolidated versions. For " +
-      "Spanish BOE legislation, call search_boe_legislation instead.",
+      "text, the outline of anchors and the consolidated versions.",
     inputSchema: searchLegislationArgsSchema,
     access: "read",
     anonymized: { exposure: "passthrough" },

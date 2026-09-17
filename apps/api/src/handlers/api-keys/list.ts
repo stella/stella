@@ -12,6 +12,7 @@ import {
   machineApiKeyCursor,
 } from "@/api/lib/machine-api-key-queries";
 import { createCursorPage } from "@/api/lib/pagination";
+import type { McpMode } from "@/api/mcp/constants";
 
 const MACHINE_API_KEY_PAGE_SIZE_DEFAULT = 50;
 const MACHINE_API_KEY_PAGE_SIZE_MAX = 200;
@@ -39,6 +40,12 @@ type MachineApiKeySummary = {
   start: string | null;
   scopes: MachineApiKeyScope[];
   permissions: Record<string, string[]>;
+  /**
+   * The MCP audience the key is bound to, or null for a key usable on every
+   * audience. Shown because "which surface does this credential reach" is the
+   * question an operator auditing a key list is asking.
+   */
+  audience: McpMode | null;
   enabled: boolean;
   expiresAt: Date | null;
   createdAt: Date;
@@ -120,6 +127,7 @@ export const createListMachineApiKeysHandler = (
         start: row.start,
         scopes: summary.scopes,
         permissions: summary.permissions,
+        audience: summary.audience ?? null,
         enabled: summary.enabled,
         expiresAt: row.expiresAt,
         createdAt: row.createdAt,

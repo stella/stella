@@ -1,8 +1,14 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
-import { MACHINE_API_KEY_PREFIX } from "@/api/lib/machine-api-key-config";
+import {
+  MACHINE_API_KEY_GRANTABLE_AUDIENCES,
+  MACHINE_API_KEY_GRANTABLE_SCOPES,
+  MACHINE_API_KEY_PREFIX,
+} from "@/api/lib/machine-api-key-config";
 import { resolveMachineApiKeySession as resolveMachineApiKeySessionWithDependencies } from "@/api/mcp/api-key-auth";
 import { extractMcpSession } from "@/api/mcp/auth";
+import { getMcpResourceScopes, MCP_MODES } from "@/api/mcp/constants";
+import type { McpMode } from "@/api/mcp/constants";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
 import type { McpEffectiveAuthority } from "@/api/mcp/effective-authority";
 
@@ -24,8 +30,12 @@ import type { McpEffectiveAuthority } from "@/api/mcp/effective-authority";
 const verifyApiKey = mock();
 const resolveMemberAuthorization = mock();
 
-const resolveMachineApiKeySession = async (credential: string) =>
+const resolveMachineApiKeySession = async (
+  credential: string,
+  options: { mode?: McpMode | undefined } = {},
+) =>
   await resolveMachineApiKeySessionWithDependencies(credential, {
+    ...options,
     verifyApiKey,
     resolveAuthorization: resolveMemberAuthorization,
   });
@@ -88,6 +98,123 @@ const expectRejected = async (): Promise<Error> => {
 beforeEach(() => {
   verifyApiKey.mockReset();
   resolveMemberAuthorization.mockReset();
+});
+
+/**
+ * Audience binding.
+ *
+ * A JWT is held to one audience by its own `aud` claim, which the bearer path
+ * verifies per mode. A key carries no such claim, so without this binding one
+ * credential is accepted on every audience path: a key minted for the public
+ * legal corpus replays against the default surface and reaches matter data with
+ * the same scopes. The property is that a bound key is usable on exactly the
+ * audience it names, and that an unbound key keeps the reach it already had.
+ */
+describe("machine API key audience binding", () => {
+  const expectRejectedOn = async (mode: McpMode): Promise<Error> => {
+    const rejection = await resolveMachineApiKeySession(CREDENTIAL, {
+      mode,
+    }).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    if (!(rejection instanceof Error)) {
+      throw new Error(`expected the credential to be rejected on ${mode}`);
+    }
+    return rejection;
+  };
+
+  test("a key bound to the law audience is usable there", async () => {
+    givenKey({
+      metadata: { audience: "law", organizationId: ORG_ID, scopes: SCOPES },
+    });
+    givenMemberRole("member");
+
+    const session = await resolveMachineApiKeySession(CREDENTIAL, {
+      mode: "law",
+    });
+
+    expect(session.organizationId).toBe(ORG_ID);
+    expect(session.scopes).toEqual(SCOPES);
+  });
+
+  test("the same key is refused on every other audience", async () => {
+    givenKey({
+      metadata: { audience: "law", organizationId: ORG_ID, scopes: SCOPES },
+    });
+    givenMemberRole("owner");
+
+    for (const mode of MACHINE_API_KEY_GRANTABLE_AUDIENCES) {
+      if (mode === "law") {
+        continue;
+      }
+      const rejection = await expectRejectedOn(mode);
+      // The same generic rejection every other failure uses: which audience a
+      // credential belongs to is not something a probe gets told.
+      expect(rejection.message).toBe("Invalid or expired API key");
+    }
+  });
+
+  test("the audience is checked before the credential's owner is looked up", async () => {
+    // Failing closed early also means a mismatched key cannot be used to probe
+    // whether its owner is still a member of the organization.
+    givenKey({
+      metadata: { audience: "law", organizationId: ORG_ID, scopes: SCOPES },
+    });
+    givenMemberRole("owner");
+
+    await expectRejectedOn("default");
+
+    expect(resolveMemberAuthorization).not.toHaveBeenCalled();
+  });
+
+  test("a key minted before audiences existed still reaches every audience", async () => {
+    // The metadata has no `audience` key at all, which is exactly what every
+    // already-issued key looks like. Nothing about them may change.
+    givenKey();
+    givenMemberRole("member");
+
+    for (const mode of MACHINE_API_KEY_GRANTABLE_AUDIENCES) {
+      const session = await resolveMachineApiKeySession(CREDENTIAL, {
+        mode,
+      });
+      expect(session.userId).toBe(OWNER_USER_ID);
+    }
+  });
+
+  test("the bindable audiences are exactly those whose scopes are grantable", () => {
+    // The boundary schemas need a literal tuple, so the list is written out.
+    // The rule it stands for is recomputed here instead of being trusted: a new
+    // audience whose scopes a machine key can carry must be offered, and one
+    // whose scopes it cannot must not be. The anonymized surface is the latter.
+    const grantable = MCP_MODES.filter((mode) =>
+      getMcpResourceScopes(mode).every((scope) =>
+        MACHINE_API_KEY_GRANTABLE_SCOPES.some(
+          (candidate) => candidate === scope,
+        ),
+      ),
+    );
+
+    const bindable: readonly McpMode[] = MACHINE_API_KEY_GRANTABLE_AUDIENCES;
+    expect(bindable).toEqual(grantable);
+    expect(MACHINE_API_KEY_GRANTABLE_AUDIENCES).not.toContain("anonymized");
+    expect(MACHINE_API_KEY_GRANTABLE_AUDIENCES).toContain("law");
+  });
+
+  test("an audience the metadata schema does not know refuses the credential", async () => {
+    givenKey({
+      metadata: {
+        audience: "not-an-audience",
+        organizationId: ORG_ID,
+        scopes: SCOPES,
+      },
+    });
+    givenMemberRole("owner");
+
+    expect((await expectRejectedOn("default")).message).toBe(
+      "Invalid or expired API key",
+    );
+  });
 });
 
 describe("resolveMachineApiKeySession", () => {
@@ -372,6 +499,32 @@ describe("authenticateMcpRequest credential dispatch", () => {
 
     expect(session.userId).toBe(OWNER_USER_ID);
     expect(verifyApiKey).toHaveBeenCalled();
+  });
+
+  test("hands the presented audience to the API key verifier", async () => {
+    // The wiring the binding depends on. A key is refused on the wrong audience
+    // only if the transport's mode actually reaches the key path; the JWT path
+    // gets the same thing through `getMcpAccessTokenVerificationOptions(mode)`.
+    const { authenticateMcpRequest } = await import("@/api/mcp/auth");
+    givenKey({
+      metadata: { audience: "law", organizationId: ORG_ID, scopes: SCOPES },
+    });
+    givenMemberRole("member");
+
+    const onLaw = await authenticateMcpRequest(CREDENTIAL, {
+      mode: "law",
+      resolveApiKeySession: resolveMachineApiKeySession,
+    });
+    expect(onLaw.userId).toBe(OWNER_USER_ID);
+
+    const onDefault = await authenticateMcpRequest(CREDENTIAL, {
+      mode: "default",
+      resolveApiKeySession: resolveMachineApiKeySession,
+    }).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(onDefault).toBeInstanceOf(Error);
   });
 
   test("never falls back to the API key verifier for a JWT-shaped credential", async () => {

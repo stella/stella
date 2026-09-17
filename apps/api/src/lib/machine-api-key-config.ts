@@ -4,6 +4,7 @@ import { statements } from "@stll/permissions";
 import type { PermissionInput } from "@stll/permissions";
 
 import { MCP_DEFAULT_RESOURCE_SCOPES } from "@/api/mcp/constants";
+import type { McpMode } from "@/api/mcp/constants";
 
 /**
  * `statements` widened to an index signature. This is an ordinary assignment
@@ -101,6 +102,23 @@ export type MachineApiKeyScope =
 const machineApiKeyScopeSchema = v.picklist(MACHINE_API_KEY_GRANTABLE_SCOPES);
 
 /**
+ * The audiences a machine key may be bound to: exactly those whose resource
+ * scopes this configuration can grant. The anonymized audience is absent
+ * because its `stella:*_anonymized` scopes are not grantable here, so a key
+ * bound to it could never carry a scope that surface accepts.
+ *
+ * A literal tuple rather than a filter over `MCP_MODES`, because both the
+ * TypeBox boundary schema and the valibot metadata picklist need the exact
+ * member union. `machine-api-keys.test.ts` recomputes the rule and asserts this
+ * list equals it, so a new audience cannot quietly fail to be offered here.
+ */
+export const MACHINE_API_KEY_GRANTABLE_AUDIENCES = [
+  "default",
+  "documents",
+  "law",
+] as const satisfies readonly McpMode[];
+
+/**
  * What travels in the plugin's `metadata` column.
  *
  * The organization id lives here rather than in `referenceId` because the plugin
@@ -115,9 +133,33 @@ const machineApiKeyScopeSchema = v.picklist(MACHINE_API_KEY_GRANTABLE_SCOPES);
  * silently stripping them would hide that.
  */
 export const machineApiKeyMetadataSchema = v.strictObject({
+  /**
+   * The MCP audience this key may be presented on, when it was minted for one.
+   *
+   * A JWT is bound to its audience by the token's own `aud` claim, which the
+   * bearer path verifies per mode. A key has no such claim, so without this it
+   * is accepted on every audience path: a key minted for the public legal
+   * corpus would replay against the default surface and reach matter data with
+   * the same scopes. Optional because keys minted before this existed carry no
+   * audience and keep working on every surface; a key that names one is held to
+   * it.
+   */
+  audience: v.optional(v.picklist(MACHINE_API_KEY_GRANTABLE_AUDIENCES)),
   organizationId: v.pipe(v.string(), v.nonEmpty()),
   scopes: v.array(machineApiKeyScopeSchema),
 });
+
+/**
+ * Whether a key may be presented on this audience. An unbound key keeps the
+ * behaviour it had before audiences existed.
+ */
+export const isMachineApiKeyAudienceAllowed = ({
+  audience,
+  mode,
+}: {
+  audience: McpMode | undefined;
+  mode: McpMode;
+}): boolean => audience === undefined || audience === mode;
 
 export type MachineApiKeyMetadata = v.InferOutput<
   typeof machineApiKeyMetadataSchema

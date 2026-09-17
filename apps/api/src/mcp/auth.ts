@@ -258,7 +258,7 @@ export const authenticateMcpRequest = async (
 ): Promise<McpSession> => {
   if (isMachineApiKeyCredential(bearerToken)) {
     try {
-      return await resolveApiKeySession(bearerToken);
+      return await resolveApiKeySession(bearerToken, { mode });
     } catch (error) {
       throw classifyMcpTokenVerificationError(error);
     }

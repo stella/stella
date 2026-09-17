@@ -2,6 +2,7 @@ import * as v from "valibot";
 
 import { getAuth, resolveMemberAuthorization } from "@/api/lib/auth";
 import {
+  isMachineApiKeyAudienceAllowed,
   MACHINE_API_KEY_CONFIG_ID,
   machineApiKeyMetadataSchema,
   machineApiKeyPermissionsSchema,
@@ -11,6 +12,7 @@ import { isMemberRole } from "@/api/lib/member-roles";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import { brandActorSessionIdentity } from "@/api/lib/safe-id-boundaries";
 import type { McpSession } from "@/api/mcp/auth";
+import type { McpMode } from "@/api/mcp/constants";
 import { McpAuthenticationError } from "@/api/mcp/errors";
 
 /**
@@ -43,13 +45,21 @@ const rejectCredential = (): McpAuthenticationError =>
  * On top of that this re-checks the key's stored permissions against the
  * owner's *current* role, so demoting or removing a member immediately shrinks
  * or kills every key they minted, without anyone having to remember to revoke.
+ *
+ * `mode` is the audience path the credential was presented on. The bearer path
+ * gets this for free from the token's `aud` claim; a key carries no claim to
+ * check, so a key minted for one audience is refused on another here. A key
+ * with no audience in its metadata predates the binding and stays usable
+ * anywhere, which is what it could already do.
  */
 export const resolveMachineApiKeySession = async (
   credential: string,
   {
+    mode = "default",
     verifyApiKey = getAuth().api.verifyApiKey,
     resolveAuthorization = resolveMemberAuthorization,
   }: {
+    mode?: McpMode | undefined;
     verifyApiKey?: (
       ...args: Parameters<ReturnType<typeof getAuth>["api"]["verifyApiKey"]>
     ) => ReturnType<ReturnType<typeof getAuth>["api"]["verifyApiKey"]>;
@@ -77,8 +87,19 @@ export const resolveMachineApiKeySession = async (
     throw rejectCredential();
   }
 
+  // Two independent reasons to refuse, sharing one branch because they share
+  // one answer: metadata this code path did not write, and a key bound to a
+  // different audience than the one it was presented on. Both are decided
+  // before the owner is looked up, so a mismatched key cannot be used to probe
+  // whether its owner is still a member.
   const metadata = v.safeParse(machineApiKeyMetadataSchema, key.metadata);
-  if (!metadata.success) {
+  if (
+    !metadata.success ||
+    !isMachineApiKeyAudienceAllowed({
+      audience: metadata.output.audience,
+      mode,
+    })
+  ) {
     throw rejectCredential();
   }
 

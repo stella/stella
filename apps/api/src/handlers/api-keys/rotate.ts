@@ -77,6 +77,9 @@ const rotateMachineApiKey = createSafeRootHandler(
         scopes: existing.scopes,
         permissions: existing.permissions,
         expiresInDays: body.expiresInDays,
+        // Carried, never re-chosen: a rotation that dropped the binding would
+        // hand back a wider credential than the one it replaced.
+        audience: existing.audience,
         userId: user.id,
         organizationId: session.activeOrganizationId,
       }),

@@ -170,10 +170,16 @@ const TOOL_COUNT_CEILING: Record<SurfaceMode, number> = {
 // this audience sells, so growth here is the thing being ratcheted, not an
 // incidental cost. It carries the same four legislation schemas, so the two
 // facts above account for its size too.
+// Every surface drops 66 chars when search_legislation stops cross-referencing
+// search_boe_legislation: the corpus is jurisdiction-agnostic, and the law
+// audience does not carry the connector at all, so following that sentence
+// there answered unknown_tool. Measured 130_687, 66_687 and 22_001; the two
+// wider ceilings keep the same 47-char margin they were set with, and law
+// stays pinned exactly.
 const TOOLS_LIST_PAYLOAD_CHAR_CEILING: Record<SurfaceMode, number> = {
-  default: 130_800,
-  anonymized: 66_800,
-  law: 22_067,
+  default: 130_734,
+  anonymized: 66_734,
+  law: 22_001,
 };
 
 // default bumped 42_000 -> 42_300 for the two fields read_case_law_citations

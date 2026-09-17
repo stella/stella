@@ -50,6 +50,12 @@ audience serves the product identity and the legislation workflow only: a
 reference for a workflow it carries no tool for is context an agent pays for
 and cannot use.
 
+Each audience is also an OAuth resource. Adding one widens the resource set the
+startup census requires, and startup never seeds an existing database, so a
+release that adds an audience runs the `better-auth-17-backfill` deployment step
+before the new image serves traffic: it inserts the resource and links existing
+client registrations to it.
+
 OAuth protected-resource discovery is served from:
 
 - `/.well-known/oauth-protected-resource`
