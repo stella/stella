@@ -3240,6 +3240,13 @@ describe("OpenAI-compatible MCP tools", () => {
 
   type BatchDecisionPage = {
     items: {
+      decision?: {
+        caseNumber: string;
+        citationsFrom: unknown[];
+        text: string | null;
+        textUnavailableReason?: string;
+        textWithheldReason?: string;
+      };
       decisionId: string;
       message?: string;
       status: string;
@@ -3292,6 +3299,29 @@ describe("OpenAI-compatible MCP tools", () => {
     expect(readGatedDecisionMock).toHaveBeenCalledTimes(1);
   });
 
+  test("read_case_law_decision reports a shared-corpus read as found without text", async () => {
+    // A process reading a shared corpus does not crawl, so even a document a
+    // fetch could land elsewhere is not coming here. Saying `pending` would
+    // send the caller back forever.
+    const base = createReadDecisionResult();
+    readGatedDecisionMock.mockResolvedValue({
+      ...base,
+      documentAst: null,
+      documentPending: true,
+      fulltext: null,
+      source: { ...base.source, adapterKey: "sk-courts" },
+    });
+
+    const payload = await withSharedCorpus(
+      "postgres://shared-corpus/readonly",
+      async () => await readBatch([DECISION_ID]),
+    );
+    const entry = payload.items.at(0) ?? panic("Missing lookup entry");
+
+    expect(entry.status).toBe("found");
+    expect(entry.decision?.textUnavailableReason).toContain("not available");
+  });
+
   test("read_case_law_decision keeps an unfinished fetch pending", async () => {
     // `hydrateDeferredDocument` hands the read back still pending when the
     // fetch times out or the publisher has nothing, and the entry then has no
@@ -3301,12 +3331,18 @@ describe("OpenAI-compatible MCP tools", () => {
     readGatedDecisionMock.mockImplementation(
       async ({ locator }: { locator: { kind: "id"; id: string } }) => ({
         ...base,
+        // A deferred source with something to fetch: `pending` is only the
+        // answer where a later fetch can still land the document.
+        source: { ...base.source, adapterKey: "sk-courts" },
         documentPending: true,
         id: locator.id,
       }),
     );
 
-    const payload = await readBatch([DECISION_ID]);
+    const payload = await withSharedCorpus(
+      undefined,
+      async () => await readBatch([DECISION_ID]),
+    );
 
     expect(payload.items.map(({ status }) => status)).toEqual(["pending"]);
     expect(payload.items.at(0)?.message).toContain("on its own");
@@ -3321,6 +3357,103 @@ describe("OpenAI-compatible MCP tools", () => {
     ).toHaveLength(1);
   });
 
+  /**
+   * Whether this process reads a shared public-law corpus decides whether a
+   * pending document can still be fetched at all, so a test about that
+   * distinction sets it rather than inheriting the developer's `.env`.
+   */
+  const withSharedCorpus = async <T>(
+    url: string | undefined,
+    body: () => Promise<T>,
+  ): Promise<T> => {
+    const previous = envBase.PUBLIC_LAW_DATABASE_URL;
+    envBase.PUBLIC_LAW_DATABASE_URL = url;
+    try {
+      return await body();
+    } finally {
+      envBase.PUBLIC_LAW_DATABASE_URL = previous;
+    }
+  };
+
+  // Every way a document can be absent for good. `documentPending` stays set
+  // on all of them, and reporting them `pending` would send a caller back for
+  // something no fetch can land while hiding the metadata and citations the
+  // row does carry.
+  // Built from the one adapter that defers its documents, so each case below
+  // changes exactly one thing and the reason it is terminal is that thing.
+  const deferredSource = () => ({
+    ...createReadDecisionResult().source,
+    adapterKey: "sk-courts",
+  });
+
+  const terminal: Record<string, Record<string, unknown>> = {
+    // cz-ns serves its documents with the listing, so there is no deferred
+    // fetch to wait for.
+    "a source that does not defer its documents": {},
+    "a payload object storage refused": {
+      documentReadFailed: true,
+      source: deferredSource(),
+    },
+    "nothing at the publisher to fetch": {
+      documentUrl: null,
+      source: deferredSource(),
+    },
+  };
+
+  for (const [name, state] of Object.entries(terminal)) {
+    test(`read_case_law_decision reports ${name} as found without text`, async () => {
+      const base = createReadDecisionResult();
+      readGatedDecisionMock.mockResolvedValue({
+        ...base,
+        ...state,
+        documentAst: null,
+        documentPending: true,
+        fulltext: null,
+      });
+
+      const payload = await withSharedCorpus(
+        undefined,
+        async () => await readBatch([DECISION_ID]),
+      );
+      const entry = payload.items.at(0) ?? panic("Missing lookup entry");
+
+      expect(entry.status).toBe("found");
+      expect(entry.decision?.text).toBeNull();
+      expect(entry.decision?.textUnavailableReason).toContain("not available");
+      // The point of not saying `pending`: what the row does carry is still
+      // readable.
+      expect(entry.decision?.caseNumber).toBe("29 Cdo 123/2024");
+      expect(entry.decision?.citationsFrom).toHaveLength(1);
+    });
+  }
+
+  test("read_case_law_decision keeps the licence reason apart from a missing document", async () => {
+    // A licence that bars AI use of wording the corpus holds is a different
+    // answer from a document it never had, and only one of them is worth a
+    // retry. Neither field may claim the other's case.
+    const base = createReadDecisionResult();
+    readGatedDecisionMock.mockResolvedValue({
+      ...base,
+      documentReadFailed: true,
+      documentPending: true,
+      source: {
+        ...base.source,
+        allowsDerivedAi: false,
+        adapterKey: "sk-courts",
+      },
+    });
+
+    const payload = await withSharedCorpus(
+      undefined,
+      async () => await readBatch([DECISION_ID]),
+    );
+    const entry = payload.items.at(0) ?? panic("Missing lookup entry");
+
+    expect(entry.status).toBe("found");
+    expect(entry.decision?.textWithheldReason).toContain("licence");
+    expect(entry.decision?.textUnavailableReason).toBeUndefined();
+  });
+
   test("read_case_law_decision bounds the publisher fetches one call triggers", async () => {
     const base = createReadDecisionResult();
     readGatedDecisionMock.mockImplementation(
@@ -3332,6 +3465,9 @@ describe("OpenAI-compatible MCP tools", () => {
         locator: { kind: "id"; id: string };
       }) => ({
         ...base,
+        // A deferred source, so a still-pending document reads as retryable
+        // rather than as one no fetch could land.
+        source: { ...base.source, adapterKey: "sk-courts" },
         // Pending until something fetches it: the on-demand re-read stands for
         // a fetch that finished, so only the entries the budget never reached
         // stay pending.
@@ -3342,7 +3478,10 @@ describe("OpenAI-compatible MCP tools", () => {
       }),
     );
 
-    const payload = await readBatch([DECISION_ID, ...PENDING_DECISION_IDS]);
+    const payload = await withSharedCorpus(
+      undefined,
+      async () => await readBatch([DECISION_ID, ...PENDING_DECISION_IDS]),
+    );
 
     // The stored read answers every id; the fetch budget covers the first
     // three pending ones and the fourth says to read it on its own.

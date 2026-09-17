@@ -430,6 +430,12 @@ const nestedField = (
 
 type CliExpectedCommand = {
   kind: "command";
+  /**
+   * Repeatable flags this task needs more than one of, by minimum count. For a
+   * batch command the cardinality IS the contract, and pinning the values
+   * would score the model's wording rather than whether it batched.
+   */
+  repeatedAtLeast?: Readonly<Record<string, number>>;
   /** Tokens after `stella`, e.g. ["document", "list"] or ["capability", "entities", "translate"]. */
   path: readonly string[];
   flags: Readonly<Record<string, string>>;
@@ -569,13 +575,18 @@ const TASKS: readonly Task[] = [
       checkArgs: (args) => {
         const queries = args["queries"];
         return [
+          // At least two: one phrasing is a valid call, but this task asks for
+          // several in one call, and a single query would pass a batch task
+          // the model did not perform. The wording is the model's own.
           ...(Array.isArray(queries) &&
-          queries.length > 0 &&
+          queries.length >= 2 &&
           queries.every(
             (query) => typeof query === "string" && query.length > 0,
           )
             ? []
-            : ["queries: expected a non-empty array of non-empty strings"]),
+            : [
+                `queries: expected at least 2 non-empty strings, got ${JSON.stringify(queries)}`,
+              ]),
           // The handler folds the code to upper case (publicCaseLawCountry),
           // so `cze` is as correct as `CZE`.
           ...(typeof args["country"] === "string" &&
@@ -591,6 +602,9 @@ const TASKS: readonly Task[] = [
       kind: "command",
       path: ["case-law", "search"],
       flags: { country: "CZE" },
+      // `--queries` repeats; the task is about carrying several, not about
+      // which words, so the expectation is the count and nothing else.
+      repeatedAtLeast: { queries: 2 },
     },
   },
   {
@@ -1714,6 +1728,16 @@ const scoreCliRun = ({
       if (spec.required && resolveFlagValue(parsed, spec.flag) === undefined) {
         issues.push(`missing required --${spec.flag}`);
       }
+    }
+  }
+  for (const [flagName, minimum] of Object.entries(
+    expected.repeatedAtLeast ?? {},
+  )) {
+    const carried = resolveFlagValues(parsed, flagName)?.length ?? 0;
+    if (carried < minimum) {
+      issues.push(
+        `--${flagName}: expected at least ${String(minimum)} values, got ${String(carried)}`,
+      );
     }
   }
   for (const [flagName, expectedValue] of Object.entries(expected.flags)) {

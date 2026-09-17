@@ -1461,7 +1461,13 @@ const caseLawDecisionProjection = v.strictObject({
   text: v.nullable(v.string()),
   charCount: v.nullable(v.number()),
   truncated: v.boolean(),
+  // Why there is no text, when there is none. At most one is present, and
+  // they are separate fields because the next call differs: a licence bars AI
+  // use of wording this corpus holds and will not change, while an
+  // unavailable document is one the publisher never served here, so the
+  // metadata and citations below are all there is to read.
   textWithheldReason: v.optional(v.string()),
+  textUnavailableReason: v.optional(v.string()),
 });
 
 /**

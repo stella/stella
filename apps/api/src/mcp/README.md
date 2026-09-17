@@ -38,17 +38,22 @@ instructions, because an orchestrator picks tools from the names it was handed:
   the same as every other audience: an OAuth bearer token or an API key
   carrying those two scopes.
 
-Every audience authenticates the same way and exposes static MCP resources
-through `resources/list` and `resources/read`: `stella://about` for canonical
-product identity and official URLs, `stella://reference/template-markers` for
-the DOCX template marker grammar, `stella://reference/template-fields` for the
+Every audience authenticates the same way and serves static MCP resources
+through `resources/list` and `resources/read`, but each serves a filtered
+subset of them rather than the whole set: a reference for a workflow an
+audience carries no tool for is context an agent pays for and cannot use. The
+resources are `stella://about` for canonical product identity and official
+URLs, `stella://reference/template-markers` for the DOCX template marker
+grammar, `stella://reference/template-fields` for the
 `configure_template_fields` overlay, `stella://reference/template-workflow` for
 the order those two are used in (author, create, read the discovered paths
 back, configure, preview, persist), and
-`stella://reference/legislation-workflow` for the corpus-reading order. The law
-audience serves the product identity and the legislation workflow only: a
-reference for a workflow it carries no tool for is context an agent pays for
-and cannot use.
+`stella://reference/legislation-workflow` for the corpus-reading order.
+
+The default audience serves all of them. The documents audience serves the
+product identity and the three template references, and not the legislation
+workflow. The law audience serves the product identity and the legislation
+workflow, and none of the template references.
 
 Each audience is also an OAuth resource, and adding one needs no operator step.
 It widens the resource set the startup census requires, and startup never seeds

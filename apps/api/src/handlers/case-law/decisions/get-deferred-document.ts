@@ -174,6 +174,54 @@ export type ReadGatedDecisionOptions = {
 };
 
 /**
+ * Whether a read's document is stored, still coming, or not coming at all.
+ *
+ * `documentPending` alone cannot answer that. It stays set when a fetch was
+ * never possible: a source that does not defer its documents, a payload object
+ * storage refused (`documentReadFailed`), or a process reading a shared corpus,
+ * which does not crawl at all. A caller told "pending" for one of those waits
+ * for something that will never arrive, and if it withholds the stored
+ * metadata while waiting, the decision reads as missing rather than as one
+ * whose text is not served here.
+ *
+ * Derived from `hydrate`'s own gates, in the module that owns them, so the
+ * answer cannot drift from what a hydration attempt would actually do.
+ */
+export const DECISION_DOCUMENT_STATE = {
+  /** Stored and readable. */
+  available: "available",
+  /** Not stored, and a later fetch can still land it. */
+  pending: "pending",
+  /** Not stored, and nothing this deployment does will change that. */
+  unavailable: "unavailable",
+} as const;
+
+export type DecisionDocumentState =
+  (typeof DECISION_DOCUMENT_STATE)[keyof typeof DECISION_DOCUMENT_STATE];
+
+export const decisionDocumentState = (
+  read: DecisionRead,
+): DecisionDocumentState => {
+  if (!("documentPending" in read) || !read.documentPending) {
+    return DECISION_DOCUMENT_STATE.available;
+  }
+  // A shared-corpus process is strictly read-side: the only thing that can
+  // change a stored document here is the development reparse, and a decision
+  // still pending after `hydrate` ran is one it did not apply to.
+  if (readsSharedPublicLawCorpus()) {
+    return DECISION_DOCUMENT_STATE.unavailable;
+  }
+  return isDeferredDocumentFetchable({
+    adapterKey: read.source.adapterKey,
+    documentUrl: read.documentUrl,
+    documentPending: read.documentPending,
+    documentReadFailed: read.documentReadFailed,
+  })
+    ? DECISION_DOCUMENT_STATE.pending
+    : DECISION_DOCUMENT_STATE.unavailable;
+};
+
+/**
  * Gate, read, then hydrate — in that order and for that reason.
  *
  * The gate and every row of the read share one transaction, so the content

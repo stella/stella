@@ -3985,7 +3985,7 @@ type Messages = {
       "mcpAnonymizedNote": "An anonymized endpoint is also available; it exposes the same tools with personal data masked.";
       "mcpDescription": "Connect an MCP-compatible client, such as Claude or Cursor, to your stella account using this server URL.";
       "mcpLawLabel": "Legal corpus endpoint";
-      "mcpLawNote": "A legal corpus endpoint is also available; it exposes public case law and legislation only, and reaches no matter data.";
+      "mcpLawNote": "A legal corpus endpoint is also available; it exposes public case law and legislation only, and does not access matter data.";
       "mcpStep1": "Add the URL above as a custom connector or MCP server in your client.";
       "mcpStep2": "Sign in when the browser prompts you.";
       "mcpStep3": "Approve access on the consent screen.";

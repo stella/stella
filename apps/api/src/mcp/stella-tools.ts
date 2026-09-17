@@ -26,6 +26,8 @@ import type {
 import type { readGatedDecisionCitations } from "@/api/handlers/case-law/decisions/citation-passages";
 import {
   DECISION_DOCUMENT_HYDRATION,
+  DECISION_DOCUMENT_STATE,
+  decisionDocumentState,
   type DecisionDocumentHydration,
   type readGatedDecisionWithDocument,
 } from "@/api/handlers/case-law/decisions/get-deferred-document";
@@ -1831,7 +1833,9 @@ const resolveCaseLawSearchCursors = ({
   cursor: string | undefined;
   queryCount: number;
 }): CaseLawSearchCursors => {
-  if (cursor === undefined) {
+  // An empty string is a model spelling an absent optional, not a page
+  // boundary: decoding it would answer "invalid cursor" for a first page.
+  if (cursor === undefined || cursor.length === 0) {
     return {
       type: "cursors",
       cursors: Array.from({ length: queryCount }, () => undefined),
@@ -2083,15 +2087,16 @@ type DecisionItemResult = v.InferInput<
 >["items"][number];
 
 /**
- * Whether the publisher document is still to be fetched. A stored-only read
- * reports it instead of crawling, so the batch decides how many crawls this
- * one call is worth.
+ * Whether a later fetch can still land this decision's document. A
+ * stored-only read reports a pending document instead of crawling for it, so
+ * the batch decides how many crawls one call is worth; a document no fetch
+ * could ever land is not one of those decisions, and `decisionDocumentState`
+ * is what tells the two apart.
  */
 const isDecisionDocumentPending = (read: GatedDecisionRead): boolean =>
   read !== null &&
-  "documentPending" in read &&
-  read.documentPending &&
-  isReadCaseLawDecisionSuccess(read);
+  isReadCaseLawDecisionSuccess(read) &&
+  decisionDocumentState(read) === DECISION_DOCUMENT_STATE.pending;
 
 const decisionNotFoundItem = (decisionId: string): DecisionItemResult => ({
   decisionId,
@@ -2117,11 +2122,12 @@ const decisionItemResult = ({
   if (read === null || !isReadCaseLawDecisionSuccess(read)) {
     return decisionNotFoundItem(decisionId);
   }
-  // Still pending after everything this call was willing to do: either the
-  // fetch budget did not reach this entry, or the fetch it did get ran out of
-  // time or found nothing at the publisher. Both leave the document queued and
-  // the decision without text, and the caller's next move is the same, so
-  // neither is reported as a `found` with nothing in it.
+  // Still pending after everything this call was willing to do, AND a later
+  // fetch could still land it: either the budget did not reach this entry, or
+  // the fetch it got ran out of time. Both leave the document queued, and the
+  // caller's next move is the same, so neither is a `found` with nothing in
+  // it. A document no fetch can land is the other answer entirely, and falls
+  // through to `found` below so its metadata and citations stay readable.
   if (isDecisionDocumentPending(read)) {
     return {
       decisionId,
@@ -2196,6 +2202,15 @@ const decisionItemResult = ({
             textWithheldReason:
               "The source licence does not permit AI use of the full text.",
           }),
+      // The licence and the missing document are different answers, and a
+      // caller that conflated them would retry one that will never change.
+      ...(aiTextAllowed &&
+      decisionDocumentState(read) === DECISION_DOCUMENT_STATE.unavailable
+        ? {
+            textUnavailableReason:
+              "The publisher's document for this decision is not available from this corpus, so the metadata and citations here are all it carries.",
+          }
+        : {}),
     },
   };
 };
