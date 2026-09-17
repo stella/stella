@@ -35,6 +35,18 @@
  * running again and a completed run inserts and links nothing. `assertComplete`
  * is the same census the API runs at startup, so a partial repair fails the
  * deploy rather than the boot.
+ *
+ * Nothing here reads the API's environment. The migrate entrypoint runs with a
+ * database-only environment (the ECS `api-migrate` task definition injects
+ * `HOME`, `NODE_ENV` and the `DB_*` components, and nothing else), so reaching
+ * the env-backed `getBetterAuthOAuthResources()` made `bun run
+ * src/db/migrate.ts` die on `S3_BUCKET` before it opened a connection. The
+ * origin the resource identifiers are built on therefore comes from the rows
+ * already in `oauth_resource`, which carry this deployment's own absolute
+ * identifiers and are written only by Stella's own seeding paths. That is exact
+ * per environment with nothing to configure, and it fails closed: an empty
+ * table is a fresh database, which startup's pristine seeding owns, and more
+ * than one origin is an ambiguous policy a deploy must not guess at.
  */
 
 import { panic, Result } from "better-result";
@@ -42,7 +54,8 @@ import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
 import { assertBetterAuthOAuthPolicyCensus } from "../lib/db/better-auth-oauth-policy-census";
-import { getBetterAuthOAuthResources } from "../lib/oauth-resource-policy";
+import { isRecord } from "../lib/type-guards";
+import { buildBetterAuthOAuthResources } from "../mcp/resource-policy-contract";
 import {
   backfillOAuthClients,
   seedOAuthResources,
@@ -71,6 +84,8 @@ const CLIENT_PAGE_SIZE = 200;
 const LOCK_TIMEOUT = "10s";
 const STATEMENT_TIMEOUT = "2min";
 
+const READ_RESOURCE_IDENTIFIERS_SQL = "SELECT identifier FROM oauth_resource";
+
 const dialect = new PgDialect();
 
 /**
@@ -85,8 +100,48 @@ const bindTo = (connection: OnlineMigrationConnection) => ({
   },
 });
 
+/**
+ * The origin this deployment's resource identifiers are built on, read off the
+ * identifiers it already stores. `null` when the table is empty: a fresh
+ * database has no policy to reconcile and startup's pristine seeding owns it.
+ */
+const readStoredOrigin = async (
+  connection: OnlineMigrationConnection,
+): Promise<string | null> => {
+  const rows = await connection.query(READ_RESOURCE_IDENTIFIERS_SQL);
+  const origins = new Set<string>();
+  for (const row of rows) {
+    if (!isRecord(row) || typeof row["identifier"] !== "string") {
+      return panic(
+        `Online repair ${REPAIR_NAME}: oauth_resource has an invalid shape`,
+      );
+    }
+    const parsed = URL.parse(row["identifier"]);
+    if (parsed === null) {
+      return panic(
+        `Online repair ${REPAIR_NAME}: a stored resource identifier is not a URL`,
+      );
+    }
+    origins.add(parsed.origin);
+  }
+  if (origins.size > 1) {
+    // Two origins mean two deployments' policies in one database. Guessing
+    // which one a new audience belongs to could advertise it on the wrong
+    // host, so the deploy stops instead.
+    return panic(
+      `Online repair ${REPAIR_NAME}: oauth_resource holds ${String(origins.size)} distinct origins`,
+    );
+  }
+  const [origin] = [...origins];
+  return origin === undefined ? null : origin;
+};
+
 const repair = async (connection: OnlineMigrationConnection): Promise<void> => {
-  const expectedResources = getBetterAuthOAuthResources();
+  const origin = await readStoredOrigin(connection);
+  if (origin === null) {
+    return;
+  }
+  const expectedResources = buildBetterAuthOAuthResources(origin);
 
   await connection.execute("BEGIN");
   // Transaction boundary on a raw connection: a failure is rolled back so the
@@ -125,11 +180,17 @@ const repair = async (connection: OnlineMigrationConnection): Promise<void> => {
 const assertComplete = async (
   connection: OnlineMigrationConnection,
 ): Promise<void> => {
+  const origin = await readStoredOrigin(connection);
+  if (origin === null) {
+    // Nothing was owed, so nothing is incomplete. The API's own startup gate
+    // seeds and then verifies a fresh database.
+    return;
+  }
   const census = await Result.tryPromise({
     try: async () =>
       await assertBetterAuthOAuthPolicyCensus(
         bindTo(connection),
-        getBetterAuthOAuthResources(),
+        buildBetterAuthOAuthResources(origin),
       ),
     catch: (cause) => cause,
   });
