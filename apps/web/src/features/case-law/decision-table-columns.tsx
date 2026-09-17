@@ -145,7 +145,10 @@ export const useDecisionTableSchema = ({
   const t = useTranslations();
   const questionColumns =
     questions.type === "available" ? questions.columns : NO_QUESTION_COLUMNS;
-  const withQuestionSurface = questions.type === "available";
+  // The add-column column is the way into writing a question, which a reader
+  // without an account is offered too; only a surface with nothing to ask of
+  // drops it.
+  const withQuestionSurface = questions.type !== "hidden";
 
   return useMemo(
     () =>

@@ -35,8 +35,9 @@ type LegalReaderAIChatProps = {
  * question typed here carries the decision — or the consolidation — the way
  * one typed over a PDF carries the PDF.
  *
- * A visitor gets nothing but their text back: the chat is an account feature
- * and the public shell offers its own way in.
+ * A visitor gets the same bar in the same place, without a runtime behind it:
+ * the account is asked for when they press it, not by taking the composer
+ * away.
  */
 export const LegalReaderAIChat = ({
   activeLegal,
@@ -49,8 +50,9 @@ export const LegalReaderAIChat = ({
   if (user === null) {
     return (
       <FileViewerWithAI
+        activeLegal={activeLegal}
         className={className}
-        overlayActivation={FILE_CHAT_OVERLAY_ACTIVATION.deferred}
+        overlayActivation={FILE_CHAT_OVERLAY_ACTIVATION.gated}
       >
         {children}
       </FileViewerWithAI>

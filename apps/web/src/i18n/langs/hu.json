@@ -89,6 +89,7 @@
     "continueWithMicrosoft": "Folytatás Microsofttal",
     "createFirstAccount": "Első fiók létrehozása",
     "createFirstOrganization": "Hozza létre első szervezetét a kezdéshez",
+    "createFreeAccount": "Ingyenes fiók létrehozása",
     "createOrganization": "Szervezet létrehozása",
     "createOrganizationButton": "Szervezet létrehozása",
     "devQuickStart": {
@@ -131,6 +132,13 @@
     "organizationNamePlaceholder": "Szervezetem",
     "password": "Jelszó",
     "rateLimitExceeded": "Túl sok próbálkozás. Kérjük, próbálja újra később.",
+    "requireAccount": {
+      "askAboutDocument": "Hozzon létre ingyenes fiókot, hogy kérdezhessen erről a dokumentumról",
+      "askInChat": "Hozzon létre ingyenes fiókot, hogy ezt megkérdezhesse a csevegésben",
+      "description": "Amint elkészül a fiókja, visszatér erre az oldalra.",
+      "generateHeadnotes": "Hozzon létre ingyenes fiókot az MI jogi tételek elkészítéséhez",
+      "writeResearchQuestion": "Hozzon létre ingyenes fiókot, hogy kérdést tegyen fel ezeknek a találatoknak"
+    },
     "resendCode": "Kód újraküldése erre: <email>{emailAddress}</email>",
     "selectOrganization": "Válasszon szervezetet",
     "signIn": "Bejelentkezés",
@@ -566,6 +574,7 @@
         "procedural-history": "Eljárási előzmények",
         "reasoning": "Érvelés"
       },
+      "generate": "MI jogi tételek elkészítése",
       "holdingAnchor": "Ugrás a bekezdésre",
       "topics": "Témák",
       "treatment": "Későbbi megítélés"
@@ -3319,7 +3328,6 @@
       "colorViolet": "Lila",
       "colorYellow": "Sárga",
       "commentPlaceholder": "Írj megjegyzést…",
-      "createFreeAccount": "Ingyenes fiók létrehozása",
       "guestAuthor": "Ön",
       "guestLimitReached": "Ez a lap legfeljebb {count} kiemelést és jegyzetet tud tárolni. Továbbiak mentéséhez hozzon létre fiókot.",
       "guestMigrationComplete": "A kiemelések és jegyzetek mentve.",
@@ -4144,7 +4152,6 @@
     "provisionAskContextPrompt": "\n\nA rendelkezést alkalmazó részletek a legnagyobb súlyú határozatokból:\n{passages}\n\nAz ítélkezési gyakorlat eszközeivel bármelyik határozatot teljes terjedelmében elolvashatod, vagy további, a rendelkezésre hivatkozó határozatokat kereshetsz.",
     "provisionAskPlaceholder": "Kérdezzen erről a rendelkezésről",
     "provisionAskQuestionPrompt": "{subject} kapcsán: {question}",
-    "provisionAskSignIn": "A rendelkezéssel kapcsolatos kérdéshez jelentkezzen be.",
     "provisionAskSummarize": "Foglald össze, hogyan alkalmazzák a bíróságok ezt a rendelkezést",
     "provisionAskSummarizePrompt": "Foglald össze, hogyan alkalmazzák a bíróságok a következőt: {subject}, és hivatkozz a felhasznált határozatokra.",
     "provisionDetailsFor": "{provision} részletei",

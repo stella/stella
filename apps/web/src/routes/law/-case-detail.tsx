@@ -6,6 +6,7 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 
+import { useRequireAccount } from "@/components/auth/use-require-account";
 import { createCaseDecisionDetailsTab } from "@/components/inspector/case-decision-details-view";
 import {
   createCaseDecisionViewTab,
@@ -15,7 +16,6 @@ import {
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { useInspectorView } from "@/components/inspector/use-inspector-view";
 import { OpenOriginalButton } from "@/components/legal-reader/open-original-button";
-import { usePublicSignInRequest } from "@/components/public-sign-in-request";
 import Tooltip from "@/components/tooltip";
 import { buildDecisionFacts } from "@/features/case-law/components/case-viewer/decision-facts.logic";
 import { DecisionWorkspace } from "@/features/case-law/components/case-viewer/decision-workspace";
@@ -153,7 +153,7 @@ export function PublicDecisionViewer({
           fallback={
             <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
               <DecisionWorkspace
-                aiMode="locked"
+                aiMode="gated"
                 decision={decision}
                 decisionId={decisionId}
                 initialAnchorId={initialAnchorId}
@@ -193,23 +193,21 @@ const GuestDecisionWorkspace = ({
   initialAnchorId?: string | undefined;
   initialSearchQuery?: string | undefined;
 }) => {
-  const requestSignIn = usePublicSignInRequest();
-  const currentHref = useRouterState({
-    select: (state) => state.location.href,
-  });
+  const { accountDialog, ensureAccount } = useRequireAccount();
 
   return (
     <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
       <DecisionWorkspace
-        aiMode="locked"
+        aiMode="gated"
         decision={decision}
         decisionId={decisionId}
         initialAnchorId={initialAnchorId}
         initialSearchQuery={initialSearchQuery}
-        onRequestAI={
-          requestSignIn === null ? undefined : () => requestSignIn(currentHref)
-        }
+        onRequestAnalysis={() => {
+          ensureAccount("generateHeadnotes");
+        }}
       />
+      {accountDialog}
     </div>
   );
 };

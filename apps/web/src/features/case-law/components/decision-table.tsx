@@ -18,7 +18,6 @@ import { useTranslations } from "use-intl";
 import { cn } from "@stll/ui/utils";
 
 import { queryHighlightTokens } from "@/components/legal-reader/query-marks";
-import { BulkAddColumns } from "@/components/workspaces/bulk-add-columns";
 import { FindHighlightScope } from "@/components/workspaces/table/find-highlight";
 import type { TableFindHighlight } from "@/components/workspaces/table/find-highlight";
 import { MobileTableOrientationGate } from "@/components/workspaces/table/mobile-table-orientation-gate";
@@ -36,6 +35,10 @@ import {
   DecisionRenderScope,
   useDecisionTableColumns,
 } from "@/features/case-law/decision-table-columns";
+import {
+  AddQuestionColumn,
+  questionColumnAddAction,
+} from "@/features/case-law/research/add-question-column";
 import type { QuestionColumnSurface } from "@/features/case-law/research/question-columns.logic";
 
 export type { Decision } from "@/features/case-law/components/decision-cells";
@@ -160,23 +163,18 @@ export const DecisionTable = ({
     ...tableState.listeners,
   });
 
-  // The rail is a write affordance: a reader the organization has not granted
-  // `create` gets the table without it, not a trigger that fails on submit.
+  // The rail is a transparent strip pinned over the table's end columns, so it
+  // is reserved only where it actually carries a control; otherwise it would
+  // swallow clicks on the cells beneath it.
   const rowHost = useDecisionRowHost({
     searchQuery: query,
-    ...(questions.type === "available" && questions.grants.create
-      ? {
+    ...(questionColumnAddAction(questions) === null
+      ? {}
+      : {
           addColumnRail: (
-            <BulkAddColumns
-              target={{
-                kind: "organisation",
-                suggestion: questions.suggestion,
-              }}
-              triggerVariant="rail"
-            />
+            <AddQuestionColumn surface={questions} triggerVariant="rail" />
           ),
-        }
-      : {}),
+        }),
   });
 
   // Which rows are showing their whole headnote is about this screenful of

@@ -89,6 +89,7 @@
     "continueWithMicrosoft": "Weiter mit Microsoft",
     "createFirstAccount": "Erstes Konto erstellen",
     "createFirstOrganization": "Erstellen Sie Ihre erste Organisation",
+    "createFreeAccount": "Kostenloses Konto erstellen",
     "createOrganization": "Organisation erstellen",
     "createOrganizationButton": "Organisation erstellen",
     "devQuickStart": {
@@ -131,6 +132,13 @@
     "organizationNamePlaceholder": "Meine Organisation",
     "password": "Passwort",
     "rateLimitExceeded": "Zu viele Versuche. Bitte versuchen Sie es später erneut.",
+    "requireAccount": {
+      "askAboutDocument": "Erstellen Sie ein kostenloses Konto, um Fragen zu diesem Dokument zu stellen",
+      "askInChat": "Erstellen Sie ein kostenloses Konto, um das im Chat zu fragen",
+      "description": "Sobald Ihr Konto bereit ist, kehren Sie auf diese Seite zurück.",
+      "generateHeadnotes": "Erstellen Sie ein kostenloses Konto, um KI-Leitsätze zu erzeugen",
+      "writeResearchQuestion": "Erstellen Sie ein kostenloses Konto, um diesen Ergebnissen eine Frage zu stellen"
+    },
     "resendCode": "Code erneut an <email>{emailAddress}</email> senden",
     "selectOrganization": "Organisation auswählen",
     "signIn": "Anmelden",
@@ -566,6 +574,7 @@
         "procedural-history": "Verfahrensgang",
         "reasoning": "Argumentation"
       },
+      "generate": "KI-Leitsätze erzeugen",
       "holdingAnchor": "Zum Absatz",
       "topics": "Themen",
       "treatment": "Spätere Rezeption"
@@ -3319,7 +3328,6 @@
       "colorViolet": "Violett",
       "colorYellow": "Gelb",
       "commentPlaceholder": "Kommentar schreiben…",
-      "createFreeAccount": "Kostenloses Konto erstellen",
       "guestAuthor": "Sie",
       "guestLimitReached": "Dieser Tab kann bis zu {count} Hervorhebungen und Notizen speichern. Erstellen Sie ein Konto, um mehr zu speichern.",
       "guestMigrationComplete": "Hervorhebungen und Notizen gespeichert.",
@@ -4144,7 +4152,6 @@
     "provisionAskContextPrompt": "\n\nPassagen, die die Vorschrift in den maßgeblichsten Entscheidungen anwenden:\n{passages}\n\nNutze die Rechtsprechungswerkzeuge, um eine dieser Entscheidungen vollständig zu lesen oder weitere Entscheidungen zu finden, die die Vorschrift zitieren.",
     "provisionAskPlaceholder": "Zu dieser Vorschrift fragen",
     "provisionAskQuestionPrompt": "Zu {subject}: {question}",
-    "provisionAskSignIn": "Melden Sie sich an, um zu dieser Vorschrift zu fragen.",
     "provisionAskSummarize": "Zusammenfassen, wie Gerichte diese Vorschrift anwenden",
     "provisionAskSummarizePrompt": "Fasse zusammen, wie Gerichte {subject} anwenden, und zitiere die herangezogenen Entscheidungen.",
     "provisionDetailsFor": "Einzelheiten zu {provision}",

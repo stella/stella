@@ -1,4 +1,3 @@
-import { useRouterState } from "@tanstack/react-router";
 import { MessageSquareTextIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -13,9 +12,9 @@ import {
 } from "@stll/ui/select";
 import { cn } from "@stll/ui/utils";
 
+import { ACCOUNT_GATE_OUTCOME } from "@/components/auth/require-account.logic";
+import { useRequireAccount } from "@/components/auth/use-require-account";
 import { openPublicLawChat } from "@/components/public-law-ask";
-import { usePublicSignInRequest } from "@/components/public-sign-in-request";
-import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 
 /**
  * How much of the page the box takes. `inline` is a row among others;
@@ -154,8 +153,9 @@ const PublicLawCountrySelect = ({
 };
 
 /**
- * Hands the entry to a chat with the corpus tools. The chat is an account
- * feature: a visitor is sent to sign in and comes back to the same list.
+ * Hands the entry to a chat with the corpus tools. Drawn for every reader; a
+ * visitor is asked for an account at the moment the question would be sent,
+ * and comes back to the same list.
  */
 export const PublicLawAskInChat = ({
   label,
@@ -165,36 +165,26 @@ export const PublicLawAskInChat = ({
   prompt: string;
 }) => {
   const t = useTranslations();
-  const user = useMaybeAuthenticatedUser();
-  const requestSignIn = usePublicSignInRequest();
-  const currentHref = useRouterState({
-    select: (state) => state.location.href,
-  });
-
-  if (user === null && requestSignIn === null) {
-    return null;
-  }
-
-  const ask = () => {
-    if (user === null) {
-      if (requestSignIn !== null) {
-        requestSignIn(currentHref);
-      }
-      return;
-    }
-    openPublicLawChat({ label, prompt });
-  };
+  const { accountDialog, ensureAccount } = useRequireAccount();
 
   return (
-    <Button
-      className="text-muted-foreground text-xs"
-      onClick={ask}
-      size="sm"
-      type="button"
-      variant="ghost"
-    >
-      <MessageSquareTextIcon aria-hidden="true" className="size-3.5" />
-      {t("common.askInChat")}
-    </Button>
+    <>
+      <Button
+        className="text-muted-foreground text-xs"
+        onClick={() => {
+          if (ensureAccount("askInChat") !== ACCOUNT_GATE_OUTCOME.allowed) {
+            return;
+          }
+          openPublicLawChat({ label, prompt });
+        }}
+        size="sm"
+        type="button"
+        variant="ghost"
+      >
+        <MessageSquareTextIcon aria-hidden="true" className="size-3.5" />
+        {t("common.askInChat")}
+      </Button>
+      {accountDialog}
+    </>
   );
 };

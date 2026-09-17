@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { sessionOptions } from "@/lib/auth-queries";
 import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
 
-type ClientAuthStatus =
+export type ClientAuthStatus =
   | { status: "checking"; isAuthenticated: false }
   | { status: "anonymous"; isAuthenticated: false }
   | {

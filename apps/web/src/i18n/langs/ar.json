@@ -89,6 +89,7 @@
     "continueWithMicrosoft": "المتابعة باستخدام Microsoft",
     "createFirstAccount": "إنشاء الحساب الأول",
     "createFirstOrganization": "أنشئ مؤسستك الأولى للبدء",
+    "createFreeAccount": "إنشاء حساب مجاني",
     "createOrganization": "إنشاء مؤسسة",
     "createOrganizationButton": "إنشاء مؤسسة",
     "devQuickStart": {
@@ -131,6 +132,13 @@
     "organizationNamePlaceholder": "مؤسستي",
     "password": "كلمة المرور",
     "rateLimitExceeded": "محاولات كثيرة جدًا. يُرجى المحاولة مرة أخرى لاحقًا.",
+    "requireAccount": {
+      "askAboutDocument": "أنشئ حسابًا مجانيًا لطرح سؤال عن هذا المستند",
+      "askInChat": "أنشئ حسابًا مجانيًا لطرح هذا السؤال في المحادثة",
+      "description": "ستعود إلى هذه الصفحة بمجرد أن يصبح حسابك جاهزًا.",
+      "generateHeadnotes": "أنشئ حسابًا مجانيًا لتوليد خلاصات الحكم بالذكاء الاصطناعي",
+      "writeResearchQuestion": "أنشئ حسابًا مجانيًا لطرح سؤال على هذه النتائج"
+    },
     "resendCode": "إرسال الرمز مرة أخرى إلى <email>{emailAddress}</email>",
     "selectOrganization": "اختر مؤسسة",
     "signIn": "تسجيل الدخول",
@@ -566,6 +574,7 @@
         "procedural-history": "التاريخ الإجرائي",
         "reasoning": "التسبيب"
       },
+      "generate": "توليد خلاصات الحكم بالذكاء الاصطناعي",
       "holdingAnchor": "الانتقال إلى الفقرة",
       "topics": "الموضوعات",
       "treatment": "المعالجة اللاحقة"
@@ -3319,7 +3328,6 @@
       "colorViolet": "بنفسجي",
       "colorYellow": "أصفر",
       "commentPlaceholder": "اكتب تعليقًا…",
-      "createFreeAccount": "إنشاء حساب مجاني",
       "guestAuthor": "أنت",
       "guestLimitReached": "يمكن أن يحتوي هذا التبويب على ما يصل إلى {count} من التمييزات والملاحظات. أنشئ حسابًا لحفظ المزيد.",
       "guestMigrationComplete": "تم حفظ التمييزات والملاحظات.",
@@ -4144,7 +4152,6 @@
     "provisionAskContextPrompt": "\n\nمقاطع تطبّق هذا الحكم في أكثر القرارات حجية:\n{passages}\n\nاستخدم أدوات السوابق القضائية لقراءة أي من هذه القرارات كاملاً أو للعثور على قرارات أخرى تستشهد بهذا الحكم.",
     "provisionAskPlaceholder": "اسأل عن هذه المادة",
     "provisionAskQuestionPrompt": "بخصوص {subject}: {question}",
-    "provisionAskSignIn": "سجّل الدخول لطرح سؤال عن هذه المادة.",
     "provisionAskSummarize": "لخّص كيف تطبّق المحاكم هذه المادة",
     "provisionAskSummarizePrompt": "لخّص كيف تطبّق المحاكم {subject}، مع الإشارة إلى الأحكام التي تستند إليها.",
     "provisionDetailsFor": "تفاصيل {provision}",

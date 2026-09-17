@@ -89,6 +89,7 @@
     "continueWithMicrosoft": "Continuer avec Microsoft",
     "createFirstAccount": "Créer le premier compte",
     "createFirstOrganization": "Créez votre première organisation pour commencer",
+    "createFreeAccount": "Créer un compte gratuit",
     "createOrganization": "Créer une organisation",
     "createOrganizationButton": "Créer l'organisation",
     "devQuickStart": {
@@ -131,6 +132,13 @@
     "organizationNamePlaceholder": "Mon organisation",
     "password": "Mot de passe",
     "rateLimitExceeded": "Trop de tentatives. Veuillez réessayer plus tard.",
+    "requireAccount": {
+      "askAboutDocument": "Créez un compte gratuit pour poser une question sur ce document",
+      "askInChat": "Créez un compte gratuit pour poser cette question dans le chat",
+      "description": "Vous reviendrez à cette page dès que votre compte sera prêt.",
+      "generateHeadnotes": "Créez un compte gratuit pour générer des sommaires par IA",
+      "writeResearchQuestion": "Créez un compte gratuit pour poser une question à ces résultats"
+    },
     "resendCode": "Renvoyer le code à <email>{emailAddress}</email>",
     "selectOrganization": "Sélectionner une organisation",
     "signIn": "Se connecter",
@@ -566,6 +574,7 @@
         "procedural-history": "Procédure",
         "reasoning": "Raisonnement"
       },
+      "generate": "Générer les sommaires par IA",
       "holdingAnchor": "Aller au paragraphe",
       "topics": "Thèmes",
       "treatment": "Traitement ultérieur"
@@ -3319,7 +3328,6 @@
       "colorViolet": "Pourpre",
       "colorYellow": "Jaune",
       "commentPlaceholder": "Écrire un commentaire…",
-      "createFreeAccount": "Créer un compte gratuit",
       "guestAuthor": "Vous",
       "guestLimitReached": "Cet onglet peut contenir jusqu’à {count} surlignages et notes. Créez un compte pour en enregistrer davantage.",
       "guestMigrationComplete": "Surlignages et notes enregistrés.",
@@ -4144,7 +4152,6 @@
     "provisionAskContextPrompt": "\n\nPassages appliquant la disposition dans les décisions les plus autorisées :\n{passages}\n\nUtilise les outils de jurisprudence pour lire l’une de ces décisions en entier ou pour trouver d’autres décisions citant la disposition.",
     "provisionAskPlaceholder": "Poser une question sur cette disposition",
     "provisionAskQuestionPrompt": "À propos de {subject} : {question}",
-    "provisionAskSignIn": "Connectez-vous pour poser une question sur cette disposition.",
     "provisionAskSummarize": "Résumer l’application de cette disposition par les juridictions",
     "provisionAskSummarizePrompt": "Résume la façon dont les juridictions appliquent {subject}, en citant les décisions retenues.",
     "provisionDetailsFor": "Détails de {provision}",

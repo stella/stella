@@ -2,14 +2,14 @@ import { lazy, Suspense, useRef } from "react";
 import type { ReactNode } from "react";
 
 import { useQuery } from "@tanstack/react-query";
-import { Link, useRouterState } from "@tanstack/react-router";
+import { Link } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/button";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Skeleton } from "@stll/ui/skeleton";
 
 import type { ActiveLegalDocument } from "@/components/ai-suggestions/active-legal-document";
+import { useRequireAccount } from "@/components/auth/use-require-account";
 import {
   InspectorFindBar,
   useInspectorFind,
@@ -22,7 +22,6 @@ import { ZoomControls } from "@/components/inspector/zoom-controls";
 import { LegalReaderAIChat } from "@/components/legal-reader/legal-reader-ai-chat";
 import { OpenOriginalButton } from "@/components/legal-reader/open-original-button";
 import { useReaderTextScale } from "@/components/legal-reader/use-reader-text-scale";
-import { usePublicSignInRequest } from "@/components/public-sign-in-request";
 import {
   CitingDecisionItem,
   ProvisionCitingDecisions,
@@ -39,11 +38,10 @@ import {
   statuteVersionsOptions,
 } from "@/features/statutes/queries/statutes";
 import { optionalArray } from "@/lib/arrays";
-import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { createStatuteLinkTarget } from "@/lib/statute-route";
 
-// The ask actions pull the chat composer's draft machinery; a visitor who
-// cannot chat never loads it.
+// The ask actions pull the prompt builders the chat needs; the pane is read
+// far more often than it is asked a question, so they arrive on demand.
 const LazyProvisionAskActions = lazy(async () => {
   const module =
     await import("@/features/statutes/components/provision-ask-actions");
@@ -276,8 +274,9 @@ const ProvisionSection = ({
 );
 
 /**
- * Asking needs a session: the chat is an account feature. A visitor is
- * offered the sign-in instead, and keeps the wording, citations and history.
+ * The two ways to ask about a provision, drawn for every reader. Writing the
+ * question costs nothing; sending it is what needs an account, and the gate
+ * asks there, keeping the wording, the citations and the history on screen.
  */
 const ProvisionAsk = ({
   activeLegal,
@@ -288,49 +287,19 @@ const ProvisionAsk = ({
   passages: readonly CitingDecisionRow[];
   payload: ProvisionViewPayload;
 }) => {
-  const t = useTranslations();
-  const user = useMaybeAuthenticatedUser();
-  const requestSignIn = usePublicSignInRequest();
-  const currentHref = useRouterState({
-    select: (state) => state.location.href,
-  });
+  const { accountDialog, ensureAccount } = useRequireAccount();
 
-  if (user !== null) {
-    return (
+  return (
+    <>
       <Suspense fallback={<Skeleton className="h-16 w-full" />}>
         <LazyProvisionAskActions
           activeLegal={activeLegal}
+          ensureAccount={() => ensureAccount("askAboutDocument")}
           passages={passages}
           payload={payload}
         />
       </Suspense>
-    );
-  }
-
-  return (
-    <div className="flex flex-col items-start gap-2">
-      <p className="text-muted-foreground text-xs">
-        {t("statutes.provisionAskSignIn")}
-      </p>
-      {requestSignIn === null ? (
-        <Button
-          className="text-xs"
-          render={<Link search={{ redirectTo: currentHref }} to="/auth" />}
-          size="sm"
-          variant="outline"
-        >
-          {t("auth.signIn")}
-        </Button>
-      ) : (
-        <Button
-          className="text-xs"
-          onClick={() => requestSignIn(currentHref)}
-          size="sm"
-          variant="outline"
-        >
-          {t("auth.signIn")}
-        </Button>
-      )}
-    </div>
+      {accountDialog}
+    </>
   );
 };

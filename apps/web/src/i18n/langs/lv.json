@@ -89,6 +89,7 @@
     "continueWithMicrosoft": "Turpināt ar Microsoft",
     "createFirstAccount": "Izveidot pirmo kontu",
     "createFirstOrganization": "Izveidojiet savu pirmo organizāciju, lai sāktu darbu",
+    "createFreeAccount": "Izveidot bezmaksas kontu",
     "createOrganization": "Izveidot organizāciju",
     "createOrganizationButton": "Izveidot organizāciju",
     "devQuickStart": {
@@ -131,6 +132,13 @@
     "organizationNamePlaceholder": "Mana organizācija",
     "password": "Parole",
     "rateLimitExceeded": "Pārāk daudz mēģinājumu. Lūdzu, mēģiniet vēlāk.",
+    "requireAccount": {
+      "askAboutDocument": "Izveidojiet bezmaksas kontu, lai jautātu par šo dokumentu",
+      "askInChat": "Izveidojiet bezmaksas kontu, lai jautātu to tērzēšanā",
+      "description": "Kad konts būs gatavs, atgriezīsieties šajā lapā.",
+      "generateHeadnotes": "Izveidojiet bezmaksas kontu, lai MI sagatavotu kopsavilkumus",
+      "writeResearchQuestion": "Izveidojiet bezmaksas kontu, lai uzdotu jautājumu šiem rezultātiem"
+    },
     "resendCode": "Nosūtīt kodu vēlreiz uz <email>{emailAddress}</email>",
     "selectOrganization": "Izvēlieties organizāciju",
     "signIn": "Pieslēgties",
@@ -566,6 +574,7 @@
         "procedural-history": "Procesa gaita",
         "reasoning": "Argumentācija"
       },
+      "generate": "Sagatavot MI kopsavilkumus",
       "holdingAnchor": "Pāriet uz rindkopu",
       "topics": "Tēmas",
       "treatment": "Vēlākā judikatūra"
@@ -3319,7 +3328,6 @@
       "colorViolet": "Violets",
       "colorYellow": "Dzeltens",
       "commentPlaceholder": "Rakstiet komentāru…",
-      "createFreeAccount": "Izveidot bezmaksas kontu",
       "guestAuthor": "Jūs",
       "guestLimitReached": "Šajā cilnē var saglabāt līdz {count} izcēlumiem un piezīmēm. Lai saglabātu vairāk, izveidojiet kontu.",
       "guestMigrationComplete": "Izcēlumi un piezīmes saglabāti.",
@@ -4144,7 +4152,6 @@
     "provisionAskContextPrompt": "\n\nFragmenti, kuros norma piemērota autoritatīvākajos nolēmumos:\n{passages}\n\nIzmanto judikatūras rīkus, lai izlasītu jebkuru no šiem nolēmumiem pilnībā vai atrastu citus nolēmumus, kas atsaucas uz normu.",
     "provisionAskPlaceholder": "Jautājiet par šo normu",
     "provisionAskQuestionPrompt": "Par {subject}: {question}",
-    "provisionAskSignIn": "Piesakieties, lai jautātu par šo normu.",
     "provisionAskSummarize": "Apkopot, kā tiesas piemēro šo normu",
     "provisionAskSummarizePrompt": "Apkopo, kā tiesas piemēro {subject}, un atsaucies uz nolēmumiem, uz kuriem balsties.",
     "provisionDetailsFor": "{provision} informācija",

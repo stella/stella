@@ -92,6 +92,7 @@ type Messages = {
     "continueWithMicrosoft": "Continue with Microsoft";
     "createFirstAccount": "Create first account";
     "createFirstOrganization": "Create your first organization to get started";
+    "createFreeAccount": "Create free account";
     "createOrganization": "Create an organization";
     "createOrganizationButton": "Create organization";
     "devQuickStart": {
@@ -134,6 +135,13 @@ type Messages = {
     "organizationNamePlaceholder": "My organization";
     "password": "Password";
     "rateLimitExceeded": "Too many attempts. Please try again later.";
+    "requireAccount": {
+      "askAboutDocument": "Create a free account to ask about this document";
+      "askInChat": "Create a free account to ask this in chat";
+      "description": "You'll come back to this page once your account is ready.";
+      "generateHeadnotes": "Create a free account to generate AI headnotes";
+      "writeResearchQuestion": "Create a free account to ask a question of these results";
+    };
     "resendCode": "Send code again to <email>{emailAddress}</email>";
     "selectOrganization": "Select an organization";
     "signIn": "Sign in";
@@ -569,6 +577,7 @@ type Messages = {
         "procedural-history": "Procedural history";
         "reasoning": "Reasoning";
       };
+      "generate": "Generate AI headnotes";
       "holdingAnchor": "Go to paragraph";
       "topics": "Topics";
       "treatment": "Later treatment";
@@ -3322,7 +3331,6 @@ type Messages = {
       "colorViolet": "Violet";
       "colorYellow": "Yellow";
       "commentPlaceholder": "Write a comment…";
-      "createFreeAccount": "Create free account";
       "guestAuthor": "You";
       "guestLimitReached": "This tab can hold up to {count} highlights and notes. Create an account to save more.";
       "guestMigrationComplete": "Highlights and notes saved.";
@@ -4147,7 +4155,6 @@ type Messages = {
     "provisionAskContextPrompt": "\n\nPassages applying it in the most authoritative decisions:\n{passages}\n\nUse the case-law tools to read any of these decisions in full or to find further decisions citing the provision.";
     "provisionAskPlaceholder": "Ask about this provision";
     "provisionAskQuestionPrompt": "About {subject}: {question}";
-    "provisionAskSignIn": "Sign in to ask about this provision.";
     "provisionAskSummarize": "Summarize how courts apply this provision";
     "provisionAskSummarizePrompt": "Summarize how courts apply {subject}, citing the decisions you rely on.";
     "provisionDetailsFor": "Details of {provision}";

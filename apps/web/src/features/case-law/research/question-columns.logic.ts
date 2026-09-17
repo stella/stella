@@ -416,27 +416,39 @@ export type AvailableQuestionColumns = {
 };
 
 /**
+ * A reader without an organization, on a surface that asks questions. The
+ * columns and the answers belong to an organization, so there are none to
+ * draw and none to read; writing a question is still offered, and the account
+ * is asked for the moment the composer would open. Nothing here reads the
+ * organization's columns, so no request is spent on a reader who has none.
+ */
+type GatedQuestionColumns = {
+  type: "gated";
+  /** What a newly written question would be grounded in; needs no account. */
+  suggestion: QuestionSuggestionScope;
+};
+
+/**
  * How much of the question surface a reader gets.
  *
- * The results page is public. A reader without an organization has nothing to
- * hang a question on and no way to pay for an answer, so they get the plain
- * table: no columns, and, because one answer decides both, no control that
- * would create or run one. `hidden` carries no columns at all, so a reader who
- * signed out cannot be drawn a column the table happens to still hold.
+ * A surface with nothing to ask of — a matter with no decision linked — is
+ * `hidden`: no columns, and no control over columns it would have to read the
+ * organization to draw. It carries no columns at all, so a reader who signed
+ * out cannot be drawn a column the table happens to still hold.
  *
- * A surface with nothing to ask of — a matter with no decision linked — is the
- * same `hidden`. It is one answer rather than two because every control the
- * available surface carries reads the organization's columns to draw itself:
- * a second gate on the reads alone would still let the add-column rail ask.
+ * The results page is public, so a reader without an organization gets
+ * `gated`: the same table, and the same way into writing a question, with the
+ * account asked for at that step rather than by removing the control.
  *
- * Holding no grant is not one of these answers. A member the organization has
- * not licensed to author or run questions still belongs to it, so they get the
+ * Holding no grant is neither of those. A member the organization has not
+ * licensed to author or run questions still belongs to it, so they get the
  * available surface and read every column and answer on it; `grants` decides
  * what they are offered, not whether they see the work.
  */
 export type QuestionColumnSurface =
   | { type: "hidden" }
-  | AvailableQuestionColumns;
+  | AvailableQuestionColumns
+  | GatedQuestionColumns;
 
 export const questionColumnSurface = ({
   activeOrganizationId,
@@ -447,7 +459,12 @@ export const questionColumnSurface = ({
   activeOrganizationId: string | null;
   /** Whether this surface has anything to ask a question of. */
   enabled: boolean;
-}): QuestionColumnSurface =>
-  enabled && activeOrganizationId !== null
-    ? { type: "available", ...available }
-    : { type: "hidden" };
+}): QuestionColumnSurface => {
+  if (!enabled) {
+    return { type: "hidden" };
+  }
+
+  return activeOrganizationId === null
+    ? { type: "gated", suggestion: available.suggestion }
+    : { type: "available", ...available };
+};

@@ -10,6 +10,7 @@ import { QuerySuspenseBoundary } from "@/components/query-suspense-boundary";
 import type { ChatThreadId } from "@/lib/chat-thread-ref";
 
 import { FILE_CHAT_OVERLAY_ACTIVATION } from "./file-viewer-with-ai-config";
+import type { FileChatOverlayActivation } from "./file-viewer-with-ai-config";
 import type { FileViewerWithAIProps } from "./file-viewer-with-ai.impl";
 
 // The actual implementation pulls in `host.tsx`, `file-chat-overlay.tsx`,
@@ -24,6 +25,29 @@ const createLazyFileChatOverlayHost = () =>
     const m = await import("./file-viewer-with-ai.impl");
     return { default: m.FileChatOverlayHost };
   });
+
+// The gated bar carries the docked geometry, the placeholder copy and the
+// integration stylesheet, and nothing else, so it stays out of the public
+// reader's own chunk without pulling the overlay graph above in behind it.
+// A factory for the same reason the host above is one: the type has to be
+// rebuilt to retry a failed import.
+const createLazyGatedChatComposer = () =>
+  lazy(async () => {
+    const m = await import("./gated-chat-composer");
+    return { default: m.GatedChatComposer };
+  });
+
+/**
+ * Which activations float a composer over the document, and therefore need the
+ * integration stylesheet's trailing reserve so the document's last page can
+ * clear it. Total over the union: a new activation answers this before it
+ * ships, rather than silently leaving its last paragraphs under the bar.
+ */
+const ACTIVATION_FLOATS_COMPOSER = {
+  active: true,
+  deferred: false,
+  gated: true,
+} as const satisfies Record<FileChatOverlayActivation, boolean>;
 
 export const FileViewerWithAI = ({
   overlayActivation = FILE_CHAT_OVERLAY_ACTIVATION.active,
@@ -59,6 +83,9 @@ export const FileViewerWithAI = ({
   const [LazyFileChatOverlayHost, setLazyFileChatOverlayHost] = useState(
     createLazyFileChatOverlayHost,
   );
+  const [LazyGatedChatComposer, setLazyGatedChatComposer] = useState(
+    createLazyGatedChatComposer,
+  );
   const [overlayThread, setOverlayThread] = useState<{
     overlayKey: string;
     threadId: ChatThreadId | undefined;
@@ -71,10 +98,42 @@ export const FileViewerWithAI = ({
   return (
     <div
       className={cn("@container/file-viewer relative h-full w-full", className)}
-      data-file-viewer-ai={overlayIsActive ? "true" : undefined}
+      data-file-viewer-ai={
+        ACTIVATION_FLOATS_COMPOSER[overlayActivation] ? "true" : undefined
+      }
       data-file-viewer-root="true"
     >
       {children}
+      {overlayActivation === FILE_CHAT_OVERLAY_ACTIVATION.gated && (
+        // Its own boundary, not the active overlay's: a rejected chunk here
+        // would otherwise climb to whichever ancestor catches first and take
+        // the document down with it, and the reader is the whole page for an
+        // anonymous visitor.
+        <QuerySuspenseBoundary
+          area="gated-chat-composer"
+          errorFallback={({ reset }) => (
+            <FileChatOverlayErrorFallback
+              onRetry={() => {
+                // React.lazy caches a rejected thenable. Recreate the lazy type
+                // before resetting the boundary so a transient chunk failure
+                // gets a genuinely fresh import attempt.
+                setLazyGatedChatComposer(() => createLazyGatedChatComposer());
+                reset();
+              }}
+            />
+          )}
+          resetKeys={[overlayKey]}
+          suspenseFallback={null}
+        >
+          <LazyGatedChatComposer
+            activeDraft={activeDraft}
+            activeExternal={activeExternal}
+            activeFile={activeFile}
+            activeLegal={activeLegal}
+            docxEditSafety={docxEditSafety}
+          />
+        </QuerySuspenseBoundary>
+      )}
       {overlayIsActive && (
         <QuerySuspenseBoundary
           area="file-chat-overlay"

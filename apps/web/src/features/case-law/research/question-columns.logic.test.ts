@@ -322,14 +322,16 @@ describe("who is shown question columns", () => {
     ).toEqual({ type: "available", ...available });
   });
 
-  test("a reader without an organization sees no column and no control", () => {
+  // The results page is public: a reader without an organization has no column
+  // to read, and is still offered the way into writing one.
+  test("a reader without an organization keeps the way into a question", () => {
     expect(
       questionColumnSurface({
         ...available,
         activeOrganizationId: null,
         enabled: true,
       }),
-    ).toEqual({ type: "hidden" });
+    ).toEqual({ type: "gated", suggestion: available.suggestion });
   });
 
   test("a matter with nothing linked asks nothing of anyone", () => {

@@ -89,6 +89,7 @@
     "continueWithMicrosoft": "Pokračovat přes Microsoft",
     "createFirstAccount": "Vytvořit první účet",
     "createFirstOrganization": "Vytvořte svou první organizaci",
+    "createFreeAccount": "Vytvořit bezplatný účet",
     "createOrganization": "Vytvořit organizaci",
     "createOrganizationButton": "Vytvořit organizaci",
     "devQuickStart": {
@@ -131,6 +132,13 @@
     "organizationNamePlaceholder": "Moje organizace",
     "password": "Heslo",
     "rateLimitExceeded": "Příliš mnoho pokusů. Zkuste to prosím později.",
+    "requireAccount": {
+      "askAboutDocument": "Vytvořte si bezplatný účet a zeptejte se na tento dokument",
+      "askInChat": "Vytvořte si bezplatný účet a zeptejte se na to v chatu",
+      "description": "Až bude účet hotový, vrátíte se na tuto stránku.",
+      "generateHeadnotes": "Vytvořte si bezplatný účet a nechte AI sestavit právní věty",
+      "writeResearchQuestion": "Vytvořte si bezplatný účet a položte těmto výsledkům otázku"
+    },
     "resendCode": "Poslat kód znovu na <email>{emailAddress}</email>",
     "selectOrganization": "Vyberte organizaci",
     "signIn": "Přihlásit se",
@@ -566,6 +574,7 @@
         "procedural-history": "Procesní historie",
         "reasoning": "Uvažování"
       },
+      "generate": "Sestavit právní věty pomocí AI",
       "holdingAnchor": "Přejít na odstavec",
       "topics": "Témata",
       "treatment": "Pozdější judikatura"
@@ -3319,7 +3328,6 @@
       "colorViolet": "Fialová",
       "colorYellow": "Žlutá",
       "commentPlaceholder": "Napište komentář…",
-      "createFreeAccount": "Vytvořit bezplatný účet",
       "guestAuthor": "Vy",
       "guestLimitReached": "Tato karta může obsahovat nejvýše {count} zvýraznění a poznámek. Vytvořte si účet a uložte další.",
       "guestMigrationComplete": "Zvýraznění a poznámky byly uloženy.",
@@ -4144,7 +4152,6 @@
     "provisionAskContextPrompt": "\n\nPasáže, které toto ustanovení aplikují v nejvlivnějších rozhodnutích:\n{passages}\n\nPomocí nástrojů pro judikaturu si můžeš přečíst kterékoli z těchto rozhodnutí celé nebo dohledat další rozhodnutí, která ustanovení citují.",
     "provisionAskPlaceholder": "Zeptejte se na toto ustanovení",
     "provisionAskQuestionPrompt": "K {subject}: {question}",
-    "provisionAskSignIn": "Chcete-li se na ustanovení zeptat, přihlaste se.",
     "provisionAskSummarize": "Shrnout, jak soudy toto ustanovení používají",
     "provisionAskSummarizePrompt": "Shrň, jak soudy používají {subject}, a cituj rozhodnutí, ze kterých vycházíš.",
     "provisionDetailsFor": "Podrobnosti k {provision}",

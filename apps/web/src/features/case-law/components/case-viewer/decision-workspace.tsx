@@ -81,9 +81,27 @@ type DecisionWorkspaceBaseProps = {
   initialSearchQuery?: string | undefined;
 };
 
-type LockedDecisionWorkspaceProps = DecisionWorkspaceBaseProps & {
-  aiMode: "locked";
-  onRequestAI?: (() => void) | undefined;
+/**
+ * A reader without an account, or a member whose own workspace chunk has not
+ * arrived yet. The layer is named and offered where it would be drawn instead
+ * of being hidden, and the account is asked for on the run.
+ *
+ * Nothing is read here: the public decision payload deliberately carries no
+ * persisted analysis (`case-law-public-route-invariants.test.ts`, "public
+ * decision payload does not expose persisted AI analysis"), and the endpoint
+ * that would return one is behind `validateAuth`. So a decision that already
+ * holds an analysis still shows the offer, and taking it up returns the
+ * stored analysis through the authenticated read rather than running again.
+ * Serving it to a visitor is a corpus-exposure decision for the API, not a
+ * thing this component can decide.
+ */
+type GatedDecisionWorkspaceProps = DecisionWorkspaceBaseProps & {
+  aiMode: "gated";
+  /**
+   * Opens the account gate. Absent while a member's workspace loads: the
+   * column then names the layer without offering a run nobody owns yet.
+   */
+  onRequestAnalysis?: (() => void) | undefined;
 };
 
 type EnabledDecisionWorkspaceProps = DecisionWorkspaceBaseProps & {
@@ -93,7 +111,7 @@ type EnabledDecisionWorkspaceProps = DecisionWorkspaceBaseProps & {
 
 export type DecisionWorkspaceProps =
   | EnabledDecisionWorkspaceProps
-  | LockedDecisionWorkspaceProps;
+  | GatedDecisionWorkspaceProps;
 
 const getHeadingDisplayAnchorId = ({
   annotations,
@@ -145,7 +163,10 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
     scrollContainerRef: mainRef,
     target: annotationTarget,
   });
-  const aiEnabled = props.aiMode === "enabled";
+  // Only an account may start a run, so only this branch polls. Everything
+  // below reads `analysisState` alone: a gated reader's state never leaves
+  // `idle`, which draws the offer rather than an empty analysis column.
+  const analysisRunnable = props.aiMode === "enabled";
   const ensureAIAvailable =
     props.aiMode === "enabled" ? props.ensureAIAvailable : null;
 
@@ -199,17 +220,11 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
   }, [ensureAIAvailable, generateDecisionAnalysis]);
 
   const hasAnalysis =
-    aiEnabled &&
-    (analysisState.status === "done" ||
-      (analysisState.status === "generating" && analysisState.tree.length > 0));
+    analysisState.status === "done" ||
+    (analysisState.status === "generating" && analysisState.tree.length > 0);
   const isAnalyzing =
-    aiEnabled &&
-    analysisState.status === "generating" &&
-    analysisState.tree.length === 0;
+    analysisState.status === "generating" && analysisState.tree.length === 0;
   const analysisTree = (() => {
-    if (!aiEnabled) {
-      return [];
-    }
     if (analysisState.status === "done") {
       return analysisState.analysis.tree;
     }
@@ -222,9 +237,7 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
   // The written layers come whole with the finished analysis; a run still
   // in flight streams only its tree, so there is nothing to show yet.
   const completeAnalysis =
-    aiEnabled && analysisState.status === "done"
-      ? analysisState.analysis
-      : null;
+    analysisState.status === "done" ? analysisState.analysis : null;
 
   // The passage the reader was sent to, marked for as long as they are on it.
   // A jump anywhere else in the document is them leaving it, so the marker
@@ -331,10 +344,10 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
   ];
 
   useExternalSyncEffect(() => {
-    if (aiEnabled && ast && analysisState.status === "idle") {
+    if (analysisRunnable && ast && analysisState.status === "idle") {
       detached(generate(), "decision-workspace.generate");
     }
-  }, [aiEnabled, analysisState.status, ast, generate]);
+  }, [analysisRunnable, analysisState.status, ast, generate]);
 
   const reset = useCaseSearchStore((s) => s.reset);
   useExternalSyncEffect(() => {
@@ -366,12 +379,6 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
         <BidiText as="span">{decision.caseNumber}</BidiText>
       </h1>
       <div className="relative min-h-0 flex-1">
-        {props.aiMode === "locked" && showAiNotes && (
-          <LockedAnalysisPreview
-            onRequest={props.onRequestAI}
-            width={panelWidth - 16}
-          />
-        )}
         <div className="bg-background/80 supports-[backdrop-filter]:bg-background/55 absolute start-3 bottom-3 z-30 flex items-center overflow-hidden rounded-lg border shadow-[0_1px_2px_rgb(0_0_0/0.05),0_8px_24px_rgb(0_0_0/0.08)] backdrop-blur-xl max-lg:hidden">
           {notesFilterOptions.map((option) => {
             const Icon = option.icon;
@@ -482,28 +489,33 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
                   </div>
                 )}
                 {showAiNotes &&
-                  aiEnabled &&
-                  analysisState.status === "error" && (
-                    <div
-                      className="bg-background/75 supports-[backdrop-filter]:bg-background/55 mx-2 mt-8 flex flex-col items-center gap-2 rounded-lg border px-3 py-4 text-center shadow-sm backdrop-blur-xl"
-                      role="alert"
-                    >
-                      <p className="text-muted-foreground text-xs leading-snug">
-                        {t("errors.api.server")}
-                      </p>
-                      <Button
-                        className="text-muted-foreground hover:text-foreground hover:bg-muted flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs transition-colors"
-                        onClick={() => {
-                          detached(generate(), "decision-workspace.generate");
-                        }}
-                        size="sm"
-                        variant="ghost"
-                      >
-                        <SparklesIcon className="size-3" />
-                        {t("common.retry")}
-                      </Button>
-                    </div>
+                  props.aiMode === "gated" &&
+                  analysisState.status === "idle" && (
+                    <GatedAnalysisInvitation
+                      onRequest={props.onRequestAnalysis}
+                    />
                   )}
+                {showAiNotes && analysisState.status === "error" && (
+                  <div
+                    className="bg-background/75 supports-[backdrop-filter]:bg-background/55 mx-2 mt-8 flex flex-col items-center gap-2 rounded-lg border px-3 py-4 text-center shadow-sm backdrop-blur-xl"
+                    role="alert"
+                  >
+                    <p className="text-muted-foreground text-xs leading-snug">
+                      {t("errors.api.server")}
+                    </p>
+                    <Button
+                      className="text-muted-foreground hover:text-foreground hover:bg-muted flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs transition-colors"
+                      onClick={() => {
+                        detached(generate(), "decision-workspace.generate");
+                      }}
+                      size="sm"
+                      variant="ghost"
+                    >
+                      <SparklesIcon className="size-3" />
+                      {t("common.retry")}
+                    </Button>
+                  </div>
+                )}
 
                 {/* The notes are painted absolutely inside this region, so they
                     are measured against the space the layers above them leave
@@ -626,44 +638,41 @@ const AnalysisLoader = () => {
   );
 };
 
-const LockedAnalysisPreview = ({
+/**
+ * The analysis column before a run: the layer is named and offered where it
+ * would be drawn, rather than teased behind a blur. Without a handler the
+ * column only names the layer, which is what a member's loading shell needs.
+ */
+const GatedAnalysisInvitation = ({
   onRequest,
-  width,
 }: {
   onRequest?: (() => void) | undefined;
-  width: number;
 }) => {
   const t = useTranslations();
 
   return (
-    <section
+    <div
       aria-label={t("caseLaw.notesFilter.ai")}
-      className="bg-background/70 supports-[backdrop-filter]:bg-background/45 absolute start-2 bottom-14 z-30 min-h-36 overflow-hidden rounded-xl border shadow-[0_1px_2px_rgb(0_0_0/0.05),0_10px_30px_rgb(0_0_0/0.09)] backdrop-blur-xl max-lg:hidden"
-      data-slot="locked-analysis-preview"
-      style={{ width: `${width}px` }}
+      className="bg-background/75 supports-[backdrop-filter]:bg-background/55 mx-2 mt-8 flex flex-col items-center gap-2 rounded-lg border px-3 py-4 text-center shadow-sm backdrop-blur-xl"
+      data-slot="gated-analysis-invitation"
+      role="region"
     >
-      <div aria-hidden="true" className="space-y-3 p-4 opacity-45 blur-[3px]">
-        <div className="bg-foreground/35 h-2 w-2/5 rounded-full" />
-        <div className="space-y-2">
-          <div className="bg-foreground/20 h-2 w-full rounded-full" />
-          <div className="bg-foreground/20 h-2 w-5/6 rounded-full" />
-          <div className="bg-foreground/20 h-2 w-3/4 rounded-full" />
-        </div>
-        <div className="bg-foreground/25 h-2 w-1/3 rounded-full" />
-      </div>
-      <div className="bg-background/20 absolute inset-0 flex items-center justify-center backdrop-blur-[2px]">
-        {onRequest === undefined ? (
-          <span className="bg-background/80 text-muted-foreground flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs shadow-sm">
-            <SparklesIcon className="size-3.5" />
-            AI
-          </span>
-        ) : (
-          <Button className="shadow-sm" onClick={onRequest} size="sm">
-            <SparklesIcon className="size-3.5" />
-            {t("legalReader.annotations.createFreeAccount")}
-          </Button>
-        )}
-      </div>
-    </section>
+      {onRequest === undefined ? (
+        <span className="text-muted-foreground flex items-center gap-1.5 text-xs">
+          <SparklesIcon className="size-3.5" />
+          {t("caseLaw.notesFilter.ai")}
+        </span>
+      ) : (
+        <Button
+          className="text-muted-foreground hover:text-foreground hover:bg-muted flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs transition-colors"
+          onClick={onRequest}
+          size="sm"
+          variant="ghost"
+        >
+          <SparklesIcon className="size-3" />
+          {t("caseLaw.analysis.generate")}
+        </Button>
+      )}
+    </div>
   );
 };
