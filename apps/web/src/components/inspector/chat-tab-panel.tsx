@@ -46,7 +46,7 @@ import {
 } from "@/components/chat-editor-provider";
 import type { ChatDraftAttachment } from "@/components/chat-editor-provider";
 import {
-  composerMarkdown,
+  composerStoredMarkdown,
   composerText,
 } from "@/components/chat-editor-source";
 import { ChatApprovalContext } from "@/components/chat/chat-approval-context";
@@ -387,7 +387,7 @@ export const ChatTabPanel = ({
 
   const savedPrompts = useSavedPrompts();
   const handleSelectPrompt = (prompt: ChatPrompt) => {
-    editorController.setContent(composerMarkdown(prompt.body));
+    editorController.setContent(composerStoredMarkdown(prompt.body));
     editorController.focus();
   };
 
@@ -697,7 +697,7 @@ export const ChatTabPanel = ({
             followupChips={
               <SuggestedFollowupChips
                 onSelect={(prompt) => {
-                  editorController.setContent(composerMarkdown(prompt));
+                  editorController.setContent(composerStoredMarkdown(prompt));
                   detached(
                     editorController.submit(async (draft) => {
                       if (!(await ensureAIAvailable())) {

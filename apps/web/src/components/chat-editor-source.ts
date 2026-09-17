@@ -4,8 +4,17 @@
  * `createChatComposerDocument` parses its input as the composer's own inline
  * Markdown and has no HTML path at all, so a caller that hands it markup gets
  * the tags rendered as words. The brand makes that unrepresentable: a composer
- * input exists only as prose escaped for the grammar, or as Markdown a caller
- * wrote against it.
+ * input exists only as something one of the three constructors minted.
+ *
+ * Which one to use follows from where the string came from, and nothing else:
+ *
+ * - `composerText` — a quote, a title, a value: words that must appear exactly
+ *   as written, with no syntax read in them.
+ * - `composerMarkdown` — Markdown this codebase composed for this grammar. A
+ *   tag in it is a defect in the builder, so it panics.
+ * - `composerStoredMarkdown` — Markdown that is data: a stored prompt, a model
+ *   answer. It is still read as Markdown, but a tag in it is someone's content
+ *   rather than a defect, so it is shown instead of ending the session.
  */
 
 import { panic } from "better-result";
@@ -44,3 +53,16 @@ export const composerMarkdown = (source: string): ComposerSource => {
   }
   return v.parse(composerSourceSchema, source);
 };
+
+// Only an unescaped `<` opens a tag. `>` is ordinary text to this grammar, so
+// neutralising the opening bracket is enough to make the whole tag print.
+const UNESCAPED_ANGLE = /(?<!\\)</gu;
+
+/**
+ * Markdown that arrived as content: a saved prompt, a model's answer. It is
+ * read as Markdown like any other source, but an HTML tag in it belongs to
+ * whoever wrote it, so it is escaped into the words it already is. Nothing is
+ * removed, and the caller is never handed a failure for text it does not own.
+ */
+export const composerStoredMarkdown = (source: string): ComposerSource =>
+  v.parse(composerSourceSchema, source.replaceAll(UNESCAPED_ANGLE, "\\<"));

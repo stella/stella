@@ -43,7 +43,7 @@ import {
 } from "@/components/chat-editor-provider";
 import type { ChatInputDraft } from "@/components/chat-editor-provider";
 import {
-  composerMarkdown,
+  composerStoredMarkdown,
   composerText,
 } from "@/components/chat-editor-source";
 import { ChatInputSurface } from "@/components/chat-input-surface";
@@ -332,7 +332,7 @@ function ChatIndex() {
   );
 
   const selectPrompt = (prompt: ChatPrompt) => {
-    controller.setContent(composerMarkdown(prompt.body));
+    controller.setContent(composerStoredMarkdown(prompt.body));
     controller.focus();
   };
 
