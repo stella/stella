@@ -5,7 +5,10 @@ import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
 
-import { publicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
+import {
+  PUBLIC_CASE_LAW_COUNTRIES,
+  publicCaseLawCountry,
+} from "@stll/api-contract/case-law-launch-readiness";
 import { isUuid } from "@stll/uuid-codec";
 
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
@@ -35,6 +38,10 @@ import {
   tPaginationLimit,
   tSafeId,
 } from "@/api/lib/custom-schema";
+import {
+  readPublicLawCountry,
+  tPublicLawCountry,
+} from "@/api/lib/legal-search/public-law-country";
 import { LIMITS } from "@/api/lib/limits";
 import {
   createCursorPage,
@@ -48,7 +55,7 @@ export const listDecisionsQuerySchema = t.Object({
   limit: t.Optional(tPaginationLimit(LIMITS.caseLawSearchPageSizeMax)),
   cursor: t.Optional(tPaginationCursor()),
   court: t.Optional(t.String({ maxLength: 512 })),
-  country: t.String({ minLength: 2, maxLength: 3 }),
+  country: tPublicLawCountry,
   dateFrom: t.Optional(t.String({ format: "date" })),
   dateTo: t.Optional(t.String({ format: "date" })),
   decisionType: t.Optional(t.String({ maxLength: 128 })),
@@ -164,7 +171,13 @@ export const listDecisionsHandler = async (
    */
   readCourtWeights: () => Promise<CourtWeightMap> = loadCourtWeights,
 ) => {
-  const country = publicCaseLawCountry(query.country);
+  const countryRead = readPublicLawCountry(query.country, {
+    admitted: PUBLIC_CASE_LAW_COUNTRIES,
+  });
+  if (countryRead.kind === "unreadable") {
+    return status(400, { message: countryRead.message });
+  }
+  const country = publicCaseLawCountry(countryRead.country);
   if (country === null) {
     return status(404, { message: "Not Found" });
   }

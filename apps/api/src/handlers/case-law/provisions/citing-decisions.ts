@@ -3,7 +3,10 @@ import type { SQL } from "drizzle-orm";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
 
-import { publicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
+import {
+  PUBLIC_CASE_LAW_COUNTRIES,
+  publicCaseLawCountry,
+} from "@stll/api-contract/case-law-launch-readiness";
 
 import {
   caseLawDecisions,
@@ -14,6 +17,10 @@ import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import { tPaginationCursor, tPaginationLimit } from "@/api/lib/custom-schema";
+import {
+  readPublicLawCountry,
+  tPublicLawCountry,
+} from "@/api/lib/legal-search/public-law-country";
 import { LIMITS } from "@/api/lib/limits";
 import {
   createCursorPage,
@@ -34,7 +41,7 @@ import {
  * table, so either answers from the same access path.
  */
 export const listCitingDecisionsQuerySchema = t.Object({
-  jurisdiction: t.String({ minLength: 2, maxLength: 3 }),
+  jurisdiction: tPublicLawCountry,
   work: t.Optional(t.String({ minLength: 1, maxLength: 256 })),
   eli: t.Optional(t.String({ minLength: 1, maxLength: 512 })),
   anchor: t.Optional(t.String({ minLength: 1, maxLength: 256 })),
@@ -121,7 +128,14 @@ export const listCitingDecisionsHandler = async (
   query: ListCitingDecisionsQuery,
   caseLawDb: CaseLawPublicReadDb,
 ) => {
-  const jurisdiction = publicCaseLawCountry(query.jurisdiction);
+  const countryRead = readPublicLawCountry(query.jurisdiction, {
+    admitted: PUBLIC_CASE_LAW_COUNTRIES,
+    parameter: "jurisdiction",
+  });
+  if (countryRead.kind === "unreadable") {
+    return status(400, { message: countryRead.message });
+  }
+  const jurisdiction = publicCaseLawCountry(countryRead.country);
   if (jurisdiction === null) {
     return status(404, { message: "Not Found" });
   }

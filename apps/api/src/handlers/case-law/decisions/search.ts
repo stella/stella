@@ -4,7 +4,10 @@ import type { SQL } from "drizzle-orm";
 import { status } from "elysia";
 import type { Static } from "elysia";
 
-import { publicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
+import {
+  PUBLIC_CASE_LAW_COUNTRIES,
+  publicCaseLawCountry,
+} from "@stll/api-contract/case-law-launch-readiness";
 import {
   type DecisionQueryIntent,
   parseDecisionQuery,
@@ -148,6 +151,7 @@ import {
 } from "@/api/lib/legal-search/index-naming";
 import { collapseByLanguageGroup } from "@/api/lib/legal-search/language-group-collapse";
 import { buildPgFtsSearchSql } from "@/api/lib/legal-search/pg-fts-query";
+import { readPublicLawCountry } from "@/api/lib/legal-search/public-law-country";
 import {
   blendStableCitationAuthority,
   courtTierSignal,
@@ -207,7 +211,13 @@ export const searchDecisionsHandler = async (
   body: SearchDecisionsBody,
   caseLawDb: CaseLawPublicReadDb,
 ) => {
-  const country = publicCaseLawCountry(body.country);
+  const countryRead = readPublicLawCountry(body.country, {
+    admitted: PUBLIC_CASE_LAW_COUNTRIES,
+  });
+  if (countryRead.kind === "unreadable") {
+    return status(400, { message: countryRead.message });
+  }
+  const country = publicCaseLawCountry(countryRead.country);
   if (country === null) {
     return status(404, { message: "Not Found" });
   }

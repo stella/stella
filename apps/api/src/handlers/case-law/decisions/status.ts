@@ -4,6 +4,7 @@ import { status, t } from "elysia";
 import type { Static } from "elysia";
 
 import {
+  PUBLIC_CASE_LAW_COUNTRIES,
   publicCaseLawCountry,
   type PublicCaseLawCountry,
 } from "@stll/api-contract/case-law-launch-readiness";
@@ -25,6 +26,10 @@ import { readNonRedistributableCaseLawSourceIds } from "@/api/lib/case-law/non-r
 import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions";
 import { errorTag } from "@/api/lib/errors/utils";
 import { createTtlResultCache } from "@/api/lib/legal-search/browse-facets-cache";
+import {
+  readPublicLawCountry,
+  tPublicLawCountry,
+} from "@/api/lib/legal-search/public-law-country";
 import type { LegalBrowseFacets } from "@/api/lib/legal-search/types";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
@@ -63,7 +68,7 @@ type CorpusUpdatedAtRead = {
 };
 
 export const readCaseLawCorpusStatusQuerySchema = t.Object({
-  country: t.String({ minLength: 2, maxLength: 3 }),
+  country: tPublicLawCountry,
 });
 
 type ReadCaseLawCorpusStatusQuery = Static<
@@ -229,7 +234,13 @@ export const readCaseLawCorpusStatusHandler = async (
   { country }: ReadCaseLawCorpusStatusQuery,
   caseLawDb: CaseLawPublicReadDb,
 ) => {
-  const publicCountry = publicCaseLawCountry(country);
+  const countryRead = readPublicLawCountry(country, {
+    admitted: PUBLIC_CASE_LAW_COUNTRIES,
+  });
+  if (countryRead.kind === "unreadable") {
+    return status(400, { message: countryRead.message });
+  }
+  const publicCountry = publicCaseLawCountry(countryRead.country);
   if (publicCountry === null) {
     return status(404, { message: "Not Found" });
   }
