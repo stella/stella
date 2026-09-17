@@ -1,5 +1,12 @@
 # @stll/ai-catalog
 
+## 0.1.14
+
+### Patch Changes
+
+- [#3475](https://github.com/stella/stella/pull/3475) [`d474798`](https://github.com/stella/stella/commit/d4747984fd140474931208ec01d4503bb1fbab50) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Regenerate `capabilities.gen.ts` so the OpenRouter GPT-5.6 rows follow the
+  catalogue's declaration order.
+
 ## 0.1.13
 
 ### Patch Changes
