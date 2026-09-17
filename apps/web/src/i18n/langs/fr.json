@@ -2762,7 +2762,7 @@
       "basisDivider": "et / ou",
       "basisPlaybook": "Revue selon {name}",
       "basisReferences": "{count, plural, one {Comparaison avec # document de référence} other {Comparaison avec # documents de référence}}",
-      "basisToggle": "What was compared",
+      "basisToggle": "Ce qui a été comparé",
       "changeBasis": "Modifier la base de révision",
       "chatDraft": {
         "finding": "Constat :",
@@ -2870,7 +2870,7 @@
         "present": "Oui"
       },
       "progressPositions": "{total, plural, one {{completed, number} sur # critère} other {{completed, number} sur # critères}}",
-      "proposedChange": "Proposed change",
+      "proposedChange": "Modification proposée",
       "proposing": "Proposition des critères… {count, number}",
       "readOnlyRun": "Décidé lors de cette révision",
       "recommendation": "Recommandation :",

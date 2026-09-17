@@ -18,6 +18,7 @@ import { useShallow } from "zustand/shallow";
 import { cn } from "@stll/ui/utils";
 
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
+import { detached } from "@/lib/detached";
 
 import {
   nextDocxEditorSlotSequence,
@@ -33,10 +34,23 @@ import type {
 
 // The editor graph (Folio, prosemirror-tables, yjs, utif2, …) stays out of the
 // eager preload: the host is only reached once a slot has claimed a document.
+const importHostedDocxEditor = async () =>
+  await import("./docx-editor-host-instance");
+
 const LazyHostedDocxEditor = lazy(async () => {
-  const m = await import("./docx-editor-host-instance");
+  const m = await importHostedDocxEditor();
   return { default: m.HostedDocxEditor };
 });
+
+/**
+ * Fetch the editor chunk before a slot can claim a document. A mount site
+ * knows a DOCX is coming as soon as its tab says so, while the file's entity,
+ * property and URL are still in flight; starting the chunk there overlaps it
+ * with those rounds instead of queuing it behind the last of them.
+ */
+export const preloadHostedDocxEditor = (): void => {
+  detached(importHostedDocxEditor(), "docx-editor-host.preload");
+};
 
 /**
  * Mounted once, above both places a document can be read. Renders nothing

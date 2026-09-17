@@ -2762,7 +2762,7 @@
       "basisDivider": "ja / või",
       "basisPlaybook": "Kontroll juhendi {name} alusel",
       "basisReferences": "{count, plural, one {Võrdlus # võrdlusdokumendiga} other {Võrdlus # võrdlusdokumendiga}}",
-      "basisToggle": "What was compared",
+      "basisToggle": "Mida võrreldi",
       "changeBasis": "Muuda ülevaatuse alust",
       "chatDraft": {
         "finding": "Leid:",
@@ -2852,7 +2852,7 @@
       },
       "passageUnavailable": "Võrdlusteksti pole saadaval",
       "passagesCount": "{count, plural, one {# lõik} other {# lõiku}}",
-      "passagesToggle": "Passages",
+      "passagesToggle": "Lõigud",
       "pendingCount": "{count, plural, one {# ootel leid} other {# ootel leidu}}",
       "perspective": {
         "neutral": "Täpsustamata",
@@ -2870,7 +2870,7 @@
         "present": "Jah"
       },
       "progressPositions": "{total, plural, one {{completed, number} ühest seisukohast} other {{completed, number} #-st seisukohast}}",
-      "proposedChange": "Proposed change",
+      "proposedChange": "Kavandatav muudatus",
       "proposing": "Seisukohtade pakkumine… {count, number}",
       "readOnlyRun": "Otsustatud selle ülevaatuse käigus",
       "recommendation": "Soovitus:",

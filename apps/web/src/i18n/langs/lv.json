@@ -2762,7 +2762,7 @@
       "basisDivider": "un / vai",
       "basisPlaybook": "Pārbaude pēc {name}",
       "basisReferences": "{count, plural, zero {Nav atsauces dokumentu} one {Salīdzinājums ar # atsauces dokumentu} other {Salīdzinājums ar # atsauces dokumentiem}}",
-      "basisToggle": "What was compared",
+      "basisToggle": "Kas tika salīdzināts",
       "changeBasis": "Mainīt pārbaudes pamatu",
       "chatDraft": {
         "finding": "Secinājums:",
@@ -2852,7 +2852,7 @@
       },
       "passageUnavailable": "Atsauces teksts nav pieejams",
       "passagesCount": "{count, plural, zero {# fragmentu} one {# fragments} other {# fragmenti}}",
-      "passagesToggle": "Passages",
+      "passagesToggle": "Fragmenti",
       "pendingCount": "{count, plural, zero {# neizlemtu secinājumu} one {# neizlemts secinājums} other {# neizlemti secinājumi}}",
       "perspective": {
         "neutral": "Nav norādīts",
@@ -2870,7 +2870,7 @@
         "present": "Jā"
       },
       "progressPositions": "{total, plural, zero {Nav pozīciju} one {{completed, number} no # pozīcijas} other {{completed, number} no # pozīcijām}}",
-      "proposedChange": "Proposed change",
+      "proposedChange": "Ierosinātās izmaiņas",
       "proposing": "Tiek piedāvātas pozīcijas… {count, number}",
       "readOnlyRun": "Izlemts šajā pārbaudē",
       "recommendation": "Ieteikums:",

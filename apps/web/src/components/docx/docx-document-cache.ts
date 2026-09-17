@@ -104,10 +104,18 @@ export const installDocxDocumentCacheInvalidation = (
   });
 };
 
+/** TanStack types a cache event's query as `Query<any, any, any, any>`, so its
+ *  key arrives as `any`; narrow it to unknown members before reading it. */
+const isUnknownArray = (value: unknown): value is readonly unknown[] =>
+  Array.isArray(value);
+
 /** `["files", workspaceId, fieldId, purpose]` — see `fileContentQueryKey`. */
 const docxDocumentRefFromQueryKey = (
-  queryKey: readonly unknown[],
+  queryKey: unknown,
 ): DocxDocumentRef | null => {
+  if (!isUnknownArray(queryKey)) {
+    return null;
+  }
   const [root, workspaceId, fileFieldId, purpose] = queryKey;
   if (
     root !== "files" ||

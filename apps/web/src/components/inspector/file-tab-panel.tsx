@@ -29,7 +29,10 @@ import {
   useReviewStore,
 } from "@/components/ai-suggestions/review-store";
 import type { DocxBrowserEditorActions } from "@/components/docx/docx-browser-editor";
-import { DocxEditorSlot } from "@/components/docx/docx-editor-host";
+import {
+  DocxEditorSlot,
+  preloadHostedDocxEditor,
+} from "@/components/docx/docx-editor-host";
 import { DOCX_EDITOR_SLOT } from "@/components/docx/docx-editor-host.logic";
 import type { DocxEditorSlotBindings } from "@/components/docx/docx-editor-host.logic";
 import { AnonymizationFacet } from "@/components/inspector/anonymization-facet";
@@ -91,6 +94,7 @@ import {
 import { QuerySuspenseBoundary } from "@/components/query-suspense-boundary";
 import Tooltip from "@/components/tooltip";
 import { env } from "@/env";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -493,6 +497,14 @@ export const FileTabPanel = ({
     requiresPdfMeasurement,
     scaleOffset,
   } = getFileTabDisplayState({ activeId, minimized, scaleOffsets, tab });
+  // The tab's mime type says a DOCX is coming long before the entity, the file
+  // property and the file URL have resolved, so the editor chunk is fetched
+  // alongside those rounds rather than after the last of them.
+  useExternalSyncEffect(() => {
+    if (isNativeDocxDisplay) {
+      preloadHostedDocxEditor();
+    }
+  }, [isNativeDocxDisplay]);
   const readsDocumentInInspector = documentReviewPaneFieldId === tab.id;
   const fullViewFacet =
     tab.facet ?? (readsDocumentInInspector ? "preview" : "metadata");

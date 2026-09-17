@@ -2762,7 +2762,7 @@
       "basisDivider": "e / ou",
       "basisPlaybook": "Revisão conforme {name}",
       "basisReferences": "{count, plural, one {Comparação com # documento de referência} other {Comparação com # documentos de referência}}",
-      "basisToggle": "What was compared",
+      "basisToggle": "O que foi comparado",
       "changeBasis": "Alterar base da revisão",
       "chatDraft": {
         "finding": "Constatação:",
@@ -2852,7 +2852,7 @@
       },
       "passageUnavailable": "Texto de referência indisponível",
       "passagesCount": "{count, plural, one {# trecho} other {# trechos}}",
-      "passagesToggle": "Passages",
+      "passagesToggle": "Trechos",
       "pendingCount": "{count, plural, one {# pendente} other {# pendente}}",
       "perspective": {
         "neutral": "Não especificado",
@@ -2870,7 +2870,7 @@
         "present": "Sim"
       },
       "progressPositions": "{total, plural, one {{completed, number} de # posição} other {{completed, number} de # posições}}",
-      "proposedChange": "Proposed change",
+      "proposedChange": "Alteração proposta",
       "proposing": "Propondo posições… {count, number}",
       "readOnlyRun": "Decidido nesta revisão",
       "recommendation": "Recomendação:",

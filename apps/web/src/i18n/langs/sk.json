@@ -2762,7 +2762,7 @@
       "basisDivider": "a / alebo",
       "basisPlaybook": "Kontrola podľa {name}",
       "basisReferences": "{count, plural, one {Porovnanie s # referenčným dokumentom} few {Porovnanie s # referenčnými dokumentmi} other {Porovnanie s # referenčnými dokumentmi}}",
-      "basisToggle": "What was compared",
+      "basisToggle": "Podklady kontroly",
       "changeBasis": "Zmeniť podklady kontroly",
       "chatDraft": {
         "finding": "Zistenie:",
@@ -2852,7 +2852,7 @@
       },
       "passageUnavailable": "Text referencie nie je dostupný",
       "passagesCount": "{count, plural, one {# pasáž} few {# pasáže} other {# pasáží}}",
-      "passagesToggle": "Passages",
+      "passagesToggle": "Pasáže",
       "pendingCount": "{count, plural, one {# čaká} few {# čakajú} other {# čaká}}",
       "perspective": {
         "neutral": "Neuvedené",
@@ -2870,7 +2870,7 @@
         "present": "Áno"
       },
       "progressPositions": "{total, plural, one {{completed, number} z # pozície} few {{completed, number} z # pozícií} other {{completed, number} z # pozícií}}",
-      "proposedChange": "Proposed change",
+      "proposedChange": "Navrhovaná zmena",
       "proposing": "Navrhujú sa pozície… {count, number}",
       "readOnlyRun": "Rozhodnuté v tejto kontrole",
       "recommendation": "Odporúčanie:",

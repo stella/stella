@@ -2762,7 +2762,7 @@
       "basisDivider": "és / vagy",
       "basisPlaybook": "Ellenőrzés a(z) {name} alapján",
       "basisReferences": "{count, plural, one {Összevetés # referenciadokumentummal} other {Összevetés # referenciadokumentummal}}",
-      "basisToggle": "What was compared",
+      "basisToggle": "Mit vetettünk össze",
       "changeBasis": "Ellenőrzési alap módosítása",
       "chatDraft": {
         "finding": "Megállapítás:",
@@ -2852,7 +2852,7 @@
       },
       "passageUnavailable": "A referenciaszöveg nem érhető el",
       "passagesCount": "{count, plural, one {# szövegrész} other {# szövegrész}}",
-      "passagesToggle": "Passages",
+      "passagesToggle": "Szövegrészek",
       "pendingCount": "{count, plural, one {# függőben} other {# függőben}}",
       "perspective": {
         "neutral": "Nincs megadva",
@@ -2870,7 +2870,7 @@
         "present": "Igen"
       },
       "progressPositions": "{total, plural, one {{completed, number} / # álláspont} other {{completed, number} / # álláspont}}",
-      "proposedChange": "Proposed change",
+      "proposedChange": "Javasolt módosítás",
       "proposing": "Álláspontok javaslása… {count, number}",
       "readOnlyRun": "Ebben az ellenőrzésben eldöntve",
       "recommendation": "Ajánlás:",
