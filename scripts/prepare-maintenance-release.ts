@@ -4,6 +4,7 @@ import { Result } from "better-result";
 import { randomUUID } from "node:crypto";
 import {
   existsSync,
+  readdirSync,
   readFileSync,
   renameSync,
   rmSync,
@@ -28,6 +29,19 @@ const RELEASE_PAGE_LIMIT = 20;
 const STABLE_VERSION_PATTERN = /^(\d+)\.(\d+)\.(\d+)$/u;
 const MAINTENANCE_CHANGELOG =
   "# Maintenance release\n\nStella includes reliability and maintenance improvements.\n";
+const CHANGESET_DIRECTORY = ".changeset";
+/** Declares which files a version run generates; the CI gate reads the same. */
+const CHANGESET_POLICY_PATH = "scripts/changeset-policy.json";
+const CHANGESET_FRONTMATTER_FENCE = "---";
+/** Changesets ships this file; it is documentation, never a release entry. */
+const CHANGESET_README = "README.md";
+/**
+ * The release commit carries the generated version bumps, which are
+ * release-gated paths. The changeset policy asks for an added entry beside
+ * them; the bump is generated rather than a change of its own, so the entry
+ * that accompanies it is empty. The next release's fold consumes it.
+ */
+const EMPTY_CHANGESET = "---\n---\n";
 
 type StableVersion = {
   major: number;
@@ -42,8 +56,17 @@ type MaintenanceReleaseOptions = {
 
 type PreparedMaintenanceRelease = {
   changelogPath: string;
+  /** Names of the `.changeset` entries this run consumed, in read order. */
+  changesets: readonly string[];
   previousTag: string;
   version: string;
+};
+
+/** One pending `.changeset/*.md` entry. */
+type PendingChangeset = {
+  readonly file: string;
+  readonly packages: readonly string[];
+  readonly summary: string;
 };
 
 type ReleaseFileWriter = (path: string, contents: string) => void;
@@ -69,6 +92,127 @@ const checkedVersionPart = (value: string | undefined): number => {
     throw new MaintenanceReleaseError(`Invalid stable version part: ${value}`);
   }
   return parsed;
+};
+
+/**
+ * `"@stll/cli": minor`, quoted or bare, as Changesets writes the frontmatter.
+ * A package name holds no colon, so the first one separates it from the bump.
+ */
+const changesetPackageName = (line: string): string | null => {
+  const separator = line.indexOf(":");
+  if (separator === -1 || line.slice(separator + 1).trim().length === 0) {
+    return null;
+  }
+  const key = line.slice(0, separator).trim();
+  const quoted =
+    key.length > 1 &&
+    (key.startsWith('"') || key.startsWith("'")) &&
+    key.endsWith(key.slice(0, 1));
+  const name = quoted ? key.slice(1, -1) : key;
+  return name.length > 0 ? name : null;
+};
+
+/**
+ * The packages a changeset frontmatter names and the summary beneath it.
+ * An entry with no frontmatter (`bun run changeset --empty`) names none: it
+ * records a deliberate no-release change and belongs in no changelog.
+ */
+export const parseChangesetEntry = (
+  entry: string,
+): { packages: readonly string[]; summary: string } => {
+  const lines = entry.split("\n");
+  if (lines.at(0)?.trim() !== CHANGESET_FRONTMATTER_FENCE) {
+    return { packages: [], summary: "" };
+  }
+  const packages: string[] = [];
+  for (const [index, line] of lines.slice(1).entries()) {
+    if (line.trim() === CHANGESET_FRONTMATTER_FENCE) {
+      return {
+        packages,
+        summary: lines
+          .slice(index + 2)
+          .join(" ")
+          .replaceAll(/\s+/gu, " ")
+          .trim(),
+      };
+    }
+    const name = changesetPackageName(line);
+    if (name !== null) {
+      packages.push(name);
+    }
+  }
+  throw new MaintenanceReleaseError(
+    "A pending changeset has unterminated frontmatter",
+  );
+};
+
+export const readPendingChangesets = (
+  rootDir: string,
+): readonly PendingChangeset[] => {
+  const directory = nodePath.join(rootDir, CHANGESET_DIRECTORY);
+  if (!existsSync(directory)) {
+    return [];
+  }
+  return readdirSync(directory)
+    .filter((file) => file.endsWith(".md") && file !== CHANGESET_README)
+    .sort()
+    .map((file) => {
+      const { packages, summary } = parseChangesetEntry(
+        readFileSync(nodePath.join(directory, file), "utf-8"),
+      );
+      return { file, packages, summary };
+    });
+};
+
+/**
+ * Every file a version run rewrites: the generated paths the release policy
+ * declares, plus the entries the run consumes. Read from the policy rather
+ * than listed here, so a package added to the release set is covered without
+ * this script being told about it.
+ */
+const versionRollbackPaths = (
+  rootDir: string,
+  changesets: readonly PendingChangeset[],
+): readonly string[] => {
+  if (changesets.length === 0) {
+    return [];
+  }
+  const policyPath = nodePath.join(rootDir, CHANGESET_POLICY_PATH);
+  const parsed: unknown = JSON.parse(readFileSync(policyPath, "utf-8"));
+  if (
+    !isRecord(parsed) ||
+    !Array.isArray(parsed["generatedPaths"]) ||
+    !parsed["generatedPaths"].every((entry) => typeof entry === "string")
+  ) {
+    throw new MaintenanceReleaseError(
+      `${CHANGESET_POLICY_PATH} must hold generatedPaths as an array of strings`,
+    );
+  }
+  const generated: readonly string[] = parsed["generatedPaths"];
+  return [
+    ...generated.map((file) => nodePath.join(rootDir, file)),
+    ...changesets.map(({ file }) =>
+      nodePath.join(rootDir, CHANGESET_DIRECTORY, file),
+    ),
+  ];
+};
+
+/**
+ * The release note the landing changelog and the GitHub release read. The
+ * standing maintenance text stays first, so a release that folds nothing in
+ * reads exactly as it did before.
+ */
+export const maintenanceChangelog = (
+  changesets: readonly PendingChangeset[],
+): string => {
+  const released = changesets.filter(({ packages }) => packages.length > 0);
+  if (released.length === 0) {
+    return MAINTENANCE_CHANGELOG;
+  }
+  const entries = released
+    .map(({ packages, summary }) => `- ${packages.join(", ")}: ${summary}\n`)
+    .join("");
+  return `${MAINTENANCE_CHANGELOG}\n## Packages\n\n${entries}`;
 };
 
 export const parseStableVersion = (value: string): StableVersion => {
@@ -227,13 +371,34 @@ export const withFileRollback = <T>({
   }
 };
 
+/**
+ * `changeset version` as the organization's version pull request runs it: the
+ * repository's own script, so both flows bump versions, write package
+ * changelogs and delete consumed entries the same way.
+ */
+const runChangesetVersion = (rootDir: string) => {
+  const result = Bun.spawnSync(["bun", "run", "changeset:version"], {
+    cwd: rootDir,
+    stderr: "inherit",
+    stdout: "inherit",
+  });
+  if (!result.success) {
+    throw new MaintenanceReleaseError(
+      `bun run changeset:version exited with code ${String(result.exitCode)}`,
+    );
+  }
+};
+
 export const prepareMaintenanceReleaseFiles = ({
   publishedAt,
   rootDir,
+  versionPackages = runChangesetVersion,
   writeFile = atomicWriteFile,
 }: {
   publishedAt: string | null;
   rootDir: string;
+  /** Consumes the pending changesets; the repository's own version script. */
+  versionPackages?: (rootDir: string) => void;
   writeFile?: ReleaseFileWriter;
 }): PreparedMaintenanceRelease => {
   if (publishedAt !== null && Number.isNaN(Date.parse(publishedAt))) {
@@ -267,16 +432,42 @@ export const prepareMaintenanceReleaseFiles = ({
   if (releaseDates[previousTag] !== null) {
     releaseDates[previousTag] = publishedAt;
   }
+  const changesets = readPendingChangesets(rootDir);
+  const emptyChangesetPath = nodePath.join(
+    rootDir,
+    CHANGESET_DIRECTORY,
+    `release-v${next.value}.md`,
+  );
   return withFileRollback({
     operation: () => {
+      if (changesets.length > 0) {
+        // Package versions, package changelogs and the consumed entries are
+        // whatever the version script produces, so the release carries the
+        // same bytes the version pull request would have. Those writes are
+        // the one part of this preparation the rollback below cannot
+        // restore; the run starts from a clean worktree, so a checkout does.
+        versionPackages(rootDir);
+        writeFile(emptyChangesetPath, EMPTY_CHANGESET);
+      }
       // VERSION is the commit marker: every dependent file is durable before
       // it advances. Atomic sibling renames prevent truncated files.
-      writeFile(absoluteChangelogPath, MAINTENANCE_CHANGELOG);
+      writeFile(absoluteChangelogPath, maintenanceChangelog(changesets));
       writeFile(releaseDatesPath, `${JSON.stringify(releaseDates, null, 2)}\n`);
       writeFile(versionPath, `${next.value}\n`);
-      return { changelogPath, previousTag, version: next.value };
+      return {
+        changelogPath,
+        changesets: changesets.map(({ file }) => file),
+        previousTag,
+        version: next.value,
+      };
     },
-    paths: [versionPath, releaseDatesPath, absoluteChangelogPath],
+    paths: [
+      versionPath,
+      releaseDatesPath,
+      absoluteChangelogPath,
+      emptyChangesetPath,
+      ...versionRollbackPaths(rootDir, changesets),
+    ],
     writeFile,
   });
 };
@@ -514,6 +705,10 @@ const main = async () => {
   );
   const publishedAt = await fetchPublishedAt(`v${current.value}`);
   const next = nextPatchVersion(current);
+  // Read before the preparation consumes them: the changelog and marketing
+  // checks below run after it, and a failure there must restore the version
+  // run's writes too, or the next attempt meets a dirty worktree.
+  const pending = readPendingChangesets(ROOT_DIR);
   const prepared = withFileRollback({
     operation: () => {
       ensureFreshRecordings(options.recordingReviewReason);
@@ -535,6 +730,8 @@ const main = async () => {
       nodePath.join(ROOT_DIR, "VERSION"),
       nodePath.join(ROOT_DIR, RELEASE_DATES_PATH),
       nodePath.join(ROOT_DIR, `docs/changelog/v${next.value}.md`),
+      nodePath.join(ROOT_DIR, CHANGESET_DIRECTORY, `release-v${next.value}.md`),
+      ...versionRollbackPaths(ROOT_DIR, pending),
     ],
   });
   process.stdout.write(
@@ -543,6 +740,11 @@ const main = async () => {
       `  VERSION`,
       `  ${prepared.changelogPath}`,
       `  ${RELEASE_DATES_PATH} (${prepared.previousTag}${publishedAt === null ? ": never promoted" : ""})`,
+      ...(prepared.changesets.length === 0
+        ? []
+        : [
+            `  package versions, changelogs and ${String(prepared.changesets.length)} consumed changeset(s): ${prepared.changesets.join(", ")}`,
+          ]),
       "Review the diff, commit it, and open the release PR.",
       "",
     ].join("\n"),

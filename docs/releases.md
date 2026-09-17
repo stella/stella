@@ -80,17 +80,21 @@ marketing:reshoot` re-records only the stale captures (see
    The same pull request runs `scripts/check-cli-release-coupling.ts`: a
    stable release is refused while a pending changeset names `@stll/cli`,
    because the CLI that has to ship with the release does not have a version
-   yet. Merge the Version Packages pull request first, then rebase the
-   release. The check also refuses a commit whose CLI version is behind npm's
+   yet. `bun run release:maintenance` applies every pending changeset in the
+   release commit, so a release prepared with it leaves none pending. A
+   hand-cut release needs `bun run changeset:version` in the same commit, plus
+   `bun run changeset --empty`: the generated bumps are release-gated paths,
+   and the changeset policy asks for an added entry beside them. The check
+   also refuses a commit whose CLI version is behind npm's
    `latest`, or equals it while the generated contract surface differs from
    the published tarball.
 
 5. Merge the commit to `main`. The `tag-on-version-bump.yml` workflow runs
    the same CLI coupling check and pushes the matching `vX.Y.Z` tag. The tag
    then triggers `release.yml`. If the check fails there (a CLI changeset
-   merged between the pull request check and the tag), merge the Version
-   Packages pull request and dispatch `tag-on-version-bump.yml` against
-   `main` by hand.
+   merged between the pull request check and the tag), apply it with `bun run
+   changeset:version` plus `bun run changeset --empty`, merge that, and
+   dispatch `tag-on-version-bump.yml` against `main` by hand.
 6. Wait for the release workflow. It builds and attests the immutable
    images, creates the GitHub release as a draft with the manifest attached,
    and promotes stable releases automatically; the release is published and
@@ -110,6 +114,25 @@ packed CLI's generated protocol contract, capabilities, and resource scopes
 before the client becomes public. A manual CLI publish is recovery-only and
 requires `release_ref` to name the stable release currently served by
 production.
+
+## Package Versions
+
+Package versions come from `.changeset/*.md`, and two flows apply them:
+
+- `bun run release:maintenance` applies every pending entry in the release
+  commit. The release therefore carries the package versions, package
+  changelogs and deleted entries the version pull request would have produced,
+  summarized under "Packages" in `docs/changelog/vX.Y.Z.md`, plus an empty
+  changeset for the generated bumps themselves. Nothing stays pending, so the
+  CLI coupling gate has nothing to refuse.
+- `.github/workflows/release-pr.yml` maintains a Version Packages pull request
+  for package releases between application releases. It stands down while a
+  ready pull request into `main` is open whose title starts with `chore:
+  release v` and whose head branch lives in this repository, since that release
+  applies the same entries; `workflow_dispatch` runs it anyway.
+
+Both run the repository's `changeset:version` script, so neither can produce a
+different bump than the other.
 
 ## API and CLI Compatibility
 
@@ -134,7 +157,8 @@ Before expanding the CLI contract:
 
 1. Add the API behavior and scopes, then update the API revision or capability.
 2. Regenerate and commit the CLI contract snapshot.
-3. Merge the Version Packages pull request so the CLI carries its new version.
+3. Let the release commit apply the changeset, or merge the Version Packages
+   pull request, so the CLI carries its new version.
 4. Ship that API in a stable release.
 5. Let the post-release exact-tarball canary publish the CLI.
 

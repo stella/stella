@@ -16,8 +16,51 @@ concurrency:
 permissions: {}
 
 jobs:
-  version:
+  # An open release pull request already carries the pending changesets:
+  # `bun run release:maintenance` applies them in the release commit, so a
+  # Version Packages pull request opened beside it would version the same
+  # entries a second time. The boundary: while a release is open, the release
+  # owns versioning; otherwise this workflow does. `workflow_dispatch` runs
+  # regardless, which is the manual path to a package-only publish.
+  gate:
+    name: Check for an open release
     if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    outputs:
+      may-version: ${{ steps.release.outputs.may-version }}
+    steps:
+      - name: Look for an open release pull request
+        # The title alone is contributor-controlled text, which would make this
+        # an unauthenticated switch for suppressing versioning. A release is
+        # recognized only as a ready pull request into main whose head branch
+        # lives in this repository, which takes write access to push.
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MANUAL: ${{ github.event_name == 'workflow_dispatch' }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          open=$(gh pr list --repo "$REPOSITORY" --state open --base main \
+            --limit 100 --json title,isDraft,isCrossRepository \
+            --jq '[
+              .[]
+              | select(.title | startswith("chore: release v"))
+              | select(.isDraft | not)
+              | select(.isCrossRepository | not)
+            ] | length')
+          if [[ "$MANUAL" == "true" || "$open" == "0" ]]; then
+            echo "may-version=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "may-version=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::$open open release pull request(s) version the pending changesets; skipping."
+          fi
+
+  version:
+    needs: gate
+    if: needs.gate.outputs.may-version == 'true'
     name: Maintain Version Packages PR
     permissions:
       contents: read

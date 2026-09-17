@@ -4,6 +4,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   writeFileSync,
@@ -16,10 +17,13 @@ import { propertyConfig } from "@stll/property-testing";
 import {
   fetchPublishedAt,
   MaintenanceReleaseError,
+  maintenanceChangelog,
   nextPatchVersion,
+  parseChangesetEntry,
   parseMaintenanceReleaseOptions,
   parseStableVersion,
   prepareMaintenanceReleaseFiles,
+  readPendingChangesets,
   resolveGitHubToken,
   withFileRollback,
 } from "./prepare-maintenance-release";
@@ -153,6 +157,214 @@ describe("the token the GitHub reads are made with", () => {
   );
 });
 
+describe("pending changesets folded into the release", () => {
+  const CLI_ENTRY =
+    '---\n"@stll/cli": minor\n---\n\nNew `case-law lookup` command:\nseveral references per call.\n';
+  const UI_ENTRY = "---\n@stll/ui: patch\n---\n\nKeep the toolbar in view.\n";
+
+  // What `changeset version` leaves behind: the entries are gone, and the
+  // packages carry their new versions.
+  const consumeChangesets = () => {
+    const calls: string[] = [];
+    return {
+      calls,
+      versionPackages: (root: string) => {
+        calls.push(root);
+        for (const file of readdirSync(nodePath.join(root, ".changeset"))) {
+          if (file !== "README.md") {
+            rmSync(nodePath.join(root, ".changeset", file));
+          }
+        }
+        writeFileSync(
+          nodePath.join(root, "packages/cli/CHANGELOG.md"),
+          "# @stll/cli\n\n## 1.7.0\n",
+        );
+      },
+    };
+  };
+
+  const changesetFixture = (root: string, entries: Record<string, string>) => {
+    mkdirSync(nodePath.join(root, ".changeset"), { recursive: true });
+    for (const [file, text] of Object.entries(entries)) {
+      writeFileSync(nodePath.join(root, ".changeset", file), text);
+    }
+    // The release policy declares the generated paths a version run rewrites;
+    // the preparation restores exactly those on failure.
+    mkdirSync(nodePath.join(root, "scripts"), { recursive: true });
+    writeFileSync(
+      nodePath.join(root, "scripts/changeset-policy.json"),
+      `${JSON.stringify({ generatedPaths: ["packages/cli/CHANGELOG.md"] })}\n`,
+    );
+    mkdirSync(nodePath.join(root, "packages/cli"), { recursive: true });
+    writeFileSync(
+      nodePath.join(root, "packages/cli/CHANGELOG.md"),
+      "# @stll/cli\n",
+    );
+  };
+
+  test("reads the packages and the summary of an entry", () => {
+    expect(parseChangesetEntry(CLI_ENTRY)).toEqual({
+      packages: ["@stll/cli"],
+      summary: "New `case-law lookup` command: several references per call.",
+    });
+    expect(parseChangesetEntry(UI_ENTRY)).toEqual({
+      packages: ["@stll/ui"],
+      summary: "Keep the toolbar in view.",
+    });
+    // `bun run changeset --empty`: a deliberate no-release change.
+    expect(parseChangesetEntry("---\n---\n")).toEqual({
+      packages: [],
+      summary: "",
+    });
+    expect(parseChangesetEntry("No frontmatter at all.\n")).toEqual({
+      packages: [],
+      summary: "",
+    });
+    expect(() => parseChangesetEntry('---\n"@stll/cli": minor\n')).toThrow(
+      MaintenanceReleaseError,
+    );
+  });
+
+  test("lists the pending entries and leaves the Changesets README alone", () => {
+    const root = mkdtempSync(nodePath.join(tmpdir(), "stella-release-"));
+    roots.push(root);
+    changesetFixture(root, {
+      "README.md": "# Changesets\n",
+      "b-ui.md": UI_ENTRY,
+      "a-cli.md": CLI_ENTRY,
+    });
+
+    expect(readPendingChangesets(root).map(({ file }) => file)).toEqual([
+      "a-cli.md",
+      "b-ui.md",
+    ]);
+    // A repository that has never had one must not fail the read.
+    const bare = mkdtempSync(nodePath.join(tmpdir(), "stella-release-"));
+    roots.push(bare);
+    expect(readPendingChangesets(bare)).toEqual([]);
+  });
+
+  test("summarizes only the entries that release something", () => {
+    expect(maintenanceChangelog([])).toBe(
+      "# Maintenance release\n\nStella includes reliability and maintenance improvements.\n",
+    );
+    expect(
+      maintenanceChangelog([
+        { file: "empty.md", packages: [], summary: "" },
+        { file: "cli.md", packages: ["@stll/cli"], summary: "Lookup command." },
+      ]),
+    ).toBe(
+      "# Maintenance release\n\nStella includes reliability and maintenance improvements.\n\n## Packages\n\n- @stll/cli: Lookup command.\n",
+    );
+  });
+
+  test("versions the pending packages and records them in the changelog", () => {
+    const root = mkdtempSync(nodePath.join(tmpdir(), "stella-release-"));
+    roots.push(root);
+    releaseFixture(root, "{}\n");
+    changesetFixture(root, {
+      "README.md": "# Changesets\n",
+      "cli.md": CLI_ENTRY,
+      "empty.md": "---\n---\n",
+      "ui.md": UI_ENTRY,
+    });
+    const { calls, versionPackages } = consumeChangesets();
+
+    expect(
+      prepareMaintenanceReleaseFiles({
+        publishedAt: "2026-02-03T04:05:06Z",
+        rootDir: root,
+        versionPackages,
+      }),
+    ).toEqual({
+      changelogPath: "docs/changelog/v1.2.4.md",
+      changesets: ["cli.md", "empty.md", "ui.md"],
+      previousTag: "v1.2.3",
+      version: "1.2.4",
+    });
+    expect(calls).toEqual([root]);
+    expect(
+      readFileSync(nodePath.join(root, "docs/changelog/v1.2.4.md"), "utf-8"),
+    ).toBe(
+      "# Maintenance release\n\nStella includes reliability and maintenance improvements.\n\n## Packages\n\n- @stll/cli: New `case-law lookup` command: several references per call.\n- @stll/ui: Keep the toolbar in view.\n",
+    );
+    // The generated bumps are release-gated paths, so the release commit
+    // carries the empty entry the changeset policy asks for beside them.
+    expect(
+      readFileSync(
+        nodePath.join(root, ".changeset/release-v1.2.4.md"),
+        "utf-8",
+      ),
+    ).toBe("---\n---\n");
+    expect(readdirSync(nodePath.join(root, ".changeset")).toSorted()).toEqual([
+      "README.md",
+      "release-v1.2.4.md",
+    ]);
+  });
+
+  test("leaves versioning alone when nothing is pending", () => {
+    const root = mkdtempSync(nodePath.join(tmpdir(), "stella-release-"));
+    roots.push(root);
+    releaseFixture(root, "{}\n");
+    changesetFixture(root, { "README.md": "# Changesets\n" });
+    const { calls, versionPackages } = consumeChangesets();
+
+    expect(
+      prepareMaintenanceReleaseFiles({
+        publishedAt: "2026-02-03T04:05:06Z",
+        rootDir: root,
+        versionPackages,
+      }).changesets,
+    ).toEqual([]);
+    expect(calls).toEqual([]);
+    expect(
+      readFileSync(nodePath.join(root, "docs/changelog/v1.2.4.md"), "utf-8"),
+    ).toBe(
+      "# Maintenance release\n\nStella includes reliability and maintenance improvements.\n",
+    );
+    expect(readdirSync(nodePath.join(root, ".changeset"))).toEqual([
+      "README.md",
+    ]);
+  });
+
+  test("restores the version run's writes when a later one fails", () => {
+    const root = mkdtempSync(nodePath.join(tmpdir(), "stella-release-"));
+    roots.push(root);
+    releaseFixture(root, "{}\n");
+    changesetFixture(root, { "cli.md": CLI_ENTRY });
+    const { versionPackages } = consumeChangesets();
+    const versionPath = nodePath.join(root, "VERSION");
+
+    expect(() =>
+      prepareMaintenanceReleaseFiles({
+        publishedAt: "2026-02-03T04:05:06Z",
+        rootDir: root,
+        versionPackages,
+        writeFile: (path, contents) => {
+          if (path === versionPath) {
+            throw new Error("simulated write failure");
+          }
+          writeFileSync(path, contents);
+        },
+      }),
+    ).toThrow("simulated write failure");
+    expect(
+      existsSync(nodePath.join(root, ".changeset/release-v1.2.4.md")),
+    ).toBe(false);
+    expect(existsSync(nodePath.join(root, "docs/changelog/v1.2.4.md"))).toBe(
+      false,
+    );
+    // The consumed entry and the package changelog the version run rewrote are
+    // back, so the next attempt starts from the clean worktree it asserts.
+    expect(
+      readFileSync(nodePath.join(root, ".changeset/cli.md"), "utf-8"),
+    ).toBe(CLI_ENTRY);
+    expect(
+      readFileSync(nodePath.join(root, "packages/cli/CHANGELOG.md"), "utf-8"),
+    ).toBe("# @stll/cli\n");
+  });
+});
+
 describe("maintenance release preparation", () => {
   test("increments every safe stable patch version without changing its series", () => {
     fc.assert(
@@ -221,6 +433,7 @@ describe("maintenance release preparation", () => {
       }),
     ).toEqual({
       changelogPath: "docs/changelog/v1.2.4.md",
+      changesets: [],
       previousTag: "v1.2.3",
       version: "1.2.4",
     });
