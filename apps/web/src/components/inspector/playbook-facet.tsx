@@ -450,6 +450,10 @@ export const PlaybookFacet = ({
               field: fileFieldId,
               justification: undefined,
               justificationPage: undefined,
+              // The arrangement belongs to the document being left. Carried
+              // onto another file it would open that file in the inspector,
+              // which is the one pane this navigation exists to avoid.
+              pane: undefined,
               pdfPage: undefined,
             }),
           }),
@@ -492,6 +496,7 @@ export const PlaybookFacet = ({
           field: reference.fileFieldId,
           justification: undefined,
           justificationPage: undefined,
+          pane: undefined,
           pdfPage: undefined,
         }),
       }),
@@ -2691,6 +2696,9 @@ const ResultsView = ({
         />
         {results.length > 0 ? (
           <ReviewResultList
+            // A run owns its findings, so the list's opened cards and its
+            // filter start from the run being read, not from the one before.
+            key={runId}
             decisionPending={decisionPending}
             editorAvailable={editorAvailable}
             entityId={entityId}
