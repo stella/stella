@@ -9,6 +9,11 @@
  * independent of which search provider a deployment runs: the columns are
  * there either way.
  *
+ * Identity spans two tables. `case_law_decisions` holds the primary docket and
+ * the ECLI; the parallel references a publisher supplies (a second docket, a
+ * reporter citation) are stored only as `case_law_decision_identifiers` rows.
+ * Both are read, so a reference that names a decision by either one resolves.
+ *
  * `searchDecisionsHandler` has an identity branch of its own, but only inside
  * the corpus-index provider and only as a first attempt before it falls
  * through to the text index. A lookup cannot fall through, so it reads here.
@@ -19,16 +24,27 @@
  */
 
 import { panic } from "better-result";
-import { and, eq, inArray, or } from "drizzle-orm";
+import { and, eq, exists, inArray, or, sql } from "drizzle-orm";
+
+import {
+  DECISION_IDENTIFIER_TYPES,
+  type DecisionIdentifierType,
+} from "@stll/legal-ast/decision-identifier";
 
 import {
   caseLawDecisionIdentifiers,
   caseLawDecisions,
   caseLawSources,
 } from "@/api/db/schema";
-import { bareCitationKey } from "@/api/handlers/case-law/ingestion/citation-extractor";
+import {
+  bareCitationKey,
+  normalizeDecisionIdentifierValue,
+} from "@/api/handlers/case-law/ingestion/citation-extractor";
 import type { SafeId } from "@/api/lib/branded-types";
-import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+import type {
+  CaseLawPublicReadDb,
+  CaseLawPublicReadTransaction,
+} from "@/api/lib/case-law-public-read-db";
 import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions";
 import { redistributableCaseLawSourceFor } from "@/api/lib/case-law/redistribution-sql";
 import { LIMITS } from "@/api/lib/limits";
@@ -59,30 +75,85 @@ export type DecisionIdentityRow = {
 type LookupDecisionsByIdentityOptions = {
   caseLawDb: CaseLawPublicReadDb;
   country: string;
-  /** Candidates to read; past this the reference names a list, not a decision. */
-  limit?: number;
   locator: DecisionIdentityLocator;
 };
 
 /**
+ * Candidates read before the caller's exact-identity filter. Every predicate
+ * below is key equality, but the caller compares by its own canonical key and
+ * drops what merely collides under this normalization, so the listed-candidate
+ * cap belongs after that filter; this read is bounded by the wider page size
+ * the search handler's identity branch already reads by.
+ */
+const IDENTITY_CANDIDATE_SCAN_MAX = LIMITS.caseLawSearchPageSizeMax;
+
+type IdentifierRowMatchOptions = {
+  tx: CaseLawPublicReadTransaction;
+  type: DecisionIdentifierType;
+  /** As the reference spells it; normalized here for the column. */
+  value: string;
+};
+
+/**
+ * A publisher-supplied identifier row carrying the reference, normalized by
+ * the function ingestion writes that column with. Correlated rather than
+ * joined: a decision with several matching rows stays one candidate, so the
+ * bound above counts decisions and not identifier rows.
+ */
+const identifierRowMatches = ({ tx, type, value }: IdentifierRowMatchOptions) =>
+  exists(
+    tx
+      .select({ one: sql`1` })
+      .from(caseLawDecisionIdentifiers)
+      .where(
+        and(
+          eq(caseLawDecisionIdentifiers.decisionId, caseLawDecisions.id),
+          eq(caseLawDecisionIdentifiers.type, type),
+          eq(
+            caseLawDecisionIdentifiers.normalizedValue,
+            normalizeDecisionIdentifierValue(type, value),
+          ),
+        ),
+      ),
+  );
+
+/**
  * ECLIs are published in one case but cited in another, and the column stores
  * the published spelling. The docket's identity is its citation key, which
- * `bareCitationKey` already normalizes.
+ * `bareCitationKey` already normalizes: the same function that writes the
+ * column.
  */
-const identityCondition = (locator: DecisionIdentityLocator) => {
+const identityCondition = ({
+  locator,
+  tx,
+}: {
+  locator: DecisionIdentityLocator;
+  tx: CaseLawPublicReadTransaction;
+}) => {
   if (locator.kind === "ecli") {
     return or(
       eq(caseLawDecisions.ecli, locator.value),
       eq(caseLawDecisions.ecli, locator.value.toUpperCase()),
+      identifierRowMatches({
+        tx,
+        type: DECISION_IDENTIFIER_TYPES.ECLI,
+        value: locator.value,
+      }),
     );
   }
-  return eq(caseLawDecisions.citationKey, bareCitationKey(locator.value));
+  return or(
+    eq(caseLawDecisions.citationKey, bareCitationKey(locator.value)),
+    identifierRowMatches({
+      tx,
+      type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+      value: locator.value,
+    }),
+  );
 };
 
 export const lookupDecisionsByIdentity = async ({
   caseLawDb,
   country,
-  limit = LIMITS.caseLawLookupCandidatesMax + 1,
   locator,
 }: LookupDecisionsByIdentityOptions): Promise<DecisionIdentityRow[]> => {
   const rows = await caseLawDb(async (tx) => {
@@ -104,7 +175,7 @@ export const lookupDecisionsByIdentity = async ({
       )
       .where(
         and(
-          identityCondition(locator),
+          identityCondition({ locator, tx }),
           eq(caseLawDecisions.country, country),
           publishedCaseLawDecision,
           redistributableCaseLawSourceFor(caseLawSources.descriptor),
@@ -118,7 +189,7 @@ export const lookupDecisionsByIdentity = async ({
         caseLawDecisions.decisionDate,
         caseLawDecisions.id,
       )
-      .limit(limit);
+      .limit(IDENTITY_CANDIDATE_SCAN_MAX);
 
     if (decisions.length === 0) {
       return [];

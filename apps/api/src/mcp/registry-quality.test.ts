@@ -198,10 +198,15 @@ const TOOL_COUNT_CEILING: Record<SurfaceMode, number> = {
 // an output schema whose four branches each say what the caller does next. The
 // fourth keeps a reference whose read failed from taking the batch down with
 // it.
+// Naming that fourth status in the description measures 24_053 law, up 30
+// after trimming the same description elsewhere: a caller reading
+// `lookup_failed` as an unknown status would retry the whole batch instead of
+// the one reference whose read did not complete. The wider surfaces absorb it
+// in their existing headroom.
 const TOOLS_LIST_PAYLOAD_CHAR_CEILING: Record<SurfaceMode, number> = {
   default: 132_800,
   anonymized: 68_800,
-  law: 24_023,
+  law: 24_053,
 };
 
 // default bumped 42_000 -> 42_300 for the two fields read_case_law_citations

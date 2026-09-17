@@ -956,16 +956,16 @@ export const STELLA_TOOL_DEFINITIONS = [
     description:
       "Resolve case references to decisions: docket numbers as the courts " +
       "write them (a trailing sheet number is ignored) and ECLIs. Answered " +
-      "from the corpus's identity columns, never by ranking text, so a hit " +
-      "is the decision the reference names. Every `identifiers[]` entry is " +
+      "from the identity columns, never by ranking text, so a hit is the " +
+      "decision named, not one citing it. Every `identifiers[]` entry is " +
       "answered on its own, in input order, under `status`: `found` carries " +
       "that decision's id, resourceName, appUrl, docket, court, date and " +
-      "ECLI; `ambiguous` carries the candidates, because a docket is unique " +
-      "to a court and not to the corpus, and picking one of them would cite " +
-      "the wrong court; `not_found` carries a message and what to call " +
-      "instead. Use this when the user names a case; use search_case_law " +
-      "when they describe one. Pass a `found` decisionId to " +
-      "read_case_law_decision for the text.",
+      "ECLI; `ambiguous` carries the candidates: a docket is unique to a " +
+      "court, not to the corpus, and picking one would cite the wrong " +
+      "court; `not_found` says what to call instead; `lookup_failed` means " +
+      "the read did not complete, so retry that entry. Use this when the " +
+      "user names a case; use search_case_law when they describe one. Pass " +
+      "a `found` decisionId to read_case_law_decision for the text.",
     inputSchema: lookupCaseLawArgsSchema,
     access: "read",
     anonymized: { exposure: "passthrough" },
@@ -2530,8 +2530,9 @@ const lookupItemResult = ({
     };
   }
 
-  // One candidate over the listed maximum was read, so a full list means
-  // there may be more than the reply names.
+  // The cap lands here, on what survived the exact-identity filter: the
+  // identity read is bounded wider than the listed maximum precisely because
+  // that filter drops rows whose key merely collided.
   const listed = outcome.matches.slice(0, LIMITS.caseLawLookupCandidatesMax);
   const count =
     outcome.matches.length > LIMITS.caseLawLookupCandidatesMax

@@ -1778,6 +1778,32 @@ describe("OpenAI-compatible MCP tools", () => {
     expect(entry.decisionId).toBeUndefined();
   });
 
+  test("lookup_case_law caps the candidates it lists and says so", async () => {
+    // The identity read is bounded wider than the listed maximum, because the
+    // exact-identity filter runs after it. The cap applies to what survives
+    // that filter, and a longer list reports itself as truncated rather than
+    // reading as the whole set.
+    lookupDecisionsByIdentityMock.mockResolvedValue(
+      Array.from(
+        { length: LIMITS.caseLawLookupCandidatesMax + 3 },
+        (_, index) =>
+          createLookupRow(
+            `00000000-0000-4000-8000-00000000d0${String(index).padStart(2, "0")}`,
+            `Court ${String(index)}`,
+          ),
+      ),
+    );
+
+    const payload = await lookup([CZ_DOCKET]);
+
+    const entry = payload.items.at(0) ?? panic("Missing lookup entry");
+    expect(entry.status).toBe("ambiguous");
+    expect(entry.candidates).toHaveLength(LIMITS.caseLawLookupCandidatesMax);
+    expect(entry.message).toContain(
+      `More than ${String(LIMITS.caseLawLookupCandidatesMax)} decisions`,
+    );
+  });
+
   test("lookup_case_law keeps a row that answers to another reference out of found", async () => {
     // The second guard behind the identity statement: a row whose own
     // identifiers do not carry the reference is not the decision named, and
