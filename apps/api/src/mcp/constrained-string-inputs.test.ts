@@ -86,8 +86,6 @@ const HAND_CONSTRAINED_STRING_INPUTS: Record<string, string> = {
   // `readPublicLawCountry` never sees the spelling it could read.
   "POST /v1/legislation/corpus/search.body.jurisdiction":
     "ISO 3166-1 code length-bounded, not bound to the country reader",
-  "GET /v1/case/provisions/citation-counts.query.jurisdiction":
-    "ISO 3166-1 code length-bounded, not bound to the country reader",
   "POST /v1/case/research/columns/suggest-prompt.body.country":
     "ISO 3166-1 code length-bounded, not bound to the country reader",
 
