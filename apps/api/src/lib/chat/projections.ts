@@ -1919,8 +1919,11 @@ export const SEARCH_BOE_LEGISLATION_PROJECTION = v.union([
                 texto: v.optional(v.string()),
               }),
             ),
-            url_eli: v.optional(v.string()),
-            url_html_consolidada: v.optional(v.string()),
+            // The gazette's own ELI and consolidated-text URLs, which may
+            // embed the publisher's own UUID — never a Stella tenant id, so
+            // they are forwarded unchanged.
+            url_eli: v.optional(publicUrl()),
+            url_html_consolidada: v.optional(publicUrl()),
           }),
         ),
       ),
