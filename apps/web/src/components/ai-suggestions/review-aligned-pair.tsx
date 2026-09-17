@@ -2,7 +2,10 @@ import { cn } from "@stll/ui/utils";
 
 import type { DeltaCitation } from "@/components/ai-suggestions/review-delta";
 import { buildMarkedPair } from "@/components/ai-suggestions/review-key-terms";
-import { ReviewPassageSide } from "@/components/ai-suggestions/review-passage-side";
+import {
+  REVIEW_SIDE,
+  ReviewPassageSide,
+} from "@/components/ai-suggestions/review-passage-side";
 import type { ParameterDelta } from "@/components/ai-suggestions/review-term-row";
 
 /** The width past which the card can hold two readable columns. */
@@ -65,6 +68,7 @@ export const ReviewAlignedPair = ({
           label={target.label}
           onActivate={onShowInDocument}
           paragraphs={pair.target}
+          side={REVIEW_SIDE.target}
         />
         <div className="border-border border-t pt-3 @min-[40rem]/review-pair:border-t-0 @min-[40rem]/review-pair:pt-0">
           <ReviewPassageSide
@@ -72,6 +76,7 @@ export const ReviewAlignedPair = ({
             label={standardLabel ?? standard.label}
             onActivate={onShowStandardPassage}
             paragraphs={pair.standard}
+            side={REVIEW_SIDE.standard}
           />
         </div>
       </div>

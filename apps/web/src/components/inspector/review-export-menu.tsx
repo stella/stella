@@ -96,6 +96,9 @@ type ReviewExportMenuProps = {
    *  whose version has not loaded); the counterparty item then explains
    *  itself rather than disappearing. */
   counterparty: CounterpartyExportTarget | null;
+  /** How the menu opens: a labelled button, or a glyph on a row of glyphs
+   *  where the label lives in the tooltip and the accessible name. */
+  trigger: "labelled" | "glyph";
 };
 
 /** Downloads a finished review, named by who is going to read it. */
@@ -103,6 +106,7 @@ export const ReviewExportMenu = ({
   workspaceId,
   runId,
   counterparty,
+  trigger,
 }: ReviewExportMenuProps) => {
   const t = useTranslations();
   const analytics = useAnalytics();
@@ -175,12 +179,23 @@ export const ReviewExportMenu = ({
     <Menu>
       <MenuTrigger
         render={
-          <Button
-            aria-busy={pending !== null}
-            disabled={pending !== null}
-            size="xs"
-            variant="outline"
-          />
+          trigger === "glyph" ? (
+            <Button
+              aria-busy={pending !== null}
+              aria-label={t("clauses.export")}
+              disabled={pending !== null}
+              size="icon-xs"
+              title={t("clauses.export")}
+              variant="ghost"
+            />
+          ) : (
+            <Button
+              aria-busy={pending !== null}
+              disabled={pending !== null}
+              size="xs"
+              variant="outline"
+            />
+          )
         }
       >
         {pending === null ? (
@@ -188,7 +203,7 @@ export const ReviewExportMenu = ({
         ) : (
           <Loader label={t("inspector.review.export.exporting")} size="sm" />
         )}
-        {t("clauses.export")}
+        {trigger === "labelled" && t("clauses.export")}
       </MenuTrigger>
       <MenuPopup className="min-w-56">
         <MenuGroup>

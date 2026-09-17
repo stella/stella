@@ -4,7 +4,6 @@ import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
 import { Skeleton } from "@stll/ui/skeleton";
-import { stellaToast } from "@stll/ui/toast";
 
 import { FacetBar } from "@/components/inspector/inspector-facet-bar";
 import type {
@@ -20,32 +19,27 @@ export type Facet = FileFacet;
 /**
  * Mounted only inside the fullscreen branch. If the user enters Full
  * view while their tab still holds `facet: "preview"` (carried over
- * from sidepeek), silently swap to Metadata, drop a one-line toast,
- * and pulse the header's Minimize button so they know that's how to
- * get a side-by-side preview again.
+ * from sidepeek), silently swap to Metadata. Silently: the swap fires on
+ * every remount of the branch, and a toast explaining it read as noise
+ * the second time.
  */
 type FullViewPreviewGuardProps = {
   tabId: string;
   facet: FileTab["facet"];
   setFileFacet: (tabId: string, facet: NonNullable<FileTab["facet"]>) => void;
-  flashMinimize: (tabId: string) => void;
 };
 
 export const FullViewPreviewGuard = ({
   tabId,
   facet,
   setFileFacet,
-  flashMinimize,
 }: FullViewPreviewGuardProps) => {
-  const t = useTranslations();
   useExternalSyncEffect(() => {
     if (facet !== "preview") {
       return;
     }
     setFileFacet(tabId, "metadata");
-    stellaToast.info(t("inspector.facet.previewInFullViewToast"));
-    flashMinimize(tabId);
-  }, [facet, tabId, setFileFacet, flashMinimize, t]);
+  }, [facet, tabId, setFileFacet]);
   return null;
 };
 

@@ -17,6 +17,7 @@ import {
   EyeIcon,
   EyeOffIcon,
   FlagIcon,
+  InfoIcon,
   MessageSquareIcon,
   PanelLeftIcon,
   PanelRightIcon,
@@ -256,7 +257,7 @@ export const PlaybookFacet = ({
   const navigate = useNavigate();
 
   const viewId = useMatterViewId();
-  const { documentInMainPane, paneSwap } = useDocumentPaneRouting({
+  const { placement, paneSwap } = useDocumentPaneRouting({
     entityId,
     fileFieldId,
     viewId,
@@ -421,16 +422,43 @@ export const PlaybookFacet = ({
   /**
    * Jump to a clause of the reviewed document.
    *
-   * Where that document is read decides what has to happen first. Mounted over
-   * a hidden preview, the preview is brought back before the scroll; mounted
-   * beside a main pane that is already showing the document, nothing is
-   * switched — reaching for the preview there would replace this very panel.
-   * Either way the scroll is queued as a command, because an editor that is
-   * not on screen yet cannot scroll.
+   * Where that document is read decides what has to happen first. Already in
+   * the main pane, nothing is switched: reaching for the inspector's preview
+   * there would replace this very panel. Reading in the inspector because the
+   * review took the main pane, the hidden preview is brought back. On no
+   * screen at all, the main viewer opens the document at the clause, the way
+   * a reference opens, and this panel stays where it is. The scroll itself is
+   * queued as a command, because an editor not on screen yet cannot scroll.
    */
   const scrollToBlock = (blockId: string, text?: string) => {
-    if (!documentInMainPane) {
-      useInspectorTabsStore.getState().setFileFacet(fileFieldId, "preview");
+    switch (placement) {
+      case DOCUMENT_PLACEMENT.main:
+        break;
+      case DOCUMENT_PLACEMENT.inspector:
+        useInspectorTabsStore.getState().setFileFacet(fileFieldId, "preview");
+        break;
+      case DOCUMENT_PLACEMENT.offScreen:
+        detached(
+          navigate({
+            to: "/workspaces/$workspaceId/$viewId/document",
+            params: { workspaceId, viewId },
+            search: (prev) => ({
+              ...prev,
+              block: blockId,
+              editing: undefined,
+              entity: entityId,
+              field: fileFieldId,
+              justification: undefined,
+              justificationPage: undefined,
+              pdfPage: undefined,
+            }),
+          }),
+          "playbook-facet.open-target-clause",
+        );
+        return;
+      default:
+        placement satisfies never;
+        panic(`Unhandled document placement: ${String(placement)}`);
     }
     useInspectorCommandStore
       .getState()
@@ -826,14 +854,23 @@ type DocumentPaneRoutingArgs = {
   workspaceId: string;
 };
 
+/**
+ * Where the document itself is being read right now: in the main pane, in
+ * the inspector's preview beside a review that took the main pane, or on no
+ * screen at all because the route is showing something else (the matter
+ * table, another document). A scroll to a clause has to know which, because
+ * only the last one has a document to open first.
+ */
+const DOCUMENT_PLACEMENT = {
+  main: "main",
+  inspector: "inspector",
+  offScreen: "off-screen",
+} as const;
+type DocumentPlacement =
+  (typeof DOCUMENT_PLACEMENT)[keyof typeof DOCUMENT_PLACEMENT];
+
 type DocumentPaneRouting = {
-  /**
-   * Where the document itself is being read right now. When the route is
-   * showing it in the main pane, this panel must not reach for the preview:
-   * the document is already on screen and the switch would only take the
-   * review away.
-   */
-  documentInMainPane: boolean;
+  placement: DocumentPlacement;
   /** The pane the document reads in, and the gesture that moves it, when the
    *  facet is looking at the route's own document. `null` otherwise. */
   paneSwap: ReviewPaneSwap | null;
@@ -860,23 +897,25 @@ const useDocumentPaneRouting = ({
       ? documentSearch
       : null;
   const currentPane = routeSearch?.pane ?? DOCUMENT_PANE.document;
-  const documentInMainPane =
-    routeSearch !== null && currentPane !== DOCUMENT_PANE.review;
   if (routeSearch === null) {
-    return { documentInMainPane, paneSwap: null };
+    return { placement: DOCUMENT_PLACEMENT.offScreen, paneSwap: null };
   }
   return {
-    documentInMainPane,
+    placement:
+      currentPane === DOCUMENT_PANE.review
+        ? DOCUMENT_PLACEMENT.inspector
+        : DOCUMENT_PLACEMENT.main,
     paneSwap: {
       pane: currentPane,
       onToggle: (pane) => {
         // The panes trade places in one gesture: the inspector shows the
-        // document exactly when the main pane does not.
-        useInspectorTabsStore
-          .getState()
-          .setFileFacet(fileFieldId, PANE_INSPECTOR_FACET[pane]);
-        detached(
-          navigate({
+        // document exactly when the main pane does not. The route moves
+        // first and the facet follows it: a full-view tab holding the
+        // "preview" facet while the route still says the main pane is the
+        // document gets corrected to Metadata by the full-view guard, so
+        // setting the facet before the navigation landed on Metadata.
+        const swap = async () => {
+          await navigate({
             to: "/workspaces/$workspaceId/$viewId/document",
             params: { workspaceId, viewId },
             search: (prev) => ({
@@ -884,9 +923,12 @@ const useDocumentPaneRouting = ({
               // The default arrangement is the absence of the param.
               pane: pane === DOCUMENT_PANE.document ? undefined : pane,
             }),
-          }),
-          "playbook-facet.swap-pane",
-        );
+          });
+          useInspectorTabsStore
+            .getState()
+            .setFileFacet(fileFieldId, PANE_INSPECTOR_FACET[pane]);
+        };
+        detached(swap(), "playbook-facet.swap-pane");
       },
     },
   };
@@ -1722,29 +1764,28 @@ const NotComparedDisclosure = ({
     reason.kind === "other"
       ? reason.text
       : t(SKIP_REASON_LABEL_KEYS[reason.kind]);
+  // Inline in the counts line; the list, when opened, takes the row below.
   return (
-    <div className="mt-1.5">
+    <>
+      <span aria-hidden="true">{SUMMARY_SEPARATOR.trim()}</span>
       <button
         aria-expanded={open}
-        className="text-muted-foreground hover:text-foreground text-xs transition-colors"
+        className="hover:text-foreground transition-colors"
         onClick={() => setOpen((current) => !current)}
         type="button"
       >
         {t("inspector.review.notComparedCount", { count: skipped.length })}
       </button>
       {open && (
-        <ul className="mt-1 space-y-0.5">
+        <ul className="mt-1 basis-full space-y-0.5">
           {skipped.map((entry) => (
-            <li
-              className="text-muted-foreground text-xs leading-6"
-              key={entry.subject}
-            >
+            <li className="leading-6" key={entry.subject}>
               <BidiText as="span">{`${entry.subject} — ${reasonText(entry.reason)}`}</BidiText>
             </li>
           ))}
         </ul>
       )}
-    </div>
+    </>
   );
 };
 
@@ -2677,83 +2718,120 @@ const ResultsView = ({
     );
   })();
 
+  const [basisOpen, setBasisOpen] = useState(false);
+  const basisSentence = buildRunSummarySentence({
+    targetName,
+    targetVersionNumber,
+    references: basis.references,
+    playbookName: basis.playbookName,
+    playbookProposed: basis.provenance === "ephemeral",
+    ...runBasisLabels(
+      basis.perspective.type === "party" ? basis.perspective.role : null,
+    ),
+  });
+
   return (
     <div className="bg-background flex h-full flex-col">
-      <header className="space-y-2 border-b px-3 py-2.5">
-        {/* The title block owns the full width and the actions wrap on their
-            own row beneath it: in a side pane the two cannot share a line
-            without the title collapsing to a sliver. */}
-        <div className="space-y-2">
-          <div className="min-w-0">
-            <h2 className="truncate text-sm font-semibold">
-              {t("inspector.review.title")}
-            </h2>
-            <p className="text-muted-foreground truncate text-xs">
-              <BidiText as="span">
-                {buildRunSummarySentence({
-                  targetName,
-                  targetVersionNumber,
-                  references: basis.references,
-                  playbookName: basis.playbookName,
-                  playbookProposed: basis.provenance === "ephemeral",
-                  ...runBasisLabels(
-                    basis.perspective.type === "party"
-                      ? basis.perspective.role
-                      : null,
-                  ),
-                })}
-              </BidiText>
-            </p>
-            {/* One line, whichever it is: while the worker runs it counts the
-              positions it has answered, and when the last batch lands it
-              becomes the run's own summary — no row appears or disappears. */}
+      <header className="space-y-1.5 border-b px-3 py-2">
+        {/* Two lines, whatever the pane width: how far the run got, and one
+            row of controls. What exactly was compared is a click away on the
+            counts line. The tab above already carries the name; the heading
+            stays for the outline and screen readers only. */}
+        <h2 className="sr-only">{t("inspector.review.title")}</h2>
+        {/* One line: while the worker runs it counts the positions it has
+            answered, then it becomes the run's own summary, and what the run
+            never measured sits beside it, because a checklist that silently
+            omits half the document reads as if the other half were compliant. */}
+        {/* One row: run-level controls as glyphs on the left, the counts in
+            the middle giving way first, the document's own queue on the
+            right. Only what a click opens (the basis sentence, the list of
+            what was not compared) drops beneath it. */}
+        <div className="flex flex-wrap items-center gap-1">
+          <PaneSwapToggle swap={paneSwap} />
+          {/* Only a run whose positions were never saved has a playbook to
+              make; one that ran against a definition already has one. */}
+          {basis.provenance === "ephemeral" && (
+            <Tooltip
+              content={t("inspector.review.saveAsPlaybook")}
+              render={
+                <Button
+                  aria-busy={saveAsPlaybookPending}
+                  aria-label={t("inspector.review.saveAsPlaybook")}
+                  onClick={() => {
+                    // Busy, not disabled: a disabled trigger loses its
+                    // tooltip, and a second click while saving is a no-op.
+                    if (!saveAsPlaybookPending) {
+                      onSaveAsPlaybook();
+                    }
+                  }}
+                  size="icon-xs"
+                  variant="ghost"
+                />
+              }
+            >
+              <ClipboardCheckIcon className="size-3.5" />
+            </Tooltip>
+          )}
+          <ReviewExportMenu
+            // The counterparty file is the document, so it is addressed by the
+            // field it lives on: nothing the run knows is in scope.
+            counterparty={
+              targetName.length === 0
+                ? null
+                : { fileFieldId: targetFileFieldId, fileName: targetName }
+            }
+            runId={runId}
+            trigger="glyph"
+            workspaceId={workspaceId}
+          />
+          <Tooltip
+            content={t("inspector.review.reviewAgain")}
+            render={
+              <Button
+                aria-label={t("inspector.review.reviewAgain")}
+                onClick={onReviewAgain}
+                size="icon-xs"
+                variant="ghost"
+              />
+            }
+          >
+            <RotateCcwIcon className="size-3.5" />
+          </Tooltip>
+          {/* The counts give way first: while the worker runs they count
+              the positions it has answered, then they become the run's own
+              summary, with what the run never measured beside them, because
+              a checklist that silently omits half the document reads as if
+              the other half were compliant. */}
+          <div className="text-muted-foreground ms-1 flex min-w-0 flex-1 flex-wrap items-center gap-x-1.5 text-xs tabular-nums">
             <RunHeaderStatusLine
               decided={decisions.decided}
               flagged={flaggedCount}
               progress={runProgress}
               total={results.length}
             />
-            {/* What the run never measured, under the counts of what it did:
-              a checklist that silently omits half the document reads as if the
-              other half were compliant. */}
             <NotComparedDisclosure skipped={basis.skipped} />
           </div>
-          <div className="flex flex-wrap items-center gap-1.5">
-            {/* Only a run whose positions were never saved has a playbook to
-              make; one that ran against a definition already has one. */}
-            {basis.provenance === "ephemeral" && (
+          <Tooltip
+            content={t("inspector.review.basisToggle")}
+            render={
               <Button
-                disabled={saveAsPlaybookPending}
-                onClick={onSaveAsPlaybook}
-                size="xs"
-                variant="outline"
-              >
-                {t("inspector.review.saveAsPlaybook")}
-              </Button>
-            )}
-            <ReviewExportMenu
-              // The counterparty file is the document, so it is addressed by the
-              // field it lives on: nothing the run knows is in scope.
-              counterparty={
-                targetName.length === 0
-                  ? null
-                  : { fileFieldId: targetFileFieldId, fileName: targetName }
-              }
-              runId={runId}
-              workspaceId={workspaceId}
-            />
-            <Button onClick={onReviewAgain} size="xs" variant="outline">
-              {t("inspector.review.reviewAgain")}
-            </Button>
-            <div className="ms-auto">
-              <PaneSwapToggle swap={paneSwap} />
-            </div>
-          </div>
+                aria-expanded={basisOpen}
+                aria-label={t("inspector.review.basisToggle")}
+                onClick={() => setBasisOpen((current) => !current)}
+                size="icon-xs"
+                variant="ghost"
+              />
+            }
+          >
+            <InfoIcon className="size-3.5" />
+          </Tooltip>
+          <div className="ms-auto">{queueControls}</div>
+          {basisOpen && (
+            <p className="text-muted-foreground basis-full text-xs leading-6">
+              <BidiText as="span">{basisSentence}</BidiText>
+            </p>
+          )}
         </div>
-        {/* The document's own queue, on its own row: it answers to the
-            document rather than to this run, and the row above is already
-            carrying everything the run offers. */}
-        {queueControls}
       </header>
 
       <ReviewHistorySection history={history} />
@@ -2981,20 +3059,20 @@ const RunHeaderStatusLine = ({
       total: progress.total,
     });
     return (
-      <p className="text-muted-foreground text-xs tabular-nums">
+      <span>
         {elapsedMs === null
           ? positions
           : `${positions}${SUMMARY_SEPARATOR}${formatElapsedMinutesSeconds(elapsedMs)}`}
-      </p>
+      </span>
     );
   }
   if (total === 0) {
     return null;
   }
   return (
-    <p className="text-muted-foreground text-xs tabular-nums">
+    <span>
       {`${t("inspector.review.flaggedPositions", { flagged, total })}${SUMMARY_SEPARATOR}${t("inspector.review.decidedCount", { count: decided })}`}
-    </p>
+    </span>
   );
 };
 
@@ -3212,9 +3290,25 @@ const ReviewResultList = ({
   // Narrows whichever list the tabs chose to one flag. Off by default: the
   // chips exist to find flagged work again, not to hide anything on arrival.
   const [flagFilter, setFlagFilter] = useState<ReviewFlag | null>(null);
-  const [expandedId, setExpandedId] = useState(
-    focusedOnMount ?? deviations.at(0)?.id ?? orderedItems.at(0)?.id ?? null,
-  );
+  // Cards open and close on their own: opening one never closes another, so
+  // nothing below the pointer moves except the card that was clicked.
+  const [expandedIds, setExpandedIds] = useState<ReadonlySet<string>>(() => {
+    const first =
+      focusedOnMount ?? deviations.at(0)?.id ?? orderedItems.at(0)?.id ?? null;
+    return new Set(first === null ? [] : [first]);
+  });
+  const openCard = (id: string) =>
+    setExpandedIds((current) =>
+      current.has(id) ? current : new Set([...current, id]),
+    );
+  const toggleCard = (id: string) =>
+    setExpandedIds((current) => {
+      const next = new Set(current);
+      if (!next.delete(id)) {
+        next.add(id);
+      }
+      return next;
+    });
 
   // A finding named from outside opens whatever filter shows it. Adjusted
   // during render (React's own pattern) rather than in an effect, so the card
@@ -3223,7 +3317,7 @@ const ReviewResultList = ({
   if (focusItemId !== answeredFocusId) {
     setAnsweredFocusId(focusItemId);
     if (focusItemId !== null) {
-      setExpandedId(focusItemId);
+      openCard(focusItemId);
       setFlagFilter(null);
       if (!deviations.some((item) => item.id === focusItemId)) {
         setFilter("coverage");
@@ -3239,10 +3333,6 @@ const ReviewResultList = ({
     flagFilter === null
       ? tabItems
       : tabItems.filter((item) => item.flags.includes(flagFilter));
-  const visibleExpandedId =
-    expandedId === null || visibleItems.some((item) => item.id === expandedId)
-      ? expandedId
-      : (visibleItems.at(0)?.id ?? null);
 
   // Bring the opened card into view. The detail panel carries the id and only
   // exists once expanded, which the commit above has already done.
@@ -3262,6 +3352,14 @@ const ReviewResultList = ({
     getReviewFocusedId(state, entityId),
   );
   const listRef = useRef<HTMLUListElement>(null);
+  // Keyed on ids, not on the derived list: the list is a new array every
+  // render, and an effect keyed on it re-opened the focused card on the very
+  // render that collapsed it. Focus moving is the only thing that opens.
+  const focusedItemId =
+    focusedSuggestionId === null
+      ? null
+      : (orderedItems.find((item) => item.suggestionId === focusedSuggestionId)
+          ?.id ?? null);
   useExternalSyncEffect(() => {
     if (focusedSuggestionId === null) {
       return;
@@ -3271,13 +3369,10 @@ const ReviewResultList = ({
         `[data-suggestion-id="${CSS.escape(focusedSuggestionId)}"]`,
       )
       ?.scrollIntoView({ block: "nearest" });
-    const matched = orderedItems.find(
-      (item) => item.suggestionId === focusedSuggestionId,
-    );
-    if (matched !== undefined) {
-      setExpandedId(matched.id);
+    if (focusedItemId !== null) {
+      openCard(focusedItemId);
     }
-  }, [focusedSuggestionId, orderedItems]);
+  }, [focusedSuggestionId, focusedItemId]);
 
   return (
     <section>
@@ -3310,7 +3405,7 @@ const ReviewResultList = ({
           <ReviewResultCard
             editorAvailable={editorAvailable}
             decisionPending={decisionPending}
-            expanded={visibleExpandedId === item.id}
+            expanded={expandedIds.has(item.id)}
             item={item}
             key={item.id}
             negotiation={negotiationBySourceId.get(item.positionId)}
@@ -3321,9 +3416,17 @@ const ReviewResultList = ({
             onOpenReferenceCitation={onOpenReferenceCitation}
             onRejectSuggestion={onRejectSuggestion}
             onScrollToBlock={onScrollToBlock}
-            onToggle={() =>
-              setExpandedId(visibleExpandedId === item.id ? null : item.id)
-            }
+            // Opening a card is looking at its change: the document focuses
+            // the same suggestion, which is what paints its redline in place.
+            onToggle={() => {
+              const opening = !expandedIds.has(item.id);
+              toggleCard(item.id);
+              if (opening && item.suggestionId !== null) {
+                useReviewStore
+                  .getState()
+                  .setFocusedId(entityId, item.suggestionId);
+              }
+            }}
             passageTexts={passageTexts}
             perspective={perspective}
             readOnly={readOnly}
@@ -3545,15 +3648,21 @@ const ReviewResultCard = ({
     singleReferenceId === null
       ? undefined
       : referenceNamesByField(references).get(singleReferenceId);
+  // The run header already names a lone reference; a card says which one
+  // only when the run compared against several and this finding's standard
+  // came from one of them.
   const standardLabel =
-    singleReferenceName === undefined
+    singleReferenceName === undefined || references.length < 2
       ? undefined
       : t("inspector.review.standardColumnFrom", { name: singleReferenceName });
 
   return (
     <li
       className={cn(
-        "bg-card overflow-hidden rounded-lg border",
+        // No overflow clipping on the card: the header below is sticky within
+        // it, and a clipping ancestor would pin the header to the card's own
+        // box instead of the scrolling panel.
+        "bg-card rounded-lg border",
         // A decided card recedes while it is collapsed; opening it puts the
         // finding back at full strength so the reviewer can read what they
         // decided about.
@@ -3561,10 +3670,18 @@ const ReviewResultCard = ({
       )}
       data-suggestion-id={suggestion?.id}
     >
+      {/* The topic stays in view while a long card scrolls under it, and
+          stops with the card, so the reader never loses which finding the
+          passages belong to. */}
       <button
         aria-controls={detailId}
         aria-expanded={expanded}
-        className="hover:bg-muted/70 w-full transition-colors"
+        className={cn(
+          "hover:bg-muted/70 w-full rounded-t-lg transition-colors",
+          // Negative offset by the list's own padding, so the stuck header
+          // sits flush with the panel edge instead of a padding-high gap.
+          expanded && "bg-card sticky -top-2 z-10 rounded-b-none shadow-xs",
+        )}
         onClick={onToggle}
         type="button"
       >
@@ -3603,11 +3720,17 @@ const ReviewResultCard = ({
         />
       </button>
       {expanded && (
-        <div className="space-y-3 border-t px-3 py-3" id={detailId}>
+        <div className="space-y-2 border-t px-3 py-3" id={detailId}>
+          {/* One sentence first: what the finding is. The comparison below
+              is the evidence for it, and the reasoning behind both is a
+              click away and not in the way of the next finding. */}
+          {caption !== null && (
+            <p className="text-foreground text-sm leading-6 text-pretty">
+              <BidiText as="span">{firstSentence(caption)}</BidiText>
+            </p>
+          )}
           <ReviewDeltaView
             delta={finding.delta}
-            impact={finding.impact ?? "unknown"}
-            label={item.title}
             onShowInDocument={editorAvailable ? scrollToCitedBlock : undefined}
             // Only a standard quoted from a reference has a document to
             // open; an authored one is language the playbook holds, and
@@ -3633,14 +3756,6 @@ const ReviewResultCard = ({
               passages: finding.citations,
             }}
           />
-          {/* One sentence. The comparison is what the card is for; the
-              reasoning behind it is a click away and not in the way of the
-              next finding. */}
-          {caption !== null && (
-            <p className="text-muted-foreground text-sm leading-6 text-pretty">
-              <BidiText as="span">{firstSentence(caption)}</BidiText>
-            </p>
-          )}
           {/* The standard's own passages did not agree with each other, which
               a reviewer weighing them has to know. */}
           {finding.consensus === "mixed" && (
@@ -3726,10 +3841,14 @@ const WhyDisclosure = ({
   const t = useTranslations();
   const [open, setOpen] = useState(false);
   const panelId = `${id}-why`;
-  // The rationale behind a comparison caption is a second text the card never
-  // showed; behind a rationale caption it is the caption itself.
+  // A reference comparison carries its text as the caption and again in
+  // `rationale` for readers of that field alone; the panel shows a text once.
+  // Only a rationale that says something the caption does not is a second
+  // paragraph here.
   const rationale =
-    finding.explanation?.type === "comparison" ? finding.rationale : null;
+    finding.rationale !== null && finding.rationale.trim() !== caption?.trim()
+      ? finding.rationale
+      : null;
   const fullCaption =
     caption !== null && firstSentence(caption) !== caption.trim()
       ? caption
@@ -3754,7 +3873,7 @@ const WhyDisclosure = ({
       <button
         aria-controls={panelId}
         aria-expanded={open}
-        className="text-muted-foreground hover:text-foreground -mx-1 flex min-h-11 items-center gap-1 px-1 text-xs transition-colors"
+        className="text-muted-foreground hover:text-foreground -mx-1 flex min-h-8 items-center gap-1 px-1 text-xs transition-colors"
         onClick={() => setOpen(!open)}
         type="button"
       >
@@ -3765,11 +3884,14 @@ const WhyDisclosure = ({
         />
         {t("inspector.review.why")}
       </button>
+      {/* One voice inside: muted prose, a lead-in in the text colour where a
+          paragraph answers a named question. The recommendation is not
+          louder than the reasoning; the redline above it is what acts. */}
       {open && (
-        <div className="space-y-2" id={panelId}>
+        <div className="space-y-2 pt-1" id={panelId}>
           {purpose !== null && (
             <p className="text-muted-foreground text-sm leading-6 text-pretty">
-              <span className="text-foreground-strong-muted font-medium">
+              <span className="text-foreground font-medium">
                 {t("inspector.review.whyItMatters")}
               </span>{" "}
               <BidiText as="span">{purpose}</BidiText>
@@ -3791,11 +3913,11 @@ const WhyDisclosure = ({
             verdict={finding.verdict}
           />
           {typeof finding.recommendation === "string" && (
-            <p className="text-foreground text-sm leading-6 text-pretty">
-              <span className="text-foreground-strong-muted font-medium">
+            <p className="text-muted-foreground text-sm leading-6 text-pretty">
+              <span className="text-foreground font-medium">
                 {t("inspector.review.recommendation")}
               </span>{" "}
-              {finding.recommendation}
+              <BidiText as="span">{finding.recommendation}</BidiText>
             </p>
           )}
         </div>
@@ -3856,25 +3978,53 @@ const ReviewCardActions = ({
   return (
     <section
       aria-label={t("inspector.review.decision")}
-      className="flex flex-wrap items-center gap-2 border-t pt-3"
+      className="space-y-2 border-t pt-3"
     >
-      {readOnly ? (
-        <span className="text-muted-foreground text-xs">
-          {t("inspector.review.readOnlyRun")}
-        </span>
-      ) : (
-        <FindingResolution
-          decisionPending={decisionPending}
-          editorAvailable={editorAvailable}
-          item={item}
-          onAcceptSuggestion={onAcceptSuggestion}
-          onDecide={onDecide}
-          onRejectSuggestion={onRejectSuggestion}
-          suggestion={suggestion}
-        />
+      {/* The change the buttons below act on, shown where the decision is
+          taken. The same preview the chat's cards render; without it the card
+          asked for a verdict on wording it never showed. */}
+      {suggestion !== undefined && (
+        <div className="space-y-1">
+          <div className="flex items-center justify-between gap-2">
+            <span className={REVIEW_SECTION_LABEL_CLASS}>
+              {t("inspector.review.proposedChange")}
+            </span>
+            {targetBlockId !== null && (
+              <Button
+                className="text-muted-foreground hover:text-foreground h-6 px-1.5 text-xs"
+                disabled={!editorAvailable}
+                onClick={() => onScrollToBlock(targetBlockId)}
+                size="sm"
+                variant="ghost"
+              >
+                {t("inspector.review.showInDocument")}
+              </Button>
+            )}
+          </div>
+          <RedlinePreview
+            preview={suggestion.preview}
+            rejected={suggestion.status === "rejected"}
+            srSummary={suggestion.summary}
+          />
+        </div>
       )}
-      {targetBlockId !== null && (
-        <>
+      <div className="flex flex-wrap items-center gap-2">
+        {readOnly ? (
+          <span className="text-muted-foreground text-xs">
+            {t("inspector.review.readOnlyRun")}
+          </span>
+        ) : (
+          <FindingResolution
+            decisionPending={decisionPending}
+            editorAvailable={editorAvailable}
+            item={item}
+            onAcceptSuggestion={onAcceptSuggestion}
+            onDecide={onDecide}
+            onRejectSuggestion={onRejectSuggestion}
+            suggestion={suggestion}
+          />
+        )}
+        {suggestion === undefined && targetBlockId !== null && (
           <Button
             className="text-muted-foreground hover:text-foreground h-7 px-2"
             disabled={!editorAvailable}
@@ -3884,24 +4034,31 @@ const ReviewCardActions = ({
           >
             {t("inspector.review.showInDocument")}
           </Button>
+        )}
+      </div>
+      {/* What a reviewer does besides deciding: a note into the draft, a flag
+          for later, a question. Quieter and on its own row, so the decision
+          row reads as one. */}
+      <div className="flex flex-wrap items-center gap-1">
+        {targetBlockId !== null && (
           <CounterpartyNotePopover
             disabled={!editorAvailable}
             onSubmit={onAddCounterpartyNote}
           />
-        </>
-      )}
-      {!readOnly && (
-        <FindingFlagMenu flags={item.flags} onSetFlags={onSetFlags} />
-      )}
-      <Button
-        className="text-muted-foreground hover:text-foreground order-last ms-auto h-7 px-2"
-        onClick={onAskInChat}
-        size="sm"
-        variant="ghost"
-      >
-        <MessageSquareIcon className="me-1 size-3.5" />
-        {t("common.askInChat")}
-      </Button>
+        )}
+        {!readOnly && (
+          <FindingFlagMenu flags={item.flags} onSetFlags={onSetFlags} />
+        )}
+        <Button
+          className="text-muted-foreground hover:text-foreground ms-auto h-7 px-2"
+          onClick={onAskInChat}
+          size="sm"
+          variant="ghost"
+        >
+          <MessageSquareIcon className="me-1 size-3.5" />
+          {t("common.askInChat")}
+        </Button>
+      </div>
     </section>
   );
 };

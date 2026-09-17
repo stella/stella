@@ -2661,8 +2661,7 @@
       "unavailable": "Le site référencé n’autorise pas un aperçu sécurisé. Si l’outil a renvoyé le texte du document, il s’affiche ici ; sinon, ouvrez l’original."
     },
     "facet": {
-      "anonymization": "Anonymisation",
-      "previewInFullViewToast": "L'aperçu est la vue principale ici. Cliquez sur le bouton de réduction pour l'afficher à côté des métadonnées."
+      "anonymization": "Anonymisation"
     },
     "groups": {
       "addContext": "Ajouter le contexte",
@@ -2763,6 +2762,7 @@
       "basisDivider": "et / ou",
       "basisPlaybook": "Revue selon {name}",
       "basisReferences": "{count, plural, one {Comparaison avec # document de référence} other {Comparaison avec # documents de référence}}",
+      "basisToggle": "What was compared",
       "changeBasis": "Modifier la base de révision",
       "chatDraft": {
         "finding": "Constat :",
@@ -2852,6 +2852,7 @@
       },
       "passageUnavailable": "Texte de référence indisponible",
       "passagesCount": "{count, plural, one {# passage} other {# passages}}",
+      "passagesToggle": "Passages",
       "pendingCount": "{count, plural, one {# en attente} other {# en attente}}",
       "perspective": {
         "neutral": "Non précisé",
@@ -2869,6 +2870,7 @@
         "present": "Oui"
       },
       "progressPositions": "{total, plural, one {{completed, number} sur # critère} other {{completed, number} sur # critères}}",
+      "proposedChange": "Proposed change",
       "proposing": "Proposition des critères… {count, number}",
       "readOnlyRun": "Décidé lors de cette révision",
       "recommendation": "Recommandation :",

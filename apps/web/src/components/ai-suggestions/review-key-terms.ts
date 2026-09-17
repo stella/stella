@@ -492,6 +492,25 @@ export const buildMarkedPair = ({
 }: BuildMarkedPairInput): MarkedPair => {
   const targetSide = joinSide(target);
   const standardSide = joinSide(standard);
+  // A parameter delta has already named the phrase that differs. Marking the
+  // word diff and every defined term around it as well buries that phrase in
+  // a passage of highlights, so a named phrase carries its side alone.
+  if (deltaTargetText !== undefined || deltaStandardText !== undefined) {
+    return {
+      standard: markSide(
+        standardSide,
+        deltaStandardText === undefined
+          ? []
+          : phraseRanges(standardSide.text, deltaStandardText),
+      ),
+      target: markSide(
+        targetSide,
+        deltaTargetText === undefined
+          ? []
+          : phraseRanges(targetSide.text, deltaTargetText),
+      ),
+    };
+  }
   const diff = diffHighlightRanges({
     standardText: standardSide.text,
     targetText: targetSide.text,
@@ -499,11 +518,11 @@ export const buildMarkedPair = ({
   return {
     standard: markSide(standardSide, [
       ...diff.standard,
-      ...sideRanges(standardSide.text, deltaStandardText),
+      ...keyTermRanges(standardSide.text),
     ]),
     target: markSide(targetSide, [
       ...diff.target,
-      ...sideRanges(targetSide.text, deltaTargetText),
+      ...keyTermRanges(targetSide.text),
     ]),
   };
 };
@@ -553,14 +572,6 @@ const joinSide = (passages: readonly PassageInput[]): JoinedSide => {
   }
   return { paragraphs, text: bodies.join(PARAGRAPH_SEPARATOR) };
 };
-
-const sideRanges = (
-  text: string,
-  deltaText: string | undefined,
-): KeyTermRange[] => [
-  ...keyTermRanges(text),
-  ...(deltaText === undefined ? [] : phraseRanges(text, deltaText)),
-];
 
 const markSide = (
   side: JoinedSide,

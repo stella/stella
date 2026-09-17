@@ -2661,8 +2661,7 @@
       "unavailable": "Odkazovaný web nepovoľuje bezpečný náhľad. Ak nástroj vrátil text dokumentu, zobrazí sa tu; inak otvorte originál."
     },
     "facet": {
-      "anonymization": "Anonymizácia",
-      "previewInFullViewToast": "Náhľad je tu hlavným zobrazením. Kliknutím na tlačidlo minimalizácie ho zobrazíte vedľa metadát."
+      "anonymization": "Anonymizácia"
     },
     "groups": {
       "addContext": "Pridať kontext",
@@ -2763,6 +2762,7 @@
       "basisDivider": "a / alebo",
       "basisPlaybook": "Kontrola podľa {name}",
       "basisReferences": "{count, plural, one {Porovnanie s # referenčným dokumentom} few {Porovnanie s # referenčnými dokumentmi} other {Porovnanie s # referenčnými dokumentmi}}",
+      "basisToggle": "What was compared",
       "changeBasis": "Zmeniť podklady kontroly",
       "chatDraft": {
         "finding": "Zistenie:",
@@ -2852,6 +2852,7 @@
       },
       "passageUnavailable": "Text referencie nie je dostupný",
       "passagesCount": "{count, plural, one {# pasáž} few {# pasáže} other {# pasáží}}",
+      "passagesToggle": "Passages",
       "pendingCount": "{count, plural, one {# čaká} few {# čakajú} other {# čaká}}",
       "perspective": {
         "neutral": "Neuvedené",
@@ -2869,6 +2870,7 @@
         "present": "Áno"
       },
       "progressPositions": "{total, plural, one {{completed, number} z # pozície} few {{completed, number} z # pozícií} other {{completed, number} z # pozícií}}",
+      "proposedChange": "Proposed change",
       "proposing": "Navrhujú sa pozície… {count, number}",
       "readOnlyRun": "Rozhodnuté v tejto kontrole",
       "recommendation": "Odporúčanie:",

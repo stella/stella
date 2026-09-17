@@ -2665,7 +2665,6 @@ type Messages = {
     };
     "facet": {
       "anonymization": "Anonymization";
-      "previewInFullViewToast": "Preview is the main view here. Click the minimize button to see it alongside metadata.";
     };
     "groups": {
       "addContext": "Add context";
@@ -2748,9 +2747,9 @@ type Messages = {
     "review": {
       "actionNeeded": "Action needed";
       "addComment": "Add as comment";
-      "addNote": "Add note for counterparty";
+      "addNote": "Add comment for counterparty";
       "addNotePlaceholder": "What the counterparty should see";
-      "addNoteSubmit": "Add note";
+      "addNoteSubmit": "Add comment";
       "addReference": "Add {name} as a reference";
       "addTopic": "Add topic";
       "allDecided": "Every finding here has been decided.";
@@ -2766,6 +2765,7 @@ type Messages = {
       "basisDivider": "and / or";
       "basisPlaybook": "Reviews against {name}";
       "basisReferences": "{count, plural, one {Compares with # reference document} other {Compares with # reference documents}}";
+      "basisToggle": "What was compared";
       "changeBasis": "Change review basis";
       "chatDraft": {
         "finding": "Finding:";
@@ -2841,12 +2841,12 @@ type Messages = {
       "noReferencesFound": "No matching DOCX documents.";
       "notCompared": "Not compared";
       "notComparedCount": "Not compared: {count, number}";
-      "noteAdded": "Note added for the counterparty";
-      "noteBlockedChecking": "stella is still checking whether this document can be edited safely. Your note is kept; try again in a moment.";
-      "noteBlockedCollaboration": "The shared editing session is still opening. Your note is kept; try again in a moment.";
-      "noteBlockedOpening": "The document is still opening. Your note is kept; try again in a moment.";
-      "noteBlockedReadOnly": "This shared document is open for viewing only. Your note is kept; try again once you can edit it.";
-      "noteNotAdded": "Note not added";
+      "noteAdded": "Comment added for the counterparty";
+      "noteBlockedChecking": "stella is still checking whether this document can be edited safely. Your comment is kept; try again in a moment.";
+      "noteBlockedCollaboration": "The shared editing session is still opening. Your comment is kept; try again in a moment.";
+      "noteBlockedOpening": "The document is still opening. Your comment is kept; try again in a moment.";
+      "noteBlockedReadOnly": "This shared document is open for viewing only. Your comment is kept; try again once you can edit it.";
+      "noteNotAdded": "Comment not added";
       "openPlaybooks": "Open playbooks";
       "pane": {
         "document": "Panel: findings beside the document";
@@ -2855,6 +2855,7 @@ type Messages = {
       };
       "passageUnavailable": "Reference text unavailable";
       "passagesCount": "{count, plural, one {# passage} other {# passages}}";
+      "passagesToggle": "Passages";
       "pendingCount": "{count, plural, one {# pending} other {# pending}}";
       "perspective": {
         "neutral": "Not specified";
@@ -2872,6 +2873,7 @@ type Messages = {
         "present": "Yes";
       };
       "progressPositions": "{total, plural, one {{completed, number} of # position} other {{completed, number} of # positions}}";
+      "proposedChange": "Proposed change";
       "proposing": "Proposing positions… {count, number}";
       "readOnlyRun": "Decided on this run";
       "recommendation": "Recommendation:";

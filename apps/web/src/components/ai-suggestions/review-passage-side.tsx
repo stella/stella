@@ -47,6 +47,24 @@ const MARK_CLASS = {
 export const REVIEW_SECTION_LABEL_CLASS =
   "text-muted-foreground text-xs tracking-wide uppercase";
 
+/** Which document a value or passage comes from. */
+export const REVIEW_SIDE = {
+  target: "target",
+  standard: "standard",
+} as const;
+export type ReviewSide = (typeof REVIEW_SIDE)[keyof typeof REVIEW_SIDE];
+
+/**
+ * The side, said once as a rule down the start edge instead of a label above
+ * every value: the reviewed document in the accent, the standard in the
+ * muted tone, the same two everywhere a card sets one against the other.
+ * A narrow pane has no room for a word per row; a colour costs two pixels.
+ */
+export const REVIEW_SIDE_RULE_CLASS = {
+  target: "border-s-2 border-s-primary ps-2",
+  standard: "border-s-2 border-s-muted-foreground/40 ps-2",
+} as const satisfies Record<ReviewSide, string>;
+
 /** A clause number in the hanging margin, or any other numeric caption beside
  *  a passage. */
 export const REVIEW_CLAUSE_LABEL_CLASS =
@@ -87,6 +105,8 @@ const COLLAPSED_HEIGHT_CLASS = {
 
 export type ReviewPassageSideProps = {
   label: string;
+  /** Which document this is, carried as the colour rule down its edge. */
+  side: ReviewSide;
   paragraphs: readonly MarkedParagraph[];
   /** How tall the collapsed column is. Defaults to the comparison's height. */
   collapse?: PassageCollapse | undefined;
@@ -102,6 +122,7 @@ export type ReviewPassageSideProps = {
 
 export const ReviewPassageSide = ({
   label,
+  side,
   paragraphs,
   collapse = PASSAGE_COLLAPSE.full,
   expandLabel,
@@ -116,7 +137,7 @@ export const ReviewPassageSide = ({
   );
 
   return (
-    <div className="min-w-0 space-y-1.5">
+    <div className={cn("min-w-0 space-y-1.5", REVIEW_SIDE_RULE_CLASS[side])}>
       <p className={REVIEW_SECTION_LABEL_CLASS}>
         <BidiText as="span">{label}</BidiText>
       </p>
@@ -190,6 +211,7 @@ export const ReviewStandardPassages = ({
     label={label}
     onActivate={onActivate}
     paragraphs={buildMarkedSide(passages)}
+    side={REVIEW_SIDE.standard}
   />
 );
 

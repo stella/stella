@@ -2661,8 +2661,7 @@
       "unavailable": "Nurodyta svetainė neleidžia saugios peržiūros. Jei įrankis grąžino dokumento tekstą, jis bus rodomas čia; kitu atveju atidarykite originalą."
     },
     "facet": {
-      "anonymization": "Anonimizavimas",
-      "previewInFullViewToast": "Peržiūra čia yra pagrindinis rodinys. Spustelėkite suskleidimo mygtuką, kad matytumėte ją kartu su metaduomenimis."
+      "anonymization": "Anonimizavimas"
     },
     "groups": {
       "addContext": "Pridėti kontekstą",
@@ -2763,6 +2762,7 @@
       "basisDivider": "ir / arba",
       "basisPlaybook": "Patikra pagal {name}",
       "basisReferences": "{count, plural, one {Palyginimas su # referenciniu dokumentu} few {Palyginimas su # referenciniais dokumentais} other {Palyginimas su # referencinių dokumentų}}",
+      "basisToggle": "What was compared",
       "changeBasis": "Keisti peržiūros pagrindą",
       "chatDraft": {
         "finding": "Išvada:",
@@ -2852,6 +2852,7 @@
       },
       "passageUnavailable": "Referencinis tekstas nepasiekiamas",
       "passagesCount": "{count, plural, one {# ištrauka} few {# ištraukos} many {# ištraukos} other {# ištraukų}}",
+      "passagesToggle": "Passages",
       "pendingCount": "{count, plural, one {# laukianti išvada} few {# laukiančios išvados} many {# laukiančios išvados} other {# laukiančių išvadų}}",
       "perspective": {
         "neutral": "Nenurodyta",
@@ -2869,6 +2870,7 @@
         "present": "Taip"
       },
       "progressPositions": "{total, plural, one {{completed, number} iš # pozicijos} few {{completed, number} iš # pozicijų} many {{completed, number} iš # pozicijų} other {{completed, number} iš # pozicijų}}",
+      "proposedChange": "Proposed change",
       "proposing": "Siūlomos pozicijos… {count, number}",
       "readOnlyRun": "Nuspręsta šioje peržiūroje",
       "recommendation": "Rekomendacija:",
