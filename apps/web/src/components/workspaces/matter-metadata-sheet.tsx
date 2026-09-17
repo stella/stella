@@ -19,7 +19,6 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
-import { FieldDescription } from "@stll/ui/field";
 import { Input } from "@stll/ui/input";
 import { Separator } from "@stll/ui/separator";
 import { stellaToast } from "@stll/ui/toast";
@@ -417,9 +416,9 @@ export const MatterMetadataPanel = ({
               variant="inline"
             />
           </div>
-          <FieldDescription className="col-start-2 pb-2 text-pretty">
+          <p className="text-muted-foreground col-start-2 pb-2 text-xs text-pretty">
             {documentNumberingHint}
-          </FieldDescription>
+          </p>
         </section>
 
         {/* InfoSoud */}
