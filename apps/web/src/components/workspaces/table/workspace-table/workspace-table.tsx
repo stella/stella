@@ -43,6 +43,8 @@ import {
   DraggableHeaderCell,
   HeaderEndFillerCell,
 } from "@/components/workspaces/table/workspace-table/header-cells";
+import { anchoredHorizontalScroll } from "@/components/workspaces/table/workspace-table/horizontal-scroll.logic";
+import type { HorizontalScrollMetrics } from "@/components/workspaces/table/workspace-table/horizontal-scroll.logic";
 import {
   ADD_PROPERTY_RAIL_ACTIVE_CLASS_NAME,
   TABLE_ROW_ESTIMATE_PX,
@@ -122,7 +124,7 @@ export const WorkspaceTable = <TRow extends TableRowData = TableTreeNode>({
   const tableWrapperRef = useRef<HTMLDivElement>(null);
   const loadMoreSentinelRef = useRef<HTMLDivElement>(null);
   const lastSelectedIndex = useRef<number | null>(null);
-  const previousHorizontalMaxScroll = useRef<number | null>(null);
+  const previousScrollMetrics = useRef<HorizontalScrollMetrics | null>(null);
   const lastColumnDropPosition = useRef<ColumnDropPosition | null>(null);
   const [expandedTableCell, setExpandedTableCell] =
     useState<ExpandedTableCell | null>(null);
@@ -386,7 +388,6 @@ export const WorkspaceTable = <TRow extends TableRowData = TableTreeNode>({
     minWidth: tableWidth,
     width: gridWidth,
   };
-  const horizontalMaxScroll = Math.max(0, gridWidth - wrapperWidth);
   const handleColumnReorder = useCallback(
     (sourceId: string, targetId: string, edge: ColumnDropEdge) => {
       const sourceColumn = table.getColumn(sourceId);
@@ -524,22 +525,19 @@ export const WorkspaceTable = <TRow extends TableRowData = TableTreeNode>({
       return;
     }
 
-    const previousMax = previousHorizontalMaxScroll.current;
-    previousHorizontalMaxScroll.current = horizontalMaxScroll;
-    if (previousMax === null) {
-      return;
-    }
+    const previous = previousScrollMetrics.current;
+    const next: HorizontalScrollMetrics = { tableWidth, wrapperWidth };
+    previousScrollMetrics.current = next;
 
-    const wasAtRightEdge = element.scrollLeft >= previousMax - 2;
-    if (wasAtRightEdge) {
-      element.scrollLeft = horizontalMaxScroll;
-      return;
+    const anchored = anchoredHorizontalScroll({
+      next,
+      previous,
+      scrollLeft: element.scrollLeft,
+    });
+    if (anchored !== null) {
+      element.scrollLeft = anchored;
     }
-
-    if (element.scrollLeft > horizontalMaxScroll) {
-      element.scrollLeft = horizontalMaxScroll;
-    }
-  }, [horizontalMaxScroll]);
+  }, [tableWidth, wrapperWidth]);
 
   return (
     <div
