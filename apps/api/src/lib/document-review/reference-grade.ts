@@ -243,7 +243,9 @@ const stripBlockIdMarkers = (
       }
       return "";
     })
-    .replaceAll(/[ \t]+([.,;:])/gu, "$1")
+    // The lookbehind pins each match to the start of its run of spaces, so a
+    // long run is scanned once instead of once per offset inside it.
+    .replaceAll(/(?<![ \t])[ \t]+([.,;:])/gu, "$1")
     .replaceAll(/[ \t]{2,}/gu, " ")
     .trim();
   return { text, blockIds };
