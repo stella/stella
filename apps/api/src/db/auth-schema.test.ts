@@ -278,6 +278,16 @@ const HOST_MEMBER_FIELDS = {
   }),
 } as const;
 
+// Better Auth declared `issuer` from 1.7.0 to 1.7.2 and retracted it in 1.7.3.
+// The column is retained, nullable, for one release after the bump so a
+// reversal stays available; from here it is the host's, not the library's.
+const HOST_ACCOUNT_FIELDS = {
+  issuer: hostField("issuer", "string", {
+    input: "server-managed",
+    returned: false,
+  }),
+} as const;
+
 const referenceTo = (tableName: string): BetterAuthFieldReference => {
   if (tableName === "organization" || tableName === "user") {
     return { field: "id", model: tableName, onDelete: "cascade" };
@@ -440,7 +450,10 @@ describe("auth schema", () => {
         table: session,
       }),
       account: normalizeModel({
-        expectedFields: BETTER_AUTH_CORE_SCHEMA.account.fields,
+        expectedFields: {
+          ...BETTER_AUTH_CORE_SCHEMA.account.fields,
+          ...HOST_ACCOUNT_FIELDS,
+        },
         modelName: "account",
         table: account,
       }),
@@ -507,6 +520,7 @@ describe("auth schema", () => {
       },
       {
         fields: {
+          account: HOST_ACCOUNT_FIELDS,
           user: HOST_USER_FIELDS,
           member: HOST_MEMBER_FIELDS,
         },
@@ -515,6 +529,12 @@ describe("auth schema", () => {
             {
               fields: ["providerId"],
               predicate: `"account"."provider_id" = 'credential'`,
+              unique: true,
+            },
+            // The identity key, host-owned since 1.7.3 stopped declaring one.
+            {
+              fields: ["providerId", "accountId"],
+              predicate: null,
               unique: true,
             },
           ],

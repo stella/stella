@@ -1,4 +1,6 @@
 import { apiKey } from "@better-auth/api-key";
+import { createCimdClientDiscovery } from "@better-auth/cimd";
+import { fetchClientMetadataResource } from "@better-auth/cimd/node";
 import { oauthProvider } from "@better-auth/oauth-provider";
 import type { BetterAuthPlugin, HookEndpointContext } from "better-auth";
 import { betterAuth } from "better-auth";
@@ -1251,6 +1253,19 @@ const createAuth = () => {
         allowDynamicClientRegistration: true,
         allowUnauthenticatedClientRegistration: true,
         rateLimit: { register: AUTH_RATE_LIMITS.oauthClientRegistration },
+        // Hosted MCP clients identify themselves by an https URL `client_id`
+        // and skip per-user registration entirely. The transport resolves the
+        // host once, refuses any non-public-routable answer, pins that address
+        // for the connection, and never follows a redirect; resources and
+        // scopes stay bound by the `clientMetadataDocument` registration rules
+        // above, so such a client gets no more reach than a registered one.
+        extensions: [
+          {
+            clientDiscovery: createCimdClientDiscovery({
+              fetchClientMetadataResource,
+            }),
+          },
+        ],
         accessTokenExpiresIn: ACCESS_TOKEN_EXPIRES_IN,
         refreshTokenExpiresIn: REFRESH_TOKEN_EXPIRES_IN,
         clientReference: ({ session }) =>

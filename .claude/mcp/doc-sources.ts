@@ -187,6 +187,7 @@ export const DOC_SOURCES = {
       "@better-auth/api-key",
       "@better-auth/core",
       "@better-auth/oauth-provider",
+      "@better-auth/cimd",
     ],
     url: "https://better-auth.com/llms.txt",
   },
