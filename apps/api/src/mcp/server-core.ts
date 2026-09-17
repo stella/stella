@@ -16,10 +16,7 @@ import type {
 import { panic, Result } from "better-result";
 
 import { detached } from "@/api/lib/detached";
-import {
-  isEventStreamResponse,
-  withSseHeartbeat,
-} from "@/api/lib/sse-heartbeat";
+import { isEventStreamResponse, withSseHeartbeat } from "@/api/lib/sse";
 import { isMcpSession, type McpSession } from "@/api/mcp/auth";
 import type { RecordMcpSessionInitialized } from "@/api/mcp/client-identity";
 import {

@@ -2,8 +2,7 @@ import Elysia from "elysia";
 
 import { workspaceAccessMacro } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
-import { subscribe } from "@/api/lib/sse";
-import { sseResponse } from "@/api/lib/sse-heartbeat";
+import { sseResponse, subscribe } from "@/api/lib/sse";
 
 /**
  * SSE endpoint for real-time workspace events.

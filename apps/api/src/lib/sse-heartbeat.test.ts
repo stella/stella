@@ -5,7 +5,7 @@ import nodePath from "node:path";
 import { SSE_HEARTBEAT_FRAME } from "@stll/api-contract/sse-heartbeat";
 
 import { LIMITS } from "@/api/lib/limits";
-import { sseResponse, withSseHeartbeat } from "@/api/lib/sse-heartbeat";
+import { sseResponse, withSseHeartbeat } from "@/api/lib/sse";
 
 const decoder = new TextDecoder();
 const encode = (text: string): Uint8Array => new TextEncoder().encode(text);
@@ -154,7 +154,7 @@ describe("SSE heartbeat", () => {
 });
 
 const API_SOURCE = nodePath.join(import.meta.dirname, "..");
-const HEARTBEAT_MODULE = nodePath.join(API_SOURCE, "lib/sse-heartbeat.ts");
+const HEARTBEAT_MODULE = nodePath.join(API_SOURCE, "lib/sse.ts");
 const SOURCE_EXTENSIONS = new Set([".ts", ".tsx"]);
 const TEST_FILE_PATTERN = /\.(?:test|spec)\.tsx?$/u;
 
@@ -182,7 +182,7 @@ const SSE_CONTENT_TYPE_PATTERN = /content-type"?\s*:\s*"text\/event-stream/iu;
 const SSE_MEDIA_TYPE_PATTERN = /text\/event-stream/u;
 const RESPONSE_CONSTRUCTION_PATTERN = /new Response\(/u;
 const SSE_LIBRARY_RESPONSE_PATTERN = /toServerSentEventsResponse\(/u;
-const HEARTBEAT_IMPORT_PATTERN = /from "@\/api\/lib\/sse-heartbeat"/u;
+const HEARTBEAT_IMPORT_PATTERN = /from "@\/api\/lib\/sse"/u;
 
 /** A module that can put event-stream bytes on the wire, however it builds them. */
 const buildsEventStreamResponse = (source: string): boolean =>

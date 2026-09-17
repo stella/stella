@@ -17,8 +17,7 @@ import {
   readDesktopEditSessionEventState,
   refreshDesktopEditSessionLiveness,
 } from "@/api/lib/desktop-edit-sessions";
-import { registerSessionDelivery } from "@/api/lib/sse";
-import { sseResponse } from "@/api/lib/sse-heartbeat";
+import { registerSessionDelivery, sseResponse } from "@/api/lib/sse";
 
 const SESSION_TOKEN_LENGTH = 64;
 const BEARER_PREFIX = "Bearer ";
