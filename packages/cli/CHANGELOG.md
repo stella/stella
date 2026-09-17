@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 1.7.0
+
+### Minor Changes
+
+- [#3470](https://github.com/stella/stella/pull/3470) [`53e54bf`](https://github.com/stella/stella/commit/53e54bf4f1629fa48a9429e4f792245fe75d5fa9) Thanks [@jan-kubica](https://github.com/jan-kubica)! - New `case-law lookup` command: resolve docket numbers and ECLIs to decisions, several per call, answering `found`, `ambiguous` or `not_found` per reference.
+
 ## 1.6.0
 
 ### Minor Changes
