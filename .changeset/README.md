@@ -31,15 +31,19 @@ include a Changeset describing the user-visible change and its semver impact:
 Run `bun run changeset`, select the affected package(s), and commit the generated
 Markdown file. Changes that do not alter a published package do not need one.
 
-After Changesets are merged, the shared organization workflow maintains a
-version-only pull request. Merging that pull request updates package versions,
-changelogs, internal dependency ranges, and `bun.lock`. The local
-`publish-npm.yml` workflow builds and packs artifacts without credentials, then
-delegates the privileged, resumable npm and GitHub release transaction to the
-versioned workflow in `stella/.github`.
+Pending entries are applied by whichever flow gets there first. `bun run
+release:maintenance` applies them in the release commit, so the release carries
+the package versions, package changelogs and consumed entries the version-only
+pull request would have produced. While a release pull request is open, the
+shared organization workflow stands down; otherwise it maintains a version-only
+pull request for a package release between application releases. Either way the
+result is the same bytes, produced by the same `changeset:version` script. The
+local `publish-npm.yml` workflow builds and packs artifacts without credentials,
+then delegates the privileged, resumable npm and GitHub release transaction to
+the versioned workflow in `stella/.github`.
 
 The CLI remains an intentional exception to the trigger timing: its new version
 is published only after the matching stable application release is verified in
-production. The reverse holds too: a stable release tag is refused while a
-pending changeset names `@stll/cli`, so merge the version-only pull request
-before cutting a release that needs the new CLI (see `docs/releases.md`).
+production. A stable release tag is still refused while a pending changeset
+names `@stll/cli`, which a release preparation satisfies by applying the entry
+rather than by waiting for another pull request (see `docs/releases.md`).
