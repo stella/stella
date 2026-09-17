@@ -4,7 +4,6 @@ import nodePath from "node:path";
 
 import {
   apiSourceRoot,
-  collectApiImports,
   collectApiModuleGraph,
 } from "@/api/tests/api-module-graph";
 
@@ -25,9 +24,11 @@ const ADAPTER_DIRECTORY = "handlers/case-law/ingestion/adapters";
 const PUBLISHER_REQUEST_GATE = `${ADAPTER_DIRECTORY}/publisher-request-gate.ts`;
 
 /**
- * The adapters that reserve a publisher slot, read off the gate's importers
+ * The adapters that reserve a publisher slot, read off the gate's reachability
  * rather than listed here: an adapter added to the gate is covered by the
- * assertions below without anyone remembering to extend a list.
+ * assertions below without anyone remembering to extend a list. Reachability
+ * is transitive, because an adapter reaches the gate through its publisher's
+ * throttle rather than importing it directly.
  */
 const gatedAdapterEntrypoints = async (): Promise<string[]> => {
   const gateModule = nodePath.resolve(apiSourceRoot, PUBLISHER_REQUEST_GATE);
@@ -41,10 +42,8 @@ const gatedAdapterEntrypoints = async (): Promise<string[]> => {
       if (modulePath === gateModule) {
         return null;
       }
-      const imports = await collectApiImports(modulePath);
-      return imports.includes(gateModule)
-        ? `${ADAPTER_DIRECTORY}/${entry}`
-        : null;
+      const modules = await collectApiModuleGraph(modulePath);
+      return modules.has(gateModule) ? `${ADAPTER_DIRECTORY}/${entry}` : null;
     }),
   );
   return gated.filter((entry): entry is string => entry !== null).sort();
