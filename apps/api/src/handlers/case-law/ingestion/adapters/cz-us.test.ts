@@ -16,7 +16,11 @@ import {
   decodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
 } from "@/api/handlers/case-law/ingestion/adapter";
-import { czUsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-us";
+import {
+  czUsAdapter,
+  RESULTS_PAGE_SIZE,
+} from "@/api/handlers/case-law/ingestion/adapters/cz-us";
+import { NalusRateLimitedError } from "@/api/handlers/case-law/ingestion/adapters/cz-us-throttle";
 import {
   TEXT_ABSENCE_REASON,
   TEXT_FIELD_TYPE,
@@ -162,6 +166,27 @@ type MockSearchOptions = {
   onDetail?: (url: URL, init?: RequestInit) => void;
 };
 
+/**
+ * Requests the adapter made to the court. Counted rather than inferred: the
+ * publisher caps automated clients at a fixed number of requests a day, so
+ * what a cycle costs is part of this adapter's contract.
+ */
+let nalusRequests = 0;
+
+const fetchCallCount = (): number => nalusRequests;
+
+const installRawMock = (
+  respond: (input: string | URL | Request) => Response,
+): void => {
+  nalusRequests = 0;
+  globalThis.fetch = asFetchMock(
+    mock((input: string | URL | Request) => {
+      nalusRequests += 1;
+      return Promise.resolve(respond(input));
+    }),
+  );
+};
+
 const installSearchMock = ({
   rows = [],
   rangeFrom = 1,
@@ -177,8 +202,10 @@ const installSearchMock = ({
   onDetail,
 }: MockSearchOptions): void => {
   const bySz = new Map(rows.map((row) => [row.sz, row]));
+  nalusRequests = 0;
   globalThis.fetch = asFetchMock(
     mock((input: string | URL | Request, init?: RequestInit) => {
+      nalusRequests += 1;
       const url = new URL(resolveUrl(input));
       const method = requestMethod(input, init);
       if (url.pathname.endsWith("/Search/Search.aspx") && method === "GET") {
@@ -265,8 +292,8 @@ const historicalCursor = (
   availableTo = latestClosedAvailabilityDay(),
 ): string => `search:historical:${availableTo}:${year}:collect:0:0:-`;
 
-const recentCursor = (availableFrom: string, availableTo: string): string =>
-  `search:recent:${availableFrom}:${availableTo}:collect:0:0:-`;
+const recentCursor = (verifiedThrough: string, availableTo: string): string =>
+  `search:recent-frontier:${verifiedThrough}:${availableTo}:collect:0:0:-`;
 
 describe("czUsAdapter.fetchPage", () => {
   const originalFetch = globalThis.fetch;
@@ -329,7 +356,9 @@ describe("czUsAdapter.fetchPage", () => {
     expect(submitted?.get("ctl00$MainContent$availableTo")).toBe(
       czechDay(latestClosedAvailabilityDay()),
     );
-    expect(submitted?.get("ctl00$MainContent$resultsPageSize")).toBe("40");
+    expect(submitted?.get("ctl00$MainContent$resultsPageSize")).toBe(
+      String(RESULTS_PAGE_SIZE),
+    );
     expect(page.decisions.map(({ caseNumber }) => caseNumber)).toEqual(
       rows.map(({ caseNumber }) => caseNumber),
     );
@@ -515,13 +544,28 @@ describe("czUsAdapter.fetchPage", () => {
   });
 
   test("uses the result banner for pagination and slice completion", async () => {
-    const firstRows = Array.from({ length: 40 }, (_, index) => ({
+    const firstRows = Array.from({ length: RESULTS_PAGE_SIZE }, (_, index) => ({
       id: String(3000 + index),
       sz: `1-${index + 1}-24_1`,
       caseNumber: `I.ÚS ${index + 1}/24`,
       date: "1. 1. 2024",
     }));
-    installSearchMock({ rows: firstRows, reported: 42 });
+    const tailRows = [
+      {
+        id: "3040",
+        sz: `1-${RESULTS_PAGE_SIZE + 1}-24_1`,
+        caseNumber: `I.ÚS ${RESULTS_PAGE_SIZE + 1}/24`,
+        date: "2. 1. 2024",
+      },
+      {
+        id: "3041",
+        sz: `1-${RESULTS_PAGE_SIZE + 2}-24_1`,
+        caseNumber: `I.ÚS ${RESULTS_PAGE_SIZE + 2}/24`,
+        date: "2. 1. 2024",
+      },
+    ];
+    const reported = RESULTS_PAGE_SIZE + tailRows.length;
+    installSearchMock({ rows: firstRows, reported });
     const first = unwrap(
       await czUsAdapter.fetchPage(historicalCursor(2024), {}),
     );
@@ -530,49 +574,23 @@ describe("czUsAdapter.fetchPage", () => {
     );
 
     installSearchMock({
-      rows: [
-        {
-          id: "3040",
-          sz: "1-41-24_1",
-          caseNumber: "I.ÚS 41/24",
-          date: "2. 1. 2024",
-        },
-        {
-          id: "3041",
-          sz: "1-42-24_1",
-          caseNumber: "I.ÚS 42/24",
-          date: "2. 1. 2024",
-        },
-      ],
-      rangeFrom: 41,
-      reported: 42,
+      rows: tailRows,
+      rangeFrom: RESULTS_PAGE_SIZE + 1,
+      reported,
     });
     const last = unwrap(await czUsAdapter.fetchPage(first.nextCursor, {}));
     expect(last.nextCursor).toMatch(
       /^search:historical:\d{4}-\d{2}-\d{2}:2024:verify:0:0:[a-f0-9]+$/u,
     );
 
-    installSearchMock({ rows: firstRows, reported: 42 });
+    installSearchMock({ rows: firstRows, reported });
     const verifyFirst = unwrap(
       await czUsAdapter.fetchPage(last.nextCursor, {}),
     );
     installSearchMock({
-      rows: [
-        {
-          id: "3040",
-          sz: "1-41-24_1",
-          caseNumber: "I.ÚS 41/24",
-          date: "2. 1. 2024",
-        },
-        {
-          id: "3041",
-          sz: "1-42-24_1",
-          caseNumber: "I.ÚS 42/24",
-          date: "2. 1. 2024",
-        },
-      ],
-      rangeFrom: 41,
-      reported: 42,
+      rows: tailRows,
+      rangeFrom: RESULTS_PAGE_SIZE + 1,
+      reported,
     });
     const verified = unwrap(
       await czUsAdapter.fetchPage(verifyFirst.nextCursor, {}),
@@ -656,6 +674,30 @@ describe("czUsAdapter.fetchPage", () => {
     expect(page.nextCursor).toBe(historicalCursor(1994));
   });
 
+  test("migrates a persisted rolling-window cursor without skipping its first unlisted day", async () => {
+    let submitted: URLSearchParams | undefined;
+    installSearchMock({
+      empty: true,
+      onPost: (form) => {
+        submitted = form;
+      },
+    });
+    // Exactly what the rolling window persisted after it finished 2026-08-04:
+    // an inclusive lower bound on the first day it had not listed.
+    const rollingWindowCursor =
+      "search:recent:2026-08-05:2026-08-06:collect:0:0:-";
+
+    const page = unwrap(await czUsAdapter.fetchPage(rollingWindowCursor, {}));
+
+    expect(submitted?.get("ctl00$MainContent$availableFrom")).toBe("5.8.2026");
+    expect(page.nextCursor).toBe(
+      recentCursor(
+        latestClosedAvailabilityDay(),
+        latestClosedAvailabilityDay(),
+      ),
+    );
+  });
+
   test("finishing the current decision year hands over to availability polling", async () => {
     installSearchMock({ empty: true });
     const currentYear = new Date().getUTCFullYear();
@@ -665,14 +707,14 @@ describe("czUsAdapter.fetchPage", () => {
     );
 
     expect(page.nextCursor).toMatch(
-      /^search:recent:\d{4}-\d{2}-\d{2}:\d{4}-\d{2}-\d{2}:collect:0:0:-$/u,
+      /^search:recent-frontier:\d{4}-\d{2}-\d{2}:\d{4}-\d{2}-\d{2}:collect:0:0:-$/u,
     );
     expect(page.nextCursor?.split(":").at(3)).toBe(
       latestClosedAvailabilityDay(),
     );
   });
 
-  test("catches up every publication day after the historical snapshot", async () => {
+  test("hands the historical snapshot day over as the recent frontier", async () => {
     installSearchMock({ empty: true });
     const currentYear = new Date().getUTCFullYear();
     const snapshotDay = addDays(latestClosedAvailabilityDay(), -90);
@@ -684,8 +726,11 @@ describe("czUsAdapter.fetchPage", () => {
       ),
     );
 
+    // The sweep filtered every year it walked on `snapshotDay`, so the days
+    // after it are exactly what no pass has listed: the recent phase picks
+    // them up in one window rather than losing or re-walking them.
     expect(page.nextCursor).toBe(
-      recentCursor(addDays(snapshotDay, 1), addDays(snapshotDay, 45)),
+      recentCursor(snapshotDay, latestClosedAvailabilityDay()),
     );
   });
 
@@ -699,7 +744,7 @@ describe("czUsAdapter.fetchPage", () => {
     });
 
     unwrap(
-      await czUsAdapter.fetchPage(recentCursor("2026-06-24", "2026-08-07"), {}),
+      await czUsAdapter.fetchPage(recentCursor("2026-06-23", "2026-08-07"), {}),
     );
 
     expect(
@@ -1448,14 +1493,126 @@ describe("czUsAdapter.fetchPage", () => {
     expect(verified.nextCursor).toBe(historicalCursor(2025));
   });
 
-  test("catches up recent availability in contiguous bounded windows", async () => {
+  test("carries the frontier to the latest closed day and then stands still", async () => {
+    const latest = latestClosedAvailabilityDay();
     installSearchMock({ empty: true });
-    const page = unwrap(
+
+    const walked = unwrap(
       await czUsAdapter.fetchPage(recentCursor("2025-01-01", "2025-02-14"), {}),
     );
+    expect(walked.nextCursor).toBe(recentCursor("2025-02-14", latest));
 
-    expect(page.nextCursor).toBe(
-      "search:recent:2025-02-15:2025-03-31:collect:0:0:-",
+    // The frontier has reached the court's last closed day, so the next cycle
+    // has nothing to list: it must cost the publisher no request at all.
+    const fetchCalls = fetchCallCount();
+    const idle = unwrap(
+      await czUsAdapter.fetchPage(recentCursor(latest, latest), {}),
     );
+
+    expect(idle.decisions).toEqual([]);
+    expect(idle.nextCursor).toBe(recentCursor(latest, latest));
+    expect(fetchCallCount()).toBe(fetchCalls);
+  });
+
+  test("a new closed day costs one listing and its decisions, once", async () => {
+    const latest = latestClosedAvailabilityDay();
+    const rows = [
+      {
+        id: "8001",
+        sz: "1-7-26_1",
+        caseNumber: "I.ÚS 7/26",
+        date: "6. 8. 2026",
+      },
+      {
+        id: "8002",
+        sz: "2-7-26_1",
+        caseNumber: "II.ÚS 7/26",
+        date: "6. 8. 2026",
+      },
+    ];
+    let submitted: URLSearchParams | undefined;
+    installSearchMock({
+      rows,
+      onPost: (form) => {
+        submitted = form;
+      },
+    });
+
+    // One closed day behind the frontier: the day after `latest - 1`.
+    const collect = unwrap(
+      await czUsAdapter.fetchPage(
+        recentCursor(addDays(latest, -1), latest),
+        {},
+      ),
+    );
+    expect(submitted?.get("ctl00$MainContent$availableFrom")).toBe(
+      czechDay(latest),
+    );
+    expect(collect.decisions).toHaveLength(rows.length);
+    // 3 listing requests, then a text and an abstract for each row.
+    expect(fetchCallCount()).toBe(3 + rows.length * 2);
+
+    const verify = unwrap(await czUsAdapter.fetchPage(collect.nextCursor, {}));
+    expect(verify.decisions).toEqual([]);
+    // One re-listing confirms the window; nothing is fetched twice.
+    expect(fetchCallCount()).toBe(3 + rows.length * 2 + 3);
+    expect(verify.nextCursor).toBe(recentCursor(latest, latest));
+
+    // And the frontier now stands still rather than re-listing the day.
+    const settled = fetchCallCount();
+    const idle = unwrap(await czUsAdapter.fetchPage(verify.nextCursor, {}));
+    expect(idle.nextCursor).toBe(verify.nextCursor);
+    expect(fetchCallCount()).toBe(settled);
+  });
+
+  test("the publisher's rate-limit redirect halts the page without moving the cursor", async () => {
+    const cursor = recentCursor("2026-06-23", "2026-08-07");
+    installRawMock(
+      () =>
+        new Response(null, {
+          status: 302,
+          headers: { Location: "https://nalus.usoud.cz/limit-exceeded.html" },
+        }),
+    );
+
+    const result = await czUsAdapter.fetchPage(cursor, {});
+
+    expect(Result.isError(result)).toBe(true);
+    if (!Result.isError(result)) {
+      throw new TypeError("the rate-limit redirect must not produce a page");
+    }
+    expect(result.error).toMatchObject({
+      adapterKey: "cz-us",
+      cursor,
+      httpStatus: 302,
+    });
+    expect(result.error.message).toContain("rate limit");
+    expect(result.error.cause).toBeInstanceOf(NalusRateLimitedError);
+    // One request learns the limit is still in force; the page fetches nothing
+    // else and the cursor it was given is the cursor it leaves behind.
+    expect(fetchCallCount()).toBe(1);
+  });
+
+  test("a plain 429 is the same halt as the limit page", async () => {
+    installRawMock(() => new Response("slow down", { status: 429 }));
+
+    const result = await czUsAdapter.fetchPage(historicalCursor(2024), {});
+
+    expect(Result.isError(result)).toBe(true);
+    if (!Result.isError(result)) {
+      throw new TypeError("a 429 must not produce a page");
+    }
+    expect(result.error).toMatchObject({ httpStatus: 429 });
+    expect(result.error.message).toContain("rate limit");
+  });
+
+  test("an ordinary 302 to the results page is not a rate limit", async () => {
+    installSearchMock({ rows: [], reported: 0 });
+
+    // The search form answers a valid submit with a 302; only the limit page
+    // as the redirect target says the budget is spent.
+    const result = await czUsAdapter.fetchPage(historicalCursor(2024), {});
+
+    expect(Result.isOk(result)).toBe(true);
   });
 });

@@ -34,7 +34,12 @@ import type {
   StoredRawReparseOutcome,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import {
-  INGESTION_USER_AGENT,
+  fetchNalus,
+  NALUS_REQUEST_INTERVAL_MS,
+  NalusRateLimitedError,
+  type NalusRequestInit,
+} from "@/api/handlers/case-law/ingestion/adapters/cz-us-throttle";
+import {
   adapterCatch,
   hashContent,
   parseCeDate,
@@ -52,14 +57,11 @@ import {
   type DecisionTextFields,
   type TextField,
 } from "@/api/lib/case-law/decision-text";
+import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
-import { fetchWithTimeout } from "@/api/lib/fetch";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
+import { logger } from "@/api/lib/observability/logger";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
-
-const COMMON_HEADERS = {
-  "User-Agent": INGESTION_USER_AGENT,
-} as const;
 
 /**
  * Czech Constitutional Court (Ústavní soud) adapter.
@@ -76,13 +78,25 @@ const COMMON_HEADERS = {
  * publish several decisions. Probing `I-{number}-{year}_1` loses all of those
  * distinctions.
  *
+ * Every request to the court goes through the publisher gate in
+ * `cz-us-throttle.ts`: NALUS states a 5,000-requests-a-day ceiling for
+ * automated clients and redirects a client past it to a limit page, so the
+ * budget is a structural property of this adapter rather than a habit of its
+ * loops.
+ *
  * Cursor formats:
  *   search:historical:<available-to>:<decision-year>:<pass>:<page>:<digest>:<expected>
- *   search:recent:<available-from>:<available-to>:<pass>:<page>:<digest>:<expected>
+ *   search:recent-frontier:<verified-through>:<available-to>:<pass>:<page>:<digest>:<expected>
  *
  * A null or legacy probe cursor starts the search-based historical repair at
  * FIRST_YEAR. This intentionally re-enumerates history once: it migrates the
  * incomplete probe crawl onto publisher-stated document identities.
+ *
+ * The recent phase is a frontier, not a rolling window: it lists the
+ * availability days after the last closed day it verified and then stands
+ * still, so a day on which the court publishes nothing costs no request at
+ * all. Whether a decision year is complete is the reconciliation ledger's
+ * question, not this cursor's.
  *
  * The same search form takes an arbitrary decision-date range, which is what
  * makes this source reconcilable: a decision year can be listed on its own,
@@ -148,8 +162,36 @@ const nalusIdentities = ({
   };
 };
 
-/** Largest result size that keeps one page's text fetches reasonably bounded. */
-const RESULTS_PAGE_SIZE = 40;
+/**
+ * Rows per crawl page.
+ *
+ * Sized against the gate rather than the court: every row costs a text and an
+ * abstract request, each of which waits its NALUS slot, so the page size is
+ * what decides a page's wall clock. See {@link CZ_US_PAGE_TIMEOUT_MS}.
+ */
+export const RESULTS_PAGE_SIZE = 12;
+
+/** Search requests one result page costs: bootstrap GET, POST, results page. */
+const REQUESTS_PER_LISTING = 3;
+
+/** Requests one kept row costs: GetText, then GetAbstract. */
+const REQUESTS_PER_DECISION = 2;
+
+const PAGE_REQUEST_BUDGET =
+  REQUESTS_PER_LISTING + RESULTS_PAGE_SIZE * REQUESTS_PER_DECISION;
+
+/**
+ * How long one crawl page may take, derived from what the gate makes it cost
+ * so the two cannot drift apart.
+ *
+ * The runner exits a cycle that outlives 45 minutes, and the pipeline checks
+ * `maxCycleMs` only between pages, so a page may start just under
+ * {@link CZ_US_MAX_CYCLE_MS} and still has to finish inside that ceiling.
+ */
+const CZ_US_PAGE_TIMEOUT_MS =
+  PAGE_REQUEST_BUDGET * (NALUS_REQUEST_INTERVAL_MS + ADAPTER_TIMEOUT.REQUEST);
+
+const CZ_US_MAX_CYCLE_MS = 30 * 60 * 1000;
 
 /**
  * Result size for a listing walk, the largest the search form offers. The
@@ -175,13 +217,6 @@ const SWEEP_PHASE = {
   /** Steady state: enumerate the source's recent publication window. */
   RECENT: "recent",
 } as const;
-
-/**
- * NALUS exposes availability dates only for a rolling recent index. Replaying
- * a generous window makes ordinary scheduler interruptions self-healing while
- * keeping steady-state work bounded.
- */
-const RECENT_WINDOW_DAYS = 45;
 
 const CRAWL_PASS = {
   COLLECT: "collect",
@@ -599,9 +634,18 @@ type HistoricalCursor = {
   expectedDigest?: string | undefined;
 };
 
+/**
+ * The recent phase's position, stated as a frontier.
+ *
+ * `verifiedThrough` is the last closed availability day this walk has listed
+ * and verified; the window being walked is the days after it, up to
+ * `availableTo`. The two being equal is the steady state: everything the
+ * court has closed is accounted for, and the next cycle costs no request at
+ * all until a new day closes.
+ */
 type RecentCursor = {
   phase: typeof SWEEP_PHASE.RECENT;
-  availableFrom: string;
+  verifiedThrough: string;
   availableTo: string;
   pass: CrawlPass;
   page: number;
@@ -676,6 +720,18 @@ class SearchPageDriftError extends TypeError {
 const ISO_DAY_PATTERN = /^\d{4}-\d{2}-\d{2}$/u;
 const LEGACY_CURSOR_PATTERN = /^\d+:\d{4}(?::(?:historical|recent))?$/u;
 
+/**
+ * How the recent phase names itself in a cursor.
+ *
+ * Not the phase name, on purpose: the rolling-window cursor this phase
+ * replaced had the same eight fields and named the first availability day it
+ * had *not* listed, where the frontier names the last day it verified. Read
+ * as a frontier, that string would skip exactly that day, and a forward-only
+ * walk never returns to it, so the token is what tells the two apart.
+ */
+const RECENT_CURSOR_PHASE = "recent-frontier";
+const ROLLING_WINDOW_CURSOR_PHASE = "recent";
+
 /** Latest complete NALUS publication day; today's result set is still live. */
 const latestClosedAvailabilityDay = (now: Date): string =>
   Temporal.Instant.fromEpochMilliseconds(now.getTime())
@@ -696,21 +752,6 @@ const historicalStart = (now: Date): HistoricalCursor => ({
 const czechDate = (value: string): string => {
   const date = Temporal.PlainDate.from(value);
   return `${date.day}.${date.month}.${date.year}`;
-};
-
-const recentStart = (now: Date): RecentCursor => {
-  const latest = latestClosedAvailabilityDay(now);
-  const from = Temporal.PlainDate.from(latest).subtract({
-    days: RECENT_WINDOW_DAYS - 1,
-  });
-  return {
-    phase: SWEEP_PHASE.RECENT,
-    availableFrom: from.toString(),
-    availableTo: latest,
-    pass: CRAWL_PASS.COLLECT,
-    page: 0,
-    digest: DIGEST_SEED,
-  };
 };
 
 const addUtcDays = (day: string, days: number): string =>
@@ -772,18 +813,30 @@ const parseCursor = (cursor: string, now: Date): CursorState => {
       ...(expectedDigest === "-" ? {} : { expectedDigest }),
     };
   }
-  if (phase === SWEEP_PHASE.RECENT && parts.length === 8) {
-    const availableFrom = parts.at(2);
+  // A rolling-window cursor persisted before the frontier: its lower bound
+  // was inclusive, so the day it names is the first one still unlisted. The
+  // window restarts one day before it and runs to the latest closed day; a
+  // half-finished pass is dropped rather than translated, because its digest
+  // was accumulated over a window that no longer exists.
+  const rollingWindowFrom =
+    phase === ROLLING_WINDOW_CURSOR_PHASE && parts.length === 8
+      ? parts.at(2)
+      : undefined;
+  if (rollingWindowFrom && ISO_DAY_PATTERN.test(rollingWindowFrom)) {
+    return recentFrontier(addUtcDays(rollingWindowFrom, -1), now);
+  }
+  if (phase === RECENT_CURSOR_PHASE && parts.length === 8) {
+    const verifiedThrough = parts.at(2);
     const availableTo = parts.at(3);
     const pass = parts.at(4);
     const digest = parts.at(6);
     const expectedDigest = parts.at(7);
     if (
-      !availableFrom ||
+      !verifiedThrough ||
       !availableTo ||
-      !ISO_DAY_PATTERN.test(availableFrom) ||
+      !ISO_DAY_PATTERN.test(verifiedThrough) ||
       !ISO_DAY_PATTERN.test(availableTo) ||
-      availableFrom > availableTo ||
+      verifiedThrough > availableTo ||
       availableTo > latestClosedAvailabilityDay(now) ||
       (pass !== CRAWL_PASS.COLLECT && pass !== CRAWL_PASS.VERIFY) ||
       !digest ||
@@ -794,8 +847,8 @@ const parseCursor = (cursor: string, now: Date): CursorState => {
       throw new TypeError("Invalid cz-us availability window");
     }
     return {
-      phase,
-      availableFrom,
+      phase: SWEEP_PHASE.RECENT,
+      verifiedThrough,
       availableTo,
       pass,
       page: parseNonNegativeInteger(parts.at(5), "page"),
@@ -811,7 +864,7 @@ const makeCursor = (state: CursorState): string => {
     case SWEEP_PHASE.HISTORICAL:
       return `search:${state.phase}:${state.availableTo}:${state.year}:${state.pass}:${state.page}:${state.digest}:${state.expectedDigest ?? "-"}`;
     case SWEEP_PHASE.RECENT:
-      return `search:${state.phase}:${state.availableFrom}:${state.availableTo}:${state.pass}:${state.page}:${state.digest}:${state.expectedDigest ?? "-"}`;
+      return `search:${RECENT_CURSOR_PHASE}:${state.verifiedThrough}:${state.availableTo}:${state.pass}:${state.page}:${state.digest}:${state.expectedDigest ?? "-"}`;
     default: {
       state satisfies never;
       return panic(`Unhandled cz-us cursor: ${String(state)}`);
@@ -834,10 +887,9 @@ const nextSlice = (state: CursorState, now: Date): CursorState => {
             page: 0,
             digest: DIGEST_SEED,
           }
-        : nextRecentWindow(state.availableTo, now);
-    case SWEEP_PHASE.RECENT: {
-      return nextRecentWindow(state.availableTo, now);
-    }
+        : recentFrontier(state.availableTo, now);
+    case SWEEP_PHASE.RECENT:
+      return recentFrontier(state.availableTo, now);
     default: {
       state satisfies never;
       return panic(`Unhandled cz-us cursor: ${String(state)}`);
@@ -845,24 +897,57 @@ const nextSlice = (state: CursorState, now: Date): CursorState => {
   }
 };
 
-function nextRecentWindow(availableTo: string, now: Date): RecentCursor {
-  const latest = latestClosedAvailabilityDay(now);
-  if (availableTo < latest) {
-    const availableFrom = addUtcDays(availableTo, 1);
-    return {
-      phase: SWEEP_PHASE.RECENT,
-      availableFrom,
-      availableTo:
-        [addUtcDays(availableFrom, RECENT_WINDOW_DAYS - 1), latest]
-          .sort()
-          .at(0) ?? latest,
-      pass: CRAWL_PASS.COLLECT,
-      page: 0,
-      digest: DIGEST_SEED,
-    };
+/**
+ * The recent phase positioned after `verifiedThrough`.
+ *
+ * Both callers pass the availability bound the slice they just finished was
+ * filtered on, which is what makes the handover lossless: the historical
+ * sweep pinned every year it walked to one closed day, so the days after it
+ * are exactly what no pass has listed yet.
+ */
+const recentFrontier = (verifiedThrough: string, now: Date): RecentCursor => ({
+  phase: SWEEP_PHASE.RECENT,
+  verifiedThrough,
+  availableTo: latestClosedAvailabilityDay(now),
+  pass: CRAWL_PASS.COLLECT,
+  page: 0,
+  digest: DIGEST_SEED,
+});
+
+/** Whether the frontier has caught up with the court's closed days. */
+const recentFrontierIsCurrent = (state: RecentCursor): boolean =>
+  state.verifiedThrough === state.availableTo;
+
+/**
+ * Where the walk goes when a verify pass does not confirm the slice it just
+ * collected.
+ *
+ * The historical sweep re-collects: it is a one-time enumeration of the whole
+ * corpus, and a slice it cannot confirm is a slice it may have read short.
+ *
+ * The recent phase does not. Its window covers closed availability days, so a
+ * changed listing means the court back-dated a record rather than that the
+ * walk raced it, and re-collecting was what made the phase loop: one verify
+ * listing per closed window is its whole budget. What the divergence means for
+ * completeness is the reconciliation ledger's question, and it walks decision
+ * years independently of this cursor.
+ */
+const afterUnconfirmedSlice = (
+  state: CursorState,
+  now: Date,
+  reason: string,
+): CursorState => {
+  if (state.phase === SWEEP_PHASE.HISTORICAL) {
+    return restartSlice(state);
   }
-  return recentStart(now);
-}
+  logger.warn("case_law.ingestion.cz_us_recent_window_unconfirmed", {
+    adapterKey: ADAPTER_KEYS.CZ_US,
+    availableFrom: addUtcDays(state.verifiedThrough, 1),
+    availableTo: state.availableTo,
+    reason,
+  });
+  return recentFrontier(state.availableTo, now);
+};
 
 const restartSlice = (state: CursorState): CursorState => ({
   ...state,
@@ -937,7 +1022,9 @@ const searchFields = (state: CursorState): Record<string, string> => {
       };
     case SWEEP_PHASE.RECENT:
       return {
-        ctl00$MainContent$availableFrom: czechDate(state.availableFrom),
+        ctl00$MainContent$availableFrom: czechDate(
+          addUtcDays(state.verifiedThrough, 1),
+        ),
         ctl00$MainContent$availableTo: czechDate(state.availableTo),
         ctl00$MainContent$razeni: "20",
       };
@@ -1128,6 +1215,45 @@ const parseResultPage = ({
   return { listed, ...banner };
 };
 
+/**
+ * One NALUS response, with the court's rate-limit refusal raised as the halt
+ * it is.
+ *
+ * The gate reports the refusal as a value, so nothing behind it decides
+ * control flow by exception. The crawl raises it at this one seam, where
+ * {@link czUsFetchError} is the only handler that can read it, rather than at
+ * eight call sites that would each have to remember what a refusal means.
+ */
+const nalusResponse = async (
+  url: string,
+  init?: NalusRequestInit,
+): Promise<Response> => {
+  const response = await fetchNalus(url, init);
+  if (Result.isError(response)) {
+    throw response.error;
+  }
+  return response.value;
+};
+
+type NalusReadOptions = NalusRequestInit & {
+  /** What the failure names: "NALUS <subject> returned HTTP …". */
+  subject: string;
+  url: string;
+};
+
+/** {@link nalusResponse} for a read whose every non-OK status is a failure. */
+const nalusOkResponse = async ({
+  subject,
+  url,
+  ...init
+}: NalusReadOptions): Promise<Response> => {
+  const response = await nalusResponse(url, init);
+  if (!response.ok) {
+    throw new TypeError(`NALUS ${subject} returned HTTP ${response.status}`);
+  }
+  return response;
+};
+
 type FetchSearchPageOptions = {
   state: CursorState;
   pageSize: number;
@@ -1139,15 +1265,11 @@ const fetchSearchPage = async ({
   pageSize,
   signal,
 }: FetchSearchPageOptions): Promise<FetchedSearchPage | null> => {
-  const first = await fetchWithTimeout(SEARCH_URL, {
-    headers: COMMON_HEADERS,
-    redirect: "manual",
+  const first = await nalusOkResponse({
+    subject: "search form",
+    url: SEARCH_URL,
     signal,
-    timeoutMs: ADAPTER_TIMEOUT.REQUEST,
   });
-  if (!first.ok) {
-    throw new TypeError(`NALUS search form returned HTTP ${first.status}`);
-  }
   const formHtml = await first.text();
   const viewState = hiddenField(formHtml, "__VIEWSTATE");
   const validation = hiddenField(formHtml, "__EVENTVALIDATION");
@@ -1175,13 +1297,10 @@ const fetchSearchPage = async ({
     ...searchFields(state),
   });
   const initialCookies = cookieHeader([first]);
-  const submit = await fetchWithTimeout(SEARCH_URL, {
+  const submit = await nalusResponse(SEARCH_URL, {
     method: "POST",
     signal,
-    redirect: "manual",
-    timeoutMs: ADAPTER_TIMEOUT.REQUEST,
     headers: {
-      ...COMMON_HEADERS,
       "Content-Type": "application/x-www-form-urlencoded",
       Cookie: initialCookies,
       Referer: SEARCH_URL,
@@ -1205,15 +1324,12 @@ const fetchSearchPage = async ({
   const cookies = cookieHeader([first, submit]);
   const pageUrl =
     state.page === 0 ? RESULTS_URL : `${RESULTS_URL}?page=${state.page}`;
-  const results = await fetchWithTimeout(pageUrl, {
-    headers: { ...COMMON_HEADERS, Cookie: cookies },
-    redirect: "manual",
+  const results = await nalusOkResponse({
+    subject: "results",
+    url: pageUrl,
+    headers: { Cookie: cookies },
     signal,
-    timeoutMs: ADAPTER_TIMEOUT.REQUEST,
   });
-  if (!results.ok) {
-    throw new TypeError(`NALUS results returned HTTP ${results.status}`);
-  }
   return {
     ...parseResultPage({
       html: await results.text(),
@@ -1255,12 +1371,7 @@ const fetchListedDecision = async (
       decision: listedOnlyDecision(listed, "missing-text-action"),
     };
   }
-  const response = await fetchWithTimeout(listed.sourceUrl, {
-    headers: COMMON_HEADERS,
-    redirect: "manual",
-    signal,
-    timeoutMs: ADAPTER_TIMEOUT.REQUEST,
-  });
+  const response = await nalusResponse(listed.sourceUrl, { signal });
   if (!response.ok) {
     if (response.status === 404 || response.status === 410) {
       return {
@@ -1303,14 +1414,9 @@ const fetchListedDecision = async (
   let abstractHtml: string | undefined;
   try {
     const abstractQuery = new URLSearchParams({ sz: listed.sz });
-    const abstractResponse = await fetchWithTimeout(
+    const abstractResponse = await nalusResponse(
       `${ABSTRACT_URL}?${abstractQuery.toString()}`,
-      {
-        headers: COMMON_HEADERS,
-        redirect: "manual",
-        signal,
-        timeoutMs: ADAPTER_TIMEOUT.REQUEST,
-      },
+      { signal },
     );
     if (abstractResponse.ok) {
       abstractHtml = await abstractResponse.text();
@@ -1326,7 +1432,9 @@ const fetchListedDecision = async (
       };
     }
   } catch (error) {
-    if (signal?.aborted) {
+    // The publisher's rate limit is not an absent abstract: recording it as
+    // one would store the decision without the field and never ask again.
+    if (signal?.aborted || error instanceof NalusRateLimitedError) {
       throw error;
     }
     decision.textFields = {
@@ -1755,19 +1863,38 @@ const reparseStoredRaw = (
 
 // ── Adapter ──────────────────────────────────────────────
 
+/**
+ * How a failed page is reported.
+ *
+ * The publisher's own rate limit gets its own halt rather than the generic
+ * fetch failure: it carries the refusal's status, so
+ * `case_law.ingestion.adapter_halted` names the limit and its HTTP status
+ * instead of a redirect nobody can read. The cursor is untouched either way —
+ * an `Err` never reaches the pipeline's checkpoint — so the next cycle
+ * resumes where this one stopped and costs one request to learn whether the
+ * limit is still in force.
+ */
+const czUsFetchError =
+  (cursor: string | null) =>
+  (cause: unknown): AdapterFetchError =>
+    cause instanceof NalusRateLimitedError
+      ? new AdapterFetchError({
+          message: cause.message,
+          adapterKey: ADAPTER_KEYS.CZ_US,
+          cursor,
+          httpStatus: cause.httpStatus,
+          cause,
+        })
+      : adapterCatch(ADAPTER_KEYS.CZ_US, cursor)(cause);
+
 export const czUsAdapter = defineSourceAdapter({
   key: ADAPTER_KEYS.CZ_US,
   sourceFields: PENDING_SOURCE_FIELD_INVENTORY,
   language: "cs",
   minRequestIntervalMs: 100,
-  // A page performs three serial search requests, then up to eight batches
-  // whose detail and abstract requests are sequential. At the request-level
-  // timeout that is about 190 seconds; the page budget leaves transport
-  // margin, while maxCycleMs still bounds how many slow pages one cycle runs.
-  //
-  pageTimeoutMs: 240_000,
+  pageTimeoutMs: CZ_US_PAGE_TIMEOUT_MS,
   maxSyncPages: 10,
-  maxCycleMs: 30 * 60 * 1000,
+  maxCycleMs: CZ_US_MAX_CYCLE_MS,
   reparseStoredRaw,
 
   /**
@@ -1779,12 +1906,7 @@ export const czUsAdapter = defineSourceAdapter({
    */
   async getTotalCount(signal) {
     try {
-      const searchUrl = "https://nalus.usoud.cz/Search/Search.aspx";
-      const first = await fetchWithTimeout(searchUrl, {
-        redirect: "manual",
-        signal,
-        timeoutMs: ADAPTER_TIMEOUT.REQUEST,
-      });
+      const first = await nalusResponse(SEARCH_URL, { signal });
       if (!first.ok) {
         return sourceTotalProbeFailed(SOURCE_TOTAL_PROBE_FAILURE.HTTP_STATUS);
       }
@@ -1818,11 +1940,9 @@ export const czUsAdapter = defineSourceAdapter({
         ctl00$MainContent$decidedTo: `31.12.${Temporal.Now.plainDateISO().year + 1}`,
         ctl00$MainContent$but_search: "Vyhledat",
       });
-      const submit = await fetchWithTimeout(searchUrl, {
+      const submit = await nalusResponse(SEARCH_URL, {
         method: "POST",
         signal,
-        redirect: "manual",
-        timeoutMs: ADAPTER_TIMEOUT.REQUEST,
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",
           Cookie: cookies,
@@ -1832,15 +1952,10 @@ export const czUsAdapter = defineSourceAdapter({
       if (submit.status !== 302 && !submit.ok) {
         return sourceTotalProbeFailed(SOURCE_TOTAL_PROBE_FAILURE.HTTP_STATUS);
       }
-      const results = await fetchWithTimeout(
-        "https://nalus.usoud.cz/Search/Results.aspx",
-        {
-          redirect: "manual",
-          signal,
-          timeoutMs: ADAPTER_TIMEOUT.REQUEST,
-          headers: { Cookie: cookies },
-        },
-      );
+      const results = await nalusResponse(RESULTS_URL, {
+        signal,
+        headers: { Cookie: cookies },
+      });
       if (!results.ok) {
         return sourceTotalProbeFailed(SOURCE_TOTAL_PROBE_FAILURE.HTTP_STATUS);
       }
@@ -1881,7 +1996,20 @@ export const czUsAdapter = defineSourceAdapter({
     return await Result.tryPromise({
       try: async () => {
         const now = new Date();
-        const state = cursor ? parseCursor(cursor, now) : historicalStart(now);
+        let state = cursor ? parseCursor(cursor, now) : historicalStart(now);
+        if (
+          state.phase === SWEEP_PHASE.RECENT &&
+          recentFrontierIsCurrent(state)
+        ) {
+          const rearmed = recentFrontier(state.availableTo, now);
+          if (recentFrontierIsCurrent(rearmed)) {
+            // Every closed availability day is accounted for, so there is
+            // nothing to list and no request to spend. An unchanged cursor is
+            // how this pipeline reads a source with nothing left.
+            return { decisions: [], nextCursor: makeCursor(state) };
+          }
+          state = rearmed;
+        }
         let page: FetchedSearchPage | null;
         try {
           page = await fetchSearchPage({
@@ -1902,7 +2030,9 @@ export const czUsAdapter = defineSourceAdapter({
           if (state.pass === CRAWL_PASS.VERIFY) {
             return {
               decisions: [],
-              nextCursor: makeCursor(restartSlice(state)),
+              nextCursor: makeCursor(
+                afterUnconfirmedSlice(state, now, "listing-now-empty"),
+              ),
             };
           }
           return {
@@ -1927,7 +2057,9 @@ export const czUsAdapter = defineSourceAdapter({
           if (digest !== state.expectedDigest) {
             return {
               decisions: [],
-              nextCursor: makeCursor(restartSlice(state)),
+              nextCursor: makeCursor(
+                afterUnconfirmedSlice(state, now, "digest-mismatch"),
+              ),
             };
           }
           return {
@@ -1960,7 +2092,7 @@ export const czUsAdapter = defineSourceAdapter({
           sourceUrl: page.url,
         };
       },
-      catch: adapterCatch(ADAPTER_KEYS.CZ_US, cursor),
+      catch: czUsFetchError(cursor),
     });
   },
 });

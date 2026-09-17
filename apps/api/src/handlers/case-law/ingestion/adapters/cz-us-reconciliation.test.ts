@@ -4,6 +4,7 @@ import {
   afterAll,
   afterEach,
   beforeAll,
+  beforeEach,
   describe,
   expect,
   mock,
@@ -381,6 +382,7 @@ describe("czUsListingIdentity", () => {
 
 describe("cz-us listSlicePage", () => {
   const originalFetch = globalThis.fetch;
+  const originalSleep = Bun.sleep;
 
   beforeAll(() => {
     setSystemTime(NOW);
@@ -390,8 +392,15 @@ describe("cz-us listSlicePage", () => {
     setSystemTime();
   });
 
+  beforeEach(() => {
+    // The publisher gate paces every NALUS request; these tests assert what
+    // the walk asks for, not how long it waits for a slot.
+    Bun.sleep = () => Promise.resolve();
+  });
+
   afterEach(() => {
     globalThis.fetch = originalFetch;
+    Bun.sleep = originalSleep;
   });
 
   const rowsFor = (count: number, offset = 0): MockRow[] =>
@@ -497,6 +506,7 @@ describe("cz-us listSlicePage", () => {
 
 describe("cz-us buildDecision", () => {
   const originalFetch = globalThis.fetch;
+  const originalSleep = Bun.sleep;
 
   beforeAll(() => {
     setSystemTime(NOW);
@@ -506,8 +516,15 @@ describe("cz-us buildDecision", () => {
     setSystemTime();
   });
 
+  beforeEach(() => {
+    // The publisher gate paces every NALUS request; these tests assert what
+    // the walk asks for, not how long it waits for a slot.
+    Bun.sleep = () => Promise.resolve();
+  });
+
   afterEach(() => {
     globalThis.fetch = originalFetch;
+    Bun.sleep = originalSleep;
   });
 
   const servedRow: MockRow = {
