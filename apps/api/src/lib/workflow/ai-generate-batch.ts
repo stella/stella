@@ -23,6 +23,7 @@ import {
 } from "@/api/lib/tanstack-ai-generate";
 import {
   decodeSystemOneAnswers,
+  describeSystemOneReadings,
   planSystemOneAnswers,
 } from "@/api/lib/typesafe/answer-questions";
 import type { SystemOneClient } from "@/api/lib/typesafe/system-one";
@@ -240,13 +241,14 @@ const askSystemOne = async ({
     return fallbackAll;
   }
 
+  const outcomes = decodeSystemOneAnswers({
+    plan,
+    questions,
+    answers: asked.value.answers,
+  });
   const { output, fallbackPropertyIds } = outputFromSystemOneOutcomes({
     properties: systemOne,
-    outcomes: decodeSystemOneAnswers({
-      plan,
-      questions,
-      answers: asked.value.answers,
-    }),
+    outcomes,
     locators,
   });
 
@@ -257,6 +259,7 @@ const askSystemOne = async ({
     latencyMs: asked.value.latencyMs,
     answeredCount: systemOne.length - fallbackPropertyIds.length,
     fallbackCount: fallbackPropertyIds.length,
+    readings: describeSystemOneReadings({ questions, outcomes }),
   });
 
   if (onPartialAnswer) {

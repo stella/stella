@@ -376,6 +376,7 @@ export const createSystemOneClient = ({
         // SAFETY: `bindAnswer` checked every answer against its own question
         // (same type; a choice inside its criteria with a probability per
         // option), which is exactly what the mapped type promises per key.
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the per-key binding above is the proof the mapped type asks for
         answers: answers as SystemOneAnswers<TQuestions>,
         usage: {
           inputTokens: parsed.output.usage.input_tokens,
