@@ -37,6 +37,7 @@ import {
   fetchNalus,
   NALUS_REQUEST_INTERVAL_MS,
   NalusRateLimitedError,
+  type NalusRequestInit,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-us-throttle";
 import {
   adapterCatch,
@@ -85,7 +86,7 @@ import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
  *
  * Cursor formats:
  *   search:historical:<available-to>:<decision-year>:<pass>:<page>:<digest>:<expected>
- *   search:recent:<verified-through>:<available-to>:<pass>:<page>:<digest>:<expected>
+ *   search:recent-frontier:<verified-through>:<available-to>:<pass>:<page>:<digest>:<expected>
  *
  * A null or legacy probe cursor starts the search-based historical repair at
  * FIRST_YEAR. This intentionally re-enumerates history once: it migrates the
@@ -719,6 +720,18 @@ class SearchPageDriftError extends TypeError {
 const ISO_DAY_PATTERN = /^\d{4}-\d{2}-\d{2}$/u;
 const LEGACY_CURSOR_PATTERN = /^\d+:\d{4}(?::(?:historical|recent))?$/u;
 
+/**
+ * How the recent phase names itself in a cursor.
+ *
+ * Not the phase name, on purpose: the rolling-window cursor this phase
+ * replaced had the same eight fields and named the first availability day it
+ * had *not* listed, where the frontier names the last day it verified. Read
+ * as a frontier, that string would skip exactly that day, and a forward-only
+ * walk never returns to it, so the token is what tells the two apart.
+ */
+const RECENT_CURSOR_PHASE = "recent-frontier";
+const ROLLING_WINDOW_CURSOR_PHASE = "recent";
+
 /** Latest complete NALUS publication day; today's result set is still live. */
 const latestClosedAvailabilityDay = (now: Date): string =>
   Temporal.Instant.fromEpochMilliseconds(now.getTime())
@@ -800,7 +813,19 @@ const parseCursor = (cursor: string, now: Date): CursorState => {
       ...(expectedDigest === "-" ? {} : { expectedDigest }),
     };
   }
-  if (phase === SWEEP_PHASE.RECENT && parts.length === 8) {
+  // A rolling-window cursor persisted before the frontier: its lower bound
+  // was inclusive, so the day it names is the first one still unlisted. The
+  // window restarts one day before it and runs to the latest closed day; a
+  // half-finished pass is dropped rather than translated, because its digest
+  // was accumulated over a window that no longer exists.
+  const rollingWindowFrom =
+    phase === ROLLING_WINDOW_CURSOR_PHASE && parts.length === 8
+      ? parts.at(2)
+      : undefined;
+  if (rollingWindowFrom && ISO_DAY_PATTERN.test(rollingWindowFrom)) {
+    return recentFrontier(addUtcDays(rollingWindowFrom, -1), now);
+  }
+  if (phase === RECENT_CURSOR_PHASE && parts.length === 8) {
     const verifiedThrough = parts.at(2);
     const availableTo = parts.at(3);
     const pass = parts.at(4);
@@ -822,7 +847,7 @@ const parseCursor = (cursor: string, now: Date): CursorState => {
       throw new TypeError("Invalid cz-us availability window");
     }
     return {
-      phase,
+      phase: SWEEP_PHASE.RECENT,
       verifiedThrough,
       availableTo,
       pass,
@@ -839,7 +864,7 @@ const makeCursor = (state: CursorState): string => {
     case SWEEP_PHASE.HISTORICAL:
       return `search:${state.phase}:${state.availableTo}:${state.year}:${state.pass}:${state.page}:${state.digest}:${state.expectedDigest ?? "-"}`;
     case SWEEP_PHASE.RECENT:
-      return `search:${state.phase}:${state.verifiedThrough}:${state.availableTo}:${state.pass}:${state.page}:${state.digest}:${state.expectedDigest ?? "-"}`;
+      return `search:${RECENT_CURSOR_PHASE}:${state.verifiedThrough}:${state.availableTo}:${state.pass}:${state.page}:${state.digest}:${state.expectedDigest ?? "-"}`;
     default: {
       state satisfies never;
       return panic(`Unhandled cz-us cursor: ${String(state)}`);
@@ -1190,6 +1215,45 @@ const parseResultPage = ({
   return { listed, ...banner };
 };
 
+/**
+ * One NALUS response, with the court's rate-limit refusal raised as the halt
+ * it is.
+ *
+ * The gate reports the refusal as a value, so nothing behind it decides
+ * control flow by exception. The crawl raises it at this one seam, where
+ * {@link czUsFetchError} is the only handler that can read it, rather than at
+ * eight call sites that would each have to remember what a refusal means.
+ */
+const nalusResponse = async (
+  url: string,
+  init?: NalusRequestInit,
+): Promise<Response> => {
+  const response = await fetchNalus(url, init);
+  if (Result.isError(response)) {
+    throw response.error;
+  }
+  return response.value;
+};
+
+type NalusReadOptions = NalusRequestInit & {
+  /** What the failure names: "NALUS <subject> returned HTTP …". */
+  subject: string;
+  url: string;
+};
+
+/** {@link nalusResponse} for a read whose every non-OK status is a failure. */
+const nalusOkResponse = async ({
+  subject,
+  url,
+  ...init
+}: NalusReadOptions): Promise<Response> => {
+  const response = await nalusResponse(url, init);
+  if (!response.ok) {
+    throw new TypeError(`NALUS ${subject} returned HTTP ${response.status}`);
+  }
+  return response;
+};
+
 type FetchSearchPageOptions = {
   state: CursorState;
   pageSize: number;
@@ -1201,10 +1265,11 @@ const fetchSearchPage = async ({
   pageSize,
   signal,
 }: FetchSearchPageOptions): Promise<FetchedSearchPage | null> => {
-  const first = await fetchNalus(SEARCH_URL, { signal });
-  if (!first.ok) {
-    throw new TypeError(`NALUS search form returned HTTP ${first.status}`);
-  }
+  const first = await nalusOkResponse({
+    subject: "search form",
+    url: SEARCH_URL,
+    signal,
+  });
   const formHtml = await first.text();
   const viewState = hiddenField(formHtml, "__VIEWSTATE");
   const validation = hiddenField(formHtml, "__EVENTVALIDATION");
@@ -1232,7 +1297,7 @@ const fetchSearchPage = async ({
     ...searchFields(state),
   });
   const initialCookies = cookieHeader([first]);
-  const submit = await fetchNalus(SEARCH_URL, {
+  const submit = await nalusResponse(SEARCH_URL, {
     method: "POST",
     signal,
     headers: {
@@ -1259,13 +1324,12 @@ const fetchSearchPage = async ({
   const cookies = cookieHeader([first, submit]);
   const pageUrl =
     state.page === 0 ? RESULTS_URL : `${RESULTS_URL}?page=${state.page}`;
-  const results = await fetchNalus(pageUrl, {
+  const results = await nalusOkResponse({
+    subject: "results",
+    url: pageUrl,
     headers: { Cookie: cookies },
     signal,
   });
-  if (!results.ok) {
-    throw new TypeError(`NALUS results returned HTTP ${results.status}`);
-  }
   return {
     ...parseResultPage({
       html: await results.text(),
@@ -1307,7 +1371,7 @@ const fetchListedDecision = async (
       decision: listedOnlyDecision(listed, "missing-text-action"),
     };
   }
-  const response = await fetchNalus(listed.sourceUrl, { signal });
+  const response = await nalusResponse(listed.sourceUrl, { signal });
   if (!response.ok) {
     if (response.status === 404 || response.status === 410) {
       return {
@@ -1350,7 +1414,7 @@ const fetchListedDecision = async (
   let abstractHtml: string | undefined;
   try {
     const abstractQuery = new URLSearchParams({ sz: listed.sz });
-    const abstractResponse = await fetchNalus(
+    const abstractResponse = await nalusResponse(
       `${ABSTRACT_URL}?${abstractQuery.toString()}`,
       { signal },
     );
@@ -1842,7 +1906,7 @@ export const czUsAdapter = defineSourceAdapter({
    */
   async getTotalCount(signal) {
     try {
-      const first = await fetchNalus(SEARCH_URL, { signal });
+      const first = await nalusResponse(SEARCH_URL, { signal });
       if (!first.ok) {
         return sourceTotalProbeFailed(SOURCE_TOTAL_PROBE_FAILURE.HTTP_STATUS);
       }
@@ -1876,7 +1940,7 @@ export const czUsAdapter = defineSourceAdapter({
         ctl00$MainContent$decidedTo: `31.12.${Temporal.Now.plainDateISO().year + 1}`,
         ctl00$MainContent$but_search: "Vyhledat",
       });
-      const submit = await fetchNalus(SEARCH_URL, {
+      const submit = await nalusResponse(SEARCH_URL, {
         method: "POST",
         signal,
         headers: {
@@ -1888,7 +1952,7 @@ export const czUsAdapter = defineSourceAdapter({
       if (submit.status !== 302 && !submit.ok) {
         return sourceTotalProbeFailed(SOURCE_TOTAL_PROBE_FAILURE.HTTP_STATUS);
       }
-      const results = await fetchNalus(RESULTS_URL, {
+      const results = await nalusResponse(RESULTS_URL, {
         signal,
         headers: { Cookie: cookies },
       });

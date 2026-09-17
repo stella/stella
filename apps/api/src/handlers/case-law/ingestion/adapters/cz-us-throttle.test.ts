@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { afterEach, describe, expect, mock, test } from "bun:test";
 
 import { DAY_IN_MS } from "@stll/time";
@@ -102,12 +103,14 @@ describe("the NALUS publisher budget", () => {
     );
     const { fetchNalus } = gatedFetch();
 
-    const rejection = await rejectionOf(
-      fetchNalus("https://nalus.usoud.cz/Search/Search.aspx"),
+    const refusal = await fetchNalus(
+      "https://nalus.usoud.cz/Search/Search.aspx",
     );
 
-    expect(rejection).toBeInstanceOf(NalusRateLimitedError);
-    expect(rejection).toMatchObject({
+    expect(Result.isError(refusal)).toBe(true);
+    const error = Result.isError(refusal) ? refusal.error : undefined;
+    expect(error).toBeInstanceOf(NalusRateLimitedError);
+    expect(error).toMatchObject({
       httpStatus: 302,
       message: expect.stringContaining(String(NALUS_DAILY_REQUEST_LIMIT)),
     });
@@ -119,12 +122,14 @@ describe("the NALUS publisher budget", () => {
     );
     const { fetchNalus } = gatedFetch();
 
-    const rejection = await rejectionOf(
-      fetchNalus("https://nalus.usoud.cz/Search/GetText.aspx?sz=1-1-93_1"),
+    const refusal = await fetchNalus(
+      "https://nalus.usoud.cz/Search/GetText.aspx?sz=1-1-93_1",
     );
 
-    expect(rejection).toBeInstanceOf(NalusRateLimitedError);
-    expect(rejection).toMatchObject({ httpStatus: 429 });
+    expect(Result.isError(refusal)).toBe(true);
+    const error = Result.isError(refusal) ? refusal.error : undefined;
+    expect(error).toBeInstanceOf(NalusRateLimitedError);
+    expect(error).toMatchObject({ httpStatus: 429 });
   });
 
   test("hands back the search form's own 302 unchanged", async () => {
@@ -144,7 +149,7 @@ describe("the NALUS publisher budget", () => {
       { method: "POST", body: "ctl00%24MainContent%24but_search=Vyhledat" },
     );
 
-    expect(response.status).toBe(302);
+    expect(Result.isOk(response) && response.value.status).toBe(302);
   });
 
   test("refuses a URL outside the publisher, without spending a slot", async () => {

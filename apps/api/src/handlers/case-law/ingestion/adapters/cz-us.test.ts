@@ -293,7 +293,7 @@ const historicalCursor = (
 ): string => `search:historical:${availableTo}:${year}:collect:0:0:-`;
 
 const recentCursor = (verifiedThrough: string, availableTo: string): string =>
-  `search:recent:${verifiedThrough}:${availableTo}:collect:0:0:-`;
+  `search:recent-frontier:${verifiedThrough}:${availableTo}:collect:0:0:-`;
 
 describe("czUsAdapter.fetchPage", () => {
   const originalFetch = globalThis.fetch;
@@ -674,6 +674,30 @@ describe("czUsAdapter.fetchPage", () => {
     expect(page.nextCursor).toBe(historicalCursor(1994));
   });
 
+  test("migrates a persisted rolling-window cursor without skipping its first unlisted day", async () => {
+    let submitted: URLSearchParams | undefined;
+    installSearchMock({
+      empty: true,
+      onPost: (form) => {
+        submitted = form;
+      },
+    });
+    // Exactly what the rolling window persisted after it finished 2026-08-04:
+    // an inclusive lower bound on the first day it had not listed.
+    const rollingWindowCursor =
+      "search:recent:2026-08-05:2026-08-06:collect:0:0:-";
+
+    const page = unwrap(await czUsAdapter.fetchPage(rollingWindowCursor, {}));
+
+    expect(submitted?.get("ctl00$MainContent$availableFrom")).toBe("5.8.2026");
+    expect(page.nextCursor).toBe(
+      recentCursor(
+        latestClosedAvailabilityDay(),
+        latestClosedAvailabilityDay(),
+      ),
+    );
+  });
+
   test("finishing the current decision year hands over to availability polling", async () => {
     installSearchMock({ empty: true });
     const currentYear = new Date().getUTCFullYear();
@@ -683,7 +707,7 @@ describe("czUsAdapter.fetchPage", () => {
     );
 
     expect(page.nextCursor).toMatch(
-      /^search:recent:\d{4}-\d{2}-\d{2}:\d{4}-\d{2}-\d{2}:collect:0:0:-$/u,
+      /^search:recent-frontier:\d{4}-\d{2}-\d{2}:\d{4}-\d{2}-\d{2}:collect:0:0:-$/u,
     );
     expect(page.nextCursor?.split(":").at(3)).toBe(
       latestClosedAvailabilityDay(),

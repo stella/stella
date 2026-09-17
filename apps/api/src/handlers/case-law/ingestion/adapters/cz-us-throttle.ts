@@ -1,4 +1,4 @@
-import { panic, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 
 import { DAY_IN_MS } from "@stll/time";
 
@@ -82,14 +82,17 @@ const isRateLimitRefusal = (response: Response): boolean => {
   return path.toLowerCase().endsWith(LIMIT_EXCEEDED_PAGE);
 };
 
-type NalusRequestInit = {
+export type NalusRequestInit = {
   body?: string | undefined;
   headers?: Record<string, string> | undefined;
   method?: "POST" | undefined;
   signal?: AbortSignal | undefined;
 };
 
-type NalusFetch = (url: string, init?: NalusRequestInit) => Promise<Response>;
+type NalusFetch = (
+  url: string,
+  init?: NalusRequestInit,
+) => Promise<Result<Response, NalusRateLimitedError>>;
 
 /**
  * Every NALUS request the adapter makes, behind one publisher gate.
@@ -137,12 +140,14 @@ export const createNalusFetch = (
       timeoutMs: ADAPTER_TIMEOUT.REQUEST,
     });
     if (isRateLimitRefusal(response)) {
-      throw new NalusRateLimitedError({
-        message: `NALUS rate limit reached: the court allows automated clients ${NALUS_DAILY_REQUEST_LIMIT} requests per day`,
-        httpStatus: response.status,
-      });
+      return Result.err(
+        new NalusRateLimitedError({
+          message: `NALUS rate limit reached: the court allows automated clients ${NALUS_DAILY_REQUEST_LIMIT} requests per day`,
+          httpStatus: response.status,
+        }),
+      );
     }
-    return response;
+    return Result.ok(response);
   };
 };
 
