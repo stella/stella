@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import { normalizeCountry } from "@stll/agent-input";
 import {
   PUBLIC_CASE_LAW_COUNTRIES,
@@ -132,9 +134,61 @@ type CorpusPageOutcome =
 
 const EMPTY_PAGE: CorpusPage = { results: [], cursors: {} };
 
-/** The share of a source's page one country gets; at least one hit each. */
-const perCountryLimit = (cap: number, countries: number): number =>
-  Math.max(1, Math.floor(cap / countries));
+/**
+ * A source's page cap split across the countries it is asked for, summing to
+ * exactly the cap: a floor share each, plus one extra hit to the first
+ * `cap % countries` of them in admitted order.
+ *
+ * The obvious equal floored share is wrong in both directions. Three countries
+ * under a cap of five would each take one, spending three hits of the five;
+ * twelve countries would each take the `Math.max(1, ...)` floor and return
+ * twelve hits from a cap of five. Truncating the merged page afterwards cannot
+ * repair that, because by then every country's cursor has advanced past hits
+ * no continuation would ever emit again.
+ */
+export const corpusCountryQuotas = <TCountry>(
+  cap: number,
+  countries: readonly TCountry[],
+): readonly { country: TCountry; limit: number }[] => {
+  const share = Math.floor(cap / countries.length);
+  const remainder = cap % countries.length;
+  return countries.map((country, index) => ({
+    country,
+    limit: index < remainder ? share + 1 : share,
+  }));
+};
+
+/**
+ * A country whose share floors to zero would have to be carried to a later
+ * page, and this pair has no scheme for that: its merged cursor records where
+ * each country got to, not which ones never ran. Both admitted lists and both
+ * caps are constants, so the case is excluded here rather than handled: an
+ * admission that outgrows its cap fails at module load, on the deployment that
+ * made the change, instead of silently dropping a jurisdiction from `search`.
+ */
+const assertCapCoversAdmittedCountries = (
+  source: string,
+  cap: number,
+  admitted: readonly string[],
+): void => {
+  if (admitted.length > cap) {
+    panic(
+      `The ${source} compat page cap is smaller than the admitted country list`,
+      { admitted: admitted.length, cap },
+    );
+  }
+};
+
+assertCapCoversAdmittedCountries(
+  "case-law",
+  LIMITS.mcpCompatDecisionPageSizeDefault,
+  PUBLIC_CASE_LAW_COUNTRIES,
+);
+assertCapCoversAdmittedCountries(
+  "legislation",
+  LIMITS.mcpCompatStatutePageSizeDefault,
+  PUBLIC_LEGISLATION_COUNTRIES,
+);
 
 /**
  * Three states, as in `search_case_law`: a string continues this country, an
@@ -167,18 +221,25 @@ const searchDecisions = async ({
   if (countries.length === 0) {
     return { type: "page", page: EMPTY_PAGE };
   }
-  const limit = perCountryLimit(
-    LIMITS.mcpCompatDecisionPageSizeDefault,
-    countries.length,
-  );
   const search =
     context.testDependencies?.searchDecisionsHandler ??
     defaultSearchDecisionsHandler;
 
   const outcomes = await mapWithConcurrency({
-    items: [...countries],
+    items: [
+      ...corpusCountryQuotas(
+        LIMITS.mcpCompatDecisionPageSizeDefault,
+        countries,
+      ),
+    ],
     limit: countries.length,
-    operation: async (country: PublicCaseLawCountry) => {
+    operation: async ({
+      country,
+      limit,
+    }: {
+      country: PublicCaseLawCountry;
+      limit: number;
+    }) => {
       const position = subCursorArgument(cursors, country);
       if (position.exhausted) {
         return { country, result: null } as const;
@@ -248,18 +309,25 @@ const searchStatutes = async ({
   if (countries.length === 0) {
     return { type: "page", page: EMPTY_PAGE };
   }
-  const limit = perCountryLimit(
-    LIMITS.mcpCompatStatutePageSizeDefault,
-    countries.length,
-  );
   const search =
     context.testDependencies?.searchLegislationHandler ??
     defaultSearchLegislationHandler;
 
   const outcomes = await mapWithConcurrency({
-    items: [...countries],
+    items: [
+      ...corpusCountryQuotas(
+        LIMITS.mcpCompatStatutePageSizeDefault,
+        countries,
+      ).map(({ country, limit }) => ({ jurisdiction: country, limit })),
+    ],
     limit: countries.length,
-    operation: async (jurisdiction: PublicLegislationCountry) => {
+    operation: async ({
+      jurisdiction,
+      limit,
+    }: {
+      jurisdiction: PublicLegislationCountry;
+      limit: number;
+    }) => {
       const position = subCursorArgument(cursors, jurisdiction);
       if (position.exhausted) {
         return { jurisdiction, result: null } as const;

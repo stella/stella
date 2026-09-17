@@ -1,9 +1,14 @@
 import type { CallToolResult } from "@modelcontextprotocol/server";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
+import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
+import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
+
 import { env } from "@/api/env";
 import { toSafeId } from "@/api/lib/branded-types";
+import { LIMITS } from "@/api/lib/limits";
 import { getAppBaseUrl } from "@/api/lib/mcp-connectors/app-urls";
+import { corpusCountryQuotas } from "@/api/mcp/compat-corpus";
 import { LAW_COMPAT_TOOL_HANDLERS } from "@/api/mcp/compat-law-tools";
 import { COMPAT_TOOL_HANDLERS } from "@/api/mcp/compat-tools";
 import type { McpMode } from "@/api/mcp/constants";
@@ -263,6 +268,86 @@ beforeEach(() => {
 
 const withCorpus = async (body: () => Promise<void>) =>
   await withPublicLaw({ featurePublicLaw: true, isDev: false }, body);
+
+describe("the corpus page cap split across countries", () => {
+  // Exhaustive rather than sampled: the domain is 1..cap for two caps that are
+  // constants, so every case a deployment can reach is checked here.
+  const CAPS = [
+    LIMITS.mcpCompatDecisionPageSizeDefault,
+    LIMITS.mcpCompatStatutePageSizeDefault,
+  ];
+
+  test("quotas sum to exactly the cap for every admissible country count", () => {
+    for (const cap of CAPS) {
+      for (let count = 1; count <= cap; count += 1) {
+        const quotas = corpusCountryQuotas(
+          cap,
+          Array.from({ length: count }, (_, index) => index),
+        );
+        const total = quotas.reduce((sum, { limit }) => sum + limit, 0);
+        expect(total, `cap ${cap} across ${count} countries`).toBe(cap);
+      }
+    }
+  });
+
+  test("no country is given a zero quota, and the shares differ by at most one", () => {
+    for (const cap of CAPS) {
+      for (let count = 1; count <= cap; count += 1) {
+        const limits = corpusCountryQuotas(
+          cap,
+          Array.from({ length: count }, (_, index) => index),
+        ).map(({ limit }) => limit);
+        expect(
+          Math.min(...limits),
+          `cap ${cap} across ${count}`,
+        ).toBeGreaterThan(0);
+        // The remainder goes to the first countries in admitted order, so the
+        // largest and smallest share can differ by one hit and no more.
+        expect(Math.max(...limits) - Math.min(...limits)).toBeLessThanOrEqual(
+          1,
+        );
+      }
+    }
+  });
+
+  test("each admitted country list fits inside its page cap", () => {
+    // The companion to the module-load assertion in compat-corpus.ts: a
+    // country whose share floored to zero would need a deferred-page scheme
+    // this pair does not have, so admitting one more country than the cap is
+    // a change that has to move the cap with it.
+    expect(PUBLIC_CASE_LAW_COUNTRIES.length).toBeLessThanOrEqual(
+      LIMITS.mcpCompatDecisionPageSizeDefault,
+    );
+    expect(PUBLIC_LEGISLATION_COUNTRIES.length).toBeLessThanOrEqual(
+      LIMITS.mcpCompatStatutePageSizeDefault,
+    );
+  });
+
+  test("a page asks each corpus for no more than its cap", async () => {
+    await withCorpus(async () => {
+      await run({
+        args: { query: "promlčení" },
+        context: createContext(),
+        handler: COMPAT_TOOL_HANDLERS.search,
+      });
+
+      // Every country's request carries its own quota, so what the corpus was
+      // asked for in total is the cap and never more.
+      const askedFor = (calls: readonly unknown[][]): number =>
+        calls.reduce(
+          (total, call) => total + asTestRaw<{ limit: number }>(call[0]).limit,
+          0,
+        );
+
+      expect(askedFor(searchDecisionsHandlerMock.mock.calls)).toBe(
+        LIMITS.mcpCompatDecisionPageSizeDefault,
+      );
+      expect(askedFor(searchLegislationHandlerMock.mock.calls)).toBe(
+        LIMITS.mcpCompatStatutePageSizeDefault,
+      );
+    });
+  });
+});
 
 describe("compat search reaching the public corpus", () => {
   test("the default surface returns matter hits, then decisions, then statutes", async () => {
