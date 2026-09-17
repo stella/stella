@@ -343,6 +343,7 @@ const CitationRow = ({
             decision: cited,
             id: item.id,
             sectionIndex: item.sectionIndex,
+            treatment: item.treatment,
           },
           textDecisionId,
         }}

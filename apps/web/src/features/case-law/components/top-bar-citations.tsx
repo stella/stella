@@ -2,13 +2,17 @@ import { useQuery } from "@tanstack/react-query";
 import { useNow, useTranslations } from "use-intl";
 
 import { Temporal } from "@stll/time";
+import { Popover, PopoverPanel, PopoverTrigger } from "@stll/ui/popover";
+import { cn } from "@stll/ui/utils";
 
-import { createCaseDecisionDetailsTab } from "@/components/inspector/case-decision-details-view";
-import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { decisionYear } from "@/features/case-law/citation-format";
 import { totalCitations } from "@/features/case-law/citation-treatment";
 import { citationStripFromYear } from "@/features/case-law/components/case-viewer/citation-header";
-import { CitationYearStrip } from "@/features/case-law/components/citation-year-strip";
+import { CitationTimelinePanel } from "@/features/case-law/components/citation-timeline-panel";
+import {
+  CITATION_TRIGGER_TOUCH_TARGET,
+  CitationYearStrip,
+} from "@/features/case-law/components/citation-year-strip";
 import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
 import { decisionCitationSummaryOptions } from "@/features/case-law/queries/citations";
 import { useMainCaseLawDecision } from "@/features/case-law/use-main-decision";
@@ -18,8 +22,8 @@ import { useFormatter } from "@/i18n/formatting-context";
 /**
  * The reception of the decision on the main view, in the title row: the
  * year strip, how often it is cited, and how the citing courts split for
- * and against. A click opens the details tab, where the citing decisions
- * are listed.
+ * and against. A click opens the timeline, and the citing decisions are one
+ * step further.
  */
 export const TopBarCitations = () => {
   const decision = useMainCaseLawDecision();
@@ -71,48 +75,65 @@ const TopBarCitationsFor = ({
   ]
     .filter((part) => part !== null)
     .join(" · ");
-  const openDetails = () => {
-    useInspectorTabsStore.getState().openView(
-      createCaseDecisionDetailsTab({
-        caseNumber: decision.caseNumber,
-        country: decision.country,
-        court: decision.court,
-        decisionId: decision.id,
-        language: decision.language,
-        languageAlternates: decision.languageAlternates,
-        slug: decision.slug,
-      }),
-    );
+  const target = {
+    caseNumber: decision.caseNumber,
+    country: decision.country,
+    court: decision.court,
+    decisionId: decision.id,
+    language: decision.language,
+    languageAlternates: decision.languageAlternates,
+    slug: decision.slug,
   };
 
   return (
-    <button
-      aria-label={label}
-      className="text-muted-foreground hover:text-foreground ms-3 flex shrink-0 items-center gap-2 rounded-sm px-1 py-0.5 font-sans text-xs transition-colors"
-      onClick={openDetails}
-      type="button"
-    >
-      <CitationYearStrip
-        byYear={summary.incomingByYear}
-        fromYear={fromYear}
-        toYear={currentYear}
-      />
-      <span aria-hidden="true" className="tabular-nums">
-        {format.number(total)}
-      </span>
-      {(positive > 0 || negative > 0) && (
-        <span
-          aria-hidden="true"
-          className="flex items-center gap-1 tabular-nums"
-        >
-          {positive > 0 && (
-            <span className="text-primary">+{format.number(positive)}</span>
-          )}
-          {negative > 0 && (
-            <span className="text-destructive">−{format.number(negative)}</span>
-          )}
+    <Popover>
+      <PopoverTrigger
+        render={
+          <button
+            aria-label={label}
+            className={cn(
+              "text-muted-foreground hover:text-foreground ms-3 flex shrink-0 items-center gap-2 rounded-sm px-1 py-0.5 font-sans text-xs transition-colors",
+              CITATION_TRIGGER_TOUCH_TARGET,
+            )}
+            type="button"
+          />
+        }
+      >
+        <CitationYearStrip
+          byYear={summary.incomingByYear}
+          fromYear={fromYear}
+          toYear={currentYear}
+        />
+        <span aria-hidden="true" className="tabular-nums">
+          {format.number(total)}
         </span>
-      )}
-    </button>
+        {(positive > 0 || negative > 0) && (
+          <span
+            aria-hidden="true"
+            className="flex items-center gap-1 tabular-nums"
+          >
+            {positive > 0 && (
+              <span className="text-primary">+{format.number(positive)}</span>
+            )}
+            {negative > 0 && (
+              <span className="text-destructive">
+                −{format.number(negative)}
+              </span>
+            )}
+          </span>
+        )}
+      </PopoverTrigger>
+      <PopoverPanel
+        align="start"
+        className="w-[min(24rem,calc(100vw-2rem))] max-w-none"
+      >
+        <CitationTimelinePanel
+          fromYear={fromYear}
+          summary={summary}
+          target={target}
+          toYear={currentYear}
+        />
+      </PopoverPanel>
+    </Popover>
   );
 };

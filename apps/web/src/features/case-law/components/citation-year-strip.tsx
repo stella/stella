@@ -1,24 +1,33 @@
 import { useTranslations } from "use-intl";
 
-import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
 import { cn } from "@stll/ui/utils";
 
+import { CITATION_TREATMENT_FILL } from "@/features/case-law/citation-treatment";
+import type { CitationYearCounts } from "@/features/case-law/citation-treatment";
 import {
-  CITATION_TREATMENT_FILL,
-  CITATION_TREATMENT_LABEL,
-  CITATION_TREATMENT_ORDER,
-  totalCitations,
-} from "@/features/case-law/citation-treatment";
-import type {
-  CitationTreatment,
-  CitationYearCounts,
-} from "@/features/case-law/citation-treatment";
+  CitationNegativeHatch,
+  negativeHatchFill,
+  useCitationHatchId,
+} from "@/features/case-law/components/citation-negative-hatch";
+import {
+  citationTimelineColumns,
+  citationTimelinePeak,
+  MIN_VISIBLE_HEIGHT,
+  stackColumnSegments,
+} from "@/features/case-law/components/citation-timeline.logic";
+
+/**
+ * The hit area a control wrapping the strip needs. The strip is 16px tall and
+ * the row around it barely 20px, well under the 44px a finger is entitled to,
+ * so a coarse pointer gets a centred pseudo-element instead: the target grows,
+ * the drawing does not.
+ */
+export const CITATION_TRIGGER_TOUCH_TARGET =
+  "relative pointer-coarse:after:absolute pointer-coarse:after:inset-1/2 pointer-coarse:after:size-full pointer-coarse:after:min-h-11 pointer-coarse:after:min-w-11 pointer-coarse:after:-translate-x-1/2 pointer-coarse:after:-translate-y-1/2";
 
 const STRIP_HEIGHT = 16;
 const COLUMN_WIDTH = 5;
 const COLUMN_GAP = 1;
-/** A year with citations is never drawn flat, however large the peak. */
-const MIN_VISIBLE_HEIGHT = 1;
 
 type CitationYearStripProps = {
   byYear: readonly CitationYearCounts[];
@@ -32,82 +41,14 @@ type CitationYearStripProps = {
 /**
  * One column per calendar year of incoming citations, stacked by treatment.
  *
- * No axes and no labels: the strip is a glance at the shape of a decision's
- * reception, the counts are a hover away. Height scales to the busiest year
+ * No axes, no labels and no tab stops of its own: the strip is a glance at
+ * the shape of a decision's reception, and it is drawn inside the control
+ * that opens the timeline, where the year-by-year counts are. Focusable
+ * columns here would be interactive content nested in a button, which
+ * assistive technology flattens and the keyboard cannot reach usefully. Height scales to the busiest year
  * in view, so two strips are not comparable by eye; that is the reader's
  * own decision against its own past, which is the question asked of it.
  */
-type ColumnSegment = {
-  height: number;
-  treatment: CitationTreatment;
-  y: number;
-};
-
-type StackColumnSegmentsOptions = {
-  columnHeight: number;
-  counts: CitationYearCounts;
-};
-
-/**
- * One column's segments, stacked bottom-up in display order reversed so the
- * treatment that must not be missed (negative) sits on top where the eye
- * lands. Every present treatment gets at least `MIN_VISIBLE_HEIGHT`, and the
- * stack never exceeds `columnHeight`: rounding and the floor can overshoot,
- * so the excess is taken back from the tallest segments first, never below
- * the floor, which keeps the top edge inside the strip.
- */
-export const stackColumnSegments = ({
-  columnHeight,
-  counts,
-}: StackColumnSegmentsOptions): ColumnSegment[] => {
-  const total = totalCitations(counts);
-  const sized: { height: number; treatment: CitationTreatment }[] = [];
-  for (const treatment of CITATION_TREATMENT_ORDER.toReversed()) {
-    const count = counts[treatment];
-    if (count === 0) {
-      continue;
-    }
-    sized.push({
-      height: Math.max(
-        MIN_VISIBLE_HEIGHT,
-        Math.round((count / total) * columnHeight),
-      ),
-      treatment,
-    });
-  }
-
-  let stacked = 0;
-  for (const part of sized) {
-    stacked += part.height;
-  }
-  let excess = stacked - columnHeight;
-  while (excess > 0) {
-    let tallest = sized.at(0);
-    for (const part of sized) {
-      if (tallest === undefined || part.height > tallest.height) {
-        tallest = part;
-      }
-    }
-    if (tallest === undefined || tallest.height <= MIN_VISIBLE_HEIGHT) {
-      break;
-    }
-    tallest.height -= 1;
-    excess -= 1;
-  }
-
-  const segments: ColumnSegment[] = [];
-  let filled = 0;
-  for (const part of sized) {
-    segments.push({
-      height: part.height,
-      treatment: part.treatment,
-      y: STRIP_HEIGHT - filled - part.height,
-    });
-    filled += part.height;
-  }
-  return segments;
-};
-
 export const CitationYearStrip = ({
   byYear,
   className,
@@ -115,24 +56,15 @@ export const CitationYearStrip = ({
   toYear,
 }: CitationYearStripProps) => {
   const t = useTranslations();
+  const hatchId = useCitationHatchId();
 
   if (toYear < fromYear) {
     return null;
   }
 
-  const countsByYear = new Map(byYear.map((entry) => [entry.year, entry]));
-  const years: number[] = [];
-  for (let year = fromYear; year <= toYear; year += 1) {
-    years.push(year);
-  }
-  const peak = Math.max(
-    1,
-    ...years.map((year) => {
-      const counts = countsByYear.get(year);
-      return counts === undefined ? 0 : totalCitations(counts);
-    }),
-  );
-  const width = years.length * (COLUMN_WIDTH + COLUMN_GAP) - COLUMN_GAP;
+  const columns = citationTimelineColumns({ byYear, fromYear, toYear });
+  const peak = citationTimelinePeak(columns);
+  const width = columns.length * (COLUMN_WIDTH + COLUMN_GAP) - COLUMN_GAP;
 
   return (
     <svg
@@ -148,8 +80,11 @@ export const CitationYearStrip = ({
       viewBox={`0 0 ${String(width)} ${String(STRIP_HEIGHT)}`}
       width={width}
     >
-      {years.map((year, index) => {
-        const counts = countsByYear.get(year);
+      <CitationNegativeHatch
+        id={hatchId}
+        surfaceClassName="stroke-background"
+      />
+      {columns.map(({ counts, total, year }, index) => {
         const x = index * (COLUMN_WIDTH + COLUMN_GAP);
         if (counts === undefined) {
           return (
@@ -164,62 +99,33 @@ export const CitationYearStrip = ({
           );
         }
 
-        const total = totalCitations(counts);
         const columnHeight = Math.max(
           MIN_VISIBLE_HEIGHT,
           Math.round((total / peak) * STRIP_HEIGHT),
         );
-        const segments = stackColumnSegments({ columnHeight, counts });
-
-        const breakdown = CITATION_TREATMENT_ORDER.filter(
-          (treatment) => counts[treatment] > 0,
-        )
-          .map(
-            (treatment) =>
-              `${t(CITATION_TREATMENT_LABEL[treatment])} ${String(counts[treatment])}`,
-          )
-          .join(" · ");
+        const segments = stackColumnSegments({
+          baseline: STRIP_HEIGHT,
+          columnHeight,
+          counts,
+        });
 
         return (
-          <Tooltip key={year}>
-            {/* A group is not focusable by itself; the tab stop and label
-                give keyboard and screen-reader users the same per-year
-                breakdown the tooltip shows on hover. */}
-            <TooltipTrigger
-              render={
-                <g
-                  aria-label={`${t("caseLaw.citation.yearTitle", {
-                    count: total,
-                    year: String(year),
-                  })}: ${breakdown}`}
-                  role="img"
-                  tabIndex={0}
-                />
-              }
-            >
-              {segments.map((segment) => (
-                <rect
-                  className={CITATION_TREATMENT_FILL[segment.treatment]}
-                  height={segment.height}
-                  key={segment.treatment}
-                  width={COLUMN_WIDTH}
-                  x={x}
-                  y={segment.y}
-                />
-              ))}
-            </TooltipTrigger>
-            <TooltipPopup>
-              <span className="font-medium">
-                {t("caseLaw.citation.yearTitle", {
-                  count: total,
-                  year: String(year),
-                })}
-              </span>
-              <span className="text-muted-foreground block text-xs">
-                {breakdown}
-              </span>
-            </TooltipPopup>
-          </Tooltip>
+          <g key={year}>
+            {segments.map((segment) => (
+              <rect
+                className={cn(
+                  segment.treatment !== "negative" &&
+                    CITATION_TREATMENT_FILL[segment.treatment],
+                )}
+                fill={negativeHatchFill(segment.treatment, hatchId)}
+                height={segment.height}
+                key={segment.treatment}
+                width={COLUMN_WIDTH}
+                x={x}
+                y={segment.y}
+              />
+            ))}
+          </g>
         );
       })}
     </svg>
