@@ -67,6 +67,7 @@ import {
   TABLE_COLUMN_DRAG_TYPE,
   toColumnDropEdge,
 } from "@/components/workspaces/table/workspace-table/internals-helpers";
+import { tableRowWindow } from "@/components/workspaces/table/workspace-table/row-window.logic";
 import { WorkspaceTableSkeletonRows } from "@/components/workspaces/table/workspace-table/skeleton-rows";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { TOOLBAR_ROW_HEIGHT_PX } from "@/lib/consts";
@@ -356,21 +357,20 @@ export const WorkspaceTable = <TRow extends TableRowData = TableTreeNode>({
       observer.disconnect();
     };
   }, [inlineFlow, outerScrollRef]);
-  // `virtualItem.start` is measured from the scroll start and includes the
-  // scrollMargin, while the rows container already sits at scrollMargin in the
-  // DOM flow — so subtract it for the top filler and add it back for the bottom
-  // filler. Both reduce to the plain formulas when scrollMargin is 0 (flat).
-  const virtualizerScrollMargin = rowVirtualizer.options.scrollMargin;
-  const paddingTop = (virtualRows.at(0)?.start ?? 0) - virtualizerScrollMargin;
-  const paddingBottom =
-    rowVirtualizer.getTotalSize() -
-    (virtualRows.at(-1)?.end ?? 0) +
-    virtualizerScrollMargin;
   // Every layout windows its rows now; grouped sections virtualize against the
-  // shared scroll via scrollMargin (above), the flat table against its wrapper.
-  const renderedRows = virtualRows.map((virtualRow) => ({
-    row: rowModel.rows.at(virtualRow.index),
-    index: virtualRow.index,
+  // shared scroll via scrollMargin, the flat table against its wrapper. Until
+  // one of them is measured the virtualizer has no window, and the body draws
+  // its own first rows rather than none; see `row-window.logic`.
+  const { indexes, paddingTop, paddingBottom } = tableRowWindow({
+    virtualRows,
+    rowCount: rowModel.rows.length,
+    totalSize: rowVirtualizer.getTotalSize(),
+    scrollMargin: rowVirtualizer.options.scrollMargin,
+    estimatedRowPx: TABLE_ROW_ESTIMATE_PX,
+  });
+  const renderedRows = indexes.map((index) => ({
+    row: rowModel.rows.at(index),
+    index,
   }));
   // Rows that are on their way stand in the grid; rows that are on screen stay
   // on screen, so a refetch over a drawn result set never draws both.
