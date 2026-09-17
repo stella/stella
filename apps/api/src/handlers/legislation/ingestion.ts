@@ -30,6 +30,10 @@ import {
 } from "@/api/lib/legal-search/corpus-storage";
 import type { CorpusWriteOutcome } from "@/api/lib/legal-search/corpus-storage";
 import {
+  canStartCyclePage,
+  startCycleDeadline,
+} from "@/api/lib/legal-search/cycle-deadline";
+import {
   ADAPTER_TIMEOUT,
   MAX_CYCLE_MS,
   MAX_SYNC_PAGES,
@@ -594,10 +598,11 @@ export const runLegislationIngestion = async ({
   const coverage: SliceCoverage[] = [];
 
   const pageLimit = maxPages ?? adapter.maxSyncPages ?? MAX_SYNC_PAGES;
-  const cycleSignal = AbortSignal.any([
-    signal,
-    AbortSignal.timeout(adapter.maxCycleMs ?? MAX_CYCLE_MS),
-  ]);
+  const deadline = startCycleDeadline({
+    budgetMs: adapter.maxCycleMs ?? MAX_CYCLE_MS,
+    abortEarlyOn: [signal],
+  });
+  const pageTimeoutMs = adapter.pageTimeoutMs ?? ADAPTER_TIMEOUT.PAGE;
 
   /**
    * The publisher pause and the request as one step, so the pause spaces this
@@ -613,15 +618,18 @@ export const runLegislationIngestion = async ({
     return await adapter.fetchPage(
       pageCursor,
       source.config ?? {},
-      AbortSignal.any([
-        cycleSignal,
-        AbortSignal.timeout(adapter.pageTimeoutMs ?? ADAPTER_TIMEOUT.PAGE),
-      ]),
+      AbortSignal.any([deadline.signal, AbortSignal.timeout(pageTimeoutMs)]),
     );
   };
 
   for (let page = 0; page < pageLimit; page += 1) {
-    if (cycleSignal.aborted) {
+    // The pause and the page timeout are what the next page costs. Starting
+    // one the remaining budget cannot cover only throws its work away: the
+    // cycle deadline aborts the fetch mid-flight and the cursor stays where
+    // the last completed page left it either way.
+    const nextPageMs =
+      pageTimeoutMs + (page > 0 ? adapter.minRequestIntervalMs : 0);
+    if (!canStartCyclePage(deadline, nextPageMs)) {
       break;
     }
     const pageResult = await fetchPagePaced(page, cursor);

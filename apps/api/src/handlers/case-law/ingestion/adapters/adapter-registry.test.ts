@@ -11,7 +11,11 @@ import {
   loadAdapterByKey,
 } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry-lazy";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
-import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
+import {
+  ADAPTER_KEYS,
+  ADAPTER_TIMEOUT,
+  MAX_CYCLE_MS,
+} from "@/api/lib/legal-search/ingestion-constants";
 
 describe("case-law adapter capabilities", () => {
   test("every registered adapter exposes a total count", () => {
@@ -26,6 +30,23 @@ describe("case-law adapter capabilities", () => {
           ],
     );
     expect(missing).toEqual([]);
+  });
+
+  test("every adapter can start a page inside its own cycle budget", () => {
+    // The page loop refuses to start a page the remaining cycle budget
+    // cannot cover. An adapter whose page timeout is not shorter than its
+    // whole cycle could therefore never start one, and would report a
+    // timeout on every cycle without fetching anything.
+    const starved = listAdapters().flatMap((adapter) => {
+      const pageMs = adapter.pageTimeoutMs ?? ADAPTER_TIMEOUT.PAGE;
+      const cycleMs = adapter.maxCycleMs ?? MAX_CYCLE_MS;
+      return pageMs < cycleMs
+        ? []
+        : [
+            `${adapter.key}: page timeout ${pageMs}ms, cycle budget ${cycleMs}ms`,
+          ];
+    });
+    expect(starved).toEqual([]);
   });
 
   test("every adapter states a walkable slice order", () => {
