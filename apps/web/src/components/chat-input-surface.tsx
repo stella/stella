@@ -83,6 +83,11 @@ type ChatInputSurfaceProps = {
    */
   dock?: ReactNode;
   /**
+   * The (+) menu's leading "New chat" row: the same action the dock's
+   * new-chat button carries. `null` hides the row (nothing to leave yet).
+   */
+  onNewThread?: (() => void) | null | undefined;
+  /**
    * When provided, the (+) menu gains a Models submenu. Omit on surfaces
    * without a model picker.
    */
@@ -125,6 +130,7 @@ export const ChatInputSurface = ({
   onStop,
   anonymized = false,
   dock,
+  onNewThread,
   models,
   skillsOrganizationId,
   reservedCommands,
@@ -315,6 +321,7 @@ export const ChatInputSurface = ({
                       : undefined
                   }
                   models={models}
+                  onNewThread={onNewThread}
                   onOpenFilePicker={openFilePicker}
                   skills={
                     skillsOrganizationId

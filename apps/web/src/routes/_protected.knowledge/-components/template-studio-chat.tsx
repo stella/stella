@@ -1495,6 +1495,7 @@ const TemplateStudioChatInner = ({
               mode: "edit",
             },
           ]}
+          onNewThread={hasMessages ? startNewThread : null}
           queueWhileGenerating
           sendDisabledReason={editorReady ? undefined : "editor-loading"}
           skillsOrganizationId={activeOrganizationId}

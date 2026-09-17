@@ -12,6 +12,7 @@ import {
   AtSignIcon,
   BookOpenIcon,
   CpuIcon,
+  MessageSquarePlusIcon,
   PaperclipIcon,
   PlusIcon,
   ServerIcon,
@@ -51,6 +52,10 @@ import {
 } from "@/components/chat-mention-helpers";
 import { MentionIcon } from "@/components/chat-mention-list";
 import { insertPastedTextChip } from "@/components/chat-pasted-text-extension";
+import {
+  ComposerEditModeSubmenu,
+  type ComposerEditModeMenuProps,
+} from "@/components/chat/chat-edit-mode-menu";
 import {
   CHAT_MODEL_MENU_POPUP_CLASS_NAME,
   ChatModelOptionsMenu,
@@ -111,7 +116,15 @@ type ComposerPlusMenuProps = {
   disabled: boolean;
   guideAnchorsEnabled?: boolean;
   onOpenFilePicker: () => void;
+  /** Starts a new thread from the menu's leading row. `null` hides the row
+   *  (a thread with nothing to leave, or a rotation under way), mirroring
+   *  the dock's own new-chat button which keeps the same action. */
+  onNewThread?: (() => void) | null | undefined;
   models?: ComposerModelsMenuProps | undefined;
+  /** Enables the Edit mode submenu (how AI edits land in the open DOCX).
+   *  Lives only here, never in the dock; omit on surfaces without a
+   *  selectable edit mode. */
+  editMode?: ComposerEditModeMenuProps | undefined;
   skills?: ComposerSkillsMenuProps | undefined;
   /** Enables the Context submenu (mention a matter or one of its files);
    *  omit on surfaces without a mention-insertion target. */
@@ -126,17 +139,19 @@ type ComposerPlusMenuProps = {
 
 // The composer's (+) affordance: a single Menu rendered into whichever slot the
 // composer state calls for. A circular, filled button (not a bare ghost icon)
-// carrying attach / models / skills / MCP actions, the latter three as
-// hover-opening submenus (Cursor's (+) pattern). Shared by every chat surface
+// carrying new chat / attach / models / edit mode / skills / MCP actions, the
+// submenus hover-opening (Cursor's (+) pattern). Shared by every chat surface
 // so the affordance can never drift; each submenu appears only when the
-// surface passes the matching prop. The three submenus' list queries are
+// surface passes the matching prop. The list-backed submenus' queries are
 // gated on the root menu's open state, so opening (+) — not mounting the
 // composer — is what triggers the fetches.
 export const ComposerPlusMenu = ({
   disabled,
   guideAnchorsEnabled = false,
   onOpenFilePicker,
+  onNewThread,
   models,
+  editMode,
   skills,
   context,
   mcp,
@@ -240,6 +255,15 @@ export const ComposerPlusMenu = ({
         <PlusIcon className="size-4" />
       </MenuTrigger>
       <MenuPopup align="start" side="top">
+        {onNewThread && (
+          <>
+            <MenuItem onClick={onNewThread}>
+              <MessageSquarePlusIcon />
+              {t("chat.newChat")}
+            </MenuItem>
+            <MenuSeparator />
+          </>
+        )}
         <MenuItem
           {...guideAnchor(GUIDE_ANCHORS.chatMenuAttach, guideAnchorsEnabled)}
           onClick={onOpenFilePicker}
@@ -252,6 +276,12 @@ export const ComposerPlusMenu = ({
             enabled={menuOpen}
             guideAnchorsEnabled={guideAnchorsEnabled}
             models={models}
+          />
+        )}
+        {editMode && (
+          <ComposerEditModeSubmenu
+            onChange={editMode.onChange}
+            optionId={editMode.optionId}
           />
         )}
         {skills && (

@@ -833,6 +833,7 @@
     "choosePromptImprovementStrategy": "Promptjavítási lehetőségek",
     "composerMenu": {
       "context": "Kontextus",
+      "editMode": "Szerkesztési mód",
       "mcpServers": "MCP-kiszolgálók",
       "models": "Modellek",
       "noFiles": "Nincs fájl ebben az ügyben",

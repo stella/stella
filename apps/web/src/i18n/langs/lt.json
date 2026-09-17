@@ -833,6 +833,7 @@
     "choosePromptImprovementStrategy": "Užklausos tobulinimo parinktys",
     "composerMenu": {
       "context": "Kontekstas",
+      "editMode": "Redagavimo režimas",
       "mcpServers": "MCP serveriai",
       "models": "Modeliai",
       "noFiles": "Šioje byloje nėra failų",

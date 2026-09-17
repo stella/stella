@@ -833,6 +833,7 @@
     "choosePromptImprovementStrategy": "Options d’amélioration du prompt",
     "composerMenu": {
       "context": "Contexte",
+      "editMode": "Mode d'édition",
       "mcpServers": "Serveurs MCP",
       "models": "Modèles",
       "noFiles": "Aucun fichier dans ce dossier",

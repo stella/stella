@@ -59,6 +59,7 @@ import type {
 } from "@/components/chat-editor-provider";
 import { ChatComposerActionButton } from "@/components/chat/chat-composer-action-button";
 import { ChatDraftAttachmentChips } from "@/components/chat/chat-draft-attachment-chips";
+import type { ComposerEditModeMenuProps } from "@/components/chat/chat-edit-mode-menu";
 import type { ComposerModelsMenuProps } from "@/components/chat/chat-model-options-menu";
 import { ComposerControlSlot } from "@/components/chat/composer-control-slot";
 import { ComposerPlusMenu } from "@/components/chat/composer-plus-menu";
@@ -267,6 +268,13 @@ type PromptBarProps = {
    * this bar's own editor, so their props omit `editor` (supplied here).
    */
   models?: ComposerModelsMenuProps | undefined;
+  /**
+   * The (+) menu's leading "New chat" row: the same action the dock's
+   * new-chat button carries. `null` hides the row (nothing to leave yet).
+   */
+  onNewThread?: (() => void) | null | undefined;
+  /** The (+) menu's Edit mode submenu; its only home (the dock has none). */
+  editMode?: ComposerEditModeMenuProps | undefined;
   skillsOrganizationId?: string | undefined;
   /**
    * Reserved-command availability for this bar's slash menu. Omit on
@@ -498,6 +506,8 @@ export const PromptBar = (props: PromptBarProps) => {
     followupChips,
     attachmentsEnabled = false,
     models,
+    onNewThread,
+    editMode,
     skillsOrganizationId,
     reservedCommands,
     context,
@@ -822,12 +832,14 @@ export const PromptBar = (props: PromptBarProps) => {
                     : undefined
                 }
                 disabled={inputDisabled}
+                editMode={editMode}
                 mcp={
                   mcpOrganizationId
                     ? { activeOrganizationId: mcpOrganizationId }
                     : undefined
                 }
                 models={models}
+                onNewThread={onNewThread}
                 onOpenFilePicker={openFilePicker}
                 skills={
                   skillsOrganizationId

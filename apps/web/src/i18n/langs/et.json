@@ -833,6 +833,7 @@
     "choosePromptImprovementStrategy": "Viiba täiustamise valikud",
     "composerMenu": {
       "context": "Kontekst",
+      "editMode": "Muutmisrežiim",
       "mcpServers": "MCP-serverid",
       "models": "Mudelid",
       "noFiles": "Selles toimikus pole faile",

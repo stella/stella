@@ -125,7 +125,10 @@ import {
 import type { ChatDraftAttachment } from "@/components/chat-editor-provider";
 import { ChatApprovalContext } from "@/components/chat/chat-approval-context";
 import { ChatComposerDock } from "@/components/chat/chat-composer-dock";
-import { ComposerEditModeControl } from "@/components/chat/chat-edit-mode-selector";
+import {
+  composerEditModeMenuFor,
+  DocxEditSafetyChip,
+} from "@/components/chat/chat-edit-mode-menu";
 import { ChatMatterPicker } from "@/components/chat/chat-matter-picker";
 import { ChatMattersContext } from "@/components/chat/chat-matters-context";
 import { ChatThreadMessages } from "@/components/chat/chat-thread-messages";
@@ -1268,7 +1271,6 @@ const FileChatOverlayInner = ({
     });
     return state.type === "unavailable" ? null : state.selection;
   });
-  const canSelectEditMode = activeDocxEditModeState.type === "selectable";
   // Folio's PM view exists almost immediately after DocxBrowserEditor
   // mounts but there is a sub-100ms window where the ref is set but
   // `createAIEditSnapshot()` still returns null. Sending a message in
@@ -2535,6 +2537,19 @@ const FileChatOverlayInner = ({
     };
   }, [panelOpen]);
 
+  // One action for both new-chat entry points (the (+) menu row and the
+  // dock button), so they can never disagree on when a new thread is offered.
+  const newThreadAction =
+    hasMessages &&
+    draftPersistence.status !== "saving" &&
+    offersNewThread(newThreadChoice)
+      ? () => {
+          detached(
+            requestNewThreadRotation(),
+            "file-chat-overlay.request-new-thread",
+          );
+        }
+      : null;
   return (
     <ChatMattersContext
       value={{
@@ -2652,6 +2667,11 @@ const FileChatOverlayInner = ({
           attentionPulseSeq={attentionPulseSeq}
           canSubmitNow={canSubmitComposerDraft}
           context={{ activeOrganizationId, threadRef }}
+          editMode={composerEditModeMenuFor({
+            onChange: setEditModeOptionId,
+            optionId: editModeOptionId,
+            state: activeDocxEditModeState,
+          })}
           editorController={editorController}
           mcpOrganizationId={activeOrganizationId}
           models={{
@@ -2661,6 +2681,7 @@ const FileChatOverlayInner = ({
             selectedReasoningEffort: data.reasoningEffort,
             selectModel: modelSelection.selectModel,
           }}
+          onNewThread={newThreadAction}
           reservedCommands={{ hasPersistedThread: hasMessages }}
           skillsOrganizationId={activeOrganizationId}
           emptyPlaceholder={
@@ -2698,18 +2719,7 @@ const FileChatOverlayInner = ({
                 selectedReasoningEffort: data.reasoningEffort,
                 selectModel: modelSelection.selectModel,
               }}
-              onNewThread={
-                hasMessages &&
-                draftPersistence.status !== "saving" &&
-                offersNewThread(newThreadChoice)
-                  ? () => {
-                      detached(
-                        requestNewThreadRotation(),
-                        "file-chat-overlay.request-new-thread",
-                      );
-                    }
-                  : null
-              }
+              onNewThread={newThreadAction}
               newThreadPrompt={
                 newThreadPromptStatus !== null
                   ? {
@@ -2743,14 +2753,7 @@ const FileChatOverlayInner = ({
                   />
                 ) : undefined
               }
-              endExtras={
-                <ComposerEditModeControl
-                  onChange={setEditModeOptionId}
-                  optionId={editModeOptionId}
-                  selectable={canSelectEditMode}
-                  unsafe={docxEditSafety === "unsafe"}
-                />
-              }
+              endExtras={<DocxEditSafetyChip safety={docxEditSafety} />}
               status="ready"
               threadRef={threadRef}
             />
