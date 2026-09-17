@@ -1,6 +1,9 @@
-import type { StandardJSONSchemaV1 } from "@standard-schema/spec";
+import type {
+  StandardJSONSchemaV1,
+  StandardSchemaV1,
+} from "@standard-schema/spec";
 import { toolDefinition } from "@tanstack/ai";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import { DOCX_SUGGEST_CHANGES_AUTO_APPLY_OPTIONS } from "@stll/api-contract/chat-docx-suggestions";
@@ -160,19 +163,46 @@ export const hasSuggestChangesApprovalResponse = (
 type SuggestChangesArgs =
   FolioAgentToolInputByName[typeof SUGGEST_CHANGES_TOOL_NAME];
 
+type SuggestChangesInputSchema = StandardJSONSchemaV1<
+  SuggestChangesArgs,
+  SuggestChangesArgs
+> &
+  StandardSchemaV1<SuggestChangesArgs, SuggestChangesArgs>;
+
+const isSuggestChangesArgs = (
+  value: unknown,
+  options: FolioSuggestChangesOptions,
+): value is SuggestChangesArgs => parseSuggestChangesInput(value, options).ok;
+
+const suggestChangesInputError = (
+  value: unknown,
+  options: FolioSuggestChangesOptions,
+): string => {
+  const parsed = parseSuggestChangesInput(value, options);
+  return parsed.ok
+    ? panic("suggest_changes input rejected and accepted by the same parser")
+    : parsed.error;
+};
+
 /**
- * Folio's raw JSON Schema carried as a Standard JSON Schema, so TanStack
- * types the server handler's input as folio's own argument contract. No
- * `validate` member on purpose: the provider enforces the JSON Schema and
- * folio's lenient parser is the runtime validator, exactly as on the
- * client-executed surfaces.
+ * Folio's raw JSON Schema carried as a Standard Schema whose validator is
+ * folio's own lenient parser, so TanStack types the server handler's input
+ * as folio's argument contract. The `validate` member is load-bearing:
+ * TanStack's approval interrupt serialises `inputSchema` through a boundary
+ * that accepts a Standard Schema validator or a raw JSON Schema and throws
+ * on a Standard JSON Schema that carries no validator.
  */
-const toStandardJsonSchema = (
+const toSuggestChangesInputSchema = (
   jsonSchema: Record<string, unknown>,
-): StandardJSONSchemaV1<SuggestChangesArgs, SuggestChangesArgs> => ({
+  options: FolioSuggestChangesOptions,
+): SuggestChangesInputSchema => ({
   "~standard": {
     version: 1,
     vendor: "stella",
+    validate: (value) =>
+      isSuggestChangesArgs(value, options)
+        ? { value }
+        : { issues: [{ message: suggestChangesInputError(value, options) }] },
     jsonSchema: {
       input: () => jsonSchema,
       output: () => jsonSchema,
@@ -281,8 +311,9 @@ export const createAutoApplySuggestChangesTools = ({
     [SUGGEST_CHANGES_TOOL_NAME]: toolDefinition({
       name: definition.name,
       description: `${definition.description}${AUTO_APPLY_DESCRIPTION_SUFFIX}`,
-      inputSchema: toStandardJsonSchema(
+      inputSchema: toSuggestChangesInputSchema(
         providerSafeFolioInputSchema(definition),
+        suggestChanges,
       ),
       outputSchema: toTanStackToolSchema(outputSchema),
     }).server(async (input): Promise<AutoApplySuggestChangesOutput> => {
