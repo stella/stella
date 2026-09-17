@@ -52,28 +52,56 @@ type CaptureWindow = { startedAt: number; suppressed: number };
 const captureWindows = new Map<string, CaptureWindow>();
 
 /**
- * Structural key for repeat suppression: error class, stable code, and code
- * location, deliberately excluding the caller's correlation context.
+ * The components of an error's structural identity, in fixed order.
+ *
+ * Positions are fixed and a missing component stays empty, so a frameless
+ * error's cause frame can never occupy the position another error's primary
+ * frame uses.
+ *
+ * The SQLSTATE earns its place because a database call site fails in ways
+ * that are unrelated defects: a missing column and a violated check
+ * constraint are raised from the same line, so they share a class, a stable
+ * code, and both frames. Without the SQLSTATE they are one identity, which
+ * is the opposite of what the identity is for. A wrapper class that carries
+ * no `code` of its own makes this worse, because `error.code` then repeats
+ * the class name and distinguishes nothing.
+ */
+const ERROR_IDENTITY_COMPONENTS = [
+  "error.class",
+  "error.code",
+  "error.frame",
+  "error.cause.frame",
+  "error.cause.pg_code",
+] as const;
+
+/**
+ * The grouping fingerprint and the suppression key are the same identity read
+ * from two different places, so both derive from `ERROR_IDENTITY_COMPONENTS`
+ * rather than repeating it. Listing the components twice lets one list gain a
+ * component the other never gets, which silently regroups issues on one path
+ * and throttles across defects on the other.
+ */
+const errorIdentity = (component: (key: string) => string): string =>
+  ERROR_IDENTITY_COMPONENTS.map(component).join("|");
+
+/**
+ * Structural key for repeat suppression: error class, stable code, code
+ * location, and SQLSTATE, deliberately excluding the caller's correlation
+ * context.
  *
  * A stuck loop re-reports the same defect with a fresh request or entity ID
  * every cycle, so keying on context would defeat the throttle in exactly the
- * case that motivates it. Two call sites that genuinely share a class, code,
- * and frame are the same defect.
+ * case that motivates it. Two call sites that genuinely share every component
+ * above are the same defect.
  */
-const captureWindowKey = (properties: ExceptionProperties): string => {
-  // `ExceptionProperties` widens every value to include `$exception_list`, so
-  // read each field back as a string rather than stringifying whatever is there.
-  const field = (key: string): string => {
+const captureWindowKey = (properties: ExceptionProperties): string =>
+  errorIdentity((key) => {
+    // `ExceptionProperties` widens every value to include `$exception_list`,
+    // so read each field back as a string rather than stringifying whatever
+    // is there.
     const value = properties[key];
     return typeof value === "string" ? value : "";
-  };
-  return [
-    field("error.class"),
-    field("error.code"),
-    field("error.frame"),
-    field("error.cause.frame"),
-  ].join("|");
-};
+  });
 
 /**
  * Drop the key whose window opened longest ago once the map is full, so a
@@ -149,19 +177,13 @@ const captureErrorWithOptions = (
     // and stack redacted, every event of one error class collapses into a
     // single issue and first-seen automations never fire for new defects.
     // Group by the structural fingerprint instead: same non-PII components,
-    // one issue per distinct defect. Positions are fixed (empty stays empty)
-    // so a frameless error's cause frame can never collide with another
-    // error's primary frame — the same shape `captureWindowKey` uses. The
-    // production server and long-running worker embed source maps, so these
-    // are source positions rather than bundle positions; the artifact test
-    // guards that build contract. Stack symbols are deliberately absent:
-    // engines can infer one from a data-derived computed property key.
-    $exception_fingerprint: [
-      fingerprint["error.class"] ?? "",
-      fingerprint["error.code"] ?? "",
-      fingerprint["error.frame"] ?? "",
-      fingerprint["error.cause.frame"] ?? "",
-    ].join("|"),
+    // one issue per distinct defect, read from `ERROR_IDENTITY_COMPONENTS` so
+    // it stays the identity `captureWindowKey` throttles on. The production
+    // server and long-running worker embed source maps, so the frames are
+    // source positions rather than bundle positions; the artifact test guards
+    // that build contract. Stack symbols are deliberately absent: engines can
+    // infer one from a data-derived computed property key.
+    $exception_fingerprint: errorIdentity((key) => fingerprint[key] ?? ""),
     $exception_level: "error",
     $exception_list: [
       {
