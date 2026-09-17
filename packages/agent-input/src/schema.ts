@@ -1,6 +1,8 @@
 import { panic } from "better-result";
 
 import { normalizeBoolean } from "./boolean";
+import type { CountrySpelling } from "./country";
+import { countryCodeIn, normalizeCountry } from "./country";
 import { normalizeDateFormatSpec } from "./date-format-spec";
 import { normalizeDateValue } from "./date-value";
 import { normalizeEnumValue } from "./enum-value";
@@ -12,6 +14,7 @@ export const AGENT_INPUT_NORMALIZATION_KEY = "x-stella-agent-input";
 
 export const AGENT_INPUT_NORMALIZATION_KIND = {
   boolean: "boolean",
+  country: "country",
   date: "date",
   dateFormat: "date-format",
   enum: "enum",
@@ -22,12 +25,25 @@ export const AGENT_INPUT_NORMALIZATION_KIND = {
 export type AgentInputNormalizationKind =
   (typeof AGENT_INPUT_NORMALIZATION_KIND)[keyof typeof AGENT_INPUT_NORMALIZATION_KIND];
 
+/**
+ * What a country field needs beyond its kind: which ISO spelling the surface
+ * stores, and the codes it holds law for, so the ask names the tool to call and
+ * the values there are to ask for.
+ */
+export type AgentInputCountryAnnotation = {
+  spelling: CountrySpelling;
+  admitted?: readonly string[];
+  tool?: string;
+};
+
 export type AgentInputNormalizationAnnotation = {
   kind: AgentInputNormalizationKind;
   /** Preserve invalid input only when the owning handler deliberately repairs it. */
   invalidValueDisposition?: "handler-owned";
   /** Locale context disambiguates numeric grouping and adds named date months. */
   locale?: string;
+  /** Required by the `country` kind, which has two canonical spellings. */
+  country?: AgentInputCountryAnnotation;
 };
 
 /** Attach an explicit normalization kind to a canonical JSON Schema field. */
@@ -45,6 +61,8 @@ export const agentInputNormalizationGuidance = (
   switch (annotation.kind) {
     case "boolean":
       return "Use a JSON boolean; common unambiguous yes/no words are normalized.";
+    case "country":
+      return "An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.";
     case "date":
       return "Use ISO YYYY-MM-DD; unambiguous localized calendar dates are normalized.";
     case "date-format":
@@ -116,12 +134,37 @@ const annotationOf = (
   }
   const locale = annotation["locale"];
   const invalidValueDisposition = annotation["invalidValueDisposition"];
+  const country = countryAnnotationOf(annotation["country"]);
   return {
     kind: normalizedKind,
     ...(invalidValueDisposition === "handler-owned"
       ? { invalidValueDisposition }
       : {}),
     ...(typeof locale === "string" ? { locale } : {}),
+    ...(country === undefined ? {} : { country }),
+  };
+};
+
+/** The country half of an annotation, read back from the emitted schema. */
+const countryAnnotationOf = (
+  value: unknown,
+): AgentInputCountryAnnotation | undefined => {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+  const spelling = value["spelling"];
+  if (spelling !== "alpha-3" && spelling !== "alpha-2") {
+    return undefined;
+  }
+  const admitted = value["admitted"];
+  const tool = value["tool"];
+  return {
+    spelling,
+    ...(isUnknownArray(admitted) &&
+    admitted.every((code) => typeof code === "string")
+      ? { admitted }
+      : {}),
+    ...(typeof tool === "string" ? { tool } : {}),
   };
 };
 
@@ -186,18 +229,57 @@ const inferredAnnotationOf = (
     : { kind: AGENT_INPUT_NORMALIZATION_KIND.enum };
 };
 
+/**
+ * A country field carries a string, not the pair the reader returns, so the
+ * canonical value is projected into the spelling the surface stores. The
+ * annotation is what says which one; a country field declared without it would
+ * silently store alpha-3 where a column holds alpha-2, so it is required.
+ */
+const normalizeCountryLeaf = ({
+  annotation,
+  path,
+  value,
+}: {
+  annotation: AgentInputNormalizationAnnotation;
+  path: string;
+  value: unknown;
+}): Normalized<unknown> => {
+  const country =
+    annotation.country ??
+    panic("A country agent input must declare which ISO spelling it stores");
+  const spelling: CountrySpelling = country.spelling;
+  const read = normalizeCountry(value, {
+    spelling,
+    admitted: country.admitted,
+    tool: country.tool,
+    parameter: path.split(".").at(-1),
+  });
+  return read.ok
+    ? {
+        ok: true,
+        value: countryCodeIn(read.value, spelling),
+        ...(read.note === undefined ? {} : { note: read.note }),
+      }
+    : read;
+};
+
 const normalizeLeaf = ({
   annotation,
+  path,
   schema,
   value,
 }: {
   annotation: AgentInputNormalizationAnnotation;
+  /** Dotted path of the field, whose last segment is the property an ask names. */
+  path: string;
   schema: Record<string, unknown>;
   value: unknown;
 }): Normalized<unknown> => {
   switch (annotation.kind) {
     case "boolean":
       return normalizeBoolean(value);
+    case "country":
+      return normalizeCountryLeaf({ annotation, path, value });
     case "date":
       return normalizeDateValue(
         value,
@@ -438,7 +520,7 @@ const walkSchema = ({
     ? schema["type"]
     : [schema["type"]];
   if (annotation !== undefined && !(value === null && types.includes("null"))) {
-    const normalized = normalizeLeaf({ annotation, schema, value });
+    const normalized = normalizeLeaf({ annotation, path, schema, value });
     if (!normalized.ok) {
       if (annotation.invalidValueDisposition === "handler-owned") {
         return { status: "not-applicable" };

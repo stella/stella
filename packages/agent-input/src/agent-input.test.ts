@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { normalizeBoolean } from "./boolean";
+import { normalizeCountry } from "./country";
 import { normalizeDateFormatSpec } from "./date-format-spec";
 import type { DateFormatSpec } from "./date-format-spec";
 import { normalizeDateValue } from "./date-value";
@@ -308,4 +309,117 @@ describe("closed vocabularies", () => {
       'The allowed values are "krs", "ares", "orsr".',
     );
   });
+});
+
+describe("countries", () => {
+  test.each([
+    ["CZE", "CZE"],
+    ["cze", "CZE"],
+    [" CZE ", "CZE"],
+    ["CZ", "CZE"],
+    ["cz", "CZE"],
+    ["Česko", "CZE"],
+    ["česko", "CZE"],
+    ["Cesko", "CZE"],
+    ["Česká republika", "CZE"],
+    ["Ceska  republika", "CZE"],
+    ["Czechia", "CZE"],
+    ["Czech Republic", "CZE"],
+    ["Tschechien", "CZE"],
+    ["Czechy", "CZE"],
+    ["SVK", "SVK"],
+    ["SK", "SVK"],
+    ["Slovensko", "SVK"],
+    ["Slovak Republic", "SVK"],
+    ["Slowakei", "SVK"],
+    ["POL", "POL"],
+    ["Polska", "POL"],
+    ["Polsko", "POL"],
+    ["Poľsko", "POL"],
+    ["AUT", "AUT"],
+    ["Österreich", "AUT"],
+    ["Osterreich", "AUT"],
+    ["Rakousko", "AUT"],
+    ["Rakúsko", "AUT"],
+    // The supranational jurisdiction ISO assigns no code, spelled as the
+    // corpus spells it.
+    ["EU", "EU"],
+    ["European Union", "EU"],
+    ["Evropská unie", "EU"],
+    ["Unia Europejska", "EU"],
+    ["Germany", "DEU"],
+    ["Deutschland", "DEU"],
+    ["Bundesrepublik Deutschland", "DEU"],
+  ])("reads %j as %s", (input, expected) => {
+    const read = normalizeCountry(input);
+    expect(read).toMatchObject({ ok: true, value: { alpha3: expected } });
+  });
+
+  test("returns both ISO spellings so a caller stores its own", () => {
+    const read = normalizeCountry("Česko");
+    expect(read.ok && read.value).toEqual({ alpha3: "CZE", alpha2: "CZ" });
+  });
+
+  test("an alpha-2 caller is told the code it stores", () => {
+    const read = normalizeCountry("Czechia", { spelling: "alpha-2" });
+    expect(read.ok && read.value.alpha2).toBe("CZ");
+    expect(read.ok && read.note).toBe('Read "Czechia" as "CZ".');
+  });
+
+  // A spelling carrying two country readings is never guessed: `cs` is the
+  // Czech language tag and was Czechoslovakia's code, and the two successor
+  // states are different bodies of law.
+  test("a spelling naming two countries asks with both named", () => {
+    const read = normalizeCountry("cs", { tool: "search_case_law" });
+    if (read.ok) {
+      throw new Error(`"cs" resolved to ${read.value.alpha3}`);
+    }
+    expect(read.hint).toContain("CZE or SVK");
+  });
+
+  test.each([undefined, null, "", "   "])(
+    "asks for a required country when given %j",
+    (absent) => {
+      const read = normalizeCountry(absent, {
+        admitted: ["CZE"],
+        tool: "search_case_law",
+        parameter: "country",
+      });
+      expect(read.ok).toBe(false);
+      if (read.ok) {
+        return;
+      }
+      expect(read.expected).toBe("a country code, one of CZE");
+      expect(read.hint).toContain("`country` on search_case_law is required");
+    },
+  );
+
+  test("an unreadable spelling asks with the admitted codes", () => {
+    const read = normalizeCountry("Atlantis", {
+      admitted: ["CZE", "EU"],
+      tool: "search_case_law",
+    });
+    expect(read.ok).toBe(false);
+    if (read.ok) {
+      return;
+    }
+    expect(read.received).toBe('"Atlantis"');
+    expect(read.hint).toContain("Admitted: CZE, EU.");
+  });
+
+  // Recognising a country is not admitting it: the corpus answers that, so a
+  // country with no corpus still reads rather than failing to be spelled.
+  test("a country the corpus lacks is still read", () => {
+    const read = normalizeCountry("Francie", { admitted: ["CZE"] });
+    expect(read.ok && read.value.alpha3).toBe("FRA");
+  });
+
+  // Wrapped in tuples so an array case reaches the reader as an array rather
+  // than being spread into its elements.
+  test.each([[42], [true], [["CZE"]], [{ country: "CZE" }]])(
+    "asks when given the non-string %j",
+    (input) => {
+      expect(normalizeCountry(input).ok).toBe(false);
+    },
+  );
 });

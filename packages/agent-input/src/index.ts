@@ -2,6 +2,18 @@
 // ask-for-a-fix shape they all answer with.
 export { normalizeBoolean } from "./boolean";
 export {
+  COUNTRY_INPUT_MAX_CHARS,
+  countryCodeIn,
+  normalizeCountry,
+} from "./country";
+export type {
+  CountryAlpha2,
+  CountryAlpha3,
+  CountryOptions,
+  CountrySpelling,
+  CountryValue,
+} from "./country";
+export {
   DATE_FORMAT_SPEC_HINT,
   normalizeDateFormatSpec,
 } from "./date-format-spec";
@@ -20,6 +32,7 @@ export {
   normalizeAgentInput,
 } from "./schema";
 export type {
+  AgentInputCountryAnnotation,
   AgentInputNormalizationAnnotation,
   AgentInputNormalizationIssue,
   AgentInputNormalizationKind,

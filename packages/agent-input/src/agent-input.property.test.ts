@@ -12,10 +12,12 @@
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import fc from "fast-check";
 
+import { COUNTRY_ALPHA3_BY_CODE, COUNTRY_CODES } from "@stll/country-codes";
 import { propertyConfig, propertyTestTimeout } from "@stll/property-testing";
 import { foldToAscii } from "@stll/text-normalize";
 
 import { normalizeBoolean } from "./boolean";
+import { normalizeCountry } from "./country";
 import { normalizeDateFormatSpec } from "./date-format-spec";
 import { normalizeDateValue } from "./date-value";
 import { normalizeEnumValue } from "./enum-value";
@@ -419,6 +421,183 @@ describe("closed vocabularies", () => {
         },
       ),
       propertyConfig({ numRuns: 300 }),
+    );
+  });
+});
+
+describe("countries", () => {
+  /** Every country the reader can name, by its alpha-2 key. */
+  const countryArb = fc.constantFrom(...COUNTRY_CODES);
+
+  /** The languages the reader indexes names in. */
+  const nameLocaleArb = fc.constantFrom("en", "cs", "sk", "pl", "de");
+
+  const displayName = (region: string, locale: string): string | undefined =>
+    new Intl.DisplayNames([locale], {
+      type: "region",
+      style: "long",
+      fallback: "none",
+    }).of(region);
+
+  test("both ISO codes of a country read as the same country", () => {
+    fc.assert(
+      fc.property(countryArb, (alpha2) => {
+        const alpha3 = COUNTRY_ALPHA3_BY_CODE[alpha2];
+        const fromAlpha2 = normalizeCountry(alpha2);
+        const fromAlpha3 = normalizeCountry(alpha3);
+        expect(fromAlpha2.ok && fromAlpha2.value).toEqual({ alpha3, alpha2 });
+        expect(fromAlpha3.ok && fromAlpha3.value).toEqual({ alpha3, alpha2 });
+      }),
+      propertyConfig({ numRuns: 300 }),
+    );
+  });
+
+  test("case, surrounding space and diacritics carry no meaning", () => {
+    fc.assert(
+      fc.property(
+        countryArb,
+        nameLocaleArb,
+        fc.constantFrom("", " ", "  ", "\t"),
+        (alpha2, locale, spaces) => {
+          const canonical = normalizeCountry(alpha2);
+          const name = displayName(alpha2, locale);
+          const spellings = [
+            alpha2.toLowerCase(),
+            COUNTRY_ALPHA3_BY_CODE[alpha2].toLowerCase(),
+            `${spaces}${alpha2}${spaces}`,
+            ...(name === undefined
+              ? []
+              : [name, name.toUpperCase(), foldToAscii(name)]),
+          ];
+          for (const spelling of spellings) {
+            const read = normalizeCountry(spelling);
+            // A name may be ambiguous in principle; it may never be read as a
+            // country other than its own.
+            if (read.ok && canonical.ok) {
+              expect(read.value).toEqual(canonical.value);
+            }
+          }
+        },
+      ),
+      propertyConfig({ numRuns: 200 }),
+    );
+  });
+
+  test("a canonical code is a fixed point that reports no coercion", () => {
+    fc.assert(
+      fc.property(countryArb, (alpha2) => {
+        const read = normalizeCountry(COUNTRY_ALPHA3_BY_CODE[alpha2]);
+        expect(read.ok && read.note).toBeUndefined();
+        // An alpha-2 caller's canonical spelling is its own, so that is the
+        // fixed point there.
+        const asAlpha2 = normalizeCountry(alpha2, { spelling: "alpha-2" });
+        expect(asAlpha2.ok && asAlpha2.note).toBeUndefined();
+      }),
+      propertyConfig({ numRuns: 300 }),
+    );
+  });
+
+  test("a country's name in any read language names that country", () => {
+    fc.assert(
+      fc.property(countryArb, nameLocaleArb, (alpha2, locale) => {
+        const name = displayName(alpha2, locale);
+        fc.pre(name !== undefined);
+        const read = normalizeCountry(name);
+        if (read.ok) {
+          expect(read.value.alpha2).toBe(alpha2);
+          return;
+        }
+        // The only permitted refusal is an ambiguity that names its readings.
+        expect(read.hint).toContain("more than one country");
+      }),
+      propertyConfig({ numRuns: 400 }),
+    );
+  });
+
+  test("an absent value asks and never resolves to a country", () => {
+    fc.assert(
+      fc.property(
+        fc.constantFrom(undefined, null, "", " ", "   ", "\t\n"),
+        (absent) => {
+          const read = normalizeCountry(absent, { tool: "a_tool" });
+          if (read.ok) {
+            throw new Error(
+              `an absent country resolved to ${read.value.alpha3}`,
+            );
+          }
+          expect(read.hint).toContain("is required");
+        },
+      ),
+      propertyConfig({ numRuns: 50 }),
+    );
+  });
+
+  // Reading is idempotent over the spellings the reader accepts: the code it
+  // returns is itself a spelling, so a caller that stores and re-reads a value
+  // cannot walk it to a different country. Drawn from real spellings rather
+  // than from random strings, which the reader rejects almost always and which
+  // would make this a test of the generator's skip tolerance.
+  test("reading a country the reader accepted again returns the same country", () => {
+    const spellingArb = fc
+      .tuple(countryArb, nameLocaleArb, fc.integer({ min: 0, max: 3 }))
+      .map(([alpha2, locale, form]) => {
+        const name = displayName(alpha2, locale);
+        switch (form) {
+          case 0:
+            return alpha2;
+          case 1:
+            return COUNTRY_ALPHA3_BY_CODE[alpha2];
+          case 2:
+            return alpha2.toLowerCase();
+          default:
+            return name ?? alpha2;
+        }
+      });
+    fc.assert(
+      fc.property(spellingArb, (spelling) => {
+        const read = normalizeCountry(spelling);
+        fc.pre(read.ok);
+        const again = normalizeCountry(read.value.alpha3);
+        expect(again.ok && again.value).toEqual(read.value);
+        const asAlpha2 = normalizeCountry(read.value.alpha2, {
+          spelling: "alpha-2",
+        });
+        expect(asAlpha2.ok && asAlpha2.value).toEqual(read.value);
+      }),
+      propertyConfig({ numRuns: 400 }),
+    );
+  });
+
+  test("a value that names no country is never read as one", () => {
+    fc.assert(
+      fc.property(
+        fc.constantFrom(
+          "Atlantis",
+          "ZZ",
+          "ZZZ",
+          "nowhere",
+          "123",
+          "C",
+          "country",
+          "the moon",
+        ),
+        (candidate) => {
+          expect(normalizeCountry(candidate).ok).toBe(false);
+        },
+      ),
+      propertyConfig({ numRuns: 50 }),
+    );
+  });
+
+  test("a non-string is always asked about", () => {
+    fc.assert(
+      fc.property(
+        fc.oneof(fc.integer(), fc.boolean(), fc.array(fc.string())),
+        (candidate) => {
+          expect(normalizeCountry(candidate).ok).toBe(false);
+        },
+      ),
+      propertyConfig({ numRuns: 200 }),
     );
   });
 });
