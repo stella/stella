@@ -229,7 +229,10 @@ const statuteDocumentFixture = (documentId: string) => ({
   versionValidFrom: "2014-01-01",
   versionValidTo: null,
   sections: null,
-  sourceUrl: "https://example.test/89-2012",
+  // A GUID-bearing publisher URL: the id belongs to the publisher's own
+  // scheme, never a Stella tenant id, so the projection must forward it
+  // unchanged rather than treat it as an undeclared internal identifier.
+  sourceUrl: `https://example.test/89-2012/${uid(90)}`,
   documentUrl: null,
   createdAt: new Date("2026-01-01T00:00:00.000Z"),
   updatedAt: new Date("2026-01-01T00:00:00.000Z"),
@@ -1264,7 +1267,8 @@ const CONTRACT_CORPUS = {
               headnote: { type: "absent", reason: "not_published" },
               languageAlternates: [],
               slug: "ns-22-cdo-1000-2020",
-              sourceUrl: "https://example.test/decision",
+              // GUID-bearing publisher URL; see the statute fixture above.
+              sourceUrl: `https://example.test/decision/${uid(91)}`,
             },
           ],
           nextCursor: null,
@@ -1338,7 +1342,8 @@ const CONTRACT_CORPUS = {
           decisionDate: "2020-05-01",
           decisionType: "judgment",
           documentAst: null,
-          documentUrl: null,
+          // GUID-bearing publisher URL; see the statute fixture above.
+          documentUrl: `https://example.test/decision/${uid(92)}`,
           ecli: "ECLI:CZ:NS:2020:22.CDO.1000.2020.1",
           identifiers: [
             {
@@ -1370,8 +1375,9 @@ const CONTRACT_CORPUS = {
             adapterKey: "cz-ns",
             allowsDerivedAi: true,
           },
-          sourceUrl: "https://example.test/decision",
-          sourceAttributionUrl: "https://example.test/decision",
+          // GUID-bearing publisher URLs; see the statute fixture above.
+          sourceUrl: `https://example.test/decision/${uid(93)}`,
+          sourceAttributionUrl: `https://example.test/decision/${uid(94)}`,
           createdAt: new Date("2020-05-01T00:00:00.000Z"),
           updatedAt: new Date("2020-05-01T00:00:00.000Z"),
         } satisfies Awaited<ReturnType<typeof readGatedDecisionWithDocument>>);
@@ -1436,7 +1442,8 @@ const CONTRACT_CORPUS = {
               documentType: "act",
               status: "in_force",
               effectiveDate: "2014-01-01",
-              sourceUrl: "https://example.test/89-2012",
+              // GUID-bearing publisher URL; see the statute fixture above.
+              sourceUrl: `https://example.test/89-2012/${uid(95)}`,
               headline: "<mark>náhrada škody</mark>",
               score: 1.5,
             },
@@ -1584,7 +1591,8 @@ const CONTRACT_CORPUS = {
               country: null,
               textAddress: "Praha 1",
             },
-            registryUrl: "https://ares.gov.cz/27074358",
+            // GUID-bearing publisher URL; see the statute fixture above.
+            registryUrl: `https://ares.gov.cz/27074358/${uid(96)}`,
           },
         } satisfies RegistryLookupResponse);
       },
