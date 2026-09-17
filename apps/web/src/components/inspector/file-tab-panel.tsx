@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState } from "react";
+import { lazy, Suspense, useMemo, useState } from "react";
 import type {
   Dispatch,
   MouseEvent,
@@ -28,8 +28,10 @@ import {
   REVIEW_SUGGESTION_ORIGIN,
   useReviewStore,
 } from "@/components/ai-suggestions/review-store";
-import { DocxBrowserEditor } from "@/components/docx/docx-browser-editor";
 import type { DocxBrowserEditorActions } from "@/components/docx/docx-browser-editor";
+import { DocxEditorSlot } from "@/components/docx/docx-editor-host";
+import { DOCX_EDITOR_SLOT } from "@/components/docx/docx-editor-host.logic";
+import type { DocxEditorSlotBindings } from "@/components/docx/docx-editor-host.logic";
 import { AnonymizationFacet } from "@/components/inspector/anonymization-facet";
 import { useFileAnonymizationPipeline } from "@/components/inspector/anonymize-pdf";
 import { DesktopOpenButton } from "@/components/inspector/desktop-open-button";
@@ -89,6 +91,7 @@ import {
 import { QuerySuspenseBoundary } from "@/components/query-suspense-boundary";
 import Tooltip from "@/components/tooltip";
 import { env } from "@/env";
+import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import {
@@ -129,8 +132,6 @@ type FileTabPanelProps = {
   editingDocxTabId: string | null;
   editingTabId: string | null;
   editValue: string;
-  flashMinimizeButton: (tabId: string) => void;
-  flashingMinimizeTabId: string | null;
   handleCloseTab: (tabId: string) => void;
   handleMinimizeFromFullView: (tab: FileTab) => void;
   handleOpenFullView: () => Promise<void>;
@@ -442,8 +443,6 @@ export const FileTabPanel = ({
   editingDocxTabId,
   editingTabId,
   editValue,
-  flashMinimizeButton,
-  flashingMinimizeTabId,
   handleCloseTab,
   handleMinimizeFromFullView,
   handleOpenFullView,
@@ -671,6 +670,96 @@ export const FileTabPanel = ({
     }
   }
 
+  const handleViewerError = () => {
+    stellaToast.add({
+      title: t("errors.actionFailed"),
+      type: "error",
+    });
+  };
+
+  const handleDocxScrollTopChange = (scrollTop: number) => {
+    setDocxScrollTopByTab((prev) => {
+      const next = new Map(prev);
+      next.set(tab.id, scrollTop);
+      return next;
+    });
+  };
+
+  // The hosted editor lives above this panel, so what it reports back travels
+  // through the claim. Stable for the tab's lifetime: a claim rewritten on
+  // every render of the inspector would churn the host for nothing.
+  const handleDocxClose = useLatestCallback(() => {
+    // Don't touch docxActionsRef here. The editor stays mounted across
+    // error -> idle transitions; only its own cleanup should release the
+    // slot, otherwise the next unlock finds no entry and silently no-ops.
+    setEditingDocxTabId(null);
+  });
+  const handleDocxCompatibilityChange = useLatestCallback(
+    (compatibility: DocxCompatibility) => {
+      setDocxCompatibilityByTab((prev) => {
+        if (prev.get(tab.id) === compatibility) {
+          return prev;
+        }
+        const next = new Map(prev);
+        next.set(tab.id, compatibility);
+        return next;
+      });
+    },
+  );
+  const handleDocxSaved = useLatestCallback((savedFieldId: string) => {
+    if (savedFieldId === tab.id) {
+      return;
+    }
+    setDocxScrollTopByTab((prev) => {
+      const scrollTop = prev.get(tab.id);
+      if (scrollTop === undefined) {
+        return prev;
+      }
+      const next = new Map(prev);
+      next.set(savedFieldId, scrollTop);
+      return next;
+    });
+    setScaleOffsets((prev) => {
+      const savedScaleOffset = prev.get(tab.id);
+      if (savedScaleOffset === undefined) {
+        return prev;
+      }
+      const next = new Map(prev);
+      next.set(savedFieldId, savedScaleOffset);
+      return next;
+    });
+    useInspectorTabsStore.getState().replaceFileFieldId(tab.id, savedFieldId);
+  });
+  const handleDocxScrollTop = useLatestCallback(handleDocxScrollTopChange);
+  const handleDocxCollaborationPublishableChange = useLatestCallback(
+    setIsCollaborationPublishable,
+  );
+  const handleDocxError = useLatestCallback(handleViewerError);
+  const docxEditorBindings = useMemo(
+    () =>
+      ({
+        actionsKey: tab.id,
+        actionsMapRef: docxActionsRef,
+        onClose: handleDocxClose,
+        onCollaborationPublishableChange:
+          handleDocxCollaborationPublishableChange,
+        onCompatibilityChange: handleDocxCompatibilityChange,
+        onError: handleDocxError,
+        onSaved: handleDocxSaved,
+        onScrollTopChange: handleDocxScrollTop,
+      }) satisfies DocxEditorSlotBindings,
+    [
+      docxActionsRef,
+      handleDocxClose,
+      handleDocxCollaborationPublishableChange,
+      handleDocxCompatibilityChange,
+      handleDocxError,
+      handleDocxSaved,
+      handleDocxScrollTop,
+      tab.id,
+    ],
+  );
+
   if (minimized) {
     return null;
   }
@@ -893,21 +982,6 @@ export const FileTabPanel = ({
     <InspectorPdfErrorFallback onRetry={reset} />
   );
 
-  const handleViewerError = () => {
-    stellaToast.add({
-      title: t("errors.actionFailed"),
-      type: "error",
-    });
-  };
-
-  const handleDocxScrollTopChange = (scrollTop: number) => {
-    setDocxScrollTopByTab((prev) => {
-      const next = new Map(prev);
-      next.set(tab.id, scrollTop);
-      return next;
-    });
-  };
-
   const fileViewer = (() => {
     if (isEmailDisplay) {
       if (shouldSurfaceEmailResolutionError) {
@@ -1014,67 +1088,20 @@ export const FileTabPanel = ({
         );
       }
       return (
-        <DocxBrowserEditor
-          actionsKey={tab.id}
-          actionsMapRef={docxActionsRef}
+        <DocxEditorSlot
+          bindings={docxEditorBindings}
           canUnlock={canUpdateEntity}
-          entityId={tab.entityId}
-          errorFallback={viewerErrorFallback}
-          fieldId={tab.id}
+          document={{
+            entityId: tab.entityId,
+            fileFieldId: tab.id,
+            propertyId: filePropertyId,
+            workspaceId: tab.workspaceId,
+          }}
+          fallback={<PeekSuspenseFallback />}
           initialScrollTop={docxScrollTopByTab.get(tab.id)}
           isEditing={isEditingNativeDocx}
-          onClose={() => {
-            // Don't touch docxActionsRef here. The editor stays
-            // mounted across error → idle transitions; only its
-            // own cleanup effect should release the slot, otherwise
-            // the next unlock finds no entry and silently no-ops.
-            // setEditingDocxTabId(null) is enough to flip the UI
-            // back out of edit mode.
-            setEditingDocxTabId(null);
-          }}
-          onCollaborationPublishableChange={setIsCollaborationPublishable}
-          onCompatibilityChange={(compatibility) => {
-            setDocxCompatibilityByTab((prev) => {
-              if (prev.get(tab.id) === compatibility) {
-                return prev;
-              }
-              const next = new Map(prev);
-              next.set(tab.id, compatibility);
-              return next;
-            });
-          }}
-          onError={handleViewerError}
-          onSaved={(fieldId) => {
-            if (fieldId !== tab.id) {
-              setDocxScrollTopByTab((prev) => {
-                const scrollTop = prev.get(tab.id);
-                if (scrollTop === undefined) {
-                  return prev;
-                }
-                const next = new Map(prev);
-                next.set(fieldId, scrollTop);
-                return next;
-              });
-              setScaleOffsets((prev) => {
-                const savedScaleOffset = prev.get(tab.id);
-                if (savedScaleOffset === undefined) {
-                  return prev;
-                }
-                const next = new Map(prev);
-                next.set(fieldId, savedScaleOffset);
-                return next;
-              });
-              useInspectorTabsStore
-                .getState()
-                .replaceFileFieldId(tab.id, fieldId);
-            }
-          }}
-          onScrollTopChange={handleDocxScrollTopChange}
-          propertyId={filePropertyId}
           scaleOffset={scaleOffset}
-          showActionBar={false}
-          surface="inspector"
-          workspaceId={tab.workspaceId}
+          slot={DOCX_EDITOR_SLOT.inspector}
         />
       );
     }
@@ -1154,7 +1181,6 @@ export const FileTabPanel = ({
         {!readsDocumentInInspector && (
           <FullViewPreviewGuard
             facet={tab.facet}
-            flashMinimize={flashMinimizeButton}
             setFileFacet={setFileFacet}
             tabId={tab.id}
           />
@@ -1168,11 +1194,6 @@ export const FileTabPanel = ({
                 content={t("workspaces.pdf.backToPeek")}
                 render={
                   <Button
-                    className={cn(
-                      "transition-[color,background-color,box-shadow]",
-                      flashingMinimizeTabId === tab.id &&
-                        "bg-primary/10 text-primary ring-primary/60 animate-pulse ring-2",
-                    )}
                     onClick={() => {
                       handleMinimizeFromFullView(tab);
                     }}

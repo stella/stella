@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import { current, type Draft } from "immer";
 import { v7 as uuidv7 } from "uuid";
 
+import { forgetDocxDocuments } from "@/components/docx/docx-document-cache";
 import {
   getInspectorTabGroupId,
   normalizeInspectorGroupAssignments,
@@ -808,6 +809,13 @@ export const createInspectorTabsSlice = (
       }
       if (idChanged) {
         tab.renderId = uuidv7();
+        // A new version supersedes the document behind both ids: the old field
+        // will never be read again, and the new one must not be served the
+        // bytes a previous tab left under that id.
+        forgetDocxDocuments([
+          { fileFieldId: oldFieldId, workspaceId: tab.workspaceId },
+          { fileFieldId: next.id, workspaceId: tab.workspaceId },
+        ]);
       }
       if (tab.justificationFieldId === oldFieldId) {
         tab.justificationFieldId = next.id;
