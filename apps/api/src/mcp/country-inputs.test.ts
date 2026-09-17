@@ -255,7 +255,23 @@ describe("a country input reads the spellings a model writes", () => {
     ).toContain("country");
   });
 
-  test("an empty country asks and says it is required", () => {
+  // An empty or one-character country now reaches the reader instead of the
+  // schema's own length bound, so the answer names the accepted forms.
+  test.each(["", " ", "   ", "C"])(
+    "a country of %j asks and says what is accepted",
+    (blank) => {
+      const result = readCountry("search_case_law", {
+        queries: ["q"],
+        country: blank,
+      });
+      expect(result).toMatchObject({ issues: [{ path: "country" }] });
+      expect(
+        "hint" in result && typeof result.hint === "string" ? result.hint : "",
+      ).toContain("ISO 3166-1");
+    },
+  );
+
+  test("a whitespace-only country asks and says it is required", () => {
     expect(
       readCountry("search_case_law", { queries: ["q"], country: "   " }),
     ).toMatchObject({

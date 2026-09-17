@@ -1011,7 +1011,6 @@ describe("OpenAI-compatible MCP tools", () => {
         country: {
           type: "string",
           description: `Required corpus country. Admitted: ${PUBLIC_CASE_LAW_COUNTRIES.join(", ")}. ${COUNTRY_INPUT_GUIDANCE}`,
-          minLength: 2,
           maxLength: COUNTRY_INPUT_MAX_CHARS,
           // The marker dispatch reads: a country arrives canonical because the
           // reader ran, not because the caller spelled it that way.
@@ -2493,7 +2492,6 @@ describe("OpenAI-compatible MCP tools", () => {
     // reaches the advertised schema without an edit here.
     expect(schema?.properties?.["country"]).toEqual({
       type: "string",
-      minLength: 2,
       maxLength: COUNTRY_INPUT_MAX_CHARS,
       description: `Required corpus country. Admitted: ${PUBLIC_LEGISLATION_COUNTRIES.join(", ")}. ${COUNTRY_INPUT_GUIDANCE}`,
       [AGENT_INPUT_NORMALIZATION_KEY]: {

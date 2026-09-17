@@ -9,6 +9,13 @@ import { normalizeEnumValue } from "./enum-value";
 import { isPlausibleLocale, normalizeLocale } from "./locale";
 import type { Normalized } from "./normalized";
 import { normalizeNumber } from "./number";
+import type { AgentInputNormalizationAnnotation } from "./schema";
+import {
+  AGENT_INPUT_NORMALIZATION_KEY,
+  AGENT_INPUT_NORMALIZATION_KIND,
+  agentInputNormalization,
+  normalizeAgentInput,
+} from "./schema";
 
 /** The value, or the ask rendered so a failure names what the agent sent. */
 const valueOf = <TValue>(result: Normalized<TValue>): TValue | string =>
@@ -422,4 +429,51 @@ describe("countries", () => {
       expect(normalizeCountry(input).ok).toBe(false);
     },
   );
+});
+
+describe("the normalization annotation", () => {
+  // The country kind has two canonical spellings and no default between them,
+  // so the union branch requires one. Without it the first value reaching a
+  // field declared `{ kind: "country" }` would have nothing to be read into.
+  test("cannot declare a country without the spelling it stores", () => {
+    // @ts-expect-error the country branch requires `country.spelling`
+    const annotation: AgentInputNormalizationAnnotation = { kind: "country" };
+    expect(annotation.kind).toBe(AGENT_INPUT_NORMALIZATION_KIND.country);
+  });
+
+  test("reads a country field once it says which code to store", () => {
+    const declared = agentInputNormalization({
+      kind: AGENT_INPUT_NORMALIZATION_KIND.country,
+      country: { spelling: "alpha-2" },
+    });
+    expect(
+      normalizeAgentInput({
+        schema: {
+          type: "object",
+          properties: { country: { type: "string", ...declared } },
+        },
+        value: { country: "Czechia" },
+      }),
+    ).toMatchObject({ ok: true, value: { country: "CZ" } });
+  });
+
+  // An annotation whose kind is `country` but which never says which code to
+  // store is not an annotation: the field keeps whatever its own schema says
+  // rather than being read as a country.
+  test("leaves a country field alone when the spelling is missing", () => {
+    expect(
+      normalizeAgentInput({
+        schema: {
+          type: "object",
+          properties: {
+            country: {
+              type: "string",
+              [AGENT_INPUT_NORMALIZATION_KEY]: { kind: "country" },
+            },
+          },
+        },
+        value: { country: "Czechia" },
+      }),
+    ).toMatchObject({ ok: true, value: { country: "Czechia" } });
+  });
 });

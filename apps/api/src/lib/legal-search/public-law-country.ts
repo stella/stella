@@ -28,10 +28,14 @@ import {
  *
  * The bound is the reader's, not a code's: capped at three characters, the
  * framework rejected `Czech Republic` with its own opaque 422 before the
- * handler could name the forms that are accepted.
+ * handler could name the forms that are accepted. There is no lower bound for
+ * the same reason: a blank or one-character country is a spelling the reader
+ * can answer, and a length the framework refuses first is an answer that names
+ * neither the accepted forms nor the admitted codes. The property stays
+ * required, so an omitted one is still the framework's missing-parameter
+ * error rather than a country read from nothing.
  */
 export const tPublicLawCountry = t.String({
-  minLength: 2,
   maxLength: COUNTRY_INPUT_MAX_CHARS,
 });
 

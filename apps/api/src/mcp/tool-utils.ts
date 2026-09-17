@@ -111,7 +111,6 @@ export const uuidInputSchema = (description: string) =>
 export const countryInputSchema = (description: string) =>
   v.pipe(
     v.string(),
-    v.minLength(2),
     v.maxLength(COUNTRY_INPUT_MAX_CHARS),
     v.description(description),
   );

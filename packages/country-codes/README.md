@@ -45,8 +45,9 @@ COUNTRY_ALPHA3_BY_CODE.CZ; // "CZE"
 countryCodeFromAlpha3("SVK"); // "SK"
 ```
 
-The alpha-3 table is declared `satisfies Record<CountryCode, string>`, so a code
-added to `COUNTRY_CODES` without an alpha-3 fails to compile instead of leaving
+The table is a plain `as const`, so the published declaration stays inferable
+from the literal, and the lookups above index it by `CountryCode`: a code added
+to `COUNTRY_CODES` without an alpha-3 fails to compile there instead of leaving
 the two halves to drift.
 
 Includes `XK` (Kosovo), which is widely used (EU, IMF, World Bank,

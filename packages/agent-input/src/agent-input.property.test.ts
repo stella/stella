@@ -452,34 +452,60 @@ describe("countries", () => {
     );
   });
 
-  test("case, surrounding space and diacritics carry no meaning", () => {
+  // A code is unconditional: every case and padding of it must read, and read
+  // as its own country. A name is not, because a name can in principle be
+  // ambiguous, so it is held to the weaker claim that it is never read as some
+  // other country. Asserting both under one conditional would let the codes go
+  // unchecked.
+  test("every case and padding of a country's codes reads as that country", () => {
     fc.assert(
       fc.property(
         countryArb,
-        nameLocaleArb,
-        fc.constantFrom("", " ", "  ", "\t"),
-        (alpha2, locale, spaces) => {
-          const canonical = normalizeCountry(alpha2);
-          const name = displayName(alpha2, locale);
-          const spellings = [
+        fc.constantFrom("", " ", "  ", "\t", "\n"),
+        (alpha2, spaces) => {
+          const alpha3 = COUNTRY_ALPHA3_BY_CODE[alpha2];
+          const expected = { alpha3, alpha2 };
+          for (const spelling of [
+            alpha2,
             alpha2.toLowerCase(),
-            COUNTRY_ALPHA3_BY_CODE[alpha2].toLowerCase(),
+            alpha3,
+            alpha3.toLowerCase(),
             `${spaces}${alpha2}${spaces}`,
-            ...(name === undefined
-              ? []
-              : [name, name.toUpperCase(), foldToAscii(name)]),
-          ];
-          for (const spelling of spellings) {
+            `${spaces}${alpha3}${spaces}`,
+            `${spaces}${alpha3.toLowerCase()}${spaces}`,
+          ]) {
             const read = normalizeCountry(spelling);
-            // A name may be ambiguous in principle; it may never be read as a
-            // country other than its own.
-            if (read.ok && canonical.ok) {
-              expect(read.value).toEqual(canonical.value);
-            }
+            expect(read.ok && read.value).toEqual(expected);
           }
         },
       ),
-      propertyConfig({ numRuns: 200 }),
+      propertyConfig({ numRuns: 300 }),
+    );
+  });
+
+  test("a country's name is never read as a different country", () => {
+    fc.assert(
+      fc.property(countryArb, nameLocaleArb, (alpha2, locale) => {
+        const name = displayName(alpha2, locale);
+        fc.pre(name !== undefined);
+        for (const spelling of [
+          name,
+          name.toUpperCase(),
+          name.toLowerCase(),
+          foldToAscii(name),
+          ` ${name} `,
+        ]) {
+          const read = normalizeCountry(spelling);
+          if (read.ok) {
+            expect(read.value.alpha2).toBe(alpha2);
+            continue;
+          }
+          // The only permitted refusal names the readings it could not decide
+          // between.
+          expect(read.hint).toContain("more than one country");
+        }
+      }),
+      propertyConfig({ numRuns: 300 }),
     );
   });
 

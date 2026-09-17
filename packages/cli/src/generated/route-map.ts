@@ -535,7 +535,6 @@ export const generatedRouteMap: RouteNode = {
                 },
                 country: {
                   type: "string",
-                  minLength: 2,
                   maxLength: 64,
                   description:
                     "Required corpus country. Admitted: CZE. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
@@ -640,7 +639,6 @@ export const generatedRouteMap: RouteNode = {
                 },
                 country: {
                   type: "string",
-                  minLength: 2,
                   maxLength: 64,
                   description:
                     "Required corpus country. Admitted: CZE. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
@@ -2532,7 +2530,6 @@ export const generatedRouteMap: RouteNode = {
                 },
                 country: {
                   type: "string",
-                  minLength: 2,
                   maxLength: 64,
                   description:
                     "Required corpus country. Admitted: CZE. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",

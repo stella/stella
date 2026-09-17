@@ -211,11 +211,11 @@ const TOOL_COUNT_CEILING: Record<SurfaceMode, number> = {
 // `not_found`, and the model answered from memory instead of from the corpus.
 // The marker also carries the admitted codes and the tool name so a rejection
 // names the call to change rather than only the field that was wrong.
-// Measured 133_399 default, 69_210 anonymized and 24_524 law.
+// Measured 133_357 default, 69_168 anonymized and 24_482 law.
 const TOOLS_LIST_PAYLOAD_CHAR_CEILING: Record<SurfaceMode, number> = {
-  default: 133_500,
-  anonymized: 69_300,
-  law: 24_524,
+  default: 133_450,
+  anonymized: 69_260,
+  law: 24_482,
 };
 
 // default bumped 42_000 -> 42_300 for the two fields read_case_law_citations

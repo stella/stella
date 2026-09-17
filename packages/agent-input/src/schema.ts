@@ -36,15 +36,33 @@ export type AgentInputCountryAnnotation = {
   tool?: string;
 };
 
-export type AgentInputNormalizationAnnotation = {
-  kind: AgentInputNormalizationKind;
+type AgentInputAnnotationCommon = {
   /** Preserve invalid input only when the owning handler deliberately repairs it. */
   invalidValueDisposition?: "handler-owned";
   /** Locale context disambiguates numeric grouping and adds named date months. */
   locale?: string;
-  /** Required by the `country` kind, which has two canonical spellings. */
-  country?: AgentInputCountryAnnotation;
 };
+
+/**
+ * A kind, plus whatever that kind cannot be read without.
+ *
+ * `country` is a union branch rather than an optional property because it has
+ * two canonical spellings and no default between them: a field declared
+ * `{ kind: "country" }` alone would type-check and then have nothing to say
+ * about which code to store.
+ */
+export type AgentInputNormalizationAnnotation =
+  | (AgentInputAnnotationCommon & {
+      kind: Exclude<
+        AgentInputNormalizationKind,
+        typeof AGENT_INPUT_NORMALIZATION_KIND.country
+      >;
+      country?: never;
+    })
+  | (AgentInputAnnotationCommon & {
+      kind: typeof AGENT_INPUT_NORMALIZATION_KIND.country;
+      country: AgentInputCountryAnnotation;
+    });
 
 /** Attach an explicit normalization kind to a canonical JSON Schema field. */
 export const agentInputNormalization = (
@@ -77,7 +95,7 @@ export const agentInputNormalizationGuidance = (
     case "number":
       return "Use a JSON number; unambiguous localized numeric notation is normalized.";
     default:
-      annotation.kind satisfies never;
+      annotation satisfies never;
       return panic("Unhandled agent input normalization kind");
   }
 };
@@ -133,16 +151,26 @@ const annotationOf = (
     return undefined;
   }
   const locale = annotation["locale"];
-  const invalidValueDisposition = annotation["invalidValueDisposition"];
-  const country = countryAnnotationOf(annotation["country"]);
-  return {
-    kind: normalizedKind,
-    ...(invalidValueDisposition === "handler-owned"
-      ? { invalidValueDisposition }
-      : {}),
+  const disposition =
+    annotation["invalidValueDisposition"] === "handler-owned"
+      ? "handler-owned"
+      : undefined;
+  const common: AgentInputAnnotationCommon = {
+    ...(disposition === undefined
+      ? {}
+      : { invalidValueDisposition: disposition }),
     ...(typeof locale === "string" ? { locale } : {}),
-    ...(country === undefined ? {} : { country }),
   };
+  if (normalizedKind === AGENT_INPUT_NORMALIZATION_KIND.country) {
+    const country = countryAnnotationOf(annotation["country"]);
+    // A country annotation without a spelling says nothing about which code to
+    // store, so it is not an annotation: the field falls through to whatever
+    // its own schema says rather than being read as a country.
+    return country === undefined
+      ? undefined
+      : { ...common, kind: normalizedKind, country };
+  }
+  return { ...common, kind: normalizedKind };
 };
 
 /** The country half of an annotation, read back from the emitted schema. */
@@ -236,17 +264,14 @@ const inferredAnnotationOf = (
  * silently store alpha-3 where a column holds alpha-2, so it is required.
  */
 const normalizeCountryLeaf = ({
-  annotation,
+  country,
   path,
   value,
 }: {
-  annotation: AgentInputNormalizationAnnotation;
+  country: AgentInputCountryAnnotation;
   path: string;
   value: unknown;
 }): Normalized<unknown> => {
-  const country =
-    annotation.country ??
-    panic("A country agent input must declare which ISO spelling it stores");
   const spelling: CountrySpelling = country.spelling;
   const read = normalizeCountry(value, {
     spelling,
@@ -279,7 +304,7 @@ const normalizeLeaf = ({
     case "boolean":
       return normalizeBoolean(value);
     case "country":
-      return normalizeCountryLeaf({ annotation, path, value });
+      return normalizeCountryLeaf({ country: annotation.country, path, value });
     case "date":
       return normalizeDateValue(
         value,
@@ -301,7 +326,7 @@ const normalizeLeaf = ({
           : { locale: annotation.locale },
       );
     default:
-      annotation.kind satisfies never;
+      annotation satisfies never;
       return panic("Unhandled agent input normalization kind");
   }
 };

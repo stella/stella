@@ -199,7 +199,6 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         },
         "country": {
           "type": "string",
-          "minLength": 2,
           "maxLength": 64,
           "description": "Required corpus country. Admitted: CZE. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
           "x-stella-agent-input": {
@@ -284,7 +283,6 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         },
         "country": {
           "type": "string",
-          "minLength": 2,
           "maxLength": 64,
           "description": "Required corpus country. Admitted: CZE. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
           "x-stella-agent-input": {
@@ -779,7 +777,6 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         },
         "country": {
           "type": "string",
-          "minLength": 2,
           "maxLength": 64,
           "description": "Required corpus country. Admitted: CZE. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
           "x-stella-agent-input": {
@@ -4014,7 +4011,6 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
         },
         "country": {
           "type": "string",
-          "minLength": 2,
           "maxLength": 64,
           "description": "Required corpus country. Admitted: CZE. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
           "x-stella-agent-input": {
@@ -4099,7 +4095,6 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
         },
         "country": {
           "type": "string",
-          "minLength": 2,
           "maxLength": 64,
           "description": "Required corpus country. Admitted: CZE. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
           "x-stella-agent-input": {
@@ -4289,7 +4284,6 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
         },
         "country": {
           "type": "string",
-          "minLength": 2,
           "maxLength": 64,
           "description": "Required corpus country. Admitted: CZE. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
           "x-stella-agent-input": {
@@ -5181,7 +5175,6 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
         },
         "country": {
           "type": "string",
-          "minLength": 2,
           "maxLength": 64,
           "description": "Required corpus country. Admitted: CZE. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
           "x-stella-agent-input": {
@@ -5266,7 +5259,6 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
         },
         "country": {
           "type": "string",
-          "minLength": 2,
           "maxLength": 64,
           "description": "Required corpus country. Admitted: CZE. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
           "x-stella-agent-input": {
@@ -5398,7 +5390,6 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
         },
         "country": {
           "type": "string",
-          "minLength": 2,
           "maxLength": 64,
           "description": "Required corpus country. Admitted: CZE. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
           "x-stella-agent-input": {
