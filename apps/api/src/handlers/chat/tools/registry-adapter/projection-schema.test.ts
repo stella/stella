@@ -14,6 +14,7 @@ import {
   PROJECTION_SCHEMA_FAILURE_MESSAGE,
   projectionBranch,
   projectForChat,
+  publicUrl,
   REF_PROJECTION_FAILURE_MESSAGE,
   renderProjectionShape,
   strippedField,
@@ -223,6 +224,20 @@ describe("projectForChat", () => {
     }).unwrap();
 
     expect(projected).toEqual({ cursor: null, versionId: WS_UUID });
+  });
+
+  test("publicUrl forwards a publisher URL verbatim, embedded UUID and all", () => {
+    const schema: ChatProjectionSchema = v.strictObject({
+      sourceUrl: v.nullable(publicUrl()),
+    });
+    const justiceCzUrl = `https://rozhodnuti.justice.cz/api/finaldoc/${ROGUE_UUID}`;
+
+    const projected = project({
+      payload: { sourceUrl: justiceCzUrl },
+      schema,
+    }).unwrap();
+
+    expect(projected).toEqual({ sourceUrl: justiceCzUrl });
   });
 
   test("sibling workspace source reads the raw payload, not the hydrated output", () => {
@@ -662,6 +677,7 @@ describe("compile-time payload ties", () => {
         entityId: chatEntityRef({ from: "inputParam", param: "matter_id" }),
         matterId: chatRef("matter"),
         passthrough: passthroughId(),
+        publicSourceUrl: publicUrl(),
         stripped: strippedField(),
         unenumerated: unenumeratedJson(),
       }),
@@ -671,6 +687,7 @@ describe("compile-time payload ties", () => {
     expectTypeOf<Input["entityId"]>().toEqualTypeOf<SafeId<"entity">>();
     expectTypeOf<Input["matterId"]>().toEqualTypeOf<SafeId<"workspace">>();
     expectTypeOf<Input["passthrough"]>().toEqualTypeOf<string>();
+    expectTypeOf<Input["publicSourceUrl"]>().toEqualTypeOf<string>();
     expectTypeOf<Input["stripped"]>().toEqualTypeOf<unknown>();
     expectTypeOf<Input["unenumerated"]>().toEqualTypeOf<unknown>();
     expectTypeOf<

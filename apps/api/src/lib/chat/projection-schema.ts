@@ -100,6 +100,14 @@ export type RefMediationLists = {
    */
   passthroughIdPaths: readonly string[];
   /**
+   * Output paths carrying a publisher-owned URL (a court's decision portal, a
+   * legislature's gazette) that may embed a UUID assigned by that external
+   * publisher. Forwarded verbatim and, like `passthroughIdPaths`, licensed to
+   * survive the runtime UUID invariant — the embedded id is never a Stella
+   * tenant id.
+   */
+  publicUrlPaths: readonly string[];
+  /**
    * Output paths deleted from the chat projection before the payload reaches
    * the model: ids other surfaces need (web-UI field/file plumbing handles)
    * that chat cannot act on.
@@ -135,6 +143,7 @@ const annotationSchema = v.variant("role", [
     workspace: workspaceSourceSchema,
   }),
   v.strictObject({ role: v.literal("passthroughId") }),
+  v.strictObject({ role: v.literal("publicUrl") }),
   v.strictObject({ role: v.literal("strip") }),
   v.strictObject({ role: v.literal("json") }),
 ]);
@@ -223,6 +232,21 @@ export const passthroughId = () =>
   v.pipe(
     v.string(),
     v.metadata({ [CHAT_PROJECTION_METADATA_KEY]: { role: "passthroughId" } }),
+  );
+
+/**
+ * A public URL assigned by an external publisher (a court's decision portal,
+ * a legislature's official gazette), which may embed a UUID of the
+ * publisher's own minting rather than a Stella tenant id. Forwarded verbatim
+ * and excluded from the runtime UUID invariant: the publisher's UUID is not a
+ * tenant identifier the chat ref registry needs to mediate, and rewriting or
+ * refusing it would break the link. Distinct from `passthroughId`, which is
+ * reserved for opaque internal handles, not externally owned URLs.
+ */
+export const publicUrl = () =>
+  v.pipe(
+    v.string(),
+    v.metadata({ [CHAT_PROJECTION_METADATA_KEY]: { role: "publicUrl" } }),
   );
 
 /**
@@ -453,6 +477,7 @@ const buildMediationLists = (
 ): RefMediationLists => {
   const outputRefsByPath = new Map<string, OutputRefField>();
   const passthroughIdPaths = new Set<string>();
+  const publicUrlPaths = new Set<string>();
   const stripPaths = new Set<string>();
 
   const recordRefField = (field: OutputRefField): void => {
@@ -483,6 +508,10 @@ const buildMediationLists = (
         passthroughIdPaths.add(path);
         return;
       }
+      case "publicUrl": {
+        publicUrlPaths.add(path);
+        return;
+      }
       case "strip": {
         stripPaths.add(path);
         return;
@@ -500,6 +529,7 @@ const buildMediationLists = (
   return {
     outputRefs: [...outputRefsByPath.values()],
     passthroughIdPaths: [...passthroughIdPaths],
+    publicUrlPaths: [...publicUrlPaths],
     stripPaths: [...stripPaths],
   };
 };
@@ -511,7 +541,7 @@ const mediationListsCache = new WeakMap<
 
 /**
  * Mechanically derive a converted tool's `outputRefs`/`passthroughIdPaths`/
- * `stripPaths` from its projection schema's annotations. `projectForChat`
+ * `publicUrlPaths`/`stripPaths` from its projection schema's annotations. `projectForChat`
  * reads annotations directly; reverse persistence resolution consumes the
  * ref paths, and the contract corpus consumes all paths for its
  * declared-vs-exercised anti-vacuity guard. Memoized per schema.
@@ -949,6 +979,11 @@ const projectField = ({
       }
       case "passthroughId": {
         // Licensed to survive verbatim, UUID-shaped or not.
+        return value;
+      }
+      case "publicUrl": {
+        // A publisher-owned URL: forwarded verbatim, its embedded id (if any)
+        // never a Stella tenant id.
         return value;
       }
       case "json": {

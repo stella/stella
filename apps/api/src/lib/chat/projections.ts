@@ -38,6 +38,7 @@ import {
   chatRef,
   passthroughId,
   projectionBranch,
+  publicUrl,
   strippedField,
   unenumeratedJson,
 } from "./projection-schema";
@@ -1380,7 +1381,9 @@ export const SEARCH_CASE_LAW_PROJECTION = v.strictObject({
       // Passages of the decision that matched, within the scanned window.
       matchingPassages: v.number(),
       snippet: v.nullable(v.string()),
-      sourceUrl: v.nullable(v.string()),
+      // The publisher's own decision URL, which may embed the publisher's
+      // own UUID — never a Stella tenant id, so it is forwarded unchanged.
+      sourceUrl: v.nullable(publicUrl()),
     }),
   ),
   total: searchTotalProjection,
@@ -1442,7 +1445,9 @@ const caseLawDecisionProjection = v.strictObject({
   decisionId: passthroughId(),
   resourceName: passthroughId(),
   decisionType: v.nullable(v.string()),
-  documentUrl: v.nullable(v.string()),
+  // The publisher's own document URL, which may embed the publisher's own
+  // UUID — never a Stella tenant id, so it is forwarded unchanged.
+  documentUrl: v.nullable(publicUrl()),
   ecli: v.nullable(v.string()),
   language: v.string(),
   metadata: unenumeratedJson(),
@@ -1453,12 +1458,12 @@ const caseLawDecisionProjection = v.strictObject({
     adapterKey: v.string(),
     allowsDerivedAi: v.boolean(),
   }),
-  sourceUrl: v.nullable(v.string()),
+  sourceUrl: v.nullable(publicUrl()),
   // Where this decision's data is freely available. An agent quoting the
   // decision has to be able to attribute it, and some courts make the
   // attribution a condition of reuse, so the tool states the page rather
   // than leaving the caller to derive one from `source.adapterKey`.
-  sourceAttributionUrl: v.nullable(v.string()),
+  sourceAttributionUrl: v.nullable(publicUrl()),
   text: v.nullable(v.string()),
   charCount: v.nullable(v.number()),
   truncated: v.boolean(),
@@ -1662,7 +1667,9 @@ export const SEARCH_LEGISLATION_PROJECTION = v.strictObject({
       resourceName: passthroughId(),
       score: v.number(),
       snippet: v.nullable(v.string()),
-      sourceUrl: v.nullable(v.string()),
+      // The publisher's own document URL, which may embed the publisher's
+      // own UUID — never a Stella tenant id, so it is forwarded unchanged.
+      sourceUrl: v.nullable(publicUrl()),
       status: v.string(),
       title: v.string(),
     }),
@@ -1703,7 +1710,9 @@ export const READ_STATUTE_PROJECTION = v.strictObject({
     ),
     outlineTruncated: v.boolean(),
     resourceName: passthroughId(),
-    sourceUrl: v.nullable(v.string()),
+    // The publisher's own document URL, which may embed the publisher's own
+    // UUID — never a Stella tenant id, so it is forwarded unchanged.
+    sourceUrl: v.nullable(publicUrl()),
     status: v.string(),
     text: v.nullable(v.string()),
     // Present only where the source permits displaying wording but bars
@@ -1924,7 +1933,10 @@ const businessRegistryHitProjection = v.strictObject({
       textAddress: v.nullable(v.string()),
     }),
   ),
-  registryUrl: v.string(),
+  // The registry's own record URL, which some registries key by a
+  // UUID-formatted entry id — never a Stella tenant id, so it is forwarded
+  // unchanged.
+  registryUrl: publicUrl(),
   details: v.optional(unenumeratedJson()),
 });
 
