@@ -473,7 +473,9 @@ export const PlaybookFacet = ({
   const reportNote = (outcome: CounterpartyNoteOutcome, blockId: string) => {
     const { applied, tone, title, description } =
       reportCounterpartyNote(outcome);
-    stellaToast[tone](t(title), {
+    stellaToast.add({
+      type: tone,
+      title: t(title),
       ...(description !== undefined && { description: t(description) }),
       ...(applied && {
         action: {
@@ -1148,6 +1150,25 @@ const ReviewRunPanel = ({
     );
   }
 
+  // Writing the note into the draft is the reviewer's answer to the finding,
+  // so a write that lands also records the decision; nothing is recorded for
+  // one that did not.
+  const addCounterpartyNoteAndAccept = async (
+    findingId: DocumentReviewFindingRow["id"],
+    blockId: string,
+    note: string,
+  ): Promise<boolean> => {
+    const added = await onAddCounterpartyNote(blockId, note);
+    if (added) {
+      decide.mutate({
+        workspaceId,
+        findingId,
+        decision: REVIEW_DECISION.ACCEPTED,
+      });
+    }
+    return added;
+  };
+
   const { run } = runDetail;
   const view = reviewRunView(run.status);
   // The version the run measured, not whichever one is current: a completed
@@ -1199,20 +1220,7 @@ const ReviewRunPanel = ({
       history={history}
       negotiationBySourceId={negotiationLookup(playbookDetail)}
       onAcceptSuggestion={onAcceptSuggestion}
-      // Writing the note into the draft is the reviewer's answer to the
-      // finding, so a write that lands also records the decision; nothing is
-      // recorded for one that did not.
-      onAddCounterpartyNote={async (findingId, blockId, note) => {
-        const added = await onAddCounterpartyNote(blockId, note);
-        if (added) {
-          decide.mutate({
-            workspaceId,
-            findingId,
-            decision: REVIEW_DECISION.ACCEPTED,
-          });
-        }
-        return added;
-      }}
+      onAddCounterpartyNote={addCounterpartyNoteAndAccept}
       onDecide={(findingId, decision) => {
         decide.mutate({ workspaceId, findingId, decision });
       }}
@@ -3526,6 +3534,11 @@ const ReviewResultCard = ({
   );
   const scrollToCitedBlock = (blockId: string) =>
     onScrollToBlock(blockId, citationTextByBlockId.get(blockId));
+  // The note lands on the cited clause; a finding with no citation has no
+  // block to comment on, and the popover is not offered for one.
+  const addCounterpartyNote = async (note: string): Promise<boolean> =>
+    targetBlockId !== null &&
+    (await onAddCounterpartyNote(item.id, targetBlockId, note));
   const singleReferenceId = singleReferenceFieldId(finding);
   const singleReferenceName =
     singleReferenceId === null
@@ -3647,10 +3660,7 @@ const ReviewResultCard = ({
             item={item}
             readOnly={readOnly}
             onAcceptSuggestion={onAcceptSuggestion}
-            onAddCounterpartyNote={async (note) =>
-              targetBlockId !== null &&
-              (await onAddCounterpartyNote(item.id, targetBlockId, note))
-            }
+            onAddCounterpartyNote={addCounterpartyNote}
             onAskInChat={() =>
               useInspectorCommandStore.getState().requestFileChatDraft({
                 fileFieldId: targetFileFieldId,

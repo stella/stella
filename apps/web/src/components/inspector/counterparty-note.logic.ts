@@ -16,10 +16,32 @@ export type CounterpartyNoteOutcome =
   | { type: "failed" }
   | { type: "blocked"; reason: DocxEditModeBlockReason };
 
+/**
+ * The keys this decision can name, listed rather than widened to
+ * `TranslationKey`: handing `t()` the whole catalog union explodes the
+ * instantiation (TS2590). `Extract` still resolves each one against the
+ * catalog, so a stale key becomes `never` and fails the assignment below.
+ */
+type CounterpartyNoteTitleKey = Extract<
+  TranslationKey,
+  | "folio.unsupportedDocxEditTitle"
+  | "inspector.review.commentFailed"
+  | "inspector.review.noteAdded"
+  | "inspector.review.noteNotAdded"
+>;
+
+type CounterpartyNoteDescriptionKey = Extract<
+  TranslationKey,
+  | "folio.unsupportedDocxEditDescription"
+  | "inspector.review.noteBlockedChecking"
+  | "inspector.review.noteBlockedCollaboration"
+  | "inspector.review.noteBlockedOpening"
+>;
+
 type CounterpartyNoteMessage = {
   tone: "error" | "info" | "success" | "warning";
-  title: TranslationKey;
-  description?: TranslationKey;
+  title: CounterpartyNoteTitleKey;
+  description?: CounterpartyNoteDescriptionKey;
 };
 
 export type CounterpartyNoteReport = CounterpartyNoteMessage & {
