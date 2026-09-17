@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 1.5.0
+
+### Minor Changes
+
+- [#3456](https://github.com/stella/stella/pull/3456) [`1380c26`](https://github.com/stella/stella/commit/1380c26dcf52b162f0b8475d10b34fb26a36bdc3) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Corpus legislation search, point-in-time statute read, batch provision read and provision history become `legislation` commands; the BOE search moves to `legislation boe-search`.
+
 ## 1.4.1
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # @stll/ui
 
+## 0.28.1
+
+### Patch Changes
+
+- [#3448](https://github.com/stella/stella/pull/3448) [`08d97f9`](https://github.com/stella/stella/commit/08d97f95cc33fb11dab29a05a1eeb235f3c8945a) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Court badges: larger, higher-contrast abbreviations with room for diacritics
+
 ## 0.28.0
 
 ### Minor Changes
