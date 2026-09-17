@@ -5461,6 +5461,7 @@ type Messages = {
       "sortAscendingDate": "Oldest first";
       "sortDescending": "Sort descending";
       "sortDescendingDate": "Newest first";
+      "splitOptions": "{count, plural, one {Split into # option} other {Split into # options}}";
       "suggestWithAI": "Suggest with AI";
       "text": "Text";
       "typeChangeWarning": "Existing data will be cleared and rebuilt on save.";

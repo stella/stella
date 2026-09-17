@@ -1044,8 +1044,8 @@ const DraftCard = ({
               }
             : {})}
           options={draft.options}
-          pushOption={(option) =>
-            onChange({ options: [...draft.options, option] })
+          pushOptions={(added) =>
+            onChange({ options: [...draft.options, ...added] })
           }
           removeOptionAt={(index) =>
             onChange({

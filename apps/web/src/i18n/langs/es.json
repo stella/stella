@@ -5458,6 +5458,7 @@
       "sortAscendingDate": "Más antiguos primero",
       "sortDescending": "Orden descendente",
       "sortDescendingDate": "Más recientes primero",
+      "splitOptions": "{count, plural, one {Dividir en # opción} other {Dividir en # opciones}}",
       "suggestWithAI": "Sugerir con IA",
       "text": "Texto",
       "typeChangeWarning": "Los datos existentes se borrarán y se reconstruirán al guardar.",

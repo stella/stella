@@ -683,8 +683,8 @@ const PropertyComposerBody = ({
     );
   };
 
-  const pushOption = (option: WorkspacePropertyOption) =>
-    setOptions((prev) => [...prev, option]);
+  const pushOptions = (added: WorkspacePropertyOption[]) =>
+    setOptions((prev) => [...prev, ...added]);
   const removeOptionAt = (index: number) =>
     setOptions((prev) => prev.filter((_, i) => i !== index));
   const replaceOptionAt = (index: number, option: WorkspacePropertyOption) =>
@@ -702,7 +702,7 @@ const PropertyComposerBody = ({
           : t("workspaces.properties.composerTitle")}
       </DialogTitle>
 
-      <div className="flex flex-col gap-3 px-5 pt-5 pb-4">
+      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-5 pt-5 pb-4">
         <Input
           autoComplete="off"
           autoFocus
@@ -784,7 +784,7 @@ const PropertyComposerBody = ({
             fallback={effectiveFallback}
             onFallbackChange={setFallback}
             options={options}
-            pushOption={pushOption}
+            pushOptions={pushOptions}
             removeOptionAt={removeOptionAt}
             replaceOptionAt={replaceOptionAt}
           />

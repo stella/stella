@@ -5458,6 +5458,7 @@
       "sortAscendingDate": "Od najstarších",
       "sortDescending": "Radiť zostupne",
       "sortDescendingDate": "Od najnovších",
+      "splitOptions": "{count, plural, one {Rozdeliť na # možnosť} few {Rozdeliť na # možnosti} other {Rozdeliť na # možností}}",
       "suggestWithAI": "Navrhnúť pomocou AI",
       "text": "Text",
       "typeChangeWarning": "Existujúce dáta sa pri uložení vymažú a znovu vypočítajú.",

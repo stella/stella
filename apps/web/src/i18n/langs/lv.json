@@ -5458,6 +5458,7 @@
       "sortAscendingDate": "Vecākie vispirms",
       "sortDescending": "Kārtot dilstošā secībā",
       "sortDescendingDate": "Jaunākie vispirms",
+      "splitOptions": "{count, plural, zero {Sadalīt # iespējās} one {Sadalīt # iespējā} other {Sadalīt # iespējās}}",
       "suggestWithAI": "Ieteikt ar AI",
       "text": "Teksts",
       "typeChangeWarning": "Saglabājot esošie dati tiks dzēsti un izveidoti no jauna.",

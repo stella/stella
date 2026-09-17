@@ -5458,6 +5458,7 @@
       "sortAscendingDate": "Seniausi pirmi",
       "sortDescending": "Rūšiuoti mažėjimo tvarka",
       "sortDescendingDate": "Naujausi pirmi",
+      "splitOptions": "{count, plural, one {Skaidyti į # parinktį} few {Skaidyti į # parinktis} many {Skaidyti į # parinkties} other {Skaidyti į # parinkčių}}",
       "suggestWithAI": "Pasiūlyti su AI",
       "text": "Tekstas",
       "typeChangeWarning": "Esami duomenys bus išvalyti ir perkurti išsaugant.",
