@@ -1538,7 +1538,15 @@ const CONTRACT_CORPUS = {
       buildArgs: () => ({ query: "impuesto" }),
       setup: () => {
         searchConsolidatedLegislationMock.mockResolvedValue({
-          data: [{ identificador: "BOE-A-2020-1", titulo: "Ley 1/2020" }],
+          data: [
+            {
+              identificador: "BOE-A-2020-1",
+              titulo: "Ley 1/2020",
+              // GUID-bearing publisher URLs; see the statute fixture above.
+              url_eli: `https://boe.es/eli/${uid(97)}`,
+              url_html_consolidada: `https://boe.es/consolidado/${uid(98)}`,
+            },
+          ],
           status: { code: "200", text: "ok" },
         } satisfies BoeSearchResponse);
       },
