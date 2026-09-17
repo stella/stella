@@ -11,6 +11,7 @@ import {
 import { panic } from "better-result";
 import type { GenericSchema, InferInput, InferOutput } from "valibot";
 
+import { stripInternalMetadata } from "@/api/lib/json-schema/valibot-json-schema-config";
 import type { ProviderSafeJsonSchemaProjectionOptions } from "@/api/lib/provider-safe-json-schema";
 import { projectToProviderSafeJsonSchema } from "@/api/lib/provider-safe-json-schema";
 
@@ -189,6 +190,7 @@ export const toTanStackValibotSchema = <TSchema extends GenericSchema>(
               target: valibotJsonSchemaTarget(options.target),
               typeMode: "input",
               ignoreActions: PROVIDER_SCHEMA_IGNORED_ACTIONS,
+              overrideAction: stripInternalMetadata,
             }),
             providerProjectionOptions,
           ),
@@ -198,6 +200,7 @@ export const toTanStackValibotSchema = <TSchema extends GenericSchema>(
               target: valibotJsonSchemaTarget(options.target),
               typeMode: "output",
               ignoreActions: PROVIDER_SCHEMA_IGNORED_ACTIONS,
+              overrideAction: stripInternalMetadata,
             }),
             providerProjectionOptions,
           ),

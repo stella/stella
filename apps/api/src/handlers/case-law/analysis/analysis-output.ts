@@ -28,6 +28,8 @@ import {
   CURRENT_ANALYSIS_VERSION,
 } from "@stll/legal-ast/analysis";
 
+import { stripInternalMetadata } from "@/api/lib/json-schema/valibot-json-schema-config";
+
 import { normalizeAnalysisHeadingLabels } from "./category-catalog";
 
 /**
@@ -53,7 +55,7 @@ export type AnalysisOutput = v.InferOutput<typeof analysisOutputSchema>;
  */
 export const ANALYSIS_OUTPUT_JSON_SCHEMA: JsonSchema = toJsonSchema(
   analysisOutputSchema,
-  { errorMode: "throw" },
+  { errorMode: "throw", overrideAction: stripInternalMetadata },
 );
 
 type BuildAnalysisOptions = {
