@@ -1796,6 +1796,7 @@
     "checking": "Overujem {citation} …",
     "contradicts": "Odporuje",
     "doesNotAddress": "Nerieši",
+    "earlier": "Skoršie kontroly",
     "failed": "Overenie citácie sa nepodarilo. Skúste to znova.",
     "goToParagraph": "Prejsť na odsek",
     "noPassage": "Žiadna jednotlivá pasáž rozhodnutia tento záver nenesie.",

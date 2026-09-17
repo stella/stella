@@ -75,6 +75,10 @@ import { DocxEditor } from "@/components/docx/app-docx-editor";
 import type { DocxComments } from "@/components/docx/app-docx-editor";
 import { CitationCheckCard } from "@/components/docx/citation-check/citation-check-card";
 import { findDecisionReference } from "@/components/docx/citation-check/citation-check.logic";
+import {
+  blockContaining,
+  useAutomaticCitationCheck,
+} from "@/components/docx/citation-check/use-automatic-citation-check";
 import { useCitationCheck } from "@/components/docx/citation-check/use-citation-check";
 import { DocxFindBar } from "@/components/docx/docx-find-bar";
 import { DocxLoadingShell } from "@/components/docx/docx-loading-shell";
@@ -211,26 +215,6 @@ const canInsertEvidenceReference = (
 ) => canUnlock && compatibility?.canSafelyEdit !== false;
 
 const CHECK_CITATION_CONTEXT_ID = "stella.check-citation";
-
-/**
- * The paragraph a document position sits in, so a citation check's answer can
- * be shown against the paragraph it was asked about. Null when the editor has
- * no live view or the position falls between anchors, which costs the answer
- * its anchor and nothing else.
- */
-const blockIdContaining = (
-  editor: DocxEditorRef | null,
-  position: number,
-): string | null => {
-  const snapshot = editor?.createAIEditSnapshot() ?? null;
-  if (snapshot === null) {
-    return null;
-  }
-  const anchor = Object.values(snapshot.anchors).find(
-    (candidate) => candidate.from <= position && position <= candidate.to,
-  );
-  return anchor?.id ?? null;
-};
 
 type DocxBrowserEditorContentProps = DocxBrowserEditorProps & {
   evidenceReferencesDialogState: EvidenceReferencesDialogState;
@@ -678,6 +662,13 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
     text: string;
   } | null>(null);
   const citationCheck = useCitationCheck();
+  // The check also runs unasked, on whatever paragraph the caret settles in,
+  // in read-only documents too: reading a colleague's draft is when a citation
+  // most wants checking, and the check only reads.
+  const handleCaretMoved = useAutomaticCitationCheck({
+    editorRef,
+    checkParagraph: citationCheck.runSettledParagraph,
+  });
 
   // Bridge document selections → inspector "Term to anonymize"
   // input. Folio fires `onSelectionTextChange` with the range
@@ -698,6 +689,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
       setCitedReference((current) =>
         current === reference ? current : reference,
       );
+      handleCaretMoved(selection.from);
       if (selection.from === selection.to) {
         return;
       }
@@ -709,7 +701,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
         .getState()
         .publishDocumentTextSelection(fieldId, single);
     },
-    [fieldId],
+    [fieldId, handleCaretMoved],
   );
   useExternalSyncEffect(
     () => () => {
@@ -1900,12 +1892,12 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
       return;
     }
     detached(
-      citationCheck.run({
+      citationCheck.runSelected({
         citation: citedReference,
         // The writer's own selection is the sentence being checked; the
         // editor never widens it, so what is judged is what was highlighted.
         claim: selection.text,
-        blockId: blockIdContaining(editorRef.current, range.from),
+        blockId: blockContaining(editorRef.current, range.from)?.id ?? null,
       }),
       "docx.citation-check",
     );
@@ -2199,9 +2191,9 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
             persistence={{ type: "workspace", workspaceId }}
             requestDocxEditMode={requestEditMode}
           />
-          {/* The citation check's answer, docked to the inline start so it
-              clears the review stepper's bottom-centre lane. Returns null
-              until a check has been asked for. */}
+          {/* What the citation checks answered, docked to the inline start so
+              it clears the review stepper's bottom-centre lane. Returns null
+              until a check has run. */}
           <CitationCheckCard
             onDismiss={citationCheck.dismiss}
             onRevealParagraph={(blockId) => {

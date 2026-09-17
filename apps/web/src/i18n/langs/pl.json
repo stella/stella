@@ -1796,6 +1796,7 @@
     "checking": "Sprawdzam {citation} …",
     "contradicts": "Przeczy",
     "doesNotAddress": "Nie odnosi się",
+    "earlier": "Wcześniejsze sprawdzenia",
     "failed": "Sprawdzenie powołania nie powiodło się. Spróbuj ponownie.",
     "goToParagraph": "Przejdź do akapitu",
     "noPassage": "Żaden pojedynczy fragment orzeczenia nie zawiera tego wniosku.",

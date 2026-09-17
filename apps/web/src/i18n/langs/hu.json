@@ -1796,6 +1796,7 @@
     "checking": "{citation} ellenőrzése …",
     "contradicts": "Ellentmond",
     "doesNotAddress": "Nem foglalkozik vele",
+    "earlier": "Korábbi ellenőrzések",
     "failed": "A hivatkozás ellenőrzése nem fejeződött be. Próbálja újra.",
     "goToParagraph": "Ugrás a bekezdésre",
     "noPassage": "A határozat egyetlen szövegrésze sem hordozza ezt a megállapítást.",

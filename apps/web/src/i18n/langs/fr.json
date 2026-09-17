@@ -1796,6 +1796,7 @@
     "checking": "Vérification de {citation} …",
     "contradicts": "Contredit",
     "doesNotAddress": "Ne traite pas",
+    "earlier": "Vérifications précédentes",
     "failed": "La vérification de la citation n’a pas abouti. Réessayez.",
     "goToParagraph": "Aller au paragraphe",
     "noPassage": "Aucun passage isolé de la décision ne porte cette lecture.",
