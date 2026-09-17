@@ -23,16 +23,14 @@ import { Button } from "@stll/ui/button";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
+import { FileChatWarmup } from "@/components/ai-suggestions/file-chat-warmup";
 import { FILE_CHAT_OVERLAY_ACTIVATION } from "@/components/ai-suggestions/file-viewer-with-ai-config";
 import {
   REVIEW_SUGGESTION_ORIGIN,
   useReviewStore,
 } from "@/components/ai-suggestions/review-store";
 import type { DocxBrowserEditorActions } from "@/components/docx/docx-browser-editor";
-import {
-  DocxEditorSlot,
-  preloadHostedDocxEditor,
-} from "@/components/docx/docx-editor-host";
+import { DocxEditorSlot } from "@/components/docx/docx-editor-host";
 import { DOCX_EDITOR_SLOT } from "@/components/docx/docx-editor-host.logic";
 import type { DocxEditorSlotBindings } from "@/components/docx/docx-editor-host.logic";
 import { AnonymizationFacet } from "@/components/inspector/anonymization-facet";
@@ -94,7 +92,6 @@ import {
 import { QuerySuspenseBoundary } from "@/components/query-suspense-boundary";
 import Tooltip from "@/components/tooltip";
 import { env } from "@/env";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -497,14 +494,6 @@ export const FileTabPanel = ({
     requiresPdfMeasurement,
     scaleOffset,
   } = getFileTabDisplayState({ activeId, minimized, scaleOffsets, tab });
-  // The tab's mime type says a DOCX is coming long before the entity, the file
-  // property and the file URL have resolved, so the editor chunk is fetched
-  // alongside those rounds rather than after the last of them.
-  useExternalSyncEffect(() => {
-    if (isNativeDocxDisplay) {
-      preloadHostedDocxEditor();
-    }
-  }, [isNativeDocxDisplay]);
   const readsDocumentInInspector = documentReviewPaneFieldId === tab.id;
   const fullViewFacet =
     tab.facet ?? (readsDocumentInInspector ? "preview" : "metadata");
@@ -1100,21 +1089,31 @@ export const FileTabPanel = ({
         );
       }
       return (
-        <DocxEditorSlot
-          bindings={docxEditorBindings}
-          canUnlock={canUpdateEntity}
-          document={{
-            entityId: tab.entityId,
-            fileFieldId: tab.id,
-            propertyId: filePropertyId,
-            workspaceId: tab.workspaceId,
-          }}
-          fallback={<PeekSuspenseFallback />}
-          initialScrollTop={docxScrollTopByTab.get(tab.id)}
-          isEditing={isEditingNativeDocx}
-          scaleOffset={scaleOffset}
-          slot={DOCX_EDITOR_SLOT.inspector}
-        />
+        <>
+          {/* Beside the slot, not inside the editor: the chat overlay travels
+              with the editor's chunk, and its two reads would otherwise queue
+              behind that fetch instead of running alongside it. */}
+          <FileChatWarmup
+            entityId={tab.entityId}
+            fileFieldId={tab.id}
+            workspaceId={tab.workspaceId}
+          />
+          <DocxEditorSlot
+            bindings={docxEditorBindings}
+            canUnlock={canUpdateEntity}
+            document={{
+              entityId: tab.entityId,
+              fileFieldId: tab.id,
+              propertyId: filePropertyId,
+              workspaceId: tab.workspaceId,
+            }}
+            fallback={<PeekSuspenseFallback />}
+            initialScrollTop={docxScrollTopByTab.get(tab.id)}
+            isEditing={isEditingNativeDocx}
+            scaleOffset={scaleOffset}
+            slot={DOCX_EDITOR_SLOT.inspector}
+          />
+        </>
       );
     }
     return (
