@@ -8,6 +8,10 @@ import {
   publicCaseLawCountry,
 } from "@stll/api-contract/case-law-launch-readiness";
 import {
+  exactDecisionMatches,
+  parseDecisionQuery,
+} from "@stll/api-contract/decision-query-intent";
+import {
   DEFAULT_SEARCH_SORT,
   SEARCH_SORTS,
   SEARCH_TOTAL_TYPE,
@@ -23,6 +27,7 @@ import type {
   ContactPhone,
   FieldContent,
 } from "@/api/db/schema-validators";
+import { splitCaseReference } from "@/api/handlers/case-law/case-number";
 import type { readGatedDecisionCitations } from "@/api/handlers/case-law/decisions/citation-passages";
 import {
   DECISION_DOCUMENT_HYDRATION,
@@ -32,6 +37,10 @@ import {
   type DecisionDocumentHydration,
   type readGatedDecisionWithDocument,
 } from "@/api/handlers/case-law/decisions/get-deferred-document";
+import type {
+  DecisionIdentityRow,
+  lookupDecisionsByIdentity,
+} from "@/api/handlers/case-law/decisions/lookup-by-identity";
 import type { searchDecisionsHandler } from "@/api/handlers/case-law/decisions/search";
 import { parseUsableDocumentAst } from "@/api/handlers/case-law/document-ast";
 import {
@@ -43,16 +52,19 @@ import type { readWorkspaceHandler } from "@/api/handlers/workspaces/get";
 import type { readOverviewHandler } from "@/api/handlers/workspaces/read-overview";
 import type { readWorkspaceContactsHandler } from "@/api/handlers/workspaces/workspace-contacts-read";
 import type { readWorkspaceMembersHandler } from "@/api/handlers/workspaces/workspace-members-read";
+import { captureError } from "@/api/lib/analytics/capture";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { CITATION_READ_DIRECTIONS } from "@/api/lib/case-law/citation-vocabulary";
+import { DECISION_LOOKUP_STATUS } from "@/api/lib/case-law/decision-lookup-vocabulary";
 import { DECISION_READ_STATUS } from "@/api/lib/case-law/decision-read-vocabulary";
 import {
   type AssertNoExtraFields,
   type LIST_MATTERS_DETAIL_PROJECTION,
   type LIST_MATTERS_LIST_PROJECTION,
   LIST_MATTERS_PROJECTION,
+  LOOKUP_CASE_LAW_PROJECTION,
   READ_CASE_LAW_CITATIONS_PROJECTION,
   READ_CASE_LAW_DECISION_PROJECTION,
   READ_CONTACT_PROJECTION,
@@ -68,6 +80,7 @@ import {
   type ExtractedContentSourceProvenance,
 } from "@/api/lib/document-content-provenance";
 import { createFileKey } from "@/api/lib/files/utils";
+import { decisionDocketGrammarForCountry } from "@/api/lib/legal-search/adapter-manifest";
 import { CORPUS_SEARCH_CURSOR_MAX_LENGTH } from "@/api/lib/legal-search/corpus-search-cursor";
 import { LIMITS } from "@/api/lib/limits";
 import { getAppBaseUrl } from "@/api/lib/mcp-connectors/app-urls";
@@ -142,6 +155,11 @@ const defaultReadGatedDecisionCitations: typeof readGatedDecisionCitations =
     await (
       await import("@/api/handlers/case-law/decisions/citation-passages")
     ).readGatedDecisionCitations(input);
+const defaultLookupDecisionsByIdentity: typeof lookupDecisionsByIdentity =
+  async (input) =>
+    await (
+      await import("@/api/handlers/case-law/decisions/lookup-by-identity")
+    ).lookupDecisionsByIdentity(input);
 const defaultSearchDecisionsHandler: typeof searchDecisionsHandler = async (
   input,
   database,
@@ -172,6 +190,7 @@ const defaultReadWorkspaceMembersHandler: typeof readWorkspaceMembersHandler =
 
 type StellaToolName =
   | "list_matters"
+  | "lookup_case_law"
   | "read_case_law_citations"
   | "read_case_law_decision"
   | "read_contact"
@@ -708,6 +727,33 @@ const searchCaseLawArgsSchema = nullAsAbsent(
   }),
 );
 
+const lookupCaseLawArgsSchema = nullAsAbsent(
+  v.strictObject({
+    identifiers: v.pipe(
+      v.array(
+        v.pipe(
+          v.string(),
+          v.minLength(1),
+          v.maxLength(LIMITS.caseLawIdentifierMaxLength),
+        ),
+      ),
+      v.minLength(1),
+      v.maxLength(LIMITS.caseLawLookupIdentifiersMax),
+      v.description(
+        `The references to resolve, at most ${LIMITS.caseLawLookupIdentifiersMax} per call: a docket number as the court writes it (the sheet number after it is ignored) or an ECLI. Each is answered on its own.`,
+      ),
+    ),
+    country: v.pipe(
+      v.string(),
+      v.minLength(2),
+      v.maxLength(3),
+      v.description(
+        `Required corpus country code, uppercase ISO 3166-1 alpha-3. Admitted: ${ADMITTED_CASE_LAW_COUNTRIES}.`,
+      ),
+    ),
+  }),
+);
+
 const readContentAcrossMattersArgsSchema = nullAsAbsent(
   v.strictObject({
     entity_id: uuidInputSchema("Entity ID"),
@@ -899,6 +945,35 @@ export const STELLA_TOOL_DEFINITIONS = [
     feature: "FEATURE_PUBLIC_LAW",
     name: "search_case_law",
     scope: "stella:search",
+  }),
+  defineValibotMcpTool({
+    annotations: {
+      title: "Look up case law by identifier",
+      destructiveHint: false,
+      readOnlyHint: true,
+      openWorldHint: false,
+    },
+    description:
+      "Resolve case references to decisions: docket numbers as the courts " +
+      "write them (a trailing sheet number is ignored) and ECLIs. Answered " +
+      "from the identity columns, never by ranking text, so a hit is the " +
+      "decision named, not one citing it. Every `identifiers[]` entry is " +
+      "answered on its own, in input order, under `status`: `found` carries " +
+      "that decision's id, resourceName, appUrl, docket, court, date and " +
+      "ECLI; `ambiguous` carries the candidates: a docket is unique to a " +
+      "court, not to the corpus, and picking one would cite the wrong " +
+      "court; `not_found` says what to call instead; `lookup_failed` means " +
+      "the read did not complete, so retry that entry. Use this when the " +
+      "user names a case; use search_case_law when they describe one. Pass " +
+      "a `found` decisionId to read_case_law_decision for the text.",
+    inputSchema: lookupCaseLawArgsSchema,
+    access: "read",
+    anonymized: { exposure: "passthrough" },
+    // Backed by the public case-law corpus (caseLawPublicReadDb), the same
+    // surface the public routes gate behind env.isDev || env.FEATURE_PUBLIC_LAW.
+    feature: "FEATURE_PUBLIC_LAW",
+    name: "lookup_case_law",
+    scope: "stella:read",
   }),
   defineValibotMcpTool({
     annotations: {
@@ -2374,6 +2449,193 @@ const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
   } satisfies v.InferInput<typeof READ_CASE_LAW_DECISION_PROJECTION>);
 };
 
+// --- lookup_case_law -------------------------------------------------------
+
+type DecisionLookupItem = v.InferInput<
+  typeof LOOKUP_CASE_LAW_PROJECTION
+>["items"][number];
+
+const SEARCH_INSTEAD_HINT =
+  "Search the decision's text with search_case_law instead, or pass the docket exactly as the court wrote it.";
+
+const decisionIdentityOf = (row: DecisionIdentityRow) => ({
+  appUrl: buildCaseLawDecisionAppUrl({
+    caseNumber: row.caseNumber,
+    country: row.country,
+    court: row.court,
+    language: row.language,
+    slug: row.slug,
+  }),
+  caseNumber: row.caseNumber,
+  court: row.court,
+  decisionDate: row.decisionDate,
+  decisionId: row.id,
+  ecli: row.ecli,
+  resourceName: serializeAuthorizedCorpusMcpResourceName(
+    resourceRef({
+      type: RESOURCE_TYPE.CASE_LAW_DECISION,
+      id: brandPersistedCaseLawDecisionId(row.id),
+    }),
+  ),
+});
+
+/**
+ * What one identifier resolved to. A grammar declining the spelling is a
+ * different answer from the corpus not holding it: both send the caller to a
+ * text search, but only one of them is worth re-spelling first.
+ */
+type DecisionLookupOutcome =
+  | { type: "not_an_identifier" }
+  | { type: "failed"; message: string }
+  | { type: "matches"; matches: readonly DecisionIdentityRow[] };
+
+const lookupItemResult = ({
+  identifier,
+  outcome,
+}: {
+  identifier: string;
+  outcome: DecisionLookupOutcome;
+}): DecisionLookupItem => {
+  if (outcome.type === "failed") {
+    return {
+      identifier,
+      message: `Resolving this reference failed: ${outcome.message}. Retry this reference; the entries beside it are unaffected.`,
+      status: DECISION_LOOKUP_STATUS.lookupFailed,
+    };
+  }
+  if (outcome.type === "not_an_identifier") {
+    return {
+      identifier,
+      hint: SEARCH_INSTEAD_HINT,
+      message:
+        "This is not a docket number or ECLI in a grammar the corpus's courts use.",
+      status: DECISION_LOOKUP_STATUS.notFound,
+    };
+  }
+
+  const [only, ...rest] = outcome.matches;
+  if (only === undefined) {
+    return {
+      identifier,
+      hint: SEARCH_INSTEAD_HINT,
+      message: "No decision in this corpus carries this identifier.",
+      status: DECISION_LOOKUP_STATUS.notFound,
+    };
+  }
+  if (rest.length === 0) {
+    return {
+      identifier,
+      ...decisionIdentityOf(only),
+      status: DECISION_LOOKUP_STATUS.found,
+    };
+  }
+
+  // The cap lands here, on what survived the exact-identity filter: the
+  // identity read is bounded wider than the listed maximum precisely because
+  // that filter drops rows whose key merely collided.
+  const listed = outcome.matches.slice(0, LIMITS.caseLawLookupCandidatesMax);
+  const count =
+    outcome.matches.length > LIMITS.caseLawLookupCandidatesMax
+      ? `More than ${String(LIMITS.caseLawLookupCandidatesMax)} decisions`
+      : `${String(outcome.matches.length)} decisions`;
+  return {
+    identifier,
+    candidates: listed.map(decisionIdentityOf),
+    message: `${count} carry this identifier, at different courts or in different languages. Pick one by its court and date and pass its decisionId to read_case_law_decision.`,
+    status: DECISION_LOOKUP_STATUS.ambiguous,
+  };
+};
+
+const handleLookupCaseLawTool: TypedMcpToolHandler<
+  v.InferInput<typeof LOOKUP_CASE_LAW_PROJECTION>
+> = async ({ args, context }) => {
+  const parsed = v.safeParse(lookupCaseLawArgsSchema, args);
+  if (!parsed.success) {
+    return validationErrorResult(parsed.issues);
+  }
+  const { country, identifiers } = parsed.output;
+  const publicCountry = publicCaseLawCountry(country);
+  if (publicCountry === null) {
+    return notFoundResult(
+      "Case-law country not found",
+      `Pass one of the admitted country codes: ${ADMITTED_CASE_LAW_COUNTRIES}.`,
+    );
+  }
+
+  // The jurisdiction's own docket grammar, read the way `searchDecisionsHandler`
+  // reads it: `11 C 153/2025` is a docket in Czechia and not in Poland, and a
+  // lookup that classified an identifier differently from the search beside it
+  // would decline a reference that search resolves.
+  const grammar = decisionDocketGrammarForCountry(publicCountry);
+  const lookup =
+    context.testDependencies?.lookupDecisionsByIdentity ??
+    defaultLookupDecisionsByIdentity;
+
+  // One resolution per distinct identifier; a list naming the same decision
+  // twice resolves it once and answers both of its positions.
+  const uniqueIdentifiers = [...new Set(identifiers)];
+  const outcomes = new Map(
+    await mapWithConcurrency({
+      items: uniqueIdentifiers,
+      limit: LIMITS.caseLawLookupConcurrency,
+      operation: async (
+        identifier,
+      ): Promise<readonly [string, DecisionLookupOutcome]> => {
+        // The sheet number names a page of the court file, not the decision,
+        // so it is dropped before the grammars see the reference.
+        const { caseNumber } = splitCaseReference(identifier);
+        const intent = parseDecisionQuery(caseNumber, { grammar });
+        if (intent.type !== "identifier") {
+          return [identifier, { type: "not_an_identifier" }];
+        }
+        // The identity columns, not the text index: a ranked page of the
+        // decisions that MENTION a docket can leave out the decision that IS
+        // it, and which provider a deployment runs decides whether the search
+        // handler has an identity branch at all.
+        const read = await Result.tryPromise({
+          try: async () =>
+            await lookup({
+              caseLawDb: caseLawPublicReadDb,
+              country: publicCountry,
+              locator: { kind: intent.kind, value: intent.value },
+            }),
+          catch: (cause) => cause,
+        });
+        if (Result.isError(read)) {
+          captureError(read.error);
+          return [
+            identifier,
+            { type: "failed", message: "the corpus read did not complete" },
+          ];
+        }
+        // A second guard, cheap and independent of the statement above: an
+        // entry only reports a decision that answers to the reference by one
+        // of its own identifiers.
+        return [
+          identifier,
+          {
+            type: "matches",
+            matches: exactDecisionMatches(intent.value, read.value),
+          },
+        ];
+      },
+    }),
+  );
+
+  const outcomeOf = (identifier: string): DecisionLookupOutcome =>
+    outcomes.get(identifier) ??
+    panic(`No lookup ran for identifier ${identifier}`);
+
+  return toolDataResult({
+    items: identifiers.map((identifier) =>
+      lookupItemResult({
+        identifier,
+        outcome: outcomeOf(identifier),
+      }),
+    ),
+  } satisfies v.InferInput<typeof LOOKUP_CASE_LAW_PROJECTION>);
+};
+
 const handleReadCaseLawCitationsTool: TypedMcpToolHandler<
   v.InferInput<typeof READ_CASE_LAW_CITATIONS_PROJECTION>
 > = async ({ args, context }) => {
@@ -2554,6 +2816,7 @@ const handleSetPracticeJurisdictionsTool: TypedMcpToolHandler<
 
 export const STELLA_TOOL_HANDLERS = {
   list_matters: handleListMattersTool,
+  lookup_case_law: handleLookupCaseLawTool,
   read_case_law_citations: handleReadCaseLawCitationsTool,
   read_case_law_decision: handleReadCaseLawDecisionTool,
   read_contact: handleReadContactTool,
@@ -2568,6 +2831,9 @@ export const STELLA_TOOL_SET = defineMcpToolSet(
   STELLA_TOOL_HANDLERS,
   {
     list_matters: defineChatProjectionMcpToolOutput(LIST_MATTERS_PROJECTION),
+    lookup_case_law: defineChatProjectionMcpToolOutput(
+      LOOKUP_CASE_LAW_PROJECTION,
+    ),
     read_case_law_citations: defineChatProjectionMcpToolOutput(
       READ_CASE_LAW_CITATIONS_PROJECTION,
     ),

@@ -87,6 +87,7 @@ requires (request it at `stella auth login --scopes`).
 | capability   | `stella capability invoke`                 | read                        |                                         |
 | capability   | `stella capability list`                   | read                        | paginated                               |
 | case-law     | `stella case-law citations`                | read                        | paginated                               |
+| case-law     | `stella case-law lookup`                   | read                        |                                         |
 | case-law     | `stella case-law read`                     | read                        | paginated; per-entry cursor, no `--all` |
 | case-law     | `stella case-law search`                   | search                      | paginated                               |
 | clause       | `stella clause delete`                     | knowledge_write             | destructive (needs `--yes` off a TTY)   |
@@ -156,6 +157,9 @@ are omitted here.
 - `stella case-law citations`
   - `--decision-id` — Case-law decision ID (string)
   - `--direction` — Which side of the citation graph to read: 'cites' for the decisions this decision cites, 'cited_by' for the decisions that cite it. Citing is not agreeing: both sides carry negative treatments. (enum: cites, cited_by)
+- `stella case-law lookup`
+  - `--identifiers` — The references to resolve, at most 50 per call: a docket number as the court writes it (the sheet number after it is ignored) or an ECLI. Each is answered on its own. (string-array, repeatable)
+  - `--country` — Required corpus country code, uppercase ISO 3166-1 alpha-3. Admitted: CZE. (string)
 - `stella case-law read`
   - `--decision-ids` — The decisions to read, at most 20 per call. Each id is answered on its own, so one unknown id does not sink the rest. (string-array, repeatable)
 - `stella case-law search`

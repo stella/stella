@@ -17,6 +17,7 @@ import {
   CITATION_TREATMENTS,
 } from "@/api/lib/case-law/citation-vocabulary";
 import { COURT_TIER_LABELS } from "@/api/lib/case-law/court-tiers";
+import { DECISION_LOOKUP_STATUS } from "@/api/lib/case-law/decision-lookup-vocabulary";
 import {
   DECISION_READ_ABSENCE_STATUSES,
   DECISION_READ_STATUS,
@@ -1502,6 +1503,73 @@ export const READ_CASE_LAW_DECISION_PROJECTION = v.strictObject({
             status: v.literal(status),
           }),
         ),
+      ),
+    ]),
+  ),
+});
+
+/**
+ * One decision as an identifier lookup names it: enough to cite it and to
+ * fetch it, and nothing else. A lookup answers "which decision is this", so
+ * the text, the citation lists and the source metadata are
+ * read_case_law_decision's job.
+ */
+const caseLawDecisionIdentityProjection = v.strictObject({
+  // Nullable for the same reason as search_case_law's `results[].appUrl`.
+  appUrl: v.nullable(v.string()),
+  caseNumber: v.string(),
+  court: v.string(),
+  decisionDate: v.nullable(v.string()),
+  decisionId: passthroughId(),
+  ecli: v.nullable(v.string()),
+  resourceName: passthroughId(),
+});
+
+/** The identifier the caller wrote, echoed so a batch reply says which entry it is. */
+const decisionLookupSubject = { identifier: v.string() } as const;
+
+/**
+ * lookup_case_law. Source of truth: `handleLookupCaseLawTool`
+ * (`stella-tools.ts`) over the search handler's identity branch. One entry per
+ * requested identifier, in input order, discriminated on `status`: a docket is
+ * unique to a court rather than to the corpus, so several candidates are
+ * reported as such instead of one being chosen. All ids are public case-law
+ * corpus ids.
+ */
+export const LOOKUP_CASE_LAW_PROJECTION = v.strictObject({
+  items: v.array(
+    v.variant("status", [
+      projectionBranch(
+        v.strictObject({
+          ...decisionLookupSubject,
+          ...caseLawDecisionIdentityProjection.entries,
+          status: v.literal(DECISION_LOOKUP_STATUS.found),
+        }),
+      ),
+      projectionBranch(
+        v.strictObject({
+          ...decisionLookupSubject,
+          // Bounded: past a handful the identifier names a list of decisions
+          // and the caller should search instead.
+          candidates: v.array(caseLawDecisionIdentityProjection),
+          message: v.string(),
+          status: v.literal(DECISION_LOOKUP_STATUS.ambiguous),
+        }),
+      ),
+      projectionBranch(
+        v.strictObject({
+          ...decisionLookupSubject,
+          hint: v.string(),
+          message: v.string(),
+          status: v.literal(DECISION_LOOKUP_STATUS.notFound),
+        }),
+      ),
+      projectionBranch(
+        v.strictObject({
+          ...decisionLookupSubject,
+          message: v.string(),
+          status: v.literal(DECISION_LOOKUP_STATUS.lookupFailed),
+        }),
       ),
     ]),
   ),

@@ -225,6 +225,7 @@ type PublicLawToolName = Extract<
  */
 export const LAW_MCP_TOOL_DISPOSITION = {
   search_case_law: "corpus",
+  lookup_case_law: "corpus",
   read_case_law_decision: "corpus",
   read_case_law_citations: "corpus",
   search_legislation: "corpus",

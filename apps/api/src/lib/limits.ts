@@ -449,6 +449,25 @@ export const LIMITS = {
   /** Decisions one batch read may ask for. */
   caseLawDecisionBatchMax: 20,
   /**
+   * References one identifier lookup may resolve. A brief cites dozens of
+   * cases, and resolving them is what the tool is for; each one is an indexed
+   * identity read, not a ranking.
+   */
+  caseLawLookupIdentifiersMax: 50,
+  /**
+   * Characters of one case reference. A docket, an ECLI or a reporter
+   * citation; anything longer is prose and belongs in a text search.
+   */
+  caseLawIdentifierMaxLength: 256,
+  /**
+   * Decisions listed when a reference names more than one. Past a handful the
+   * reference names a list of decisions rather than a decision, and the
+   * caller should search instead of choosing.
+   */
+  caseLawLookupCandidatesMax: 5,
+  /** Identity reads resolved at once while answering one lookup. */
+  caseLawLookupConcurrency: 6,
+  /**
    * Publisher document fetches one batch read may trigger. A decision whose
    * document nobody has fetched yet costs a crawl, so a batch reads the
    * stored state first and spends this budget on the pending ones; the rest

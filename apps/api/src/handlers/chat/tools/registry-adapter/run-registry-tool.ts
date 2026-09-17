@@ -50,6 +50,7 @@ const REGISTRY_READ_TOOL_HANDLERS = {
   search: COMPAT_TOOL_HANDLERS.search,
   list_matters: STELLA_TOOL_HANDLERS.list_matters,
   list_contacts: MATTER_TOOL_HANDLERS.list_contacts,
+  lookup_case_law: STELLA_TOOL_HANDLERS.lookup_case_law,
   read_case_law_citations: STELLA_TOOL_HANDLERS.read_case_law_citations,
   read_case_law_decision: STELLA_TOOL_HANDLERS.read_case_law_decision,
   read_contact: STELLA_TOOL_HANDLERS.read_contact,

@@ -528,7 +528,7 @@ describe("handleMcpHttpRequest", () => {
     }
   });
 
-  test("the law audience serves seven corpus tools under its own server name", async () => {
+  test("the law audience serves the corpus tools under its own server name", async () => {
     const context = { type: "law-mcp-context" };
     authenticateMcpRequestMock.mockResolvedValue({
       organizationId: "org_1",
@@ -562,6 +562,7 @@ describe("handleMcpHttpRequest", () => {
       const listed = await client.listTools(undefined, { timeout: 2000 });
       expect(listed.tools.map(({ name }) => name)).toEqual([
         "search_case_law",
+        "lookup_case_law",
         "read_case_law_decision",
         "read_case_law_citations",
         "search_legislation",
