@@ -196,22 +196,64 @@ export const report = (verdict: ChangesetVerdict): number => {
 
 type GitRun = { readonly ok: boolean; readonly stdout: string };
 
-const git = (args: readonly string[]): GitRun => {
+const git = (args: readonly string[], cwd = REPO_ROOT): GitRun => {
   const result = Bun.spawnSync(["git", ...args], {
-    cwd: REPO_ROOT,
+    cwd,
     stdout: "pipe",
     stderr: "pipe",
   });
   return { ok: result.exitCode === 0, stdout: result.stdout.toString() };
 };
 
-const gitPaths = (args: readonly string[]): string[] => {
-  const result = git(args);
+const gitPaths = (args: readonly string[], cwd = REPO_ROOT): string[] => {
+  const result = git(args, cwd);
   if (!result.ok) {
     panic(`git ${args.join(" ")} failed`);
   }
   return result.stdout.split("\0").filter(Boolean);
 };
+
+/**
+ * The two diffs the gate decides on, both read with `--no-renames`: a
+ * maintenance release deletes the previous empty `.changeset/release-vX.md`
+ * and adds a byte-identical `release-vY.md`, which git reports as a single
+ * rename, so the added-entry query would come back empty and the guard would
+ * refuse a commit that does carry a new entry.
+ */
+export const readChangesetDiff = ({
+  mergeBase,
+  root,
+}: {
+  readonly mergeBase: string;
+  readonly root: string;
+}): Pick<ChangesetGateInput, "addedFiles" | "changedFiles"> => ({
+  changedFiles: gitPaths(
+    [
+      "diff",
+      "--no-renames",
+      "--name-only",
+      "-z",
+      "--diff-filter=ACMRD",
+      mergeBase,
+      "HEAD",
+    ],
+    root,
+  ),
+  addedFiles: gitPaths(
+    [
+      "diff",
+      "--no-renames",
+      "--name-only",
+      "-z",
+      "--diff-filter=A",
+      mergeBase,
+      "HEAD",
+      "--",
+      CHANGESET_PATHSPEC,
+    ],
+    root,
+  ),
+});
 
 const hasCommit = (ref: string): boolean =>
   git(["rev-parse", "--verify", "--quiet", `${ref}^{commit}`]).ok;
@@ -276,24 +318,7 @@ const main = (args: readonly string[]): number => {
 
   return report(
     decideChangesetGate({
-      changedFiles: gitPaths([
-        "diff",
-        "--name-only",
-        "-z",
-        "--diff-filter=ACMRD",
-        mergeBase,
-        "HEAD",
-      ]),
-      addedFiles: gitPaths([
-        "diff",
-        "--name-only",
-        "-z",
-        "--diff-filter=A",
-        mergeBase,
-        "HEAD",
-        "--",
-        CHANGESET_PATHSPEC,
-      ]),
+      ...readChangesetDiff({ mergeBase, root: REPO_ROOT }),
       releasePaths: loadChangesetPolicy().releasePaths,
     }),
   );
