@@ -1306,6 +1306,18 @@ describe("system prompt tool-reference guard", () => {
     }
   });
 
+  // A failed or empty corpus search is the condition under which a model
+  // answers from recollection, which for case law means a docket number that
+  // resolves to nothing. The rule has to reach every assembled prompt, not
+  // only the ones that happen to carry a corpus tool.
+  test("every assembled prompt forbids answering case law from recollection", () => {
+    for (const prompt of buildAssembledPrompts(FULL_TOOL_AVAILABILITY)) {
+      expect(prompt).toContain("CORPUS-ONLY CASE LAW");
+      expect(prompt).toContain("Retry with reformulated input");
+      expect(prompt).toContain("no flagged fallback");
+    }
+  });
+
   test("web research tools are named iff they are registered", () => {
     for (const prompt of buildAssembledPrompts(FULL_TOOL_AVAILABILITY)) {
       expect(prompt).toContain(`\`${WEB_SEARCH_TOOL_NAME}\``);
