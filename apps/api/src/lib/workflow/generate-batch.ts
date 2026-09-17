@@ -32,6 +32,7 @@ import type {
 import type { AIBatchProperty } from "@/api/lib/workflow/get-execution-plan";
 import { normalizeJustification } from "@/api/lib/workflow/parse-justifications";
 import type { JustificationFilenames } from "@/api/lib/workflow/parse-justifications";
+import { batesStamp } from "@/api/lib/workflow/system-one-batch";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 
 /**
@@ -66,7 +67,7 @@ const addBatesNumbers = async (
 
   for (const page of pages) {
     const { width, height, index } = page;
-    const batesNumber = `${simplifiedName}-${String(index + 1).padStart(4, "0")}`;
+    const batesNumber = batesStamp(simplifiedName, index);
     const textWidth = font.widthOfTextAtSize(batesNumber, fontSize);
     const textHeight = font.heightAtSize(fontSize);
     const rectangleWidth = textWidth + padding * 2;
