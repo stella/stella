@@ -21,7 +21,7 @@ import { caseLawDecisions } from "@/api/db/schema";
 import {
   storedObservationHasDetail,
   storedObservationHasDetailSqlFor,
-} from "@/api/lib/legal-search/ingestion-normalization";
+} from "@/api/lib/legal-search/partial-observation-sql";
 
 /** For an aliased decision table: a language sibling, a self-join. */
 export const publishedCaseLawDecisionFor = storedObservationHasDetail;
