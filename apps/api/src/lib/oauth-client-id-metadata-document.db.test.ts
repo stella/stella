@@ -30,7 +30,7 @@ const metadataDocument = (overrides: Record<string, unknown> = {}) => ({
 });
 
 await mock.module("@better-auth/cimd/node", () => ({
-  fetchClientMetadataResource: (input: RequestInfo | URL) => {
+  fetchClientMetadataResource: (input: string | URL | Request) => {
     const url = input instanceof Request ? input.url : String(input);
     requestedUrls.push(url);
     const document = documentsByUrl.get(url);
@@ -77,9 +77,12 @@ const authorize = async (
     scope: "openid",
   });
   return await getAuth().handler(
-    new Request(`${getAuthEndpointUrl("oauth2/authorize")}?${query}`, {
-      headers: { "x-forwarded-for": `198.51.100.${String(requestsIssued)}` },
-    }),
+    new Request(
+      `${getAuthEndpointUrl("oauth2/authorize")}?${query.toString()}`,
+      {
+        headers: { "x-forwarded-for": `198.51.100.${String(requestsIssued)}` },
+      },
+    ),
   );
 };
 
