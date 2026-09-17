@@ -89,7 +89,7 @@ const lawCompatFetchArgsSchema = nullAsAbsent(
   }),
 );
 
-export const LAW_COMPAT_TOOL_DEFINITIONS = [
+const LAW_COMPAT_TOOL_DEFINITIONS = [
   defineValibotMcpTool({
     annotations: {
       title: "Search",
