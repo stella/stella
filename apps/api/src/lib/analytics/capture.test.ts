@@ -50,6 +50,19 @@ const captureFromSiteB = (): void => {
   captureError(new Error("boom"));
 };
 
+/**
+ * A query failure as the driver raises it: a wrapper carrying no `code` of
+ * its own, over a driver error whose SQLSTATE sits in `errno`. Every
+ * occurrence is built on one source line, so two SQLSTATEs from here differ
+ * in nothing else — the shape of one call site that fails for unrelated
+ * reasons.
+ */
+const captureQueryFailure = (sqlState: string): void => {
+  const driverError = new Error("driver rejected the statement");
+  Reflect.set(driverError, "errno", sqlState);
+  captureError(new Error("query failed", { cause: driverError }));
+};
+
 const extractionError = ({
   exitCode,
   message,
@@ -106,6 +119,16 @@ describe("captureError repeat suppression", () => {
     expect(captured).toHaveLength(2);
   });
 
+  test("one SQLSTATE at a call site does not throttle another", () => {
+    // A hot failure must not hide a rarer one raised from the same line: a
+    // statement the server cancels and a column the query cannot resolve are
+    // different defects that share every other component of the key.
+    captureQueryFailure("54000");
+    captureQueryFailure("42703");
+
+    expect(captured).toHaveLength(2);
+  });
+
   test("suppressed occurrences are counted onto the next reported event", () => {
     // Nothing is silently swallowed: the rate stays recoverable from the
     // dashboard even though the repeats themselves are not ingested.
@@ -142,6 +165,25 @@ describe("captureError issue grouping", () => {
       (event) => event.properties["$exception_fingerprint"],
     );
     expect(typeof fingerprints.at(0)).toBe("string");
+    expect(fingerprints.at(0)).not.toBe(fingerprints.at(1));
+  });
+
+  test("database failures at one call site group by SQLSTATE", () => {
+    // A missing column and a violated check constraint are raised from the
+    // same line, so class, stable code, and both frames are identical and the
+    // SQLSTATE is the only thing that tells the two defects apart.
+    captureQueryFailure("42703");
+    captureQueryFailure("23514");
+
+    // Both must reach the sink before their fingerprints can be compared: one
+    // identity for both would throttle the second away and leave the
+    // comparison to pass against a missing event.
+    expect(captured).toHaveLength(2);
+    const fingerprints = captured.map(
+      (event) => event.properties["$exception_fingerprint"],
+    );
+    expect(fingerprints.at(0)).toContain("42703");
+    expect(fingerprints.at(1)).toContain("23514");
     expect(fingerprints.at(0)).not.toBe(fingerprints.at(1));
   });
 
