@@ -196,7 +196,7 @@ const TOOLS_LIST_PAYLOAD_CHAR_CEILING: Record<SurfaceMode, number> = {
 const OUTPUT_SCHEMA_TOTAL_CHAR_CEILING: Record<SurfaceMode, number> = {
   default: 46_600,
   anonymized: 32_300,
-  law: 9_298,
+  law: 9298,
 };
 
 // Largest measured schema is read_document at 3_434 chars. A single tool must
