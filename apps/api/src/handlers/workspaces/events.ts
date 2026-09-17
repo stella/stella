@@ -3,6 +3,7 @@ import Elysia from "elysia";
 import { workspaceAccessMacro } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import { subscribe } from "@/api/lib/sse";
+import { sseResponse } from "@/api/lib/sse-heartbeat";
 
 /**
  * SSE endpoint for real-time workspace events.
@@ -44,12 +45,6 @@ export const workspaceEventsRoute = new Elysia({
         workspaceId,
       });
 
-      return new Response(stream, {
-        headers: {
-          "Content-Type": "text/event-stream",
-          "Cache-Control": "no-cache, no-store",
-          Connection: "keep-alive",
-        },
-      });
+      return sseResponse(stream);
     },
   );

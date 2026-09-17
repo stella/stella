@@ -6,6 +6,7 @@ import type {
   UserRealtimeEvent,
   WorkspaceRealtimeEvent,
 } from "@stll/api-contract";
+import { SSE_HEARTBEAT_FRAME } from "@stll/api-contract/sse-heartbeat";
 
 import type { SafeId } from "@/api/lib/branded-types";
 import { connectionErrorFields, errorTag } from "@/api/lib/errors/utils";
@@ -88,7 +89,13 @@ const formatSSE = (
   return encoder.encode(`data: ${payload}\n\n`);
 };
 
-const formatKeepAlive = (): Uint8Array => encoder.encode(`:keep-alive\n\n`);
+/**
+ * The registry's own sweep writes the shared keep-alive frame. Its purpose is
+ * the sweep itself — a connection whose enqueue fails is dropped from the
+ * routing table — while the response wrapper in `sse-heartbeat.ts` owns wire
+ * liveness for every event stream. One spelling on the wire either way.
+ */
+const formatKeepAlive = (): Uint8Array => encoder.encode(SSE_HEARTBEAT_FRAME);
 
 /**
  * Close one stream controller best-effort. `close()` throws for a controller
@@ -144,8 +151,8 @@ export const subscribe = ({
   signal,
   userId,
   workspaceId,
-}: SubscribeOptions): ReadableStream => {
-  const stream = new ReadableStream({
+}: SubscribeOptions): ReadableStream<Uint8Array> => {
+  const stream = new ReadableStream<Uint8Array>({
     start(controller) {
       // The request signal can already be aborted here: the async auth
       // macro that runs before subscribe() awaits, and the client can
@@ -199,8 +206,8 @@ export const subscribeUser = ({
   organizationId,
   signal,
   userId,
-}: SubscribeUserOptions): ReadableStream => {
-  const stream = new ReadableStream({
+}: SubscribeUserOptions): ReadableStream<Uint8Array> => {
+  const stream = new ReadableStream<Uint8Array>({
     start(controller) {
       // Same hazard as `subscribe`: the async auth macro awaits before this
       // runs, so the client may already be gone and an aborted signal never

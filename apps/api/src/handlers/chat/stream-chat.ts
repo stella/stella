@@ -145,6 +145,7 @@ import type { ChatTerminalError } from "@/api/lib/errors/tagged-errors";
 import { errorFingerprint } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
 import { providerSafeJsonSchemaOptionsForTanStackProvider } from "@/api/lib/provider-safe-json-schema";
+import { withSseHeartbeat } from "@/api/lib/sse-heartbeat";
 import {
   abortControllerFromSignal,
   mergeGenerationOptions,
@@ -532,7 +533,10 @@ export const streamChat = async ({
     source: stream,
   });
   const processedStream = processServerChatStream({
-    abortSignal,
+    // The run's own signal, not the request's. Cancelling the response stream
+    // aborts only this derived controller — that is the abort the client
+    // disconnect delivers — while a request abort reaches both.
+    abortSignal: abortController.signal,
     existingMessageIds: new Set(preparedMessageList.map(({ id }) => id)),
     flushPendingSource: persistenceVisibleStream.flushPending,
     preservedTerminalMessageId: owningAssistantMessageId,
@@ -550,7 +554,9 @@ export const streamChat = async ({
     source: processedStream,
   });
 
-  return toServerSentEventsResponse(output, { abortController });
+  return withSseHeartbeat(
+    toServerSentEventsResponse(output, { abortController }),
+  );
 };
 
 const thirdPartyBoundaryRefusalResponse = (
@@ -1706,15 +1712,27 @@ export const processServerChatStream = async function* ({
     let outcome: ChatTurnOutcome;
     if (incompleteClientInteraction) {
       outcome = { type: "failed", error: "unknown" };
-    } else if (awaitingUserInteraction === null) {
-      outcome = { type: "completed" };
-    } else {
+    } else if (awaitingUserInteraction !== null) {
       outcome = {
         type: "awaiting-user",
         interaction: awaitingUserInteraction,
       };
+    } else if (abortSignal.aborted) {
+      // A cancelled run drains like a finished one. TanStack's agent loop
+      // checks its cancellation before it reads each adapter chunk, so the
+      // terminal `RUN_ERROR` the adapter yields for the aborted provider
+      // request is dropped rather than forwarded, and this generator sees a
+      // source that simply ended. Grading that silence as a completion
+      // persists a turn with no answer and no reason; the signal is what says
+      // the turn was cut.
+      outcome = { type: "interrupted", reason: "client-disconnected" };
+    } else {
+      outcome = { type: "completed" };
     }
     await terminalize({
+      // An interrupted outcome flushes the pending source into the processor,
+      // which has to be finalized again for that content to reach the message.
+      flushProcessor: outcome.type === "interrupted",
       outcome,
     });
     for (const chunk of finalRunFinishedChunks) {

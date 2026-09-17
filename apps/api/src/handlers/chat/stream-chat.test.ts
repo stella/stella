@@ -293,6 +293,7 @@ type ProcessedStreamFinishEvent = Parameters<
 /** Run the loop's emission through the same persistence path as `streamChat`. */
 const persistNativeInterruptTurn = async (
   chunks: AsyncIterable<StreamChunk>,
+  abortSignal: AbortSignal = new AbortController().signal,
 ) => {
   const messageId = toSafeId<"chatMessage">(
     "11111111-1111-4111-8111-111111111111",
@@ -318,7 +319,7 @@ const persistNativeInterruptTurn = async (
   };
   const emitted = await collectChunks(
     processServerChatStream({
-      abortSignal: new AbortController().signal,
+      abortSignal,
       getResponseMessage: () => responseMessage,
       mapMessageId,
       onFinish: (event) => {
@@ -330,6 +331,127 @@ const persistNativeInterruptTurn = async (
   );
   return { emitted, finish: terminal.finish, source };
 };
+
+/**
+ * A turn the connection outlives: the model calls a tool, and while it thinks
+ * about the result the client goes away. The response stream's cancel aborts
+ * the run, the provider request rejects, and the adapter reports that as its
+ * terminal `RUN_ERROR` — the shape the OpenRouter text adapter emits from its
+ * own catch.
+ */
+const createAbortedAfterToolCallAdapter = (
+  abortController: AbortController,
+): AnyTextAdapter => {
+  let iteration = 0;
+  return {
+    kind: "text",
+    name: "aborted-after-tool-call",
+    model: "aborted-after-tool-call",
+    "~types": {
+      providerOptions: {},
+      inputModalities: ["text"],
+      messageMetadataByModality: {},
+      toolCapabilities: [],
+      toolCallMetadata: {},
+      systemPromptMetadata: undefined,
+    },
+    async *chatStream({ model, runId, threadId }) {
+      iteration += 1;
+      const timestamp = Date.now();
+      const resolvedRunId = runId ?? "run-1";
+      const resolvedThreadId = threadId ?? "thread-1";
+      if (iteration > 1) {
+        // Reading the tool result, the model produces nothing for as long as
+        // it thinks; the connection goes first and the provider request
+        // rejects with the abort.
+        abortController.abort("client disconnected");
+        yield {
+          type: EventType.RUN_ERROR,
+          message: "Request aborted",
+          code: "aborted",
+          model,
+          timestamp,
+        } satisfies StreamChunk;
+        return;
+      }
+      yield {
+        type: EventType.RUN_STARTED,
+        runId: resolvedRunId,
+        threadId: resolvedThreadId,
+        model,
+        timestamp,
+      } satisfies StreamChunk;
+      yield {
+        type: EventType.TOOL_CALL_START,
+        toolCallId: "call-1",
+        toolCallName: "run-code",
+        parentMessageId: "provider-message-1",
+        timestamp,
+      } satisfies StreamChunk;
+      yield {
+        type: EventType.TOOL_CALL_ARGS,
+        toolCallId: "call-1",
+        delta: '{"source":"1 + 1"}',
+        model,
+        timestamp,
+      } satisfies StreamChunk;
+      yield {
+        type: EventType.TOOL_CALL_END,
+        toolCallId: "call-1",
+        timestamp,
+      } satisfies StreamChunk;
+      yield {
+        type: EventType.RUN_FINISHED,
+        runId: resolvedRunId,
+        threadId: resolvedThreadId,
+        finishReason: "tool_calls",
+        model,
+        timestamp,
+      } satisfies StreamChunk;
+    },
+    structuredOutput: () => {
+      throw new Error("Structured output is not part of this fixture");
+    },
+  };
+};
+
+describe("a turn whose connection dropped mid-run", () => {
+  test("settles as interrupted, not as a completion with no answer", async () => {
+    const abortController = new AbortController();
+    const codeTool = toolDefinition({
+      name: "run-code",
+      description: "Server-executed code",
+      inputSchema: toTanStackToolSchema(v.object({ source: v.string() })),
+    }).server(async () => ({ value: 2 }));
+    const { finish, source } = await persistNativeInterruptTurn(
+      chat({
+        abortController,
+        adapter: createAbortedAfterToolCallAdapter(abortController),
+        agentLoopStrategy: maxIterations(3),
+        messages: [{ role: "user", content: "Add one and one" }],
+        threadId: "thread-1",
+        tools: [codeTool],
+      }),
+      abortController.signal,
+    );
+
+    // The fault this compensates for: the agent loop tests its cancellation
+    // before it reads each adapter chunk, so the terminal RUN_ERROR is
+    // dropped and the turn drains exactly like a finished one. If a future
+    // SDK forwards it, this expectation fails and the branch below can go.
+    expect(source.map((chunk) => chunk.type)).not.toContain(
+      EventType.RUN_ERROR,
+    );
+    expect(finish?.outcome).toEqual({
+      type: "interrupted",
+      reason: "client-disconnected",
+    });
+    // The tool call the model completed before the cut is still the turn's.
+    expect(finish?.responseMessage.parts.map((part) => part.type)).toContain(
+      "tool-call",
+    );
+  });
+});
 
 describe("native interrupt boundary persistence", () => {
   test("persists a client-tool turn the loop pauses for, and awaits the client", async () => {

@@ -5,6 +5,7 @@ import { resolveCaching } from "@/api/lib/ai-config";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { sseResponse } from "@/api/lib/sse-heartbeat";
 import { streamTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
 
 const MAX_PREFIX_CHARS = 8000;
@@ -144,16 +145,7 @@ const autocompleteStream = createSafeRootHandler(
       },
     });
 
-    return Result.ok(
-      new Response(sse, {
-        status: 200,
-        headers: {
-          "content-type": "text/event-stream; charset=utf-8",
-          "cache-control": "no-cache, no-transform",
-          "x-accel-buffering": "no",
-        },
-      }),
-    );
+    return Result.ok(sseResponse(sse));
   },
 );
 

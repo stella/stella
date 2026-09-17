@@ -247,6 +247,11 @@ export const LIMITS = {
   mcpGatewayToolSchemaMaxChars: 20_000,
   mcpGatewayRateLimitWindowMs: 60_000,
   mcpGatewayRateLimitMax: 60,
+  /** Silence an event stream may carry before it writes a comment frame. The
+   *  CDN and the load balancer in front of this service both cut a connection
+   *  after 60 s without a byte, so the interval leaves room for three writes
+   *  inside one of their windows. */
+  sseHeartbeatMs: 15_000,
   clauseVariantsPerClause: 10,
   clauseVersionsPerClause: 50,
   templateClausesPerTemplate: 50,

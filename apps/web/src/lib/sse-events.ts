@@ -16,6 +16,7 @@ export type SSEEvent = { event: string; data: string };
 const DEFAULT_EVENT_NAME = "message";
 const EVENT_FIELD = "event:";
 const DATA_FIELD = "data:";
+const COMMENT_PREFIX = ":";
 const FRAME_SEPARATOR = "\n\n";
 
 /** Parse whole frames out of an already-complete chunk of the stream. The
@@ -29,11 +30,19 @@ export const parseSSEEvents = (raw: string): SSEEvent[] => {
     let event = DEFAULT_EVENT_NAME;
     const dataLines: string[] = [];
     for (const line of block.split("\n")) {
+      if (line.startsWith(COMMENT_PREFIX)) {
+        continue;
+      }
       if (line.startsWith(EVENT_FIELD)) {
         event = line.slice(EVENT_FIELD.length).trim();
       } else if (line.startsWith(DATA_FIELD)) {
         dataLines.push(line.slice(DATA_FIELD.length).trim());
       }
+    }
+    // A frame that carried no `data:` field dispatches nothing, which is what
+    // makes the server's keep-alive comment frame invisible here.
+    if (dataLines.length === 0) {
+      continue;
     }
     events.push({ event, data: dataLines.join("\n") });
   }

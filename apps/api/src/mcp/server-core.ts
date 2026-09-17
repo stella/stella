@@ -16,6 +16,10 @@ import type {
 import { panic, Result } from "better-result";
 
 import { detached } from "@/api/lib/detached";
+import {
+  isEventStreamResponse,
+  withSseHeartbeat,
+} from "@/api/lib/sse-heartbeat";
 import { isMcpSession, type McpSession } from "@/api/mcp/auth";
 import type { RecordMcpSessionInitialized } from "@/api/mcp/client-identity";
 import {
@@ -257,11 +261,15 @@ const withMcpCors = (
       );
     }
   }
-  return new Response(response.body, {
+  const answer = new Response(response.body, {
     headers,
     status: response.status,
     statusText: response.statusText,
   });
+  // Both transport legs exit here, so this is where an event-stream answer —
+  // the notification channel, or a tool call whose work outlasts an
+  // intermediary's idle timeout — picks up the keep-alive.
+  return isEventStreamResponse(answer) ? withSseHeartbeat(answer) : answer;
 };
 
 /** Transport-level refusal (the SDK reserves -32000..-32099 for these). */
@@ -863,15 +871,7 @@ export const createMcpHttpRequestHandler = ({
     try {
       await server.connect(transport);
       const response = await transport.handleRequest(request, { authInfo });
-      const isEventStream =
-        response.headers
-          .get("content-type")
-          ?.split(";")
-          .at(0)
-          ?.trim()
-          .toLowerCase() === "text/event-stream";
-
-      if (response.body === null || !isEventStream) {
+      if (response.body === null || !isEventStreamResponse(response)) {
         await teardown();
         return response;
       }

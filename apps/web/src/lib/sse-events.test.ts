@@ -1,4 +1,7 @@
+import { fetchServerSentEvents } from "@tanstack/ai-client";
 import { describe, expect, it } from "bun:test";
+
+import { SSE_HEARTBEAT_FRAME } from "@stll/api-contract/sse-heartbeat";
 
 import { parseSSEEvents, readSSEEvents } from "@/lib/sse-events";
 
@@ -33,6 +36,52 @@ describe("parseSSEEvents", () => {
         (frame) => frame.event,
       ),
     ).toEqual(["a", "b"]);
+  });
+
+  it("dispatches nothing for the server's keep-alive frame", () => {
+    expect(parseSSEEvents(SSE_HEARTBEAT_FRAME)).toEqual([]);
+    expect(
+      parseSSEEvents(`${SSE_HEARTBEAT_FRAME}event: a\ndata: 1\n\n`),
+    ).toEqual([{ event: "a", data: "1" }]);
+  });
+});
+
+describe("the TanStack chat client reading the same keep-alive frame", () => {
+  it("yields no chunk for it", async () => {
+    const terminalChunk = {
+      type: "RUN_FINISHED",
+      threadId: "thread-1",
+      runId: "run-1",
+      timestamp: 1,
+    };
+    const fetchClient: typeof fetch = Object.assign(
+      async () =>
+        new Response(
+          streamOf([
+            SSE_HEARTBEAT_FRAME,
+            `data: ${JSON.stringify(terminalChunk)}\n\n`,
+          ]),
+          { headers: { "content-type": "text/event-stream" } },
+        ),
+      { preconnect: () => undefined },
+    );
+    const connection = fetchServerSentEvents("https://example.invalid/chat", {
+      fetchClient,
+    });
+
+    const chunks = [];
+    for await (const chunk of connection.connect(
+      [],
+      {},
+      new AbortController().signal,
+      { runId: "run-1", threadId: "thread-1" },
+    )) {
+      chunks.push(chunk);
+    }
+
+    // Two frames on the wire, one chunk out: the keep-alive dispatched nothing.
+    expect(chunks).toHaveLength(1);
+    expect(chunks.at(0)).toMatchObject({ runId: "run-1" });
   });
 });
 

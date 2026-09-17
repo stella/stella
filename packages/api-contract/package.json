@@ -31,6 +31,7 @@
     "./time-entry-types": "./src/time-entry-types.ts",
     "./time-entries": "./src/time-entries.ts",
     "./signals": "./src/signals.ts",
+    "./sse-heartbeat": "./src/sse-heartbeat.ts",
     "./workflow-status": "./src/workflow-status.ts"
   },
   "scripts": {

@@ -9,6 +9,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { rateLimit } from "@/api/lib/rate-limit/rate-limit";
 import { createStandardApiRateLimitOptions } from "@/api/lib/rate-limit/standard-api";
 import { subscribeUser } from "@/api/lib/sse";
+import { sseResponse } from "@/api/lib/sse-heartbeat";
 
 // Mounted at `/v1/notifications` directly at the root, like `/v1/memories`:
 // folding another `.use()` into the large `/v1` group tips Elysia's inferred
@@ -56,13 +57,7 @@ export const notificationsRoute = new Elysia({
         userId: user.id,
       });
 
-      return new Response(stream, {
-        headers: {
-          "Content-Type": "text/event-stream",
-          "Cache-Control": "no-cache, no-store",
-          Connection: "keep-alive",
-        },
-      });
+      return sseResponse(stream);
     },
   )
   .get("/", listNotifications.handler, {
