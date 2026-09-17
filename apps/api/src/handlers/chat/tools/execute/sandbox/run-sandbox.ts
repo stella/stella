@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { Result, panic } from "better-result";
 import type {
   QuickJSAsyncContext,
   QuickJSDeferredPromise,
@@ -116,11 +116,10 @@ const sandboxHostWorkInFlight = new Set<Promise<void>>();
 
 /**
  * Default budget for {@link awaitSandboxAdmissionIdle}. Generously above the
- * longest legitimate orphaned host-work tail (bounded by a run's wall-clock
- * deadline, {@link DEFAULT_SANDBOX_LIMITS}.maxDurationMs) yet below the sandbox
- * test suite's 15s per-test ceiling, so a genuinely stranded host promise fails
- * the drain fast with a diagnostic instead of silently 15s-timing-out every
- * subsequent test.
+ * host-work tail a test legitimately leaves behind (every sandbox test settles
+ * the host calls it starts) yet below the sandbox test suite's 15s per-test
+ * ceiling, so a genuinely stranded host promise fails the drain fast with a
+ * diagnostic instead of silently 15s-timing-out every subsequent test.
  */
 export const SANDBOX_ADMISSION_IDLE_TIMEOUT_MS = 10_000;
 
@@ -157,7 +156,7 @@ export class SandboxAdmissionNotIdleError extends Error {
         `queuedWaiters=${snapshot.queuedWaiters}, ` +
         `hostWorkInFlight=${snapshot.hostWorkInFlight}. ` +
         "A host promise was likely stranded (e.g. a test abandoned an unresolved gate); " +
-        "resolve/settle every host call it starts, or lower the run's maxDurationMs.",
+        "resolve/settle every host call it starts.",
     );
     this.name = "SandboxAdmissionNotIdleError";
     this.snapshot = snapshot;
@@ -210,9 +209,9 @@ export const getSandboxAdmissionSnapshot = (): SandboxAdmissionSnapshot =>
  * Test-only: register host work in the process-global in-flight set exactly as
  * `runHostCall` does (added on registration, removed when it settles). Drain
  * tests use it to create a stranded entry (a promise that never settles)
- * DIRECTLY, instead of racing a real run's wall-clock deadline against QuickJS
- * startup on a loaded runner: with a small `maxDurationMs`, the deadline can
- * pass before the script's host call ever executes, so the end-to-end
+ * DIRECTLY, instead of racing a real run's wall-clock ceiling against QuickJS
+ * startup on a loaded runner: with a small `maxTotalDurationMs`, the ceiling
+ * can pass before the script's host call ever executes, so the end-to-end
  * construction of a strand is nondeterministic under CI load.
  */
 export const trackSandboxHostWorkForTest = (work: Promise<void>): void => {
@@ -283,8 +282,82 @@ export const awaitSandboxAdmissionIdle = async ({
 const buildSandboxScript = (transpiledBody: string): string =>
   `${buildHostBridgePrelude()}\n${transpiledBody}`;
 
-const hasDeadlinePassed = (deadline: number): boolean =>
-  Temporal.Now.instant().epochMilliseconds >= deadline;
+/**
+ * Whether the script is spending its own budget or parked in
+ * {@link waitForHostProgress}, which owns the only suspension.
+ */
+type SandboxScriptBudget =
+  | { status: "spending" }
+  | { status: "suspended"; suspendedAtMs: number };
+
+/**
+ * The two wall clocks a run answers to. `scriptDeadlineMs` is the script's own
+ * budget (`maxDurationMs`) and moves: the interval the host loop spends blocked
+ * on an in-flight host call is suspended and then added back, so tool time
+ * never counts as script time. Guest code cannot run during that interval, so
+ * everything charged to the script deadline really is the script's own work —
+ * including a busy loop that starts a host call and never awaits it.
+ * `totalDeadlineMs` (`maxTotalDurationMs`) never moves and bounds the run
+ * outright.
+ */
+type SandboxClock = {
+  scriptDeadlineMs: number;
+  readonly totalDeadlineMs: number;
+  budget: SandboxScriptBudget;
+};
+
+/** Which of the two clocks expired, for the message a reader gets. */
+type SandboxLimitExceeded = "script" | "total";
+
+type CreateSandboxClockProps = {
+  startedAtMs: number;
+  limits: SandboxLimits;
+};
+
+const createSandboxClock = ({
+  startedAtMs,
+  limits,
+}: CreateSandboxClockProps): SandboxClock => ({
+  scriptDeadlineMs: startedAtMs + limits.maxDurationMs,
+  totalDeadlineMs: startedAtMs + limits.maxTotalDurationMs,
+  budget: { status: "spending" },
+});
+
+const suspendScriptBudget = (clock: SandboxClock): void => {
+  if (clock.budget.status === "suspended") {
+    return panic("Sandbox script budget was suspended twice");
+  }
+
+  clock.budget = {
+    status: "suspended",
+    suspendedAtMs: Temporal.Now.instant().epochMilliseconds,
+  };
+};
+
+const resumeScriptBudget = (clock: SandboxClock): void => {
+  const { budget } = clock;
+  if (budget.status === "spending") {
+    return panic("Sandbox script budget was resumed without a suspension");
+  }
+
+  clock.scriptDeadlineMs +=
+    Temporal.Now.instant().epochMilliseconds - budget.suspendedAtMs;
+  clock.budget = { status: "spending" };
+};
+
+const sandboxLimitExceeded = (
+  clock: SandboxClock,
+): SandboxLimitExceeded | undefined => {
+  const now = Temporal.Now.instant().epochMilliseconds;
+  if (now >= clock.totalDeadlineMs) {
+    return "total";
+  }
+  if (clock.budget.status === "suspended") {
+    return undefined;
+  }
+
+  return now >= clock.scriptDeadlineMs ? "script" : undefined;
+};
 
 const errorMessageFromUnknown = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
@@ -370,10 +443,16 @@ const attachSandboxLogsToError = (
         cause: error.cause,
       });
 
-const createTimeoutError = (limits: SandboxLimits): SandboxError =>
+const createTimeoutError = (
+  limits: SandboxLimits,
+  exceeded: SandboxLimitExceeded,
+): SandboxError =>
   new SandboxError({
     reason: "timeout",
-    message: `Sandbox execution exceeded ${limits.maxDurationMs}ms.`,
+    message:
+      exceeded === "script"
+        ? `Sandbox execution exceeded maxDurationMs (${limits.maxDurationMs}ms) of script time, which excludes time spent in tool calls.`
+        : `Sandbox execution exceeded maxTotalDurationMs (${limits.maxTotalDurationMs}ms) of total time, including time spent in tool calls.`,
   });
 
 const createStalledError = (): SandboxError =>
@@ -418,21 +497,21 @@ const rejectVmPromise = (
 
 type ShouldIgnoreHostCompletionProps = {
   ctx: QuickJSAsyncContext;
-  deadline: number;
+  clock: SandboxClock;
   state: HostBridgeState;
 };
 
 const shouldIgnoreHostCompletion = ({
   ctx,
-  deadline,
+  clock,
   state,
 }: ShouldIgnoreHostCompletionProps): boolean =>
-  state.closed || hasDeadlinePassed(deadline) || !ctx.alive;
+  state.closed || sandboxLimitExceeded(clock) !== undefined || !ctx.alive;
 
 type SettleDeferredWithBridgeErrorProps = {
   ctx: QuickJSAsyncContext;
   deferred: QuickJSDeferredPromise;
-  deadline: number;
+  clock: SandboxClock;
   error: VmBridgeError;
   state: HostBridgeState;
 };
@@ -440,11 +519,11 @@ type SettleDeferredWithBridgeErrorProps = {
 const settleDeferredWithBridgeError = ({
   ctx,
   deferred,
-  deadline,
+  clock,
   error,
   state,
 }: SettleDeferredWithBridgeErrorProps): void => {
-  if (shouldIgnoreHostCompletion({ ctx, deadline, state })) {
+  if (shouldIgnoreHostCompletion({ ctx, clock, state })) {
     return;
   }
 
@@ -591,7 +670,7 @@ export const runSandbox = async ({
       ...DEFAULT_SANDBOX_LIMITS,
       ...partialLimits,
     };
-    const deadline = startedAt + limits.maxDurationMs;
+    const clock = createSandboxClock({ startedAtMs: startedAt, limits });
 
     return await Result.gen(async function* () {
       const transpiled = yield* transpileSandboxSource(source);
@@ -600,7 +679,7 @@ export const runSandbox = async ({
           script: buildSandboxScript(transpiled),
           registry,
           limits,
-          deadline,
+          clock,
         }),
       );
 
@@ -667,7 +746,7 @@ type ExecuteSandboxScriptProps = {
   script: string;
   registry: SandboxFunctionRegistry;
   limits: SandboxLimits;
-  deadline: number;
+  clock: SandboxClock;
 };
 
 type CreateSandboxContextResult = Result<QuickJSAsyncContext, SandboxError>;
@@ -687,7 +766,7 @@ const executeSandboxScript = async ({
   script,
   registry,
   limits,
-  deadline,
+  clock,
 }: ExecuteSandboxScriptProps): Promise<ExecuteSandboxScriptResult> => {
   const state = createHostBridgeState();
   const logCapture = createSandboxLogCapture();
@@ -699,7 +778,7 @@ const executeSandboxScript = async ({
     }
 
     const ctx = scope.manage(sandboxContext.value);
-    configureSandboxRuntime({ ctx, limits, deadline, state });
+    configureSandboxRuntime({ ctx, limits, clock, state });
 
     const readCall = ctx.newFunction(
       SANDBOX_HOST_BRIDGE_GLOBAL,
@@ -710,7 +789,7 @@ const executeSandboxScript = async ({
           state,
           registry,
           limits,
-          deadline,
+          clock,
           nameHandle,
           argsHandle,
         }),
@@ -742,7 +821,7 @@ const executeSandboxScript = async ({
           state,
           script,
           limits,
-          deadline,
+          clock,
         })
       )
         .map((value) => ({
@@ -763,20 +842,21 @@ const executeSandboxScript = async ({
 type ConfigureSandboxRuntimeProps = {
   ctx: QuickJSAsyncContext;
   limits: SandboxLimits;
-  deadline: number;
+  clock: SandboxClock;
   state: HostBridgeState;
 };
 
 const configureSandboxRuntime = ({
   ctx,
   limits,
-  deadline,
+  clock,
   state,
 }: ConfigureSandboxRuntimeProps): void => {
   ctx.runtime.setMemoryLimit(limits.maxMemoryBytes);
   ctx.runtime.setMaxStackSize(limits.maxStackBytes);
   ctx.runtime.setInterruptHandler(
-    () => state.hostCallLimitTripped || hasDeadlinePassed(deadline),
+    () =>
+      state.hostCallLimitTripped || sandboxLimitExceeded(clock) !== undefined,
   );
 };
 
@@ -786,7 +866,7 @@ type HandleStellaCallProps = {
   state: HostBridgeState;
   registry: SandboxFunctionRegistry;
   limits: SandboxLimits;
-  deadline: number;
+  clock: SandboxClock;
   nameHandle: QuickJSHandle;
   argsHandle: QuickJSHandle;
 };
@@ -797,7 +877,7 @@ const handleStellaCall = ({
   state,
   registry,
   limits,
-  deadline,
+  clock,
   nameHandle,
   argsHandle,
 }: HandleStellaCallProps): QuickJSHandle => {
@@ -833,7 +913,7 @@ const handleStellaCall = ({
     ctx,
     deferred,
     state,
-    deadline,
+    clock,
     fn: preparedCall.value.fn,
     parsedArgs: preparedCall.value.parsedArgs,
   });
@@ -931,7 +1011,7 @@ type RunHostCallProps = {
   ctx: QuickJSAsyncContext;
   deferred: QuickJSDeferredPromise;
   state: HostBridgeState;
-  deadline: number;
+  clock: SandboxClock;
   fn: SandboxFunction;
   parsedArgs: unknown;
 };
@@ -941,7 +1021,7 @@ const runHostCall = ({
   ctx,
   deferred,
   state,
-  deadline,
+  clock,
   fn,
   parsedArgs,
 }: RunHostCallProps): Promise<void> => {
@@ -960,7 +1040,7 @@ const runHostCall = ({
       settleDeferredWithBridgeError({
         ctx,
         deferred,
-        deadline,
+        clock,
         error: hostResult.error,
         state,
       });
@@ -972,7 +1052,7 @@ const runHostCall = ({
       settleDeferredWithBridgeError({
         ctx,
         deferred,
-        deadline,
+        clock,
         error: createVmBridgeError(
           "SandboxHostError",
           serialised.error.message,
@@ -982,7 +1062,7 @@ const runHostCall = ({
       return;
     }
 
-    if (shouldIgnoreHostCompletion({ ctx, deadline, state })) {
+    if (shouldIgnoreHostCompletion({ ctx, clock, state })) {
       return;
     }
 
@@ -998,7 +1078,7 @@ const runHostCall = ({
       settleDeferredWithBridgeError({
         ctx,
         deferred,
-        deadline,
+        clock,
         error: createVmBridgeError(
           "SandboxHostError",
           errorMessageFromUnknown(error),
@@ -1022,7 +1102,7 @@ type RunScriptInContextProps = {
   state: HostBridgeState;
   script: string;
   limits: SandboxLimits;
-  deadline: number;
+  clock: SandboxClock;
 };
 
 const runScriptInContext = async ({
@@ -1031,19 +1111,14 @@ const runScriptInContext = async ({
   state,
   script,
   limits,
-  deadline,
+  clock,
 }: RunScriptInContextProps): Promise<RunScriptInContextResult> => {
   const evalResult = ctx.evalCode(script, "sandbox.js");
   if (evalResult.error) {
     const errHandle = scope.manage(evalResult.error);
     const dumpedError = dumpVmError(ctx, errHandle);
     return Result.err(
-      classifyVmError(
-        dumpedError,
-        limits,
-        deadline,
-        state.hostCallLimitTripped,
-      ),
+      classifyVmError(dumpedError, limits, clock, state.hostCallLimitTripped),
     );
   }
 
@@ -1054,7 +1129,7 @@ const runScriptInContext = async ({
     state,
     promiseHandle,
     limits,
-    deadline,
+    clock,
   });
   if (Result.isError(settled)) {
     return settled;
@@ -1066,7 +1141,7 @@ const runScriptInContext = async ({
       classifyVmError(
         dumpVmError(ctx, errHandle),
         limits,
-        deadline,
+        clock,
         state.hostCallLimitTripped,
       ),
     );
@@ -1087,7 +1162,7 @@ type DriveVmUntilSettledProps = {
   state: HostBridgeState;
   promiseHandle: QuickJSHandle;
   limits: SandboxLimits;
-  deadline: number;
+  clock: SandboxClock;
 };
 
 const driveVmUntilSettled = async ({
@@ -1096,7 +1171,7 @@ const driveVmUntilSettled = async ({
   state,
   promiseHandle,
   limits,
-  deadline,
+  clock,
 }: DriveVmUntilSettledProps): Promise<DriveVmUntilSettledResult> => {
   let idlePasses = 0;
 
@@ -1106,12 +1181,7 @@ const driveVmUntilSettled = async ({
       const errHandle = scope.manage(drained.error);
       const dumpedError = dumpVmError(ctx, errHandle);
       return Result.err(
-        classifyVmError(
-          dumpedError,
-          limits,
-          deadline,
-          state.hostCallLimitTripped,
-        ),
+        classifyVmError(dumpedError, limits, clock, state.hostCallLimitTripped),
       );
     }
 
@@ -1129,14 +1199,9 @@ const driveVmUntilSettled = async ({
       });
     }
 
-    if (hasDeadlinePassed(deadline)) {
+    if (sandboxLimitExceeded(clock) !== undefined) {
       return Result.err(
-        classifyVmError(
-          undefined,
-          limits,
-          deadline,
-          state.hostCallLimitTripped,
-        ),
+        classifyVmError(undefined, limits, clock, state.hostCallLimitTripped),
       );
     }
 
@@ -1144,17 +1209,10 @@ const driveVmUntilSettled = async ({
       idlePasses = 0;
       const waitResult = await waitForHostProgress({
         pendingHostWork: state.pendingHostWork,
-        deadline,
+        clock,
       });
       if (waitResult === "timeout") {
-        return Result.err(
-          classifyVmError(
-            undefined,
-            limits,
-            deadline,
-            state.hostCallLimitTripped,
-          ),
-        );
+        return Result.err(createTimeoutError(limits, "total"));
       }
       continue;
     }
@@ -1175,48 +1233,64 @@ const driveVmUntilSettled = async ({
 type HostProgress = "progress" | "timeout";
 type WaitForHostProgressProps = {
   pendingHostWork: Set<Promise<void>>;
-  deadline: number;
+  clock: SandboxClock;
 };
 
+/**
+ * Park until an in-flight host call settles, or the total ceiling passes. This
+ * interval is the whole of what the script deadline excludes, and suspending
+ * it here is what makes that exclusion honest: guest code only runs while the
+ * loop drives the VM, never while the loop is parked, so the tool's own time is
+ * the only thing taken off the script's clock. The tool bounds its duration and
+ * `maxHostCalls` bounds how many may run, so only the total ceiling bounds the
+ * wait.
+ */
 const waitForHostProgress = async ({
   pendingHostWork,
-  deadline,
+  clock,
 }: WaitForHostProgressProps): Promise<HostProgress> => {
-  const remainingMs = deadline - Temporal.Now.instant().epochMilliseconds;
-  if (remainingMs <= 0) {
-    return "timeout";
+  suspendScriptBudget(clock);
+  try {
+    const remainingMs =
+      clock.totalDeadlineMs - Temporal.Now.instant().epochMilliseconds;
+    if (remainingMs <= 0) {
+      return "timeout";
+    }
+
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    const timeoutPromise = new Promise<"timeout">((resolve) => {
+      timeoutId = setTimeout(() => {
+        resolve("timeout");
+      }, remainingMs);
+    });
+    const progressPromise = Promise.race(Array.from(pendingHostWork)).then(
+      () => "progress" as const,
+    );
+
+    const result = await Promise.race([progressPromise, timeoutPromise]);
+    if (timeoutId !== undefined) {
+      clearTimeout(timeoutId);
+    }
+
+    return result;
+  } finally {
+    resumeScriptBudget(clock);
   }
-
-  let timeoutId: ReturnType<typeof setTimeout> | undefined;
-  const timeoutPromise = new Promise<"timeout">((resolve) => {
-    timeoutId = setTimeout(() => {
-      resolve("timeout");
-    }, remainingMs);
-  });
-  const progressPromise = Promise.race(Array.from(pendingHostWork)).then(
-    () => "progress" as const,
-  );
-
-  const result = await Promise.race([progressPromise, timeoutPromise]);
-  if (timeoutId !== undefined) {
-    clearTimeout(timeoutId);
-  }
-
-  return result;
 };
 
 const classifyVmError = (
   err: { name?: string; message?: string } | undefined,
   limits: SandboxLimits,
-  deadline: number,
+  clock: SandboxClock,
   hostCallLimitTripped: boolean,
 ): SandboxError => {
   const message = err?.message ?? "Unknown sandbox error";
   if (hostCallLimitTripped) {
     return createHostCallLimitError(limits);
   }
-  if (hasDeadlinePassed(deadline)) {
-    return createTimeoutError(limits);
+  const exceeded = sandboxLimitExceeded(clock);
+  if (exceeded !== undefined) {
+    return createTimeoutError(limits, exceeded);
   }
   if (/out of memory|memory/iu.test(message)) {
     return createMemoryError(message);

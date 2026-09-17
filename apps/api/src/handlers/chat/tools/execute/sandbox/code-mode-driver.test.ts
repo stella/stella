@@ -182,10 +182,10 @@ describe("createStellaIsolateDriver", () => {
     expect(result.logs).toBeUndefined();
   });
 
-  it("times out at the deadline instead of waiting for unfinished host work", async () => {
+  it("times out at the total ceiling instead of waiting for unfinished host work", async () => {
     // The host call blocks on a gate the test releases only AFTER the run has
-    // returned, so the run terminating with `timeout` at all proves the
-    // deadline governs, not the host call's duration. No elapsed-time bound:
+    // returned, so the run terminating with `timeout` at all proves the total
+    // ceiling governs, not the host call's duration. No elapsed-time bound:
     // wall-clock assertions are exactly what flakes on a loaded runner.
     const hostGate = createDeferred();
     const result = await runCode({
@@ -196,7 +196,7 @@ describe("createStellaIsolateDriver", () => {
           return { done: true };
         }),
       ),
-      limits: { maxDurationMs: 250 },
+      limits: { maxTotalDurationMs: 250 },
     });
 
     expect(result.success).toBe(false);

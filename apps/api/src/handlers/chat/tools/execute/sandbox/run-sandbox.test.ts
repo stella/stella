@@ -378,16 +378,16 @@ describe("runSandbox", () => {
     }
   });
 
-  it("times out at the deadline instead of waiting for unfinished host work", async () => {
+  it("times out at the total ceiling instead of waiting for unfinished host work", async () => {
     // The host call blocks on a gate the test releases only AFTER the run has
-    // returned, so the run terminating with `timeout` at all proves the
-    // deadline governs, not the host call's duration. No elapsed-time bound:
+    // returned, so the run terminating with `timeout` at all proves the total
+    // ceiling governs, not the host call's duration. No elapsed-time bound:
     // wall-clock assertions are exactly what flakes on a loaded runner.
     const gate = createHoldGate(["slow-host"]);
     const result = await runSandbox({
       source: `await read.hold({ label: "slow-host" }); return "ok";`,
       registry: gate.registry,
-      limits: { maxDurationMs: 250 },
+      limits: { maxTotalDurationMs: 250 },
     });
 
     expect(Result.isError(result)).toBe(true);
@@ -397,6 +397,85 @@ describe("runSandbox", () => {
 
     // Settle the orphaned host call so the afterEach drain stays instant.
     gate.release("slow-host");
+  });
+
+  it("does not count host-call time against maxDurationMs", async () => {
+    // The tool's 3s is not the script's time: the script budget is suspended
+    // for the awaited call and resumed when it settles, so a budget a third of
+    // the call's duration still admits the run.
+    const result = await runSandbox({
+      source: `return await read.slow({ ms: 3000 });`,
+      registry: baseRegistry,
+      limits: { maxDurationMs: 1000 },
+    });
+
+    expect(Result.isOk(result)).toBe(true);
+    if (Result.isOk(result)) {
+      expect(result.value.value).toEqual({ done: true });
+    }
+  });
+
+  it("charges the script's own work against maxDurationMs", async () => {
+    // A 1500ms busy loop against a 1000ms script budget. No host call is
+    // involved, so nothing suspends the budget: the interrupt fires and the
+    // message names the limit that did it.
+    const result = await runSandbox({
+      source: `
+        const until = Date.now() + 1500;
+        while (Date.now() < until) {}
+        return "spun";
+      `,
+      registry: baseRegistry,
+      limits: { maxDurationMs: 1000 },
+    });
+
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error.reason).toBe("timeout");
+      expect(result.error.message).toContain("maxDurationMs");
+    }
+  });
+
+  it("charges a busy loop that spins beside an unawaited host call", async () => {
+    // Starting a host call and discarding its promise must not buy script
+    // time: only the interval the host loop spends parked on host work is
+    // suspended, and no guest code runs during it.
+    const result = await runSandbox({
+      source: `
+        read.slow({ ms: 3000 });
+        const until = Date.now() + 2000;
+        while (Date.now() < until) {}
+        return "spun";
+      `,
+      registry: baseRegistry,
+      limits: { maxDurationMs: 500, maxTotalDurationMs: 30_000 },
+    });
+
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error.reason).toBe("timeout");
+      expect(result.error.message).toContain("maxDurationMs");
+    }
+  });
+
+  it("stops host calls that together outlast maxTotalDurationMs", async () => {
+    // Each call is well inside the script budget and the host-call cap; only
+    // the hard ceiling can end this run, and it says so.
+    const result = await runSandbox({
+      source: `
+        await read.slow({ ms: 400 });
+        await read.slow({ ms: 400 });
+        return "done";
+      `,
+      registry: baseRegistry,
+      limits: { maxDurationMs: 10_000, maxTotalDurationMs: 500 },
+    });
+
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error.reason).toBe("timeout");
+      expect(result.error.message).toContain("maxTotalDurationMs");
+    }
   });
 
   it("aborts an exponential allocation on memory limit", async () => {
@@ -904,7 +983,7 @@ describe("runSandbox", () => {
       source: `await read.slow({ ms: 150 }); return "late";`,
       registry: baseRegistry,
       concurrencyKey,
-      limits: { maxDurationMs: 50 },
+      limits: { maxTotalDurationMs: 50 },
     });
     const secondPromise = runSandbox({
       source: `return 42;`,
@@ -984,7 +1063,7 @@ describe("runSandbox", () => {
       runSandbox({
         source: `await read.slow({ ms: 300 }); return "late";`,
         registry: baseRegistry,
-        limits: { maxDurationMs: 50 },
+        limits: { maxTotalDurationMs: 50 },
       }),
       runSandbox({
         source: `const r = await read.echo({ value: "healthy" }); return r.value;`,
@@ -1007,7 +1086,7 @@ describe("runSandbox", () => {
     const timedOut = await runSandbox({
       source: `await read.slow({ ms: 300 }); return "late";`,
       registry: baseRegistry,
-      limits: { maxDurationMs: 50 },
+      limits: { maxTotalDurationMs: 50 },
     });
     const clean = await runSandbox({
       source: `return typeof globalThis.afterTimeoutLeak === "undefined" ? "clean" : globalThis.afterTimeoutLeak;`,
@@ -1114,7 +1193,7 @@ describe("runSandbox", () => {
     const result = await runSandbox({
       source: `await read.mutate({ value: 7 }); return "done";`,
       registry,
-      limits: { maxDurationMs: 250 },
+      limits: { maxTotalDurationMs: 250 },
     });
 
     expect(Result.isError(result)).toBe(true);
