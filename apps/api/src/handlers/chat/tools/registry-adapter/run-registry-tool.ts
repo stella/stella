@@ -16,6 +16,7 @@ import {
   normalizeObjectInputAtBoundary,
 } from "@/api/mcp/input-normalization";
 import { KNOWLEDGE_TOOL_HANDLERS } from "@/api/mcp/knowledge-tools";
+import { LEGISLATION_TOOL_HANDLERS } from "@/api/mcp/legislation-tools";
 import { MATTER_TOOL_HANDLERS } from "@/api/mcp/matter-tools";
 import { RESEARCH_ADMIN_TOOL_HANDLERS } from "@/api/mcp/research-admin-tools";
 import { getStaticMcpToolDefinition } from "@/api/mcp/static-tool-definitions";
@@ -67,7 +68,11 @@ const REGISTRY_READ_TOOL_HANDLERS = {
   resolve_rate: BILLING_TOOL_HANDLERS.resolve_rate,
   list_invoices: BILLING_TOOL_HANDLERS.list_invoices,
   get_usage: BILLING_TOOL_HANDLERS.get_usage,
-  search_legislation: RESEARCH_ADMIN_TOOL_HANDLERS.search_legislation,
+  search_legislation: LEGISLATION_TOOL_HANDLERS.search_legislation,
+  read_statute: LEGISLATION_TOOL_HANDLERS.read_statute,
+  read_statute_provisions: LEGISLATION_TOOL_HANDLERS.read_statute_provisions,
+  read_provision_history: LEGISLATION_TOOL_HANDLERS.read_provision_history,
+  search_boe_legislation: RESEARCH_ADMIN_TOOL_HANDLERS.search_boe_legislation,
   list_audit_log: RESEARCH_ADMIN_TOOL_HANDLERS.list_audit_log,
   // Non-projectable: this only prepares sanitized issue content for MCP/CLI.
   prepare_feedback: FEEDBACK_TOOL_HANDLERS.prepare_feedback,

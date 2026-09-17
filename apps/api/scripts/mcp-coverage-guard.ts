@@ -111,6 +111,10 @@ const TOOLS_WITHOUT_ENUMERABLE_ENDPOINT: Record<string, string> = {
     "inline endpoint: apps/api/src/handlers/case-law/public-routes.ts GET /case/decisions/:decisionId",
   read_case_law_citations:
     "no dedicated endpoint: MCP handler reads the citation graph with its citing passages directly (apps/api/src/handlers/case-law/decisions/citation-passages.ts)",
+  read_provision_history:
+    "inline endpoint: apps/api/src/handlers/legislation/public-routes.ts GET /law/statutes/:documentId/provisions/:anchor/history",
+  read_statute_provisions:
+    "no dedicated endpoint: MCP handler reads provision text out of the consolidations it resolves (apps/api/src/handlers/legislation/provision-text.ts over apps/api/src/lib/legal-search/legislation-version-blocks.ts); the HTTP provision preview is a browser citation view with its own cache-control and route gate",
   read_content_across_matters:
     "no dedicated endpoint: MCP handler reads extractedContent directly (apps/api/src/mcp/stella-tools.ts)",
   fetch:

@@ -142,7 +142,7 @@ describe("list_audit_log", () => {
   });
 });
 
-describe("search_legislation feature gating", () => {
+describe("search_boe_legislation feature gating", () => {
   const withPublicLaw = async (
     { featurePublicLaw, isDev }: { featurePublicLaw: boolean; isDev: boolean },
     run: () => Promise<void>,
@@ -161,7 +161,7 @@ describe("search_legislation feature gating", () => {
 
   test("carries the FEATURE_PUBLIC_LAW gate and passthrough policy", () => {
     const def = DEFAULT_MCP_TOOL_DEFINITIONS.find(
-      (tool) => tool.name === "search_legislation",
+      (tool) => tool.name === "search_boe_legislation",
     );
     expect(def?.feature).toBe("FEATURE_PUBLIC_LAW");
     expect(def?.anonymized).toEqual({ exposure: "passthrough" });
@@ -172,7 +172,7 @@ describe("search_legislation feature gating", () => {
       const names = (
         await listMcpTools(createContext(), "default", ["stella:read"])
       ).map((tool) => tool.name);
-      expect(names).not.toContain("search_legislation");
+      expect(names).not.toContain("search_boe_legislation");
       // An untagged stella:read tool stays listed: only the gate drops.
       expect(names).toContain("list_matters");
     });
@@ -183,18 +183,18 @@ describe("search_legislation feature gating", () => {
       const names = (
         await listMcpTools(createContext(), "default", ["stella:read"])
       ).map((tool) => tool.name);
-      expect(names).toContain("search_legislation");
+      expect(names).toContain("search_boe_legislation");
     });
     await withPublicLaw({ featurePublicLaw: false, isDev: true }, async () => {
       const names = (
         await listMcpTools(createContext(), "default", ["stella:read"])
       ).map((tool) => tool.name);
-      expect(names).toContain("search_legislation");
+      expect(names).toContain("search_boe_legislation");
     });
   });
 
   test("rejects block_id without law_id before any BOE fetch", async () => {
-    const result = await RESEARCH_ADMIN_TOOL_HANDLERS.search_legislation({
+    const result = await RESEARCH_ADMIN_TOOL_HANDLERS.search_boe_legislation({
       args: { block_id: "a1" },
       context: createContext("owner"),
     });
@@ -202,7 +202,7 @@ describe("search_legislation feature gating", () => {
   });
 
   test("requires at least one search filter in search mode", async () => {
-    const result = await RESEARCH_ADMIN_TOOL_HANDLERS.search_legislation({
+    const result = await RESEARCH_ADMIN_TOOL_HANDLERS.search_boe_legislation({
       args: {},
       context: createContext("owner"),
     });

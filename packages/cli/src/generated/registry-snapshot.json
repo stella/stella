@@ -237,7 +237,9 @@
     "cli": {
       "command": ["document", "content"],
       "scope": "read",
-      "windowedText": true
+      "windowedText": {
+        "textPath": "text"
+      }
     },
     "name": "read_content_across_matters",
     "description": "Read a document's content, found anywhere in your accessible matters. DOCX files are converted to Markdown with structure preserved (headings, tables, lists); other formats return their extracted plain text. Use after search_across_matters. Long documents are returned in windows; pass the returned nextCursor back as cursor to read more.",
@@ -270,7 +272,9 @@
     "cli": {
       "command": ["case-law", "read"],
       "scope": "read",
-      "windowedText": true
+      "windowedText": {
+        "textPath": "decision.text"
+      }
     },
     "name": "read_case_law_decision",
     "description": "Read a single case-law decision by its decision ID: its own text. Returns metadata, explicit decision text fields, plain text, source URLs, its route-independent resourceName, and bare citation ids. It does NOT say how other courts have treated this decision, and its citation entries carry no treatment and no surrounding text: to learn what the citing courts said, or what this decision relied on, call read_case_law_citations ({ decision_id: '<uuid>', direction: 'cited_by' }) instead. Long decision text and large citation lists are returned in windows; pass the returned nextCursor back as cursor to read more.",
@@ -662,6 +666,238 @@
       "idempotentHint": false,
       "openWorldHint": false,
       "readOnlyHint": false
+    }
+  },
+  {
+    "cli": {
+      "command": ["legislation", "search"],
+      "scope": "search",
+      "itemsKey": "results"
+    },
+    "name": "search_legislation",
+    "description": "Search the stella legislation corpus within one country: consolidated statutes, each with its ELI, title, language, document type, publication status, effective date and a matched snippet. Filters: document type, status, language, and an effective-date range (ISO YYYY-MM-DD). No facets are returned and `total` is not counted, so page with the returned nextCursor instead of reasoning about a result count. A hit is metadata only: pass its `eli` to read_statute for the text, the outline of anchors and the consolidated versions. For Spanish BOE legislation, call search_boe_legislation instead.",
+    "inputSchema": {
+      "type": "object",
+      "required": ["query", "country"],
+      "additionalProperties": false,
+      "properties": {
+        "query": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500,
+          "description": "Search query"
+        },
+        "country": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 3,
+          "description": "Required corpus country code, uppercase ISO 3166-1 alpha-3. Admitted: CZE."
+        },
+        "document_type": {
+          "type": "string",
+          "maxLength": 128,
+          "description": "Filter by document type"
+        },
+        "status": {
+          "type": "string",
+          "maxLength": 32,
+          "description": "Filter by publication status"
+        },
+        "language": {
+          "type": "string",
+          "maxLength": 8,
+          "description": "Filter by language code"
+        },
+        "date_from": {
+          "type": "string",
+          "format": "date",
+          "maxLength": 10,
+          "description": "Filter statutes effective from this ISO date (YYYY-MM-DD)"
+        },
+        "date_to": {
+          "type": "string",
+          "format": "date",
+          "maxLength": 10,
+          "description": "Filter statutes effective up to this ISO date (YYYY-MM-DD)"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "description": "Max results to return; defaults to 10."
+        },
+        "cursor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "description": "Opaque cursor from a previous search_legislation call"
+        }
+      }
+    },
+    "annotations": {
+      "title": "Search legislation",
+      "destructiveHint": false,
+      "readOnlyHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "cli": {
+      "command": ["legislation", "read"],
+      "scope": "read",
+      "windowedText": {
+        "textPath": "statute.text"
+      }
+    },
+    "name": "read_statute",
+    "description": "Read one statute by ELI as it stood on a date: `as_of` picks the consolidation in force that day, and omitting it reads the text in force today. Returns that consolidation's metadata and validity window, `versions` (the newest page of the work's consolidations), `outline` (its heading anchors, the input read_statute_provisions takes) and its plain text. Long text comes back in windows; pass the returned nextCursor back as cursor to read more. A source that bars AI use of its wording still answers with metadata, versions and outline, and `textWithheldReason` in place of the text.",
+    "inputSchema": {
+      "type": "object",
+      "required": ["eli"],
+      "additionalProperties": false,
+      "properties": {
+        "eli": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "description": "European Legislation Identifier of the work, exactly as search_legislation returns it (for example /eli/cz/sb/2012/89). It addresses the act, not one consolidation of it."
+        },
+        "language": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 8,
+          "description": "Language of the consolidation to read. Language is part of the work key, so an act published in two languages has one consolidation in each."
+        },
+        "as_of": {
+          "type": "string",
+          "format": "date",
+          "maxLength": 10,
+          "description": "Read the consolidation in force on this ISO date (YYYY-MM-DD); omit it for the text in force today."
+        },
+        "cursor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "description": "Opaque cursor from a previous read_statute call to read the next window of statute text"
+        }
+      }
+    },
+    "annotations": {
+      "title": "Read statute",
+      "destructiveHint": false,
+      "readOnlyHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "cli": {
+      "command": ["legislation", "provisions"],
+      "scope": "read",
+      "itemsKey": "items"
+    },
+    "name": "read_statute_provisions",
+    "description": "Read named provisions of one or more statutes in one call: each `items[]` entry is { eli, anchor } plus an optional as_of and language. An anchor is the publisher's own (par_1729, par_1729-odst_1) and read_statute's `outline` lists them. Every entry is answered separately, in input order, under `status`: `found` carries the provision's text, while `not_found` (no such ELI), `uncovered_date` (no consolidation covers that day), `provision_not_found` (that consolidation has no such anchor) and `text_withheld` (the source bars AI use of its wording) each carry a message. Prefer one batched call over one call per provision.",
+    "inputSchema": {
+      "type": "object",
+      "required": ["items"],
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "eli": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 512,
+                "description": "European Legislation Identifier of the work, exactly as search_legislation returns it (for example /eli/cz/sb/2012/89). It addresses the act, not one consolidation of it."
+              },
+              "anchor": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256,
+                "description": "Anchor of the provision in the publisher's own scheme. read_statute's outline lists a consolidation's provision anchors (par_1729); a subdivision of one of them is accepted too and narrows the answer to that subdivision (par_1729-odst_1, par_1729-odst_2-pism_a). Anchors are not derivable from a section number."
+              },
+              "as_of": {
+                "type": "string",
+                "format": "date",
+                "maxLength": 10,
+                "description": "Read the consolidation in force on this ISO date (YYYY-MM-DD); omit it for the text in force today."
+              },
+              "language": {
+                "type": "string",
+                "minLength": 2,
+                "maxLength": 8,
+                "description": "Language of the consolidation to read. Language is part of the work key, so an act published in two languages has one consolidation in each."
+              }
+            },
+            "required": ["eli", "anchor"],
+            "additionalProperties": false
+          },
+          "minItems": 1,
+          "maxItems": 20,
+          "description": "The provisions to read, at most 20 per call. Each entry is validated and answered on its own, so a malformed or unresolvable entry does not sink the rest: it comes back with its own status."
+        }
+      }
+    },
+    "annotations": {
+      "title": "Read statute provisions",
+      "destructiveHint": false,
+      "readOnlyHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "cli": {
+      "command": ["legislation", "history"],
+      "scope": "read",
+      "itemsKey": "items"
+    },
+    "name": "read_provision_history",
+    "description": "How one provision's wording changed: its text in each consolidation of the work, newest validity window first, so two wordings can be compared without downloading whole statutes. Takes the work's `eli` and an `anchor` from read_statute's outline. A consolidation that does not carry the anchor is left out of `items`. Pass the returned nextCursor back as cursor for older windows.",
+    "inputSchema": {
+      "type": "object",
+      "required": ["eli", "anchor"],
+      "additionalProperties": false,
+      "properties": {
+        "eli": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "description": "European Legislation Identifier of the work, exactly as search_legislation returns it (for example /eli/cz/sb/2012/89). It addresses the act, not one consolidation of it."
+        },
+        "anchor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "description": "Anchor of the provision in the publisher's own scheme. read_statute's outline lists a consolidation's provision anchors (par_1729); a subdivision of one of them is accepted too and narrows the answer to that subdivision (par_1729-odst_1, par_1729-odst_2-pism_a). Anchors are not derivable from a section number."
+        },
+        "language": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 8,
+          "description": "Language of the consolidation to read. Language is part of the work key, so an act published in two languages has one consolidation in each."
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 20,
+          "description": "Versions per page; defaults to 5, at most 20."
+        },
+        "cursor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "description": "Opaque cursor from a previous read_provision_history call to read the next page"
+        }
+      }
+    },
+    "annotations": {
+      "title": "Read provision history",
+      "destructiveHint": false,
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -2981,11 +3217,11 @@
   },
   {
     "cli": {
-      "command": ["legislation", "search"],
+      "command": ["legislation", "boe-search"],
       "scope": "read",
       "itemsKey": "items"
     },
-    "name": "search_legislation",
+    "name": "search_boe_legislation",
     "description": "Search and read Spanish consolidated legislation from the BOE. In search mode, pass query (free text) and/or filters (title, department_code, legal_range_code, matter_code, date_from/date_to as YYYYMMDD); at least one filter is required. In read mode, pass law_id (e.g. BOE-A-1889-4763) to return the law with its block structure; add full_text to include the consolidated text, block_id to return one text block, or relation_type to list related laws instead. Returns public statutory data.",
     "inputSchema": {
       "type": "object",
@@ -3041,7 +3277,7 @@
         "cursor": {
           "type": "string",
           "maxLength": 5,
-          "description": "Opaque cursor from a previous search_legislation call for the next page"
+          "description": "Opaque cursor from a previous search_boe_legislation call for the next page"
         },
         "law_id": {
           "type": "string",
@@ -3065,7 +3301,7 @@
       }
     },
     "annotations": {
-      "title": "Search legislation",
+      "title": "Search BOE legislation",
       "destructiveHint": false,
       "readOnlyHint": true,
       "openWorldHint": true

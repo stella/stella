@@ -46,7 +46,8 @@ export type ToolAnnotation = {
   itemsKey?: string;
   singleReadWhen?: string;
   columns?: readonly string[];
-  windowedText?: true;
+  /** See the API-side annotation: where the windowed text lives in the payload. */
+  windowedText?: { textPath: string };
   paginationless?: true;
   inputOnly?: readonly string[];
   discriminator?: {
@@ -107,6 +108,12 @@ export type LeafCommandSpec = {
   inputOnly: readonly string[];
   paginated: boolean;
   windowedText: boolean;
+  /**
+   * Dot-separated path to the windowed text in the payload, present exactly
+   * when `windowedText` is true. A nested read (`statute.text`) renders and
+   * concatenates from here, so `--all` cannot silently join empty chunks.
+   */
+  textPath?: string;
   itemsKey?: string;
   destructive: boolean;
   /** See `ToolAnnotation.confirmPassthrough`: --yes / prompt-retry confirm flow. */

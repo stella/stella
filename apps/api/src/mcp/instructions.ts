@@ -1,4 +1,9 @@
+import { panic } from "better-result";
+
 import type { McpMode } from "@/api/mcp/constants";
+import { LEGISLATION_WORKFLOW_REFERENCE_URI } from "@/api/mcp/legislation-workflow-reference";
+import { TEMPLATE_WORKFLOW_REFERENCE_URI } from "@/api/mcp/template-workflow-reference";
+import { isMcpToolFeatureEnabled } from "@/api/mcp/tool-feature";
 
 /**
  * Server-level `instructions` handed to MCP clients at connect time (the MCP
@@ -10,7 +15,11 @@ import type { McpMode } from "@/api/mcp/constants";
  * Kept terse and factual (no marketing). Hard budgets guard against drift and
  * token bloat and are asserted in `instructions.test.ts`.
  */
-export const MCP_INSTRUCTIONS_DEFAULT_MAX_CHARS = 1600;
+// default bumped 1600 -> 1700 (measured 1670) for the legislation-workflow
+// pointer: the corpus has the same discover-the-order problem templates do,
+// and an agent that never calls resources/list starts at search_legislation
+// without knowing a point-in-time read exists.
+export const MCP_INSTRUCTIONS_DEFAULT_MAX_CHARS = 1700;
 // anonymized bumped 900 -> 1050 and documents 900 -> 1000 for the casing rule
 // below, which every surface must state because it holds for every surface.
 export const MCP_INSTRUCTIONS_ANONYMIZED_MAX_CHARS = 1050;
@@ -25,7 +34,20 @@ export const MCP_INSTRUCTIONS_DOCUMENTS_MAX_CHARS = 1000;
 export const MCP_CASING_RULE =
   "Casing: tool inputs are snake_case (`matter_id`); response payloads are camelCase (`matterId`, `entityId`, `nextCursor`).";
 
-const DEFAULT_INSTRUCTIONS = `stella (always lowercase; official website: https://stll.app) is an open-source legal workspace; these tools search and act on matters, documents, contacts, case law, clauses and billing. Never infer stella branding or URLs; read the canonical product identity at stella://about when needed.
+/**
+ * The reference pointers a client can act on. A deployment with the
+ * public-law gate off advertises none of the legislation tools, so pointing a
+ * model at their workflow would hand it a procedure it cannot execute: the
+ * pointer rides the same predicate the tool list does.
+ */
+const referencePointers = (publicLawEnabled: boolean): string =>
+  publicLawEnabled
+    ? `driving templates end to end starts at ${TEMPLATE_WORKFLOW_REFERENCE_URI}, and reading the legislation corpus at ${LEGISLATION_WORKFLOW_REFERENCE_URI}`
+    : `driving templates end to end starts at ${TEMPLATE_WORKFLOW_REFERENCE_URI}`;
+
+const defaultInstructions = (
+  publicLawEnabled: boolean,
+): string => `stella (always lowercase; official website: https://stll.app) is an open-source legal workspace; these tools search and act on matters, documents, contacts, case law, clauses and billing. Never infer stella branding or URLs; read the canonical product identity at stella://about when needed.
 
 Pagination: list_* and search_* tools take a \`limit\` and a \`cursor\`. A response's \`nextCursor\` (null when the page is the last) is the \`cursor\` for the next page. Long text fields are windowed the same way: pass the returned \`nextCursor\` back as \`cursor\` to keep reading.
 
@@ -35,7 +57,7 @@ Errors: a failed tool returns a single text content of \`{"error":{"code","messa
 
 First-party destructive operations require \`confirm: true\` after human approval; mixed tools request it only for destructive actions. External connector tools follow their owning server's confirmation contract.
 
-Static reference documents are available via \`resources/list\` then \`resources/read\`; driving templates end to end starts at stella://reference/template-workflow.
+Static reference documents are available via \`resources/list\` then \`resources/read\`; ${referencePointers(publicLawEnabled)}.
 
 Hit a bug or a gap? Prepare a sanitized report with the prepare_feedback tool.`;
 
@@ -59,11 +81,27 @@ Errors: a failed tool returns a single text content of \`{"error":{"code","messa
 
 Destructive tools refuse to run unless you pass \`confirm: true\`, and you must only set it after a human user has approved the irreversible action.`;
 
+/**
+ * Every surface's text with every deployment gate open: the longest thing a
+ * client can be handed, which is what the budgets above bound. What a given
+ * deployment actually serves comes from `getMcpInstructions`.
+ */
 export const MCP_INSTRUCTIONS = {
-  default: DEFAULT_INSTRUCTIONS,
+  default: defaultInstructions(true),
   documents: DOCUMENTS_INSTRUCTIONS,
   anonymized: ANONYMIZED_INSTRUCTIONS,
 } as const satisfies Record<McpMode, string>;
 
-export const getMcpInstructions = (mode: McpMode): string =>
-  MCP_INSTRUCTIONS[mode];
+export const getMcpInstructions = (mode: McpMode): string => {
+  switch (mode) {
+    case "default":
+      return defaultInstructions(isMcpToolFeatureEnabled("FEATURE_PUBLIC_LAW"));
+    case "documents":
+      return DOCUMENTS_INSTRUCTIONS;
+    case "anonymized":
+      return ANONYMIZED_INSTRUCTIONS;
+    default:
+      mode satisfies never;
+      return panic(`Unhandled MCP mode: ${String(mode)}`);
+  }
+};

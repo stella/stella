@@ -59,7 +59,7 @@ const querySchema = t.Object({
       pattern: "^\\d+$",
       maxLength: 5,
       description:
-        "Opaque cursor from a previous search_legislation call for the next page",
+        "Opaque cursor from a previous search_boe_legislation call for the next page",
     }),
   ),
   limit: t.Optional(
@@ -78,10 +78,10 @@ const boeSearch = createSafeRootHandler(
       "filter is required: free text, title, department code, legal-range " +
       "code (law rank), subject-matter code, or a publication date range as " +
       "YYYYMMDD. Paginate with limit and the opaque cursor. This queries the " +
-      "BOE service live; use legislation.search to search the stella " +
-      "legislation corpus instead.",
+      "BOE service live; use the search_legislation tool to search the " +
+      "stella legislation corpus instead.",
     permissions: { workspace: ["read"] },
-    mcp: { type: "tool", name: "search_legislation" },
+    mcp: { type: "tool", name: "search_boe_legislation" },
     access: "read",
     query: querySchema,
   },

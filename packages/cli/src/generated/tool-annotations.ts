@@ -39,12 +39,16 @@ export const generatedToolAnnotations: Readonly<
   read_content_across_matters: {
     command: ["document", "content"],
     scope: "read",
-    windowedText: true,
+    windowedText: {
+      textPath: "text",
+    },
   },
   read_case_law_decision: {
     command: ["case-law", "read"],
     scope: "read",
-    windowedText: true,
+    windowedText: {
+      textPath: "decision.text",
+    },
   },
   read_case_law_citations: {
     command: ["case-law", "citations"],
@@ -58,6 +62,28 @@ export const generatedToolAnnotations: Readonly<
   set_practice_jurisdictions: {
     command: ["organization", "set-jurisdictions"],
     scope: "onboarding",
+  },
+  search_legislation: {
+    command: ["legislation", "search"],
+    scope: "search",
+    itemsKey: "results",
+  },
+  read_statute: {
+    command: ["legislation", "read"],
+    scope: "read",
+    windowedText: {
+      textPath: "statute.text",
+    },
+  },
+  read_statute_provisions: {
+    command: ["legislation", "provisions"],
+    scope: "read",
+    itemsKey: "items",
+  },
+  read_provision_history: {
+    command: ["legislation", "history"],
+    scope: "read",
+    itemsKey: "items",
   },
   list_templates: {
     command: ["template", "list"],
@@ -254,8 +280,8 @@ export const generatedToolAnnotations: Readonly<
     command: ["usage", "get"],
     scope: "read",
   },
-  search_legislation: {
-    command: ["legislation", "search"],
+  search_boe_legislation: {
+    command: ["legislation", "boe-search"],
     scope: "read",
     itemsKey: "items",
   },

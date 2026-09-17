@@ -33,6 +33,10 @@ const PROVISION_PREVIEW_CACHE_CONTROL =
   "public, max-age=3600, stale-while-revalidate=86400";
 
 const config = {
+  // Not a capability: a browser citation-preview read that sets its own
+  // cache-control header and is gated by the public-law route hook, neither of
+  // which the generic invoke path can honor. Agents read provision text
+  // through `read_statute_provisions`, which is where the MCP contract lives.
   mcp: { type: "internal", reason: "public_indexing" },
   params: t.Object({
     documentId: tSafeId("legislationDocument"),

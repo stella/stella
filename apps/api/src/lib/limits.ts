@@ -496,6 +496,26 @@ export const LIMITS = {
    */
   legislationProvisionHistoryPageSizeDefault: 5,
   legislationProvisionHistoryPageSizeMax: 20,
+  /**
+   * Headings in the outline a statute read returns. A consolidated code runs
+   * to thousands of provisions, so the outline is the way in rather than the
+   * whole structure; a read says when it was cut.
+   */
+  legislationOutlineHeadingsMax: 200,
+  /**
+   * Characters of one provision's text. A provision is a section, not a
+   * statute, so this sits far below the document text window: a batch read
+   * carries up to twenty of them at once.
+   */
+  legislationProvisionTextChars: 6000,
+  /**
+   * Consolidations whose AST is fetched at once while answering one batch
+   * provision read. Each is an object-storage hop, so the fan-out is bounded
+   * rather than one request per item.
+   */
+  legislationProvisionReadConcurrency: 6,
+  /** Provisions one batch read may ask for, each up to the text budget above. */
+  legislationProvisionBatchMax: 20,
   /** Works (one canonical URL each) in one statute sitemap shard. */
   statuteSitemapShardUrlLimit: 5000,
   /** Max child sitemap entries in one sitemap index by protocol. */

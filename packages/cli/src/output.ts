@@ -72,26 +72,50 @@ const fieldOf = (payload: unknown, key: string): unknown =>
   isRecord(payload) ? payload[key] : undefined;
 
 /**
+ * The path `--all` merges concatenated windows back to. A merged payload is
+ * the CLI's own shape, not the tool's, so the two sites that build and read
+ * it name the same constant rather than both spelling `"text"`.
+ */
+export const MERGED_TEXT_PATH = "text";
+
+/**
+ * One value at a dot-separated path (`statute.text`). A read that nests its
+ * subject (`{ statute: { text } }`) is as ordinary as one that does not, and
+ * a missing segment is an absent value rather than a throw.
+ */
+export const valueAtPath = (payload: unknown, path: string): unknown => {
+  let current: unknown = payload;
+  for (const key of path.split(".")) {
+    if (!isRecord(current)) {
+      return undefined;
+    }
+    current = current[key];
+  }
+  return current;
+};
+
+/**
  * Choose the render shape for a parsed payload given the leaf's annotations and
  * whether a single-read flip is active for this invocation (spec S4).
  */
 export const buildRenderPlan = ({
   payload,
   itemsKey,
-  windowedText,
+  textPath,
   singleReadActive,
   columns,
 }: {
   payload: unknown;
   itemsKey: string | undefined;
-  windowedText: boolean;
+  /** Set exactly for a windowed-text leaf; see `LeafCommandSpec.textPath`. */
+  textPath: string | undefined;
   singleReadActive: boolean;
   columns: readonly string[] | undefined;
 }): RenderPlan => {
-  if (windowedText) {
+  if (textPath !== undefined) {
     return {
       kind: "windowed-text",
-      text: asString(fieldOf(payload, "text")) ?? "",
+      text: asString(valueAtPath(payload, textPath)) ?? "",
       nextCursor: asString(fieldOf(payload, "nextCursor")),
     };
   }

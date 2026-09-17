@@ -33,10 +33,19 @@ export const redistributableLegislationVersion = sql`EXISTS (
      AND ${publishedLegislationDocument}
 )`;
 
-/** AI use is a separate permission from displaying source wording. */
+/**
+ * AI use is a separate permission from displaying source wording, on the
+ * joined source row. The same two forms as redistribution above: this one for
+ * a read that joins `legislation_sources`, the correlated one below for a
+ * read that addresses a version by id.
+ */
+export const derivedAiLegislationSource = sql<boolean>`(
+  ${legislationSources.descriptor} IS NULL
+  OR (${legislationSources.descriptor} ->> 'allowsDerivedAi') = 'true'
+)`;
+
 export const derivedAiLegislationVersion = sql`EXISTS (
   SELECT 1 FROM ${legislationSources}
    WHERE ${legislationSources.id} = ${legislationDocuments.sourceId}
-     AND (${legislationSources.descriptor} IS NULL
-          OR (${legislationSources.descriptor} ->> 'allowsDerivedAi') = 'true')
+     AND ${derivedAiLegislationSource}
 )`;

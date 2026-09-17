@@ -218,14 +218,14 @@ here as its CLI form). Projected from the same handler enumeration that builds
 
 | Capability                      | Access | Scope       | Feature            | Reachable via                                                  |
 | ------------------------------- | ------ | ----------- | ------------------ | -------------------------------------------------------------- |
-| `legislation.boe-get-law`       | read   | stella:read | FEATURE_PUBLIC_LAW | covered by `search_legislation`                                |
-| `legislation.boe-law-structure` | read   | stella:read | FEATURE_PUBLIC_LAW | covered by `search_legislation`                                |
-| `legislation.boe-related-laws`  | read   | stella:read | FEATURE_PUBLIC_LAW | covered by `search_legislation`                                |
-| `legislation.boe-search`        | read   | stella:read | FEATURE_PUBLIC_LAW | curated tool `search_legislation`                              |
-| `legislation.boe-text-block`    | read   | stella:read | FEATURE_PUBLIC_LAW | covered by `search_legislation`                                |
+| `legislation.boe-get-law`       | read   | stella:read | FEATURE_PUBLIC_LAW | covered by `search_boe_legislation`                            |
+| `legislation.boe-law-structure` | read   | stella:read | FEATURE_PUBLIC_LAW | covered by `search_boe_legislation`                            |
+| `legislation.boe-related-laws`  | read   | stella:read | FEATURE_PUBLIC_LAW | covered by `search_boe_legislation`                            |
+| `legislation.boe-search`        | read   | stella:read | FEATURE_PUBLIC_LAW | curated tool `search_boe_legislation`                          |
+| `legislation.boe-text-block`    | read   | stella:read | FEATURE_PUBLIC_LAW | covered by `search_boe_legislation`                            |
 | `legislation.borme-summary`     | read   | stella:read | FEATURE_PUBLIC_LAW | generic invoke → `stella capability legislation borme-summary` |
-| `legislation.get`               | read   | stella:read | FEATURE_PUBLIC_LAW | generic invoke → `stella capability legislation get`           |
-| `legislation.search`            | read   | stella:read | FEATURE_PUBLIC_LAW | generic invoke → `stella capability legislation search`        |
+| `legislation.get`               | read   | stella:read | FEATURE_PUBLIC_LAW | covered by `read_statute`                                      |
+| `legislation.search`            | read   | stella:read | FEATURE_PUBLIC_LAW | curated tool `search_legislation`                              |
 
 ## lists
 

@@ -583,6 +583,7 @@ export const generatedRouteMap: RouteNode = {
             inputOnly: [],
             paginated: true,
             windowedText: true,
+            textPath: "decision.text",
             destructive: false,
             scope: "read",
             inputSchema: {
@@ -698,6 +699,7 @@ export const generatedRouteMap: RouteNode = {
             inputOnly: [],
             paginated: true,
             windowedText: true,
+            textPath: "text",
             destructive: false,
             scope: "read",
             inputSchema: {
@@ -2305,6 +2307,588 @@ export const generatedRouteMap: RouteNode = {
                   type: "boolean",
                   description:
                     "Required for the remove_member action: must be true to remove a member (an irreversible action). Set it only after a human user has approved the removal; ignored by the other actions.",
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    legislation: {
+      kind: "route",
+      children: {
+        search: {
+          kind: "leaf",
+          spec: {
+            commandPath: ["legislation", "search"],
+            toolName: "search_legislation",
+            description:
+              "Search the stella legislation corpus within one country: consolidated statutes, each with its ELI, title, language, document type, publication status, effective date and a matched snippet.",
+            flags: [
+              {
+                flag: "--query",
+                prop: "query",
+                kind: "string",
+                repeatable: false,
+                description: "Search query",
+                required: true,
+              },
+              {
+                flag: "--country",
+                prop: "country",
+                kind: "string",
+                repeatable: false,
+                description:
+                  "Required corpus country code, uppercase ISO 3166-1 alpha-3. Admitted: CZE.",
+                required: true,
+              },
+              {
+                flag: "--document-type",
+                prop: "document_type",
+                kind: "string",
+                repeatable: false,
+                description: "Filter by document type",
+                required: false,
+              },
+              {
+                flag: "--status",
+                prop: "status",
+                kind: "string",
+                repeatable: false,
+                description: "Filter by publication status",
+                required: false,
+              },
+              {
+                flag: "--language",
+                prop: "language",
+                kind: "string",
+                repeatable: false,
+                description: "Filter by language code",
+                required: false,
+              },
+              {
+                flag: "--date-from",
+                prop: "date_from",
+                kind: "string",
+                repeatable: false,
+                description:
+                  "Filter statutes effective from this ISO date (YYYY-MM-DD)",
+                required: false,
+              },
+              {
+                flag: "--date-to",
+                prop: "date_to",
+                kind: "string",
+                repeatable: false,
+                description:
+                  "Filter statutes effective up to this ISO date (YYYY-MM-DD)",
+                required: false,
+              },
+            ],
+            inputOnly: [],
+            paginated: true,
+            windowedText: false,
+            itemsKey: "results",
+            destructive: false,
+            scope: "search",
+            inputSchema: {
+              type: "object",
+              required: ["query", "country"],
+              additionalProperties: false,
+              properties: {
+                query: {
+                  type: "string",
+                  minLength: 1,
+                  maxLength: 500,
+                  description: "Search query",
+                },
+                country: {
+                  type: "string",
+                  minLength: 2,
+                  maxLength: 3,
+                  description:
+                    "Required corpus country code, uppercase ISO 3166-1 alpha-3. Admitted: CZE.",
+                },
+                document_type: {
+                  type: "string",
+                  maxLength: 128,
+                  description: "Filter by document type",
+                },
+                status: {
+                  type: "string",
+                  maxLength: 32,
+                  description: "Filter by publication status",
+                },
+                language: {
+                  type: "string",
+                  maxLength: 8,
+                  description: "Filter by language code",
+                },
+                date_from: {
+                  type: "string",
+                  format: "date",
+                  maxLength: 10,
+                  description:
+                    "Filter statutes effective from this ISO date (YYYY-MM-DD)",
+                },
+                date_to: {
+                  type: "string",
+                  format: "date",
+                  maxLength: 10,
+                  description:
+                    "Filter statutes effective up to this ISO date (YYYY-MM-DD)",
+                },
+                limit: {
+                  type: "integer",
+                  minimum: 1,
+                  maximum: 100,
+                  description: "Max results to return; defaults to 10.",
+                },
+                cursor: {
+                  type: "string",
+                  minLength: 1,
+                  maxLength: 512,
+                  description:
+                    "Opaque cursor from a previous search_legislation call",
+                },
+              },
+            },
+          },
+        },
+        read: {
+          kind: "leaf",
+          spec: {
+            commandPath: ["legislation", "read"],
+            toolName: "read_statute",
+            description:
+              "Read one statute by ELI as it stood on a date: `as_of` picks the consolidation in force that day, and omitting it reads the text in force today.",
+            flags: [
+              {
+                flag: "--eli",
+                prop: "eli",
+                kind: "string",
+                repeatable: false,
+                description:
+                  "European Legislation Identifier of the work, exactly as search_legislation returns it (for example /eli/cz/sb/2012/89). It addresses the act, not one consolidation of it.",
+                required: true,
+              },
+              {
+                flag: "--language",
+                prop: "language",
+                kind: "string",
+                repeatable: false,
+                description:
+                  "Language of the consolidation to read. Language is part of the work key, so an act published in two languages has one consolidation in each.",
+                required: false,
+              },
+              {
+                flag: "--as-of",
+                prop: "as_of",
+                kind: "string",
+                repeatable: false,
+                description:
+                  "Read the consolidation in force on this ISO date (YYYY-MM-DD); omit it for the text in force today.",
+                required: false,
+              },
+            ],
+            inputOnly: [],
+            paginated: true,
+            windowedText: true,
+            textPath: "statute.text",
+            destructive: false,
+            scope: "read",
+            inputSchema: {
+              type: "object",
+              required: ["eli"],
+              additionalProperties: false,
+              properties: {
+                eli: {
+                  type: "string",
+                  minLength: 1,
+                  maxLength: 512,
+                  description:
+                    "European Legislation Identifier of the work, exactly as search_legislation returns it (for example /eli/cz/sb/2012/89). It addresses the act, not one consolidation of it.",
+                },
+                language: {
+                  type: "string",
+                  minLength: 2,
+                  maxLength: 8,
+                  description:
+                    "Language of the consolidation to read. Language is part of the work key, so an act published in two languages has one consolidation in each.",
+                },
+                as_of: {
+                  type: "string",
+                  format: "date",
+                  maxLength: 10,
+                  description:
+                    "Read the consolidation in force on this ISO date (YYYY-MM-DD); omit it for the text in force today.",
+                },
+                cursor: {
+                  type: "string",
+                  minLength: 1,
+                  maxLength: 512,
+                  description:
+                    "Opaque cursor from a previous read_statute call to read the next window of statute text",
+                },
+              },
+            },
+          },
+        },
+        provisions: {
+          kind: "leaf",
+          spec: {
+            commandPath: ["legislation", "provisions"],
+            toolName: "read_statute_provisions",
+            description:
+              "Read named provisions of one or more statutes in one call: each `items[]` entry is { eli, anchor } plus an optional as_of and language.",
+            flags: [],
+            inputOnly: ["items"],
+            paginated: false,
+            windowedText: false,
+            itemsKey: "items",
+            destructive: false,
+            scope: "read",
+            inputSchema: {
+              type: "object",
+              required: ["items"],
+              additionalProperties: false,
+              properties: {
+                items: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      eli: {
+                        type: "string",
+                        minLength: 1,
+                        maxLength: 512,
+                        description:
+                          "European Legislation Identifier of the work, exactly as search_legislation returns it (for example /eli/cz/sb/2012/89). It addresses the act, not one consolidation of it.",
+                      },
+                      anchor: {
+                        type: "string",
+                        minLength: 1,
+                        maxLength: 256,
+                        description:
+                          "Anchor of the provision in the publisher's own scheme. read_statute's outline lists a consolidation's provision anchors (par_1729); a subdivision of one of them is accepted too and narrows the answer to that subdivision (par_1729-odst_1, par_1729-odst_2-pism_a). Anchors are not derivable from a section number.",
+                      },
+                      as_of: {
+                        type: "string",
+                        format: "date",
+                        maxLength: 10,
+                        description:
+                          "Read the consolidation in force on this ISO date (YYYY-MM-DD); omit it for the text in force today.",
+                      },
+                      language: {
+                        type: "string",
+                        minLength: 2,
+                        maxLength: 8,
+                        description:
+                          "Language of the consolidation to read. Language is part of the work key, so an act published in two languages has one consolidation in each.",
+                      },
+                    },
+                    required: ["eli", "anchor"],
+                    additionalProperties: false,
+                  },
+                  minItems: 1,
+                  maxItems: 20,
+                  description:
+                    "The provisions to read, at most 20 per call. Each entry is validated and answered on its own, so a malformed or unresolvable entry does not sink the rest: it comes back with its own status.",
+                },
+              },
+            },
+          },
+        },
+        history: {
+          kind: "leaf",
+          spec: {
+            commandPath: ["legislation", "history"],
+            toolName: "read_provision_history",
+            description:
+              "How one provision's wording changed: its text in each consolidation of the work, newest validity window first, so two wordings can be compared without downloading whole statutes.",
+            flags: [
+              {
+                flag: "--eli",
+                prop: "eli",
+                kind: "string",
+                repeatable: false,
+                description:
+                  "European Legislation Identifier of the work, exactly as search_legislation returns it (for example /eli/cz/sb/2012/89). It addresses the act, not one consolidation of it.",
+                required: true,
+              },
+              {
+                flag: "--anchor",
+                prop: "anchor",
+                kind: "string",
+                repeatable: false,
+                description:
+                  "Anchor of the provision in the publisher's own scheme. read_statute's outline lists a consolidation's provision anchors (par_1729); a subdivision of one of them is accepted too and narrows the answer to that subdivision (par_1729-odst_1, par_1729-odst_2-pism_a). Anchors are not derivable from a section number.",
+                required: true,
+              },
+              {
+                flag: "--language",
+                prop: "language",
+                kind: "string",
+                repeatable: false,
+                description:
+                  "Language of the consolidation to read. Language is part of the work key, so an act published in two languages has one consolidation in each.",
+                required: false,
+              },
+            ],
+            inputOnly: [],
+            paginated: true,
+            windowedText: false,
+            itemsKey: "items",
+            destructive: false,
+            scope: "read",
+            inputSchema: {
+              type: "object",
+              required: ["eli", "anchor"],
+              additionalProperties: false,
+              properties: {
+                eli: {
+                  type: "string",
+                  minLength: 1,
+                  maxLength: 512,
+                  description:
+                    "European Legislation Identifier of the work, exactly as search_legislation returns it (for example /eli/cz/sb/2012/89). It addresses the act, not one consolidation of it.",
+                },
+                anchor: {
+                  type: "string",
+                  minLength: 1,
+                  maxLength: 256,
+                  description:
+                    "Anchor of the provision in the publisher's own scheme. read_statute's outline lists a consolidation's provision anchors (par_1729); a subdivision of one of them is accepted too and narrows the answer to that subdivision (par_1729-odst_1, par_1729-odst_2-pism_a). Anchors are not derivable from a section number.",
+                },
+                language: {
+                  type: "string",
+                  minLength: 2,
+                  maxLength: 8,
+                  description:
+                    "Language of the consolidation to read. Language is part of the work key, so an act published in two languages has one consolidation in each.",
+                },
+                limit: {
+                  type: "integer",
+                  minimum: 1,
+                  maximum: 20,
+                  description: "Versions per page; defaults to 5, at most 20.",
+                },
+                cursor: {
+                  type: "string",
+                  minLength: 1,
+                  maxLength: 512,
+                  description:
+                    "Opaque cursor from a previous read_provision_history call to read the next page",
+                },
+              },
+            },
+          },
+        },
+        "boe-search": {
+          kind: "leaf",
+          spec: {
+            commandPath: ["legislation", "boe-search"],
+            toolName: "search_boe_legislation",
+            description:
+              "Search and read Spanish consolidated legislation from the BOE.",
+            flags: [
+              {
+                flag: "--query",
+                prop: "query",
+                kind: "string",
+                repeatable: false,
+                description: "Free-text search over consolidated legislation",
+                required: false,
+              },
+              {
+                flag: "--title",
+                prop: "title",
+                kind: "string",
+                repeatable: false,
+                description: "Filter search results by title text",
+                required: false,
+              },
+              {
+                flag: "--department-code",
+                prop: "department_code",
+                kind: "string",
+                repeatable: false,
+                description: "Filter search results by department code",
+                required: false,
+              },
+              {
+                flag: "--legal-range-code",
+                prop: "legal_range_code",
+                kind: "string",
+                repeatable: false,
+                description:
+                  "Filter search results by legal-range code (law rank)",
+                required: false,
+              },
+              {
+                flag: "--matter-code",
+                prop: "matter_code",
+                kind: "string",
+                repeatable: false,
+                description: "Filter search results by subject-matter code",
+                required: false,
+              },
+              {
+                flag: "--date-from",
+                prop: "date_from",
+                kind: "string",
+                repeatable: false,
+                description:
+                  "Only laws published on or after this date (YYYYMMDD)",
+                required: false,
+              },
+              {
+                flag: "--date-to",
+                prop: "date_to",
+                kind: "string",
+                repeatable: false,
+                description:
+                  "Only laws published on or before this date (YYYYMMDD)",
+                required: false,
+              },
+              {
+                flag: "--law-id",
+                prop: "law_id",
+                kind: "string",
+                repeatable: false,
+                description:
+                  "BOE consolidated-law id (e.g. BOE-A-1889-4763) to read; omit to search",
+                required: false,
+              },
+              {
+                flag: "--block-id",
+                prop: "block_id",
+                kind: "string",
+                repeatable: false,
+                description:
+                  "With law_id, return this text block's content instead of the whole law",
+                required: false,
+              },
+              {
+                flag: "--relation-type",
+                prop: "relation_type",
+                kind: "enum",
+                enum: [
+                  "modifies",
+                  "modifiedBy",
+                  "derogates",
+                  "derogatedBy",
+                  "all",
+                ],
+                repeatable: false,
+                description:
+                  "With law_id, list related laws of this relation kind instead of the law body",
+                required: false,
+              },
+              {
+                flag: "--full-text",
+                prop: "full_text",
+                kind: "boolean",
+                repeatable: false,
+                description:
+                  "With law_id (no block_id/relation_type), include the consolidated full text",
+                required: false,
+              },
+            ],
+            inputOnly: [],
+            paginated: true,
+            windowedText: false,
+            itemsKey: "items",
+            destructive: false,
+            scope: "read",
+            inputSchema: {
+              type: "object",
+              required: [],
+              additionalProperties: false,
+              properties: {
+                query: {
+                  type: "string",
+                  minLength: 1,
+                  maxLength: 256,
+                  description: "Free-text search over consolidated legislation",
+                },
+                title: {
+                  type: "string",
+                  minLength: 1,
+                  maxLength: 256,
+                  description: "Filter search results by title text",
+                },
+                department_code: {
+                  type: "string",
+                  minLength: 1,
+                  maxLength: 32,
+                  description: "Filter search results by department code",
+                },
+                legal_range_code: {
+                  type: "string",
+                  minLength: 1,
+                  maxLength: 32,
+                  description:
+                    "Filter search results by legal-range code (law rank)",
+                },
+                matter_code: {
+                  type: "string",
+                  minLength: 1,
+                  maxLength: 32,
+                  description: "Filter search results by subject-matter code",
+                },
+                date_from: {
+                  type: "string",
+                  maxLength: 8,
+                  description:
+                    "Only laws published on or after this date (YYYYMMDD)",
+                },
+                date_to: {
+                  type: "string",
+                  maxLength: 8,
+                  description:
+                    "Only laws published on or before this date (YYYYMMDD)",
+                },
+                limit: {
+                  type: "integer",
+                  minimum: 1,
+                  maximum: 100,
+                  description: "Max search results to return",
+                },
+                cursor: {
+                  type: "string",
+                  maxLength: 5,
+                  description:
+                    "Opaque cursor from a previous search_boe_legislation call for the next page",
+                },
+                law_id: {
+                  type: "string",
+                  description:
+                    "BOE consolidated-law id (e.g. BOE-A-1889-4763) to read; omit to search",
+                },
+                block_id: {
+                  type: "string",
+                  minLength: 1,
+                  maxLength: 128,
+                  description:
+                    "With law_id, return this text block's content instead of the whole law",
+                },
+                relation_type: {
+                  enum: [
+                    "modifies",
+                    "modifiedBy",
+                    "derogates",
+                    "derogatedBy",
+                    "all",
+                  ],
+                  type: "string",
+                  description:
+                    "With law_id, list related laws of this relation kind instead of the law body",
+                },
+                full_text: {
+                  type: "boolean",
+                  description:
+                    "With law_id (no block_id/relation_type), include the consolidated full text",
                 },
               },
             },
@@ -4722,221 +5306,6 @@ export const generatedRouteMap: RouteNode = {
               required: [],
               additionalProperties: false,
               properties: {},
-            },
-          },
-        },
-      },
-    },
-    legislation: {
-      kind: "route",
-      children: {
-        search: {
-          kind: "leaf",
-          spec: {
-            commandPath: ["legislation", "search"],
-            toolName: "search_legislation",
-            description:
-              "Search and read Spanish consolidated legislation from the BOE.",
-            flags: [
-              {
-                flag: "--query",
-                prop: "query",
-                kind: "string",
-                repeatable: false,
-                description: "Free-text search over consolidated legislation",
-                required: false,
-              },
-              {
-                flag: "--title",
-                prop: "title",
-                kind: "string",
-                repeatable: false,
-                description: "Filter search results by title text",
-                required: false,
-              },
-              {
-                flag: "--department-code",
-                prop: "department_code",
-                kind: "string",
-                repeatable: false,
-                description: "Filter search results by department code",
-                required: false,
-              },
-              {
-                flag: "--legal-range-code",
-                prop: "legal_range_code",
-                kind: "string",
-                repeatable: false,
-                description:
-                  "Filter search results by legal-range code (law rank)",
-                required: false,
-              },
-              {
-                flag: "--matter-code",
-                prop: "matter_code",
-                kind: "string",
-                repeatable: false,
-                description: "Filter search results by subject-matter code",
-                required: false,
-              },
-              {
-                flag: "--date-from",
-                prop: "date_from",
-                kind: "string",
-                repeatable: false,
-                description:
-                  "Only laws published on or after this date (YYYYMMDD)",
-                required: false,
-              },
-              {
-                flag: "--date-to",
-                prop: "date_to",
-                kind: "string",
-                repeatable: false,
-                description:
-                  "Only laws published on or before this date (YYYYMMDD)",
-                required: false,
-              },
-              {
-                flag: "--law-id",
-                prop: "law_id",
-                kind: "string",
-                repeatable: false,
-                description:
-                  "BOE consolidated-law id (e.g. BOE-A-1889-4763) to read; omit to search",
-                required: false,
-              },
-              {
-                flag: "--block-id",
-                prop: "block_id",
-                kind: "string",
-                repeatable: false,
-                description:
-                  "With law_id, return this text block's content instead of the whole law",
-                required: false,
-              },
-              {
-                flag: "--relation-type",
-                prop: "relation_type",
-                kind: "enum",
-                enum: [
-                  "modifies",
-                  "modifiedBy",
-                  "derogates",
-                  "derogatedBy",
-                  "all",
-                ],
-                repeatable: false,
-                description:
-                  "With law_id, list related laws of this relation kind instead of the law body",
-                required: false,
-              },
-              {
-                flag: "--full-text",
-                prop: "full_text",
-                kind: "boolean",
-                repeatable: false,
-                description:
-                  "With law_id (no block_id/relation_type), include the consolidated full text",
-                required: false,
-              },
-            ],
-            inputOnly: [],
-            paginated: true,
-            windowedText: false,
-            itemsKey: "items",
-            destructive: false,
-            scope: "read",
-            inputSchema: {
-              type: "object",
-              required: [],
-              additionalProperties: false,
-              properties: {
-                query: {
-                  type: "string",
-                  minLength: 1,
-                  maxLength: 256,
-                  description: "Free-text search over consolidated legislation",
-                },
-                title: {
-                  type: "string",
-                  minLength: 1,
-                  maxLength: 256,
-                  description: "Filter search results by title text",
-                },
-                department_code: {
-                  type: "string",
-                  minLength: 1,
-                  maxLength: 32,
-                  description: "Filter search results by department code",
-                },
-                legal_range_code: {
-                  type: "string",
-                  minLength: 1,
-                  maxLength: 32,
-                  description:
-                    "Filter search results by legal-range code (law rank)",
-                },
-                matter_code: {
-                  type: "string",
-                  minLength: 1,
-                  maxLength: 32,
-                  description: "Filter search results by subject-matter code",
-                },
-                date_from: {
-                  type: "string",
-                  maxLength: 8,
-                  description:
-                    "Only laws published on or after this date (YYYYMMDD)",
-                },
-                date_to: {
-                  type: "string",
-                  maxLength: 8,
-                  description:
-                    "Only laws published on or before this date (YYYYMMDD)",
-                },
-                limit: {
-                  type: "integer",
-                  minimum: 1,
-                  maximum: 100,
-                  description: "Max search results to return",
-                },
-                cursor: {
-                  type: "string",
-                  maxLength: 5,
-                  description:
-                    "Opaque cursor from a previous search_legislation call for the next page",
-                },
-                law_id: {
-                  type: "string",
-                  description:
-                    "BOE consolidated-law id (e.g. BOE-A-1889-4763) to read; omit to search",
-                },
-                block_id: {
-                  type: "string",
-                  minLength: 1,
-                  maxLength: 128,
-                  description:
-                    "With law_id, return this text block's content instead of the whole law",
-                },
-                relation_type: {
-                  enum: [
-                    "modifies",
-                    "modifiedBy",
-                    "derogates",
-                    "derogatedBy",
-                    "all",
-                  ],
-                  type: "string",
-                  description:
-                    "With law_id, list related laws of this relation kind instead of the law body",
-                },
-                full_text: {
-                  type: "boolean",
-                  description:
-                    "With law_id (no block_id/relation_type), include the consolidated full text",
-                },
-              },
             },
           },
         },
@@ -22382,7 +22751,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "legislation", "boe-search"],
                 capabilityId: "legislation.boe-search",
                 description:
-                  "Search Spanish consolidated legislation on the BOE. At least one filter is required: free text, title, department code, legal-range code (law rank), subject-matter code, or a publication date range as YYYYMMDD. Paginate with limit and the opaque cursor. This queries the BOE service live; use legislation.search to search the stella legislation corpus instead.",
+                  "Search Spanish consolidated legislation on the BOE. At least one filter is required: free text, title, department code, legal-range code (law rank), subject-matter code, or a publication date range as YYYYMMDD. Paginate with limit and the opaque cursor. This queries the BOE service live; use the search_legislation tool to search the stella legislation corpus instead.",
                 access: "read",
                 flags: [
                   {
@@ -22523,7 +22892,7 @@ export const generatedRouteMap: RouteNode = {
                           pattern: "^\\d+$",
                           maxLength: 5,
                           description:
-                            "Opaque cursor from a previous search_legislation call for the next page",
+                            "Opaque cursor from a previous search_boe_legislation call for the next page",
                           type: "string",
                         },
                         limit: {
@@ -22684,7 +23053,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "legislation", "search"],
                 capabilityId: "legislation.search",
                 description:
-                  "Full-text search the stella legislation corpus, returning ranked results with a highlighted snippet and each document's ELI, title, country, language, type, status, and effective date. Filter by jurisdiction, document type, status, source, language, and effective-date range; paginate with limit and cursor. Admitted jurisdiction codes (uppercase): CZE. Omit jurisdiction to search all admitted jurisdictions. Only admitted jurisdictions and sources cleared for redistribution are searched. Read a hit in full with legislation.get; use legislation.boe-search to query the Spanish BOE service directly instead.",
+                  "Full-text search the stella legislation corpus, returning ranked results with a highlighted snippet and each document's ELI, title, country, language, type, status, and effective date. Filter by jurisdiction, document type, status, source, language, and effective-date range; paginate with limit and cursor. Admitted jurisdiction codes (uppercase): CZE. Omit jurisdiction to search all admitted jurisdictions. Only admitted jurisdictions and sources cleared for redistribution are searched. Read a hit in full with legislation.read; use legislation.boe-search to query the Spanish BOE service directly instead.",
                 access: "read",
                 flags: [
                   {

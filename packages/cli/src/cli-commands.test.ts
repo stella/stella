@@ -617,6 +617,73 @@ describe("windowed text (S4)", () => {
     expect(result.exitCode).toBe(0);
     expect(result.stdout.trim()).toBe("THE FULL BODY");
   });
+
+  test("a read that nests its subject prints the nested text", async () => {
+    // read_statute answers `{ nextCursor, statute: { text } }`. A runtime that
+    // only looked at a top-level `text` printed nothing here.
+    const server = startMockServer(() => ({
+      toolPayload: {
+        nextCursor: null,
+        statute: {
+          charCount: 13,
+          eli: "/eli/cz/sb/2012/89",
+          text: "THE STATUTE BODY",
+          truncated: false,
+        },
+      },
+    }));
+    const result = await runCli({
+      args: ["legislation", "read", "--eli", "/eli/cz/sb/2012/89"],
+      url: server.url,
+      token: READ,
+    });
+    server.stop();
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout.trim()).toBe("THE STATUTE BODY");
+  });
+
+  test("--all concatenates the nested windows of a statute read", async () => {
+    const server = startMockServer((_body, index) => ({
+      toolPayload:
+        index === 0
+          ? { nextCursor: "w2", statute: { text: "FIRST ", truncated: true } }
+          : { nextCursor: null, statute: { text: "SECOND", truncated: false } },
+    }));
+    const result = await runCli({
+      args: ["legislation", "read", "--eli", "/eli/cz/sb/2012/89", "--all"],
+      url: server.url,
+      token: READ,
+    });
+    server.stop();
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout.trim()).toBe("FIRST SECOND");
+    expect(server.requests).toHaveLength(2);
+    expect(server.requests.at(1)?.params.arguments).toMatchObject({
+      cursor: "w2",
+    });
+  });
+
+  test("a case-law decision read prints its nested text too", async () => {
+    const server = startMockServer(() => ({
+      toolPayload: {
+        nextCursor: null,
+        decision: { caseNumber: "29 Cdo 1/2024", text: "THE DECISION BODY" },
+      },
+    }));
+    const result = await runCli({
+      args: [
+        "case-law",
+        "read",
+        "--decision-id",
+        "00000000-0000-4000-8000-000000000001",
+      ],
+      url: server.url,
+      token: READ,
+    });
+    server.stop();
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout.trim()).toBe("THE DECISION BODY");
+  });
 });
 
 describe("value flags and validation (S3)", () => {
@@ -1243,7 +1310,7 @@ describe("organization discriminator split (S2/Phase 4)", () => {
   });
 });
 
-describe("legislation multi-shape rendering (Phase 4)", () => {
+describe("BOE legislation multi-shape rendering (Phase 4)", () => {
   test("search-mode list renders the items Page envelope", async () => {
     const server = startMockServer(() => ({
       toolPayload: {
@@ -1252,7 +1319,7 @@ describe("legislation multi-shape rendering (Phase 4)", () => {
       },
     }));
     const result = await runCli({
-      args: ["legislation", "search", "--query", "tax", "--table"],
+      args: ["legislation", "boe-search", "--query", "tax", "--table"],
       url: server.url,
       token: READ,
     });
@@ -1269,7 +1336,7 @@ describe("legislation multi-shape rendering (Phase 4)", () => {
       toolPayload: { law_id: "l1", block_id: "b1", text: "Section text" },
     }));
     const result = await runCli({
-      args: ["legislation", "search", "--law-id", "l1", "--table"],
+      args: ["legislation", "boe-search", "--law-id", "l1", "--table"],
       url: server.url,
       token: READ,
     });

@@ -231,7 +231,7 @@ export const uploadCommand: Command<Context> = buildCommand<
         plan: buildRenderPlan({
           payload: isRecord(finalizedResult) ? finalizedResult : uploaded.value,
           itemsKey: undefined,
-          windowedText: false,
+          textPath: undefined,
           singleReadActive: true,
           columns: undefined,
         }),

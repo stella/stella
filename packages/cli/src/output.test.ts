@@ -54,7 +54,7 @@ describe("renderResult: jsonl (spec 049 §3)", () => {
     const plan = buildRenderPlan({
       payload: { items: [{ id: 1 }, { id: 2 }], nextCursor: null },
       itemsKey: "items",
-      windowedText: false,
+      textPath: undefined,
       singleReadActive: false,
       columns: undefined,
     });
@@ -68,7 +68,7 @@ describe("renderResult: jsonl (spec 049 §3)", () => {
     const plan = buildRenderPlan({
       payload: { ok: true },
       itemsKey: undefined,
-      windowedText: false,
+      textPath: undefined,
       singleReadActive: false,
       columns: undefined,
     });
@@ -82,7 +82,7 @@ describe("buildRenderPlan (S4)", () => {
     const plan = buildRenderPlan({
       payload: { matters: [{ id: "m1" }], nextCursor: "c1" },
       itemsKey: "matters",
-      windowedText: false,
+      textPath: undefined,
       singleReadActive: false,
       columns: undefined,
     });
@@ -103,7 +103,7 @@ describe("buildRenderPlan (S4)", () => {
         members: [],
       },
       itemsKey: "matters",
-      windowedText: false,
+      textPath: undefined,
       singleReadActive: false,
       columns: undefined,
     });
@@ -114,7 +114,7 @@ describe("buildRenderPlan (S4)", () => {
     const plan = buildRenderPlan({
       payload: { text: "hello", nextCursor: "next" },
       itemsKey: undefined,
-      windowedText: true,
+      textPath: "text",
       singleReadActive: false,
       columns: undefined,
     });
@@ -122,6 +122,42 @@ describe("buildRenderPlan (S4)", () => {
       kind: "windowed-text",
       text: "hello",
       nextCursor: "next",
+    });
+  });
+
+  test("windowed-text follows a nested path to the text", () => {
+    // read_statute answers `{ nextCursor, statute: { text } }` and
+    // read_case_law_decision `{ nextCursor, decision: { text } }`: a leaf
+    // states where its window lives, so neither renders an empty string.
+    const plan = buildRenderPlan({
+      payload: {
+        nextCursor: "next",
+        statute: { charCount: 5, text: "hello", truncated: true },
+      },
+      itemsKey: undefined,
+      textPath: "statute.text",
+      singleReadActive: false,
+      columns: undefined,
+    });
+    expect(plan).toEqual({
+      kind: "windowed-text",
+      text: "hello",
+      nextCursor: "next",
+    });
+  });
+
+  test("windowed-text reads an absent nested path as empty, never as a throw", () => {
+    const plan = buildRenderPlan({
+      payload: { nextCursor: null },
+      itemsKey: undefined,
+      textPath: "statute.text",
+      singleReadActive: false,
+      columns: undefined,
+    });
+    expect(plan).toEqual({
+      kind: "windowed-text",
+      text: "",
+      nextCursor: null,
     });
   });
 });
@@ -186,7 +222,7 @@ describe("renderResult: table fitting and flattening", () => {
     buildRenderPlan({
       payload: { items, nextCursor: null },
       itemsKey: "items",
-      windowedText: false,
+      textPath: undefined,
       singleReadActive: false,
       columns: undefined,
     });
@@ -253,7 +289,7 @@ describe("renderResult: table fitting and flattening", () => {
       plan: buildRenderPlan({
         payload: { id: "m1", meta: {} },
         itemsKey: undefined,
-        windowedText: false,
+        textPath: undefined,
         singleReadActive: true,
         columns: undefined,
       }),
@@ -275,7 +311,7 @@ describe("renderResult: table fitting and flattening", () => {
           members: [{ userId: "u1" }],
         },
         itemsKey: undefined,
-        windowedText: false,
+        textPath: undefined,
         singleReadActive: true,
         columns: undefined,
       }),
@@ -309,7 +345,7 @@ describe("displayWidth and Unicode-aware truncation", () => {
           nextCursor: null,
         },
         itemsKey: "items",
-        windowedText: false,
+        textPath: undefined,
         singleReadActive: false,
         columns: undefined,
       }),

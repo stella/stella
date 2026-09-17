@@ -79,9 +79,17 @@ type SurfaceMode = (typeof SURFACES)[number]["mode"];
 // becoming a tool whose meaning depends on which optional arguments are
 // present, and the orientation eval showed a model reaching for the decision
 // read and never finding the treatment.
+// default bumped 51 -> 55 and anonymized 22 -> 26 for the four legislation
+// corpus tools: corpus legislation search, point-in-time statute read, batch
+// provision read, and provision history. They are four intents, not one tool
+// with a mode argument: a search answers "which act", a read answers "what did
+// it say on this date", the batch read answers "these provisions" without a
+// call per provision, and the history answers "what changed". All four are
+// public-corpus `passthrough`, so both surfaces carry them. The BOE rename
+// (search_legislation -> search_boe_legislation) is count-neutral.
 const TOOL_COUNT_CEILING: Record<SurfaceMode, number> = {
-  default: 51,
-  anonymized: 22,
+  default: 55,
+  anonymized: 26,
 };
 
 // Serialized `tools/list` tool array (the wire payload produced by
@@ -139,9 +147,21 @@ const TOOL_COUNT_CEILING: Record<SurfaceMode, number> = {
 // carries, and the search sort names the identifier lookup that ignores it.
 // The citation tool's own description paid part of that back. Pin those exact
 // sizes so the next schema growth stays reviewable.
+// The four legislation corpus tools measure 130_210 default and 66_210
+// anonymized, from 118_768 and 54_768 without them (the BOE rename accounts
+// for the difference from the 118_752 pinned above). The cost is the ELI,
+// anchor and as_of prose each tool repeats, and the batch read's nested
+// `items[]` object; the alternative was one legislation tool whose meaning
+// depended on which optional arguments were present. Pin those exact sizes so
+// the next schema growth stays reviewable.
+// default 130_300 -> 130_800 and anonymized 66_300 -> 66_800 (measured
+// 130_753 and 66_753) for two contract facts the batch provision read owes a
+// model: that a subdivision anchor is accepted, and that an entry is
+// validated on its own so a malformed one comes back with its own status
+// instead of sinking the call.
 const TOOLS_LIST_PAYLOAD_CHAR_CEILING: Record<SurfaceMode, number> = {
-  default: 118_800,
-  anonymized: 54_800,
+  default: 130_800,
+  anonymized: 66_800,
 };
 
 // default bumped 42_000 -> 42_300 for the two fields read_case_law_citations
@@ -149,9 +169,20 @@ const TOOLS_LIST_PAYLOAD_CHAR_CEILING: Record<SurfaceMode, number> = {
 // reading an excerpt as the whole paragraph, or a passage as the mention the
 // treatment was classified from, is reading something the data does not say.
 // Measured 42_212. The anonymized surface does not carry this tool.
+// default bumped 42_300 -> 46_400 and anonymized 28_000 -> 32_000 for the
+// four legislation corpus schemas: measured 46_280 default (42_212 without
+// them) and 31_916 anonymized (27_848 without them). Their largest, 1_416 for
+// read_statute, is well under the per-tool ceiling; it declares the outline
+// entries, the version window and the withheld-text field, each of which says
+// something the data would otherwise be read as promising.
+// default 46_400 -> 46_600 and anonymized 32_000 -> 32_300 (measured 46_525
+// and 32_161) for the two branches the provision reads gained: an `invalid`
+// entry carrying its own `issues[]`, and a history item discriminated on the
+// same status vocabulary so a version whose source bars derived AI use
+// answers `text_withheld` rather than its wording.
 const OUTPUT_SCHEMA_TOTAL_CHAR_CEILING: Record<SurfaceMode, number> = {
-  default: 42_300,
-  anonymized: 28_000,
+  default: 46_600,
+  anonymized: 32_300,
 };
 
 // Largest measured schema is read_document at 3_434 chars. A single tool must

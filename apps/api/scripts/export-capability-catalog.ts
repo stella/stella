@@ -380,9 +380,11 @@ const ROUTE_HOOK_WAIVERS: Record<string, string> = {};
  *    the whole billing capability surface (time-entries, rates, invoices,
  *    expenses, billing-codes) rides the same flag.
  *  - FEATURE_PUBLIC_LAW gates the public legal-corpus surface (search_case_law,
- *    read_case_law_decision, search_legislation, and the public case-law
- *    routes); legislation and case-law capabilities (corpus analysis,
- *    matter-links into corpus decisions, ingestion admin) are corpus-backed.
+ *    read_case_law_decision, the legislation corpus tools search_legislation,
+ *    read_statute, read_statute_provisions and read_provision_history, the BOE
+ *    connector search_boe_legislation, and the public case-law routes);
+ *    legislation and case-law capabilities (corpus analysis, matter-links into
+ *    corpus decisions, ingestion admin) are corpus-backed.
  *  - FEATURE_USAGE gates only `get_usage` (tool disposition; inherited
  *    mechanically, no capability-disposition entries), so `usage` needs no row.
  * Web-only flags (FEATURE_CHAT, FEATURE_CONTACTS, FEATURE_TODOS, ...) gate UI

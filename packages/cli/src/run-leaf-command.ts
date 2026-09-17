@@ -34,11 +34,13 @@ import {
 import {
   buildRenderPlan,
   jsonlLine,
+  MERGED_TEXT_PATH,
   renderResult,
   selectFormat,
+  terminalWidth,
+  valueAtPath,
   type OutputFormat,
   type Writers,
-  terminalWidth,
 } from "./output.js";
 import { RESERVED_FLAG_KEYS } from "./reserved-flag-keys.js";
 import type { FlagSpec, LeafCommandSpec } from "./route-types.js";
@@ -76,6 +78,12 @@ const stringField = (value: unknown, key: string): string | null => {
   }
   const field = value[key];
   return typeof field === "string" ? field : null;
+};
+
+/** One window's text at the leaf's declared path; an absent one is empty. */
+const asStringAtPath = (value: unknown, path: string): string => {
+  const found = valueAtPath(value, path);
+  return typeof found === "string" ? found : "";
 };
 
 const arrayField = (value: unknown, key: string): readonly unknown[] => {
@@ -761,7 +769,7 @@ type AllOutcome = {
  * stream ignore `payload` and read `count`/`truncated`/`lastCursor`.
  */
 const followAll = async ({
-  windowedText,
+  textPath,
   itemsKey,
   baseArgs,
   serverUrl,
@@ -771,7 +779,8 @@ const followAll = async ({
   stream,
   requestTimeoutMs,
 }: {
-  windowedText: boolean;
+  /** Set exactly for a windowed-text leaf; see `LeafCommandSpec.textPath`. */
+  textPath: string | undefined;
   itemsKey: string | undefined;
   baseArgs: Record<string, unknown>;
   serverUrl: string;
@@ -815,8 +824,8 @@ const followAll = async ({
     }
     pages += 1;
 
-    if (windowedText) {
-      const chunk = stringField(payload, "text") ?? "";
+    if (textPath !== undefined) {
+      const chunk = asStringAtPath(payload, textPath);
       bytes += Buffer.byteLength(chunk);
       text += chunk;
     } else if (itemsKey !== undefined) {
@@ -845,12 +854,15 @@ const followAll = async ({
     }
   } while (cursor !== null);
 
-  const mergedPayload = windowedText
-    ? { text, nextCursor: null }
-    : { ...firstPayload, [itemsKey ?? "items"]: items, nextCursor: null };
+  // The merged windowed payload is the CLI's own shape, flat at
+  // `MERGED_TEXT_PATH` whatever path the tool nested its window under.
+  const mergedPayload =
+    textPath === undefined
+      ? { ...firstPayload, [itemsKey ?? "items"]: items, nextCursor: null }
+      : { [MERGED_TEXT_PATH]: text, nextCursor: null };
 
   const itemCount = stream === undefined ? items.length : streamedCount;
-  const count = windowedText ? Buffer.byteLength(text) : itemCount;
+  const count = textPath === undefined ? itemCount : Buffer.byteLength(text);
   return Result.ok({
     payload: mergedPayload,
     truncated,
@@ -870,7 +882,7 @@ export const streamOrRenderAllPages = async ({
   context,
   writers,
   format,
-  windowedText,
+  textPath,
   itemsKey,
   baseArgs,
   serverUrl,
@@ -882,7 +894,8 @@ export const streamOrRenderAllPages = async ({
   context: Context;
   writers: Writers;
   format: OutputFormat;
-  windowedText: boolean;
+  /** Set exactly for a windowed-text leaf; see `LeafCommandSpec.textPath`. */
+  textPath: string | undefined;
   itemsKey: string | undefined;
   baseArgs: Record<string, unknown>;
   serverUrl: string;
@@ -894,9 +907,9 @@ export const streamOrRenderAllPages = async ({
   ) => Record<string, unknown>;
   requestTimeoutMs?: number;
 }): Promise<void> => {
-  const streaming = format === "jsonl" && !windowedText;
+  const streaming = format === "jsonl" && textPath === undefined;
   const outcome = await followAll({
-    windowedText,
+    textPath,
     itemsKey,
     baseArgs,
     serverUrl,
@@ -921,7 +934,7 @@ export const streamOrRenderAllPages = async ({
     const plan = buildRenderPlan({
       payload: outcome.value.payload,
       itemsKey,
-      windowedText,
+      textPath: textPath === undefined ? undefined : MERGED_TEXT_PATH,
       singleReadActive: false,
       columns: undefined,
     });
@@ -1032,7 +1045,8 @@ type RenderCommandResultOptions = {
   format: OutputFormat;
   itemsKey: string | undefined;
   result: CallToolResult;
-  windowedText: boolean;
+  /** Set exactly for a windowed-text leaf; see `LeafCommandSpec.textPath`. */
+  textPath: string | undefined;
   writers: Writers;
   writeReceipt: boolean;
   /** Input paths the leaf exposes as flags, so an issue can name the flag. */
@@ -1044,7 +1058,7 @@ export const renderCommandResult = ({
   format,
   itemsKey,
   result,
-  windowedText,
+  textPath,
   writers,
   writeReceipt,
   flagPaths,
@@ -1061,7 +1075,7 @@ export const renderCommandResult = ({
   const plan = buildRenderPlan({
     payload,
     itemsKey,
-    windowedText,
+    textPath,
     singleReadActive: false,
     columns: undefined,
   });
@@ -1207,7 +1221,7 @@ export const runLeafCommand = async ({
       format,
       itemsKey: spec.itemsKey,
       result,
-      windowedText: spec.windowedText,
+      textPath: spec.textPath,
       writers,
       writeReceipt: false,
       flagPaths: leafFlagPaths(spec),
@@ -1232,7 +1246,7 @@ export const runLeafCommand = async ({
       context,
       writers,
       format,
-      windowedText: spec.windowedText,
+      textPath: spec.textPath,
       itemsKey: spec.itemsKey,
       baseArgs: args,
       serverUrl,

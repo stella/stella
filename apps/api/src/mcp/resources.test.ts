@@ -5,8 +5,14 @@ import { describe, expect, test } from "bun:test";
 
 import { MCP_APP_RESOURCE_MIME_TYPE } from "@stll/api-contract";
 
+import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
+import { LIMITS } from "@/api/lib/limits";
 import { DOCUMENT_UPLOAD_APP_RESOURCE_URI } from "@/api/mcp/document-file-upload";
+import {
+  buildLegislationWorkflowReference,
+  LEGISLATION_WORKFLOW_TOOL_NAMES,
+} from "@/api/mcp/legislation-workflow-reference";
 import { listMcpResources, readMcpResource } from "@/api/mcp/resources";
 import {
   DEFAULT_MCP_TOOL_DEFINITIONS,
@@ -22,6 +28,8 @@ import {
 const MARKER_REFERENCE_URI = "stella://reference/template-markers";
 const FIELD_REFERENCE_URI = "stella://reference/template-fields";
 const WORKFLOW_REFERENCE_URI = "stella://reference/template-workflow";
+const LEGISLATION_WORKFLOW_REFERENCE_URI =
+  "stella://reference/legislation-workflow";
 const PRODUCT_IDENTITY_URI = "stella://about";
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -56,6 +64,7 @@ describe("MCP resources", () => {
       expect(uris).toContain(MARKER_REFERENCE_URI);
       expect(uris).toContain(FIELD_REFERENCE_URI);
       expect(uris).toContain(WORKFLOW_REFERENCE_URI);
+      expect(uris).toContain(LEGISLATION_WORKFLOW_REFERENCE_URI);
       // The reference documents are static, public, and tenant-independent, so
       // the set is identical across modes.
       expect(uris).toEqual(listMcpResources("default").map((r) => r.uri));
@@ -154,6 +163,88 @@ describe("MCP resources", () => {
     ).toEqual([]);
   });
 
+  test("reads the legislation workflow reference in corpus-reading order", async () => {
+    const workflow = listMcpResources("default").find(
+      (resource) => resource.uri === LEGISLATION_WORKFLOW_REFERENCE_URI,
+    );
+    expect(workflow?.mimeType).toBe("text/markdown");
+
+    const result = await readMcpResource(
+      LEGISLATION_WORKFLOW_REFERENCE_URI,
+      "default",
+    );
+    const content = result.contents.at(0);
+    if (!content || !("text" in content)) {
+      throw new Error("Expected a text resource content entry");
+    }
+    expect(content.uri).toBe(LEGISLATION_WORKFLOW_REFERENCE_URI);
+    expect(content.text).toBe(buildLegislationWorkflowReference());
+    // The facts an agent cannot read off the tool list: the ELI is the handle
+    // every later call takes, the point-in-time question is answered by the
+    // read and not by a search filter, anchors come from the outline, and a
+    // withheld text will not come back on a retry.
+    expect(content.text).toContain("`as_of`");
+    expect(content.text).toContain("`outline`");
+    expect(content.text).toContain("`par_1729`");
+    expect(content.text).toContain("`text_withheld`");
+    expect(content.text).toContain("`textWithheldReason`");
+    // Rendered from the enforced limits, never spelled by hand.
+    expect(content.text).toContain(String(LIMITS.legislationProvisionBatchMax));
+    expect(content.text).toContain(
+      String(LIMITS.legislationProvisionTextChars),
+    );
+    expect(content.text).toContain(
+      String(LIMITS.legislationOutlineHeadingsMax),
+    );
+  });
+
+  test("every tool the legislation reference names is in the registry", () => {
+    const text = buildLegislationWorkflowReference();
+    const registryNames = new Set<string>(MCP_STATIC_TOOL_NAMES);
+    for (const name of LEGISLATION_WORKFLOW_TOOL_NAMES) {
+      expect(registryNames.has(name), `${name} is not a registry tool`).toBe(
+        true,
+      );
+      expect(text, `${name} is declared but never named`).toContain(name);
+    }
+
+    // Same scan as the template reference, for the other direction: a
+    // snake_case token that reads as a tool name to an agent must be one.
+    const toolVerbs = new Set(
+      MCP_STATIC_TOOL_NAMES.map((name) => name.split("_")[0]),
+    );
+    const advertisedValues = new Set(
+      DEFAULT_MCP_TOOL_DEFINITIONS.flatMap((definition) =>
+        advertisedEnumValues(definition.inputSchema),
+      ),
+    );
+    const mentioned = [...text.matchAll(/\b[a-z]+(?:_[a-z]+)+\b/gu)]
+      .map(([token]) => token)
+      .filter((token) => toolVerbs.has(token.split("_")[0] ?? ""));
+    expect(
+      [...new Set(mentioned)].filter(
+        (token) => !registryNames.has(token) && !advertisedValues.has(token),
+      ),
+    ).toEqual([]);
+  });
+
+  test("every stella:// uri the legislation reference names is a listed resource", () => {
+    const listedUris = new Set(
+      listMcpResources("default").map((resource) => resource.uri),
+    );
+    expect(
+      [
+        ...new Set(
+          [
+            ...buildLegislationWorkflowReference().matchAll(
+              /stella:\/\/[\w/-]+/gu,
+            ),
+          ].map(([uri]) => uri),
+        ),
+      ].filter((uri) => !listedUris.has(uri)),
+    ).toEqual([]);
+  });
+
   test("every stella:// uri the workflow reference names is a listed resource", () => {
     const listedUris = new Set(
       listMcpResources("default").map((resource) => resource.uri),
@@ -228,6 +319,40 @@ describe("MCP resources", () => {
         prefersBorder: true,
       },
     });
+  });
+
+  test("lists and reads the legislation workflow only behind its own gate", async () => {
+    const previousFeaturePublicLaw = env.FEATURE_PUBLIC_LAW;
+    const previousIsDev = env.isDev;
+    env.FEATURE_PUBLIC_LAW = false;
+    env.isDev = false;
+    try {
+      // The four corpus tools are filtered out of tools/list on this
+      // deployment, so a reference telling a model to call them would hand it
+      // a procedure it has no advertised schema for.
+      expect(
+        listMcpResources("default").map((entry) => entry.uri),
+      ).not.toContain(LEGISLATION_WORKFLOW_REFERENCE_URI);
+      let caught: unknown;
+      try {
+        await readMcpResource(LEGISLATION_WORKFLOW_REFERENCE_URI, "default");
+      } catch (error) {
+        caught = error;
+      }
+      expect(caught).toBeInstanceOf(ProtocolError);
+      // An ungated reference is unaffected.
+      expect(listMcpResources("default").map((entry) => entry.uri)).toContain(
+        WORKFLOW_REFERENCE_URI,
+      );
+
+      env.FEATURE_PUBLIC_LAW = true;
+      expect(listMcpResources("default").map((entry) => entry.uri)).toContain(
+        LEGISLATION_WORKFLOW_REFERENCE_URI,
+      );
+    } finally {
+      env.FEATURE_PUBLIC_LAW = previousFeaturePublicLaw;
+      env.isDev = previousIsDev;
+    }
   });
 
   test("throws for an unknown resource uri", async () => {

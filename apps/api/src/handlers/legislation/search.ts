@@ -516,11 +516,11 @@ const config = {
     "language, type, status, and effective date. Filter by jurisdiction, " +
     "document type, status, source, language, and effective-date range; " +
     `paginate with limit and cursor. ${PUBLIC_JURISDICTIONS_DESCRIPTION} Only admitted jurisdictions and sources cleared for redistribution ` +
-    "are searched. Read a hit in full with legislation.get; use " +
+    "are searched. Read a hit in full with legislation.read; use " +
     "legislation.boe-search to query the Spanish BOE service directly " +
     "instead.",
   permissions: { workspace: ["read"] },
-  mcp: { type: "capability", reason: "legal_corpus_admin" },
+  mcp: { type: "tool", name: "search_legislation" },
   access: "read",
   body: searchLegislationBodySchema,
   response: searchLegislationResponseSchema,

@@ -17,7 +17,7 @@ const boeLawStructure = createSafeRootHandler(
       "parts, articles, and provisions with the block ids that address them. " +
       "Use legislation.boe-text-block to fetch the text of a single block.",
     permissions: { workspace: ["read"] },
-    mcp: { type: "covered", by: "search_legislation" },
+    mcp: { type: "covered", by: "search_boe_legislation" },
     access: "read",
     params: paramsSchema,
   },
