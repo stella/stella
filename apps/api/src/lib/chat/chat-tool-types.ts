@@ -1,12 +1,15 @@
 import type { StandardTypedV1 } from "@standard-schema/spec";
 import type {
   AnyTool,
+  ApprovalSchemaConfig,
   ClientTool,
   InputSchemaOf,
   OutputSchemaOf,
   SchemaInput,
 } from "@tanstack/ai";
 import { panic } from "better-result";
+
+import type { ToolSchemaInput } from "@/api/lib/tanstack-ai-schema";
 
 /**
  * Heterogeneous chat-tool boundary. Keep each concrete tool's literal schemas
@@ -17,9 +20,10 @@ export type ChatTool = Omit<
   AnyTool,
   "inputSchema" | "name" | "outputSchema"
 > & {
-  inputSchema?: SchemaInput | undefined;
+  approvalSchema?: ApprovalSchemaConfig | undefined;
+  inputSchema?: ToolSchemaInput | undefined;
   name: string;
-  outputSchema?: SchemaInput | undefined;
+  outputSchema?: ToolSchemaInput | undefined;
 };
 
 export type ChatToolMap = Record<string, ChatTool | undefined>;

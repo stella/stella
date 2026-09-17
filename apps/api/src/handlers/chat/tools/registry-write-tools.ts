@@ -18,6 +18,7 @@ import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import type { ChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
 import { knownDefectRefusalMessage } from "@/api/lib/chat/tool-defect-memo";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
+import type { WithToolSchemaInputs } from "@/api/lib/tanstack-ai-schema";
 import { isRecord } from "@/api/lib/type-guards";
 import {
   DEFAULT_MCP_TOOL_DEFINITIONS,
@@ -56,7 +57,9 @@ export type ProjectedWriteToolName = {
  * factories; this type describes what it produces.
  */
 export type ChatRegistryWriteToolMap = {
-  [K in ProjectedWriteToolName]: ServerTool<SchemaInput, SchemaInput, K>;
+  [K in ProjectedWriteToolName]: WithToolSchemaInputs<
+    ServerTool<SchemaInput, SchemaInput, K>
+  >;
 };
 
 /**

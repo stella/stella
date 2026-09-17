@@ -2,7 +2,7 @@ import type {
   StandardJSONSchemaV1,
   StandardSchemaV1,
 } from "@standard-schema/spec";
-import type { SchemaInput } from "@tanstack/ai";
+import type { JSONSchema, SchemaInput } from "@tanstack/ai";
 import {
   type ConversionConfig,
   toJsonSchema,
@@ -18,6 +18,31 @@ export type TanStackValibotSchema<TSchema extends GenericSchema> =
   StandardJSONSchemaV1<InferInput<TSchema>, InferOutput<TSchema>> &
     StandardSchemaV1<InferInput<TSchema>, InferOutput<TSchema>>;
 
+/**
+ * The tool schema forms TanStack accepts at every runtime boundary. Its own
+ * `SchemaInput` type also admits a Standard JSON Schema with no `validate`
+ * member, but the approval-interrupt boundary (`normalizeApprovalSchema`,
+ * `hashSchemaInput`) throws on that form, so a chat tool carrying it fails
+ * the first time the model calls it. Excluding it here makes the compiler,
+ * not the chat loop, reject such a tool: a raw JSON Schema is any plain
+ * record, a validator is a Standard Schema, and an object with a `~standard`
+ * member must be the latter.
+ */
+export type ToolSchemaInput =
+  | StandardSchemaV1
+  | (JSONSchema & { "~standard"?: never });
+
+type ToolSchemaFields = {
+  inputSchema?: SchemaInput | undefined;
+  outputSchema?: SchemaInput | undefined;
+};
+
+/** A library-typed tool after its schemas are narrowed to `ToolSchemaInput`. */
+export type WithToolSchemaInputs<TTool> = TTool & {
+  inputSchema?: ToolSchemaInput | undefined;
+  outputSchema?: ToolSchemaInput | undefined;
+};
+
 type JsonObject = Record<string, unknown>;
 
 const isJsonObject = (value: unknown): value is JsonObject =>
@@ -25,13 +50,13 @@ const isJsonObject = (value: unknown): value is JsonObject =>
 
 const isProjectableJsonSchemaInput = (
   value: unknown,
-): value is StandardJSONSchemaV1 => {
+): value is StandardJSONSchemaV1 & StandardSchemaV1 => {
   if (!isJsonObject(value)) {
     return false;
   }
   const schemaObject: JsonObject = value;
   const standard = schemaObject["~standard"];
-  if (!isJsonObject(standard)) {
+  if (!isJsonObject(standard) || typeof standard["validate"] !== "function") {
     return false;
   }
   const jsonSchema = standard["jsonSchema"];
@@ -42,7 +67,9 @@ const isProjectableJsonSchemaInput = (
   );
 };
 
-const isStandardSchemaInput = (value: unknown): value is StandardSchemaV1 => {
+export const isStandardSchemaInput = (
+  value: unknown,
+): value is StandardSchemaV1 => {
   if (!isJsonObject(value)) {
     return false;
   }
@@ -50,6 +77,26 @@ const isStandardSchemaInput = (value: unknown): value is StandardSchemaV1 => {
   const standard = schemaObject["~standard"];
   return isJsonObject(standard) && typeof standard["validate"] === "function";
 };
+
+const isRawToolJsonSchema = (
+  value: unknown,
+): value is JSONSchema & { "~standard"?: never } =>
+  isJsonObject(value) && !("~standard" in value);
+
+const isToolSchemaInput = (value: unknown): value is ToolSchemaInput =>
+  isStandardSchemaInput(value) || isRawToolJsonSchema(value);
+
+/**
+ * Narrow a tool whose schemas a library types as the broad `SchemaInput`
+ * (Code Mode, MCP) at its registration boundary. Every such library builds
+ * its schemas from a validator or raw JSON, so a miss is a contract change in
+ * the dependency, not user input.
+ */
+export const hasToolSchemaInputs = <TTool extends ToolSchemaFields>(
+  tool: TTool,
+): tool is WithToolSchemaInputs<TTool> =>
+  (tool.inputSchema === undefined || isToolSchemaInput(tool.inputSchema)) &&
+  (tool.outputSchema === undefined || isToolSchemaInput(tool.outputSchema));
 
 const strictifyObjectSchemas = (schema: unknown): unknown => {
   if (!isJsonObject(schema)) {
@@ -162,9 +209,9 @@ export const toTanStackValibotSchema = <TSchema extends GenericSchema>(
 export const projectSchemaInputJsonSchema = (
   schema: unknown,
   projectionOptions: ProviderSafeJsonSchemaProjectionOptions,
-): SchemaInput | undefined => {
+): ToolSchemaInput | undefined => {
   if (isProjectableJsonSchemaInput(schema)) {
-    return {
+    const projected: StandardJSONSchemaV1 & StandardSchemaV1 = {
       ...schema,
       "~standard": {
         ...schema["~standard"],
@@ -182,6 +229,7 @@ export const projectSchemaInputJsonSchema = (
         },
       },
     };
+    return projected;
   }
 
   if (schema === undefined || isStandardSchemaInput(schema)) {
