@@ -2767,9 +2767,9 @@
       "dismiss": "Atmesti",
       "documentChanged": "Šis dokumentas pasikeitė po šios peržiūros.",
       "export": {
-        "counterparty": "Siųsti priešingai šaliai",
+        "counterparty": "Atsisiųsti priešingai šaliai",
         "counterpartyFailed": "Nepavyko eksportuoti dokumento",
-        "counterpartyHint": "Dokumentas su jūsų sekamais pakeitimais",
+        "counterpartyHint": "Įrašytas dokumentas su sekamais pakeitimais, be vidinių peržiūros pastabų",
         "counterpartyUnavailable": "Atidarykite dokumentą, kad galėtumėte jį eksportuoti",
         "csv": "CSV",
         "docx": "Word dokumentas (.docx)",

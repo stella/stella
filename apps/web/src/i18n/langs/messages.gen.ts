@@ -2770,9 +2770,9 @@ type Messages = {
       "dismiss": "Dismiss";
       "documentChanged": "This document changed after this review.";
       "export": {
-        "counterparty": "Send to counterparty";
+        "counterparty": "Download for counterparty";
         "counterpartyFailed": "Could not export the document";
-        "counterpartyHint": "The document with your tracked changes";
+        "counterpartyHint": "The saved document with tracked changes, without the internal review notes";
         "counterpartyUnavailable": "Open the document to export it";
         "csv": "CSV";
         "docx": "Word (.docx)";

@@ -2767,9 +2767,9 @@
       "dismiss": "Elvetés",
       "documentChanged": "A dokumentum az ellenőrzés óta megváltozott.",
       "export": {
-        "counterparty": "Küldés az ellenfélnek",
+        "counterparty": "Letöltés az ellenfélnek",
         "counterpartyFailed": "A dokumentumot nem sikerült exportálni",
-        "counterpartyHint": "A dokumentum az Ön követett módosításaival",
+        "counterpartyHint": "A mentett dokumentum követett módosításokkal, a belső ellenőrzési jegyzetek nélkül",
         "counterpartyUnavailable": "Nyissa meg a dokumentumot az exportáláshoz",
         "csv": "CSV",
         "docx": "Word-dokumentum (.docx)",

@@ -2767,9 +2767,9 @@
       "dismiss": "Zamítnout",
       "documentChanged": "Dokument se od této kontroly změnil.",
       "export": {
-        "counterparty": "Odeslat protistraně",
+        "counterparty": "Stáhnout pro protistranu",
         "counterpartyFailed": "Dokument se nepodařilo uložit",
-        "counterpartyHint": "Dokument s vašimi sledovanými změnami",
+        "counterpartyHint": "Uložená verze dokumentu se sledovanými změnami, bez interních poznámek kontroly",
         "counterpartyUnavailable": "Dokument uložíte až po jeho otevření",
         "csv": "CSV",
         "docx": "Word (.docx)",

@@ -2671,7 +2671,10 @@ const ResultsView = ({
   return (
     <div className="bg-background flex h-full flex-col">
       <header className="space-y-2 border-b px-3 py-2.5">
-        <div className="flex items-center justify-between gap-2">
+        {/* The title block owns the full width and the actions wrap on their
+            own row beneath it: in a side pane the two cannot share a line
+            without the title collapsing to a sliver. */}
+        <div className="space-y-2">
           <div className="min-w-0">
             <h2 className="truncate text-sm font-semibold">
               {t("inspector.review.title")}
@@ -2706,8 +2709,7 @@ const ResultsView = ({
               other half were compliant. */}
             <NotComparedDisclosure skipped={basis.skipped} />
           </div>
-          <div className="flex shrink-0 items-center gap-2">
-            <PaneSwapToggle swap={paneSwap} />
+          <div className="flex flex-wrap items-center gap-1.5">
             {/* Only a run whose positions were never saved has a playbook to
               make; one that ran against a definition already has one. */}
             {basis.provenance === "ephemeral" && (
@@ -2734,6 +2736,9 @@ const ResultsView = ({
             <Button onClick={onReviewAgain} size="xs" variant="outline">
               {t("inspector.review.reviewAgain")}
             </Button>
+            <div className="ms-auto">
+              <PaneSwapToggle swap={paneSwap} />
+            </div>
           </div>
         </div>
         {/* The document's own queue, on its own row: it answers to the

@@ -2767,9 +2767,9 @@
       "dismiss": "Verwerfen",
       "documentChanged": "Dieses Dokument hat sich seit dieser Prüfung geändert.",
       "export": {
-        "counterparty": "An die Gegenpartei senden",
+        "counterparty": "Für die Gegenpartei herunterladen",
         "counterpartyFailed": "Das Dokument konnte nicht exportiert werden",
-        "counterpartyHint": "Das Dokument mit Ihren nachverfolgten Änderungen",
+        "counterpartyHint": "Das gespeicherte Dokument mit nachverfolgten Änderungen, ohne die internen Prüfnotizen",
         "counterpartyUnavailable": "Öffnen Sie das Dokument, um es zu exportieren",
         "csv": "CSV",
         "docx": "Word-Datei (.docx)",

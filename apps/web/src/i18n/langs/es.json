@@ -2767,9 +2767,9 @@
       "dismiss": "Descartar",
       "documentChanged": "Este documento cambió después de esta revisión.",
       "export": {
-        "counterparty": "Enviar a la contraparte",
+        "counterparty": "Descargar para la contraparte",
         "counterpartyFailed": "No se pudo exportar el documento",
-        "counterpartyHint": "El documento con el seguimiento de tus cambios",
+        "counterpartyHint": "El documento guardado con el control de cambios, sin las notas internas de la revisión",
         "counterpartyUnavailable": "Abre el documento para exportarlo",
         "csv": "CSV",
         "docx": "Archivo Word (.docx)",

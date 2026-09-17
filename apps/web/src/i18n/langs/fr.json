@@ -2767,9 +2767,9 @@
       "dismiss": "Écarter",
       "documentChanged": "Ce document a changé depuis cette révision.",
       "export": {
-        "counterparty": "Envoyer à la contrepartie",
+        "counterparty": "Télécharger pour la contrepartie",
         "counterpartyFailed": "Impossible d'exporter le document",
-        "counterpartyHint": "Le document avec le suivi de vos modifications",
+        "counterpartyHint": "Le document enregistré avec le suivi des modifications, sans les notes internes de la revue",
         "counterpartyUnavailable": "Ouvrez le document pour l'exporter",
         "csv": "CSV",
         "docx": "Fichier Word (.docx)",

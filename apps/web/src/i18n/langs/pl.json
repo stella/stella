@@ -2767,9 +2767,9 @@
       "dismiss": "Odrzuć",
       "documentChanged": "Ten dokument zmienił się po tej weryfikacji.",
       "export": {
-        "counterparty": "Wyślij do kontrahenta",
+        "counterparty": "Pobierz dla kontrahenta",
         "counterpartyFailed": "Nie udało się wyeksportować dokumentu",
-        "counterpartyHint": "Dokument z Twoimi śledzonymi zmianami",
+        "counterpartyHint": "Zapisany dokument ze śledzonymi zmianami, bez wewnętrznych notatek z przeglądu",
         "counterpartyUnavailable": "Otwórz dokument, aby go wyeksportować",
         "csv": "CSV",
         "docx": "Dokument Word (.docx)",

@@ -2767,9 +2767,9 @@
       "dismiss": "Noraidīt",
       "documentChanged": "Šis dokuments pēc šīs pārbaudes ir mainījies.",
       "export": {
-        "counterparty": "Sūtīt pretpusei",
+        "counterparty": "Lejupielādēt pretpusei",
         "counterpartyFailed": "Neizdevās eksportēt dokumentu",
-        "counterpartyHint": "Dokuments ar jūsu izsekotajām izmaiņām",
+        "counterpartyHint": "Saglabātais dokuments ar izsekotajām izmaiņām, bez iekšējām pārskata piezīmēm",
         "counterpartyUnavailable": "Atveriet dokumentu, lai to eksportētu",
         "csv": "CSV",
         "docx": "Word dokuments (.docx)",

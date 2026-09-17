@@ -2767,9 +2767,9 @@
       "dismiss": "Jäta kõrvale",
       "documentChanged": "See dokument on pärast seda ülevaatust muutunud.",
       "export": {
-        "counterparty": "Saada vastaspoolele",
+        "counterparty": "Laadi vastaspoole jaoks alla",
         "counterpartyFailed": "Dokumendi eksportimine ebaõnnestus",
-        "counterpartyHint": "Dokument koos teie jälitatud muudatustega",
+        "counterpartyHint": "Salvestatud dokument jälitatud muudatustega, ilma sisemiste ülevaatusmärkusteta",
         "counterpartyUnavailable": "Avage dokument, et see eksportida",
         "csv": "CSV",
         "docx": "Word dokument (.docx)",

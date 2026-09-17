@@ -2767,9 +2767,9 @@
       "dismiss": "استبعاد",
       "documentChanged": "تغيّر هذا المستند بعد هذه المراجعة.",
       "export": {
-        "counterparty": "إرسال إلى الطرف المقابل",
+        "counterparty": "تنزيل للطرف المقابل",
         "counterpartyFailed": "تعذّر تصدير المستند",
-        "counterpartyHint": "المستند مع تغييراتك المتعقَّبة",
+        "counterpartyHint": "المستند المحفوظ مع تعقّب التغييرات، بدون ملاحظات المراجعة الداخلية",
         "counterpartyUnavailable": "افتح المستند لتصديره",
         "csv": "CSV",
         "docx": "مستند Word ‏(.docx)",
