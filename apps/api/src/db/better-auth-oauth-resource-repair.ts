@@ -133,7 +133,7 @@ const readStoredOrigin = async (
     );
   }
   const [origin] = [...origins];
-  return origin === undefined ? null : origin;
+  return origin ?? null;
 };
 
 const repair = async (connection: OnlineMigrationConnection): Promise<void> => {
