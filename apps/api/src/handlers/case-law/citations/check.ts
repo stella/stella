@@ -180,14 +180,33 @@ const checkCitation = createSafeRootHandler(
   async function* ({
     body: { citation, claim, language },
   }): SafeHandlerGenerator<CitationCheckResponse> {
+    // Each stage leaves one line, so an operator can follow a check from the
+    // reference read out of the prose to the reading Jev returned. The claim
+    // itself never appears in any of them.
+    const startedAt = performance.now();
     const lookup = readCitedDecision(citation);
+    logger.info("case_law.citation_check.reference", {
+      recognized: lookup !== null,
+      identifier: lookup?.identifier ?? "",
+      kind: lookup?.kind ?? "",
+      countries: lookup?.countries.join(",") ?? "",
+    });
     if (lookup === null) {
       return notFound();
     }
+    const lookupStartedAt = performance.now();
     const matches = yield* Result.await(
       Result.tryPromise(async () => await resolveCitedDecisions(lookup)),
     );
     const cited = chooseCitedDecision(matches);
+    logger.info("case_law.citation_check.lookup", {
+      identifier: lookup.identifier,
+      matchCount: matches.length,
+      found: cited !== null,
+      decisionId: cited?.chosen.id ?? "",
+      caseNumber: cited?.chosen.caseNumber ?? "",
+      latencyMs: Math.round(performance.now() - lookupStartedAt),
+    });
     if (cited === null) {
       return notFound();
     }
@@ -214,9 +233,16 @@ const checkCitation = createSafeRootHandler(
       return unavailable(decision, "derived_ai_withheld");
     }
 
+    const textStartedAt = performance.now();
     const sources = yield* Result.await(
       Result.tryPromise(async () => await rankPassages(row, claim)),
     );
+    logger.info("case_law.citation_check.text", {
+      decisionId: row.id,
+      passageCount: sources.length,
+      chars: sources.reduce((sum, source) => sum + source.text.length, 0),
+      latencyMs: Math.round(performance.now() - textStartedAt),
+    });
     if (sources.length === 0) {
       return unavailable(decision, "no_text");
     }
@@ -268,6 +294,7 @@ const checkCitation = createSafeRootHandler(
       confidence: checked.confidence,
       passageCount: sources.length,
       alternativeCount: alternatives.length,
+      totalMs: Math.round(performance.now() - startedAt),
     });
 
     return Result.ok({
