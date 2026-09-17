@@ -398,14 +398,19 @@ URL from each listed row. If no enumeration surface exists, describe the
 guessing blind spot in the adapter and coverage benchmark; do not present a
 miss cutoff as proof that the source is exhausted.
 
-### 19. Paginate a fixed set, not a moving target
+### 19. Paginate a fixed set, then follow a frontier
 
-Offset pagination is safe only while the matched set and ordering stay fixed.
-If new records can land ahead of the cursor, every later offset moves and a
-document can pass between pages unseen. Oldest-first ordering helps when new
-records append at the end; otherwise persist an immutable query boundary in
-the cursor and catch up from that exact boundary after the snapshot finishes.
-Do not include the publisher's still-live current day in a verified snapshot.
+A crawl has two regimes and they want opposite things. The rule below is one
+rule read twice: which half applies depends on whether the set the cursor
+walks is still being written to.
+
+**The historical sweep pages a fixed set.** Offset pagination is safe only
+while the matched set and ordering stay fixed. If new records can land ahead
+of the cursor, every later offset moves and a document can pass between pages
+unseen. Oldest-first ordering helps when new records append at the end;
+otherwise persist an immutable query boundary in the cursor and catch up from
+that exact boundary after the snapshot finishes. Do not include the
+publisher's still-live current day in a verified snapshot.
 
 For every non-empty slice that can still mutate — including one-page slices —
 collect a digest of the exact publisher identities and make a listing-only
@@ -415,14 +420,46 @@ restart from page zero, not retry the invalid offset forever. The follow-up
 window must begin at the snapshot boundary plus one, not at a fresh rolling
 lookback, or a long crawl/outage creates a permanent gap.
 
-One exception, and only where the source's completeness is owned by a
-reconciliation ledger that enumerates independently of the crawl cursor: a
-frontier over already-closed publication days records the divergence as
-telemetry and advances instead of holding. Holding there re-lists the same
-window every cycle without ever confirming it, because the mismatch means the
-publisher changed a closed day rather than that the walk raced its own
-pagination. The ledger, not the cursor, then repairs the window. A source with
-no such ledger holds or restarts, as above.
+**The steady-state follow-up is a frontier, not a window.** Once the sweep has
+seen the collection, the cursor carries the last publisher window it verified
+and advances only over windows that have closed since. It verifies a closed
+window once — with its own listing pass, or through the reconciliation slice
+that covers the same window — records a mismatch as telemetry and moves on;
+completeness past the frontier is the reconciliation ledger's, not this
+cursor's, so a mismatch must never hold the cursor or re-collect the window.
+That holds only where such a ledger exists and enumerates independently of this
+cursor; a source without one pages a fixed set, as above.
+A cycle on which no window closed must cost zero publisher requests and return
+the cursor it was given, which is also what lets the runner tell "caught up"
+from "working".
+
+A steady-state phase that re-lists a rolling window of already-held documents
+is this rule broken, not this rule applied: it costs the publisher O(window)
+requests an hour forever, writes nothing, and finds only what the ledger would
+have found anyway.
+
+### 19a. A request nobody declared is a request nobody counted
+
+Every adapter names its publisher and that publisher's budget in the total
+policy map (`adapters/publisher-policy.ts`), and every request leaves through
+the shared gated fetch, which reserves a slot first. A publisher gate kept
+inside one adapter is a budget the next adapter spending against the same host
+does not know about, and a loop reaching the network directly spends requests
+nothing counts; `publisher-gate-coverage.test.ts` fails the build on an
+adapter module that fetches any other way.
+
+State the budget the publisher stated. Where a publisher has stated nothing,
+use the map's politeness default and say in the entry that it is politeness,
+not a publisher statement.
+
+Steady-state cost must be O(new documents), not O(window): see rule 19. Size a
+page against what the gate makes it cost, so a page's wall clock and its
+request count cannot drift apart.
+
+A publisher's rate-limit refusal — a 429, or a redirect to a limit page — is a
+typed halt, not a retryable failure. It spends one request per cycle, leaves
+the cursor untouched, and is never retried: no retry clears it, and the budget
+the halt protects is the budget a retry would spend.
 
 ### 20. A listed document survives detail and parser failures
 
@@ -659,12 +696,16 @@ When adding a new country adapter:
     snapshot boundary, verify one-page and multi-page slices, and test that a
     withdrawn saved page plus an outage longer than the rolling window cannot
     leave a date gap (rule 19)
-13. **Preserve listed-only records** — test a permanent missing/unparseable
+13. **Count the steady-state cycle** — declare the publisher and its budget in
+    the policy map, fetch only through the gated helper, and test the quiet
+    cycle (zero or one request, cursor unchanged), the cycle that has new
+    documents to collect, and the publisher's rate-limit halt (rules 19, 19a)
+14. **Preserve listed-only records** — test a permanent missing/unparseable
     detail, a malformed primary identity with an exact fallback, a counted row
     with no identity, partial refresh after detail recovery, pending-mirror
     replay, fallback-to-canonical identity migration, archived listing HTML,
     and an unrecognised HTTP 200 search response (rule 20)
-14. **Constrain detail origins** — rebuild URLs from opaque identifiers or
+15. **Constrain detail origins** — rebuild URLs from opaque identifiers or
     test every publisher-declared origin against an explicit allowlist (rule 21)
 
 ## File Map

@@ -67,10 +67,46 @@ const abortableSleep = async (
   }
 };
 
+/** The deployed client, which the gate connects itself. */
+type ConnectableGateClient = PublisherGateClient & {
+  connect: () => Promise<unknown>;
+};
+
+/**
+ * The deployed gate client, connected before it is handed out.
+ *
+ * The offline queue is off, so Bun rejects a command issued before the first
+ * connection completes — and the first reservation after every process start
+ * is exactly that command. Connect once; a failed connect is forgotten so the
+ * next reservation retries it instead of inheriting a rejected promise
+ * forever. `createClient` is the seam: the connect-then-send order is what a
+ * test asserts, without a Redis.
+ */
+export const connectedGateClient = (
+  createClient: () => Promise<ConnectableGateClient>,
+): (() => Promise<PublisherGateClient>) => {
+  let client: ConnectableGateClient | undefined;
+  let connected: Promise<unknown> | undefined;
+  return async () => {
+    client ??= await createClient();
+    const redis = client;
+    connected ??= redis.connect().catch((error: unknown) => {
+      connected = undefined;
+      throw error;
+    });
+    await connected;
+    return redis;
+  };
+};
+
+const deployedGateClient = connectedGateClient(async () => {
+  const { createRedisClient } = await import("@/api/lib/redis-client");
+  return createRedisClient({ enableOfflineQueue: false });
+});
+
 const defaultDependencies = (
   intervalMs: number,
 ): PublisherRequestGateDependencies => {
-  let redis: PublisherGateClient | undefined;
   let localNextRequestAt = 0;
   const localRedis: PublisherGateClient = {
     send: () => {
@@ -85,13 +121,23 @@ const defaultDependencies = (
       if (!DEPLOYED_NODE_ENVS.has(process.env.NODE_ENV ?? "")) {
         return localRedis;
       }
-      const { createRedisClient } = await import("@/api/lib/redis-client");
-      redis ??= createRedisClient({ enableOfflineQueue: false });
-      return redis;
+      return await deployedGateClient();
     },
     sleep: abortableSleep,
   };
 };
+
+/**
+ * Whether a reservation is worth making at all.
+ *
+ * Under `bun test` every request is a stub, so a slot only buys wall clock —
+ * and outside a deployment the gate paces off the process clock, which suites
+ * move (`setSystemTime`): one set backwards parks a stubbed request until the
+ * reservation it already made comes round, which is weeks. What a reservation
+ * does is asserted through this module's injected dependencies instead.
+ */
+export const publisherGateReserves = (): boolean =>
+  process.env.NODE_ENV !== "test";
 
 export const createPublisherRequestSlot =
   (

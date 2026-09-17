@@ -24,6 +24,7 @@ import type {
   SourceAdapter,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { fetchAtRisWithRetry } from "@/api/handlers/case-law/ingestion/adapters/at-ris-throttle";
+import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import type { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import {
   adapterCatch,
@@ -45,7 +46,9 @@ const API_URL = "https://data.bka.gv.at/ris/api/v2.6/Judikatur";
 const DOCUMENT_ORIGIN = "https://www.ris.bka.gv.at";
 const LANGUAGE = "de";
 const PAGE_SIZE = 100;
-const REQUEST_INTERVAL_MS = 5000;
+/** Read off the policy map, so the pacing this adapter states and the gate
+ * that enforces it cannot drift apart. */
+const REQUEST_INTERVAL_MS = publisherRequestIntervalMs(ADAPTER_KEYS.AT_COURTS);
 const MIN_DOCUMENT_LENGTH = 100;
 const START_DIGEST = "start";
 const FOREIGN_ORGAN_PREFIX = "AUSL";

@@ -21,6 +21,7 @@ import {
   isTimeoutError,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
+import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
 import { logger } from "@/api/lib/observability/logger";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -141,7 +142,7 @@ type PageWalkDeclaration =
 
 type PagePaginationOptions<TResponse> = PageWalkDeclaration & {
   /** Adapter key for error context. */
-  adapterKey: string;
+  adapterKey: AdapterKey;
   /**
    * The page number this endpoint gives its first page. Cursors are item
    * offsets either way: this is only how an offset is turned into the number
@@ -403,7 +404,7 @@ const nameIsPlainCursorName = (name: string): boolean =>
   name === PLAIN_CURSOR_NAME;
 
 const assertNamesAreUsable = (
-  adapterKey: string,
+  adapterKey: AdapterKey,
   modes: readonly TraversalMode[],
 ): void => {
   for (const { name } of modes) {
@@ -517,7 +518,7 @@ export const defineWalkKind = <TParams extends v.ObjectEntries>({
 };
 
 type MaterialiseWalksOptions = {
-  adapterKey: string;
+  adapterKey: AdapterKey;
   config: Record<string, unknown>;
   cursor: string | null;
   walkKinds: Readonly<Record<string, WalkKind>>;
@@ -606,7 +607,7 @@ type ParsedPageItems = {
 };
 
 type ParsePageItemsOptions = {
-  adapterKey: string;
+  adapterKey: AdapterKey;
   items: unknown[];
   itemConcurrency?: number | undefined;
   page: number;
@@ -807,9 +808,9 @@ export const createPagePaginatedFetch = <TResponse>(
         if (!response.ok) {
           // A 5xx the origin itself produced, after all retries: skip this
           // page and advance.
-          // 429 is NOT skipped — it's transient throttling, not
-          // a page error. The cursor stays put so the page is
-          // retried in the next cycle. 502 joins it for the same reason
+          // 429 is NOT skipped — it is the publisher's rate-limit refusal,
+          // reached after exactly one request (rule 19a). The cursor stays
+          // put so the page is read next cycle. 502 joins it for the reason
           // (see BAD_GATEWAY_STATUS): nothing was read, so there is nothing
           // to advance past.
           if (

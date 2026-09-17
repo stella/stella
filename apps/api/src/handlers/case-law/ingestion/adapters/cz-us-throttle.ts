@@ -1,38 +1,25 @@
 import { panic, Result, TaggedError } from "better-result";
 
-import { DAY_IN_MS } from "@stll/time";
-
 import { ADAPTER_TIMEOUT } from "@/api/handlers/case-law/consts";
 import {
-  createPublisherRequestSlot,
-  type PublisherRequestGateDependencies,
-} from "@/api/handlers/case-law/ingestion/adapters/publisher-request-gate";
+  createPublisherSlot,
+  NALUS_DAILY_REQUEST_LIMIT,
+  publisherRequestIntervalMs,
+} from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
+import type { PublisherRequestGateDependencies } from "@/api/handlers/case-law/ingestion/adapters/publisher-request-gate";
 import { INGESTION_USER_AGENT } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { fetchWithTimeout } from "@/api/lib/fetch";
+import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 
 /**
- * The ceiling nalus.usoud.cz states to an over-quota client: "The maximum
- * allowed limit for automated scrapers is 5,000 requests per day."
+ * What one NALUS request costs the crawl in waiting, read off the policy map
+ * so the page budget this adapter sizes itself against cannot drift from the
+ * gate that enforces it.
  */
-export const NALUS_DAILY_REQUEST_LIMIT = 5000;
-
-/** The share of the stated limit this worker spends; the rest is margin. */
-const NALUS_REQUEST_BUDGET_SHARE = 0.96;
-
-/**
- * One NALUS request per interval, across every loop in every process that
- * talks to the court: 4,800 requests a day against the 5,000 it allows.
- */
-export const NALUS_REQUEST_INTERVAL_MS = Math.ceil(
-  DAY_IN_MS / (NALUS_DAILY_REQUEST_LIMIT * NALUS_REQUEST_BUDGET_SHARE),
+export const NALUS_REQUEST_INTERVAL_MS = publisherRequestIntervalMs(
+  ADAPTER_KEYS.CZ_US,
 );
-
-const NALUS_GATE_CONFIG = {
-  intervalMs: NALUS_REQUEST_INTERVAL_MS,
-  key: "case-law:publisher-gate:nalus-usoud",
-  publisher: "NALUS",
-} as const;
 
 const NALUS_ORIGIN = "https://nalus.usoud.cz";
 const NALUS_HOST_POLICY = {
@@ -106,10 +93,7 @@ type NalusFetch = (
 export const createNalusFetch = (
   dependencies?: PublisherRequestGateDependencies,
 ): NalusFetch => {
-  const reserveSlot = createPublisherRequestSlot(
-    NALUS_GATE_CONFIG,
-    dependencies,
-  );
+  const reserveSlot = createPublisherSlot(ADAPTER_KEYS.CZ_US, dependencies);
   return async (url, init = {}) => {
     const target = restrictOutboundUrl({
       hostPolicy: NALUS_HOST_POLICY,

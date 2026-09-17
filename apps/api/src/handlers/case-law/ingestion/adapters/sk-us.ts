@@ -56,6 +56,8 @@ import type {
   ReconciliationSlicePage,
   ReconciliationSlicePageOptions,
 } from "@/api/handlers/case-law/ingestion/adapter";
+import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
+import { fetchPublisher } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import {
   INGESTION_USER_AGENT,
   adapterCatch,
@@ -70,7 +72,6 @@ import {
   FetchBoundaryError,
 } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
-import { fetchWithTimeout } from "@/api/lib/fetch";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { parseSkDecisionPdf } from "@/api/lib/legal-search/parsers/sk-courts";
 import { logger } from "@/api/lib/observability/logger";
@@ -85,11 +86,8 @@ const DOC_DOWNLOAD_URL = `${BASE_URL}/docDownload`;
 const PAGE_SIZE = 10;
 const SEARCH_RETRY_DELAY_MS = 500;
 
-/**
- * Shortest gap between two requests this adapter makes to the court, both as
- * the pipeline's pacing and as the pause it takes between requests of its own.
- */
-const MIN_REQUEST_INTERVAL_MS = 500;
+/** Shortest gap between two requests this adapter makes to the court. */
+const MIN_REQUEST_INTERVAL_MS = publisherRequestIntervalMs(ADAPTER_KEYS.SK_US);
 
 /**
  * Page size for a listing walk. The crawl takes ten at a time because every
@@ -248,14 +246,12 @@ const fetchPdfBytes = async (
   signal?: AbortSignal,
 ): Promise<Uint8Array | undefined> => {
   try {
-    const response = await fetchWithTimeout(
-      `${DOC_DOWNLOAD_URL}/${documentId}`,
-      {
-        headers: { "User-Agent": INGESTION_USER_AGENT },
-        signal,
-        timeoutMs: 30_000,
-      },
-    );
+    const response = await fetchPublisher(`${DOC_DOWNLOAD_URL}/${documentId}`, {
+      adapterKey: ADAPTER_KEYS.SK_US,
+      headers: { "User-Agent": INGESTION_USER_AGENT },
+      signal,
+      timeoutMs: 30_000,
+    });
     if (!response.ok) {
       return undefined;
     }
@@ -497,7 +493,8 @@ const executeSearch = async ({
   range,
   signal,
 }: ExecuteSearchOptions): Promise<SearchResponse | null> => {
-  const response = await fetchWithTimeout(SEARCH_URL, {
+  const response = await fetchPublisher(SEARCH_URL, {
+    adapterKey: ADAPTER_KEYS.SK_US,
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -825,7 +822,6 @@ const listSkUsWindow = async ({
   }
 
   if (pageSize <= 1) {
-    await Bun.sleep(MIN_REQUEST_INTERVAL_MS);
     const confirmation = await searchWindow({
       offset,
       pageSize,
@@ -846,7 +842,6 @@ const listSkUsWindow = async ({
   budget.remaining -= 2;
 
   const half = Math.ceil(pageSize / 2);
-  await Bun.sleep(MIN_REQUEST_INTERVAL_MS);
   const lower = await listSkUsWindow({
     budget,
     offset,
@@ -854,7 +849,6 @@ const listSkUsWindow = async ({
     signal,
     slice,
   });
-  await Bun.sleep(MIN_REQUEST_INTERVAL_MS);
   const upper = await listSkUsWindow({
     budget,
     offset: offset + half,
@@ -1065,9 +1059,6 @@ export const skUsAdapter = defineSourceAdapter({
             }
             continue;
           }
-
-          // Rate limit between PDF downloads
-          await Bun.sleep(300);
         }
 
         const nextOffset = offset + PAGE_SIZE;
@@ -1089,12 +1080,21 @@ export const skUsAdapter = defineSourceAdapter({
           };
         }
 
-        // Current year exhausted; park at current offset so the
-        // pipeline's stagnation detection stops the cycle cleanly
-        // instead of rewinding and reprocessing already-seen pages.
+        // Current year, short page: the cursor stops where the listing
+        // stopped, not where it started. Standing still re-lists the same
+        // tail and re-downloads its PDFs every cycle for nothing; a frontier
+        // costs one search request on a cycle the court added nothing to.
+        //
+        // It reads the window the same way the walk that filled it does —
+        // offsets are only stable to walk at all because this window appends
+        // — and a record that lands behind the frontier is the month slices'
+        // to find, not this cursor's.
         return {
           decisions,
-          nextCursor: encodeCursor({ year, offset }),
+          nextCursor: encodeCursor({
+            year,
+            offset: offset + data.documents.length,
+          }),
         };
       },
       catch: adapterCatch(ADAPTER_KEYS.SK_US, cursor),

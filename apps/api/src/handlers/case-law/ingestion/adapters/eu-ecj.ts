@@ -28,6 +28,7 @@ import type {
   StoredRawReparseInput,
   StoredRawReparseOutcome,
 } from "@/api/handlers/case-law/ingestion/adapter";
+import { fetchPublisher } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import {
   INGESTION_USER_AGENT,
   adapterCatch,
@@ -54,7 +55,6 @@ import {
   TelemetryError,
 } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
-import { fetchWithTimeout } from "@/api/lib/fetch";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import { logger } from "@/api/lib/observability/logger";
@@ -360,7 +360,8 @@ WHERE {
 ORDER BY ASC(?date) ASC(?celex) ASC(?language)
 LIMIT ${SPARQL_LIMIT}`.trim();
 
-  const response = await fetchWithTimeout(SPARQL_URL, {
+  const response = await fetchPublisher(SPARQL_URL, {
+    adapterKey: ADAPTER_KEYS.EU_ECJ,
     method: "POST",
     signal,
     timeoutMs,
@@ -663,7 +664,8 @@ const readDocumentResponse = async ({
   lang,
   signal,
 }: ReadDocumentOptions): Promise<ManifestationRead> => {
-  const response = await fetchWithTimeout(url, {
+  const response = await fetchPublisher(url, {
+    adapterKey: ADAPTER_KEYS.EU_ECJ,
     signal,
     timeoutMs: ADAPTER_TIMEOUT.REQUEST,
     headers: {
@@ -944,9 +946,6 @@ const parseManifestation = (
     keywords: [],
   };
 };
-
-/** Crawl delay between decisions (not between language variants). */
-const CRAWL_DELAY_MS = 500;
 
 /** First year the Court sat; the oldest decisions Cellar can list. */
 const COURT_EPOCH_YEAR = ADAPTER_MANIFESTS[
@@ -1588,7 +1587,8 @@ WHERE {
     FILTER(STR(?manifestationType) = "xhtml")
   }
 }`.trim();
-      const response = await fetchWithTimeout(SPARQL_URL, {
+      const response = await fetchPublisher(SPARQL_URL, {
+        adapterKey: ADAPTER_KEYS.EU_ECJ,
         method: "POST",
         signal,
         timeoutMs: 60_000,
@@ -1653,7 +1653,6 @@ WHERE {
 
         const decisions: IngestionResult[] = [];
         const completedVariants = new Set<string>();
-        let previousCelex: string | undefined;
 
         // 2. Fetch and parse each language variant
         for (const binding of bindings) {
@@ -1666,11 +1665,6 @@ WHERE {
           if (completedVariants.has(variantKey)) {
             continue;
           }
-
-          if (previousCelex !== undefined && previousCelex !== celex) {
-            await Bun.sleep(CRAWL_DELAY_MS);
-          }
-          previousCelex = celex;
 
           const decision = await buildDecision(binding, abortSignal);
           if (!decision) {

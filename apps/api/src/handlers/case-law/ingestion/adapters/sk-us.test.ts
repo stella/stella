@@ -180,8 +180,9 @@ const mockFetch = ({
   onSearch,
   search,
   searchFor,
-}: MockOptions): { calls: () => number } => {
+}: MockOptions): { calls: () => number; downloads: () => number } => {
   let searchCall = 0;
+  let downloadCall = 0;
   globalThis.fetch = asFetchMock(
     (input: string | URL | Request, init?: RequestInit) => {
       const url = new URL(input instanceof Request ? input.url : String(input));
@@ -199,6 +200,7 @@ const mockFetch = ({
         );
       }
       if (url.pathname.startsWith(DOWNLOAD_PREFIX)) {
+        downloadCall += 1;
         return Promise.resolve(downloadResponse(download));
       }
       return Promise.resolve(
@@ -206,7 +208,7 @@ const mockFetch = ({
       );
     },
   );
-  return { calls: () => searchCall };
+  return { calls: () => searchCall, downloads: () => downloadCall };
 };
 
 describe("sk-us reconciliation slices", () => {
@@ -793,5 +795,118 @@ describe("sk-us crawl and reconciliation dispose of a missing document different
     expect(built.decision.isListingOnly).toBe(true);
     expect(built.decision.fulltext).toBeUndefined();
     expect(built.decision.sourceRawContentType).toBe("application/json");
+  });
+});
+
+/**
+ * What the steady-state crawl costs the court once the current year is listed
+ * to its end.
+ *
+ * The cursor used to park at the offset the tail started from, so every cycle
+ * re-listed that tail and re-downloaded a PDF for each decision on it — work
+ * that wrote nothing, forever. The arithmetic below is the whole change: a
+ * cycle the court added nothing to spends one search request, and a cycle that
+ * collects documents leaves the cursor past them.
+ */
+describe("the sk-us steady-state frontier", () => {
+  const originalFetch = globalThis.fetch;
+
+  beforeAll(() => {
+    setSystemTime(new Date("2026-08-11T09:30:00.000Z"));
+  });
+
+  afterAll(() => {
+    setSystemTime();
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  /** Where the crawl parked after listing the current year to its end. */
+  const PARKED_OFFSET = 120;
+  const PARKED_CURSOR = `2026:${PARKED_OFFSET}`;
+
+  /** What the court states the year held when the cursor last moved. */
+  const YEAR_NUM_FOUND = 123;
+
+  /** Three decisions the court published since then. */
+  const newDocument = (index: number) => ({
+    ...PLENARY_OPINION,
+    documentId: `7964d54e-6708-48e9-92cc-5cc40000000${index}`,
+    mkRSAPNumberOfFile: `III. ÚS ${index + 1}/2026`,
+    mkDateOfDecision: "08/10/2026 00:00:00",
+  });
+  const NEW_DOCUMENTS = [newDocument(0), newDocument(1), newDocument(2)];
+
+  const fetchPageAt = async (cursor: string | null) => {
+    const result = await skUsAdapter.fetchPage(cursor, {});
+    if (result.isErr()) {
+      throw result.error;
+    }
+    return result.unwrap();
+  };
+
+  test("a cycle the court added nothing to costs one search and no downloads", async () => {
+    const starts: number[] = [];
+    const stub = mockFetch({
+      search: [{ type: "page", documents: [], numFound: YEAR_NUM_FOUND }],
+      onSearch: (body) => {
+        starts.push(body.start);
+      },
+    });
+
+    const page = await fetchPageAt(PARKED_CURSOR);
+
+    expect(stub.calls()).toBe(1);
+    expect(stub.downloads()).toBe(0);
+    expect(starts).toEqual([PARKED_OFFSET]);
+    expect(page.decisions).toHaveLength(0);
+    expect(page.nextCursor).toBe(PARKED_CURSOR);
+  });
+
+  test("a cycle that collects three decisions costs one search and three downloads", async () => {
+    const stub = mockFetch({
+      search: [
+        {
+          type: "page",
+          documents: NEW_DOCUMENTS,
+          numFound: YEAR_NUM_FOUND + NEW_DOCUMENTS.length,
+        },
+      ],
+    });
+
+    const page = await fetchPageAt(PARKED_CURSOR);
+
+    expect(stub.calls()).toBe(1);
+    expect(stub.downloads()).toBe(NEW_DOCUMENTS.length);
+    expect(page.decisions).toHaveLength(NEW_DOCUMENTS.length);
+    // The cursor stops where the listing stopped, not where it started.
+    expect(page.nextCursor).toBe(
+      `2026:${PARKED_OFFSET + NEW_DOCUMENTS.length}`,
+    );
+    expect(page.nextCursor).not.toBe(PARKED_CURSOR);
+  });
+
+  test("the cycle after a collection stands still instead of re-downloading it", async () => {
+    const stub = mockFetch({
+      search: [],
+      searchFor: ({ start }) => ({
+        type: "page",
+        documents: start === PARKED_OFFSET ? NEW_DOCUMENTS : [],
+        numFound: YEAR_NUM_FOUND + NEW_DOCUMENTS.length,
+      }),
+    });
+
+    const collecting = await fetchPageAt(PARKED_CURSOR);
+    const quiet = await fetchPageAt(collecting.nextCursor);
+
+    // The point of the frontier: those three PDFs are paid for once, and the
+    // next cycle spends a single search request to learn there is nothing
+    // behind them.
+    expect(stub.calls()).toBe(2);
+    expect(stub.downloads()).toBe(NEW_DOCUMENTS.length);
+    expect(quiet.decisions).toHaveLength(0);
+    expect(quiet.nextCursor).toBe(collecting.nextCursor);
   });
 });
