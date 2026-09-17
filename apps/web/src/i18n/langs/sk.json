@@ -2281,7 +2281,9 @@
     "editOpenFailedTitle": "DOCX sa nepodarilo otvoriť",
     "editPermissionDenied": "Nemáte oprávnenie upravovať tento dokument.",
     "editSaveFailedTitle": "DOCX sa nepodarilo uložiť",
-    "editSessionTakenOver": "Túto reláciu úprav prevzalo iné okno.",
+    "editSessionReleased": "Tento dokument bol otvorený na úpravy inde, takže je táto karta len na čítanie.",
+    "editSessionReleasedUnsaved": "Vaše neuložené zmeny tu zostávajú.",
+    "editSessionReopen": "Znova otvoriť na úpravy",
     "evidenceReferences": "Odkazy na dôkazy",
     "evidenceUnavailable": "Tento odkaz na dôkaz nie je možné v tomto spise otvoriť.",
     "findReplace": {

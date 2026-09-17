@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   getDocxEditBlockReason,
   getDocxLeaveAction,
+  isDocxEditorUnlocked,
   selectDocxBrowserEditorBuffer,
   selectEditorBuffer,
   selectPreviewFile,
@@ -117,6 +118,42 @@ describe("DOCX browser editor buffer selection", () => {
     ).toBe(preservedLoadedBuffer);
   });
 
+  test("keeps the taken-over document mounted with its unsaved changes", () => {
+    const lastEditingBuffer = bufferFrom([2]);
+
+    expect(
+      selectDocxBrowserEditorBuffer({
+        collaborationSeedBuffer: null,
+        lastEditingBuffer,
+        preservedLoadedBuffer: bufferFrom([3]),
+        previewBuffer: bufferFrom([4]),
+        state: {
+          status: "released",
+          reason: "takenOver",
+          hasUnsavedChanges: true,
+        },
+      }),
+    ).toBe(lastEditingBuffer);
+  });
+
+  test("shows the preview when the take-over arrived before any edit", () => {
+    const previewBuffer = bufferFrom([4]);
+
+    expect(
+      selectDocxBrowserEditorBuffer({
+        collaborationSeedBuffer: null,
+        lastEditingBuffer: null,
+        preservedLoadedBuffer: null,
+        previewBuffer,
+        state: {
+          status: "released",
+          reason: "takenOver",
+          hasUnsavedChanges: false,
+        },
+      }),
+    ).toBe(previewBuffer);
+  });
+
   test("falls back to the preview buffer for ordinary readonly loads", () => {
     const previewBuffer = bufferFrom([4]);
 
@@ -189,6 +226,42 @@ describe("DOCX readonly unlock prompt", () => {
   });
 });
 
+describe("DOCX editor read-only gate", () => {
+  test("unlocks only an acquired session or a writable collaboration room", () => {
+    expect(
+      isDocxEditorUnlocked({
+        canEditCollaboratively: false,
+        state: {
+          status: "editing",
+          sessionId: "session-1",
+          sessionToken: "token-1",
+          buffer: bufferFrom([1]),
+          fileName: "Contract.docx",
+        },
+      }),
+    ).toBe(true);
+    expect(
+      isDocxEditorUnlocked({
+        canEditCollaboratively: true,
+        state: { status: "idle" },
+      }),
+    ).toBe(true);
+  });
+
+  test("keeps a session another tab took over read-only", () => {
+    expect(
+      isDocxEditorUnlocked({
+        canEditCollaboratively: false,
+        state: {
+          status: "released",
+          reason: "takenOver",
+          hasUnsavedChanges: true,
+        },
+      }),
+    ).toBe(false);
+  });
+});
+
 describe("DOCX edit finalization", () => {
   test("finalizes if the live editor has pending changes before dirty state catches up", () => {
     expect(
@@ -231,13 +304,16 @@ describe("DOCX route leave policy", () => {
       }),
     ).toBe("retryFinalize");
     expect(getDocxLeaveAction({ status: "saving" })).toBe("block");
+  });
+
+  test("lets the reader leave a session another tab took over", () => {
     expect(
       getDocxLeaveAction({
-        status: "error",
+        status: "released",
         reason: "takenOver",
-        source: "checkpoint",
+        hasUnsavedChanges: true,
       }),
-    ).toBe("block");
+    ).toBe("allow");
   });
 
   test("finalizes active edits and allows sessions without an acquired lock", () => {

@@ -2281,7 +2281,9 @@
     "editOpenFailedTitle": "DOCX-i ei saanud avada",
     "editPermissionDenied": "Sul pole õigust seda dokumenti muuta.",
     "editSaveFailedTitle": "DOCX-i ei saanud salvestada",
-    "editSessionTakenOver": "See muutmisseanss võeti mujal üle.",
+    "editSessionReleased": "See dokument avati mujal muutmiseks, seega on see kaart ainult lugemiseks.",
+    "editSessionReleasedUnsaved": "Teie salvestamata muudatused säilivad siin.",
+    "editSessionReopen": "Ava uuesti muutmiseks",
     "evidenceReferences": "Tõendiviited",
     "evidenceUnavailable": "Seda tõendiviidet ei saa selles toimikus avada.",
     "findReplace": {

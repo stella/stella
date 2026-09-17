@@ -2281,7 +2281,9 @@
     "editOpenFailedTitle": "Could not open DOCX",
     "editPermissionDenied": "You do not have permission to edit this document.",
     "editSaveFailedTitle": "Could not save DOCX",
-    "editSessionTakenOver": "Another tab, window, or device opened this document for editing, so this session was released. Unsaved local changes are preserved — reopen the doc to continue.",
+    "editSessionReleased": "This document was opened for editing elsewhere, so this tab is read-only.",
+    "editSessionReleasedUnsaved": "Your unsaved changes are kept here.",
+    "editSessionReopen": "Reopen for editing",
     "evidenceReferences": "Evidence references",
     "evidenceUnavailable": "This evidence reference cannot be opened in this matter.",
     "findReplace": {

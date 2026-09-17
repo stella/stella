@@ -2281,7 +2281,9 @@
     "editOpenFailedTitle": "DOCX-Datei konnte nicht geöffnet werden",
     "editPermissionDenied": "Sie haben keine Berechtigung, dieses Dokument zu bearbeiten.",
     "editSaveFailedTitle": "DOCX-Datei konnte nicht gespeichert werden",
-    "editSessionTakenOver": "Diese Bearbeitungssitzung wurde an anderer Stelle übernommen.",
+    "editSessionReleased": "Dieses Dokument wurde an anderer Stelle zum Bearbeiten geöffnet, daher ist dieser Tab schreibgeschützt.",
+    "editSessionReleasedUnsaved": "Ihre nicht gespeicherten Änderungen bleiben hier erhalten.",
+    "editSessionReopen": "Erneut zum Bearbeiten öffnen",
     "evidenceReferences": "Beweisverweise",
     "evidenceUnavailable": "Dieser Beweisverweis kann in dieser Akte nicht geöffnet werden.",
     "findReplace": {

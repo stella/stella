@@ -2281,7 +2281,9 @@
     "editOpenFailedTitle": "Nepavyko atidaryti DOCX",
     "editPermissionDenied": "Neturite teisės redaguoti šio dokumento.",
     "editSaveFailedTitle": "Nepavyko išsaugoti DOCX",
-    "editSessionTakenOver": "Ši redagavimo sesija buvo perimta kitur.",
+    "editSessionReleased": "Šis dokumentas buvo atidarytas redaguoti kitur, todėl šis skirtukas yra tik skaitymui.",
+    "editSessionReleasedUnsaved": "Jūsų neįrašyti pakeitimai lieka čia.",
+    "editSessionReopen": "Atidaryti redaguoti iš naujo",
     "evidenceReferences": "Įrodymų nuorodos",
     "evidenceUnavailable": "Šios įrodymo nuorodos šioje byloje atidaryti negalima.",
     "findReplace": {

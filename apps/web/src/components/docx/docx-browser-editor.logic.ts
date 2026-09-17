@@ -3,7 +3,7 @@ import { panic } from "better-result";
 import type { DocxEditSafety } from "@/lib/chat-edit-mode";
 import { selectStableArrayBuffer } from "@/lib/files/array-buffer-utils";
 
-import type { EditSessionState } from "./use-edit-session";
+import type { EditSessionState } from "./use-edit-session.logic";
 
 export type DocxPreviewFile = {
   fileId: string;
@@ -51,7 +51,7 @@ type SelectEditorBufferOptions =
       previewBuffer: ArrayBuffer | undefined;
     }
   | {
-      status: "saving";
+      status: "released" | "saving";
       editingBuffer?: undefined;
       lastEditingBuffer: ArrayBuffer | null;
       preservedLoadedBuffer: ArrayBuffer | null;
@@ -72,7 +72,12 @@ export const selectEditorBuffer = (
     return options.editingBuffer;
   }
 
-  if (options.status === "saving" && options.lastEditingBuffer !== null) {
+  // Finalizing and a taken-over session both keep the document the user was
+  // working in: reverting to the server preview would drop their unsaved work.
+  if (
+    (options.status === "saving" || options.status === "released") &&
+    options.lastEditingBuffer !== null
+  ) {
     return options.lastEditingBuffer;
   }
 
@@ -116,6 +121,22 @@ export const selectDocxBrowserEditorBuffer = ({
   });
 };
 
+type IsDocxEditorUnlockedOptions = {
+  canEditCollaboratively: boolean;
+  state: EditSessionState;
+};
+
+/**
+ * What takes the document out of read-only: an acquired edit session, or a
+ * collaboration room that accepts this reader's edits. Every other status,
+ * including a session another tab took over, renders the document as it is.
+ */
+export const isDocxEditorUnlocked = ({
+  canEditCollaboratively,
+  state,
+}: IsDocxEditorUnlockedOptions) =>
+  canEditCollaboratively || state.status === "editing";
+
 type ShouldFinalizeEditSessionOptions = {
   isDirty: boolean;
   hasSessionChanges: boolean;
@@ -142,6 +163,9 @@ export const getDocxLeaveAction = (
       return "finalize";
     case "saving":
       return "block";
+    case "released":
+      // The lock is gone, so there is nothing left to save or wait for.
+      return "allow";
     case "error":
       return state.source === "finalize" ? "retryFinalize" : "block";
     default:
