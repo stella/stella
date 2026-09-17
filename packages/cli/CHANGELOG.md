@@ -1,5 +1,13 @@
 # @stll/cli
 
+## 1.8.0
+
+### Minor Changes
+
+- [#3499](https://github.com/stella/stella/pull/3499) [`fec5b75`](https://github.com/stella/stella/commit/fec5b75de0cc1bbd4b922962f9deedcc16eb0205) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `case-law search` no longer requires a question's function words. It reports
+  `searches[].queryUsed` (the words the search required) and
+  `searches[].warnings`, and takes `--strict` to require every word.
+
 ## 1.7.1
 
 ### Patch Changes
