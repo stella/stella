@@ -5,7 +5,7 @@ import { cn } from "@stll/ui/utils";
 import type { CourtTier } from "@/features/case-law/decision-filter-facets.logic";
 
 /**
- * How each tier's chip is drawn: solid ink at the apex, lighter down the
+ * How each tier's chip is drawn: a firm edge at the apex, lighter down the
  * instances. Weight rather than colour, because a chip must not be the only
  * carrier of a fact — and it never is: the court's name stands beside it.
  */

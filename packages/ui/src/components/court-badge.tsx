@@ -1,7 +1,7 @@
 import { cn } from "../lib/utils";
 
 /**
- * How a court's abbreviation is drawn: solid ink for the apex, then lighter
+ * How a court's abbreviation is drawn: a firm edge for the apex, then lighter
  * treatments down the instances.
  *
  * A rank, not a status, so the scale is weight and not colour. Colour here
@@ -34,9 +34,17 @@ const COURT_BADGE_BASE_CLASS =
  * find. The lighter weights write their text in `foreground-strong-muted`
  * rather than `muted-foreground`: two capitals are not a paragraph a reader
  * can infer from context, so they hold body-text contrast in both themes.
+ *
+ * Every weight also writes its text in a foreground token on a tint, never
+ * inverted on a fill. The apex is separated by the strength of its edge, not
+ * by a block of ink: an ink block is the one treatment whose legibility
+ * depends on `text-background` surviving intact, and it reads as a filled
+ * square among chips whose surfaces are 4% tints — the two capitals inside it
+ * carry the whole fact, with no contrast to spare if anything composites them.
+ * Weight, applied to the border, says the same thing and cannot fail that way.
  */
 const WEIGHT_CLASS = {
-  solid: "border-foreground bg-foreground text-background",
+  solid: "border-foreground bg-muted text-foreground",
   tinted: "border-border bg-muted text-foreground",
   outline: "border-border text-foreground-strong-muted",
   dashed: "border-border border-dashed text-foreground-strong-muted",
