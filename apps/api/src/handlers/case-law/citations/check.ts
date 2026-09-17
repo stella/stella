@@ -40,11 +40,8 @@ import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import {
   readDecisionPassageRow,
   resolveDecisionPassages,
-  retrieveDecisionPassages,
 } from "@/api/lib/case-law/decision-passages";
 import type { DecisionPassageRow } from "@/api/lib/case-law/decision-passages";
-import { selectPassagesWithinBudget } from "@/api/lib/case-law/research-answers";
-import type { ResearchPassage } from "@/api/lib/case-law/research-answers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { allowsDerivedAi } from "@/api/lib/legal-search/corpus-source";
 import { LIMITS } from "@/api/lib/limits";
@@ -119,50 +116,31 @@ const resolveCitedDecisions = async (
 };
 
 /**
- * The decision's passages ranked against the claim, best first.
- *
- * Retrieval is what ranks, so it builds the short list the model chooses
- * from. A decision the index cannot answer for (indexed after this read, or
- * a row whose text lives only in Postgres) falls back to reading order: worse
- * grounding than a ranked list, and better than declining to check a
- * citation whose decision is right there.
+ * The decision as Jev reads it: whole and in reading order when it fits the
+ * source budget, which a judgment usually does. Only a decision over the
+ * budget is cut down to the passages retrieval ranks against the claim; a
+ * claim written in another language than the decision ranks poorly, so the
+ * ranked list is the fallback, never the first choice.
  */
 const rankPassages = async (
   decision: DecisionPassageRow,
   claim: string,
 ): Promise<AnswerSource[]> => {
-  const maxPassages = LIMITS.caseLawCitationCheckPassagesMax;
-  const retrieved = await retrieveDecisionPassages({
-    caseLawDb: caseLawPublicReadDb,
-    decision,
-    maxPassages,
-    queries: [claim],
-  });
-  const ranked: readonly ResearchPassage[] =
-    retrieved.length > 0 ? retrieved : await readingOrderPassages(decision);
-  return selectPassagesWithinBudget(ranked.slice(0, maxPassages), {
-    budgetChars: SYSTEM_ONE_SOURCE_BUDGET_CHARS,
-    passageChars: LIMITS.caseLawCitationCheckPassageChars,
-  }).map((passage) => ({ id: passage.anchorId, text: passage.excerpt }));
-};
-
-/**
- * The decision as it reads, opening first. `queries` is empty on purpose:
- * this runs only after retrieval already came back with nothing, so asking
- * the index a second time would spend a round trip on the same answer.
- */
-const readingOrderPassages = async (
-  decision: DecisionPassageRow,
-): Promise<readonly ResearchPassage[]> => {
   const text = await resolveDecisionPassages({
     caseLawDb: caseLawPublicReadDb,
     decision,
     budgetChars: SYSTEM_ONE_SOURCE_BUDGET_CHARS,
     passageChars: LIMITS.caseLawCitationCheckPassageChars,
     maxPassages: LIMITS.caseLawCitationCheckPassagesMax,
-    queries: [],
+    queries: [claim],
   });
-  return text.kind === "none" ? [] : text.passages;
+  if (text.kind === "none") {
+    return [];
+  }
+  return text.passages.map((passage) => ({
+    id: passage.anchorId,
+    text: passage.excerpt,
+  }));
 };
 
 const config = {

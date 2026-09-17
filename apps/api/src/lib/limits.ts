@@ -432,8 +432,8 @@ export const LIMITS = {
    * passage the reading rests on, so the list has to stay one a reader would
    * accept as an answer.
    */
-  caseLawCitationCheckPassagesMax: 8,
-  caseLawCitationCheckPassageChars: 1500,
+  caseLawCitationCheckPassagesMax: 24,
+  caseLawCitationCheckPassageChars: 3000,
   /** Longest sentence a citation check judges, and the citation that names it. */
   caseLawCitationCheckClaimChars: 2000,
   caseLawDecisionCitationPageSize: 50,
