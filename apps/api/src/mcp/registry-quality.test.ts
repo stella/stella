@@ -212,16 +212,16 @@ const TOOL_COUNT_CEILING: Record<SurfaceMode, number> = {
 // The marker also carries the admitted codes and the tool name so a rejection
 // names the call to change rather than only the field that was wrong.
 // Measured 133_357 default, 69_168 anonymized and 24_482 law.
-// Reporting what a search required then measures 133_597 default, 69_567
-// anonymized and 24_769 law, up 888 on the wider surfaces and 716 on law:
-// search_case_law gains a `strict` input and the sentence that says function
-// words are not required terms, and the descriptions of its filters and of
+// Reporting what a search required then measures 134_215 default, 69_996
+// anonymized and 25_198 law, on top of the country reader above: search_case_law
+// gains a `strict` input and the sentence saying function words are not
+// required terms, and the descriptions of its filters and of
 // read_case_law_citations were trimmed to pay part of it back. A model that
 // cannot see which words were required reads an empty page as an empty corpus.
 const TOOLS_LIST_PAYLOAD_CHAR_CEILING: Record<SurfaceMode, number> = {
-  default: 0,
-  anonymized: 0,
-  law: 0,
+  default: 134_300,
+  anonymized: 70_100,
+  law: 25_250,
 };
 
 // default bumped 42_000 -> 42_300 for the two fields read_case_law_citations
