@@ -62,6 +62,7 @@ import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
 import { skillToolDefinition, toMcpTools } from "@/api/mcp/gateway/list-tools";
 import { resolveSkillToolPrecedence } from "@/api/mcp/gateway/skills";
 import type { SkillToolRow } from "@/api/mcp/gateway/skills";
+import { normalizeObjectInputAtBoundary } from "@/api/mcp/input-normalization";
 import { getMcpInstructions } from "@/api/mcp/instructions";
 import { listStaticMcpToolDefinitions } from "@/api/mcp/static-tool-definitions";
 import type {
@@ -287,6 +288,14 @@ type SchemaCheckResult = {
   kind: "valibot" | "structural";
   ok: boolean;
   issues: string[];
+  /**
+   * The arguments as the handler receives them, with the lenient readers
+   * already applied. A task asserts against these rather than the raw call:
+   * dispatch normalizes at the boundary, so an eval scoring the raw spelling
+   * would fail a call production accepts, and would stop measuring whether the
+   * contract is drivable.
+   */
+  normalized: unknown;
 };
 
 /** Light structural check for a legacy tool's plain JSON Schema. */
@@ -299,6 +308,7 @@ const structuralCheck = (
       kind: "structural",
       ok: false,
       issues: ["input is not an object"],
+      normalized: args,
     };
   }
   const required = Array.isArray(schema["required"])
@@ -330,15 +340,42 @@ const structuralCheck = (
       issues.push(`"${key}" not in enum`);
     }
   }
-  return { kind: "structural", ok: issues.length === 0, issues };
+  return {
+    kind: "structural",
+    ok: issues.length === 0,
+    issues,
+    normalized: args,
+  };
 };
 
 const schemaCheck = (
   definition: McpToolDefinition,
   args: unknown,
 ): SchemaCheckResult => {
+  // The same boundary dispatch runs before the schema, so the eval measures the
+  // contract a model actually faces: `CZ` for a country and `1. 10. 2026` for a
+  // date are read here exactly as `tools.ts` reads them.
+  const boundary = isRecord(args)
+    ? normalizeObjectInputAtBoundary({
+        exactProperties: ["confirm", "validate_only"],
+        schema: definition.inputSchema,
+        value: args,
+      })
+    : null;
+  if (boundary !== null && !boundary.ok) {
+    return {
+      kind: hasValibotSchema(definition) ? "valibot" : "structural",
+      ok: false,
+      issues: boundary.issues.map(
+        ({ path: issuePath, message }) =>
+          `${issuePath.length === 0 ? "<root>" : issuePath}: ${message}`,
+      ),
+      normalized: args,
+    };
+  }
+  const normalized = boundary === null ? args : boundary.value;
   if (hasValibotSchema(definition)) {
-    const parsed = v.safeParse(definition.inputSchemaSource, args);
+    const parsed = v.safeParse(definition.inputSchemaSource, normalized);
     return {
       kind: "valibot",
       ok: parsed.success,
@@ -348,9 +385,10 @@ const schemaCheck = (
             (issue) =>
               `${issue.path?.map((p) => String(p.key)).join(".") ?? "<root>"}: ${issue.message}`,
           ),
+      normalized,
     };
   }
-  return structuralCheck(definition.inputSchema, args);
+  return structuralCheck(definition.inputSchema, normalized);
 };
 
 // --- MCP task specs ----------------------------------------------------------
@@ -642,6 +680,58 @@ const TASKS: readonly Task[] = [
       kind: "command",
       path: ["case-law", "lookup"],
       flags: { country: "CZE", identifiers: CASE_LAW_DOCKET },
+    },
+  },
+  {
+    id: "search-case-law-czech-country-spelling",
+    // Asked in Czech, a model writes the country the way Czech writes it:
+    // `CZ`, `Česko`, `Česká republika`. The corpus keys on `CZE`, so while the
+    // input was capped at three characters those calls were rejected at the
+    // schema and the model answered from memory instead of from the corpus.
+    // The request is in Czech because that is the condition that produces the
+    // spelling; the assertion is on the country the reader resolves.
+    request:
+      "Najdi českou judikaturu k promlčení práva na náhradu škody ze " +
+      "smlouvy. Zkus v jednom volání několik formulací dotazu.",
+    // The CLI surface scores a constructed command line, which no boundary
+    // reader sees, so its country is named here: the spelling is the MCP
+    // half's subject and command construction is this half's.
+    cliRequest:
+      "Najdi českou judikaturu (country code CZE) k promlčení práva na " +
+      "náhradu škody ze smlouvy. Zkus v jednom volání několik formulací.",
+    mcp: {
+      toolName: "search_case_law",
+      exampleArgs: {
+        queries: ["promlčení náhrady škody", "promlčecí lhůta náhrada škody"],
+        country: "CZ",
+      },
+      checkArgs: (args) => {
+        const queries = args["queries"];
+        return [
+          ...(Array.isArray(queries) &&
+          queries.length >= 2 &&
+          queries.every(
+            (query) => typeof query === "string" && query.length > 0,
+          )
+            ? []
+            : [
+                `queries: expected at least 2 non-empty strings, got ${JSON.stringify(queries)}`,
+              ]),
+          // The country reader canonicalizes at the boundary this eval parses
+          // through, so every spelling that names Czechia arrives as `CZE`.
+          ...(args["country"] === "CZE"
+            ? []
+            : [
+                `country: expected CZE after normalization, got ${JSON.stringify(args["country"])}`,
+              ]),
+        ];
+      },
+    },
+    cli: {
+      kind: "command",
+      path: ["case-law", "search"],
+      flags: { country: "CZE" },
+      repeatedAtLeast: { queries: 2 },
     },
   },
   {
@@ -1134,7 +1224,9 @@ const assertMcpTaskFixtures = (tasks: readonly Task[]): void => {
     const schema = schemaCheck(definition, task.mcp.exampleArgs);
     const issues = [
       ...schema.issues,
-      ...task.mcp.checkArgs(task.mcp.exampleArgs),
+      ...task.mcp.checkArgs(
+        isRecord(schema.normalized) ? schema.normalized : task.mcp.exampleArgs,
+      ),
     ];
     if (issues.length > 0) {
       failures.push(`${task.id}: ${issues.join("; ")}`);
@@ -1680,10 +1772,16 @@ const scoreMcpRun = ({
   const definition = mcpDefinitionsByName.get(name);
   const schema =
     definition === undefined
-      ? { kind: "structural" as const, ok: false, issues: ["unknown tool"] }
+      ? {
+          kind: "structural" as const,
+          ok: false,
+          issues: ["unknown tool"],
+          normalized: input,
+        }
       : schemaCheck(definition, input);
+  const checked = isRecord(schema.normalized) ? schema.normalized : args;
   const taskIssues = isRecord(input)
-    ? task.mcp.checkArgs(args)
+    ? task.mcp.checkArgs(checked)
     : ["input is not an object"];
   const issues = [...schema.issues, ...taskIssues];
   return {
