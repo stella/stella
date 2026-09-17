@@ -59,6 +59,17 @@ const position = (
   ],
 });
 
+/** Block ids are document-local: a reference document can carry the same id as
+ *  the target, so a marker in prose names no side. */
+const sharedBlockIdPosition = (): ReferenceStandardPosition => {
+  const base = position();
+  const passage = base.passages.at(0);
+  if (passage === undefined) {
+    throw new Error("the position fixture has no passage to share an id with");
+  }
+  return { ...base, passages: [{ ...passage, blockId: "p-1" }] };
+};
+
 const buyer: ReviewPerspective = { type: "party", role: "Buyer", name: null };
 
 const emptyDelta = {
@@ -267,6 +278,43 @@ describe("block-id markers in prose", () => {
     expect(grading.explanation).toEqual({
       type: "comparison",
       text: "The target leaves the cap at [●]% and the date at [insert].",
+    });
+  });
+
+  test("a marker the standard shares grounds nothing on its own", () => {
+    const grading = normalizeReferenceGrading({
+      raw: raw({
+        rationale: "The target sets twelve months [p-1].",
+        recommendation: "",
+        targetCitations: [],
+      }),
+      position: sharedBlockIdPosition(),
+      targetBlocks,
+      targetLanguage: "EN-GB",
+      perspective: buyer,
+    });
+    expect(grading.citations).toEqual([]);
+    expect(grading.explanation).toEqual({ type: "insufficient-evidence" });
+  });
+
+  test("an explicit target citation still carries a shared marker", () => {
+    const grading = normalizeReferenceGrading({
+      raw: raw({
+        rationale: "The target sets twelve months [p-1].",
+        recommendation: "",
+        targetCitations: [{ blockId: "p-1" }],
+      }),
+      position: sharedBlockIdPosition(),
+      targetBlocks,
+      targetLanguage: "EN-GB",
+      perspective: buyer,
+    });
+    expect(grading.citations.map((citation) => citation.blockId)).toEqual([
+      "p-1",
+    ]);
+    expect(grading.explanation).toEqual({
+      type: "comparison",
+      text: "The target sets twelve months.",
     });
   });
 });

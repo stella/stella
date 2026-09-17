@@ -545,21 +545,27 @@ export const normalizeReferenceGrading = ({
   // ids into its prose ("… at the Purchase Price. [373A0010]"). Prose is read
   // by people, in the panel, the memo and the chat draft, so the markers come
   // out; a target block named only there still counts as a citation.
-  const knownBlockIds = new Set([
-    ...targetBlocks.keys(),
-    ...position.passages.map((passage) => passage.blockId),
-  ]);
+  const standardBlockIds = new Set(
+    position.passages.map((passage) => passage.blockId),
+  );
+  const knownBlockIds = new Set([...targetBlocks.keys(), ...standardBlockIds]);
   const rationaleProse = stripBlockIdMarkers(raw.rationale, knownBlockIds);
   const recommendationProse = stripBlockIdMarkers(
     raw.recommendation,
     knownBlockIds,
   );
+  // Block ids are document-local, so a marker the standard also carries names
+  // no side: it comes out of the prose but never grounds the finding. Only
+  // `targetCitations`, where the model states which document it means, may
+  // carry an id both documents use.
+  const proseCitations = [
+    ...rationaleProse.blockIds,
+    ...recommendationProse.blockIds,
+  ]
+    .filter((blockId) => !standardBlockIds.has(blockId))
+    .map((blockId) => ({ blockId }));
   const citations = verifiedTargetCitations(
-    [
-      ...raw.targetCitations,
-      ...rationaleProse.blockIds.map((blockId) => ({ blockId })),
-      ...recommendationProse.blockIds.map((blockId) => ({ blockId })),
-    ],
+    [...raw.targetCitations, ...proseCitations],
     targetBlocks,
   );
   const grounded = isGrounded(raw.assessment, citations.length > 0);
