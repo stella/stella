@@ -15,6 +15,7 @@ import nodePath from "node:path";
 import { propertyConfig } from "@stll/property-testing";
 
 import {
+  changesetVersionEnv,
   fetchPublishedAt,
   MaintenanceReleaseError,
   maintenanceChangelog,
@@ -155,6 +156,55 @@ describe("the token the GitHub reads are made with", () => {
       expect(resolveGitHubToken({}, cliToken(stdout).run)).toBeNull();
     },
   );
+
+  // The nested `changeset version` run reads GITHUB_TOKEN and nothing else, so
+  // a token that came from GH_TOKEN or the signed-in CLI has to be handed down
+  // under that name; otherwise the version run fails and the preparation rolls
+  // back.
+  test("hands a token resolved elsewhere to the version run as GITHUB_TOKEN", () => {
+    const fromVariable = { GH_TOKEN: "gh-token", PATH: "/usr/bin" };
+    expect(
+      changesetVersionEnv(
+        fromVariable,
+        resolveGitHubToken(fromVariable, cliToken(null).run),
+      ),
+    ).toEqual({
+      GH_TOKEN: "gh-token",
+      GITHUB_TOKEN: "gh-token",
+      PATH: "/usr/bin",
+    });
+
+    const fromCli = { PATH: "/usr/bin" };
+    expect(
+      changesetVersionEnv(
+        fromCli,
+        resolveGitHubToken(fromCli, cliToken("cli-token\n").run),
+      ),
+    ).toEqual({ GITHUB_TOKEN: "cli-token", PATH: "/usr/bin" });
+  });
+
+  test("changes GITHUB_TOKEN alone, whatever the parent environment holds", () => {
+    fc.assert(
+      fc.property(
+        fc.dictionary(fc.stringMatching(/^[A-Z][A-Z_]{0,7}$/u), fc.string()),
+        fc.option(fc.string({ minLength: 1 }), { nil: null }),
+        (parent, token) => {
+          const child = changesetVersionEnv(parent, token);
+          const added = token === null ? [] : ["GITHUB_TOKEN"];
+          expect(Object.keys(child).toSorted()).toEqual(
+            [...new Set([...Object.keys(parent), ...added])].toSorted(),
+          );
+          for (const [key, value] of Object.entries(parent)) {
+            if (key !== "GITHUB_TOKEN" || token === null) {
+              expect(child[key]).toBe(value);
+            }
+          }
+          expect(child["GITHUB_TOKEN"]).toBe(token ?? parent["GITHUB_TOKEN"]);
+        },
+      ),
+      propertyConfig({ numRuns: 200 }),
+    );
+  });
 });
 
 describe("pending changesets folded into the release", () => {

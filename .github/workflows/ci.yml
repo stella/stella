@@ -388,7 +388,7 @@ jobs:
 
       - name: Enforce release intent
         # The repository owner publishes this versioned shared contract.
-        uses: stella/.github/.github/actions/changeset-policy@5628b97fb3c560c0d961baa60c272c598eddcab5 # v1.7.0
+        uses: stella/.github/.github/actions/changeset-policy@2ac805220ed86dcaa154e332e0f3dbbc7b0e8024 # v1.7.1
         with:
           release-paths: ${{ steps.policy.outputs.release_paths }}
           generated-paths: ${{ steps.policy.outputs.generated_paths }}

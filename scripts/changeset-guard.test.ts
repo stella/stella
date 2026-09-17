@@ -1,6 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
-import { existsSync, readFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { propertyConfig } from "@stll/property-testing";
@@ -11,12 +19,22 @@ import {
   loadChangesetPolicy,
   parseChangesetPolicy,
   parseReleasePathspec,
+  readChangesetDiff,
 } from "./changeset-guard";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const POLICY_FILE = "scripts/changeset-policy.json";
 const WORKFLOW_FILE = ".github/workflows/ci.yml";
 const TREE_SUFFIX = "/**";
+/** What `bun run changeset --empty` writes: no frontmatter, no summary. */
+const EMPTY_CHANGESET = "---\n---\n";
+const CHANGESET_POLICY_ACTION = "changeset-policy";
+const CHANGESET_POLICY_PIN = new RegExp(
+  `${CHANGESET_POLICY_ACTION}@[0-9a-f]{40} # v(\\d+)\\.(\\d+)\\.(\\d+)`,
+  "u",
+);
+/** The first shared-gate version that reads a renamed entry as an added one. */
+const MINIMUM_CHANGESET_POLICY_VERSION = [1, 7, 1];
 /** Release metadata that belongs to the repository, not to one package. */
 const REPO_LEVEL_GENERATED = new Set(["bun.lock"]);
 
@@ -55,6 +73,18 @@ const SLUG = fc.stringMatching(/^[a-z][a-z0-9-]{0,11}$/u);
 
 const readFile = (relativePath: string): string =>
   readFileSync(path.join(REPO_ROOT, relativePath), "utf-8");
+
+const git = (root: string, args: readonly string[]): string => {
+  const result = Bun.spawnSync(["git", ...args], {
+    cwd: root,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  if (result.exitCode !== 0) {
+    throw new Error(result.stderr.toString());
+  }
+  return result.stdout.toString();
+};
 
 /** Published package name of a manifest, or null when it is private. */
 const publishedName = (relativePath: string): string | null => {
@@ -230,6 +260,73 @@ describe("changeset gate decision", () => {
   });
 });
 
+describe("the diff the gate decides on", () => {
+  test("counts a renamed empty changeset as a new entry", () => {
+    // A maintenance release commit deletes the previous release's empty entry
+    // and adds a byte-identical one under the next version's name. Git reads
+    // that pair as one rename, so a rename-blind query sees no added entry and
+    // the guard refuses the release commit.
+    const root = mkdtempSync(path.join(tmpdir(), "stella-changeset-guard-"));
+    try {
+      mkdirSync(path.join(root, ".changeset"), { recursive: true });
+      mkdirSync(path.join(root, "packages/ui"), { recursive: true });
+      writeFileSync(path.join(root, ".changeset/README.md"), "# Changesets\n");
+      writeFileSync(
+        path.join(root, ".changeset/release-v1.2.3.md"),
+        EMPTY_CHANGESET,
+      );
+      writeFileSync(
+        path.join(root, "packages/ui/package.json"),
+        '{"name":"@stll/ui","version":"1.2.3"}\n',
+      );
+      git(root, ["init", "-b", "main"]);
+      git(root, ["config", "user.email", "test@example.com"]);
+      git(root, ["config", "user.name", "Test"]);
+      git(root, ["add", "."]);
+      git(root, ["commit", "--no-gpg-sign", "-m", "base"]);
+      const mergeBase = git(root, ["rev-parse", "HEAD"]).trim();
+
+      git(root, [
+        "mv",
+        ".changeset/release-v1.2.3.md",
+        ".changeset/release-v1.2.4.md",
+      ]);
+      writeFileSync(
+        path.join(root, "packages/ui/package.json"),
+        '{"name":"@stll/ui","version":"1.2.4"}\n',
+      );
+      git(root, ["add", "."]);
+      git(root, ["commit", "--no-gpg-sign", "-m", "release v1.2.4"]);
+
+      // The regression only means anything while git still pairs the two
+      // entries as a rename.
+      expect(
+        git(root, [
+          "diff",
+          "--name-status",
+          "--find-renames",
+          mergeBase,
+          "HEAD",
+          "--",
+          ".changeset/*.md",
+        ]),
+      ).toMatch(/^R/mu);
+
+      expect(
+        decideChangesetGate({
+          ...readChangesetDiff({ mergeBase, root }),
+          releasePaths: policy.releasePaths,
+        }),
+      ).toEqual({
+        status: "satisfied",
+        changesets: [".changeset/release-v1.2.4.md"],
+      });
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+});
+
 describe("changeset policy file", () => {
   test("rejects a policy that is missing a list", () => {
     expect(() => parseChangesetPolicy(`{"releasePaths": []}`)).toThrow(
@@ -311,6 +408,20 @@ describe("changeset policy file", () => {
   });
 });
 
+/** Negative when `version` precedes `minimum`, zero when they are equal. */
+const compareVersions = (
+  version: readonly number[],
+  minimum: readonly number[],
+): number => {
+  for (const [index, part] of version.entries()) {
+    const floor = minimum[index] ?? 0;
+    if (part !== floor) {
+      return part - floor;
+    }
+  }
+  return 0;
+};
+
 describe("workflow and pre-push read the same policy", () => {
   test("the workflow job feeds every list from the policy file", () => {
     const job = changesetJob();
@@ -318,6 +429,23 @@ describe("workflow and pre-push read the same policy", () => {
     for (const key of ["releasePaths", "generatedPaths", "packageFiles"]) {
       expect(job).toContain(`.${key}[]`);
     }
+  });
+
+  test("pins the shared gate to a version that reads renames as this guard does", () => {
+    // The shared action counted a renamed changeset entry as no entry at all
+    // until this version, so an older pin would refuse a release commit that
+    // pre-push accepts. Dependabot rewrites the comment with the SHA, so the
+    // comment is the readable side of the pin; it may only move forward.
+    const pin = CHANGESET_POLICY_PIN.exec(readFile(WORKFLOW_FILE));
+    if (pin === null) {
+      throw new Error(
+        `${WORKFLOW_FILE} must pin ${CHANGESET_POLICY_ACTION} to a 40-character SHA commented with its version.`,
+      );
+    }
+    const pinned = [pin.at(1), pin.at(2), pin.at(3)].map(Number);
+    expect(
+      compareVersions(pinned, MINIMUM_CHANGESET_POLICY_VERSION),
+    ).toBeGreaterThanOrEqual(0);
   });
 
   test("the workflow job inlines no pathspecs of its own", () => {

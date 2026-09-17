@@ -379,6 +379,7 @@ export const withFileRollback = <T>({
 const runChangesetVersion = (rootDir: string) => {
   const result = Bun.spawnSync(["bun", "run", "changeset:version"], {
     cwd: rootDir,
+    env: changesetVersionEnv(process.env, githubToken()),
     stderr: "inherit",
     stdout: "inherit",
   });
@@ -548,17 +549,36 @@ export const resolveGitHubToken = (
 // per read would spawn it as many times.
 let resolvedToken: string | null | undefined;
 
+const githubToken = (): string | null => {
+  if (resolvedToken === undefined) {
+    resolvedToken = resolveGitHubToken(process.env);
+  }
+  return resolvedToken;
+};
+
+/**
+ * Environment for the nested version run. Changesets reads `GITHUB_TOKEN`
+ * alone, so the token this script resolved for its own reads is passed under
+ * that name; a run that took its token from `GH_TOKEN` or the signed-in CLI
+ * would otherwise meet the changesets "create a GitHub personal access token"
+ * failure. Every other variable stays the parent's, and a run with no token
+ * inherits the environment unchanged.
+ */
+export const changesetVersionEnv = (
+  env: Record<string, string | undefined>,
+  token: string | null,
+): Record<string, string | undefined> =>
+  token === null ? env : { ...env, GITHUB_TOKEN: token };
+
 const requestGitHub = async (path: string): Promise<Response> => {
   const headers: Record<string, string> = {
     Accept: "application/vnd.github+json",
     "User-Agent": "stella-maintenance-release",
     "X-GitHub-Api-Version": "2022-11-28",
   };
-  if (resolvedToken === undefined) {
-    resolvedToken = resolveGitHubToken(process.env);
-  }
-  if (resolvedToken !== null) {
-    headers["Authorization"] = `Bearer ${resolvedToken}`;
+  const token = githubToken();
+  if (token !== null) {
+    headers["Authorization"] = `Bearer ${token}`;
   }
   return fetch(`${GITHUB_API_ROOT}${path}`, { headers });
 };
