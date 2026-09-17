@@ -492,7 +492,7 @@ describe("empty-result onboarding hints", () => {
     });
 
     const result = await handleMcpToolCall({
-      args: { country: "CZE", query: "anything" },
+      args: { country: "CZE", queries: ["anything"] },
       context,
       toolName: "search_case_law",
     });
@@ -511,15 +511,18 @@ describe("empty-result onboarding hints", () => {
       hits: [
         {
           caseNumber: "29 Cdo 123/2024",
+          citationAuthority: 0,
           citationCount: 0,
           country: "CZE",
           court: "Nejvyšší soud",
+          courtAbbreviation: "NS",
           decisionDate: "2024-02-01",
           decisionId: "dec_1",
           decisionType: "judgment",
           ecli: null,
           headline: "hit",
           language: "cs",
+          matchingPassages: 1,
           sourceUrl: "https://example.test",
         },
       ],
@@ -534,7 +537,7 @@ describe("empty-result onboarding hints", () => {
     });
 
     const result = await handleMcpToolCall({
-      args: { country: "CZE", query: "shareholder" },
+      args: { country: "CZE", queries: ["shareholder"] },
       context,
       toolName: "search_case_law",
     });
@@ -557,7 +560,7 @@ describe("empty-result onboarding hints", () => {
     });
 
     const result = await handleMcpToolCall({
-      args: { country: "CZE", query: "shareholder" },
+      args: { country: "CZE", queries: ["shareholder"] },
       context,
       toolName: "search_case_law",
     });

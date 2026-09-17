@@ -430,6 +430,12 @@ const nestedField = (
 
 type CliExpectedCommand = {
   kind: "command";
+  /**
+   * Repeatable flags this task needs more than one of, by minimum count. For a
+   * batch command the cardinality IS the contract, and pinning the values
+   * would score the model's wording rather than whether it batched.
+   */
+  repeatedAtLeast?: Readonly<Record<string, number>>;
   /** Tokens after `stella`, e.g. ["document", "list"] or ["capability", "entities", "translate"]. */
   path: readonly string[];
   flags: Readonly<Record<string, string>>;
@@ -527,6 +533,7 @@ const DOCUMENT_ID = "d0d0d0d0-0000-4000-8000-000000000042";
 const TRANSLATION_ENTITY_ID = "7f7f7f7f-1111-4222-8333-444444444444";
 const TRANSLATION_FIELD_ID = "5e5e5e5e-1111-4222-8333-444444444444";
 const CASE_LAW_DECISION_ID = "b2b2b2b2-0000-4000-8000-000000000031";
+const CASE_LAW_SECOND_DECISION_ID = "b2b2b2b2-0000-4000-8000-000000000032";
 // A legislation work is addressed by its ELI, and its provisions by the
 // publisher's own anchors; neither is UUID-shaped, and neither is guessable,
 // so the tasks carry them the way a previous call would have returned them.
@@ -553,30 +560,92 @@ const TASKS: readonly Task[] = [
   },
   {
     id: "search-case-law",
+    // The corpus admits alpha-3 codes only, and the tool's `country` input
+    // now names the admitted ones, so the task asks for a jurisdiction the
+    // corpus carries: a task naming one it does not measures a guess rather
+    // than orientation.
     request:
-      "Search the case-law corpus for decisions about breach of a duty of care in negligence, restricted to German courts.",
+      "Search the Czech case-law corpus for decisions about breach of a duty of care in negligence. Try a couple of phrasings in the same call.",
     mcp: {
       toolName: "search_case_law",
       exampleArgs: {
-        query: "breach of duty of care negligence",
-        country: "DE",
+        queries: ["breach of duty of care negligence", "negligent breach"],
+        country: "CZE",
       },
-      checkArgs: (args) => [
-        ...(typeof args["query"] === "string" && args["query"].length > 0
-          ? []
-          : ["query: expected a non-empty string"]),
-        // The handler folds the code to upper case (publicCaseLawCountry), so
-        // `de` is as correct as `DE`.
-        ...(typeof args["country"] === "string" &&
-        args["country"].toUpperCase() === "DE"
-          ? []
-          : [`country: expected DE, got ${JSON.stringify(args["country"])}`]),
-      ],
+      checkArgs: (args) => {
+        const queries = args["queries"];
+        return [
+          // At least two: one phrasing is a valid call, but this task asks for
+          // several in one call, and a single query would pass a batch task
+          // the model did not perform. The wording is the model's own.
+          ...(Array.isArray(queries) &&
+          queries.length >= 2 &&
+          queries.every(
+            (query) => typeof query === "string" && query.length > 0,
+          )
+            ? []
+            : [
+                `queries: expected at least 2 non-empty strings, got ${JSON.stringify(queries)}`,
+              ]),
+          // The handler folds the code to upper case (publicCaseLawCountry),
+          // so `cze` is as correct as `CZE`.
+          ...(typeof args["country"] === "string" &&
+          args["country"].toUpperCase() === "CZE"
+            ? []
+            : [
+                `country: expected CZE, got ${JSON.stringify(args["country"])}`,
+              ]),
+        ];
+      },
     },
     cli: {
       kind: "command",
       path: ["case-law", "search"],
-      flags: { country: "DE" },
+      flags: { country: "CZE" },
+      // `--queries` repeats; the task is about carrying several, not about
+      // which words, so the expectation is the count and nothing else.
+      repeatedAtLeast: { queries: 2 },
+    },
+  },
+  {
+    id: "read-case-law-decisions",
+    request: `Give me the text of decisions ${CASE_LAW_DECISION_ID} and ${CASE_LAW_SECOND_DECISION_ID}. Fetch both in a single call.`,
+    mcp: {
+      toolName: "read_case_law_decision",
+      exampleArgs: {
+        decision_ids: [CASE_LAW_DECISION_ID, CASE_LAW_SECOND_DECISION_ID],
+      },
+      checkArgs: (args) => {
+        const ids = args["decision_ids"];
+        if (!Array.isArray(ids)) {
+          return ["decision_ids: expected an array"];
+        }
+        // Both decisions in one call is the contract this tool exists for;
+        // two single-id calls would each cost a round trip.
+        if (ids.length !== 2) {
+          return [`decision_ids: expected 2 entries, got ${ids.length}`];
+        }
+        return [CASE_LAW_DECISION_ID, CASE_LAW_SECOND_DECISION_ID].flatMap(
+          (expected, index) =>
+            ids[index] === expected
+              ? []
+              : [
+                  `decision_ids.${index}: expected ${expected}, got ${JSON.stringify(ids[index])}`,
+                ],
+        );
+      },
+    },
+    cli: {
+      kind: "command",
+      path: ["case-law", "read"],
+      // Both ids, in order: a command naming one of the two is not the batch
+      // workflow this task measures.
+      flags: {
+        "decision-ids": JSON.stringify([
+          CASE_LAW_DECISION_ID,
+          CASE_LAW_SECOND_DECISION_ID,
+        ]),
+      },
     },
   },
   {
@@ -1325,6 +1394,13 @@ const tokenizeCommand = (command: string): string[] => {
 type ParsedCliCommand = {
   path: string[];
   flags: Map<string, string | null>;
+  /**
+   * Every value a repeatable flag carried, in order. `flags` keeps the last
+   * one, which is what a single-valued expectation compares; a batch command
+   * is only proved by the whole list, so a reply naming one of two requested
+   * ids cannot pass as the batch workflow.
+   */
+  repeatedFlags: Map<string, string[]>;
   /** Whether the reply actually invoked the `stella` executable. */
   startsWithStella: boolean;
 };
@@ -1334,6 +1410,16 @@ const parseCliCommand = (command: string): ParsedCliCommand => {
   const startsWithStella = tokens[0] === "stella";
   const commandPath: string[] = [];
   const flags = new Map<string, string | null>();
+  const repeatedFlags = new Map<string, string[]>();
+  const record = (flagName: string, value: string | null): void => {
+    flags.set(flagName, value);
+    if (value !== null) {
+      repeatedFlags.set(flagName, [
+        ...(repeatedFlags.get(flagName) ?? []),
+        value,
+      ]);
+    }
+  };
   let index = startsWithStella ? 1 : 0;
   while (index < tokens.length) {
     const token = tokens[index];
@@ -1347,20 +1433,20 @@ const parseCliCommand = (command: string): ParsedCliCommand => {
         continue;
       }
       if (inlineValue !== undefined) {
-        flags.set(flagName, inlineValue);
+        record(flagName, inlineValue);
         index += 1;
         continue;
       }
       const next = tokens[index + 1];
       const takesValue = next !== undefined && !next.startsWith("--");
-      flags.set(flagName, takesValue ? next : null);
+      record(flagName, takesValue ? next : null);
       index += takesValue ? 2 : 1;
       continue;
     }
     commandPath.push(token);
     index += 1;
   }
-  return { path: commandPath, flags, startsWithStella };
+  return { path: commandPath, flags, repeatedFlags, startsWithStella };
 };
 
 // Models spell a refusal with a typographic apostrophe (`can’t`) as often as
@@ -1442,6 +1528,40 @@ const resolveFlagValue = (
     }
   }
   return undefined;
+};
+
+/**
+ * Every value a repeatable flag carried: the repeats a command spelled out, or
+ * the array its `--input` payload put under the same key. An expectation
+ * written as a JSON array compares against this rather than against the last
+ * repeat.
+ */
+const resolveFlagValues = (
+  parsed: ParsedCliCommand,
+  flagName: string,
+): string[] | undefined => {
+  const repeats = parsed.repeatedFlags.get(flagName);
+  if (repeats !== undefined) {
+    return repeats;
+  }
+  const fromInput = resolveFlagValue(parsed, flagName);
+  if (typeof fromInput !== "string") {
+    return undefined;
+  }
+  const parsedInput: unknown = parseJsonOrNull(fromInput);
+  return Array.isArray(parsedInput) &&
+    parsedInput.every((entry) => typeof entry === "string")
+    ? parsedInput
+    : undefined;
+};
+
+/** An expectation spelled as a JSON array of strings, or null when it is not. */
+const expectedFlagValues = (expectedValue: string): string[] | null => {
+  const parsedValue: unknown = parseJsonOrNull(expectedValue);
+  return Array.isArray(parsedValue) &&
+    parsedValue.every((entry) => typeof entry === "string")
+    ? parsedValue
+    : null;
 };
 
 // --- scoring ---------------------------------------------------------------
@@ -1610,7 +1730,31 @@ const scoreCliRun = ({
       }
     }
   }
+  for (const [flagName, minimum] of Object.entries(
+    expected.repeatedAtLeast ?? {},
+  )) {
+    const carried = resolveFlagValues(parsed, flagName)?.length ?? 0;
+    if (carried < minimum) {
+      issues.push(
+        `--${flagName}: expected at least ${String(minimum)} values, got ${String(carried)}`,
+      );
+    }
+  }
   for (const [flagName, expectedValue] of Object.entries(expected.flags)) {
+    const expectedList = expectedFlagValues(expectedValue);
+    if (expectedList !== null) {
+      const actualList = resolveFlagValues(parsed, flagName);
+      if (
+        actualList === undefined ||
+        actualList.length !== expectedList.length ||
+        actualList.some((value, index) => value !== expectedList[index])
+      ) {
+        issues.push(
+          `--${flagName}: expected ${JSON.stringify(expectedList)}, got ${JSON.stringify(actualList)}`,
+        );
+      }
+      continue;
+    }
     const actual = resolveFlagValue(parsed, flagName);
     if (
       !sameCliFlagValue({

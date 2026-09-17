@@ -80,62 +80,62 @@ default scopes are `openid profile email offline_access stella:read stella:searc
 Generated from the MCP tool registry; `Access` is the OAuth scope the command
 requires (request it at `stella auth login --scopes`).
 
-| Domain       | Command                                    | Access                      | Notes                                 |
-| ------------ | ------------------------------------------ | --------------------------- | ------------------------------------- |
-| audit-log    | `stella audit-log list`                    | admin_read                  | paginated                             |
-| capability   | `stella capability describe`               | read                        |                                       |
-| capability   | `stella capability invoke`                 | read                        |                                       |
-| capability   | `stella capability list`                   | read                        | paginated                             |
-| case-law     | `stella case-law citations`                | read                        | paginated                             |
-| case-law     | `stella case-law read`                     | read                        | paginated; windowed text              |
-| case-law     | `stella case-law search`                   | search                      | paginated                             |
-| clause       | `stella clause delete`                     | knowledge_write             | destructive (needs `--yes` off a TTY) |
-| clause       | `stella clause list`                       | read                        | paginated                             |
-| clause       | `stella clause save`                       | knowledge_write             |                                       |
-| contact      | `stella contact delete`                    | matters_write               | destructive (needs `--yes` off a TTY) |
-| contact      | `stella contact list`                      | read                        | paginated                             |
-| contact      | `stella contact lookup-registry`           | read                        |                                       |
-| contact      | `stella contact read`                      | read                        |                                       |
-| contact      | `stella contact save`                      | matters_write               |                                       |
-| document     | `stella document content`                  | read                        | paginated; windowed text              |
-| document     | `stella document delete`                   | documents_write             | destructive (needs `--yes` off a TTY) |
-| document     | `stella document field set`                | documents_write             |                                       |
-| document     | `stella document list`                     | read                        | paginated                             |
-| document     | `stella document properties list`          | read                        | paginated                             |
-| document     | `stella document read`                     | read                        |                                       |
-| document     | `stella document save`                     | documents_write             |                                       |
-| feedback     | `stella feedback prepare`                  | feedback                    |                                       |
-| invoice      | `stella invoice list`                      | read                        | paginated                             |
-| legislation  | `stella legislation boe-search`            | read                        | paginated                             |
-| legislation  | `stella legislation history`               | read                        | paginated                             |
-| legislation  | `stella legislation provisions`            | read                        |                                       |
-| legislation  | `stella legislation read`                  | read                        | paginated; windowed text              |
-| legislation  | `stella legislation search`                | search                      | paginated                             |
-| matter       | `stella matter delete`                     | matters_write               | destructive (needs `--yes` off a TTY) |
-| matter       | `stella matter link-contact`               | matters_write               |                                       |
-| matter       | `stella matter list`                       | read                        | paginated                             |
-| matter       | `stella matter save`                       | matters_write               |                                       |
-| organization | `stella organization add-member`           | admin_write                 |                                       |
-| organization | `stella organization remove-member`        | admin_write                 | destructive (needs `--yes` off a TTY) |
-| organization | `stella organization set-jurisdictions`    | onboarding                  |                                       |
-| organization | `stella organization update-settings`      | admin_write                 |                                       |
-| playbook     | `stella playbook list`                     | read                        | paginated                             |
-| playbook     | `stella playbook run`                      | knowledge_write             |                                       |
-| rate         | `stella rate resolve`                      | read                        |                                       |
-| search       | `stella search matters`                    | search                      | paginated                             |
-| task         | `stella task delete`                       | matters_write               | destructive (needs `--yes` off a TTY) |
-| task         | `stella task list`                         | read                        | paginated                             |
-| task         | `stella task save`                         | matters_write               |                                       |
-| template     | `stella template configure-fields`         | templates                   |                                       |
-| template     | `stella template create`                   | templates                   |                                       |
-| template     | `stella template fill`                     | templates                   |                                       |
-| template     | `stella template list`                     | templates                   | paginated                             |
-| template     | `stella template save-filled new-document` | documents_write + templates |                                       |
-| template     | `stella template save-filled new-version`  | documents_write + templates |                                       |
-| time-entry   | `stella time-entry delete`                 | billing_write               | destructive (needs `--yes` off a TTY) |
-| time-entry   | `stella time-entry list`                   | read                        | paginated                             |
-| time-entry   | `stella time-entry save`                   | billing_write               |                                       |
-| usage        | `stella usage get`                         | read                        |                                       |
+| Domain       | Command                                    | Access                      | Notes                                   |
+| ------------ | ------------------------------------------ | --------------------------- | --------------------------------------- |
+| audit-log    | `stella audit-log list`                    | admin_read                  | paginated                               |
+| capability   | `stella capability describe`               | read                        |                                         |
+| capability   | `stella capability invoke`                 | read                        |                                         |
+| capability   | `stella capability list`                   | read                        | paginated                               |
+| case-law     | `stella case-law citations`                | read                        | paginated                               |
+| case-law     | `stella case-law read`                     | read                        | paginated; per-entry cursor, no `--all` |
+| case-law     | `stella case-law search`                   | search                      | paginated                               |
+| clause       | `stella clause delete`                     | knowledge_write             | destructive (needs `--yes` off a TTY)   |
+| clause       | `stella clause list`                       | read                        | paginated                               |
+| clause       | `stella clause save`                       | knowledge_write             |                                         |
+| contact      | `stella contact delete`                    | matters_write               | destructive (needs `--yes` off a TTY)   |
+| contact      | `stella contact list`                      | read                        | paginated                               |
+| contact      | `stella contact lookup-registry`           | read                        |                                         |
+| contact      | `stella contact read`                      | read                        |                                         |
+| contact      | `stella contact save`                      | matters_write               |                                         |
+| document     | `stella document content`                  | read                        | paginated; windowed text                |
+| document     | `stella document delete`                   | documents_write             | destructive (needs `--yes` off a TTY)   |
+| document     | `stella document field set`                | documents_write             |                                         |
+| document     | `stella document list`                     | read                        | paginated                               |
+| document     | `stella document properties list`          | read                        | paginated                               |
+| document     | `stella document read`                     | read                        |                                         |
+| document     | `stella document save`                     | documents_write             |                                         |
+| feedback     | `stella feedback prepare`                  | feedback                    |                                         |
+| invoice      | `stella invoice list`                      | read                        | paginated                               |
+| legislation  | `stella legislation boe-search`            | read                        | paginated                               |
+| legislation  | `stella legislation history`               | read                        | paginated                               |
+| legislation  | `stella legislation provisions`            | read                        |                                         |
+| legislation  | `stella legislation read`                  | read                        | paginated; windowed text                |
+| legislation  | `stella legislation search`                | search                      | paginated                               |
+| matter       | `stella matter delete`                     | matters_write               | destructive (needs `--yes` off a TTY)   |
+| matter       | `stella matter link-contact`               | matters_write               |                                         |
+| matter       | `stella matter list`                       | read                        | paginated                               |
+| matter       | `stella matter save`                       | matters_write               |                                         |
+| organization | `stella organization add-member`           | admin_write                 |                                         |
+| organization | `stella organization remove-member`        | admin_write                 | destructive (needs `--yes` off a TTY)   |
+| organization | `stella organization set-jurisdictions`    | onboarding                  |                                         |
+| organization | `stella organization update-settings`      | admin_write                 |                                         |
+| playbook     | `stella playbook list`                     | read                        | paginated                               |
+| playbook     | `stella playbook run`                      | knowledge_write             |                                         |
+| rate         | `stella rate resolve`                      | read                        |                                         |
+| search       | `stella search matters`                    | search                      | paginated                               |
+| task         | `stella task delete`                       | matters_write               | destructive (needs `--yes` off a TTY)   |
+| task         | `stella task list`                         | read                        | paginated                               |
+| task         | `stella task save`                         | matters_write               |                                         |
+| template     | `stella template configure-fields`         | templates                   |                                         |
+| template     | `stella template create`                   | templates                   |                                         |
+| template     | `stella template fill`                     | templates                   |                                         |
+| template     | `stella template list`                     | templates                   | paginated                               |
+| template     | `stella template save-filled new-document` | documents_write + templates |                                         |
+| template     | `stella template save-filled new-version`  | documents_write + templates |                                         |
+| time-entry   | `stella time-entry delete`                 | billing_write               | destructive (needs `--yes` off a TTY)   |
+| time-entry   | `stella time-entry list`                   | read                        | paginated                               |
+| time-entry   | `stella time-entry save`                   | billing_write               |                                         |
+| usage        | `stella usage get`                         | read                        |                                         |
 
 ## Command flags
 
@@ -157,10 +157,10 @@ are omitted here.
   - `--decision-id` — Case-law decision ID (string)
   - `--direction` — Which side of the citation graph to read: 'cites' for the decisions this decision cites, 'cited_by' for the decisions that cite it. Citing is not agreeing: both sides carry negative treatments. (enum: cites, cited_by)
 - `stella case-law read`
-  - `--decision-id` — Case-law decision ID (string)
+  - `--decision-ids` — The decisions to read, at most 20 per call. Each id is answered on its own, so one unknown id does not sink the rest. (string-array, repeatable)
 - `stella case-law search`
-  - `--query` — Search query (string)
-  - `--country` — Required corpus country code (string)
+  - `--queries` — Several phrasings of ONE question, at most 5. Their pages are merged and deduplicated within the page, so a reformulation costs no extra round trip; one phrasing is a valid call. (string-array, repeatable)
+  - `--country` — Required corpus country code, uppercase ISO 3166-1 alpha-3. Admitted: CZE. (string)
   - optional: --court, --language, --decision-type, --source-id, --date-from, --date-to, --sort (relevance|newest)
 - `stella clause delete`
   - `--clause-id` — Clause id to delete (string)

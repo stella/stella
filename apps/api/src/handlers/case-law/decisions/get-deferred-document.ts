@@ -31,6 +31,29 @@ type DecisionRead = Awaited<ReturnType<typeof readDecisionHandler>>;
 type ReadableDecision = Extract<DecisionRead, { documentPending: boolean }>;
 
 /**
+ * Whether the caller's reads may persist demand. Only a caller we can
+ * attribute — a session, an agent token — may steer the ingestion
+ * queue; see `recordDemand` in `document-on-demand.ts`.
+ */
+export type DecisionReadCaller = "anonymous" | "attributed";
+
+/**
+ * Whether this read may fetch a document the ingestion queue has not stored
+ * yet. A fetch is a publisher crawl, so a caller reading many decisions at
+ * once reads the stored state first and spends its own fetch budget
+ * deliberately, rather than crawling once per id.
+ */
+export const DECISION_DOCUMENT_HYDRATION = {
+  /** Fetch the document when the read finds one pending. */
+  onDemand: "on-demand",
+  /** Answer from what is stored; a pending document stays pending. */
+  storedOnly: "stored-only",
+} as const;
+
+export type DecisionDocumentHydration =
+  (typeof DECISION_DOCUMENT_HYDRATION)[keyof typeof DECISION_DOCUMENT_HYDRATION];
+
+/**
  * A development process reading a shared corpus shows the parser in this
  * tree rather than the one that ingested the row; see `dev-reparse.ts`.
  */
@@ -56,16 +79,31 @@ const reparsedForDev = async (
     : { ...decision, documentAst, documentPending: false, fulltext: null };
 };
 
+/**
+ * Whether reads run against a shared public-law database rather than this
+ * process's own ingestion database. That mode is strictly read-side: no read
+ * may crawl a publisher or write through the local ingestion database, so the
+ * parser in this tree is applied to what is stored instead.
+ */
+export const readsSharedPublicLawCorpus = (): boolean =>
+  envBase.PUBLIC_LAW_DATABASE_URL !== undefined;
+
 const hydrate = async (
   decision: ReadableDecision,
   recordDemand: boolean,
+  documentHydration: DecisionDocumentHydration,
 ): Promise<ReadableDecision> => {
   // The local shared-corpus mode is strictly read-side. An incomplete remote
   // decision stays metadata-only instead of starting the ingestion path,
   // which would otherwise crawl the publisher and write through the local
-  // ingestion database.
-  if (envBase.PUBLIC_LAW_DATABASE_URL !== undefined) {
+  // ingestion database. Checked before the caller's fetch budget, because a
+  // caller that declines a publisher fetch is still owed the parser in this
+  // tree: the reparse is not the fetch it declined.
+  if (readsSharedPublicLawCorpus()) {
     return await reparsedForDev(decision);
+  }
+  if (documentHydration === DECISION_DOCUMENT_HYDRATION.storedOnly) {
+    return decision;
   }
 
   if (
@@ -121,21 +159,73 @@ const hydrate = async (
 export const hydrateDeferredDocument = async (
   read: DecisionRead,
   recordDemand: boolean,
+  documentHydration: DecisionDocumentHydration,
 ): Promise<DecisionRead> =>
-  "documentPending" in read ? await hydrate(read, recordDemand) : read;
-
-/**
- * Whether the caller's reads may persist demand. Only a caller we can
- * attribute — a session, an agent token — may steer the ingestion
- * queue; see `recordDemand` in `document-on-demand.ts`.
- */
-export type DecisionReadCaller = "anonymous" | "attributed";
+  "documentPending" in read
+    ? await hydrate(read, recordDemand, documentHydration)
+    : read;
 
 export type ReadGatedDecisionOptions = {
   caseLawDb: CaseLawPublicReadDb;
   locator: DecisionSubjectLocator;
   caller: DecisionReadCaller;
   citationsCursor?: string | null | undefined;
+  documentHydration: DecisionDocumentHydration;
+};
+
+/**
+ * Whether a read's document is stored, still coming, or not coming at all.
+ *
+ * `documentPending` alone cannot answer that. It stays set when a fetch was
+ * never possible: a source that does not defer its documents, a payload object
+ * storage refused (`documentReadFailed`), or a process reading a shared corpus,
+ * which does not crawl at all. A caller told "pending" for one of those waits
+ * for something that will never arrive, and if it withholds the stored
+ * metadata while waiting, the decision reads as missing rather than as one
+ * whose text is not served here.
+ *
+ * Derived from `hydrate`'s own gates, in the module that owns them, so the
+ * answer cannot drift from what a hydration attempt would actually do.
+ */
+export const DECISION_DOCUMENT_STATE = {
+  /** Stored and readable. */
+  available: "available",
+  /** Not stored, and a later fetch can still land it. */
+  pending: "pending",
+  /** Not stored, and nothing this deployment does will change that. */
+  unavailable: "unavailable",
+} as const;
+
+export type DecisionDocumentState =
+  (typeof DECISION_DOCUMENT_STATE)[keyof typeof DECISION_DOCUMENT_STATE];
+
+export const decisionDocumentState = (
+  read: DecisionRead,
+  /**
+   * Whether this process reads a shared corpus, passed in rather than read
+   * here: it is the one part of the answer that belongs to the deployment
+   * rather than to the row, and a caller that has it already should not make
+   * this a second reader of the environment.
+   */
+  readsSharedCorpus: boolean,
+): DecisionDocumentState => {
+  if (!("documentPending" in read) || !read.documentPending) {
+    return DECISION_DOCUMENT_STATE.available;
+  }
+  // A shared-corpus process is strictly read-side: the only thing that can
+  // change a stored document here is the development reparse, and a decision
+  // still pending after `hydrate` ran is one it did not apply to.
+  if (readsSharedCorpus) {
+    return DECISION_DOCUMENT_STATE.unavailable;
+  }
+  return isDeferredDocumentFetchable({
+    adapterKey: read.source.adapterKey,
+    documentUrl: read.documentUrl,
+    documentPending: read.documentPending,
+    documentReadFailed: read.documentReadFailed,
+  })
+    ? DECISION_DOCUMENT_STATE.pending
+    : DECISION_DOCUMENT_STATE.unavailable;
 };
 
 /**
@@ -154,6 +244,7 @@ export const readGatedDecisionWithDocument = async ({
   locator,
   caller,
   citationsCursor,
+  documentHydration,
 }: ReadGatedDecisionOptions): Promise<DecisionRead | null> => {
   const read = await withRedistributableSubject(
     caseLawDb,
@@ -163,5 +254,9 @@ export const readGatedDecisionWithDocument = async ({
 
   return read === null
     ? null
-    : await hydrateDeferredDocument(read, caller === "attributed");
+    : await hydrateDeferredDocument(
+        read,
+        caller === "attributed",
+        documentHydration,
+      );
 };

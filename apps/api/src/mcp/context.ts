@@ -14,7 +14,10 @@ import {
   createScopedDb,
 } from "@/api/db/scoped";
 import type { readGatedDecisionCitations } from "@/api/handlers/case-law/decisions/citation-passages";
-import type { readGatedDecisionWithDocument } from "@/api/handlers/case-law/decisions/get-deferred-document";
+import type {
+  readGatedDecisionWithDocument,
+  readsSharedPublicLawCorpus,
+} from "@/api/handlers/case-law/decisions/get-deferred-document";
 import type { searchDecisionsHandler } from "@/api/handlers/case-law/decisions/search";
 import type {
   resolveStatuteExpression,
@@ -121,6 +124,7 @@ export type McpRequestContext = {
     searchDecisionsHandler?: typeof searchDecisionsHandler;
     readGatedDecisionCitations?: typeof readGatedDecisionCitations;
     readGatedDecisionWithDocument?: typeof readGatedDecisionWithDocument;
+    readsSharedPublicLawCorpus?: typeof readsSharedPublicLawCorpus;
     searchLegislationHandler?: typeof searchLegislationHandler;
     resolveStatuteExpression?: typeof resolveStatuteExpression;
     resolveStatuteWorkVersion?: typeof resolveStatuteWorkVersion;

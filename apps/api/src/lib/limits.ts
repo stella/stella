@@ -440,6 +440,21 @@ export const LIMITS = {
   caseLawCitationPassageChars: 1200,
   /** Decision ASTs fetched at once while resolving one page of passages. */
   caseLawCitationPassageConcurrency: 6,
+  /**
+   * Phrasings one case-law search may carry. An agent reformulates rather
+   * than pages, so the tool takes the reformulations up front and merges
+   * their pages; past a handful the merged page stops being one question.
+   */
+  caseLawSearchQueriesMax: 5,
+  /** Decisions one batch read may ask for. */
+  caseLawDecisionBatchMax: 20,
+  /**
+   * Publisher document fetches one batch read may trigger. A decision whose
+   * document nobody has fetched yet costs a crawl, so a batch reads the
+   * stored state first and spends this budget on the pending ones; the rest
+   * are answered `pending` and fetched by their own single-id read.
+   */
+  caseLawDecisionBatchHydrationsMax: 3,
   caseLawSearchPageSizeDefault: 20,
   caseLawSearchPageSizeMax: 100,
   /** Max language variants for one decision's languageGroupKey. Bounds the

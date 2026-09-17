@@ -70,7 +70,12 @@ const notesFor = (spec: LeafCommandSpec): string => {
     parts.push("destructive (needs `--yes` off a TTY)");
   }
   if (spec.paginated) {
-    parts.push("paginated");
+    // The global-flags section lists `--all` for every paginated command, so a
+    // paginated leaf that does not offer it has to say so here: a per-entry
+    // cursor has no single page to follow.
+    parts.push(
+      spec.followable ? "paginated" : "paginated; per-entry cursor, no `--all`",
+    );
   }
   if (spec.windowedText) {
     parts.push("windowed text");

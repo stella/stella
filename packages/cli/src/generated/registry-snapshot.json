@@ -158,28 +158,33 @@
       "itemsKey": "results"
     },
     "name": "search_case_law",
-    "description": "Search case law within one country. Filters: court, language, dates (ISO YYYY-MM-DD), decision type, and source_id (the id a `facets.source` bucket carries in `value`). `sort` defaults to 'relevance'. Facets and total are returned on the first page only, and describe the whole result set. Each hit carries citationAuthority (the score the ranking blends in), matchingPassages (how many of its passages matched, at least 1) and a route-independent resourceName. Call read_case_law_citations for how a decision was treated by the courts citing it.",
+    "description": "Search case law within one country. `queries` carries several phrasings of one question and merges their results; matchedQueries names the phrasings that returned each hit. `limit` is the merged page, split evenly across the phrasings, so a page they agree on is shorter. Filters: court, language, dates (ISO YYYY-MM-DD), decision type, and source_id (the id a `facets.source` bucket carries in `value`). `sort` defaults to 'relevance'. Facets and total describe ONE query's whole set: first page of a single-query call only, null otherwise. Each hit also carries citationAuthority (the score the ranking blends in), matchingPassages (its passages that matched, at least 1) and a route-independent resourceName. Call read_case_law_citations for how the citing courts treated one.",
     "inputSchema": {
       "type": "object",
-      "required": ["query", "country"],
+      "required": ["queries", "country"],
       "additionalProperties": false,
       "properties": {
-        "query": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 500,
-          "description": "Search query"
+        "queries": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "minItems": 1,
+          "maxItems": 5,
+          "description": "Several phrasings of ONE question, at most 5. Their pages are merged and deduplicated within the page, so a reformulation costs no extra round trip; one phrasing is a valid call."
         },
         "limit": {
           "type": "integer",
           "minimum": 1,
           "maximum": 20,
-          "description": "Max results to return"
+          "description": "Merged-page size, split evenly across the queries (at least one hit each)"
         },
         "cursor": {
           "type": "string",
-          "maxLength": 128,
-          "description": "Opaque cursor from a previous search_case_law call"
+          "maxLength": 1330,
+          "description": "Opaque cursor from a previous search_case_law call. It continues the same queries, in the same order. It carries each query's own position and not what earlier pages emitted, so a decision several queries return can appear on more than one page: key results by decisionId."
         },
         "court": {
           "type": "string",
@@ -190,7 +195,7 @@
           "type": "string",
           "minLength": 2,
           "maxLength": 3,
-          "description": "Required corpus country code"
+          "description": "Required corpus country code, uppercase ISO 3166-1 alpha-3. Admitted: CZE."
         },
         "language": {
           "type": "string",
@@ -272,27 +277,32 @@
     "cli": {
       "command": ["case-law", "read"],
       "scope": "read",
-      "windowedText": {
-        "textPath": "decision.text"
-      }
+      "itemsKey": "items",
+      "perEntryCursor": true
     },
     "name": "read_case_law_decision",
-    "description": "Read a single case-law decision by its decision ID: its own text. Returns metadata, explicit decision text fields, plain text, source URLs, its route-independent resourceName, and bare citation ids. It does NOT say how other courts have treated this decision, and its citation entries carry no treatment and no surrounding text: to learn what the citing courts said, or what this decision relied on, call read_case_law_citations ({ decision_id: '<uuid>', direction: 'cited_by' }) instead. Long decision text and large citation lists are returned in windows; pass the returned nextCursor back as cursor to read more.",
+    "description": "Read case-law decisions by id. Every `decision_ids[]` entry is answered on its own, in input order, under `status`: `found` carries the decision (metadata, text fields, plain text, source URLs, resourceName, citation ids), while `not_found` (no such public decision) and `pending` (its publisher document is not stored yet) carry a message. Prefer one batched call over one per decision; the call's text budget is shared, so read one id alone for a whole decision's text. It does NOT say how the citing courts treated a decision: its citation entries carry no treatment and no surrounding text. For that call read_case_law_citations ({ decision_id: '<uuid>', direction: 'cited_by' }). Long text and citation lists come back in windows; pass an entry's nextCursor back as cursor with that one id.",
     "inputSchema": {
       "type": "object",
-      "required": ["decision_id"],
+      "required": ["decision_ids"],
       "additionalProperties": false,
       "properties": {
-        "decision_id": {
-          "type": "string",
-          "format": "uuid",
-          "description": "Case-law decision ID"
+        "decision_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Case-law decision ID"
+          },
+          "minItems": 1,
+          "maxItems": 20,
+          "description": "The decisions to read, at most 20 per call. Each id is answered on its own, so one unknown id does not sink the rest."
         },
         "cursor": {
           "type": "string",
           "minLength": 1,
           "maxLength": 512,
-          "description": "Opaque cursor from a previous call to read the next window of decision text and citations"
+          "description": "Opaque cursor from a previous call to read the next window of one decision's text and citations. Accepted only alongside a single decision id."
         }
       }
     },
