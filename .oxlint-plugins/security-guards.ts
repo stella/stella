@@ -63,6 +63,9 @@ const RAW_NAME_PROPS = new Set(["name", "filename", "fileName"]);
 //   href="https://..."                  (string literal)
 //   href={`/path/${id}`}                (template literal)
 //   href={sanitizeHref(url)}            (sanitizer call)
+//   href={readerHref(url, policy)}      (sanitizer call; it calls sanitizeHref
+//                                        and then withholds a host the
+//                                        document may not link to)
 // Flagged:
 //   href={node.href}       (data object property access)
 //   href={item.url}        (data object property access)
@@ -91,7 +94,14 @@ const isSafeTemplateLiteral = (node): boolean => {
   );
 };
 
-const isSanitizeHrefCall = (node): boolean => isCallTo(node, "sanitizeHref");
+// The sanitizers a sink may be fed from. `readerHref` is the legal reader's
+// own gate: it returns `sanitizeHref`'s answer and then withholds any host
+// outside the document's publisher, so it is never weaker than `sanitizeHref`.
+// A helper only earns a place here by calling one of these itself.
+const HREF_SANITIZERS = ["sanitizeHref", "readerHref"];
+
+const isSanitizeHrefCall = (node): boolean =>
+  HREF_SANITIZERS.some((sanitizer) => isCallTo(node, sanitizer));
 
 // ── Rule 3: no-unscoped-user-query ─────────────────────────────
 //

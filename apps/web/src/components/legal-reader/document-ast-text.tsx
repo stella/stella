@@ -20,11 +20,15 @@ import type {
   SearchMatchRange,
   SearchPiece,
 } from "@/components/legal-reader/reader-search";
+import {
+  readerHref,
+  useSourceLinkPolicy,
+} from "@/components/legal-reader/source-link-policy";
+import type { SourceLinkPolicy } from "@/components/legal-reader/source-link-policy";
 import Tooltip from "@/components/tooltip";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { normalizeOptionalArray } from "@/lib/arrays";
 import { detached } from "@/lib/detached";
-import { sanitizeHref } from "@/lib/sanitize-href";
 import { forceReflow } from "@/lib/utils";
 
 import "./reader.css";
@@ -69,6 +73,12 @@ type HighlightContext = {
   anchors: TextAnchor[];
   pieceId: string;
   ranges: SearchMatchRange[];
+  /**
+   * Which of the source document's own hyperlinks reach the page; see
+   * `source-link-policy.tsx`. Carried on the context rather than read per
+   * node, so every `href` this file writes is decided by one call.
+   */
+  sourceLinks: SourceLinkPolicy;
 };
 
 type OffsetRef = { value: number };
@@ -332,7 +342,11 @@ const renderInline = ({
   // rather than re-parsing the words around it; the words themselves are
   // the children and stay on the text axis untouched.
   if (node.type === "citation") {
-    if (sanitizeHref(node.href) === undefined) {
+    const citationHref = readerHref(node.href, context.sourceLinks);
+    if (citationHref === undefined) {
+      // Children keep the full context, anchors included: a reference whose
+      // source link the policy withholds is exactly the one our own statute
+      // or decision link should take over.
       return (
         <span data-cite={node.cite} key={key}>
           {renderInlineChildren({ children: node.children, context, offset })}
@@ -343,7 +357,7 @@ const renderInline = ({
       <a
         className="decoration-border underline underline-offset-2 hover:decoration-current"
         data-cite={node.cite}
-        href={sanitizeHref(node.href)}
+        href={readerHref(node.href, context.sourceLinks)}
         key={key}
         rel="noopener noreferrer"
         target="_blank"
@@ -363,9 +377,10 @@ const renderInline = ({
   // shown as a hanging margin marker plus a hair-thin tick at the exact
   // break point. Neither is selectable, so copies stay clean.
   if (node.type === "page-anchor") {
+    const pageHref = readerHref(node.href, context.sourceLinks);
     return (
       <Fragment key={key}>
-        {sanitizeHref(node.href) === undefined ? (
+        {pageHref === undefined ? (
           <span className="reader-page-marker" data-reader-chrome="">
             {node.label}
           </span>
@@ -373,7 +388,7 @@ const renderInline = ({
           <a
             className="reader-page-marker"
             data-reader-chrome=""
-            href={sanitizeHref(node.href)}
+            href={readerHref(node.href, context.sourceLinks)}
             rel="noopener noreferrer"
             target="_blank"
           >
@@ -385,7 +400,7 @@ const renderInline = ({
     );
   }
 
-  const safeHref = sanitizeHref(node.href);
+  const safeHref = readerHref(node.href, context.sourceLinks);
   if (!safeHref) {
     return (
       <Fragment key={key}>
@@ -408,7 +423,7 @@ const renderInline = ({
   // preview the note's text on hover.
   if (safeHref.startsWith("#")) {
     return (
-      <NoteRefLink href={safeHref} key={key}>
+      <NoteRefLink key={key} targetId={safeHref.slice(1)}>
         {children}
       </NoteRefLink>
     );
@@ -417,7 +432,7 @@ const renderInline = ({
   return (
     <a
       className="decoration-border underline underline-offset-2 hover:decoration-current"
-      href={sanitizeHref(node.href)}
+      href={readerHref(node.href, context.sourceLinks)}
       key={key}
       rel="noopener noreferrer"
       target="_blank"
@@ -459,10 +474,11 @@ const notePreviewOf = (targetId: string): string | null => {
  */
 const NoteRefLink = ({
   children,
-  href,
+  targetId,
 }: {
   children: ReactNode;
-  href: string;
+  /** The block this reference jumps to, without the `#`. */
+  targetId: string;
 }) => {
   const [preview, setPreview] = useState<string | null>(null);
   return (
@@ -477,16 +493,16 @@ const NoteRefLink = ({
         // the composition below; the aria-label satisfies the accessible
         // name statically.
         <a
-          aria-label={href.slice(1)}
+          aria-label={targetId}
           className="reader-note-ref"
-          href={sanitizeHref(href)}
+          href={`#${targetId}`}
           onClick={(event) => {
             // Scripted jump instead of native hash navigation: centers the
             // note, and the flash re-fires on every click — `:target` only
             // animates when the hash actually changes.
             event.preventDefault();
             const el = document.querySelector<HTMLElement>(
-              `#${CSS.escape(href.slice(1))}`,
+              `#${CSS.escape(targetId)}`,
             );
             if (!el) {
               return;
@@ -496,7 +512,7 @@ const NoteRefLink = ({
             forceReflow(el);
             el.dataset["highlight"] = "";
           }}
-          onMouseEnter={() => setPreview(notePreviewOf(href.slice(1)))}
+          onMouseEnter={() => setPreview(notePreviewOf(targetId))}
         />
       }
     >
@@ -544,20 +560,26 @@ const trimBareUrlPunctuation = (value: string): string => {
   return value.slice(0, end);
 };
 
+/**
+ * A bare URL printed in the text, auto-linked. Subject to the same policy as
+ * a link the AST carries: this manufactures a hyperlink the source document
+ * never marked up, so a vendor address typed into a court's prose would
+ * otherwise reach the page as a link with every `link` node already blocked.
+ */
 const bareUrlAnchors = (
   text: string,
   reserved: readonly TextAnchor[],
   initialOffset: number,
+  sourceLinks: SourceLinkPolicy,
 ): TextAnchor[] => {
   const anchors: TextAnchor[] = [];
   for (const match of text.matchAll(BARE_HTTP_URL_RE)) {
     const start = initialOffset + match.index;
     const url = trimBareUrlPunctuation(match[0]);
     const end = start + url.length;
-    const safeHref = sanitizeHref(url);
+    const safeHref = readerHref(url, sourceLinks);
     if (
       safeHref === undefined ||
-      url === "" ||
       reserved.some((anchor) => anchor.end > start && anchor.start < end)
     ) {
       continue;
@@ -568,7 +590,7 @@ const bareUrlAnchors = (
       render: (children) => (
         <a
           className="text-primary decoration-primary/60 hover:decoration-primary underline underline-offset-2"
-          href={sanitizeHref(url)}
+          href={readerHref(url, sourceLinks)}
           rel="noopener noreferrer"
           target="_blank"
         >
@@ -597,11 +619,13 @@ export const InlineContent = ({
   pieceId: string;
   ranges: SearchMatchRange[];
 }) => {
+  const sourceLinks = useSourceLinkPolicy();
   const offset: OffsetRef = { value: initialOffset };
   const automaticLinks = bareUrlAnchors(
     inlinesToPlainText(inlines),
     anchors,
     initialOffset,
+    sourceLinks,
   );
   const context: HighlightContext = {
     anchors: [...anchors, ...automaticLinks].sort(
@@ -610,6 +634,7 @@ export const InlineContent = ({
     pieceId,
     ranges,
     activeMatchIndex,
+    sourceLinks,
   };
 
   return <>{renderInlineChildren({ children: inlines, context, offset })}</>;

@@ -85,7 +85,8 @@ const renderDecision = (abstract: string): string =>
 describe("editorial legal text annotations", () => {
   test("every rendered source block has a stable selection anchor", () => {
     const abstract =
-      "Analytická právní věta\n\nText with http://example.test/source.";
+      "Analytická právní věta\n\nText with https://rozhodnuti.nsoud.cz/source " +
+      "and https://statutes.example.com/act.";
     const markup = renderDecision(abstract);
 
     for (const block of editorialSupplementBlocks(abstract)) {
@@ -93,7 +94,11 @@ describe("editorial legal text annotations", () => {
         `data-anchor="supplement-abstract:${String(block.start)}"`,
       );
     }
-    expect(markup).toContain('href="http://example.test/source"');
+    // The publisher's own address auto-links; an address outside the corpus
+    // stays the words the court printed. See `source-link-policy.tsx`.
+    expect(markup).toContain('href="https://rozhodnuti.nsoud.cz/source"');
+    expect(markup).not.toContain('href="https://statutes.example.com/act"');
+    expect(markup).toContain("https://statutes.example.com/act");
     expect(markup).not.toContain(messages.caseLaw.viewer.provisionsCited);
   });
 });
