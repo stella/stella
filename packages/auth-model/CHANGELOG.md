@@ -1,5 +1,11 @@
 # @stll/auth-model
 
+## 0.2.2
+
+### Patch Changes
+
+- [#3460](https://github.com/stella/stella/pull/3460) [`b9b6e04`](https://github.com/stella/stella/commit/b9b6e045f32d43950980cb3472dba75e5bfb8b47) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Record `account.issuer` as nullable in the database and key accounts by `(providerId, accountId)`, the identity index Better Auth links accounts by.
+
 ## 0.2.1
 
 ### Patch Changes
