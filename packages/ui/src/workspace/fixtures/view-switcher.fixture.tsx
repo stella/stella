@@ -11,6 +11,7 @@ const WorkspaceViewSwitcherFixture = () => {
   const query = new URLSearchParams(window.location.search);
   const direction = query.has("rtl") ? "rtl" : "ltr";
   const dark = query.has("dark");
+  const overflow = query.has("overflow");
   const views = direction === "rtl" ? RTL_VIEWS : LTR_VIEWS;
   const [activeViewId, setActiveViewId] = useState("table");
 
@@ -29,7 +30,10 @@ const WorkspaceViewSwitcherFixture = () => {
   return (
     <DirectionProvider direction={direction}>
       <main className="flex flex-col gap-4 p-4">
-        <div className="w-[640px]" data-workspace-switcher>
+        <div
+          className={overflow ? "w-[240px]" : "w-[640px]"}
+          data-workspace-switcher
+        >
           <WorkspaceViewSwitcher
             activeViewId={activeViewId}
             addControl={<button type="button">{addViewLabel}</button>}

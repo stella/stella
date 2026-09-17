@@ -238,7 +238,7 @@ export const WorkspaceViewSwitcher = <View extends WorkspaceViewSwitcherItem>({
         </Tabs>
       </div>
       {addControl === null || addControl === undefined ? null : (
-        <div className="flex shrink-0 translate-y-1 items-center">
+        <div className="border-border flex shrink-0 translate-y-1 items-center border-s ps-1">
           {addControl}
         </div>
       )}
