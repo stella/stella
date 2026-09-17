@@ -56,7 +56,8 @@ export const MetadataPopover = <TRow extends TableRowData = TableTreeNode>({
         <div className="flex flex-col p-1">
           <PinProperty column={column} />
           <Button
-            className="justify-start font-semibold"
+            className="justify-start font-normal"
+            size="sm"
             onClick={() => column.toggleVisibility(false)}
             variant="ghost"
           >
