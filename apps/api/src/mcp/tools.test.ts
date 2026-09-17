@@ -1002,11 +1002,15 @@ describe("OpenAI-compatible MCP tools", () => {
           // Derived from the engine cursor codec's own maximum times the query
           // cap, so the tool takes back the longest cursor it can emit.
           maxLength: 1330,
+          // An empty string is not a page boundary this tool ever issued, and
+          // rejecting it is what makes the factory read it as absent.
+          minLength: 1,
         },
         court: {
           type: "string",
           description: "Filter by court name",
           maxLength: 512,
+          minLength: 1,
         },
         country: {
           type: "string",
@@ -1027,11 +1031,13 @@ describe("OpenAI-compatible MCP tools", () => {
           type: "string",
           description: "Filter by language code",
           maxLength: 8,
+          minLength: 1,
         },
         decision_type: {
           type: "string",
           description: "Filter by decision type",
           maxLength: 128,
+          minLength: 1,
         },
         source_id: {
           type: "string",
@@ -1055,6 +1061,11 @@ describe("OpenAI-compatible MCP tools", () => {
           enum: [...SEARCH_SORTS],
           description:
             "Result order; defaults to 'relevance'. 'relevance' blends text match with citation authority and court rank; 'newest' orders by decision date and returns only dated decisions. A query naming a decision outright (docket number, ECLI) is answered by identity lookup, which ignores this option.",
+        },
+        strict: {
+          type: "boolean",
+          description:
+            "Require every word of each query, function words included. Off by default: a query phrased as a question carries words no judgment is written with, and `searches[].queryUsed` reports what was required. Pass true when every word matters.",
         },
       },
       required: ["queries", "country"],
@@ -1560,6 +1571,8 @@ describe("OpenAI-compatible MCP tools", () => {
       ],
       nextCursor: "cursor_2",
       total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 1),
+      queryUsed: "shareholder dispute",
+      warnings: [],
     });
 
     const context = createContext();
@@ -1608,6 +1621,13 @@ describe("OpenAI-compatible MCP tools", () => {
         language: [{ count: 1, label: null, value: "cs" }],
       },
       nextCursor: "cursor_2",
+      searches: [
+        {
+          query: "shareholder dispute",
+          queryUsed: "shareholder dispute",
+          warnings: [],
+        },
+      ],
       results: [
         {
           appUrl: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/cs/stable-official-slug`,
@@ -1663,6 +1683,8 @@ describe("OpenAI-compatible MCP tools", () => {
       ],
       nextCursor: null,
       total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 1),
+      queryUsed: "shareholder dispute",
+      warnings: [],
     });
 
     const result = await handleMcpToolCall({
@@ -1681,6 +1703,13 @@ describe("OpenAI-compatible MCP tools", () => {
         language: [],
       },
       nextCursor: null,
+      searches: [
+        {
+          query: "shareholder dispute",
+          queryUsed: "shareholder dispute",
+          warnings: [],
+        },
+      ],
       results: [
         {
           appUrl: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/stable-official-slug`,
@@ -2002,6 +2031,8 @@ describe("OpenAI-compatible MCP tools", () => {
               ],
         nextCursor: null,
         total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 3),
+        queryUsed: query,
+        warnings: [],
       }),
     );
 
@@ -2053,6 +2084,8 @@ describe("OpenAI-compatible MCP tools", () => {
         hits: [createCaseLawHit(`dec-${query}`, query)],
         nextCursor: query === "first" ? "engine-first-2" : null,
         total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 1),
+        queryUsed: query,
+        warnings: [],
       }),
     );
 
@@ -2095,12 +2128,16 @@ describe("OpenAI-compatible MCP tools", () => {
     // envelope this tool can hand out, and the input schema has to take it
     // back: a cap guessed below the emitted length refuses the second page.
     const longestEngineCursor = "c".repeat(CORPUS_SEARCH_CURSOR_MAX_LENGTH);
-    searchDecisionsHandlerMock.mockResolvedValue({
-      facets: null,
-      hits: [createCaseLawHit("dec-a", "a")],
-      nextCursor: longestEngineCursor,
-      total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 1),
-    });
+    searchDecisionsHandlerMock.mockImplementation(
+      async ({ query }: { query: string }) => ({
+        facets: null,
+        hits: [createCaseLawHit("dec-a", "a")],
+        nextCursor: longestEngineCursor,
+        total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 1),
+        queryUsed: query,
+        warnings: [],
+      }),
+    );
 
     const queries = Array.from(
       { length: LIMITS.caseLawSearchQueriesMax },
@@ -2271,6 +2308,8 @@ describe("OpenAI-compatible MCP tools", () => {
         ],
         nextCursor: null,
         total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 1),
+        queryUsed: "shareholder dispute",
+        warnings: [],
       });
 
       const result = await handleMcpToolCall({
@@ -3152,6 +3191,8 @@ describe("OpenAI-compatible MCP tools", () => {
       hits: [],
       nextCursor: null,
       total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 0),
+      queryUsed: "shareholder dispute",
+      warnings: [],
     });
 
     await handleMcpToolCall({

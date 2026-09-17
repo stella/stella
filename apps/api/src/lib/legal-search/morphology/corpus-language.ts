@@ -31,6 +31,22 @@ const CORPUS_MORPHOLOGY_LANGUAGE_BY_JURISDICTION = {
 } as const satisfies Record<CaseLawJurisdiction, MorphologyLanguage | null>;
 
 /**
+ * The languages the corpus's own jurisdictions are written in, deduplicated.
+ *
+ * Derived from the map above rather than hand-listed: a companion map over
+ * these languages (function words, say) then fails to compile when a new
+ * single-language jurisdiction lands, instead of inheriting whatever the
+ * absent entry would have meant.
+ */
+export const CORPUS_MORPHOLOGY_LANGUAGES = [
+  ...new Set(
+    Object.values(CORPUS_MORPHOLOGY_LANGUAGE_BY_JURISDICTION).filter(
+      (language) => language !== null,
+    ),
+  ),
+].toSorted();
+
+/**
  * Which language a jurisdiction's text stems against, or null. An unscoped
  * search spans every jurisdiction of a generation, so no one language
  * describes its text and it stems against none.

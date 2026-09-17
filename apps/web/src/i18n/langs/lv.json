@@ -707,6 +707,18 @@
       "description": "Neizdevās sazināties ar tiesu prakses meklēšanu. Jūsu vaicājums saglabājas adreses joslā, mēģiniet vēlreiz pēc brīža.",
       "title": "Meklēšana īslaicīgi nav pieejama"
     },
+    "searchWarnings": {
+      "noHits": {
+        "hint": "Mēģiniet mazāk vai citus vārdus: jēdzienus, ko lietotu nolēmums, nevis teikumu, kādā tiek uzdots jautājums.",
+        "message": "Nekas neatbilst vārdiem, ko pieprasīja šī meklēšana."
+      },
+      "noHitsFiltered": {
+        "hint": "Noņemiet vai paplašiniet filtru un meklējiet vēlreiz.",
+        "message": "Nekas neatbilst izvēlētajiem filtriem."
+      },
+      "resultsFor": "Rezultāti vaicājumam: {query}",
+      "searchEveryWord": "Meklēt visus vārdus"
+    },
     "showWholeHeadnote": "Rādīt visu kopsavilkumu",
     "sort": {
       "newest": "Jaunākie",

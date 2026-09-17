@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 
 import { corpusTokens } from "@/api/lib/legal-search/corpus-tokens";
+import { functionWordKey } from "@/api/lib/legal-search/morphology/function-words";
 import type { MorphologyLanguage } from "@/api/lib/legal-search/morphology/stem";
 import { stemCorpusText } from "@/api/lib/legal-search/morphology/stem-text";
 
@@ -107,6 +108,81 @@ export const tokenizeCorpusFreeText = (text: string): CorpusQueryToken[] => {
 
   return tokens;
 };
+
+/**
+ * What a query requires and what it stopped requiring.
+ *
+ * `dropped` carries the words as the reader wrote them, not their comparison
+ * keys: it is read back to the reader ("searched without: jak, musí, být")
+ * and quoting a normalised form at someone who typed something else reads as
+ * a different query than the one they ran.
+ */
+export type CorpusQueryPartition = {
+  /** The tokens the clause is built from, in input order. */
+  required: readonly CorpusQueryToken[];
+  /** Term tokens left out as function words, in input order. */
+  dropped: readonly string[];
+};
+
+/**
+ * Split a query's tokens into the ones it requires and the function words it
+ * does not.
+ *
+ * The one owner of the rule, called both by the clause builder and by
+ * whatever reports the query back to its caller, so the clause and the
+ * report cannot disagree about which words were required.
+ *
+ * Three things are never dropped. A phrase, because its words are what it
+ * asked to match adjacently, and dropping one silently changes the phrase
+ * ({@link TOKEN_EXPANSION_POLICY} keeps a phrase verbatim for the same
+ * reason). Anything at all when `functionWords` is null: no language was
+ * resolved, so no list applies. And the last remaining token — a query made
+ * only of function words ("jak a kdy") keeps every one of them and stays as
+ * strict as it is today, because a clause built from nothing is not a
+ * broader search, it is no search.
+ */
+export const partitionCorpusFunctionWords = (
+  tokens: readonly CorpusQueryToken[],
+  functionWords: ReadonlySet<string> | null,
+): CorpusQueryPartition => {
+  if (functionWords === null) {
+    return { required: tokens, dropped: [] };
+  }
+  const required: CorpusQueryToken[] = [];
+  const dropped: string[] = [];
+  for (const token of tokens) {
+    if (
+      token.type === "term" &&
+      functionWords.has(functionWordKey(token.value))
+    ) {
+      dropped.push(token.value);
+      continue;
+    }
+    required.push(token);
+  }
+  if (required.length === 0) {
+    return { required: tokens, dropped: [] };
+  }
+  return { required, dropped };
+};
+
+/**
+ * Tokens written back as a query string.
+ *
+ * The inverse of {@link tokenizeCorpusFreeText}, and a fixed point of it: a
+ * phrase keeps its quotes, so re-tokenising this string yields the tokens it
+ * was built from. That is what lets a caller send a reported `queryUsed`
+ * back as `query` and get the same clause, instead of a query whose phrases
+ * have decayed into loose words.
+ */
+export const formatCorpusQueryTokens = (
+  tokens: readonly CorpusQueryToken[],
+): string =>
+  tokens
+    .map((token) =>
+      token.type === "phrase" ? `"${token.value}"` : token.value,
+    )
+    .join(" ");
 
 /**
  * Extra surface forms to accept alongside a term the reader typed, most
@@ -345,6 +421,12 @@ export type CorpusFreeTextOptions = {
    * without it.
    */
   keywordFields?: readonly string[] | undefined;
+  /**
+   * Words this query may stop requiring, in the language it is asked in.
+   * Null leaves every token required, which is what a query with no
+   * resolved language, an identifier, or `strict` asks for.
+   */
+  functionWords?: ReadonlySet<string> | null | undefined;
 };
 
 /**
@@ -380,15 +462,19 @@ export const corpusFreeTextClause = (
     stemming = null,
     surfaceFields = [],
     keywordFields = [],
+    functionWords = null,
   }: CorpusFreeTextOptions = {},
 ): string | null => {
-  const tokens = tokenizeCorpusFreeText(text);
-  if (tokens.length === 0) {
+  const { required } = partitionCorpusFunctionWords(
+    tokenizeCorpusFreeText(text),
+    functionWords,
+  );
+  if (required.length === 0) {
     return null;
   }
 
   const budgeted = spendLeafBudget(
-    tokens.map((token) => ({
+    required.map((token) => ({
       alternatives: {
         stem: stemLeaves(token.value, stemming),
         surface: [
@@ -437,6 +523,7 @@ export type CaseLawCorpusQueryOptions = {
   stemming?: CorpusStemming | null | undefined;
   surfaceFields?: readonly string[] | undefined;
   keywordFields?: readonly string[] | undefined;
+  functionWords?: ReadonlySet<string> | null | undefined;
 };
 
 /**
@@ -453,12 +540,14 @@ export const caseLawCorpusQuery = ({
   stemming,
   surfaceFields,
   keywordFields,
+  functionWords,
 }: CaseLawCorpusQueryOptions): string | null => {
   const freeText = corpusFreeTextClause(text, {
     expand,
     stemming,
     surfaceFields,
     keywordFields,
+    functionWords,
   });
   if (freeText === null) {
     return null;

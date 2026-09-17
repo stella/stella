@@ -490,6 +490,15 @@ export const generatedRouteMap: RouteNode = {
                   "Result order; defaults to 'relevance'. 'relevance' blends text match with citation authority and court rank; 'newest' orders by decision date and returns only dated decisions. A query naming a decision outright (docket number, ECLI) is answered by identity lookup, which ignores this option.",
                 required: false,
               },
+              {
+                flag: "--strict",
+                prop: "strict",
+                kind: "boolean",
+                repeatable: false,
+                description:
+                  "Require every word of each query, function words included. Off by default: a query phrased as a question carries words no judgment is written with, and `searches[].queryUsed` reports what was required. Pass true when every word matters.",
+                required: false,
+              },
             ],
             inputOnly: [],
             paginated: true,
@@ -524,12 +533,14 @@ export const generatedRouteMap: RouteNode = {
                 },
                 cursor: {
                   type: "string",
+                  minLength: 1,
                   maxLength: 1330,
                   description:
                     "Opaque cursor from a previous search_case_law call. It continues the same queries, in the same order. It carries each query's own position and not what earlier pages emitted, so a decision several queries return can appear on more than one page: key results by decisionId.",
                 },
                 court: {
                   type: "string",
+                  minLength: 1,
                   maxLength: 512,
                   description: "Filter by court name",
                 },
@@ -549,11 +560,13 @@ export const generatedRouteMap: RouteNode = {
                 },
                 language: {
                   type: "string",
+                  minLength: 1,
                   maxLength: 8,
                   description: "Filter by language code",
                 },
                 decision_type: {
                   type: "string",
+                  minLength: 1,
                   maxLength: 128,
                   description: "Filter by decision type",
                 },
@@ -581,6 +594,11 @@ export const generatedRouteMap: RouteNode = {
                   type: "string",
                   description:
                     "Result order; defaults to 'relevance'. 'relevance' blends text match with citation authority and court rank; 'newest' orders by decision date and returns only dated decisions. A query naming a decision outright (docket number, ECLI) is answered by identity lookup, which ignores this option.",
+                },
+                strict: {
+                  type: "boolean",
+                  description:
+                    "Require every word of each query, function words included. Off by default: a query phrased as a question carries words no judgment is written with, and `searches[].queryUsed` reports what was required. Pass true when every word matters.",
                 },
               },
             },
@@ -713,7 +731,7 @@ export const generatedRouteMap: RouteNode = {
             commandPath: ["case-law", "citations"],
             toolName: "read_case_law_citations",
             description:
-              "What the courts citing a decision said about it (followed, distinguished, overruled), or what it cited.",
+              "How the decisions citing one stood to it, or what it cited.",
             flags: [
               {
                 flag: "--decision-id",
@@ -897,6 +915,7 @@ export const generatedRouteMap: RouteNode = {
                 },
                 cursor: {
                   type: "string",
+                  minLength: 1,
                   maxLength: 512,
                   description:
                     "Opaque cursor from a previous list_documents call to fetch the next page",
@@ -991,6 +1010,7 @@ export const generatedRouteMap: RouteNode = {
                 },
                 versions_cursor: {
                   type: "string",
+                  minLength: 1,
                   maxLength: 512,
                   description:
                     "Cursor from a previous call for the next page of version history",
@@ -1275,6 +1295,7 @@ export const generatedRouteMap: RouteNode = {
                     },
                     cursor: {
                       type: "string",
+                      minLength: 1,
                       maxLength: 512,
                       description:
                         "Opaque cursor from a previous list_properties call to fetch the next page",
@@ -1561,6 +1582,8 @@ export const generatedRouteMap: RouteNode = {
                 },
                 cursor: {
                   type: "string",
+                  minLength: 1,
+                  maxLength: 512,
                   description: "Opaque cursor from the previous page",
                 },
                 limit: {
@@ -2544,16 +2567,19 @@ export const generatedRouteMap: RouteNode = {
                 },
                 document_type: {
                   type: "string",
+                  minLength: 1,
                   maxLength: 128,
                   description: "Filter by document type",
                 },
                 status: {
                   type: "string",
+                  minLength: 1,
                   maxLength: 32,
                   description: "Filter by publication status",
                 },
                 language: {
                   type: "string",
+                  minLength: 1,
                   maxLength: 8,
                   description: "Filter by language code",
                 },
@@ -4086,6 +4112,7 @@ export const generatedRouteMap: RouteNode = {
                 },
                 cursor: {
                   type: "string",
+                  minLength: 1,
                   maxLength: 512,
                   description:
                     "Opaque cursor from a previous list_tasks call to fetch the next page",
@@ -4496,6 +4523,7 @@ export const generatedRouteMap: RouteNode = {
                 },
                 cursor: {
                   type: "string",
+                  minLength: 1,
                   maxLength: 512,
                   description:
                     "Opaque cursor from a previous list_clauses call to fetch the next page",
@@ -4834,6 +4862,7 @@ export const generatedRouteMap: RouteNode = {
                 },
                 cursor: {
                   type: "string",
+                  minLength: 1,
                   maxLength: 512,
                   description:
                     "Opaque cursor from a previous list_playbooks call to fetch the next page",
@@ -5027,6 +5056,7 @@ export const generatedRouteMap: RouteNode = {
                 },
                 cursor: {
                   type: "string",
+                  minLength: 1,
                   maxLength: 512,
                   description:
                     "Opaque cursor from a previous list_time_entries call to fetch the next page",
@@ -5431,6 +5461,7 @@ export const generatedRouteMap: RouteNode = {
                 },
                 cursor: {
                   type: "string",
+                  minLength: 1,
                   maxLength: 512,
                   description:
                     "Opaque cursor from a previous list_invoices call to fetch the next page",

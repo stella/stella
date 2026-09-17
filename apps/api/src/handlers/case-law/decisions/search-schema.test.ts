@@ -7,6 +7,7 @@ import {
   TEXT_FIELD_TYPE,
 } from "@stll/api-contract/case-law-text-field";
 import {
+  CASE_LAW_SEARCH_WARNING_CODES,
   SEARCH_EXCERPTS,
   SEARCH_TOTAL_NOT_COUNTED,
   type SearchExcerpt,
@@ -75,6 +76,8 @@ const validResponse = {
   facets: null,
   total: SEARCH_TOTAL_NOT_COUNTED,
   nextCursor: null,
+  queryUsed: "nájemné výpověď",
+  warnings: [],
 };
 
 const bucket = (value: string) => ({ value, label: null, count: 3 });
@@ -151,6 +154,31 @@ describe("case-law search response schema", () => {
       Value.Check(searchDecisionsSuccessResponseSchema, validResponse),
     ).toBe(true);
   });
+
+  test("accepts every declared warning code", () => {
+    for (const code of CASE_LAW_SEARCH_WARNING_CODES) {
+      expect(
+        Value.Check(searchDecisionsSuccessResponseSchema, {
+          ...validResponse,
+          warnings: [{ code, message: "Something", hint: "Do something" }],
+        }),
+      ).toBe(true);
+    }
+  });
+
+  // The set is closed at the boundary, so a code the web has no wording for
+  // cannot reach it: an unrenderable warning is worse than none.
+  test.each(["relaxed", "", "NO_HITS", 1, null])(
+    "rejects the undeclared warning code %p",
+    (code) => {
+      expect(
+        Value.Check(searchDecisionsSuccessResponseSchema, {
+          ...validResponse,
+          warnings: [{ code, message: "Something", hint: "Do something" }],
+        }),
+      ).toBe(false);
+    },
+  );
 
   // Page one carries the facets; a cursor page carries null, because the
   // counts describe the result set and do not change as a reader pages.

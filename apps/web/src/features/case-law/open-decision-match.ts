@@ -13,6 +13,7 @@ import type { SearchExcerpt } from "@stll/api-contract/search";
 import {
   decisionDateRange,
   decisionSortOrder,
+  isStrictSearch,
 } from "@/features/case-law/case-law-index-search.logic";
 import type { CaseLawIndexSearch } from "@/features/case-law/case-law-index-search.logic";
 import { fromCaseLawCountryParam } from "@/features/case-law/case-law-jurisdiction";
@@ -81,7 +82,18 @@ type DecisionFiltersOptions = {
 };
 
 export const createDecisionFiltersFromSearch = (
-  { country, court, from, lang, q, sort, to, type, year }: CaseLawSearchScope,
+  {
+    country,
+    court,
+    from,
+    lang,
+    q,
+    sort,
+    strict,
+    to,
+    type,
+    year,
+  }: CaseLawSearchScope,
   { excerpt }: DecisionFiltersOptions,
 ): DecisionListFilters => {
   const scope = caseLawCountryScope(country);
@@ -102,8 +114,15 @@ export const createDecisionFiltersFromSearch = (
     ...(type ? { decisionType: type } : {}),
     ...(lang ? { language: lang } : {}),
     // An order is a property of a ranked answer, so a browse listing carries
-    // none: it is newest-first by definition.
-    ...(search === undefined ? {} : { search, sort: decisionSortOrder(sort) }),
+    // none: it is newest-first by definition. Requiring every word is a
+    // property of a query, so a listing carries that no more than an order.
+    ...(search === undefined
+      ? {}
+      : {
+          search,
+          sort: decisionSortOrder(sort),
+          ...(isStrictSearch(strict) ? { strict: true } : {}),
+        }),
   };
 };
 

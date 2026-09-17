@@ -72,6 +72,41 @@ export const countedSearchTotal = (
   return { type, count };
 };
 
+/**
+ * What a case-law search answered that its caller did not ask for.
+ *
+ * Here rather than in the API for the same reason the orders above are: both
+ * the search response and the web that renders it declare these, and a
+ * second list of them is how a warning the API emits stops being a warning
+ * the page knows how to show. The wording belongs to each surface — the API
+ * writes an agent-facing sentence, the web renders a translated one — so
+ * only the codes are shared.
+ *
+ * - `function_words_optional`: the query carried words that are grammar
+ *   rather than subject matter, and did not require them. The response's
+ *   `queryUsed` is what it did require.
+ * - `no_hits`: nothing matched the words the query required.
+ * - `no_hits_filtered`: nothing matched under the filters the request
+ *   narrowed with, which is a different answer from `no_hits` because the
+ *   caller can drop a filter.
+ */
+export const CASE_LAW_SEARCH_WARNING_CODES = [
+  "function_words_optional",
+  "no_hits",
+  "no_hits_filtered",
+] as const;
+
+export type CaseLawSearchWarningCode =
+  (typeof CASE_LAW_SEARCH_WARNING_CODES)[number];
+
+export type CaseLawSearchWarning = {
+  readonly code: CaseLawSearchWarningCode;
+  /** What happened, in the caller's own terms. */
+  readonly message: string;
+  /** The concrete next call, never a restatement of the message. */
+  readonly hint: string;
+};
+
 export const GLOBAL_SEARCH_RESULT_TYPES = [
   "matter",
   "contact",

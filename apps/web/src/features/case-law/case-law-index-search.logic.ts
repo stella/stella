@@ -25,6 +25,11 @@ export type CaseLawIndexSearch = {
   lang?: string | undefined;
   q?: string | undefined;
   sort?: SearchSort | undefined;
+  /**
+   * Require every word the query carries, as a link beside the results asks
+   * for it. Absent while the search may drop a word, which is the default.
+   */
+  strict?: StrictSearchValue | undefined;
   /** The end of the decision-date range, inclusive. */
   to?: string | undefined;
   type?: string | undefined;
@@ -40,6 +45,32 @@ export type CaseLawIndexSearch = {
 export const CASE_LAW_FILTER_KEYS = ["court", "lang", "type"] as const;
 
 export type CaseLawFilterKey = (typeof CASE_LAW_FILTER_KEYS)[number];
+
+/**
+ * How the URL spells a search that requires every word it carries.
+ *
+ * A switch a reader lands on from a link beside their results, so it is
+ * spelled the way a link spells one rather than the way a caller serialises a
+ * boolean; and it is absent while it is off, so the lenient search everyone
+ * gets by default keeps one address.
+ */
+export const STRICT_SEARCH_VALUE = "1";
+
+export type StrictSearchValue = typeof STRICT_SEARCH_VALUE;
+
+/**
+ * The value a URL asks strict matching with. A public link may be typed or
+ * crawled, so any other spelling is the default search rather than an error.
+ */
+export const strictSearchValue = (
+  value: string | undefined,
+): StrictSearchValue | undefined =>
+  value === STRICT_SEARCH_VALUE ? STRICT_SEARCH_VALUE : undefined;
+
+/** Whether a URL asks the search to require every word its query carries. */
+export const isStrictSearch = (
+  strict: StrictSearchValue | undefined,
+): boolean => strict !== undefined;
 
 const validDecisionYear = (year: string | undefined): string | undefined =>
   /^\d{4}$/u.test(year ?? "") ? year : undefined;
@@ -176,7 +207,7 @@ export const decisionSortOrder = (sort: SearchSort | undefined): SearchSort =>
 export const createCaseLawIndexPath = (
   search: CaseLawIndexSearch,
 ): `/law/cases${string}` => {
-  const { country, court, lang, q, sort, type } = search;
+  const { country, court, lang, q, sort, strict, type } = search;
   const params = new URLSearchParams();
   const range = decisionDateRange(search);
   if (country) {
@@ -201,6 +232,11 @@ export const createCaseLawIndexPath = (
   }
   if (q) {
     params.set("q", q);
+  }
+  // A strict search requires words the same query answered without, so it is
+  // a different result set and its address says so.
+  if (isStrictSearch(strict)) {
+    params.set("strict", STRICT_SEARCH_VALUE);
   }
   const sortParam = decisionSortParam(sort);
   if (sortParam !== undefined) {

@@ -10,6 +10,7 @@
  */
 
 import { useMemo, useState } from "react";
+import type { ReactNode } from "react";
 
 import { useTable } from "@tanstack/react-table";
 import type { RowSelectionState } from "@tanstack/react-table";
@@ -60,6 +61,11 @@ const withHeadnoteToggled = (
 type DecisionTableProps = {
   decisions: readonly Decision[];
   /**
+   * What stands where the rows would be when there are none, for a screen
+   * that can say why. The plain "no results" line otherwise.
+   */
+  emptyState?: ReactNode | undefined;
+  /**
    * How many rows the page being loaded will hold, so the waiting table stands
    * in at that size. Defaults to a compact stand-in where a screen cannot say.
    */
@@ -90,6 +96,7 @@ type DecisionTableProps = {
 
 export const DecisionTable = ({
   decisions,
+  emptyState,
   expectedRowCount,
   extraColumns,
   findHighlight = null,
@@ -228,11 +235,13 @@ export const DecisionTable = ({
             />
           </FindHighlightScope>
         </DecisionRenderScope>
-        {rows.length === 0 && !isLoading && (
-          <div className="text-muted-foreground p-4 text-sm">
-            {t("common.noResults")}
-          </div>
-        )}
+        {rows.length === 0 &&
+          !isLoading &&
+          (emptyState ?? (
+            <div className="text-muted-foreground p-4 text-sm">
+              {t("common.noResults")}
+            </div>
+          ))}
       </div>
     </MobileTableOrientationGate>
   );

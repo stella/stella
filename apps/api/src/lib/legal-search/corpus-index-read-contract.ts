@@ -14,6 +14,8 @@ import {
   corpusMorphologyLanguage,
   documentMorphologyLanguage,
 } from "@/api/lib/legal-search/morphology/corpus-language";
+import { functionWordsFor } from "@/api/lib/legal-search/morphology/function-words";
+import type { MorphologyLanguage } from "@/api/lib/legal-search/morphology/stem";
 
 /**
  * The serving case-law generation cannot answer a case-law read: its index
@@ -180,6 +182,19 @@ export type CaseLawCorpusQueryFields = {
   surfaceFields: readonly string[];
   keywordFields: readonly string[];
   stemming: CorpusStemming | null;
+  /**
+   * The words a query in this language may stop requiring, or null where it
+   * requires every one it carries.
+   *
+   * Resolved beside the stemming language and from the same answer, because
+   * both are the same question — which language is the reader writing in —
+   * and two resolvers would eventually disagree. It does not depend on the
+   * generation's stem fields the way {@link CorpusStemming} does: dropping a
+   * function word is a decision about the reader's text, not about a field
+   * the index declares, so a generation that maps no stem companion still
+   * gets it.
+   */
+  functionWords: ReadonlySet<string> | null;
 };
 
 /**
@@ -192,6 +207,10 @@ export type CaseLawCorpusQueryFields = {
  * prevent. A generation that maps nothing extra yields the query it yields
  * today.
  *
+ * {@link caseLawQueryLanguage} is the one answer to which language the
+ * reader is writing in, because two answers to that question is how the
+ * stemming and the function-word exclusion drift apart.
+ *
  * The stemming language comes from the request's `language` filter first,
  * because that filter names the documents whose stems are being matched: a
  * search scoped to `EU` but filtered to Czech text has to stem Czech, and a
@@ -202,6 +221,17 @@ export type CaseLawCorpusQueryFields = {
  * than the jurisdiction's, which would stem the reader's words against a
  * language the documents are not written in.
  */
+export const caseLawQueryLanguage = ({
+  jurisdiction,
+  language,
+}: Omit<
+  CaseLawCorpusQueryFieldsOptions,
+  "generation"
+>): MorphologyLanguage | null =>
+  language === undefined
+    ? corpusMorphologyLanguage(jurisdiction)
+    : documentMorphologyLanguage(language);
+
 export const caseLawCorpusQueryFields = ({
   generation,
   jurisdiction,
@@ -209,13 +239,11 @@ export const caseLawCorpusQueryFields = ({
 }: CaseLawCorpusQueryFieldsOptions): CaseLawCorpusQueryFields => {
   const { stemFields, searchableFields, keywordFields } =
     corpusIndexReadContract("case_law", generation);
-  const stemLanguage =
-    language === undefined
-      ? corpusMorphologyLanguage(jurisdiction)
-      : documentMorphologyLanguage(language);
+  const stemLanguage = caseLawQueryLanguage({ jurisdiction, language });
   return {
     surfaceFields: searchableFields,
     keywordFields,
+    functionWords: functionWordsFor(stemLanguage),
     stemming:
       stemFields === null || stemLanguage === null
         ? null

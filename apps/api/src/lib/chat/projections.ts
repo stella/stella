@@ -7,7 +7,10 @@ import {
   TEXT_FIELD_TYPE,
   type DecisionTextFieldKey,
 } from "@stll/api-contract/case-law-text-field";
-import { SEARCH_TOTAL_TYPE } from "@stll/api-contract/search";
+import {
+  CASE_LAW_SEARCH_WARNING_CODES,
+  SEARCH_TOTAL_TYPE,
+} from "@stll/api-contract/search";
 import type { SearchTotal } from "@stll/api-contract/search";
 import { CITATION_PASSAGE_MENTIONS } from "@stll/legal-ast/citation-passage";
 
@@ -1351,6 +1354,28 @@ export const SEARCH_CASE_LAW_PROJECTION = v.strictObject({
   // memory of what earlier pages emitted, so the deduplication `results`
   // carries is within the page; a caller paging keys on `decisionId`.
   nextCursor: v.nullable(passthroughId()),
+  // One entry per `queries[]` entry, in the same order. Per query rather than
+  // per call because each phrasing is interpreted on its own: one may carry
+  // function words and another none.
+  searches: v.array(
+    v.strictObject({
+      // The phrasing as sent, echoed so a caller reading `searches` alone
+      // does not have to hold its own request to know which entry is which.
+      query: v.string(),
+      // The words this phrasing actually required, itself a valid query:
+      // send it back as a `queries` entry to repeat the same search.
+      queryUsed: v.string(),
+      // What the search answered that the call did not ask for. Empty for a
+      // phrasing that required every word it carried and found something.
+      warnings: v.array(
+        v.strictObject({
+          code: v.picklist(CASE_LAW_SEARCH_WARNING_CODES),
+          message: v.string(),
+          hint: v.string(),
+        }),
+      ),
+    }),
+  ),
   results: v.array(
     v.strictObject({
       // `buildCaseLawDecisionAppUrl` returns null while the public-law surface

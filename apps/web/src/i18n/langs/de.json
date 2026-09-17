@@ -707,6 +707,18 @@
       "description": "Die Suche in der Rechtsprechung war nicht erreichbar. Ihre Suchanfrage bleibt in der Adresszeile, versuchen Sie es gleich noch einmal.",
       "title": "Die Suche ist vorübergehend nicht verfügbar"
     },
+    "searchWarnings": {
+      "noHits": {
+        "hint": "Versuchen Sie weniger oder andere Wörter: die Begriffe, die eine Entscheidung verwenden würde, nicht den Satz, in dem eine Frage gestellt wird.",
+        "message": "Nichts entspricht den Wörtern, die diese Suche verlangt hat."
+      },
+      "noHitsFiltered": {
+        "hint": "Entfernen oder erweitern Sie einen Filter und suchen Sie erneut.",
+        "message": "Nichts entspricht den gewählten Filtern."
+      },
+      "resultsFor": "Ergebnisse für: {query}",
+      "searchEveryWord": "Alle Wörter suchen"
+    },
     "showWholeHeadnote": "Ganzen Leitsatz anzeigen",
     "sort": {
       "newest": "Neueste",

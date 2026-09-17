@@ -707,6 +707,18 @@
       "description": "No se pudo acceder a la búsqueda de jurisprudencia. Tu consulta se conserva en la barra de direcciones; inténtalo de nuevo en un momento.",
       "title": "La búsqueda no está disponible temporalmente"
     },
+    "searchWarnings": {
+      "noHits": {
+        "hint": "Pruebe con menos palabras o con otras: los términos que usaría una resolución, no la frase con la que se formula una pregunta.",
+        "message": "Nada coincide con las palabras que exigió esta búsqueda."
+      },
+      "noHitsFiltered": {
+        "hint": "Quite o amplíe un filtro y vuelva a buscar.",
+        "message": "Nada coincide con los filtros aplicados."
+      },
+      "resultsFor": "Resultados de: {query}",
+      "searchEveryWord": "Buscar todas las palabras"
+    },
     "showWholeHeadnote": "Mostrar el sumario completo",
     "sort": {
       "newest": "Más recientes",

@@ -707,6 +707,18 @@
       "description": "Nie udało się połączyć z wyszukiwaniem orzecznictwa. Twoje zapytanie pozostaje w pasku adresu, spróbuj ponownie za chwilę.",
       "title": "Wyszukiwanie jest tymczasowo niedostępne"
     },
+    "searchWarnings": {
+      "noHits": {
+        "hint": "Spróbuj mniej lub innych słów: pojęć, których użyłoby orzeczenie, a nie zdania, w którym zadaje się pytanie.",
+        "message": "Nic nie odpowiada słowom wymaganym przez to wyszukiwanie."
+      },
+      "noHitsFiltered": {
+        "hint": "Usuń lub poszerz filtr i wyszukaj ponownie.",
+        "message": "Nic nie odpowiada wybranym filtrom."
+      },
+      "resultsFor": "Wyniki dla: {query}",
+      "searchEveryWord": "Szukaj wszystkich słów"
+    },
     "showWholeHeadnote": "Pokaż całą tezę",
     "sort": {
       "newest": "Najnowsze",

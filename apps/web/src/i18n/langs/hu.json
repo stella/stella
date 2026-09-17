@@ -707,6 +707,18 @@
       "description": "Az ítélkezési gyakorlat keresője nem érhető el. A keresése megmarad a címsorban, próbálja újra egy pillanat múlva.",
       "title": "A keresés átmenetileg nem érhető el"
     },
+    "searchWarnings": {
+      "noHits": {
+        "hint": "Próbáljon kevesebb vagy más szót: azokat a kifejezéseket, amelyeket egy határozat használna, nem a kérdés mondatát.",
+        "message": "Semmi nem felel meg a keresés által megkívánt szavaknak."
+      },
+      "noHitsFiltered": {
+        "hint": "Töröljön vagy bővítsen egy szűrőt, és keressen újra.",
+        "message": "Semmi nem felel meg a beállított szűrőknek."
+      },
+      "resultsFor": "Találatok erre: {query}",
+      "searchEveryWord": "Minden szó keresése"
+    },
     "showWholeHeadnote": "A teljes jogi tétel megjelenítése",
     "sort": {
       "newest": "Legújabb",

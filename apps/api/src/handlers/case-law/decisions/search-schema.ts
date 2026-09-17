@@ -1,6 +1,7 @@
 import { Type } from "@sinclair/typebox";
 import { t } from "elysia";
 
+import { CASE_LAW_SEARCH_WARNING_CODES } from "@stll/api-contract/search";
 import {
   DECISION_IDENTIFIER_MAX_COUNT,
   DECISION_IDENTIFIER_TYPES,
@@ -46,7 +47,21 @@ export const searchDecisionsBodySchema = t.Object({
   // character count: the window is the search's to choose, and a caller that
   // could ask for arbitrary characters could ask for the whole decision.
   excerpt: t.Optional(searchExcerptSchema),
+  // Require every word the query carries, function words included. Off by
+  // default: a question asked in a sentence is the common entry, and no
+  // judgment is written the way a question is asked. A caller that knows
+  // every word matters — a quoted statutory formula, a name — asks for this.
+  strict: t.Optional(t.Boolean()),
 });
+
+const searchWarningSchema = t.Object(
+  {
+    code: t.UnionEnum([...CASE_LAW_SEARCH_WARNING_CODES]),
+    message: t.String(),
+    hint: t.String(),
+  },
+  { additionalProperties: false },
+);
 
 const nullableStringSchema = t.Union([t.String(), t.Null()]);
 
@@ -185,6 +200,19 @@ export const searchDecisionsSuccessResponseSchema = t.Object(
     ]),
     total: searchTotalSchema,
     nextCursor: nullableStringSchema,
+    /**
+     * The query the engine actually answered: the words it required, with a
+     * phrase still quoted. Equal in meaning to the request's `query` when
+     * nothing was dropped, and always a query that re-runs the same search,
+     * so a caller paging or repeating sends this back rather than rebuilding
+     * it.
+     */
+    queryUsed: t.String(),
+    /**
+     * What this search answered that the request did not ask for. Empty for
+     * a search that required every word and found something.
+     */
+    warnings: t.Array(searchWarningSchema),
   },
   { additionalProperties: false },
 );

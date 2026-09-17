@@ -56,7 +56,10 @@ import { captureError } from "@/api/lib/analytics/capture";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
-import { CITATION_READ_DIRECTIONS } from "@/api/lib/case-law/citation-vocabulary";
+import {
+  CITATION_READ_DIRECTIONS,
+  CITATION_TREATMENTS,
+} from "@/api/lib/case-law/citation-vocabulary";
 import { DECISION_LOOKUP_STATUS } from "@/api/lib/case-law/decision-lookup-vocabulary";
 import { DECISION_READ_STATUS } from "@/api/lib/case-law/decision-read-vocabulary";
 import {
@@ -674,6 +677,7 @@ const searchCaseLawArgsSchema = nullAsAbsent(
     cursor: v.optional(
       v.pipe(
         v.string(),
+        v.minLength(1),
         v.maxLength(CASE_LAW_SEARCH_CURSOR_MAX_LENGTH),
         v.description(
           "Opaque cursor from a previous search_case_law call. It continues the same queries, in the same order. It carries each query's own position and not what earlier pages emitted, so a decision several queries return can appear on more than one page: key results by decisionId.",
@@ -683,6 +687,7 @@ const searchCaseLawArgsSchema = nullAsAbsent(
     court: v.optional(
       v.pipe(
         v.string(),
+        v.minLength(1),
         v.maxLength(512),
         v.description("Filter by court name"),
       ),
@@ -693,6 +698,7 @@ const searchCaseLawArgsSchema = nullAsAbsent(
     language: v.optional(
       v.pipe(
         v.string(),
+        v.minLength(1),
         v.maxLength(8),
         v.description("Filter by language code"),
       ),
@@ -700,6 +706,7 @@ const searchCaseLawArgsSchema = nullAsAbsent(
     decision_type: v.optional(
       v.pipe(
         v.string(),
+        v.minLength(1),
         v.maxLength(128),
         v.description("Filter by decision type"),
       ),
@@ -724,6 +731,14 @@ const searchCaseLawArgsSchema = nullAsAbsent(
         v.picklist(SEARCH_SORTS),
         v.description(
           `Result order; defaults to '${DEFAULT_SEARCH_SORT}'. 'relevance' blends text match with citation authority and court rank; 'newest' orders by decision date and returns only dated decisions. A query naming a decision outright (docket number, ECLI) is answered by identity lookup, which ignores this option.`,
+        ),
+      ),
+    ),
+    strict: v.optional(
+      v.pipe(
+        v.boolean(),
+        v.description(
+          "Require every word of each query, function words included. Off by default: a query phrased as a question carries words no judgment is written with, and `searches[].queryUsed` reports what was required. Pass true when every word matters.",
         ),
       ),
     ),
@@ -928,16 +943,16 @@ export const STELLA_TOOL_DEFINITIONS = [
       "Search case law within one country. `queries` carries several " +
       "phrasings of one question and merges their results; matchedQueries " +
       "names the phrasings that returned each hit. `limit` is the merged " +
-      "page, split evenly across the phrasings, so a page they agree on is " +
-      "shorter. Filters: court, language, dates " +
-      "(ISO YYYY-MM-DD), decision type, and source_id (the id a " +
-      "`facets.source` bucket carries in `value`). `sort` defaults to " +
-      `'${DEFAULT_SEARCH_SORT}'. Facets and total describe ONE query's whole ` +
-      "set: first page of a single-query call only, null otherwise. Each " +
-      "hit also carries citationAuthority (the score the ranking blends in), " +
-      "matchingPassages (its passages that matched, at least 1) and a " +
-      "route-independent resourceName. Call read_case_law_citations for how " +
-      "the citing courts treated one.",
+      "page, split evenly across them. Filters: court, language, dates, " +
+      "decision type, source_id (a `facets.source` bucket's `value`). " +
+      `\`sort\` defaults to '${DEFAULT_SEARCH_SORT}'. Facets and total ` +
+      "describe ONE query's whole set: first page of a single-query call " +
+      "only, null otherwise. Function words are not required terms; " +
+      "`searches[]` gives each phrasing's `queryUsed` and warnings, and " +
+      "`strict` requires every word. Each hit carries citationAuthority " +
+      "(the score the ranking blends in), matchingPassages (at least 1) and " +
+      "a route-independent resourceName. read_case_law_citations gives the " +
+      "polarity of the citing decisions.",
     inputSchema: searchCaseLawArgsSchema,
     inputNormalization: {
       country: countryNormalization({
@@ -1052,17 +1067,17 @@ export const STELLA_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     description:
-      "What the courts citing a decision said about it (followed, " +
-      "distinguished, overruled), or what it cited. One page of citations, " +
-      "each with the citing court's treatment and an excerpt of the " +
-      "paragraph the citation sits in. `cited_by` returns the decisions " +
-      "that cite this one, `cites` the ones it cites; neither means " +
-      "agreement, both carry negative treatments. `polarity` is the " +
-      "classified reading, or 'unclassified' where there is none. " +
+      "How the decisions citing one stood to it, or what it cited. One page " +
+      "of citations, each with a polarity and an excerpt of the paragraph " +
+      "the citation sits in. `cited_by` returns the decisions that cite " +
+      "this one, `cites` the ones it cites; neither means agreement. " +
+      `\`polarity\` is one of ${CITATION_TREATMENTS.join(", ")}: a stance, ` +
+      "not a doctrinal act, so it never says followed, distinguished or " +
+      "overruled. 'unclassified' means none was read. " +
       "`passage.text` is at most " +
       `${LIMITS.caseLawCitationPassageChars} characters centred on the citation, cut when ` +
       "`passage.truncated`; `passage.mention` is 'sole', " +
-      "'classified_section' (the mention the treatment was read from), or " +
+      "'classified_section' (the mention the polarity was read from), or " +
       "'latest_of_several' (it may not be). Example: { decision_id: " +
       "'<uuid>', direction: " +
       "'cited_by', limit: 20 }. Pass the returned nextCursor back as cursor.",
@@ -1980,6 +1995,7 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
     queries,
     sort,
     source_id: sourceId,
+    strict,
   } = parsed.output;
   const limit = parsed.output.limit ?? DEFAULT_SEARCH_LIMIT;
   const publicCountry = publicCaseLawCountry(country);
@@ -2054,6 +2070,7 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
             ...(dateFrom === undefined ? {} : { dateFrom }),
             ...(dateTo === undefined ? {} : { dateTo }),
             ...(sort === undefined ? {} : { sort }),
+            ...(strict === undefined ? {} : { strict }),
           },
           caseLawPublicReadDb,
         ),
@@ -2098,8 +2115,27 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
     ? null
     : encodePaginationCursor(subCursors);
 
+  // One entry per query, in the order the call sent them. Facets and a total
+  // describe one query's result set, so a merged page carries none; which
+  // words a phrasing required is a property of that phrasing alone, so every
+  // phrasing reports its own.
+  const searches = queries.map((query, index) => {
+    const outcome = pages.at(index);
+    if (outcome === undefined || outcome.exhausted) {
+      // A phrasing its cursor declared exhausted ran nothing this call, so it
+      // required exactly the words it carries.
+      return { query, queryUsed: query, warnings: [] };
+    }
+    return {
+      query,
+      queryUsed: outcome.page.queryUsed,
+      warnings: outcome.page.warnings,
+    };
+  });
+
   const payload = toolDataResult({
     facets: single === undefined ? null : single.facets,
+    searches,
     nextCursor: single === undefined ? mergedCursor : single.nextCursor,
     results: merged.map(({ hit, matchedQueries }) => {
       const resource = resourceRef({
