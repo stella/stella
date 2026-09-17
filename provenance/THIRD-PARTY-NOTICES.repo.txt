@@ -14,10 +14,10 @@ Project: root
 - @atlaskit/pragmatic-drag-and-drop-auto-scroll 3.2.0 — Apache-2.0
 - @atlaskit/pragmatic-drag-and-drop-hitbox 2.2.0 — Apache-2.0
 - @atlaskit/pragmatic-drag-and-drop-live-region 2.1.0 — Apache-2.0
-- @aws-sdk/client-s3 3.1129.0 — Apache-2.0
-- @aws-sdk/client-sesv2 3.1129.0 — Apache-2.0
-- @aws-sdk/client-sts 3.1129.0 — Apache-2.0
-- @aws-sdk/s3-request-presigner 3.1129.0 — Apache-2.0
+- @aws-sdk/client-s3 3.1130.0 — Apache-2.0
+- @aws-sdk/client-sesv2 3.1130.0 — Apache-2.0
+- @aws-sdk/client-sts 3.1130.0 — Apache-2.0
+- @aws-sdk/s3-request-presigner 3.1130.0 — Apache-2.0
 - @base-ui/react 1.8.0 — MIT
 - @better-auth/api-key 1.7.1 — MIT
 - @better-auth/oauth-provider 1.7.1 — MIT
@@ -28,7 +28,7 @@ Project: root
 - @firecrawl/anydoc 0.2.4 — MIT
 - @floating-ui/react-dom 2.1.9 — MIT
 - @formatjs/icu-messageformat-parser 3.5.17 — MIT
-- @google/genai 2.21.0 — Apache-2.0
+- @google/genai 2.22.0 — Apache-2.0
 - @hocuspocus/extension-redis 4.7.0 — MIT
 - @hocuspocus/provider 4.7.0 — MIT
 - @hocuspocus/server 4.7.0 — MIT
@@ -75,10 +75,10 @@ Project: root
 - @tanstack/react-hotkeys 0.10.0 — MIT
 - @tanstack/react-query 5.102.8 — MIT
 - @tanstack/react-query-devtools 5.102.8 — MIT
-- @tanstack/react-router 1.170.34 — MIT
+- @tanstack/react-router 1.170.35 — MIT
 - @tanstack/react-router-devtools 1.167.1 — MIT
 - @tanstack/react-router-ssr-query 1.167.2 — MIT
-- @tanstack/react-start 1.168.51 — MIT
+- @tanstack/react-start 1.168.52 — MIT
 - @tanstack/react-store 0.11.1 — MIT
 - @tanstack/react-table 9.2.4 — MIT
 - @tanstack/react-table-devtools 9.2.0 — MIT
@@ -102,7 +102,7 @@ Project: root
 - @valibot/to-json-schema 1.7.1 — MIT
 - @volar/typescript 2.4.28 — MIT
 - @vscode/diff 0.0.2-0 — MIT
-- @vscode/markdown-editor 0.0.2-91 — MIT
+- @vscode/markdown-editor 0.0.2-95 — MIT
 - @vscode/observables 0.1.1-0 — MIT
 - astro 7.3.2 — MIT
 - better-auth 1.7.1 — MIT
@@ -139,8 +139,8 @@ Project: root
 - oxc-transform-react 0.148.0 — MIT
 - pdfjs-dist 6.3.289 — Apache-2.0
 - postal-mime 3.0.0 — MIT-0
-- posthog-js 1.429.2 — (Apache-2.0 AND MIT)
-- posthog-node 5.51.8 — MIT
+- posthog-js 1.429.5 — (Apache-2.0 AND MIT)
+- posthog-node 5.52.1 — MIT
 - prism-react-renderer 2.4.1 — MIT
 - prosemirror-commands 1.7.2 — MIT
 - prosemirror-history 1.5.0 — MIT
