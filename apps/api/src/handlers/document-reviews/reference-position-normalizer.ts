@@ -188,8 +188,13 @@ export const cappedSeverity = (
 // cannot be compared: "27 August 2026" and "[●]" name one deal, not a term.
 // A locked-box date is not a position; the locked-box PERIOD is.
 
-/** A blank the deal fills in: `[●]`, `[•]`, `[__]`, `[insert date]`. */
-const PLACEHOLDER_PATTERN = /\[[^\]\n]{0,24}\]/gu;
+/**
+ * A blank the deal fills in: `[●]`, `[•]`, `[__]`, `[insert date]`. A bracket
+ * with a digit inside (`[10 (ten) Business Days]`, `[5]%`) is a proposed value
+ * still under negotiation, which is a term a second document can be measured
+ * against, so it stays.
+ */
+const PLACEHOLDER_PATTERN = /\[[^\]\n\p{Nd}]{0,24}\]/gu;
 
 /**
  * A calendar date in the forms a contract states one: ISO, day-first with dots

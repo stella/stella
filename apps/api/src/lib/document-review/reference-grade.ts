@@ -71,7 +71,8 @@ import type { PositionTermKind } from "@/api/lib/workflow/playbook-positions";
 import type { VerdictTier } from "@/api/lib/workflow/verdict-tiers";
 
 const REFERENCE_GRADE_TIMEOUT_MS = 120_000;
-const REFERENCE_GRADE_ROLE = "pdf" as const;
+/** The role every grading call dispatches on, and the one a run records. */
+export const REFERENCE_GRADE_ROLE = "pdf" as const;
 const MAX_VERIFIED_CITATIONS_PER_FINDING = 8;
 /** Positions per model call. The target document dominates the prompt and is
  *  cached, so several term-level positions per call amortise it without

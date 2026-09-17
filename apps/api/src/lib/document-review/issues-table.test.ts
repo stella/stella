@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { parseDocx } from "@stll/folio-core/server";
+
 import { toSafeId } from "@/api/lib/branded-types";
 import {
   buildIssuesTableRows,
@@ -292,5 +294,24 @@ describe("renderIssuesTableDocx", () => {
     // A ZIP container starts with the local file header signature "PK".
     expect(Array.from(new Uint8Array(docx, 0, 2))).toEqual([0x50, 0x4b]);
     expect(ISSUES_TABLE_COLUMNS).toHaveLength(9);
+  });
+
+  // Five text columns only read on a page turned on its side; the split above
+  // is sized to that page, so the page must actually be that page.
+  test("lays the table out on a landscape page the split fills", async () => {
+    const docx = await renderIssuesTableDocx({
+      title: "Draft SPA - review issues",
+      basisLine: describeIssuesTableBasis(basis),
+      rows: [],
+    });
+    const page = (await parseDocx(docx)).package.document
+      .finalSectionProperties;
+    expect(page).toMatchObject({ orientation: "landscape" });
+    expect(page?.pageWidth).toBeGreaterThan(page?.pageHeight ?? Infinity);
+    expect(
+      (page?.pageWidth ?? 0) -
+        (page?.marginLeft ?? 0) -
+        (page?.marginRight ?? 0),
+    ).toBe(DOCX_TEXT_WIDTH);
   });
 });

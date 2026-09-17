@@ -25,10 +25,13 @@ import {
   activeDocxKey,
   useActiveDocxStore,
 } from "@/components/ai-suggestions/active-docx-store";
+import type { DocxEditModeResult } from "@/components/docx/docx-browser-editor.logic";
 
 const makeRegistration = () => ({
   editorRef: createRef<DocxEditorRef | null>(),
-  requestEditMode: () => true,
+  requestEditMode: async (): Promise<DocxEditModeResult> => ({
+    type: "editing",
+  }),
   editable: false,
 });
 

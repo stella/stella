@@ -1,4 +1,4 @@
-import { TaggedError } from "better-result";
+import { panic, TaggedError } from "better-result";
 
 import type { Document } from "@stll/folio-core";
 import {
@@ -19,6 +19,26 @@ export class DocxAuthoringError extends TaggedError("DocxAuthoringError")<{
  */
 export const stellaDocument = (): Document =>
   createEmptyDocument({ preset: createStellaStyleDocumentPreset() });
+
+/**
+ * The house document turned on its side: same margins and styles, A4
+ * landscape. For a wide table that would otherwise wrap every cell into a
+ * column of single words.
+ */
+export const stellaLandscapeDocument = (): Document => {
+  const doc = stellaDocument();
+  const portrait = doc.package.document.finalSectionProperties;
+  if (portrait?.pageWidth === undefined || portrait.pageHeight === undefined) {
+    return panic("The house preset must declare a page size.");
+  }
+  doc.package.document.finalSectionProperties = {
+    ...portrait,
+    orientation: "landscape",
+    pageWidth: portrait.pageHeight,
+    pageHeight: portrait.pageWidth,
+  };
+  return doc;
+};
 
 /**
  * Serialise a document model to DOCX bytes. The model comes from a builder

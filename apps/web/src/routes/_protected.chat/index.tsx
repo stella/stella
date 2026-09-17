@@ -42,6 +42,10 @@ import {
   useChatEditor,
 } from "@/components/chat-editor-provider";
 import type { ChatInputDraft } from "@/components/chat-editor-provider";
+import {
+  composerMarkdown,
+  composerText,
+} from "@/components/chat-editor-source";
 import { ChatInputSurface } from "@/components/chat-input-surface";
 import { ChatComposerDock } from "@/components/chat/chat-composer-dock";
 import { ChatMatterPicker } from "@/components/chat/chat-matter-picker";
@@ -328,7 +332,7 @@ function ChatIndex() {
   );
 
   const selectPrompt = (prompt: ChatPrompt) => {
-    controller.setContent(prompt.body);
+    controller.setContent(composerMarkdown(prompt.body));
     controller.focus();
   };
 
@@ -348,14 +352,14 @@ function ChatIndex() {
           newThreadMessages.push(args);
           return;
         }
-        controller.setContent("");
+        controller.setContent(composerText(""));
         threadIdRef.current = createChatThreadId();
         rotateDraftThread((value) => value + 1);
       },
       "rename-chat": () => {
         // Nothing persisted to rename yet: this composer only ever holds an
         // unsent draft thread. Explain instead of silently no-oping.
-        controller.setContent("");
+        controller.setContent(composerText(""));
         stellaToast.add({
           title: t("chat.renameUnavailableEmptyThread"),
           type: "info",

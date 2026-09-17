@@ -1789,6 +1789,9 @@ type Messages = {
     "applyDirect": "Direct";
     "applyTracked": "Tracked changes";
     "barLabel": "Suggestion review";
+    "blockedCollaboration": "The shared editing session is still opening. Try again in a moment.";
+    "blockedOpening": "The document is still opening. Try again in a moment.";
+    "blockedReadOnly": "This shared document is open for viewing only.";
     "change": {
       "deleteParagraph": "Delete paragraph";
       "replacement": "“{find}” → “{replace}”";
@@ -1800,8 +1803,10 @@ type Messages = {
     "finalizePendingNote": "{count, plural, one {# suggestion is still pending review.} other {# suggestions are still pending review.}}";
     "hideAccepted": "Hide accepted suggestions";
     "keepInReview": "Keep in review";
+    "notApplied": "Change not applied";
     "pendingLimitReached": "This document has too many suggestions awaiting review. Resolve some before asking for more.";
     "persistFailed": "Couldn't save your review change";
+    "readOnlyNotice": "Suggestions cannot be applied to this document here.";
     "reject": "Reject";
     "rejectAll": "Reject all";
     "revert": "Revert";
@@ -2771,9 +2776,9 @@ type Messages = {
       "dismiss": "Dismiss";
       "documentChanged": "This document changed after this review.";
       "export": {
-        "counterparty": "Send to counterparty";
+        "counterparty": "Download for counterparty";
         "counterpartyFailed": "Could not export the document";
-        "counterpartyHint": "The document with your tracked changes";
+        "counterpartyHint": "The saved document with tracked changes, without the internal review notes";
         "counterpartyUnavailable": "Open the document to export it";
         "csv": "CSV";
         "docx": "Word (.docx)";
@@ -2825,6 +2830,11 @@ type Messages = {
       "notCompared": "Not compared";
       "notComparedCount": "Not compared: {count, number}";
       "noteAdded": "Note added for the counterparty";
+      "noteBlockedChecking": "stella is still checking whether this document can be edited safely. Your note is kept; try again in a moment.";
+      "noteBlockedCollaboration": "The shared editing session is still opening. Your note is kept; try again in a moment.";
+      "noteBlockedOpening": "The document is still opening. Your note is kept; try again in a moment.";
+      "noteBlockedReadOnly": "This shared document is open for viewing only. Your note is kept; try again once you can edit it.";
+      "noteNotAdded": "Note not added";
       "openPlaybooks": "Open playbooks";
       "pane": {
         "document": "Panel: findings beside the document";

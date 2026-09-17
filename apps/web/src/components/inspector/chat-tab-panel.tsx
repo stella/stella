@@ -45,6 +45,10 @@ import {
   useChatEditor,
 } from "@/components/chat-editor-provider";
 import type { ChatDraftAttachment } from "@/components/chat-editor-provider";
+import {
+  composerMarkdown,
+  composerText,
+} from "@/components/chat-editor-source";
 import { ChatApprovalContext } from "@/components/chat/chat-approval-context";
 import { ChatComposerDock } from "@/components/chat/chat-composer-dock";
 import {
@@ -383,7 +387,7 @@ export const ChatTabPanel = ({
 
   const savedPrompts = useSavedPrompts();
   const handleSelectPrompt = (prompt: ChatPrompt) => {
-    editorController.setContent(prompt.body);
+    editorController.setContent(composerMarkdown(prompt.body));
     editorController.focus();
   };
 
@@ -511,10 +515,10 @@ export const ChatTabPanel = ({
           }
           stop();
           resetChatTabId(tab.id, createChatThreadId());
-          editorController.setContent("");
+          editorController.setContent(composerText(""));
         },
         "rename-chat": (args) => {
-          editorController.setContent("");
+          editorController.setContent(composerText(""));
           if (!hasThreadMessages) {
             stellaToast.add({
               title: t("chat.renameUnavailableEmptyThread"),
@@ -693,7 +697,7 @@ export const ChatTabPanel = ({
             followupChips={
               <SuggestedFollowupChips
                 onSelect={(prompt) => {
-                  editorController.setContent(prompt);
+                  editorController.setContent(composerMarkdown(prompt));
                   detached(
                     editorController.submit(async (draft) => {
                       if (!(await ensureAIAvailable())) {

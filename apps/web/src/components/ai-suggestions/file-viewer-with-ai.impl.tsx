@@ -29,6 +29,7 @@ import {
   type CreateDocumentDraftPersistence,
 } from "@/components/chat/create-document-draft-runtime";
 import type { DocxComments } from "@/components/docx/app-docx-editor";
+import type { DocxEditModeResult } from "@/components/docx/docx-browser-editor.logic";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import type { DocxEditSafety } from "@/lib/chat-edit-mode";
 import type { ChatThreadId } from "@/lib/chat-thread-ref";
@@ -138,7 +139,7 @@ export type FileViewerWithAIProps = {
    */
   docxEditSafety?: DocxEditSafety | undefined;
   /** Request editable DOCX mode before applying a confirmed AI edit. */
-  requestDocxEditMode?: (() => boolean | Promise<boolean>) | undefined;
+  requestDocxEditMode?: (() => Promise<DocxEditModeResult>) | undefined;
   /** The actual file viewer component. */
   children: ReactNode;
 };

@@ -22,6 +22,7 @@ import { and, asc, eq, inArray, lt, or, sql } from "drizzle-orm";
 import { Temporal, DAY_IN_MS } from "@stll/time";
 
 import { rootDb } from "@/api/db/root";
+import type { Transaction } from "@/api/db/root";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
   documentReviewFindings,
@@ -54,6 +55,7 @@ import {
 import type { DocumentReviewFindingRow } from "@/api/lib/document-review/finding-write";
 import { fetchAndPrepareReviewFiles } from "@/api/lib/document-review/prepare-review-files";
 import type { ReviewFile } from "@/api/lib/document-review/prepare-review-files";
+import { REFERENCE_GRADE_ROLE } from "@/api/lib/document-review/reference-grade";
 import {
   readReferencePassageTexts,
   referencePassageIds,
@@ -88,6 +90,10 @@ import {
   brandPersistedUserId,
   brandValidatedWorkflowActorKey,
 } from "@/api/lib/safe-id-boundaries";
+import {
+  formatModelRef,
+  getTanStackTextModelInfoForRole,
+} from "@/api/lib/tanstack-ai-models";
 import type { PreparedDocxFile } from "@/api/lib/workflow/generate-batch";
 import type { ResolvedFile } from "@/api/lib/workflow/generate-batch-shared";
 import type { ResolvedTiers } from "@/api/lib/workflow/playbook-positions";
@@ -515,6 +521,36 @@ const claimRun = async (actor: RunActor): Promise<ClaimedRun | null> => {
   return claimed ?? null;
 };
 
+type RecordRunModelArgs = {
+  tx: Transaction;
+  workspaceId: SafeId<"workspace">;
+  runId: SafeId<"documentReviewRun">;
+  modelRef: string;
+};
+
+/**
+ * Stamp the model the run grades with, once grading resolves it. A run is
+ * reproducible only against the model that produced its findings, and a claim
+ * happens before the model is known, so this is its own write.
+ */
+export const recordDocumentReviewRunModel = async ({
+  tx,
+  workspaceId,
+  runId,
+  modelRef,
+}: RecordRunModelArgs): Promise<void> => {
+  // audit: skip — lifecycle bookkeeping on the run row audited at create.
+  await tx
+    .update(documentReviewRuns)
+    .set({ modelRef })
+    .where(
+      and(
+        eq(documentReviewRuns.id, runId),
+        eq(documentReviewRuns.workspaceId, workspaceId),
+      ),
+    );
+};
+
 const processDocumentReviewRunJob = async (
   data: DocumentReviewRunJobDataV1,
 ): Promise<void> => {
@@ -698,12 +734,22 @@ const executeRun = async (
   }
 
   const config = await Result.tryPromise({
-    try: async () => ({
-      orgAIConfig: await loadOrgAIConfig(actor.organizationId),
-      promptCachingEnabled: await loadPromptCachingPreference(
-        actor.organizationId,
-      ),
-    }),
+    try: async () => {
+      const orgAIConfig = await loadOrgAIConfig(actor.organizationId);
+      return {
+        orgAIConfig,
+        // Resolved here, where a role without a provider is already an
+        // `ai_unavailable` run rather than a failure mid-grading.
+        graderModel: getTanStackTextModelInfoForRole(
+          REFERENCE_GRADE_ROLE,
+          orgAIConfig,
+          { organizationId: actor.organizationId },
+        ),
+        promptCachingEnabled: await loadPromptCachingPreference(
+          actor.organizationId,
+        ),
+      };
+    },
     catch: (cause) => cause,
   });
   if (Result.isError(config)) {
@@ -713,6 +759,16 @@ const executeRun = async (
     });
     return "ai_unavailable";
   }
+
+  await actor.scopedDb(
+    async (tx) =>
+      await recordDocumentReviewRunModel({
+        tx,
+        workspaceId: actor.workspaceId,
+        runId: actor.runId,
+        modelRef: formatModelRef(config.value.graderModel),
+      }),
+  );
 
   const deps: PassDeps = {
     abortSignal: AbortSignal.timeout(REVIEW_TIMEOUT_MS),

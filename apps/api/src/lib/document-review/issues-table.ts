@@ -24,7 +24,7 @@ import type {
 } from "@/api/lib/document-review/run-contract";
 import {
   documentToDocx,
-  stellaDocument,
+  stellaLandscapeDocument,
 } from "@/api/lib/docx-authoring/document";
 import type { PositionSeverity } from "@/api/lib/workflow/playbook-positions";
 import type { VerdictTier } from "@/api/lib/workflow/verdict-tiers";
@@ -369,11 +369,13 @@ export const describeIssuesTableBasis = (
   return parts.join(" · ");
 };
 
-// Word rendering: the portrait text width (9360 twips) split over five
-// columns. The classification columns ride inside the topic cell as a second
-// line. Exported so a test can hold the split to the page width.
-export const DOCX_TEXT_WIDTH = 9360;
-export const DOCX_COLUMN_WIDTHS = [1700, 2150, 2150, 1900, 1460];
+// Word rendering: A4 landscape (16838 twips less the 1440 house margins on
+// each side) split over five columns. Five text columns in portrait wrap
+// every cell into a ribbon of single words; on its side the table reads. The
+// classification columns ride inside the topic cell as a second line.
+// Exported so a test can hold the split to the page width.
+export const DOCX_TEXT_WIDTH = 13_958;
+export const DOCX_COLUMN_WIDTHS = [2540, 3205, 3205, 2833, 2175];
 const DOCX_HEADER = [
   "Topic",
   "Draft position",
@@ -416,7 +418,7 @@ export const renderIssuesTableDocx = async ({
   basisLine,
   rows,
 }: RenderIssuesTableDocxArgs): Promise<ArrayBuffer> => {
-  const doc = stellaDocument();
+  const doc = stellaLandscapeDocument();
   doc.package.document.content = [
     heading({ text: title, level: 1 }),
     paragraph(basisLine),

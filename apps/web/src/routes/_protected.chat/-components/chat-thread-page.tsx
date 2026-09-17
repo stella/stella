@@ -28,6 +28,10 @@ import {
   useChatEditor,
 } from "@/components/chat-editor-provider";
 import type { ChatInputDraft } from "@/components/chat-editor-provider";
+import {
+  composerMarkdown,
+  composerText,
+} from "@/components/chat-editor-source";
 import { ChatInputSurface } from "@/components/chat-input-surface";
 import { ChatApprovalContext } from "@/components/chat/chat-approval-context";
 import { ChatComposerDock } from "@/components/chat/chat-composer-dock";
@@ -419,7 +423,7 @@ export const ChatThreadPage = ({
   };
 
   const selectPrompt = (prompt: ChatPrompt) => {
-    controller.setContent(prompt.body);
+    controller.setContent(composerMarkdown(prompt.body));
     controller.focus();
   };
   const sendWithoutAnonymization = useLatestCallback(async () => {
@@ -484,7 +488,7 @@ export const ChatThreadPage = ({
         // in-flight Chat alive in the query cache, so navigating away
         // would leave it streaming against the abandoned thread.
         stop();
-        controller.setContent("");
+        controller.setContent(composerText(""));
         if (threadRef.scope === "workspace") {
           detached(
             navigate({
@@ -505,7 +509,7 @@ export const ChatThreadPage = ({
         }
       },
       "rename-chat": (args) => {
-        controller.setContent("");
+        controller.setContent(composerText(""));
         if (messages.length === 0) {
           stellaToast.add({
             title: t("chat.renameUnavailableEmptyThread"),
@@ -745,7 +749,7 @@ export const ChatThreadPage = ({
                 <SuggestedFollowupChips
                   className="px-2 pb-0"
                   onSelect={(prompt) => {
-                    controller.setContent(prompt);
+                    controller.setContent(composerMarkdown(prompt));
                     detached(
                       controller.submit(async (draft) => {
                         if (!(await ensureAIAvailable())) {

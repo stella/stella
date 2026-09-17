@@ -170,7 +170,14 @@ import { useFolioDocumentBlocks } from "@/components/ai-suggestions/use-folio-do
 import { useReviewActions } from "@/components/ai-suggestions/use-review-actions";
 import { useReviewChangeSummary } from "@/components/ai-suggestions/use-review-change-summary";
 import { useReviewStartMode } from "@/components/ai-suggestions/use-review-start-mode";
+import {
+  composerMarkdown,
+  composerText,
+} from "@/components/chat-editor-source";
+import type { ComposerSource } from "@/components/chat-editor-source";
 import { DocumentIcon } from "@/components/document-icon";
+import { reportCounterpartyNote } from "@/components/inspector/counterparty-note.logic";
+import type { CounterpartyNoteOutcome } from "@/components/inspector/counterparty-note.logic";
 import { DOCUMENT_PANE } from "@/components/inspector/document-pane";
 import type {
   DocumentPane,
@@ -465,6 +472,27 @@ export const PlaybookFacet = ({
   };
 
   /**
+   * Say how the note ended, and answer whether it is in the document: the
+   * popover keeps the reviewer's text until it is.
+   */
+  const reportNote = (outcome: CounterpartyNoteOutcome, blockId: string) => {
+    const { applied, tone, title, description } =
+      reportCounterpartyNote(outcome);
+    stellaToast.add({
+      type: tone,
+      title: t(title),
+      ...(description !== undefined && { description: t(description) }),
+      ...(applied && {
+        action: {
+          label: t("inspector.review.showInDocument"),
+          onClick: () => scrollToBlock(blockId),
+        },
+      }),
+    });
+    return applied;
+  };
+
+  /**
    * Write the reviewer's note on the cited clause as a DOCX comment.
    *
    * The reviewer's own text is the whole input: nothing derived from the
@@ -477,18 +505,18 @@ export const PlaybookFacet = ({
   ): Promise<boolean> => {
     const editor = registration?.editorRef.current;
     if (registration === undefined || !editor) {
-      return false;
+      return reportNote({ type: "failed" }, blockId);
     }
     const application = await Result.tryPromise(async () => {
-      const unlocked = registration.editable
-        ? true
-        : await registration.requestEditMode();
-      if (!unlocked) {
-        return "cancelled" as const;
+      if (!registration.editable) {
+        const editMode = await registration.requestEditMode();
+        if (editMode.type === "blocked") {
+          return { type: "blocked", reason: editMode.reason } as const;
+        }
       }
       const snapshot = editor.createAIEditSnapshot();
       if (!snapshot) {
-        return "failed" as const;
+        return { type: "failed" } as const;
       }
       const result = editor.applyAIEditOperations({
         snapshot,
@@ -503,34 +531,15 @@ export const PlaybookFacet = ({
         mode: "tracked-changes",
         ...(author.length > 0 && { author }),
       });
-      return result.applied.length === 0 ? "failed" : "applied";
+      return result.applied.length === 0
+        ? ({ type: "failed" } as const)
+        : ({ type: "applied" } as const);
     });
     if (Result.isError(application)) {
       analytics.captureError(application.error);
-      stellaToast.add({
-        type: "error",
-        title: t("inspector.review.commentFailed"),
-      });
-      return false;
+      return reportNote({ type: "failed" }, blockId);
     }
-    if (application.value === "applied") {
-      stellaToast.add({
-        type: "success",
-        title: t("inspector.review.noteAdded"),
-        action: {
-          label: t("inspector.review.showInDocument"),
-          onClick: () => scrollToBlock(blockId),
-        },
-      });
-      return true;
-    }
-    if (application.value === "failed") {
-      stellaToast.add({
-        type: "error",
-        title: t("inspector.review.commentFailed"),
-      });
-    }
-    return false;
+    return reportNote(application.value, blockId);
   };
 
   const acceptChange = (change: ReviewChange) => {
@@ -1146,6 +1155,25 @@ const ReviewRunPanel = ({
     );
   }
 
+  // Writing the note into the draft is the reviewer's answer to the finding,
+  // so a write that lands also records the decision; nothing is recorded for
+  // one that did not.
+  const addCounterpartyNoteAndAccept = async (
+    findingId: DocumentReviewFindingRow["id"],
+    blockId: string,
+    note: string,
+  ): Promise<boolean> => {
+    const added = await onAddCounterpartyNote(blockId, note);
+    if (added) {
+      decide.mutate({
+        workspaceId,
+        findingId,
+        decision: REVIEW_DECISION.ACCEPTED,
+      });
+    }
+    return added;
+  };
+
   const { run } = runDetail;
   const view = reviewRunView(run.status);
   // The version the run measured, not whichever one is current: a completed
@@ -1197,23 +1225,7 @@ const ReviewRunPanel = ({
       history={history}
       negotiationBySourceId={negotiationLookup(playbookDetail)}
       onAcceptSuggestion={onAcceptSuggestion}
-      // Writing the note into the draft is the reviewer's answer to the
-      // finding, so a write that lands also records the decision; nothing is
-      // recorded for one that did not.
-      onAddCounterpartyNote={(findingId, blockId, note) => {
-        detached(
-          (async () => {
-            if (await onAddCounterpartyNote(blockId, note)) {
-              decide.mutate({
-                workspaceId,
-                findingId,
-                decision: REVIEW_DECISION.ACCEPTED,
-              });
-            }
-          })(),
-          "playbook-facet.add-counterparty-note",
-        );
-      }}
+      onAddCounterpartyNote={addCounterpartyNoteAndAccept}
       onDecide={(findingId, decision) => {
         decide.mutate({ workspaceId, findingId, decision });
       }}
@@ -1274,14 +1286,10 @@ const REFERENCE_SUGGESTION_LIMIT = 3;
 const SECTION_LABEL_CLASS = REVIEW_SECTION_LABEL_CLASS;
 const CHAT_DRAFT_PASSAGES_PER_DOCUMENT = 2;
 
-const escapeHtml = (value: string): string =>
-  value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;");
-
+// The bold token is the builder's own; the words around it are the reviewer's
+// and the document's, so they are escaped rather than parsed.
 const paragraph = (label: string, value: string): string =>
-  `<p><strong>${escapeHtml(label)}</strong> ${escapeHtml(value)}</p>`;
+  `**${composerText(label)}** ${composerText(value)}`;
 
 /**
  * The finding as a chat draft: the issue, the cited passages of each document,
@@ -1320,7 +1328,7 @@ const buildFindingChatDraft = ({
   /** The words behind the reference passages. A quote this reader never
    *  received is left out of the draft rather than sent as an empty line. */
   passageTextById: ReadonlyMap<string, string>;
-}): string => {
+}): ComposerSource => {
   const { finding } = item;
   const parts: string[] = [paragraph(labels.issue, item.title)];
   for (const citation of finding.citations.slice(
@@ -1353,8 +1361,8 @@ const buildFindingChatDraft = ({
   if (typeof finding.recommendation === "string") {
     parts.push(paragraph(labels.recommendation, finding.recommendation));
   }
-  parts.push(`<p>${escapeHtml(labels.question)}</p>`);
-  return parts.join("");
+  parts.push(composerText(labels.question));
+  return composerMarkdown(parts.join("\n\n"));
 };
 
 type LauncherPlaybook = Pick<PlaybookListItem, "id" | "name" | "status">;
@@ -2529,7 +2537,7 @@ type ResultsViewProps = {
     findingId: DocumentReviewFindingRow["id"],
     blockId: string,
     note: string,
-  ) => void;
+  ) => Promise<boolean>;
   onDecide: (
     findingId: DocumentReviewFindingRow["id"],
     decision: DocumentReviewDecision,
@@ -2672,7 +2680,10 @@ const ResultsView = ({
   return (
     <div className="bg-background flex h-full flex-col">
       <header className="space-y-2 border-b px-3 py-2.5">
-        <div className="flex items-center justify-between gap-2">
+        {/* The title block owns the full width and the actions wrap on their
+            own row beneath it: in a side pane the two cannot share a line
+            without the title collapsing to a sliver. */}
+        <div className="space-y-2">
           <div className="min-w-0">
             <h2 className="truncate text-sm font-semibold">
               {t("inspector.review.title")}
@@ -2707,8 +2718,7 @@ const ResultsView = ({
               other half were compliant. */}
             <NotComparedDisclosure skipped={basis.skipped} />
           </div>
-          <div className="flex shrink-0 items-center gap-2">
-            <PaneSwapToggle swap={paneSwap} />
+          <div className="flex flex-wrap items-center gap-1.5">
             {/* Only a run whose positions were never saved has a playbook to
               make; one that ran against a definition already has one. */}
             {basis.provenance === "ephemeral" && (
@@ -2735,6 +2745,9 @@ const ResultsView = ({
             <Button onClick={onReviewAgain} size="xs" variant="outline">
               {t("inspector.review.reviewAgain")}
             </Button>
+            <div className="ms-auto">
+              <PaneSwapToggle swap={paneSwap} />
+            </div>
           </div>
         </div>
         {/* The document's own queue, on its own row: it answers to the
@@ -3143,7 +3156,7 @@ type ReviewResultListProps = {
     findingId: DocumentReviewFindingRow["id"],
     blockId: string,
     note: string,
-  ) => void;
+  ) => Promise<boolean>;
   onDecide: (
     findingId: DocumentReviewFindingRow["id"],
     decision: DocumentReviewDecision,
@@ -3442,7 +3455,7 @@ type ReviewResultCardProps = {
     findingId: DocumentReviewFindingRow["id"],
     blockId: string,
     note: string,
-  ) => void;
+  ) => Promise<boolean>;
   onDecide: (
     findingId: DocumentReviewFindingRow["id"],
     decision: DocumentReviewDecision,
@@ -3522,6 +3535,11 @@ const ReviewResultCard = ({
   );
   const scrollToCitedBlock = (blockId: string) =>
     onScrollToBlock(blockId, citationTextByBlockId.get(blockId));
+  // The note lands on the cited clause; a finding with no citation has no
+  // block to comment on, and the popover is not offered for one.
+  const addCounterpartyNote = async (note: string): Promise<boolean> =>
+    targetBlockId !== null &&
+    (await onAddCounterpartyNote(item.id, targetBlockId, note));
   const singleReferenceId = singleReferenceFieldId(finding);
   const singleReferenceName =
     singleReferenceId === null
@@ -3643,15 +3661,11 @@ const ReviewResultCard = ({
             item={item}
             readOnly={readOnly}
             onAcceptSuggestion={onAcceptSuggestion}
-            onAddCounterpartyNote={(note) => {
-              if (targetBlockId !== null) {
-                onAddCounterpartyNote(item.id, targetBlockId, note);
-              }
-            }}
+            onAddCounterpartyNote={addCounterpartyNote}
             onAskInChat={() =>
               useInspectorCommandStore.getState().requestFileChatDraft({
                 fileFieldId: targetFileFieldId,
-                html: buildFindingChatDraft({
+                markdown: buildFindingChatDraft({
                   item,
                   passageTextById: passageTexts.textById,
                   references,
@@ -3807,7 +3821,7 @@ type ReviewCardActionsProps = {
   targetBlockId: string | null;
   onAcceptSuggestion: (suggestion: ReviewSuggestion) => void;
   onRejectSuggestion: (suggestion: ReviewSuggestion) => void;
-  onAddCounterpartyNote: (note: string) => void;
+  onAddCounterpartyNote: (note: string) => Promise<boolean>;
   onAskInChat: () => void;
   onDecide: (decision: DocumentReviewDecision) => void;
   onSetFlags: (flags: readonly ReviewFlag[]) => void;
@@ -4128,11 +4142,12 @@ const CounterpartyNotePopover = ({
   onSubmit,
 }: {
   disabled: boolean;
-  onSubmit: (note: string) => void;
+  onSubmit: (note: string) => Promise<boolean>;
 }) => {
   const t = useTranslations();
   const [open, setOpen] = useState(false);
   const [note, setNote] = useState("");
+  const [submitting, setSubmitting] = useState(false);
   const trimmed = note.trim();
 
   return (
@@ -4156,6 +4171,10 @@ const CounterpartyNotePopover = ({
             aria-label={t("inspector.review.addNote")}
             autoFocus
             className="min-h-[72px] text-sm"
+            // Frozen while the write is in flight: an edit typed during the
+            // wait would be cleared below by a submission that never carried
+            // it, which is the loss this whole path exists to prevent.
+            disabled={submitting}
             maxLength={2000}
             onChange={(event) => setNote(event.target.value)}
             placeholder={t("inspector.review.addNotePlaceholder")}
@@ -4163,11 +4182,22 @@ const CounterpartyNotePopover = ({
           />
           <Button
             className="w-full"
-            disabled={trimmed.length === 0}
+            disabled={trimmed.length === 0 || submitting}
             onClick={() => {
-              onSubmit(trimmed);
-              setNote("");
-              setOpen(false);
+              setSubmitting(true);
+              detached(
+                (async () => {
+                  const added = await onSubmit(trimmed);
+                  setSubmitting(false);
+                  // The text is the reviewer's only copy: clear it and close
+                  // the popover once it is in the document, never before.
+                  if (added) {
+                    setNote("");
+                    setOpen(false);
+                  }
+                })(),
+                "playbook-facet.add-counterparty-note",
+              );
             }}
             size="sm"
           >
