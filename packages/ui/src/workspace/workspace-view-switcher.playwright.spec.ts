@@ -13,7 +13,11 @@ test.use({
 
 const openFixture = async (
   page: Page,
-  options: { direction: "ltr" | "rtl"; dark?: boolean },
+  options: {
+    direction: "ltr" | "rtl";
+    dark?: boolean;
+    overflow?: boolean;
+  },
 ) => {
   const params = new URLSearchParams();
   if (options.direction === "rtl") {
@@ -21,6 +25,9 @@ const openFixture = async (
   }
   if (options.dark) {
     params.set("dark", "");
+  }
+  if (options.overflow) {
+    params.set("overflow", "");
   }
 
   await page.goto(`${fixturePath}?${params.toString()}`);
@@ -88,6 +95,43 @@ test.describe("workspace view switcher chrome", () => {
     await page.getByRole("tab", { name: "المواعيد النهائية" }).click();
     await expectIndicatorToTrackTab(page, 1);
   });
+
+  for (const direction of ["ltr", "rtl"] as const) {
+    test(`keeps the add action fixed beside overflowing ${direction.toUpperCase()} tabs`, async ({
+      page,
+    }) => {
+      await openFixture(page, { direction, overflow: true });
+      const tabList = page.getByRole("tablist");
+      const addView = page.getByRole("button", {
+        name: direction === "rtl" ? "إضافة عرض" : "Add view",
+      });
+      const actionArea = addView.locator("..");
+
+      const overflow = await tabList.evaluate(
+        (element) => element.scrollWidth - element.clientWidth,
+      );
+      expect(overflow).toBeGreaterThan(0);
+      await expect(addView).toBeVisible();
+      await expect
+        .poll(
+          async () =>
+            await actionArea.evaluate(
+              (element) => getComputedStyle(element).borderInlineStartWidth,
+            ),
+        )
+        .toBe("1px");
+
+      const before = await addView.boundingBox();
+      await tabList.evaluate((element, isRTL) => {
+        element.scrollLeft = isRTL ? -element.scrollWidth : element.scrollWidth;
+      }, direction === "rtl");
+      const after = await addView.boundingBox();
+
+      expect(before).not.toBeNull();
+      expect(after).not.toBeNull();
+      expect(after?.x).toBeCloseTo(before?.x ?? 0, 0);
+    });
+  }
 });
 
 for (const theme of ["light", "dark"]) {
