@@ -10,12 +10,14 @@ import {
   createApiEnv,
   createDesktopEnv,
   createWebEnv,
+  describeFailedProbes,
   ensureWorktreeEnvLinks,
   findFirstAvailableOffset,
   getSharedDockerServicesWaitFailure,
   hasLegacyObjectStoreService,
   infraPortsForOffset,
   isWorktreeCheckout,
+  MAX_HASH_OFFSET,
   parseDockerComposePsJson,
   loadEnvFile,
   migrateLegacyS3DevCredentials,
@@ -184,14 +186,15 @@ describe("parseDevRunnerConfig", () => {
 });
 
 describe("resolveOffset", () => {
+  const worktreePath = "/Users/dev/stella/.worktrees/dev-runner";
+
   test("uses explicit port offset when provided", () => {
     expect(
       resolveOffset({
-        branchName: "feature/dev-runner",
         devInstance: undefined,
         isWorktree: true,
         portOffset: 12,
-        worktreeName: "stella-dev-runner",
+        worktreePath,
       }),
     ).toEqual({
       offset: 12,
@@ -202,11 +205,10 @@ describe("resolveOffset", () => {
   test("rejects explicit offsets above the maximum valid port range", () => {
     expect(() =>
       resolveOffset({
-        branchName: "feature/dev-runner",
         devInstance: undefined,
         isWorktree: true,
         portOffset: 19_635,
-        worktreeName: "stella-dev-runner",
+        worktreePath,
       }),
     ).toThrow("STELLA_PORT_OFFSET must be an integer between 0 and 19634");
   });
@@ -214,11 +216,10 @@ describe("resolveOffset", () => {
   test("rejects numeric dev instances above the maximum valid port range", () => {
     expect(() =>
       resolveOffset({
-        branchName: "feature/dev-runner",
         devInstance: "19635",
         isWorktree: true,
         portOffset: undefined,
-        worktreeName: "stella-dev-runner",
+        worktreePath,
       }),
     ).toThrow(
       "numeric STELLA_DEV_INSTANCE must be an integer between 0 and 19634",
@@ -228,11 +229,10 @@ describe("resolveOffset", () => {
   test("uses default ports for the main checkout", () => {
     expect(
       resolveOffset({
-        branchName: "main",
         devInstance: undefined,
         isWorktree: false,
         portOffset: undefined,
-        worktreeName: "stella-1",
+        worktreePath: "/Users/dev/stella",
       }),
     ).toEqual({
       offset: 0,
@@ -240,17 +240,31 @@ describe("resolveOffset", () => {
     });
   });
 
-  test("hashes worktree identity when no explicit override exists", () => {
+  test("hashes the worktree path into the bucket range", () => {
     const resolved = resolveOffset({
-      branchName: "codex/dev-runner-bootstrap",
       devInstance: undefined,
       isWorktree: true,
       portOffset: undefined,
-      worktreeName: "stella-1-dev-runner-bootstrap",
+      worktreePath,
     });
 
     expect(resolved.offset).toBeGreaterThan(0);
-    expect(resolved.source).toContain("hashed worktree=");
+    expect(resolved.offset).toBeLessThanOrEqual(MAX_HASH_OFFSET);
+    expect(resolved.source).toBe(`hashed worktree path=${worktreePath}`);
+  });
+
+  test("gives sibling worktrees separate offsets", () => {
+    const offsetFor = (candidatePath: string) =>
+      resolveOffset({
+        devInstance: undefined,
+        isWorktree: true,
+        portOffset: undefined,
+        worktreePath: candidatePath,
+      }).offset;
+
+    expect(offsetFor("/Users/dev/stella/.worktrees/alpha")).not.toBe(
+      offsetFor("/Users/dev/stella/.worktrees/beta"),
+    );
   });
 });
 
@@ -408,6 +422,36 @@ describe("shared Docker service readiness", () => {
     ).toBe("rustfs-setup has not completed yet (state=running)");
 
     expect(getSharedDockerServicesWaitFailure(readyStatuses)).toBeUndefined();
+  });
+});
+
+describe("describeFailedProbes", () => {
+  test("names each failing service with its error", () => {
+    expect(
+      describeFailedProbes([
+        { service: "postgres", status: "ok" },
+        {
+          error: "connect ECONNRESET 127.0.0.1:27379",
+          service: "valkey",
+          status: "failed",
+        },
+        { error: "timeout", service: "rustfs", status: "failed" },
+        { error: "HTTP 503", service: "gotenberg", status: "failed" },
+      ]),
+    ).toEqual([
+      "valkey: connect ECONNRESET 127.0.0.1:27379",
+      "rustfs: timeout",
+      "gotenberg: HTTP 503",
+    ]);
+  });
+
+  test("reports nothing when every probe succeeded", () => {
+    expect(
+      describeFailedProbes([
+        { service: "postgres", status: "ok" },
+        { service: "valkey", status: "ok" },
+      ]),
+    ).toEqual([]);
   });
 });
 

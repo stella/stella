@@ -6,6 +6,7 @@ import {
   lstatSync,
   mkdirSync,
   readFileSync,
+  realpathSync,
   symlinkSync,
   writeFileSync,
 } from "node:fs";
@@ -47,7 +48,7 @@ const SHARED_DOCKER_COMPLETED_SERVICES = ["rustfs-setup"] as const;
 const LEGACY_OBJECT_STORE_SERVICE = "minio";
 const RUSTFS_S3_DEV_ACCESS_KEY = "stella-rustfs-dev";
 const RUSTFS_S3_DEV_SECRET_KEY = "stella-rustfs-dev-secret";
-const MAX_HASH_OFFSET = 400;
+export const MAX_HASH_OFFSET = 400;
 const PORT_SEARCH_LIMIT = 2000;
 // The web app renders via TanStack Start SSR (root document from __root.tsx),
 // which mounts into <body> directly — there is no `<div id="app">` SPA mount.
@@ -64,11 +65,10 @@ export type InfraPorts = {
 };
 
 export type OffsetConfig = {
-  branchName: string | undefined;
   devInstance: string | undefined;
   isWorktree: boolean;
   portOffset: number | undefined;
-  worktreeName: string | undefined;
+  worktreePath: string;
 };
 
 export type ResolvedOffset = {
@@ -84,7 +84,7 @@ export type DevPorts = {
 };
 
 type GitContext = {
-  branchName: string | undefined;
+  canonicalRoot: string;
   commonGitDir: string;
   currentRoot: string;
   isWorktree: boolean;
@@ -157,11 +157,6 @@ const hashSeed = (seed: string) => {
   return hash;
 };
 
-const normalizeCommandOutput = (output: string) => {
-  const trimmed = output.trim();
-  return trimmed.length > 0 ? trimmed : undefined;
-};
-
 const resolveCommandPath = (command: string) => Bun.which(command) ?? command;
 
 const resolveMaybeRelativePath = (cwd: string, value: string) =>
@@ -176,11 +171,10 @@ const validateOffset = (offset: number, source: string) => {
 };
 
 export const resolveOffset = ({
-  branchName,
   devInstance,
   isWorktree,
   portOffset,
-  worktreeName,
+  worktreePath,
 }: OffsetConfig): ResolvedOffset => {
   if (portOffset !== undefined) {
     validateOffset(portOffset, "STELLA_PORT_OFFSET");
@@ -216,17 +210,13 @@ export const resolveOffset = ({
     };
   }
 
-  const seed = branchName?.trim() || worktreeName?.trim();
-  if (!seed) {
-    return {
-      offset: 1,
-      source: "fallback worktree offset",
-    };
-  }
-
+  // The seed is the worktree's canonical path, never the branch: a checkout
+  // switching branches must keep the ports its running stack and its
+  // port-pinned local state (Better Auth OAuth resource policies, cookies)
+  // were set up on.
   return {
-    offset: (hashSeed(seed) % MAX_HASH_OFFSET) + 1,
-    source: `hashed worktree=${seed}`,
+    offset: (hashSeed(worktreePath) % MAX_HASH_OFFSET) + 1,
+    source: `hashed worktree path=${worktreePath}`,
   };
 };
 
@@ -311,6 +301,19 @@ export const checkPortAvailabilityOnHosts = async (
   return true;
 };
 
+// A probe reports why it failed, not just that it did: Docker Desktop's port
+// forwarder can reset one published port while the container still reports
+// healthy, and only the per-service error makes that visible.
+type ProbeOutcome = { error: string; status: "failed" } | { status: "ok" };
+
+const describeProbeError = (error: unknown) => {
+  if (!(error instanceof Error)) {
+    return String(error);
+  }
+
+  return error.name === "TimeoutError" ? "timeout" : error.message;
+};
+
 const connectToPort = async ({
   host = "127.0.0.1",
   port,
@@ -320,39 +323,42 @@ const connectToPort = async ({
   port: number;
   timeoutMs?: number;
 }) =>
-  await new Promise<boolean>((resolve) => {
+  await new Promise<ProbeOutcome>((resolve) => {
     const socket = new Socket();
 
-    const finish = (result: boolean) => {
+    const finish = (outcome: ProbeOutcome) => {
       socket.removeAllListeners();
       socket.destroy();
-      resolve(result);
+      resolve(outcome);
     };
 
     socket.once("connect", () => {
-      finish(true);
+      finish({ status: "ok" });
     });
 
-    socket.once("error", () => {
-      finish(false);
+    socket.once("error", (error: Error) => {
+      finish({ error: error.message, status: "failed" });
     });
 
     socket.setTimeout(timeoutMs, () => {
-      finish(false);
+      finish({ error: "timeout", status: "failed" });
     });
 
     socket.connect(port, host);
   });
 
-const checkHttpOk = async (url: string) => {
+const probeHttpHealth = async (url: string): Promise<ProbeOutcome> => {
   try {
     const response = await fetch(url, {
       method: "GET",
       signal: AbortSignal.timeout(DEFAULT_HTTP_PROBE_TIMEOUT_MS),
     });
-    return response.ok;
-  } catch {
-    return false;
+
+    return response.ok
+      ? { status: "ok" }
+      : { error: `HTTP ${String(response.status)}`, status: "failed" };
+  } catch (error) {
+    return { error: describeProbeError(error), status: "failed" };
   }
 };
 
@@ -367,15 +373,47 @@ const readJson = (bodyText: string): unknown => {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
-const areSharedDockerServicesHealthy = async (infraPorts: InfraPorts) => {
-  const healthChecks = await Promise.all([
-    connectToPort({ port: infraPorts.postgres }),
-    connectToPort({ port: infraPorts.valkey }),
-    checkHttpOk(`http://127.0.0.1:${String(infraPorts.rustfs)}/health`),
-    checkHttpOk(`http://127.0.0.1:${String(infraPorts.gotenberg)}/health`),
-  ]);
+export type SharedDockerService =
+  (typeof SHARED_DOCKER_HEALTHY_SERVICES)[number];
 
-  return healthChecks.every(Boolean);
+export type SharedServiceProbe = ProbeOutcome & {
+  service: SharedDockerService;
+};
+
+const probeSharedDockerServices = async (
+  infraPorts: InfraPorts,
+): Promise<SharedServiceProbe[]> => {
+  const probes = {
+    gotenberg: probeHttpHealth(
+      `http://127.0.0.1:${String(infraPorts.gotenberg)}/health`,
+    ),
+    postgres: connectToPort({ port: infraPorts.postgres }),
+    rustfs: probeHttpHealth(
+      `http://127.0.0.1:${String(infraPorts.rustfs)}/health`,
+    ),
+    valkey: connectToPort({ port: infraPorts.valkey }),
+  } satisfies Record<SharedDockerService, Promise<ProbeOutcome>>;
+
+  return await Promise.all(
+    SHARED_DOCKER_HEALTHY_SERVICES.map(async (service) => ({
+      service,
+      ...(await probes[service]),
+    })),
+  );
+};
+
+export const describeFailedProbes = (
+  probes: readonly SharedServiceProbe[],
+): string[] => {
+  const failures: string[] = [];
+
+  for (const probe of probes) {
+    if (probe.status === "failed") {
+      failures.push(`${probe.service}: ${probe.error}`);
+    }
+  }
+
+  return failures;
 };
 
 const isHealthyApiPort = async (port: number) => {
@@ -716,7 +754,11 @@ const ensureDockerServices = async ({
     );
   }
 
-  if (await areSharedDockerServicesHealthy(infraPorts)) {
+  const failedProbes = describeFailedProbes(
+    await probeSharedDockerServices(infraPorts),
+  );
+
+  if (failedProbes.length === 0) {
     const currentFailure = getSharedDockerServicesWaitFailure(
       readSharedDockerServiceStatuses({
         infraOffset,
@@ -734,7 +776,7 @@ const ensureDockerServices = async ({
     );
   } else if (!(await areSharedDockerPortsFree(infraPorts))) {
     panic(
-      `Shared Docker ports (${sharedInfraPortList(infraPorts).join(", ")}) are already allocated, but the shared dev services did not pass health checks. Stop the conflicting stack, or use --infra-offset to shift stella's infra ports.`,
+      `Shared Docker ports (${sharedInfraPortList(infraPorts).join(", ")}) are already allocated, but the shared dev services did not pass health checks (${failedProbes.join("; ")}). Stop the conflicting stack, or use --infra-offset to shift stella's infra ports.`,
     );
   }
 
@@ -1306,12 +1348,6 @@ const createGitContext = (cwd: string): GitContext => {
     cmd: [resolveCommandPath("git"), "rev-parse", "--git-common-dir"],
     cwd,
   });
-  const branchName = normalizeCommandOutput(
-    runCommandText({
-      cmd: [resolveCommandPath("git"), "branch", "--show-current"],
-      cwd,
-    }),
-  );
   const commonGitDir = resolveMaybeRelativePath(
     currentRoot,
     commonGitDirOutput,
@@ -1319,7 +1355,10 @@ const createGitContext = (cwd: string): GitContext => {
   const isWorktree = isWorktreeCheckout(currentRoot);
 
   return {
-    branchName,
+    // Symlinked parents (macOS /tmp, linked worktree roots) would otherwise
+    // hash the same checkout to different offsets depending on the cwd it was
+    // reached through.
+    canonicalRoot: realpathSync(currentRoot),
     commonGitDir,
     currentRoot,
     isWorktree,
@@ -1736,11 +1775,10 @@ const main = async () => {
   }
 
   const initialOffset = resolveOffset({
-    branchName: gitContext.branchName,
     devInstance,
     isWorktree: gitContext.isWorktree,
     portOffset,
-    worktreeName: path.basename(gitContext.currentRoot),
+    worktreePath: gitContext.canonicalRoot,
   });
   const resolvedOffset = await findFirstAvailableOffset({
     mode,
