@@ -8,6 +8,7 @@ import { propertyConfig } from "@stll/property-testing";
 
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import {
+  ANNOTATION_JSON_SCHEMA_KEYWORDS,
   providerSafeJsonSchemaOptionsForTanStackProvider,
   projectToProviderSafeJsonSchema,
   PROVIDER_SAFE_JSON_SCHEMA_KEYWORDS,
@@ -121,6 +122,26 @@ const schemaWithComposition = fc.oneof(
   scalarSchema.map((schema) => ({
     oneOf: [schema, { type: "number", exclusiveMinimum: 0 }],
   })),
+);
+
+// Roots that constrain nothing once projected: annotations the subset keeps and
+// keywords it drops, in every combination including none of them.
+const schemaWithoutConstraints = fc.record(
+  {
+    title: fc.string({ maxLength: 12 }),
+    description: fc.string({ maxLength: 12 }),
+    default: jsonSchemaLiteral,
+    example: jsonSchemaLiteral,
+    $schema: fc.constant("https://json-schema.org/draft/2020-12/schema"),
+    $comment: fc.string({ maxLength: 12 }),
+    propertyNames: fc.constant({ type: "string" }),
+  },
+  { requiredKeys: [] },
+);
+
+const projectableSchema = fc.oneof(
+  schemaWithComposition,
+  schemaWithoutConstraints,
 );
 
 describe("projectToProviderSafeJsonSchema", () => {
@@ -1091,7 +1112,7 @@ describe("projectToProviderSafeJsonSchema", () => {
   test("property: projection only emits provider-safe schema keywords", () => {
     fc.assert(
       fc.property(
-        schemaWithComposition,
+        projectableSchema,
         fc.constantFrom("json-schema", "openapi" as const),
         (input, nullUnionStrategy) => {
           const { schema } = projectToProviderSafeJsonSchema(input, {
@@ -1105,10 +1126,44 @@ describe("projectToProviderSafeJsonSchema", () => {
     );
   });
 
+  test("gives a root left without a shape an object type", () => {
+    for (const input of [
+      {},
+      { $schema: "https://json-schema.org/draft/2020-12/schema" },
+      { propertyNames: { type: "string" } },
+      { title: "Arguments", description: "Takes no arguments" },
+    ]) {
+      expect(projectToProviderSafeJsonSchema(input).schema).toMatchObject({
+        type: "object",
+      });
+    }
+  });
+
+  test("property: no projected root is left holding only annotations", () => {
+    const annotations = new Set<string>(ANNOTATION_JSON_SCHEMA_KEYWORDS);
+
+    fc.assert(
+      fc.property(
+        projectableSchema,
+        fc.constantFrom("json-schema", "openapi" as const),
+        (input, nullUnionStrategy) => {
+          const { schema } = projectToProviderSafeJsonSchema(input, {
+            nullUnionStrategy,
+          });
+
+          expect(
+            Object.keys(schema).some((keyword) => !annotations.has(keyword)),
+          ).toBe(true);
+        },
+      ),
+      propertyConfig({ numRuns: 300 }),
+    );
+  });
+
   test("property: projecting an already projected schema is stable", () => {
     fc.assert(
       fc.property(
-        schemaWithComposition,
+        projectableSchema,
         fc.constantFrom("json-schema", "openapi" as const),
         (input, nullUnionStrategy) => {
           const first = projectToProviderSafeJsonSchema(input, {

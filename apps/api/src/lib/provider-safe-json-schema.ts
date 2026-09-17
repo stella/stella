@@ -99,10 +99,55 @@ const isValueConstraintJsonSchemaKeyword = (
 export const VALUE_CONSTRAINT_JSON_SCHEMA_KEYWORDS =
   PROVIDER_SAFE_JSON_SCHEMA_KEYWORDS.filter(isValueConstraintJsonSchemaKeyword);
 
+/**
+ * Whether an allowlisted keyword constrains the values a schema accepts or
+ * only annotates them. Total over the allowlist, so a keyword added there has
+ * to state a role rather than inherit one. `format` counts as a constraint:
+ * providers enforce it.
+ */
+const JSON_SCHEMA_KEYWORD_ROLE = {
+  type: "constraint",
+  format: "constraint",
+  title: "annotation",
+  description: "annotation",
+  nullable: "constraint",
+  enum: "constraint",
+  properties: "constraint",
+  required: "constraint",
+  items: "constraint",
+  anyOf: "constraint",
+  default: "annotation",
+  minimum: "constraint",
+  maximum: "constraint",
+  minItems: "constraint",
+  maxItems: "constraint",
+  minLength: "constraint",
+  maxLength: "constraint",
+  pattern: "constraint",
+  additionalProperties: "constraint",
+  example: "annotation",
+} as const satisfies Record<
+  ProviderSafeJsonSchemaKeyword,
+  "annotation" | "constraint"
+>;
+
+const isAnnotationJsonSchemaKeyword = (
+  keyword: ProviderSafeJsonSchemaKeyword,
+): boolean => JSON_SCHEMA_KEYWORD_ROLE[keyword] === "annotation";
+
+/**
+ * Allowlisted keywords that say nothing about the values a schema accepts.
+ * Exported so the projection's own assertions read this list instead of a
+ * copy of it.
+ */
+export const ANNOTATION_JSON_SCHEMA_KEYWORDS =
+  PROVIDER_SAFE_JSON_SCHEMA_KEYWORDS.filter(isAnnotationJsonSchemaKeyword);
+
 const ALLOWED_KEYWORDS = new Set<string>(PROVIDER_SAFE_JSON_SCHEMA_KEYWORDS);
 const VALUE_CONSTRAINT_KEYWORDS = new Set<string>(
   VALUE_CONSTRAINT_JSON_SCHEMA_KEYWORDS,
 );
+const ANNOTATION_KEYWORDS = new Set<string>(ANNOTATION_JSON_SCHEMA_KEYWORDS);
 
 const VALUE_CONSTRAINT_DESCRIPTIONS = {
   minimum: "Minimum value (inclusive)",
@@ -1068,6 +1113,20 @@ const projectNode = ({
 };
 
 /**
+ * A root left holding nothing but annotations constrains nothing: the
+ * permissive `{}` schema projects that way, and so does one whose only other
+ * keywords fell outside the provider-safe subset. Such a root is legal JSON
+ * Schema but unusable where this projection lands, because a tool input schema
+ * has to state `type: "object"` at its root. Both positions the projection
+ * feeds describe an object, so say so. Nested nodes still project to `{}`,
+ * which remains a valid "any" subschema.
+ */
+const withRootShape = (schema: JsonObject): JsonObject =>
+  Object.keys(schema).some((keyword) => !ANNOTATION_KEYWORDS.has(keyword))
+    ? schema
+    : { ...schema, type: "object" };
+
+/**
  * Project a JSON Schema into the provider-safe subset. Pure: returns a fresh
  * schema plus the dotted paths of every keyword that was dropped.
  */
@@ -1091,6 +1150,8 @@ export const projectToProviderSafeJsonSchema = (
     context,
     seenRefs: new Set(),
   });
-  const safeSchema = isJsonObject(projected) ? projected : schema;
+  const safeSchema = isJsonObject(projected)
+    ? withRootShape(projected)
+    : schema;
   return { schema: safeSchema, droppedKeywords: context.dropped };
 };
