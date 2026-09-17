@@ -44,9 +44,8 @@ type HorizontalScrollAnchorInput = {
  * common answer and the reason this returns one: the browser already keeps a
  * scroll offset across a reflow, so anchoring means writing nothing.
  *
- * Offsets are read on the physical axis, the way `scrollLeft` reports them. An
- * RTL container reports a negative offset, which no branch here matches, so it
- * falls through to leaving the scroll alone — the anchored outcome either way.
+ * Both edges are reasoned about as a distance from the inline-start edge, so
+ * an RTL table anchors and follows its end edge the same way an LTR one does.
  */
 export const anchoredHorizontalScroll = ({
   next,
@@ -57,18 +56,25 @@ export const anchoredHorizontalScroll = ({
     return null;
   }
 
+  // Every browser this app targets reports an RTL offset as 0 down to -max, so
+  // the sign `scrollLeft` carries is the container's writing mode rather than
+  // part of the distance. Decide on the distance, write back on the same side.
+  const offset = Math.abs(scrollLeft);
+  const onReportedSide = (distance: number) =>
+    scrollLeft < 0 ? -distance : distance;
+
   const maxScroll = horizontalMaxScroll(next);
-  const clamped = scrollLeft > maxScroll ? maxScroll : null;
+  const clamped = offset > maxScroll ? onReportedSide(maxScroll) : null;
 
   if (previous.wrapperWidth !== next.wrapperWidth) {
     return clamped;
   }
 
   const wasAtEndEdge =
-    scrollLeft >= horizontalMaxScroll(previous) - END_EDGE_TOLERANCE_PX;
+    offset >= horizontalMaxScroll(previous) - END_EDGE_TOLERANCE_PX;
   if (!wasAtEndEdge) {
     return clamped;
   }
 
-  return scrollLeft === maxScroll ? null : maxScroll;
+  return offset === maxScroll ? null : onReportedSide(maxScroll);
 };

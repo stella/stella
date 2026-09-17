@@ -174,9 +174,9 @@ describe("table horizontal scroll anchoring", () => {
     ).toBeNull();
   });
 
-  test("an RTL container's negative offset is left untouched", () => {
-    // RTL reports the offset as negative, which no write branch matches; the
-    // dock must not move those columns either.
+  test("an RTL dock opening leaves the reader's columns where they are", () => {
+    // RTL reports the offset as negative; the dock must not move those
+    // columns either.
     for (const scrollLeft of [-400, -120, 0]) {
       expect(
         anchoredHorizontalScroll({
@@ -189,5 +189,47 @@ describe("table horizontal scroll anchoring", () => {
         }),
       ).toBeNull();
     }
+  });
+
+  test("an RTL grid that grows keeps its end edge, on the reported side", () => {
+    const previous: HorizontalScrollMetrics = {
+      tableWidth: TABLE_WIDTH,
+      wrapperWidth: OPEN_WRAPPER_WIDTH,
+    };
+    const next: HorizontalScrollMetrics = {
+      tableWidth: TABLE_WIDTH + 300,
+      wrapperWidth: OPEN_WRAPPER_WIDTH,
+    };
+
+    expect(
+      anchoredHorizontalScroll({
+        next,
+        previous,
+        scrollLeft: -horizontalMaxScroll(previous),
+      }),
+    ).toBe(-horizontalMaxScroll(next));
+  });
+
+  test("an RTL offset past the end of a shrunken grid is clamped to it", () => {
+    expect(
+      anchoredHorizontalScroll({
+        next: { tableWidth: 1300, wrapperWidth: OPEN_WRAPPER_WIDTH },
+        previous: { tableWidth: TABLE_WIDTH, wrapperWidth: OPEN_WRAPPER_WIDTH },
+        scrollLeft: -320,
+      }),
+    ).toBe(-100);
+  });
+
+  test("an RTL grid that grows leaves a reader mid-scroll where they were", () => {
+    expect(
+      anchoredHorizontalScroll({
+        next: {
+          tableWidth: TABLE_WIDTH + 300,
+          wrapperWidth: OPEN_WRAPPER_WIDTH,
+        },
+        previous: { tableWidth: TABLE_WIDTH, wrapperWidth: OPEN_WRAPPER_WIDTH },
+        scrollLeft: -120,
+      }),
+    ).toBeNull();
   });
 });
