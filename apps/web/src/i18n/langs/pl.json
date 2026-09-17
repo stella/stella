@@ -5456,6 +5456,7 @@
       "sortAscendingDate": "Od najstarszych",
       "sortDescending": "Sortuj malejąco",
       "sortDescendingDate": "Od najnowszych",
+      "splitOptions": "{count, plural, one {Split into # option} other {Split into # options}}",
       "suggestWithAI": "Zaproponuj z AI",
       "text": "Tekst",
       "typeChangeWarning": "Istniejące dane zostaną usunięte i ponownie pobrane przy zapisie.",

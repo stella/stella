@@ -5456,6 +5456,7 @@
       "sortAscendingDate": "الأقدم أولًا",
       "sortDescending": "ترتيب تنازلي",
       "sortDescendingDate": "الأحدث أولًا",
+      "splitOptions": "{count, plural, one {Split into # option} other {Split into # options}}",
       "suggestWithAI": "اقترح بالذكاء الاصطناعي",
       "text": "نص",
       "typeChangeWarning": "سيتم مسح البيانات الحالية وإعادة بنائها عند الحفظ.",

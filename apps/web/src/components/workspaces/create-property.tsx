@@ -683,8 +683,8 @@ const PropertyComposerBody = ({
     );
   };
 
-  const pushOption = (option: WorkspacePropertyOption) =>
-    setOptions((prev) => [...prev, option]);
+  const pushOptions = (added: WorkspacePropertyOption[]) =>
+    setOptions((prev) => [...prev, ...added]);
   const removeOptionAt = (index: number) =>
     setOptions((prev) => prev.filter((_, i) => i !== index));
   const replaceOptionAt = (index: number, option: WorkspacePropertyOption) =>
@@ -784,7 +784,7 @@ const PropertyComposerBody = ({
             fallback={effectiveFallback}
             onFallbackChange={setFallback}
             options={options}
-            pushOption={pushOption}
+            pushOptions={pushOptions}
             removeOptionAt={removeOptionAt}
             replaceOptionAt={replaceOptionAt}
           />

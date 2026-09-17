@@ -5456,6 +5456,7 @@
       "sortAscendingDate": "Vanemad enne",
       "sortDescending": "Sorteeri kahanevalt",
       "sortDescendingDate": "Uuemad enne",
+      "splitOptions": "{count, plural, one {Split into # option} other {Split into # options}}",
       "suggestWithAI": "Soovita AI-ga",
       "text": "Tekst",
       "typeChangeWarning": "Olemasolevad andmed kustutatakse ja luuakse salvestamisel uuesti.",

@@ -1,7 +1,7 @@
 import { useId, useRef, useState } from "react";
 
 import { panic } from "better-result";
-import { PlusIcon, XIcon } from "lucide-react";
+import { PlusIcon, SplitIcon, XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
@@ -13,6 +13,10 @@ import {
 } from "@stll/ui/popover";
 import { contentDir } from "@stll/ui/use-content-dir";
 
+import {
+  hasOptionSeparator,
+  splitOptionValues,
+} from "@/components/workspaces/properties/inline-option-editor.logic";
 import { SelectFallback } from "@/components/workspaces/properties/select-fallback";
 import { SelectColorIcon } from "@/components/workspaces/properties/shared";
 import {
@@ -27,7 +31,8 @@ const colorAt = (index: number): OptionColor =>
 
 type InlineOptionEditorProps = {
   options: WorkspacePropertyOption[];
-  pushOption: (option: WorkspacePropertyOption) => void;
+  /** Several at once: a pasted list lands in one update, never one per option. */
+  pushOptions: (options: WorkspacePropertyOption[]) => void;
   removeOptionAt: (index: number) => void;
   replaceOptionAt: (index: number, option: WorkspacePropertyOption) => void;
   fallback: string | null;
@@ -41,7 +46,7 @@ type InlineOptionEditorProps = {
 
 export const InlineOptionEditor = ({
   options,
-  pushOption,
+  pushOptions,
   removeOptionAt,
   replaceOptionAt,
   fallback,
@@ -61,20 +66,48 @@ export const InlineOptionEditor = ({
     return rowId;
   };
 
+  const addValues = (text: string) => {
+    const values = splitOptionValues({
+      text,
+      existing: options.map((option) => option.value),
+    });
+    if (values.length === 0) {
+      setDraft("");
+      return;
+    }
+    const addedRowIds = values.map(() => allocateRowId());
+    setRowIds((current) => [...current, ...addedRowIds]);
+    pushOptions(
+      values.map((value, index) => ({
+        value,
+        color: colorAt(options.length + index),
+      })),
+    );
+    setDraft("");
+  };
+
+  /** Enter keeps the draft as one option; splitting is offered, never assumed. */
   const addFromDraft = () => {
     const value = draft.trim();
     if (value.length === 0) {
       return;
     }
-    if (options.some((o) => o.value === value)) {
+    if (options.some((option) => option.value === value)) {
       setDraft("");
       return;
     }
     const rowId = allocateRowId();
     setRowIds((current) => [...current, rowId]);
-    pushOption({ value, color: colorAt(options.length) });
+    pushOptions([{ value, color: colorAt(options.length) }]);
     setDraft("");
   };
+
+  const suggestedSplit = hasOptionSeparator(draft)
+    ? splitOptionValues({
+        text: draft,
+        existing: options.map((option) => option.value),
+      })
+    : [];
 
   const renameAt = (index: number, value: string) => {
     const existing = options[index];
@@ -145,6 +178,21 @@ export const InlineOptionEditor = ({
           value={draft}
         />
       </label>
+
+      {suggestedSplit.length > 1 && (
+        <Button
+          className="self-start"
+          onClick={() => addValues(draft)}
+          size="sm"
+          type="button"
+          variant="outline"
+        >
+          <SplitIcon className="size-3.5" />
+          {t("workspaces.properties.splitOptions", {
+            count: suggestedSplit.length,
+          })}
+        </Button>
+      )}
 
       {options.length > 0 && onFallbackChange !== undefined && (
         <SelectFallback
