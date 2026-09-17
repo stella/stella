@@ -1785,6 +1785,8 @@
     "applyDirect": "Direkt",
     "applyTracked": "Nachverfolgte Änderungen",
     "barLabel": "Vorschlagsprüfung",
+    "blockedCollaboration": "Die gemeinsame Bearbeitungssitzung wird noch geöffnet. Versuchen Sie es gleich noch einmal.",
+    "blockedOpening": "Das Dokument wird noch geöffnet. Versuchen Sie es gleich noch einmal.",
     "change": {
       "deleteParagraph": "Absatz löschen",
       "replacement": "„{find}“ → „{replace}“"
@@ -1796,8 +1798,10 @@
     "finalizePendingNote": "{count, plural, one {# Vorschlag steht noch zur Prüfung aus.} other {# Vorschläge stehen noch zur Prüfung aus.}}",
     "hideAccepted": "Angenommene Vorschläge ausblenden",
     "keepInReview": "In Prüfung behalten",
+    "notApplied": "Änderung nicht übernommen",
     "pendingLimitReached": "Für dieses Dokument stehen zu viele Vorschläge zur Prüfung aus. Bearbeiten Sie einige, bevor Sie weitere anfordern.",
     "persistFailed": "Ihre Prüfungsänderung konnte nicht gespeichert werden",
+    "readOnlyNotice": "Vorschläge lassen sich hier nicht auf dieses Dokument anwenden.",
     "reject": "Ablehnen",
     "rejectAll": "Alle ablehnen",
     "revert": "Zurücksetzen",

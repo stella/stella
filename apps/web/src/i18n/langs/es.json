@@ -1785,6 +1785,8 @@
     "applyDirect": "Directo",
     "applyTracked": "Control de cambios",
     "barLabel": "Revisión de sugerencias",
+    "blockedCollaboration": "La sesión de edición compartida aún se está abriendo. Inténtalo de nuevo en un momento.",
+    "blockedOpening": "El documento aún se está abriendo. Inténtalo de nuevo en un momento.",
     "change": {
       "deleteParagraph": "Eliminar párrafo",
       "replacement": "“{find}” → “{replace}”"
@@ -1796,8 +1798,10 @@
     "finalizePendingNote": "{count, plural, one {# sugerencia sigue pendiente de revisión.} other {# sugerencias siguen pendientes de revisión.}}",
     "hideAccepted": "Ocultar sugerencias aceptadas",
     "keepInReview": "Mantener en revisión",
+    "notApplied": "Cambio no aplicado",
     "pendingLimitReached": "Este documento tiene demasiadas sugerencias pendientes de revisión. Resuelva algunas antes de pedir más.",
     "persistFailed": "No se pudo guardar tu cambio de revisión",
+    "readOnlyNotice": "Aquí no se pueden aplicar sugerencias a este documento.",
     "reject": "Rechazar",
     "rejectAll": "Rechazar todo",
     "revert": "Revertir",

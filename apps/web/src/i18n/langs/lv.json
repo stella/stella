@@ -1785,6 +1785,8 @@
     "applyDirect": "Tieši",
     "applyTracked": "Izsekotās izmaiņas",
     "barLabel": "Ieteikumu pārskatīšana",
+    "blockedCollaboration": "Koplietotā rediģēšanas sesija vēl tiek atvērta. Mēģiniet vēlreiz pēc brīža.",
+    "blockedOpening": "Dokuments vēl tiek atvērts. Mēģiniet vēlreiz pēc brīža.",
     "change": {
       "deleteParagraph": "Dzēst rindkopu",
       "replacement": "„{find}” → „{replace}”"
@@ -1796,8 +1798,10 @@
     "finalizePendingNote": "{count, plural, zero {# ieteikumu joprojām gaida pārskatīšanu.} one {# ieteikums joprojām gaida pārskatīšanu.} other {# ieteikumi joprojām gaida pārskatīšanu.}}",
     "hideAccepted": "Slēpt pieņemtos ieteikumus",
     "keepInReview": "Atstāt pārskatīšanai",
+    "notApplied": "Izmaiņa netika piemērota",
     "pendingLimitReached": "Šajā dokumentā pārāk daudz ieteikumu gaida pārskatīšanu. Pirms pieprasāt jaunus, izskatiet dažus no tiem.",
     "persistFailed": "Neizdevās saglabāt jūsu pārskatīšanas izmaiņas",
+    "readOnlyNotice": "Ieteikumus šim dokumentam šeit nevar piemērot.",
     "reject": "Noraidīt",
     "rejectAll": "Noraidīt visu",
     "revert": "Atjaunot",

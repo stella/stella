@@ -1785,6 +1785,8 @@
     "applyDirect": "Priame",
     "applyTracked": "Sledované zmeny",
     "barLabel": "Revízia návrhov",
+    "blockedCollaboration": "Zdieľaná úprava sa ešte otvára. Skúste to o chvíľu znova.",
+    "blockedOpening": "Dokument sa ešte otvára. Skúste to o chvíľu znova.",
     "change": {
       "deleteParagraph": "Vymazať odsek",
       "replacement": "„{find}“ → „{replace}“"
@@ -1796,8 +1798,10 @@
     "finalizePendingNote": "{count, plural, one {# návrh stále čaká na revíziu.} few {# návrhy stále čakajú na revíziu.} other {# návrhov stále čaká na revíziu.}}",
     "hideAccepted": "Skryť prijaté návrhy",
     "keepInReview": "Ponechať v revízii",
+    "notApplied": "Zmena nebola použitá",
     "pendingLimitReached": "Tento dokument má príliš veľa návrhov čakajúcich na revíziu. Skôr než požiadate o ďalšie, niektoré vyriešte.",
     "persistFailed": "Nepodarilo sa uložiť vašu zmenu revízie",
+    "readOnlyNotice": "Návrhy do tohto dokumentu tu použiť nemožno.",
     "reject": "Odmietnuť",
     "rejectAll": "Odmietnuť všetky",
     "revert": "Vrátiť",

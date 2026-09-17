@@ -71,7 +71,10 @@ import type { ReviewSuggestion } from "@/components/ai-suggestions/review-store"
 import { useFolioDocumentBlocks } from "@/components/ai-suggestions/use-folio-document-blocks";
 import { useReviewActions } from "@/components/ai-suggestions/use-review-actions";
 import { useReviewChangeSummary } from "@/components/ai-suggestions/use-review-change-summary";
-import type { DocxEditModeResult } from "@/components/docx/docx-browser-editor.logic";
+import type {
+  DocxEditBlockReason,
+  DocxEditModeResult,
+} from "@/components/docx/docx-browser-editor.logic";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useHydrationSafeHotkeyPlatform } from "@/hooks/use-hydration-safe-hotkey-platform";
@@ -91,6 +94,12 @@ type ReviewBarProps = {
   docxEditorRef: RefObject<DocxEditorRef | null>;
   /** Whether the editor currently accepts edit operations. */
   docxEditable: boolean;
+  /**
+   * Why this document cannot be put into edit mode, when it cannot. `unsafe`
+   * is the verdict that does not pass: the bar then offers reading, not
+   * applying, rather than buttons whose click cannot land.
+   */
+  applyBlockReason?: DocxEditBlockReason | null;
   requestDocxEditMode?: (() => Promise<DocxEditModeResult>) | undefined;
 };
 
@@ -99,6 +108,7 @@ export const ReviewBar = ({
   persistence,
   docxEditorRef,
   docxEditable,
+  applyBlockReason = null,
   requestDocxEditMode,
 }: ReviewBarProps) => {
   const t = useTranslations();
@@ -361,7 +371,14 @@ export const ReviewBar = ({
         {t("inspector.review.why")}
       </Button>
       <span aria-hidden="true" className="bg-border mx-0.5 h-5 w-px" />
-      {activeAction === "revert" && (
+      {applyBlockReason === "unsafe" && (
+        // Folio cannot rewrite this DOCX, so no accept can land. Say that once,
+        // quietly, instead of offering buttons whose click does nothing.
+        <span className="text-muted-foreground px-1 text-xs">
+          {t("docxReview.readOnlyNotice")}
+        </span>
+      )}
+      {applyBlockReason !== "unsafe" && activeAction === "revert" && (
         <ReviewDecisionActions
           onRevert={revertActive}
           // Unlike accept/reject, revert keeps its label at every width: it is
@@ -372,35 +389,37 @@ export const ReviewBar = ({
           state="accepted"
         />
       )}
-      {activeAction !== "revert" && activeAction !== "resolved" && (
-        <ReviewDecisionActions
-          acceptLabel={
-            <span className="@max-[30rem]/review-bar:hidden">
-              {t("common.accept")}
-            </span>
-          }
-          acceptTooltip={`${t("common.accept")} · ${formatHotkeyForPlatform(
-            acceptHotkey,
-            hotkeyPlatform,
-          )}`}
-          onAccept={() => {
-            detached(acceptAndAdvance(), "review-bar.accept-and-advance");
-          }}
-          onReject={rejectAndAdvance}
-          rejectLabel={
-            <span className="@max-[30rem]/review-bar:hidden">
-              {t("docxReview.reject")}
-            </span>
-          }
-          rejectTooltip={`${t("docxReview.reject")} · ${formatHotkeyForPlatform(
-            rejectHotkey,
-            hotkeyPlatform,
-          )}`}
-          size="xs"
-          state={activeAction === "busy" ? "applying" : "pending"}
-        />
-      )}
-      {pendingChanges.length > 0 && (
+      {applyBlockReason !== "unsafe" &&
+        activeAction !== "revert" &&
+        activeAction !== "resolved" && (
+          <ReviewDecisionActions
+            acceptLabel={
+              <span className="@max-[30rem]/review-bar:hidden">
+                {t("common.accept")}
+              </span>
+            }
+            acceptTooltip={`${t("common.accept")} · ${formatHotkeyForPlatform(
+              acceptHotkey,
+              hotkeyPlatform,
+            )}`}
+            onAccept={() => {
+              detached(acceptAndAdvance(), "review-bar.accept-and-advance");
+            }}
+            onReject={rejectAndAdvance}
+            rejectLabel={
+              <span className="@max-[30rem]/review-bar:hidden">
+                {t("docxReview.reject")}
+              </span>
+            }
+            rejectTooltip={`${t("docxReview.reject")} · ${formatHotkeyForPlatform(
+              rejectHotkey,
+              hotkeyPlatform,
+            )}`}
+            size="xs"
+            state={activeAction === "busy" ? "applying" : "pending"}
+          />
+        )}
+      {applyBlockReason !== "unsafe" && pendingChanges.length > 0 && (
         <AcceptAllButton
           className="h-7 px-2.5 text-xs"
           onAcceptAll={acceptAll}
@@ -413,28 +432,34 @@ export const ReviewBar = ({
           </span>
         </AcceptAllButton>
       )}
-      <span aria-hidden="true" className="bg-border mx-0.5 h-5 w-px" />
-      <Select
-        onValueChange={(value) => {
-          if (value === "tracked-changes" || value === "direct") {
-            setApplyMode(value);
-          }
-        }}
-        value={applyMode}
-      >
-        <SelectTrigger
-          aria-label={t("docxReview.applyAs")}
-          className="hover:bg-muted h-7 w-auto max-w-64 min-w-0 justify-between gap-1 rounded-full border-0 bg-transparent px-2 text-xs font-medium @max-[26rem]/review-bar:max-w-36"
-        >
-          <SelectValue />
-        </SelectTrigger>
-        <SelectPopup>
-          <SelectItem value="tracked-changes">
-            {t("docxReview.applyTracked")}
-          </SelectItem>
-          <SelectItem value="direct">{t("docxReview.applyDirect")}</SelectItem>
-        </SelectPopup>
-      </Select>
+      {applyBlockReason !== "unsafe" && (
+        <>
+          <span aria-hidden="true" className="bg-border mx-0.5 h-5 w-px" />
+          <Select
+            onValueChange={(value) => {
+              if (value === "tracked-changes" || value === "direct") {
+                setApplyMode(value);
+              }
+            }}
+            value={applyMode}
+          >
+            <SelectTrigger
+              aria-label={t("docxReview.applyAs")}
+              className="hover:bg-muted h-7 w-auto max-w-64 min-w-0 justify-between gap-1 rounded-full border-0 bg-transparent px-2 text-xs font-medium @max-[26rem]/review-bar:max-w-36"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectPopup>
+              <SelectItem value="tracked-changes">
+                {t("docxReview.applyTracked")}
+              </SelectItem>
+              <SelectItem value="direct">
+                {t("docxReview.applyDirect")}
+              </SelectItem>
+            </SelectPopup>
+          </Select>
+        </>
+      )}
     </div>
   );
 };

@@ -2097,6 +2097,9 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
               coordinate space (it clears the composer at `bottom-24`).
               Returns null unless this entity has pending suggestions. */}
           <ReviewBar
+            applyBlockReason={getDocxEditBlockReason({
+              canSafelyEdit: compatibility?.canSafelyEdit,
+            })}
             docxEditable={isUnlocked}
             docxEditorRef={editorRef}
             entityId={entityId}

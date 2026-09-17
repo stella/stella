@@ -1785,6 +1785,8 @@
     "applyDirect": "Bezpośrednio",
     "applyTracked": "Śledzenie zmian",
     "barLabel": "Przegląd sugestii",
+    "blockedCollaboration": "Sesja wspólnej edycji dopiero się otwiera. Spróbuj ponownie za chwilę.",
+    "blockedOpening": "Dokument dopiero się otwiera. Spróbuj ponownie za chwilę.",
     "change": {
       "deleteParagraph": "Usuń akapit",
       "replacement": "„{find}” → „{replace}”"
@@ -1796,8 +1798,10 @@
     "finalizePendingNote": "{count, plural, one {# sugestia nadal oczekuje na przegląd.} few {# sugestie nadal oczekują na przegląd.} many {# sugestii nadal oczekuje na przegląd.} other {# sugestii nadal oczekuje na przegląd.}}",
     "hideAccepted": "Ukryj zaakceptowane sugestie",
     "keepInReview": "Zostaw w przeglądzie",
+    "notApplied": "Zmiana nie została zastosowana",
     "pendingLimitReached": "Ten dokument ma zbyt wiele sugestii oczekujących na przegląd. Rozpatrz część z nich, zanim poprosisz o kolejne.",
     "persistFailed": "Nie udało się zapisać zmiany przeglądu",
+    "readOnlyNotice": "Propozycji nie można tutaj zastosować do tego dokumentu.",
     "reject": "Odrzuć",
     "rejectAll": "Odrzuć wszystkie",
     "revert": "Cofnij",

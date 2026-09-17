@@ -1785,6 +1785,8 @@
     "applyDirect": "Tiesiogiai",
     "applyTracked": "Sekami pakeitimai",
     "barLabel": "Pasiūlymų peržiūra",
+    "blockedCollaboration": "Bendro redagavimo sesija dar atveriama. Pabandykite dar kartą po akimirkos.",
+    "blockedOpening": "Dokumentas dar atveriamas. Pabandykite dar kartą po akimirkos.",
     "change": {
       "deleteParagraph": "Ištrinti pastraipą",
       "replacement": "„{find}“ → „{replace}“"
@@ -1796,8 +1798,10 @@
     "finalizePendingNote": "{count, plural, one {# pasiūlymas vis dar laukia peržiūros.} few {# pasiūlymai vis dar laukia peržiūros.} other {# pasiūlymų vis dar laukia peržiūros.}}",
     "hideAccepted": "Slėpti priimtus pasiūlymus",
     "keepInReview": "Palikti peržiūrai",
+    "notApplied": "Pakeitimas nepritaikytas",
     "pendingLimitReached": "Šiame dokumente per daug pasiūlymų laukia peržiūros. Prieš prašydami naujų, išspręskite dalį jų.",
     "persistFailed": "Nepavyko išsaugoti jūsų peržiūros pakeitimo",
+    "readOnlyNotice": "Pasiūlymų šiam dokumentui čia pritaikyti negalima.",
     "reject": "Atmesti",
     "rejectAll": "Atmesti visus",
     "revert": "Atstatyti",

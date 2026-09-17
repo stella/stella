@@ -1785,6 +1785,8 @@
     "applyDirect": "Otse",
     "applyTracked": "Jälitatud muudatustena",
     "barLabel": "Soovituste ülevaatus",
+    "blockedCollaboration": "Jagatud muutmisseanss on veel avanemas. Proovi hetke pärast uuesti.",
+    "blockedOpening": "Dokument on veel avanemas. Proovi hetke pärast uuesti.",
     "change": {
       "deleteParagraph": "Kustuta lõik",
       "replacement": "„{find}“ → „{replace}“"
@@ -1796,8 +1798,10 @@
     "finalizePendingNote": "{count, plural, one {# soovitus ootab veel ülevaatust.} other {# soovitust ootab veel ülevaatust.}}",
     "hideAccepted": "Peida nõustutud soovitused",
     "keepInReview": "Jäta ülevaatusse",
+    "notApplied": "Muudatust ei rakendatud",
     "pendingLimitReached": "Selles dokumendis ootab ülevaatust liiga palju soovitusi. Lahendage mõned, enne kui uusi küsite.",
     "persistFailed": "Teie ülevaatusmuudatust ei õnnestunud salvestada",
+    "readOnlyNotice": "Ettepanekuid ei saa siin sellele dokumendile rakendada.",
     "reject": "Lükka tagasi",
     "rejectAll": "Lükka kõik tagasi",
     "revert": "Taasta",

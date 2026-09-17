@@ -62,12 +62,58 @@ import type {
   ReviewSuggestion,
   ReviewSuggestionStatus,
 } from "@/components/ai-suggestions/review-store";
-import type { DocxEditModeResult } from "@/components/docx/docx-browser-editor.logic";
+import type {
+  DocxEditModeBlockReason,
+  DocxEditModeResult,
+} from "@/components/docx/docx-browser-editor.logic";
 import { getWordEditAuthorName } from "@/features/chat/hooks/use-chat-user-context";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
+import type { TranslationKey } from "@/i18n/types";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
+
+/**
+ * Why an apply could not reach the document, in words. Total over the block
+ * reasons, so a new one has to decide what the reviewer is told. The keys are
+ * listed rather than widened to `TranslationKey`: handing `t()` the whole
+ * catalog union explodes the instantiation.
+ */
+const EDIT_MODE_BLOCKED_MESSAGES = {
+  pendingCompatibility: {
+    title: "folio.checkingDocxEditTitle",
+    description: "folio.checkingDocxEditDescription",
+  },
+  unsafe: {
+    title: "folio.unsupportedDocxEditTitle",
+    description: "folio.unsupportedDocxEditDescription",
+  },
+  collaboration: {
+    title: "docxReview.notApplied",
+    description: "docxReview.blockedCollaboration",
+  },
+  opening: {
+    title: "docxReview.notApplied",
+    description: "docxReview.blockedOpening",
+  },
+} as const satisfies Record<
+  DocxEditModeBlockReason,
+  {
+    title: Extract<
+      TranslationKey,
+      | "docxReview.notApplied"
+      | "folio.checkingDocxEditTitle"
+      | "folio.unsupportedDocxEditTitle"
+    >;
+    description: Extract<
+      TranslationKey,
+      | "docxReview.blockedCollaboration"
+      | "docxReview.blockedOpening"
+      | "folio.checkingDocxEditDescription"
+      | "folio.unsupportedDocxEditDescription"
+    >;
+  }
+>;
 
 export type UseReviewActionsOptions = {
   entityId: string;
@@ -143,7 +189,19 @@ export const useReviewActions = ({
     if (!requestDocxEditMode) {
       return false;
     }
-    return (await requestDocxEditMode()).type === "editing";
+    const editMode = await requestDocxEditMode();
+    if (editMode.type === "editing") {
+      return true;
+    }
+    // The change stays pending, so the reviewer has to learn why their click
+    // did nothing; a silent return reads as a broken button.
+    const { title, description } = EDIT_MODE_BLOCKED_MESSAGES[editMode.reason];
+    stellaToast.add({
+      type: editMode.reason === "unsafe" ? "warning" : "info",
+      title: t(title),
+      description: t(description),
+    });
+    return false;
   });
 
   // Read the CURRENT store row for an id captured before an await. Follows a

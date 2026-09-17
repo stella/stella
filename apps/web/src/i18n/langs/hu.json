@@ -1785,6 +1785,8 @@
     "applyDirect": "Közvetlen",
     "applyTracked": "Követett módosítások",
     "barLabel": "Javaslatok áttekintése",
+    "blockedCollaboration": "A közös szerkesztési munkamenet még betöltődik. Próbálja meg újra egy pillanat múlva.",
+    "blockedOpening": "A dokumentum még betöltődik. Próbálja meg újra egy pillanat múlva.",
     "change": {
       "deleteParagraph": "Bekezdés törlése",
       "replacement": "„{find}” → „{replace}”"
@@ -1796,8 +1798,10 @@
     "finalizePendingNote": "{count, plural, one {# javaslat még felülvizsgálatra vár.} other {# javaslat még felülvizsgálatra vár.}}",
     "hideAccepted": "Elfogadott javaslatok elrejtése",
     "keepInReview": "Felülvizsgálatban hagyás",
+    "notApplied": "A módosítás nem lett alkalmazva",
     "pendingLimitReached": "Ehhez a dokumentumhoz túl sok javaslat vár felülvizsgálatra. Intézzen el néhányat, mielőtt újakat kér.",
     "persistFailed": "Nem sikerült menteni a felülvizsgálati módosítást",
+    "readOnlyNotice": "A javaslatok itt nem alkalmazhatók erre a dokumentumra.",
     "reject": "Elutasítás",
     "rejectAll": "Összes elutasítása",
     "revert": "Visszaállítás",
