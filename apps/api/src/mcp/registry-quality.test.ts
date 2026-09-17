@@ -203,10 +203,19 @@ const TOOL_COUNT_CEILING: Record<SurfaceMode, number> = {
 // `lookup_failed` as an unknown status would retry the whole batch instead of
 // the one reference whose read did not complete. The wider surfaces absorb it
 // in their existing headroom.
+// Binding the four country inputs to the lenient country reader costs the
+// rest: each carries the `x-stella-agent-input` marker dispatch reads, plus one
+// sentence saying an alpha-3 or alpha-2 code or the country's name is accepted.
+// Both are what a model needs to spell the value at all: capped at three
+// characters, `country` answered a Czech request for Czech case law with
+// `not_found`, and the model answered from memory instead of from the corpus.
+// The marker also carries the admitted codes and the tool name so a rejection
+// names the call to change rather than only the field that was wrong.
+// Measured 133_399 default, 69_210 anonymized and 24_524 law.
 const TOOLS_LIST_PAYLOAD_CHAR_CEILING: Record<SurfaceMode, number> = {
-  default: 132_800,
-  anonymized: 68_800,
-  law: 24_053,
+  default: 133_500,
+  anonymized: 69_300,
+  law: 24_524,
 };
 
 // default bumped 42_000 -> 42_300 for the two fields read_case_law_citations

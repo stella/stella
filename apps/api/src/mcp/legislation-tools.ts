@@ -45,6 +45,8 @@ import type {
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
   buildLegislationDocumentAppUrl,
+  countryInputSchema,
+  countryNormalization,
   DEFAULT_SEARCH_LIMIT,
   errorResult,
   handlerStatusOf,
@@ -135,6 +137,10 @@ const PROVISION_READ_STEP = "readStatuteProvisions.corpusAst";
 
 const ADMITTED_COUNTRIES = PUBLIC_LEGISLATION_COUNTRIES.join(", ");
 
+/** Named because the country ask names the call to change; a census test binds
+ *  this to the tool's own `name` so a rename cannot leave a stale hint. */
+const SEARCH_LEGISLATION_TOOL = "search_legislation";
+
 const FIND_THE_ELI_HINT =
   "Find the ELI with search_legislation and pass it as eli.";
 
@@ -197,13 +203,8 @@ const searchLegislationArgsSchema = nullAsAbsent(
       v.maxLength(LIMITS.searchQueryMaxLength),
       v.description("Search query"),
     ),
-    country: v.pipe(
-      v.string(),
-      v.minLength(2),
-      v.maxLength(3),
-      v.description(
-        `Required corpus country code, uppercase ISO 3166-1 alpha-3. Admitted: ${ADMITTED_COUNTRIES}.`,
-      ),
+    country: countryInputSchema(
+      `Required corpus country. Admitted: ${ADMITTED_COUNTRIES}.`,
     ),
     document_type: v.optional(
       v.pipe(
@@ -381,13 +382,20 @@ const LEGISLATION_TOOL_DEFINITIONS = [
       "count. A hit is metadata only: pass its `eli` to read_statute for the " +
       "text, the outline of anchors and the consolidated versions.",
     inputSchema: searchLegislationArgsSchema,
+    inputNormalization: {
+      country: countryNormalization({
+        spelling: "alpha-3",
+        admitted: PUBLIC_LEGISLATION_COUNTRIES,
+        tool: SEARCH_LEGISLATION_TOOL,
+      }),
+    },
     access: "read",
     anonymized: { exposure: "passthrough" },
     // Backed by the public legislation corpus (legislationPublicReadDb), the
     // same surface the public routes gate behind env.isDev ||
     // env.FEATURE_PUBLIC_LAW.
     feature: "FEATURE_PUBLIC_LAW",
-    name: "search_legislation",
+    name: SEARCH_LEGISLATION_TOOL,
     scope: "stella:search",
   }),
   defineValibotMcpTool({

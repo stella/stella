@@ -10,6 +10,12 @@ import {
 } from "bun:test";
 import JSZip from "jszip";
 
+import {
+  AGENT_INPUT_NORMALIZATION_KEY,
+  AGENT_INPUT_NORMALIZATION_KIND,
+  agentInputNormalizationGuidance,
+  COUNTRY_INPUT_MAX_CHARS,
+} from "@stll/agent-input";
 import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
 import {
@@ -875,6 +881,16 @@ const createContext = ({
   userId: toSafeId<"user">("user_1"),
 });
 
+/**
+ * The sentence the factory appends to a country description, rendered from the
+ * same guidance the schema emits so this test cannot pin wording the model is
+ * no longer shown.
+ */
+const COUNTRY_INPUT_GUIDANCE = agentInputNormalizationGuidance({
+  kind: AGENT_INPUT_NORMALIZATION_KIND.country,
+  country: { spelling: "alpha-3" },
+});
+
 describe("OpenAI-compatible MCP tools", () => {
   let analytics: RecordingAnalytics;
 
@@ -994,9 +1010,19 @@ describe("OpenAI-compatible MCP tools", () => {
         },
         country: {
           type: "string",
-          description: `Required corpus country code, uppercase ISO 3166-1 alpha-3. Admitted: ${PUBLIC_CASE_LAW_COUNTRIES.join(", ")}.`,
+          description: `Required corpus country. Admitted: ${PUBLIC_CASE_LAW_COUNTRIES.join(", ")}. ${COUNTRY_INPUT_GUIDANCE}`,
           minLength: 2,
-          maxLength: 3,
+          maxLength: COUNTRY_INPUT_MAX_CHARS,
+          // The marker dispatch reads: a country arrives canonical because the
+          // reader ran, not because the caller spelled it that way.
+          [AGENT_INPUT_NORMALIZATION_KEY]: {
+            kind: AGENT_INPUT_NORMALIZATION_KIND.country,
+            country: {
+              spelling: "alpha-3",
+              admitted: [...PUBLIC_CASE_LAW_COUNTRIES],
+              tool: "search_case_law",
+            },
+          },
         },
         language: {
           type: "string",
@@ -1887,9 +1913,11 @@ describe("OpenAI-compatible MCP tools", () => {
     ]);
   });
 
+  // A country the reader resolves but the corpus does not hold is an admission
+  // miss; a token that names no country is answered at the boundary instead.
   test("lookup_case_law rejects a country outside the public list", async () => {
     const result = await handleMcpToolCall({
-      args: { country: "XAA", identifiers: [CZ_DOCKET] },
+      args: { country: "Germany", identifiers: [CZ_DOCKET] },
       context: createContext(),
       toolName: "lookup_case_law",
     });
@@ -1899,6 +1927,24 @@ describe("OpenAI-compatible MCP tools", () => {
       message: "Case-law country not found",
       hint: `Pass one of the admitted country codes: ${PUBLIC_CASE_LAW_COUNTRIES.join(", ")}.`,
     });
+    expect(lookupDecisionsByIdentityMock).not.toHaveBeenCalled();
+  });
+
+  test("lookup_case_law asks about a country nothing spells", async () => {
+    const result = await handleMcpToolCall({
+      args: { country: "XAA", identifiers: [CZ_DOCKET] },
+      context: createContext(),
+      toolName: "lookup_case_law",
+    });
+
+    const error = validationEnvelope(result);
+    expect(error["code"]).toBe("validation_error");
+    expect(error["issues"]).toEqual([
+      {
+        path: "country",
+        message: '"XAA" is not a country code, one of CZE.',
+      },
+    ]);
     expect(lookupDecisionsByIdentityMock).not.toHaveBeenCalled();
   });
 
@@ -2448,8 +2494,16 @@ describe("OpenAI-compatible MCP tools", () => {
     expect(schema?.properties?.["country"]).toEqual({
       type: "string",
       minLength: 2,
-      maxLength: 3,
-      description: `Required corpus country code, uppercase ISO 3166-1 alpha-3. Admitted: ${PUBLIC_LEGISLATION_COUNTRIES.join(", ")}.`,
+      maxLength: COUNTRY_INPUT_MAX_CHARS,
+      description: `Required corpus country. Admitted: ${PUBLIC_LEGISLATION_COUNTRIES.join(", ")}. ${COUNTRY_INPUT_GUIDANCE}`,
+      [AGENT_INPUT_NORMALIZATION_KEY]: {
+        kind: AGENT_INPUT_NORMALIZATION_KIND.country,
+        country: {
+          spelling: "alpha-3",
+          admitted: [...PUBLIC_LEGISLATION_COUNTRIES],
+          tool: "search_legislation",
+        },
+      },
     });
     expect(schema?.properties?.["limit"]).toEqual({
       type: "integer",
@@ -3140,9 +3194,12 @@ describe("OpenAI-compatible MCP tools", () => {
     expect(searchDecisionsHandlerMock).not.toHaveBeenCalled();
   });
 
+  // Recognising a country and admitting it are two answers. A country the
+  // reader resolves but the corpus does not hold is an admission miss, which
+  // the model fixes by choosing another jurisdiction.
   test("search_case_law rejects a country outside the public list", async () => {
     const result = await handleMcpToolCall({
-      args: { country: "XAA", queries: ["synthetic"] },
+      args: { country: "Germany", queries: ["synthetic"] },
       context: createContext(),
       toolName: "search_case_law",
     });
@@ -3152,6 +3209,27 @@ describe("OpenAI-compatible MCP tools", () => {
       message: "Case-law country not found",
       hint: `Pass one of the admitted country codes: ${PUBLIC_CASE_LAW_COUNTRIES.join(", ")}.`,
     });
+    expect(searchDecisionsHandlerMock).not.toHaveBeenCalled();
+  });
+
+  // A token that names no country is a spelling the reader could not read, so
+  // it is answered at the boundary with the forms that are accepted rather
+  // than as a corpus that is missing.
+  test("search_case_law asks about a country nothing spells", async () => {
+    const result = await handleMcpToolCall({
+      args: { country: "XAA", queries: ["synthetic"] },
+      context: createContext(),
+      toolName: "search_case_law",
+    });
+
+    const error = validationEnvelope(result);
+    expect(error["code"]).toBe("validation_error");
+    expect(error["issues"]).toEqual([
+      {
+        path: "country",
+        message: '"XAA" is not a country code, one of CZE.',
+      },
+    ]);
     expect(searchDecisionsHandlerMock).not.toHaveBeenCalled();
   });
 
