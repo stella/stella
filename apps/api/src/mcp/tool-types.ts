@@ -278,6 +278,14 @@ export type McpCliToolAnnotation = {
    */
   windowedText?: { textPath: string };
   paginationless?: true;
+  /**
+   * The leaf takes a `--cursor` but does not offer `--all`. A per-entry cursor
+   * is the case this exists for: the payload carries one continuation per
+   * item, so there is no single page for the follow loop to advance, and a
+   * loop that followed a top-level cursor would stop after one window and
+   * return truncated content as if it were whole.
+   */
+  perEntryCursor?: true;
   inputOnly?: readonly string[];
   discriminator?: {
     prop: string;

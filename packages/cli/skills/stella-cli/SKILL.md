@@ -159,7 +159,7 @@ are omitted here.
 - `stella case-law read`
   - `--decision-ids` — The decisions to read, at most 20 per call. Each id is answered on its own, so one unknown id does not sink the rest. (string-array, repeatable)
 - `stella case-law search`
-  - `--queries` — Several phrasings of ONE question, at most 5. Their pages are merged and deduplicated, so a reformulation costs no extra round trip; one phrasing is a valid call. (string-array, repeatable)
+  - `--queries` — Several phrasings of ONE question, at most 5. Their pages are merged and deduplicated within the page, so a reformulation costs no extra round trip; one phrasing is a valid call. (string-array, repeatable)
   - `--country` — Required corpus country code, uppercase ISO 3166-1 alpha-3. Admitted: CZE. (string)
   - optional: --court, --language, --decision-type, --source-id, --date-from, --date-to, --sort (relevance|newest)
 - `stella clause delete`

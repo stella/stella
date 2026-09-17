@@ -182,10 +182,15 @@ const TOOL_COUNT_CEILING: Record<SurfaceMode, number> = {
 // from 130_687, 66_687 and 22_001: the array inputs cost less than the prose
 // the two descriptions gave back. Tightened to the new measurement, since a
 // ratchet only moves down without a reviewed reason.
+// Saying what the merged cursor does and does not carry costs 188 of those
+// characters back: that its deduplication is within the page, and that a
+// caller paging keys on `decisionId`. Neither is inferable from the shape, and
+// a client that assumed otherwise would drop results silently. Measured
+// 130_318 default, 66_318 anonymized and 21_632 law.
 const TOOLS_LIST_PAYLOAD_CHAR_CEILING: Record<SurfaceMode, number> = {
-  default: 130_200,
-  anonymized: 66_200,
-  law: 21_444,
+  default: 130_400,
+  anonymized: 66_400,
+  law: 21_632,
 };
 
 // default bumped 42_000 -> 42_300 for the two fields read_case_law_citations

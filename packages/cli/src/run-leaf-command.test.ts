@@ -29,6 +29,7 @@ const specWith = (flags: readonly FlagSpec[]): LeafCommandSpec => ({
   flags,
   inputOnly: [],
   paginated: false,
+  followable: true,
   windowedText: false,
   destructive: false,
   inputSchema: { type: "object", properties: {} },
@@ -378,6 +379,7 @@ const INVOKE_SPEC: LeafCommandSpec = {
   ],
   inputOnly: ["input"],
   paginated: false,
+  followable: true,
   windowedText: false,
   destructive: false,
   confirmPassthrough: true,
@@ -459,6 +461,7 @@ describe("--input composes with flags before server validation (S5.5)", () => {
     ],
     inputOnly: [],
     paginated: false,
+    followable: true,
     windowedText: false,
     destructive: false,
     inputSchema: {

@@ -586,6 +586,7 @@ const leafSpecsForTool = ({
   const itemsKey = annotation?.itemsKey;
   const textPath = annotation?.windowedText?.textPath;
   const windowedText = textPath !== undefined;
+  const followable = annotation?.perEntryCursor !== true;
   const confirmPassthrough = annotation?.confirmPassthrough;
   const mode = resolvePaginationMode(properties, annotation);
   const paginated = mode !== "none";
@@ -647,6 +648,7 @@ const leafSpecsForTool = ({
         flags,
         inputOnly,
         paginated,
+        followable,
         windowedText,
         ...(textPath === undefined ? {} : { textPath }),
         ...(itemsKey === undefined ? {} : { itemsKey }),
@@ -676,6 +678,7 @@ const leafSpecsForTool = ({
       flags,
       inputOnly,
       paginated,
+      followable,
       windowedText,
       ...(textPath === undefined ? {} : { textPath }),
       ...(itemsKey === undefined ? {} : { itemsKey }),

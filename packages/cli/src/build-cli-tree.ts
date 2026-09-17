@@ -129,10 +129,14 @@ const buildLeafFlags = (spec: LeafCommandSpec): Record<string, unknown> => {
     flags[RESERVED_FLAG_KEYS.cursor] = parsedStringFlag(
       "Opaque pagination cursor from a previous page",
     );
-    flags[RESERVED_FLAG_KEYS.all] = booleanFlag(
-      "Follow cursors and return every page (bounded)",
-      false,
-    );
+    // A per-entry cursor has no single page to follow, so the leaf that
+    // carries one does not offer `--all`; see `LeafCommandSpec.followable`.
+    if (spec.followable) {
+      flags[RESERVED_FLAG_KEYS.all] = booleanFlag(
+        "Follow cursors and return every page (bounded)",
+        false,
+      );
+    }
     if (hasLimitProp(spec)) {
       flags[RESERVED_FLAG_KEYS.limit] = parsedStringFlag("Max items per page");
     }

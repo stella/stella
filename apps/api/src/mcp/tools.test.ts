@@ -36,6 +36,7 @@ import { encryptContent } from "@/api/lib/content-encryption";
 import type { EncryptedContent } from "@/api/lib/content-encryption";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import { createFileKey } from "@/api/lib/file-key";
+import { CORPUS_SEARCH_CURSOR_MAX_LENGTH } from "@/api/lib/legal-search/corpus-search-cursor";
 import { LIMITS } from "@/api/lib/limits";
 import { encodePaginationCursor } from "@/api/lib/pagination";
 import { pgFtsProvider } from "@/api/lib/search/pg-fts-provider";
@@ -958,7 +959,7 @@ describe("OpenAI-compatible MCP tools", () => {
         queries: {
           type: "array",
           description:
-            "Several phrasings of ONE question, at most 5. Their pages are merged and deduplicated, so a reformulation costs no extra round trip; one phrasing is a valid call.",
+            "Several phrasings of ONE question, at most 5. Their pages are merged and deduplicated within the page, so a reformulation costs no extra round trip; one phrasing is a valid call.",
           items: { type: "string", minLength: 1, maxLength: 500 },
           minItems: 1,
           maxItems: 5,
@@ -973,8 +974,10 @@ describe("OpenAI-compatible MCP tools", () => {
         cursor: {
           type: "string",
           description:
-            "Opaque cursor from a previous search_case_law call. It continues the same queries, in the same order.",
-          maxLength: 876,
+            "Opaque cursor from a previous search_case_law call. It continues the same queries, in the same order. It carries each query's own position and not what earlier pages emitted, so a decision several queries return can appear on more than one page: key results by decisionId.",
+          // Derived from the engine cursor codec's own maximum times the query
+          // cap, so the tool takes back the longest cursor it can emit.
+          maxLength: 1330,
         },
         court: {
           type: "string",
@@ -1807,6 +1810,58 @@ describe("OpenAI-compatible MCP tools", () => {
     expect(searchDecisionsHandlerMock).toHaveBeenCalledTimes(1);
     expect(searchDecisionsHandlerMock).toHaveBeenCalledWith(
       expect.objectContaining({ cursor: "engine-first-2", query: "first" }),
+      caseLawPublicReadDb,
+    );
+  });
+
+  test("search_case_law accepts back the longest cursor its engine can emit", async () => {
+    // Under query expansion an engine cursor carries a 64-character dictionary
+    // identity. Five of them at the codec's own maximum is the largest
+    // envelope this tool can hand out, and the input schema has to take it
+    // back: a cap guessed below the emitted length refuses the second page.
+    const longestEngineCursor = "c".repeat(CORPUS_SEARCH_CURSOR_MAX_LENGTH);
+    searchDecisionsHandlerMock.mockResolvedValue({
+      facets: null,
+      hits: [createCaseLawHit("dec-a", "a")],
+      nextCursor: longestEngineCursor,
+      total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 1),
+    });
+
+    const queries = Array.from(
+      { length: LIMITS.caseLawSearchQueriesMax },
+      (_unused, index) => `phrasing ${String(index)}`,
+    );
+    const firstPage = asTestRaw<MergedSearchPage>(
+      parseToolPayload(
+        await handleMcpToolCall({
+          args: { country: "CZE", queries },
+          context: createContext(),
+          toolName: "search_case_law",
+        }),
+      ),
+    );
+    const emitted = firstPage.nextCursor ?? panic("Missing merged cursor");
+    // Against the advertised bound, not a constant restated here: the contract
+    // a client validates against is the one that has to accept this.
+    const advertised = asTestRaw<{
+      properties: { cursor: { maxLength: number } };
+    }>(
+      (await listMcpTools(createContext())).find(
+        (tool) => tool.name === "search_case_law",
+      )?.inputSchema,
+    );
+    expect(emitted.length).toBeLessThanOrEqual(
+      advertised.properties.cursor.maxLength,
+    );
+
+    const continued = await handleMcpToolCall({
+      args: { country: "CZE", cursor: emitted, queries },
+      context: createContext(),
+      toolName: "search_case_law",
+    });
+    expect(continued.isError).toBeUndefined();
+    expect(searchDecisionsHandlerMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ cursor: longestEngineCursor }),
       caseLawPublicReadDb,
     );
   });
@@ -3237,14 +3292,52 @@ describe("OpenAI-compatible MCP tools", () => {
     expect(readGatedDecisionMock).toHaveBeenCalledTimes(1);
   });
 
-  test("read_case_law_decision bounds the publisher fetches one call triggers", async () => {
+  test("read_case_law_decision keeps an unfinished fetch pending", async () => {
+    // `hydrateDeferredDocument` hands the read back still pending when the
+    // fetch times out or the publisher has nothing, and the entry then has no
+    // text. Reporting that as `found` would drop the retry guidance exactly
+    // when the document is still queued.
     const base = createReadDecisionResult();
     readGatedDecisionMock.mockImplementation(
       async ({ locator }: { locator: { kind: "id"; id: string } }) => ({
         ...base,
-        documentPending: (PENDING_DECISION_IDS as readonly string[]).includes(
-          locator.id,
-        ),
+        documentPending: true,
+        id: locator.id,
+      }),
+    );
+
+    const payload = await readBatch([DECISION_ID]);
+
+    expect(payload.items.map(({ status }) => status)).toEqual(["pending"]);
+    expect(payload.items.at(0)?.message).toContain("on its own");
+    // The budget was spent on it: the entry is pending because the fetch did
+    // not finish, not because the call refused to try.
+    expect(
+      readGatedDecisionMock.mock.calls.filter(
+        (call) =>
+          asTestRaw<{ documentHydration: string }>(call.at(0))
+            .documentHydration === DECISION_DOCUMENT_HYDRATION.onDemand,
+      ),
+    ).toHaveLength(1);
+  });
+
+  test("read_case_law_decision bounds the publisher fetches one call triggers", async () => {
+    const base = createReadDecisionResult();
+    readGatedDecisionMock.mockImplementation(
+      async ({
+        documentHydration,
+        locator,
+      }: {
+        documentHydration: string;
+        locator: { kind: "id"; id: string };
+      }) => ({
+        ...base,
+        // Pending until something fetches it: the on-demand re-read stands for
+        // a fetch that finished, so only the entries the budget never reached
+        // stay pending.
+        documentPending:
+          documentHydration === DECISION_DOCUMENT_HYDRATION.storedOnly &&
+          (PENDING_DECISION_IDS as readonly string[]).includes(locator.id),
         id: locator.id,
       }),
     );

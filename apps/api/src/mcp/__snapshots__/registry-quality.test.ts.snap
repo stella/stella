@@ -179,7 +179,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           },
           "minItems": 1,
           "maxItems": 5,
-          "description": "Several phrasings of ONE question, at most 5. Their pages are merged and deduplicated, so a reformulation costs no extra round trip; one phrasing is a valid call."
+          "description": "Several phrasings of ONE question, at most 5. Their pages are merged and deduplicated within the page, so a reformulation costs no extra round trip; one phrasing is a valid call."
         },
         "limit": {
           "type": "integer",
@@ -189,8 +189,8 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         },
         "cursor": {
           "type": "string",
-          "maxLength": 876,
-          "description": "Opaque cursor from a previous search_case_law call. It continues the same queries, in the same order."
+          "maxLength": 1330,
+          "description": "Opaque cursor from a previous search_case_law call. It continues the same queries, in the same order. It carries each query's own position and not what earlier pages emitted, so a decision several queries return can appear on more than one page: key results by decisionId."
         },
         "court": {
           "type": "string",
@@ -3917,7 +3917,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
           },
           "minItems": 1,
           "maxItems": 5,
-          "description": "Several phrasings of ONE question, at most 5. Their pages are merged and deduplicated, so a reformulation costs no extra round trip; one phrasing is a valid call."
+          "description": "Several phrasings of ONE question, at most 5. Their pages are merged and deduplicated within the page, so a reformulation costs no extra round trip; one phrasing is a valid call."
         },
         "limit": {
           "type": "integer",
@@ -3927,8 +3927,8 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
         },
         "cursor": {
           "type": "string",
-          "maxLength": 876,
-          "description": "Opaque cursor from a previous search_case_law call. It continues the same queries, in the same order."
+          "maxLength": 1330,
+          "description": "Opaque cursor from a previous search_case_law call. It continues the same queries, in the same order. It carries each query's own position and not what earlier pages emitted, so a decision several queries return can appear on more than one page: key results by decisionId."
         },
         "court": {
           "type": "string",
@@ -5014,7 +5014,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
           },
           "minItems": 1,
           "maxItems": 5,
-          "description": "Several phrasings of ONE question, at most 5. Their pages are merged and deduplicated, so a reformulation costs no extra round trip; one phrasing is a valid call."
+          "description": "Several phrasings of ONE question, at most 5. Their pages are merged and deduplicated within the page, so a reformulation costs no extra round trip; one phrasing is a valid call."
         },
         "limit": {
           "type": "integer",
@@ -5024,8 +5024,8 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
         },
         "cursor": {
           "type": "string",
-          "maxLength": 876,
-          "description": "Opaque cursor from a previous search_case_law call. It continues the same queries, in the same order."
+          "maxLength": 1330,
+          "description": "Opaque cursor from a previous search_case_law call. It continues the same queries, in the same order. It carries each query's own position and not what earlier pages emitted, so a decision several queries return can appear on more than one page: key results by decisionId."
         },
         "court": {
           "type": "string",

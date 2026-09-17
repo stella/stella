@@ -76,6 +76,7 @@ const cliAnnotationSchema = v.object({
     v.object({ textPath: v.pipe(v.string(), v.minLength(1)) }),
   ),
   paginationless: v.optional(v.literal(true)),
+  perEntryCursor: v.optional(v.literal(true)),
   inputOnly: v.optional(stringArraySchema),
   discriminator: v.optional(
     v.object({
@@ -136,6 +137,9 @@ const projectToolAnnotation = (cli: ParsedCliAnnotation): ToolAnnotation => {
   }
   if (cli.paginationless !== undefined) {
     annotation.paginationless = cli.paginationless;
+  }
+  if (cli.perEntryCursor !== undefined) {
+    annotation.perEntryCursor = cli.perEntryCursor;
   }
   if (cli.inputOnly !== undefined) {
     annotation.inputOnly = cli.inputOnly;

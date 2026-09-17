@@ -173,7 +173,7 @@
           },
           "minItems": 1,
           "maxItems": 5,
-          "description": "Several phrasings of ONE question, at most 5. Their pages are merged and deduplicated, so a reformulation costs no extra round trip; one phrasing is a valid call."
+          "description": "Several phrasings of ONE question, at most 5. Their pages are merged and deduplicated within the page, so a reformulation costs no extra round trip; one phrasing is a valid call."
         },
         "limit": {
           "type": "integer",
@@ -183,8 +183,8 @@
         },
         "cursor": {
           "type": "string",
-          "maxLength": 876,
-          "description": "Opaque cursor from a previous search_case_law call. It continues the same queries, in the same order."
+          "maxLength": 1330,
+          "description": "Opaque cursor from a previous search_case_law call. It continues the same queries, in the same order. It carries each query's own position and not what earlier pages emitted, so a decision several queries return can appear on more than one page: key results by decisionId."
         },
         "court": {
           "type": "string",
@@ -277,7 +277,8 @@
     "cli": {
       "command": ["case-law", "read"],
       "scope": "read",
-      "itemsKey": "items"
+      "itemsKey": "items",
+      "perEntryCursor": true
     },
     "name": "read_case_law_decision",
     "description": "Read case-law decisions by id. Every `decision_ids[]` entry is answered on its own, in input order, under `status`: `found` carries the decision (metadata, text fields, plain text, source URLs, resourceName, citation ids), while `not_found` (no such public decision) and `pending` (its publisher document is not stored yet) carry a message. Prefer one batched call over one per decision; the call's text budget is shared, so read one id alone for a whole decision's text. It does NOT say how the citing courts treated a decision: its citation entries carry no treatment and no surrounding text. For that call read_case_law_citations ({ decision_id: '<uuid>', direction: 'cited_by' }). Long text and citation lists come back in windows; pass an entry's nextCursor back as cursor with that one id.",

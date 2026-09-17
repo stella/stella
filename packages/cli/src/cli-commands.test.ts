@@ -713,6 +713,36 @@ describe("windowed text (S4)", () => {
       ],
     });
   });
+
+  test("a per-entry cursor leaf does not offer --all", async () => {
+    // The follow loop advances one top-level cursor. This payload carries a
+    // continuation per entry, so following nothing would print the first
+    // window as though it were the whole decision; the flag is absent rather
+    // than quietly truncating.
+    const server = startMockServer(() => ({ toolPayload: { items: [] } }));
+    const result = await runCli({
+      args: [
+        "case-law",
+        "read",
+        "--decision-ids",
+        "00000000-0000-4000-8000-000000000001",
+        "--all",
+      ],
+      url: server.url,
+      token: READ,
+    });
+    const help = await runCli({
+      args: ["case-law", "read", "--help"],
+      url: server.url,
+      token: READ,
+    });
+    server.stop();
+    expect(result.exitCode).toBe(2);
+    expect(server.requests).toHaveLength(0);
+    // The cursor itself stays: one decision's text is continued by hand.
+    expect(help.stdout).toContain("--cursor");
+    expect(help.stdout).not.toContain("--all");
+  });
 });
 
 describe("value flags and validation (S3)", () => {

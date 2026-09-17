@@ -10,7 +10,10 @@ import {
   readDecisionHandler,
   readDecisionQuerySchema,
 } from "@/api/handlers/case-law/decisions/get";
-import { hydrateDeferredDocument } from "@/api/handlers/case-law/decisions/get-deferred-document";
+import {
+  DECISION_DOCUMENT_HYDRATION,
+  hydrateDeferredDocument,
+} from "@/api/handlers/case-law/decisions/get-deferred-document";
 import {
   listLatestDecisionsHandler,
   listLatestDecisionsQuerySchema,
@@ -150,7 +153,12 @@ const readDecision = createSafePublicSubjectFollowUpHandler({
     await readDecisionHandler({ subject, citationsCursor }),
   // Unauthenticated: hydrates when a slot is free, but never persists
   // demand — see `recordDemand`. Runs after the gated transaction closes.
-  followUp: async (read) => await hydrateDeferredDocument(read, false),
+  followUp: async (read) =>
+    await hydrateDeferredDocument(
+      read,
+      false,
+      DECISION_DOCUMENT_HYDRATION.onDemand,
+    ),
 });
 
 const readDecisionBySlug = createSafePublicSubjectFollowUpHandler({
@@ -174,7 +182,12 @@ const readDecisionBySlug = createSafePublicSubjectFollowUpHandler({
   }),
   read: async (subject, { query: { citationsCursor } }) =>
     await readDecisionHandler({ subject, citationsCursor }),
-  followUp: async (read) => await hydrateDeferredDocument(read, false),
+  followUp: async (read) =>
+    await hydrateDeferredDocument(
+      read,
+      false,
+      DECISION_DOCUMENT_HYDRATION.onDemand,
+    ),
 });
 
 /**

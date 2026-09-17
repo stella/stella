@@ -65,6 +65,7 @@ import {
   type ExtractedContentSourceProvenance,
 } from "@/api/lib/document-content-provenance";
 import { createFileKey } from "@/api/lib/files/utils";
+import { CORPUS_SEARCH_CURSOR_MAX_LENGTH } from "@/api/lib/legal-search/corpus-search-cursor";
 import { LIMITS } from "@/api/lib/limits";
 import { getAppBaseUrl } from "@/api/lib/mcp-connectors/app-urls";
 import {
@@ -597,19 +598,17 @@ const searchAcrossMattersArgsSchema = nullAsAbsent(
  */
 const ADMITTED_CASE_LAW_COUNTRIES = PUBLIC_CASE_LAW_COUNTRIES.join(", ");
 
-/** One query's own keyset cursor, as the search engine issues it. */
-const CASE_LAW_SEARCH_SUB_CURSOR_MAX_LENGTH = 128;
-
 /**
  * A merged cursor carries one sub-cursor per query, JSON-wrapped and
- * base64url-encoded. Derived from the two bounds it is built out of (three
- * characters of JSON per entry, two for the brackets, four base64 characters
- * per three bytes) so the advertised cap cannot drift from what the encoder
- * can produce.
+ * base64url-encoded. The sub-cursor bound comes from the engine cursor's own
+ * codec rather than a number written here: under query expansion an engine
+ * cursor carries a 64-character dictionary identity, and a cap guessed below
+ * what the engine emits rejects a page boundary this tool itself handed out.
+ * The envelope adds three JSON characters per entry, two for the brackets,
+ * and four base64 characters per three bytes.
  */
 const CASE_LAW_SEARCH_CURSOR_MAX_LENGTH = Math.ceil(
-  (((CASE_LAW_SEARCH_SUB_CURSOR_MAX_LENGTH + 3) *
-    LIMITS.caseLawSearchQueriesMax +
+  (((CORPUS_SEARCH_CURSOR_MAX_LENGTH + 3) * LIMITS.caseLawSearchQueriesMax +
     2) *
     4) /
     3,
@@ -628,7 +627,7 @@ const searchCaseLawArgsSchema = nullAsAbsent(
       v.minLength(1),
       v.maxLength(LIMITS.caseLawSearchQueriesMax),
       v.description(
-        `Several phrasings of ONE question, at most ${LIMITS.caseLawSearchQueriesMax}. Their pages are merged and deduplicated, so a reformulation costs no extra round trip; one phrasing is a valid call.`,
+        `Several phrasings of ONE question, at most ${LIMITS.caseLawSearchQueriesMax}. Their pages are merged and deduplicated within the page, so a reformulation costs no extra round trip; one phrasing is a valid call.`,
       ),
     ),
     limit: v.optional(
@@ -647,7 +646,7 @@ const searchCaseLawArgsSchema = nullAsAbsent(
         v.string(),
         v.maxLength(CASE_LAW_SEARCH_CURSOR_MAX_LENGTH),
         v.description(
-          "Opaque cursor from a previous search_case_law call. It continues the same queries, in the same order.",
+          "Opaque cursor from a previous search_case_law call. It continues the same queries, in the same order. It carries each query's own position and not what earlier pages emitted, so a decision several queries return can appear on more than one page: key results by decisionId.",
         ),
       ),
     ),
@@ -1771,6 +1770,14 @@ type MergedCaseLawHit = {
  * query's page is the only comparable signal: a decision keeps the hit from
  * the query that ranked it highest, and ties go to the decision more
  * phrasings agree on, then to its id so the order is total.
+ *
+ * Within the page, and deliberately not across pages. Suppressing a repeat on
+ * a later page means carrying every emitted id in the cursor: at the page
+ * sizes this tool serves that is kilobytes of opaque string a model has to
+ * copy back verbatim, and bounding it means a page count past which paging
+ * simply stops. Repeating a decision costs a slot; refusing to page costs the
+ * results. The input descriptions say which guarantee this is, and
+ * `decisionId` is the key a caller dedupes on.
  */
 const mergeCaseLawSearchHits = (
   pagesByQuery: readonly (readonly CaseLawSearchHit[])[],
@@ -2098,8 +2105,6 @@ type DecisionItemOptions = {
   /** The window this entry's share of the call's text budget allows. */
   maxTextChars: number;
   read: GatedDecisionRead;
-  /** The entry the fetch budget did not reach. */
-  pendingBeyondBudget: boolean;
   textOffset: number;
 };
 
@@ -2107,18 +2112,22 @@ const decisionItemResult = ({
   decisionId,
   maxTextChars,
   read,
-  pendingBeyondBudget,
   textOffset,
 }: DecisionItemOptions): DecisionItemResult => {
-  if (pendingBeyondBudget) {
-    return {
-      decisionId,
-      message: `The publisher document for this decision is not stored yet, and this call's fetch budget of ${String(LIMITS.caseLawDecisionBatchHydrationsMax)} was spent on earlier entries. Read this decision id on its own to fetch it.`,
-      status: DECISION_READ_STATUS.pending,
-    };
-  }
   if (read === null || !isReadCaseLawDecisionSuccess(read)) {
     return decisionNotFoundItem(decisionId);
+  }
+  // Still pending after everything this call was willing to do: either the
+  // fetch budget did not reach this entry, or the fetch it did get ran out of
+  // time or found nothing at the publisher. Both leave the document queued and
+  // the decision without text, and the caller's next move is the same, so
+  // neither is reported as a `found` with nothing in it.
+  if (isDecisionDocumentPending(read)) {
+    return {
+      decisionId,
+      message: `The publisher document for this decision is not stored yet. Read this decision id on its own to fetch it; this call's fetch budget is ${String(LIMITS.caseLawDecisionBatchHydrationsMax)} documents.`,
+      status: DECISION_READ_STATUS.pending,
+    };
   }
 
   // allowsRedistribution gates whether the decision is publicly
@@ -2282,8 +2291,6 @@ const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
     return errorResult(failure);
   }
 
-  // The pending entries this call fetches, in input order, and the ones the
-  // budget did not reach.
   const readOf = (decisionId: string): GatedDecisionRead => {
     if (!reads.has(decisionId)) {
       return panic(`No gated read ran for decision ${decisionId}`);
@@ -2291,16 +2298,12 @@ const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
     return reads.get(decisionId) ?? null;
   };
 
-  const pendingIds = uniqueIds.filter((decisionId) =>
-    isDecisionDocumentPending(readOf(decisionId)),
-  );
-  const fetchedIds = pendingIds.slice(
-    0,
-    LIMITS.caseLawDecisionBatchHydrationsMax,
-  );
-  const deferredIds = new Set(
-    pendingIds.slice(LIMITS.caseLawDecisionBatchHydrationsMax),
-  );
+  // The pending entries this call fetches, in input order. Anything past the
+  // budget, and anything whose fetch does not finish, stays pending and is
+  // reported as such.
+  const fetchedIds = uniqueIds
+    .filter((decisionId) => isDecisionDocumentPending(readOf(decisionId)))
+    .slice(0, LIMITS.caseLawDecisionBatchHydrationsMax);
   // The re-read runs the gate again rather than hydrating the row it already
   // holds: a publisher fetch must not run inside the read transaction, and
   // the content that answers has to come from a state the gate approved.
@@ -2330,7 +2333,6 @@ const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
       decisionItemResult({
         decisionId,
         maxTextChars,
-        pendingBeyondBudget: deferredIds.has(decisionId),
         read: readOf(decisionId),
         textOffset: offsets.text,
       }),

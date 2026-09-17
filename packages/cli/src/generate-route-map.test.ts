@@ -522,6 +522,7 @@ const errorSpecValue: LeafCommandSpec = {
   flags: [],
   inputOnly: [],
   paginated: false,
+  followable: true,
   windowedText: false,
   destructive: false,
   inputSchema: {},

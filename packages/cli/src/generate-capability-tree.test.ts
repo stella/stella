@@ -561,6 +561,7 @@ describe("insertCapabilities: namespaced merge", () => {
                 flags: [],
                 inputOnly: [],
                 paginated: false,
+                followable: true,
                 windowedText: false,
                 destructive: false,
                 inputSchema: { type: "object", properties: {} },

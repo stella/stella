@@ -49,6 +49,8 @@ export type ToolAnnotation = {
   /** See the API-side annotation: where the windowed text lives in the payload. */
   windowedText?: { textPath: string };
   paginationless?: true;
+  /** See the API-side annotation: a per-entry cursor cannot be followed. */
+  perEntryCursor?: true;
   inputOnly?: readonly string[];
   discriminator?: {
     prop: string;
@@ -107,6 +109,12 @@ export type LeafCommandSpec = {
   flags: readonly FlagSpec[];
   inputOnly: readonly string[];
   paginated: boolean;
+  /**
+   * Whether the leaf offers `--all`. False where the payload's continuation is
+   * per entry: the follow loop advances one top-level cursor, and following
+   * nothing would return the first window as though it were the whole text.
+   */
+  followable: boolean;
   windowedText: boolean;
   /**
    * Dot-separated path to the windowed text in the payload, present exactly

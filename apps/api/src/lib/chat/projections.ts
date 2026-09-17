@@ -1345,7 +1345,9 @@ export const SEARCH_CASE_LAW_PROJECTION = v.strictObject({
   ),
   // One query: the engine's own opaque `[score, decisionId]` cursor. Several
   // queries: one sub-cursor per query, base64url-encoded together, so a
-  // continuation resumes each query where its own page ended.
+  // continuation resumes each query where its own page ended. It carries no
+  // memory of what earlier pages emitted, so the deduplication `results`
+  // carries is within the page; a caller paging keys on `decisionId`.
   nextCursor: v.nullable(passthroughId()),
   results: v.array(
     v.strictObject({

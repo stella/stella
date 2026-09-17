@@ -84,6 +84,36 @@ const parseWindowStart = (value: string): number | null =>
 const parseSearchSort = (value: string): SearchSort | null =>
   SEARCH_SORTS.find((sort) => sort === value) ?? null;
 
+/**
+ * The longest cursor this grammar can emit, in characters.
+ *
+ * Derived from the segments rather than measured, because a caller that has to
+ * declare a cursor input's maximum length has to be told by the grammar's own
+ * owner: a smaller cap rejects a page boundary this service legitimately
+ * issued, and the caller finds out only when a second page is refused. Under
+ * query expansion the dictionary identity alone is a 64-character sha256, so
+ * the emitted length is not a round number anyone should guess.
+ */
+const SCORE_MAX_CHARS = 24;
+const WINDOW_RANK_MAX_CHARS = 10;
+const DICTIONARY_IDENTITY_MAX_CHARS = 64;
+const DECISION_ID_MAX_CHARS = 36;
+const SORT_MAX_CHARS = Math.max(...SEARCH_SORTS.map((sort) => sort.length));
+/** Four base64 characters per three bytes, rounded up to a whole group. */
+const base64Length = (bytes: number): number => Math.ceil(bytes / 3) * 4;
+
+export const CORPUS_SEARCH_CURSOR_MAX_LENGTH = base64Length(
+  SCORE_MAX_CHARS +
+    1 +
+    WINDOW_RANK_MAX_CHARS +
+    1 +
+    DICTIONARY_IDENTITY_MAX_CHARS +
+    1 +
+    SORT_MAX_CHARS +
+    1 +
+    DECISION_ID_MAX_CHARS,
+);
+
 export const encodeCorpusSearchCursor = ({
   dictionary,
   id,

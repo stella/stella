@@ -624,9 +624,14 @@ const TASKS: readonly Task[] = [
     cli: {
       kind: "command",
       path: ["case-law", "read"],
-      // `--decision-ids` repeats, and the scorer keeps one value per flag, so
-      // the assertion is the last id a correct command carries.
-      flags: { "decision-ids": CASE_LAW_SECOND_DECISION_ID },
+      // Both ids, in order: a command naming one of the two is not the batch
+      // workflow this task measures.
+      flags: {
+        "decision-ids": JSON.stringify([
+          CASE_LAW_DECISION_ID,
+          CASE_LAW_SECOND_DECISION_ID,
+        ]),
+      },
     },
   },
   {
@@ -1375,6 +1380,13 @@ const tokenizeCommand = (command: string): string[] => {
 type ParsedCliCommand = {
   path: string[];
   flags: Map<string, string | null>;
+  /**
+   * Every value a repeatable flag carried, in order. `flags` keeps the last
+   * one, which is what a single-valued expectation compares; a batch command
+   * is only proved by the whole list, so a reply naming one of two requested
+   * ids cannot pass as the batch workflow.
+   */
+  repeatedFlags: Map<string, string[]>;
   /** Whether the reply actually invoked the `stella` executable. */
   startsWithStella: boolean;
 };
@@ -1384,6 +1396,16 @@ const parseCliCommand = (command: string): ParsedCliCommand => {
   const startsWithStella = tokens[0] === "stella";
   const commandPath: string[] = [];
   const flags = new Map<string, string | null>();
+  const repeatedFlags = new Map<string, string[]>();
+  const record = (flagName: string, value: string | null): void => {
+    flags.set(flagName, value);
+    if (value !== null) {
+      repeatedFlags.set(flagName, [
+        ...(repeatedFlags.get(flagName) ?? []),
+        value,
+      ]);
+    }
+  };
   let index = startsWithStella ? 1 : 0;
   while (index < tokens.length) {
     const token = tokens[index];
@@ -1397,20 +1419,20 @@ const parseCliCommand = (command: string): ParsedCliCommand => {
         continue;
       }
       if (inlineValue !== undefined) {
-        flags.set(flagName, inlineValue);
+        record(flagName, inlineValue);
         index += 1;
         continue;
       }
       const next = tokens[index + 1];
       const takesValue = next !== undefined && !next.startsWith("--");
-      flags.set(flagName, takesValue ? next : null);
+      record(flagName, takesValue ? next : null);
       index += takesValue ? 2 : 1;
       continue;
     }
     commandPath.push(token);
     index += 1;
   }
-  return { path: commandPath, flags, startsWithStella };
+  return { path: commandPath, flags, repeatedFlags, startsWithStella };
 };
 
 // Models spell a refusal with a typographic apostrophe (`can’t`) as often as
@@ -1492,6 +1514,40 @@ const resolveFlagValue = (
     }
   }
   return undefined;
+};
+
+/**
+ * Every value a repeatable flag carried: the repeats a command spelled out, or
+ * the array its `--input` payload put under the same key. An expectation
+ * written as a JSON array compares against this rather than against the last
+ * repeat.
+ */
+const resolveFlagValues = (
+  parsed: ParsedCliCommand,
+  flagName: string,
+): string[] | undefined => {
+  const repeats = parsed.repeatedFlags.get(flagName);
+  if (repeats !== undefined) {
+    return repeats;
+  }
+  const fromInput = resolveFlagValue(parsed, flagName);
+  if (typeof fromInput !== "string") {
+    return undefined;
+  }
+  const parsedInput: unknown = parseJsonOrNull(fromInput);
+  return Array.isArray(parsedInput) &&
+    parsedInput.every((entry) => typeof entry === "string")
+    ? parsedInput
+    : undefined;
+};
+
+/** An expectation spelled as a JSON array of strings, or null when it is not. */
+const expectedFlagValues = (expectedValue: string): string[] | null => {
+  const parsedValue: unknown = parseJsonOrNull(expectedValue);
+  return Array.isArray(parsedValue) &&
+    parsedValue.every((entry) => typeof entry === "string")
+    ? parsedValue
+    : null;
 };
 
 // --- scoring ---------------------------------------------------------------
@@ -1661,6 +1717,20 @@ const scoreCliRun = ({
     }
   }
   for (const [flagName, expectedValue] of Object.entries(expected.flags)) {
+    const expectedList = expectedFlagValues(expectedValue);
+    if (expectedList !== null) {
+      const actualList = resolveFlagValues(parsed, flagName);
+      if (
+        actualList === undefined ||
+        actualList.length !== expectedList.length ||
+        actualList.some((value, index) => value !== expectedList[index])
+      ) {
+        issues.push(
+          `--${flagName}: expected ${JSON.stringify(expectedList)}, got ${JSON.stringify(actualList)}`,
+        );
+      }
+      continue;
+    }
     const actual = resolveFlagValue(parsed, flagName);
     if (
       !sameCliFlagValue({
