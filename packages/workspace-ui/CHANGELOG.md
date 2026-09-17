@@ -1,5 +1,11 @@
 # @stll/workspace-ui
 
+## 0.11.2
+
+### Patch Changes
+
+- [#3502](https://github.com/stella/stella/pull/3502) [`7a78745`](https://github.com/stella/stella/commit/7a787456cbadc8c017e17a1f38e18c770967a590) Thanks [@voidstackloop](https://github.com/voidstackloop)! - Keep the new-view action visible and separated from overflowing workspace tabs.
+
 ## 0.11.1
 
 ### Patch Changes
