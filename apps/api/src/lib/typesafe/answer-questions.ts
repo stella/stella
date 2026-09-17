@@ -492,11 +492,7 @@ const sourceChosen = (
     return null;
   }
   const where = answers[whereKey];
-  if (
-    where === undefined ||
-    where.type !== "choice" ||
-    where.choice === NO_SOURCE
-  ) {
+  if (where?.type !== "choice" || where.choice === NO_SOURCE) {
     return null;
   }
   return where.choice;
@@ -675,3 +671,61 @@ export const decodeSystemOneAnswers = ({
   }
   return outcomes;
 };
+
+/** Longest question and value carried into a log line; the rest is cut. */
+const READING_QUESTION_CHARS = 80;
+const READING_VALUE_CHARS = 60;
+const READINGS_MAX = 20;
+
+const readingValue = (answer: Exclude<Answer, null>): string => {
+  if (typeof answer === "string") {
+    return answer;
+  }
+  if (Array.isArray(answer)) {
+    return answer.join(", ");
+  }
+  return `${String(answer.amount)}${answer.currency === null ? "" : ` ${answer.currency}`}`;
+};
+
+type DescribeSystemOneReadingsOptions = {
+  questions: readonly AnswerQuestion[];
+  outcomes: ReadonlyMap<string, AnswerOutcome>;
+};
+
+/**
+ * One request's readings as a log attribute: which question, what the model
+ * chose, and how sure it was. A JSON string because the logger takes scalar
+ * attributes; a question the plan skipped is listed with no outcome so the
+ * line still accounts for every question asked.
+ */
+export const describeSystemOneReadings = ({
+  questions,
+  outcomes,
+}: DescribeSystemOneReadingsOptions): string =>
+  JSON.stringify(
+    questions.slice(0, READINGS_MAX).map((question) => {
+      const outcome = outcomes.get(question.id);
+      const kind = question.content.type;
+      const q = truncate(question.question, READING_QUESTION_CHARS);
+      if (outcome === undefined) {
+        return { kind, q, state: "unplanned" };
+      }
+      if (outcome.state === "not_stated") {
+        return {
+          kind,
+          q,
+          state: outcome.state,
+          confidence: outcome.confidence,
+        };
+      }
+      return {
+        kind,
+        q,
+        state: outcome.state,
+        value: truncate(readingValue(outcome.answer), READING_VALUE_CHARS),
+        probability: outcome.probability,
+        confidence: outcome.confidence,
+        source: outcome.sourceId,
+      };
+    }),
+  );
