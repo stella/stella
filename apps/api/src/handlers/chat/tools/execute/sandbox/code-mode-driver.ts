@@ -25,9 +25,12 @@ import { SANDBOX_READ_GLOBAL } from "@/api/handlers/chat/tools/execute/sandbox/r
  * 4. the `SandboxError` tagged-error taxonomy.
  *
  * The limits are owned here, not by the code-mode config: `IsolateConfig`'s
- * `timeout`/`memoryLimit` are deliberately NOT honored, because code-mode
- * defaults `timeout` to 30_000ms — larger than Stella's 10_000ms deadline — so
- * letting them flow through would silently relax the wall-clock deadline. The
+ * `timeout`/`memoryLimit` are deliberately NOT honored. code-mode has one
+ * number for time, defaulted to 30_000ms and measured over the whole
+ * execution; Stella splits that into `maxDurationMs` (10_000ms of the script's
+ * own time, suspended while a host call is awaited) and `maxTotalDurationMs`
+ * (a hard 120_000ms wall clock), so letting a single `timeout` flow through
+ * would relax the script deadline and leave the total ceiling unset. The
  * driver's own `limits` (falling back to `DEFAULT_SANDBOX_LIMITS` inside
  * `runSandbox` when omitted) stay authoritative for every layer, and
  * `maxHostCalls`/`maxReturnBytes` have no code-mode equivalent at all, so they

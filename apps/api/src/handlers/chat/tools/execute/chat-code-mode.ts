@@ -93,7 +93,7 @@ const chatProjectableReadToolNames = (): readonly RegistryReadToolName[] => {
  * sandbox owns transpilation and forbidden-syntax rejection, so its taxonomy
  * survives; the driver wraps the source in an async IIFE downstream, which
  * tolerates the top-level `return`/`await` code-mode emits) and the sandbox's own
- * wall-clock deadline instead of code-mode's larger default.
+ * script deadline instead of code-mode's larger default.
  */
 const CODE_MODE_RUNTIME_CONFIG = {
   transpile: (code: string) => code,
