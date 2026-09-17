@@ -113,7 +113,7 @@
     "apps/web/src/components/inspector/download-rendition-menu.tsx": 6,
     "apps/web/src/components/inspector/email-attachments-facet.tsx": 4,
     "apps/web/src/components/inspector/external-reference-panel.tsx": 7,
-    "apps/web/src/components/inspector/file-tab-panel.tsx": 7,
+    "apps/web/src/components/inspector/file-tab-panel.tsx": 1,
     "apps/web/src/components/inspector/inspector-find.tsx": 1,
     "apps/web/src/components/inspector/inspector-rail.tsx": 6,
     "apps/web/src/components/inspector/playbook-facet.tsx": 25,

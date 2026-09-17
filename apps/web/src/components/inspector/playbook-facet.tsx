@@ -3991,11 +3991,10 @@ const ReviewCardActions = ({
             </span>
             {targetBlockId !== null && (
               <Button
-                className="text-muted-foreground hover:text-foreground h-6 px-1.5 text-xs"
                 disabled={!editorAvailable}
                 onClick={() => onScrollToBlock(targetBlockId)}
-                size="sm"
-                variant="ghost"
+                size="xs"
+                variant="muted"
               >
                 {t("inspector.review.showInDocument")}
               </Button>
