@@ -185,25 +185,21 @@ SELECT count(*) FROM drizzle.__drizzle_migrations
 WHERE name = :'relaxation_migration';
 SQL
 )"
-if [[ "$relaxation_receipts" -eq 0 ]]; then
-  echo "Rehearsed a pre-relaxation database; nothing to replay"
-  exit 0
-fi
+run_migrator() {
+  (
+    cd "$repo_root/apps/api"
+    bun run src/db/migrate.ts
+  )
+}
 
-psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
-  -v relaxation_migration="$relaxation_migration" <<'SQL' >/dev/null
-DELETE FROM drizzle.__drizzle_migrations
-WHERE name = :'relaxation_migration';
-SQL
-
-(
-  cd "$repo_root/apps/api"
-  bun run src/db/migrate.ts
-)
-
-psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -Atc "
+# The committed head shape once the relaxation migration is part of the
+# checkout: issuer nullable, the legacy identity index retired, the
+# replacement valid and enforcing.
+assert_relaxed_head() {
+  local expected_receipts="$1"
+  psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -Atc "
 SELECT
-  (SELECT count(*) = ${recorded_before}
+  (SELECT count(*) = ${expected_receipts}
    FROM drizzle.__drizzle_migrations)
   AND NOT (SELECT attnotnull
            FROM pg_attribute
@@ -213,7 +209,54 @@ SELECT
   AND (SELECT indisvalid AND indisready
        FROM pg_index
        WHERE indexrelid = 'public.account_provider_account_id_uidx'::regclass);
-" | grep -qx t || {
+" | grep -qx t
+}
+
+# The head shape of a checkout that predates the relaxation migration: the
+# historical constraint stays, and the migrator recorded nothing new.
+assert_constrained_head() {
+  local expected_receipts="$1"
+  psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -Atc "
+SELECT
+  (SELECT count(*) = ${expected_receipts}
+   FROM drizzle.__drizzle_migrations)
+  AND (SELECT attnotnull
+       FROM pg_attribute
+       WHERE attrelid = 'public.account'::regclass
+         AND attname = 'issuer');
+" | grep -qx t
+}
+
+if [[ "$relaxation_receipts" -eq 0 ]]; then
+  # No receipt for the relaxation. The migrator above applies every migration
+  # on disk, so this can only be a checkout that predates the relaxation: the
+  # shape this rehearsal was written for, whose head keeps the historical
+  # constraint. A checkout that carries the migration but recorded no receipt
+  # is inconsistent, not a shape to accept.
+  if [[ -d "$repo_root/apps/api/drizzle/$relaxation_migration" ]]; then
+    echo "The relaxation migration is on disk but the migrator recorded no receipt for it" >&2
+    exit 1
+  fi
+  # Prove the database sits on that checkout's head rather than exiting on
+  # the receipt count alone: nothing left to apply, constraint still recorded.
+  run_migrator
+  assert_constrained_head "$recorded_before" || {
+    echo "A pre-relaxation checkout did not keep the historical constraint" >&2
+    exit 1
+  }
+  echo "Rehearsed a pre-relaxation checkout; account keeps the historical constraint"
+  exit 0
+fi
+
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+  -v relaxation_migration="$relaxation_migration" <<'SQL' >/dev/null
+DELETE FROM drizzle.__drizzle_migrations
+WHERE name = :'relaxation_migration';
+SQL
+
+run_migrator
+
+assert_relaxed_head "$recorded_before" || {
   echo "Replaying the relaxation migration did not restore the head shape" >&2
   exit 1
 }
