@@ -1,7 +1,6 @@
 import { Result } from "better-result";
 import { and, eq, exists, inArray, sql } from "drizzle-orm";
 
-import { parseUsableDocumentAst } from "@stll/legal-ast/document-ast";
 import { Temporal } from "@stll/time";
 
 import type { SafeDb } from "@/api/db/safe-db";
@@ -15,10 +14,13 @@ import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
-import type {
-  CaseLawPublicReadDb,
-  CaseLawPublicReadTransaction,
-} from "@/api/lib/case-law-public-read-db";
+import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+import {
+  readDecisionPassageRow,
+  resolveDecisionPassages,
+  retrieveDecisionPassages,
+} from "@/api/lib/case-law/decision-passages";
+import type { DecisionPassageRow } from "@/api/lib/case-law/decision-passages";
 import type {
   ResearchAnswerClaim,
   ResearchAnswerCell,
@@ -29,7 +31,6 @@ import {
   buildResearchUserMessage,
   parseResearchAnswers,
   RESEARCH_SYSTEM_PROMPT,
-  selectPassagesWithinBudget,
 } from "@/api/lib/case-law/research-answers";
 import type {
   CaseLawResearchAnswerRun,
@@ -43,24 +44,10 @@ import {
   splitSystemOneQuestions,
   systemOneSourcesFromPassages,
 } from "@/api/lib/case-law/research-answers-system-one";
-import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
-import { readServingCorpusIndexGenerationTx } from "@/api/lib/legal-search/corpus-index-generation-store";
-import {
-  corpusFreeTextClause,
-  quoteCorpusValue,
-} from "@/api/lib/legal-search/corpus-query";
 import {
   allowsDerivedAi,
   isRedistributable,
 } from "@/api/lib/legal-search/corpus-source";
-import type { CorpusSourceDescriptor } from "@/api/lib/legal-search/corpus-source";
-import {
-  parsePersistedCorpusAst,
-  readCorpusAst,
-  readCorpusPayloadOrFallback,
-  readCorpusText,
-} from "@/api/lib/legal-search/corpus-storage";
-import { corpusIndexRoute } from "@/api/lib/legal-search/index-naming";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
@@ -187,25 +174,6 @@ export const runResearchAnswers = async (
   );
 };
 
-type DecisionTextSource =
-  | { kind: "passages"; passages: ResearchPassage[]; retrieved: boolean }
-  | { kind: "none" };
-
-type ResearchDecisionRow = {
-  id: SafeId<"caseLawDecision">;
-  caseNumber: string;
-  court: string;
-  country: string;
-  language: string;
-  decisionType: string | null;
-  documentAst: unknown;
-  astS3Key: string | null;
-  textS3Key: string | null;
-  contentHash: string | null;
-  fulltext: string | null;
-  source: { descriptor: CorpusSourceDescriptor | null } | null;
-};
-
 const answerDecision = async (
   decisionId: SafeId<"caseLawDecision">,
   claimedColumnIds: readonly SafeId<"caseLawResearchColumn">[],
@@ -236,7 +204,7 @@ const answerDecision = async (
     );
 
   const decision = await caseLawDb(
-    async (tx) => await readResearchDecision(tx, decisionId),
+    async (tx) => await readDecisionPassageRow(tx, decisionId),
   );
   if (decision === null) {
     await fail("decision_unavailable");
@@ -262,12 +230,14 @@ const answerDecision = async (
     return;
   }
 
-  const text = await resolveDecisionText(
-    decision,
-    questions,
+  const text = await resolveDecisionPassages({
     caseLawDb,
-    LIMITS.caseLawResearchAnswerTextBudgetChars,
-  );
+    decision,
+    budgetChars: LIMITS.caseLawResearchAnswerTextBudgetChars,
+    passageChars: LIMITS.caseLawResearchAnswerPassageChars,
+    maxPassages: LIMITS.caseLawResearchAnswerPassagesMax,
+    queries: questions.map((question) => question.question),
+  });
   if (text.kind === "none") {
     await fail("no_text");
     return;
@@ -451,176 +421,10 @@ const stillClaimedColumnsFor = async (
   return rows.value.map((row) => row.columnId);
 };
 
-const readResearchDecision = async (
-  tx: CaseLawPublicReadTransaction,
-  decisionId: SafeId<"caseLawDecision">,
-): Promise<ResearchDecisionRow | null> => {
-  const row = await tx.query.caseLawDecisions.findFirst({
-    where: { id: { eq: decisionId } },
-    columns: {
-      id: true,
-      caseNumber: true,
-      court: true,
-      country: true,
-      language: true,
-      decisionType: true,
-      documentAst: true,
-      astS3Key: true,
-      textS3Key: true,
-      contentHash: true,
-      fulltext: true,
-    },
-    // `descriptor` decides redistribution and derived-AI use; never returned.
-    with: { source: { columns: { descriptor: true } } },
-  });
-  return row ?? null;
-};
-
-/**
- * The decision as anchored passages: the AST's blocks when it has one (each
- * block's anchor is what the reader scrolls to), otherwise the stored text as
- * one unanchored passage. Over budget, the passages most relevant to the
- * questions are retrieved from the corpus index instead.
- */
-const resolveDecisionText = async (
-  decision: ResearchDecisionRow,
-  questions: readonly ResearchQuestion[],
-  caseLawDb: CaseLawPublicReadDb,
-  budgetChars: number,
-): Promise<DecisionTextSource> => {
-  const blocks = await readDecisionBlocks(decision);
-  const passages: ResearchPassage[] =
-    blocks === null
-      ? await readDecisionFulltextPassage(decision)
-      : blocks.flatMap((block) =>
-          block.plainText.trim().length > 0
-            ? [{ anchorId: block.anchorId, excerpt: block.plainText.trim() }]
-            : [],
-        );
-  if (passages.length === 0) {
-    return { kind: "none" };
-  }
-  const total = passages.reduce(
-    (sum, passage) => sum + passage.excerpt.length,
-    0,
-  );
-  if (total <= budgetChars) {
-    return { kind: "passages", passages, retrieved: false };
-  }
-
-  const retrieved = await retrievePassages(decision, questions, caseLawDb);
-  const selected = selectPassagesWithinBudget(
-    retrieved.length > 0 ? retrieved : passages,
-    {
-      budgetChars,
-      passageChars: LIMITS.caseLawResearchAnswerPassageChars,
-    },
-  );
-  return selected.length === 0
-    ? { kind: "none" }
-    : { kind: "passages", passages: selected, retrieved: true };
-};
-
-/** A row's corpus object, or its Postgres copy when the object is unreadable. */
-const readStoredPayload = async <T>({
-  decision,
-  fallback,
-  key,
-  read,
-  step,
-}: {
-  decision: ResearchDecisionRow;
-  key: string | null;
-  step: string;
-  read: (key: string) => Promise<T>;
-  fallback: () => T | null;
-}): Promise<T | null> => {
-  if (key === null || decision.contentHash === null) {
-    return fallback();
-  }
-  const stored = await Result.tryPromise(
-    async () =>
-      await readCorpusPayloadOrFallback({
-        documentId: decision.id,
-        key,
-        step,
-        read: async () => await read(key),
-        fallback: async () => await Promise.resolve(fallback()),
-      }),
-  );
-  return Result.isOk(stored) ? stored.value : null;
-};
-
-const readDecisionBlocks = async (
-  decision: ResearchDecisionRow,
-): Promise<{ anchorId: string; plainText: string; type: string }[] | null> => {
-  const stored = await readStoredPayload({
-    decision,
-    key: decision.astS3Key,
-    step: "researchAnswers.corpusAst",
-    read: readCorpusAst,
-    fallback: () => parsePersistedCorpusAst(decision.documentAst),
-  });
-  const ast = stored === null ? null : parseUsableDocumentAst(stored);
-  return ast === null ? null : ast.blocks;
-};
-
-const readDecisionFulltextPassage = async (
-  decision: ResearchDecisionRow,
-): Promise<ResearchPassage[]> => {
-  const text = await readStoredPayload({
-    decision,
-    key: decision.textS3Key,
-    step: "researchAnswers.corpusText",
-    read: readCorpusText,
-    fallback: () => decision.fulltext,
-  });
-  const trimmed = text?.trim() ?? "";
-  return trimmed.length === 0 ? [] : [{ anchorId: "text", excerpt: trimmed }];
-};
-
-/** The passages of one decision that match the questions, best first. */
-const retrievePassages = async (
-  decision: ResearchDecisionRow,
-  questions: readonly { question: string }[],
-  caseLawDb: CaseLawPublicReadDb,
-): Promise<ResearchPassage[]> => {
-  const freeText = corpusFreeTextClause(
-    questions.map((question) => question.question).join(" "),
-  );
-  if (freeText === null) {
-    return [];
-  }
-  const searched = await Result.tryPromise(async () => {
-    const serving = await caseLawDb(
-      async (tx) => await readServingCorpusIndexGenerationTx(tx, "case_law"),
-    );
-    const { indexId } = corpusIndexRoute(serving.generation, decision.country);
-    return await getCorpusIndexClient(serving.cluster).search({
-      indexId,
-      query: `document_id:${quoteCorpusValue(decision.id)} AND ${freeText}`,
-      maxHits: LIMITS.caseLawResearchAnswerPassagesMax,
-      sortBy: "_score",
-    });
-  });
-  if (Result.isError(searched) || Result.isError(searched.value)) {
-    return [];
-  }
-  return searched.value.value.hits.flatMap((hit) => {
-    const anchorId = hit["anchor_id"];
-    const text = hit["text"];
-    return typeof anchorId === "string" &&
-      anchorId.length > 0 &&
-      typeof text === "string"
-      ? [{ anchorId, excerpt: text }]
-      : [];
-  });
-};
-
 type SystemOnePassOptions = {
   caseLawDb: CaseLawPublicReadDb;
   client: SystemOneClient;
-  decision: ResearchDecisionRow;
+  decision: DecisionPassageRow;
   questions: readonly ResearchRunColumn[];
   text: { passages: readonly ResearchPassage[]; retrieved: boolean };
 };
@@ -657,7 +461,12 @@ const answerWithSystemOne = async ({
   const overBudget = exceedsSystemOneSourceBudget(text.passages);
   const ranked =
     overBudget && !text.retrieved
-      ? await retrievePassages(decision, asked, caseLawDb)
+      ? await retrieveDecisionPassages({
+          caseLawDb,
+          decision,
+          maxPassages: LIMITS.caseLawResearchAnswerPassagesMax,
+          queries: asked.map((question) => question.question),
+        })
       : [];
   const sources = systemOneSourcesFromPassages(
     ranked.length > 0 ? ranked : text.passages,

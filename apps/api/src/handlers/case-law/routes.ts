@@ -1,6 +1,7 @@
 import Elysia from "elysia";
 
 import generateDecisionAnalysis from "@/api/handlers/case-law/analysis/generate";
+import checkCitation from "@/api/handlers/case-law/citations/check";
 import getCaseLawIngestionStatus from "@/api/handlers/case-law/ingestion/status";
 import createMatterLinksBatch from "@/api/handlers/case-law/matter-links/batch/create";
 import createMatterLink from "@/api/handlers/case-law/matter-links/create";
@@ -13,6 +14,9 @@ import {
   permissionMacro,
   workspaceAccessMacro,
 } from "@/api/lib/auth";
+import { API_RATE_LIMITS } from "@/api/lib/limits";
+import { rateLimit } from "@/api/lib/rate-limit/rate-limit";
+import { createRedisRateLimit } from "@/api/lib/rate-limit/redis-context";
 
 const authenticatedCaseLawRoute = new Elysia({
   prefix: "/case",
@@ -23,6 +27,31 @@ const authenticatedCaseLawRoute = new Elysia({
   .get("/decisions/:decisionId/analysis", generateDecisionAnalysis.handler, {
     params: generateDecisionAnalysis.config.params,
     permissions: generateDecisionAnalysis.config.permissions,
+  });
+
+/**
+ * A citation check resolves a reference against the corpus and sends one
+ * decision's passages to the typed judgment model, so it carries a budget of
+ * its own rather than drawing on the general API one. The limiter is scoped
+ * to this plugin, which is why it needs no path predicate.
+ */
+const caseLawCitationRoute = new Elysia({ prefix: "/case/citations" })
+  .use(
+    rateLimit({
+      duration: API_RATE_LIMITS.caseLawCitationCheck.duration,
+      max: API_RATE_LIMITS.caseLawCitationCheck.max,
+      ...createRedisRateLimit({
+        failurePolicy: "fail_open_local",
+        scope: "case-law-citation-check",
+      }),
+    }),
+  )
+  .use(authMacro)
+  .use(permissionMacro)
+  .guard({ validateAuth: true })
+  .post("/check", checkCitation.handler, {
+    body: checkCitation.config.body,
+    permissions: checkCitation.config.permissions,
   });
 
 /**
@@ -70,6 +99,7 @@ const caseLawAdminRoute = new Elysia({
 export const caseLawRoute = new Elysia()
   .use(publicCaseLawRoute)
   .use(authenticatedCaseLawRoute)
+  .use(caseLawCitationRoute)
   .use(caseLawResearchRoute)
   .use(caseLawMatterLinksRoute)
   .use(caseLawAdminRoute);

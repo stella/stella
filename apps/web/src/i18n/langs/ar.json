@@ -216,8 +216,7 @@
         "treatAsGoverning": "اعتبار {id} حاكمًا"
       },
       "relation": {
-        "conflicts": "يتعارض مع",
-        "supports": "يدعم"
+        "conflicts": "يتعارض مع"
       },
       "reopened": "أُعيد فتحه، والفحص معلّق",
       "reopenedTooltip": "أعاد المراجع تصنيف هذا على أنه واقعة قابلة للفحص؛ ولا يزال فحص السجل المباشر معلقًا.",
@@ -1528,6 +1527,7 @@
     "stepCount": "{count, plural, zero {# خطوة} one {# خطوة} two {# خطوتان} few {# خطوات} many {# خطوة} other {# خطوة}}",
     "stepProgress": "{current} من {total}",
     "summarizeChanges": "تلخيص التغييرات",
+    "supports": "يؤيد",
     "timeBilling": "الوقت والفوترة",
     "today": "اليوم",
     "translate": "ترجمة",
@@ -1789,6 +1789,23 @@
       "organization": "مؤسسة",
       "person": "شخص"
     }
+  },
+  "docxCitationCheck": {
+    "action": "التحقق من الاستشهاد",
+    "alternatives": "{count, plural, zero {يطابق هذا المرجع # حكم آخر} one {يطابق هذا المرجع # حكم آخر} two {يطابق هذا المرجع حكمان آخران} few {تطابق هذا المرجع # أحكام أخرى} many {يطابق هذا المرجع # حكمًا آخر} other {يطابق هذا المرجع # حكم آخر}}",
+    "checking": "جارٍ التحقق من {citation} …",
+    "contradicts": "يناقض",
+    "doesNotAddress": "لا يتناول",
+    "failed": "لم يكتمل التحقق من الاستشهاد. حاول مرة أخرى.",
+    "goToParagraph": "الانتقال إلى الفقرة",
+    "noPassage": "لا يحمل أي مقطع منفرد من الحكم هذه القراءة.",
+    "notFound": "لا يوجد حكم مطابق لـ {citation} في قاعدة بيانات السوابق القضائية",
+    "probability": "احتمال {probability, number, percent}",
+    "showPassage": "عرض المقطع",
+    "title": "التحقق من الاستشهاد",
+    "unavailableDerivedAi": "لا يسمح ناشر هذا الحكم بتحليل نصه بالذكاء الاصطناعي.",
+    "unavailableNoText": "عُثر على الحكم، لكن نصه غير متاح للتحقق منه.",
+    "uncertain": "غير مؤكد"
   },
   "docxReview": {
     "acceptAll": "قبول الكل",

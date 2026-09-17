@@ -216,8 +216,7 @@
         "treatAsGoverning": "Považovat {id} za rozhodující"
       },
       "relation": {
-        "conflicts": "Odporuje",
-        "supports": "Podporuje"
+        "conflicts": "Odporuje"
       },
       "reopened": "Znovu otevřeno, čeká na kontrolu",
       "reopenedTooltip": "Kontrolující osoba překlasifikovala toto tvrzení jako ověřitelné; porovnání se živými záznamy dosud neproběhlo.",
@@ -1528,6 +1527,7 @@
     "stepCount": "{count, plural, one {# krok} few {# kroky} many {# kroku} other {# kroků}}",
     "stepProgress": "{current} z {total}",
     "summarizeChanges": "Shrnout změny",
+    "supports": "Podporuje",
     "timeBilling": "Čas a fakturace",
     "today": "Dnes",
     "translate": "Přeložit",
@@ -1789,6 +1789,23 @@
       "organization": "Organizace",
       "person": "Osoba"
     }
+  },
+  "docxCitationCheck": {
+    "action": "Ověřit citaci",
+    "alternatives": "{count, plural, one {Tomuto označení odpovídá ještě # rozhodnutí} few {Tomuto označení odpovídají ještě # rozhodnutí} other {Tomuto označení odpovídá ještě # rozhodnutí}}",
+    "checking": "Ověřuji {citation} …",
+    "contradicts": "Odporuje",
+    "doesNotAddress": "Neřeší",
+    "failed": "Ověření citace se nezdařilo. Zkuste to znovu.",
+    "goToParagraph": "Přejít na odstavec",
+    "noPassage": "Žádná jednotlivá pasáž rozhodnutí tento závěr nenese.",
+    "notFound": "Rozhodnutí odpovídající {citation} není v databázi judikatury",
+    "probability": "pravděpodobnost {probability, number, percent}",
+    "showPassage": "Zobrazit pasáž",
+    "title": "Ověření citace",
+    "unavailableDerivedAi": "Vydavatel tohoto rozhodnutí nepovoluje analýzu jeho textu umělou inteligencí.",
+    "unavailableNoText": "Rozhodnutí bylo nalezeno, ale jeho text není k dispozici k ověření.",
+    "uncertain": "Nejisté"
   },
   "docxReview": {
     "acceptAll": "Přijmout vše",

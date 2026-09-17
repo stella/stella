@@ -216,8 +216,7 @@
         "treatAsGoverning": "Laikyti {id} vadovaujamuoju"
       },
       "relation": {
-        "conflicts": "Prieštarauja",
-        "supports": "Patvirtina"
+        "conflicts": "Prieštarauja"
       },
       "reopened": "Atverta iš naujo, laukiama patikros",
       "reopenedTooltip": "Tikrintojas perklasifikavo tai kaip patikrinamą faktą; tiesioginė patikra pagal registrą dar neatlikta.",
@@ -1528,6 +1527,7 @@
     "stepCount": "{count, plural, one {# žingsnis} few {# žingsniai} other {# žingsnių}}",
     "stepProgress": "{current} iš {total}",
     "summarizeChanges": "Apibendrinti pakeitimus",
+    "supports": "Patvirtina",
     "timeBilling": "Laikas ir atsiskaitymai",
     "today": "Šiandien",
     "translate": "Versti",
@@ -1789,6 +1789,23 @@
       "organization": "Organizacija",
       "person": "Asmuo"
     }
+  },
+  "docxCitationCheck": {
+    "action": "Patikrinti citatą",
+    "alternatives": "{count, plural, one {Šią nuorodą atitinka dar # sprendimas} few {Šią nuorodą atitinka dar # sprendimai} other {Šią nuorodą atitinka dar # sprendimų}}",
+    "checking": "Tikrinama {citation} …",
+    "contradicts": "Prieštarauja",
+    "doesNotAddress": "Nenagrinėja",
+    "failed": "Citatos patikra nebaigta. Bandykite dar kartą.",
+    "goToParagraph": "Eiti į pastraipą",
+    "noPassage": "Nė viena atskira sprendimo ištrauka šios išvados neparemia.",
+    "notFound": "Teismų praktikos duomenų bazėje nėra sprendimo, atitinkančio {citation}",
+    "probability": "{probability, number, percent} tikimybė",
+    "showPassage": "Rodyti ištrauką",
+    "title": "Citatos patikra",
+    "unavailableDerivedAi": "Šio sprendimo leidėjas neleidžia jo teksto analizuoti dirbtiniu intelektu.",
+    "unavailableNoText": "Sprendimas rastas, tačiau jo tekstas patikrai neprieinamas.",
+    "uncertain": "Neaišku"
   },
   "docxReview": {
     "acceptAll": "Priimti visus",

@@ -59,7 +59,9 @@ const CANDIDATE_SNIPPET_CHARS = 60;
 const RUNNER_UP_MIN_PROBABILITY = 0.02;
 
 const NOT_STATED = "__not_stated";
-const NO_SOURCE = "__none";
+
+/** The option a where-question offers when no listed source carries the answer. */
+export const NO_SOURCE = "__none";
 
 export type AnswerSource = {
   /** The id the caller cites: a passage anchor, a folio block id, a bates page. */
@@ -304,13 +306,17 @@ const candidateCriteria = (
   return criteria;
 };
 
-const whereQuestion = (
-  question: string,
+/**
+ * The sources as the options of a where-question: each one described by its
+ * opening words, plus `__none` for a reading that rests on none of them. The
+ * caller writes what `__none` means for its own question, because "no source
+ * states the answer" and "no passage carries the court's treatment" are
+ * different findings.
+ */
+export const sourceChoiceCriteria = (
   sources: readonly AnswerSource[],
-): SystemOneQuestion | null => {
-  if (sources.length === 0 || sources.length > LOCATOR_CHOICE_MAX_SOURCES) {
-    return null;
-  }
+  noSourceCriterion: SystemOneEntry,
+): Record<string, SystemOneEntry> => {
   const criteria: Record<string, SystemOneEntry> = {};
   for (const source of sources) {
     criteria[source.id] = truncate(
@@ -318,13 +324,23 @@ const whereQuestion = (
       LOCATOR_DESCRIPTION_CHARS,
     );
   }
-  criteria[NO_SOURCE] = "No source states the answer.";
+  criteria[NO_SOURCE] = noSourceCriterion;
+  return criteria;
+};
+
+const whereQuestion = (
+  question: string,
+  sources: readonly AnswerSource[],
+): SystemOneQuestion | null => {
+  if (sources.length === 0 || sources.length > LOCATOR_CHOICE_MAX_SOURCES) {
+    return null;
+  }
   return choice(
     {
       question,
       task: "Which entry of `sources` states the answer to `question`? Choose `__none` when no entry states it.",
     },
-    criteria,
+    sourceChoiceCriteria(sources, "No source states the answer."),
   );
 };
 

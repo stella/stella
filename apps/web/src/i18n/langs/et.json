@@ -216,8 +216,7 @@
         "treatAsGoverning": "Käsita fakti {id} aluseks olevana"
       },
       "relation": {
-        "conflicts": "On vastuolus",
-        "supports": "Toetab"
+        "conflicts": "On vastuolus"
       },
       "reopened": "Uuesti avatud, kontroll ootel",
       "reopenedTooltip": "Kontrollija liigitas selle uuesti kontrollitavaks faktiks; reaalajas registrikontroll on veel ootel.",
@@ -1528,6 +1527,7 @@
     "stepCount": "{count, plural, one {# samm} other {# sammu}}",
     "stepProgress": "{current} / {total}",
     "summarizeChanges": "Võta muudatused kokku",
+    "supports": "Toetab",
     "timeBilling": "Aeg ja arveldus",
     "today": "Täna",
     "translate": "Tõlgi",
@@ -1789,6 +1789,23 @@
       "organization": "Organisatsioon",
       "person": "Isik"
     }
+  },
+  "docxCitationCheck": {
+    "action": "Kontrolli viidet",
+    "alternatives": "{count, plural, one {Sellele viitele vastab veel # lahend} other {Sellele viitele vastab veel # lahendit}}",
+    "checking": "Kontrollin viidet {citation} …",
+    "contradicts": "Räägib vastu",
+    "doesNotAddress": "Ei käsitle",
+    "failed": "Viite kontroll ei lõppenud. Proovige uuesti.",
+    "goToParagraph": "Mine lõigu juurde",
+    "noPassage": "Ükski lahendi üksik lõik seda järeldust ei kanna.",
+    "notFound": "Kohtupraktika andmebaasis ei ole lahendit {citation}",
+    "probability": "{probability, number, percent} tõenäosus",
+    "showPassage": "Näita lõiku",
+    "title": "Viite kontroll",
+    "unavailableDerivedAi": "Selle lahendi väljaandja ei luba teksti tehisintellektiga analüüsida.",
+    "unavailableNoText": "Lahend leiti, kuid selle tekst ei ole kontrollimiseks kättesaadav.",
+    "uncertain": "Ebakindel"
   },
   "docxReview": {
     "acceptAll": "Nõustu kõigiga",

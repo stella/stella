@@ -426,6 +426,16 @@ export const LIMITS = {
   caseLawResearchAnswerPassageChars: 1500,
   /** Rationale kept beside an answer. */
   caseLawResearchAnswerRationaleChars: 600,
+  /**
+   * Passages a citation check offers the model, and the cap on each. Fewer
+   * than a question column reads: the model has to choose one of them as the
+   * passage the reading rests on, so the list has to stay one a reader would
+   * accept as an answer.
+   */
+  caseLawCitationCheckPassagesMax: 8,
+  caseLawCitationCheckPassageChars: 1500,
+  /** Longest sentence a citation check judges, and the citation that names it. */
+  caseLawCitationCheckClaimChars: 2000,
   caseLawDecisionCitationPageSize: 50,
   /**
    * Consolidations one page of provision previews may read. Each is a whole
@@ -776,6 +786,11 @@ export const API_RATE_LIMITS = {
    *  source IP, so this is loose enough for production while
    *  still bounding the worst case. */
   hostedUsageWebhook: { duration: 60_000, max: 300 },
+  /** Citation checks: 30 req/min per IP. Each call resolves a reference
+   *  against the corpus and sends a decision's passages to the typed
+   *  judgment model, so it gets a budget of its own well under the general
+   *  API one. */
+  caseLawCitationCheck: { duration: 60_000, max: 30 },
   /** Delete account OTP email request limit: 5 requests per minute. */
   deleteAccountOtp: { duration: 60_000, max: 5 },
   /** Two-factor management (enable/disable/get-totp-uri/regenerate-backup-codes)
