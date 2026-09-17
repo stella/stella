@@ -15,8 +15,9 @@ checks.
 1. **Resolve application ports** (dry run):
 
    Run the dev-runner in dry-run mode to learn which ports it will
-   use. The runner hashes the worktree/branch name into a port
-   offset so multiple worktrees can run simultaneously.
+   use. The runner hashes the canonical worktree path into a port
+   offset, so multiple worktrees can run simultaneously and
+   switching branches inside one worktree keeps its ports.
 
    ```bash
    bun run dev --dry-run --skip-install --no-browser
