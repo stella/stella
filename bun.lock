@@ -477,6 +477,7 @@
       "name": "@stll/agent-input",
       "version": "0.0.0",
       "dependencies": {
+        "@stll/country-codes": "workspace:*",
         "@stll/template-conditions": "workspace:*",
         "@stll/text-normalize": "workspace:*",
         "@stll/time": "workspace:*",

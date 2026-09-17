@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { normalizeBoolean } from "./boolean";
+import { normalizeCountry } from "./country";
 import { normalizeDateFormatSpec } from "./date-format-spec";
 import type { DateFormatSpec } from "./date-format-spec";
 import { normalizeDateValue } from "./date-value";
@@ -8,6 +9,13 @@ import { normalizeEnumValue } from "./enum-value";
 import { isPlausibleLocale, normalizeLocale } from "./locale";
 import type { Normalized } from "./normalized";
 import { normalizeNumber } from "./number";
+import type { AgentInputNormalizationAnnotation } from "./schema";
+import {
+  AGENT_INPUT_NORMALIZATION_KEY,
+  AGENT_INPUT_NORMALIZATION_KIND,
+  agentInputNormalization,
+  normalizeAgentInput,
+} from "./schema";
 
 /** The value, or the ask rendered so a failure names what the agent sent. */
 const valueOf = <TValue>(result: Normalized<TValue>): TValue | string =>
@@ -307,5 +315,165 @@ describe("closed vocabularies", () => {
     expect(!result.ok && result.hint).toBe(
       'The allowed values are "krs", "ares", "orsr".',
     );
+  });
+});
+
+describe("countries", () => {
+  test.each([
+    ["CZE", "CZE"],
+    ["cze", "CZE"],
+    [" CZE ", "CZE"],
+    ["CZ", "CZE"],
+    ["cz", "CZE"],
+    ["Česko", "CZE"],
+    ["česko", "CZE"],
+    ["Cesko", "CZE"],
+    ["Česká republika", "CZE"],
+    ["Ceska  republika", "CZE"],
+    ["Czechia", "CZE"],
+    ["Czech Republic", "CZE"],
+    ["Tschechien", "CZE"],
+    ["Czechy", "CZE"],
+    ["SVK", "SVK"],
+    ["SK", "SVK"],
+    ["Slovensko", "SVK"],
+    ["Slovak Republic", "SVK"],
+    ["Slowakei", "SVK"],
+    ["POL", "POL"],
+    ["Polska", "POL"],
+    ["Polsko", "POL"],
+    ["Poľsko", "POL"],
+    ["AUT", "AUT"],
+    ["Österreich", "AUT"],
+    ["Osterreich", "AUT"],
+    ["Rakousko", "AUT"],
+    ["Rakúsko", "AUT"],
+    // The supranational jurisdiction ISO assigns no code, spelled as the
+    // corpus spells it.
+    ["EU", "EU"],
+    ["European Union", "EU"],
+    ["Evropská unie", "EU"],
+    ["Unia Europejska", "EU"],
+    ["Germany", "DEU"],
+    ["Deutschland", "DEU"],
+    ["Bundesrepublik Deutschland", "DEU"],
+  ])("reads %j as %s", (input, expected) => {
+    const read = normalizeCountry(input);
+    expect(read).toMatchObject({ ok: true, value: { alpha3: expected } });
+  });
+
+  test("returns both ISO spellings so a caller stores its own", () => {
+    const read = normalizeCountry("Česko");
+    expect(read.ok && read.value).toEqual({ alpha3: "CZE", alpha2: "CZ" });
+  });
+
+  test("an alpha-2 caller is told the code it stores", () => {
+    const read = normalizeCountry("Czechia", { spelling: "alpha-2" });
+    expect(read.ok && read.value.alpha2).toBe("CZ");
+    expect(read.ok && read.note).toBe('Read "Czechia" as "CZ".');
+  });
+
+  // A spelling carrying two country readings is never guessed: `cs` is the
+  // Czech language tag and was Czechoslovakia's code, and the two successor
+  // states are different bodies of law.
+  test("a spelling naming two countries asks with both named", () => {
+    const read = normalizeCountry("cs", { tool: "search_case_law" });
+    if (read.ok) {
+      throw new Error(`"cs" resolved to ${read.value.alpha3}`);
+    }
+    expect(read.hint).toContain("CZE or SVK");
+  });
+
+  test.each([undefined, null, "", "   "])(
+    "asks for a required country when given %j",
+    (absent) => {
+      const read = normalizeCountry(absent, {
+        admitted: ["CZE"],
+        tool: "search_case_law",
+        parameter: "country",
+      });
+      expect(read.ok).toBe(false);
+      if (read.ok) {
+        return;
+      }
+      expect(read.expected).toBe("a country code, one of CZE");
+      expect(read.hint).toContain("`country` on search_case_law is required");
+    },
+  );
+
+  test("an unreadable spelling asks with the admitted codes", () => {
+    const read = normalizeCountry("Atlantis", {
+      admitted: ["CZE", "EU"],
+      tool: "search_case_law",
+    });
+    expect(read.ok).toBe(false);
+    if (read.ok) {
+      return;
+    }
+    expect(read.received).toBe('"Atlantis"');
+    expect(read.hint).toContain("Admitted: CZE, EU.");
+  });
+
+  // Recognising a country is not admitting it: the corpus answers that, so a
+  // country with no corpus still reads rather than failing to be spelled.
+  test("a country the corpus lacks is still read", () => {
+    const read = normalizeCountry("Francie", { admitted: ["CZE"] });
+    expect(read.ok && read.value.alpha3).toBe("FRA");
+  });
+
+  // Wrapped in tuples so an array case reaches the reader as an array rather
+  // than being spread into its elements.
+  test.each([[42], [true], [["CZE"]], [{ country: "CZE" }]])(
+    "asks when given the non-string %j",
+    (input) => {
+      expect(normalizeCountry(input).ok).toBe(false);
+    },
+  );
+});
+
+describe("the normalization annotation", () => {
+  // The country kind has two canonical spellings and no default between them,
+  // so the union branch requires one. Without it the first value reaching a
+  // field declared `{ kind: "country" }` would have nothing to be read into.
+  test("cannot declare a country without the spelling it stores", () => {
+    // @ts-expect-error the country branch requires `country.spelling`
+    const annotation: AgentInputNormalizationAnnotation = { kind: "country" };
+    expect(annotation.kind).toBe(AGENT_INPUT_NORMALIZATION_KIND.country);
+  });
+
+  test("reads a country field once it says which code to store", () => {
+    const declared = agentInputNormalization({
+      kind: AGENT_INPUT_NORMALIZATION_KIND.country,
+      country: { spelling: "alpha-2" },
+    });
+    expect(
+      normalizeAgentInput({
+        schema: {
+          type: "object",
+          properties: { country: { type: "string", ...declared } },
+        },
+        value: { country: "Czechia" },
+      }),
+    ).toMatchObject({ ok: true, value: { country: "CZ" } });
+  });
+
+  // An annotation whose kind is `country` but which never says which code to
+  // store is not an annotation: the field keeps whatever its own schema says
+  // rather than being read as a country.
+  test("leaves a country field alone when the spelling is missing", () => {
+    expect(
+      normalizeAgentInput({
+        schema: {
+          type: "object",
+          properties: {
+            country: {
+              type: "string",
+              [AGENT_INPUT_NORMALIZATION_KEY]: { kind: "country" },
+            },
+          },
+        },
+        value: { country: "Czechia" },
+      }),
+    ).toMatchObject({ ok: true, value: { country: "Czechia" } });
   });
 });

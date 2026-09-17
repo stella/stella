@@ -15,6 +15,7 @@ import {
   CHAT_THREAD_PLACEHOLDER_TITLE,
   toChatDecisionPassageHref,
 } from "@stll/api-contract";
+import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 import {
   DOCX_SUGGEST_CHANGES_AUTO_APPLY_OPTIONS,
   DOCX_SUGGEST_CHANGES_OPTIONS_BY_SURFACE,
@@ -24,6 +25,7 @@ import type {
   ReaderAnnotationTargetType,
   ReaderAnnotationVisibility,
 } from "@stll/api-contract/legal-reader-annotations";
+import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
 import { describeSuggestChangesCapabilities } from "@stll/folio-agents";
 import { isFolioAIContentBlock } from "@stll/folio-core/server";
 import type { SkillMetadata } from "@stll/skills";
@@ -245,6 +247,29 @@ const EXTERNAL_FACT_SOURCING_WITH_WEB_NO_SKILLS =
 const EXTERNAL_FACT_SOURCING_NO_WEB_NO_SKILLS =
   "EXTERNAL-FACT SOURCING: Web research is not enabled for this thread. Answer from your own knowledge and explicitly flag that no external source was available in this conversation (the user can enable web search to add one). Never use `execute_typescript` for external research — its `external_*` functions read stella's internal workspace data only.";
 
+/**
+ * What a failed or empty corpus search licenses, by jurisdiction.
+ *
+ * The covered jurisdictions are rendered from the constants the tools admit,
+ * so opening a corpus moves this rule with it. Scope matters in both
+ * directions: inside the corpus, recollection is the failure mode this exists
+ * to stop, while outside it an empty corpus says nothing about the law, and
+ * refusing to answer at all would be its own defect.
+ */
+export const buildCorpusOnlyCaseLawSection = ({
+  caseLawCountries,
+  legislationCountries,
+}: {
+  caseLawCountries: readonly string[];
+  legislationCountries: readonly string[];
+}): string =>
+  `CORPUS-ONLY CASE LAW: stella holds case law for ${caseLawCountries.join(", ")} and legislation for ${legislationCountries.join(", ")} (ISO 3166-1 alpha-3). For a question about one of those, a search that fails or returns nothing is not an invitation to answer from your own recollection: retry with reformulated input — a different phrasing, a broader query, the country spelled as a code — and if it still returns nothing, say the corpus holds nothing for the question. For any other jurisdiction, say the corpus does not cover it; EXTERNAL-FACT SOURCING then applies as written, so you may answer from your own knowledge with its flag. Either way, never present a decision, docket number, or ECLI as verified unless a tool returned it this turn.`;
+
+const CORPUS_ONLY_CASE_LAW_SECTION = buildCorpusOnlyCaseLawSection({
+  caseLawCountries: PUBLIC_CASE_LAW_COUNTRIES,
+  legislationCountries: PUBLIC_LEGISLATION_COUNTRIES,
+});
+
 const SUBAGENT_DELEGATION_SECTION =
   "DELEGATION: When a task splits into independent pieces (no piece depends on another's result), call `spawn_subagents` to run them in parallel instead of doing them one by one yourself. Subagents are cheaper and read/write workspace data under the single approval already granted to `spawn_subagents` — do not ask the user to approve each subagent separately. Prefer this whenever breadth or parallelism would speed up the task.";
 
@@ -306,6 +331,7 @@ const buildCoreRuleSections = ({
   "CITATIONS: When a tool returns a stable URL, cite each individual claim inline with its OWN Markdown link — one citation per sentence (or per discrete fact) rather than a single trailing 'Sources:' block. Anchor text should be short (source domain, citation, or `[1]`-style footnote), and each link must point to the specific URL that supports THAT claim. The stella inspector opens these links in-app on click, so prefer them over plain text. Never invent URLs.",
   "MATTER MENTIONS: When you name a matter, document, task, or contact from tool results, link it with the ref the tool returned: [Human name](#stella-entity-ref=ent_N) for entities, [Matter name](#stella-workspace-ref=mat_N) for matters, copying the ref verbatim from the tool output (entityRef, matterRef, or list item ids). Never invent a ref — a citation with an unknown ref renders as plain text and is flagged. If you cannot cite a ref for an item, you did not read it from a tool this turn, so do not present it as existing (see FRESH DATA).",
   "LEGAL REFERENCE RESOLUTION: Citation resolvers are exact-match. On a no-match, retry with a broader search tool using citation variants before declaring it unavailable.",
+  CORPUS_ONLY_CASE_LAW_SECTION,
   "USER-FACING LANGUAGE: Speak in legal-work terms; never expose internal names, tool names, or schema identifiers — refer to documents, matters, and folders by their human names. Reply in the user's UI language (see user context); switch only if the user themselves writes a natural-language message in another language. Copy `mention` strings from tool outputs verbatim instead of rewriting refs.",
   ...(subagents ? [SUBAGENT_DELEGATION_SECTION] : []),
 ];

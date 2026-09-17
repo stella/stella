@@ -21,6 +21,7 @@ import {
   tPaginationLimit,
   tSafeId,
 } from "@/api/lib/custom-schema";
+import { tPublicLawCountry } from "@/api/lib/legal-search/public-law-country";
 import { LIMITS } from "@/api/lib/limits";
 import { searchTotalSchema } from "@/api/lib/search/total-schema";
 
@@ -32,7 +33,7 @@ export const searchDecisionsBodySchema = t.Object({
   limit: t.Optional(tPaginationLimit(LIMITS.caseLawSearchPageSizeMax)),
   cursor: t.Optional(tPaginationCursor()),
   court: t.Optional(t.String({ maxLength: 512 })),
-  country: t.String({ minLength: 2, maxLength: 3 }),
+  country: tPublicLawCountry,
   dateFrom: t.Optional(t.String({ format: "date" })),
   dateTo: t.Optional(t.String({ format: "date" })),
   decisionType: t.Optional(t.String({ maxLength: 128 })),

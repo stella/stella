@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import Elysia, { t } from "elysia";
 
+import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
+
 import { env } from "@/api/env";
 import {
   listDecisionFacetsHandler,
@@ -59,6 +61,10 @@ import {
 import { createSafePublicHandler } from "@/api/lib/api-handlers";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { tSafeId } from "@/api/lib/custom-schema";
+import {
+  readPublicLawCountry,
+  tPublicLawCountry,
+} from "@/api/lib/legal-search/public-law-country";
 import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
 
 const listDecisions = createSafePublicHandler(
@@ -168,18 +174,20 @@ const readDecisionBySlug = createSafePublicSubjectFollowUpHandler({
     query: t.Composite([
       readDecisionQuerySchema,
       t.Object({
-        country: t.String({ minLength: 2, maxLength: 3 }),
+        country: tPublicLawCountry,
         language: t.Optional(t.String({ minLength: 2, maxLength: 8 })),
       }),
     ]),
   },
   caseLawDb: caseLawPublicReadDb,
-  locate: ({ params: { slug }, query: { country, language } }) => ({
-    kind: "slug",
-    country,
-    slug,
-    language,
-  }),
+  locate: ({ params: { slug }, query: { country, language } }) => {
+    const countryRead = readPublicLawCountry(country, {
+      admitted: PUBLIC_CASE_LAW_COUNTRIES,
+    });
+    return countryRead.kind === "unreadable"
+      ? countryRead
+      : { kind: "slug", country: countryRead.country, slug, language };
+  },
   read: async (subject, { query: { citationsCursor } }) =>
     await readDecisionHandler({ subject, citationsCursor }),
   followUp: async (read) =>

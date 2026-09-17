@@ -2,6 +2,15 @@ import type { CallToolResult } from "@modelcontextprotocol/server";
 import { panic, TaggedError } from "better-result";
 import * as v from "valibot";
 
+import type {
+  AgentInputNormalizationAnnotation,
+  CountrySpelling,
+} from "@stll/agent-input";
+import {
+  AGENT_INPUT_NORMALIZATION_KIND,
+  COUNTRY_INPUT_MAX_CHARS,
+} from "@stll/agent-input";
+
 import { env } from "@/api/env";
 import { createCaseLawDecisionSlug } from "@/api/handlers/case-law/decisions/slug";
 import { createStatuteSlug } from "@/api/handlers/legislation/slug";
@@ -88,6 +97,47 @@ export const featureDisabledHint = (feature: string | undefined): string =>
  */
 export const uuidInputSchema = (description: string) =>
   v.pipe(v.string(), v.uuid(), v.description(description));
+
+/**
+ * A country input, in any spelling that carries one meaning.
+ *
+ * The leniency itself is not here: it is the `country` agent-input kind, which
+ * the tool binds to this property with `countryNormalization` so one reader
+ * canonicalizes every surface. This schema is the declaration that says a
+ * country is what the property holds, and its bounds are what make the
+ * advertised contract match that: a schema capped at three characters tells a
+ * model the names are refused when the reader in fact reads them.
+ */
+export const countryInputSchema = (description: string) =>
+  v.pipe(
+    v.string(),
+    v.maxLength(COUNTRY_INPUT_MAX_CHARS),
+    v.description(description),
+  );
+
+/**
+ * Binds a country property to the shared reader.
+ *
+ * `spelling` is required rather than defaulted: alpha-3 is what the corpus
+ * keys on and alpha-2 is what a practice-jurisdiction row holds, and guessing
+ * would write one into the other's column.
+ */
+export const countryNormalization = ({
+  spelling,
+  admitted,
+  tool,
+}: {
+  spelling: CountrySpelling;
+  admitted?: readonly string[];
+  tool?: string;
+}): AgentInputNormalizationAnnotation => ({
+  kind: AGENT_INPUT_NORMALIZATION_KIND.country,
+  country: {
+    spelling,
+    ...(admitted === undefined ? {} : { admitted }),
+    ...(tool === undefined ? {} : { tool }),
+  },
+});
 
 /**
  * An MCP tool's declared input: `v.strictObject(...)`, or a pipe over one.

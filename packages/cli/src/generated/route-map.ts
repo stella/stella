@@ -436,7 +436,7 @@ export const generatedRouteMap: RouteNode = {
                 kind: "string",
                 repeatable: false,
                 description:
-                  "Required corpus country code, uppercase ISO 3166-1 alpha-3. Admitted: CZE.",
+                  "Required corpus country. Admitted: CZE. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
                 required: true,
               },
               {
@@ -535,10 +535,17 @@ export const generatedRouteMap: RouteNode = {
                 },
                 country: {
                   type: "string",
-                  minLength: 2,
-                  maxLength: 3,
+                  maxLength: 64,
                   description:
-                    "Required corpus country code, uppercase ISO 3166-1 alpha-3. Admitted: CZE.",
+                    "Required corpus country. Admitted: CZE. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
+                  "x-stella-agent-input": {
+                    kind: "country",
+                    country: {
+                      spelling: "alpha-3",
+                      admitted: ["CZE"],
+                      tool: "search_case_law",
+                    },
+                  },
                 },
                 language: {
                   type: "string",
@@ -602,7 +609,7 @@ export const generatedRouteMap: RouteNode = {
                 kind: "string",
                 repeatable: false,
                 description:
-                  "Required corpus country code, uppercase ISO 3166-1 alpha-3. Admitted: CZE.",
+                  "Required corpus country. Admitted: CZE. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
                 required: true,
               },
             ],
@@ -632,10 +639,17 @@ export const generatedRouteMap: RouteNode = {
                 },
                 country: {
                   type: "string",
-                  minLength: 2,
-                  maxLength: 3,
+                  maxLength: 64,
                   description:
-                    "Required corpus country code, uppercase ISO 3166-1 alpha-3. Admitted: CZE.",
+                    "Required corpus country. Admitted: CZE. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
+                  "x-stella-agent-input": {
+                    kind: "country",
+                    country: {
+                      spelling: "alpha-3",
+                      admitted: ["CZE"],
+                      tool: "lookup_case_law",
+                    },
+                  },
                 },
               },
             },
@@ -2108,7 +2122,15 @@ export const generatedRouteMap: RouteNode = {
                           "ZW",
                         ],
                         type: "string",
-                        description: "ISO 3166-1 alpha-2 country code",
+                        description:
+                          "Country of this practice jurisdiction. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
+                        "x-stella-agent-input": {
+                          kind: "country",
+                          country: {
+                            spelling: "alpha-2",
+                            tool: "set_practice_jurisdictions",
+                          },
+                        },
                       },
                       is_primary: {
                         type: "boolean",
@@ -2442,7 +2464,7 @@ export const generatedRouteMap: RouteNode = {
                 kind: "string",
                 repeatable: false,
                 description:
-                  "Required corpus country code, uppercase ISO 3166-1 alpha-3. Admitted: CZE.",
+                  "Required corpus country. Admitted: CZE. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
                 required: true,
               },
               {
@@ -2508,10 +2530,17 @@ export const generatedRouteMap: RouteNode = {
                 },
                 country: {
                   type: "string",
-                  minLength: 2,
-                  maxLength: 3,
+                  maxLength: 64,
                   description:
-                    "Required corpus country code, uppercase ISO 3166-1 alpha-3. Admitted: CZE.",
+                    "Required corpus country. Admitted: CZE. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
+                  "x-stella-agent-input": {
+                    kind: "country",
+                    country: {
+                      spelling: "alpha-3",
+                      admitted: ["CZE"],
+                      tool: "search_legislation",
+                    },
+                  },
                 },
                 document_type: {
                   type: "string",

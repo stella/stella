@@ -116,6 +116,42 @@ describe("public statute routes", () => {
     expect(await response.json()).toEqual({ message: "Invalid cursor" });
   });
 
+  test("every spelling of one country reaches the same statute jurisdiction", async () => {
+    // The undecodable cursor is answered after the country has been read and
+    // before any data access, so a complaint about the cursor is the proof
+    // that the spelling itself was read.
+    for (const country of ["CZE", "CZ", "cze", "Česko", "Czech Republic"]) {
+      const response = await publicLegislationRoute.handle(
+        new Request(
+          `http://localhost/law/statutes?country=${encodeURIComponent(country)}&cursor=not-a-cursor`,
+        ),
+      );
+
+      expect(response.status).toBe(400);
+      expect(await response.json()).toEqual({ message: "Invalid cursor" });
+    }
+  });
+
+  test("a country nothing spells names the forms that are accepted", async () => {
+    const urls = [
+      "http://localhost/law/statutes?country=Freedonia",
+      "http://localhost/law/statutes/shelf?country=Freedonia",
+      "http://localhost/law/statutes/by-slug/89-2012-sb?country=Freedonia",
+    ];
+
+    for (const url of urls) {
+      const response = await publicLegislationRoute.handle(new Request(url));
+
+      // The reader's own ask, so it names both notations and the
+      // jurisdictions this deployment holds statutes for.
+      expect(response.status).toBe(400);
+      const body = await response.text();
+      expect(body).toContain("ISO 3166-1");
+      expect(body).toContain("Czechia");
+      expect(body).toContain("CZE");
+    }
+  });
+
   test("authenticated corpus reads use the shared public-law boundary", async () => {
     const [getSource, searchSource] = await Promise.all([
       readHandlerSource("get.ts"),

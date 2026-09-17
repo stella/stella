@@ -100,6 +100,7 @@ jobs:
             pkg:npm/@stll/anonymize-chat,
             pkg:npm/@stll/anonymize-wasm,
             pkg:npm/@stll/conditions,
+            pkg:npm/@stll/country-codes,
             pkg:npm/@stll/docx-core,
             pkg:npm/@stll/errors,
             pkg:npm/@stll/ssr-kit,

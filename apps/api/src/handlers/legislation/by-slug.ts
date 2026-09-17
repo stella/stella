@@ -2,6 +2,8 @@ import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
 
+import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
+
 import { legislationDocuments, legislationSources } from "@/api/db/schema";
 import { readPublicLegislationHandler } from "@/api/handlers/legislation/get";
 import {
@@ -14,6 +16,10 @@ import {
   inForceOn,
   versionSortKey,
 } from "@/api/lib/legal-search/legislation-validity-window";
+import {
+  readPublicLawCountry,
+  tPublicLawCountry,
+} from "@/api/lib/legal-search/public-law-country";
 import type { LegislationReadDb } from "@/api/lib/legislation-public-read-db";
 
 export const readStatuteBySlugParamsSchema = t.Object({
@@ -21,7 +27,7 @@ export const readStatuteBySlugParamsSchema = t.Object({
 });
 
 export const readStatuteBySlugQuerySchema = t.Object({
-  country: t.String({ minLength: 2, maxLength: 3 }),
+  country: tPublicLawCountry,
   /** Absent means "the latest consolidation the corpus holds". */
   asOf: t.Optional(t.String({ format: "date" })),
 });
@@ -59,7 +65,13 @@ export const readStatuteBySlugHandler = async ({
     return status(404, { message: "Legislation document not found" });
   }
 
-  const country = query.country.toUpperCase();
+  const countryRead = readPublicLawCountry(query.country, {
+    admitted: PUBLIC_LEGISLATION_COUNTRIES,
+  });
+  if (countryRead.kind === "unreadable") {
+    return status(400, { message: countryRead.message });
+  }
+  const country = countryRead.country;
   const asOf = query.asOf;
 
   const resolved = await legislationDb(async (tx) => {

@@ -1,6 +1,8 @@
 import { and, asc, eq, sql } from "drizzle-orm";
-import { t } from "elysia";
+import { status, t } from "elysia";
 import type { Static } from "elysia";
+
+import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 
 import {
   caseLawStatuteCitationCounts,
@@ -12,9 +14,13 @@ import {
 } from "@/api/db/schema";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
+import {
+  readPublicLawCountry,
+  tPublicLawCountry,
+} from "@/api/lib/legal-search/public-law-country";
 
 export const statuteCitationCountsQuerySchema = t.Object({
-  jurisdiction: t.String({ minLength: 2, maxLength: 3 }),
+  jurisdiction: tPublicLawCountry,
   eli: t.String({ minLength: 1, maxLength: 512 }),
 });
 
@@ -28,8 +34,18 @@ const PROVISION_COUNT_LIMIT = 10_000;
 export const readStatuteCitationCountsHandler = async (
   query: StatuteCitationCountsQuery,
   caseLawDb: CaseLawPublicReadDb,
-) =>
-  await caseLawDb(async (tx) => {
+) => {
+  // The filter is an equality on a stored alpha-3 code, so an unfolded
+  // spelling answered an empty set rather than the counts that exist.
+  const countryRead = readPublicLawCountry(query.jurisdiction, {
+    admitted: PUBLIC_CASE_LAW_COUNTRIES,
+    parameter: "jurisdiction",
+  });
+  if (countryRead.kind === "unreadable") {
+    return status(400, { message: countryRead.message });
+  }
+  const jurisdiction = countryRead.country;
+  return await caseLawDb(async (tx) => {
     const [state] = await tx
       .select({ status: caseLawStatuteCitationCountState.status })
       .from(caseLawStatuteCitationCountState)
@@ -60,7 +76,7 @@ export const readStatuteCitationCountsHandler = async (
       )
       .where(
         and(
-          eq(caseLawStatuteCitationCounts.jurisdiction, query.jurisdiction),
+          eq(caseLawStatuteCitationCounts.jurisdiction, jurisdiction),
           eq(caseLawStatuteCitationCounts.workEli, query.eli),
           eq(
             caseLawStatuteCitationCounts.targetType,
@@ -79,3 +95,4 @@ export const readStatuteCitationCountsHandler = async (
 
     return { status: "ready" as const, provisions: rows };
   });
+};

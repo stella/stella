@@ -563,6 +563,29 @@ describe("public case-law route boundary", () => {
     );
     for (const source of scopedSources) {
       expect(source).toContain("publicCaseLawCountry(");
+      // Admission decides whether a country has a corpus; it is handed the
+      // canonical alpha-3 the shared reader produced, never the caller's own
+      // spelling. A handler that folded the code itself would answer `CZ` and
+      // `Česko` with a bare 404 while `read_case_law_decision` reads both.
+      expect(source).toContain("readPublicLawCountry(");
+    }
+
+    const declaredCountrySources = await Promise.all(
+      [
+        LIST_DECISIONS_FILE,
+        FACETS_DECISIONS_FILE,
+        LATEST_DECISIONS_FILE,
+        SEARCH_DECISIONS_SCHEMA_FILE,
+        STATUS_DECISIONS_FILE,
+        CITING_DECISIONS_FILE,
+        ROUTES_FILE,
+      ].map(readSource),
+    );
+    for (const source of declaredCountrySources) {
+      // One declaration, whose bound is the reader's: a per-endpoint
+      // `maxLength: 3` refuses `Czech Republic` with the framework's opaque
+      // 422 before a handler can name the notations that are accepted.
+      expect(source).toContain("tPublicLawCountry");
     }
 
     const [subject, sitemap, alternates, citations, readiness] =

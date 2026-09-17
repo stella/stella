@@ -119,6 +119,8 @@ import type {
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
   buildCaseLawDecisionAppUrl,
+  countryInputSchema,
+  countryNormalization,
   DEFAULT_LIST_LIMIT,
   DEFAULT_SEARCH_LIMIT,
   ensureWorkspaceAccess,
@@ -620,6 +622,12 @@ const searchAcrossMattersArgsSchema = nullAsAbsent(
  */
 const ADMITTED_CASE_LAW_COUNTRIES = PUBLIC_CASE_LAW_COUNTRIES.join(", ");
 
+/** Named because the country ask names the call to change; a census test binds
+ *  this to the tool's own `name` so a rename cannot leave a stale hint. */
+const SEARCH_CASE_LAW_TOOL = "search_case_law";
+const LOOKUP_CASE_LAW_TOOL = "lookup_case_law";
+const SET_PRACTICE_JURISDICTIONS_TOOL = "set_practice_jurisdictions";
+
 /**
  * A merged cursor carries one sub-cursor per query, JSON-wrapped and
  * base64url-encoded. The sub-cursor bound comes from the engine cursor's own
@@ -679,13 +687,8 @@ const searchCaseLawArgsSchema = nullAsAbsent(
         v.description("Filter by court name"),
       ),
     ),
-    country: v.pipe(
-      v.string(),
-      v.minLength(2),
-      v.maxLength(3),
-      v.description(
-        `Required corpus country code, uppercase ISO 3166-1 alpha-3. Admitted: ${ADMITTED_CASE_LAW_COUNTRIES}.`,
-      ),
+    country: countryInputSchema(
+      `Required corpus country. Admitted: ${ADMITTED_CASE_LAW_COUNTRIES}.`,
     ),
     language: v.optional(
       v.pipe(
@@ -743,13 +746,8 @@ const lookupCaseLawArgsSchema = nullAsAbsent(
         `The references to resolve, at most ${LIMITS.caseLawLookupIdentifiersMax} per call: a docket number as the court writes it (the sheet number after it is ignored) or an ECLI. Each is answered on its own.`,
       ),
     ),
-    country: v.pipe(
-      v.string(),
-      v.minLength(2),
-      v.maxLength(3),
-      v.description(
-        `Required corpus country code, uppercase ISO 3166-1 alpha-3. Admitted: ${ADMITTED_CASE_LAW_COUNTRIES}.`,
-      ),
+    country: countryInputSchema(
+      `Required corpus country. Admitted: ${ADMITTED_CASE_LAW_COUNTRIES}.`,
     ),
   }),
 );
@@ -833,9 +831,12 @@ const readContactArgsSchema = nullAsAbsent(
 );
 
 const practiceJurisdictionInputSchema = v.strictObject({
+  // The picklist stays: alpha-2 is what the row holds, and membership is worth
+  // enforcing structurally. The country kind is bound to the same property so a
+  // name or an alpha-3 code is read into that alpha-2 before it is checked.
   country_code: v.pipe(
     v.picklist(COUNTRY_CODES),
-    v.description("ISO 3166-1 alpha-2 country code"),
+    v.description("Country of this practice jurisdiction"),
   ),
   is_primary: v.pipe(
     v.boolean(),
@@ -938,12 +939,19 @@ export const STELLA_TOOL_DEFINITIONS = [
       "route-independent resourceName. Call read_case_law_citations for how " +
       "the citing courts treated one.",
     inputSchema: searchCaseLawArgsSchema,
+    inputNormalization: {
+      country: countryNormalization({
+        spelling: "alpha-3",
+        admitted: PUBLIC_CASE_LAW_COUNTRIES,
+        tool: SEARCH_CASE_LAW_TOOL,
+      }),
+    },
     access: "read",
     anonymized: { exposure: "passthrough" },
     // Backed by the public case-law corpus (caseLawPublicReadDb), the same
     // surface the public routes gate behind env.isDev || env.FEATURE_PUBLIC_LAW.
     feature: "FEATURE_PUBLIC_LAW",
-    name: "search_case_law",
+    name: SEARCH_CASE_LAW_TOOL,
     scope: "stella:search",
   }),
   defineValibotMcpTool({
@@ -967,12 +975,19 @@ export const STELLA_TOOL_DEFINITIONS = [
       "user names a case; use search_case_law when they describe one. Pass " +
       "a `found` decisionId to read_case_law_decision for the text.",
     inputSchema: lookupCaseLawArgsSchema,
+    inputNormalization: {
+      country: countryNormalization({
+        spelling: "alpha-3",
+        admitted: PUBLIC_CASE_LAW_COUNTRIES,
+        tool: LOOKUP_CASE_LAW_TOOL,
+      }),
+    },
     access: "read",
     anonymized: { exposure: "passthrough" },
     // Backed by the public case-law corpus (caseLawPublicReadDb), the same
     // surface the public routes gate behind env.isDev || env.FEATURE_PUBLIC_LAW.
     feature: "FEATURE_PUBLIC_LAW",
-    name: "lookup_case_law",
+    name: LOOKUP_CASE_LAW_TOOL,
     scope: "stella:read",
   }),
   defineValibotMcpTool({
@@ -1102,7 +1117,13 @@ export const STELLA_TOOL_DEFINITIONS = [
     },
     access: "write",
     anonymized: { exposure: "excluded", reason: "write" },
-    name: "set_practice_jurisdictions",
+    name: SET_PRACTICE_JURISDICTIONS_TOOL,
+    inputNormalization: {
+      "jurisdictions[].country_code": countryNormalization({
+        spelling: "alpha-2",
+        tool: SET_PRACTICE_JURISDICTIONS_TOOL,
+      }),
+    },
     scope: "stella:onboarding",
   }),
 ] as const satisfies readonly McpToolDefinition[];

@@ -2,7 +2,10 @@ import { Result } from "better-result";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
 
-import { publicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
+import {
+  PUBLIC_CASE_LAW_COUNTRIES,
+  publicCaseLawCountry,
+} from "@stll/api-contract/case-law-launch-readiness";
 
 import {
   type NonRedistributableSourcesError,
@@ -13,6 +16,10 @@ import { LegalBrowseFacetsError } from "@/api/lib/legal-search/browse-facets";
 import { createBrowseFacetsCache } from "@/api/lib/legal-search/browse-facets-cache";
 import { isCorpusIndexJurisdiction } from "@/api/lib/legal-search/index-naming";
 import { getLegalSearchProvider } from "@/api/lib/legal-search/provider";
+import {
+  readPublicLawCountry,
+  tPublicLawCountry,
+} from "@/api/lib/legal-search/public-law-country";
 import type { LegalBrowseFacets } from "@/api/lib/legal-search/types";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
@@ -25,7 +32,7 @@ import { logger } from "@/api/lib/observability/logger";
  */
 
 export const listDecisionFacetsQuerySchema = t.Object({
-  country: t.String({ minLength: 2, maxLength: 3 }),
+  country: tPublicLawCountry,
 });
 
 type ListDecisionFacetsQuery = Static<typeof listDecisionFacetsQuerySchema>;
@@ -44,7 +51,13 @@ const browseFacets = createBrowseFacetsCache({
 export const listDecisionFacetsHandler = async ({
   country,
 }: ListDecisionFacetsQuery) => {
-  const publicCountry = publicCaseLawCountry(country);
+  const countryRead = readPublicLawCountry(country, {
+    admitted: PUBLIC_CASE_LAW_COUNTRIES,
+  });
+  if (countryRead.kind === "unreadable") {
+    return status(400, { message: countryRead.message });
+  }
+  const publicCountry = publicCaseLawCountry(countryRead.country);
   if (publicCountry === null || !isCorpusIndexJurisdiction(publicCountry)) {
     return status(404, { message: "Not Found" });
   }

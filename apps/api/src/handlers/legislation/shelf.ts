@@ -3,6 +3,8 @@ import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
 
+import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
+
 import { legislationDocuments, legislationSources } from "@/api/db/schema";
 import { isCurrentVersionOfWork } from "@/api/handlers/legislation/list";
 import { readNonRedistributableLegislationSourceIds } from "@/api/handlers/legislation/non-redistributable-sources";
@@ -14,6 +16,10 @@ import {
   inForceToday,
   versionSortKey,
 } from "@/api/lib/legal-search/legislation-validity-window";
+import {
+  readPublicLawCountry,
+  tPublicLawCountry,
+} from "@/api/lib/legal-search/public-law-country";
 import type { LegislationReadDb } from "@/api/lib/legislation-public-read-db";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
@@ -26,7 +32,7 @@ import { logger } from "@/api/lib/observability/logger";
  */
 
 export const legislationShelfQuerySchema = t.Object({
-  country: t.String({ minLength: 2, maxLength: 3 }),
+  country: tPublicLawCountry,
 });
 
 type LegislationShelfQuery = Static<typeof legislationShelfQuerySchema>;
@@ -187,10 +193,16 @@ export const readLegislationShelfHandler = async (
   { country }: LegislationShelfQuery,
   legislationDb: LegislationReadDb,
 ) => {
-  if (!isCorpusIndexJurisdiction(country)) {
+  const countryRead = readPublicLawCountry(country, {
+    admitted: PUBLIC_LEGISLATION_COUNTRIES,
+  });
+  if (countryRead.kind === "unreadable") {
+    return status(400, { message: countryRead.message });
+  }
+  if (!isCorpusIndexJurisdiction(countryRead.country)) {
     return status(400, { message: "Invalid country" });
   }
-  const jurisdiction = country.toUpperCase();
+  const jurisdiction = countryRead.country;
   const empty: LegislationShelf = {
     country: jurisdiction,
     recentlyInForce: [],

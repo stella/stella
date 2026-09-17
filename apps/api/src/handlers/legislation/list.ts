@@ -3,6 +3,8 @@ import type { SQL, SQLWrapper } from "drizzle-orm";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
 
+import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
+
 import {
   caseLawStatuteCitationCountState,
   LEGISLATION_TITLE_SORT_KEY_CHARS,
@@ -24,6 +26,10 @@ import {
   inForceOn,
   versionSortKey,
 } from "@/api/lib/legal-search/legislation-validity-window";
+import {
+  readPublicLawCountry,
+  tPublicLawCountry,
+} from "@/api/lib/legal-search/public-law-country";
 import type { LegislationReadDb } from "@/api/lib/legislation-public-read-db";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -41,7 +47,7 @@ export const ACT_NUMBER_PATTERN = /^([0-9]{1,5})\/([0-9]{4})$/u;
 const COLLECTION_PATTERN = /^[a-z0-9]{1,8}$/u;
 
 export const listStatutesQuerySchema = t.Object({
-  country: t.String({ minLength: 2, maxLength: 3 }),
+  country: tPublicLawCountry,
   query: t.Optional(t.String({ maxLength: 256 })),
   /** An act's own number, `<number>/<year>`; the request asks for that work. */
   number: t.Optional(t.String({ pattern: ACT_NUMBER_PATTERN.source })),
@@ -196,6 +202,12 @@ export const listStatutesHandler = async (
   query: ListStatutesQuery,
   legislationDb: LegislationReadDb,
 ) => {
+  const countryRead = readPublicLawCountry(query.country, {
+    admitted: PUBLIC_LEGISLATION_COUNTRIES,
+  });
+  if (countryRead.kind === "unreadable") {
+    return status(400, { message: countryRead.message });
+  }
   const limit = query.limit ?? LIMITS.legislationListPageSizeDefault;
   const cursor =
     query.cursor === undefined ? null : decodeListCursor(query.cursor);
@@ -206,7 +218,7 @@ export const listStatutesHandler = async (
     query.asOf === undefined ? sql`CURRENT_DATE` : sql`${query.asOf}::date`;
   const conditions: SQL[] = [
     publishedLegislationDocument,
-    eq(legislationDocuments.country, query.country.toUpperCase()),
+    eq(legislationDocuments.country, countryRead.country),
     inForceOn(
       legislationDocuments.versionValidFrom,
       legislationDocuments.versionValidTo,

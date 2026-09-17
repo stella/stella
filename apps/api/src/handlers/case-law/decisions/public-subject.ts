@@ -20,6 +20,17 @@ export const DECISION_NOT_FOUND = { message: "Decision not found" } as const;
 const notFound = () => status(404, DECISION_NOT_FOUND);
 type NotFoundStatus = ReturnType<typeof notFound>;
 
+/**
+ * A request whose address cannot be read at all, as against one that names no
+ * decision. A country spelling the reader cannot resolve is the caller's to
+ * correct, so it carries the reader's ask instead of joining the one answer
+ * missing and restricted subjects share.
+ */
+export type UnreadableSubjectAddress = { kind: "unreadable"; message: string };
+
+const unreadableAddress = (message: string) => status(400, { message });
+type UnreadableAddressStatus = ReturnType<typeof unreadableAddress>;
+
 /** Handlers the factory produced; the route census checks both directions. */
 const gatedHandlers = new Set<unknown>();
 
@@ -31,8 +42,10 @@ const gatedHandlers = new Set<unknown>();
 type SubjectHandlerOptions<TConfig extends PublicHandlerConfig, TRead> = {
   config: TConfig;
   caseLawDb: CaseLawPublicReadDb;
-  /** Which decision the request names. */
-  locate: (ctx: PublicHandlerContext<TConfig>) => DecisionSubjectLocator;
+  /** Which decision the request names, or why its address is unreadable. */
+  locate: (
+    ctx: PublicHandlerContext<TConfig>,
+  ) => DecisionSubjectLocator | UnreadableSubjectAddress;
   /** Runs inside the gated transaction; reads through `subject.tx` only. */
   read: (
     subject: RedistributableDecisionSubject,
@@ -69,7 +82,13 @@ const buildGatedSubjectHandler = <
     config,
     async function* (
       ctx: PublicHandlerContext<TConfig>,
-    ): SafeHandlerGenerator<TResult | NotFoundStatus> {
+    ): SafeHandlerGenerator<
+      TResult | NotFoundStatus | UnreadableAddressStatus
+    > {
+      const located = locate(ctx);
+      if (located.kind === "unreadable") {
+        return Result.ok(unreadableAddress(located.message));
+      }
       // `null` is the gate's answer, so a read that resolves to null of its
       // own accord would be indistinguishable; wrap it instead.
       const gated = yield* Result.await(
@@ -77,7 +96,7 @@ const buildGatedSubjectHandler = <
           async () =>
             await withRedistributableSubject(
               caseLawDb,
-              locate(ctx),
+              located,
               async (subject) => ({ value: await read(subject, ctx) }),
             ),
         ),

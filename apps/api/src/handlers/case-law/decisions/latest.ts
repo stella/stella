@@ -3,7 +3,10 @@ import { sql } from "drizzle-orm";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
 
-import { publicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
+import {
+  PUBLIC_CASE_LAW_COUNTRIES,
+  publicCaseLawCountry,
+} from "@stll/api-contract/case-law-launch-readiness";
 import type { DecisionHeadnotePreview } from "@stll/api-contract/case-law-text-field";
 
 import { readBrowseFacets } from "@/api/handlers/case-law/decisions/facets";
@@ -29,6 +32,10 @@ import { redistributableCaseLawSourceSqlFor } from "@/api/lib/case-law/redistrib
 import { errorTag } from "@/api/lib/errors/utils";
 import { createTtlResultCache } from "@/api/lib/legal-search/browse-facets-cache";
 import { isCorpusIndexJurisdiction } from "@/api/lib/legal-search/index-naming";
+import {
+  readPublicLawCountry,
+  tPublicLawCountry,
+} from "@/api/lib/legal-search/public-law-country";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
 
@@ -40,7 +47,7 @@ import { logger } from "@/api/lib/observability/logger";
  */
 
 export const listLatestDecisionsQuerySchema = t.Object({
-  country: t.String({ minLength: 2, maxLength: 3 }),
+  country: tPublicLawCountry,
 });
 
 type ListLatestDecisionsQuery = Static<typeof listLatestDecisionsQuerySchema>;
@@ -301,7 +308,13 @@ export const listLatestDecisionsHandler = async (
   { country }: ListLatestDecisionsQuery,
   caseLawDb: CaseLawPublicReadDb,
 ) => {
-  const publicCountry = publicCaseLawCountry(country);
+  const countryRead = readPublicLawCountry(country, {
+    admitted: PUBLIC_CASE_LAW_COUNTRIES,
+  });
+  if (countryRead.kind === "unreadable") {
+    return status(400, { message: countryRead.message });
+  }
+  const publicCountry = publicCaseLawCountry(countryRead.country);
   if (publicCountry === null || !isCorpusIndexJurisdiction(publicCountry)) {
     return status(404, { message: "Not Found" });
   }
