@@ -8,7 +8,7 @@ import {
 import { toSafeId } from "@/api/lib/branded-types";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
-import { createTimeEntryHandler } from "./create";
+import { createTimeEntryHandler } from "./time-entry-insert";
 
 describe("roundToBillingIncrement (billing increment snap)", () => {
   test("ceils to the 6-minute billing increment", () => {

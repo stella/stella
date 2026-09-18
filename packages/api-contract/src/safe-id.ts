@@ -138,6 +138,7 @@ export type SafeIdType =
   | "templatePersistenceRequest"
   | "templateVersion"
   | "timeEntry"
+  | "timeEntrySuggestion"
   | "user"
   | "userFile"
   | "workspace"

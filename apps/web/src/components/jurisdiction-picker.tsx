@@ -157,7 +157,7 @@ export const JurisdictionPicker = ({
                 <span className="min-w-0 flex-1 truncate">{country.name}</span>
                 {isSuggested && (
                   <span className="bg-muted text-muted-foreground text-3xs rounded-full px-1.5 py-0.5">
-                    {t("onboarding.jurisdictionSuggested")}
+                    {t("common.suggested")}
                   </span>
                 )}
                 <span className="text-muted-foreground text-xs">

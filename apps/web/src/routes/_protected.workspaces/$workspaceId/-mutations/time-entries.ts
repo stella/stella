@@ -1,4 +1,4 @@
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { useAnalytics } from "@/lib/analytics/provider";
 import type { NonEmptyPatch } from "@/lib/mutation-command";
@@ -77,6 +77,50 @@ export const useUpdateTimeEntry = () => {
             ...(workItemId !== undefined && { workItemId }),
           },
         },
+      });
+    },
+    onError: (error) => {
+      analytics.captureError(error);
+    },
+  });
+};
+
+type TimeSuggestionDecision =
+  | {
+      type: "accept";
+      durationMinutes: number;
+      narrative: string;
+      billable: boolean;
+    }
+  | { type: "dismiss" };
+
+type DecideTimeSuggestionVars = {
+  workspaceId: string;
+  fingerprint: string;
+  date: string;
+  timezoneId: string;
+  decision: TimeSuggestionDecision;
+};
+
+export const useDecideTimeSuggestion = () => {
+  const analytics = useAnalytics();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ workspaceId, ...body }: DecideTimeSuggestionVars) => {
+      await sendTimeEntryMutation({
+        workspaceId,
+        mutation: {
+          type: "suggestion_decision",
+          body: { queryKey: timeEntriesKeys.all(workspaceId), ...body },
+        },
+      });
+    },
+    onSuccess: async (_result, { workspaceId }) => {
+      // Accept creates an entry and both decisions retire a suggestion, so the
+      // day's entries, summary, and suggestions all refetch together.
+      await queryClient.invalidateQueries({
+        queryKey: timeEntriesKeys.all(workspaceId),
       });
     },
     onError: (error) => {

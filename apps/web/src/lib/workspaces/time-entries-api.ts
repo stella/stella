@@ -7,6 +7,8 @@ import {
   parseTimeEntryIdResponse,
   parseTimeEntryListPage,
   parseTimeEntrySplitResponse,
+  parseTimeEntrySuggestionDecision,
+  parseTimeEntrySuggestionsResponse,
   parseTimeEntrySummary,
   parseTimeEntryUpdatedResponse,
   parseTimerStartResponse,
@@ -15,6 +17,7 @@ import {
 import type {
   TimeEntry,
   TimeEntryListPage,
+  TimeEntrySuggestionsResponse,
   TimeEntrySummary,
 } from "@stll/api-contract/time-entries";
 import { cents } from "@stll/money";
@@ -134,6 +137,19 @@ export const fetchTimeEntrySummary = async ({
     workspaceId,
   });
 
+export const fetchTimeEntrySuggestions = async ({
+  query,
+  signal,
+  workspaceId,
+}: FetchTimeEntriesOptions): Promise<TimeEntrySuggestionsResponse> =>
+  await requestTimeEntries({
+    parse: parseTimeEntrySuggestionsResponse,
+    path: "/suggestions",
+    query,
+    signal,
+    workspaceId,
+  });
+
 type TimeEntryMutation =
   | { body: unknown; type: "create" }
   | { body: unknown; type: "update" }
@@ -142,7 +158,8 @@ type TimeEntryMutation =
   | { body: unknown; type: "timer_stop" }
   | { body: unknown; type: "batch_update" }
   | { body: unknown; type: "batch_delete" }
-  | { body: unknown; type: "split" };
+  | { body: unknown; type: "split" }
+  | { body: unknown; type: "suggestion_decision" };
 
 type SendTimeEntryMutationOptions = {
   mutation: TimeEntryMutation;
@@ -223,6 +240,15 @@ export const sendTimeEntryMutation = async ({
         method: "POST",
         parse: parseTimeEntrySplitResponse,
         path: "/split",
+        workspaceId,
+      });
+      return;
+    case "suggestion_decision":
+      await requestTimeEntries({
+        body: mutation.body,
+        method: "POST",
+        parse: parseTimeEntrySuggestionDecision,
+        path: "/suggestions/decisions",
         workspaceId,
       });
       return;

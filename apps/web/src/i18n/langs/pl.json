@@ -558,6 +558,15 @@
       "written_off": "Odpisany"
     },
     "stopTimer": "Zatrzymaj",
+    "suggestions": {
+      "actionCount": "{count, plural, one {# działanie} few {# działania} many {# działań} other {# działania}}",
+      "activeVsLogged": "Aktywność: {active} · Zarejestrowano: {logged}",
+      "chatEvidence": "{count, plural, one {# wiadomość} few {# wiadomości} many {# wiadomości} other {# wiadomości}} w rozmowie „{title}”",
+      "keyboardHint": "Enter akceptuje, E edytuje przed akceptacją, Delete odrzuca",
+      "privacyNote": "Widzisz je tylko Ty. Nic nie zostaje zapisane, dopóki nie zaakceptujesz sugestii.",
+      "title": "Sugestie na podstawie Twojej aktywności",
+      "unnamedRecord": "Wpis w sprawie"
+    },
     "timerActive": "Timer uruchomiony",
     "timesheets": "Karta czasu pracy",
     "total": "Razem",
@@ -1351,6 +1360,7 @@
     "description": "Opis",
     "details": "Szczegóły",
     "disconnect": "Rozłącz",
+    "dismiss": "Odrzuć",
     "displayName": "Nazwa wyświetlana",
     "document": "Dokument",
     "documentName": "Nazwa dokumentu",
@@ -1531,6 +1541,7 @@
     "status": "Status",
     "stepCount": "{count, plural, one {# krok} few {# kroki} many {# kroków} other {# kroku}}",
     "stepProgress": "{current} z {total}",
+    "suggested": "Sugestia",
     "summarizeChanges": "Podsumuj zmiany",
     "timeBilling": "Czas i rozliczenia",
     "today": "Dzisiaj",
@@ -2272,7 +2283,6 @@
     "deleteRow": "Usuń wiersz",
     "deleted": "Usunięto",
     "discardChanges": "Odrzuć",
-    "dismiss": "Odrzuć",
     "displayText": "Tekst wyświetlany",
     "doneEditing": "Zakończ edycję",
     "doubleClickFooter": "Kliknij dwukrotnie, aby dodać stopkę",
@@ -2788,7 +2798,6 @@
         "dismissed": "Odrzucono"
       },
       "description": "Wybierz przygotowany playbook, dokumenty referencyjne lub oba.",
-      "dismiss": "Odrzuć",
       "documentChanged": "Ten dokument zmienił się po tej weryfikacji.",
       "export": {
         "counterparty": "Pobierz dla kontrahenta",
@@ -3514,7 +3523,6 @@
     "jurisdictionSearchLabel": "Szukaj krajów",
     "jurisdictionSearchPlaceholder": "Szukaj krajów",
     "jurisdictionSubtitle": "Wybierz kraje, w których prowadzisz praktykę. stella dostosuje odpowiedzi AI i pokaże dostępne źródła: orzecznictwo, akty prawne i rejestry przedsiębiorców.",
-    "jurisdictionSuggested": "Sugerowane",
     "jurisdictionTitle": "Wybierz jurysdykcje swojej praktyki",
     "mcpCardDescription": "Dodaj stellę jako wtyczkę, a Twój asystent będzie mógł przeszukiwać Twoje sprawy i pracować z Twoimi dokumentami. Konfiguracja zajmuje około minuty.",
     "mcpCardTitle": "Korzystaj ze stelli w Claude lub ChatGPT",

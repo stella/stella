@@ -558,6 +558,15 @@
       "written_off": "Anulado"
     },
     "stopTimer": "Parar",
+    "suggestions": {
+      "actionCount": "{count, plural, one {# ação} many {# ações} other {# ações}}",
+      "activeVsLogged": "{active} de atividade · {logged} lançados",
+      "chatEvidence": "{count, plural, one {# mensagem} many {# mensagens} other {# mensagens}} em “{title}”",
+      "keyboardHint": "Enter aceita, E edita antes de aceitar, Delete descarta",
+      "privacyNote": "Só você vê estas sugestões. Nada é registrado até você aceitar.",
+      "title": "Sugestões a partir da sua atividade",
+      "unnamedRecord": "Registro do caso"
+    },
     "timerActive": "Temporizador em execução",
     "timesheets": "Planilhas de horas",
     "total": "Total",
@@ -1351,6 +1360,7 @@
     "description": "Descrição",
     "details": "Detalhes",
     "disconnect": "Desconectar",
+    "dismiss": "Descartar",
     "displayName": "Nome de exibição",
     "document": "Documento",
     "documentName": "Nome do documento",
@@ -1531,6 +1541,7 @@
     "status": "Status",
     "stepCount": "{count, plural, one {# etapa} other {# etapas}}",
     "stepProgress": "{current} de {total}",
+    "suggested": "Sugestão",
     "summarizeChanges": "Resumir alterações",
     "timeBilling": "Tempo e faturamento",
     "today": "Hoje",
@@ -2272,7 +2283,6 @@
     "deleteRow": "Excluir linha",
     "deleted": "Excluído",
     "discardChanges": "Descartar",
-    "dismiss": "Fechar",
     "displayText": "Exibir texto",
     "doneEditing": "Edição concluída",
     "doubleClickFooter": "Clique duas vezes para adicionar rodapé",
@@ -2788,7 +2798,6 @@
         "dismissed": "Descartado"
       },
       "description": "Escolha um playbook elaborado, documentos de referência ou ambos.",
-      "dismiss": "Descartar",
       "documentChanged": "Este documento mudou após esta revisão.",
       "export": {
         "counterparty": "Baixar para a contraparte",
@@ -3514,7 +3523,6 @@
     "jurisdictionSearchLabel": "Pesquisar países",
     "jurisdictionSearchPlaceholder": "Pesquisar países",
     "jurisdictionSubtitle": "Escolha os países onde você atua. A stella adaptará as respostas da IA e apresentará as fontes disponíveis: jurisprudência, legislação e registros comerciais.",
-    "jurisdictionSuggested": "Sugerido",
     "jurisdictionTitle": "Escolha suas jurisdições de atuação",
     "mcpCardDescription": "Adicione a stella como plugin e seu assistente poderá pesquisar seus casos e trabalhar com seus documentos. A configuração leva cerca de um minuto.",
     "mcpCardTitle": "Use a stella no Claude ou no ChatGPT",

@@ -89,7 +89,7 @@
     "files": {}
   },
   "throw-outside-boundary": {
-    "count": 1070,
+    "count": 1068,
     "files": {
       "apps/api/src/handlers/case-law/decisions/latest.ts": 3,
       "apps/api/src/handlers/case-law/erasure.ts": 1,
@@ -166,7 +166,6 @@
       "apps/api/src/handlers/skills/proposals/update.ts": 3,
       "apps/api/src/handlers/skills/revisions/get.ts": 1,
       "apps/api/src/handlers/style-sets/delete.ts": 2,
-      "apps/api/src/handlers/time-entries/create.ts": 2,
       "apps/api/src/handlers/view-templates/create.ts": 2,
       "apps/api/src/handlers/views/create.ts": 3,
       "apps/api/src/handlers/workspaces/duplicate.ts": 6,

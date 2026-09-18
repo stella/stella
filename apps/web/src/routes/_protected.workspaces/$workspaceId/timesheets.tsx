@@ -20,6 +20,7 @@ import {
 import { MEDIUM_DATE_FORMAT } from "@/lib/relative-time";
 import {
   timeEntriesInfiniteOptions,
+  timeEntrySuggestionsOptions,
   timeEntrySummaryOptions,
 } from "@/lib/workspaces/queries/time-entries";
 import { PersonalTimesheetDay } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/personal-timesheet-day";
@@ -68,6 +69,14 @@ export const Route = createFileRoute(
       ensureRouteQueryData(
         context.queryClient,
         timeEntrySummaryOptions(params.workspaceId, today, today),
+      ),
+      ensureRouteQueryData(
+        context.queryClient,
+        timeEntrySuggestionsOptions(
+          params.workspaceId,
+          today,
+          Temporal.Now.timeZoneId(),
+        ),
       ),
     ]);
   },

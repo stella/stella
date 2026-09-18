@@ -3,6 +3,10 @@ import type {
   TimeEntryListPage,
   TimeEntrySource,
   TimeEntryStatus,
+  TimeEntrySuggestion,
+  TimeEntrySuggestionDecision,
+  TimeEntrySuggestionEvidence,
+  TimeEntrySuggestionsResponse,
   TimeEntrySummary,
 } from "./time-entry-types";
 
@@ -11,43 +15,60 @@ export type {
   TimeEntryListPage,
   TimeEntrySource,
   TimeEntryStatus,
+  TimeEntrySuggestion,
+  TimeEntrySuggestionDecision,
+  TimeEntrySuggestionEvidence,
+  TimeEntrySuggestionsResponse,
   TimeEntrySummary,
 } from "./time-entry-types";
 
 type UnknownRecord = Record<string, unknown> & {
+  actions?: unknown;
+  activeMinutes?: unknown;
   activityCode?: unknown;
   billable?: unknown;
   billedMinutes?: unknown;
   createdAt?: unknown;
   currency?: unknown;
   daily?: unknown;
+  date?: unknown;
   dateWorked?: unknown;
   deleted?: unknown;
   durationMinutes?: unknown;
   email?: unknown;
+  endedAt?: unknown;
   entryCount?: unknown;
   entryIds?: unknown;
+  evidence?: unknown;
+  fingerprint?: unknown;
   id?: unknown;
   image?: unknown;
   invoiceNarrative?: unknown;
   items?: unknown;
   limit?: unknown;
   members?: unknown;
+  messageCount?: unknown;
   name?: unknown;
   narrative?: unknown;
   nextCursor?: unknown;
   noCharge?: unknown;
   rateAtEntry?: unknown;
+  resourceType?: unknown;
   scope?: unknown;
+  signalCount?: unknown;
   source?: unknown;
   splitGroupId?: unknown;
+  startedAt?: unknown;
   status?: unknown;
   taskCode?: unknown;
+  timeEntryId?: unknown;
   timerStartedAt?: unknown;
   timerStoppedAt?: unknown;
   timezoneId?: unknown;
+  title?: unknown;
   totalMinutes?: unknown;
   totalTeamMinutes?: unknown;
+  type?: unknown;
   updated?: unknown;
   updatedAt?: unknown;
   userId?: unknown;
@@ -72,7 +93,10 @@ const isTimeEntryStatus = (input: unknown): input is TimeEntryStatus =>
   input === "written_off";
 
 const isTimeEntrySource = (input: unknown): input is TimeEntrySource =>
-  input === "manual" || input === "timer";
+  input === "manual" || input === "timer" || input === "suggested";
+
+const isStringArray = (input: unknown): input is string[] =>
+  Array.isArray(input) && input.every((item) => typeof item === "string");
 
 const parseTimeEntry = (input: unknown): TimeEntry | null => {
   if (
@@ -279,4 +303,104 @@ export const parseTimeEntrySplitResponse = (input: unknown) => {
 export const parsePolishedTimeEntryNarrativeResponse = (input: unknown) =>
   isRecord(input) && typeof input.narrative === "string"
     ? { narrative: input.narrative }
+    : null;
+
+const parseTimeEntrySuggestionEvidence = (
+  input: unknown,
+): TimeEntrySuggestionEvidence | null => {
+  if (!isRecord(input) || typeof input.id !== "string") {
+    return null;
+  }
+  if (input.type === "chat_thread") {
+    return typeof input.title === "string" && isInteger(input.messageCount)
+      ? {
+          type: "chat_thread",
+          id: input.id,
+          title: input.title,
+          messageCount: input.messageCount,
+        }
+      : null;
+  }
+  if (input.type === "resource") {
+    return typeof input.resourceType === "string" &&
+      isNullableString(input.name) &&
+      isStringArray(input.actions)
+      ? {
+          type: "resource",
+          id: input.id,
+          resourceType: input.resourceType,
+          name: input.name,
+          actions: input.actions,
+        }
+      : null;
+  }
+  return null;
+};
+
+const parseTimeEntrySuggestion = (
+  input: unknown,
+): TimeEntrySuggestion | null => {
+  if (
+    !isRecord(input) ||
+    typeof input.fingerprint !== "string" ||
+    typeof input.startedAt !== "string" ||
+    typeof input.endedAt !== "string" ||
+    !isInteger(input.durationMinutes) ||
+    !isInteger(input.signalCount) ||
+    !Array.isArray(input.evidence)
+  ) {
+    return null;
+  }
+  const evidence: TimeEntrySuggestionEvidence[] = [];
+  for (const item of input.evidence) {
+    const parsed = parseTimeEntrySuggestionEvidence(item);
+    if (parsed === null) {
+      return null;
+    }
+    evidence.push(parsed);
+  }
+  return {
+    fingerprint: input.fingerprint,
+    startedAt: input.startedAt,
+    endedAt: input.endedAt,
+    durationMinutes: input.durationMinutes,
+    signalCount: input.signalCount,
+    evidence,
+  };
+};
+
+export const parseTimeEntrySuggestionsResponse = (
+  input: unknown,
+): TimeEntrySuggestionsResponse | null => {
+  if (
+    !isRecord(input) ||
+    typeof input.date !== "string" ||
+    !isInteger(input.activeMinutes) ||
+    !Array.isArray(input.items)
+  ) {
+    return null;
+  }
+  const items: TimeEntrySuggestion[] = [];
+  for (const item of input.items) {
+    const parsed = parseTimeEntrySuggestion(item);
+    if (parsed === null) {
+      return null;
+    }
+    items.push(parsed);
+  }
+  return { date: input.date, activeMinutes: input.activeMinutes, items };
+};
+
+export const parseTimeEntrySuggestionDecision = (
+  input: unknown,
+): TimeEntrySuggestionDecision | null =>
+  isRecord(input) &&
+  typeof input.fingerprint === "string" &&
+  (input.status === "accepted" || input.status === "dismissed") &&
+  isNullableString(input.timeEntryId)
+    ? {
+        fingerprint: input.fingerprint,
+        status: input.status,
+        timeEntryId: input.timeEntryId,
+      }
     : null;

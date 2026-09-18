@@ -369,6 +369,37 @@ export const wsOrganizationPolicies = (tableName: string) => [
   }),
 ];
 
+const wsOrganizationUserCheck = sql`(
+  ${userCheck} AND ${workspaceOrganizationCheck}
+)`;
+
+/**
+ * Workspace-and-organization rows that belong to one user: a timekeeper's own
+ * decisions, never another member's, even through the `stella` role.
+ */
+export const wsOrganizationUserPolicies = (tableName: string) => [
+  p.pgPolicy(`${tableName}_user_select`, {
+    for: "select",
+    to: stella,
+    using: wsOrganizationUserCheck,
+  }),
+  p.pgPolicy(`${tableName}_user_insert`, {
+    for: "insert",
+    to: stella,
+    withCheck: wsOrganizationUserCheck,
+  }),
+  p.pgPolicy(`${tableName}_user_update`, {
+    for: "update",
+    to: stella,
+    using: wsOrganizationUserCheck,
+  }),
+  p.pgPolicy(`${tableName}_user_delete`, {
+    for: "delete",
+    to: stella,
+    using: wsOrganizationUserCheck,
+  }),
+];
+
 const wsOrganizationSelectPolicy = (tableName: string) =>
   p.pgPolicy(`${tableName}_workspace_select`, {
     for: "select",

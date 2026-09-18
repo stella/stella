@@ -558,6 +558,15 @@
       "written_off": "Odepsáno"
     },
     "stopTimer": "Zastavit",
+    "suggestions": {
+      "actionCount": "{count, plural, one {# akce} few {# akce} other {# akcí}}",
+      "activeVsLogged": "Aktivita {active} · Vykázáno {logged}",
+      "chatEvidence": "{count, plural, one {# zpráva} few {# zprávy} other {# zpráv}} v konverzaci „{title}“",
+      "keyboardHint": "Enter přijme, E upraví před přijetím, Delete zamítne",
+      "privacyNote": "Vidíte je jen vy. Nic se nezaznamená, dokud návrh nepřijmete.",
+      "title": "Návrhy z vaší aktivity",
+      "unnamedRecord": "Záznam ve spisu"
+    },
     "timerActive": "Časovač běží",
     "timesheets": "Výkazy práce",
     "total": "Celkem",
@@ -1351,6 +1360,7 @@
     "description": "Popis",
     "details": "Detaily",
     "disconnect": "Odpojit",
+    "dismiss": "Zamítnout",
     "displayName": "Zobrazované jméno",
     "document": "Dokument",
     "documentName": "Název dokumentu",
@@ -1531,6 +1541,7 @@
     "status": "Stav",
     "stepCount": "{count, plural, one {# krok} few {# kroky} many {# kroku} other {# kroků}}",
     "stepProgress": "{current} z {total}",
+    "suggested": "Návrh",
     "summarizeChanges": "Shrnout změny",
     "timeBilling": "Čas a fakturace",
     "today": "Dnes",
@@ -2272,7 +2283,6 @@
     "deleteRow": "Smazat řádek",
     "deleted": "Smazáno",
     "discardChanges": "Zahodit",
-    "dismiss": "Zavřít",
     "displayText": "Zobrazovaný text",
     "doneEditing": "Dokončit úpravy",
     "doubleClickFooter": "Dvojklikem přidáte zápatí",
@@ -2788,7 +2798,6 @@
         "dismissed": "Zamítnuto"
       },
       "description": "Vyberte schválený playbook, referenční dokumenty nebo obojí.",
-      "dismiss": "Zamítnout",
       "documentChanged": "Dokument se od této kontroly změnil.",
       "export": {
         "counterparty": "Stáhnout pro protistranu",
@@ -3514,7 +3523,6 @@
     "jurisdictionSearchLabel": "Hledat země",
     "jurisdictionSearchPlaceholder": "Hledat země",
     "jurisdictionSubtitle": "Vyberte země své praxe. stella podle nich přizpůsobí odpovědi AI a nabídne dostupné zdroje: judikaturu, předpisy a obchodní rejstříky.",
-    "jurisdictionSuggested": "Doporučeno",
     "jurisdictionTitle": "Vyberte jurisdikce své praxe",
     "mcpCardDescription": "Přidejte stellu jako plugin a váš asistent bude moci vyhledávat ve vašich spisech a pracovat s vašimi dokumenty. Nastavení zabere asi minutu.",
     "mcpCardTitle": "Používejte stellu z Claude nebo ChatGPT",

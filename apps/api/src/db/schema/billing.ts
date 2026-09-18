@@ -1,8 +1,10 @@
 import {
   INVOICE_STATUS,
   INVOICE_STATUSES,
+  TIME_ENTRY_SUGGESTION_STATUSES,
   type InvoiceStatus,
 } from "@stll/api-contract";
+import type { TimeEntrySuggestionEvidence } from "@stll/api-contract/time-entry-types";
 
 import {
   EXPENSE_CATEGORIES,
@@ -19,6 +21,7 @@ import {
   unsafeCents,
   user,
   wsOrganizationPolicies,
+  wsOrganizationUserPolicies,
   wsPolicies,
   timestamptz,
 } from "./common";
@@ -27,6 +30,9 @@ import { entities } from "./entities";
 
 export const ACTIVE_TIMER_INDEX_NAME =
   "time_entries_one_active_timer_per_user_idx";
+
+const TIME_ENTRY_SUGGESTION_STATUS_SQL_VALUES =
+  TIME_ENTRY_SUGGESTION_STATUSES.map((status) => sql.raw(`'${status}'`));
 
 export const timeEntries = p.pgTable(
   "time_entries",
@@ -109,6 +115,65 @@ export const timeEntries = p.pgTable(
       sql`${table.billedMinutes} >= 0`,
     ),
     ...wsOrganizationPolicies("time_entries"),
+  ],
+);
+
+/**
+ * A suggested entry the timekeeper accepted or dismissed. Suggestions are
+ * recomputed from the timekeeper's own matter activity on every read; only
+ * the decision persists, keyed by the cluster fingerprint for that day.
+ * Evidence is snapshotted on accept so the created entry stays auditable to
+ * the activity it was drawn from.
+ */
+export const timeEntrySuggestions = p.pgTable(
+  "time_entry_suggestions",
+  {
+    id: pUuid<"timeEntrySuggestion">().primaryKey(),
+    organizationId: safeOrganizationId("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    workspaceId: safeWorkspaceId("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    userId: p
+      .text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    dateWorked: p.date("date_worked").notNull(),
+    fingerprint: p.varchar({ length: 64 }).notNull(),
+    status: p
+      .text("status", { enum: TIME_ENTRY_SUGGESTION_STATUSES })
+      .notNull(),
+    timeEntryId: safeUuid<"timeEntry">("time_entry_id").references(
+      () => timeEntries.id,
+      { onDelete: "set null" },
+    ),
+    evidence: p.jsonb().$type<TimeEntrySuggestionEvidence[]>(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p
+      .foreignKey({
+        columns: [table.workspaceId, table.organizationId],
+        foreignColumns: [workspaces.id, workspaces.organizationId],
+        name: "time_entry_suggestions_workspace_organization_fk",
+      })
+      .onDelete("cascade"),
+    p
+      .uniqueIndex("time_entry_suggestions_ws_user_fingerprint_uidx")
+      .on(table.workspaceId, table.userId, table.fingerprint),
+    p
+      .index("time_entry_suggestions_ws_user_date_idx")
+      .on(table.workspaceId, table.userId, table.dateWorked),
+    p.check(
+      "time_entry_suggestions_status_check",
+      sql`${table.status} in (${sql.join(TIME_ENTRY_SUGGESTION_STATUS_SQL_VALUES, sql`, `)})`,
+    ),
+    p.check(
+      "time_entry_suggestions_accepted_entry_check",
+      sql`${table.status} <> 'accepted' OR ${table.timeEntryId} IS NOT NULL OR ${table.evidence} IS NOT NULL`,
+    ),
+    ...wsOrganizationUserPolicies("time_entry_suggestions"),
   ],
 );
 

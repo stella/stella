@@ -5,6 +5,7 @@ import type { TimeEntrySource, TimeEntryStatus } from "@stll/api-contract";
 
 import {
   fetchTimeEntries,
+  fetchTimeEntrySuggestions,
   fetchTimeEntrySummary,
 } from "@/lib/workspaces/time-entries-api";
 
@@ -38,6 +39,7 @@ type PersonalTimeEntry = {
   durationMinutes: number;
   id: string;
   narrative: string;
+  source: TimeEntrySource;
   status: TimeEntryStatus;
   timerStartedAt: string | null;
 };
@@ -99,6 +101,11 @@ export const timeEntriesKeys = {
     "teamSummary",
     { dateFrom, dateTo },
   ],
+  suggestions: (workspaceId: string, date: string, timezoneId: string) => [
+    ...timeEntriesKeys.all(workspaceId),
+    "suggestions",
+    { date, timezoneId },
+  ],
 };
 
 const listTimeEntries = async ({
@@ -148,6 +155,7 @@ const listPersonalTimeEntries = async ({
         durationMinutes,
         id,
         narrative,
+        source,
         status,
         timerStartedAt,
       }) => ({
@@ -156,6 +164,7 @@ const listPersonalTimeEntries = async ({
         durationMinutes,
         id,
         narrative,
+        source,
         status,
         timerStartedAt,
       }),
@@ -248,6 +257,21 @@ export const timeEntryTeamSummaryOptions = (
         ),
       } satisfies TeamTimeEntrySummary;
     },
+  });
+
+export const timeEntrySuggestionsOptions = (
+  workspaceId: string,
+  date: string,
+  timezoneId: string,
+) =>
+  queryOptions({
+    queryKey: timeEntriesKeys.suggestions(workspaceId, date, timezoneId),
+    queryFn: async ({ signal }) =>
+      await fetchTimeEntrySuggestions({
+        workspaceId,
+        query: { date, timezoneId },
+        signal,
+      }),
   });
 
 export const activeTimerOptions = (workspaceId: string) =>

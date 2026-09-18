@@ -296,6 +296,12 @@ export const LIMITS = {
   activeTimersPerUser: 1,
   timeEntryMaxAgeDays: 90,
   billingIncrementMinutes: 6,
+  /** Two activity signals closer than this belong to one suggested entry. */
+  timeSuggestionMergeGapMinutes: 15,
+  /** Engaged time assumed after the last observed signal of a cluster. */
+  timeSuggestionTailMinutes: 5,
+  /** Per-source cap on activity rows read for one day of suggestions. */
+  timeSuggestionSignalsPerSourceMax: 1000,
   invoicesPerWorkspace: 10_000,
   invoicesPageSizeDefault: 50,
   invoicesPageSizeMax: 100,

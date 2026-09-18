@@ -13,6 +13,8 @@ import readTimeEntryById from "@/api/handlers/time-entries/get";
 import readTimeEntries from "@/api/handlers/time-entries/list";
 import polishTimeEntryNarrative from "@/api/handlers/time-entries/polish-narrative";
 import splitEntry from "@/api/handlers/time-entries/split";
+import createTimeSuggestionDecision from "@/api/handlers/time-entries/suggestions/decisions/create";
+import listTimeSuggestions from "@/api/handlers/time-entries/suggestions/list";
 import readTimeEntrySummary from "@/api/handlers/time-entries/summary/get";
 import timerStart from "@/api/handlers/time-entries/timer-start";
 import timerStop from "@/api/handlers/time-entries/timer-stop";
@@ -43,6 +45,15 @@ export const timeEntriesRoute = new Elysia({
   .get("/summary", readTimeEntrySummary.handler, {
     permissions: readTimeEntrySummary.config.permissions,
     query: readTimeEntrySummary.config.query,
+  })
+  .get("/suggestions", listTimeSuggestions.handler, {
+    permissions: listTimeSuggestions.config.permissions,
+    query: listTimeSuggestions.config.query,
+  })
+  .post("/suggestions/decisions", createTimeSuggestionDecision.handler, {
+    body: createTimeSuggestionDecision.config.body,
+    resourceSetUpdated: timeEntryRealtimeUpdates,
+    permissions: createTimeSuggestionDecision.config.permissions,
   })
   .get("/:id", readTimeEntryById.handler, {
     params: readTimeEntryById.config.params,
