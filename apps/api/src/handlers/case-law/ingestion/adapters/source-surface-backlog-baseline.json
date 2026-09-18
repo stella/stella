@@ -4,16 +4,7 @@
     "cz-ns": ["document-pdf", "document-rtf", "listing", "slice-listing"],
     "cz-nss": ["listing", "original", "text"],
     "sk-courts": ["bulk-dump", "document"],
-    "sk-us": [
-      "archive-listing",
-      "codelists",
-      "collection-listing",
-      "document",
-      "document-file",
-      "facets",
-      "file",
-      "listing"
-    ],
+    "sk-us": ["archive-listing", "collection-listing"],
     "pl-courts": [
       "enrichment",
       "listing-dump",

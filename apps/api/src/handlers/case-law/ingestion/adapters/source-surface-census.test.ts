@@ -34,6 +34,7 @@ import type { AdapterKey } from "@/api/handlers/case-law/consts";
 import {
   backlogSurface,
   decodeSourceRawEnvelope,
+  decodeSourceRawEnvelopeObjects,
   storedSourceSurface,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type {
@@ -55,6 +56,7 @@ import {
   czUsFixture,
   plSnFixture,
   skCourtsFixture,
+  skUsFixture,
   type EnrolledAdapterFixture,
 } from "@/api/tests/helpers/case-law-enrolled-fixtures";
 
@@ -109,9 +111,7 @@ const SURFACE_EVIDENCE = {
     { kind: "built", fixture: skCourtsFixture },
     { kind: "page-recording", file: "sk-courts-page.json.gz" },
   ],
-  [ADAPTER_KEYS.SK_US]: NO_CAPTURE(
-    "no recording of a crawl page exists for this adapter",
-  ),
+  [ADAPTER_KEYS.SK_US]: [{ kind: "built", fixture: skUsFixture }],
   [ADAPTER_KEYS.PL_COURTS]: [
     { kind: "page-recording", file: "pl-courts-page.json.gz" },
   ],
@@ -169,6 +169,11 @@ const legacyPartNames = (
 /**
  * What one stored row states it holds: the envelope's own names, or the names
  * its adapter's legacy shape maps the payload onto.
+ *
+ * An envelope names two kinds of surface. A text part it holds, and a binary
+ * part it points at: the bytes of a publisher's file live in corpus storage
+ * and the envelope carries the address. Both are a surface this row records,
+ * so both count as evidence.
  */
 const storedNamesOf = (
   adapter: AdapterKey,
@@ -177,7 +182,10 @@ const storedNamesOf = (
 ): readonly string[] => {
   const parts = decodeSourceRawEnvelope(raw);
   if (parts !== null) {
-    return Object.keys(parts);
+    return [
+      ...Object.keys(parts),
+      ...Object.keys(decodeSourceRawEnvelopeObjects(raw)),
+    ];
   }
   return (LEGACY_SHAPES_BY_ADAPTER.get(adapter) ?? [])
     .filter((shape) => shape.contentTypes.includes(contentType))

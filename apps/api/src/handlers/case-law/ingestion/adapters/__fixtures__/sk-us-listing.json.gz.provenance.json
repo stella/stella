@@ -1,0 +1,7 @@
+{
+  "capture": "recorded",
+  "sha256": "256cbf3835e7940219b65135ae761c32d5a952653f700222d38ce926c6db1b45",
+  "sourceUrl": "https://www.ustavnysud.sk/o/v1/dms/search",
+  "capturedAt": "2026-09-18T18:44:25.514Z",
+  "note": "POST body: {\"docType\":\"USSR_DECISION_MK\",\"start\":0,\"pageSize\":25,\"searchFilter\":{\"filterNameValue\":[{\"type\":\"DATE_RANGE\",\"fieldName\":\"mkDateOfDecision\",\"fieldValue\":{\"FROM\":\"2021-07-29\",\"TO\":\"2021-07-29\"}}]},\"facetFilter\":{\"facetFilterNameValue\":[]},\"facets\":[],\"fieldsToReturn\":[],\"clustering\":false}; one decision day, 21 documents including a separate opinion"
+}

@@ -1,5 +1,7 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { panic } from "better-result";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
+import { envBase } from "@/api/env-base";
 import {
   getS3,
   isMissingCorpusObjectError,
@@ -16,6 +18,8 @@ import {
 } from "@/api/lib/s3";
 import { isExpiredCredentialsError } from "@/api/lib/s3/credential-guard";
 import { credentialsFromEnvValues } from "@/api/lib/s3/credentials";
+import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
+import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 
 const jsonResponse = (body: unknown): Response =>
   new Response(JSON.stringify(body), { status: 200 });
@@ -626,6 +630,133 @@ describe("readCorpusS3Range", () => {
     expect(rejection).toMatchObject({
       message: expect.stringContaining("expected 8"),
     });
+  });
+});
+
+/**
+ * The same reader against the in-process store, so the range it asks for is
+ * served by something that answers a `Range` header the way S3 does rather
+ * than by a stub written to match the request. A pack is exactly this shape:
+ * one object holding several members back to back, each addressed by its
+ * offset and length.
+ */
+describe("readCorpusS3Range over the fake store", () => {
+  const originalFetch = globalThis.fetch;
+  const corpusBucket = envBase.LEGAL_CORPUS_S3_BUCKET ?? envBase.S3_BUCKET;
+  const key = "legal-corpus/packs/jurisdiction=SVK/members.pack";
+  const signal = new AbortController().signal;
+  const members = ["first-member", "second-member", "third"].map((member) =>
+    new TextEncoder().encode(member),
+  );
+  const memberOffset = (index: number): number =>
+    members
+      .slice(0, index)
+      .reduce((total, member) => total + member.byteLength, 0);
+  const pack = new Uint8Array(memberOffset(members.length));
+  for (const [index, member] of members.entries()) {
+    pack.set(member, memberOffset(index));
+  }
+  const memberAt = (index: number): Uint8Array =>
+    members[index] ?? panic(`the synthetic pack has no member ${index}`);
+  let fake: FakeS3;
+
+  const rangesServed = (): (string | null)[] =>
+    fake.requests
+      .filter(({ method }) => method === "GET")
+      .map(({ range }) => range);
+
+  beforeEach(() => {
+    fake = startFakeS3();
+    fake.put(corpusBucket, key, pack);
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+    fake.stop();
+  });
+
+  test("returns the member in the middle of the pack and nothing around it", async () => {
+    const offset = memberOffset(1);
+
+    const bytes = await readCorpusS3Range({
+      key,
+      offset,
+      length: memberAt(1).byteLength,
+      signal,
+    });
+
+    expect(new TextDecoder().decode(bytes)).toBe("second-member");
+    // Inclusive last byte: an exclusive end would overrun into the third
+    // member, and the store would serve that longer span happily.
+    expect(rangesServed()).toEqual([
+      `bytes=${offset}-${offset + memberAt(1).byteLength - 1}`,
+    ]);
+  });
+
+  test("refuses a range running past the end instead of taking the short read", async () => {
+    const offset = memberOffset(2);
+
+    const rejection: unknown = await readCorpusS3Range({
+      key,
+      offset,
+      // Past the last byte: S3 clamps such a range to the object and answers
+      // 206 over the shorter span, so the caller only learns the difference
+      // from `Content-Range`.
+      length: pack.byteLength - offset + 16,
+      signal,
+    }).then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(rejection).toMatchObject({
+      message: expect.stringContaining("different range"),
+    });
+  });
+
+  test("refuses a range starting past the end", async () => {
+    const rejection: unknown = await readCorpusS3Range({
+      key,
+      offset: pack.byteLength,
+      length: 4,
+      signal,
+    }).then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    // Unsatisfiable, so the store answers 416 rather than a body, and the
+    // code reaches the caller for the credential guard to classify.
+    expect(rejection).toMatchObject({ status: 416, code: "InvalidRange" });
+  });
+
+  test("refuses a store that drops the range header and answers with the pack", async () => {
+    const withoutRange = async (
+      input: string | URL | Request,
+      init?: RequestInit,
+    ): Promise<Response> => {
+      const headers = new Headers(init?.headers);
+      headers.delete("range");
+      return await originalFetch(input, { ...init, headers });
+    };
+    globalThis.fetch = Object.assign(withoutRange, {
+      preconnect: originalFetch.preconnect,
+    });
+
+    const rejection: unknown = await readCorpusS3Range({
+      key,
+      offset: memberOffset(1),
+      length: memberAt(1).byteLength,
+      signal,
+    }).then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(rejection).toMatchObject({
+      message: expect.stringContaining("not 206"),
+    });
+    expect(rangesServed()).toEqual([null]);
   });
 });
 

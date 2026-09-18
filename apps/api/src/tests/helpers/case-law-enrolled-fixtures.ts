@@ -42,6 +42,12 @@ import {
   readPlSnEnvelope,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-sn";
 import { assembleSkCourtsDecision } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
+import { buildSkUsDecision } from "@/api/handlers/case-law/ingestion/adapters/sk-us";
+import { withSourceRawObjects } from "@/api/lib/legal-search/ingestion-types";
+import {
+  RAW_SOURCE_FAMILY,
+  sourceBinaryRef,
+} from "@/api/lib/legal-search/raw-source-storage";
 import { isRecord } from "@/api/lib/type-guards";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
@@ -787,4 +793,197 @@ export const skCourtsFixture = (): EnrolledAdapterFixture => ({
         detail: { ...SK_COURTS_DETAIL_RECORD },
       }) ?? panic("sk-courts fixture did not build"),
     ),
+});
+
+// ── SK ÚS fixture ────────────────────────────────────────
+
+/**
+ * The search row, carrying every key this service is known to send.
+ *
+ * All forty-six filled, because a disposition is only exercised where the
+ * decision built from the fixture can be checked for it, and the service
+ * sends the same key set for every corpus it serves: a key that is empty on
+ * a decision is filled on a collection entry, and both reach the adapter
+ * through this one reader.
+ */
+const SK_US_LISTING_ROW = {
+  docType: "USSR_DECISION",
+  content: null,
+  title: "Rozhodnutie - Nález",
+  index: 0,
+  documentId: "11111111-2222-4333-8444-555555555555",
+  contentType: "application/pdf",
+  extension: null,
+  size: null,
+  mkDocumentType: "Rozhodnutie - Nález",
+  mkDateOfDecision: "07/29/2021 00:00:00",
+  mkRSAPNumberOfFile: "III. ÚS 425/2021",
+  mkRVPNumberOfFile: "1448/2020",
+  mkECLI: "ECLI:SK:USSR:2021:3.US.425.2021.1",
+  mkDateOfLegalForce: "07/31/2021 00:00:00",
+  mkPublicationDate: "08/05/2021 00:00:00",
+  mkFormOfDecision: "Nález",
+  mkTypeOfDecision: ["Nález"],
+  mkTypeOfProceeding: "konanie o ústavných sťažnostiach",
+  mkTypeOfNegotiation: ["Neverejné zasadnutie"],
+  mkDecisionInTermsOf: ["čl. 127 ods. 1 ústavy"],
+  mkDecisionInTermsOfForSort: "čl. 127 ods. 1 ústavy",
+  mkResultOfNegotiation: ["vyhovuje"],
+  mkCause: ["porušenie základného práva"],
+  mkJudgeReporter: "Martin Vernarský",
+  mkDifferentView: "Odlišné stanovisko iné",
+  mkWordRegister: ["základné práva a slobody"],
+  mkMaterialRegister: ["právo na súdnu ochranu"],
+  mkComplainedLegalRegulation: "301/2005 Z. z.",
+  mkClarificationOfLegalRegulation: "arbitrárnosť rozhodnutia",
+  mkFileReference: ["1448/2020"],
+  mkReferences: ["2196/2020"],
+  mkTypeOfProposer: "Fyzická osoba",
+  mkAffectedLegalRegulation: "460/1992 Zb.",
+  mkUnderage: "nie",
+  mkIncludeToZnaU: true,
+  mkEntryDate: "06/30/2020 00:00:00",
+  mkFormOfEntry: "písomné podanie",
+  mkTypeOfEntry: "ústavná sťažnosť",
+  mkParentIdDecision: "Nalez",
+  mkLawReportsNumber: "43",
+  mkVolumeOfLawReports: "2021",
+  mkYearOfLawReports: 2021,
+  mkTimePeriodZNaU: "II. polrok",
+  mkClauseTitle: "Právo na súdnu ochranu",
+  mkClauseText:
+    "Všeobecný súd musí svoje rozhodnutie odôvodniť tak, aby bolo preskúmateľné.",
+  mkWebTitle: "Nález III. ÚS 425/2021",
+};
+
+/**
+ * The facet counts of the docket on its decision day, which is the only
+ * form these index fields are ever served in.
+ */
+const SK_US_FACETS = JSON.stringify({
+  documents: [SK_US_LISTING_ROW],
+  numFound: 1,
+  facetCount: {
+    mkDifferentViewJudges: { "Peter Straka": 1 },
+    mkDefendant: { "Okresný súd Košice II": 1 },
+    mkPublicDefendant: { "Okresný súd Košice II": 1 },
+    mkViolator: { "Okresný súd Košice II": 1 },
+    mkFormOfProposer: { "Fyzická osoba": 1 },
+    mkKindOfOtherProposer: { "Generálny prokurátor SR": 1 },
+    mkFileNumberOfDefendantProceeding: { "5T/12/2019": 1 },
+  },
+});
+
+/** The docket file, whose header states when the petition arrived. */
+const SK_US_COURT_FILE = JSON.stringify({
+  documents: [
+    {
+      docType: "USSR_COURTFILE",
+      documentId: "99999999-8888-4777-8666-555555555555",
+      mkRVPNumberOfFile: "1448/2020",
+      mkEntryDate: "06/30/2020 00:00:00",
+      mkReferences: ["2196/2020"],
+    },
+    SK_US_LISTING_ROW,
+  ],
+  numFound: 2,
+});
+
+/** The two rosters the decision's judge fields are drawn from. */
+const SK_US_CODELIST = JSON.stringify({
+  codelist: {
+    mkJudgeReporter: ["Martin Vernarský", "Peter Straka"],
+    mkDifferentViewJudges: ["Martin Vernarský", "Peter Straka"],
+  },
+});
+
+/**
+ * The document as the court renders it, with one anonymized run.
+ *
+ * The run is a black-on-black span over non-breaking spaces, which is how
+ * this court redacts: the fixture carries the shape rather than any hidden
+ * words, because there are none to carry.
+ */
+const SK_US_DOCUMENT_XHTML =
+  `<?xml version="1.0" encoding="UTF-8"?><html><body><div>` +
+  `<span style="font-size: 21px; ">NÁLEZ<br/><br/></span>` +
+  `<span style="font-size: 12px; ">Ústavný súd Slovenskej republiky v senáte o ústavnej sťažnosti sťažovateľa <br/>` +
+  `</span><span style="color: #000000; background-color: #000000; font-size: 12px; ">${"&nbsp;".repeat(
+    8,
+  )}</span>` +
+  `<span style="font-size: 12px; "> takto <br/><br/>rozh od ol :  <br/><br/>` +
+  `Základné právo sťažovateľa na súdnu ochranu porušené bolo. <br/><br/>` +
+  `O d ôvod n eni e:  <br/><br/>` +
+  `Ústavný súd preskúmal napadnuté rozhodnutie a dospel k záveru, že je arbitrárne. <br/><br/>` +
+  `Pou čen i e :  Proti tomuto nálezu nemožno podať opravný prostriedok. <br/><br/>` +
+  `V Košiciach 29. júla 2021 <br/><br/>Martin Vernarský <br/>predseda senátu</span></div></body></html>`;
+
+/** A payload that opens like a PDF; its body is not a parseable one. */
+const SK_US_DOCUMENT_FILE = new TextEncoder().encode(
+  "%PDF-1.4\n1 0 obj\n<<>>\n",
+);
+
+/** The source this fixture's decision is stored under; it prefixes its keys. */
+const SK_US_SOURCE_ID = "sk-us-inventory-fixture";
+
+/**
+ * Built through the adapter's own fetch path, because what this adapter
+ * stores is decided there: five responses per decision, four of them
+ * fetched from endpoints the builder chooses between.
+ *
+ * The envelope is then closed over its binary part the way the pipeline
+ * closes it, through the same derivation, so the guards read the envelope a
+ * stored row holds rather than one this helper invented.
+ */
+export const skUsFixture = (): EnrolledAdapterFixture => ({
+  buildDecision: async () => {
+    globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
+      const url = new URL(input instanceof Request ? input.url : String(input));
+      const body = ((): string | Uint8Array => {
+        if (url.pathname === "/o/v1/dms/content") {
+          return JSON.stringify({
+            content: Buffer.from(SK_US_DOCUMENT_XHTML).toString("base64"),
+          });
+        }
+        if (url.pathname === "/o/v1/dms/search") {
+          return SK_US_FACETS;
+        }
+        if (url.pathname.startsWith("/o/v1/dms/file/")) {
+          return SK_US_COURT_FILE;
+        }
+        if (url.pathname === "/o/v1/codelist/decision") {
+          return SK_US_CODELIST;
+        }
+        return SK_US_DOCUMENT_FILE;
+      })();
+      return await Promise.resolve(
+        new Response(body, {
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+    });
+
+    const built = await buildSkUsDecision({ ...SK_US_LISTING_ROW });
+    if (built.type !== "built") {
+      return panic(`sk-us fixture did not build: ${built.type}`);
+    }
+    const { decision } = built;
+    const objects = Object.fromEntries(
+      Object.entries(decision.sourceRawObjects ?? {}).map(
+        ([part, { bytes, contentType }]) => [
+          part,
+          sourceBinaryRef({
+            family: RAW_SOURCE_FAMILY.CASE_LAW,
+            sourceId: SK_US_SOURCE_ID,
+            bytes,
+            contentType,
+          }),
+        ],
+      ),
+    );
+    return {
+      ...decision,
+      sourceRaw: withSourceRawObjects(decision.sourceRaw ?? "", objects),
+    };
+  },
 });

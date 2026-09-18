@@ -51,6 +51,7 @@ import {
   czUsFixture,
   plSnFixture,
   skCourtsFixture,
+  skUsFixture,
   type EnrolledAdapterFixture,
 } from "@/api/tests/helpers/case-law-enrolled-fixtures";
 
@@ -89,7 +90,7 @@ const ADAPTER_INVENTORY_COVERAGE = {
     disposition: "enrolled",
     fixture: skCourtsFixture,
   },
-  [ADAPTER_KEYS.SK_US]: PENDING,
+  [ADAPTER_KEYS.SK_US]: { disposition: "enrolled", fixture: skUsFixture },
   [ADAPTER_KEYS.PL_COURTS]: PENDING,
   [ADAPTER_KEYS.PL_SN]: { disposition: "enrolled", fixture: plSnFixture },
   [ADAPTER_KEYS.AT_COURTS]: PENDING,

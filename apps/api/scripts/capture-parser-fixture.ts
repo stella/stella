@@ -18,6 +18,12 @@
  *   bun apps/api/scripts/capture-parser-fixture.ts <url> --dir src/handlers/.../__fixtures__
  *   bun apps/api/scripts/capture-parser-fixture.ts <url> --note "spacer-span verdict"
  *   bun apps/api/scripts/capture-parser-fixture.ts <url> --name page.html.gz --gzip
+ *   bun apps/api/scripts/capture-parser-fixture.ts <url> --body query.json
+ *
+ * `--body` posts a request body read from a file and records it in the
+ * sidecar, because a search API's address alone does not name what was
+ * asked for: without the query, a recapture of the same URL is a different
+ * document.
  *
  * The eu-ecj decision corpus is not captured with this script: those
  * fixtures are paired with their Formex oracle, which only the adapter's
@@ -120,12 +126,26 @@ const capture = async (argv: readonly string[]): Promise<void> => {
     );
   }
 
+  const bodyPath = flagValue(argv, "--body");
+  const body =
+    bodyPath === undefined ? undefined : await Bun.file(bodyPath).text();
+
   const response = await fetch(url, {
     signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-    headers: { "User-Agent": INGESTION_USER_AGENT },
+    headers: {
+      "User-Agent": INGESTION_USER_AGENT,
+      ...(body === undefined ? {} : { "Content-Type": "application/json" }),
+    },
+    ...(body === undefined ? {} : { method: "POST", body }),
   });
   if (!response.ok) {
     fail(`${url.href}: ${response.status} ${response.statusText}`);
+  }
+  // A 204 is `ok`, and this API answers one for a query it will not serve.
+  // Writing those zero bytes as the fixture would record the refusal as the
+  // document.
+  if (response.status === 204) {
+    fail(`${url.href}: 204, the source served no body for this request`);
   }
 
   const served = new Uint8Array(await response.arrayBuffer());
@@ -134,7 +154,11 @@ const capture = async (argv: readonly string[]): Promise<void> => {
   // guard rehashes. Directories whose fixtures run to hundreds of
   // kilobytes store them this way.
   const bytes = argv.includes("--gzip") ? Bun.gzipSync(served) : served;
-  const note = flagValue(argv, "--note");
+  const flagNote = flagValue(argv, "--note");
+  const note =
+    body === undefined
+      ? flagNote
+      : [`POST body: ${body.trim()}`, flagNote].filter(Boolean).join("; ");
   await Bun.write(path.resolve(API_ROOT, relativePath), bytes);
   await Bun.write(
     path.resolve(API_ROOT, provenancePathOf(relativePath)),

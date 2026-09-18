@@ -67,6 +67,10 @@
       "types": "./src/provision-reference.ts",
       "import": "./src/provision-reference.ts"
     },
+    "./slovak-document-roles": {
+      "types": "./src/slovak-document-roles.ts",
+      "import": "./src/slovak-document-roles.ts"
+    },
     "./statute-ast": {
       "types": "./src/statute-ast.ts",
       "import": "./src/statute-ast.ts"

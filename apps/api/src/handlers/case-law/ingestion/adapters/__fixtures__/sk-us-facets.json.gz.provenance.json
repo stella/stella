@@ -1,0 +1,7 @@
+{
+  "capture": "recorded",
+  "sha256": "5262592546eea0bf24ef870bb2ce80431c457ede36d8a683e063afb0a44b3298",
+  "sourceUrl": "https://www.ustavnysud.sk/o/v1/dms/search",
+  "capturedAt": "2026-09-18T18:45:37.495Z",
+  "note": "POST body: {\"docType\":\"USSR_DECISION_MK\",\"start\":0,\"pageSize\":25,\"searchFilter\":{\"filterNameValue\":[{\"type\":\"DATE_RANGE\",\"fieldName\":\"mkDateOfDecision\",\"fieldValue\":{\"FROM\":\"2021-07-29\",\"TO\":\"2021-07-29\"}},{\"type\":\"STRING\",\"fieldName\":\"mkRSAPNumberOfFileNorm\",\"fieldValue\":\"III. ÚS 425/2021\"}]},\"facetFilter\":{\"facetFilterNameValue\":[]},\"facets\":[\"mkDifferentViewJudges\",\"mkDefendant\",\"mkPublicDefendant\",\"mkViolator\",\"mkFormOfProposer\",\"mkKindOfOtherProposer\",\"mkFileNumberOfDefendantProceeding\"],\"fieldsToReturn\":[],\"clustering\":false}; one docket on one decision day, with the index-only fields as facet counts"
+}
