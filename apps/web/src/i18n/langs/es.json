@@ -1234,7 +1234,6 @@
     "saveVersionAndLeave": "Guardar versión y salir",
     "searchClauses": "Buscar cláusulas...",
     "searchPlaceholder": "Buscar cláusulas...",
-    "selectFile": "Seleccionar archivo JSON",
     "selectVersionToCompare": "Seleccione una versión para comparar con la actual",
     "slotCustom": "Nombre de espacio personalizado…",
     "slotHelp": "Un espacio es una posición con nombre en el documento ('{{'@clause:name'}}') donde se inserta la cláusula vinculada al rellenar la plantilla.",
@@ -1707,7 +1706,6 @@
       "skippedLimitReached": "Omitido: se alcanzó el límite de contactos"
     },
     "importStudio": {
-      "chooseFile": "Elegir un archivo",
       "customFieldTarget": "Importar como campo personalizado",
       "defaultType": "Usar este tipo si el archivo no tiene una columna de tipo de contacto",
       "delimiter": {
@@ -4423,7 +4421,6 @@
       "sourceFirm": "Despacho",
       "sourceParty": "Otra parte"
     },
-    "browseFiles": "Explorar archivos",
     "builtInLookupFormat": "Formato básico",
     "categoryDeleteConfirm": "Esta acción eliminará la categoría. Las plantillas de esta categoría pasarán a estar sin categorizar.",
     "categoryDeleteFailed": "Error al eliminar la categoría",

@@ -1234,7 +1234,6 @@
     "saveVersionAndLeave": "Saglabāt versiju un iziet",
     "searchClauses": "Meklēt klauzulas...",
     "searchPlaceholder": "Meklēt klauzulas...",
-    "selectFile": "Atlasīt JSON failu",
     "selectVersionToCompare": "Atlasiet versiju, ko salīdzināt ar pašreizējo",
     "slotCustom": "Pielāgots slota nosaukums…",
     "slotHelp": "Slots ir nosaukta vieta dokumentā ('{{'@clause:name'}}'), kur, aizpildot veidni, tiek ievietota saistītā klauzula.",
@@ -1707,7 +1706,6 @@
       "skippedLimitReached": "Izlaists: sasniegts kontaktu limits"
     },
     "importStudio": {
-      "chooseFile": "Izvēlēties failu",
       "customFieldTarget": "Importēt kā pielāgotu lauku",
       "defaultType": "Izmantot šo tipu, ja failā nav kontaktpersonas tipa kolonnas",
       "delimiter": {
@@ -4423,7 +4421,6 @@
       "sourceFirm": "Birojs",
       "sourceParty": "Cita puse"
     },
-    "browseFiles": "Pārlūkot failus",
     "builtInLookupFormat": "Pamata formāts",
     "categoryDeleteConfirm": "Kategorija tiks noņemta. Veidnes šajā kategorijā kļūs nekategorizētas.",
     "categoryDeleteFailed": "Neizdevās dzēst kategoriju",

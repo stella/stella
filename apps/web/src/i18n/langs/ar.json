@@ -1234,7 +1234,6 @@
     "saveVersionAndLeave": "حفظ الإصدار والمغادرة",
     "searchClauses": "البحث في البنود...",
     "searchPlaceholder": "البحث في البنود...",
-    "selectFile": "اختر ملف JSON",
     "selectVersionToCompare": "اختر إصدارًا للمقارنة بالإصدار الحالي",
     "slotCustom": "اسم خانة مخصّص…",
     "slotHelp": "الخانة هي موضع مُسمّى في المستند ('{{'@clause:name'}}') يُدرَج فيه البند المرتبط عند تعبئة القالب.",
@@ -1707,7 +1706,6 @@
       "skippedLimitReached": "تم التخطي: تم الوصول للحد الأقصى لجهات الاتصال"
     },
     "importStudio": {
-      "chooseFile": "اختيار ملف",
       "customFieldTarget": "استيراد كحقل مخصص",
       "defaultType": "استخدام هذا النوع عندما لا يحتوي الملف على عمود لنوع جهة الاتصال",
       "delimiter": {
@@ -4423,7 +4421,6 @@
       "sourceFirm": "مكتب المحاماة",
       "sourceParty": "طرف آخر"
     },
-    "browseFiles": "تصفّح الملفات",
     "builtInLookupFormat": "التنسيق الأساسي",
     "categoryDeleteConfirm": "سيؤدي هذا إلى إزالة الفئة. ستصبح القوالب الموجودة في هذه الفئة غير مصنّفة.",
     "categoryDeleteFailed": "تعذّر حذف الفئة",

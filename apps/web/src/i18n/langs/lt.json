@@ -1234,7 +1234,6 @@
     "saveVersionAndLeave": "Išsaugoti versiją ir išeiti",
     "searchClauses": "Ieškoti sąlygų...",
     "searchPlaceholder": "Ieškoti sąlygų...",
-    "selectFile": "Pasirinkti JSON failą",
     "selectVersionToCompare": "Pasirinkite versiją, kurią norite palyginti su dabartine",
     "slotCustom": "Pasirinktinis nišos pavadinimas…",
     "slotHelp": "Niša – tai pavadinta vieta dokumente ('{{'@clause:name'}}'), į kurią užpildant šabloną įterpiama susieta sąlyga.",
@@ -1707,7 +1706,6 @@
       "skippedLimitReached": "Praleista: pasiektas kontaktų limitas"
     },
     "importStudio": {
-      "chooseFile": "Pasirinkti failą",
       "customFieldTarget": "Importuoti kaip pasirinktinį lauką",
       "defaultType": "Naudokite šį tipą, jei faile nėra kontakto tipo stulpelio",
       "delimiter": {
@@ -4423,7 +4421,6 @@
       "sourceFirm": "Kontora",
       "sourceParty": "Kita šalis"
     },
-    "browseFiles": "Naršyti failus",
     "builtInLookupFormat": "Pagrindinis formatas",
     "categoryDeleteConfirm": "Kategorija bus pašalinta. Šablonai šioje kategorijoje taps nekategorizuoti.",
     "categoryDeleteFailed": "Nepavyko ištrinti kategorijos",

@@ -489,7 +489,7 @@ const UploadStep = ({
         </span>
         <span className="text-muted-foreground flex items-center gap-1.5 text-sm">
           <UploadIcon className="size-4" />
-          {t("contacts.importStudio.chooseFile")}
+          {t("common.chooseFile")}
         </span>
       </button>
       <input

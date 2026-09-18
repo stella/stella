@@ -137,7 +137,7 @@ export const ClauseImportDialog = ({
               size="sm"
               variant="outline"
             >
-              {t("clauses.selectFile")}
+              {t("common.chooseFile")}
             </Button>
             <input
               accept=".json,.csv"

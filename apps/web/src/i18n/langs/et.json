@@ -1234,7 +1234,6 @@
     "saveVersionAndLeave": "Salvesta versioon ja lahku",
     "searchClauses": "Otsi klausleid...",
     "searchPlaceholder": "Otsi klausleid...",
-    "selectFile": "Vali JSON-fail",
     "selectVersionToCompare": "Vali praegusega võrreldav versioon",
     "slotCustom": "Kohandatud pesa nimi…",
     "slotHelp": "Pesa on dokumendis nimega koht ('{{'@clause:name'}}'), kuhu malli täitmisel lisatakse seotud klausel.",
@@ -1707,7 +1706,6 @@
       "skippedLimitReached": "Vahele jäetud: kontaktide piirmäär täis"
     },
     "importStudio": {
-      "chooseFile": "Vali fail",
       "customFieldTarget": "Impordi kohandatud väljana",
       "defaultType": "Kasuta seda tüüpi, kui failis pole kontakti tüübi veergu",
       "delimiter": {
@@ -4423,7 +4421,6 @@
       "sourceFirm": "Büroo",
       "sourceParty": "Muu osapool"
     },
-    "browseFiles": "Sirvi faile",
     "builtInLookupFormat": "Põhivorming",
     "categoryDeleteConfirm": "See eemaldab kategooria. Selles kategoorias olevad mallid muutuvad kategoriseerimata.",
     "categoryDeleteFailed": "Kategooria kustutamine ebaõnnestus",

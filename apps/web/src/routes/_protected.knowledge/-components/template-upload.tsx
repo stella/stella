@@ -206,7 +206,7 @@ export const TemplateUpload = ({
               variant="outline"
             >
               <UploadIcon />
-              {loading ? t("common.loading") : t("templates.browseFiles")}
+              {loading ? t("common.loading") : t("common.chooseFile")}
             </Button>
             <Button
               disabled={loading}
