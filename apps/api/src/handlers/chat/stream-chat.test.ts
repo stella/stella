@@ -57,6 +57,7 @@ import {
   HandlerError,
 } from "@/api/lib/errors/tagged-errors";
 import { logger } from "@/api/lib/observability/logger";
+import { abortControllerFromSignal } from "@/api/lib/tanstack-ai-generate";
 import { toUserFileUrl } from "@/api/lib/user-files/types";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
@@ -290,9 +291,25 @@ type ProcessedStreamFinishEvent = Parameters<
   Parameters<typeof processServerChatStream>[0]["onFinish"]
 >[0];
 
+/** The two signals `streamChat` hands the processor: the run's own, and the
+ *  metered provider deadline it was derived from. */
+type TurnSignals = {
+  abortSignal: AbortSignal;
+  deadlineSignal: AbortSignal;
+};
+
+const uncutTurnSignals = (): TurnSignals => {
+  const deadline = new AbortController();
+  return {
+    abortSignal: abortControllerFromSignal(deadline.signal).signal,
+    deadlineSignal: deadline.signal,
+  };
+};
+
 /** Run the loop's emission through the same persistence path as `streamChat`. */
 const persistNativeInterruptTurn = async (
   chunks: AsyncIterable<StreamChunk>,
+  signals: TurnSignals = uncutTurnSignals(),
 ) => {
   const messageId = toSafeId<"chatMessage">(
     "11111111-1111-4111-8111-111111111111",
@@ -318,7 +335,7 @@ const persistNativeInterruptTurn = async (
   };
   const emitted = await collectChunks(
     processServerChatStream({
-      abortSignal: new AbortController().signal,
+      ...signals,
       getResponseMessage: () => responseMessage,
       mapMessageId,
       onFinish: (event) => {
@@ -330,6 +347,149 @@ const persistNativeInterruptTurn = async (
   );
   return { emitted, finish: terminal.finish, source };
 };
+
+/**
+ * A turn that is cut while the model thinks about a tool result: the run is
+ * aborted, the provider request rejects, and the adapter reports that as its
+ * terminal `RUN_ERROR` — the shape the OpenRouter text adapter emits from its
+ * own catch. `cut` is whichever of the two aborts the caller is exercising.
+ */
+const createAbortedAfterToolCallAdapter = (cut: () => void): AnyTextAdapter => {
+  let iteration = 0;
+  return {
+    kind: "text",
+    name: "aborted-after-tool-call",
+    model: "aborted-after-tool-call",
+    "~types": {
+      providerOptions: {},
+      inputModalities: ["text"],
+      messageMetadataByModality: {},
+      toolCapabilities: [],
+      toolCallMetadata: {},
+      systemPromptMetadata: undefined,
+    },
+    async *chatStream({ model, runId, threadId }) {
+      iteration += 1;
+      const timestamp = Date.now();
+      const resolvedRunId = runId ?? "run-1";
+      const resolvedThreadId = threadId ?? "thread-1";
+      if (iteration > 1) {
+        // Reading the tool result, the model produces nothing for as long as
+        // it thinks; the run is cut first and the provider request rejects
+        // with the abort.
+        cut();
+        yield {
+          type: EventType.RUN_ERROR,
+          message: "Request aborted",
+          code: "aborted",
+          model,
+          timestamp,
+        } satisfies StreamChunk;
+        return;
+      }
+      yield {
+        type: EventType.RUN_STARTED,
+        runId: resolvedRunId,
+        threadId: resolvedThreadId,
+        model,
+        timestamp,
+      } satisfies StreamChunk;
+      yield {
+        type: EventType.TOOL_CALL_START,
+        toolCallId: "call-1",
+        toolCallName: "run-code",
+        parentMessageId: "provider-message-1",
+        timestamp,
+      } satisfies StreamChunk;
+      yield {
+        type: EventType.TOOL_CALL_ARGS,
+        toolCallId: "call-1",
+        delta: '{"source":"1 + 1"}',
+        model,
+        timestamp,
+      } satisfies StreamChunk;
+      yield {
+        type: EventType.TOOL_CALL_END,
+        toolCallId: "call-1",
+        timestamp,
+      } satisfies StreamChunk;
+      yield {
+        type: EventType.RUN_FINISHED,
+        runId: resolvedRunId,
+        threadId: resolvedThreadId,
+        finishReason: "tool_calls",
+        model,
+        timestamp,
+      } satisfies StreamChunk;
+    },
+    structuredOutput: () => {
+      throw new Error("Structured output is not part of this fixture");
+    },
+  };
+};
+
+/** Both causes reach the run's signal, so each is cut at its own origin: the
+ *  deadline at the source signal `streamChat` is handed, the disconnect at the
+ *  controller the response stream cancels. */
+type TurnCut = "deadline" | "disconnect";
+
+const persistCutTurn = async (cause: TurnCut) => {
+  const deadline = new AbortController();
+  const abortController = abortControllerFromSignal(deadline.signal);
+  const codeTool = toolDefinition({
+    name: "run-code",
+    description: "Server-executed code",
+    inputSchema: toTanStackToolSchema(v.object({ source: v.string() })),
+  }).server(async () => ({ value: 2 }));
+  return await persistNativeInterruptTurn(
+    chat({
+      abortController,
+      adapter: createAbortedAfterToolCallAdapter(() => {
+        if (cause === "deadline") {
+          deadline.abort("provider deadline");
+          return;
+        }
+        abortController.abort("client disconnected");
+      }),
+      agentLoopStrategy: maxIterations(3),
+      messages: [{ role: "user", content: "Add one and one" }],
+      threadId: "thread-1",
+      tools: [codeTool],
+    }),
+    { abortSignal: abortController.signal, deadlineSignal: deadline.signal },
+  );
+};
+
+describe("a turn cut while the model was thinking", () => {
+  test("settles as interrupted, not as a completion with no answer", async () => {
+    const { finish, source } = await persistCutTurn("disconnect");
+
+    // The fault this compensates for: the agent loop tests its cancellation
+    // before it reads each adapter chunk, so the terminal RUN_ERROR is
+    // dropped and the turn drains exactly like a finished one. If a future
+    // SDK forwards it, this expectation fails and the branch below can go.
+    expect(source.map((chunk) => chunk.type)).not.toContain(
+      EventType.RUN_ERROR,
+    );
+    expect(finish?.outcome).toEqual({
+      type: "interrupted",
+      reason: "client-disconnected",
+    });
+    // The tool call the model completed before the cut is still the turn's.
+    expect(finish?.responseMessage.parts.map((part) => part.type)).toContain(
+      "tool-call",
+    );
+  });
+
+  test("names the metered provider deadline as a timeout", async () => {
+    const { finish } = await persistCutTurn("deadline");
+
+    expect(finish?.outcome).toEqual({
+      type: "interrupted",
+      reason: "timeout",
+    });
+  });
+});
 
 describe("native interrupt boundary persistence", () => {
   test("persists a client-tool turn the loop pauses for, and awaits the client", async () => {
@@ -615,6 +775,7 @@ describe("outgoing chat stream message ids", () => {
         });
         const stream = processServerChatStream({
           abortSignal: new AbortController().signal,
+          deadlineSignal: new AbortController().signal,
           getResponseMessage: () => responseMessage,
           mapMessageId: createChatMessageIdMapper(() => messageId),
           onFinish: ({ outcome }) => {
@@ -959,6 +1120,7 @@ describe("outgoing chat stream message ids", () => {
     let persistedMessageId: string | undefined;
     const stream = processServerChatStream({
       abortSignal: new AbortController().signal,
+      deadlineSignal: new AbortController().signal,
       existingMessageIds: new Set([owningMessageId]),
       getResponseMessage: () => ({
         id: owningMessageId,
@@ -1078,6 +1240,7 @@ describe("outgoing chat stream message ids", () => {
     });
     const stream = processServerChatStream({
       abortSignal: new AbortController().signal,
+      deadlineSignal: new AbortController().signal,
       getResponseMessage: () => responseMessage,
       mapMessageId: createChatMessageIdMapper(() => messageId),
       onFinish: () => {
@@ -1156,6 +1319,7 @@ describe("outgoing chat stream message ids", () => {
     const persistedTexts: string[] = [];
     const stream = processServerChatStream({
       abortSignal: new AbortController().signal,
+      deadlineSignal: new AbortController().signal,
       getResponseMessage: () => responseMessage,
       mapMessageId: createChatMessageIdMapper(() => messageId),
       onFinish: ({ responseMessage: finishedMessage }) => {
@@ -1237,6 +1401,7 @@ describe("outgoing chat stream message ids", () => {
     let persistedToolCalls: { input: unknown; name: string }[] = [];
     const stream = processServerChatStream({
       abortSignal: new AbortController().signal,
+      deadlineSignal: new AbortController().signal,
       getResponseMessage: () => responseMessage,
       mapMessageId: createChatMessageIdMapper(() => messageId),
       onFinish: ({ responseMessage: finishedMessage }) => {
@@ -1394,6 +1559,7 @@ describe("outgoing chat stream message ids", () => {
     let persistedState: string | undefined;
     const stream = processServerChatStream({
       abortSignal: new AbortController().signal,
+      deadlineSignal: new AbortController().signal,
       getResponseMessage: () => responseMessage,
       mapMessageId: createChatMessageIdMapper(() => messageId),
       onFinish: ({ responseMessage: finishedMessage }) => {
@@ -1499,6 +1665,7 @@ describe("outgoing chat stream message ids", () => {
 
     const stream = processServerChatStream({
       abortSignal: abortController.signal,
+      deadlineSignal: new AbortController().signal,
       getResponseMessage: () => responseMessage,
       mapMessageId: createChatMessageIdMapper(() => messageId),
       onFinish: ({ outcome, responseMessage: finishedMessage }) => {
@@ -1562,6 +1729,7 @@ describe("outgoing chat stream message ids", () => {
     const outcomes: string[] = [];
     const stream = processServerChatStream({
       abortSignal: new AbortController().signal,
+      deadlineSignal: new AbortController().signal,
       getResponseMessage: () => null,
       mapMessageId: createChatMessageIdMapper(() => messageId),
       onFinish: ({ outcome }) => {
@@ -1615,6 +1783,7 @@ describe("outgoing chat stream message ids", () => {
     });
     const stream = processServerChatStream({
       abortSignal: new AbortController().signal,
+      deadlineSignal: new AbortController().signal,
       getResponseMessage: () => null,
       mapMessageId: createChatMessageIdMapper(() => messageId),
       onFinish: ({ outcome }) => {
@@ -1652,6 +1821,7 @@ describe("outgoing chat stream message ids", () => {
     try {
       const stream = processServerChatStream({
         abortSignal: new AbortController().signal,
+        deadlineSignal: new AbortController().signal,
         getResponseMessage: () => null,
         mapMessageId: createChatMessageIdMapper(() => messageId),
         onFinish: () => undefined,
@@ -1686,6 +1856,7 @@ describe("outgoing chat stream message ids", () => {
     try {
       const stream = processServerChatStream({
         abortSignal: new AbortController().signal,
+        deadlineSignal: new AbortController().signal,
         getResponseMessage: () => null,
         mapMessageId: createChatMessageIdMapper(() => messageId),
         onFinish: () => undefined,
@@ -1725,6 +1896,7 @@ describe("outgoing chat stream message ids", () => {
     const outcomes: string[] = [];
     const stream = processServerChatStream({
       abortSignal: new AbortController().signal,
+      deadlineSignal: new AbortController().signal,
       getResponseMessage: () => null,
       mapMessageId: createChatMessageIdMapper(() => messageId),
       onFinish: ({ outcome }) => {
@@ -1764,6 +1936,7 @@ describe("outgoing chat stream message ids", () => {
     const outcomes: string[] = [];
     const stream = processServerChatStream({
       abortSignal: new AbortController().signal,
+      deadlineSignal: new AbortController().signal,
       getResponseMessage: () => null,
       mapMessageId: createChatMessageIdMapper(() => messageId),
       onFinish: ({ outcome }) => {
@@ -1794,6 +1967,7 @@ describe("outgoing chat stream message ids", () => {
     const outcomes: string[] = [];
     const stream = processServerChatStream({
       abortSignal: new AbortController().signal,
+      deadlineSignal: new AbortController().signal,
       getResponseMessage: () => null,
       mapMessageId: createChatMessageIdMapper(() => messageId),
       onFinish: ({ outcome }) => {
@@ -1824,6 +1998,7 @@ describe("outgoing chat stream message ids", () => {
     const outcomes: string[] = [];
     const stream = processServerChatStream({
       abortSignal: new AbortController().signal,
+      deadlineSignal: new AbortController().signal,
       getResponseMessage: () => null,
       mapMessageId: createChatMessageIdMapper(() => messageId),
       onFinish: ({ outcome }) => {
@@ -1913,6 +2088,7 @@ describe("chat stream client-disconnect persistence", () => {
 
     const stream = processServerChatStream({
       abortSignal,
+      deadlineSignal: new AbortController().signal,
       getResponseMessage,
       mapMessageId: createChatMessageIdMapper(() => messageId),
       onFinish: ({ outcome, responseMessage }) => {
@@ -1988,6 +2164,7 @@ describe("chat stream client-disconnect persistence", () => {
     });
     const stream = processServerChatStream({
       abortSignal: new AbortController().signal,
+      deadlineSignal: new AbortController().signal,
       flushPendingSource: persistenceVisible.flushPending,
       getResponseMessage: () => responseMessage,
       mapMessageId: createChatMessageIdMapper(() => messageId),
@@ -2021,6 +2198,7 @@ describe("chat stream client-disconnect persistence", () => {
 
     const stream = processServerChatStream({
       abortSignal: new AbortController().signal,
+      deadlineSignal: new AbortController().signal,
       getResponseMessage,
       mapMessageId: createChatMessageIdMapper(() => messageId),
       onFinish: () => {
@@ -2062,6 +2240,7 @@ describe("chat stream client-disconnect persistence", () => {
 
     const stream = processServerChatStream({
       abortSignal: new AbortController().signal,
+      deadlineSignal: new AbortController().signal,
       getResponseMessage,
       mapMessageId: createChatMessageIdMapper(() => messageId),
       onFinish: ({ outcome }) => {
@@ -2144,6 +2323,7 @@ describe("streamed chat message conversion", () => {
     await collectChunks(
       processServerChatStream({
         abortSignal: new AbortController().signal,
+        deadlineSignal: new AbortController().signal,
         getResponseMessage: () => responseMessage,
         mapMessageId: createChatMessageIdMapper(() => messageId),
         onFinish: ({ outcome }) => {
@@ -2181,6 +2361,7 @@ describe("streamed chat message conversion", () => {
 
     const stream = processServerChatStream({
       abortSignal: new AbortController().signal,
+      deadlineSignal: new AbortController().signal,
       getResponseMessage: () => responseMessage,
       mapMessageId: createChatMessageIdMapper(() => messageId),
       onFinish: ({ outcome }) => {
@@ -2505,6 +2686,7 @@ describe("chat stream refs", () => {
     });
     const processed = processServerChatStream({
       abortSignal: new AbortController().signal,
+      deadlineSignal: new AbortController().signal,
       getResponseMessage: () => responseMessage,
       mapMessageId: createChatMessageIdMapper(() => messageId),
       onFinish: ({ responseMessage: terminalMessage }) => {

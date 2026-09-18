@@ -17,7 +17,7 @@ import {
   readDesktopEditSessionEventState,
   refreshDesktopEditSessionLiveness,
 } from "@/api/lib/desktop-edit-sessions";
-import { registerSessionDelivery } from "@/api/lib/sse";
+import { registerSessionDelivery, sseResponse } from "@/api/lib/sse";
 
 const SESSION_TOKEN_LENGTH = 64;
 const BEARER_PREFIX = "Bearer ";
@@ -206,7 +206,7 @@ export const desktopEditSessionEventsHandler = async (
     });
   };
 
-  const stream = new ReadableStream({
+  const stream = new ReadableStream<Uint8Array>({
     start(controller) {
       livenessRefreshTimer = setInterval(
         refreshLivenessInBackground,
@@ -253,13 +253,7 @@ export const desktopEditSessionEventsHandler = async (
     },
   });
 
-  return new Response(stream, {
-    headers: {
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache",
-      Connection: "keep-alive",
-    },
-  });
+  return sseResponse(stream);
 };
 
 /**

@@ -22,6 +22,7 @@ import { proposeReviewPositionsBodySchema } from "@/api/handlers/document-review
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { pinProposedPositions } from "@/api/lib/document-review/reference-passages";
+import { sseResponse } from "@/api/lib/sse";
 
 const config = {
   description:
@@ -168,16 +169,7 @@ const proposePositionsStream = createSafeHandler(
       },
     });
 
-    return Result.ok(
-      new Response(sse, {
-        status: 200,
-        headers: {
-          "content-type": "text/event-stream; charset=utf-8",
-          "cache-control": "no-cache, no-transform",
-          "x-accel-buffering": "no",
-        },
-      }),
-    );
+    return Result.ok(sseResponse(sse));
   },
 );
 

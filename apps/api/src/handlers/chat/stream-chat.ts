@@ -145,6 +145,7 @@ import type { ChatTerminalError } from "@/api/lib/errors/tagged-errors";
 import { errorFingerprint } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
 import { providerSafeJsonSchemaOptionsForTanStackProvider } from "@/api/lib/provider-safe-json-schema";
+import { withSseHeartbeat } from "@/api/lib/sse";
 import {
   abortControllerFromSignal,
   mergeGenerationOptions,
@@ -532,7 +533,11 @@ export const streamChat = async ({
     source: stream,
   });
   const processedStream = processServerChatStream({
-    abortSignal,
+    // The run's own signal, not the deadline's. Cancelling the response stream
+    // aborts only this derived controller — that is the abort a client
+    // disconnect delivers — while the deadline reaches both.
+    abortSignal: abortController.signal,
+    deadlineSignal: abortSignal,
     existingMessageIds: new Set(preparedMessageList.map(({ id }) => id)),
     flushPendingSource: persistenceVisibleStream.flushPending,
     preservedTerminalMessageId: owningAssistantMessageId,
@@ -550,7 +555,9 @@ export const streamChat = async ({
     source: processedStream,
   });
 
-  return toServerSentEventsResponse(output, { abortController });
+  return withSseHeartbeat(
+    toServerSentEventsResponse(output, { abortController }),
+  );
 };
 
 const thirdPartyBoundaryRefusalResponse = (
@@ -1357,7 +1364,13 @@ const createChatRuntimeMiddleware = ({
 };
 
 type ProcessServerChatStreamProps = {
+  /** The run's own signal: aborted by the provider deadline below *and* by the
+   *  response stream's cancel, which is how a client disconnect arrives. */
   abortSignal: AbortSignal;
+  /** The metered provider deadline the caller set for this turn. It is the
+   *  only one of the two causes that reaches this signal, so it is what tells
+   *  a deadline apart from a disconnect. */
+  deadlineSignal: AbortSignal;
   existingMessageIds?: ReadonlySet<string> | undefined;
   flushPendingSource?: (() => PublicStreamChunk[]) | undefined;
   getResponseMessage: () => ChatMessage | null;
@@ -1367,6 +1380,22 @@ type ProcessServerChatStreamProps = {
   processor: StreamProcessor;
   source: AsyncIterable<PublicStreamChunk>;
 };
+
+type ChatInterruptionReason = Extract<
+  ChatTurnOutcome,
+  { type: "interrupted" }
+>["reason"];
+
+/**
+ * Which of the two aborts cut this run. Both reach the run's signal, so the
+ * deadline is what has to be asked: it fires on its own timer and nothing
+ * else touches it, while a response-stream cancel aborts only the controller
+ * derived from it.
+ */
+const chatInterruptionReason = (
+  deadlineSignal: AbortSignal,
+): ChatInterruptionReason =>
+  deadlineSignal.aborted ? "timeout" : "client-disconnected";
 
 type RunErrorChunk = Extract<PublicStreamChunk, { type: EventType.RUN_ERROR }>;
 
@@ -1510,6 +1539,7 @@ const restoreInterruptedToolCallInputs = (
 
 export const processServerChatStream = async function* ({
   abortSignal,
+  deadlineSignal,
   existingMessageIds = new Set(),
   flushPendingSource,
   getResponseMessage,
@@ -1706,15 +1736,30 @@ export const processServerChatStream = async function* ({
     let outcome: ChatTurnOutcome;
     if (incompleteClientInteraction) {
       outcome = { type: "failed", error: "unknown" };
-    } else if (awaitingUserInteraction === null) {
-      outcome = { type: "completed" };
-    } else {
+    } else if (awaitingUserInteraction !== null) {
       outcome = {
         type: "awaiting-user",
         interaction: awaitingUserInteraction,
       };
+    } else if (abortSignal.aborted) {
+      // A cancelled run drains like a finished one. TanStack's agent loop
+      // checks its cancellation before it reads each adapter chunk, so the
+      // terminal `RUN_ERROR` the adapter yields for the aborted provider
+      // request is dropped rather than forwarded, and this generator sees a
+      // source that simply ended. Grading that silence as a completion
+      // persists a turn with no answer and no reason; the signal is what says
+      // the turn was cut, and which signal says why.
+      outcome = {
+        type: "interrupted",
+        reason: chatInterruptionReason(deadlineSignal),
+      };
+    } else {
+      outcome = { type: "completed" };
     }
     await terminalize({
+      // An interrupted outcome flushes the pending source into the processor,
+      // which has to be finalized again for that content to reach the message.
+      flushProcessor: outcome.type === "interrupted",
       outcome,
     });
     for (const chunk of finalRunFinishedChunks) {
@@ -1729,7 +1774,10 @@ export const processServerChatStream = async function* ({
       captureError(error, { kind });
       await terminalize({
         flushProcessor: true,
-        outcome: { type: "interrupted", reason: "timeout" },
+        outcome: {
+          type: "interrupted",
+          reason: chatInterruptionReason(deadlineSignal),
+        },
       });
     } else {
       reportStreamFailure(error, kind);

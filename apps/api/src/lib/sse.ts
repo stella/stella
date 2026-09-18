@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
 import type {
   DesktopEditSessionRealtimeEvent,
@@ -6,9 +6,11 @@ import type {
   UserRealtimeEvent,
   WorkspaceRealtimeEvent,
 } from "@stll/api-contract";
+import { SSE_HEARTBEAT_FRAME } from "@stll/api-contract/sse-heartbeat";
 
 import type { SafeId } from "@/api/lib/branded-types";
 import { connectionErrorFields, errorTag } from "@/api/lib/errors/utils";
+import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
 import { createRedisClient } from "@/api/lib/redis-client";
 import {
@@ -88,7 +90,163 @@ const formatSSE = (
   return encoder.encode(`data: ${payload}\n\n`);
 };
 
-const formatKeepAlive = (): Uint8Array => encoder.encode(`:keep-alive\n\n`);
+/**
+ * One keep-alive frame, written by the two things that keep a stream alive:
+ * the registry sweep below, whose purpose is the sweep itself — a connection
+ * whose enqueue fails is dropped from the routing table — and the response
+ * heartbeat further down, which owns wire liveness for every event stream.
+ */
+const HEARTBEAT_CHUNK = encoder.encode(SSE_HEARTBEAT_FRAME);
+
+// ── Response heartbeat ──────────────────────────────────
+//
+// Every `text/event-stream` response this service serves, and the timer that
+// keeps one writing while its producer is silent.
+//
+// An event stream that goes quiet is indistinguishable from a dead connection
+// to everything between this process and the browser. The CDN and the load
+// balancer in front of it both give up after 60 s without a byte, and a chat
+// turn whose model thinks through a tool result produces no events for longer
+// than that: the edge drops the connection mid-turn, the provider request is
+// aborted, and the answer is lost. The frames written here are comments the
+// event-stream grammar tells every reader to ignore, so they reset those idle
+// timers without adding an event.
+//
+// `sseResponse` builds a stream this service authors; `withSseHeartbeat` wraps
+// one a library produced. Both are the same writer, so an event stream cannot
+// be served without it.
+
+const SSE_MEDIA_TYPE = "text/event-stream";
+
+/**
+ * `no-store` and `no-transform` together: an intermediary must neither keep a
+ * copy of a per-request stream nor buffer or recode it, and `x-accel-buffering`
+ * says the same to a reverse proxy that reads it.
+ */
+const SSE_HEADERS = {
+  "cache-control": "no-cache, no-store, no-transform",
+  connection: "keep-alive",
+  "content-type": SSE_MEDIA_TYPE,
+  "x-accel-buffering": "no",
+} as const;
+
+/**
+ * Whether a response another layer produced is an event stream, read off the
+ * media type alone: the parameters after it (`; charset=utf-8`) are not part
+ * of the answer.
+ */
+export const isEventStreamResponse = (response: Response): boolean =>
+  response.headers
+    .get("content-type")
+    ?.split(";")
+    .at(0)
+    ?.trim()
+    .toLowerCase() === SSE_MEDIA_TYPE;
+
+type HeartbeatState = "closed" | "open";
+
+/**
+ * The reader's owner is the stream returned below: it holds the lock for the
+ * whole response and gives it up by reading to EOF or by cancelling, both of
+ * which end the source.
+ */
+const takeStreamReaderOwnership = <T>(body: ReadableStream<T>) =>
+  body.getReader();
+
+const withHeartbeatFrames = (
+  source: ReadableStream<Uint8Array>,
+): ReadableStream<Uint8Array> => {
+  const reader = takeStreamReaderOwnership(source);
+  let state: HeartbeatState = "open";
+  let timer: ReturnType<typeof setTimeout> | undefined;
+
+  const disarm = (): void => {
+    if (timer !== undefined) {
+      clearTimeout(timer);
+      timer = undefined;
+    }
+  };
+  const closeHeartbeat = (): void => {
+    state = "closed";
+    disarm();
+  };
+  // Armed from the last byte written, not on a fixed schedule: a stream that is
+  // producing already keeps the connection busy and must not be padded.
+  const arm = (
+    controller: ReadableStreamDefaultController<Uint8Array>,
+  ): void => {
+    disarm();
+    timer = setTimeout(() => {
+      timer = undefined;
+      if (state === "closed") {
+        return;
+      }
+      controller.enqueue(HEARTBEAT_CHUNK);
+      arm(controller);
+    }, LIMITS.sseHeartbeatMs);
+  };
+
+  return new ReadableStream<Uint8Array>({
+    start: (controller) => {
+      arm(controller);
+    },
+    pull: async (controller) => {
+      const result = await Result.tryPromise({
+        try: async () => await reader.read(),
+        catch: (cause) => cause,
+      });
+      if (Result.isError(result)) {
+        closeHeartbeat();
+        controller.error(result.error);
+        return;
+      }
+      // The consumer can cancel while that read is outstanding, and a
+      // cancelled stream rejects both `close` and `enqueue`.
+      if (state === "closed") {
+        return;
+      }
+      if (result.value.done) {
+        closeHeartbeat();
+        controller.close();
+        return;
+      }
+      controller.enqueue(result.value.value);
+      arm(controller);
+    },
+    cancel: async (reason) => {
+      closeHeartbeat();
+      // The producer learns the consumer left through its own `cancel`: for the
+      // chat stream that is what aborts the provider request.
+      await reader.cancel(reason);
+    },
+  });
+};
+
+/**
+ * Serve a stream this service authors as Server-Sent Events. Owns the response
+ * headers as well as the heartbeat, so an event stream cannot be served with a
+ * cacheable or buffered one.
+ */
+export const sseResponse = (body: ReadableStream<Uint8Array>): Response =>
+  new Response(withHeartbeatFrames(body), { headers: SSE_HEADERS });
+
+/**
+ * Add the heartbeat to an event-stream `Response` built elsewhere: the chat
+ * stream, which a library encodes and whose cancel path aborts the provider,
+ * and the MCP transport, which owns its own body. Status, status text, and
+ * headers carry over untouched.
+ */
+export const withSseHeartbeat = (response: Response): Response => {
+  const body =
+    response.body ?? panic("Event-stream response was built without a body");
+  return new Response(withHeartbeatFrames(body), {
+    headers: response.headers,
+    status: response.status,
+    statusText: response.statusText,
+  });
+};
+
+// ── Connection registry ─────────────────────────────────
 
 /**
  * Close one stream controller best-effort. `close()` throws for a controller
@@ -144,8 +302,8 @@ export const subscribe = ({
   signal,
   userId,
   workspaceId,
-}: SubscribeOptions): ReadableStream => {
-  const stream = new ReadableStream({
+}: SubscribeOptions): ReadableStream<Uint8Array> => {
+  const stream = new ReadableStream<Uint8Array>({
     start(controller) {
       // The request signal can already be aborted here: the async auth
       // macro that runs before subscribe() awaits, and the client can
@@ -199,8 +357,8 @@ export const subscribeUser = ({
   organizationId,
   signal,
   userId,
-}: SubscribeUserOptions): ReadableStream => {
-  const stream = new ReadableStream({
+}: SubscribeUserOptions): ReadableStream<Uint8Array> => {
+  const stream = new ReadableStream<Uint8Array>({
     start(controller) {
       // Same hazard as `subscribe`: the async auth macro awaits before this
       // runs, so the client may already be gone and an aborted signal never
@@ -802,7 +960,7 @@ export const broadcastSessionEvent = (
 // ── Keep-alive heartbeat ────────────────────────────────
 
 const sendKeepAlive = () => {
-  const chunk = formatKeepAlive();
+  const chunk = HEARTBEAT_CHUNK;
 
   for (const [workspaceId, set] of connections) {
     for (const conn of set) {
