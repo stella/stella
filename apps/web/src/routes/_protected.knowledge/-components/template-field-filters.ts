@@ -24,6 +24,7 @@ import {
 } from "@stll/template-conditions";
 import type {
   FilterCall,
+  MarkerForm,
   MarkerMeta,
   MarkerPrefix,
   RowScope,
@@ -179,8 +180,8 @@ const scanDirectives = ({
       scanned.push({ from, to, raw, meta, prefix, scopedPath });
       continue;
     }
-    // Only a tag that names one path can carry that path's rule: an expression
-    // the author already wrote is the document's, not a field's.
+    // Only a tag that names one path can carry that path's configuration: an
+    // expression the author already wrote is the document's, not a field's.
     if (
       (meta.kind === "if" || meta.kind === "elif") &&
       isFieldPath(meta.expr)
@@ -196,8 +197,9 @@ const scanDirectives = ({
  * The edits that put the session's field configuration into the document: the
  * value marker of every configured path, the `{% for %}` opener of every
  * configured repeat, the markers that render a registry hit for the field that
- * lookup fills, and the `{% if %}` / `{% elif %}` tag of a rule with no marker
- * of its own. Markers whose text is unchanged are skipped, so a save that
+ * lookup fills, and the `{% if %}` / `{% elif %}` tag of a condition with no
+ * marker of its own — its rule, or what to call the question and how the model
+ * should answer it. Markers whose text is unchanged are skipped, so a save that
  * changed nothing rewrites nothing.
  *
  * Where a configuration goes is the reading the server applies when it writes
@@ -240,15 +242,28 @@ export const markerConfigRewrites = ({
   const placed = new Set<string>();
   const unplaced: UnplacedField[] = [];
 
+  /** Which half of a field's configuration a marker carries: a `{% for %}`
+   *  opener declares the REPEAT, every other marker the value. */
+  type ChainScope = "array" | "value";
+
+  type FieldChainOptions = {
+    field: StudioField;
+    /** The brace pair the chain is written in. A tag carries no quoted text,
+     *  so a brace in one of its arguments has no spelling there; a value
+     *  marker's arguments carry anything. */
+    form: MarkerForm;
+    scope: ChainScope;
+  };
+
   /** The chain a field writes into this marker, or nothing when the grammar
-   *  cannot spell one of its values there. A repeat's chain goes in a tag,
-   *  which carries no quoted text; a value marker's arguments carry anything. */
-  const chainFor = (
-    field: StudioField,
-    form: "output" | "statement",
-  ): FilterCall[] | null => {
+   *  cannot spell one of its values there. */
+  const chainFor = ({
+    field,
+    form,
+    scope,
+  }: FieldChainOptions): FilterCall[] | null => {
     const filters =
-      form === "statement" ? arrayFieldFilters(field) : fieldFilters(field);
+      scope === "array" ? arrayFieldFilters(field) : fieldFilters(field);
     const refused = unwritableFilterValues(filters, form).at(0);
     if (refused === undefined) {
       return filters;
@@ -264,14 +279,43 @@ export const markerConfigRewrites = ({
   const rewrites = scanned.flatMap(
     ({ from, to, meta, prefix, raw, scopedPath }) => {
       if (meta.kind === "if" || meta.kind === "elif") {
-        // A field the document also prints keeps its rule in its own marker's
-        // condition() filter, so the tag goes on naming it.
+        // A field the document also prints keeps its configuration in its own
+        // marker's chain, so the tag goes on naming it bare.
         if (markerPaths.has(scopedPath)) {
           return [];
         }
         const field = byPath.get(scopedPath);
-        const rule = field === undefined ? null : fieldRule(field);
-        if (rule?.kind !== "expression") {
+        if (field === undefined) {
+          return [];
+        }
+        const rule = fieldRule(field);
+        // A rule decides the answer, so the tag evaluates it and asks nothing:
+        // a computed condition has no label or prompt to carry.
+        if (rule.kind === "expression") {
+          placed.add(scopedPath);
+          return rewriteTo(
+            { from, to },
+            raw,
+            renderConditionTag({
+              kind: meta.kind,
+              expression: rule.expression,
+              filters: [],
+              prefix,
+            }),
+          );
+        }
+        if (rule.kind === "unspellable") {
+          return [];
+        }
+        // A question the document only asks has no value marker, so the tag is
+        // where its label and its prompt live. A tag that carries nothing and
+        // a field that says nothing stay as the author wrote them, so opening
+        // a template does not rewrite every `{% if %}` in it.
+        if (meta.filters.length === 0 && !carriesConfiguration(field)) {
+          return [];
+        }
+        const filters = chainFor({ field, form: "statement", scope: "value" });
+        if (filters === null) {
           return [];
         }
         placed.add(scopedPath);
@@ -280,7 +324,8 @@ export const markerConfigRewrites = ({
           raw,
           renderConditionTag({
             kind: meta.kind,
-            expression: rule.expression,
+            expression: meta.expr,
+            filters,
             prefix,
           }),
         );
@@ -291,7 +336,7 @@ export const markerConfigRewrites = ({
           return [];
         }
         placed.add(scopedPath);
-        const filters = chainFor(field, "statement");
+        const filters = chainFor({ field, form: "statement", scope: "array" });
         if (filters === null) {
           return [];
         }
@@ -317,7 +362,7 @@ export const markerConfigRewrites = ({
         return [];
       }
       placed.add(field.path);
-      const filters = chainFor(field, "output");
+      const filters = chainFor({ field, form: "output", scope: "value" });
       if (filters === null) {
         return [];
       }

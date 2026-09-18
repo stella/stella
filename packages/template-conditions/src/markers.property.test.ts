@@ -93,14 +93,14 @@ const ifMarker: fc.Arbitrary<AuthoredMarker> = fc
   .tuple(fc.constantFrom(...CONDITIONS), prefix)
   .map(([expr, tag]) => ({
     text: `{%${tag === "" ? " " : tag}if ${expr} %}`,
-    meta: { kind: "if", expr } satisfies MarkerMeta,
+    meta: { kind: "if", expr, filters: [] } satisfies MarkerMeta,
   }));
 
 const elifMarker: fc.Arbitrary<AuthoredMarker> = fc
   .tuple(fc.constantFrom(...CONDITIONS), prefix)
   .map(([expr, tag]) => ({
     text: `{%${tag === "" ? " " : tag}elif ${expr} %}`,
-    meta: { kind: "elif", expr } satisfies MarkerMeta,
+    meta: { kind: "elif", expr, filters: [] } satisfies MarkerMeta,
   }));
 
 const elseMarker: fc.Arbitrary<AuthoredMarker> = prefix.map((tag) => ({

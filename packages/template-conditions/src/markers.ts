@@ -53,8 +53,15 @@ export type MarkerMeta =
   | { kind: "num"; key: string }
   | { kind: "ref"; key: string }
   | { kind: "loop"; property: LoopProperty }
-  | { kind: "if"; expr: string }
-  | { kind: "elif"; expr: string }
+  | {
+      kind: "if";
+      expr: string;
+      /** Filters on a tag whose whole body is one field path configure THAT
+       *  boolean: a question the document only asks has no value marker to
+       *  carry a chain. A tag holding a real expression carries none. */
+      filters: readonly FilterCall[];
+    }
+  | { kind: "elif"; expr: string; filters: readonly FilterCall[] }
   | { kind: "else" }
   | { kind: "endif" }
   | {
@@ -541,6 +548,34 @@ const TAG_RE = /^(?<tag>[\p{L}_][\p{L}\p{N}_]*)\b(?<rest>[\s\S]*)$/u;
 const FOR_RE =
   /^(?<alias>[\p{L}_][\p{L}\p{N}_-]*)\s+in\s+(?<path>[\p{L}\p{N}_.-]+)\s*(?<filters>\|[\s\S]*)?$/u;
 const CALL_RE = /^(?<name>[\p{L}_][\p{L}\p{N}_]*)\s*\(/u;
+const CONDITION_RE = /^(?<path>[\p{L}\p{N}_.-]+)\s*(?<filters>\|[\s\S]*)$/u;
+
+/**
+ * Read an `{% if %}` / `{% elif %}` body: one field path plus the chain that
+ * configures the boolean it names, or an expression the author wrote.
+ *
+ * A tail the filter catalogue does not read is part of that expression
+ * (`items|length > 0`), never a configuration, so the body stays verbatim
+ * rather than being rejected: a tag the grammar refuses would take its whole
+ * block with it.
+ */
+const readConditionBody = (
+  rest: string,
+): { expr: string; filters: readonly FilterCall[] } => {
+  const match = CONDITION_RE.exec(rest);
+  if (!match) {
+    return { expr: rest, filters: [] };
+  }
+  const chain = scanFilterChain(match.groups?.["filters"] ?? "");
+  if (
+    chain === null ||
+    "unknownFilter" in chain ||
+    chain.filters.length === 0
+  ) {
+    return { expr: rest, filters: [] };
+  }
+  return { expr: match.groups?.["path"] ?? rest, filters: chain.filters };
+};
 
 /** Classify a `{% ... %}` tag. */
 const classifyStatement = (inner: string): MarkerMeta | null => {
@@ -551,10 +586,14 @@ const classifyStatement = (inner: string): MarkerMeta | null => {
   const tag = match.groups?.["tag"] ?? "";
   const rest = (match.groups?.["rest"] ?? "").trim();
   switch (tag) {
-    case "if":
-      return { kind: "if", expr: rest };
-    case "elif":
-      return { kind: "elif", expr: rest };
+    case "if": {
+      const { expr, filters } = readConditionBody(rest);
+      return { kind: "if", expr, filters };
+    }
+    case "elif": {
+      const { expr, filters } = readConditionBody(rest);
+      return { kind: "elif", expr, filters };
+    }
     case "else":
       return rest === "" ? { kind: "else" } : null;
     case "endif":
