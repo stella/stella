@@ -334,17 +334,6 @@ describe("Dependabot changeset decision", () => {
       "major-change",
     ],
     [
-      "a runtime minor bump below 1.0.0",
-      {
-        ...basePackage,
-        dependencies: {
-          ...basePackage.dependencies,
-          "tailwind-merge": "^0.7.0",
-        },
-      },
-      "major-change",
-    ],
-    [
       "a runtime range the fixer cannot compare",
       {
         ...basePackage,
@@ -382,12 +371,12 @@ describe("Dependabot changeset decision", () => {
     expect(decideSingle(head)).toEqual({ status: "refuse", reason });
   });
 
-  test("refuses a runtime bump below 1.0.0 only when its minor moves", () => {
+  describe("a runtime bump below 1.0.0", () => {
     const base = {
       ...basePackage,
       dependencies: { "@stll/ui": "workspace:^", lib: "^0.6.0" },
     };
-    expect(
+    const decideBump = (range: string) =>
       decide({
         changedFiles: [workspaceUiManifest],
         manifests: [
@@ -396,19 +385,29 @@ describe("Dependabot changeset decision", () => {
             base: json(base),
             head: json({
               ...base,
-              dependencies: { ...base.dependencies, lib: "^0.6.4" },
+              dependencies: { ...base.dependencies, lib: range },
             }),
           }),
         ],
-      }),
-    ).toEqual({
-      status: "create",
-      entries: [
-        {
-          packageName: "@stll/workspace-ui",
-          updates: [{ name: "lib", range: "^0.6.4" }],
-        },
-      ],
+      });
+
+    test("is a patch changeset when only the patch moves", () => {
+      expect(decideBump("^0.6.4")).toEqual({
+        status: "create",
+        entries: [
+          {
+            packageName: "@stll/workspace-ui",
+            updates: [{ name: "lib", range: "^0.6.4" }],
+          },
+        ],
+      });
+    });
+
+    test("is refused when the minor moves", () => {
+      expect(decideBump("^0.7.0")).toEqual({
+        status: "refuse",
+        reason: "major-change",
+      });
     });
   });
 
