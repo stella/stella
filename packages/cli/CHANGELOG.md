@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 1.11.0
+
+### Minor Changes
+
+- [#3554](https://github.com/stella/stella/pull/3554) [`2d013c9`](https://github.com/stella/stella/commit/2d013c931f26a85b8c92c7300409670fd4d721f0) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Removes `stella capability tasks list`; `stella task list` lists tasks across matters.
+
 ## 1.10.0
 
 ### Minor Changes
