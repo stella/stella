@@ -558,6 +558,15 @@
       "written_off": "مشطوب"
     },
     "stopTimer": "إيقاف",
+    "suggestions": {
+      "actionCount": "{count, plural, zero {لا إجراءات} one {إجراء واحد} two {إجراءان} few {# إجراءات} many {# إجراءً} other {# إجراء}}",
+      "activeVsLogged": "{active} نشاط · {logged} مُسجَّلة",
+      "chatEvidence": "{count, plural, zero {لا رسائل} one {رسالة واحدة} two {رسالتان} few {# رسائل} many {# رسالة} other {# رسالة}} في محادثة «{title}»",
+      "keyboardHint": "مفتاح Enter يقبل، و E يحرّر قبل القبول، و Delete يستبعد",
+      "privacyNote": "أنت وحدك من يرى هذه المقترحات. لا يُسجَّل أي شيء حتى تقبله.",
+      "title": "مقترحات من نشاطك",
+      "unnamedRecord": "سجل في الملف القانوني"
+    },
     "timerActive": "المؤقّت قيد التشغيل",
     "timesheets": "سجلات الوقت",
     "total": "الإجمالي",
@@ -1351,6 +1360,7 @@
     "description": "الوصف",
     "details": "التفاصيل",
     "disconnect": "قطع الاتصال",
+    "dismiss": "تجاهل",
     "displayName": "الاسم المعروض",
     "document": "مستند",
     "documentName": "اسم المستند",
@@ -1531,6 +1541,7 @@
     "status": "الحالة",
     "stepCount": "{count, plural, zero {# خطوة} one {# خطوة} two {# خطوتان} few {# خطوات} many {# خطوة} other {# خطوة}}",
     "stepProgress": "{current} من {total}",
+    "suggested": "اقتراح",
     "summarizeChanges": "تلخيص التغييرات",
     "timeBilling": "الوقت والفوترة",
     "today": "اليوم",
@@ -2272,7 +2283,6 @@
     "deleteRow": "حذف الصف",
     "deleted": "محذوف",
     "discardChanges": "تجاهل",
-    "dismiss": "تجاهل",
     "displayText": "النص المعروض",
     "doneEditing": "تم التعديل",
     "doubleClickFooter": "انقر نقرًا مزدوجًا لإضافة تذييل الصفحة",
@@ -2788,7 +2798,6 @@
         "dismissed": "مستبعد"
       },
       "description": "اختر دليل مراجعة مُعدًا أو مستندات مرجعية أو كليهما.",
-      "dismiss": "استبعاد",
       "documentChanged": "تغيّر هذا المستند بعد هذه المراجعة.",
       "export": {
         "counterparty": "تنزيل للطرف المقابل",
@@ -3514,7 +3523,6 @@
     "jurisdictionSearchLabel": "البحث في الدول",
     "jurisdictionSearchPlaceholder": "البحث في الدول",
     "jurisdictionSubtitle": "اختر الدول التي تمارس فيها عملك. ستخصص stella إجابات الذكاء الاصطناعي وتعرض المصادر المتاحة: الاجتهاد القضائي والتشريعات والسجلات التجارية.",
-    "jurisdictionSuggested": "مقترَحة",
     "jurisdictionTitle": "اختر ولاياتك القضائية للممارسة",
     "mcpCardDescription": "أضف stella كإضافة ليتمكن مساعدك من البحث في ملفاتك القانونية والعمل مع مستنداتك. يستغرق الإعداد نحو دقيقة.",
     "mcpCardTitle": "استخدم stella من Claude أو ChatGPT",

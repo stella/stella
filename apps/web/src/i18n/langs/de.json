@@ -558,6 +558,15 @@
       "written_off": "Abgeschrieben"
     },
     "stopTimer": "Stoppen",
+    "suggestions": {
+      "actionCount": "{count, plural, one {# Aktion} other {# Aktionen}}",
+      "activeVsLogged": "{active} aktiv · {logged} erfasst",
+      "chatEvidence": "{count, plural, one {# Nachricht} other {# Nachrichten}} in „{title}“",
+      "keyboardHint": "Enter nimmt an, E bearbeitet vor dem Annehmen, Entf verwirft",
+      "privacyNote": "Nur Sie sehen diese Vorschläge. Es wird nichts erfasst, bevor Sie einen Vorschlag annehmen.",
+      "title": "Vorschläge aus Ihrer Aktivität",
+      "unnamedRecord": "Akteneintrag"
+    },
     "timerActive": "Timer läuft",
     "timesheets": "Zeiterfassung",
     "total": "Gesamt",
@@ -1351,6 +1360,7 @@
     "description": "Beschreibung",
     "details": "Details",
     "disconnect": "Trennen",
+    "dismiss": "Verwerfen",
     "displayName": "Anzeigename",
     "document": "Dokument",
     "documentName": "Dokumentname",
@@ -1531,6 +1541,7 @@
     "status": "Status",
     "stepCount": "{count, plural, one {# Schritt} other {# Schritte}}",
     "stepProgress": "{current} von {total}",
+    "suggested": "Vorschlag",
     "summarizeChanges": "Änderungen zusammenfassen",
     "timeBilling": "Zeit & Abrechnung",
     "today": "Heute",
@@ -2272,7 +2283,6 @@
     "deleteRow": "Zeile löschen",
     "deleted": "Gelöscht",
     "discardChanges": "Verwerfen",
-    "dismiss": "Schließen",
     "displayText": "Anzeigetext",
     "doneEditing": "Bearbeitung abschließen",
     "doubleClickFooter": "Zum Hinzufügen einer Fußzeile doppelklicken",
@@ -2788,7 +2798,6 @@
         "dismissed": "Verworfen"
       },
       "description": "Wählen Sie ein erstelltes Playbook, Referenzdokumente oder beides.",
-      "dismiss": "Verwerfen",
       "documentChanged": "Dieses Dokument hat sich seit dieser Prüfung geändert.",
       "export": {
         "counterparty": "Für die Gegenpartei herunterladen",
@@ -3514,7 +3523,6 @@
     "jurisdictionSearchLabel": "Länder suchen",
     "jurisdictionSearchPlaceholder": "Länder suchen",
     "jurisdictionSubtitle": "Wählen Sie die Länder, in denen Sie tätig sind. stella passt KI-Antworten daran an und zeigt verfügbare Quellen: Rechtsprechung, Rechtsvorschriften und Handelsregister.",
-    "jurisdictionSuggested": "Vorgeschlagen",
     "jurisdictionTitle": "Wählen Sie Ihre Praxisjurisdiktionen",
     "mcpCardDescription": "Fügen Sie stella als Plugin hinzu, und Ihr Assistent kann Ihre Akten durchsuchen und mit Ihren Dokumenten arbeiten. Die Einrichtung dauert etwa eine Minute.",
     "mcpCardTitle": "Nutzen Sie stella aus Claude oder ChatGPT",

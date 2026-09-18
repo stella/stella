@@ -4,9 +4,12 @@ import {
   useSuspenseInfiniteQuery,
   useSuspenseQuery,
 } from "@tanstack/react-query";
+import { panic } from "better-result";
 import { PencilIcon, PlusIcon, TrashIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import type { TimeEntrySuggestion } from "@stll/api-contract/time-entry-types";
+import { Temporal } from "@stll/time";
 import {
   AlertDialog,
   AlertDialogClose,
@@ -26,6 +29,7 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
 import {
   timeEntriesInfiniteOptions,
+  timeEntrySuggestionsOptions,
   timeEntrySummaryOptions,
 } from "@/lib/workspaces/queries/time-entries";
 import { formatMinutes } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/format-duration";
@@ -37,8 +41,10 @@ import {
   timeEntryActionLabel,
   timeEntryNarrativeExcerpt,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/time-entry-copy.logic";
+import { TimeSuggestionsLane } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/time-suggestions-lane";
 import {
   useCreateTimeEntry,
+  useDecideTimeSuggestion,
   useDeleteTimeEntry,
   useUpdateTimeEntry,
 } from "@/routes/_protected.workspaces/$workspaceId/-mutations/time-entries";
@@ -49,6 +55,12 @@ type PersonalTimesheetDayProps = {
   date: string;
 };
 
+type DayDialog =
+  | { type: "closed" }
+  | { type: "create" }
+  | { type: "edit"; id: string }
+  | { type: "accept"; suggestion: TimeEntrySuggestion; narrative: string };
+
 export const PersonalTimesheetDay = ({
   canCreateTimeEntry,
   workspaceId,
@@ -57,10 +69,12 @@ export const PersonalTimesheetDay = ({
   const tBilling = useTranslations("billing");
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
-  const [dialog, setDialog] = useState<
-    { type: "closed" } | { type: "create" } | { type: "edit"; id: string }
-  >({ type: "closed" });
+  const timezoneId = Temporal.Now.timeZoneId();
+  const [dialog, setDialog] = useState<DayDialog>({ type: "closed" });
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [busySuggestions, setBusySuggestions] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
   const canCreate = usePermissions({ timeEntry: ["create"] });
   const canUpdate = usePermissions({ timeEntry: ["update"] });
   const canDelete = usePermissions({ timeEntry: ["delete"] });
@@ -74,6 +88,9 @@ export const PersonalTimesheetDay = ({
   const { data: summary } = useSuspenseQuery(
     timeEntrySummaryOptions(workspaceId, date, date),
   );
+  const { data: suggestions } = useSuspenseQuery(
+    timeEntrySuggestionsOptions(workspaceId, date, timezoneId),
+  );
   const entries = useMemo(
     () => entriesQuery.data.pages.flatMap((page) => page.items),
     [entriesQuery.data.pages],
@@ -86,6 +103,64 @@ export const PersonalTimesheetDay = ({
   const createEntry = useCreateTimeEntry();
   const updateEntry = useUpdateTimeEntry();
   const deleteEntry = useDeleteTimeEntry();
+  const decideSuggestion = useDecideTimeSuggestion();
+
+  const reportFailure = (error: unknown) => {
+    getAnalytics().captureError(error);
+    stellaToast.add({ title: tErrors("actionFailed"), type: "error" });
+  };
+
+  // Each in-flight decision stays disabled until its own request settles, so
+  // a second click on the same row cannot send a duplicate accept.
+  const markBusy = (fingerprint: string) =>
+    setBusySuggestions((current) => new Set(current).add(fingerprint));
+  const clearBusy = (fingerprint: string) =>
+    setBusySuggestions((current) => {
+      const next = new Set(current);
+      next.delete(fingerprint);
+      return next;
+    });
+
+  const acceptSuggestion = async (
+    suggestion: TimeEntrySuggestion,
+    values: Pick<
+      ManualTimeEntryValues,
+      "durationMinutes" | "narrative" | "billable"
+    >,
+  ) => {
+    markBusy(suggestion.fingerprint);
+    try {
+      await decideSuggestion.mutateAsync({
+        workspaceId,
+        fingerprint: suggestion.fingerprint,
+        date,
+        timezoneId,
+        decision: {
+          type: "accept",
+          durationMinutes: values.durationMinutes,
+          narrative: values.narrative,
+          billable: values.billable,
+        },
+      });
+    } finally {
+      clearBusy(suggestion.fingerprint);
+    }
+  };
+
+  const dismissSuggestion = async (suggestion: TimeEntrySuggestion) => {
+    markBusy(suggestion.fingerprint);
+    try {
+      await decideSuggestion.mutateAsync({
+        workspaceId,
+        fingerprint: suggestion.fingerprint,
+        date,
+        timezoneId,
+        decision: { type: "dismiss" },
+      });
+    } finally {
+      clearBusy(suggestion.fingerprint);
+    }
+  };
 
   const submit = async (values: ManualTimeEntryValues) => {
     try {
@@ -93,25 +168,57 @@ export const PersonalTimesheetDay = ({
         await updateEntry.mutateAsync({
           workspaceId,
           id: dialog.id,
-          timezoneId: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          timezoneId,
           ...values,
         });
+      } else if (dialog.type === "accept") {
+        await acceptSuggestion(dialog.suggestion, values);
       } else {
         await createEntry.mutateAsync({
           workspaceId,
-          timezoneId: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          timezoneId,
           ...values,
         });
       }
       setDialog({ type: "closed" });
     } catch (error) {
-      getAnalytics().captureError(error);
-      stellaToast.add({ title: tErrors("actionFailed"), type: "error" });
+      reportFailure(error);
     }
   };
 
-  const pending = createEntry.isPending || updateEntry.isPending;
+  const pending =
+    createEntry.isPending ||
+    updateEntry.isPending ||
+    decideSuggestion.isPending;
   const deletingEntry = entries.find((entry) => entry.id === deletingId);
+  const dialogTitle = (() => {
+    switch (dialog.type) {
+      case "edit":
+        return tBilling("editEntry");
+      case "accept":
+        return tBilling("suggestions.title");
+      case "create":
+      case "closed":
+        return tCommon("logTime");
+      default:
+        dialog satisfies never;
+        return panic("Unhandled timesheet dialog state");
+    }
+  })();
+  const formDefaults: ManualTimeEntryValues =
+    dialog.type === "accept"
+      ? {
+          dateWorked: date,
+          durationMinutes: dialog.suggestion.durationMinutes,
+          narrative: dialog.narrative,
+          billable: false,
+        }
+      : {
+          dateWorked: editingEntry?.dateWorked ?? date,
+          durationMinutes: editingEntry?.durationMinutes ?? 0,
+          narrative: editingEntry?.narrative ?? "",
+          billable: editingEntry?.billable ?? false,
+        };
 
   return (
     <div className="flex flex-col gap-3">
@@ -131,6 +238,34 @@ export const PersonalTimesheetDay = ({
         )}
       </div>
 
+      {canCreate && canCreateTimeEntry && suggestions.items.length > 0 && (
+        <TimeSuggestionsLane
+          activeMinutes={suggestions.activeMinutes}
+          busyFingerprints={busySuggestions}
+          items={suggestions.items}
+          loggedMinutes={summary.totalMinutes}
+          onAccept={(suggestion, narrative) => {
+            detached(
+              acceptSuggestion(suggestion, {
+                durationMinutes: suggestion.durationMinutes,
+                narrative,
+                billable: false,
+              }).catch(reportFailure),
+              "personal-timesheet-day.accept-suggestion",
+            );
+          }}
+          onDismiss={(suggestion) => {
+            detached(
+              dismissSuggestion(suggestion).catch(reportFailure),
+              "personal-timesheet-day.dismiss-suggestion",
+            );
+          }}
+          onEdit={(suggestion, narrative) =>
+            setDialog({ type: "accept", suggestion, narrative })
+          }
+        />
+      )}
+
       {entries.length > 0 ? (
         <div className="flex flex-col gap-2">
           {entries.map((entry) => (
@@ -142,9 +277,16 @@ export const PersonalTimesheetDay = ({
                 <BidiText as="p" className="truncate text-sm font-medium">
                   {entry.narrative}
                 </BidiText>
-                {!entry.billable && (
+                {(!entry.billable || entry.source === "suggested") && (
                   <span className="text-muted-foreground text-xs">
-                    {tBilling("nonBillable")}
+                    {[
+                      entry.source === "suggested"
+                        ? tCommon("suggested")
+                        : null,
+                      entry.billable ? null : tBilling("nonBillable"),
+                    ]
+                      .filter((label) => label !== null)
+                      .join(" · ")}
                   </span>
                 )}
               </div>
@@ -226,18 +368,10 @@ export const PersonalTimesheetDay = ({
       >
         <DialogPopup className="max-w-lg">
           <DialogPanel className="flex flex-col gap-4">
-            <DialogTitle>
-              {dialog.type === "edit"
-                ? tBilling("editEntry")
-                : tCommon("logTime")}
-            </DialogTitle>
+            <DialogTitle>{dialogTitle}</DialogTitle>
             <ManualTimeEntryForm
-              defaultValues={{
-                dateWorked: editingEntry?.dateWorked ?? date,
-                durationMinutes: editingEntry?.durationMinutes ?? 0,
-                narrative: editingEntry?.narrative ?? "",
-                billable: editingEntry?.billable ?? false,
-              }}
+              dateLocked={dialog.type === "accept"}
+              defaultValues={formDefaults}
               onCancel={() => setDialog({ type: "closed" })}
               onSubmit={submit}
               pending={pending}
@@ -279,11 +413,7 @@ export const PersonalTimesheetDay = ({
                     .mutateAsync({ workspaceId, id: deletingId })
                     .then(() => setDeletingId(null))
                     .catch((error: unknown) => {
-                      getAnalytics().captureError(error);
-                      stellaToast.add({
-                        title: tErrors("actionFailed"),
-                        type: "error",
-                      });
+                      reportFailure(error);
                     }),
                   "personal-timesheet-day.delete-entry",
                 );

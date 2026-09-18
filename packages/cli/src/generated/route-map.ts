@@ -43881,7 +43881,7 @@ export const generatedRouteMap: RouteNode = {
                   },
                   {
                     kind: "enum",
-                    enum: ["manual", "timer"],
+                    enum: ["manual", "timer", "suggested"],
                     repeatable: false,
                     flag: "--source",
                     prop: "source",
@@ -43985,7 +43985,7 @@ export const generatedRouteMap: RouteNode = {
                         source: {
                           default: "manual",
                           type: "string",
-                          enum: ["manual", "timer"],
+                          enum: ["manual", "timer", "suggested"],
                         },
                         billable: {
                           type: "boolean",
@@ -44079,6 +44079,267 @@ export const generatedRouteMap: RouteNode = {
                         },
                       },
                       required: ["matterId"],
+                    },
+                  },
+                },
+              },
+            },
+            "suggestions-decisions-create": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: [
+                  "capability",
+                  "time-entries",
+                  "suggestions-decisions-create",
+                ],
+                capabilityId: "time-entries.suggestions.decisions.create",
+                description:
+                  "Decide on a suggested time entry from time-entries.suggestions.list. `decision.type: accept` records a time entry with the given minutes and narrative (source `suggested`) and keeps the suggestion's evidence with the decision; it fails with 409 when the fingerprint is no longer pending for that day. `decision.type: dismiss` hides the suggestion for good and is idempotent: repeating it returns the decision already stored, including an earlier accept.",
+                access: "write",
+                flags: [
+                  {
+                    flag: "--matter-id",
+                    prop: "matterId",
+                    kind: "string",
+                    required: true,
+                    repeatable: false,
+                    part: "params",
+                    partPath: "matterId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    description:
+                      "Fingerprint of a suggestion from time-entries.suggestions.list",
+                    flag: "--fingerprint",
+                    prop: "fingerprint",
+                    required: true,
+                    part: "body",
+                    partPath: "fingerprint",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    description:
+                      "Day the suggestions are computed for (ISO YYYY-MM-DD)",
+                    flag: "--date",
+                    prop: "date",
+                    required: true,
+                    part: "body",
+                    partPath: "date",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    description:
+                      "IANA time zone that bounds the day (e.g. Europe/Prague); an accepted entry is dated in it",
+                    flag: "--timezone-id",
+                    prop: "timezoneId",
+                    required: true,
+                    part: "body",
+                    partPath: "timezoneId",
+                  },
+                ],
+                inputOnly: ["body.decision"],
+                paginated: false,
+                destructive: false,
+                scope: "billing_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: [
+                        "fingerprint",
+                        "date",
+                        "timezoneId",
+                        "decision",
+                      ],
+                      properties: {
+                        fingerprint: {
+                          pattern: "^[0-9a-f]{64}$",
+                          description:
+                            "Fingerprint of a suggestion from time-entries.suggestions.list",
+                          type: "string",
+                        },
+                        date: {
+                          format: "date",
+                          description:
+                            "Day the suggestions are computed for (ISO YYYY-MM-DD)",
+                          type: "string",
+                        },
+                        timezoneId: {
+                          minLength: 1,
+                          maxLength: 64,
+                          description:
+                            "IANA time zone that bounds the day (e.g. Europe/Prague); an accepted entry is dated in it",
+                          type: "string",
+                        },
+                        decision: {
+                          description:
+                            "`accept` records a time entry from the suggestion; `dismiss` hides it for good",
+                          anyOf: [
+                            {
+                              type: "object",
+                              required: [
+                                "type",
+                                "durationMinutes",
+                                "narrative",
+                              ],
+                              properties: {
+                                type: {
+                                  const: "accept",
+                                  type: "string",
+                                },
+                                durationMinutes: {
+                                  minimum: 1,
+                                  description:
+                                    "Minutes to record; the suggestion's engaged minutes unless edited",
+                                  type: "integer",
+                                },
+                                narrative: {
+                                  minLength: 1,
+                                  maxLength: 10000,
+                                  description: "Description of the work",
+                                  type: "string",
+                                },
+                                billable: {
+                                  description:
+                                    "Whether the entry is billable to the client",
+                                  type: "boolean",
+                                },
+                                taskCode: {
+                                  nullable: true,
+                                  anyOf: [
+                                    {
+                                      maxLength: 20,
+                                      description: "UTBMS/LEDES task code",
+                                      type: "string",
+                                    },
+                                    {
+                                      type: "null",
+                                    },
+                                  ],
+                                },
+                                activityCode: {
+                                  nullable: true,
+                                  anyOf: [
+                                    {
+                                      maxLength: 20,
+                                      description: "UTBMS/LEDES activity code",
+                                      type: "string",
+                                    },
+                                    {
+                                      type: "null",
+                                    },
+                                  ],
+                                },
+                              },
+                            },
+                            {
+                              type: "object",
+                              required: ["type"],
+                              properties: {
+                                type: {
+                                  const: "dismiss",
+                                  type: "string",
+                                },
+                              },
+                            },
+                          ],
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      properties: {
+                        matterId: {
+                          type: "string",
+                        },
+                      },
+                      required: ["matterId"],
+                    },
+                  },
+                },
+              },
+            },
+            "suggestions-list": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "time-entries", "suggestions-list"],
+                capabilityId: "time-entries.suggestions.list",
+                description:
+                  "List suggested time entries for one day in the current matter, drawn from the signed-in user's own activity here: chat messages they sent and records they created, edited, or downloaded. Each item carries a fingerprint, the observed span, engaged minutes, and the evidence behind it. Items the user already accepted or dismissed are omitted. Accept one with time-entries.suggestions.accept or hide it with time-entries.suggestions.dismiss.",
+                access: "read",
+                flags: [
+                  {
+                    flag: "--matter-id",
+                    prop: "matterId",
+                    kind: "string",
+                    required: true,
+                    repeatable: false,
+                    part: "params",
+                    partPath: "matterId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    description:
+                      "Day the suggestions are computed for (ISO YYYY-MM-DD)",
+                    flag: "--date",
+                    prop: "date",
+                    required: true,
+                    part: "query",
+                    partPath: "date",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    description:
+                      "IANA time zone that bounds the day (e.g. Europe/Prague); an accepted entry is dated in it",
+                    flag: "--timezone-id",
+                    prop: "timezoneId",
+                    required: true,
+                    part: "query",
+                    partPath: "timezoneId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "read",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    params: {
+                      type: "object",
+                      properties: {
+                        matterId: {
+                          type: "string",
+                        },
+                      },
+                      required: ["matterId"],
+                    },
+                    query: {
+                      type: "object",
+                      required: ["date", "timezoneId"],
+                      properties: {
+                        date: {
+                          format: "date",
+                          description:
+                            "Day the suggestions are computed for (ISO YYYY-MM-DD)",
+                          type: "string",
+                        },
+                        timezoneId: {
+                          minLength: 1,
+                          maxLength: 64,
+                          description:
+                            "IANA time zone that bounds the day (e.g. Europe/Prague); an accepted entry is dated in it",
+                          type: "string",
+                        },
+                      },
                     },
                   },
                 },

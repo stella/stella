@@ -558,6 +558,15 @@
       "written_off": "Leírva"
     },
     "stopTimer": "Leállítás",
+    "suggestions": {
+      "actionCount": "{count, plural, one {# művelet} other {# művelet}}",
+      "activeVsLogged": "Tevékenység: {active} · Rögzítve: {logged}",
+      "chatEvidence": "{count, plural, one {# üzenet} other {# üzenet}} a(z) „{title}” beszélgetésben",
+      "keyboardHint": "Az Enter elfogadja, az E elfogadás előtt szerkeszti, a Delete elveti",
+      "privacyNote": "Ezeket csak Ön látja. Semmit nem rögzítünk, amíg el nem fogadja.",
+      "title": "Javaslatok a tevékenysége alapján",
+      "unnamedRecord": "Ügyirat"
+    },
     "timerActive": "Időmérő fut",
     "timesheets": "Munkaidő-nyilvántartás",
     "total": "Összesen",
@@ -1351,6 +1360,7 @@
     "description": "Leírás",
     "details": "Részletek",
     "disconnect": "Leválasztás",
+    "dismiss": "Elvetés",
     "displayName": "Megjelenítendő név",
     "document": "Dokumentum",
     "documentName": "Dokumentum neve",
@@ -1531,6 +1541,7 @@
     "status": "Státusz",
     "stepCount": "{count, plural, one {# lépés} other {# lépés}}",
     "stepProgress": "{current} / {total}",
+    "suggested": "Javaslat",
     "summarizeChanges": "Változtatások összefoglalása",
     "timeBilling": "Idő és számlázás",
     "today": "Ma",
@@ -2272,7 +2283,6 @@
     "deleteRow": "Sor törlése",
     "deleted": "Törölve",
     "discardChanges": "Elvetés",
-    "dismiss": "Elvetés",
     "displayText": "Megjelenített szöveg",
     "doneEditing": "Szerkesztés befejezése",
     "doubleClickFooter": "Kattintson duplán élőláb hozzáadásához",
@@ -2788,7 +2798,6 @@
         "dismissed": "Elvetve"
       },
       "description": "Válasszon egy kidolgozott playbookot, referenciadokumentumokat vagy mindkettőt.",
-      "dismiss": "Elvetés",
       "documentChanged": "A dokumentum az ellenőrzés óta megváltozott.",
       "export": {
         "counterparty": "Letöltés az ellenfélnek",
@@ -3514,7 +3523,6 @@
     "jurisdictionSearchLabel": "Országok keresése",
     "jurisdictionSearchPlaceholder": "Országok keresése",
     "jurisdictionSubtitle": "Válassza ki, mely országokban praktizál. A stella ehhez igazítja az AI-válaszokat, és felkínálja az elérhető forrásokat: ítélkezési gyakorlatot, jogszabályokat és cégnyilvántartásokat.",
-    "jurisdictionSuggested": "Javasolt",
     "jurisdictionTitle": "Válassza ki gyakorlati joghatóságait",
     "mcpCardDescription": "Adja hozzá a stellát bővítményként, és az asszisztense kereshet az ügyei között, és dolgozhat a dokumentumaival. A beállítás körülbelül egy percet vesz igénybe.",
     "mcpCardTitle": "Használja a stellát a Claude-ból vagy a ChatGPT-ből",

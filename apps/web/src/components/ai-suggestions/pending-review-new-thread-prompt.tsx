@@ -50,7 +50,7 @@ export const PendingReviewNewThreadPrompt = ({
           size="sm"
           variant="destructive-outline"
         >
-          {t("inspector.review.dismiss")}
+          {t("common.dismiss")}
         </Button>
       </div>
     </>

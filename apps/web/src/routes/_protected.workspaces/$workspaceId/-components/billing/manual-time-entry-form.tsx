@@ -1,13 +1,15 @@
 import { useState } from "react";
 
-import { useTranslations } from "use-intl";
+import { useFormatter, useTranslations } from "use-intl";
 
+import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import { Label } from "@stll/ui/label";
 
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import { detached } from "@/lib/detached";
+import { MEDIUM_DATE_FORMAT } from "@/lib/relative-time";
 import { DurationInput } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/duration-input";
 import {
   getTimeEntryDateBounds,
@@ -24,6 +26,8 @@ export type ManualTimeEntryValues = {
 
 type ManualTimeEntryFormProps = {
   defaultValues: ManualTimeEntryValues;
+  /** The day is fixed by the caller (a suggestion belongs to its day). */
+  dateLocked?: boolean;
   pending: boolean;
   workspaceId: string;
   onCancel: () => void;
@@ -32,6 +36,7 @@ type ManualTimeEntryFormProps = {
 
 export const ManualTimeEntryForm = ({
   defaultValues,
+  dateLocked = false,
   pending,
   workspaceId,
   onCancel,
@@ -39,6 +44,7 @@ export const ManualTimeEntryForm = ({
 }: ManualTimeEntryFormProps) => {
   const tBilling = useTranslations("billing");
   const tCommon = useTranslations("common");
+  const format = useFormatter();
   const dateBounds = getTimeEntryDateBounds();
   const [dateWorked, setDateWorked] = useState(defaultValues.dateWorked);
   const [durationMinutes, setDurationMinutes] = useState(
@@ -78,14 +84,30 @@ export const ManualTimeEntryForm = ({
           <Label id="time-entry-date-label" htmlFor="time-entry-date">
             {tCommon("date")}
           </Label>
-          <DatePickerPopover
-            id="time-entry-date"
-            labelledBy="time-entry-date-label"
-            maxDate={dateBounds.today}
-            minDate={dateBounds.earliestDate}
-            onChange={(value) => setDateWorked(value ?? "")}
-            value={dateWorked}
-          />
+          {dateLocked ? (
+            <output
+              aria-labelledby="time-entry-date-label"
+              className="bg-muted flex min-h-11 items-center rounded-md border px-3 text-sm"
+              id="time-entry-date"
+            >
+              {format.dateTime(
+                Temporal.PlainDate.from(dateWorked).toZonedDateTime({
+                  plainTime: Temporal.PlainTime.from("00:00"),
+                  timeZone: "UTC",
+                }).epochMilliseconds,
+                { ...MEDIUM_DATE_FORMAT, timeZone: "UTC" },
+              )}
+            </output>
+          ) : (
+            <DatePickerPopover
+              id="time-entry-date"
+              labelledBy="time-entry-date-label"
+              maxDate={dateBounds.today}
+              minDate={dateBounds.earliestDate}
+              onChange={(value) => setDateWorked(value ?? "")}
+              value={dateWorked}
+            />
+          )}
         </div>
         <div className="flex flex-col gap-1.5">
           <Label id="time-entry-duration-label">{tBilling("duration")}</Label>

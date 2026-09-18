@@ -558,6 +558,15 @@
       "written_off": "Maha kantud"
     },
     "stopTimer": "Peata",
+    "suggestions": {
+      "actionCount": "{count, plural, one {# toiming} other {# toimingut}}",
+      "activeVsLogged": "Tegevus {active} · Kirjendatud {logged}",
+      "chatEvidence": "{count, plural, one {# sõnum} other {# sõnumit}} vestluses „{title}“",
+      "keyboardHint": "Enter võtab vastu, E muudab enne vastuvõtmist, Delete jätab kõrvale",
+      "privacyNote": "Neid näete ainult teie. Midagi ei kirjendata enne, kui te ettepaneku vastu võtate.",
+      "title": "Ettepanekud teie tegevuse põhjal",
+      "unnamedRecord": "Toimiku kirje"
+    },
     "timerActive": "Taimer käib",
     "timesheets": "Tööajatabelid",
     "total": "Kokku",
@@ -1351,6 +1360,7 @@
     "description": "Kirjeldus",
     "details": "Üksikasjad",
     "disconnect": "Katkesta ühendus",
+    "dismiss": "Jäta kõrvale",
     "displayName": "Kuvatav nimi",
     "document": "Dokument",
     "documentName": "Dokumendi nimi",
@@ -1531,6 +1541,7 @@
     "status": "Olek",
     "stepCount": "{count, plural, one {# samm} other {# sammu}}",
     "stepProgress": "{current} / {total}",
+    "suggested": "Soovitus",
     "summarizeChanges": "Võta muudatused kokku",
     "timeBilling": "Aeg ja arveldus",
     "today": "Täna",
@@ -2272,7 +2283,6 @@
     "deleteRow": "Kustuta rida",
     "deleted": "Kustutatud",
     "discardChanges": "Loobu",
-    "dismiss": "Sulge",
     "displayText": "Kuvatav tekst",
     "doneEditing": "Lõpeta muutmine",
     "doubleClickFooter": "Topeltklõpsa jaluse lisamiseks",
@@ -2788,7 +2798,6 @@
         "dismissed": "Kõrvale jäetud"
       },
       "description": "Valige koostatud kontrolljuhend, võrdlusdokumendid või mõlemad.",
-      "dismiss": "Jäta kõrvale",
       "documentChanged": "See dokument on pärast seda ülevaatust muutunud.",
       "export": {
         "counterparty": "Laadi vastaspoole jaoks alla",
@@ -3514,7 +3523,6 @@
     "jurisdictionSearchLabel": "Otsi riike",
     "jurisdictionSearchPlaceholder": "Otsi riike",
     "jurisdictionSubtitle": "Valige riigid, kus te praktiseerite. stella kohandab tehisintellekti vastuseid ja pakub saadaolevaid allikaid: kohtupraktikat, õigusakte ja äriregistreid.",
-    "jurisdictionSuggested": "Soovitatud",
     "jurisdictionTitle": "Valige oma praktika jurisdiktsioonid",
     "mcpCardDescription": "Lisage stella pistikprogrammina ja teie assistent saab otsida teie toimikutest ning töötada teie dokumentidega. Seadistamine võtab umbes minuti.",
     "mcpCardTitle": "Kasutage stellat Claude’is või ChatGPT-s",

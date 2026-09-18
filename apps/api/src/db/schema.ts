@@ -55,6 +55,7 @@ export {
   TIME_ENTRY_SOURCE,
   TIME_ENTRY_SOURCES,
   TIME_ENTRY_STATUSES,
+  TIME_ENTRY_SUGGESTION_STATUS,
 } from "./schema/common";
 export type {
   AccountDeletionRequestStatus,

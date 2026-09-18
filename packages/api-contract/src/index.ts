@@ -15,12 +15,15 @@ export {
   TIME_ENTRY_SOURCE,
   TIME_ENTRY_SOURCES,
   TIME_ENTRY_STATUSES,
+  TIME_ENTRY_SUGGESTION_STATUS,
+  TIME_ENTRY_SUGGESTION_STATUSES,
 } from "./billing";
 export type {
   ExpenseCategory,
   InvoiceStatus,
   TimeEntrySource,
   TimeEntryStatus,
+  TimeEntrySuggestionStatus,
 } from "./billing";
 export {
   BUSINESS_REGISTRY_SLUGS,

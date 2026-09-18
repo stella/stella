@@ -575,7 +575,7 @@ const DismissPopover = ({ disabled, onDismiss }: DismissPopoverProps) => {
       <PopoverTrigger
         render={
           <Button
-            aria-label={t("inspector.review.dismiss")}
+            aria-label={t("common.dismiss")}
             disabled={disabled}
             size="sm"
             variant="muted"
@@ -613,7 +613,7 @@ const DismissPopover = ({ disabled, onDismiss }: DismissPopoverProps) => {
               }}
               size="sm"
             >
-              {t("inspector.review.dismiss")}
+              {t("common.dismiss")}
             </Button>
           </div>
         </PopoverPanel>

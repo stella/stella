@@ -473,7 +473,7 @@ export const SuggestionStepper = ({
         <DirectionalIcon icon={ChevronRightIcon} />
       </Button>
       <Button className="ms-1" onClick={onDismiss} size="sm" variant="ghost">
-        {t("folio.dismiss")}
+        {t("common.dismiss")}
       </Button>
       <Button onClick={onAccept} size="sm">
         {t("common.accept")}

@@ -10,6 +10,7 @@ import {
   TIME_ENTRY_SOURCE,
   TIME_ENTRY_SOURCES,
   TIME_ENTRY_STATUSES,
+  TIME_ENTRY_SUGGESTION_STATUS,
   type ExpenseCategory,
   type TimeEntrySource,
   type TimeEntryStatus,
@@ -63,6 +64,7 @@ import {
   workspaceCheck,
   workspaceViewTemplatePolicies,
   wsOrganizationPolicies,
+  wsOrganizationUserPolicies,
   wsOrganizationReadOnlyPolicies,
   wsDataScopePolicies,
   wsOrganizationScopedRequestPolicies,
@@ -410,6 +412,7 @@ export {
   TIME_ENTRY_SOURCE,
   TIME_ENTRY_SOURCES,
   TIME_ENTRY_STATUSES,
+  TIME_ENTRY_SUGGESTION_STATUS,
 };
 export type { ExpenseCategory, TimeEntrySource, TimeEntryStatus };
 
@@ -543,6 +546,7 @@ export {
   workspaceCheck,
   workspaceViewTemplatePolicies,
   wsOrganizationPolicies,
+  wsOrganizationUserPolicies,
   wsOrganizationReadOnlyPolicies,
   wsDataScopePolicies,
   wsOrganizationScopedRequestPolicies,

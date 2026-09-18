@@ -31,6 +31,7 @@ import {
   templates,
   templateVersions,
   timeEntries,
+  timeEntrySuggestions,
   workspaceContacts,
   workspaceMembers,
   workspaces,
@@ -716,6 +717,60 @@ describe("workspace INSERT — correct scope", () => {
     });
   });
 
+  test("SELECT timeEntrySuggestion as its owner in its workspace → visible", async () => {
+    const rows = await scopedQuery(
+      [ids.wsA1],
+      ids.orgA,
+      (tx) =>
+        tx
+          .select({ id: timeEntrySuggestions.id })
+          .from(timeEntrySuggestions)
+          .where(eq(timeEntrySuggestions.id, ids.timeEntrySuggestionA1)),
+      ids.userA1,
+    );
+    expect(rows).toHaveLength(1);
+  });
+
+  test("UPDATE timeEntrySuggestion as its owner → succeeds", async () => {
+    await dryScopedQuery(
+      [ids.wsA1],
+      ids.orgA,
+      async (tx) => {
+        const rows = await tx
+          .update(timeEntrySuggestions)
+          .set({ dateWorked: "2026-01-02" })
+          .where(eq(timeEntrySuggestions.id, ids.timeEntrySuggestionA1))
+          .returning({ id: timeEntrySuggestions.id });
+        expect(rows).toHaveLength(1);
+      },
+      ids.userA1,
+    );
+  });
+
+  test("INSERT timeEntrySuggestion as its owner → succeeds", async () => {
+    await dryScopedQuery(
+      [ids.wsA1],
+      ids.orgA,
+      async (tx) => {
+        const rows = await tx
+          .insert(timeEntrySuggestions)
+          .values({
+            id: testId(),
+            organizationId: ids.orgA,
+            workspaceId: ids.wsA1,
+            userId: ids.userA1,
+            dateWorked: "2026-01-02",
+            fingerprint:
+              "ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc1",
+            status: "dismissed" as const,
+          })
+          .returning({ id: timeEntrySuggestions.id });
+        expect(rows).toHaveLength(1);
+      },
+      ids.userA1,
+    );
+  });
+
   test("INSERT rateTable → succeeds", async () => {
     await dryScopedQuery([ids.wsA1], ids.orgA, async (tx) => {
       const rows = await tx
@@ -1192,6 +1247,32 @@ describe("workspace DELETE — correct scope", () => {
         .returning({ id: billingCodes.id });
       expect(rows).toHaveLength(1);
     });
+  });
+
+  test("DELETE timeEntrySuggestion as its owner → succeeds", async () => {
+    await dryScopedQuery(
+      [ids.wsA1],
+      ids.orgA,
+      async (tx) => {
+        const delId = testId();
+        await tx.insert(timeEntrySuggestions).values({
+          id: delId,
+          organizationId: ids.orgA,
+          workspaceId: ids.wsA1,
+          userId: ids.userA1,
+          dateWorked: "2026-01-03",
+          fingerprint:
+            "ddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd1",
+          status: "dismissed" as const,
+        });
+        const rows = await tx
+          .delete(timeEntrySuggestions)
+          .where(eq(timeEntrySuggestions.id, delId))
+          .returning({ id: timeEntrySuggestions.id });
+        expect(rows).toHaveLength(1);
+      },
+      ids.userA1,
+    );
   });
 
   test("DELETE rateTable in own workspace → succeeds", async () => {

@@ -32,13 +32,14 @@ export const EXPENSE_CATEGORIES = [
 
 export type ExpenseCategory = (typeof EXPENSE_CATEGORIES)[number];
 
-export const TIME_ENTRY_SOURCES = ["manual", "timer"] as const;
+export const TIME_ENTRY_SOURCES = ["manual", "timer", "suggested"] as const;
 
 export type TimeEntrySource = (typeof TIME_ENTRY_SOURCES)[number];
 
 export const TIME_ENTRY_SOURCE = {
   MANUAL: "manual",
   TIMER: "timer",
+  SUGGESTED: "suggested",
 } as const satisfies Record<string, TimeEntrySource>;
 
 type MissingTimeEntrySource = Exclude<
@@ -47,6 +48,30 @@ type MissingTimeEntrySource = Exclude<
 >;
 
 true satisfies MissingTimeEntrySource extends never ? true : never;
+
+/**
+ * What the timekeeper did with a suggested entry. A suggestion that was not
+ * acted on has no row: it is recomputed from activity on every read.
+ */
+export const TIME_ENTRY_SUGGESTION_STATUSES = [
+  "accepted",
+  "dismissed",
+] as const;
+
+export type TimeEntrySuggestionStatus =
+  (typeof TIME_ENTRY_SUGGESTION_STATUSES)[number];
+
+export const TIME_ENTRY_SUGGESTION_STATUS = {
+  ACCEPTED: "accepted",
+  DISMISSED: "dismissed",
+} as const satisfies Record<string, TimeEntrySuggestionStatus>;
+
+type MissingTimeEntrySuggestionStatus = Exclude<
+  TimeEntrySuggestionStatus,
+  (typeof TIME_ENTRY_SUGGESTION_STATUS)[keyof typeof TIME_ENTRY_SUGGESTION_STATUS]
+>;
+
+true satisfies MissingTimeEntrySuggestionStatus extends never ? true : never;
 
 export const INVOICE_STATUSES = [
   "draft",

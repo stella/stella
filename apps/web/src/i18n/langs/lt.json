@@ -558,6 +558,15 @@
       "written_off": "Nurašytas"
     },
     "stopTimer": "Stabdyti",
+    "suggestions": {
+      "actionCount": "{count, plural, one {# veiksmas} few {# veiksmai} many {# veiksmų} other {# veiksmo}}",
+      "activeVsLogged": "Veikla: {active} · Užregistruota: {logged}",
+      "chatEvidence": "{count, plural, one {# žinutė} few {# žinutės} many {# žinučių} other {# žinutės}} pokalbyje „{title}“",
+      "keyboardHint": "Enter priima, E leidžia redaguoti prieš priimant, Delete atmeta",
+      "privacyNote": "Šiuos pasiūlymus matote tik jūs. Niekas neįrašoma, kol pasiūlymo nepriimate.",
+      "title": "Pasiūlymai pagal jūsų veiklą",
+      "unnamedRecord": "Bylos įrašas"
+    },
     "timerActive": "Laikmatis veikia",
     "timesheets": "Darbo laiko apskaita",
     "total": "Iš viso",
@@ -1351,6 +1360,7 @@
     "description": "Aprašymas",
     "details": "Detalės",
     "disconnect": "Atjungti",
+    "dismiss": "Atmesti",
     "displayName": "Rodomas vardas",
     "document": "Dokumentas",
     "documentName": "Dokumento pavadinimas",
@@ -1531,6 +1541,7 @@
     "status": "Būsena",
     "stepCount": "{count, plural, one {# žingsnis} few {# žingsniai} other {# žingsnių}}",
     "stepProgress": "{current} iš {total}",
+    "suggested": "Pasiūlymas",
     "summarizeChanges": "Apibendrinti pakeitimus",
     "timeBilling": "Laikas ir atsiskaitymai",
     "today": "Šiandien",
@@ -2272,7 +2283,6 @@
     "deleteRow": "Ištrinti eilutę",
     "deleted": "Ištrinta",
     "discardChanges": "Atmesti",
-    "dismiss": "Atmesti",
     "displayText": "Rodomas tekstas",
     "doneEditing": "Baigti redagavimą",
     "doubleClickFooter": "Spustelėkite du kartus, kad pridėtumėte poraštę",
@@ -2788,7 +2798,6 @@
         "dismissed": "Atmesta"
       },
       "description": "Pasirinkite parengtą peržiūros vadovą, referencinius dokumentus arba abu.",
-      "dismiss": "Atmesti",
       "documentChanged": "Šis dokumentas pasikeitė po šios peržiūros.",
       "export": {
         "counterparty": "Atsisiųsti priešingai šaliai",
@@ -3514,7 +3523,6 @@
     "jurisdictionSearchLabel": "Ieškoti šalių",
     "jurisdictionSearchPlaceholder": "Ieškoti šalių",
     "jurisdictionSubtitle": "Pasirinkite šalis, kuriose vykdote teisinę praktiką. stella pagal jas pritaikys AI atsakymus ir pasiūlys prieinamus šaltinius: teismų praktiką, teisės aktus ir įmonių registrus.",
-    "jurisdictionSuggested": "Siūloma",
     "jurisdictionTitle": "Pasirinkite savo praktikos jurisdikcijas",
     "mcpCardDescription": "Pridėkite stella kaip papildinį ir jūsų asistentas galės ieškoti jūsų bylose bei dirbti su jūsų dokumentais. Sąranka užtrunka apie minutę.",
     "mcpCardTitle": "Naudokite stella iš Claude arba ChatGPT",

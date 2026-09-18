@@ -7,8 +7,8 @@ import { roles } from "@stll/permissions";
 
 import { member, user } from "@/api/db/auth-schema";
 import { invoices, timeEntries } from "@/api/db/schema";
-import { createTimeEntryHandler } from "@/api/handlers/time-entries/create";
 import { deleteTimeEntryHandler } from "@/api/handlers/time-entries/delete";
+import { createTimeEntryHandler } from "@/api/handlers/time-entries/time-entry-insert";
 import { updateTimeEntryHandler } from "@/api/handlers/time-entries/update";
 import { readOrgEntitlementHandler } from "@/api/handlers/usage/get-entitlement";
 import { TIME_ENTRY_VISIBILITY } from "@/api/lib/billing-constants";

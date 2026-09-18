@@ -558,6 +558,15 @@
       "written_off": "Norakstīts"
     },
     "stopTimer": "Apturēt",
+    "suggestions": {
+      "actionCount": "{count, plural, zero {# darbību} one {# darbība} other {# darbības}}",
+      "activeVsLogged": "Aktivitāte: {active} · Reģistrēts: {logged}",
+      "chatEvidence": "{count, plural, zero {# ziņojumu} one {# ziņojums} other {# ziņojumi}} sarunā „{title}”",
+      "keyboardHint": "Enter pieņem, E ļauj rediģēt pirms pieņemšanas, Delete noraida",
+      "privacyNote": "Šos ieteikumus redzat tikai jūs. Nekas netiek reģistrēts, kamēr to nepieņemat.",
+      "title": "Ieteikumi, balstoti uz jūsu aktivitāti",
+      "unnamedRecord": "Lietas ieraksts"
+    },
     "timerActive": "Taimeris darbojas",
     "timesheets": "Darba laika uzskaite",
     "total": "Kopā",
@@ -1351,6 +1360,7 @@
     "description": "Apraksts",
     "details": "Detaļas",
     "disconnect": "Atvienot",
+    "dismiss": "Noraidīt",
     "displayName": "Attēlojamais vārds",
     "document": "Dokuments",
     "documentName": "Dokumenta nosaukums",
@@ -1531,6 +1541,7 @@
     "status": "Statuss",
     "stepCount": "{count, plural, zero {# soļu} one {# solis} other {# soļi}}",
     "stepProgress": "{current} no {total}",
+    "suggested": "Ieteikums",
     "summarizeChanges": "Apkopot izmaiņas",
     "timeBilling": "Laiks un norēķini",
     "today": "Šodien",
@@ -2272,7 +2283,6 @@
     "deleteRow": "Dzēst rindu",
     "deleted": "Dzēsts",
     "discardChanges": "Atmest",
-    "dismiss": "Aizvērt",
     "displayText": "Attēlojamais teksts",
     "doneEditing": "Pabeigt rediģēšanu",
     "doubleClickFooter": "Veiciet dubultklikšķi, lai pievienotu kājeni",
@@ -2788,7 +2798,6 @@
         "dismissed": "Noraidīts"
       },
       "description": "Izvēlieties sagatavotu pārbaudes ceļvedi, atsauces dokumentus vai abus.",
-      "dismiss": "Noraidīt",
       "documentChanged": "Šis dokuments pēc šīs pārbaudes ir mainījies.",
       "export": {
         "counterparty": "Lejupielādēt pretpusei",
@@ -3514,7 +3523,6 @@
     "jurisdictionSearchLabel": "Meklēt valstis",
     "jurisdictionSearchPlaceholder": "Meklēt valstis",
     "jurisdictionSubtitle": "Izvēlieties valstis, kurās praktizējat. stella atbilstoši pielāgos MI atbildes un piedāvās pieejamos avotus: tiesu praksi, tiesību aktus un uzņēmumu reģistrus.",
-    "jurisdictionSuggested": "Ieteikts",
     "jurisdictionTitle": "Izvēlieties savas prakses jurisdikcijas",
     "mcpCardDescription": "Pievienojiet stella kā spraudni, un jūsu asistents varēs meklēt jūsu lietās un strādāt ar jūsu dokumentiem. Iestatīšana aizņem aptuveni minūti.",
     "mcpCardTitle": "Izmantojiet stella no Claude vai ChatGPT",

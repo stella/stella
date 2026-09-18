@@ -41,6 +41,7 @@ import {
   templates,
   templateVersions,
   timeEntries,
+  timeEntrySuggestions,
   userFiles,
   workspaceContacts,
   workspaceMembers,
@@ -1692,6 +1693,60 @@ describe("chat mutations — wrong user", () => {
       ids.userA1,
     );
     expect(rows).toHaveLength(0);
+  });
+
+  test("a timekeeper's suggestion decisions stay in their workspace", async () => {
+    const rows = await scopedQuery(
+      [ids.wsA2],
+      ids.orgA,
+      (tx) =>
+        tx
+          .select({ id: timeEntrySuggestions.id })
+          .from(timeEntrySuggestions)
+          .where(eq(timeEntrySuggestions.id, ids.timeEntrySuggestionA1)),
+      ids.userA1,
+    );
+    expect(rows).toHaveLength(0);
+  });
+
+  test("another member of the matter cannot read a timekeeper's suggestion decisions", async () => {
+    const rows = await scopedQuery(
+      [ids.wsA1],
+      ids.orgA,
+      (tx) =>
+        tx
+          .select({ id: timeEntrySuggestions.id })
+          .from(timeEntrySuggestions)
+          .where(eq(timeEntrySuggestions.id, ids.timeEntrySuggestionA1)),
+      ids.userA2,
+    );
+    expect(rows).toHaveLength(0);
+  });
+
+  test("update or delete on another timekeeper's suggestion decision affects zero rows", async () => {
+    const updated = await scopedQuery(
+      [ids.wsA1],
+      ids.orgA,
+      (tx) =>
+        tx
+          .update(timeEntrySuggestions)
+          .set({ dateWorked: "2026-01-02" })
+          .where(eq(timeEntrySuggestions.id, ids.timeEntrySuggestionA1))
+          .returning({ id: timeEntrySuggestions.id }),
+      ids.userA2,
+    );
+    expect(updated).toHaveLength(0);
+    const deleted = await scopedQuery(
+      [ids.wsA1],
+      ids.orgA,
+      (tx) =>
+        tx
+          .delete(timeEntrySuggestions)
+          .where(eq(timeEntrySuggestions.id, ids.timeEntrySuggestionA1))
+          .returning({ id: timeEntrySuggestions.id }),
+      ids.userA2,
+    );
+    expect(deleted).toHaveLength(0);
   });
 
   test("data workspace arrays containing NULL fail closed", async () => {

@@ -49,6 +49,7 @@ import {
   templates,
   templateVersions,
   timeEntries,
+  timeEntrySuggestions,
   userFiles,
   workspaceContacts,
   workspaceMembers,
@@ -136,6 +137,8 @@ export const createTestIds = () => ({
   justificationB1: id<"justification">(),
   timeEntryA1: id<"timeEntry">(),
   timeEntryB1: id<"timeEntry">(),
+  timeEntrySuggestionA1: id<"timeEntrySuggestion">(),
+  timeEntrySuggestionB1: id<"timeEntrySuggestion">(),
   billingCodeA1: id<"billingCode">(),
   billingCodeB1: id<"billingCode">(),
   rateTableA1: id<"rateTable">(),
@@ -962,6 +965,29 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
       type: "task" as const,
       code: "T001",
       label: "Code B",
+    },
+  ]);
+
+  await db.insert(timeEntrySuggestions).values([
+    {
+      id: ids.timeEntrySuggestionA1,
+      organizationId: ids.orgA,
+      workspaceId: ids.wsA1,
+      userId: ids.userA1,
+      dateWorked: "2026-01-01",
+      fingerprint:
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1",
+      status: "dismissed" as const,
+    },
+    {
+      id: ids.timeEntrySuggestionB1,
+      organizationId: ids.orgB,
+      workspaceId: ids.wsB1,
+      userId: ids.userB1,
+      dateWorked: "2026-01-01",
+      fingerprint:
+        "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb1",
+      status: "dismissed" as const,
     },
   ]);
 

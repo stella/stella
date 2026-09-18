@@ -561,6 +561,15 @@ type Messages = {
       "written_off": "Written off";
     };
     "stopTimer": "Stop";
+    "suggestions": {
+      "actionCount": "{count, plural, one {# action} other {# actions}}";
+      "activeVsLogged": "{active} active · {logged} logged";
+      "chatEvidence": "{count, plural, one {# message} other {# messages}} in “{title}”";
+      "keyboardHint": "Enter accepts, E edits before accepting, Delete dismisses";
+      "privacyNote": "Only you can see these. Nothing is recorded until you accept it.";
+      "title": "Suggested from your activity";
+      "unnamedRecord": "Matter record";
+    };
     "timerActive": "Timer running";
     "timesheets": "Timesheets";
     "total": "Total";
@@ -1354,6 +1363,7 @@ type Messages = {
     "description": "Description";
     "details": "Details";
     "disconnect": "Disconnect";
+    "dismiss": "Dismiss";
     "displayName": "Display name";
     "document": "Document";
     "documentName": "Document name";
@@ -1534,6 +1544,7 @@ type Messages = {
     "status": "Status";
     "stepCount": "{count, plural, one {# step} other {# steps}}";
     "stepProgress": "{current} of {total}";
+    "suggested": "Suggested";
     "summarizeChanges": "Summarize changes";
     "timeBilling": "Time & Billing";
     "today": "Today";
@@ -2275,7 +2286,6 @@ type Messages = {
     "deleteRow": "Delete row";
     "deleted": "Deleted";
     "discardChanges": "Discard";
-    "dismiss": "Dismiss";
     "displayText": "Display text";
     "doneEditing": "Done editing";
     "doubleClickFooter": "Double-click to add footer";
@@ -2791,7 +2801,6 @@ type Messages = {
         "dismissed": "Dismissed";
       };
       "description": "Choose an authored playbook, reference documents, or both.";
-      "dismiss": "Dismiss";
       "documentChanged": "This document changed after this review.";
       "export": {
         "counterparty": "Download for counterparty";
@@ -3517,7 +3526,6 @@ type Messages = {
     "jurisdictionSearchLabel": "Search countries";
     "jurisdictionSearchPlaceholder": "Search countries";
     "jurisdictionSubtitle": "Choose where you practice. stella will tailor AI responses and surface available sources: case law, legislation, and company registries.";
-    "jurisdictionSuggested": "Suggested";
     "jurisdictionTitle": "Pick your practice jurisdictions";
     "mcpCardDescription": "Add stella as a plugin and your assistant can search your matters and work with your documents. Setup takes about a minute.";
     "mcpCardTitle": "Use stella from Claude or ChatGPT";

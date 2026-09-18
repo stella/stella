@@ -30,7 +30,7 @@ import type { readLegislationProvisionVersions } from "@/api/handlers/legislatio
 import type { searchLegislationHandler } from "@/api/handlers/legislation/search";
 import type { listStatuteVersionsHandler } from "@/api/handlers/legislation/versions";
 import type { configureTemplateFields } from "@/api/handlers/templates/configure-template-fields-service";
-import type { createTimeEntryHandler } from "@/api/handlers/time-entries/create";
+import type { createTimeEntryHandler } from "@/api/handlers/time-entries/time-entry-insert";
 import type { readWorkspaceHandler } from "@/api/handlers/workspaces/get";
 import type { readOverviewHandler } from "@/api/handlers/workspaces/read-overview";
 import type { readWorkspaceContactsHandler } from "@/api/handlers/workspaces/workspace-contacts-read";
