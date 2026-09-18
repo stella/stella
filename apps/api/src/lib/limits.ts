@@ -240,6 +240,16 @@ export const LIMITS = {
   mcpSearchPageSizeMax: 20,
   /** Default page size for the OpenAI-compatible MCP search tool. */
   mcpCompatSearchPageSizeDefault: 8,
+  /**
+   * The corpus half of one OpenAI-compatible `search` page. That tool takes a
+   * query and nothing else, so it cannot be told which corpus to prefer: it
+   * asks each source for its own share and ranks matter hits, then decisions,
+   * then statutes. Decisions get the larger share because a case-law question
+   * is answered by reading several decisions, while a statute question is
+   * usually answered by one act.
+   */
+  mcpCompatDecisionPageSizeDefault: 5,
+  mcpCompatStatutePageSizeDefault: 3,
   mcpGatewaySkillsMax: 100,
   mcpGatewayToolsPerConnectorMax: 100,
   mcpGatewayToolNameMaxChars: 128,
@@ -536,6 +546,13 @@ export const LIMITS = {
    * whole structure; a read says when it was cut.
    */
   legislationOutlineHeadingsMax: 200,
+  /**
+   * Characters of a European Legislation Identifier a tool input accepts. An
+   * ELI is a path the publisher mints (`/eli/cz/sb/2012/89`), so the bound is
+   * a wire cap rather than a grammar; every surface that takes one (the
+   * legislation tools and the compat id vocabulary) reads it from here.
+   */
+  legislationEliMaxChars: 512,
   /**
    * Characters of one provision's text. A provision is a section, not a
    * statute, so this sits far below the document text window: a batch read

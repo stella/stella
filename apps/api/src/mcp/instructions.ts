@@ -24,9 +24,11 @@ export const MCP_INSTRUCTIONS_DEFAULT_MAX_CHARS = 1700;
 // below, which every surface must state because it holds for every surface.
 export const MCP_INSTRUCTIONS_ANONYMIZED_MAX_CHARS = 1050;
 export const MCP_INSTRUCTIONS_DOCUMENTS_MAX_CHARS = 1000;
-// law: measured 1062. The surface's whole point is a short tool list, so the
-// connect text names all seven tools and the one reference that orders them.
-export const MCP_INSTRUCTIONS_LAW_MAX_CHARS = 1100;
+// law bumped 1100 -> 1300 (measured 1257) for the OpenAI-compatible pair: a
+// client that drives only `search` and `fetch` reads the connect text as its
+// whole contract, so the id vocabulary it must echo back is stated here beside
+// the named tools rather than left to the two tool descriptions.
+export const MCP_INSTRUCTIONS_LAW_MAX_CHARS = 1300;
 
 /**
  * The one casing convention of this surface, stated identically everywhere so a
@@ -87,12 +89,15 @@ Destructive tools refuse to run unless you pass \`confirm: true\`, and you must 
 /**
  * What the law audience can be told to call. Its whole tool list rides the
  * public-law gate, so with the gate closed the surface lists nothing and
- * naming seven tools would be the same dead end the default surface avoids
- * above.
+ * naming its tools would be the same dead end the default surface avoids
+ * above. The gate-closed sentence names none of them, which is also what lets
+ * `instructions.test.ts` check that claim by substring: two of the tools are
+ * called `search` and `fetch`, and either word used loosely elsewhere in this
+ * text would read as naming one.
  */
 const lawTools = (publicLawEnabled: boolean): string =>
   publicLawEnabled
-    ? `Case law: search_case_law, lookup_case_law, read_case_law_decision, read_case_law_citations. Legislation: search_legislation, read_statute, read_statute_provisions, read_provision_history. Read ${LEGISLATION_WORKFLOW_REFERENCE_URI} before the first search_legislation call.`
+    ? `Whole corpus: search, then fetch its result ids (\`decision:<uuid>\`, \`statute:<eli>\`) for the text. Case law: search_case_law, lookup_case_law, read_case_law_decision, read_case_law_citations. Legislation: search_legislation, read_statute, read_statute_provisions, read_provision_history. Read ${LEGISLATION_WORKFLOW_REFERENCE_URI} before the first search_legislation call.`
     : "The public legal corpus is not enabled on this deployment, so this surface lists no tools.";
 
 const lawInstructions = (
@@ -101,7 +106,7 @@ const lawInstructions = (
 
 ${lawTools(publicLawEnabled)}
 
-Pagination: search_* tools take a \`limit\` and a \`cursor\`. A response's \`nextCursor\` (null on the last page) is the \`cursor\` for the next page; long text fields are windowed the same way.
+Pagination: a paged tool takes a \`cursor\`, and most take a \`limit\`. A response's \`nextCursor\` (null on the last page) is the \`cursor\` for the next page; long text fields are windowed the same way.
 
 ${MCP_CASING_RULE}
 

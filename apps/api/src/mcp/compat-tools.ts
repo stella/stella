@@ -13,7 +13,33 @@ import {
 } from "@/api/lib/safe-id-boundaries";
 import { decodeCursor } from "@/api/lib/search/cursor";
 import { getSearchProvider } from "@/api/lib/search/provider";
+import {
+  COMPAT_FETCH_OUTPUT_SCHEMA,
+  COMPAT_SEARCH_OUTPUT_SCHEMA,
+} from "@/api/mcp/compat-contract";
+import {
+  EMPTY_CORPUS_CURSORS,
+  hasMoreCorpusPages,
+  resolveCompatCorpusCountries,
+  searchCompatCorpus,
+} from "@/api/mcp/compat-corpus";
+import {
+  COMPAT_ID_HINT,
+  COMPAT_ID_VOCABULARY,
+  compatIdInputSchema,
+  decodeCompatId,
+} from "@/api/mcp/compat-ids";
+import {
+  compatCorpusFetchResponse,
+  compatSearchCursorError,
+  decodeCompatSearchCursor,
+  encodeCompatSearchCursor,
+  invalidCompatIdResult,
+  publicLawDisabledResult,
+  type CompatSearchPosition,
+} from "@/api/mcp/compat-shared";
 import type { McpRequestContext } from "@/api/mcp/context";
+import { isMcpToolFeatureEnabled } from "@/api/mcp/tool-feature";
 import type {
   McpCompatSearchResult,
   McpToolDefinition,
@@ -27,10 +53,9 @@ import {
   ensureWorkspaceAccess,
   errorResult,
   MAX_CURSOR_LENGTH,
+  MCP_CONTENT_MAX_CHARS,
   notFoundResult,
   nullAsAbsent,
-  structuredErrorResult,
-  uuidInputSchema,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
 import {
@@ -54,7 +79,7 @@ type CompatFetchPayload = {
   workspaceId: SafeId<"workspace">;
 };
 
-const COMPAT_FETCH_CONTENT_MAX_CHARS = 8000;
+const PUBLIC_LAW_FEATURE = "FEATURE_PUBLIC_LAW";
 
 const getFetchableEntityMap = async ({
   context,
@@ -175,6 +200,7 @@ const mapCompatSearchResults = ({
 
     return [
       {
+        kind: "matter",
         id: entityId,
         title,
         url,
@@ -264,7 +290,7 @@ const compatSearchArgsSchema = nullAsAbsent(
 
 const compatFetchArgsSchema = nullAsAbsent(
   v.strictObject({
-    id: uuidInputSchema("Document/entity ID"),
+    id: compatIdInputSchema(`Result id from search. ${COMPAT_ID_VOCABULARY}`),
     cursor: v.optional(
       v.pipe(
         v.string(),
@@ -292,11 +318,15 @@ export const COMPAT_TOOL_DEFINITIONS = [
       textFields: ["title"],
       description:
         "Search anonymized knowledge across accessible matters using the " +
-        "OpenAI-compatible search tool shape. Returns anonymized titles with ids and urls for follow-up fetch calls.",
+        "OpenAI-compatible search tool shape. Where this deployment enables the public legal " +
+        "corpus, the same query also returns case-law decisions and statutes, which are " +
+        `published law and are returned as written. ${COMPAT_ID_VOCABULARY} Pass an id back to fetch verbatim.`,
     },
     description:
       "Search knowledge across accessible matters using the OpenAI-compatible " +
-      "search tool shape. Returns results with id, title, and url for follow-up fetch calls.",
+      "search tool shape. Where this deployment enables the public legal corpus, the same " +
+      "query also returns case-law decisions and statutes for the jurisdictions the " +
+      `organization practises in. ${COMPAT_ID_VOCABULARY} Pass an id back to fetch verbatim.`,
     inputSchema: compatSearchArgsSchema,
     name: "search",
     scope: "stella:search",
@@ -313,69 +343,72 @@ export const COMPAT_TOOL_DEFINITIONS = [
       exposure: "anonymize",
       textFields: ["title", "text"],
       description:
-        "Fetch anonymized document text by id using the OpenAI-compatible fetch " +
-        "tool shape. Use ids returned by the anonymized search tool. Long documents " +
-        "are returned in windows; pass the returned nextCursor back as cursor to read more.",
+        "Fetch one search result by id using the OpenAI-compatible fetch tool " +
+        `shape. ${COMPAT_ID_VOCABULARY} A matter document is returned anonymized; a ` +
+        "decision or a statute is published law and is returned as written. Long text is " +
+        "returned in windows; pass the returned nextCursor back as cursor to read more.",
     },
     description:
-      "Fetch a knowledge document by id using the OpenAI-compatible fetch " +
-      "tool shape. Use ids returned by the search tool. Long documents are " +
-      "returned in windows; pass the returned nextCursor back as cursor to read more.",
+      "Fetch one search result by id using the OpenAI-compatible fetch tool " +
+      `shape. ${COMPAT_ID_VOCABULARY} \`metadata.kind\` says which of the three the ` +
+      "answer is. Long text is returned in windows; pass the returned nextCursor back " +
+      "as cursor to read more.",
     inputSchema: compatFetchArgsSchema,
     name: "fetch",
     scope: "stella:read",
   }),
 ] as const satisfies readonly McpToolDefinition[];
 
-const COMPAT_SEARCH_OUTPUT_SCHEMA = v.strictObject({
-  results: v.array(
-    v.strictObject({ id: v.string(), title: v.string(), url: v.string() }),
-  ),
-  nextCursor: v.optional(v.nullable(v.string())),
-});
-
-const COMPAT_FETCH_OUTPUT_SCHEMA = v.strictObject({
-  id: v.string(),
-  title: v.string(),
-  text: v.string(),
-  url: v.string(),
-  nextCursor: v.nullable(v.string()),
-  metadata: v.strictObject({
-    anonymized: v.optional(v.literal(true)),
-    anonymizedEntityCount: v.optional(v.number()),
-    charCount: v.number(),
-    source: v.literal("stella"),
-    truncated: v.boolean(),
-    workspaceId: v.string(),
-  }),
-});
-
-const handleCompatSearchTool: McpToolHandler<
-  v.InferInput<typeof COMPAT_SEARCH_OUTPUT_SCHEMA>
-> = async ({ args, context }) => {
-  const parsed = v.safeParse(compatSearchArgsSchema, args);
-  if (!parsed.success) {
-    return validationErrorResult(parsed.issues);
+/**
+ * The position a cursor names with the corpus gate closed: this pair reads
+ * matters alone, so the cursor is the knowledge provider's own, exactly as it
+ * was before the corpus reached the pair. Rejecting an undecodable one matters
+ * either way, because the provider treats a malformed cursor as no cursor and
+ * silently returns the first page, which would duplicate hits or loop a
+ * paginating client.
+ */
+const matterOnlyPosition = (
+  cursor: string | undefined,
+): CompatSearchPosition | null => {
+  if (cursor === undefined) {
+    return { matter: undefined, corpus: EMPTY_CORPUS_CURSORS };
   }
-  const { cursor, query } = parsed.output;
-  // Reject an undecodable provider cursor instead of forwarding it: the
-  // provider treats a malformed cursor as no cursor and silently returns the
-  // first page, which would duplicate hits or loop a paginating client.
-  if (cursor !== undefined && decodeCursor(cursor) === null) {
-    return structuredErrorResult({
-      code: "validation_error",
-      message: "Invalid cursor",
-      issues: [{ path: "cursor", message: "Invalid cursor" }],
-      hint: "Pass the 'cursor' verbatim as returned by a previous call, or omit it for the first page.",
-    });
-  }
+  return decodeCursor(cursor) === null
+    ? null
+    : { matter: cursor, corpus: EMPTY_CORPUS_CURSORS };
+};
 
-  // Request exactly the page size and pass the provider cursor through so
-  // pagination stays correct: the keyset cursor tracks the provider's hit
-  // position, so over-fetching and post-filtering would desync it and skip
-  // results. Non-fetchable hits are dropped, so a page may be smaller than
-  // the page size; callers keep paging while `nextCursor` is non-null.
-  const result = await (
+type MatterSearchPage = {
+  /** Passed through as the provider spelled it; absent is its own answer. */
+  nextCursor: string | null | undefined;
+  results: McpCompatSearchResult[];
+};
+
+/** What a matter source whose cursor said its pages ended answers with. */
+const EXHAUSTED_MATTER_PAGE: MatterSearchPage = {
+  nextCursor: null,
+  results: [],
+};
+
+/**
+ * One page of matter knowledge.
+ *
+ * Request exactly the page size and pass the provider cursor through so
+ * pagination stays correct: the keyset cursor tracks the provider's hit
+ * position, so over-fetching and post-filtering would desync it and skip
+ * results. Non-fetchable hits are dropped, so a page may be smaller than the
+ * page size; callers keep paging while `nextCursor` is non-null.
+ */
+const searchMatterKnowledge = async ({
+  context,
+  cursor,
+  query,
+}: {
+  context: McpRequestContext;
+  cursor: string | undefined;
+  query: string;
+}): Promise<MatterSearchPage> => {
+  const page = await (
     context.testDependencies?.getSearchProvider ?? getSearchProvider
   )().search({
     query,
@@ -386,7 +419,7 @@ const handleCompatSearchTool: McpToolHandler<
   });
 
   const hits = getCompatSearchHits({
-    hits: result.hits.map((hit) => ({
+    hits: page.hits.map((hit) => ({
       entityId: hit.entityId,
       workspaceId: hit.workspaceId,
       name: hit.title,
@@ -396,18 +429,78 @@ const handleCompatSearchTool: McpToolHandler<
     context,
     entityIds: getCompatSearchEntityIds(hits),
   });
-  const results = mapCompatSearchResults({
-    fetchableMap,
-    hits,
+
+  return {
+    nextCursor: page.nextCursor,
+    results: mapCompatSearchResults({ fetchableMap, hits }),
+  };
+};
+
+const handleCompatSearchTool: McpToolHandler<
+  v.InferInput<typeof COMPAT_SEARCH_OUTPUT_SCHEMA>
+> = async ({ args, context }) => {
+  const parsed = v.safeParse(compatSearchArgsSchema, args);
+  if (!parsed.success) {
+    return validationErrorResult(parsed.issues);
+  }
+  const { cursor, query } = parsed.output;
+  const corpusEnabled = isMcpToolFeatureEnabled(PUBLIC_LAW_FEATURE);
+
+  const position = corpusEnabled
+    ? decodeCompatSearchCursor(cursor)
+    : matterOnlyPosition(cursor);
+  if (position === null) {
+    return compatSearchCursorError();
+  }
+
+  const matter =
+    position.matter === null
+      ? EXHAUSTED_MATTER_PAGE
+      : await searchMatterKnowledge({
+          context,
+          cursor: position.matter,
+          query,
+        });
+
+  if (!corpusEnabled) {
+    return {
+      egress: "compatSearch",
+      nextCursor: matter.nextCursor,
+      results: matter.results,
+    };
+  }
+
+  const corpus = await searchCompatCorpus({
+    context,
+    countries: await resolveCompatCorpusCountries(context),
+    cursors: position.corpus,
+    query,
   });
+  if (corpus.type === "failed") {
+    return errorResult(corpus.message);
+  }
+
+  // Matter hits first, then decisions, then statutes: a caller asking this
+  // pair about its own matters must not have the answer pushed below public
+  // law it did not ask for.
+  // The merged cursor has no "not asked yet" state to carry, so a provider
+  // that answered without one has ended: `undefined` and `null` are the same
+  // position to a caller paging this page.
+  const matterNext = matter.nextCursor ?? null;
+  const exhausted = matterNext === null && !hasMoreCorpusPages(corpus.cursors);
 
   // Return the full per-workspace results (title included); the egress pipeline
-  // strips `workspaceId` in default mode and anonymizes titles in anonymized
-  // mode. The handler never branches on mode.
+  // strips `workspaceId` in default mode and anonymizes matter titles in
+  // anonymized mode. The handler never branches on mode.
   return {
     egress: "compatSearch",
-    nextCursor: result.nextCursor,
-    results,
+    nextCursor: exhausted
+      ? null
+      : encodeCompatSearchCursor({
+          matter: matterNext,
+          corpus: corpus.cursors,
+        }),
+    results: [...matter.results, ...corpus.results],
   };
 };
 
@@ -416,12 +509,22 @@ const handleCompatFetchTool: McpToolHandler<
 > = async ({ args, context }) => {
   const parsed = v.safeParse(compatFetchArgsSchema, args);
   if (!parsed.success) {
-    return validationErrorResult(
-      parsed.issues,
-      "Pass an 'id' from a search result verbatim; it is a document UUID. A stella:// resource URI is read with resources/read, not this tool.",
-    );
+    return validationErrorResult(parsed.issues, COMPAT_ID_HINT);
   }
-  const { cursor, id: rawEntityId } = parsed.output;
+  const { cursor, id: rawId } = parsed.output;
+  const compatId = decodeCompatId(rawId);
+  if (compatId === null) {
+    return invalidCompatIdResult(COMPAT_ID_HINT);
+  }
+
+  if (compatId.kind !== "document") {
+    if (!isMcpToolFeatureEnabled(PUBLIC_LAW_FEATURE)) {
+      return publicLawDisabledResult(PUBLIC_LAW_FEATURE);
+    }
+    return await compatCorpusFetchResponse({ compatId, context, cursor });
+  }
+
+  const rawEntityId = compatId.entityId;
   const entityId = brandPersistedEntityId(rawEntityId);
 
   if (context.accessibleWorkspaceIds.length === 0) {
@@ -508,12 +611,12 @@ const handleCompatFetchTool: McpToolHandler<
   return {
     egress: "compatFetch",
     cursor,
-    id: rawEntityId,
-    maxChars: COMPAT_FETCH_CONTENT_MAX_CHARS,
+    id: rawId,
+    maxChars: MCP_CONTENT_MAX_CHARS,
+    subject: { kind: "document", workspaceId: fetchPayload.workspaceId },
     text: fetchPayload.text,
     title: fetchPayload.title,
     url,
-    workspaceId: fetchPayload.workspaceId,
   };
 };
 

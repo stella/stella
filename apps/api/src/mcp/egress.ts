@@ -7,6 +7,7 @@ import type { McpMode } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
 import type {
   InternalToolResult,
+  McpCompatFetchSubject,
   McpEgressPlan,
   McpStructuredTextField,
   McpToolResponse,
@@ -266,30 +267,40 @@ const finalizeCompatSearch = async ({
   mode: McpMode;
   plan: Extract<McpEgressPlan, { egress: "compatSearch" }>;
 }): Promise<InternalToolResult> => {
-  // `workspaceId` is per-hit attribution the egress pipeline uses to group
-  // anonymization; it is stripped before the result reaches the client.
-  const results = plan.results.map(
-    ({ workspaceId: _workspaceId, ...hit }) => hit,
-  );
+  // `kind` and `workspaceId` are per-hit egress attribution; both are stripped
+  // before the result reaches the client.
+  const results = plan.results.map(({ id, title, url }) => ({
+    id,
+    title,
+    url,
+  }));
 
   // MCP access is for authorized Stella users only. In anonymized mode we still
   // search raw, non-anonymized indexed text so retrieval quality stays useful,
   // then anonymize the returned titles, grouped per workspace, before they
-  // leave Stella for the AI client.
+  // leave Stella for the AI client. A corpus hit is published law with no
+  // tenant attribution to group by, so it leaves as written: the per-hit
+  // `kind`, not the request mode alone, decides.
   if (mode === "anonymized") {
     await anonymizeTextFieldsByWorkspace({
       anonymizer,
       context,
-      fields: plan.results.map((hit, index) => ({
-        apply: (value) => {
-          const target = results[index];
-          if (target) {
-            target.title = value;
-          }
-        },
-        value: hit.title,
-        workspaceId: hit.workspaceId,
-      })),
+      fields: plan.results.flatMap((hit, index) =>
+        hit.kind === "corpus"
+          ? []
+          : [
+              {
+                apply: (value: string) => {
+                  const target = results[index];
+                  if (target) {
+                    target.title = value;
+                  }
+                },
+                value: hit.title,
+                workspaceId: hit.workspaceId,
+              },
+            ],
+      ),
     });
   }
 
@@ -307,7 +318,11 @@ const finalizeCompatFetch = async ({
   mode: McpMode;
   plan: Extract<McpEgressPlan, { egress: "compatFetch" }>;
 }): Promise<InternalToolResult> => {
-  if (mode === "anonymized") {
+  // The subject kind decides anonymization, not the request mode alone: a
+  // matter document carries tenant-authored text, while a decision or a statute
+  // is published law every reader may see as written.
+  if (mode === "anonymized" && plan.subject.kind === "document") {
+    const { workspaceId } = plan.subject;
     // Same boundary as anonymized search: the user may fetch a raw document
     // internally, but the AI client receives only the anonymized title/body.
     // Anonymize the whole document first, then window the redacted text so no
@@ -317,7 +332,7 @@ const finalizeCompatFetch = async ({
       context,
       text: plan.text,
       title: plan.title,
-      workspaceId: plan.workspaceId,
+      workspaceId,
     });
 
     const textWindow = windowTextByCursor({
@@ -336,12 +351,13 @@ const finalizeCompatFetch = async ({
       url: plan.url,
       nextCursor: textWindow.nextCursor,
       metadata: {
+        kind: "document",
         anonymized: true,
         anonymizedEntityCount: anonymized.anonymizedEntityCount,
         charCount: textWindow.charCount,
         source: "stella",
         truncated: textWindow.truncated,
-        workspaceId: plan.workspaceId,
+        workspaceId,
       },
     });
   }
@@ -362,12 +378,31 @@ const finalizeCompatFetch = async ({
     url: plan.url,
     nextCursor: textWindow.nextCursor,
     metadata: {
+      ...compatFetchSubjectMetadata(plan.subject),
       charCount: textWindow.charCount,
       source: "stella",
       truncated: textWindow.truncated,
-      workspaceId: plan.workspaceId,
     },
   });
+};
+
+/**
+ * The subject's own half of `metadata`: its kind, plus the workspace a matter
+ * document belongs to and the other kinds do not. A switch with an
+ * exhaustiveness check, so a new compat subject cannot reach a client without
+ * a decision here.
+ */
+const compatFetchSubjectMetadata = (subject: McpCompatFetchSubject) => {
+  switch (subject.kind) {
+    case "document":
+      return { kind: subject.kind, workspaceId: subject.workspaceId };
+    case "decision":
+    case "statute":
+      return { kind: subject.kind };
+    default:
+      subject satisfies never;
+      return panic("Unhandled compat fetch subject");
+  }
 };
 
 const anonymizeCompatFetchPayload = async ({

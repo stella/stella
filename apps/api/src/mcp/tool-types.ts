@@ -316,16 +316,33 @@ export const defineMcpCliToolAnnotations = <
 ): McpCliToolAnnotationMap<TDefinitions> => annotations;
 
 /**
- * Compat search hit before egress. Carries `workspaceId` so the egress pipeline
- * can group per-workspace anonymization; the field is stripped before the
- * result reaches the client.
+ * Compat search hit before egress. The `kind` is the anonymization
+ * disposition, not a display label: a `matter` hit carries tenant-authored
+ * text and the `workspaceId` the egress pipeline groups its redaction by, and
+ * a `corpus` hit is published law that every reader may see as written. Both
+ * fields are stripped before the result reaches the client.
  */
-export type McpCompatSearchResult = {
-  id: string;
-  title: string;
-  url: string;
-  workspaceId: string;
-};
+export type McpCompatSearchResult =
+  | {
+      kind: "matter";
+      id: string;
+      title: string;
+      url: string;
+      workspaceId: string;
+    }
+  | { kind: "corpus"; id: string; title: string; url: string };
+
+/**
+ * What one compat fetch is reading, and therefore whether its text is
+ * anonymizable tenant content or published law. The same discriminator is the
+ * `metadata.kind` the client receives, so the egress decision and the answer
+ * the model reads cannot disagree; `workspaceId` exists only on the branch
+ * that has one.
+ */
+export type McpCompatFetchSubject =
+  | { kind: "document"; workspaceId: string }
+  | { kind: "decision" }
+  | { kind: "statute" };
 
 /**
  * One anonymizable text field inside a generic `structured` egress payload.
@@ -427,10 +444,10 @@ export type McpEgressPlan<TPayload = unknown> =
       cursor: string | undefined;
       id: string;
       maxChars: number;
+      subject: McpCompatFetchSubject;
       text: string;
       title: string;
       url: string;
-      workspaceId: string;
     }
   | {
       egress: "structured";

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
+import { ALL_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
 import {
   describeTemplateArgsSchema,
   fillTemplateArgsSchema,
@@ -50,6 +50,11 @@ const NON_UUID_ID_INPUTS: Record<string, string> = {
   // as a display-name fallback.
   "upload_document_version.file.file_id": "host-assigned client file reference",
   "create_template.file.file_id": "host-assigned client file reference",
+  // The OpenAI-compatible id vocabulary (`compat-ids.ts`): a bare UUID for a
+  // matter document, `decision:<uuid>`, or `statute:<eli>`. The advertised
+  // `pattern` is the same grammar the reader tests, and the reader runs before
+  // anything reaches SQL, so a malformed id is still a validation issue.
+  "fetch.id": "OpenAI-compatible compat id, not a bare uuid",
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -152,7 +157,7 @@ const collectIdProperties = (
   }
 };
 
-const idProperties = DEFAULT_MCP_TOOL_DEFINITIONS.flatMap((tool) => {
+const idProperties = ALL_MCP_TOOL_DEFINITIONS.flatMap((tool) => {
   const found: { path: string; schema: unknown }[] = [];
   collectIdProperties(tool.inputSchema, tool.name, found);
   return found;
@@ -190,7 +195,7 @@ describe("MCP id inputs are validated as UUIDs", () => {
     for (const [toolName, validator] of Object.entries(
       LEGACY_MANUAL_INPUT_VALIDATORS,
     )) {
-      const tool = DEFAULT_MCP_TOOL_DEFINITIONS.find(
+      const tool = ALL_MCP_TOOL_DEFINITIONS.find(
         ({ name }) => name === toolName,
       );
       if (tool === undefined) {
@@ -216,7 +221,7 @@ describe("MCP id inputs are validated as UUIDs", () => {
   });
 
   test("every hand-written schema carrying an id is bound to its validator", () => {
-    const unbound = DEFAULT_MCP_TOOL_DEFINITIONS.filter(
+    const unbound = ALL_MCP_TOOL_DEFINITIONS.filter(
       (tool) =>
         !("inputSchemaSource" in tool) &&
         !(tool.name in LEGACY_MANUAL_INPUT_VALIDATORS) &&

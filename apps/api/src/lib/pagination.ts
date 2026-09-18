@@ -10,6 +10,15 @@ export type Page<T> = {
 
 type CursorPrimitive = string | number | boolean | null;
 
+/**
+ * One position inside an encoded cursor. A record part exists for a merged
+ * cursor whose sub-positions are keyed rather than ordered (one per corpus
+ * country, say): a positional array would make a key appearing or disappearing
+ * a silent misalignment, while a keyed one just starts that source at its
+ * first page.
+ */
+type CursorPart = CursorPrimitive | Readonly<Record<string, CursorPrimitive>>;
+
 type CursorPageOptions<T> = {
   rows: readonly T[];
   limit: number;
@@ -55,9 +64,8 @@ export async function* iterateCursorPages<T>(
   } while (cursor !== null);
 }
 
-export const encodePaginationCursor = (
-  parts: readonly CursorPrimitive[],
-): string => Buffer.from(JSON.stringify(parts)).toString("base64url");
+export const encodePaginationCursor = (parts: readonly CursorPart[]): string =>
+  Buffer.from(JSON.stringify(parts)).toString("base64url");
 
 export const decodePaginationCursor = (cursor: string): unknown[] | null => {
   try {

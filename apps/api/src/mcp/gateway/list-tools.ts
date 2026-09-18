@@ -309,8 +309,9 @@ export const skillToolDefinition = (
  */
 export const resolveMcpToolOutputContract = (
   toolName: string,
+  mode: McpMode = "default",
 ): RuntimeMcpToolOutputContract | undefined =>
-  getStaticMcpToolOutputContract(toolName) ??
+  getStaticMcpToolOutputContract(toolName, mode) ??
   getDynamicMcpToolOutputContract(toolName);
 
 type WireInputSchema = McpTool["inputSchema"];
@@ -388,9 +389,10 @@ const toWireInputSchema = (schema: McpToolInputSchema): WireInputSchema => {
 
 export const toMcpTools = (
   definitions: readonly McpToolDefinition[],
+  mode: McpMode = "default",
 ): McpTool[] =>
   definitions.map(({ _meta, annotations, description, inputSchema, name }) => {
-    const outputContract = resolveMcpToolOutputContract(name);
+    const outputContract = resolveMcpToolOutputContract(name, mode);
     return {
       ...(_meta === undefined ? {} : { _meta }),
       annotations,

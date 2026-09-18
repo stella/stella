@@ -10,19 +10,10 @@ import { mapWithConcurrency } from "@stll/concurrency";
 import type { Block } from "@stll/legal-ast/document-ast";
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
 
-import type {
-  resolveStatuteExpression,
-  resolveStatuteWorkVersion,
-  StatuteExpressionResolution,
-} from "@/api/handlers/legislation/by-eli";
-import type { readPublicLegislationHandler } from "@/api/handlers/legislation/get";
+import type { StatuteExpressionResolution } from "@/api/handlers/legislation/by-eli";
 import type { readProvisionHistoryHandler } from "@/api/handlers/legislation/provision-history";
 import { extractProvisionText } from "@/api/handlers/legislation/provision-text";
-import type {
-  LegislationProvisionVersion,
-  readLegislationProvisionVersions,
-} from "@/api/handlers/legislation/provision-versions";
-import type { searchLegislationHandler } from "@/api/handlers/legislation/search";
+import type { LegislationProvisionVersion } from "@/api/handlers/legislation/provision-versions";
 import type { listStatuteVersionsHandler } from "@/api/handlers/legislation/versions";
 import {
   READ_PROVISION_HISTORY_PROJECTION,
@@ -35,6 +26,17 @@ import { readVersionBlocks } from "@/api/lib/legal-search/legislation-version-bl
 import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
 import { LIMITS } from "@/api/lib/limits";
 import { brandPersistedLegislationDocumentId } from "@/api/lib/safe-id-boundaries";
+import {
+  isLegislationSearchSuccess,
+  isStatuteDocument,
+  defaultListStatuteVersionsHandler,
+  defaultReadLegislationProvisionVersions,
+  defaultReadProvisionHistoryHandler,
+  defaultReadPublicLegislationHandler,
+  defaultResolveStatuteExpression,
+  defaultResolveStatuteWorkVersion,
+  defaultSearchLegislationHandler,
+} from "@/api/mcp/public-law-handlers";
 import { serializeAuthorizedCorpusMcpResourceName } from "@/api/mcp/resource-serialization";
 import type {
   InternalToolErrorResult,
@@ -85,46 +87,6 @@ import {
  * (`resolveStatuteExpression`), so a tool cannot address a statute
  * differently from the reader.
  */
-
-const defaultSearchLegislationHandler: typeof searchLegislationHandler = async (
-  body,
-  legislationDb,
-) =>
-  await (
-    await import("@/api/handlers/legislation/search")
-  ).searchLegislationHandler(body, legislationDb);
-const defaultResolveStatuteExpression: typeof resolveStatuteExpression = async (
-  query,
-  legislationDb,
-) =>
-  await (
-    await import("@/api/handlers/legislation/by-eli")
-  ).resolveStatuteExpression(query, legislationDb);
-const defaultResolveStatuteWorkVersion: typeof resolveStatuteWorkVersion =
-  async (query, legislationDb) =>
-    await (
-      await import("@/api/handlers/legislation/by-eli")
-    ).resolveStatuteWorkVersion(query, legislationDb);
-const defaultReadPublicLegislationHandler: typeof readPublicLegislationHandler =
-  async (documentId, legislationDb) =>
-    await (
-      await import("@/api/handlers/legislation/get")
-    ).readPublicLegislationHandler(documentId, legislationDb);
-const defaultListStatuteVersionsHandler: typeof listStatuteVersionsHandler =
-  async (options) =>
-    await (
-      await import("@/api/handlers/legislation/versions")
-    ).listStatuteVersionsHandler(options);
-const defaultReadProvisionHistoryHandler: typeof readProvisionHistoryHandler =
-  async (options) =>
-    await (
-      await import("@/api/handlers/legislation/provision-history")
-    ).readProvisionHistoryHandler(options);
-const defaultReadLegislationProvisionVersions: typeof readLegislationProvisionVersions =
-  async (options) =>
-    await (
-      await import("@/api/handlers/legislation/provision-versions")
-    ).readLegislationProvisionVersions(options);
 
 type LegislationToolName =
   | "search_legislation"
@@ -527,16 +489,6 @@ const boundProvisionText = (text: string) => {
 
 // --- search_legislation ---------------------------------------------------
 
-type LegislationSearchSuccess = Extract<
-  Awaited<ReturnType<typeof searchLegislationHandler>>,
-  { items: unknown[] }
->;
-
-const isLegislationSearchSuccess = (
-  value: Awaited<ReturnType<typeof searchLegislationHandler>>,
-): value is LegislationSearchSuccess =>
-  typeof value === "object" && "items" in value && Array.isArray(value.items);
-
 const handleSearchLegislationTool: TypedMcpToolHandler<
   v.InferInput<typeof SEARCH_LEGISLATION_PROJECTION>
 > = async ({ args, context }) => {
@@ -616,16 +568,6 @@ const handleSearchLegislationTool: TypedMcpToolHandler<
 };
 
 // --- read_statute ---------------------------------------------------------
-
-type StatuteDocument = Extract<
-  Awaited<ReturnType<typeof readPublicLegislationHandler>>,
-  { eli: string }
->;
-
-const isStatuteDocument = (
-  value: Awaited<ReturnType<typeof readPublicLegislationHandler>>,
-): value is StatuteDocument =>
-  typeof value === "object" && "eli" in value && typeof value.eli === "string";
 
 type StatuteVersionsPage = Extract<
   Awaited<ReturnType<typeof listStatuteVersionsHandler>>,

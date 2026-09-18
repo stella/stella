@@ -38,7 +38,7 @@ import type { McpToolFeatureFlag } from "@/api/mcp/tool-types";
  * tenant data. Both belong off the tool ceiling.
  *
  * Every resource is public, static and tenant-independent, so a mode projects
- * the set only to keep it answerable: the law audience carries seven corpus
+ * the set only to keep it answerable: the law audience carries the corpus
  * tools and no template or upload tool, and a reference for a workflow it
  * cannot drive is context an agent pays for and cannot use.
  */

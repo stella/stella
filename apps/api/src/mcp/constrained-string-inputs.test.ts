@@ -45,7 +45,7 @@ import {
 import { UUID_PATTERN } from "@stll/uuid-codec";
 
 import { isRecord } from "@/api/lib/type-guards";
-import { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
+import { ALL_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
 import api from "@/api/server";
 
 /**
@@ -112,6 +112,12 @@ const HAND_CONSTRAINED_STRING_INPUTS: Record<string, string> = {
     "publisher-minted BOE consolidated-law identifier",
   "GET /v1/legislation/laws/:lawId/related.params.lawId":
     "publisher-minted BOE consolidated-law identifier",
+
+  // The OpenAI-compatible id vocabulary: a value `search` mints and the caller
+  // echoes back, never one a model composes. Its pattern is rendered from the
+  // same grammar the reader tests (`compat-ids.ts`), so there is nothing here
+  // for a value-kind reader to normalize.
+  "fetch.id": "an id `search` minted, echoed back verbatim",
 
   "search_boe_legislation.cursor":
     "an opaque server-issued page token, not a model-authored value",
@@ -194,7 +200,7 @@ const collectStringProperties = (
   }
 };
 
-const toolStringProperties = DEFAULT_MCP_TOOL_DEFINITIONS.flatMap((tool) => {
+const toolStringProperties = ALL_MCP_TOOL_DEFINITIONS.flatMap((tool) => {
   const found: StringProperty[] = [];
   collectStringProperties(tool.inputSchema, tool.name, found);
   return found;
