@@ -19,6 +19,39 @@ describe("CSS correctness guard", () => {
     ["declaration-property-value-no-unknown", ".sample { display: blcok; }"],
     ["property-no-unknown", ".sample { colro: red; }"],
     ["selector-no-unmatchable", "label:checked { color: red; }"],
+    // conventions-ux: never `transition: all`, animate transform/opacity only.
+    [
+      "declaration-property-value-disallowed-list",
+      ".sample { transition: all; }",
+    ],
+    [
+      "declaration-property-value-disallowed-list",
+      ".sample { transition: all 150ms ease; }",
+    ],
+    [
+      "declaration-property-value-disallowed-list",
+      ".sample { transition-property: opacity, all; }",
+    ],
+    [
+      "declaration-property-value-disallowed-list",
+      ".sample { transition: height 150ms; }",
+    ],
+    [
+      "declaration-property-value-disallowed-list",
+      ".sample { transition: opacity 150ms, margin-inline 150ms; }",
+    ],
+    [
+      "declaration-property-value-disallowed-list",
+      ".sample { transition-property: max-height; }",
+    ],
+    [
+      "rule-selector-property-disallowed-list",
+      "@keyframes grow { from { height: 0; } to { height: 100%; } }",
+    ],
+    [
+      "rule-selector-property-disallowed-list",
+      "@keyframes shift { 0%, 40% { inset-inline-start: 0; } 100% { inset-inline-start: 1rem; } }",
+    ],
   ])("rejects %s through the production config", async (rule, code) => {
     const result = await lintCss(code);
     expect(result.errored).toBe(true);
@@ -39,6 +72,31 @@ describe("CSS correctness guard", () => {
         color: color-mix(in oklch, var(--color-brand), transparent 20%);
         padding-inline: 1rem;
         &:focus-visible { outline: 2px solid currentColor; }
+      }
+    `);
+    expect(result.errored).toBe(false);
+    expect(result.results.flatMap((file) => file.warnings)).toEqual([]);
+  });
+
+  test("accepts motion that names compositable properties", async () => {
+    const result = await lintCss(`
+      .sample {
+        transition: opacity 150ms, transform 150ms;
+        transition-property: color, box-shadow;
+      }
+      .other {
+        transition:
+          --brand-gradient-end 800ms ease,
+          background-color 120ms ease-out;
+      }
+      .reduced { transition: none !important; }
+      @keyframes rise {
+        from { opacity: 0; transform: translateY(4px); }
+        to { opacity: 1; transform: none; }
+      }
+      @keyframes tint {
+        0%, 35% { background-color: currentColor; border-top-left-radius: 0; }
+        100% { background-color: transparent; }
       }
     `);
     expect(result.errored).toBe(false);

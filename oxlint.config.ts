@@ -185,6 +185,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-physical-properties.fixture.ts", [
     "no-physical-properties/no-physical-properties",
   ]),
+  fixtureRuleOverride("no-layout-motion-classes.fixture.ts", [
+    "no-layout-motion-classes/no-layout-motion-classes",
+  ]),
   fixtureRuleOverride("prefer-temporal.fixture.ts", [
     "prefer-temporal/prefer-temporal",
   ]),
@@ -1060,6 +1063,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-ambient-hotkey-format.ts",
     "./.oxlint-plugins/no-ambient-nondeterminism.ts",
     "./.oxlint-plugins/no-physical-properties.ts",
+    "./.oxlint-plugins/no-layout-motion-classes.ts",
     "./.oxlint-plugins/no-body-ownership-ids.ts",
     "./.oxlint-plugins/no-raw-error-logging.ts",
     "./.oxlint-plugins/no-redacted-log-attribute-key.ts",
@@ -1739,6 +1743,59 @@ export default defineConfig({
         "no-raw-foreground-opacity/no-raw-foreground-opacity": "error",
         "no-inline-style-colors/no-inline-style-colors": "error",
         "no-physical-properties/no-physical-properties": "error",
+        "no-layout-motion-classes/no-layout-motion-classes": [
+          "error",
+          {
+            // Surfaces that change their own box. A transform moves the paint
+            // and leaves the box siblings lay out against where it was, so
+            // these have no compositable spelling. The exemption covers the
+            // layout-property diagnostics only: `transition-all` and the
+            // viewport utilities stay reported here too, and an entry needs a
+            // reason naming the surface that owns the box.
+            allowedFiles: [
+              {
+                path: "apps/web/src/routes/_protected.settings/organization.usage.tsx",
+                reason:
+                  "Usage meter animates the bar width it owns as the quota fills.",
+              },
+              {
+                path: "apps/web/src/routes/_protected.workspaces/-components/alphabet-index.tsx",
+                reason:
+                  "Alphabet rail animates the width it owns between its collapsed and expanded states, and its hovered letter pill the max-width and font-size it owns.",
+              },
+              {
+                path: "packages/ui/src/components/accordion.tsx",
+                reason:
+                  "Accordion panel is a disclosure: it opens from zero to the height it owns.",
+              },
+              {
+                path: "packages/ui/src/components/outline-rail.tsx",
+                reason:
+                  "Outline rail marker animates the width and height it owns as the active section changes.",
+              },
+              {
+                path: "packages/ui/src/components/popover.tsx",
+                reason:
+                  "Popover popup morphs between the width and height it owns as its content changes size.",
+              },
+              {
+                path: "packages/ui/src/components/sidebar.tsx",
+                reason:
+                  "Sidebar rail animates the width and inline inset it owns as it collapses to icon width.",
+              },
+              {
+                path: "packages/ui/src/components/tabs.tsx",
+                reason:
+                  "Active-tab indicator animates the width and height it owns onto the selected tab.",
+              },
+              {
+                path: "packages/ui/src/components/tooltip.tsx",
+                reason:
+                  "Tooltip positioner animates the inset it owns when it repositions on collision, and its popup the width and height it owns.",
+              },
+            ],
+          },
+        ],
       },
     },
     {

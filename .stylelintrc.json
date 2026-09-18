@@ -10,8 +10,29 @@
       true,
       { "ignore": ["consecutive-duplicates-with-different-values"] }
     ],
+    "declaration-property-value-disallowed-list": [
+      {
+        "/^transition(-property)?$/": [
+          "/(^|[\\s,])all([\\s,]|$)/",
+          "/(^|[\\s,])(min-|max-)?(width|height|top|right|bottom|left|inset|margin|padding|flex-basis|font-size)(-[a-z-]+)?([\\s,]|$)/"
+        ]
+      },
+      {
+        "message": "conventions-ux (Interactions & Animations): never transition `all`, and animate only compositable properties (transform, opacity, colours, shadows); a layout property forces a layout recalc on every frame. Found \"%s: %s\"."
+      }
+    ],
     "declaration-property-value-no-unknown": true,
     "property-no-unknown": true,
+    "rule-selector-property-disallowed-list": [
+      {
+        "/^\\s*(from|to|-?\\d+(\\.\\d+)?%)(\\s*,\\s*(from|to|-?\\d+(\\.\\d+)?%))*\\s*$/": [
+          "/^(min-|max-)?(width|height|top|right|bottom|left|inset|margin|padding|flex-basis|font-size)(-[a-z-]+)?$/"
+        ]
+      },
+      {
+        "message": "conventions-ux (Interactions & Animations): animate transform and opacity only. The `%s` frame animates `%s`, which forces a layout recalc on every frame; use scale/translate instead."
+      }
+    ],
     "selector-no-unmatchable": true
   }
 }

@@ -11,6 +11,7 @@ setDefaultTimeout(20_000);
 const PLUGINS = [
   "no-awaited-builder-union",
   "no-coerced-optional-union-enum",
+  "no-layout-motion-classes",
   "no-physical-properties",
 ] as const;
 
@@ -101,6 +102,16 @@ describe.serial("custom oxlint safe fixers", () => {
         'export const view = <div className="ml-2 mr-3 pl-4 pr-5 -left-1 right-[2px] text-left text-right border-l border-r-2 rounded-l rounded-r-xl rounded-tl-md rounded-tr rounded-bl-lg rounded-br scroll-ml-2 scroll-mr-2 scroll-pl-3 hover:scroll-pr-3" />;\nexport const template = <div className={`hover:pr-4 md:rounded-l-lg`} />;\n',
       expected:
         'export const view = <div className="ms-2 me-3 ps-4 pe-5 -start-1 end-[2px] text-start text-end border-s border-e-2 rounded-s rounded-e-xl rounded-ss-md rounded-se rounded-es-lg rounded-ee scroll-ms-2 scroll-me-2 scroll-ps-3 hover:scroll-pe-3" />;\nexport const template = <div className={`hover:pe-4 md:rounded-s-lg`} />;\n',
+    });
+  });
+
+  test("rewrites transition-all and the screen viewport utilities", async () => {
+    await expectFixedPoint({
+      fileName: "subject.tsx",
+      source:
+        'export const view = <div className="transition-all h-screen min-h-screen max-h-screen w-screen hover:transition-all md:min-h-screen!" />;\nexport const composed = cn("transition-all", `min-h-screen`);\n',
+      expected:
+        'export const view = <div className="transition h-dvh min-h-dvh max-h-dvh w-dvw hover:transition md:min-h-dvh!" />;\nexport const composed = cn("transition", `min-h-dvh`);\n',
     });
   });
 
