@@ -52,6 +52,7 @@ import {
   czRegionalFixture,
   czUsFixture,
   huBhgyFixture,
+  plCourtsFixture,
   plSnFixture,
   skCourtsFixture,
   skUsFixture,
@@ -94,7 +95,10 @@ const ADAPTER_INVENTORY_COVERAGE = {
     fixture: skCourtsFixture,
   },
   [ADAPTER_KEYS.SK_US]: { disposition: "enrolled", fixture: skUsFixture },
-  [ADAPTER_KEYS.PL_COURTS]: PENDING,
+  [ADAPTER_KEYS.PL_COURTS]: {
+    disposition: "enrolled",
+    fixture: plCourtsFixture,
+  },
   [ADAPTER_KEYS.PL_SN]: { disposition: "enrolled", fixture: plSnFixture },
   [ADAPTER_KEYS.AT_COURTS]: {
     disposition: "enrolled",

@@ -1,0 +1,7 @@
+{
+  "capture": "recorded",
+  "sha256": "a8072b451712cca4a4fdc1371a6c8506bdb390749a4887d6c41d777526291cbb",
+  "sourceUrl": "https://www.saos.org.pl/api/search/judgments?pageSize=50&pageNumber=0&sortingField=DATABASE_ID&sortingDirection=ASC&judgmentDateFrom=2018-03-22&judgmentDateTo=2018-03-22",
+  "capturedAt": "2026-09-18T20:01:48.968Z",
+  "note": "search page for one judgment date; the reconciliation listing shape"
+}

@@ -57,6 +57,8 @@ import {
   czRegionalFixture,
   czUsFixture,
   huBhgyFixture,
+  plCourtsFixture,
+  plCourtsSearchFixture,
   plSnFixture,
   skCourtsFixture,
   skUsFixture,
@@ -119,6 +121,10 @@ const SURFACE_EVIDENCE = {
   ],
   [ADAPTER_KEYS.SK_US]: [{ kind: "built", fixture: skUsFixture }],
   [ADAPTER_KEYS.PL_COURTS]: [
+    { kind: "built", fixture: plCourtsFixture },
+    // The second listing is a second decision: a row is named by the dump or
+    // by the date-filtered search, so no one envelope holds both parts.
+    { kind: "built", fixture: plCourtsSearchFixture },
     { kind: "page-recording", file: "pl-courts-page.json.gz" },
   ],
   [ADAPTER_KEYS.PL_SN]: [

@@ -489,11 +489,14 @@ export const LEGACY_RAW_SHAPES = {
       part: "document-file",
     },
   ],
+  // Kept after the adapter moved to the envelope: every row stored before it
+  // holds the pair in this wrapper, and the dump row it holds is the
+  // allowlisted reading of the listing response rather than the response.
   [ADAPTER_KEYS.PL_COURTS]: [
     {
       shape: "wrapper-json",
       contentTypes: ["application/json"],
-      keys: { dumpItem: "listing", detail: "detail" },
+      keys: { dumpItem: "listing-dump", detail: "detail" },
     },
   ],
   [ADAPTER_KEYS.EU_ECJ]: [
@@ -1131,7 +1134,6 @@ type DeclaredSourceFieldInventory = {
  * join is written here rather than derived from the registry.
  */
 const LEGACY_UNINVENTORIED_ADAPTERS = [
-  ADAPTER_KEYS.PL_COURTS,
   ADAPTER_KEYS.EU_ECJ,
 ] as const satisfies readonly AdapterKey[];
 
