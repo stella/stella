@@ -97,11 +97,16 @@ export const PdfBreadcrumb = () => {
     ? renameEntity.variables.name
     : null;
 
-  const isRenameable = canRenameDocumentCrumb({
-    entityId,
-    canUpdateEntity,
-    isLastCrumb: pdfMode !== "organize",
-  });
+  // Until the metadata lands there is no stored name to edit, only the
+  // `fieldId` the crumb falls back to; a commit then would rename the document
+  // to that id.
+  const isRenameable =
+    fileName !== undefined &&
+    canRenameDocumentCrumb({
+      entityId,
+      canUpdateEntity,
+      isLastCrumb: pdfMode !== "organize",
+    });
 
   return (
     <>

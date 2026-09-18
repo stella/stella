@@ -64,6 +64,11 @@ type DocumentRenameSubmissionInput = {
  * What a commit sends. The draft edits the base name only, so the stored
  * extension is re-appended; a blank or unchanged result sends nothing, which
  * is also what Escape leaves behind because it never reaches this point.
+ *
+ * The editor hands the draft over trimmed, so a stored name padded with
+ * whitespace (`" Draft.docx"`) comes back shortened without the user typing
+ * anything. Comparing against the trimmed base name keeps that blur a no-op
+ * rather than a rename nobody asked for.
  */
 export const resolveDocumentRenameSubmission = ({
   draft,
@@ -73,9 +78,9 @@ export const resolveDocumentRenameSubmission = ({
   if (trimmed.length === 0) {
     return { type: "discard" };
   }
-  const name = `${trimmed}${splitFileName(currentName).extension}`;
-  if (name === currentName) {
+  const { baseName, extension } = splitFileName(currentName);
+  if (trimmed === baseName.trim()) {
     return { type: "discard" };
   }
-  return { type: "commit", name };
+  return { type: "commit", name: `${trimmed}${extension}` };
 };

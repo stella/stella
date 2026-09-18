@@ -115,6 +115,21 @@ describe("committing a document crumb rename", () => {
     ).toEqual({ type: "discard" });
   });
 
+  test("sends nothing when only the stored name's padding differs", () => {
+    expect(
+      resolveDocumentRenameSubmission({
+        draft: "Draft",
+        currentName: " Draft.docx",
+      }),
+    ).toEqual({ type: "discard" });
+    expect(
+      resolveDocumentRenameSubmission({
+        draft: "Draft",
+        currentName: "Draft .docx",
+      }),
+    ).toEqual({ type: "discard" });
+  });
+
   test("renames a document that has no extension", () => {
     expect(
       resolveDocumentRenameSubmission({
