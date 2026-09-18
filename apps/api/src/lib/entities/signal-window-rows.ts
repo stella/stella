@@ -17,7 +17,7 @@ const ENTITY_COLUMN_KEYS = Object.keys(ENTITY_COLUMNS).filter(
 );
 
 /** The discriminator column the union adds beside the entity columns. */
-export const WINDOW_ROW_KIND_COLUMN = "row_kind";
+const WINDOW_ROW_KIND_COLUMN = "row_kind";
 
 const PROPOSAL = sql.identifier("signal_proposal");
 const proposalKind = sql`${PROPOSAL}.kind`;
