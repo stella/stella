@@ -217,7 +217,7 @@
       "apps/api/src/lib/legal-search/corpus-pack.ts": 6,
       "apps/api/src/lib/legal-search/corpus-storage.ts": 4,
       "apps/api/src/lib/legal-search/ingestion-normalization.ts": 4,
-      "apps/api/src/handlers/case-law/ingestion/sk-document-backfill.ts": 1,
+      "apps/api/src/lib/legal-search/sk-document-backfill.ts": 1,
       "apps/api/src/lib/mcp-upstream/connections.ts": 3,
       "apps/api/src/lib/mcp-upstream/crypto.ts": 2,
       "apps/api/src/lib/mcp-upstream/oauth.ts": 2,

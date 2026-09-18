@@ -9,13 +9,13 @@
 
 import { describe, expect, test } from "bun:test";
 
-import type { PendingDocument } from "@/api/handlers/case-law/ingestion/sk-document-backfill";
-import type { PendingDocumentTierLoaders } from "@/api/handlers/case-law/ingestion/sk-document-queue";
+import { createSafeId } from "@/api/lib/branded-types";
+import type { PendingDocument } from "@/api/lib/legal-search/sk-document-backfill";
+import type { PendingDocumentTierLoaders } from "@/api/lib/legal-search/sk-document-queue";
 import {
   DOCUMENT_TIER,
   createPendingDocumentQueue,
-} from "@/api/handlers/case-law/ingestion/sk-document-queue";
-import { createSafeId } from "@/api/lib/branded-types";
+} from "@/api/lib/legal-search/sk-document-queue";
 
 const PAGE_SIZE = 5;
 const PROBE_INTERVAL_MS = 5000;

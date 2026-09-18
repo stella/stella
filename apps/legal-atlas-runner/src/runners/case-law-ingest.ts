@@ -40,6 +40,7 @@ import {
 import {
   getAdapter,
   listAdapters,
+  skCourtsDocumentFetch,
 } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import {
   CYCLE_HALT_REASON,
@@ -53,12 +54,6 @@ import {
   runReconciliationWorkUnit,
 } from "@/api/handlers/case-law/ingestion/reconciliation-engine";
 import {
-  DOCUMENT_FETCH_BUDGET_MS,
-  fetchDecisionDocument,
-  scopedPendingDocumentTierLoaders,
-} from "@/api/handlers/case-law/ingestion/sk-document-backfill";
-import { createPendingDocumentQueue } from "@/api/handlers/case-law/ingestion/sk-document-queue";
-import {
   readSourceReportedTotals,
   setSourceReportedTotal,
 } from "@/api/handlers/case-law/ingestion/source-totals";
@@ -68,6 +63,12 @@ import { IngestionStallError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { backfillSearchIndex } from "@/api/lib/legal-search/case-law-search-index";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
+import {
+  DOCUMENT_FETCH_BUDGET_MS,
+  fetchDecisionDocument,
+  scopedPendingDocumentTierLoaders,
+} from "@/api/lib/legal-search/sk-document-backfill";
+import { createPendingDocumentQueue } from "@/api/lib/legal-search/sk-document-queue";
 import { logger } from "@/api/lib/observability/logger";
 import {
   isCorpusS3Stale,
@@ -1359,6 +1360,7 @@ export const runCaseLawIngest = async (
           async () =>
             await fetchDecisionDocument({
               decision,
+              fetchDocument: skCourtsDocumentFetch,
               scopedDb: backfillDb,
               signal: AbortSignal.timeout(DOCUMENT_FETCH_BUDGET_MS),
             }),

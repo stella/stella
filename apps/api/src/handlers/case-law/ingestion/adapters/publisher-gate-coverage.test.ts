@@ -43,6 +43,20 @@ const DIRECT_FETCH_MODULES = {
   "ingestion/adapters/update-fixtures.ts": "test-only",
 } as const;
 
+/**
+ * Modules outside the scanned trees that still download from a publisher, and
+ * do it with a fetch their caller injects.
+ *
+ * The Slovak document walk is the one of these: it lives in `lib/`, which may
+ * not import this slice, so it cannot call the gate itself and the scan above
+ * never reaches it. What keeps it honest is the other half of the same rule —
+ * it holds no fetch of its own, so the gated fetch its callers pass is the
+ * only way it reaches the court's host.
+ *
+ * Paths are relative to `apps/api/src`.
+ */
+const INJECTED_FETCH_MODULES = ["lib/legal-search/sk-document-backfill.ts"];
+
 /** How a module reaches the network without the gate noticing. */
 const UNGATED_CALL_PATTERNS = [
   { name: "fetchWithTimeout(", pattern: /\bfetchWithTimeout\(/u },
@@ -91,6 +105,16 @@ const sourceOf = async (entry: string): Promise<string> =>
 const codeOf = async (entry: string): Promise<string> =>
   withoutComments(await sourceOf(entry));
 
+const apiSrcRoot = nodePath.resolve(caseLawRoot, "../..");
+
+const expectNoUngatedCall = (entry: string, code: string): void => {
+  for (const { name, pattern } of UNGATED_CALL_PATTERNS) {
+    expect(`${entry} uses ${name}: ${pattern.test(code)}`).toBe(
+      `${entry} uses ${name}: false`,
+    );
+  }
+};
+
 describe("every publisher request goes through the gate", () => {
   test("the patterns match a module that reaches the network directly", () => {
     const ungated = [
@@ -137,13 +161,16 @@ describe("every publisher request goes through the gate", () => {
   test.each(gatedModules)(
     "%s reaches no publisher on its own",
     async (entry) => {
-      const source = await codeOf(entry);
+      expectNoUngatedCall(entry, await codeOf(entry));
+    },
+  );
 
-      for (const { name, pattern } of UNGATED_CALL_PATTERNS) {
-        expect(`${entry} uses ${name}: ${pattern.test(source)}`).toBe(
-          `${entry} uses ${name}: false`,
-        );
-      }
+  test.each(INJECTED_FETCH_MODULES)(
+    "%s holds no fetch of its own, so its caller's gated one is the only one",
+    async (entry) => {
+      const source = await Bun.file(nodePath.resolve(apiSrcRoot, entry)).text();
+
+      expectNoUngatedCall(entry, withoutComments(source));
     },
   );
 });

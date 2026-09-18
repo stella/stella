@@ -43,9 +43,6 @@ import {
   caseLawDecisions,
 } from "@/api/db/schema";
 import { corpusStorageMode } from "@/api/env-base";
-import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
-import { fetchPublisher } from "@/api/handlers/case-law/ingestion/adapters/retry";
-import type { PendingDocumentTierLoaders } from "@/api/handlers/case-law/ingestion/sk-document-queue";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   TEXT_ABSENCE_REASON,
@@ -79,11 +76,15 @@ import type {
   CorpusPayloadColumns,
   WriteCorpusResult,
 } from "@/api/lib/legal-search/corpus-storage";
-import { PARSER_VERSIONS } from "@/api/lib/legal-search/ingestion-constants";
+import {
+  ADAPTER_KEYS,
+  PARSER_VERSIONS,
+} from "@/api/lib/legal-search/ingestion-constants";
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
 import { parseSkDecisionPdf } from "@/api/lib/legal-search/parsers/sk-courts";
 import { segmentDecision } from "@/api/lib/legal-search/segment-decision";
 import { restrictSkCourtDocumentUrl } from "@/api/lib/legal-search/sk-court-document-url";
+import type { PendingDocumentTierLoaders } from "@/api/lib/legal-search/sk-document-queue";
 import { isRecord } from "@/api/lib/type-guards";
 import { withTimeout } from "@/api/lib/with-timeout";
 
@@ -101,26 +102,35 @@ export type PendingDocument = {
 };
 
 /**
- * PDFs are large and the court's site is slow; this is the timeout the
- * adapter used before the download was deferred.
+ * The gated download of one decision's PDF.
+ *
+ * One request per decision over a corpus of millions makes this walk the
+ * largest traffic the slice sends the court's host, so every download has to
+ * be counted against that publisher's budget. The gate lives in the ingestion
+ * slice, which `lib` may not import, so the caller supplies it — required, and
+ * never defaulted, because a call site that forgot it would download outside
+ * the budget and nothing would say so.
  */
-const PDF_TIMEOUT_MS = 30_000;
+export type SkDocumentFetch = (
+  url: URL,
+  init: { signal?: AbortSignal },
+) => Promise<Response>;
+
+export type FetchPdfBytesOptions = {
+  documentUrl: string;
+  fetchDocument: SkDocumentFetch;
+  signal: AbortSignal;
+};
 
 /**
  * The decision's document, or `undefined` where the publisher states there is
  * none to fetch.
- *
- * Through the adapter's own gate, and counted against its publisher's budget.
- * One request per decision over a corpus of millions makes this walk the
- * largest traffic the slice sends that host, so a download that paced itself
- * was the one spend nothing could see — which is also why this module sits in
- * the tree `publisher-gate-coverage.test.ts` scans rather than beside the
- * parsers it feeds.
  */
-export const fetchPdfBytes = async (
-  documentUrl: string,
-  signal: AbortSignal,
-): Promise<Uint8Array | undefined> => {
+export const fetchPdfBytes = async ({
+  documentUrl,
+  fetchDocument,
+  signal,
+}: FetchPdfBytesOptions): Promise<Uint8Array | undefined> => {
   const target = restrictSkCourtDocumentUrl(documentUrl);
   if (target === null) {
     // Persisted legacy rows can predate the provider boundary. Returning the
@@ -129,12 +139,7 @@ export const fetchPdfBytes = async (
     return undefined;
   }
 
-  const response = await fetchPublisher(target, {
-    adapterKey: ADAPTER_KEYS.SK_COURTS,
-    redirect: "error",
-    signal,
-    timeoutMs: PDF_TIMEOUT_MS,
-  });
+  const response = await fetchDocument(target, { signal });
   if (response.ok) {
     return new Uint8Array(await response.arrayBuffer());
   }
@@ -921,12 +926,15 @@ export const DOCUMENT_FETCH_BUDGET_MS = 60_000;
 
 export type FetchDecisionDocumentOptions = {
   decision: PendingDocument;
+  /** The publisher's gate, supplied by the caller. See `SkDocumentFetch`. */
+  fetchDocument: SkDocumentFetch;
   scopedDb: ScopedDb;
   signal: AbortSignal;
 };
 
 const runDecisionDocumentFetch = async ({
   decision,
+  fetchDocument,
   scopedDb,
   signal,
 }: FetchDecisionDocumentOptions): Promise<DecisionDocumentOutcome> => {
@@ -936,7 +944,11 @@ const runDecisionDocumentFetch = async ({
   }
 
   const pdfBytes = decision.documentUrl
-    ? await fetchPdfBytes(decision.documentUrl, signal)
+    ? await fetchPdfBytes({
+        documentUrl: decision.documentUrl,
+        fetchDocument,
+        signal,
+      })
     : undefined;
   const document = pdfBytes
     ? await parsePendingDocument(decision, pdfBytes)

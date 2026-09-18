@@ -18,7 +18,7 @@ import { Temporal } from "@stll/time";
  * connection pool.
  */
 
-import type { PendingDocument } from "@/api/handlers/case-law/ingestion/sk-document-backfill";
+import type { PendingDocument } from "@/api/lib/legal-search/sk-document-backfill";
 
 export const DOCUMENT_TIER = {
   /** Asked for by a reader the read path could not serve in time. */

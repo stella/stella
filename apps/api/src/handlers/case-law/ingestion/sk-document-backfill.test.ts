@@ -18,7 +18,7 @@ import {
   remainingDocumentPredicate,
   requestedDocumentOrder,
   requestedDocumentPredicate,
-} from "@/api/handlers/case-law/ingestion/sk-document-backfill";
+} from "@/api/lib/legal-search/sk-document-backfill";
 
 const dialect = new PgDialect();
 
@@ -30,10 +30,13 @@ const compileOrder = (fragments: readonly SQL[]) =>
 
 describe("deferred document queue shape", () => {
   test("treats a persisted out-of-boundary URL as unavailable", async () => {
-    const result = await fetchPdfBytes(
-      "http://legacy.invalid/document.pdf",
-      new AbortController().signal,
-    );
+    const result = await fetchPdfBytes({
+      documentUrl: "http://legacy.invalid/document.pdf",
+      // The boundary is checked before anything is downloaded, so a fetcher
+      // that cannot run is the assertion: reaching it would be the bug.
+      fetchDocument: () => panic("off-origin URL must not be fetched"),
+      signal: new AbortController().signal,
+    });
 
     expect(result).toBeUndefined();
   });

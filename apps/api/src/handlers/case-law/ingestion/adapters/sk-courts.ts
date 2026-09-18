@@ -60,6 +60,7 @@ import {
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { restrictSkCourtDocumentUrl } from "@/api/lib/legal-search/sk-court-document-url";
+import type { SkDocumentFetch } from "@/api/lib/legal-search/sk-document-backfill";
 import { logger } from "@/api/lib/observability/logger";
 import { sanitizeUrl } from "@/api/lib/sanitize-url";
 import { isRecord } from "@/api/lib/type-guards";
@@ -107,6 +108,28 @@ const ITEM_CONCURRENCY = 10;
 const LIST_TIMEOUT_MS = 60_000;
 /** The only language this source publishes; half of the fallback identity. */
 export const SK_COURTS_LANGUAGE = "sk";
+
+/**
+ * PDFs are large and the court's site is slow; this is the timeout the
+ * adapter used before the download was deferred to the document walk.
+ */
+const DOCUMENT_TIMEOUT_MS = 30_000;
+
+/**
+ * The gated download the deferred document walk runs on.
+ *
+ * The walk lives in `lib/legal-search/sk-document-backfill.ts`, which may not
+ * import this slice, so it takes its fetch from whoever starts it and this is
+ * the value every caller passes: this publisher's budget, the redirect rule
+ * and the download timeout in one place.
+ */
+export const skCourtsDocumentFetch: SkDocumentFetch = async (url, { signal }) =>
+  await fetchPublisher(url, {
+    adapterKey: ADAPTER_KEYS.SK_COURTS,
+    redirect: "error",
+    signal,
+    timeoutMs: DOCUMENT_TIMEOUT_MS,
+  });
 
 const arrayOrEmpty = <T>(value: T[] | null | undefined): T[] => {
   if (value === undefined || value === null) {

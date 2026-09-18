@@ -258,7 +258,7 @@ const PUBLIC_DECISION_READ_GATES = {
   "apps/api/src/lib/legal-search/pg-fts-legal-provider.ts": {
     gate: PUBLIC_DECISION_READ_GATE.PREDICATE,
   },
-  "apps/api/src/handlers/case-law/ingestion/sk-document-backfill.ts": {
+  "apps/api/src/lib/legal-search/sk-document-backfill.ts": {
     gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
     reason: "Ingestion backfill of Slovak documents; not a public read.",
   },
