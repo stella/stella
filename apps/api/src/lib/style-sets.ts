@@ -1,11 +1,12 @@
 import { Result } from "better-result";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { styleSets } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createTemplateBuffer } from "@/api/lib/docx-authoring/create-template-buffer";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import type { StyleGuide } from "@/api/lib/house-style/guide";
 import { readS3ArrayBuffer } from "@/api/lib/s3";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
@@ -86,12 +87,20 @@ type ReadStyleSetPackageOptions = {
   styleSetId: SafeId<"styleSet">;
 };
 
+export type StyleSetPackage = {
+  buffer: Buffer;
+  name: string;
+  updatedAt: Date;
+  /** Null until a style guide has been written for this style set. */
+  styleGuide: StyleGuide | null;
+};
+
 export const readStyleSetPackage = async ({
   safeDb,
   organizationId,
   styleSetId,
 }: ReadStyleSetPackageOptions): Promise<
-  Result<{ buffer: Buffer; name: string; updatedAt: Date }, HandlerError>
+  Result<StyleSetPackage, HandlerError>
 > => {
   const styleSetResult = await safeDb(async (tx) => {
     const [styleSet] = await tx
@@ -99,6 +108,7 @@ export const readStyleSetPackage = async ({
         name: styleSets.name,
         s3Key: styleSets.s3Key,
         updatedAt: styleSets.updatedAt,
+        styleGuide: styleSets.styleGuide,
       })
       .from(styleSets)
       .where(
@@ -125,13 +135,14 @@ export const readStyleSetPackage = async ({
       new HandlerError({ status: 404, message: "Style set not found" }),
     );
   }
-  const { name, s3Key, updatedAt } = styleSetResult.value;
+  const { name, s3Key, updatedAt, styleGuide } = styleSetResult.value;
 
   return await Result.tryPromise({
     try: async () => ({
       buffer: Buffer.from(await readS3ArrayBuffer(s3Key)),
       name,
       updatedAt,
+      styleGuide,
     }),
     catch: (cause) =>
       new HandlerError({
@@ -159,4 +170,15 @@ export const styleSetColumns = {
   sizeBytes: styleSets.sizeBytes,
   createdAt: styleSets.createdAt,
   updatedAt: styleSets.updatedAt,
+};
+
+/**
+ * Whether a style set can be converted into, without sending a listing every
+ * guide's prose: conversion needs one and the picker says so before asking.
+ */
+export const styleSetListColumns = {
+  ...styleSetColumns,
+  hasStyleGuide: sql<boolean>`${styleSets.styleGuide} IS NOT NULL`.as(
+    "has_style_guide",
+  ),
 };

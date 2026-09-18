@@ -32,6 +32,7 @@ import type {
   SystemOneQuestion,
   SystemOneQuestions,
   SystemOneState,
+  SystemOneUsage,
 } from "@/api/lib/decisions/system-one";
 import { SYSTEM_ONE_USD_PER_INPUT_TOKEN } from "@/api/lib/decisions/system-one";
 import { logger } from "@/api/lib/observability/logger";
@@ -97,6 +98,9 @@ export type DecideManyResult<TQuestions extends SystemOneQuestions> = {
   decisions: Decisions<TQuestions>;
   /** The versioned model that answered; null when nothing was asked. */
   model: string | null;
+  /** What the call cost, for a caller that prices a run; null when nothing was asked. */
+  usage: SystemOneUsage | null;
+  latencyMs: number | null;
 };
 
 export type DecideOptions<TQuestion extends SystemOneQuestion> =
@@ -180,7 +184,12 @@ export const decideMany = async <TQuestions extends SystemOneQuestions>({
   const model =
     client === undefined ? resolveDecisionModel(orgAIConfig) : client;
   if (model === null || Object.keys(questions).length === 0) {
-    return { decisions: undecidedAll(questions, "no-backend"), model: null };
+    return {
+      decisions: undecidedAll(questions, "no-backend"),
+      model: null,
+      usage: null,
+      latencyMs: null,
+    };
   }
   const timeout = AbortSignal.timeout(timeoutMs);
   const asked = await model.ask({
@@ -192,7 +201,12 @@ export const decideMany = async <TQuestions extends SystemOneQuestions>({
   });
   if (Result.isError(asked)) {
     captureError(asked.error, { source: "decide", decision: id });
-    return { decisions: undecidedAll(questions, "failed"), model: null };
+    return {
+      decisions: undecidedAll(questions, "failed"),
+      model: null,
+      usage: null,
+      latencyMs: null,
+    };
   }
 
   const decisions: Record<string, Decision<AnyAnswer>> = {};
@@ -251,6 +265,8 @@ export const decideMany = async <TQuestions extends SystemOneQuestions>({
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- per-key wrapping of an already per-key typed answer set
     decisions: decisions as Decisions<TQuestions>,
     model: asked.value.model,
+    usage: asked.value.usage,
+    latencyMs: asked.value.latencyMs,
   };
 };
 

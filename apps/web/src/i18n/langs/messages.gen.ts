@@ -4222,6 +4222,12 @@ type Messages = {
     "validity": "Valid from {from} to {to}";
   };
   "styleSets": {
+    "convertConfirm": "Convert";
+    "convertDescription": "Rebuild this document inside one of your style sets. The wording stays as it is; every paragraph is matched to a style from the set. The original document is kept.";
+    "convertPending": "Converting…";
+    "convertSuccess": "Created {fileName}";
+    "convertTitle": "Convert to house style";
+    "convertToHouseStyle": "Convert to house style…";
     "create": "Create";
     "defaultBadge": "Default";
     "deleteConfirmation": "Type the style set name to confirm.";
@@ -4294,6 +4300,7 @@ type Messages = {
     "importTitle": "Import style set";
     "loadFailed": "Style sets could not be loaded";
     "newDocument": "New document";
+    "noStyleGuide": "No style guide yet";
     "pickerDescription": "Choose the formatting system for the new file.";
     "renameTitle": "Rename style set";
     "replace": "Replace source";

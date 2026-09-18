@@ -1460,7 +1460,7 @@
     }
   },
   "api-lib-top-level-entries": {
-    "count": 289,
+    "count": 290,
     "files": {
       "apps/api/src/lib/account-deletion-cleanup-queue.ts": 1,
       "apps/api/src/lib/account-deletion-effect-store.ts": 1,
@@ -1612,6 +1612,7 @@
       "apps/api/src/lib/gzip-json.ts": 1,
       "apps/api/src/lib/health": 1,
       "apps/api/src/lib/hosted-usage-provider": 1,
+      "apps/api/src/lib/house-style": 1,
       "apps/api/src/lib/http-basic-auth.ts": 1,
       "apps/api/src/lib/huggingface.ts": 1,
       "apps/api/src/lib/infosoud": 1,

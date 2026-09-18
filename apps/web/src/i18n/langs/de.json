@@ -4219,6 +4219,12 @@
     "validity": "Gültig von {from} bis {to}"
   },
   "styleSets": {
+    "convertConfirm": "Convert",
+    "convertDescription": "Rebuild this document inside one of your style sets. The wording stays as it is; every paragraph is matched to a style from the set. The original document is kept.",
+    "convertPending": "Converting…",
+    "convertSuccess": "Created {fileName}",
+    "convertTitle": "Convert to house style",
+    "convertToHouseStyle": "Convert to house style…",
     "create": "Erstellen",
     "defaultBadge": "Standard",
     "deleteConfirmation": "Geben Sie zur Bestätigung den Namen des Stilsets ein.",
@@ -4291,6 +4297,7 @@
     "importTitle": "Stilset importieren",
     "loadFailed": "Stilsets konnten nicht geladen werden",
     "newDocument": "Neues Dokument",
+    "noStyleGuide": "No style guide yet",
     "pickerDescription": "Wählen Sie das Formatierungssystem für die neue Datei.",
     "renameTitle": "Stilset umbenennen",
     "replace": "Quelle ersetzen",
