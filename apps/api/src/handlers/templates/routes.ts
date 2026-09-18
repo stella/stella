@@ -17,6 +17,7 @@ import createTemplate from "@/api/handlers/templates/create";
 import createBlankTemplate from "@/api/handlers/templates/create-blank";
 import createTemplateFromStyleSet from "@/api/handlers/templates/create-from-style-set";
 import createTemplateFromStyles from "@/api/handlers/templates/create-from-styles";
+import decideTemplateConditions from "@/api/handlers/templates/decide-conditions";
 import deleteTemplate from "@/api/handlers/templates/delete";
 import discoverTemplate from "@/api/handlers/templates/discover";
 import fillTemplate from "@/api/handlers/templates/fill";
@@ -131,6 +132,11 @@ export const templatesRoute = new Elysia({
   .get("/:templateId/check", checkTemplate.handler, {
     params: checkTemplate.config.params,
     permissions: checkTemplate.config.permissions,
+  })
+  .post("/:templateId/decide-conditions", decideTemplateConditions.handler, {
+    body: decideTemplateConditions.config.body,
+    params: decideTemplateConditions.config.params,
+    permissions: decideTemplateConditions.config.permissions,
   })
   .post("/:templateId/fill-preview", fillTemplatePreview.handler, {
     body: fillTemplatePreview.config.body,

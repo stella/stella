@@ -910,6 +910,9 @@
     "templates.conditionCount": [
       "fr"
     ],
+    "templates.conditionDecidedNo": [
+      "es"
+    ],
     "templates.conditionOperator": [
       "de",
       "pl"

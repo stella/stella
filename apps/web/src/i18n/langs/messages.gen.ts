@@ -4472,6 +4472,7 @@ type Messages = {
     "addPart": "Add part";
     "addTag": "Add tag";
     "aiAdaptHint": "AI adapts this wording to fit each place it appears in the document.";
+    "aiDecidedConditions": "Decided by AI";
     "aiFieldsNotDrafted": "AI could not draft these fields: {list}";
     "allTemplates": "All templates";
     "backToList": "Back to templates";
@@ -4508,10 +4509,16 @@ type Messages = {
     "conditionAddRule": "Add rule";
     "conditionAnd": "And";
     "conditionCount": "{count, plural, one {# condition} other {# conditions}}";
+    "conditionDecidedNo": "No · {probability}";
+    "conditionDecidedOnGenerate": "Decided when you generate";
+    "conditionDecidedYes": "Yes · {probability}";
     "conditionField": "Field";
+    "conditionForcedNo": "No · set by you";
+    "conditionForcedYes": "Yes · set by you";
     "conditionFormulaPlaceholder": "Enter a formula…";
     "conditionMatch": "Match";
     "conditionNamePlaceholder": "Condition name (e.g. NPF)";
+    "conditionNotSettled": "Not settled by the details, decided when you generate";
     "conditionOpAfter": "after";
     "conditionOpAtLeast": "at least";
     "conditionOpAtMost": "at most";
@@ -4528,6 +4535,7 @@ type Messages = {
     "conditionOpOnOrBefore": "on or before";
     "conditionOperator": "Operator";
     "conditionOr": "Or";
+    "conditionOverrideHint": "Click to set this yourself, click again to hand it back to AI";
     "conditionUseFieldInstead": "Use a field instead";
     "conditionUseFormula": "ƒ Calculated value…";
     "conditionValue": "Value";
