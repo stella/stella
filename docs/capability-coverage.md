@@ -426,7 +426,6 @@ here as its CLI form). Projected from the same handler enumeration that builds
 | `tasks.entity-links-delete` | write, destructive | stella:matters_write | —       | covered by `save_task`   |
 | `tasks.entity-links-read`   | read               | stella:read          | —       | covered by `list_tasks`  |
 | `tasks.get`                 | read               | stella:read          | —       | covered by `list_tasks`  |
-| `tasks.list`                | read               | stella:read          | —       | covered by `list_tasks`  |
 | `tasks.update`              | write              | stella:matters_write | —       | covered by `save_task`   |
 
 ## template-packs

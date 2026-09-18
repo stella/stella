@@ -11,13 +11,8 @@ import createEntityLink from "@/api/handlers/tasks/entity-links-create";
 import deleteEntityLink from "@/api/handlers/tasks/entity-links-delete";
 import listEntityLinks from "@/api/handlers/tasks/entity-links-read";
 import readTaskById from "@/api/handlers/tasks/get";
-import listTasks from "@/api/handlers/tasks/list";
 import updateTask from "@/api/handlers/tasks/update";
-import {
-  authMacro,
-  permissionMacro,
-  workspaceAccessMacro,
-} from "@/api/lib/auth";
+import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 import {
   resourceRealtime,
   workspaceResourceSetUpdates,
@@ -29,17 +24,7 @@ const taskCreateRealtimeUpdates = workspaceResourceSetUpdates([
   RESOURCE_TYPE.LEGAL_LIST,
 ]);
 
-/** Tasks across every matter the caller can read (the Inbox list). */
-const taskListRoute = new Elysia({ prefix: "/tasks" })
-  .use(authMacro)
-  .use(permissionMacro)
-  .guard({ validateAuth: true })
-  .get("/", listTasks.handler, {
-    query: listTasks.config.query,
-    permissions: listTasks.config.permissions,
-  });
-
-const workspaceTasksRoute = new Elysia({
+export const tasksRoute = new Elysia({
   prefix: "/tasks/:workspaceId",
 })
   .use(workspaceAccessMacro)
@@ -95,9 +80,3 @@ const workspaceTasksRoute = new Elysia({
     params: listEntityLinks.config.params,
     permissions: listEntityLinks.config.permissions,
   });
-
-// Composed here rather than as a second `.use` in server.ts: the versioned
-// route chain there is at the depth limit of the Eden type the web app infers.
-export const tasksRoute = new Elysia()
-  .use(taskListRoute)
-  .use(workspaceTasksRoute);
