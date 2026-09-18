@@ -17,8 +17,10 @@ import {
 
 type InputProps = Omit<
   InputPrimitive.Props & React.RefAttributes<HTMLInputElement>,
-  "size" | "style"
+  "size" | "style" | "type"
 > & {
+  // A file input paints untranslatable browser chrome; `FileInput` owns it.
+  type?: Exclude<React.HTMLInputTypeAttribute, "file"> | undefined;
   size?: ControlSize | number;
   style?: React.CSSProperties;
   unstyled?: boolean;
@@ -53,8 +55,6 @@ const Input = ({
     INPUT_SIZE_CLASS_NAMES[controlSize],
     props.type === "search" &&
       "ps-8 [&::-webkit-search-cancel-button]:appearance-none [&::-webkit-search-decoration]:appearance-none [&::-webkit-search-results-button]:appearance-none [&::-webkit-search-results-decoration]:appearance-none",
-    props.type === "file" &&
-      "text-muted-foreground file:text-foreground file:me-3 file:bg-transparent file:text-sm file:font-medium",
   );
 
   return (

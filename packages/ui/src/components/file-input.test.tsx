@@ -1,0 +1,71 @@
+import { renderToStaticMarkup } from "react-dom/server";
+
+import { describe, expect, test } from "bun:test";
+
+import { FileInput } from "./file-input";
+
+const labels = {
+  chooseLabel: "Choose file",
+  emptyLabel: "No file selected",
+};
+
+describe("FileInput", () => {
+  test("hides the native input and labels the trigger with the caller's copy", () => {
+    const markup = renderToStaticMarkup(
+      <FileInput
+        accept=".docx"
+        file={null}
+        onFileChange={() => {}}
+        {...labels}
+      />,
+    );
+
+    expect(markup).toContain('type="file"');
+    expect(markup).toContain('class="sr-only"');
+    expect(markup).toContain('accept=".docx"');
+    expect(markup).toContain('data-slot="file-input-trigger"');
+    expect(markup).toContain(">Choose file<");
+    expect(markup).toContain(">No file selected<");
+  });
+
+  test("shows the selected file name in a bidi-isolated run", () => {
+    const markup = renderToStaticMarkup(
+      <FileInput
+        file={new File([""], "smlouva.docx")}
+        onFileChange={() => {}}
+        {...labels}
+      />,
+    );
+
+    expect(markup).toContain("<bdi>smlouva.docx</bdi>");
+    expect(markup).not.toContain("No file selected");
+  });
+
+  test("composes the field label with the trigger's own text", () => {
+    const markup = renderToStaticMarkup(
+      <FileInput
+        aria-labelledby="source-label"
+        file={null}
+        onFileChange={() => {}}
+        {...labels}
+      />,
+    );
+
+    const triggerId = /aria-labelledby="source-label ([^"]+)"/u.exec(
+      markup,
+    )?.[1];
+    expect(triggerId).toBeDefined();
+    expect(markup).toContain(`id="${triggerId}"`);
+    expect(markup).toMatch(
+      /<input [^>]*aria-hidden="true"(?:(?!aria-labelledby)[^>])*>/u,
+    );
+  });
+
+  test("disables the trigger with the input", () => {
+    const markup = renderToStaticMarkup(
+      <FileInput disabled file={null} onFileChange={() => {}} {...labels} />,
+    );
+
+    expect(markup).toContain('data-slot="file-input-trigger" disabled=""');
+  });
+});
