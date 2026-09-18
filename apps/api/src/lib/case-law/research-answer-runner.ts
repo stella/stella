@@ -40,6 +40,10 @@ import type {
 import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
 import { readServingCorpusIndexGenerationTx } from "@/api/lib/legal-search/corpus-index-generation-store";
 import {
+  corpusIndexRoute,
+  requireCorpusIndexManifest,
+} from "@/api/lib/legal-search/corpus-index-manifest";
+import {
   corpusFreeTextClause,
   quoteCorpusValue,
 } from "@/api/lib/legal-search/corpus-query";
@@ -54,7 +58,6 @@ import {
   readCorpusPayloadOrFallback,
   readCorpusText,
 } from "@/api/lib/legal-search/corpus-storage";
-import { corpusIndexRoute } from "@/api/lib/legal-search/index-naming";
 import { LIMITS } from "@/api/lib/limits";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 import { getTanStackTextModelForRole } from "@/api/lib/tanstack-ai-models";
@@ -543,7 +546,10 @@ const retrievePassages = async (
     const serving = await caseLawDb(
       async (tx) => await readServingCorpusIndexGenerationTx(tx, "case_law"),
     );
-    const { indexId } = corpusIndexRoute(serving.generation, decision.country);
+    const { indexId } = corpusIndexRoute(
+      requireCorpusIndexManifest("case_law", serving.generation),
+      decision.country,
+    );
     return await getCorpusIndexClient(serving.cluster).search({
       indexId,
       query: `document_id:${quoteCorpusValue(decision.id)} AND ${freeText}`,

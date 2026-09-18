@@ -221,6 +221,24 @@ const NAME_CASES: readonly Case[] = [
     expected: "SN",
   },
   {
+    name: "HU constitutional court by name",
+    country: "HUN",
+    court: "Alkotmánybíróság",
+    expected: "AB",
+  },
+  {
+    name: "HU supreme court by name",
+    country: "HUN",
+    court: "Kúria",
+    expected: "Kúria",
+  },
+  {
+    name: "HU supreme court under its pre-2012 name",
+    country: "HUN",
+    court: "Legfelsőbb Bíróság",
+    expected: "LB",
+  },
+  {
     name: "EU court of justice by name",
     country: "EU",
     court: "Court of Justice",
@@ -246,6 +264,12 @@ const UNKNOWN_CASES: readonly Case[] = [
     name: "a district court with no ECLI",
     country: "POL",
     court: "Sąd Rejonowy w Białymstoku",
+    expected: undefined,
+  },
+  {
+    name: "a Hungarian regional court, which is not apex",
+    country: "HUN",
+    court: "Fővárosi Törvényszék",
     expected: undefined,
   },
   {

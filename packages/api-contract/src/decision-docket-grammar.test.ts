@@ -71,6 +71,26 @@ const canonicalDocketArbitraries = {
           appeal ? " P" : ""
         }`,
     ),
+  HUN: fc.oneof(
+    fc
+      .tuple(
+        fc.integer({ min: 1, max: 999 }),
+        fc.integer({ min: 0, max: 999 }),
+        fc.integer({ min: 1900, max: 2099 }),
+        fc.integer({ min: 1, max: 9999 }),
+      )
+      .map(
+        ([thousands, rest, year, document]) =>
+          `Xyz.IV.${thousands}.${rest.toString().padStart(3, "0")}/${year}/${document}`,
+      ),
+    fc
+      .tuple(
+        fc.integer({ min: 1, max: 999 }),
+        fc.integer({ min: 1, max: 999_999 }),
+        fc.integer({ min: 1900, max: 2099 }),
+      )
+      .map(([panel, register, year]) => `${panel}.Xy.${register}/${year}.`),
+  ),
   POL: fc
     .tuple(
       fc.constantFrom("I", "II", "III", "IV", "V"),
@@ -136,6 +156,17 @@ describe("declared decision docket grammars", () => {
         ),
         propertyConfig(),
       );
+    });
+
+    test(`${grammar.jurisdiction} fixtures keep distinct dockets apart`, () => {
+      const canonicalKeys = DECISION_DOCKET_GRAMMAR_FIXTURES[
+        grammar.jurisdiction
+      ].map(({ canonical }) => {
+        const parsed = grammar.parse(canonical);
+        expect(parsed).not.toBeNull();
+        return parsed === null ? canonical : canonicalDecisionDocket(parsed);
+      });
+      expect(new Set(canonicalKeys).size).toBe(canonicalKeys.length);
     });
 
     test(`${grammar.jurisdiction} variants share one canonical value`, () => {

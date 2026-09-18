@@ -6,12 +6,15 @@ import {
   readServingCorpusIndexGenerationTx,
   type ServingCorpusIndexGeneration,
 } from "@/api/lib/legal-search/corpus-index-generation-store";
+import {
+  corpusIndexRoute,
+  requireCorpusIndexManifest,
+} from "@/api/lib/legal-search/corpus-index-manifest";
 import { corpusIndexReadContract } from "@/api/lib/legal-search/corpus-index-read-contract";
 import {
   corpusExcludedSourcesClause,
   quoteCorpusValue,
 } from "@/api/lib/legal-search/corpus-query";
-import { corpusIndexRoute } from "@/api/lib/legal-search/index-naming";
 import type {
   LegalBrowseFacets,
   LegalBrowseFacetsQuery,
@@ -204,7 +207,7 @@ export const corpusIndexBrowseFacets = async (
   // that index holds other jurisdictions; unscoped → the generation glob (one
   // multi-index aggregation across every index of the generation).
   const { indexId, jurisdictionClause } = corpusIndexRoute(
-    generation,
+    requireCorpusIndexManifest(family, generation),
     query.jurisdiction,
   );
 

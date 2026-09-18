@@ -26,6 +26,7 @@ const CORPUS_MORPHOLOGY_LANGUAGE_BY_JURISDICTION = {
   AUT: "de",
   CZE: "cs",
   EU: null,
+  HUN: "hu",
   POL: "pl",
   SVK: "sk",
 } as const satisfies Record<CaseLawJurisdiction, MorphologyLanguage | null>;

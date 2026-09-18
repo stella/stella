@@ -113,6 +113,10 @@ import type { QuickwitCluster } from "@/api/lib/legal-search/corpus-generation-c
 import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
 import { DECISION_TIMESTAMP_FIELD } from "@/api/lib/legal-search/corpus-index-config";
 import { readServingCorpusIndexGenerationTx } from "@/api/lib/legal-search/corpus-index-generation-store";
+import {
+  corpusIndexRoute,
+  requireCorpusIndexManifest,
+} from "@/api/lib/legal-search/corpus-index-manifest";
 import type { CorpusIndexScanReport } from "@/api/lib/legal-search/corpus-index-pagination";
 import {
   emptyCorpusIndexScan,
@@ -150,10 +154,7 @@ import {
   resolveExpandedCorpusQuery,
 } from "@/api/lib/legal-search/expansion";
 import { loadFtsSearchConfigs } from "@/api/lib/legal-search/fts-config";
-import {
-  corpusIndexRoute,
-  isCorpusIndexJurisdiction,
-} from "@/api/lib/legal-search/index-naming";
+import { isCorpusIndexJurisdiction } from "@/api/lib/legal-search/index-naming";
 import { collapseByLanguageGroup } from "@/api/lib/legal-search/language-group-collapse";
 import { buildPgFtsSearchSql } from "@/api/lib/legal-search/pg-fts-query";
 import { readPublicLawCountry } from "@/api/lib/legal-search/public-law-country";
@@ -1677,7 +1678,7 @@ export const searchCorpusIndexDecisions = async (
   // Scoped query → that country's index, plus a jurisdiction clause when that
   // index holds other countries; unscoped → the generation glob.
   const { indexId, jurisdictionClause } = corpusIndexRoute(
-    generation,
+    requireCorpusIndexManifest("case_law", generation),
     body.country,
   );
 

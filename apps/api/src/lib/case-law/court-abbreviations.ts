@@ -104,6 +104,15 @@ const APEX_COURT_PATTERNS = {
     [/court\s+of\s+justice/iu, "CJEU"],
     [/general\s+court/iu, "GC"],
   ],
+  // Hungary issues no ECLI, so the name is the only source there is. The
+  // Kúria is written out rather than abbreviated in Hungarian prose, which is
+  // why its chip is the name; `LB` is the pre-2012 Legfelsőbb Bíróság, the
+  // same court under the name its older decisions carry.
+  HUN: [
+    [/alkotmánybíróság/iu, "AB"],
+    [/kúria/iu, "Kúria"],
+    [/legfelsőbb\s+bíróság/iu, "LB"],
+  ],
   POL: [
     [/trybunał\s+konstytucyjny/iu, "TK"],
     [/naczelny\s+sąd\s+administracyjny/iu, "NSA"],

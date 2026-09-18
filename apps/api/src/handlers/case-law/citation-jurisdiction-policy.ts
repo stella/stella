@@ -44,15 +44,16 @@ export type CitationResolutionJurisdictionPolicy = {
 
 /**
  * EU membership is the member state's declaration, not the CJEU's. Austria,
- * Czechia, Poland and Slovakia are all member states, so a citation in any of
- * their decisions can name a Court of Justice judgment; a CJEU judgment citing
- * a bare national docket is not a pattern this corpus can honour, so `EU`
- * reaches nothing but itself.
+ * Czechia, Hungary, Poland and Slovakia are all member states, so a citation
+ * in any of their decisions can name a Court of Justice judgment; a CJEU
+ * judgment citing a bare national docket is not a pattern this corpus can
+ * honour, so `EU` reaches nothing but itself.
  */
 export const CITATION_RESOLUTION_JURISDICTION_POLICY = {
   AUT: { alsoResolvesTo: ["EU"] },
   CZE: { alsoResolvesTo: ["EU"] },
   EU: { alsoResolvesTo: [] },
+  HUN: { alsoResolvesTo: ["EU"] },
   POL: { alsoResolvesTo: ["EU"] },
   SVK: { alsoResolvesTo: ["EU"] },
 } as const satisfies Record<

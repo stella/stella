@@ -45,6 +45,33 @@ export const DECISION_DOCKET_GRAMMAR_FIXTURES = {
       variants: ["case c‑9999/99 p", " C−9999/99 P "],
     },
   ],
+  HUN: [
+    {
+      canonical: "Xyz.IV.99.999/2099/9",
+      variants: [
+        "xyz.iv.99999/2099/9",
+        "XYZ.IV.99.999/2099/9",
+        " Xyz.IV.99.999/2099/9 ",
+      ],
+    },
+    {
+      canonical: "Xy.99.999/2099/9",
+      variants: ["xy.99999/2099/9"],
+    },
+    {
+      canonical: "9.Xy.99.999/2099.",
+      variants: ["9.xy.99999/2099.", "9.Xy.99.999/2099", " 9.XY.99.999/2099. "],
+    },
+    // A panel numeral against a registry mark ending in those same letters.
+    {
+      canonical: "Xy.I.9/2099",
+      variants: ["xy.i.9/2099", " Xy.I.9/2099 "],
+    },
+    {
+      canonical: "Xyi.9/2099",
+      variants: ["xyi.9/2099", " Xyi.9/2099 "],
+    },
+  ],
   POL: [
     {
       canonical: "IV XYZ 999999/99",

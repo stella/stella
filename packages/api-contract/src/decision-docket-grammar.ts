@@ -111,6 +111,22 @@ const CZE_DOCKET_PATTERNS = [
 const SVK_DOCKET_RE =
   /^(?<senate>\d{1,3}) ?(?<registry>\p{L}{1,7})(?: ?\/ ?| )(?<ordinal>\d{1,6})\/(?<year>\d{4})$/iu;
 const SVK_DOCKET_PATTERNS = [SVK_DOCKET_RE] as const;
+/**
+ * A Hungarian docket, as the court registry decrees (Büsz. and the OBH's
+ * successor rules) prescribe it: an optional Arabic panel number, the registry
+ * letters, an optional Roman panel numeral, the register number, the filing
+ * year, and, above first instance, the document number.
+ *
+ * `Pfv.IV.20.123/2020/5` is the Kúria's review register, `Kfv.35.123/2021/8`
+ * the same without a panel numeral, and `5.P.21.203/2004.` a first-instance
+ * docket, whose panel number leads and whose trailing dot is part of how the
+ * court writes it. The register number is typeset with a thousands dot
+ * (`20.123`) by the courts and without it (`20123`) by several databases, so
+ * both are accepted and the canonical key keeps the digits only.
+ */
+const HUN_DOCKET_RE =
+  /^(?:(?<panel>\d{1,3})\.)?(?<registry>\p{L}{1,5})\.(?:(?<numeral>[ivxlc]{1,5})\.)?(?<register>\d{1,3}\.\d{3}|\d{1,6})\/(?<year>\d{4})(?:\/(?<document>\d{1,4}))?\.?$/iu;
+const HUN_DOCKET_PATTERNS = [HUN_DOCKET_RE] as const;
 const POL_DOCKET_RE =
   /^(?<chamber>[ivx]{1,5}) (?<division1>\p{L}{1,5})(?:[ /](?<division2>\p{L}{1,5}))? (?<ordinal>\d{1,6})\/(?<year>\d{2}(?:\d{2})?)$/iu;
 const POL_DOCKET_PATTERNS = [POL_DOCKET_RE] as const;
@@ -141,6 +157,30 @@ const canonicalSlovakDocketKey = (formatted: string): string => {
     return panic("Accepted Slovak docket is missing a canonical component");
   }
   return canonicalDocketKey(`${senate}${registry}/${ordinal}/${year}`);
+};
+
+const canonicalHungarianDocketKey = (formatted: string): string => {
+  const groups = HUN_DOCKET_RE.exec(formatted)?.groups;
+  const registry = groups?.["registry"];
+  const register = groups?.["register"];
+  const year = groups?.["year"];
+  if (registry === undefined || register === undefined || year === undefined) {
+    return panic("Accepted Hungarian docket is missing a canonical component");
+  }
+  const document = groups?.["document"];
+  const sheet = document === undefined ? "" : `/${document}`;
+  const panel = groups?.["panel"];
+  const numeral = groups?.["numeral"];
+  // Every component keeps the dot the court writes after it, including when
+  // the next one is absent. Concatenated instead, a registry mark followed by
+  // a panel numeral and a registry mark ending in those same letters produce
+  // one key: `Xy.I.1/2020` and `Xyi.1/2020` are different dockets.
+  const lead = panel === undefined ? "" : `${panel}.`;
+  const chamber = numeral === undefined ? "" : `${numeral}.`;
+  const digits = register.replace(".", "");
+  return canonicalDocketKey(
+    `${lead}${registry}.${chamber}${digits}/${year}${sheet}`,
+  );
 };
 
 const canonicalPolishDocketKey = (formatted: string): string => {
@@ -179,6 +219,11 @@ export const DECISION_DOCKET_GRAMMARS = {
       canonicalDocketKey(formatted.replace(EU_DOCKET_LEAD_RE, "")),
     jurisdiction: "EU",
     patterns: EU_DOCKET_PATTERNS,
+  }),
+  HUN: createDecisionDocketGrammar({
+    canonicalize: canonicalHungarianDocketKey,
+    jurisdiction: "HUN",
+    patterns: HUN_DOCKET_PATTERNS,
   }),
   POL: createDecisionDocketGrammar({
     canonicalize: canonicalPolishDocketKey,

@@ -26,7 +26,6 @@ const COUNTRIES: readonly string[] = [
   ...DECLARED.map((country) => country.toLowerCase()),
   // A code that spells a language tag derives an index of its own.
   "PL",
-  "HUN",
   "ROU",
   "xyz",
 ];

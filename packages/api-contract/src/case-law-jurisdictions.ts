@@ -22,6 +22,7 @@ export const CASE_LAW_JURISDICTIONS = [
   "AUT",
   "CZE",
   "EU",
+  "HUN",
   "POL",
   "SVK",
 ] as const;

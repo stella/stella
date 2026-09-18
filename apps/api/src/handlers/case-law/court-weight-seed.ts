@@ -26,50 +26,60 @@ export type CourtWeightSeedRow = {
   weight: number;
 };
 
+/**
+ * The ranks a court can hold, declared once: a tier and its weight belong
+ * to the label, not to the jurisdiction, so two countries cannot spell the
+ * same rank with different numbers.
+ */
+const RANK = {
+  constitutional: { tier: 4, tierLabel: "constitutional", weight: 10 },
+  supreme: { tier: 3, tierLabel: "supreme", weight: 8 },
+  regional: { tier: 2, tierLabel: "regional", weight: 4 },
+  appeal: { tier: 2, tierLabel: "appeal", weight: 5 },
+  "procurement-review": { tier: 1, tierLabel: "procurement-review", weight: 3 },
+  district: { tier: 1, tierLabel: "district", weight: 2 },
+  "administrative-labour": {
+    tier: 1,
+    tierLabel: "administrative-labour",
+    weight: 3,
+  },
+} as const satisfies Record<
+  string,
+  Pick<CourtWeightSeedRow, "tier" | "tierLabel" | "weight">
+>;
+
 export const COURT_WEIGHT_SEED: readonly CourtWeightSeedRow[] = [
   // Czech Republic
   {
     country: "CZE",
     courtPattern: "ústavní soud",
-    tier: 4,
-    tierLabel: "constitutional",
-    weight: 10,
+    ...RANK.constitutional,
   },
   {
     country: "CZE",
     courtPattern: "nejvyšší",
-    tier: 3,
-    tierLabel: "supreme",
-    weight: 8,
+    ...RANK.supreme,
   },
   {
     country: "CZE",
     courtPattern: "vrchní soud|krajský soud|městský soud",
-    tier: 2,
-    tierLabel: "regional",
-    weight: 4,
+    ...RANK.regional,
   },
   // Slovakia
   {
     country: "SVK",
     courtPattern: "ústavný súd",
-    tier: 4,
-    tierLabel: "constitutional",
-    weight: 10,
+    ...RANK.constitutional,
   },
   {
     country: "SVK",
     courtPattern: "najvyšší",
-    tier: 3,
-    tierLabel: "supreme",
-    weight: 8,
+    ...RANK.supreme,
   },
   {
     country: "SVK",
     courtPattern: "krajský súd",
-    tier: 2,
-    tierLabel: "regional",
-    weight: 4,
+    ...RANK.regional,
   },
   // Poland. The feeds store the full court name with its seat appended
   // ("Sąd Okręgowy w Warszawie", "Sąd Rejonowy dla Warszawy-Śródmieścia"),
@@ -83,44 +93,32 @@ export const COURT_WEIGHT_SEED: readonly CourtWeightSeedRow[] = [
   {
     country: "POL",
     courtPattern: "trybunał konstytucyjny",
-    tier: 4,
-    tierLabel: "constitutional",
-    weight: 10,
+    ...RANK.constitutional,
   },
   {
     country: "POL",
     courtPattern: "sąd najwyższy|naczelny sąd administracyjny",
-    tier: 3,
-    tierLabel: "supreme",
-    weight: 8,
+    ...RANK.supreme,
   },
   {
     country: "POL",
     courtPattern: "sąd apelacyjny|wojewódzki sąd administracyjny",
-    tier: 2,
-    tierLabel: "appeal",
-    weight: 5,
+    ...RANK.appeal,
   },
   {
     country: "POL",
     courtPattern: "sąd okręgowy",
-    tier: 2,
-    tierLabel: "regional",
-    weight: 4,
+    ...RANK.regional,
   },
   {
     country: "POL",
     courtPattern: "krajowa izba odwoławcza",
-    tier: 1,
-    tierLabel: "procurement-review",
-    weight: 3,
+    ...RANK["procurement-review"],
   },
   {
     country: "POL",
     courtPattern: "sąd rejonowy",
-    tier: 1,
-    tierLabel: "district",
-    weight: 2,
+    ...RANK.district,
   },
   // Austria. The RIS feeds store the court as the publisher's abbreviation
   // (`OGH`, `VwGH`, `VfGH`) or as the full name with the abbreviation in
@@ -130,38 +128,66 @@ export const COURT_WEIGHT_SEED: readonly CourtWeightSeedRow[] = [
   {
     country: "AUT",
     courtPattern: "verfassungsgerichtshof|^vfgh$",
-    tier: 4,
-    tierLabel: "constitutional",
-    weight: 10,
+    ...RANK.constitutional,
   },
   {
     country: "AUT",
     courtPattern: "oberster gerichtshof|verwaltungsgerichtshof|^ogh$|^vwgh$",
-    tier: 3,
-    tierLabel: "supreme",
-    weight: 8,
+    ...RANK.supreme,
   },
   {
     country: "AUT",
     courtPattern: "oberlandesgericht|landesgericht",
-    tier: 2,
-    tierLabel: "regional",
-    weight: 4,
+    ...RANK.regional,
+  },
+  // Hungary. Court names are a seat plus the kind of court ("Fővárosi
+  // Törvényszék", "Debreceni Járásbíróság"), so each rank is the kind alone.
+  // Two kinds are ranked under a retired name as well, because a decision
+  // carries the name in force when it was handed down: Legfelsőbb Bíróság is
+  // the Kúria before 2012, and megyei/fővárosi bíróság the törvényszék before
+  // 2013. The közigazgatási és munkaügyi bíróságok sat from 2013 to 2020 and
+  // rank between the törvényszék that absorbed them and the járásbíróság, in
+  // the same tier as the district courts but above them by weight.
+  {
+    country: "HUN",
+    courtPattern: "alkotmánybíróság",
+    ...RANK.constitutional,
+  },
+  {
+    country: "HUN",
+    courtPattern: "kúria|legfelsőbb bíróság",
+    ...RANK.supreme,
+  },
+  {
+    country: "HUN",
+    courtPattern: "ítélőtábla",
+    ...RANK.appeal,
+  },
+  {
+    country: "HUN",
+    courtPattern: "törvényszék|megyei bíróság|fővárosi bíróság",
+    ...RANK.regional,
+  },
+  {
+    country: "HUN",
+    courtPattern: "közigazgatási és munkaügyi bíróság",
+    ...RANK["administrative-labour"],
+  },
+  {
+    country: "HUN",
+    courtPattern: "járásbíróság|kerületi bíróság|városi bíróság",
+    ...RANK.district,
   },
   // European Union
   {
     country: "EU",
     courtPattern: "court of justice",
-    tier: 4,
-    tierLabel: "constitutional",
-    weight: 10,
+    ...RANK.constitutional,
   },
   {
     country: "EU",
     courtPattern: "general court",
-    tier: 3,
-    tierLabel: "supreme",
-    weight: 8,
+    ...RANK.supreme,
   },
 ];
 

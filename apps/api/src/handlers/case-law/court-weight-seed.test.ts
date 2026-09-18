@@ -15,7 +15,7 @@ import {
 
 const MIGRATION = nodePath.resolve(
   import.meta.dir,
-  "../../../drizzle/20260911180000_case_law_court_weight_seed_pol_wsa/migration.sql",
+  "../../../drizzle/20260918210100_case_law_court_weight_seed_hun/migration.sql",
 );
 
 describe("court weight seed", () => {
@@ -30,6 +30,7 @@ describe("court weight seed", () => {
       "AUT",
       "CZE",
       "EU",
+      "HUN",
       "POL",
       "SVK",
     ]);
@@ -69,6 +70,19 @@ describe("court weight seed", () => {
       ["AUT", "VfGH", "constitutional"],
       ["AUT", "Verfassungsgerichtshof (VfGH)", "constitutional"],
       ["AUT", "Verwaltungsgerichtshof (VwGH)", "supreme"],
+      ["HUN", "Alkotmánybíróság", "constitutional"],
+      ["HUN", "Kúria", "supreme"],
+      ["HUN", "Legfelsőbb Bíróság", "supreme"],
+      ["HUN", "Fővárosi Ítélőtábla", "appeal"],
+      ["HUN", "Fővárosi Törvényszék", "regional"],
+      ["HUN", "Pest Megyei Bíróság", "regional"],
+      [
+        "HUN",
+        "Fővárosi Közigazgatási és Munkaügyi Bíróság",
+        "administrative-labour",
+      ],
+      ["HUN", "Pesti Központi Kerületi Bíróság", "district"],
+      ["HUN", "Debreceni Járásbíróság", "district"],
       ["EU", "Court of Justice", "constitutional"],
       ["EU", "General Court", "supreme"],
     ];
@@ -145,6 +159,31 @@ describe("court weight seed", () => {
     ];
     for (const court of polish) {
       const matched = seededCourtWeightEntries("POL").filter((entry) =>
+        entry.pattern.test(court),
+      );
+      expect([court, matched.length]).toEqual([court, 1]);
+    }
+  });
+
+  test("Hungary ranks each stored name once, retired names included", () => {
+    // Every rank is the kind of court, and the kinds share words: "fővárosi"
+    // opens an appeal, a regional and an administrative-labour name alike, and
+    // "bíróság" closes most of them. A name two patterns both matched would
+    // take whichever precedence reached first.
+    const hungarian = [
+      "Alkotmánybíróság",
+      "Kúria",
+      "Legfelsőbb Bíróság",
+      "Szegedi Ítélőtábla",
+      "Fővárosi Ítélőtábla",
+      "Fővárosi Törvényszék",
+      "Pest Megyei Bíróság",
+      "Fővárosi Közigazgatási és Munkaügyi Bíróság",
+      "Pesti Központi Kerületi Bíróság",
+      "Debreceni Járásbíróság",
+    ];
+    for (const court of hungarian) {
+      const matched = seededCourtWeightEntries("HUN").filter((entry) =>
         entry.pattern.test(court),
       );
       expect([court, matched.length]).toEqual([court, 1]);

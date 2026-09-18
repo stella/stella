@@ -7,6 +7,7 @@ import {
   corpusIndexIdFromManifest,
   corpusIndexManifestDigest,
   corpusIndexPublisherFields,
+  corpusIndexRoute,
   corpusIndexStemFields,
   requireCorpusIndexIdForManifest,
   requireCorpusIndexManifest,
@@ -155,15 +156,51 @@ test("manifest routing is exact and case-law additions fail closed", () => {
   expect(
     corpusIndexIdFromManifest(CORPUS_INDEX_MANIFESTS.case_law_v5, "SVK"),
   ).toBe("case_law_v5_cs_sk");
+  // Declared jurisdictions this generation was not built with, and undeclared
+  // ones alike, are unrouted: a case-law index exists only for what the
+  // generation was created with. Legislation routes any jurisdiction.
   expect(() =>
     corpusIndexIdFromManifest(CORPUS_INDEX_MANIFESTS.case_law_v5, "HUN"),
   ).toThrow("Unrouted case-law jurisdiction: HUN");
+  expect(() =>
+    corpusIndexIdFromManifest(CORPUS_INDEX_MANIFESTS.case_law_v5, "ROU"),
+  ).toThrow("Unrouted case-law jurisdiction: ROU");
   expect(
     corpusIndexIdFromManifest(CORPUS_INDEX_MANIFESTS.legislation_v2, "HUN"),
   ).toBe("legislation_v2_hun");
   expect(() =>
     corpusIndexIdFromManifest(CORPUS_INDEX_MANIFESTS.legislation_v2, "cz;drop"),
   ).toThrow("Invalid corpus jurisdiction");
+});
+
+test("a query routes through the generation, not the live group map", () => {
+  // Shared index: the clause keeps the query to the scoped jurisdiction.
+  expect(corpusIndexRoute(CORPUS_INDEX_MANIFESTS.case_law_v7, "CZE")).toEqual({
+    indexId: "case_law_v7_cs_sk",
+    jurisdictionClause: "CZE",
+  });
+  // The clause is the canonical code indexed documents carry, whatever case
+  // the scope arrived in.
+  expect(corpusIndexRoute(CORPUS_INDEX_MANIFESTS.case_law_v7, "cze")).toEqual({
+    indexId: "case_law_v7_cs_sk",
+    jurisdictionClause: "CZE",
+  });
+  // A single-jurisdiction index is bounded by the index alone.
+  expect(corpusIndexRoute(CORPUS_INDEX_MANIFESTS.case_law_v7, "POL")).toEqual({
+    indexId: "case_law_v7_pol",
+    jurisdictionClause: undefined,
+  });
+  expect(
+    corpusIndexRoute(CORPUS_INDEX_MANIFESTS.case_law_v7, undefined),
+  ).toEqual({ indexId: "case_law_v7_*", jurisdictionClause: undefined });
+  // Declared in the live group map, unrouted by this generation: the query
+  // fails instead of naming an index the generation never created.
+  expect(() =>
+    corpusIndexRoute(CORPUS_INDEX_MANIFESTS.case_law_v7, "HUN"),
+  ).toThrow("Unrouted case-law jurisdiction: HUN");
+  expect(
+    corpusIndexRoute(CORPUS_INDEX_MANIFESTS.legislation_v2, "HUN"),
+  ).toEqual({ indexId: "legislation_v2_hun", jurisdictionClause: undefined });
 });
 
 test("physical route validation is exact for closed and open manifests", () => {
