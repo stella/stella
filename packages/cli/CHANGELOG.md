@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 1.12.0
+
+### Minor Changes
+
+- [#3564](https://github.com/stella/stella/pull/3564) [`9f4aa8f`](https://github.com/stella/stella/commit/9f4aa8f4809e79da0ab7192f59d87238c8e495ae) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Adds `stella capability time-entries suggestions-list` and `stella capability time-entries suggestions-decisions-create`: list suggested time entries for a day from the signed-in user's own matter activity, then accept one into a time entry or dismiss it.
+
 ## 1.11.0
 
 ### Minor Changes
