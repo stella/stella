@@ -299,14 +299,27 @@ const SOURCE_CASES = [
 ] as const satisfies readonly SourceCase[];
 
 /**
+ * Every field an adapter states its raw payload through, bound to the result
+ * type: an adapter that starts naming its binaries a new way fails to compile
+ * here rather than reaching object storage from these cases.
+ */
+const NO_RAW_PAYLOAD = {
+  sourceRaw: undefined,
+  sourceRawBytes: undefined,
+  sourceRawContentType: undefined,
+  sourceRawObjects: undefined,
+} as const satisfies Record<
+  Extract<keyof IngestionResult, `sourceRaw${string}`>,
+  undefined
+>;
+
+/**
  * The raw payload is dropped before storing: object storage is not what these
  * cases are about, and a failed upload would only add noise to them.
  */
 const withoutRawPayload = (decision: IngestionResult): IngestionResult => ({
   ...decision,
-  sourceRaw: undefined,
-  sourceRawBytes: undefined,
-  sourceRawContentType: undefined,
+  ...NO_RAW_PAYLOAD,
 });
 
 /**
