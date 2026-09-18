@@ -29,14 +29,10 @@ import {
   matchRule,
 } from "@/api/handlers/case-law/polarity/rule-engine";
 import type { RuleCache } from "@/api/handlers/case-law/polarity/rule-engine";
-import {
-  classifyWithSystemOne,
-  SYSTEM_ONE_POLARITY_ACCEPT_CONFIDENCE,
-} from "@/api/handlers/case-law/polarity/system-one-classifier";
+import { classifyWithSystemOne } from "@/api/handlers/case-law/polarity/system-one-classifier";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
-import type { SystemOneClient } from "@/api/lib/typesafe/system-one";
-import { getSystemOneClient } from "@/api/lib/typesafe/system-one-runtime";
+import type { SystemOneClient } from "@/api/lib/decisions/system-one";
 
 export { extractContext } from "@/api/handlers/case-law/polarity/context";
 
@@ -73,10 +69,10 @@ type ClassifyCitationArgs = {
     ruleCache?: RuleCache;
     dryRun?: boolean;
     /**
-     * The System One tier's client; the deployment's when omitted, null to
-     * skip the tier. Injected so a comparison run can pin a model.
+     * The System One tier's client; the instance's when omitted, null to skip
+     * the tier. Injected so a comparison run can pin a model.
      */
-    systemOne?: SystemOneClient | null;
+    decisionModel?: SystemOneClient | null;
   };
 };
 
@@ -115,31 +111,24 @@ export const classifyCitation = async ({
     };
   }
 
-  // Tier 2: System One. A confident reading is the label; anything else
-  // falls through, including a transport failure, which is telemetry
-  // rather than an `unknown` polarity: the generative tier still reads.
-  const systemOne =
-    options?.systemOne === undefined ? getSystemOneClient() : options.systemOne;
-  if (systemOne !== null) {
-    const reading = await classifyWithSystemOne({
-      client: systemOne,
-      context,
-      citationText,
-      language,
-      abortSignal: options?.abortSignal,
-    });
-    if (reading.isErr()) {
-      captureError(reading.error, { language, tier: "system-one" });
-    } else if (
-      reading.value.confidence >= SYSTEM_ONE_POLARITY_ACCEPT_CONFIDENCE
-    ) {
-      return {
-        polarity: reading.value.polarity,
-        ruleId: null,
-        source: "system-one",
-        confidence: reading.value.confidence,
-      };
-    }
+  // Tier 2: System One. A decided reading is the label; anything else falls
+  // through, including a transport failure and a deployment with no decision
+  // model, rather than becoming an `unknown` polarity: the generative tier
+  // still reads.
+  const reading = await classifyWithSystemOne({
+    client: options?.decisionModel,
+    context,
+    citationText,
+    language,
+    abortSignal: options?.abortSignal,
+  });
+  if (reading.state === "decided") {
+    return {
+      polarity: reading.answer.choice,
+      ruleId: null,
+      source: "system-one",
+      confidence: reading.confidence,
+    };
   }
 
   // Tier 3: LLM classification

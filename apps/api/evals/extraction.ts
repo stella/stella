@@ -637,6 +637,7 @@ const buildOrgAIConfig = (selection: ModelSelection): OrgAIConfig => {
   return {
     providers: [{ provider: selection.provider, apiKey: selection.apiKey }],
     overrideModels,
+    decision: null,
   };
 };
 

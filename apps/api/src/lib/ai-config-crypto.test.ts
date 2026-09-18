@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import type { OrgAIConfig } from "@/api/lib/ai-config";
+import { toSafeId } from "@/api/lib/branded-types";
 
 process.env["EMAIL_PROVIDER"] ??= "smtp";
 process.env["GOTENBERG_PASSWORD"] ??= "gotenberg";
@@ -10,8 +11,9 @@ process.env["REDIS_URL"] ??= "redis://localhost:6379";
 process.env["SMTP_HOST"] ??= "localhost";
 process.env["SMTP_PORT"] ??= "1025";
 
-const { isOrgAIConfig, maskApiKey } =
+const { decryptAIConfig, encryptAIConfig, isOrgAIConfig, maskApiKey } =
   await import("@/api/lib/ai-config-crypto");
+const { encryptContent } = await import("@/api/lib/content-encryption");
 const { normalizeOrgAIConfig } = await import("@/api/lib/ai-config");
 
 describe("maskApiKey", () => {
@@ -75,10 +77,12 @@ describe("isOrgAIConfig", () => {
       normalizeOrgAIConfig({
         providers: [{ provider: "google", apiKey: "sk-test", region: "eu" }],
         overrideModels: fullOverrideModels,
+        decision: null,
       }),
     ).toEqual({
       providers: [{ provider: "google", apiKey: "sk-test", region: "global" }],
       overrideModels: fullOverrideModels,
+      decision: null,
     });
   });
 
@@ -247,6 +251,20 @@ describe("isOrgAIConfig", () => {
     ).toBe(false);
   });
 
+  test("rejects a decision model on an unknown provider", () => {
+    expect(
+      isOrgAIConfig({
+        providers: [{ provider: "openai", apiKey: "sk-test" }],
+        overrideModels: fullOverrideModels,
+        decision: {
+          provider: "some-other-vendor",
+          apiKey: "ts-test",
+          modelId: "model-1",
+        },
+      }),
+    ).toBe(false);
+  });
+
   test("rejects OpenAI-compatible org BYOK configs", () => {
     expect(
       isOrgAIConfig({
@@ -264,5 +282,46 @@ describe("isOrgAIConfig", () => {
         },
       }),
     ).toBe(false);
+  });
+});
+
+describe("decision model in the stored blob", () => {
+  const organizationId = toSafeId<"organization">("org_decision_crypto_test");
+  const providers = [
+    { provider: "openai", apiKey: "sk-test" },
+  ] satisfies OrgAIConfig["providers"];
+  const overrideModels = {
+    chat: { provider: "openai", modelId: "gpt-5.4" },
+    fast: { provider: "openai", modelId: "gpt-5.4-nano" },
+    reasoning: { provider: "openai", modelId: "gpt-5.4" },
+    pdf: { provider: "openai", modelId: "gpt-5.4" },
+  } satisfies OrgAIConfig["overrideModels"];
+
+  test("reads a blob written before the decision model existed as none", async () => {
+    const { ciphertext, iv } = await encryptContent(
+      organizationId,
+      JSON.stringify({ providers, overrideModels }),
+    );
+
+    const config = await decryptAIConfig(organizationId, ciphertext, iv);
+
+    expect(config.decision).toBeNull();
+  });
+
+  test("round-trips a configured decision model", async () => {
+    const decision = {
+      provider: "typesafe",
+      apiKey: "ts-secret-key",
+      modelId: "jev-1.13",
+    } as const;
+
+    const { ciphertext, iv } = await encryptAIConfig(organizationId, {
+      providers,
+      overrideModels,
+      decision,
+    });
+    const config = await decryptAIConfig(organizationId, ciphertext, iv);
+
+    expect(config.decision).toEqual(decision);
   });
 });

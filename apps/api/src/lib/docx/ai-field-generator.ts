@@ -31,6 +31,9 @@ import type {
   GuardedSystemPrompt,
 } from "@/api/lib/chat/model-ingress-guard";
 import { generateChatObject } from "@/api/lib/chat/tanstack-chat-runtime";
+import { decide } from "@/api/lib/decisions/decide";
+import { noul } from "@/api/lib/decisions/system-one";
+import type { SystemOneClient } from "@/api/lib/decisions/system-one";
 import type { AiOccurrenceAdapter } from "@/api/lib/docx/adapt-ai-fields";
 import {
   maybeSkillTools,
@@ -388,6 +391,18 @@ Reply with only the text for this field — no preamble, no quotes, no markdown.
 const AI_CONDITION_TIMEOUT_MS = 20_000;
 const AI_CONDITION_MAX_TOKENS = 400;
 
+/** The condition as one typed decision over the details the fill already holds. */
+const CONDITION_QUESTION = noul(
+  {
+    task: "Is the condition asked in `question` true for the document described by `details`?",
+  },
+  {
+    true: "The details state the condition or entail it.",
+    false:
+      "The details state that it does not hold, or do not settle it: an unsettled condition excludes its block.",
+  },
+);
+
 // strictObject + object root: OpenAI strict structured output rejects a bare
 // boolean root, so the yes/no answer rides in a single required boolean field.
 const conditionDecisionSchema = v.strictObject({
@@ -408,6 +423,7 @@ export const buildAiConditionDecider = ({
   aiAnalytics,
   operationSignal,
   resolveTextModel = resolveTanStackTextModel,
+  decisionModel,
 }: {
   orgAIConfig: OrgAIConfig | null;
   organizationId: SafeId<"organization">;
@@ -421,6 +437,8 @@ export const buildAiConditionDecider = ({
   operationSignal?: AbortSignal | undefined;
   /** External model-resolution boundary; supplied by focused integration tests. */
   resolveTextModel?: typeof resolveTanStackTextModel | undefined;
+  /** The decision model; the org's when omitted, null for none. Supplied by tests. */
+  decisionModel?: SystemOneClient | null | undefined;
 }): AiConditionDecider | undefined => {
   // Resolve via org BYOK or the deployment's instance provider; skip (leave AI
   // fields unfilled) only when neither can supply a model.
@@ -430,6 +448,23 @@ export const buildAiConditionDecider = ({
   return async ({ prompt, values }) => {
     try {
       const skillTools = maybeSkillTools(prompt, skillContext);
+      // A prompt that references a skill needs the tools to load it, which
+      // only the generative run carries; every other condition is a yes/no
+      // the decision model settles first.
+      if (skillTools === undefined) {
+        const decided = await decide({
+          id: "template.condition",
+          orgAIConfig,
+          state: { question: prompt, details: JSON.stringify(values) },
+          question: CONDITION_QUESTION,
+          abortSignal: operationSignal,
+          timeoutMs: AI_CONDITION_TIMEOUT_MS,
+          client: decisionModel,
+        });
+        if (decided.state === "decided") {
+          return decided.answer.noul > 0.5;
+        }
+      }
       const { decision } = await generateFieldObject({
         abortSignal: boundedAiSignal(AI_CONDITION_TIMEOUT_MS, operationSignal),
         aiAnalytics,

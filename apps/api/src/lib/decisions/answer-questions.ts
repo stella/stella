@@ -23,23 +23,19 @@ import { panic } from "better-result";
 import { normalizeDateValue, normalizeNumber } from "@stll/agent-input";
 
 import type { AiExtractablePropertyContent } from "@/api/db/schema-validators";
-import { choice, noul } from "@/api/lib/typesafe/system-one";
+import type {
+  Decisions,
+  DecisionUndecidedReason,
+} from "@/api/lib/decisions/decide";
+import { choice, noul } from "@/api/lib/decisions/system-one";
 import type {
   ChoiceAnswer,
   NoulAnswer,
-  SystemOneAnswers,
   SystemOneEntry,
   SystemOneQuestion,
   SystemOneState,
-} from "@/api/lib/typesafe/system-one";
+} from "@/api/lib/decisions/system-one";
 import type { Answer } from "@/api/lib/workflow/ai-answer-schema";
-
-/**
- * Below this confidence a System One answer is not written; the caller hands
- * the question to the generative model instead. Measured against Jev 1.13 on
- * the polarity comparison; move it with the model, not per surface.
- */
-export const SYSTEM_ONE_ACCEPT_CONFIDENCE = 0.6;
 
 /**
  * Sources per request. Jev reads at most 32k tokens of state with the longest
@@ -98,6 +94,11 @@ export type AnswerOutcome =
       state: "not_stated";
       confidence: number;
       rationale: string;
+    }
+  | {
+      /** No answer to write: no decision model, under the floor, or a failed call. */
+      state: "undecided";
+      reason: DecisionUndecidedReason;
     };
 
 type Candidate = {
@@ -120,6 +121,9 @@ export type SystemOneAnswerPlan = {
   unplanned: string[];
   plans: Map<string, Plan>;
 };
+
+/** What `decideMany` returns for a plan's questions, keyed the same way. */
+type PlanDecisions = Decisions<Record<string, SystemOneQuestion>>;
 
 type SelectContent = Extract<
   SystemOneAnswerableContent,
@@ -484,18 +488,26 @@ const runnerUp = (
   return `; next ${label(next[0])} at ${percent(next[1])}`;
 };
 
+/**
+ * The source the model placed the answer in. The where-question is auxiliary:
+ * undecided it only costs the answer its citation, never the answer.
+ */
 const sourceChosen = (
-  answers: SystemOneAnswers<Record<string, SystemOneQuestion>>,
+  decisions: PlanDecisions,
   whereKey: string | null,
 ): string | null => {
   if (whereKey === null) {
     return null;
   }
-  const where = answers[whereKey];
-  if (where?.type !== "choice" || where.choice === NO_SOURCE) {
+  const where = decisions[whereKey];
+  if (where === undefined || where.state === "undecided") {
     return null;
   }
-  return where.choice;
+  const { answer } = where;
+  if (answer.type !== "choice" || answer.choice === NO_SOURCE) {
+    return null;
+  }
+  return answer.choice;
 };
 
 const notStated = (confidence: number): AnswerOutcome => ({
@@ -535,6 +547,11 @@ const decodeSingleSelect = (
   };
 };
 
+/**
+ * Every option is its own decision, so one option under the floor leaves the
+ * whole cell undecided: a list the model was unsure about anywhere is not a
+ * list, and the generative model answers the column instead.
+ */
 const decodeMultiSelect = (
   optionAnswers: readonly (readonly [string, NoulAnswer])[],
   sourceId: string | null,
@@ -596,8 +613,14 @@ const decodeCandidates = (
 type DecodeSystemOneAnswersOptions = {
   plan: SystemOneAnswerPlan;
   questions: readonly AnswerQuestion[];
-  answers: SystemOneAnswers<Record<string, SystemOneQuestion>>;
+  /** `decideMany` over `plan.questions`: one decision per question asked. */
+  decisions: PlanDecisions;
 };
+
+const undecided = (reason: DecisionUndecidedReason): AnswerOutcome => ({
+  state: "undecided",
+  reason,
+});
 
 /**
  * One outcome per planned question. A question the plan skipped has no entry;
@@ -606,7 +629,7 @@ type DecodeSystemOneAnswersOptions = {
 export const decodeSystemOneAnswers = ({
   plan,
   questions,
-  answers,
+  decisions,
 }: DecodeSystemOneAnswersOptions): Map<string, AnswerOutcome> => {
   const outcomes = new Map<string, AnswerOutcome>();
   for (const question of questions) {
@@ -616,20 +639,28 @@ export const decodeSystemOneAnswers = ({
     }
     switch (entry.kind) {
       case "single-select": {
-        const answer = answers[entry.valueKey];
+        const decision = decisions[entry.valueKey];
         if (
-          answer?.type === "choice" &&
-          question.content.type === "single-select"
+          decision === undefined ||
+          question.content.type !== "single-select"
         ) {
-          outcomes.set(
-            question.id,
-            decodeSingleSelect(
-              answer,
-              question.content,
-              sourceChosen(answers, entry.whereKey),
-            ),
-          );
+          break;
         }
+        if (decision.state === "undecided") {
+          outcomes.set(question.id, undecided(decision.reason));
+          break;
+        }
+        if (decision.answer.type !== "choice") {
+          break;
+        }
+        outcomes.set(
+          question.id,
+          decodeSingleSelect(
+            decision.answer,
+            question.content,
+            sourceChosen(decisions, entry.whereKey),
+          ),
+        );
         break;
       }
       case "multi-select": {
@@ -637,19 +668,30 @@ export const decodeSystemOneAnswers = ({
           break;
         }
         const { options } = question.content;
-        const optionAnswers = entry.optionKeys.flatMap((key, index) => {
-          const answer = answers[key];
+        const optionAnswers: (readonly [string, NoulAnswer])[] = [];
+        let unsure: DecisionUndecidedReason | null = null;
+        for (const [index, key] of entry.optionKeys.entries()) {
+          const decision = decisions[key];
           const option = options[index];
-          return answer?.type === "noul" && option !== undefined
-            ? [[option.value, answer] as const]
-            : [];
-        });
+          if (decision === undefined || option === undefined) {
+            continue;
+          }
+          if (decision.state === "undecided") {
+            unsure ??= decision.reason;
+            continue;
+          }
+          if (decision.answer.type === "noul") {
+            optionAnswers.push([option.value, decision.answer]);
+          }
+        }
         outcomes.set(
           question.id,
-          decodeMultiSelect(
-            optionAnswers,
-            sourceChosen(answers, entry.whereKey),
-          ),
+          unsure === null
+            ? decodeMultiSelect(
+                optionAnswers,
+                sourceChosen(decisions, entry.whereKey),
+              )
+            : undecided(unsure),
         );
         break;
       }
@@ -657,9 +699,19 @@ export const decodeSystemOneAnswers = ({
         if (entry.valueKey === null) {
           break;
         }
-        const answer = answers[entry.valueKey];
-        if (answer?.type === "choice") {
-          outcomes.set(question.id, decodeCandidates(answer, entry.candidates));
+        const decision = decisions[entry.valueKey];
+        if (decision === undefined) {
+          break;
+        }
+        if (decision.state === "undecided") {
+          outcomes.set(question.id, undecided(decision.reason));
+          break;
+        }
+        if (decision.answer.type === "choice") {
+          outcomes.set(
+            question.id,
+            decodeCandidates(decision.answer, entry.candidates),
+          );
         }
         break;
       }
@@ -671,61 +723,3 @@ export const decodeSystemOneAnswers = ({
   }
   return outcomes;
 };
-
-/** Longest question and value carried into a log line; the rest is cut. */
-const READING_QUESTION_CHARS = 80;
-const READING_VALUE_CHARS = 60;
-const READINGS_MAX = 20;
-
-const readingValue = (answer: Exclude<Answer, null>): string => {
-  if (typeof answer === "string") {
-    return answer;
-  }
-  if (Array.isArray(answer)) {
-    return answer.join(", ");
-  }
-  return `${String(answer.amount)}${answer.currency === null ? "" : ` ${answer.currency}`}`;
-};
-
-type DescribeSystemOneReadingsOptions = {
-  questions: readonly AnswerQuestion[];
-  outcomes: ReadonlyMap<string, AnswerOutcome>;
-};
-
-/**
- * One request's readings as a log attribute: which question, what the model
- * chose, and how sure it was. A JSON string because the logger takes scalar
- * attributes; a question the plan skipped is listed with no outcome so the
- * line still accounts for every question asked.
- */
-export const describeSystemOneReadings = ({
-  questions,
-  outcomes,
-}: DescribeSystemOneReadingsOptions): string =>
-  JSON.stringify(
-    questions.slice(0, READINGS_MAX).map((question) => {
-      const outcome = outcomes.get(question.id);
-      const kind = question.content.type;
-      const q = truncate(question.question, READING_QUESTION_CHARS);
-      if (outcome === undefined) {
-        return { kind, q, state: "unplanned" };
-      }
-      if (outcome.state === "not_stated") {
-        return {
-          kind,
-          q,
-          state: outcome.state,
-          confidence: outcome.confidence,
-        };
-      }
-      return {
-        kind,
-        q,
-        state: outcome.state,
-        value: truncate(readingValue(outcome.answer), READING_VALUE_CHARS),
-        probability: outcome.probability,
-        confidence: outcome.confidence,
-        source: outcome.sourceId,
-      };
-    }),
-  );

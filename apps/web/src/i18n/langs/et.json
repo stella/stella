@@ -1943,6 +1943,8 @@
       "accountDeletionSoleOwner": "Enne konto kustutamist andke ainuomandis organisatsioonide omandiõigus üle või kustutage need.",
       "accountDeletionTaskReassignmentInvalid": "Kontrollige iga aktiivse ülesande ümbermääramist. Iga uus vastutaja peab olema toimiku teine liige, kes pole veel ülesandele määratud.",
       "accountDeletionTaskReassignmentLimitExceeded": "Ümber tuleb määrata liiga palju aktiivseid ülesandeid. Enne konto kustutamist lõpetage või määrake ümber mõned ülesanded.",
+      "aiConfigDecisionInvalid": "Otsustusmudeli seadistus ei kehti. Kontrollige teenusepakkujat ja mudelit.",
+      "aiConfigDecisionValidationFailed": "Otsustusmudel lükkas seadistuse tagasi. Kontrollige API-võtit ja mudelit.",
       "aiConfigModelInvalid": "AI-mudeli seadistus ei kehti. Kontrollige valitud mudeleid.",
       "aiConfigProviderInvalid": "AI-teenusepakkuja seadistus ei kehti. Kontrollige teenusepakkuja seadeid.",
       "aiConfigProviderValidationFailed": "AI-teenusepakkuja lükkas seadistuse tagasi. Kontrollige API-võtit ja mudelit.",
@@ -3597,6 +3599,14 @@
       "dataRegion": "Andmepiirkond",
       "dataRegionDescription": "Suunab AI päringud valitud piirkonna kaudu andmesuveräänsuse tagamiseks.",
       "dataRegionUnsupported": "Piirkondlik marsruutimine on saadaval ainult Google AI (Vertex AI) puhul.",
+      "decision": {
+        "add": "Lisa otsustusmudel",
+        "description": "Kindla vastusega küsimused, näiteks dokumendikategooriad või viidete polaarsus, suunatakse sellele mudelile; ilma selleta vastab neile generatiivne mudel.",
+        "incomplete": "Sisesta otsustusmudeli jaoks API-võti ja mudel või eemalda see.",
+        "instanceProvided": "stella pakub juba otsustusmudelit; lisa oma ainult siis, kui soovid mõnda teist kasutada.",
+        "label": "Otsustusmudel",
+        "modelId": "Mudeli ID"
+      },
       "defaultModel": "Vaikimisi: {model}",
       "defaultModelOption": "Vaikimisi",
       "deploymentNamePlaceholder": "Juurutuse nimi",

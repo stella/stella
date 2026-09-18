@@ -312,24 +312,44 @@ export const OWNERSHIP = [
     enforcement: { kind: "none" },
   },
   {
-    id: "system-one-transport",
-    capability: "Typed judgments from a TypeSafe System One model (Jev)",
+    id: "typed-decisions",
+    capability:
+      "Typed decisions: a choice from a closed set, a yes/no or a score, asked of a decision model",
     owner: [
-      "apps/api/src/lib/typesafe/system-one.ts",
-      "apps/api/src/lib/typesafe/system-one-runtime.ts",
-      "apps/api/src/lib/typesafe/answer-questions.ts",
+      "apps/api/src/lib/decisions/decide.ts",
+      "apps/api/src/lib/decisions/decision-model.ts",
+      "apps/api/src/lib/decisions/system-one.ts",
+      "apps/api/src/lib/decisions/system-one-runtime.ts",
+      "apps/api/src/lib/decisions/answer-questions.ts",
     ],
     summary:
-      "A System One model answers typed questions about a state with probability " +
-      "distributions; it generates nothing. `system-one.ts` owns the wire contract, " +
-      "response validation and rate-limit retry, `system-one-runtime.ts` the " +
-      "deployment's credential, and `answer-questions.ts` the one translation of a " +
-      "table column (select, date, int) into questions and back into the `Answer` " +
-      "the generative path writes, so the two paths fill the same cell. Text " +
-      "columns and low-confidence answers stay on the generative model; a caller " +
-      "that gates on confidence reads `SYSTEM_ONE_ACCEPT_CONFIDENCE` here rather " +
-      "than choosing its own floor.",
-    enforcement: { kind: "none" },
+      "A decision model answers typed questions about a state with probability " +
+      "distributions; it generates nothing. `decide.ts` is the one entry: it " +
+      "resolves the organization's model (or the instance's, or none), applies " +
+      "the confidence floor, captures failures and logs every decision, and " +
+      "returns a `Decision` the caller must narrow before reading, so a " +
+      "deployment without a model takes the same path as an answer under the " +
+      "floor. `decision-model.ts` owns which model answers for an org, " +
+      "`system-one.ts` the wire contract and retry, `system-one-runtime.ts` the " +
+      "instance credential, and `answer-questions.ts` the translation of a table " +
+      "column (select, date, int) into questions and back into the `Answer` the " +
+      "generative path writes. A caller builds questions with the constructors in " +
+      "`system-one.ts` and asks them through `decide`; it never holds a client.",
+    enforcement: {
+      kind: "import",
+      specifiers: [
+        "@/api/lib/decisions/system-one-runtime",
+        "@/api/lib/decisions/system-one",
+      ],
+      names: ["getSystemOneClient", "createSystemOneClient"],
+      allowed: [
+        {
+          path: "apps/api/src/scripts/polarity-system-one-compare.ts",
+          reason:
+            "Measures the raw model against the corpus with a pinned client; the floor is what it calibrates, so it reads below `decide`.",
+        },
+      ],
+    },
   },
   {
     id: "pdf-rendering",

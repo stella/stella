@@ -971,4 +971,5 @@ const orgConfigForProvider = (
     reasoning: { provider, modelId: "model-reasoning" },
     pdf: { provider, modelId: "model-pdf" },
   },
+  decision: null,
 });

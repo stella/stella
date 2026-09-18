@@ -9,7 +9,7 @@
  * answer means for the cell. The runner owns the call itself.
  *
  * Nothing here fails a cell that the generative model could still answer: a
- * question the kit could not plan, an answer Jev is unsure of, and a value
+ * question the kit could not plan, a decision that was not taken, and a value
  * that no longer matches the column all come back as a fallback, and the run
  * asks the generative model for those columns instead.
  */
@@ -27,17 +27,16 @@ import type {
   ResearchPassage,
   ResearchQuestion,
 } from "@/api/lib/case-law/research-answers";
-import { LIMITS } from "@/api/lib/limits";
 import {
   isSystemOneAnswerable,
-  SYSTEM_ONE_ACCEPT_CONFIDENCE,
   SYSTEM_ONE_SOURCE_BUDGET_CHARS,
-} from "@/api/lib/typesafe/answer-questions";
+} from "@/api/lib/decisions/answer-questions";
 import type {
   AnswerOutcome,
   AnswerQuestion,
   AnswerSource,
-} from "@/api/lib/typesafe/answer-questions";
+} from "@/api/lib/decisions/answer-questions";
+import { LIMITS } from "@/api/lib/limits";
 import {
   fieldContentFromValidated,
   validateAnswerForContent,
@@ -143,11 +142,9 @@ export const resolveSystemOneOutcomes = ({
   for (const question of questions) {
     const outcome = outcomes.get(question.id);
     // No outcome means the kit could not plan the question (a select with no
-    // options, a date the text spells nowhere) or the model left it out.
-    if (
-      outcome === undefined ||
-      outcome.confidence < SYSTEM_ONE_ACCEPT_CONFIDENCE
-    ) {
+    // options, a date the text spells nowhere); undecided means no decision
+    // model, an answer under the floor, or a failed call.
+    if (outcome === undefined || outcome.state === "undecided") {
       fallbackColumnIds.push(question.id);
       continue;
     }

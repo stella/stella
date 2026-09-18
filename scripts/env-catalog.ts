@@ -388,7 +388,7 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
   TRANSACTIONAL_EMAIL_FROM:
     "Verified sender address used for every transactional email.",
   TYPESAFE_API_KEY:
-    "TypeSafe System One (Jev) API key. Unset, citation polarity and table answers use the generative model alone.",
+    "Instance decision model key (TypeSafe System One). An organization may set its own in AI settings; unset and without one, typed decisions fall back to the generative model.",
   TYPESAFE_MODEL:
     'System One model id sent to TypeSafe. Defaults to "jev-latest"; pin a versioned id to hold calibrated thresholds.',
   USE_MOCK_AI:
