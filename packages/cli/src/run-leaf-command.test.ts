@@ -497,7 +497,11 @@ describe("--input composes with flags before server validation (S5.5)", () => {
   });
 });
 
-describe("--input sources", () => {
+// `--input '<json>'`, `--input @file` and `--input -` are exercised end to end
+// in cli-commands.test.ts. What is left here is how they FAIL: a source the CLI
+// could not read, and a payload of the wrong shape, both of which must name
+// what to fix rather than fall through as an empty object.
+describe("--input source failures", () => {
   const collect = () => {
     const stderrChunks: string[] = [];
     return {
@@ -508,33 +512,6 @@ describe("--input sources", () => {
       stderrText: () => stderrChunks.join(""),
     };
   };
-
-  const inputDirs: string[] = [];
-  afterEach(async () => {
-    await Promise.all(
-      inputDirs.splice(0).map(async (dir) => {
-        await rm(dir, { recursive: true, force: true });
-      }),
-    );
-  });
-
-  test("inline JSON", async () => {
-    const sink = collect();
-    expect(
-      await parseInputObject({ inputRaw: '{"a":1}', writers: sink.writers }),
-    ).toEqual({ a: 1 });
-  });
-
-  test("@<path> reads the JSON from a file", async () => {
-    const dir = await mkdtemp(path.join(tmpdir(), "stella-input-"));
-    inputDirs.push(dir);
-    const file = path.join(dir, "args.json");
-    await writeFile(file, '{"matter_id":"m1"}');
-    const sink = collect();
-    expect(
-      await parseInputObject({ inputRaw: `@${file}`, writers: sink.writers }),
-    ).toEqual({ matter_id: "m1" });
-  });
 
   test("an unreadable @<path> names the file it could not read", async () => {
     const sink = collect();
