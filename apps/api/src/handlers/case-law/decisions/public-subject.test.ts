@@ -23,6 +23,9 @@ const SUBJECT_FREE_ROUTES = [
   "GET /case/decisions/facets",
   "GET /case/decisions/latest",
   "GET /case/decisions/status",
+  // A judge's portrait belongs to the roster, not to any one decision: the
+  // gate has no decision to admit, and redistribution is not a judge's.
+  "GET /case/judges/:judgeId/portrait",
   "GET /case/provisions/citation-counts",
   "GET /case/provisions/citing-decisions",
   "GET /case/sitemap/decisions/shard",

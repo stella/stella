@@ -248,6 +248,10 @@ export const startFakeS3 = ({ delayMs = 0 }: FakeS3Options = {}): FakeS3 => {
     }
     const headers: Record<string, string> = {
       "content-length": String(object.bytes.byteLength),
+      // S3 answers every object read with a validator, and callers pass it
+      // through to their own clients; a store with no ETag would let that
+      // pass-through look tested when nothing had one to pass.
+      etag: `"${new Bun.CryptoHasher("md5").update(object.bytes).digest("hex")}"`,
       ...(object.contentType === null
         ? {}
         : { "content-type": object.contentType }),

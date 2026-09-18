@@ -76,6 +76,7 @@ export const CaseDecisionDetailsInspectorView = ({
               <DecisionFacts
                 decisionType={decision.decisionType}
                 facts={DECISION_FACT_KINDS}
+                judges={decision.judges}
                 metadata={decision.metadata}
                 source={decision.source}
                 sourceUrl={decision.sourceUrl}

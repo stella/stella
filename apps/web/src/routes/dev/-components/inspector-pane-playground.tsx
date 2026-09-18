@@ -169,6 +169,7 @@ const BENCH_DECISION = {
   documentUnavailable: false,
   fulltext: null,
   id: "bench-decision",
+  judges: [],
   language: "cs",
   sourceAttributionUrl: null,
   textFields: BENCH_TEXT_FIELDS,

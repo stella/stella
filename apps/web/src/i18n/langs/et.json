@@ -728,10 +728,16 @@
       "abstract": "Kokkuvõte",
       "citedBy": "Viidatud",
       "cites": "Viitab",
-      "judgeRapporteur": "Ettekandja-kohtunik",
+      "dissentByline": "Eriarvamus: <bdi>{names}</bdi>",
+      "judgeRole": {
+        "dissenting": "Eriarvamus",
+        "rapporteur": "Ettekandja-kohtunik"
+      },
+      "judges": "Kohtunikud",
       "legalArea": "Õigusvaldkond",
       "legalSentence": "Õiguslause",
       "popularName": "Rahvanimi",
+      "portraitCredit": "Portreede allikas: {source}",
       "provisionMentions": "{count, number}×",
       "provisionMentionsLabel": "{count, plural, one {# mainimine} other {# mainimist}}",
       "provisionsCited": "Viidatud sätted",

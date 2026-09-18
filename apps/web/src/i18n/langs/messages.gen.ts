@@ -731,10 +731,16 @@ type Messages = {
       "abstract": "Abstract";
       "citedBy": "Cited by";
       "cites": "Cites";
-      "judgeRapporteur": "Judge rapporteur";
+      "dissentByline": "Dissenting: <bdi>{names}</bdi>";
+      "judgeRole": {
+        "dissenting": "Dissenting opinion";
+        "rapporteur": "Judge rapporteur";
+      };
+      "judges": "Judges";
       "legalArea": "Legal area";
       "legalSentence": "Legal sentence";
       "popularName": "Popular name";
+      "portraitCredit": "Portrait source: {source}";
       "provisionMentions": "{count, number}×";
       "provisionMentionsLabel": "{count, plural, one {# mention} other {# mentions}}";
       "provisionsCited": "Provisions cited";

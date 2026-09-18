@@ -2,9 +2,14 @@ import { panic, Result, UnhandledException } from "better-result";
 import { eq, sql } from "drizzle-orm";
 import { status, t } from "elysia";
 
+import type { DecisionJudgeRole } from "@stll/api-contract/case-law-judges";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
-import { caseLawDecisions } from "@/api/db/schema";
+import {
+  caseLawDecisionJudges,
+  caseLawDecisions,
+  caseLawJudges,
+} from "@/api/db/schema";
 import { corpusStorageMode } from "@/api/env-base";
 import {
   listIncomingDecisionCitations,
@@ -15,6 +20,8 @@ import {
   hasUsableAst,
   omitDerivablePlainText,
 } from "@/api/handlers/case-law/document-ast";
+import { DECISION_JUDGE_ROLE_RANK } from "@/api/handlers/case-law/judges/consts";
+import { judgePortraitPath } from "@/api/handlers/case-law/judges/portrait";
 import { corpusCarriesDocument } from "@/api/handlers/case-law/stored-payload";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -55,6 +62,7 @@ import {
   definePublicLawSharedQuery,
   PUBLIC_LAW_SHARED_QUERY,
 } from "@/api/lib/public-law-shared-query";
+import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
 
 const corpusReadEnabled = (): boolean => corpusStorageMode !== "off";
 
@@ -209,6 +217,74 @@ export const encodeDecisionCitationCursor = ({
   ]);
 };
 
+/** One judge as a decision names them, ready to render. */
+type DecisionJudge = {
+  role: DecisionJudgeRole;
+  /** The name as the decision prints it, without the academic titles. */
+  name: string;
+  judgeId: SafeId<"caseLawJudge"> | null;
+  portrait: { url: string; attribution: string } | null;
+};
+
+/**
+ * Rank the roles in reading order. Written from the rank map rather than as a
+ * literal `CASE`, so a role added to the union brings its position with it
+ * instead of sorting by the spelling of its name.
+ */
+const JUDGE_ROLE_ORDER = sqlCaseFragment({
+  operand: sql`${caseLawDecisionJudges.role}`,
+  branches: Object.entries(DECISION_JUDGE_ROLE_RANK).map(
+    ([role, rank]) => sql`WHEN ${role} THEN ${rank}`,
+  ),
+  fallback: sql`${Object.keys(DECISION_JUDGE_ROLE_RANK).length}`,
+});
+
+/**
+ * The decision's judges, rapporteur first.
+ *
+ * One left join: an unmatched name is still the decision's own statement and
+ * travels with `judgeId: null`, which is what tells the client there is
+ * nothing more to show for it.
+ */
+const listDecisionJudges = async (
+  tx: CaseLawPublicReadTransaction,
+  decisionId: SafeId<"caseLawDecision">,
+): Promise<DecisionJudge[]> => {
+  const rows = await tx
+    .select({
+      role: caseLawDecisionJudges.role,
+      name: caseLawDecisionJudges.nameAsPrinted,
+      judgeId: caseLawDecisionJudges.judgeId,
+      portraitS3Key: caseLawJudges.portraitS3Key,
+      portraitAttribution: caseLawJudges.portraitAttribution,
+    })
+    .from(caseLawDecisionJudges)
+    .leftJoin(
+      caseLawJudges,
+      eq(caseLawJudges.id, caseLawDecisionJudges.judgeId),
+    )
+    .where(eq(caseLawDecisionJudges.decisionId, decisionId))
+    .orderBy(JUDGE_ROLE_ORDER, caseLawDecisionJudges.position)
+    .limit(LIMITS.caseLawDecisionJudgesMax);
+
+  return rows.map(
+    ({ role, name, judgeId, portraitS3Key, portraitAttribution }) => ({
+      role,
+      name,
+      judgeId,
+      portrait:
+        judgeId === null ||
+        portraitS3Key === null ||
+        portraitAttribution === null
+          ? null
+          : {
+              url: judgePortraitPath(judgeId),
+              attribution: portraitAttribution,
+            },
+    }),
+  );
+};
+
 const emptyCitationPage = () => ({
   items: [],
   limit: LIMITS.caseLawDecisionCitationPageSize,
@@ -286,6 +362,7 @@ export const readDecisionHandler = definePublicLawSharedQuery(
     const [
       courtWeights,
       languageAlternates,
+      judges,
       citationsFromPage,
       citationsToPage,
     ] = await Promise.all([
@@ -298,6 +375,7 @@ export const readDecisionHandler = definePublicLawSharedQuery(
         tx,
         languageGroupKey: decision.languageGroupKey,
       }),
+      listDecisionJudges(tx, decisionId),
       citationCursors.from.status === CITATION_STREAM_CURSOR_STATUS.EXHAUSTED
         ? emptyCitationPage()
         : listOutgoingDecisionCitations({
@@ -443,6 +521,7 @@ export const readDecisionHandler = definePublicLawSharedQuery(
         // must not feed the full text to a model when this is false.
         allowsDerivedAi: allowsDerivedAi(source.descriptor),
       },
+      judges,
       citationsFrom: citationsFromPage.items,
       citationsTo: citationsToPage.items,
       citationsNextCursor,

@@ -6,13 +6,31 @@ import {
   DECISION_FACT_KINDS,
   hasDecisionFacts,
 } from "@/features/case-law/components/case-viewer/decision-facts.logic";
+import type { DecisionJudge } from "@/features/case-law/decision-judges";
+
+const RAPPORTEUR = {
+  judgeId: "00000000-0000-4000-8000-000000000001",
+  name: "Nováková Jana",
+  portrait: {
+    attribution: "Ústavní soud",
+    url: "/api/case-law/judges/00000000-0000-4000-8000-000000000001/portrait",
+  },
+  role: "rapporteur",
+} as const satisfies DecisionJudge;
+
+const DISSENTER = {
+  judgeId: null,
+  name: "Dvořák Petr",
+  portrait: null,
+  role: "dissenting",
+} as const satisfies DecisionJudge;
 
 describe("decision facts", () => {
   test("reads publisher metadata under its adapter keys", () => {
     const facts = buildDecisionFacts({
       decisionType: "rozsudek",
+      judges: [],
       metadata: {
-        judge: " Svobodová Silvie, Mgr. Ing. ",
         legalArea: "Stavební zákon",
         legalAreas: ["Baurecht", 7, ""],
         keywords: ["a", "b"],
@@ -24,7 +42,7 @@ describe("decision facts", () => {
 
     expect(facts).toEqual({
       decisionType: "rozsudek",
-      judge: "Svobodová Silvie, Mgr. Ing.",
+      judges: [],
       keywords: ["a", "b"],
       legalAreas: ["Stavební zákon", "Baurecht"],
       source: {
@@ -39,6 +57,7 @@ describe("decision facts", () => {
   test("the reader's fact order covers every fact it can build", () => {
     const facts = buildDecisionFacts({
       decisionType: "rozsudek",
+      judges: [],
       metadata: {},
       source: null,
       sourceUrl: null,
@@ -51,6 +70,7 @@ describe("decision facts", () => {
   test("a selection answers only for the facts it names", () => {
     const facts = buildDecisionFacts({
       decisionType: "rozsudek",
+      judges: [],
       metadata: { keywords: ["a"] },
       source: { name: "x" },
       sourceUrl: "https://example.org/decision",
@@ -61,15 +81,46 @@ describe("decision facts", () => {
     expect(hasDecisionFacts({ facts, kinds: ["decisionType", "source"] })).toBe(
       true,
     );
-    expect(hasDecisionFacts({ facts, kinds: ["subject", "judge"] })).toBe(
+    expect(hasDecisionFacts({ facts, kinds: ["subject", "judges"] })).toBe(
       false,
     );
     expect(hasDecisionFacts({ facts, kinds: [] })).toBe(false);
   });
 
+  test("a bench the court named is a fact, and an empty one is not", () => {
+    const withBench = buildDecisionFacts({
+      decisionType: null,
+      judges: [DISSENTER, RAPPORTEUR],
+      metadata: {},
+      source: null,
+      sourceUrl: null,
+    });
+
+    // Rapporteur first, whichever order the read sent them in.
+    expect(withBench.judges.map((judge) => judge.name)).toEqual([
+      RAPPORTEUR.name,
+      DISSENTER.name,
+    ]);
+    expect(hasDecisionFacts({ facts: withBench, kinds: ["judges"] })).toBe(
+      true,
+    );
+
+    const withoutBench = buildDecisionFacts({
+      decisionType: null,
+      judges: [],
+      metadata: {},
+      source: null,
+      sourceUrl: null,
+    });
+    expect(hasDecisionFacts({ facts: withoutBench, kinds: ["judges"] })).toBe(
+      false,
+    );
+  });
+
   test("caps keywords and refuses non-http sources", () => {
     const facts = buildDecisionFacts({
       decisionType: null,
+      judges: [],
       metadata: {
         keywords: Array.from({ length: 20 }, (_, i) => `k${String(i)}`),
       },
@@ -81,11 +132,12 @@ describe("decision facts", () => {
     expect(facts.source).toBeNull();
   });
 
-  test("is empty without metadata or source", () => {
+  test("is empty without metadata, a bench or a source", () => {
     expect(
       hasDecisionFacts({
         facts: buildDecisionFacts({
           decisionType: null,
+          judges: [],
           metadata: null,
           source: null,
           sourceUrl: null,

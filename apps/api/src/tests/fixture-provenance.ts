@@ -36,6 +36,7 @@ export const PROVENANCE_SUFFIX = ".provenance.json";
 export const CAPTURED_FIXTURE_ROOTS = [
   "src/handlers/case-law/ingestion/adapters/__fixtures__",
   "src/handlers/case-law/ingestion/parsers/__fixtures__",
+  "src/handlers/case-law/judges/__fixtures__",
 ] as const;
 
 /**

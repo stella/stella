@@ -1,3 +1,5 @@
+import { orderDecisionJudges } from "@/features/case-law/decision-judges";
+import type { DecisionJudge } from "@/features/case-law/decision-judges";
 import { sanitizeHref } from "@/lib/sanitize-href";
 
 const isNonEmptyString = (value: unknown): value is string =>
@@ -29,6 +31,8 @@ export const DECISION_FACT_KEYWORD_LIMIT = 8;
 
 export type DecisionFactsInput = {
   decisionType: string | null | undefined;
+  /** The bench, as the decision read returns it. */
+  judges: readonly DecisionJudge[];
   metadata: Record<string, unknown> | null | undefined;
   source: { name: string | null } | null | undefined;
   sourceUrl: string | null | undefined;
@@ -36,7 +40,7 @@ export type DecisionFactsInput = {
 
 export type DecisionFacts = {
   decisionType: string | null;
-  judge: string | null;
+  judges: readonly DecisionJudge[];
   keywords: string[];
   legalAreas: string[];
   source: { name: string | null; url: string } | null;
@@ -46,11 +50,13 @@ export type DecisionFacts = {
 /**
  * The publisher-supplied facts worth a line above the text. Adapters store
  * them under a handful of keys (`legalArea` for one area, `legalAreas` for
- * several, `subjectOfProceeding`, `keywords`, `judge`); anything else in
- * `metadata` stays out of the reader.
+ * several, `subjectOfProceeding`, `keywords`); anything else in `metadata`
+ * stays out of the reader. The bench is its own field of the read rather
+ * than publisher metadata.
  */
 export const buildDecisionFacts = ({
   decisionType,
+  judges,
   metadata,
   source,
   sourceUrl,
@@ -63,7 +69,7 @@ export const buildDecisionFacts = ({
   const safeSourceUrl = sanitizeHref(sourceUrl);
   return {
     decisionType: isNonEmptyString(decisionType) ? decisionType : null,
-    judge: readString(record, "judge"),
+    judges: orderDecisionJudges(judges),
     keywords: readStringList(record, "keywords").slice(
       0,
       DECISION_FACT_KEYWORD_LIMIT,
@@ -85,7 +91,7 @@ export const buildDecisionFacts = ({
  */
 const FACT_IS_PRESENT = {
   decisionType: (facts) => facts.decisionType !== null,
-  judge: (facts) => facts.judge !== null,
+  judges: (facts) => facts.judges.length > 0,
   keywords: (facts) => facts.keywords.length > 0,
   legalAreas: (facts) => facts.legalAreas.length > 0,
   source: (facts) => facts.source !== null,
@@ -103,7 +109,7 @@ export const DECISION_FACT_KINDS = [
   "legalAreas",
   "subject",
   "keywords",
-  "judge",
+  "judges",
   "source",
 ] as const satisfies readonly DecisionFactKind[];
 

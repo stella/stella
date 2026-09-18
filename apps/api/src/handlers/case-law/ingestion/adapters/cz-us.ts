@@ -14,8 +14,8 @@ import {
   defineSourceAdapter,
   EMPTY_AST,
   encodeSourceRawEnvelope,
+  excludedSourceField,
   isPersistableSourceDocumentId,
-  PENDING_SOURCE_FIELD_INVENTORY,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   STORED_RAW_REPARSE_REJECTION,
   SOURCE_TOTAL_PROBE_FAILURE,
@@ -29,6 +29,7 @@ import type {
   ReconciliationBuildOutcome,
   ReconciliationSlicePage,
   ReconciliationSlicePageOptions,
+  SourceFieldDisposition,
   SourceRawParts,
   StoredRawReparseInput,
   StoredRawReparseOutcome,
@@ -46,6 +47,9 @@ import {
   stripHtml,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { parseUsDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-us";
+import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
+import type { DecisionJudgeInput } from "@/api/handlers/case-law/judges/decision-judges";
+import { stripAcademicTitles } from "@/api/handlers/case-law/judges/judge-name";
 import { czDecisionCourt } from "@/api/lib/case-law/cz-ecli-courts";
 import {
   TEXT_ABSENCE_REASON,
@@ -234,26 +238,6 @@ const REGISTRY_SIGN_PATTERN =
   /^(?<caseNumber>\S+(?:\s\S+)*?)\s+ze\s+dne\s+(?<date>\S.*)$/u;
 const DOC_CONTENT_PATTERN = /class="DocContent">(?<body>[\s\S]*?)<\/table>/u;
 
-/**
- * The rapporteur is named immediately before this annotation. Matching
- * the annotation first keeps the scan linear: a pattern that instead
- * leads with the name (`\S+(?:\s+\S+){0,2}` and the like) has to retry
- * every offset in the document, and each retry walks the rest of the
- * current run of non-space characters, so the cost grows with the
- * square of the input.
- */
-const JUDGE_ANNOTATION_PATTERN = /\(\s*soudce\s+zpravodaj\s*\)/iu;
-
-/** Name tokens to keep ahead of the annotation. */
-const JUDGE_TOKEN_LIMIT = 3;
-
-/**
- * How far back to read for those tokens. A name plus its separators
- * never fills this, and bounding the window keeps extraction
- * independent of document size.
- */
-const JUDGE_LOOKBACK_CHARS = 200;
-
 /** Extract text from a labeled span. */
 const extractLabel = (html: string, labelId: string): string | undefined => {
   const pattern = new RegExp(`id="${labelId}"[^>]*>([\\s\\S]*?)</span>`, "iu");
@@ -399,32 +383,6 @@ const extractDocContentText = (html: string): string | undefined => {
 const extractFulltext = (bodyText: string | undefined): string | undefined =>
   bodyText !== undefined && bodyText.length > 50 ? bodyText : undefined;
 
-/**
- * Extract the rapporteur judge name from the decision body.
- *
- * Takes the body text rather than the page: the surrounding HTML
- * carries an ASP.NET `__VIEWSTATE` field, a single run of thousands of
- * non-space characters that costs far more to scan than the decision
- * itself and holds no name.
- */
-const extractJudge = (bodyText: string): string | undefined => {
-  const annotation = JUDGE_ANNOTATION_PATTERN.exec(bodyText);
-  if (!annotation) {
-    return undefined;
-  }
-
-  const tokens = bodyText
-    .slice(
-      Math.max(0, annotation.index - JUDGE_LOOKBACK_CHARS),
-      annotation.index,
-    )
-    .split(/\s+/u)
-    .filter(Boolean)
-    .slice(-JUDGE_TOKEN_LIMIT);
-
-  return tokens.length > 0 ? tokens.join(" ") : undefined;
-};
-
 /** Below this a cell holds a stub or a label, not a publisher's own text. */
 const ABSTRACT_MIN_CHARS = 20;
 
@@ -493,8 +451,362 @@ const extractAbstract = (
   };
 };
 
+// ── Record card (ResultDetail.aspx) ──────────────────────
+
+/**
+ * Whether a row's record card has been read, stated on the row itself.
+ *
+ * Selectable, because it is what the judges backfill walks: a row stored
+ * before this adapter read the card carries neither value, and one the court
+ * served no card for carries `unavailable` and is not asked again.
+ */
+export const CZ_US_RECORD_CARD_METADATA_KEY = "recordCard";
+
+export const CZ_US_RECORD_CARD_STATE = {
+  READ: "read",
+  UNAVAILABLE: "unavailable",
+} as const;
+
+/**
+ * The labels NALUS prints on a decision's record card, each mapped to the
+ * name this adapter reads it under.
+ *
+ * This map is the source-field inventory's field list as well: the
+ * disposition map below is keyed on `keyof typeof NALUS_DETAIL_LABELS`, so a
+ * label added here without a decision does not compile, and a label the court
+ * adds to the page reaches `listSourceFields` as an undeclared field rather
+ * than as silence.
+ */
+const NALUS_DETAIL_LABELS = {
+  "Identifikátor evropské judikatury": "ecli",
+  "Název soudu": "courtName",
+  "Spisová značka": "caseNumber",
+  "Paralelní citace (Sbírka zákonů)": "parallelCitationLaws",
+  "Paralelní citace (Sbírka nálezů a usnesení)": "parallelCitationReports",
+  "Populární název": "popularName",
+  "Datum rozhodnutí": "decisionDate",
+  "Datum vyhlášení": "announcedOn",
+  "Datum podání": "filedOn",
+  "Datum zpřístupnění": "availableFrom",
+  "Forma rozhodnutí": "decisionForm",
+  "Typ řízení": "proceedingType",
+  Význam: "significance",
+  Navrhovatel: "petitioner",
+  "Dotčený orgán": "affectedAuthority",
+  "Soudce zpravodaj": "rapporteur",
+  "Napadený akt": "challengedAct",
+  "Typ výroku": "rulingType",
+  "Dotčené ústavní zákony a mezinárodní smlouvy": "constitutionalProvisions",
+  "Ostatní dotčené předpisy": "otherProvisions",
+  "Odlišné stanovisko": "dissentingJudges",
+  "Předmět řízení": "proceedingSubject",
+  "Věcný rejstřík": "subjectIndex",
+  "Jazyk rozhodnutí": "decisionLanguage",
+  Poznámka: "note",
+  "URL adresa": "documentUrl",
+} as const;
+
+type NalusDetailLabel = keyof typeof NALUS_DETAIL_LABELS;
+
+export type NalusDetailFieldKey =
+  (typeof NALUS_DETAIL_LABELS)[NalusDetailLabel];
+
+/**
+ * One decision's record card, read.
+ *
+ * Every field is a list because the court separates repeats inside one cell
+ * with `<br/>`, and it does so for more cells than a reader would guess: a
+ * plenary decision has one rapporteur and nine dissenters, three petitioners
+ * and two verdict types. A field the court leaves blank is an empty list, so
+ * the record is total and absence reads the same way everywhere.
+ */
+export type NalusDetailFields = Readonly<
+  Record<NalusDetailFieldKey, readonly string[]>
+>;
+
+const DETAIL_FIELD_BY_LABEL = new Map<string, NalusDetailFieldKey>(
+  Object.entries(NALUS_DETAIL_LABELS),
+);
+
+/**
+ * The record card's own table. Scoped rather than matched by label text: the
+ * page repeats `Soudce zpravodaj` as a column heading of the result row above
+ * the card, where it labels nothing.
+ */
+const RECORD_CARD_SELECTOR = "table.recordCardTable tr";
+
+/** Repeats inside one value cell, as the court separates them. */
+const DETAIL_VALUE_SEPARATOR = /<br\s*\/?>/giu;
+
+const detailText = (text: string): string =>
+  text.replaceAll(" ", " ").replace(/\s+/gu, " ").trim();
+
+/**
+ * A field per label, all empty.
+ *
+ * Written out rather than derived from the label map, because the compiler
+ * then holds the two to exact agreement: a field added to the map and missed
+ * here does not compile, and neither does one left behind here.
+ */
+const emptyDetailFields = (): Record<NalusDetailFieldKey, string[]> => ({
+  ecli: [],
+  courtName: [],
+  caseNumber: [],
+  parallelCitationLaws: [],
+  parallelCitationReports: [],
+  popularName: [],
+  decisionDate: [],
+  announcedOn: [],
+  filedOn: [],
+  availableFrom: [],
+  decisionForm: [],
+  proceedingType: [],
+  significance: [],
+  petitioner: [],
+  affectedAuthority: [],
+  rapporteur: [],
+  challengedAct: [],
+  rulingType: [],
+  constitutionalProvisions: [],
+  otherProvisions: [],
+  dissentingJudges: [],
+  proceedingSubject: [],
+  subjectIndex: [],
+  decisionLanguage: [],
+  note: [],
+  documentUrl: [],
+});
+
+/**
+ * Read the record card of a NALUS detail page.
+ *
+ * `null` when the page holds no record card at all, which is what a session
+ * bounce answers with: a card read as empty would otherwise be
+ * indistinguishable from a decision the court states nothing about.
+ */
+export const parseNalusDetail = (html: string): NalusDetailFields | null => {
+  const $ = cheerio.load(html);
+  const rows = $(RECORD_CARD_SELECTOR);
+  if (rows.length === 0) {
+    return null;
+  }
+  const fields = emptyDetailFields();
+  rows.each((_, row) => {
+    const cells = $(row).children("td");
+    if (cells.length !== 2) {
+      return;
+    }
+    const key = DETAIL_FIELD_BY_LABEL.get(detailText(cells.eq(0).text()));
+    if (key === undefined) {
+      return;
+    }
+    fields[key].push(
+      ...(cells.eq(1).html() ?? "")
+        .split(DETAIL_VALUE_SEPARATOR)
+        .map((part) => detailText(stripHtml(part)))
+        .filter((part) => part.length > 0),
+    );
+  });
+  return fields;
+};
+
+/** Every label the record card prints, whether or not the court filled it. */
+const listNalusSourceFields = (payload: string): readonly string[] => {
+  const $ = cheerio.load(payload);
+  const labels: string[] = [];
+  $(RECORD_CARD_SELECTOR).each((_, row) => {
+    const cells = $(row).children("td");
+    if (cells.length === 2) {
+      labels.push(detailText(cells.eq(0).text()));
+    }
+  });
+  return labels;
+};
+
+/**
+ * The judges the record card names, rapporteur first and dissenters in the
+ * order the court prints them.
+ *
+ * Titles are stripped here because the printed name is what a reader sees and
+ * what the roster is matched on: honorifics differ between the court's own
+ * pages and change over a career.
+ */
+const detailJudges = (fields: NalusDetailFields): DecisionJudgeInput[] =>
+  [
+    ...fields.rapporteur.map((name) => ({
+      role: DECISION_JUDGE_ROLE.RAPPORTEUR,
+      nameAsPrinted: stripAcademicTitles(name),
+    })),
+    ...fields.dissentingJudges.map((name) => ({
+      role: DECISION_JUDGE_ROLE.DISSENTING,
+      nameAsPrinted: stripAcademicTitles(name),
+    })),
+  ].filter(({ nameAsPrinted }) => nameAsPrinted.length > 0);
+
+/** Record-card fields the row carries under their own metadata keys. */
+const DETAIL_METADATA_KEYS = [
+  "parallelCitationLaws",
+  "parallelCitationReports",
+  "announcedOn",
+  "filedOn",
+  "availableFrom",
+  "proceedingType",
+  "significance",
+  "petitioner",
+  "affectedAuthority",
+  "challengedAct",
+  "rulingType",
+  "constitutionalProvisions",
+  "otherProvisions",
+  "proceedingSubject",
+  "subjectIndex",
+  "decisionLanguage",
+  "note",
+] as const satisfies readonly NalusDetailFieldKey[];
+
+/**
+ * The record card as metadata.
+ *
+ * A cell the court filled once is stored as that string and a repeating one
+ * as the list, so a consumer never has to know which cells this court happens
+ * to repeat. A blank cell is omitted: the row then says nothing about the
+ * field, rather than saying the court states nothing.
+ */
+const detailMetadata = (
+  fields: NalusDetailFields,
+): Record<string, string | readonly string[]> =>
+  Object.fromEntries(
+    DETAIL_METADATA_KEYS.flatMap((key) => {
+      const values = fields[key];
+      const single = values.at(0);
+      if (values.length === 0 || single === undefined) {
+        return [];
+      }
+      return [[key, values.length === 1 ? single : values] as const];
+    }),
+  );
+
+/**
+ * What this source states about a decision, and what becomes of it.
+ *
+ * Keyed on the record card's labels, so the map is total over the page by
+ * construction. `Soudce zpravodaj` and `Odlišné stanovisko` share a target:
+ * they are the two roles of one list, which is why the result carries
+ * `judges` rather than a field per role.
+ */
+const NALUS_SOURCE_FIELDS = {
+  "Identifikátor evropské judikatury": {
+    disposition: "stored",
+    target: { type: "result", key: "ecli" },
+  },
+  "Název soudu": excludedSourceField(
+    "the publisher naming itself; the deciding court is resolved from the record's own ECLI, because this database also republishes other courts' decisions",
+  ),
+  "Spisová značka": {
+    disposition: "stored",
+    target: { type: "result", key: "caseNumber" },
+  },
+  "Paralelní citace (Sbírka zákonů)": {
+    disposition: "stored",
+    target: { type: "metadata", key: "parallelCitationLaws" },
+  },
+  "Paralelní citace (Sbírka nálezů a usnesení)": {
+    disposition: "stored",
+    target: { type: "metadata", key: "parallelCitationReports" },
+  },
+  "Populární název": {
+    disposition: "stored",
+    target: { type: "metadata", key: "popularName" },
+  },
+  "Datum rozhodnutí": {
+    disposition: "stored",
+    target: { type: "result", key: "decisionDate" },
+  },
+  "Datum vyhlášení": {
+    disposition: "stored",
+    target: { type: "metadata", key: "announcedOn" },
+  },
+  "Datum podání": {
+    disposition: "stored",
+    target: { type: "metadata", key: "filedOn" },
+  },
+  "Datum zpřístupnění": {
+    disposition: "stored",
+    target: { type: "metadata", key: "availableFrom" },
+  },
+  "Forma rozhodnutí": {
+    disposition: "stored",
+    target: { type: "result", key: "decisionType" },
+  },
+  "Typ řízení": {
+    disposition: "stored",
+    target: { type: "metadata", key: "proceedingType" },
+  },
+  Význam: {
+    disposition: "stored",
+    target: { type: "metadata", key: "significance" },
+  },
+  Navrhovatel: {
+    disposition: "stored",
+    target: { type: "metadata", key: "petitioner" },
+  },
+  "Dotčený orgán": {
+    disposition: "stored",
+    target: { type: "metadata", key: "affectedAuthority" },
+  },
+  "Soudce zpravodaj": {
+    disposition: "stored",
+    target: { type: "result", key: "judges" },
+  },
+  "Napadený akt": {
+    disposition: "stored",
+    target: { type: "metadata", key: "challengedAct" },
+  },
+  "Typ výroku": {
+    disposition: "stored",
+    target: { type: "metadata", key: "rulingType" },
+  },
+  "Dotčené ústavní zákony a mezinárodní smlouvy": {
+    disposition: "stored",
+    target: { type: "metadata", key: "constitutionalProvisions" },
+  },
+  "Ostatní dotčené předpisy": {
+    disposition: "stored",
+    target: { type: "metadata", key: "otherProvisions" },
+  },
+  "Odlišné stanovisko": {
+    disposition: "stored",
+    target: { type: "result", key: "judges" },
+  },
+  "Předmět řízení": {
+    disposition: "stored",
+    target: { type: "metadata", key: "proceedingSubject" },
+  },
+  "Věcný rejstřík": {
+    disposition: "stored",
+    target: { type: "metadata", key: "subjectIndex" },
+  },
+  "Jazyk rozhodnutí": {
+    disposition: "stored",
+    target: { type: "metadata", key: "decisionLanguage" },
+  },
+  Poznámka: {
+    disposition: "stored",
+    target: { type: "metadata", key: "note" },
+  },
+  "URL adresa": excludedSourceField(
+    "the retrieval address of the document the row already stores as sourceUrl",
+  ),
+} as const satisfies Record<NalusDetailLabel, SourceFieldDisposition>;
+
 type ParseDecisionPageOptions = {
   html: string;
+  /**
+   * The record card fetched beside the document, where one was served. Null
+   * for a payload stored before this adapter read the card: the fields it
+   * states are then absent, never guessed back out of the document's prose.
+   */
+  detail: NalusDetailFields | null;
   sourceUrl: string;
   sourceDocumentId: string;
   listedEcli: string | undefined;
@@ -506,6 +818,7 @@ type ParseDecisionPageOptions = {
 
 const parseDecisionPage = ({
   html,
+  detail,
   sourceUrl,
   sourceDocumentId,
   listedEcli,
@@ -524,12 +837,19 @@ const parseDecisionPage = ({
     return null;
   }
 
-  const decisionForm = extractLabel(html, "lblDecisionForm");
+  const decisionForm =
+    extractLabel(html, "lblDecisionForm") ?? detail?.decisionForm.at(0);
   const parallelQuotation = extractLabel(html, "lblParallelQuotation");
-  const popularName = extractLabel(html, "lblPopularName");
+  const popularName =
+    extractLabel(html, "lblPopularName") ?? detail?.popularName.at(0);
   const bodyText = extractDocContentText(html);
   const fulltext = extractFulltext(bodyText);
-  const judge = bodyText === undefined ? undefined : extractJudge(bodyText);
+  const judges = detail === null ? undefined : detailJudges(detail);
+  // The stored facts row reads one name; the roles live on `judges`, and
+  // both spell it the way the roster is matched on.
+  const judge = judges?.find(
+    ({ role }) => role === DECISION_JUDGE_ROLE.RAPPORTEUR,
+  )?.nameAsPrinted;
 
   // Build ECLI from case number + decision year + counter.
   // Counter comes from registrySignHidden (not the visible label).
@@ -602,6 +922,7 @@ const parseDecisionPage = ({
     decisionType: decisionForm?.toLowerCase(),
     fulltext: resolvedFulltext,
     sourceUrl,
+    ...(judges === undefined || judges.length === 0 ? {} : { judges }),
     textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
     metadata: checkedDecisionMetadata({
       caseNumber: parsed.caseNumber,
@@ -609,6 +930,11 @@ const parseDecisionPage = ({
       court,
       decisionDate: parsed.decisionDate,
       decisionType: decisionForm?.toLowerCase(),
+      [CZ_US_RECORD_CARD_METADATA_KEY]:
+        detail === null
+          ? CZ_US_RECORD_CARD_STATE.UNAVAILABLE
+          : CZ_US_RECORD_CARD_STATE.READ,
+      ...(detail === null ? {} : detailMetadata(detail)),
       judge: judge || undefined,
       parallelQuotation: parallelQuotation || undefined,
       popularName: popularName || undefined,
@@ -711,7 +1037,11 @@ type SearchPage = {
  * request order names the listing. This carries the one request whose
  * response the rows were parsed from.
  */
-type FetchedSearchPage = SearchPage & { url: string };
+type FetchedSearchPage = SearchPage & {
+  url: string;
+  /** The session the listing was read under; the record cards need it. */
+  session: NalusSession;
+};
 
 class SearchPageDriftError extends TypeError {
   override name = "SearchPageDriftError";
@@ -1389,6 +1719,7 @@ const fetchSearchPage = async ({
       pageSize,
     }),
     url: pageUrl,
+    session: { cookie: cookies },
   };
 };
 
@@ -1407,8 +1738,158 @@ export type CzUsBuildResult =
   /** NALUS lists the record but serves no readable text for it. */
   | { type: "detail-unavailable"; decision: IngestionResult };
 
+/**
+ * The court's session, as the one header every record-card read carries.
+ *
+ * `ResultDetail.aspx` answers a session-less request with a redirect to the
+ * search form, so the card cannot be fetched the way the document and the
+ * abstract are. A search already establishes one, and the crawl reuses that
+ * session for the whole page; a caller with no search of its own opens one.
+ */
+export type NalusSession = { readonly cookie: string };
+
+export const openNalusSession = async (
+  signal?: AbortSignal,
+): Promise<NalusSession> => {
+  const response = await nalusOkResponse({
+    subject: "session",
+    url: SEARCH_URL,
+    signal,
+  });
+  await response.text();
+  return { cookie: cookieHeader([response]) };
+};
+
+/**
+ * What one record-card request produced.
+ *
+ * `absent` is the court's own answer that it holds no card for the record and
+ * is durable; `unavailable` is everything else, including the redirect a
+ * lapsed session earns, and says nothing about the record. A caller that
+ * conflated them would either re-ask forever or give up on a decision that
+ * has a card.
+ */
+export type NalusRecordCardOutcome =
+  | { type: "read"; html: string }
+  | { type: "absent" }
+  | { type: "unavailable"; status: number };
+
+export const fetchNalusRecordCard = async (
+  nalusRecordId: string,
+  session: NalusSession,
+  signal?: AbortSignal,
+): Promise<NalusRecordCardOutcome> => {
+  const url = new URL(RESULT_DETAIL_URL);
+  url.searchParams.set("id", nalusRecordId);
+  const response = await nalusResponse(url.href, {
+    signal,
+    headers: { Cookie: session.cookie },
+  });
+  if (response.ok) {
+    return { type: "read", html: await response.text() };
+  }
+  await response.text();
+  return response.status === 404 || response.status === 410
+    ? { type: "absent" }
+    : { type: "unavailable", status: response.status };
+};
+
+/**
+ * The record card beside the document, where the court served one.
+ *
+ * A failed card is not a failed decision: the document is the row, and the
+ * card's fields are recoverable by the backfill that re-reads it. The row
+ * says which state it is in rather than staying silent about it, so the gap
+ * is selectable.
+ */
+const fetchRecordCard = async (
+  listed: ListedDecision,
+  session: NalusSession,
+  signal: AbortSignal | undefined,
+): Promise<string | undefined> => {
+  if (listed.nalusRecordId === undefined) {
+    return undefined;
+  }
+  const outcome = await fetchNalusRecordCard(
+    listed.nalusRecordId,
+    session,
+    signal,
+  );
+  return outcome.type === "read" ? outcome.html : undefined;
+};
+
+/** Every response the court served for one decision. */
+export type CzUsDecisionPayloads = {
+  listed: ListedDecision;
+  textHtml: string;
+  /** The record card, where one was read. */
+  detailHtml: string | undefined;
+  abstractHtml: string | undefined;
+};
+
+/**
+ * Assemble one decision from the responses the court served for it.
+ *
+ * Pure: the fetch path and the source-field conformance suite build the same
+ * decision from the same payloads, so what the suite certifies is what a
+ * crawl stores.
+ */
+export const buildCzUsDecision = ({
+  listed,
+  textHtml,
+  detailHtml,
+  abstractHtml,
+}: CzUsDecisionPayloads): IngestionResult | null => {
+  const decision = parseDecisionPage({
+    html: textHtml,
+    detail: detailHtml === undefined ? null : parseNalusDetail(detailHtml),
+    sourceUrl: listed.sourceUrl,
+    sourceDocumentId: listed.sourceDocumentId,
+    listedEcli: listed.ecli,
+    listedCounter: listed.counter,
+    nalusRecordId: listed.nalusRecordId,
+    nalusSz: listed.sz,
+    nalusQuarantineIds: listed.quarantineRepairIds,
+  });
+  if (!decision) {
+    return null;
+  }
+  if (listed.listingDocketMissing) {
+    decision.metadata["listingDocketMissing"] = true;
+  }
+  decision.textFields =
+    abstractHtml === undefined
+      ? {
+          ...decision.textFields,
+          abstract: absentTextField(TEXT_ABSENCE_REASON.PARSE_FAILED),
+          legalSentence: absentTextField(TEXT_ABSENCE_REASON.PARSE_FAILED),
+        }
+      : { ...decision.textFields, ...extractAbstract(abstractHtml) };
+  // Text-field and record-card changes must pass the pipeline's source-hash
+  // gate, which compares this hash and not the stored payload.
+  decision.rawHash = hashContent(
+    JSON.stringify({
+      abstract: decision.textFields.abstract,
+      identityHash: decision.rawHash,
+      judges: decision.judges ?? null,
+      legalSentence: decision.textFields.legalSentence,
+    }),
+  );
+  Object.assign(
+    decision,
+    multiResponseSourceRaw({
+      listingHtml: listed.listingHtml,
+      textHtml,
+      detailHtml,
+      abstractHtml,
+    }),
+  );
+  return decision;
+};
+
 const fetchListedDecision = async (
   listed: ListedDecision,
+  session: NalusSession,
   signal: AbortSignal | undefined,
 ): Promise<CzUsBuildResult> => {
   if (listed.identityQuarantined) {
@@ -1439,15 +1920,43 @@ const fetchListedDecision = async (
     );
   }
   const responseHtml = await response.text();
-  const decision = parseDecisionPage({
-    html: responseHtml,
-    sourceUrl: listed.sourceUrl,
-    sourceDocumentId: listed.sourceDocumentId,
-    listedEcli: listed.ecli,
-    listedCounter: listed.counter,
-    nalusRecordId: listed.nalusRecordId,
-    nalusSz: listed.sz,
-    nalusQuarantineIds: listed.quarantineRepairIds,
+
+  const optionalPage = async (
+    read: () => Promise<string | undefined>,
+  ): Promise<string | undefined> => {
+    try {
+      return await read();
+    } catch (error) {
+      // The publisher's rate limit is not an absent page: recording it as one
+      // would store the decision without the field and never ask again.
+      if (signal?.aborted || error instanceof NalusRateLimitedError) {
+        throw error;
+      }
+      return undefined;
+    }
+  };
+
+  const detailHtml = await optionalPage(
+    async () => await fetchRecordCard(listed, session, signal),
+  );
+  const abstractHtml = await optionalPage(async () => {
+    const abstractQuery = new URLSearchParams({ sz: listed.sz ?? "" });
+    const abstractResponse = await nalusResponse(
+      `${ABSTRACT_URL}?${abstractQuery.toString()}`,
+      { signal },
+    );
+    if (!abstractResponse.ok) {
+      await abstractResponse.text();
+      return undefined;
+    }
+    return await abstractResponse.text();
+  });
+
+  const decision = buildCzUsDecision({
+    listed,
+    textHtml: responseHtml,
+    detailHtml,
+    abstractHtml,
   });
   if (!decision) {
     return {
@@ -1458,79 +1967,37 @@ const fetchListedDecision = async (
         multiResponseSourceRaw({
           listingHtml: listed.listingHtml,
           textHtml: responseHtml,
+          detailHtml,
         }),
       ),
     };
   }
-  if (listed.listingDocketMissing) {
-    decision.metadata["listingDocketMissing"] = true;
-  }
-
-  let abstractHtml: string | undefined;
-  try {
-    const abstractQuery = new URLSearchParams({ sz: listed.sz });
-    const abstractResponse = await nalusResponse(
-      `${ABSTRACT_URL}?${abstractQuery.toString()}`,
-      { signal },
-    );
-    if (abstractResponse.ok) {
-      abstractHtml = await abstractResponse.text();
-      decision.textFields = {
-        ...decision.textFields,
-        ...extractAbstract(abstractHtml),
-      };
-    } else {
-      decision.textFields = {
-        ...decision.textFields,
-        abstract: absentTextField(TEXT_ABSENCE_REASON.PARSE_FAILED),
-        legalSentence: absentTextField(TEXT_ABSENCE_REASON.PARSE_FAILED),
-      };
-    }
-  } catch (error) {
-    // The publisher's rate limit is not an absent abstract: recording it as
-    // one would store the decision without the field and never ask again.
-    if (signal?.aborted || error instanceof NalusRateLimitedError) {
-      throw error;
-    }
-    decision.textFields = {
-      ...decision.textFields,
-      abstract: absentTextField(TEXT_ABSENCE_REASON.PARSE_FAILED),
-      legalSentence: absentTextField(TEXT_ABSENCE_REASON.PARSE_FAILED),
-    };
-    // Abstracts are optional enrichment; the listed decision is complete
-    // enough to ingest without one.
-  }
-  // Text-field changes must pass the pipeline's source-hash gate.
-  decision.rawHash = hashContent(
-    JSON.stringify({
-      abstract: decision.textFields.abstract,
-      identityHash: decision.rawHash,
-      legalSentence: decision.textFields.legalSentence,
-    }),
-  );
-  Object.assign(
-    decision,
-    multiResponseSourceRaw({
-      listingHtml: listed.listingHtml,
-      textHtml: responseHtml,
-      abstractHtml,
-    }),
-  );
   return { type: "built", decision };
 };
 
+/**
+ * Every response fetched for one decision, under the name its role has.
+ *
+ * The envelope is the only raw form this adapter writes. A plain payload is
+ * still read — rows stored before the envelope hold one — and never written
+ * again, which is what lets the reader below decide by content type instead
+ * of by sniffing the bytes.
+ */
 const multiResponseSourceRaw = ({
   listingHtml,
   textHtml,
+  detailHtml,
   abstractHtml,
 }: {
   listingHtml: string;
   textHtml: string;
+  detailHtml?: string | undefined;
   abstractHtml?: string | undefined;
 }): { sourceRaw: string; sourceRawContentType: string } => ({
   sourceRaw: encodeSourceRawEnvelope({
     listing: listingHtml,
     document: textHtml,
+    ...(detailHtml === undefined ? {} : { detail: detailHtml }),
     ...(abstractHtml === undefined ? {} : { abstract: abstractHtml }),
   }),
   sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
@@ -1596,13 +2063,17 @@ const listedOnlyDecision = (
     ),
     parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.CZ_US],
     documentAst: EMPTY_AST,
-    sourceRaw: rawSource?.sourceRaw ?? listed.listingHtml,
-    sourceRawContentType: rawSource?.sourceRawContentType ?? "text/html",
+    sourceRaw:
+      rawSource?.sourceRaw ??
+      encodeSourceRawEnvelope({ listing: listed.listingHtml }),
+    sourceRawContentType:
+      rawSource?.sourceRawContentType ?? SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   };
 };
 
 const fetchListedDecisions = async (
   listed: readonly ListedDecision[],
+  session: NalusSession,
   signal: AbortSignal | undefined,
 ): Promise<IngestionResult[]> => {
   const decisions: IngestionResult[] = [];
@@ -1614,7 +2085,8 @@ const fetchListedDecisions = async (
       // is worth more than nothing. Only the reconciliation refuses it.
       ...(await Promise.all(
         batch.map(
-          async (item) => (await fetchListedDecision(item, signal)).decision,
+          async (item) =>
+            (await fetchListedDecision(item, session, signal)).decision,
         ),
       )),
     );
@@ -1783,7 +2255,11 @@ const buildCzUsFromPayload = async (
   ) {
     return { type: "unkeyable" };
   }
-  const built = await fetchListedDecision(payload, signal);
+  const built = await fetchListedDecision(
+    payload,
+    await openNalusSession(signal),
+    signal,
+  );
   switch (built.type) {
     case "built":
       return { type: "built", decision: built.decision };
@@ -1873,8 +2349,10 @@ const reparseStoredRaw = (
   const listedCounter = stored.metadata["ecliCounter"];
   const nalusRecordId = stored.metadata["nalusRecordId"];
   const nalusSz = stored.metadata["nalusSz"];
+  const detailHtml = parts?.["detail"];
   const decision = parseDecisionPage({
     html: documentHtml,
+    detail: detailHtml === undefined ? null : parseNalusDetail(detailHtml),
     sourceUrl: stored.sourceUrl,
     sourceDocumentId: stored.sourceDocumentId,
     listedEcli: stored.ecli ?? undefined,
@@ -1944,7 +2422,11 @@ const czUsFetchError =
 
 export const czUsAdapter = defineSourceAdapter({
   key: ADAPTER_KEYS.CZ_US,
-  sourceFields: PENDING_SOURCE_FIELD_INVENTORY,
+  sourceFields: {
+    status: "declared",
+    fields: NALUS_SOURCE_FIELDS,
+    listSourceFields: listNalusSourceFields,
+  },
   language: "cs",
   minRequestIntervalMs: 100,
   pageTimeoutMs: CZ_US_PAGE_TIMEOUT_MS,
@@ -2123,7 +2605,11 @@ export const czUsAdapter = defineSourceAdapter({
           };
         }
 
-        const decisions = await fetchListedDecisions(page.listed, signal);
+        const decisions = await fetchListedDecisions(
+          page.listed,
+          page.session,
+          signal,
+        );
         if (sliceComplete) {
           return {
             decisions,

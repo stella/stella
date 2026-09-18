@@ -7,6 +7,7 @@ import type {
 } from "@stll/api-contract/case-law-text-field";
 import type { DecisionIdentifiers } from "@stll/legal-ast/decision-identifier";
 
+import type { DecisionJudgeInput } from "@/api/handlers/case-law/judges/decision-judges";
 import type { DocumentAst } from "@/api/lib/case-law/document-ast";
 import type { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
@@ -97,6 +98,13 @@ export type IngestionResult = {
   sourceUrl?: string | undefined;
   documentUrl?: string | undefined;
   metadata: Record<string, unknown>;
+  /**
+   * The judges the source names on this decision, in the order it prints
+   * them. Absent, not empty, for a source whose pages state none: an empty
+   * list is a publisher saying there are none, and the pipeline replaces the
+   * decision's stored judges only when an observation carries the field.
+   */
+  judges?: readonly DecisionJudgeInput[] | undefined;
   /** Publisher text stored under its existing metadata keys by the pipeline. */
   textFields: ReadDecisionTextFields;
   rawHash: string;

@@ -1035,11 +1035,11 @@ type BoundedCorpusReadOptions = {
  * response starts; a response that omits it is refused rather than read, so
  * the ceiling cannot be bypassed by withholding the header.
  */
-export const readCorpusS3BytesBounded = async ({
+const boundedCorpusResponse = async ({
   key,
   maxBytes,
   signal,
-}: BoundedCorpusReadOptions): Promise<Uint8Array> => {
+}: BoundedCorpusReadOptions): Promise<Response> => {
   const response = await fetchObject(corpusStore, key, signal);
   // Tested as a header, not as a number. `Number(null)` is 0 and `Number("")`
   // is 0, so converting first would turn a missing or empty `Content-Length`
@@ -1061,7 +1061,26 @@ export const readCorpusS3BytesBounded = async ({
       maxBytes,
     });
   }
-  return await response.bytes();
+  return response;
+};
+
+/** A bounded corpus read, as bytes. See {@link boundedCorpusResponse}. */
+export const readCorpusS3BytesBounded = async (
+  options: BoundedCorpusReadOptions,
+): Promise<Uint8Array> => await (await boundedCorpusResponse(options)).bytes();
+
+/** A bounded corpus read together with the store's own validator. */
+export type BoundedCorpusObject = {
+  bytes: Uint8Array;
+  /** The store's `ETag`, passed through so a client can revalidate. */
+  etag: string | null;
+};
+
+export const readCorpusS3ObjectBounded = async (
+  options: BoundedCorpusReadOptions,
+): Promise<BoundedCorpusObject> => {
+  const response = await boundedCorpusResponse(options);
+  return { bytes: await response.bytes(), etag: response.headers.get("etag") };
 };
 
 type CorpusRangeReadOptions = {

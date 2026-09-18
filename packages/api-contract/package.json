@@ -11,6 +11,7 @@
     "./chat-docx-suggestions": "./src/chat-docx-suggestions.ts",
     "./chat-file-types": "./src/chat-file-types.ts",
     "./case-law-launch-readiness": "./src/case-law-launch-readiness.ts",
+    "./case-law-judges": "./src/case-law-judges.ts",
     "./case-law-jurisdictions": "./src/case-law-jurisdictions.ts",
     "./case-law-text-field": "./src/case-law-text-field.ts",
     "./decision-docket-grammar": "./src/decision-docket-grammar.ts",

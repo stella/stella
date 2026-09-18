@@ -54,6 +54,7 @@ import {
 import { publisherCitationGap } from "@/api/handlers/case-law/ingestion/citation-recall";
 import { shouldSkipRefresh } from "@/api/handlers/case-law/ingestion/refresh-policy";
 import { segmentDecision } from "@/api/handlers/case-law/ingestion/segmenter";
+import { replaceDecisionJudges } from "@/api/handlers/case-law/judges/decision-judges";
 import { extractContext } from "@/api/handlers/case-law/polarity/context";
 import {
   ACTIVE_RULE_SOURCES,
@@ -286,6 +287,7 @@ export type DecisionRefresh =
 
 type ProcessDecisionAttemptOptions = {
   input: IngestionResult;
+  judges: CaseLawJudgeDependencies;
   sourceId: SafeId<"caseLawSource">;
   scopedDb: ScopedDb;
   observedAt: Date;
@@ -311,13 +313,27 @@ const CASE_LAW_CORPUS_DEPENDENCIES: CaseLawCorpusDependencies = {
   write: writeCorpusDocument,
 };
 
+/**
+ * Where a decision's judges are written. Injected the way the corpus write
+ * is, so the ordering against the row write can be exercised without the
+ * tables behind it.
+ */
+export type CaseLawJudgeDependencies = {
+  replace: typeof replaceDecisionJudges;
+};
+
+const CASE_LAW_JUDGE_DEPENDENCIES: CaseLawJudgeDependencies = {
+  replace: replaceDecisionJudges,
+};
+
 type ProcessDecisionOptions = Omit<
   ProcessDecisionAttemptOptions,
-  "contentionReconciliation" | "corpus" | "refresh"
+  "contentionReconciliation" | "corpus" | "judges" | "refresh"
 > & {
   /** Defaults to `WHEN_SOURCE_CHANGED`, which is what a crawl wants. */
   refresh?: DecisionRefresh;
   corpus?: CaseLawCorpusDependencies;
+  judges?: CaseLawJudgeDependencies;
 };
 
 type SourceObservation = { order: bigint };
@@ -792,6 +808,7 @@ const caseLawDecisionIdentityWhere = ({
  */
 const processDecisionAttempt = async ({
   input,
+  judges,
   sourceId,
   scopedDb,
   observedAt,
@@ -1285,6 +1302,7 @@ const processDecisionAttempt = async ({
             contentionReconciliation: CONTENTION_RECONCILIATION.RETRY,
             refresh,
             corpus,
+            judges,
             polarityRules,
           });
         }
@@ -1408,6 +1426,7 @@ const processDecisionAttempt = async ({
             contentionReconciliation: CONTENTION_RECONCILIATION.RETRY,
             refresh,
             corpus,
+            judges,
             polarityRules,
           });
         }
@@ -1886,6 +1905,24 @@ const processDecisionAttempt = async ({
     });
   };
 
+  /**
+   * The decision's judges, in the transaction that writes the row they belong
+   * to. An observation that states none leaves the stored rows alone: only a
+   * source that named judges can say the decision has different ones.
+   */
+  const writeDecisionJudges = async (
+    tx: Transaction,
+    writtenDecisionId: SafeId<"caseLawDecision">,
+  ): Promise<void> => {
+    if (result.judges === undefined) {
+      return;
+    }
+    await judges.replace(tx, {
+      decisionId: writtenDecisionId,
+      judges: result.judges,
+    });
+  };
+
   const writeDecisionRow = async (
     slug?: string,
   ): Promise<DecisionRowWriteStatus> =>
@@ -2037,6 +2074,7 @@ const processDecisionAttempt = async ({
               ...identifier,
             })),
           );
+          await writeDecisionJudges(tx, existing.id);
         }
 
         if (
@@ -2156,6 +2194,7 @@ const processDecisionAttempt = async ({
           ...identifier,
         })),
       );
+      await writeDecisionJudges(tx, decisionRow.id);
 
       await announceDecisionIdentifiers(tx, decisionRow.id, identifierRows);
 
@@ -2246,6 +2285,7 @@ const processDecisionAttempt = async ({
         contentionReconciliation: CONTENTION_RECONCILIATION.RETRY,
         refresh,
         corpus,
+        judges,
         polarityRules,
       });
     }
@@ -2442,6 +2482,7 @@ const processDecisionAttempt = async ({
 export const processDecision = async ({
   refresh = DECISION_REFRESH.WHEN_SOURCE_CHANGED,
   corpus = CASE_LAW_CORPUS_DEPENDENCIES,
+  judges = CASE_LAW_JUDGE_DEPENDENCIES,
   ...options
 }: ProcessDecisionOptions): Promise<ProcessResult> =>
   await processDecisionAttempt({
@@ -2449,6 +2490,7 @@ export const processDecision = async ({
     contentionReconciliation: CONTENTION_RECONCILIATION.INITIAL,
     refresh,
     corpus,
+    judges,
   });
 
 /**

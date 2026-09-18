@@ -728,10 +728,16 @@
       "abstract": "Abstrakt",
       "citedBy": "Citováno v",
       "cites": "Cituje",
-      "judgeRapporteur": "Soudce zpravodaj",
+      "dissentByline": "Odlišné stanovisko: <bdi>{names}</bdi>",
+      "judgeRole": {
+        "dissenting": "Odlišné stanovisko",
+        "rapporteur": "Soudce zpravodaj"
+      },
+      "judges": "Soudci",
       "legalArea": "Oblast práva",
       "legalSentence": "Právní věta",
       "popularName": "Populární název",
+      "portraitCredit": "Zdroj portrétů: {source}",
       "provisionMentions": "{count, number}×",
       "provisionMentionsLabel": "{count, plural, one {# zmínka} few {# zmínky} other {# zmínek}}",
       "provisionsCited": "Dotčená ustanovení",

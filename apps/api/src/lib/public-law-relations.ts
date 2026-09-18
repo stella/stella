@@ -9,7 +9,9 @@
 export const PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT = {
   caseLawCitations: "case_law_citations",
   caseLawDecisionIdentifiers: "case_law_decision_identifiers",
+  caseLawDecisionJudges: "case_law_decision_judges",
   caseLawDecisions: "case_law_decisions",
+  caseLawJudges: "case_law_judges",
   caseLawProvisionCitations: "case_law_provision_citations",
   caseLawStatuteCitationCounts: "case_law_statute_citation_counts",
   caseLawStatuteCitationCountState: "case_law_statute_citation_count_state",
@@ -69,6 +71,16 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     normalized_value: "required",
     created_at: "required",
   },
+  // The judges a decision names. `name_key` is the roster join and is not
+  // read by the projection, which renders the printed name.
+  case_law_decision_judges: {
+    decision_id: "required",
+    judge_id: "required",
+    name_as_printed: "required",
+    name_key: "permitted",
+    role: "required",
+    position: "required",
+  },
   case_law_decisions: {
     id: "required",
     source_id: "required",
@@ -99,6 +111,14 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     indexed_hash: "permitted",
     created_at: "required",
     updated_at: "required",
+  },
+  // Only what a portrait is served from. The roster's own fields (name, term
+  // dates, where the row was read) are not part of a decision's projection.
+  case_law_judges: {
+    id: "required",
+    portrait_s3_key: "required",
+    portrait_attribution: "required",
+    portrait_content_type: "required",
   },
   case_law_provision_citations: {
     decision_id: "required",

@@ -728,10 +728,16 @@
       "abstract": "Kopsavilkums",
       "citedBy": "Atsaucas uz",
       "cites": "Citē",
-      "judgeRapporteur": "Tiesnesis referents",
+      "dissentByline": "Atsevišķās domas: <bdi>{names}</bdi>",
+      "judgeRole": {
+        "dissenting": "Atsevišķās domas",
+        "rapporteur": "Tiesnesis referents"
+      },
+      "judges": "Tiesneši",
       "legalArea": "Tiesību joma",
       "legalSentence": "Tiesību tēze",
       "popularName": "Populārais nosaukums",
+      "portraitCredit": "Portretu avots: {source}",
       "provisionMentions": "{count, number}×",
       "provisionMentionsLabel": "{count, plural, zero {# pieminējumu} one {# pieminējums} other {# pieminējumi}}",
       "provisionsCited": "Citētās normas",

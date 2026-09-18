@@ -3,7 +3,6 @@ import type { ReactNode } from "react";
 import { ExternalLinkIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { BidiText } from "@stll/ui/bidi-text";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -16,6 +15,7 @@ import type {
   DecisionFacts as DecisionFactValues,
   DecisionFactsInput,
 } from "@/features/case-law/components/case-viewer/decision-facts.logic";
+import { DecisionJudges } from "@/features/case-law/components/case-viewer/decision-judges";
 import type { TranslationKey } from "@/i18n/types";
 import { sanitizeHref } from "@/lib/sanitize-href";
 
@@ -28,9 +28,9 @@ const FACT_ROWS = {
     label: "common.type",
     render: (facts) => <span className="capitalize">{facts.decisionType}</span>,
   },
-  judge: {
-    label: "caseLaw.viewer.judgeRapporteur",
-    render: (facts) => <BidiText as="span">{facts.judge}</BidiText>,
+  judges: {
+    label: "caseLaw.viewer.judges",
+    render: (facts) => <DecisionJudges judges={facts.judges} />,
   },
   keywords: {
     label: "inspector.metadata.documentProperties.keys.keywords",

@@ -73,6 +73,8 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
   caseLawIndexJob: { type: "non_resource", reason: "job" },
   caseLawIngestionEvent: { type: "non_resource", reason: "event" },
   caseLawIngestionFailure: { type: "non_resource", reason: "event" },
+  // A roster row of a court, addressed only as the subject of a portrait.
+  caseLawJudge: { type: "non_resource", reason: "subresource" },
   caseLawMatterLink: { type: "non_resource", reason: "association" },
   caseLawPolarityRule: { type: "non_resource", reason: "policy" },
   caseLawProvisionCitation: { type: "non_resource", reason: "association" },

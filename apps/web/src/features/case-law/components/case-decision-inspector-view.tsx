@@ -62,7 +62,7 @@ const HEADER_DECISION_FACTS = [
   "subject",
   "legalAreas",
   "keywords",
-  "judge",
+  "judges",
 ] as const satisfies readonly DecisionFactKind[];
 
 /** A compact decision reader composed for the inspector's bounded width. */
@@ -154,6 +154,7 @@ export const CaseDecisionInspectorView = ({
                 <OpenOriginalButton href={decision.sourceUrl} size="icon-xs" />
                 <DecisionInfoPopover
                   decisionType={decision.decisionType}
+                  judges={decision.judges}
                   metadata={decision.metadata}
                   source={decision.source}
                   sourceUrl={decision.sourceUrl}

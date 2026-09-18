@@ -18,6 +18,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   czUsAdapter,
+  parseNalusDetail,
   RESULTS_PAGE_SIZE,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-us";
 import { NalusRateLimitedError } from "@/api/handlers/case-law/ingestion/adapters/cz-us-throttle";
@@ -77,6 +78,35 @@ const makeTextPage = (
     ${"Lorem ipsum dolor sit amet. ".repeat(10)}
     Jan Novák (soudce zpravodaj)
   </td></tr></table>
+</body></html>`;
+
+/** The labelled record card ResultDetail.aspx prints beside the document. */
+const makeRecordCardPage = (
+  caseNumber: string,
+  date: string,
+  {
+    rapporteur = "Nováková Jana",
+    dissenters = [],
+    decisionForm = "Nález",
+  }: {
+    rapporteur?: string;
+    dissenters?: readonly string[];
+    decisionForm?: string;
+  } = {},
+): string => `
+<html><body>
+  <table id="tableDocumentHeader"><tr><td>Soudce zpravodaj</td></tr></table>
+  <table class='recordCardTable'>
+    <tr><td>Spisová značka</td><td>${caseNumber}</td></tr>
+    <tr><td>Datum rozhodnutí</td><td>${date}</td></tr>
+    <tr><td>Forma rozhodnutí</td><td>${decisionForm}</td></tr>
+    <tr><td>Typ řízení</td><td>O ústavních stížnostech</td></tr>
+    <tr><td>Navrhovatel</td><td>STĚŽOVATEL - FO</td></tr>
+    <tr><td>Soudce zpravodaj</td><td>${rapporteur}</td></tr>
+    <tr><td>Odlišné stanovisko</td><td>${dissenters.join("<br/>")}</td></tr>
+    <tr><td>Věcný rejstřík</td><td>žaloba<br/>lhůta</td></tr>
+    <tr><td>Poznámka</td><td>&nbsp;</td></tr>
+  </table>
 </body></html>`;
 
 const makeAbstractPage = (abstract = "", legalSentence = ""): string => `
@@ -160,6 +190,12 @@ type MockSearchOptions = {
   legalSentence?: string;
   abstractStatus?: number;
   detailStatus?: number;
+  /** The rapporteur every record card in this run names. */
+  rapporteur?: string;
+  /** The dissenters every record card in this run names, as printed. */
+  dissenters?: readonly string[];
+  /** Answer every record-card request with this status instead of 200. */
+  recordCardStatus?: number;
   unparseableDetail?: boolean;
   renderPositionOffset?: number;
   onPost?: (form: URLSearchParams, headers: Headers) => void;
@@ -203,6 +239,9 @@ const installSearchMock = ({
   legalSentence = "",
   abstractStatus = 200,
   detailStatus = 200,
+  rapporteur = "Nováková Jana",
+  dissenters = [],
+  recordCardStatus = 200,
   unparseableDetail = false,
   renderPositionOffset = 0,
   onPost,
@@ -263,6 +302,23 @@ const installSearchMock = ({
                 { status: detailStatus },
               )
             : new Response("missing", { status: 404 }),
+        );
+      }
+      if (url.pathname.endsWith("/Search/ResultDetail.aspx")) {
+        const row = rows.find(
+          (candidate) => candidate.id === url.searchParams.get("id"),
+        );
+        return Promise.resolve(
+          row && recordCardStatus === 200
+            ? new Response(
+                makeRecordCardPage(row.caseNumber, row.date, {
+                  rapporteur,
+                  dissenters,
+                }),
+              )
+            : new Response("no card", {
+                status: recordCardStatus === 200 ? 404 : recordCardStatus,
+              }),
         );
       }
       if (url.pathname.endsWith("/Search/GetAbstract.aspx")) {
@@ -988,7 +1044,7 @@ describe("czUsAdapter.fetchPage", () => {
     expect(decision?.legacySourceUrls).toBeUndefined();
     expect(decision?.decisionType).toBe("usnesení");
     expect(decision?.metadata).toMatchObject({
-      judge: "amet. Jan Novák",
+      judge: "Nováková Jana",
       parallelQuotation: "NALUS 14/24",
       popularName: "Testovací věc",
       ecliCounter: 1,
@@ -1083,8 +1139,14 @@ describe("czUsAdapter.fetchPage", () => {
         listedOnlyReason: "missing-text-action",
       },
     });
-    expect(page.decisions[0]?.sourceRaw).toContain("ResultDetail.aspx?id=7201");
-    expect(page.decisions[0]?.sourceRawContentType).toBe("text/html");
+    expect(page.decisions[0]?.sourceRawContentType).toBe(
+      SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+    );
+    expect(
+      decodeSourceRawEnvelope(page.decisions[0]?.sourceRaw ?? ""),
+    ).toMatchObject({
+      listing: expect.stringContaining("ResultDetail.aspx?id=7201"),
+    });
     const verified = unwrap(await czUsAdapter.fetchPage(page.nextCursor, {}));
     expect(verified.nextCursor).toBe(historicalCursor(2025));
   });
@@ -1556,13 +1618,13 @@ describe("czUsAdapter.fetchPage", () => {
       czechDay(latest),
     );
     expect(collect.decisions).toHaveLength(rows.length);
-    // 3 listing requests, then a text and an abstract for each row.
-    expect(fetchCallCount()).toBe(3 + rows.length * 2);
+    // 3 listing requests, then a text, a record card and an abstract per row.
+    expect(fetchCallCount()).toBe(3 + rows.length * 3);
 
     const verify = unwrap(await czUsAdapter.fetchPage(collect.nextCursor, {}));
     expect(verify.decisions).toEqual([]);
     // One re-listing confirms the window; nothing is fetched twice.
-    expect(fetchCallCount()).toBe(3 + rows.length * 2 + 3);
+    expect(fetchCallCount()).toBe(3 + rows.length * 3 + 3);
     expect(verify.nextCursor).toBe(recentCursor(latest, latest));
 
     // And the frontier now stands still rather than re-listing the day.
@@ -1668,5 +1730,203 @@ describe("czUsAdapter.fetchPage", () => {
     expect(result.error.message).toBe(
       `NALUS search form returned HTTP 302 to https://nalus.usoud.cz/${"a".repeat(199)}…`,
     );
+  });
+});
+
+const FIXTURES = new URL("__fixtures__/", import.meta.url);
+
+const recordCardFixture = async (name: string): Promise<string> =>
+  new TextDecoder().decode(
+    Bun.gunzipSync(await Bun.file(new URL(name, FIXTURES)).bytes()),
+  );
+
+describe("the record card the court prints beside a decision", () => {
+  test("reads every label it states, and both judge roles in printed order", async () => {
+    const fields = parseNalusDetail(
+      await recordCardFixture("cz-us-record-card-dissents.html.gz"),
+    );
+
+    expect(fields?.caseNumber).toEqual(["Pl.ÚS 1/12"]);
+    expect(fields?.decisionForm).toEqual(["Nález"]);
+    expect(fields?.rapporteur).toEqual(["Rychetský Pavel"]);
+    // One cell, nine names: the court separates repeats inside it, and a
+    // reader that took the cell's text would store them as one name.
+    expect(fields?.dissentingJudges).toEqual([
+      "Balík Stanislav",
+      "Formánková Vlasta",
+      "Holländer Pavel",
+      "Janů Ivana",
+      "Kůrka Vladimír",
+      "Lastovecká Dagmar",
+      "Musil Jan",
+      "Nykodým Jiří",
+      "Výborný Miloslav",
+    ]);
+    expect(fields?.petitioner).toEqual([
+      "SKUPINA POSLANCŮ",
+      "SKUPINA POSLANCŮ",
+      "SKUPINA SENÁTORŮ",
+    ]);
+    // A label the court prints with nothing in it is a field with no values,
+    // never a value that happens to be blank.
+    expect(fields?.note).toEqual([]);
+  });
+
+  test("states no dissent where the court printed none", async () => {
+    const fields = parseNalusDetail(
+      await recordCardFixture("cz-us-record-card.html.gz"),
+    );
+
+    expect(fields?.rapporteur).toEqual(["Brožová Iva"]);
+    expect(fields?.dissentingJudges).toEqual([]);
+    expect(fields?.decisionForm).toEqual(["Usnesení"]);
+  });
+
+  test("reads no card from a page that carries none", () => {
+    expect(parseNalusDetail("<html><body>Search</body></html>")).toBeNull();
+  });
+});
+
+describe("czUsAdapter judges", () => {
+  const originalFetch = globalThis.fetch;
+
+  beforeAll(() => {
+    setSystemTime(new Date("2026-08-08T12:00:00.000Z"));
+  });
+
+  afterAll(() => {
+    setSystemTime();
+  });
+
+  beforeEach(() => {
+    Bun.sleep = () => Promise.resolve();
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const decisionWithCard = async (
+    options: Parameters<typeof installSearchMock>[0],
+  ) => {
+    installSearchMock({
+      rows: [
+        {
+          id: "8001",
+          sz: "Pl-9-26_1",
+          caseNumber: "Pl.ÚS 9/26",
+          date: "3. 2. 2026",
+        },
+      ],
+      ...options,
+    });
+    const page = unwrap(
+      await czUsAdapter.fetchPage(historicalCursor(2026), {}),
+    );
+    return page.decisions.at(0);
+  };
+
+  test("carries the rapporteur first and the dissenters as printed", async () => {
+    const decision = await decisionWithCard({
+      rapporteur: "JUDr. Nováková Jana, Ph.D.",
+      dissenters: ["Dvořák Petr", "Mgr. Svobodová Eva"],
+    });
+
+    expect(decision?.judges).toEqual([
+      { role: "rapporteur", nameAsPrinted: "Nováková Jana" },
+      { role: "dissenting", nameAsPrinted: "Dvořák Petr" },
+      { role: "dissenting", nameAsPrinted: "Svobodová Eva" },
+    ]);
+    // The facts row still reads one name, from the same source field.
+    expect(decision?.metadata["judge"]).toBe("Nováková Jana");
+  });
+
+  test("carries only the rapporteur where no separate opinion was filed", async () => {
+    const decision = await decisionWithCard({ dissenters: [] });
+
+    expect(decision?.judges).toEqual([
+      { role: "rapporteur", nameAsPrinted: "Nováková Jana" },
+    ]);
+  });
+
+  test("stores the card beside the document so a re-read costs no request", async () => {
+    const decision = await decisionWithCard({ dissenters: ["Dvořák Petr"] });
+
+    expect(decision?.sourceRawContentType).toBe(
+      SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+    );
+    expect(decodeSourceRawEnvelope(decision?.sourceRaw ?? "")).toMatchObject({
+      detail: expect.stringContaining("Odlišné stanovisko"),
+      document: expect.stringContaining("lblRegistrySign"),
+    });
+  });
+
+  test("says so on the row when the court served no card", async () => {
+    const decision = await decisionWithCard({ recordCardStatus: 500 });
+
+    expect(decision?.judges).toBeUndefined();
+    expect(decision?.metadata["recordCard"]).toBe("unavailable");
+    expect(
+      decodeSourceRawEnvelope(decision?.sourceRaw ?? ""),
+    ).not.toHaveProperty("detail");
+  });
+});
+
+describe("czUsAdapter.reparseStoredRaw", () => {
+  const storedInput = (raw: string, contentType: string | null) => ({
+    raw: new TextEncoder().encode(raw),
+    contentType,
+    caseNumber: "Pl.ÚS 9/26",
+    sourceDocumentId: "nalus-record:8001",
+    language: "cs",
+    court: "Ústavní soud",
+    ecli: "ECLI:CZ:US:2026:Pl.US.9.26.1",
+    decisionDate: "2026-02-03",
+    decisionType: "nález",
+    sourceUrl: "https://nalus.usoud.cz/Search/GetText.aspx?sz=Pl-9-26_1",
+    documentUrl: null,
+    metadata: { nalusRecordId: "8001", nalusSz: "Pl-9-26_1" },
+  });
+
+  const textPage = makeTextPage("Pl.ÚS 9/26", "3. 2. 2026", { counter: 1 });
+
+  test("reads the judges back out of an envelope without contacting the court", async () => {
+    const stored = storedInput(
+      JSON.stringify({
+        version: 1,
+        parts: {
+          document: textPage,
+          detail: makeRecordCardPage("Pl.ÚS 9/26", "3. 2. 2026", {
+            dissenters: ["Dvořák Petr", "Svobodová Eva"],
+          }),
+        },
+      }),
+      SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+    );
+
+    const outcome = await czUsAdapter.reparseStoredRaw?.(stored);
+    expect(outcome?.type).toBe("parsed");
+    expect(
+      outcome?.type === "parsed" ? outcome.result.judges : undefined,
+    ).toEqual([
+      { role: "rapporteur", nameAsPrinted: "Nováková Jana" },
+      { role: "dissenting", nameAsPrinted: "Dvořák Petr" },
+      { role: "dissenting", nameAsPrinted: "Svobodová Eva" },
+    ]);
+  });
+
+  test("still reads a payload stored before the envelope, and states no judges for it", async () => {
+    const outcome = await czUsAdapter.reparseStoredRaw?.(
+      storedInput(textPage, "text/html"),
+    );
+
+    expect(outcome?.type).toBe("parsed");
+    if (outcome?.type !== "parsed") {
+      return;
+    }
+    // A plain payload holds the document alone. Nothing invents judges from
+    // its prose, and the row keeps whatever it already stored.
+    expect(outcome.result.judges).toBeUndefined();
+    expect(outcome.result.caseNumber).toBe("Pl.ÚS 9/26");
   });
 });

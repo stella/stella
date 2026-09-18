@@ -56,6 +56,7 @@ import type {
   Block,
   DocumentAst,
   Inline,
+  ParagraphRole,
 } from "@/api/handlers/case-law/document-ast";
 import {
   buildValidationHtml,
@@ -682,6 +683,16 @@ const SECTION_ROMAN_RE = /^(?=[IVX])(?<roman>X{0,3}(?:IX|IV|V?I{0,3}))\.?\s*$/u;
 /** Numbered paragraph: "1. ...", "2. ..." */
 const NUMBERED_PARA_RE = /^(?:\d+)\.\s+/u;
 
+/**
+ * Heading opening a separate opinion. The court prints it either on its own
+ * or as the next enumerated item, and names the dissenting judges after it,
+ * so the pattern is anchored at the start and bounded by length rather than
+ * closed at the end.
+ */
+const DISSENT_HEADING_RE =
+  /^(?:Odli[šs]n[ée]\s+stanovisko|Odli[šs]n[áa]\s+stanoviska|Stanovisko\s+men[šs]iny)\b/iu;
+const DISSENT_HEADING_MAX_CHARS = 120;
+
 // ── Block classification ───────────────────────────────────
 
 const makeAnchorId = (prefix: string, index: number): string =>
@@ -709,6 +720,9 @@ const classifyLines = (lines: readonly ParsedLine[]): Block[] => {
 
   let inRuling = false;
   let inOduvodneni = false;
+  let inDissent = false;
+  const bodyRole = (): ParagraphRole | undefined =>
+    inDissent ? "dissent" : undefined;
   const consumedLines = new Set<ParsedLine>();
 
   for (let i = 0; i < lines.length; i++) {
@@ -777,6 +791,32 @@ const classifyLines = (lines: readonly ParsedLine[]): Block[] => {
         role: "section-heading",
         inlines: textInline("Odůvodnění:"),
         plainText: "Odůvodnění:",
+      });
+      continue;
+    }
+
+    // A separate opinion runs to the end of the document, so the heading
+    // opens a zone rather than a section.
+    const numberPrefix = NUMBERED_PARA_RE.exec(plainText)?.[0] ?? "";
+    const unnumberedText = plainText.slice(numberPrefix.length);
+    const unnumberedInlines = stripInlinePrefix(inlines, numberPrefix.length);
+    if (
+      unnumberedText.length <= DISSENT_HEADING_MAX_CHARS &&
+      DISSENT_HEADING_RE.test(unnumberedText)
+    ) {
+      inDissent = true;
+      blockIndex += 1;
+      blocks.push({
+        id: makeBlockId(),
+        anchorId: makeAnchorId("h", blockIndex),
+        type: "heading",
+        level: 2,
+        role: "section-heading",
+        inlines:
+          unnumberedInlines.length > 0
+            ? unnumberedInlines
+            : textInline(unnumberedText),
+        plainText: unnumberedText,
       });
       continue;
     }
@@ -910,18 +950,17 @@ const classifyLines = (lines: readonly ParsedLine[]): Block[] => {
     }
 
     // Numbered paragraphs: "1. ...", "2. ..."
-    const numMatch = NUMBERED_PARA_RE.exec(plainText);
-    if (numMatch) {
-      const strippedText = plainText.slice(numMatch[0].length).trim();
-      const strippedInlines = stripInlinePrefix(inlines, numMatch[0].length);
+    if (numberPrefix.length > 0) {
+      const strippedText = unnumberedText.trim();
       blockIndex += 1;
       blocks.push({
         id: makeBlockId(),
         anchorId: makeAnchorId("p", blockIndex),
         type: "paragraph",
+        role: bodyRole(),
         inlines:
-          strippedInlines.length > 0
-            ? strippedInlines
+          unnumberedInlines.length > 0
+            ? unnumberedInlines
             : textInline(strippedText),
         plainText: strippedText,
       });
@@ -934,6 +973,7 @@ const classifyLines = (lines: readonly ParsedLine[]): Block[] => {
       id: makeBlockId(),
       anchorId: makeAnchorId("p", blockIndex),
       type: "paragraph",
+      role: bodyRole(),
       inlines,
       plainText,
     });

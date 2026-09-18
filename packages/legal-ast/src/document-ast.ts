@@ -74,6 +74,11 @@ export const PARAGRAPH_ROLES = [
   "history",
   "argumentation",
   "holding",
+  /**
+   * A separate opinion disagreeing with the majority, printed after it. The
+   * heading that opens one stays `section-heading`.
+   */
+  "dissent",
   "closing",
   "signature",
   /** A passage the decision reproduces from another text (block quotation). */

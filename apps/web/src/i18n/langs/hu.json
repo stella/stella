@@ -728,10 +728,16 @@
       "abstract": "Kivonat",
       "citedBy": "Hivatkozik rá",
       "cites": "Hivatkozásai",
-      "judgeRapporteur": "Előadó bíró",
+      "dissentByline": "Különvélemény: <bdi>{names}</bdi>",
+      "judgeRole": {
+        "dissenting": "Különvélemény",
+        "rapporteur": "Előadó bíró"
+      },
+      "judges": "Bírák",
       "legalArea": "Jogterület",
       "legalSentence": "Elvi bírósági határozat",
       "popularName": "Népszerű név",
+      "portraitCredit": "A portrék forrása: {source}",
       "provisionMentions": "{count, number}×",
       "provisionMentionsLabel": "{count, plural, one {# említés} other {# említés}}",
       "provisionsCited": "Hivatkozott rendelkezések",
