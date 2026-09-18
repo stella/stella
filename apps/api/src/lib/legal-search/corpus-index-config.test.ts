@@ -98,6 +98,10 @@ test("the docket is its own raw field, reachable only by an exact query", () => 
  *   among them), and the okresní courts.
  * - EU: Court of Justice, General Court, and the dissolved Civil Service
  *   Tribunal.
+ * - HUN: Alkotmánybíróság, the Kúria, 5 ítélőtábla, 20 törvényszék, and the
+ *   járásbíróság/kerületi bíróság tier, plus the retired names the same courts
+ *   carry in older decisions (megyei bíróság, közigazgatási és munkaügyi
+ *   bíróság), which are distinct tag values.
  * - POL: the SAOS `commonCourts` registry the adapter takes court names from
  *   enumerates 374 (318 rejonowy, 45 okręgowy, 11 apelacyjny), plus Sąd
  *   Najwyższy, NSA, Trybunał Konstytucyjny and the voivodeship
@@ -108,6 +112,7 @@ const COURT_DOMAIN_BOUND = {
   AUT: 200,
   CZE: 200,
   EU: 10,
+  HUN: 200,
   POL: 400,
   SVK: 200,
 } as const satisfies Record<CaseLawJurisdiction, number>;

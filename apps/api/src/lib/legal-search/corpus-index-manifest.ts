@@ -1,6 +1,14 @@
 import { panic } from "better-result";
 
-import { CASE_LAW_INDEX_GROUP_OF } from "@/api/lib/legal-search/case-law-index-groups";
+import {
+  CASE_LAW_JURISDICTIONS,
+  type CaseLawJurisdiction,
+} from "@stll/api-contract/case-law-jurisdictions";
+
+import type {
+  CASE_LAW_INDEX_GROUP_OF,
+  CaseLawIndexGroup,
+} from "@/api/lib/legal-search/case-law-index-groups";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
 import {
   CORPUS_FINAL_INDEX_CONFIG_VERSION,
@@ -45,12 +53,68 @@ type CorpusIndexManifestBase = {
   };
 };
 
+/**
+ * Which jurisdictions a case-law generation routes, and to which group.
+ *
+ * Total over the declared union, so a new jurisdiction answers for every
+ * generation, and each answer is either that generation's group for it or
+ * `null` for "this generation does not route it". A routed entry is typed as
+ * the group `CASE_LAW_INDEX_GROUP_OF` declares, so the manifest route and the
+ * id `corpusIndexId` derives cannot drift: the only freedom here is whether a
+ * generation carries the jurisdiction at all.
+ *
+ * Why it is not a view of that declaration. A generation's route is fixed when
+ * its indexes are created: the manifest digest is the generation's identity,
+ * every projection fingerprint carries it, and a serving row whose stored
+ * digest no longer matches panics. Spreading the live map would therefore
+ * re-identify every built generation, and re-project the whole corpus, the
+ * moment a jurisdiction is declared. A jurisdiction declared later enters at
+ * the next generation, which is when its index is created anyway.
+ */
+type CaseLawGenerationRoute = {
+  readonly [TJurisdiction in CaseLawJurisdiction]:
+    | (typeof CASE_LAW_INDEX_GROUP_OF)[TJurisdiction]
+    | null;
+};
+
+type CaseLawManifestRoute = {
+  type: "case_law_group";
+  /** The routed entries only, so an unrouted one adds nothing to the digest. */
+  byJurisdiction: Readonly<
+    Partial<Record<CaseLawJurisdiction, CaseLawIndexGroup>>
+  >;
+};
+
+const caseLawRoute = (route: CaseLawGenerationRoute): CaseLawManifestRoute => {
+  const byJurisdiction: Partial<
+    Record<CaseLawJurisdiction, CaseLawIndexGroup>
+  > = {};
+  for (const jurisdiction of CASE_LAW_JURISDICTIONS) {
+    const group = route[jurisdiction];
+    if (group !== null) {
+      byJurisdiction[jurisdiction] = group;
+    }
+  }
+  return { type: "case_law_group", byJurisdiction };
+};
+
+/**
+ * The topology every generation built so far was created with: the five
+ * jurisdictions declared before Hungary. A generation created with another
+ * topology declares its own.
+ */
+const CASE_LAW_ROUTE_THROUGH_V7 = {
+  AUT: "aut",
+  CZE: "cs_sk",
+  EU: "eu",
+  HUN: null,
+  POL: "pol",
+  SVK: "cs_sk",
+} as const satisfies CaseLawGenerationRoute;
+
 type CaseLawManifestBase = CorpusIndexManifestBase & {
   family: "case_law";
-  route: {
-    type: "case_law_group";
-    byJurisdiction: typeof CASE_LAW_INDEX_GROUP_OF;
-  };
+  route: CaseLawManifestRoute;
 };
 
 type CaseLawV5Manifest = CaseLawManifestBase & {
@@ -464,10 +528,7 @@ export const CORPUS_INDEX_MANIFESTS = deepFreeze({
       openingField: "is_opening",
       yearFacetField: "decision_year",
     },
-    route: {
-      type: "case_law_group",
-      byJurisdiction: { ...CASE_LAW_INDEX_GROUP_OF },
-    },
+    route: caseLawRoute(CASE_LAW_ROUTE_THROUGH_V7),
   },
   case_law_v6: {
     schemaVersion: CORPUS_INDEX_MANIFEST_SCHEMA_VERSION,
@@ -491,10 +552,7 @@ export const CORPUS_INDEX_MANIFESTS = deepFreeze({
         publisherSummary: STEM_FIELD_OF[PUBLISHER_SUMMARY_FIELD],
       },
     },
-    route: {
-      type: "case_law_group",
-      byJurisdiction: { ...CASE_LAW_INDEX_GROUP_OF },
-    },
+    route: caseLawRoute(CASE_LAW_ROUTE_THROUGH_V7),
   },
   case_law_v7: {
     schemaVersion: CORPUS_INDEX_MANIFEST_SCHEMA_VERSION,
@@ -519,10 +577,7 @@ export const CORPUS_INDEX_MANIFESTS = deepFreeze({
         publisherSummary: STEM_FIELD_OF[PUBLISHER_SUMMARY_FIELD],
       },
     },
-    route: {
-      type: "case_law_group",
-      byJurisdiction: { ...CASE_LAW_INDEX_GROUP_OF },
-    },
+    route: caseLawRoute(CASE_LAW_ROUTE_THROUGH_V7),
   },
   legislation_v2: {
     schemaVersion: CORPUS_INDEX_MANIFEST_SCHEMA_VERSION,

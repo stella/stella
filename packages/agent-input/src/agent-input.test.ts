@@ -348,6 +348,11 @@ describe("countries", () => {
     ["Osterreich", "AUT"],
     ["Rakousko", "AUT"],
     ["Rakúsko", "AUT"],
+    ["HUN", "HUN"],
+    ["Hungary", "HUN"],
+    ["Magyarország", "HUN"],
+    ["Magyar Koztarsasag", "HUN"],
+    ["Maďarsko", "HUN"],
     // The supranational jurisdiction ISO assigns no code, spelled as the
     // corpus spells it.
     ["EU", "EU"],

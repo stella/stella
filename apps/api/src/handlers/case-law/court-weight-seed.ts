@@ -148,6 +148,56 @@ export const COURT_WEIGHT_SEED: readonly CourtWeightSeedRow[] = [
     tierLabel: "regional",
     weight: 4,
   },
+  // Hungary. Court names are a seat plus the kind of court ("Fővárosi
+  // Törvényszék", "Debreceni Járásbíróság"), so each rank is the kind alone.
+  // Two kinds are ranked under a retired name as well, because a decision
+  // carries the name in force when it was handed down: Legfelsőbb Bíróság is
+  // the Kúria before 2012, and megyei/fővárosi bíróság the törvényszék before
+  // 2013. The közigazgatási és munkaügyi bíróságok sat from 2013 to 2020 and
+  // rank between the törvényszék that absorbed them and the járásbíróság, in
+  // the same tier as the district courts but above them by weight.
+  {
+    country: "HUN",
+    courtPattern: "alkotmánybíróság",
+    tier: 4,
+    tierLabel: "constitutional",
+    weight: 10,
+  },
+  {
+    country: "HUN",
+    courtPattern: "kúria|legfelsőbb bíróság",
+    tier: 3,
+    tierLabel: "supreme",
+    weight: 8,
+  },
+  {
+    country: "HUN",
+    courtPattern: "ítélőtábla",
+    tier: 2,
+    tierLabel: "appeal",
+    weight: 5,
+  },
+  {
+    country: "HUN",
+    courtPattern: "törvényszék|megyei bíróság|fővárosi bíróság",
+    tier: 2,
+    tierLabel: "regional",
+    weight: 4,
+  },
+  {
+    country: "HUN",
+    courtPattern: "közigazgatási és munkaügyi bíróság",
+    tier: 1,
+    tierLabel: "administrative-labour",
+    weight: 3,
+  },
+  {
+    country: "HUN",
+    courtPattern: "járásbíróság|kerületi bíróság|városi bíróság",
+    tier: 1,
+    tierLabel: "district",
+    weight: 2,
+  },
   // European Union
   {
     country: "EU",

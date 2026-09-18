@@ -98,6 +98,10 @@ const ADAPTER_JURISDICTIONS = {
     country: "EU",
     identifierGrammar: DECISION_DOCKET_GRAMMARS.EU,
   },
+  HUN: {
+    country: "HUN",
+    identifierGrammar: DECISION_DOCKET_GRAMMARS.HUN,
+  },
   POL: {
     country: "POL",
     identifierGrammar: DECISION_DOCKET_GRAMMARS.POL,

@@ -28,6 +28,7 @@ const FIXTURES = {
     text: "Soud návrh odmítl podle § 46 odst. 1 písm. a) s. ř. s. a o nákladech rozhodl podle § 60 odst. 3 ve spojení s § 120 s. ř. s.; vyhláška č. 485/2005 Sb. byla zrušena.",
   },
   EU: null,
+  HUN: null,
   POL: null,
   SVK: null,
 } as const satisfies Record<CaseLawJurisdiction, GrammarFixture | null>;

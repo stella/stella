@@ -49,7 +49,7 @@ test("case-law ids are per index group from the grouping generation on", () => {
   expect(corpusIndexId("case_law_v3", "CZE")).toBe("case_law_v3_cs_sk");
   expect(corpusIndexId("case_law_v3", "SVK")).toBe("case_law_v3_cs_sk");
   // A country outside every group is its own group.
-  expect(corpusIndexId("case_law_v3", "HUN")).toBe("case_law_v3_hun");
+  expect(corpusIndexId("case_law_v3", "ROU")).toBe("case_law_v3_rou");
 });
 
 test("a country outside the declaration never lands in a declared group", () => {
@@ -253,6 +253,6 @@ test("generation extraction reads a group suffix that contains the separator", (
     for (const group of CASE_LAW_INDEX_GROUP_NAMES) {
       expect(corpusIndexGeneration(`${generation}_${group}`)).toBe(generation);
     }
-    expect(corpusIndexGeneration(`${generation}_hun`)).toBe(generation);
+    expect(corpusIndexGeneration(`${generation}_rou`)).toBe(generation);
   }
 });

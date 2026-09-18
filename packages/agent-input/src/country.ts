@@ -78,7 +78,7 @@ export type CountryValue = {
  * what is accepted and can only introduce an ambiguity that the index reports
  * rather than guesses.
  */
-const NAME_LOCALES = ["en", "cs", "sk", "pl", "de"] as const;
+const NAME_LOCALES = ["en", "cs", "sk", "pl", "de", "hu"] as const;
 
 /**
  * Official long forms CLDR does not carry, keyed by CLDR region.
@@ -101,6 +101,10 @@ const OFFICIAL_NAMES = {
     "Republika Czeska",
   ],
   DE: ["Federal Republic of Germany", "Bundesrepublik Deutschland"],
+  // Hungary's constitutional name is `Magyarország`, which CLDR carries; what
+  // it omits is the name the country bore until 2012, under which its older
+  // law is still cited.
+  HU: ["Republic of Hungary", "Magyar Köztársaság"],
   PL: ["Republic of Poland", "Rzeczpospolita Polska", "Polská republika"],
   SK: [
     "Slovak Republic",

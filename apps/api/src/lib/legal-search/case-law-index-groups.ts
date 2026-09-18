@@ -35,6 +35,7 @@ export const CASE_LAW_INDEX_GROUP_OF = {
   AUT: "aut",
   CZE: "cs_sk",
   EU: "eu",
+  HUN: "hun",
   POL: "pol",
   SVK: "cs_sk",
 } as const satisfies {

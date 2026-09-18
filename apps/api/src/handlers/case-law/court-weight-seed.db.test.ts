@@ -10,7 +10,7 @@ import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 const MIGRATION = nodePath.resolve(
   import.meta.dir,
-  "../../../drizzle/20260911180000_case_law_court_weight_seed_pol_wsa/migration.sql",
+  "../../../drizzle/20260918120100_case_law_court_weight_seed_hun/migration.sql",
 );
 
 test("the seed migration applies, reconciles stale rows, and is idempotent", async () => {

@@ -508,6 +508,7 @@ export const PROVISION_CITATION_GRAMMARS = {
     unit: "section",
   }),
   EU: unsupported("EU"),
+  HUN: unsupported("HUN"),
   POL: unsupported("POL"),
   SVK: unsupported("SVK"),
 } as const satisfies {

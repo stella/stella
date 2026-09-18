@@ -1,6 +1,9 @@
 import { expect, test } from "bun:test";
 
-import { CASE_LAW_JURISDICTIONS } from "@stll/api-contract/case-law-jurisdictions";
+import {
+  CASE_LAW_JURISDICTIONS,
+  type CaseLawJurisdiction,
+} from "@stll/api-contract/case-law-jurisdictions";
 
 import {
   CITATION_RESOLUTION_JURISDICTION_POLICY,
@@ -28,13 +31,43 @@ test("every registered source publishes for a declared jurisdiction", () => {
   );
 });
 
+/**
+ * Jurisdictions declared before the source that will publish for them.
+ *
+ * The union is what forces the per-jurisdiction decisions (index group,
+ * morphology language, docket grammar, court weights, citation reach) to be
+ * authored, and those decisions have to exist before an adapter can write a
+ * row anything reads correctly. So a jurisdiction is admitted here for the
+ * window between its declaration and its adapter, and the entry is deleted in
+ * the change that registers that adapter. An entry is a named, reviewable
+ * exception; its absence is what keeps the assertion below a drift guard.
+ */
+const DECLARED_AHEAD_OF_A_SOURCE: readonly CaseLawJurisdiction[] = ["HUN"];
+
+test("a jurisdiction is only excused a source while it is named here", () => {
+  // A stale exception would silently excuse a jurisdiction whose source has
+  // since landed, or one no longer declared at all.
+  const registered = new Set<string>(
+    listAdapters().map(({ country }) => country),
+  );
+  for (const jurisdiction of DECLARED_AHEAD_OF_A_SOURCE) {
+    expect([jurisdiction, registered.has(jurisdiction)]).toEqual([
+      jurisdiction,
+      false,
+    ]);
+    expect(CASE_LAW_JURISDICTIONS).toContain(jurisdiction);
+  }
+});
+
 test("every declared jurisdiction has a registered source", () => {
   const registered = new Set<string>(
     listAdapters().map(({ country }) => country),
   );
   expect(
     CASE_LAW_JURISDICTIONS.filter(
-      (jurisdiction) => !registered.has(jurisdiction),
+      (jurisdiction) =>
+        !registered.has(jurisdiction) &&
+        !DECLARED_AHEAD_OF_A_SOURCE.includes(jurisdiction),
     ),
   ).toEqual([]);
 });
@@ -60,6 +93,7 @@ test("the declared cross-jurisdiction reach is exact", () => {
     AUT: { alsoResolvesTo: ["EU"] },
     CZE: { alsoResolvesTo: ["EU"] },
     EU: { alsoResolvesTo: [] },
+    HUN: { alsoResolvesTo: ["EU"] },
     POL: { alsoResolvesTo: ["EU"] },
     SVK: { alsoResolvesTo: ["EU"] },
   });
