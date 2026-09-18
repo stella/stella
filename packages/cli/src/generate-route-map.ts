@@ -565,37 +565,35 @@ const heuristicCommandPath = (name: string): readonly string[] => {
 };
 
 /**
- * The annotated base64 prop `--file <path>` fills, checked against the schema
- * that names it. The flag's ceiling is that prop's `maxLength`, so a prop that
- * is renamed, retyped, or loses its cap fails codegen here rather than shipping
- * a `--file` whose stated limit is nobody's.
+ * The annotated base64 prop `--file <path>` fills, kept only while the schema
+ * still backs it: a capped string this generator can state a ceiling for.
+ *
+ * Dropping the flag rather than failing is what the runtime call site needs. A
+ * live registry that renamed or uncapped the prop would otherwise take the
+ * whole rebuilt tree down over one annotation; here the command survives with
+ * its plain base64 flag. The build-time invariant — the committed snapshot must
+ * back every annotation — is a test over the generated tree
+ * (`local-file-flag.test.ts`), which fails loudly and cannot be reached by a
+ * server.
  */
 const resolveLocalFileProp = ({
   annotation,
   properties,
-  toolName,
 }: {
   annotation: ToolAnnotation | undefined;
   properties: Record<string, JsonSchema>;
-  toolName: string;
 }): string | undefined => {
   const prop = annotation?.localFileBase64Prop;
   if (prop === undefined) {
     return undefined;
   }
   const propSchema = properties[prop];
-  if (propSchema === undefined) {
-    throw new RouteGenerationError(
-      `Tool ${toolName}: localFileBase64Prop '${prop}' is not a property of its input schema`,
-    );
-  }
   if (
+    propSchema === undefined ||
     propSchema["type"] !== "string" ||
     typeof propSchema["maxLength"] !== "number"
   ) {
-    throw new RouteGenerationError(
-      `Tool ${toolName}: localFileBase64Prop '${prop}' must be a string property with a maxLength; --file derives its ceiling from it`,
-    );
+    return undefined;
   }
   return prop;
 };
@@ -624,11 +622,7 @@ const leafSpecsForTool = ({
   const windowedText = textPath !== undefined;
   const followable = annotation?.perEntryCursor !== true;
   const confirmPassthrough = annotation?.confirmPassthrough;
-  const localFileBase64Prop = resolveLocalFileProp({
-    annotation,
-    properties,
-    toolName: listing.name,
-  });
+  const localFileBase64Prop = resolveLocalFileProp({ annotation, properties });
   const mode = resolvePaginationMode(properties, annotation);
   const paginated = mode !== "none";
 

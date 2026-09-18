@@ -4,12 +4,14 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { TOOL_ANNOTATIONS } from "./annotations.js";
+import { generatedRouteMap } from "./generated/route-map.js";
 import {
   describeLimit,
   localFileLimits,
   readLocalFileAsBase64,
 } from "./local-file-flag.js";
-import type { JsonSchema } from "./route-types.js";
+import type { JsonSchema, RouteNode } from "./route-types.js";
 
 /** `create_template`'s real ceiling: half the 512 KiB MCP request frame. */
 const MAX_BASE64 = 262_144;
@@ -89,6 +91,48 @@ describe("localFileLimits", () => {
     expect(
       describeLimit({ maxBase64Length: MAX_BASE64, maxBytes: 196_608 }),
     ).toBe("196608 bytes (192 KB)");
+  });
+});
+
+/**
+ * The build-time half of the invariant the generator deliberately does not
+ * throw on: every `localFileBase64Prop` the API annotates must be backed by a
+ * capped string in the committed snapshot. Renaming or uncapping the prop
+ * without updating the annotation silently drops `--file` from the command, so
+ * the committed tree is checked here instead.
+ */
+describe("the generated tree backs every --file it offers", () => {
+  const leavesWithLocalFile = (
+    node: RouteNode,
+  ): Extract<RouteNode, { kind: "leaf" }>["spec"][] => {
+    if (node.kind === "leaf") {
+      return node.spec.localFileBase64Prop === undefined ? [] : [node.spec];
+    }
+    if (node.kind !== "route") {
+      return [];
+    }
+    return Object.values(node.children).flatMap((child) =>
+      leavesWithLocalFile(child),
+    );
+  };
+
+  const annotated = Object.entries(TOOL_ANNOTATIONS)
+    .filter(([, annotation]) => annotation.localFileBase64Prop !== undefined)
+    .map(([name]) => name);
+
+  test("every annotated tool reached the tree with a usable ceiling", () => {
+    // Not vacuous: `create_template` is the tool this exists for.
+    expect(annotated).toContain("create_template");
+    const leaves = leavesWithLocalFile(generatedRouteMap);
+    expect(
+      [...new Set(leaves.map((spec) => spec.toolName))].toSorted(),
+    ).toEqual(annotated.toSorted());
+    for (const spec of leaves) {
+      const prop = spec.localFileBase64Prop ?? "";
+      expect(
+        localFileLimits({ inputSchema: spec.inputSchema, prop }),
+      ).toBeDefined();
+    }
   });
 });
 
