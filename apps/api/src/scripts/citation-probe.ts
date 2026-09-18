@@ -224,6 +224,26 @@ const BENIGN: readonly RegExp[] = [
   // trailing one prevents a longer or oversized reference from matching a
   // benign-looking prefix of itself.
   /[čc]\.\s{0,3}j\.:?\s{0,3}(?!\d{1,3}\p{L}{1,6}\/)[\p{L}\d-]{1,10}(?:\/[\p{L}\d-]{1,10}){3,5}(?![\p{L}\d/-])/u,
+  // The same administrative reference written with a whitespace-separated
+  // authority code: "č.j. MCO5 155283/2019/ODP/Mach" (městská část office),
+  // "sp.zn. MCO5/OSU/1827/2017/Šev/Sm.p.967" (its sp. zn. spelling). The
+  // authority code is uppercase letters closed by a digit, which no court
+  // docket in the corpus opens with: a docket leads with the chamber
+  // number ("8 C/18/2008", "36Co/52/53/2023"), so the letters-then-digit
+  // head separates the two without needing the prefix to decide. Three or
+  // more slash-joined segments follow, one past the widest court docket
+  // (CASE_NUMBER_BODY_COMMA); the trailing lookahead keeps a longer
+  // reference from matching a benign-looking prefix of itself.
+  /\b\p{Lu}{2,6}\d{1,2}[\s/][\p{L}\d]{1,12}(?:\/[\p{L}\d.]{1,14}){2,5}(?![\p{L}\d/])/u,
+  // Polish prosecutor-office case files ("sygn. akt V Ds. 41/10"): the Ds.
+  // registry belongs to the prosecution service, not to a court, so the
+  // corpus never holds the referenced file.
+  /\b(?:[IVX]{1,4}\s{0,2}|\d{1,3}\s{0,2})?Ds[.\s]\s{0,3}\d{1,5}[./]\d{2,4}\b/u,
+  // Czech anonymization placeholder standing where the docket belongs
+  // ("sp. zn. Anonymizováno byl podán dne 2. 1. 2025"). The no-digit-tail
+  // rule above misses it whenever the detector's greedy tail reaches into
+  // following prose that carries a date.
+  /^(?:sp\.\s{0,3}zn\.|sen\.\s{0,3}zn\.|sygn\.(?:\s{1,3}akt)?|[čc]\.\s{0,3}j\.:?)\s{0,3}[Aa]nonymizov[aá]no\b/u,
 ];
 
 const isBenign = (candidate: string): boolean =>
