@@ -158,6 +158,17 @@ describe("declared decision docket grammars", () => {
       );
     });
 
+    test(`${grammar.jurisdiction} fixtures keep distinct dockets apart`, () => {
+      const canonicalKeys = DECISION_DOCKET_GRAMMAR_FIXTURES[
+        grammar.jurisdiction
+      ].map(({ canonical }) => {
+        const parsed = grammar.parse(canonical);
+        expect(parsed).not.toBeNull();
+        return parsed === null ? canonical : canonicalDecisionDocket(parsed);
+      });
+      expect(new Set(canonicalKeys).size).toBe(canonicalKeys.length);
+    });
+
     test(`${grammar.jurisdiction} variants share one canonical value`, () => {
       const fixtures = DECISION_DOCKET_GRAMMAR_FIXTURES[grammar.jurisdiction];
       expect(fixtures.length).toBeGreaterThan(0);

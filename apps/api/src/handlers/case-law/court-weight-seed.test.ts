@@ -15,7 +15,7 @@ import {
 
 const MIGRATION = nodePath.resolve(
   import.meta.dir,
-  "../../../drizzle/20260918120100_case_law_court_weight_seed_hun/migration.sql",
+  "../../../drizzle/20260918210100_case_law_court_weight_seed_hun/migration.sql",
 );
 
 describe("court weight seed", () => {

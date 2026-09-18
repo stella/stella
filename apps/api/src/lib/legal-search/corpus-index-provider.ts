@@ -21,6 +21,10 @@ import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution"
 import { currentCaseLawCorpusProjection } from "@/api/lib/legal-search/case-law-corpus-projection";
 import { corpusIndexBrowseFacets } from "@/api/lib/legal-search/corpus-index-facets";
 import { readServingCorpusIndexGenerationTx } from "@/api/lib/legal-search/corpus-index-generation-store";
+import {
+  corpusIndexRoute,
+  requireCorpusIndexManifest,
+} from "@/api/lib/legal-search/corpus-index-manifest";
 import { readCorpusIndexSearchPage } from "@/api/lib/legal-search/corpus-index-pagination";
 import { caseLawCorpusQueryFields } from "@/api/lib/legal-search/corpus-index-read-contract";
 import { markCorpusFragment } from "@/api/lib/legal-search/corpus-passage-highlight";
@@ -39,7 +43,6 @@ import {
 } from "@/api/lib/legal-search/corpus-search-order";
 import { loadDocumentContext } from "@/api/lib/legal-search/document-context";
 import { resolveExpandedCorpusQuery } from "@/api/lib/legal-search/expansion";
-import { corpusIndexRoute } from "@/api/lib/legal-search/index-naming";
 import {
   blendStableCitationAuthority,
   stableBlendUpperBound,
@@ -184,7 +187,7 @@ const searchResult = async (
   // that index holds other jurisdictions; unscoped → the generation glob
   // (corpus index multi-index search across all of the generation's indexes).
   const { indexId, jurisdictionClause } = corpusIndexRoute(
-    generation,
+    requireCorpusIndexManifest(family, generation),
     query.jurisdiction,
   );
 

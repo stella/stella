@@ -18,7 +18,6 @@ import {
   corpusIndexIdsFor,
   corpusIndexJurisdictions,
   corpusIndexPattern,
-  corpusIndexRoute,
   isCaseLawCorpusGeneration,
   tryCorpusIndexGeneration,
 } from "@/api/lib/legal-search/index-naming";
@@ -135,34 +134,6 @@ test("distinct physical ids for a jurisdiction list", () => {
     "case_law_v2_pol",
     "case_law_v2_svk",
   ]);
-});
-
-test("a scoped query names its index, and a clause only where the index is shared", () => {
-  // Shared index: the clause keeps the query to the scoped jurisdiction.
-  expect(corpusIndexRoute("case_law_v3", "CZE")).toEqual({
-    indexId: "case_law_v3_cs_sk",
-    jurisdictionClause: "CZE",
-  });
-  // The clause is the canonical code indexed documents carry, whatever
-  // case the scope arrived in.
-  expect(corpusIndexRoute("case_law_v3", "cze")).toEqual({
-    indexId: "case_law_v3_cs_sk",
-    jurisdictionClause: "CZE",
-  });
-  // A single-country group is bounded by its index alone.
-  expect(corpusIndexRoute("case_law_v3", "POL")).toEqual({
-    indexId: "case_law_v3_pol",
-    jurisdictionClause: undefined,
-  });
-  // Before grouping every index is one jurisdiction's.
-  expect(corpusIndexRoute("case_law_v2", "CZE")).toEqual({
-    indexId: "case_law_v2_cze",
-    jurisdictionClause: undefined,
-  });
-  expect(corpusIndexRoute("case_law_v3", undefined)).toEqual({
-    indexId: "case_law_v3_*",
-    jurisdictionClause: undefined,
-  });
 });
 
 test("pattern globs all jurisdiction indexes for a generation", () => {

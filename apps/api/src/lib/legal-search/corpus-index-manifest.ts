@@ -33,6 +33,7 @@ import {
 import { QUICKWIT_V09_BINARY_VERSION } from "@/api/lib/legal-search/corpus-index-engine-version";
 import {
   CORPUS_INDEX_ID_MAX_LENGTH,
+  corpusIndexPattern,
   isCorpusIndexJurisdiction,
 } from "@/api/lib/legal-search/index-naming";
 
@@ -836,6 +837,67 @@ export const corpusIndexIdFromManifest = (
   return indexId.length <= CORPUS_INDEX_ID_MAX_LENGTH
     ? indexId
     : panic(`Corpus index id exceeds storage limit: ${indexId}`);
+};
+
+/** How many jurisdictions this manifest routes into one physical index. */
+const manifestIndexJurisdictionCount = (
+  manifest: CorpusIndexManifest,
+  indexId: string,
+): number => {
+  switch (manifest.route.type) {
+    case "case_law_group":
+      return Object.values(manifest.route.byJurisdiction).filter(
+        (group) => `${manifest.generation}_${group}` === indexId,
+      ).length;
+    case "jurisdiction":
+      return 1;
+    default:
+      manifest.route satisfies never;
+      return panic(`Unhandled route: ${String(manifest.route)}`);
+  }
+};
+
+export type CorpusIndexRoute = {
+  /** Physical index, or the generation glob when the query is unscoped. */
+  indexId: string;
+  /**
+   * Jurisdiction the engine query must carry as a clause, in the canonical
+   * uppercase form indexed documents carry: the scoped one when its physical
+   * index holds other jurisdictions, otherwise undefined because the index
+   * itself already bounds the query.
+   */
+  jurisdictionClause: string | undefined;
+};
+
+/**
+ * Index selection for a query, scoped to one jurisdiction or unscoped.
+ *
+ * Read off the generation's own route, the same one the projection writer
+ * derives `desired_index_id` from, so the index a query names is an index
+ * that generation creates. A jurisdiction the generation does not route has
+ * no index to read: `corpusIndexIdFromManifest` fails there rather than
+ * composing a name, because a query against an index that does not exist
+ * reports no matches, which reads as an empty corpus.
+ */
+export const corpusIndexRoute = (
+  manifest: CorpusIndexManifest,
+  jurisdiction: string | undefined,
+): CorpusIndexRoute => {
+  if (jurisdiction === undefined) {
+    return {
+      indexId: corpusIndexPattern(manifest.generation),
+      jurisdictionClause: undefined,
+    };
+  }
+  const canonical = jurisdiction.toUpperCase();
+  const indexId = corpusIndexIdFromManifest(manifest, canonical);
+  return {
+    indexId,
+    jurisdictionClause:
+      manifestIndexJurisdictionCount(manifest, indexId) > 1
+        ? canonical
+        : undefined,
+  };
 };
 
 /**

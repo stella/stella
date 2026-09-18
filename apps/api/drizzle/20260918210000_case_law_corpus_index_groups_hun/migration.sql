@@ -3,9 +3,8 @@ SET statement_timeout = '5s';--> statement-breakpoint
 
 -- The physical corpus-index id of a case-law decision, derived in one place.
 --
--- Hungary joins the declaration with an index of its own: Hungarian shares its
--- morphology with no other corpus language, so a shared group would buy
--- nothing. Everything else in the body is as
+-- Hungary joins the declaration with an index of its own. Everything else in
+-- the body is as
 -- 20260818120000_case_law_corpus_index_groups left it, and the ids every
 -- previously declared jurisdiction derives are unchanged.
 --

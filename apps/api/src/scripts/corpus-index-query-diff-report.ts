@@ -2,12 +2,13 @@ import { Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
 import type { CorpusIndexHit } from "@/api/lib/legal-search/corpus-index-client";
-import { caseLawCorpusQueryFields } from "@/api/lib/legal-search/corpus-index-read-contract";
-import { caseLawCorpusQuery } from "@/api/lib/legal-search/corpus-query";
 import {
   corpusIndexRoute,
-  isCorpusIndexJurisdiction,
-} from "@/api/lib/legal-search/index-naming";
+  requireCorpusIndexManifest,
+} from "@/api/lib/legal-search/corpus-index-manifest";
+import { caseLawCorpusQueryFields } from "@/api/lib/legal-search/corpus-index-read-contract";
+import { caseLawCorpusQuery } from "@/api/lib/legal-search/corpus-query";
+import { isCorpusIndexJurisdiction } from "@/api/lib/legal-search/index-naming";
 
 /**
  * Pure half of the golden-query diff harness: query-file parsing, top-N
@@ -110,7 +111,7 @@ export const goldenQueryRequest = (
   query: GoldenQuery,
 ): GoldenQueryRequest | null => {
   const { indexId, jurisdictionClause } = corpusIndexRoute(
-    generation,
+    requireCorpusIndexManifest("case_law", generation),
     query.jurisdiction,
   );
   // The diff compares generations, so the query each one gets is the query

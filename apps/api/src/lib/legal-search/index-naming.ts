@@ -129,53 +129,6 @@ export const corpusIndexJurisdictions = (
 };
 
 /**
- * Whether the physical index a scoped query selects for this jurisdiction
- * also holds other jurisdictions, so the query needs a jurisdiction clause
- * of its own to stay exact.
- */
-const corpusIndexHoldsOtherJurisdictions = (
-  generation: string,
-  jurisdiction: string,
-): boolean =>
-  isGroupedCaseLawGeneration(generation) &&
-  caseLawIndexGroupCountries(caseLawIndexGroup(jurisdiction)).length > 1;
-
-export type CorpusIndexRoute = {
-  /** Physical index, or the generation glob when the query is unscoped. */
-  indexId: string;
-  /**
-   * Jurisdiction the engine query must carry as a clause, in the canonical
-   * uppercase form indexed documents carry: the scoped one when its physical
-   * index holds other jurisdictions, otherwise undefined because the index
-   * itself already bounds the query.
-   */
-  jurisdictionClause: string | undefined;
-};
-
-/** Index selection for a query, scoped to one jurisdiction or unscoped. */
-export const corpusIndexRoute = (
-  generation: string,
-  jurisdiction: string | undefined,
-): CorpusIndexRoute => {
-  if (jurisdiction === undefined) {
-    return {
-      indexId: corpusIndexPattern(generation),
-      jurisdictionClause: undefined,
-    };
-  }
-  const canonical = jurisdiction.toUpperCase();
-  return {
-    indexId: corpusIndexId(generation, canonical),
-    jurisdictionClause: corpusIndexHoldsOtherJurisdictions(
-      generation,
-      canonical,
-    )
-      ? canonical
-      : undefined,
-  };
-};
-
-/**
  * Recovers the generation prefix from a validated physical index id.
  *
  * A grouped case-law id ends in a group name, which may itself contain the

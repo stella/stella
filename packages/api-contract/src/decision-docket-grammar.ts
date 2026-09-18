@@ -169,11 +169,17 @@ const canonicalHungarianDocketKey = (formatted: string): string => {
   }
   const document = groups?.["document"];
   const sheet = document === undefined ? "" : `/${document}`;
-  const panel = groups?.["panel"] ?? "";
-  const numeral = groups?.["numeral"] ?? "";
+  const panel = groups?.["panel"];
+  const numeral = groups?.["numeral"];
+  // Every component keeps the dot the court writes after it, including when
+  // the next one is absent. Concatenated instead, a registry mark followed by
+  // a panel numeral and a registry mark ending in those same letters produce
+  // one key: `Xy.I.1/2020` and `Xyi.1/2020` are different dockets.
+  const lead = panel === undefined ? "" : `${panel}.`;
+  const chamber = numeral === undefined ? "" : `${numeral}.`;
   const digits = register.replace(".", "");
   return canonicalDocketKey(
-    `${panel}${registry}${numeral}${digits}/${year}${sheet}`,
+    `${lead}${registry}.${chamber}${digits}/${year}${sheet}`,
   );
 };
 
