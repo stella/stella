@@ -65,13 +65,6 @@ const detailRecord = async (name: string): Promise<Record<string, unknown>> => {
   return isRecord(data) ? data : panic(`${name} holds no judgment record`);
 };
 
-const declaredFields = () => {
-  const { sourceFields } = plCourtsAdapter;
-  return sourceFields.status === "declared"
-    ? sourceFields
-    : panic("pl-courts declares no source-field inventory");
-};
-
 type DecisionFromOptions = {
   listingRow: Record<string, unknown>;
   detail: Record<string, unknown> | null;
@@ -106,7 +99,7 @@ const namesInRole = (
 
 describe("pl-courts reads what SAOS serves", () => {
   test("every field the recorded payloads state has a disposition", async () => {
-    const { fields, listSourceFields } = declaredFields();
+    const { fields, listSourceFields } = plCourtsAdapter.sourceFields;
     const parts: SourceRawParts = {
       "listing-dump": JSON.stringify(await rowById(DUMP_PAGE, 332_735)),
       "listing-search": JSON.stringify(await rowById(SEARCH_PAGE, 332_104)),

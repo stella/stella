@@ -14,10 +14,7 @@ import {
   caseLawSources,
   relations,
 } from "@/api/db/schema";
-import {
-  EMPTY_AST,
-  pendingSourceFieldInventory,
-} from "@/api/handlers/case-law/ingestion/adapter";
+import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
 import type { SourceAdapter } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   CASE_LAW_REPLAY_SCOPE,
@@ -310,7 +307,7 @@ type StubAdapterOptions = {
  */
 const stubAdapterWithoutReparse = (): SourceAdapter => ({
   key: ADAPTER_KEYS.EU_ECJ,
-  sourceFields: pendingSourceFieldInventory(ADAPTER_KEYS.EU_ECJ),
+  sourceFields: { status: "declared", fields: {}, listSourceFields: () => [] },
   sourceSurfaces: { surfaces: {} },
   name: "replay stub",
   country: "EU",
