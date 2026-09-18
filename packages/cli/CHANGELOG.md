@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 1.8.1
+
+### Patch Changes
+
+- [#3532](https://github.com/stella/stella/pull/3532) [`e0964ce`](https://github.com/stella/stella/commit/e0964cef872b0f20d62b8759af08e371ae88a55c) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Regenerate the MCP registry snapshot: the OpenAI-compatible `search` and `fetch` now state their result-id vocabulary, and `fetch` accepts a prefixed corpus id beside a document UUID. Both stay excluded from the CLI, which has its own corpus commands.
+
 ## 1.8.0
 
 ### Minor Changes
