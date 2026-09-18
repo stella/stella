@@ -30,7 +30,7 @@ const taskCreateRealtimeUpdates = workspaceResourceSetUpdates([
 ]);
 
 /** Tasks across every matter the caller can read (the Inbox list). */
-export const taskListRoute = new Elysia({ prefix: "/tasks" })
+const taskListRoute = new Elysia({ prefix: "/tasks" })
   .use(authMacro)
   .use(permissionMacro)
   .guard({ validateAuth: true })
@@ -39,7 +39,7 @@ export const taskListRoute = new Elysia({ prefix: "/tasks" })
     permissions: listTasks.config.permissions,
   });
 
-export const tasksRoute = new Elysia({
+const workspaceTasksRoute = new Elysia({
   prefix: "/tasks/:workspaceId",
 })
   .use(workspaceAccessMacro)
@@ -95,3 +95,9 @@ export const tasksRoute = new Elysia({
     params: listEntityLinks.config.params,
     permissions: listEntityLinks.config.permissions,
   });
+
+// Composed here rather than as a second `.use` in server.ts: the versioned
+// route chain there is at the depth limit of the Eden type the web app infers.
+export const tasksRoute = new Elysia()
+  .use(taskListRoute)
+  .use(workspaceTasksRoute);
