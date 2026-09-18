@@ -169,17 +169,18 @@ const nalusIdentities = ({
 /**
  * Rows per crawl page.
  *
- * Sized against the gate rather than the court: every row costs a text and an
- * abstract request, each of which waits its NALUS slot, so the page size is
- * what decides a page's wall clock. See {@link CZ_US_PAGE_TIMEOUT_MS}.
+ * Sized against the gate rather than the court: every row costs a text, a
+ * record-card and an abstract request, each of which waits its NALUS slot, so
+ * the page size is what decides a page's wall clock. See
+ * {@link CZ_US_PAGE_TIMEOUT_MS}.
  */
 export const RESULTS_PAGE_SIZE = 12;
 
 /** Search requests one result page costs: bootstrap GET, POST, results page. */
 const REQUESTS_PER_LISTING = 3;
 
-/** Requests one kept row costs: GetText, then GetAbstract. */
-const REQUESTS_PER_DECISION = 2;
+/** Requests one kept row costs: GetText, then ResultDetail and GetAbstract. */
+const REQUESTS_PER_DECISION = 3;
 
 const PAGE_REQUEST_BUDGET =
   REQUESTS_PER_LISTING + RESULTS_PAGE_SIZE * REQUESTS_PER_DECISION;
