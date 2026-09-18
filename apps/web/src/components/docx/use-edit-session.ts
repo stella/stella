@@ -346,12 +346,15 @@ export const useEditSession = ({
   }, []);
 
   const finalize = async () => {
+    debouncedCheckpoint.cancel();
+    // A checkpoint still in flight rotates the session token when it lands;
+    // a finalize sent beside it would carry the old token and be refused as
+    // a take-over. Join the checkpoint queue, then read the session.
+    await (checkpointQueueRef.current ?? Promise.resolve());
     const session = sessionRef.current;
     if (!session) {
       return true;
     }
-
-    debouncedCheckpoint.cancel();
 
     setState({ status: "saving" });
 
