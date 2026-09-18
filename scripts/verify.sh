@@ -360,7 +360,7 @@ run_step "Maintenance release preparation self-test" bun test \
 run_step "Desktop-release-changes self-test" bash scripts/detect-desktop-release-changes.test.sh
 run_step "Dependabot Bun autofix self-test" bun test \
   scripts/autofix-workflow.test.ts \
-  scripts/dependabot-empty-changeset.test.ts
+  scripts/dependabot-changeset.test.ts
 run_step "Published package list self-test" bun test \
   scripts/check-published-package-lists.test.ts
 run_step "Published package lists" bun run check:published-package-lists

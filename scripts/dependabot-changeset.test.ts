@@ -15,9 +15,10 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
-  decideDependabotEmptyChangeset,
-  runDependabotEmptyChangeset,
-} from "./dependabot-empty-changeset";
+  decideDependabotChangeset,
+  renderChangeset,
+  runDependabotChangeset,
+} from "./dependabot-changeset";
 
 const policy = {
   releasePaths: [
@@ -55,20 +56,42 @@ const json = (value: unknown): string => JSON.stringify(value);
 const basePackage = {
   name: "@stll/workspace-ui",
   version: "0.6.2",
-  dependencies: { "@stll/ui": "workspace:^" },
+  dependencies: { "@stll/ui": "workspace:^", "tailwind-merge": "^3.6.0" },
   peerDependencies: { react: ">=19" },
   devDependencies: { "@tanstack/react-table": "9.2.2" },
 };
 
+const devBump = {
+  ...basePackage,
+  devDependencies: { "@tanstack/react-table": "9.2.3" },
+};
+
+const runtimeBump = {
+  ...basePackage,
+  dependencies: { ...basePackage.dependencies, "tailwind-merge": "^3.7.0" },
+};
+
 const decide = (
-  input: Partial<Parameters<typeof decideDependabotEmptyChangeset>[0]> = {},
+  input: Partial<Parameters<typeof decideDependabotChangeset>[0]> = {},
 ) =>
-  decideDependabotEmptyChangeset({
+  decideDependabotChangeset({
     policy,
     changedFiles: [],
     addedChangesetFiles: [],
     manifests: [],
     ...input,
+  });
+
+const decideSingle = (head: unknown) =>
+  decide({
+    changedFiles: [workspaceUiManifest],
+    manifests: [
+      manifest({
+        packagePath: workspaceUiManifest,
+        base: json(basePackage),
+        head: json(head),
+      }),
+    ],
   });
 
 const testRoots: string[] = [];
@@ -93,7 +116,12 @@ const runGit = (root: string, args: readonly string[]): string => {
   return result.stdout.toString().trim();
 };
 
-type GitFixtureChange = "bump" | "added" | "deleted" | "executable";
+type GitFixtureChange =
+  | "bump"
+  | "runtime-bump"
+  | "added"
+  | "deleted"
+  | "executable";
 
 type GitFixture = {
   readonly root: string;
@@ -103,7 +131,7 @@ type GitFixture = {
 };
 
 const makeGitFixture = (change: GitFixtureChange): GitFixture => {
-  const root = mkdtempSync(path.join(tmpdir(), "stella-dependabot-empty-"));
+  const root = mkdtempSync(path.join(tmpdir(), "stella-dependabot-changeset-"));
   testRoots.push(root);
 
   const packagePath = "packages/sample/package.json";
@@ -122,12 +150,13 @@ const makeGitFixture = (change: GitFixtureChange): GitFixture => {
   const baseManifest = {
     name: "@stll/sample",
     version: "0.1.0",
+    dependencies: { zod: "^4.0.0" },
     devDependencies: { vitest: "^3.0.0" },
   };
-  const headManifest = {
-    ...baseManifest,
-    devDependencies: { vitest: "^3.1.0" },
-  };
+  const headManifest =
+    change === "runtime-bump"
+      ? { ...baseManifest, dependencies: { zod: "^4.1.0" } }
+      : { ...baseManifest, devDependencies: { vitest: "^3.1.0" } };
   const manifestPath = path.join(root, packagePath);
 
   runGit(root, ["init", "--quiet"]);
@@ -161,12 +190,12 @@ const makeGitFixture = (change: GitFixtureChange): GitFixture => {
     root,
     base,
     head,
-    output: ".changeset/dependabot-dev-dependencies-123.md",
+    output: ".changeset/dependabot-dependencies-123.md",
   };
 };
 
-const runFixture = (fixture: GitFixture) =>
-  runDependabotEmptyChangeset(
+const runFixture = (fixture: GitFixture, ...extra: readonly string[]) =>
+  runDependabotChangeset(
     [
       "--base",
       fixture.base,
@@ -174,11 +203,12 @@ const runFixture = (fixture: GitFixture) =>
       fixture.head,
       "--output",
       fixture.output,
+      ...extra,
     ],
     fixture.root,
   );
 
-describe("Dependabot empty changeset decision", () => {
+describe("Dependabot changeset decision", () => {
   test("does nothing when no release-gated path changed", () => {
     expect(
       decide({ changedFiles: ["bun.lock", "apps/web/src/routes.tsx"] }),
@@ -194,35 +224,74 @@ describe("Dependabot empty changeset decision", () => {
     ).toEqual({ status: "noop", reason: "existing-changeset" });
   });
 
-  test("creates one empty changeset for semantic devDependency-only manifest changes", () => {
-    const head = {
-      ...basePackage,
-      devDependencies: { "@tanstack/react-table": "9.2.3" },
-    };
+  test("records no bump for a devDependency-only manifest change", () => {
+    expect(decideSingle(devBump)).toEqual({
+      status: "create",
+      entries: [{ packageName: "@stll/workspace-ui", updates: [] }],
+    });
+  });
 
+  test("records the moved floor for a same-major runtime dependency bump", () => {
+    expect(decideSingle(runtimeBump)).toEqual({
+      status: "create",
+      entries: [
+        {
+          packageName: "@stll/workspace-ui",
+          updates: [{ name: "tailwind-merge", range: "^3.7.0" }],
+        },
+      ],
+    });
+  });
+
+  test("accepts a runtime bump alongside a devDependency bump in one manifest", () => {
+    expect(
+      decideSingle({
+        ...runtimeBump,
+        devDependencies: devBump.devDependencies,
+      }),
+    ).toEqual({
+      status: "create",
+      entries: [
+        {
+          packageName: "@stll/workspace-ui",
+          updates: [{ name: "tailwind-merge", range: "^3.7.0" }],
+        },
+      ],
+    });
+  });
+
+  test("accepts an optionalDependencies bump as a runtime floor move", () => {
+    const base = {
+      ...basePackage,
+      optionalDependencies: { fsevents: "~2.3.2" },
+    };
     expect(
       decide({
         changedFiles: [workspaceUiManifest],
         manifests: [
           manifest({
             packagePath: workspaceUiManifest,
-            base: json(basePackage),
-            head: json(head),
+            base: json(base),
+            head: json({
+              ...base,
+              optionalDependencies: { fsevents: "~2.3.3" },
+            }),
           }),
         ],
       }),
     ).toEqual({
       status: "create",
-      packages: ["@stll/workspace-ui"],
+      entries: [
+        {
+          packageName: "@stll/workspace-ui",
+          updates: [{ name: "fsevents", range: "~2.3.3" }],
+        },
+      ],
     });
   });
 
-  test("derives all eligible published package names from the policy manifests", () => {
+  test("derives every eligible published package from the policy manifests", () => {
     const uiBase = { ...basePackage, name: "@stll/ui" };
-    const uiHead = {
-      ...uiBase,
-      devDependencies: { ...uiBase.devDependencies, react: "19.1.0" },
-    };
 
     expect(
       decide({
@@ -231,67 +300,137 @@ describe("Dependabot empty changeset decision", () => {
           manifest({
             packagePath: workspaceUiManifest,
             base: json(basePackage),
-            head: json({
-              ...basePackage,
-              devDependencies: {
-                "@tanstack/react-table": "9.2.3",
-              },
-            }),
+            head: json(devBump),
           }),
           manifest({
             packagePath: uiManifest,
             base: json(uiBase),
-            head: json(uiHead),
+            head: json({ ...runtimeBump, name: "@stll/ui" }),
           }),
         ],
       }),
     ).toEqual({
       status: "create",
-      packages: ["@stll/workspace-ui", "@stll/ui"],
+      entries: [
+        { packageName: "@stll/workspace-ui", updates: [] },
+        {
+          packageName: "@stll/ui",
+          updates: [{ name: "tailwind-merge", range: "^3.7.0" }],
+        },
+      ],
     });
   });
 
   test.each([
     [
-      "runtime dependency changes",
+      "a runtime major bump",
       {
         ...basePackage,
-        dependencies: { "@stll/ui": "workspace:^", zod: "^4.0.0" },
+        dependencies: {
+          ...basePackage.dependencies,
+          "tailwind-merge": "^4.0.0",
+        },
       },
-      "runtime-change",
+      "major-change",
+    ],
+    [
+      "a runtime range the fixer cannot compare",
+      {
+        ...basePackage,
+        dependencies: {
+          ...basePackage.dependencies,
+          "tailwind-merge": "catalog:",
+        },
+      },
+      "unsupported-range",
+    ],
+    [
+      "an added runtime dependency",
+      {
+        ...basePackage,
+        dependencies: { ...basePackage.dependencies, zod: "^4.0.0" },
+      },
+      "dependency-set-change",
+    ],
+    [
+      "a removed runtime dependency",
+      { ...basePackage, dependencies: { "@stll/ui": "workspace:^" } },
+      "dependency-set-change",
     ],
     [
       "peer dependency changes",
       { ...basePackage, peerDependencies: { react: ">=20" } },
       "peer-change",
     ],
-    ["source changes", basePackage, "source-change"],
+    [
+      "a manifest field outside the dependency maps",
+      { ...basePackage, version: "0.6.3" },
+      "manifest-change",
+    ],
   ] as const)("refuses %s", (_label, head, reason) => {
-    const changedFiles =
-      reason === "source-change"
-        ? [workspaceUiManifest, "packages/workspace-ui/src/table.tsx"]
-        : [workspaceUiManifest];
+    expect(decideSingle(head)).toEqual({ status: "refuse", reason });
+  });
 
+  describe("a runtime bump below 1.0.0", () => {
+    const base = {
+      ...basePackage,
+      dependencies: { "@stll/ui": "workspace:^", lib: "^0.6.0" },
+    };
+    const decideBump = (range: string) =>
+      decide({
+        changedFiles: [workspaceUiManifest],
+        manifests: [
+          manifest({
+            packagePath: workspaceUiManifest,
+            base: json(base),
+            head: json({
+              ...base,
+              dependencies: { ...base.dependencies, lib: range },
+            }),
+          }),
+        ],
+      });
+
+    test("is a patch changeset when only the patch moves", () => {
+      expect(decideBump("^0.6.4")).toEqual({
+        status: "create",
+        entries: [
+          {
+            packageName: "@stll/workspace-ui",
+            updates: [{ name: "lib", range: "^0.6.4" }],
+          },
+        ],
+      });
+    });
+
+    test("is refused when the minor moves", () => {
+      expect(decideBump("^0.7.0")).toEqual({
+        status: "refuse",
+        reason: "major-change",
+      });
+    });
+  });
+
+  test("refuses source changes next to a manifest bump", () => {
     expect(
       decide({
-        changedFiles,
+        changedFiles: [
+          workspaceUiManifest,
+          "packages/workspace-ui/src/table.tsx",
+        ],
         manifests: [
           manifest({
             packagePath: workspaceUiManifest,
             base: json(basePackage),
-            head: json(head),
+            head: json(devBump),
           }),
         ],
       }),
-    ).toEqual({ status: "refuse", reason });
+    ).toEqual({ status: "refuse", reason: "source-change" });
   });
 
-  test("refuses a group mixing an eligible devDependency change with a runtime change", () => {
-    const runtimeBase = { ...basePackage, name: "@stll/ui" };
-    const runtimeHead = {
-      ...runtimeBase,
-      dependencies: { ...runtimeBase.dependencies, zod: "^4.0.0" },
-    };
+  test("refuses a group mixing an eligible bump with a refused one", () => {
+    const uiBase = { ...basePackage, name: "@stll/ui" };
 
     expect(
       decide({
@@ -300,17 +439,12 @@ describe("Dependabot empty changeset decision", () => {
           manifest({
             packagePath: workspaceUiManifest,
             base: json(basePackage),
-            head: json({
-              ...basePackage,
-              devDependencies: {
-                "@tanstack/react-table": "9.2.3",
-              },
-            }),
+            head: json(devBump),
           }),
           manifest({
             packagePath: uiManifest,
-            base: json(runtimeBase),
-            head: json(runtimeHead),
+            base: json(uiBase),
+            head: json({ ...uiBase, peerDependencies: { react: ">=20" } }),
           }),
         ],
       }),
@@ -350,6 +484,14 @@ describe("Dependabot empty changeset decision", () => {
         head: json({ ...basePackage, devDependencies: { react: 19 } }),
       }),
     ],
+    [
+      "non-string runtime dependency",
+      manifest({
+        packagePath: workspaceUiManifest,
+        base: json(basePackage),
+        head: json({ ...basePackage, dependencies: { "tailwind-merge": 3 } }),
+      }),
+    ],
   ] as const)("refuses a malformed manifest pair: %s", (_label, pair) => {
     expect(
       decide({
@@ -367,12 +509,7 @@ describe("Dependabot empty changeset decision", () => {
           manifest({
             packagePath: workspaceUiManifest,
             base: json(basePackage),
-            head: json({
-              ...basePackage,
-              devDependencies: {
-                "@tanstack/react-table": "9.2.3",
-              },
-            }),
+            head: json(devBump),
           }),
         ],
       }),
@@ -380,14 +517,56 @@ describe("Dependabot empty changeset decision", () => {
   });
 });
 
-describe("Dependabot empty changeset CLI boundary", () => {
+describe("Dependabot changeset rendering", () => {
+  test("renders an empty changeset when no package needs a bump", () => {
+    expect(
+      renderChangeset([
+        { packageName: "@stll/ui", updates: [] },
+        { packageName: "@stll/workspace-ui", updates: [] },
+      ]),
+    ).toBe("---\n---\n");
+  });
+
+  test("lists only bumped packages and each moved floor once", () => {
+    expect(
+      renderChangeset([
+        { packageName: "@stll/workspace-ui", updates: [] },
+        {
+          packageName: "@stll/ui",
+          updates: [
+            { name: "tailwind-merge", range: "^3.7.0" },
+            { name: "clsx", range: "^2.1.2" },
+          ],
+        },
+        {
+          packageName: "@stll/chat",
+          updates: [{ name: "tailwind-merge", range: "^3.7.0" }],
+        },
+      ]),
+    ).toBe(
+      [
+        "---",
+        '"@stll/ui": patch',
+        '"@stll/chat": patch',
+        "---",
+        "",
+        "Update `tailwind-merge` to `^3.7.0`.",
+        "Update `clsx` to `^2.1.2`.",
+        "",
+      ].join("\n"),
+    );
+  });
+});
+
+describe("Dependabot changeset CLI boundary", () => {
   test.each([
     ".changeset/../outside.md",
-    ".changeset/dependabot-dev-dependencies-0.md",
-    ".changeset/dependabot-dev-dependencies-not-a-number.md",
+    ".changeset/dependabot-dev-dependencies-123.md",
+    ".changeset/dependabot-dependencies-0.md",
+    ".changeset/dependabot-dependencies-not-a-number.md",
   ])("rejects an invalid output path: %s", (output) => {
     expect(() =>
-      runDependabotEmptyChangeset([
+      runDependabotChangeset([
         "--base",
         "0".repeat(40),
         "--head",
@@ -395,7 +574,7 @@ describe("Dependabot empty changeset CLI boundary", () => {
         "--output",
         output,
       ]),
-    ).toThrow(/invalid empty changeset output path/iu);
+    ).toThrow(/invalid dependabot changeset output path/iu);
   });
 
   test("writes exactly an empty changeset for an eligible devDependency bump", () => {
@@ -407,11 +586,51 @@ describe("Dependabot empty changeset CLI boundary", () => {
     );
   });
 
+  test("writes a patch changeset for an eligible runtime bump", () => {
+    const fixture = makeGitFixture("runtime-bump");
+
+    expect(runFixture(fixture)).toBe(0);
+    expect(readFileSync(path.join(fixture.root, fixture.output), "utf-8")).toBe(
+      '---\n"@stll/sample": patch\n---\n\nUpdate `zod` to `^4.1.0`.\n',
+    );
+  });
+
+  test("verifies the written changeset against the recomputed decision", () => {
+    const fixture = makeGitFixture("runtime-bump");
+    const outputPath = path.join(fixture.root, fixture.output);
+
+    expect(runFixture(fixture)).toBe(0);
+    expect(runFixture(fixture, "--check")).toBe(0);
+
+    writeFileSync(outputPath, '---\n"@stll/sample": minor\n---\n');
+    expect(() => runFixture(fixture, "--check")).toThrow(/does not match/u);
+  });
+
+  test("check mode rejects a changeset that is not due", () => {
+    const fixture = makeGitFixture("added");
+    const outputPath = path.join(fixture.root, fixture.output);
+
+    expect(runFixture(fixture, "--check")).toBe(0);
+
+    writeFileSync(outputPath, "---\n---\n");
+    expect(() => runFixture(fixture, "--check")).toThrow(/no .* is due/u);
+  });
+
+  test("check mode rejects a symlink at the output path", () => {
+    const fixture = makeGitFixture("bump");
+    const outputPath = path.join(fixture.root, fixture.output);
+    const targetPath = path.join(fixture.root, "target.md");
+    writeFileSync(targetPath, "---\n---\n");
+    symlinkSync(targetPath, outputPath);
+
+    expect(() => runFixture(fixture, "--check")).toThrow(/regular file/u);
+  });
+
   test("rejects a checked-out repository whose HEAD differs from --head", () => {
     const fixture = makeGitFixture("bump");
 
     expect(() =>
-      runDependabotEmptyChangeset(
+      runDependabotChangeset(
         [
           "--base",
           fixture.base,
@@ -428,7 +647,6 @@ describe("Dependabot empty changeset CLI boundary", () => {
   test("refuses to overwrite an existing output file", () => {
     const fixture = makeGitFixture("bump");
     const outputPath = path.join(fixture.root, fixture.output);
-    mkdirSync(path.dirname(outputPath), { recursive: true });
     writeFileSync(outputPath, "keep this file\n");
 
     expect(() => runFixture(fixture)).toThrow(/overwrite/u);
@@ -439,7 +657,6 @@ describe("Dependabot empty changeset CLI boundary", () => {
     const fixture = makeGitFixture("bump");
     const outputPath = path.join(fixture.root, fixture.output);
     const targetPath = path.join(fixture.root, "target.md");
-    mkdirSync(path.dirname(outputPath), { recursive: true });
     writeFileSync(targetPath, "keep the target\n");
     symlinkSync(targetPath, outputPath);
 
