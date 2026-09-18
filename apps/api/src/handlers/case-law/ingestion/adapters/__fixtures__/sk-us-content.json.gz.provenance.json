@@ -1,0 +1,7 @@
+{
+  "capture": "recorded",
+  "sha256": "9a33bcca6dcd3390fa0b04d812a0feea5ac8ebcbfc10b7dcd3043fe7fb43c408",
+  "sourceUrl": "https://www.ustavnysud.sk/o/v1/dms/content",
+  "capturedAt": "2026-09-18T18:45:38.729Z",
+  "note": "POST body: {\"highlightText\":\"\",\"documentId\":\"75f2386e-1479-413d-980f-8b5d608f0ef0\",\"docType\":\"USSR_DECISION_MK\"}; plenary correction ruling; the document text as base64 XHTML"
+}

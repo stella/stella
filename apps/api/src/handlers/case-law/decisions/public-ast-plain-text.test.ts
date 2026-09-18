@@ -176,7 +176,7 @@ const fixtureAsts = async (): Promise<{ name: string; ast: DocumentAst }[]> => {
       decisionType: "beschluss",
       sourceUrl: "https://www.ris.bka.gv.at/",
       xml: await Bun.file(new URL("at-ris-jjt-1925.xml", FIXTURES)).text(),
-    }).documentAst,
+    }).unwrap().documentAst,
   });
 
   asts.push({
@@ -189,7 +189,7 @@ const fixtureAsts = async (): Promise<{ name: string; ast: DocumentAst }[]> => {
       sourceDocumentId: "b68202a0-55e4-4dea-9e93-971f0b71ae32",
       sourceUrl: "https://findok.bmf.gv.at/",
       xml: await Bun.file(new URL("at-findok-bfg-2026.xml", FIXTURES)).text(),
-    }).documentAst,
+    }).unwrap().documentAst,
   });
 
   // A line break preceded by a space: the case the two parsers used to

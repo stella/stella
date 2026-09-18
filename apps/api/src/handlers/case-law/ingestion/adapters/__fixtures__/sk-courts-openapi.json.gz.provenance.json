@@ -1,0 +1,7 @@
+{
+  "capture": "recorded",
+  "sha256": "a3483ec0dc3978d53b5e4b47e16beee4b6beb3a11b34a7931bf79803477928f1",
+  "sourceUrl": "https://obcan.justice.sk/pilot/api/ress-isu-service/v3/api-docs",
+  "capturedAt": "2026-09-18T18:30:04.501Z",
+  "note": "the service's declared schema; the field list the inventory is keyed on"
+}

@@ -27,6 +27,12 @@ import {
   type AdapterKey,
 } from "@/api/lib/legal-search/ingestion-constants";
 
+/**
+ * The Slovak document walk's gated fetch, carried here because the registry is
+ * how anything outside this slice reaches an adapter.
+ */
+export { skCourtsDocumentFetch } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
+
 type AdapterRegistry = {
   readonly [TKey in AdapterKey]: SourceAdapter & { readonly key: TKey };
 };

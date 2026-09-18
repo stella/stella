@@ -1,0 +1,7 @@
+{
+  "capture": "recorded",
+  "sha256": "88eaf3ba8726e99b8bf76fe364ea43e10513050f957a3b2440397f879b9abd1b",
+  "sourceUrl": "https://rozhodnuti.justice.cz/api/opendata/2022/5/5?page=6",
+  "capturedAt": "2026-09-18T18:34:57.980Z",
+  "note": "a day page holding one record whose court field reads the publisher's not-entered placeholder and whose identifier is not an ECLI"
+}

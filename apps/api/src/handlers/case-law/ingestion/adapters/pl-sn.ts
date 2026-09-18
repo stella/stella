@@ -56,9 +56,11 @@ import {
   defineSourceAdapter,
   EMPTY_AST,
   encodeSourceRawEnvelope,
+  excludedSourceSurface,
   isPersistableSourceDocumentId,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   STORED_RAW_REPARSE_REJECTION,
+  storedSourceSurface,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type {
   EmptyAst,
@@ -69,6 +71,8 @@ import type {
   ReconciliationSlicePageOptions,
   SourceFieldDisposition,
   SourceRawParts,
+  SourceSurfaceCensus,
+  SourceSurfaceDisposition,
   StoredRawReparseInput,
   StoredRawReparseOutcome,
   SyncPage,
@@ -1019,16 +1023,60 @@ const PL_SN_SOURCE_FIELDS = {
   SourceFieldDisposition
 >;
 
-/** What the publisher labels on a detail payload it served. */
-const listPlSnSourceFields = (payload: string): readonly string[] => {
+/**
+ * What the publisher labels for one decision.
+ *
+ * The detail payload is the widest of the three parts: it repeats the listing
+ * row's own keys and adds the rest, and the document part is the file itself
+ * rather than a set of fields.
+ */
+const listPlSnSourceFields = (parts: SourceRawParts): readonly string[] => {
   const inner = readPlSnEnvelope(
     Result.try({
-      try: (): unknown => JSON.parse(payload),
+      try: (): unknown => JSON.parse(parts[RAW_PART.DETAIL] ?? ""),
       catch: () => null,
     }).unwrapOr(null),
   );
   return isRecord(inner) ? Object.keys(inner) : [];
 };
+
+/**
+ * Every payload this publisher serves for one decision, and whether the row
+ * keeps it.
+ *
+ * All three the proxy answers with are kept, the document among them: the
+ * proxy wraps the file in its own JSON, so the part is text like the others.
+ * What is left out is a second rendering of that same file and two corpus-wide
+ * endpoints.
+ */
+const SOURCE_SURFACES = [
+  "listing",
+  "detail",
+  "document",
+  "document-html",
+  "autocomplete",
+  "human-page",
+] as const;
+
+const PL_SN_SOURCE_SURFACES = {
+  surfaces: {
+    listing: storedSourceSurface(RAW_PART.LISTING),
+    detail: storedSourceSurface(RAW_PART.DETAIL),
+    document: storedSourceSurface(RAW_PART.DOCUMENT),
+    "document-html": excludedSourceSurface(
+      "a converted rendering of the same file the document part already carries verbatim",
+    ),
+    autocomplete: excludedSourceSurface(
+      "corpus-wide completions, not a payload about any one decision",
+    ),
+    "human-page": excludedSourceSurface(
+      "the page shell the row already records as its source address; it fetches the detail payload in the browser and states nothing else",
+    ),
+  } as const satisfies Record<
+    (typeof SOURCE_SURFACES)[number],
+    SourceSurfaceDisposition
+  >,
+} as const satisfies SourceSurfaceCensus;
 
 // ── Crawl cursor ─────────────────────────────────────────
 
@@ -1341,6 +1389,8 @@ export const plSnAdapter = defineSourceAdapter({
   maxSyncPages: 10,
 
   reparseStoredRaw: reparsePlSnStoredRaw,
+
+  sourceSurfaces: PL_SN_SOURCE_SURFACES,
 
   sourceFields: {
     status: "declared",

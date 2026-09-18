@@ -11,9 +11,13 @@ import {
 import {
   defineSourceAdapter,
   EMPTY_AST,
+  encodeSourceRawEnvelope,
+  excludedSourceField,
+  excludedSourceSurface,
   isPersistableSourceDocumentId,
-  PENDING_SOURCE_FIELD_INVENTORY,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   sourceTotalRead,
+  storedSourceSurface,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type {
   IngestionResult,
@@ -21,6 +25,10 @@ import type {
   ReconciliationSlicePage,
   ReconciliationSlicePageOptions,
   SourceAdapter,
+  SourceFieldDisposition,
+  SourceRawParts,
+  SourceSurfaceCensus,
+  SourceSurfaceDisposition,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   fetchAtFindokWithRetry,
@@ -31,12 +39,19 @@ import {
   adapterCatch,
   hashContent,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
-import { parseFindokDecisionXml } from "@/api/handlers/case-law/ingestion/parsers/at-findok";
+import {
+  listFindokDocumentFields,
+  parseFindokDecisionXml,
+  parseFindokHeadnoteXml,
+} from "@/api/handlers/case-law/ingestion/parsers/at-findok";
 import { sectionsFromAst } from "@/api/handlers/case-law/ingestion/sections-from-ast";
 import {
   TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
+  absentTextField,
+  sourceTextField,
 } from "@/api/lib/case-law/decision-text";
+import type { DecisionTextFields } from "@/api/lib/case-law/decision-text";
 import { loadDocxArchive } from "@/api/lib/docx-archive";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
@@ -58,6 +73,13 @@ const SOURCE_FIRST_YEAR = Number.parseInt(
   ADAPTER_MANIFESTS[ADAPTER_KEYS.AT_FINDOK].dateRange.fromInclusive.slice(0, 4),
   10,
 );
+
+/** The envelope part each payload of a decision is stored under. */
+const FINDOK_PART = {
+  LISTING: "listing",
+  DOCUMENT_XML: "document-xml",
+  HEADNOTE_XML: "headnote-xml",
+} as const;
 
 const COLLECTIONS = {
   bfg: {
@@ -81,6 +103,7 @@ type FindokManifestItem = {
   dokumentId: string;
   dokumenttyp: string;
   gueltig: boolean;
+  gueltigAb: string | undefined;
   gz: string;
   inFindokSeitDate: string | undefined;
   pathPdf: string;
@@ -175,6 +198,7 @@ const manifestItem = (value: unknown): FindokManifestItem | undefined => {
     gz: optionalString(value["gz"]),
     titel: optionalString(value["titel"]),
     inFindokSeitDate: optionalString(value["inFindokSeitDate"]),
+    gueltigAb: optionalString(value["gueltigAb"]),
     gueltig,
     dokumentId: optionalString(value["dokumentId"]),
   };
@@ -223,6 +247,7 @@ const manifestItem = (value: unknown): FindokManifestItem | undefined => {
     dokumentId: publisherId ?? quarantineId,
     dokumenttyp: item.dokumenttyp,
     gueltig,
+    gueltigAb: item.gueltigAb,
     gz: item.gz,
     inFindokSeitDate: item.inFindokSeitDate,
     pathPdf: item.pathPdf,
@@ -518,6 +543,35 @@ const listingDigest = (
 
 const artifactUrl = (path: string): string => `${IWG_ROOT}/${path}`;
 
+/** Every payload fetched for one decision, under the name its role has. */
+type FindokStoredParts = {
+  item: FindokManifestItem;
+  documentXml?: string | undefined;
+  headnoteXml?: string | undefined;
+};
+
+const storedRaw = ({
+  item,
+  documentXml,
+  headnoteXml,
+}: FindokStoredParts): {
+  sourceRaw: string;
+  sourceRawContentType: string;
+} => ({
+  sourceRaw: encodeSourceRawEnvelope({
+    // The manifest row verbatim, not the adapter's own wrapper around it: a
+    // reader of a stored row can then tell which response it is holding.
+    [FINDOK_PART.LISTING]: JSON.stringify(item.raw),
+    ...(documentXml === undefined
+      ? {}
+      : { [FINDOK_PART.DOCUMENT_XML]: documentXml }),
+    ...(headnoteXml === undefined
+      ? {}
+      : { [FINDOK_PART.HEADNOTE_XML]: headnoteXml }),
+  }),
+  sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+});
+
 const buildListingOnly = (
   payload: FindokListingPayload,
   reason: string,
@@ -525,10 +579,7 @@ const buildListingOnly = (
 ): IngestionResult => {
   const { item, collection } = payload;
   const decisionDate = parseDate(item.appdat);
-  const sourceRaw = JSON.stringify({
-    listing: payload,
-    ...(rawXml === undefined ? {} : { documentXml: rawXml }),
-  });
+  const raw = storedRaw({ item, documentXml: rawXml });
   return {
     sourceDocumentId: item.dokumentId,
     sourceDocumentIdRepairAliases: item.sourceDocumentIdRepairAliases,
@@ -541,22 +592,55 @@ const buildListingOnly = (
     decisionType: item.dokumenttyp.toLocaleLowerCase("de-AT"),
     sourceUrl: artifactUrl(item.pathPdf),
     documentUrl: artifactUrl(item.pathPdf),
-    textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+    // The manifest states a subject line for every row, so even a row whose
+    // archive never opened carries the publisher's own summary of it.
+    textFields: {
+      ...absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+      summary: sourceTextField(ADAPTER_KEYS.AT_FINDOK, item.titel),
+    },
     metadata: {
       collection,
       stammNr: item.stammNr,
-      title: item.titel,
+      archivePath: item.pathZip,
+      validFrom: item.gueltigAb,
       inFindokSince: item.inFindokSeitDate,
       detailStatus: reason,
       sourceAttribution: "Findok, Austrian Federal Ministry of Finance, CC0",
     },
-    rawHash: hashContent(sourceRaw),
+    rawHash: hashContent(raw.sourceRaw),
     documentAst: EMPTY_AST,
     parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.AT_FINDOK],
-    sourceRaw,
-    sourceRawContentType: "application/json",
+    ...raw,
   };
 };
+
+type FindokTextFieldsOptions = {
+  readonly betreff: string | undefined;
+  /** Whether the archive carried a headnote entry at all. */
+  readonly headnoteEntryRead: boolean;
+  readonly legalSentence: string | undefined;
+};
+
+/**
+ * What this publisher itself wrote about the decision.
+ *
+ * Two of the four are real here: the subject line it prints over every
+ * document, and the legal sentences it files as a document of their own. A
+ * headnote entry that was read and could not be parsed is stated as such
+ * rather than as a decision the ministry wrote no sentence for.
+ */
+const decisionTextFields = ({
+  betreff,
+  headnoteEntryRead,
+  legalSentence,
+}: FindokTextFieldsOptions): DecisionTextFields => ({
+  ...absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+  summary: sourceTextField(ADAPTER_KEYS.AT_FINDOK, betreff),
+  legalSentence:
+    headnoteEntryRead && legalSentence === undefined
+      ? absentTextField(TEXT_ABSENCE_REASON.PARSE_FAILED)
+      : sourceTextField(ADAPTER_KEYS.AT_FINDOK, legalSentence),
+});
 
 type BuildDecisionOptions = {
   cursor: string | null;
@@ -571,7 +655,7 @@ const buildDecision = async ({
   payload,
   signal,
 }: BuildDecisionOptions): Promise<IngestionResult> => {
-  const { item, collection } = payload;
+  const { item } = payload;
   if (item.sourceDocumentIdRepairAliases === undefined) {
     return buildListingOnly(payload, "publisher-id-unavailable");
   }
@@ -612,26 +696,58 @@ const buildDecision = async ({
       cursor,
     });
   }
+  // The same archive carries the decision's headnotes as a second entry. It
+  // is already paid for by the request above, and its element names are not
+  // the ones the decision text uses, which is why reading it is a step of its
+  // own rather than a second call to the same parser.
+  const headnoteXml = await archive.readEntryString(
+    `Gesamt/${item.stammNr}.Rechtssaetze.xml`,
+  );
+  return assembleAtFindokDecision(payload, {
+    documentXml: xml,
+    headnoteXml: headnoteXml ?? undefined,
+  });
+};
+
+/** The archive entries this service serves for one decision. */
+export type AtFindokDecisionPayloads = {
+  readonly documentXml: string;
+  /** The headnote entry, where the archive carried one. */
+  readonly headnoteXml?: string | undefined;
+};
+
+/**
+ * Build one decision from the entries the archive carried.
+ *
+ * Split from the fetching above so the row a crawl writes and the row built
+ * from stored entries are the same row.
+ */
+export const assembleAtFindokDecision = (
+  payload: FindokListingPayload,
+  { documentXml, headnoteXml }: AtFindokDecisionPayloads,
+): IngestionResult => {
+  const { item, collection } = payload;
   const decisionDate = parseDate(item.appdat);
   if (decisionDate === undefined) {
     panic("validated Findok manifest date became invalid");
   }
   const decisionType = item.dokumenttyp.toLocaleLowerCase("de-AT");
-  let parsed: ReturnType<typeof parseFindokDecisionXml>;
-  try {
-    parsed = parseFindokDecisionXml({
-      caseNumber: item.gz,
-      court: item.behoerde,
-      decisionDate,
-      decisionType,
-      sourceDocumentId: item.dokumentId,
-      sourceUrl: artifactUrl(item.pathPdf),
-      xml,
-    });
-  } catch {
-    return buildListingOnly(payload, "detail-xml-unparseable", xml);
+  const parseResult = parseFindokDecisionXml({
+    caseNumber: item.gz,
+    court: item.behoerde,
+    decisionDate,
+    decisionType,
+    sourceDocumentId: item.dokumentId,
+    sourceUrl: artifactUrl(item.pathPdf),
+    xml: documentXml,
+  });
+  if (Result.isError(parseResult)) {
+    return buildListingOnly(payload, "detail-xml-unparseable", documentXml);
   }
-  const sourceRaw = JSON.stringify({ listing: payload, documentXml: xml });
+  const parsed = parseResult.value;
+  const headnotes =
+    headnoteXml === undefined ? undefined : parseFindokHeadnoteXml(headnoteXml);
+  const raw = storedRaw({ item, documentXml, headnoteXml });
   return {
     sourceDocumentId: item.dokumentId,
     sourceDocumentIdRepairAliases: item.sourceDocumentIdRepairAliases,
@@ -645,7 +761,11 @@ const buildDecision = async ({
     fulltext: parsed.fulltext,
     sourceUrl: artifactUrl(item.pathPdf),
     documentUrl: artifactUrl(item.pathPdf),
-    textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+    textFields: decisionTextFields({
+      betreff: parsed.betreff ?? item.titel,
+      headnoteEntryRead: headnoteXml !== undefined,
+      legalSentence: headnotes?.legalSentence,
+    }),
     metadata: {
       collection,
       ecli: parsed.ecli,
@@ -653,18 +773,28 @@ const buildDecision = async ({
       decisionDate,
       decisionType,
       stammNr: item.stammNr,
-      title: item.titel,
+      archivePath: item.pathZip,
+      validFrom: item.gueltigAb,
+      validUntil: parsed.envelope.validUntil,
+      officiallyPublished: parsed.envelope.officiallyPublished,
+      originalCaseNumber: parsed.envelope.originalCaseNumber,
+      versionNumber: parsed.envelope.versionNumber,
+      findokGid: parsed.envelope.globalId,
+      modified: parsed.envelope.lastChangedAt,
+      published: parsed.envelope.publishedAt,
       inFindokSince: item.inFindokSeitDate,
       statutes: parsed.statutes,
       keywords: parsed.keywords,
+      subjectCodes: parsed.subjectCodes,
+      headnoteNumbers: headnotes?.headnoteNumbers,
+      headnoteStatutes: headnotes?.statutes,
       sourceAttribution: "Findok, Austrian Federal Ministry of Finance, CC0",
     },
-    rawHash: hashContent(sourceRaw),
+    rawHash: hashContent(raw.sourceRaw),
     documentAst: parsed.documentAst,
     sections: sectionsFromAst(parsed.documentAst.blocks),
     parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.AT_FINDOK],
-    sourceRaw,
-    sourceRawContentType: "application/json",
+    ...raw,
   };
 };
 
@@ -711,6 +841,265 @@ const parseListingPayload = (
     : undefined;
 };
 
+/**
+ * Every payload this service serves for one decision, and whether the row
+ * keeps it.
+ *
+ * The crawl reads a manifest row and the archive the row points at, and the
+ * archive holds two documents: the decision text and the headnotes filed with
+ * it. All three are kept as named parts, so a reader of a stored row can tell
+ * which response it is holding and a field captured later is recoverable
+ * without asking the ministry again.
+ */
+const SOURCE_SURFACES = [
+  "listing",
+  "document-zip",
+  "document-xml",
+  "headnote-xml",
+  "document-pdf",
+  "web-document",
+] as const;
+
+const AT_FINDOK_SOURCE_SURFACES = {
+  surfaces: {
+    listing: storedSourceSurface(FINDOK_PART.LISTING),
+    "document-zip": excludedSourceSurface(
+      "the archive is the transport for the document entries below; the entries are the payloads",
+    ),
+    "document-xml": storedSourceSurface(FINDOK_PART.DOCUMENT_XML),
+    "headnote-xml": storedSourceSurface(FINDOK_PART.HEADNOTE_XML),
+    "document-pdf": excludedSourceSurface(
+      "a heavier rendition of the same text the archive's document entry states",
+    ),
+    "web-document": excludedSourceSurface(
+      "its address carries a session-flow token, so it cannot be constructed, and the page blends material from other publishers",
+    ),
+  } as const satisfies Record<
+    (typeof SOURCE_SURFACES)[number],
+    SourceSurfaceDisposition
+  >,
+} as const satisfies SourceSurfaceCensus;
+
+/**
+ * Every field this service states for a decision, across its three payloads.
+ *
+ * The manifest row is spelled in this service's own JSON keys; both archive
+ * entries are spelled as the element's group and name, because the decision
+ * text and the headnotes share one envelope and differ only in the body
+ * element each of them fills.
+ */
+const FINDOK_SOURCE_FIELDS_LIST = [
+  "appdat",
+  "behoerde",
+  "dokumentId",
+  "dokumenttyp",
+  "gueltig",
+  "gueltigAb",
+  "gz",
+  "inFindokSeit",
+  "inFindokSeitDate",
+  "pathPdf",
+  "pathZip",
+  "stammNr",
+  "titel",
+  "Grundk/appdat",
+  "Grundk/appdatbis",
+  "Grundk/av_veroeffentlicht",
+  "Grundk/behoerde",
+  "Grundk/betreff",
+  "Grundk/doktyptxt",
+  "Grundk/ecli",
+  "Grundk/erstfass",
+  "Grundk/fsgnr",
+  "Grundk/gid",
+  "Grundk/gz",
+  "Grundk/lastchangedat",
+  "Grundk/matbez_erf",
+  "Grundk/matnr_erf",
+  "Grundk/ngesamt_erf",
+  "Grundk/stammnr",
+  "Grundk/uebersex_net",
+  "Grundk/vadat",
+  "Segk/dok_fassungsnr",
+  "Segk/dokformat",
+  "Segk/fsgnr",
+  "Segk/gid",
+  "Segk/id_multifassung",
+  "Segk/inkraftvon",
+  "Segk/lastchangedat",
+  "Segk/neuzdat",
+  "Segk/ngesamt",
+  "Segk/rsnr",
+  "Segk/segbez",
+  "Segk/segnr2",
+  "Segk/txt",
+  "Segk/txtascii",
+] as const;
+
+type FindokSourceField = (typeof FINDOK_SOURCE_FIELDS_LIST)[number];
+
+const SEGMENT_BOOKKEEPING = excludedSourceField(
+  "the archive's own segmentation of one document into versioned pieces, which the row stores whole",
+);
+
+const FINDOK_SOURCE_FIELDS = {
+  appdat: {
+    disposition: "stored",
+    target: { type: "result", key: "decisionDate" },
+  },
+  behoerde: { disposition: "stored", target: { type: "result", key: "court" } },
+  dokumentId: { disposition: "stored", target: { type: "identity" } },
+  dokumenttyp: {
+    disposition: "stored",
+    target: { type: "result", key: "decisionType" },
+  },
+  gueltig: excludedSourceField(
+    "the service's own inventory flag: a row it marks invalid is never ingested, so every stored row would carry the same value",
+  ),
+  gueltigAb: {
+    disposition: "stored",
+    target: { type: "metadata", key: "validFrom" },
+  },
+  gz: {
+    disposition: "stored",
+    target: { type: "result", key: "caseNumber" },
+  },
+  inFindokSeit: excludedSourceField(
+    "a rendering of the timestamp the row states beside it in a sortable form",
+  ),
+  inFindokSeitDate: {
+    disposition: "stored",
+    target: { type: "metadata", key: "inFindokSince" },
+  },
+  pathPdf: {
+    disposition: "stored",
+    target: { type: "result", key: "documentUrl" },
+  },
+  pathZip: {
+    disposition: "stored",
+    target: { type: "metadata", key: "archivePath" },
+  },
+  stammNr: {
+    disposition: "stored",
+    target: { type: "metadata", key: "stammNr" },
+  },
+  titel: {
+    disposition: "stored",
+    target: { type: "textField", key: "summary" },
+  },
+  "Grundk/appdat": excludedSourceField(
+    "the manifest row states the decision date",
+  ),
+  "Grundk/appdatbis": {
+    disposition: "stored",
+    target: { type: "metadata", key: "validUntil" },
+  },
+  "Grundk/av_veroeffentlicht": {
+    disposition: "stored",
+    target: { type: "metadata", key: "officiallyPublished" },
+  },
+  "Grundk/behoerde": excludedSourceField(
+    "the manifest row states the deciding authority",
+  ),
+  "Grundk/betreff": {
+    disposition: "stored",
+    target: { type: "textField", key: "summary" },
+  },
+  "Grundk/doktyptxt": excludedSourceField(
+    "the manifest row states the same decision type",
+  ),
+  "Grundk/ecli": {
+    disposition: "stored",
+    target: { type: "result", key: "ecli" },
+  },
+  "Grundk/erstfass": {
+    disposition: "stored",
+    target: { type: "metadata", key: "originalCaseNumber" },
+  },
+  "Grundk/fsgnr": {
+    disposition: "stored",
+    target: { type: "metadata", key: "versionNumber" },
+  },
+  "Grundk/gid": {
+    disposition: "stored",
+    target: { type: "metadata", key: "findokGid" },
+  },
+  "Grundk/gz": excludedSourceField("the manifest row states the docket"),
+  "Grundk/lastchangedat": {
+    disposition: "stored",
+    target: { type: "metadata", key: "modified" },
+  },
+  "Grundk/matbez_erf": {
+    disposition: "stored",
+    target: { type: "metadata", key: "keywords" },
+  },
+  "Grundk/matnr_erf": {
+    disposition: "stored",
+    target: { type: "metadata", key: "subjectCodes" },
+  },
+  "Grundk/ngesamt_erf": {
+    disposition: "stored",
+    target: { type: "metadata", key: "statutes" },
+  },
+  "Grundk/stammnr": excludedSourceField(
+    "the manifest row states the same serial, which is also the archive's entry name",
+  ),
+  "Grundk/uebersex_net": {
+    disposition: "stored",
+    target: { type: "document" },
+  },
+  "Grundk/vadat": {
+    disposition: "stored",
+    target: { type: "metadata", key: "published" },
+  },
+  "Segk/dok_fassungsnr": SEGMENT_BOOKKEEPING,
+  "Segk/dokformat": excludedSourceField(
+    "the media type of the body element beside it, which is the one this parser reads",
+  ),
+  "Segk/fsgnr": SEGMENT_BOOKKEEPING,
+  "Segk/gid": SEGMENT_BOOKKEEPING,
+  "Segk/id_multifassung": SEGMENT_BOOKKEEPING,
+  "Segk/inkraftvon": SEGMENT_BOOKKEEPING,
+  "Segk/lastchangedat": SEGMENT_BOOKKEEPING,
+  "Segk/neuzdat": SEGMENT_BOOKKEEPING,
+  "Segk/ngesamt": {
+    disposition: "stored",
+    target: { type: "metadata", key: "headnoteStatutes" },
+  },
+  "Segk/rsnr": {
+    disposition: "stored",
+    target: { type: "metadata", key: "headnoteNumbers" },
+  },
+  "Segk/segbez": SEGMENT_BOOKKEEPING,
+  "Segk/segnr2": SEGMENT_BOOKKEEPING,
+  "Segk/txt": { disposition: "stored", target: { type: "document" } },
+  "Segk/txtascii": {
+    disposition: "stored",
+    target: { type: "textField", key: "legalSentence" },
+  },
+} as const satisfies Record<FindokSourceField, SourceFieldDisposition>;
+
+/** Every field the stored envelope states, read from the payloads themselves. */
+const listFindokSourceFields = (parts: SourceRawParts): readonly string[] => {
+  const names = new Set<string>();
+  const row: unknown = JSON.parse(parts[FINDOK_PART.LISTING] ?? "null");
+  if (isRecord(row)) {
+    for (const key of Object.keys(row)) {
+      names.add(key);
+    }
+  }
+  for (const part of [FINDOK_PART.DOCUMENT_XML, FINDOK_PART.HEADNOTE_XML]) {
+    const xml = parts[part];
+    if (xml === undefined) {
+      continue;
+    }
+    for (const field of listFindokDocumentFields(xml)) {
+      names.add(field);
+    }
+  }
+  return [...names];
+};
+
 export const createAtFindokAdapter = (
   dependencyOverrides: Partial<AtFindokDependencies> = {},
 ): SourceAdapter & { readonly key: typeof ADAPTER_KEYS.AT_FINDOK } => {
@@ -718,7 +1107,12 @@ export const createAtFindokAdapter = (
   const loadManifest = createManifestLoader(dependencies);
   return defineSourceAdapter({
     key: ADAPTER_KEYS.AT_FINDOK,
-    sourceFields: PENDING_SOURCE_FIELD_INVENTORY,
+    sourceSurfaces: AT_FINDOK_SOURCE_SURFACES,
+    sourceFields: {
+      status: "declared",
+      fields: FINDOK_SOURCE_FIELDS,
+      listSourceFields: listFindokSourceFields,
+    },
     language: LANGUAGE,
     minRequestIntervalMs: FINDOK_REQUEST_INTERVAL_MS,
     pageTimeoutMs: 10 * 60_000,

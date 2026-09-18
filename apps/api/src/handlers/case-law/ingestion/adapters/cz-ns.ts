@@ -10,9 +10,11 @@ import {
 } from "@/api/handlers/case-law/consts";
 import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import {
+  backlogSurface,
   decodeSourceRawEnvelope,
   defineSourceAdapter,
   excludedSourceField,
+  excludedSourceSurface,
   EMPTY_AST,
   encodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
@@ -20,6 +22,7 @@ import {
   SOURCE_TOTAL_PROBE_FAILURE,
   sourceTotalProbeFailed,
   sourceTotalRead,
+  storedSourceSurface,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type {
   EmptyAst,
@@ -29,6 +32,9 @@ import type {
   ReconciliationSlicePage,
   ReconciliationSlicePageOptions,
   SourceFieldDisposition,
+  SourceRawParts,
+  SourceSurfaceCensus,
+  SourceSurfaceDisposition,
   StoredRawReparseInput,
   StoredRawReparseOutcome,
 } from "@/api/handlers/case-law/ingestion/adapter";
@@ -332,7 +338,7 @@ const CZ_NS_CONSTITUTIONAL_COMPLAINT_RE =
  * of its metadata table. A cell is a label where the court closes it with a
  * colon, exactly as the readers above anchor on.
  */
-const listCzNsSourceFields = (html: string): readonly string[] => {
+const listCzNsSourceFields = (parts: SourceRawParts): readonly string[] => {
   const fields = new Set<string>();
 
   const addLabel = (cell: string): void => {
@@ -342,14 +348,19 @@ const listCzNsSourceFields = (html: string): readonly string[] => {
     }
   };
 
-  for (const match of html.matchAll(CZ_NS_DETAIL_LABEL_RE)) {
+  const detailHtml = parts[CZ_NS_RAW_PART.DETAIL] ?? "";
+  for (const match of detailHtml.matchAll(CZ_NS_DETAIL_LABEL_RE)) {
     addLabel(match.groups?.["cell"] ?? "");
   }
-  const printTable = CZ_NS_PRINT_TABLE_RE.exec(html)?.[0] ?? "";
+  const printHtml = parts[CZ_NS_RAW_PART.PRINT] ?? "";
+  const printTable = CZ_NS_PRINT_TABLE_RE.exec(printHtml)?.[0] ?? "";
   for (const match of printTable.matchAll(CZ_NS_CELL_RE)) {
     addLabel(match.groups?.["cell"] ?? "");
   }
-  if (CZ_NS_CONSTITUTIONAL_COMPLAINT_RE.test(html)) {
+  if (
+    CZ_NS_CONSTITUTIONAL_COMPLAINT_RE.test(detailHtml) ||
+    CZ_NS_CONSTITUTIONAL_COMPLAINT_RE.test(printHtml)
+  ) {
     fields.add("Podána ústavní stížnost");
   }
 
@@ -1215,8 +1226,65 @@ const buildCzNsFromPayload = async (
   }
 };
 
+/**
+ * Every page this court serves for one decision, and whether the row keeps it.
+ *
+ * The crawl reads a listing view for identities and then two renderings of the
+ * decision, and keeps the two renderings. The listing rows are not kept, and
+ * the word-processor and portable-document attachments are addressed by an
+ * identifier that appears on a listing the crawl does not walk — so reaching
+ * them is a question about which listing the crawl uses, not an extra fetch.
+ */
+const SOURCE_SURFACES = [
+  "listing",
+  "slice-listing",
+  "detail",
+  "print",
+  "document-pdf",
+  "document-rtf",
+  "citation-popup",
+  "citation-popup-ecli",
+  "sitemaps",
+] as const;
+
+const CZ_NS_SOURCE_SURFACES = {
+  surfaces: {
+    listing: backlogSurface(
+      ADAPTER_KEYS.CZ_NS,
+      "the listing row the crawl walks for identities is not kept beside the decision it names",
+    ),
+    "slice-listing": backlogSurface(
+      ADAPTER_KEYS.CZ_NS,
+      "the publication-day listing is the only page stating the attachment identifiers, and the crawl walks the identifier-ordered view instead",
+    ),
+    detail: storedSourceSurface(CZ_NS_RAW_PART.DETAIL),
+    print: storedSourceSurface(CZ_NS_RAW_PART.PRINT),
+    "document-pdf": backlogSurface(
+      ADAPTER_KEYS.CZ_NS,
+      "the attachment carries an identifier of its own, stated only on the listing the crawl does not walk, and its bytes need an object part rather than a text one",
+    ),
+    "document-rtf": backlogSurface(
+      ADAPTER_KEYS.CZ_NS,
+      "the word-processor original the court attaches, reachable and storable on the same terms as the portable-document attachment",
+    ),
+    "citation-popup": excludedSourceSurface(
+      "a citation sentence assembled from fields the row already stores, and the publisher's own template drops part of the date",
+    ),
+    "citation-popup-ecli": excludedSourceSurface(
+      "the same assembled sentence with the identifier the row already stores",
+    ),
+    sitemaps: excludedSourceSurface(
+      "corpus-wide addresses, not a payload about any one decision",
+    ),
+  } as const satisfies Record<
+    (typeof SOURCE_SURFACES)[number],
+    SourceSurfaceDisposition
+  >,
+} as const satisfies SourceSurfaceCensus;
+
 export const czNsAdapter = defineSourceAdapter({
   key: ADAPTER_KEYS.CZ_NS,
+  sourceSurfaces: CZ_NS_SOURCE_SURFACES,
   sourceFields: {
     status: "declared",
     fields: CZ_NS_SOURCE_FIELD_DISPOSITIONS,

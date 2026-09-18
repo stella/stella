@@ -1,0 +1,6 @@
+{
+  "capture": "recorded",
+  "sha256": "0f4b6e3e80a7b3db02c5554acc531f30b3cb9c9799ab900aad79953b1dbebac4",
+  "sourceUrl": "https://data.bka.gv.at/ris/api/v2.6/Judikatur?Applikation=Justiz&Dokumenttyp.SucheInEntscheidungstexten=true&DokumenteProSeite=OneHundred&Seitennummer=1&Sortierung.SortDirection=Ascending&Sortierung.SortedByColumn=Datum&EntscheidungsdatumVon=2026-08-03&EntscheidungsdatumBis=2026-08-03",
+  "capturedAt": "2026-09-18T18:38:48.391Z"
+}

@@ -1,0 +1,38 @@
+{
+  "comment": "Surfaces a publisher serves for a decision that the adapter does not record yet, per adapter. source-surface-census.test.ts fails when an adapter declares a backlog surface this file does not list and when this file lists one the adapter no longer declares, so the set can only shrink. Recording a surface means fetching it, storing it as a named envelope part, declaring it stored in the adapter's census, and deleting its line here.",
+  "backlog": {
+    "cz-ns": ["document-pdf", "document-rtf", "listing", "slice-listing"],
+    "cz-nss": ["listing", "original", "text"],
+    "sk-courts": ["bulk-dump", "document"],
+    "sk-us": ["archive-listing", "collection-listing"],
+    "pl-courts": [
+      "enrichment",
+      "listing-dump",
+      "listing-search",
+      "portal-web-ui",
+      "upstream-detail",
+      "upstream-document"
+    ],
+    "at-courts": ["attachments"],
+    "at-vfgh": ["attachments"],
+    "at-vwgh": ["attachments"],
+    "at-bvwg": ["attachments"],
+    "at-lvwg": ["attachments"],
+    "at-asylgh": ["attachments"],
+    "at-ubas": ["attachments"],
+    "at-uvs": ["attachments"],
+    "at-verg": ["attachments"],
+    "at-umse": ["attachments"],
+    "at-bks": ["attachments"],
+    "eu-ecj": [
+      "abstract",
+      "case-sheet",
+      "curia-listing",
+      "document",
+      "formex",
+      "gendoc",
+      "listing",
+      "notice"
+    ]
+  }
+}

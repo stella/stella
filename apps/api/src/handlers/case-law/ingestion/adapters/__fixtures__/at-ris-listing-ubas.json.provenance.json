@@ -1,0 +1,6 @@
+{
+  "capture": "recorded",
+  "sha256": "596f456b718d46a5ccfa60f4f8e81099e247a6c69a699aa0b3c4c87a33a45bb9",
+  "sourceUrl": "https://data.bka.gv.at/ris/api/v2.6/Judikatur?Applikation=Ubas&Dokumenttyp.SucheInEntscheidungstexten=true&DokumenteProSeite=OneHundred&Seitennummer=1&Sortierung.SortDirection=Ascending&Sortierung.SortedByColumn=Datum&EntscheidungsdatumVon=2007-01-01&EntscheidungsdatumBis=2007-01-01",
+  "capturedAt": "2026-09-18T18:39:30.651Z"
+}

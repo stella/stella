@@ -1,0 +1,7 @@
+{
+  "capture": "recorded",
+  "sha256": "16db9fa8bb04a1e1a5dc1fa22113647a5c00e3513fcc60a27efb3a7313d969e0",
+  "sourceUrl": "https://rozhodnuti.justice.cz/api/finalDocChain/affectingDocs/e21716f9-8855-4a85-a7e6-9af23622661b",
+  "capturedAt": "2026-09-18T18:34:50.334Z",
+  "note": "the inverse of the appellate judgment's forward relation, carrying the affecting document's own id"
+}

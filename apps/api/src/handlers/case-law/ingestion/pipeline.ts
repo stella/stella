@@ -40,7 +40,12 @@ import {
   createCaseLawDecisionSlug,
 } from "@/api/handlers/case-law/decisions/slug";
 import { hasUsableAst } from "@/api/handlers/case-law/document-ast";
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
+import { withSourceRawObjects } from "@/api/handlers/case-law/ingestion/adapter";
+import type {
+  IngestionResult,
+  SourceRawObjectRef,
+  SourceRawObjects,
+} from "@/api/handlers/case-law/ingestion/adapter";
 import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import {
   bareCitationKey,
@@ -121,6 +126,7 @@ import {
 import {
   RAW_SOURCE_FAMILY,
   writeRawSourcePayload,
+  writeSourceBinary,
 } from "@/api/lib/legal-search/raw-source-storage";
 import type { WriteRawSourcePayloadOptions } from "@/api/lib/legal-search/raw-source-storage";
 import { logger } from "@/api/lib/observability/logger";
@@ -404,6 +410,61 @@ const uploadSourceRaw = async (
     ...options,
     family: RAW_SOURCE_FAMILY.CASE_LAW,
   });
+
+type WriteSourceRawObjectsOptions = {
+  sourceId: SafeId<"caseLawSource">;
+  objects: IngestionResult["sourceRawObjects"];
+};
+
+/**
+ * Store the publisher files one decision was served, and answer the
+ * references its envelope names them by.
+ */
+const writeSourceRawObjects = async ({
+  sourceId,
+  objects,
+}: WriteSourceRawObjectsOptions): Promise<SourceRawObjects> => {
+  if (objects === undefined) {
+    return {};
+  }
+  const written: Record<string, SourceRawObjectRef> = {};
+  for (const [part, { bytes, contentType }] of Object.entries(objects)) {
+    written[part] = await writeSourceBinary({
+      family: RAW_SOURCE_FAMILY.CASE_LAW,
+      sourceId,
+      bytes,
+      contentType,
+    });
+  }
+  return written;
+};
+
+type CloseSourceRawEnvelopeOptions = {
+  result: IngestionResult;
+  objects: SourceRawObjects;
+};
+
+/**
+ * The raw payload this row stores, with its binary parts resolved.
+ *
+ * An adapter that hands over bytes without an envelope still has them
+ * stored as the payload itself, which is the shape every adapter wrote
+ * before parts existed and the one `LEGACY_RAW_SHAPES` describes.
+ */
+const closeSourceRawEnvelope = ({
+  result,
+  objects,
+}: CloseSourceRawEnvelopeOptions): Uint8Array | string | undefined => {
+  if (result.sourceRawBytes !== undefined) {
+    return result.sourceRawBytes;
+  }
+  if (result.sourceRaw === undefined) {
+    return undefined;
+  }
+  return Object.keys(objects).length === 0
+    ? result.sourceRaw
+    : withSourceRawObjects(result.sourceRaw, objects);
+};
 
 type BuildCitationRowsOptions = {
   citations: readonly ReturnType<typeof extractCitations>[number][];
@@ -1448,9 +1509,6 @@ const processDecisionAttempt = async ({
   // cannot safely advance without the artifact; an update preserves its old
   // key and carries a retryable failure through the eventual row outcome.
   const acquireSourceRawArtifact = async () => {
-    const rawPayload = preservesExistingDetail
-      ? undefined
-      : (result.sourceRawBytes ?? result.sourceRaw);
     const rawContentType = result.sourceRawContentType ?? "text/plain";
 
     let sourceRawS3Key: string | null = null;
@@ -1459,8 +1517,23 @@ const processDecisionAttempt = async ({
     if (preservesExistingDetail) {
       sourceRawS3Key = existing.sourceRawS3Key;
       sourceRawContentType = existing.sourceRawContentType;
-    } else if (rawPayload !== undefined) {
+    } else {
       try {
+        // The publisher's files first: the envelope names them by the
+        // address storage answers with, so it cannot be written until they
+        // are written. Both writes are content-addressed, so a retry after
+        // a failure between them re-lands the same objects.
+        const objects = await writeSourceRawObjects({
+          sourceId,
+          objects: result.sourceRawObjects,
+        });
+        const rawPayload = closeSourceRawEnvelope({ result, objects });
+        if (rawPayload === undefined) {
+          return {
+            type: "acquired",
+            artifact: { s3UploadFailed, sourceRawContentType, sourceRawS3Key },
+          } as const;
+        }
         sourceRawS3Key = await uploadSourceRaw({
           sourceId,
           data: rawPayload,

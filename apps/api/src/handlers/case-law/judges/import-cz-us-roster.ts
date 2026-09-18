@@ -21,6 +21,7 @@ import type { AnyNode } from "domhandler";
 import { and, eq } from "drizzle-orm";
 
 import { caseLawJudges } from "@/api/db/schema";
+import { createPublisherGateSlot } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import {
   INGESTION_USER_AGENT,
   parseCeDate,
@@ -40,6 +41,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import { CZ_ECLI_COURTS } from "@/api/lib/case-law/ecli-court-codes";
 import type { CaseLawIngestionHandle } from "@/api/lib/case-law/maintenance-lane";
+import { fetchWithTimeout } from "@/api/lib/fetch";
 import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 
@@ -56,6 +58,9 @@ const COURT_SITE_POLICY = {
   type: "exact-origin",
   origins: [COURT_SITE_ORIGIN],
 } as const;
+
+/** The court site's share of this slice's request budget, reserved per call. */
+const reserveCourtSiteSlot = createPublisherGateSlot("usoud-cz");
 
 /** The two listings the court publishes, sitting justices first. */
 export const CZ_US_ROSTER_LISTINGS = [
@@ -884,6 +889,38 @@ export const czUsRosterStore = (
 };
 
 /**
+ * The transport a run uses against the court's site, behind that site's
+ * publisher gate.
+ *
+ * The roster is the same publisher the decision crawl pages itself against,
+ * on a host of its own, so its requests are reserved through the shared gate
+ * rather than sent straight out: a budget one loop keeps to itself is a budget
+ * the next caller cannot see. The reservation is made before the request, and
+ * the interval a run is given still paces it where no gate is connected.
+ */
+export const courtSiteFetch: RosterFetch = async (url, init) => {
+  // Checked again at the call site that opens the connection: the reader above
+  // turns an off-site link into a reported failure, and reaching this line
+  // with one would mean that guard was bypassed rather than that a listing
+  // linked elsewhere.
+  const target = restrictOutboundUrl({
+    hostPolicy: COURT_SITE_POLICY,
+    rawUrl: url,
+  });
+  if (target === null) {
+    return panic(`roster request escaped the court's site: ${url}`);
+  }
+  await reserveCourtSiteSlot(init.signal);
+  return await fetchWithTimeout(target, {
+    headers: init.headers,
+    // A followed redirect would leave the origin this line just proved.
+    redirect: "error",
+    signal: init.signal,
+    timeoutMs: REQUEST_TIMEOUT_MS,
+  });
+};
+
+/**
  * The legal-corpus bucket, reached on first use so that importing this module
  * resolves no credentials.
  */
@@ -908,7 +945,7 @@ if (import.meta.main) {
   const { ingestionDb } = await enterCaseLawMaintenanceLane();
   const imported = await importCzUsRoster({
     store: czUsRosterStore(ingestionDb),
-    fetch: globalThis.fetch,
+    fetch: courtSiteFetch,
     s3: corpusPortraitStore,
     now: () => new Date(),
     intervalMs: CZ_US_ROSTER_REQUEST_INTERVAL_MS,

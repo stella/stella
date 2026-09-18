@@ -419,14 +419,14 @@
     }
   },
   "try-catch-outside-boundary": {
-    "count": 428,
+    "count": 426,
     "files": {
       "apps/api/src/handlers/ai-autocomplete/stream.ts": 1,
       "apps/api/src/handlers/api-keys/mint.ts": 1,
       "apps/api/src/handlers/case-law/analysis/generate.ts": 1,
       "apps/api/src/handlers/case-law/decisions/slug-backfill.ts": 2,
-      "apps/api/src/handlers/case-law/ingestion/adapters/at-courts.ts": 2,
-      "apps/api/src/handlers/case-law/ingestion/adapters/at-findok.ts": 3,
+      "apps/api/src/handlers/case-law/ingestion/adapters/at-courts.ts": 1,
+      "apps/api/src/handlers/case-law/ingestion/adapters/at-findok.ts": 2,
       "apps/api/src/handlers/case-law/ingestion/adapters/cz-ns.ts": 2,
       "apps/api/src/handlers/case-law/ingestion/adapters/cz-nss.ts": 3,
       "apps/api/src/handlers/case-law/ingestion/adapters/cz-regional.ts": 3,

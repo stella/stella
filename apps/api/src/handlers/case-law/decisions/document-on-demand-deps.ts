@@ -8,6 +8,7 @@
  */
 
 import type { OnDemandDocumentDeps } from "@/api/handlers/case-law/decisions/document-on-demand";
+import { skCourtsDocumentFetch } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
 import { getCaseLawIngestionDb } from "@/api/lib/case-law-ingestion-db";
 import {
   DOCUMENT_FETCH_BUDGET_MS,
@@ -28,6 +29,7 @@ export const onDemandDocumentDeps: OnDemandDocumentDeps = {
   fetchDocument: async (decision) =>
     await fetchDecisionDocument({
       decision,
+      fetchDocument: skCourtsDocumentFetch,
       scopedDb: getCaseLawIngestionDb(),
       // The unit races its own wall-clock budget; the signal aborts the
       // download inside it, which is the part that can be cancelled.

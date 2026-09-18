@@ -1,0 +1,6 @@
+{
+  "capture": "recorded",
+  "sha256": "f6c8db8f1298c2634040a97f8b399584beedc6957a9718416009d8ad5a1cf10a",
+  "sourceUrl": "https://data.bka.gv.at/ris/api/v2.6/Judikatur?Applikation=Vwgh&Dokumenttyp.SucheInEntscheidungstexten=true&DokumenteProSeite=OneHundred&Seitennummer=1&Sortierung.SortDirection=Ascending&Sortierung.SortedByColumn=Datum&EntscheidungsdatumVon=2026-01-02&EntscheidungsdatumBis=2026-01-02",
+  "capturedAt": "2026-09-18T18:38:59.166Z"
+}

@@ -10,8 +10,9 @@ import {
 import {
   defineSourceAdapter,
   EMPTY_AST,
+  encodeSourceRawEnvelope,
   isPersistableSourceDocumentId,
-  PENDING_SOURCE_FIELD_INVENTORY,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   SOURCE_TOTAL_PROBE_FAILURE,
   sourceTotalProbeFailed,
   sourceTotalRead,
@@ -23,7 +24,18 @@ import type {
   ReconciliationSlicePageOptions,
   SourceAdapter,
 } from "@/api/handlers/case-law/ingestion/adapter";
-import { fetchAtRisWithRetry } from "@/api/handlers/case-law/ingestion/adapters/at-ris-throttle";
+import {
+  AT_RIS_APPLICATIONS,
+  AT_RIS_PART,
+  atRisFieldInventory,
+  atRisStoredValues,
+} from "@/api/handlers/case-law/ingestion/adapters/at-ris-fields";
+import type { AtRisApplicationProfile } from "@/api/handlers/case-law/ingestion/adapters/at-ris-fields";
+import { atRisSourceSurfaces } from "@/api/handlers/case-law/ingestion/adapters/at-ris-source-surfaces";
+import {
+  AT_RIS_DOCUMENT_ORIGINS,
+  fetchAtRisWithRetry,
+} from "@/api/handlers/case-law/ingestion/adapters/at-ris-throttle";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import type { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import {
@@ -31,11 +43,15 @@ import {
   hashContent,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { parseRisDecisionXml } from "@/api/handlers/case-law/ingestion/parsers/at-ris";
+import type { RisDocumentSections } from "@/api/handlers/case-law/ingestion/parsers/at-ris";
 import { sectionsFromAst } from "@/api/handlers/case-law/ingestion/sections-from-ast";
 import {
   TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
+  checkedDecisionMetadata,
+  sourceTextField,
 } from "@/api/lib/case-law/decision-text";
+import type { DecisionTextFields } from "@/api/lib/case-law/decision-text";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
@@ -43,7 +59,6 @@ import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
 import { isRecord } from "@/api/lib/type-guards";
 
 const API_URL = "https://data.bka.gv.at/ris/api/v2.6/Judikatur";
-const DOCUMENT_ORIGIN = "https://www.ris.bka.gv.at";
 const LANGUAGE = "de";
 const PAGE_SIZE = 100;
 /** Read off the policy map, so the pacing this adapter states and the gate
@@ -157,7 +172,7 @@ export const defineAtRisSource = <const TKey extends AtRisAdapterKey>({
   }
 };
 
-const JUSTIZ_SOURCE = defineAtRisSource({
+export const AT_COURTS_SOURCE = defineAtRisSource({
   application: "Justiz",
   excludeForeignCourts: true,
   key: ADAPTER_KEYS.AT_COURTS,
@@ -239,7 +254,7 @@ const previousMonth = (firstSlice: string, slice: string): string | null => {
 };
 
 export const atRisPreviousMonth = (slice: string): string | null =>
-  previousMonth(JUSTIZ_SOURCE.firstSlice, slice);
+  previousMonth(AT_COURTS_SOURCE.firstSlice, slice);
 
 export const atRisMonthOf = (date: Date): string => {
   const day = Temporal.Instant.fromEpochMilliseconds(
@@ -493,50 +508,155 @@ const isExcludedItem = (
   item: RisListingItem,
 ): boolean => source.excludeForeignCourts && isForeignItem(item);
 
-const contentUrls = (item: RisListingItem): Record<string, string> => {
-  const raw = nestedRecord(
-    item,
-    "Data",
-    "Dokumentliste",
-    "ContentReference",
-    "Urls",
-  )?.["ContentUrl"];
-  let entries: unknown[] = [];
-  if (Array.isArray(raw)) {
-    entries = raw;
-  } else if (raw !== undefined) {
-    entries = [raw];
-  }
-  const urls: Record<string, string> = {};
-  for (const entry of entries) {
+/**
+ * One document the publisher lists for a decision, in every format it serves.
+ *
+ * A decision with an embedded image is listed as several of these — the main
+ * document and one reference per image — so the element is read as the list
+ * the schema declares rather than as the single record it happens to be for a
+ * decision that embeds nothing.
+ */
+type RisContentReference = {
+  contentType: string | undefined;
+  name: string | undefined;
+  formats: { dataType: string; url: string }[];
+};
+
+const contentReferences = (
+  item: RisListingItem,
+): readonly RisContentReference[] => {
+  const raw = nestedRecord(item, "Data", "Dokumentliste")?.["ContentReference"];
+  const listed = Array.isArray(raw) ? raw : [raw];
+  const references: RisContentReference[] = [];
+  for (const entry of listed) {
     const record = asRecord(entry);
-    const dataType = optionalString(record?.["DataType"]);
-    const url = optionalString(record?.["Url"]);
-    if (dataType !== undefined && url !== undefined) {
-      urls[dataType] = url;
+    if (record === undefined) {
+      continue;
+    }
+    const urls = asRecord(record["Urls"])?.["ContentUrl"];
+    const formats: { dataType: string; url: string }[] = [];
+    for (const format of Array.isArray(urls) ? urls : [urls]) {
+      const dataType = optionalString(asRecord(format)?.["DataType"]);
+      const url = optionalString(asRecord(format)?.["Url"]);
+      if (dataType !== undefined && url !== undefined) {
+        formats.push({ dataType, url });
+      }
+    }
+    references.push({
+      contentType: optionalString(record["ContentType"]),
+      name: optionalString(record["Name"]),
+      formats,
+    });
+  }
+  return references;
+};
+
+const MAIN_DOCUMENT_CONTENT_TYPE = "MainDocument";
+
+/**
+ * The formats the decision's own document is listed in.
+ *
+ * A reference without a content type counts as the main document: the element
+ * is mandatory in the schema, and a payload that omits it lists one document.
+ */
+const mainDocumentFormats = (item: RisListingItem): Record<string, string> => {
+  const urls: Record<string, string> = {};
+  for (const reference of contentReferences(item)) {
+    if (
+      reference.contentType !== undefined &&
+      reference.contentType !== MAIN_DOCUMENT_CONTENT_TYPE
+    ) {
+      continue;
+    }
+    for (const { dataType, url } of reference.formats) {
+      urls[dataType] ??= url;
     }
   }
   return urls;
 };
 
-const constructedDocumentUrl = (
-  source: AtRisSourceDefinition,
-  sourceDocumentId: string,
-  extension: "html" | "xml",
-): string => {
-  const id = encodeURIComponent(sourceDocumentId);
-  return `${DOCUMENT_ORIGIN}/Dokumente/${source.application}/${id}/${id}.${extension}`;
-};
+const parsedUrl = (value: string): URL | null =>
+  Result.try({
+    try: () => new URL(value),
+    catch: () => null,
+  }).unwrapOr(null);
 
-const listedFormatMatches = (
+/**
+ * The address the publisher lists for one format of this decision's document.
+ *
+ * The listed URL is what the crawl follows — reconstructing it is what stopped
+ * every Austrian document being fetched when the publisher moved them to
+ * another of its hosts. What is still checked is that the address is one of
+ * this publisher's document origins and that its path is the one this
+ * document number implies, so a listed address can name a different host or a
+ * different document and be refused rather than followed.
+ */
+const listedDocumentUrl = (
   source: AtRisSourceDefinition,
   item: RisListingItem,
   sourceDocumentId: string,
   dataType: "Html" | "Xml",
   extension: "html" | "xml",
-): boolean =>
-  contentUrls(item)[dataType] ===
-  constructedDocumentUrl(source, sourceDocumentId, extension);
+): string | undefined => {
+  const listed = mainDocumentFormats(item)[dataType];
+  if (listed === undefined) {
+    return undefined;
+  }
+  const url = parsedUrl(listed);
+  if (url === null) {
+    return undefined;
+  }
+  const path = `/Dokumente/${source.application}/${sourceDocumentId}/${sourceDocumentId}.${extension}`;
+  return AT_RIS_DOCUMENT_ORIGINS.some((origin) => origin === url.origin) &&
+    decodeURIComponent(url.pathname) === path
+    ? listed
+    : undefined;
+};
+
+/**
+ * The field profile of each tribunal this module builds an adapter for.
+ *
+ * Checked total here rather than where the profiles are written: the union is
+ * this module's, so an application registered without a profile fails to
+ * compile instead of reaching a crawl with nothing declared about its fields.
+ */
+const AT_RIS_PROFILES = AT_RIS_APPLICATIONS satisfies Record<
+  AtRisAdapterKey,
+  AtRisApplicationProfile
+>;
+
+const profileOf = (source: AtRisSourceDefinition): AtRisApplicationProfile =>
+  AT_RIS_PROFILES[source.key];
+
+/**
+ * The publisher's two document kinds, as the row names them.
+ *
+ * A kind this publisher has not served before is kept as it spelled it: the
+ * row then carries the publisher's own word rather than a silent default.
+ */
+const documentKindOf = (value: unknown): string | undefined => {
+  const kind = optionalString(value);
+  switch (kind) {
+    case "Rechtssatz":
+      return "headnote";
+    case "Text":
+      return "text";
+    case undefined:
+      return undefined;
+    default:
+      return kind;
+  }
+};
+
+/**
+ * The publisher writes its keywords as one line, separated by commas,
+ * semicolons or line breaks depending on the application and the decade.
+ */
+const keywordList = (value: unknown): string[] =>
+  (optionalString(value) ?? "")
+    .split(/[,;\r\n]+/u)
+    .map((keyword) => keyword.trim())
+    .filter((keyword) => keyword !== "");
 
 const readDecisionMetadata = (
   source: AtRisSourceDefinition,
@@ -577,6 +697,77 @@ const readDecisionMetadata = (
     statutes: itemValues(judicature?.["Normen"]),
     legalAreas: itemValues(sourceMetadata?.["Rechtsgebiete"]),
     headnoteNumbers: itemValues(sourceMetadata?.["Rechtssatznummern"]),
+    organ: optionalString(technical?.["Organ"]),
+    submitter: optionalString(technical?.["Einbringer"]),
+    documentKind: documentKindOf(judicature?.["Dokumenttyp"]),
+    keywords: keywordList(judicature?.["Schlagworte"]),
+    decisionTextDocument: optionalString(judicature?.["EntscheidungstextUrl"]),
+    documentParts: contentReferences(item),
+    contentFormats: Object.keys(mainDocumentFormats(item)),
+  };
+};
+
+type RisListingMetadata = ReturnType<typeof readDecisionMetadata>;
+
+/**
+ * What the row keeps of the fields this publisher states, beside the parsed
+ * document.
+ *
+ * The branch and the printed sections are projected from the inventory's own
+ * dispositions, so a field declared stored at a metadata key is written to
+ * that key by construction rather than by a second hand-kept list.
+ */
+const decisionMetadata = (
+  source: AtRisSourceDefinition,
+  data: RisListingMetadata,
+  sections: RisDocumentSections,
+): Record<string, unknown> => ({
+  ecli: data.ecli,
+  court: data.court,
+  decisionDate: data.decisionDate,
+  decisionType: data.decisionType,
+  statutes: data.statutes,
+  additionalCaseNumbers: data.caseNumbers.slice(1),
+  published: data.published,
+  modified: data.modified,
+  organ: data.organ,
+  submitter: data.submitter,
+  documentKind: data.documentKind,
+  keywords: data.keywords,
+  decisionTextDocument: data.decisionTextDocument,
+  documentParts: data.documentParts,
+  contentFormats: data.contentFormats,
+  ...atRisStoredValues(profileOf(source), {
+    branch: data.sourceMetadata,
+    sections,
+  }).metadataValues,
+  sourceAttribution: "RIS, Austrian Federal Chancellery, CC BY 4.0",
+});
+
+/**
+ * The texts the publisher itself wrote about the decision.
+ *
+ * Three of the four are real for this family: the constitutional court prints
+ * a `Leitsatz` over its decisions, the administrative court a `Betreff`, and
+ * a headnote document is a legal sentence from its first line to its last.
+ * `headnote` stays absent, and so does any of the three an application does
+ * not print — which is what the row claimed about all four of them until
+ * these sections were read.
+ */
+const decisionTextFields = (
+  source: AtRisSourceDefinition,
+  data: RisListingMetadata,
+  sections: RisDocumentSections,
+): DecisionTextFields => {
+  const stated = atRisStoredValues(profileOf(source), {
+    branch: data.sourceMetadata,
+    sections,
+  }).textFields;
+  return {
+    ...absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+    abstract: sourceTextField(source.key, stated.abstract),
+    legalSentence: sourceTextField(source.key, stated.legalSentence),
+    summary: sourceTextField(source.key, stated.summary),
   };
 };
 
@@ -649,6 +840,157 @@ const itemDigest = (
     ].join("\n"),
   );
 
+const headnoteListingQuery = (
+  source: AtRisSourceDefinition,
+  caseNumber: string,
+  decisionDate: string,
+): string => {
+  const params = new URLSearchParams({
+    Applikation: source.application,
+    "Dokumenttyp.SucheInRechtssaetzen": "true",
+    Geschaeftszahl: caseNumber,
+    EntscheidungsdatumVon: decisionDate,
+    EntscheidungsdatumBis: decisionDate,
+    DokumenteProSeite: "OneHundred",
+    Seitennummer: "1",
+    "Sortierung.SortDirection": "Ascending",
+    "Sortierung.SortedByColumn": "Datum",
+  });
+  return `${API_URL}?${params.toString()}`;
+};
+
+/**
+ * Whether a listed headnote is one of this decision's.
+ *
+ * The docket the query filters on is a full-text expression, so the answer is
+ * narrowed to the rows that name this document: an administrative-court
+ * headnote points at its decision through `EntscheidungstextUrl`, and the
+ * other applications list the decisions adopting it in their own branch.
+ */
+const headnoteNamesDecision = (
+  source: AtRisSourceDefinition,
+  headnote: Record<string, unknown>,
+  sourceDocumentId: string,
+): boolean => {
+  const judicature = nestedRecord(headnote, "Data", "Metadaten", "Judikatur");
+  if (
+    optionalString(judicature?.["EntscheidungstextUrl"])?.includes(
+      sourceDocumentId,
+    ) === true
+  ) {
+    return true;
+  }
+  const adopting = asRecord(
+    asRecord(judicature?.[source.application])?.["Entscheidungstexte"],
+  )?.["item"];
+  const listed = Array.isArray(adopting) ? adopting : [adopting];
+  return listed.some(
+    (entry) =>
+      optionalString(asRecord(entry)?.["Dokumentnummer"]) === sourceDocumentId,
+  );
+};
+
+const headnoteSummary = (
+  headnote: Record<string, unknown>,
+): Record<string, unknown> => {
+  const judicature = nestedRecord(headnote, "Data", "Metadaten", "Judikatur");
+  return {
+    sourceDocumentId: rawSourceDocumentIdOf(headnote),
+    caseNumbers: itemValues(judicature?.["Geschaeftszahl"]),
+    ecli: optionalString(judicature?.["EuropeanCaseLawIdentifier"]),
+    documentUrl: optionalString(
+      nestedRecord(headnote, "Data", "Metadaten", "Allgemein")?.["DokumentUrl"],
+    ),
+  };
+};
+
+type FetchHeadnoteListingOptions = {
+  dependencies: AtRisDependencies;
+  caseNumber: string;
+  decisionDate: string;
+  source: AtRisSourceDefinition;
+  signal?: AbortSignal | undefined;
+};
+
+/**
+ * Ask the publisher for the headnotes it indexes under this decision.
+ *
+ * A second population with its own document numbers, its own identifiers and
+ * its own provisions, which the crawl's decision-text query never sees. The
+ * answer is kept whole rather than the rows the crawl happened to read from
+ * it, so a headnote field captured later is recoverable from the row.
+ */
+const fetchHeadnoteListing = async ({
+  dependencies,
+  caseNumber,
+  decisionDate,
+  source,
+  signal,
+}: FetchHeadnoteListingOptions): Promise<string | undefined> => {
+  const response = await dependencies.request(
+    headnoteListingQuery(source, caseNumber, decisionDate),
+    { headers: { Accept: "application/json" }, redirect: "error" },
+    {
+      adapterKey: source.key,
+      baseDelayMs: REQUEST_INTERVAL_MS,
+      signal,
+      timeoutMs: ADAPTER_TIMEOUT.LIST,
+    },
+  );
+  return response.ok ? await response.text() : undefined;
+};
+
+/** The headnotes a stored answer names for this decision, as the row keeps them. */
+const headnotesOf = (
+  source: AtRisSourceDefinition,
+  headnoteListing: string | undefined,
+  sourceDocumentId: string,
+): readonly Record<string, unknown>[] => {
+  if (headnoteListing === undefined) {
+    return [];
+  }
+  const parsed = parseListingPage(
+    Result.try({
+      try: (): unknown => JSON.parse(headnoteListing),
+      catch: () => undefined,
+    }).unwrapOr(undefined),
+  );
+  if (parsed === undefined) {
+    return [];
+  }
+  return parsed.items
+    .filter((headnote) =>
+      headnoteNamesDecision(source, headnote, sourceDocumentId),
+    )
+    .map(headnoteSummary);
+};
+
+/** Every payload fetched for one decision, under the name its role has. */
+type RisStoredParts = {
+  item: RisListingItem;
+  documentXml?: string | undefined;
+  headnoteListing?: string | undefined;
+};
+
+const storedRaw = ({
+  item,
+  documentXml,
+  headnoteListing,
+}: RisStoredParts): { sourceRaw: string; sourceRawContentType: string } => ({
+  sourceRaw: encodeSourceRawEnvelope({
+    [AT_RIS_PART.LISTING]: JSON.stringify(item),
+    ...(documentXml === undefined
+      ? {}
+      : { [AT_RIS_PART.DOCUMENT_XML]: documentXml }),
+    ...(headnoteListing === undefined
+      ? {}
+      : { [AT_RIS_PART.HEADNOTE_LISTING]: headnoteListing }),
+  }),
+  sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+});
+
+const NO_SECTIONS: RisDocumentSections = {};
+
 type BuildListingOnlyOptions = {
   identity: RisIdentity;
   item: RisListingItem;
@@ -668,10 +1010,7 @@ const buildListingOnly = ({
   const data = readDecisionMetadata(source, item);
   const caseNumber = data.caseNumber ?? `RIS ${sourceDocumentId}`;
   const court = data.court ?? `RIS ${source.application}`;
-  const sourceRaw = JSON.stringify({
-    listing: item,
-    ...(rawDetail === undefined ? {} : { documentXml: rawDetail }),
-  });
+  const raw = storedRaw({ item, documentXml: rawDetail });
   return {
     sourceDocumentId,
     sourceDocumentIdRepairAliases,
@@ -685,37 +1024,25 @@ const buildListingOnly = ({
     decisionDate: data.decisionDate,
     decisionType: data.decisionType,
     sourceUrl: data.sourceUrl,
-    documentUrl: listedFormatMatches(
+    documentUrl: listedDocumentUrl(
       source,
       item,
       sourceDocumentId,
       "Html",
       "html",
-    )
-      ? constructedDocumentUrl(source, sourceDocumentId, "html")
-      : undefined,
-    textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-    metadata: {
-      ecli: data.ecli,
+    ),
+    // The listing states a text of its own for some applications, so a row
+    // without its document is still not a row whose publisher wrote nothing.
+    textFields: decisionTextFields(source, data, NO_SECTIONS),
+    metadata: checkedDecisionMetadata({
+      ...decisionMetadata(source, data, NO_SECTIONS),
       court,
-      decisionDate: data.decisionDate,
-      decisionType: data.decisionType,
-      ris: data.metadata,
-      statutes: data.statutes,
-      legalAreas: data.legalAreas,
-      headnoteNumbers: data.headnoteNumbers,
-      additionalCaseNumbers: data.caseNumbers.slice(1),
-      published: data.published,
-      modified: data.modified,
-      contentFormats: Object.keys(contentUrls(item)),
       detailStatus: reason,
-      sourceAttribution: "RIS, Austrian Federal Chancellery, CC BY 4.0",
-    },
-    rawHash: hashContent(sourceRaw),
+    }),
+    rawHash: hashContent(raw.sourceRaw),
     documentAst: EMPTY_AST,
     parserVersion: PARSER_VERSIONS[source.key],
-    sourceRaw,
-    sourceRawContentType: "application/json",
+    ...raw,
   };
 };
 
@@ -735,7 +1062,7 @@ const buildDecision = async ({
   signal,
 }: BuildDecisionOptions): Promise<IngestionResult> => {
   const identity = identityOf(source, item);
-  const { sourceDocumentId, sourceDocumentIdRepairAliases } = identity;
+  const { sourceDocumentId } = identity;
   if (identity.type === "quarantine") {
     return buildListingOnly({
       identity,
@@ -753,7 +1080,14 @@ const buildDecision = async ({
       source,
     });
   }
-  if (!listedFormatMatches(source, item, sourceDocumentId, "Xml", "xml")) {
+  const xmlUrl = listedDocumentUrl(
+    source,
+    item,
+    sourceDocumentId,
+    "Xml",
+    "xml",
+  );
+  if (xmlUrl === undefined) {
     return buildListingOnly({
       identity,
       item,
@@ -762,7 +1096,6 @@ const buildDecision = async ({
     });
   }
 
-  const xmlUrl = constructedDocumentUrl(source, sourceDocumentId, "xml");
   const response = await dependencies.request(
     xmlUrl,
     { headers: { Accept: "application/xml" }, redirect: "error" },
@@ -800,38 +1133,84 @@ const buildDecision = async ({
     });
   }
 
-  let parsed: ReturnType<typeof parseRisDecisionXml>;
-  try {
-    parsed = parseRisDecisionXml({
-      sourceDocumentId,
-      caseNumber: data.caseNumber,
-      ecli: data.ecli,
-      court: data.court,
-      decisionDate: data.decisionDate,
-      decisionType: data.decisionType,
-      sourceUrl: data.sourceUrl,
-      xml,
+  const headnoteListing =
+    data.decisionDate === undefined
+      ? undefined
+      : await fetchHeadnoteListing({
+          caseNumber: data.caseNumber,
+          decisionDate: data.decisionDate,
+          dependencies,
+          signal,
+          source,
+        });
+  return assembleAtRisDecision(source, item, {
+    documentXml: xml,
+    headnoteListing,
+  });
+};
+
+/** The payloads this publisher serves for one decision, beside its listing. */
+export type AtRisDecisionPayloads = {
+  readonly documentXml: string;
+  /** The headnote answer, where the crawl received one. */
+  readonly headnoteListing?: string | undefined;
+};
+
+/**
+ * Build one decision from the payloads the publisher served for it.
+ *
+ * Split from the fetching above so the row a crawl writes and the row built
+ * from stored payloads are the same row: everything derived — the headnotes
+ * this decision's answer names, the sections, the text fields — is derived
+ * here, from the parts the envelope keeps.
+ */
+export const assembleAtRisDecision = (
+  source: AtRisSourceDefinition,
+  item: RisListingItem,
+  { documentXml, headnoteListing }: AtRisDecisionPayloads,
+): IngestionResult => {
+  const identity = identityOf(source, item);
+  const { sourceDocumentId, sourceDocumentIdRepairAliases } = identity;
+  const data = readDecisionMetadata(source, item);
+  if (
+    identity.type === "quarantine" ||
+    data.caseNumber === undefined ||
+    data.court === undefined
+  ) {
+    return buildListingOnly({
+      identity,
+      item,
+      reason:
+        identity.type === "quarantine"
+          ? "publisher-id-unavailable"
+          : "listing-metadata-incomplete",
+      source,
+      rawDetail: documentXml,
     });
-  } catch {
+  }
+
+  const parseResult = parseRisDecisionXml({
+    sourceDocumentId,
+    caseNumber: data.caseNumber,
+    ecli: data.ecli,
+    court: data.court,
+    decisionDate: data.decisionDate,
+    decisionType: data.decisionType,
+    sourceUrl: data.sourceUrl,
+    xml: documentXml,
+  });
+  if (Result.isError(parseResult)) {
     return buildListingOnly({
       identity,
       item,
       reason: "detail-xml-unparseable",
       source,
-      rawDetail: xml,
+      rawDetail: documentXml,
     });
   }
+  const parsed = parseResult.value;
 
-  const sourceRaw = JSON.stringify({ listing: item, documentXml: xml });
-  const documentUrl = listedFormatMatches(
-    source,
-    item,
-    sourceDocumentId,
-    "Html",
-    "html",
-  )
-    ? constructedDocumentUrl(source, sourceDocumentId, "html")
-    : undefined;
+  const raw = storedRaw({ item, documentXml, headnoteListing });
   return {
     sourceDocumentId,
     sourceDocumentIdRepairAliases,
@@ -844,29 +1223,23 @@ const buildDecision = async ({
     decisionType: data.decisionType,
     fulltext: parsed.fulltext,
     sourceUrl: data.sourceUrl,
-    documentUrl,
-    textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-    metadata: {
-      ecli: data.ecli,
-      court: data.court,
-      decisionDate: data.decisionDate,
-      decisionType: data.decisionType,
-      ris: data.metadata,
-      statutes: data.statutes,
-      legalAreas: data.legalAreas,
-      headnoteNumbers: data.headnoteNumbers,
-      additionalCaseNumbers: data.caseNumbers.slice(1),
-      published: data.published,
-      modified: data.modified,
-      contentFormats: Object.keys(contentUrls(item)),
-      sourceAttribution: "RIS, Austrian Federal Chancellery, CC BY 4.0",
-    },
-    rawHash: hashContent(sourceRaw),
+    documentUrl: listedDocumentUrl(
+      source,
+      item,
+      sourceDocumentId,
+      "Html",
+      "html",
+    ),
+    textFields: decisionTextFields(source, data, parsed.sections),
+    metadata: checkedDecisionMetadata({
+      ...decisionMetadata(source, data, parsed.sections),
+      headnotes: headnotesOf(source, headnoteListing, sourceDocumentId),
+    }),
+    rawHash: hashContent(raw.sourceRaw),
     documentAst: parsed.documentAst,
     sections: sectionsFromAst(parsed.documentAst.blocks),
     parserVersion: PARSER_VERSIONS[source.key],
-    sourceRaw,
-    sourceRawContentType: "application/json",
+    ...raw,
   };
 };
 
@@ -1039,13 +1412,20 @@ type AtRisSourceAdapter<TKey extends AtRisAdapterKey> = SourceAdapter & {
   readonly key: TKey;
 };
 
+/**
+ * No `result.judges`: none of the eleven applications states who sat. The
+ * schema has no bench element, and the document prints the deciding body and
+ * — for one application — an opening paragraph naming the panel in prose,
+ * which is a passage to read rather than a roster the publisher stated.
+ */
 const createAdapter = <const TKey extends AtRisAdapterKey>(
   source: AtRisSourceDefinition & { readonly key: TKey },
   dependencies: AtRisDependencies,
 ): AtRisSourceAdapter<TKey> =>
   defineSourceAdapter({
     key: source.key,
-    sourceFields: PENDING_SOURCE_FIELD_INVENTORY,
+    sourceSurfaces: atRisSourceSurfaces(source.key),
+    sourceFields: atRisFieldInventory(profileOf(source)),
     language: LANGUAGE,
     minRequestIntervalMs: REQUEST_INTERVAL_MS,
     pageTimeoutMs: PAGE_TIMEOUT_MS,
@@ -1253,7 +1633,7 @@ const createAdapter = <const TKey extends AtRisAdapterKey>(
 export const createAtCourtsAdapter = (
   dependencies: Partial<AtRisDependencies> = {},
 ): AtRisSourceAdapter<typeof ADAPTER_KEYS.AT_COURTS> =>
-  createAdapter(JUSTIZ_SOURCE, { ...DEFAULT_DEPENDENCIES, ...dependencies });
+  createAdapter(AT_COURTS_SOURCE, { ...DEFAULT_DEPENDENCIES, ...dependencies });
 
 export const createAtRisSourceAdapter = <const TKey extends AtRisAdapterKey>(
   source: AtRisSourceDefinition & { readonly key: TKey },

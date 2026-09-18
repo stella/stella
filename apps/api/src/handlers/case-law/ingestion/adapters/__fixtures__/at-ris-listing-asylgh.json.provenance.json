@@ -1,0 +1,6 @@
+{
+  "capture": "recorded",
+  "sha256": "68edc9805c45c68001b7e7e7a5fbf679543260ab42e36fadfb76ee21b2442726",
+  "sourceUrl": "https://data.bka.gv.at/ris/api/v2.6/Judikatur?Applikation=AsylGH&Dokumenttyp.SucheInEntscheidungstexten=true&DokumenteProSeite=OneHundred&Seitennummer=1&Sortierung.SortDirection=Ascending&Sortierung.SortedByColumn=Datum&EntscheidungsdatumVon=2013-12-02&EntscheidungsdatumBis=2013-12-02",
+  "capturedAt": "2026-09-18T18:39:25.297Z"
+}

@@ -95,15 +95,21 @@ const importSpecifiers = (source: string): string[] => {
   return found;
 };
 
-/** Every specifier reachable from a file through relative and alias imports. */
-const transitiveSpecifiers = (entry: string): Set<string> => {
-  const seen = new Set<string>();
+type ImportGraph = {
+  /** Every file reachable from the entry, the entry itself included. */
+  files: readonly string[];
+  specifiers: ReadonlySet<string>;
+};
+
+/** Everything reachable from a file through relative and alias imports. */
+const importGraph = (entry: string): ImportGraph => {
+  const files = new Set<string>();
   const specifiers = new Set<string>();
   const walk = (file: string, depth: number): void => {
-    if (depth > IMPORT_DEPTH_LIMIT || seen.has(file)) {
+    if (depth > IMPORT_DEPTH_LIMIT || files.has(file)) {
       return;
     }
-    seen.add(file);
+    files.add(file);
     for (const specifier of importSpecifiers(readFileSync(file, "utf-8"))) {
       specifiers.add(specifier);
       const resolved = resolveImport(file, specifier);
@@ -113,7 +119,7 @@ const transitiveSpecifiers = (entry: string): Set<string> => {
     }
   };
   walk(entry, 0);
-  return specifiers;
+  return { files: [...files], specifiers };
 };
 
 const isCaseLawScript = (name: string): boolean => {
@@ -128,18 +134,29 @@ const isCaseLawScript = (name: string): boolean => {
 
 /** Whether a script can issue a statement: it imports a database module or opens a door. */
 const reachesDatabase = (name: string): boolean => {
-  const file = path.join(SCRIPTS_DIR, name);
-  const specifiers = transitiveSpecifiers(file);
+  const { specifiers } = importGraph(path.join(SCRIPTS_DIR, name));
   return (
     specifiers.has(LANE_MODULE) ||
     DATABASE_MODULES.some((module) => specifiers.has(module))
   );
 };
 
+/** The doors one file's own source opens. */
 const doorsImported = (source: string): string[] =>
   source.includes(`from "${LANE_MODULE}"`)
     ? DOORS.filter((door) => new RegExp(`\\b${door}\\b`, "u").test(source))
     : [];
+
+/**
+ * The doors a script opens, in its body or in a helper it runs its pass
+ * inside. Followed as far as database reach is followed: a script that asks
+ * a shared bootstrap for the lane enters it exactly once, and a body-only
+ * census would read that one entry as no entry at all.
+ */
+const doorsOpened = (name: string): string[] =>
+  importGraph(path.join(SCRIPTS_DIR, name)).files.flatMap((file) =>
+    doorsImported(readFileSync(file, "utf-8")),
+  );
 
 describe("case-law maintenance lane", () => {
   // The structural rule: a case-law script that can reach the database does
@@ -157,7 +174,7 @@ describe("case-law maintenance lane", () => {
       }
       caseLawScripts += 1;
       const source = readSource(name);
-      if (doorsImported(source).length === 0) {
+      if (doorsOpened(name).length === 0) {
         findings.push(`${name}: opens no door`);
       }
       if (DIRECT_HANDLE_IMPORTS.some((pattern) => pattern.test(source))) {
@@ -187,6 +204,16 @@ describe("case-law maintenance lane", () => {
       CASE_LAW_TABLE_MARKERS.some((marker) => source.includes(marker)),
     ).toBe(false);
     expect(isCaseLawScript("case-law-source-total.ts")).toBe(true);
+  });
+
+  // The same for the door, or a script that enters the lane in a shared
+  // bootstrap reads as a script that never enters it.
+  test("a door opened in a helper counts as the script's door", () => {
+    const source = readSource("backfill-cz-us-judges.ts");
+    expect(doorsImported(source)).toEqual([]);
+    expect(doorsOpened("backfill-cz-us-judges.ts")).toContain(
+      "enterCaseLawMaintenanceLane",
+    );
   });
 
   test("the lane key names its domain and lane apart from the graph lock", () => {

@@ -40,6 +40,7 @@ import {
 import {
   getAdapter,
   listAdapters,
+  skCourtsDocumentFetch,
 } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import {
   CYCLE_HALT_REASON,
@@ -1359,6 +1360,7 @@ export const runCaseLawIngest = async (
           async () =>
             await fetchDecisionDocument({
               decision,
+              fetchDocument: skCourtsDocumentFetch,
               scopedDb: backfillDb,
               signal: AbortSignal.timeout(DOCUMENT_FETCH_BUDGET_MS),
             }),

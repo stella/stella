@@ -8,12 +8,13 @@ import {
 
 // An in-process object store speaking enough of the S3 wire protocol for
 // `lib/s3.ts` to run unchanged: path-style GET/HEAD/PUT/DELETE on objects,
-// server-side copy, ListObjectsV2 with continuation tokens, S3-shaped XML
-// errors, and presigned GETs (the signature is not checked; the URL shape is
-// what the helpers produce). Prefer this over `mock.module("@/api/lib/s3")`: the
-// request shapes, error-code parsing, retries, and bounds in `s3.ts` are then
-// part of what the test proves, and a test cannot pass on a fabricated
-// export that the real module no longer has.
+// range GETs (see `CLOSED_RANGE_PATTERN`), server-side copy, ListObjectsV2
+// with continuation tokens, S3-shaped XML errors, and presigned GETs (the
+// signature is not checked; the URL shape is what the helpers produce).
+// Prefer this over `mock.module("@/api/lib/s3")`: the request shapes,
+// error-code parsing, retries, and bounds in `s3.ts` are then part of what
+// the test proves, and a test cannot pass on a fabricated export that the
+// real module no longer has.
 //
 // Failures are injected per request, not per helper, so a test that models
 // "the store rejected the write" sees the same error the SDK raises in
@@ -33,6 +34,8 @@ export type FakeS3Request = {
   readonly contentType: string | null;
   /** Source of a server-side copy; `null` for every other method. */
   readonly copySourceKey: string | null;
+  /** The `Range` header a GET carried; `null` when it asked for the object. */
+  readonly range: string | null;
 };
 
 export type FakeS3Failure = {
@@ -91,6 +94,69 @@ const readObjectMethod = (method: string): FakeS3Method => {
     return method;
   }
   return panic(`fake S3 received an unsupported method ${method}`);
+};
+
+/**
+ * The only form `lib/s3.ts` sends: one closed byte range. An open-ended
+ * (`bytes=100-`), suffix (`bytes=-100`) or multipart range is not modelled
+ * and panics rather than being served as a whole object, which would let a
+ * test pass against a range the store never honoured. `Range` on a HEAD and
+ * `If-Range` are ignored too.
+ */
+const CLOSED_RANGE_PATTERN = /^bytes=(?<first>\d+)-(?<last>\d+)$/u;
+
+type ClosedRange = { first: number; last: number };
+
+const parseClosedRange = (range: string): ClosedRange => {
+  const match = CLOSED_RANGE_PATTERN.exec(range);
+  const first = match?.groups?.["first"];
+  const last = match?.groups?.["last"];
+  if (first === undefined || last === undefined) {
+    return panic(`fake S3 received an unmodelled Range header ${range}`);
+  }
+  return { first: Number(first), last: Number(last) };
+};
+
+/**
+ * S3's two answers to a range it cannot serve verbatim, which a caller that
+ * demands the exact range it asked for has to tell apart: a range starting
+ * past the last byte is unsatisfiable and answers 416, while a range that
+ * merely ends past it is clamped to the last byte and answered as a 206 over
+ * the shorter span.
+ */
+const rangeResponse = ({
+  bytes,
+  range,
+  headers,
+}: {
+  bytes: Uint8Array;
+  range: ClosedRange;
+  headers: Record<string, string>;
+}): Response => {
+  const complete = bytes.byteLength;
+  if (range.first >= complete) {
+    return new Response(
+      `${XML_HEADER}<Error><Code>InvalidRange</Code><Message>The requested range is not satisfiable</Message></Error>`,
+      {
+        status: 416,
+        headers: {
+          "content-type": "application/xml",
+          "content-range": `bytes */${complete}`,
+          "x-amz-error-code": "InvalidRange",
+        },
+      },
+    );
+  }
+  const last = Math.min(range.last, complete - 1);
+  const body = bytes.slice(range.first, last + 1);
+  return new Response(body, {
+    status: 206,
+    headers: {
+      ...headers,
+      "content-length": String(body.byteLength),
+      "content-range": `bytes ${range.first}-${last}/${complete}`,
+    },
+  });
 };
 
 const listResponse = ({
@@ -189,7 +255,8 @@ export const startFakeS3 = ({ delayMs = 0 }: FakeS3Options = {}): FakeS3 => {
       return readObjectMethod(request.method);
     })();
     const contentType = request.headers.get("content-type");
-    requests.push({ method, bucket, key, contentType, copySourceKey });
+    const range = method === "GET" ? request.headers.get("range") : null;
+    requests.push({ method, bucket, key, contentType, copySourceKey, range });
 
     const failure = takeFailure(method, key);
     if (failure !== null) {
@@ -259,7 +326,14 @@ export const startFakeS3 = ({ delayMs = 0 }: FakeS3Options = {}): FakeS3 => {
     if (method === "HEAD") {
       return new Response(null, { status: 200, headers });
     }
-    return new Response(object.bytes, { status: 200, headers });
+    if (range === null) {
+      return new Response(object.bytes, { status: 200, headers });
+    }
+    return rangeResponse({
+      bytes: object.bytes,
+      range: parseClosedRange(range),
+      headers,
+    });
   };
 
   const server = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: handle });

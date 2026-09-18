@@ -38,7 +38,16 @@
 
 import { PDF } from "@libpdf/core";
 
-import { collapseSpacedLetters } from "@stll/text-normalize";
+import {
+  isSkDecisionTitle,
+  isSkHoldingMarker,
+  isSkInstructionMarker,
+  isSkReasoningMarker,
+  isSkStandaloneInstructionMarker,
+  SK_CLOSING_RE,
+  SK_JUDGE_TITLE_RE,
+  SK_ROMAN_DIVIDER_RE,
+} from "@stll/legal-ast/slovak-document-roles";
 
 import type {
   Block,
@@ -371,24 +380,21 @@ function isStructuralStart(line: PdfLine): boolean {
   if (STARTS_NEW_PARAGRAPH_RE.test(line.text)) {
     return true;
   }
-  const norm = collapseSpacedLetters(line.text.toLowerCase().trim());
   if (
-    HOLDING_MARKERS.some((m) => norm.endsWith(m)) ||
-    REASONING_MARKERS.some((m) => norm === m) ||
-    // startsWith: SK ÚS PDFs put "Poučenie:" inline with
-    // text on the same line, not as a standalone heading.
-    INSTRUCTION_MARKERS.some((m) => norm === m || norm.startsWith(m))
+    isSkHoldingMarker(line.text) ||
+    isSkReasoningMarker(line.text) ||
+    isSkInstructionMarker(line.text)
   ) {
     return true;
   }
-  if (DECISION_TITLES.has(line.text.toLowerCase().trim())) {
+  if (isSkDecisionTitle(line.text)) {
     return true;
   }
   // Closing formula and signature always start a new block
-  if (CLOSING_RE.test(line.text)) {
+  if (SK_CLOSING_RE.test(line.text)) {
     return true;
   }
-  if (SIGNATURE_RE.test(line.text)) {
+  if (SK_JUDGE_TITLE_RE.test(line.text)) {
     return true;
   }
   return false;
@@ -475,52 +481,6 @@ const skipHeaderLines = (lines: readonly PdfLine[]): PdfLine[] => {
 
 // ── Classification ────────────────────────────────────────
 
-/** Decision type names that appear as standalone title lines. */
-const DECISION_TITLES = new Set([
-  "uznesenie",
-  "rozsudok",
-  "rozsudok bez odôvodnenia",
-  "trestný rozkaz",
-  "príkaz",
-  "rozhodnutie",
-  "uznesenie bez odôvodnenia",
-]);
-
-const HOLDING_MARKERS = ["rozhodol:", "rozhodol :", "rozhodla:", "rozhodlo:"];
-
-const REASONING_MARKERS = ["odôvodnenie:", "odôvodnenie :"];
-
-const INSTRUCTION_MARKERS = ["poučenie:", "poučenie :"];
-
-const isHoldingMarker = (text: string): boolean => {
-  const norm = collapseSpacedLetters(text.toLowerCase().trim());
-  return HOLDING_MARKERS.some((m) => norm.endsWith(m));
-};
-
-const isReasoningMarker = (text: string): boolean => {
-  const norm = collapseSpacedLetters(text.toLowerCase().trim());
-  return REASONING_MARKERS.some((m) => norm === m);
-};
-
-const isInstructionMarker = (text: string): boolean => {
-  const norm = collapseSpacedLetters(text.toLowerCase().trim());
-  // startsWith: SK ÚS PDFs put "Poučenie:" inline with
-  // text on the same line, not as a standalone heading.
-  return INSTRUCTION_MARKERS.some((m) => norm === m || norm.startsWith(m));
-};
-
-/**
- * Closing formula:
- *   "V {City} dňa ..."   (obcan.justice.sk)
- *   "V {City} {date}"    (ustavnysud.sk, no "dňa")
- *   "Vo {City} ..."      (locative variant)
- */
-const CLOSING_RE = /^Vo?\s+\p{Lu}\p{Ll}+\s+(?:dňa\s|\d{1,2}\.\s)/u;
-
-/** Judge signature: title prefix */
-const SIGNATURE_RE =
-  /^(?:JUDr\.|Mgr\.|doc\.|Ing\.|PhDr\.|RNDr\.|MUDr\.|PaedDr\.)\s/u;
-
 const createIdGenerator = (): (() => string) => {
   let counter = 0;
   return () => `b${++counter}`;
@@ -583,10 +543,7 @@ const classifyLines = (lines: readonly PdfLine[]): Block[] => {
     const { text, bold, fontSize } = line;
 
     // Decision title: large font or matching decision type
-    if (
-      section === "preamble" &&
-      (fontSize > 14 || DECISION_TITLES.has(text.toLowerCase().trim()))
-    ) {
+    if (section === "preamble" && (fontSize > 14 || isSkDecisionTitle(text))) {
       blocks.push({
         id: makeId(),
         anchorId: "h-title",
@@ -600,7 +557,7 @@ const classifyLines = (lines: readonly PdfLine[]): Block[] => {
     }
 
     // Bold section markers (rozhodol, odôvodnenie, poučenie)
-    if (bold && isHoldingMarker(text)) {
+    if (bold && isSkHoldingMarker(text)) {
       section = "holding";
       blocks.push({
         id: makeId(),
@@ -614,7 +571,7 @@ const classifyLines = (lines: readonly PdfLine[]): Block[] => {
       continue;
     }
 
-    if (bold && isReasoningMarker(text)) {
+    if (bold && isSkReasoningMarker(text)) {
       section = "reasoning";
       blocks.push({
         id: makeId(),
@@ -628,10 +585,9 @@ const classifyLines = (lines: readonly PdfLine[]): Block[] => {
       continue;
     }
 
-    if (bold && isInstructionMarker(text)) {
+    if (bold && isSkInstructionMarker(text)) {
       section = "instruction";
-      const norm = collapseSpacedLetters(text.toLowerCase().trim());
-      const isStandalone = INSTRUCTION_MARKERS.some((m) => norm === m);
+      const isStandalone = isSkStandaloneInstructionMarker(text);
       if (isStandalone) {
         blocks.push({
           id: makeId(),
@@ -660,7 +616,7 @@ const classifyLines = (lines: readonly PdfLine[]): Block[] => {
     // the instruction (poučenie) section. Judge titles like
     // JUDr., Mgr. appear in intro text (senate composition)
     // and must not be classified as signatures there.
-    if (section === "instruction" && CLOSING_RE.test(text)) {
+    if (section === "instruction" && SK_CLOSING_RE.test(text)) {
       section = "closing";
       blocks.push({
         id: makeId(),
@@ -692,7 +648,7 @@ const classifyLines = (lines: readonly PdfLine[]): Block[] => {
       continue;
     }
 
-    if (section === "instruction" && SIGNATURE_RE.test(text)) {
+    if (section === "instruction" && SK_JUDGE_TITLE_RE.test(text)) {
       blocks.push({
         id: makeId(),
         anchorId: `p${++blockCount}`,
@@ -707,7 +663,7 @@ const classifyLines = (lines: readonly PdfLine[]): Block[] => {
     // Standalone bold Roman numeral markers (I., II., III.)
     // are sub-section dividers. Classify as level 3 headings
     // so they render as visual separators, not plain paragraphs.
-    if (bold && /^(?:I{1,3}|IV|VI{0,3}|IX|X{1,3})\.$/u.test(text.trim())) {
+    if (bold && SK_ROMAN_DIVIDER_RE.test(text.trim())) {
       blocks.push({
         id: makeId(),
         anchorId: `p${++blockCount}`,

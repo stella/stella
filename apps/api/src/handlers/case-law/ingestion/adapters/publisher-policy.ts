@@ -98,6 +98,16 @@ export const PUBLISHER_GATES = {
     publisher: "Justice.sk",
     intervalMs: POLITE_INTERVAL_MS,
   },
+  /**
+   * www.usoud.cz, the court's own site rather than its decision database:
+   * the judge roster and the pages it links. A budget of its own because it
+   * is a different host with a different limit, and one the roster import
+   * would otherwise spend uncounted.
+   */
+  "usoud-cz": {
+    publisher: "Ústavní soud",
+    intervalMs: POLITE_INTERVAL_MS,
+  },
   /** www.ustavnysud.sk. */
   "ustavnysud-sk": {
     publisher: "Ústavný súd SR",
@@ -162,8 +172,18 @@ export const publisherRequestsPerDay = (gateId: PublisherGateId): number =>
 export const createPublisherSlot = (
   adapterKey: AdapterKey,
   dependencies?: PublisherRequestGateDependencies,
+): ((signal?: AbortSignal) => Promise<void>) =>
+  createPublisherGateSlot(ADAPTER_PUBLISHER_GATES[adapterKey], dependencies);
+
+/**
+ * The gate for a publisher this slice reaches outside a crawl — a roster
+ * import, say. Named by gate rather than by adapter, because the host it
+ * spends against is not the one any adapter's cursor walks.
+ */
+export const createPublisherGateSlot = (
+  gateId: PublisherGateId,
+  dependencies?: PublisherRequestGateDependencies,
 ): ((signal?: AbortSignal) => Promise<void>) => {
-  const gateId = ADAPTER_PUBLISHER_GATES[adapterKey];
   const { publisher, intervalMs } = PUBLISHER_GATES[gateId];
   return createPublisherRequestSlot(
     { intervalMs, key: `case-law:publisher-gate:${gateId}`, publisher },

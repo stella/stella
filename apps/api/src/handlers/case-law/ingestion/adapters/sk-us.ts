@@ -42,12 +42,20 @@ import {
 } from "@/api/handlers/case-law/consts";
 import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import {
+  backlogSurface,
+  decodeSourceRawEnvelope,
   defineSourceAdapter,
   EMPTY_AST,
+  encodeSourceRawEnvelope,
+  excludedSourceField,
+  excludedSourceSurface,
   isPersistableSourceDocumentId,
-  PENDING_SOURCE_FIELD_INVENTORY,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  STORED_RAW_REPARSE_REJECTION,
+  storedSourceSurface,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type {
+  DecisionJudgeInput,
   EmptyAst,
   IngestionResult,
   ListingIdentity,
@@ -55,6 +63,12 @@ import type {
   ReconciliationListingItem,
   ReconciliationSlicePage,
   ReconciliationSlicePageOptions,
+  SourceFieldDisposition,
+  SourceRawParts,
+  SourceSurfaceCensus,
+  SourceSurfaceDisposition,
+  StoredRawReparseInput,
+  StoredRawReparseOutcome,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { fetchPublisher } from "@/api/handlers/case-law/ingestion/adapters/retry";
@@ -63,9 +77,12 @@ import {
   adapterCatch,
   hashContent,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
+import { parseSkUsDocumentXhtml } from "@/api/handlers/case-law/ingestion/parsers/sk-us";
+import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
 import {
   TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
+  checkedDecisionMetadata,
 } from "@/api/lib/case-law/decision-text";
 import {
   AdapterFetchError,
@@ -73,7 +90,6 @@ import {
 } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
-import { parseSkDecisionPdf } from "@/api/lib/legal-search/parsers/sk-courts";
 import { logger } from "@/api/lib/observability/logger";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -81,7 +97,38 @@ import { isRecord } from "@/api/lib/type-guards";
 
 const BASE_URL = "https://www.ustavnysud.sk";
 const SEARCH_URL = `${BASE_URL}/o/v1/dms/search`;
+const CONTENT_URL = `${BASE_URL}/o/v1/dms/content`;
+const COURT_FILE_URL = `${BASE_URL}/o/v1/dms/file`;
+const CODELIST_URL = `${BASE_URL}/o/v1/codelist/decision`;
 const DOC_DOWNLOAD_URL = `${BASE_URL}/docDownload`;
+
+/** The corpus this adapter reads; the service echoes it back as `docType`. */
+const DECISION_DOC_TYPE = "USSR_DECISION_MK";
+
+/**
+ * The index fields the service states only as facet counts.
+ *
+ * `fieldsToReturn` does not widen the projection, so these never appear on
+ * a row however they are asked for; a facet query over a result set narrowed
+ * to one docket is the only way to read them. Three more the index holds
+ * (`mkArticle`, `mkLetter`, `mkClause`, the decomposition the legal-
+ * regulation filter searches on) are left out: naming them in `facets`
+ * makes the endpoint answer 204 with an empty body.
+ */
+const FACET_FIELDS = [
+  "mkDifferentViewJudges",
+  "mkDefendant",
+  "mkPublicDefendant",
+  "mkViolator",
+  "mkFormOfProposer",
+  "mkKindOfOtherProposer",
+  "mkFileNumberOfDefendantProceeding",
+] as const;
+
+type FacetField = (typeof FACET_FIELDS)[number];
+
+/** The vocabularies a decision's judge fields are drawn from. */
+const JUDGE_CODELISTS = ["mkJudgeReporter", "mkDifferentViewJudges"] as const;
 
 const PAGE_SIZE = 10;
 const SEARCH_RETRY_DELAY_MS = 500;
@@ -149,8 +196,28 @@ const encodeCursor = (c: YearCursor): string => `${c.year}:${c.offset}`;
 
 // ── Search API types ─────────────────────────────────────
 
+/**
+ * One row of the DMS index, under the keys the service itself uses.
+ *
+ * Every corpus this endpoint serves answers with the same key set and fills
+ * a different part of it, so a key that is null on every decision sampled is
+ * still declared here: it is the collection or the archive that fills it,
+ * and a row of either reaches this type through the same reader.
+ *
+ * Two keys are typed against what the service sends rather than against
+ * what the key's name suggests. `mkDifferentView` is a single value from a
+ * three-entry vocabulary, and `mkTypeOfProposer` is one value on a decision
+ * and several on an archived one.
+ */
 type SearchDocument = {
   documentId?: string;
+  docType?: string;
+  title?: string;
+  content?: string | null;
+  index?: number;
+  extension?: string | null;
+  size?: number | null;
+  contentType?: string | null;
   mkDocumentType?: string;
   mkRSAPNumberOfFile?: string;
   mkRVPNumberOfFile?: string;
@@ -163,22 +230,32 @@ type SearchDocument = {
   mkTypeOfProceeding?: string;
   mkTypeOfNegotiation?: string[];
   mkDecisionInTermsOf?: string[];
+  mkDecisionInTermsOfForSort?: string;
   mkResultOfNegotiation?: string[];
   mkCause?: string[];
   mkJudgeReporter?: string;
-  mkDifferentView?: string[];
+  mkDifferentView?: string;
   mkWordRegister?: string[];
   mkMaterialRegister?: string[];
   mkComplainedLegalRegulation?: string | string[];
+  mkClarificationOfLegalRegulation?: string | string[];
   mkFileReference?: string[];
   mkReferences?: string[];
-  mkTypeOfProposer?: string;
+  mkTypeOfProposer?: string | string[];
   mkAffectedLegalRegulation?: string;
   mkUnderage?: string;
   mkIncludeToZnaU?: boolean;
   mkEntryDate?: string;
   mkFormOfEntry?: string;
   mkTypeOfEntry?: string;
+  mkParentIdDecision?: string;
+  mkLawReportsNumber?: string | number;
+  mkVolumeOfLawReports?: string | number;
+  mkYearOfLawReports?: number;
+  mkTimePeriodZNaU?: string;
+  mkClauseTitle?: string;
+  mkClauseText?: string;
+  mkWebTitle?: string;
 };
 
 type SearchResponse = {
@@ -262,10 +339,312 @@ const fetchPdfBytes = async (
   }
 };
 
+// ── The other responses served for one decision ──────────
+
+/**
+ * A JSON response, or `undefined` where the service served none.
+ *
+ * Every supplementary surface answers the same way to a request it will not
+ * serve: an empty 204, or a 500 with an empty body. Neither is a decision
+ * failing to exist, and neither is worth halting a crawl over, so a missing
+ * response leaves its envelope part out and the row states what did arrive.
+ */
+const fetchJson = async (
+  url: string,
+  init: { body?: string; signal?: AbortSignal },
+): Promise<string | undefined> =>
+  (
+    await Result.tryPromise({
+      try: async (): Promise<string | undefined> => {
+        const response = await fetchPublisher(url, {
+          adapterKey: ADAPTER_KEYS.SK_US,
+          ...(init.body === undefined
+            ? {}
+            : { method: "POST", body: init.body }),
+          headers: {
+            "User-Agent": INGESTION_USER_AGENT,
+            ...(init.body === undefined
+              ? {}
+              : { "Content-Type": "application/json" }),
+          },
+          ...(init.signal === undefined ? {} : { signal: init.signal }),
+          timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+        });
+        if (!response.ok || response.status === 204) {
+          return undefined;
+        }
+        const body = await response.text();
+        return body.length === 0 ? undefined : body;
+      },
+      catch: () => undefined,
+    })
+  ).unwrapOr(undefined);
+
+/**
+ * The decision's text, as the service renders it.
+ *
+ * The response wraps one field, a base64 XHTML document, and the document
+ * is what the envelope keeps: the wrapper is transport, and storing the
+ * encoding would put a third of the bytes into stating that it is base64.
+ */
+const fetchDocumentXhtml = async (
+  documentId: string,
+  signal?: AbortSignal,
+): Promise<string | undefined> => {
+  const body = await fetchJson(CONTENT_URL, {
+    body: JSON.stringify({
+      highlightText: "",
+      documentId,
+      docType: DECISION_DOC_TYPE,
+    }),
+    ...(signal === undefined ? {} : { signal }),
+  });
+  if (body === undefined) {
+    return undefined;
+  }
+  const payload: unknown = Result.try({
+    try: (): unknown => JSON.parse(body),
+    catch: () => null,
+  }).unwrapOr(null);
+  const content = isRecord(payload) ? payload["content"] : undefined;
+  return typeof content === "string"
+    ? Buffer.from(content, "base64").toString("utf-8")
+    : undefined;
+};
+
+/**
+ * The index-only fields, read as facet counts over one docket on one day.
+ *
+ * A facet counts values across a result set, so what it says belongs to
+ * whatever the query selected. Narrowed to a docket and the day it was
+ * decided, the result set is that docket's documents on that day: the
+ * decision and the separate opinions filed with it. That is the level these
+ * fields are true at anyway — a dissent belongs to the docket's decision,
+ * and the index does not say which of the docket's documents carries the
+ * name. A narrower query is not available: the service filters on the
+ * docket, the ECLI and the register number, and a separate opinion has no
+ * ECLI of its own.
+ */
+const fetchFacets = async (
+  { caseNumber, decisionDate }: { caseNumber: string; decisionDate: string },
+  signal?: AbortSignal,
+): Promise<string | undefined> =>
+  await fetchJson(SEARCH_URL, {
+    body: JSON.stringify({
+      docType: DECISION_DOC_TYPE,
+      start: 0,
+      pageSize: PAGE_SIZE,
+      searchFilter: {
+        filterNameValue: [
+          {
+            type: "DATE_RANGE",
+            fieldName: "mkDateOfDecision",
+            fieldValue: { FROM: decisionDate, TO: decisionDate },
+          },
+          {
+            type: "STRING",
+            fieldName: "mkRSAPNumberOfFileNorm",
+            fieldValue: caseNumber,
+          },
+        ],
+      },
+      facetFilter: { facetFilterNameValue: [] },
+      facets: FACET_FIELDS,
+      fieldsToReturn: FIELDS_TO_RETURN,
+      clustering: false,
+    }),
+    ...(signal === undefined ? {} : { signal }),
+  });
+
+/**
+ * The docket file a decision was filed under, with the documents in it.
+ *
+ * Addressed by the register number with its first separator replaced, which
+ * is the address the portal itself builds. It is the only surface stating
+ * when the petition reached the court and what other files it refers to.
+ */
+const fetchCourtFile = async (
+  rvpNumber: string,
+  signal?: AbortSignal,
+): Promise<string | undefined> =>
+  await fetchJson(`${COURT_FILE_URL}/${rvpNumber.replace("/", ":")}`, {
+    ...(signal === undefined ? {} : { signal }),
+  });
+
+/** The vocabularies the coded fields resolve against, whole. */
+type SkUsCodelist = {
+  /** Digest of the response the values below were read out of. */
+  sha256: string;
+  values: Readonly<Record<(typeof JUDGE_CODELISTS)[number], readonly string[]>>;
+};
+
+const parseCodelist = (body: string): SkUsCodelist | undefined => {
+  const payload: unknown = Result.try({
+    try: (): unknown => JSON.parse(body),
+    catch: () => null,
+  }).unwrapOr(null);
+  const codelist = isRecord(payload) ? payload["codelist"] : undefined;
+  if (!isRecord(codelist)) {
+    return undefined;
+  }
+  const roster = (name: (typeof JUDGE_CODELISTS)[number]): string[] => {
+    const entries = codelist[name];
+    return Array.isArray(entries)
+      ? entries.filter((entry): entry is string => typeof entry === "string")
+      : [];
+  };
+  return {
+    sha256: hashContent(body),
+    values: {
+      mkJudgeReporter: roster("mkJudgeReporter"),
+      mkDifferentViewJudges: roster("mkDifferentViewJudges"),
+    },
+  };
+};
+
+/**
+ * What one decision's envelope keeps of the vocabularies.
+ *
+ * The response is corpus-level and two hundred kilobytes; a row per
+ * decision holding all of it would store the same list fifty thousand
+ * times. So the envelope keeps the digest of the response that was read and
+ * the entries this decision's own judge fields matched in it, which is what
+ * a later reader needs to ask whether a name was in the roster at the time.
+ */
+type SkUsCodelistPart = {
+  sha256: string;
+  used: Record<string, readonly string[]>;
+};
+
+const codelistPart = (
+  codelist: SkUsCodelist,
+  named: Readonly<Record<(typeof JUDGE_CODELISTS)[number], readonly string[]>>,
+): SkUsCodelistPart => ({
+  sha256: codelist.sha256,
+  used: Object.fromEntries(
+    JUDGE_CODELISTS.map((name) => [
+      name,
+      named[name].filter((value) => codelist.values[name].includes(value)),
+    ]),
+  ),
+});
+
+/**
+ * The responses a page of decisions shares, fetched once for the page.
+ *
+ * The vocabularies are the same for every decision in a crawl, and a
+ * docket's documents are listed together and read one after another, so
+ * both would otherwise be re-requested per document. Held per call rather
+ * than per process: a cache that outlived a cycle would state a roster the
+ * court has since added a judge to.
+ */
+export type SkUsPageContext = {
+  codelist: (signal?: AbortSignal) => Promise<SkUsCodelist | undefined>;
+  facets: (
+    key: { caseNumber: string; decisionDate: string },
+    signal?: AbortSignal,
+  ) => Promise<string | undefined>;
+  courtFile: (
+    rvpNumber: string,
+    signal?: AbortSignal,
+  ) => Promise<string | undefined>;
+};
+
+/** Joins a docket and a date into one cache key; neither ever contains it. */
+const FACET_KEY_SEPARATOR = "|";
+
+/** Memoize one asynchronous read per key, including the reads that answer nothing. */
+const perKey = <T>(
+  read: (key: string, signal?: AbortSignal) => Promise<T>,
+): ((key: string, signal?: AbortSignal) => Promise<T>) => {
+  const inFlight = new Map<string, Promise<T>>();
+  return async (key, signal) => {
+    const held = inFlight.get(key);
+    if (held !== undefined) {
+      return await held;
+    }
+    const started = read(key, signal);
+    inFlight.set(key, started);
+    return await started;
+  };
+};
+
+export const createSkUsPageContext = (): SkUsPageContext => {
+  const codelist = perKey(async (_key, signal) => {
+    const body = await fetchJson(CODELIST_URL, {
+      ...(signal === undefined ? {} : { signal }),
+    });
+    return body === undefined ? undefined : parseCodelist(body);
+  });
+  const facets = perKey(async (key, signal) => {
+    const [caseNumber = "", decisionDate = ""] = key.split(FACET_KEY_SEPARATOR);
+    return await fetchFacets({ caseNumber, decisionDate }, signal);
+  });
+  const courtFile = perKey(
+    async (key, signal) => await fetchCourtFile(key, signal),
+  );
+
+  return {
+    codelist: async (signal) => await codelist("decision", signal),
+    facets: async ({ caseNumber, decisionDate }, signal) =>
+      await facets(
+        `${caseNumber}${FACET_KEY_SEPARATOR}${decisionDate}`,
+        signal,
+      ),
+    courtFile: async (rvpNumber, signal) => await courtFile(rvpNumber, signal),
+  };
+};
+
 // ── Item parsing ─────────────────────────────────────────
+
+/** The values of one facet, as the service counts them. */
+const facetValues = (
+  facetsJson: string | undefined,
+  field: FacetField,
+): string[] => {
+  if (facetsJson === undefined) {
+    return [];
+  }
+  const payload: unknown = Result.try({
+    try: (): unknown => JSON.parse(facetsJson),
+    catch: () => null,
+  }).unwrapOr(null);
+  const counts = isRecord(payload) ? payload["facetCount"] : undefined;
+  const field_ = isRecord(counts) ? counts[field] : undefined;
+  return isRecord(field_) ? Object.keys(field_) : [];
+};
+
+/** The header row of a docket file, which is the document typed as the file. */
+const courtFileHeader = (
+  fileJson: string | undefined,
+): SearchDocument | undefined => {
+  if (fileJson === undefined) {
+    return undefined;
+  }
+  const payload: unknown = Result.try({
+    try: (): unknown => JSON.parse(fileJson),
+    catch: () => null,
+  }).unwrapOr(null);
+  const documents = isRecord(payload) ? payload["documents"] : undefined;
+  if (!Array.isArray(documents)) {
+    return undefined;
+  }
+  return documents.find(
+    (document): document is SearchDocument =>
+      isRecord(document) && document["docType"] === "USSR_COURTFILE",
+  );
+};
 
 const dedupe = (arr: readonly string[] | undefined): string[] =>
   arr ? [...new Set(arr)] : [];
+
+/** A field the service sends as one value on a decision and several on an archived one. */
+const asList = (value: string | readonly string[] | undefined): string[] => {
+  if (value === undefined) {
+    return [];
+  }
+  return typeof value === "string" ? [value] : [...value];
+};
 
 /**
  * The two fields an item must state for this adapter to keep it: the docket it
@@ -331,51 +710,207 @@ export type SkUsBuildResult =
   /** The court served no document for the id the listing states. */
   | { type: "detail-unavailable"; decision: IngestionResult };
 
+export type BuildSkUsDecisionOptions = {
+  /**
+   * The responses this page has already fetched. A caller building one
+   * decision on its own may omit it and pay for its own.
+   */
+  context?: SkUsPageContext | undefined;
+  signal?: AbortSignal | undefined;
+};
+
 /**
- * Build one decision from a search-listing item, downloading and parsing its
- * PDF. Shared by the crawl and the reconciliation walk so neither can key,
- * parse or enrich an item differently from the other.
+ * The judges this decision's own record names, in the two roles the service
+ * states structurally.
+ *
+ * The rapporteur is a field on the row. The dissenters are an index field
+ * the row never carries, counted per docket by the facet query; the court
+ * also names the author in the first line of the opinion's own text, and
+ * that prose is deliberately not read here, because a roster field the
+ * publisher maintains is a better answer than a sentence parsed out of a
+ * document.
+ */
+const skUsJudges = ({
+  rapporteurs,
+  dissenters,
+}: {
+  rapporteurs: readonly string[];
+  dissenters: readonly string[];
+}): DecisionJudgeInput[] =>
+  [
+    ...rapporteurs.map((nameAsPrinted) => ({
+      role: DECISION_JUDGE_ROLE.RAPPORTEUR,
+      nameAsPrinted,
+    })),
+    ...dissenters.map((nameAsPrinted) => ({
+      role: DECISION_JUDGE_ROLE.DISSENTING,
+      nameAsPrinted,
+    })),
+  ].filter(({ nameAsPrinted }) => nameAsPrinted.trim().length > 0);
+
+/**
+ * The court's own statement that a collection entry has no legal sentence.
+ *
+ * Printed in place of the text rather than left blank, so it is an answer
+ * and not an absence: a reader that stored it as the sentence would publish
+ * the words "no legal sentence" as the court's holding.
+ */
+const NO_LEGAL_SENTENCE = "- bez právnej vety -";
+
+const skUsTextFields = (doc: SearchDocument): IngestionResult["textFields"] => {
+  const absent = absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED);
+  const headnote = doc.mkClauseTitle?.trim();
+  const legalSentence = doc.mkClauseText?.trim();
+  return {
+    ...absent,
+    ...(headnote === undefined || headnote.length === 0
+      ? {}
+      : { headnote: { type: "present" as const, text: headnote } }),
+    ...(legalSentence === undefined ||
+    legalSentence.length === 0 ||
+    legalSentence === NO_LEGAL_SENTENCE
+      ? {}
+      : { legalSentence: { type: "present" as const, text: legalSentence } }),
+  };
+};
+
+type SkUsMetadataOptions = {
+  doc: SearchDocument;
+  facetsJson: string | undefined;
+  /** The docket file's own header row, where the service served one. */
+  header: SearchDocument | undefined;
+};
+
+/**
+ * Every field the stored responses state, under the name this row keeps it.
+ *
+ * Two are renamed at the boundary. The service calls them `mkWordRegister`
+ * and `mkMaterialRegister`, and prints them as `Predmet konania` (what the
+ * proceedings were about) and `Vecný register` (the subject index) — which
+ * is the opposite of what the key names suggest, so the row spells what the
+ * court prints.
+ */
+const skUsMetadata = ({
+  doc,
+  facetsJson,
+  header,
+}: SkUsMetadataOptions): Record<string, unknown> => ({
+  caseNumber: doc.mkRSAPNumberOfFile,
+  ecli: doc.mkECLI,
+  documentId: doc.documentId,
+  docType: doc.docType,
+  title: doc.title,
+  contentType: doc.contentType,
+  documentType: doc.mkDocumentType,
+  rvpNumber: doc.mkRVPNumberOfFile,
+  typeOfDecision: dedupe(doc.mkTypeOfDecision),
+  typeOfProceeding: doc.mkTypeOfProceeding,
+  typeOfNegotiation: dedupe(doc.mkTypeOfNegotiation),
+  legalBasis: dedupe(doc.mkDecisionInTermsOf),
+  result: dedupe(doc.mkResultOfNegotiation),
+  cause: dedupe(doc.mkCause),
+  dissentingOpinion: doc.mkDifferentView,
+  proceedingSubject: dedupe(doc.mkWordRegister),
+  subjectIndex: dedupe(doc.mkMaterialRegister),
+  challengedLegislation: asList(doc.mkComplainedLegalRegulation),
+  clarificationOfLegalRegulation: asList(doc.mkClarificationOfLegalRegulation),
+  legalForceDate: parseApiDate(doc.mkDateOfLegalForce),
+  publicationDate: parseApiDate(doc.mkPublicationDate),
+  fileReference: doc.mkFileReference,
+  typeOfProposer: asList(doc.mkTypeOfProposer),
+  affectedLegalRegulation: doc.mkAffectedLegalRegulation,
+  underage: doc.mkUnderage,
+  includeToZnaU: doc.mkIncludeToZnaU,
+  formOfEntry: doc.mkFormOfEntry,
+  typeOfEntry: doc.mkTypeOfEntry,
+  parentDecisionKind: doc.mkParentIdDecision,
+  lawReportsNumber: doc.mkLawReportsNumber,
+  volumeOfLawReports: doc.mkVolumeOfLawReports,
+  yearOfLawReports: doc.mkYearOfLawReports,
+  collectionPeriod: doc.mkTimePeriodZNaU,
+  webTitle: doc.mkWebTitle,
+  // The docket file answers the two the decision row leaves empty: when the
+  // petition arrived, and what other files this one refers to.
+  entryDate: parseApiDate(doc.mkEntryDate ?? header?.mkEntryDate),
+  references: doc.mkReferences ?? header?.mkReferences,
+  courtFileId: header?.documentId,
+  defendant: facetValues(facetsJson, "mkDefendant"),
+  publicDefendant: facetValues(facetsJson, "mkPublicDefendant"),
+  violator: facetValues(facetsJson, "mkViolator"),
+  formOfProposer: facetValues(facetsJson, "mkFormOfProposer"),
+  kindOfOtherProposer: facetValues(facetsJson, "mkKindOfOtherProposer"),
+  defendantProceedingFileNumber: facetValues(
+    facetsJson,
+    "mkFileNumberOfDefendantProceeding",
+  ),
+});
+
+/**
+ * Build one decision from a search-listing item, fetching every other
+ * response the service serves for it. Shared by the crawl and the
+ * reconciliation walk so neither can key, parse or enrich an item
+ * differently from the other.
+ *
+ * Four requests per document: the text, the facet counts the index-only
+ * fields are stated as, the docket file, and the document file itself. Two
+ * of them are shared within a page, so a docket's separate opinions cost
+ * the text and the file only.
  */
 export const buildSkUsDecision = async (
   doc: SearchDocument,
-  signal?: AbortSignal,
+  { context, signal }: BuildSkUsDecisionOptions = {},
 ): Promise<SkUsBuildResult> => {
   const fields = skUsIdentityFields(doc);
   if (fields === null) {
     return { type: "unkeyable" };
   }
   const { caseNumber, documentId } = fields;
+  const page = context ?? createSkUsPageContext();
 
   const decisionDate = parseApiDate(doc.mkDateOfDecision);
   const decisionType = doc.mkFormOfDecision?.toLowerCase();
   const ecli = doc.mkECLI;
   const court = "Ústavný súd SR";
+  const documentUrl = `${DOC_DOWNLOAD_URL}/${documentId}`;
 
-  // Fetch and parse PDF
+  const documentXhtml = await fetchDocumentXhtml(documentId, signal);
+  const facetsJson =
+    decisionDate === undefined
+      ? undefined
+      : await page.facets({ caseNumber, decisionDate }, signal);
+  const courtFileJson =
+    doc.mkRVPNumberOfFile === undefined
+      ? undefined
+      : await page.courtFile(doc.mkRVPNumberOfFile, signal);
   const pdfBytes = await fetchPdfBytes(documentId, signal);
+
+  const rapporteurs =
+    doc.mkJudgeReporter === undefined ? [] : [doc.mkJudgeReporter];
+  const dissenters = facetValues(facetsJson, "mkDifferentViewJudges");
+  const codelist = await page.codelist(signal);
 
   let documentAst: DocumentAst | EmptyAst = EMPTY_AST;
   let fulltext: string | undefined;
 
-  if (pdfBytes) {
+  if (documentXhtml !== undefined) {
     try {
-      const parsed = await parseSkDecisionPdf({
-        pdfBytes,
+      const parsed = parseSkUsDocumentXhtml({
+        xhtml: documentXhtml,
         caseNumber,
         ecli,
         court,
         decisionDate,
         decisionType,
-        sourceSystem: "ustavnysud.sk",
+        documentUrl,
       });
       documentAst = parsed.documentAst;
       fulltext = parsed.fulltext;
     } catch (error) {
-      // The document itself came back and is stored verbatim, so its text is
-      // recoverable by re-parsing what was kept rather than by asking the
-      // court again. Reported rather than swallowed: a parser that starts
-      // failing across a whole page is otherwise indistinguishable from
-      // decisions that genuinely carry no text.
+      // The document itself is in the envelope, so its text is recoverable
+      // by re-parsing what was kept rather than by asking the court again.
+      // Reported rather than swallowed: a parser that starts failing across
+      // a whole page is otherwise indistinguishable from decisions that
+      // genuinely carry no text.
       logger.warn("case_law.ingestion.document_parse_failed", {
         adapterKey: ADAPTER_KEYS.SK_US,
         caseNumber,
@@ -384,8 +919,25 @@ export const buildSkUsDecision = async (
     }
   }
 
-  const rawHash = hashContent(JSON.stringify(doc));
-  const documentUrl = `${DOC_DOWNLOAD_URL}/${documentId}`;
+  const header = courtFileHeader(courtFileJson);
+
+  const parts: Record<string, string> = {
+    listing: JSON.stringify(doc),
+    ...(documentXhtml === undefined ? {} : { document: documentXhtml }),
+    ...(facetsJson === undefined ? {} : { facets: facetsJson }),
+    ...(courtFileJson === undefined ? {} : { file: courtFileJson }),
+    ...(codelist === undefined
+      ? {}
+      : {
+          codelists: JSON.stringify(
+            codelistPart(codelist, {
+              mkJudgeReporter: rapporteurs,
+              mkDifferentViewJudges: dissenters,
+            }),
+          ),
+        }),
+  };
+  const sourceRaw = encodeSourceRawEnvelope(parts);
 
   const decision: IngestionResult = {
     caseNumber,
@@ -404,58 +956,37 @@ export const buildSkUsDecision = async (
     decisionDate,
     decisionType,
     fulltext,
-    // The listing proves the document exists; without its PDF this row carries
-    // metadata only, and must never overwrite detail a later fetch recovered.
+    judges: skUsJudges({ rapporteurs, dissenters }),
+    // The listing proves the document exists; without its file this row
+    // carries the metadata and the text, and must never overwrite detail a
+    // later fetch recovered.
     ...(pdfBytes === undefined ? { isListingOnly: true } : {}),
     sourceUrl: documentUrl,
     documentUrl,
-    textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-    metadata: {
-      caseNumber,
-      ecli,
-      court,
-      decisionDate,
-      decisionType,
-      documentId,
-      documentType: doc.mkDocumentType,
-      rvpNumber: doc.mkRVPNumberOfFile,
-      judge: doc.mkJudgeReporter,
-      typeOfDecision: dedupe(doc.mkTypeOfDecision),
-      typeOfProceeding: doc.mkTypeOfProceeding,
-      typeOfNegotiation: dedupe(doc.mkTypeOfNegotiation),
-      legalBasis: dedupe(doc.mkDecisionInTermsOf),
-      result: dedupe(doc.mkResultOfNegotiation),
-      cause: dedupe(doc.mkCause),
-      dissentingOpinion: dedupe(doc.mkDifferentView),
-      wordRegister: dedupe(doc.mkWordRegister),
-      materialRegister: dedupe(doc.mkMaterialRegister),
-      challengedLegislation: (() => {
-        if (Array.isArray(doc.mkComplainedLegalRegulation)) {
-          return doc.mkComplainedLegalRegulation;
-        }
-        if (doc.mkComplainedLegalRegulation) {
-          return [doc.mkComplainedLegalRegulation];
-        }
-        return undefined;
-      })(),
-      legalForceDate: parseApiDate(doc.mkDateOfLegalForce),
-      publicationDate: parseApiDate(doc.mkPublicationDate),
-      references: doc.mkReferences,
-      fileReference: doc.mkFileReference,
-      typeOfProposer: doc.mkTypeOfProposer,
-      affectedLegalRegulation: doc.mkAffectedLegalRegulation,
-      underage: doc.mkUnderage,
-      includeToZnaU: doc.mkIncludeToZnaU,
-      entryDate: parseApiDate(doc.mkEntryDate),
-      formOfEntry: doc.mkFormOfEntry,
-      typeOfEntry: doc.mkTypeOfEntry,
-    },
-    rawHash,
+    textFields: skUsTextFields(doc),
+    metadata: checkedDecisionMetadata(
+      skUsMetadata({ doc, facetsJson, header }),
+    ),
+    // Over the envelope, not over the listing row: the row is one of six
+    // responses stored, and a hash of it alone would call a decision
+    // unchanged after the court rewrote the document behind it.
+    rawHash: hashContent(sourceRaw),
     parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.SK_US],
     documentAst,
-    sourceRaw: JSON.stringify(doc),
-    sourceRawBytes: pdfBytes,
-    sourceRawContentType: pdfBytes ? "application/pdf" : "application/json",
+    sourceRaw,
+    // The file the court serves is binary, so the envelope names it rather
+    // than holding it; the pipeline writes it and fills in the address.
+    ...(pdfBytes === undefined
+      ? {}
+      : {
+          sourceRawObjects: {
+            "document-file": {
+              bytes: pdfBytes,
+              contentType: "application/pdf",
+            },
+          },
+        }),
+    sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   };
 
   return pdfBytes === undefined
@@ -929,7 +1460,9 @@ const buildSkUsFromPayload = async (
   if (!isSearchDocument(payload)) {
     return { type: "unkeyable" };
   }
-  const built = await buildSkUsDecision(payload, signal);
+  const built = await buildSkUsDecision(payload, {
+    ...(signal === undefined ? {} : { signal }),
+  });
   switch (built.type) {
     case "built":
       return { type: "built", decision: built.decision };
@@ -946,15 +1479,568 @@ const buildSkUsFromPayload = async (
   }
 };
 
+// ── Source fields ────────────────────────────────────────
+
+/**
+ * Every field this service states for one decision, under its own key.
+ *
+ * Three responses state fields, and the union of their keys is this list.
+ * The search row carries the same forty-six keys for every corpus the
+ * endpoint serves, filling a different part of them per corpus. The facet
+ * query states seven more that no projection ever carries. The
+ * vocabularies state no field of their own: they are the values two of the
+ * keys above are drawn from, so they resolve under those keys rather than
+ * beside them.
+ */
+const SK_US_SOURCE_FIELDS_LIST = [
+  "documentId",
+  "docType",
+  "title",
+  "content",
+  "index",
+  "extension",
+  "size",
+  "contentType",
+  "mkDocumentType",
+  "mkRSAPNumberOfFile",
+  "mkRVPNumberOfFile",
+  "mkECLI",
+  "mkDateOfDecision",
+  "mkDateOfLegalForce",
+  "mkPublicationDate",
+  "mkFormOfDecision",
+  "mkTypeOfDecision",
+  "mkTypeOfProceeding",
+  "mkTypeOfNegotiation",
+  "mkDecisionInTermsOf",
+  "mkDecisionInTermsOfForSort",
+  "mkResultOfNegotiation",
+  "mkCause",
+  "mkJudgeReporter",
+  "mkDifferentView",
+  "mkWordRegister",
+  "mkMaterialRegister",
+  "mkComplainedLegalRegulation",
+  "mkClarificationOfLegalRegulation",
+  "mkFileReference",
+  "mkReferences",
+  "mkTypeOfProposer",
+  "mkAffectedLegalRegulation",
+  "mkUnderage",
+  "mkIncludeToZnaU",
+  "mkEntryDate",
+  "mkFormOfEntry",
+  "mkTypeOfEntry",
+  "mkParentIdDecision",
+  "mkLawReportsNumber",
+  "mkVolumeOfLawReports",
+  "mkYearOfLawReports",
+  "mkTimePeriodZNaU",
+  "mkClauseTitle",
+  "mkClauseText",
+  "mkWebTitle",
+  ...FACET_FIELDS,
+] as const;
+
+type SkUsSourceField = (typeof SK_US_SOURCE_FIELDS_LIST)[number];
+
+const SK_US_SOURCE_FIELDS = {
+  documentId: { disposition: "stored", target: { type: "identity" } },
+  docType: {
+    disposition: "stored",
+    target: { type: "metadata", key: "docType" },
+  },
+  title: { disposition: "stored", target: { type: "metadata", key: "title" } },
+  content: excludedSourceField(
+    "always empty in a search row; the document body is served by an endpoint of its own and kept as the document part",
+  ),
+  index: excludedSourceField(
+    "the row's offset inside the page it arrived on, which changes with the page and states nothing about the document",
+  ),
+  extension: excludedSourceField(
+    "empty on every record of every corpus this endpoint serves",
+  ),
+  size: excludedSourceField(
+    "empty on every record of every corpus this endpoint serves",
+  ),
+  contentType: {
+    disposition: "stored",
+    target: { type: "metadata", key: "contentType" },
+  },
+  mkDocumentType: {
+    disposition: "stored",
+    target: { type: "metadata", key: "documentType" },
+  },
+  mkRSAPNumberOfFile: {
+    disposition: "stored",
+    target: { type: "result", key: "caseNumber" },
+  },
+  mkRVPNumberOfFile: {
+    disposition: "stored",
+    target: { type: "metadata", key: "rvpNumber" },
+  },
+  mkECLI: { disposition: "stored", target: { type: "result", key: "ecli" } },
+  mkDateOfDecision: {
+    disposition: "stored",
+    target: { type: "result", key: "decisionDate" },
+  },
+  mkDateOfLegalForce: {
+    disposition: "stored",
+    target: { type: "metadata", key: "legalForceDate" },
+  },
+  mkPublicationDate: {
+    disposition: "stored",
+    target: { type: "metadata", key: "publicationDate" },
+  },
+  mkFormOfDecision: {
+    disposition: "stored",
+    target: { type: "result", key: "decisionType" },
+  },
+  mkTypeOfDecision: {
+    disposition: "stored",
+    target: { type: "metadata", key: "typeOfDecision" },
+  },
+  mkTypeOfProceeding: {
+    disposition: "stored",
+    target: { type: "metadata", key: "typeOfProceeding" },
+  },
+  mkTypeOfNegotiation: {
+    disposition: "stored",
+    target: { type: "metadata", key: "typeOfNegotiation" },
+  },
+  mkDecisionInTermsOf: {
+    disposition: "stored",
+    target: { type: "metadata", key: "legalBasis" },
+  },
+  mkDecisionInTermsOfForSort: excludedSourceField(
+    "a sort projection of the basis field: the same values flattened into one string",
+  ),
+  mkResultOfNegotiation: {
+    disposition: "stored",
+    target: { type: "metadata", key: "result" },
+  },
+  mkCause: {
+    disposition: "stored",
+    target: { type: "metadata", key: "cause" },
+  },
+  mkJudgeReporter: {
+    disposition: "stored",
+    target: { type: "result", key: "judges" },
+  },
+  mkDifferentView: {
+    disposition: "stored",
+    target: { type: "metadata", key: "dissentingOpinion" },
+  },
+  mkWordRegister: {
+    disposition: "stored",
+    target: { type: "metadata", key: "proceedingSubject" },
+  },
+  mkMaterialRegister: {
+    disposition: "stored",
+    target: { type: "metadata", key: "subjectIndex" },
+  },
+  mkComplainedLegalRegulation: {
+    disposition: "stored",
+    target: { type: "metadata", key: "challengedLegislation" },
+  },
+  mkClarificationOfLegalRegulation: {
+    disposition: "stored",
+    target: { type: "metadata", key: "clarificationOfLegalRegulation" },
+  },
+  mkFileReference: {
+    disposition: "stored",
+    target: { type: "metadata", key: "fileReference" },
+  },
+  mkReferences: {
+    disposition: "stored",
+    target: { type: "metadata", key: "references" },
+  },
+  mkTypeOfProposer: {
+    disposition: "stored",
+    target: { type: "metadata", key: "typeOfProposer" },
+  },
+  mkAffectedLegalRegulation: {
+    disposition: "stored",
+    target: { type: "metadata", key: "affectedLegalRegulation" },
+  },
+  mkUnderage: {
+    disposition: "stored",
+    target: { type: "metadata", key: "underage" },
+  },
+  mkIncludeToZnaU: {
+    disposition: "stored",
+    target: { type: "metadata", key: "includeToZnaU" },
+  },
+  mkEntryDate: {
+    disposition: "stored",
+    target: { type: "metadata", key: "entryDate" },
+  },
+  mkFormOfEntry: {
+    disposition: "stored",
+    target: { type: "metadata", key: "formOfEntry" },
+  },
+  mkTypeOfEntry: {
+    disposition: "stored",
+    target: { type: "metadata", key: "typeOfEntry" },
+  },
+  mkParentIdDecision: {
+    disposition: "stored",
+    target: { type: "metadata", key: "parentDecisionKind" },
+  },
+  mkLawReportsNumber: {
+    disposition: "stored",
+    target: { type: "metadata", key: "lawReportsNumber" },
+  },
+  mkVolumeOfLawReports: {
+    disposition: "stored",
+    target: { type: "metadata", key: "volumeOfLawReports" },
+  },
+  mkYearOfLawReports: {
+    disposition: "stored",
+    target: { type: "metadata", key: "yearOfLawReports" },
+  },
+  mkTimePeriodZNaU: {
+    disposition: "stored",
+    target: { type: "metadata", key: "collectionPeriod" },
+  },
+  mkClauseTitle: {
+    disposition: "stored",
+    target: { type: "textField", key: "headnote" },
+  },
+  mkClauseText: {
+    disposition: "stored",
+    target: { type: "textField", key: "legalSentence" },
+  },
+  mkWebTitle: {
+    disposition: "stored",
+    target: { type: "metadata", key: "webTitle" },
+  },
+  mkDifferentViewJudges: {
+    disposition: "stored",
+    target: { type: "result", key: "judges" },
+  },
+  mkDefendant: {
+    disposition: "stored",
+    target: { type: "metadata", key: "defendant" },
+  },
+  mkPublicDefendant: {
+    disposition: "stored",
+    target: { type: "metadata", key: "publicDefendant" },
+  },
+  mkViolator: {
+    disposition: "stored",
+    target: { type: "metadata", key: "violator" },
+  },
+  mkFormOfProposer: {
+    disposition: "stored",
+    target: { type: "metadata", key: "formOfProposer" },
+  },
+  mkKindOfOtherProposer: {
+    disposition: "stored",
+    target: { type: "metadata", key: "kindOfOtherProposer" },
+  },
+  mkFileNumberOfDefendantProceeding: {
+    disposition: "stored",
+    target: { type: "metadata", key: "defendantProceedingFileNumber" },
+  },
+} as const satisfies Record<SkUsSourceField, SourceFieldDisposition>;
+
+/**
+ * Read back the field names the stored envelope states.
+ *
+ * Driven from the parts rather than from the list above, so a key the
+ * service starts sending reaches the conformance suite as an undeclared
+ * field instead of as silence. The document part states no named field at
+ * all: it is the decision's own prose, and the parts that label anything
+ * are the three read here.
+ */
+const listSkUsSourceFields = (parts: SourceRawParts): readonly string[] => {
+  const names = new Set<string>();
+
+  const listing: unknown = Result.try({
+    try: (): unknown => JSON.parse(parts["listing"] ?? "null"),
+    catch: () => null,
+  }).unwrapOr(null);
+  if (isRecord(listing)) {
+    for (const name of Object.keys(listing)) {
+      names.add(name);
+    }
+  }
+
+  const facets: unknown = Result.try({
+    try: (): unknown => JSON.parse(parts["facets"] ?? "null"),
+    catch: () => null,
+  }).unwrapOr(null);
+  const facetCount = isRecord(facets) ? facets["facetCount"] : undefined;
+  if (isRecord(facetCount)) {
+    for (const name of Object.keys(facetCount)) {
+      names.add(name);
+    }
+  }
+
+  // The vocabularies resolve two of the names above; the part states which
+  // ones were read, and a vocabulary nothing was read from states nothing.
+  const codelists: unknown = Result.try({
+    try: (): unknown => JSON.parse(parts["codelists"] ?? "null"),
+    catch: () => null,
+  }).unwrapOr(null);
+  const used = isRecord(codelists) ? codelists["used"] : undefined;
+  if (isRecord(used)) {
+    for (const [name, values] of Object.entries(used)) {
+      if (Array.isArray(values) && values.length > 0) {
+        names.add(name);
+      }
+    }
+  }
+
+  return [...names];
+};
+
+// ── Re-parsing a stored envelope ─────────────────────────
+
+const SK_US_REPARSABLE_CONTENT_TYPES = new Set([
+  "application/json",
+  "application/pdf",
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+]);
+
+/**
+ * Read both the envelope and the two shapes stored before it.
+ *
+ * Rows written before this adapter had an envelope hold either the search
+ * row alone, as JSON, or the document file alone, as its bytes. The second
+ * is why a legacy row can carry no listing at all: the pipeline stored
+ * whichever of the two the adapter set last, and the file won.
+ */
+export const skUsStoredRawParts = (
+  raw: string,
+  contentType: string | null,
+): SourceRawParts | null => {
+  const envelope = decodeSourceRawEnvelope(raw);
+  if (envelope !== null) {
+    return envelope;
+  }
+  if (contentType === "application/pdf") {
+    // The bytes are the document file, which this adapter no longer parses
+    // and cannot rebuild a row from; naming the part is what lets a reader
+    // say so rather than guess at the payload.
+    return { "document-file": raw };
+  }
+  if (contentType !== "application/json" && contentType !== null) {
+    return null;
+  }
+  const parsed: unknown = Result.try({
+    try: (): unknown => JSON.parse(raw),
+    catch: () => null,
+  }).unwrapOr(null);
+  return isRecord(parsed) ? { listing: raw } : null;
+};
+
+/**
+ * Rebuild one decision from its stored responses alone.
+ *
+ * The listing part is what a row is rebuilt from, and the document part is
+ * what its text comes from, so a legacy row holding only the document file
+ * is refused: its metadata was never stored, and inventing it from the
+ * database row would write a decision the publisher never stated.
+ */
+const reparseStoredRaw = (
+  stored: StoredRawReparseInput,
+): StoredRawReparseOutcome => {
+  if (
+    stored.contentType !== null &&
+    !SK_US_REPARSABLE_CONTENT_TYPES.has(stored.contentType)
+  ) {
+    return {
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.UNSUPPORTED_CONTENT,
+      detail: `stored content type ${stored.contentType}`,
+    };
+  }
+
+  const raw = new TextDecoder().decode(stored.raw);
+  const parts = skUsStoredRawParts(raw, stored.contentType);
+  const listingJson = parts?.["listing"];
+  if (listingJson === undefined) {
+    return {
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA,
+      detail: `no search row in the stored payload for ${stored.caseNumber}`,
+    };
+  }
+  const listing: unknown = Result.try({
+    try: (): unknown => JSON.parse(listingJson),
+    catch: () => null,
+  }).unwrapOr(null);
+  if (!isSearchDocument(listing)) {
+    return {
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA,
+      detail: `the stored search row for ${stored.caseNumber} states no identity`,
+    };
+  }
+
+  const fields = skUsIdentityFields(listing);
+  if (fields === null) {
+    return {
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA,
+      detail: `the stored search row for ${stored.caseNumber} states no identity`,
+    };
+  }
+  if (fields.caseNumber !== stored.caseNumber) {
+    return {
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.IDENTITY_MISMATCH,
+      detail: `stored payload states ${fields.caseNumber}`,
+    };
+  }
+
+  const decisionDate = parseApiDate(listing.mkDateOfDecision);
+  const decisionType = listing.mkFormOfDecision?.toLowerCase();
+  const court = stored.court;
+  const documentUrl = `${DOC_DOWNLOAD_URL}/${fields.documentId}`;
+  const documentXhtml = parts?.["document"];
+  const facetsJson = parts?.["facets"];
+
+  const parsed =
+    documentXhtml === undefined
+      ? null
+      : parseSkUsDocumentXhtml({
+          xhtml: documentXhtml,
+          caseNumber: fields.caseNumber,
+          ecli: listing.mkECLI,
+          court,
+          decisionDate,
+          decisionType,
+          documentUrl,
+        });
+
+  return {
+    type: "parsed",
+    result: {
+      caseNumber: fields.caseNumber,
+      sourceDocumentId: fields.documentId,
+      ecli: listing.mkECLI,
+      court,
+      country: ADAPTER_MANIFESTS[ADAPTER_KEYS.SK_US].country,
+      language: SK_US_LANGUAGE,
+      decisionDate,
+      decisionType,
+      ...(parsed === null ? {} : { fulltext: parsed.fulltext }),
+      judges: skUsJudges({
+        rapporteurs:
+          listing.mkJudgeReporter === undefined
+            ? []
+            : [listing.mkJudgeReporter],
+        dissenters: facetValues(facetsJson, "mkDifferentViewJudges"),
+      }),
+      sourceUrl: documentUrl,
+      documentUrl,
+      textFields: skUsTextFields(listing),
+      metadata: checkedDecisionMetadata(
+        skUsMetadata({
+          doc: listing,
+          facetsJson,
+          header: courtFileHeader(parts?.["file"]),
+        }),
+      ),
+      rawHash: hashContent(raw),
+      parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.SK_US],
+      documentAst: parsed === null ? EMPTY_AST : parsed.documentAst,
+      sourceRaw: raw,
+      sourceRawContentType: stored.contentType ?? "application/json",
+    },
+  };
+};
+
 // ── Adapter ──────────────────────────────────────────────
+
+/**
+ * Every payload this court's service serves for one decision, and whether the
+ * row keeps it.
+ *
+ * Six are kept: the search row that names the decision, the text rendering
+ * and the file the court serves of the same document, the facet counts that
+ * are the only statement of several index fields, the docket file the
+ * document was filed under, and the vocabularies the coded fields resolve
+ * against. Two corpora under the same endpoint are not walked; the rest of
+ * the list is this service's export machinery and the portal around it.
+ */
+const SOURCE_SURFACES = [
+  "listing",
+  "details",
+  "document-file",
+  "document",
+  "file",
+  "facets",
+  "codelists",
+  "collection-listing",
+  "archive-listing",
+  "separate-opinion",
+  "rss",
+  "summary-export",
+  "zip-export",
+  "portal-search-page",
+  "sitemap",
+] as const;
+
+const SK_US_SOURCE_SURFACES = {
+  surfaces: {
+    listing: storedSourceSurface("listing"),
+    details: excludedSourceSurface(
+      "verified byte for byte as the same projection the search row already states",
+    ),
+    "document-file": storedSourceSurface("document-file"),
+    document: storedSourceSurface("document"),
+    file: storedSourceSurface("file"),
+    facets: storedSourceSurface("facets"),
+    codelists: storedSourceSurface("codelists"),
+    "collection-listing": backlogSurface(
+      ADAPTER_KEYS.SK_US,
+      "separate corpus; identity reconciliation rule needed",
+    ),
+    "archive-listing": backlogSurface(
+      ADAPTER_KEYS.SK_US,
+      "separate corpus; identity reconciliation rule needed",
+    ),
+    "separate-opinion": excludedSourceSurface(
+      "not a surface: the same query lists it as a document of its own, so it is a decision this adapter already reaches",
+    ),
+    rss: excludedSourceSurface(
+      "the most recent items only; the date-range listing covers them and states a count",
+    ),
+    "summary-export": excludedSourceSurface(
+      "a spreadsheet projection of listing columns, behind a challenge past its first page",
+    ),
+    "zip-export": excludedSourceSurface(
+      "a capped batch of the same document files, behind a challenge",
+    ),
+    "portal-search-page": excludedSourceSurface(
+      "a client-rendered shell; the search payload behind it is what this adapter reads",
+    ),
+    sitemap: excludedSourceSurface(
+      "it lists the portal's own layouts; no per-decision address exists for it to list",
+    ),
+  } as const satisfies Record<
+    (typeof SOURCE_SURFACES)[number],
+    SourceSurfaceDisposition
+  >,
+} as const satisfies SourceSurfaceCensus;
 
 export const skUsAdapter = defineSourceAdapter({
   key: ADAPTER_KEYS.SK_US,
-  sourceFields: PENDING_SOURCE_FIELD_INVENTORY,
+  sourceSurfaces: SK_US_SOURCE_SURFACES,
+  sourceFields: {
+    status: "declared",
+    fields: SK_US_SOURCE_FIELDS,
+    listSourceFields: listSkUsSourceFields,
+  },
   language: "sk",
   minRequestIntervalMs: MIN_REQUEST_INTERVAL_MS,
   pageTimeoutMs: 120_000,
   maxSyncPages: 10,
+  reparseStoredRaw,
 
   /**
    * Known blind spot: the court's decision search runs on a portal widget
@@ -1034,10 +2120,17 @@ export const skUsAdapter = defineSourceAdapter({
         }
 
         const decisions: IngestionResult[] = [];
+        // One context for the page: the vocabularies are fetched once for
+        // it, and a docket listed twice on it costs one facet query and one
+        // docket-file read.
+        const context = createSkUsPageContext();
 
         for (const doc of data.documents) {
           try {
-            const built = await buildSkUsDecision(doc, signal);
+            const built = await buildSkUsDecision(doc, {
+              context,
+              ...(signal === undefined ? {} : { signal }),
+            });
             switch (built.type) {
               case "unkeyable":
                 break;

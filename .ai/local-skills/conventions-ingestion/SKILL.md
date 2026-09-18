@@ -87,6 +87,30 @@ the `persistCheckpoint` callback passed to `commitReplaySafeIngestionBatch`.
 The lint rule enforces the visible boundary; it does not prove that preceding
 external effects are durable.
 
+## Source-Surface Census
+
+A page an adapter never fetched is invisible to any inventory of the pages it
+did. So the declaration comes in two steps, and the first is the surfaces:
+`SourceAdapter.sourceSurfaces` is required, and it is total over the addresses
+the publisher serves for one decision — `SOURCE_SURFACES` as a kebab-case list,
+then the map `as const satisfies Record<<that union>, SourceSurfaceDisposition>`
+as the `surfaces` of a literal written `as const satisfies SourceSurfaceCensus`.
+
+Each surface is one of three things:
+
+- `storedSourceSurface(part)` — fetched with the decision and kept as that
+  envelope part. The conformance suite reads the part back out of an envelope
+  this repository can produce, so an adapter with no such capture cannot
+  declare one;
+- `excludedSourceSurface(reason)` — the same constructor discipline as the
+  field inventory: a blank reason does not compile, and "not fetched today" is
+  not a reason. A rendering of a payload already kept, a corpus-wide index, a
+  query-scoped export and a page the publisher's robots policy disallows are;
+- `backlogSurface(adapter, reason)` — it belongs in the row and is not there
+  yet. Only an adapter already on `source-surface-backlog-baseline.json` can be
+  named, each entry is listed there, and `source-surface-census.test.ts` fails
+  both ways, so the set only shrinks. Recording a surface deletes its line.
+
 ## Source-Field Inventory
 
 A field an adapter never noticed is indistinguishable from one it decided to
@@ -108,18 +132,22 @@ An inventory has three parts, in the adapter beside the readers it mirrors:
   a stored field, derived elsewhere, no field on the row, and data minimization
   are. The constructor is the only way to write an exclusion, and a blank
   reason does not compile;
-- `listSourceFields(payload)`, which reads a page back and answers what the
-  publisher labelled on it.
+- `listSourceFields(parts)`, which reads the stored envelope back and answers
+  what the publisher labelled across it. The whole envelope, not one page: a
+  source states fields on the listing row as well as on the detail payload, and
+  a reader given one of them declares the others out of scope by accident.
 
 `source-field-inventory.test.ts` drives every registered adapter from the
-registry: each enrolled adapter's fixture goes through its own
-`listSourceFields`, every name that comes out must be in the map, and every
-field the map stores must be on the decision built from that fixture, at the
-target the disposition names. A field on the page that is in neither set fails
-with its name.
+registry: each enrolled adapter's fixture is built, its stored envelope goes
+through its own `listSourceFields`, every name that comes out must be in the
+map, and every field the map stores must be on the decision built from that
+fixture, at the target the disposition names. A field on the page that is in
+neither set fails with its name, and so does a field the map declares that the
+envelope never states.
 
-Enrolment is a ratchet. `PENDING_SOURCE_FIELD_INVENTORY` is the one sanctioned
-way to not have an inventory, and
+Enrolment is a ratchet. `pendingSourceFieldInventory(adapter)` is the one
+sanctioned way to not have an inventory, its argument is a closed union of the
+adapters that already exist, and
 `adapters/source-field-inventory-baseline.json` lists exactly which adapters
 use it. The suite fails when a pending adapter is missing from the baseline and
 when a baseline entry has since enrolled, so the set only shrinks. To enrol
@@ -140,11 +168,18 @@ part by its role. A raw that holds only the page the parser read makes a field
 captured later unrecoverable for every stored row: replay can only re-read what
 was kept.
 
+The envelope holds text. A response the adapter keeps as bytes goes through
+`sourceRawBytes`, which the pipeline stores _instead of_ `sourceRaw`, so an
+adapter that sets both loses the payload that names the decision.
+
 `reparseStoredRaw` decodes with `decodeSourceRawEnvelope` and handles `null`,
-which is what a row stored before its adapter had an envelope reads as. Bump
-the adapter's entry in `PARSER_VERSIONS` when the replay's output changes, and
-state in the pull request what a replay does and does not backfill: rows stored
-before the change hold what they held, and only a re-crawl adds to them.
+which is what a row stored before its adapter had an envelope reads as. The
+shapes those rows hold are registered per adapter in `LEGACY_RAW_SHAPES`, so a
+reader knows which payload it is looking at and a migrated adapter deletes its
+line. Bump the adapter's entry in `PARSER_VERSIONS` when the replay's output
+changes, and state in the pull request what a replay does and does not
+backfill: rows stored before the change hold what they held, and only a
+re-crawl adds to them.
 
 ## Verification
 

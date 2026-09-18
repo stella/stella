@@ -54,7 +54,6 @@ import {
 } from "@/api/lib/case-law/document-ast";
 import type { CorpusStorageMode } from "@/api/lib/corpus-storage-mode";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
-import { fetchWithTimeout } from "@/api/lib/fetch";
 import {
   reserveCaseLawCorpusUploadIntent,
   writeReservedCaseLawCorpusUpload,
@@ -103,15 +102,35 @@ export type PendingDocument = {
 };
 
 /**
- * PDFs are large and the court's site is slow; this is the timeout the
- * adapter used before the download was deferred.
+ * The gated download of one decision's PDF.
+ *
+ * One request per decision over a corpus of millions makes this walk the
+ * largest traffic the slice sends the court's host, so every download has to
+ * be counted against that publisher's budget. The gate lives in the ingestion
+ * slice, which `lib` may not import, so the caller supplies it — required, and
+ * never defaulted, because a call site that forgot it would download outside
+ * the budget and nothing would say so.
  */
-const PDF_TIMEOUT_MS = 30_000;
+export type SkDocumentFetch = (
+  url: URL,
+  init: { signal?: AbortSignal },
+) => Promise<Response>;
 
-export const fetchPdfBytes = async (
-  documentUrl: string,
-  signal: AbortSignal,
-): Promise<Uint8Array | undefined> => {
+export type FetchPdfBytesOptions = {
+  documentUrl: string;
+  fetchDocument: SkDocumentFetch;
+  signal: AbortSignal;
+};
+
+/**
+ * The decision's document, or `undefined` where the publisher states there is
+ * none to fetch.
+ */
+export const fetchPdfBytes = async ({
+  documentUrl,
+  fetchDocument,
+  signal,
+}: FetchPdfBytesOptions): Promise<Uint8Array | undefined> => {
   const target = restrictSkCourtDocumentUrl(documentUrl);
   if (target === null) {
     // Persisted legacy rows can predate the provider boundary. Returning the
@@ -120,11 +139,7 @@ export const fetchPdfBytes = async (
     return undefined;
   }
 
-  const response = await fetchWithTimeout(target, {
-    redirect: "error",
-    signal,
-    timeoutMs: PDF_TIMEOUT_MS,
-  });
+  const response = await fetchDocument(target, { signal });
   if (response.ok) {
     return new Uint8Array(await response.arrayBuffer());
   }
@@ -911,12 +926,15 @@ export const DOCUMENT_FETCH_BUDGET_MS = 60_000;
 
 export type FetchDecisionDocumentOptions = {
   decision: PendingDocument;
+  /** The publisher's gate, supplied by the caller. See `SkDocumentFetch`. */
+  fetchDocument: SkDocumentFetch;
   scopedDb: ScopedDb;
   signal: AbortSignal;
 };
 
 const runDecisionDocumentFetch = async ({
   decision,
+  fetchDocument,
   scopedDb,
   signal,
 }: FetchDecisionDocumentOptions): Promise<DecisionDocumentOutcome> => {
@@ -926,7 +944,11 @@ const runDecisionDocumentFetch = async ({
   }
 
   const pdfBytes = decision.documentUrl
-    ? await fetchPdfBytes(decision.documentUrl, signal)
+    ? await fetchPdfBytes({
+        documentUrl: decision.documentUrl,
+        fetchDocument,
+        signal,
+      })
     : undefined;
   const document = pdfBytes
     ? await parsePendingDocument(decision, pdfBytes)

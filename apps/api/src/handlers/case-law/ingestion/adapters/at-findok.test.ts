@@ -1,12 +1,15 @@
 import { describe, expect, it } from "bun:test";
 import JSZip from "jszip";
 
+import { decodeSourceRawEnvelope } from "@/api/handlers/case-law/ingestion/adapter";
 import {
+  assembleAtFindokDecision,
   atFindokNextSlice,
   atFindokPreviousSlice,
   createAtFindokAdapter,
   parseFindokManifest,
 } from "@/api/handlers/case-law/ingestion/adapters/at-findok";
+import { loadDocxArchive } from "@/api/lib/docx-archive";
 
 const DOCUMENT_ID = "b68202a0-55e4-4dea-9e93-971f0b71ae32";
 const MANIFEST_ITEM = {
@@ -213,5 +216,66 @@ describe("Austrian Findok adapter", () => {
     expect(
       await reconciliation.buildDecision(listing.items.at(0)?.payload),
     ).toEqual({ type: "detail-unavailable" });
+  });
+  it("reads both entries of the archive it already downloaded", async () => {
+    // The capture is one decision as the ministry files it: the text of the
+    // decision and the headnotes drawn from it, in one archive.
+    const archive = await loadDocxArchive(
+      await Bun.file(
+        new URL(
+          "../parsers/__fixtures__/at-findok-152649.zip",
+          import.meta.url,
+        ),
+      ).bytes(),
+      { maxEntries: 20, maxEntryBytes: 4_000_000, maxTotalBytes: 4_000_000 },
+    );
+    const documentXml = await archive.readEntryString(
+      "Gesamt/152649.Entscheidungstext.xml",
+    );
+    const headnoteXml = await archive.readEntryString(
+      "Gesamt/152649.Rechtssaetze.xml",
+    );
+    if (documentXml === null || headnoteXml === null) {
+      throw new Error("the captured archive is missing an entry");
+    }
+    const manifest = parseFindokManifest(
+      "bfg",
+      JSON.stringify({
+        generierungsdatum: "18.09.2026 06:17",
+        data: [
+          {
+            ...MANIFEST_ITEM,
+            stammNr: 152_649,
+            pathZip: "152/152649/152649.zip",
+            pathPdf: "152/152649/152649.1.pdf",
+            gz: "RV/2100968/2026",
+            dokumentId: "ffa6f670-dc36-42cc-ae37-52683327a048",
+          },
+        ],
+      }),
+    );
+    const item = manifest.items.at(0);
+    if (item === undefined) {
+      throw new Error("the manifest fixture states no row");
+    }
+
+    const decision = assembleAtFindokDecision(
+      { collection: "bfg", item },
+      { documentXml, headnoteXml },
+    );
+
+    expect(
+      Object.keys(decodeSourceRawEnvelope(decision.sourceRaw ?? "") ?? {}),
+    ).toEqual(["listing", "document-xml", "headnote-xml"]);
+    // The sentence lives in an element of its own, which a reader of the
+    // decision text's body element never finds.
+    expect(decision.textFields.legalSentence).toMatchObject({
+      type: "present",
+    });
+    expect(decision.textFields.summary).toMatchObject({ type: "present" });
+    expect(decision.metadata["headnoteNumbers"]).toEqual(["1"]);
+    expect(decision.metadata["headnoteStatutes"]).not.toEqual([]);
+    expect(decision.metadata["subjectCodes"]).not.toEqual([]);
+    expect(decision.metadata["findokGid"]).toContain("_");
   });
 });

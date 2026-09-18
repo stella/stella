@@ -1,0 +1,6 @@
+{
+  "capture": "recorded",
+  "sha256": "c523223470161566dfb8b5eec1b099e5190580872d3045549e83a33c79d70e1f",
+  "sourceUrl": "https://data.bka.gv.at/ris/api/v2.6/Judikatur?Applikation=Lvwg&Dokumenttyp.SucheInEntscheidungstexten=true&DokumenteProSeite=OneHundred&Seitennummer=1&Sortierung.SortDirection=Ascending&Sortierung.SortedByColumn=Datum&EntscheidungsdatumVon=2025-06-02&EntscheidungsdatumBis=2025-06-02",
+  "capturedAt": "2026-09-18T18:39:19.700Z"
+}

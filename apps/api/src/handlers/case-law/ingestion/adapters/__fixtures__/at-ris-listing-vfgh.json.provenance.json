@@ -1,0 +1,6 @@
+{
+  "capture": "recorded",
+  "sha256": "bf119250fac64b4059e2a3da03dc89a89e46565c5b180098910b5c3e581a3333",
+  "sourceUrl": "https://data.bka.gv.at/ris/api/v2.6/Judikatur?Applikation=Vfgh&Dokumenttyp.SucheInEntscheidungstexten=true&DokumenteProSeite=OneHundred&Seitennummer=1&Sortierung.SortDirection=Ascending&Sortierung.SortedByColumn=Datum&EntscheidungsdatumVon=2025-06-05&EntscheidungsdatumBis=2025-06-05",
+  "capturedAt": "2026-09-18T18:38:53.881Z"
+}

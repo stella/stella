@@ -19,16 +19,72 @@ import {
 import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
 import { tipWindowSlices } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
+import { readGzipJson } from "@/api/lib/gzip-json";
 import {
+  decodeSourceRawEnvelope,
   listingIdentityKey,
   SOURCE_DOCUMENT_ID_MAX_LENGTH,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
 } from "@/api/lib/legal-search/ingestion-types";
+import { isRecord } from "@/api/lib/type-guards";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 const reconciliation = requireReconciliation(skUsAdapter);
 
 const SEARCH_PATH = "/o/v1/dms/search";
+const CONTENT_PATH = "/o/v1/dms/content";
+const CODELIST_PATH = "/o/v1/codelist/decision";
+const COURT_FILE_PREFIX = "/o/v1/dms/file/";
 const DOWNLOAD_PREFIX = "/docDownload/";
+
+/**
+ * The decision text the stubbed service renders, carrying one anonymized
+ * run: a black-on-black span over non-breaking spaces, which is how this
+ * court redacts.
+ */
+const DOCUMENT_XHTML =
+  `<html><body><div><span style="font-size: 21px; ">N\u00c1LEZ<br/><br/></span>` +
+  `<span style="font-size: 12px; ">\u00dastavn\u00fd s\u00fad rozhodol o s\u0165a\u017enosti s\u0165a\u017eovate\u013ea <br/></span>` +
+  `<span style="color: #000000; background-color: #000000; font-size: 12px; ">${"&nbsp;".repeat(6)}</span>` +
+  `<span style="font-size: 12px; "> takto <br/><br/>rozh od ol :  <br/><br/>` +
+  `S\u0165a\u017enosti sa vyhovuje. <br/></span></div></body></html>`;
+
+const CODELIST_BODY = JSON.stringify({
+  codelist: {
+    mkJudgeReporter: ["Ivan Fia\u010dan"],
+    mkDifferentViewJudges: ["Peter Straka"],
+  },
+});
+
+const COURT_FILE_BODY = JSON.stringify({
+  documents: [
+    {
+      docType: "USSR_COURTFILE",
+      documentId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+      mkEntryDate: "06/30/2020 00:00:00",
+      mkReferences: ["2196/2020"],
+    },
+  ],
+  numFound: 1,
+});
+
+/** The facet counts a docket-narrowed search answers with. */
+const facetsBody = (judges: readonly string[]): string =>
+  JSON.stringify({
+    documents: [],
+    numFound: judges.length,
+    facetCount: {
+      mkDifferentViewJudges: Object.fromEntries(
+        judges.map((judge) => [judge, 1]),
+      ),
+      mkDefendant: { "Najvy\u0161\u0161\u00ed s\u00fad SR": 1 },
+      mkPublicDefendant: {},
+      mkViolator: {},
+      mkFormOfProposer: { "Fyzick\u00e1 osoba": 1 },
+      mkKindOfOtherProposer: {},
+      mkFileNumberOfDefendantProceeding: {},
+    },
+  });
 
 /**
  * Items shaped like the DMS actually answers: real document ids, the court's
@@ -39,6 +95,7 @@ const PLENARY_OPINION = {
   documentId: "7964d54e-6708-48e9-92cc-5cc400aab1e3",
   mkDocumentType: "Rozhodnutie - Nález",
   mkRSAPNumberOfFile: "PL. ÚS 4/2020",
+  mkRVPNumberOfFile: "1448/2020",
   mkECLI: "ECLI:SK:USSR:2020:PL.US.4.2020.1",
   mkDateOfDecision: "03/12/2020 00:00:00",
   mkFormOfDecision: "Nález",
@@ -110,13 +167,27 @@ type DownloadStub =
   | { type: "status"; status: number };
 
 type MockOptions = {
-  /** Search responses, one per request, in order. */
+  /** Listing responses, one per request, in order. */
   search: readonly SearchStub[];
   /** Answers derived from the window asked for; takes precedence over `search`. */
   searchFor?: (body: SearchBody) => SearchStub;
   download?: DownloadStub;
   onSearch?: (body: SearchBody, headers: Headers) => void;
+  /** Judges the per-docket facet query reports as dissenting. */
+  dissenters?: readonly string[];
+  /** Every supplementary surface answers nothing, as this service does under load. */
+  supplementaryUnavailable?: boolean;
 };
+
+/**
+ * Whether a search body is the crawl's listing query or the per-docket facet
+ * query. Both go to the same endpoint; only the second narrows on the docket,
+ * which is what makes the two countable apart.
+ */
+const isFacetQuery = (body: SearchBody): boolean =>
+  body.searchFilter.filterNameValue.some(
+    (filter) => filter.fieldName === "mkRSAPNumberOfFileNorm",
+  );
 
 /** A payload that opens like a real PDF; its body is not a parseable one. */
 const PDF_BYTES = new TextEncoder().encode("%PDF-1.4\n1 0 obj\n<<>>\n");
@@ -175,19 +246,38 @@ const searchResponse = (stub: SearchStub): Response => {
   }
 };
 
+type MockHandle = {
+  /** Listing queries: the crawl's own cost, excluding the facet reads. */
+  calls: () => number;
+  downloads: () => number;
+  facetCalls: () => number;
+};
+
 const mockFetch = ({
+  dissenters = [],
   download = { type: "pdf" },
   onSearch,
   search,
   searchFor,
-}: MockOptions): { calls: () => number; downloads: () => number } => {
+  supplementaryUnavailable = false,
+}: MockOptions): MockHandle => {
   let searchCall = 0;
   let downloadCall = 0;
+  let facetCall = 0;
+  const unavailable = () => new Response(null, { status: 204 });
   globalThis.fetch = asFetchMock(
     (input: string | URL | Request, init?: RequestInit) => {
       const url = new URL(input instanceof Request ? input.url : String(input));
       if (url.pathname === SEARCH_PATH) {
         const body = parseSearchBody(init);
+        if (isFacetQuery(body)) {
+          facetCall += 1;
+          return Promise.resolve(
+            supplementaryUnavailable
+              ? unavailable()
+              : new Response(facetsBody(dissenters), { headers: JSON_HEADERS }),
+          );
+        }
         onSearch?.(body, new Headers(init?.headers));
         const next =
           searchFor?.(body) ??
@@ -199,6 +289,32 @@ const mockFetch = ({
             : searchResponse(next),
         );
       }
+      if (url.pathname === CONTENT_PATH) {
+        return Promise.resolve(
+          supplementaryUnavailable
+            ? unavailable()
+            : new Response(
+                JSON.stringify({
+                  content: Buffer.from(DOCUMENT_XHTML).toString("base64"),
+                }),
+                { headers: JSON_HEADERS },
+              ),
+        );
+      }
+      if (url.pathname === CODELIST_PATH) {
+        return Promise.resolve(
+          supplementaryUnavailable
+            ? unavailable()
+            : new Response(CODELIST_BODY, { headers: JSON_HEADERS }),
+        );
+      }
+      if (url.pathname.startsWith(COURT_FILE_PREFIX)) {
+        return Promise.resolve(
+          supplementaryUnavailable
+            ? unavailable()
+            : new Response(COURT_FILE_BODY, { headers: JSON_HEADERS }),
+        );
+      }
       if (url.pathname.startsWith(DOWNLOAD_PREFIX)) {
         downloadCall += 1;
         return Promise.resolve(downloadResponse(download));
@@ -208,7 +324,11 @@ const mockFetch = ({
       );
     },
   );
-  return { calls: () => searchCall, downloads: () => downloadCall };
+  return {
+    calls: () => searchCall,
+    downloads: () => downloadCall,
+    facetCalls: () => facetCall,
+  };
 };
 
 describe("sk-us reconciliation slices", () => {
@@ -651,12 +771,132 @@ describe("sk-us buildDecision", () => {
     expect(outcome.decision.documentUrl).toBe(
       "https://www.ustavnysud.sk/docDownload/7964d54e-6708-48e9-92cc-5cc400aab1e3",
     );
-    expect(outcome.decision.sourceRawContentType).toBe("application/pdf");
+    expect(outcome.decision.sourceRawContentType).toBe(
+      SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+    );
     expect(outcome.decision.isListingOnly).toBeUndefined();
-    // A PDF this parser cannot read is still the document: the bytes are kept
-    // verbatim, so recovering its text is a re-parse of what was stored rather
-    // than another download of the same payload.
-    expect(outcome.decision.sourceRawBytes).toEqual(PDF_BYTES);
+    // The file the court serves is binary, so the envelope names it instead
+    // of holding it; the bytes are handed over for the pipeline to store.
+    expect(outcome.decision.sourceRawBytes).toBeUndefined();
+    expect(outcome.decision.sourceRawObjects?.["document-file"]?.bytes).toEqual(
+      PDF_BYTES,
+    );
+  });
+
+  test("every response the court served for the decision is in the envelope", async () => {
+    mockFetch({ search: [], dissenters: ["Peter Straka"] });
+
+    const outcome = await reconciliation.buildDecision(PLENARY_OPINION);
+    if (outcome.type !== "built") {
+      throw new Error(`expected a built decision, got ${outcome.type}`);
+    }
+    const parts = decodeSourceRawEnvelope(outcome.decision.sourceRaw ?? "");
+
+    // The listing row is what names the decision, and before the envelope it
+    // was the one response a decision with a document kept none of.
+    expect(Object.keys(parts ?? {}).toSorted()).toEqual([
+      "codelists",
+      "document",
+      "facets",
+      "file",
+      "listing",
+    ]);
+    expect(JSON.parse(parts?.["listing"] ?? "null")).toEqual(PLENARY_OPINION);
+    expect(parts?.["document"]).toContain("rozh od ol");
+    // The vocabularies are corpus-level, so the row keeps the digest of the
+    // response it read and the entries this decision resolved against it.
+    expect(JSON.parse(parts?.["codelists"] ?? "null")).toMatchObject({
+      used: {
+        mkJudgeReporter: ["Ivan Fiačan"],
+        mkDifferentViewJudges: ["Peter Straka"],
+      },
+    });
+  });
+
+  test("the judges the source states structurally reach the row", async () => {
+    mockFetch({ search: [], dissenters: ["Peter Straka"] });
+
+    const outcome = await reconciliation.buildDecision(PLENARY_OPINION);
+    if (outcome.type !== "built") {
+      throw new Error(`expected a built decision, got ${outcome.type}`);
+    }
+    // The rapporteur is a field on the row; the dissenter is an index field
+    // the row never carries and the facet query is the only statement of.
+    expect(outcome.decision.judges).toEqual([
+      { role: "rapporteur", nameAsPrinted: "Ivan Fiačan" },
+      { role: "dissenting", nameAsPrinted: "Peter Straka" },
+    ]);
+  });
+
+  test("a separate opinion's kind is the value the court sends, not its letters", async () => {
+    mockFetch({ search: [] });
+
+    const outcome = await reconciliation.buildDecision({
+      ...PLENARY_OPINION,
+      mkDifferentView: "Odlišné stanovisko iné",
+    });
+    if (outcome.type !== "built") {
+      throw new Error(`expected a built decision, got ${outcome.type}`);
+    }
+    // The field is one value of a three-entry vocabulary. Read as a list it
+    // deduplicates into the set of its own characters, which is what every
+    // separate opinion ingested before this carried.
+    expect(outcome.decision.metadata["dissentingOpinion"]).toBe(
+      "Odlišné stanovisko iné",
+    );
+  });
+
+  test("a petitioner kind reads the same whether the court sends one or several", async () => {
+    mockFetch({ search: [] });
+
+    const single = await reconciliation.buildDecision({
+      ...PLENARY_OPINION,
+      mkTypeOfProposer: "Fyzická osoba",
+    });
+    const several = await reconciliation.buildDecision({
+      ...PLENARY_OPINION,
+      mkTypeOfProposer: ["Iná", "Skupina poslancov NR SR"],
+    });
+    if (single.type !== "built" || several.type !== "built") {
+      throw new Error("expected both decisions to build");
+    }
+    expect(single.decision.metadata["typeOfProposer"]).toEqual([
+      "Fyzická osoba",
+    ]);
+    expect(several.decision.metadata["typeOfProposer"]).toEqual([
+      "Iná",
+      "Skupina poslancov NR SR",
+    ]);
+  });
+
+  test("the docket file answers what the decision row leaves empty", async () => {
+    mockFetch({ search: [] });
+
+    const outcome = await reconciliation.buildDecision(PLENARY_OPINION);
+    if (outcome.type !== "built") {
+      throw new Error(`expected a built decision, got ${outcome.type}`);
+    }
+    // Neither is on a decision row: the date the petition reached the court
+    // and the files it refers to are stated on the docket file alone.
+    expect(outcome.decision.metadata["entryDate"]).toBe("2020-06-30");
+    expect(outcome.decision.metadata["references"]).toEqual(["2196/2020"]);
+  });
+
+  test("a decision the supplementary surfaces answer nothing for still builds", async () => {
+    mockFetch({ search: [], supplementaryUnavailable: true });
+
+    const outcome = await reconciliation.buildDecision(PLENARY_OPINION);
+    if (outcome.type !== "built") {
+      throw new Error(`expected a built decision, got ${outcome.type}`);
+    }
+    // A surface the service will not serve leaves its part out rather than
+    // halting the crawl: the listing row still names the decision, and the
+    // envelope states exactly what arrived.
+    expect(
+      Object.keys(
+        decodeSourceRawEnvelope(outcome.decision.sourceRaw ?? "") ?? {},
+      ),
+    ).toEqual(["listing"]);
   });
 
   test("the identity the walk keys is the identity the build stores", async () => {
@@ -793,8 +1033,9 @@ describe("sk-us crawl and reconciliation dispose of a missing document different
     // detail a successful fetch recovered.
     expect(built.decision.caseNumber).toBe("I. ÚS 132/93");
     expect(built.decision.isListingOnly).toBe(true);
-    expect(built.decision.fulltext).toBeUndefined();
-    expect(built.decision.sourceRawContentType).toBe("application/json");
+    expect(built.decision.sourceRawContentType).toBe(
+      SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+    );
   });
 });
 
@@ -908,5 +1149,121 @@ describe("the sk-us steady-state frontier", () => {
     expect(stub.downloads()).toBe(NEW_DOCUMENTS.length);
     expect(quiet.decisions).toHaveLength(0);
     expect(quiet.nextCursor).toBe(collecting.nextCursor);
+  });
+});
+
+/**
+ * What the court actually served, against what this adapter says it serves.
+ *
+ * The suites above drive the adapter with payloads shaped like the
+ * publisher's. These read the publisher's own bytes: one recorded response
+ * per surface the census declares stored. A key the service adds, a facet
+ * it stops answering, a vocabulary it renames all reach this file as a
+ * failure rather than as an inventory that quietly stops being total.
+ */
+describe("the responses this court served, as recorded", () => {
+  const FIXTURES = new URL("__fixtures__/", import.meta.url);
+
+  const readJsonGz = async (name: string): Promise<Record<string, unknown>> => {
+    const payload = await readGzipJson(new URL(name, FIXTURES));
+    if (!isRecord(payload)) {
+      throw new TypeError(`${name} is not a JSON object`);
+    }
+    return payload;
+  };
+
+  const declaredFields = (): Readonly<Record<string, unknown>> => {
+    const { sourceFields } = skUsAdapter;
+    if (sourceFields.status !== "declared") {
+      throw new Error("sk-us declares no source-field inventory");
+    }
+    return sourceFields.fields;
+  };
+
+  test("every key the search row carries has a disposition", async () => {
+    const page = await readJsonGz("sk-us-listing.json.gz");
+    const documents = page["documents"];
+    if (!Array.isArray(documents) || documents.length === 0) {
+      throw new Error("the recorded listing carries no documents");
+    }
+
+    const fields = declaredFields();
+    const undeclared = [
+      ...new Set(
+        documents.flatMap((document) =>
+          isRecord(document) ? Object.keys(document) : [],
+        ),
+      ),
+    ].filter((key) => fields[key] === undefined);
+
+    expect(undeclared).toEqual([]);
+  });
+
+  test("the facet query answers exactly the index fields this adapter asks for", async () => {
+    const facets = await readJsonGz("sk-us-facets.json.gz");
+    const counts = facets["facetCount"];
+    if (!isRecord(counts)) {
+      throw new Error("the recorded facet response states no counts");
+    }
+
+    const fields = declaredFields();
+    expect(
+      Object.keys(counts).filter((key) => fields[key] === undefined),
+    ).toEqual([]);
+    // The separate-opinion judges are the reason this query exists: no
+    // projection ever carries them, whatever `fieldsToReturn` asks for.
+    expect(Object.keys(counts["mkDifferentViewJudges"] ?? {})).not.toEqual([]);
+  });
+
+  test("the docket file states the filing date no decision row carries", async () => {
+    const file = await readJsonGz("sk-us-file.json.gz");
+    const documents = file["documents"];
+    if (!Array.isArray(documents)) {
+      throw new TypeError("the recorded docket file carries no documents");
+    }
+    const header = documents.find(
+      (document) =>
+        isRecord(document) && document["docType"] === "USSR_COURTFILE",
+    );
+
+    expect(isRecord(header) ? header["mkEntryDate"] : undefined).toBeTruthy();
+    // The publisher's own grouping of a docket: the header plus the
+    // documents filed under it, which is stronger than grouping by docket.
+    expect(documents.length).toBeGreaterThan(1);
+  });
+
+  test("the vocabularies still name the two judge rosters", async () => {
+    const payload = await readJsonGz("sk-us-codelist.json.gz");
+    const codelist = payload["codelist"];
+    if (!isRecord(codelist)) {
+      throw new TypeError("the recorded vocabularies state no codelist");
+    }
+
+    for (const name of ["mkJudgeReporter", "mkDifferentViewJudges"]) {
+      const roster = codelist[name];
+      expect(Array.isArray(roster) ? roster.length : 0).toBeGreaterThan(0);
+    }
+  });
+
+  test("the document the service renders is the text, and the file is bytes", async () => {
+    const content = await readJsonGz("sk-us-content.json.gz");
+    const encoded = content["content"];
+    if (typeof encoded !== "string") {
+      throw new TypeError("the recorded document states no content");
+    }
+    const xhtml = Buffer.from(encoded, "base64").toString("utf-8");
+    const file = Bun.gunzipSync(
+      new Uint8Array(
+        await Bun.file(
+          new URL("sk-us-decision.pdf.gz", FIXTURES).pathname,
+        ).arrayBuffer(),
+      ),
+    );
+
+    // Two renderings of one decision. The markup is what the parser reads;
+    // the file is kept for what a later reader may want it for, and the
+    // envelope names it by a digest over these exact bytes.
+    expect(xhtml).toContain("PL. ÚS 11/2021");
+    expect(new TextDecoder().decode(file.subarray(0, 5))).toBe("%PDF-");
   });
 });

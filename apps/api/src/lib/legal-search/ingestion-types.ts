@@ -16,7 +16,10 @@ import type {
   DecisionSection,
   EmptyAst,
 } from "@/api/lib/legal-search/document-types";
-import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
+import {
+  ADAPTER_KEYS,
+  type AdapterKey,
+} from "@/api/lib/legal-search/ingestion-constants";
 
 export { EMPTY_AST };
 export type { EmptyAst };
@@ -135,10 +138,34 @@ export type IngestionResult = {
    * ground truth the pipeline measures citation extraction against.
    */
   publisherCitedCases?: readonly string[] | undefined;
-  /** Binary raw source (e.g., PDF bytes) for S3 upload. */
+  /**
+   * Binary raw source (e.g. PDF bytes) for S3 upload.
+   *
+   * The pipeline stores these bytes *instead of* `sourceRaw`, so an adapter
+   * that sets both keeps only the bytes and loses the payload that named the
+   * decision.
+   */
   sourceRawBytes?: Uint8Array | undefined;
+  /**
+   * Binary responses the envelope names rather than holds, under the part
+   * name each has in {@link SourceRawParts}.
+   *
+   * The envelope is text, so a document the publisher serves as a file has
+   * to live beside it. The pipeline writes each of these under the
+   * decision's raw prefix and rewrites the envelope's `objects` map with the
+   * address it wrote them at; the adapter states only the bytes.
+   */
+  sourceRawObjects?:
+    | Readonly<Record<string, SourceRawObjectPayload>>
+    | undefined;
   /** MIME type of sourceRaw/sourceRawBytes for S3 storage. */
   sourceRawContentType?: string | undefined;
+};
+
+/** One binary response, as the adapter that fetched it hands it over. */
+type SourceRawObjectPayload = {
+  readonly bytes: Uint8Array;
+  readonly contentType: string;
 };
 
 /**
@@ -200,6 +227,29 @@ export type SyncPage = {
 export type SourceRawParts = Readonly<Record<string, string>>;
 
 /**
+ * A binary response the envelope names instead of holding.
+ *
+ * `location` is an address in the form the corpus key columns already use
+ * (`corpus-location.ts`): today always a plain object key, and a packed
+ * address once these files are packed together, which is a change to where
+ * the bytes are written and to nothing that reads this reference.
+ *
+ * `sha256` and `byteLength` are over the publisher's bytes, so a read can be
+ * checked against what was stored rather than trusted for having arrived —
+ * the check that matters once an address names a range inside an object
+ * shared with other decisions.
+ */
+export type SourceRawObjectRef = {
+  readonly location: string;
+  readonly sha256: string;
+  readonly contentType: string;
+  readonly byteLength: number;
+};
+
+/** The binary responses of one envelope, under their part names. */
+export type SourceRawObjects = Readonly<Record<string, SourceRawObjectRef>>;
+
+/**
  * Media type for a multi-part raw payload, distinct from `application/json` so
  * a reader can tell an envelope from a publisher's own JSON document.
  */
@@ -208,8 +258,22 @@ export const SOURCE_RAW_ENVELOPE_CONTENT_TYPE =
 
 const SOURCE_RAW_ENVELOPE_VERSION = 1;
 
-export const encodeSourceRawEnvelope = (parts: SourceRawParts): string =>
-  JSON.stringify({ version: SOURCE_RAW_ENVELOPE_VERSION, parts });
+/**
+ * Write an envelope over the text parts, and over the binary parts it names.
+ *
+ * `objects` is omitted rather than written empty when a decision has no
+ * binary response, so the payload of an adapter that stores only text is
+ * byte-identical to what it wrote before binaries existed.
+ */
+export const encodeSourceRawEnvelope = (
+  parts: SourceRawParts,
+  objects: SourceRawObjects = {},
+): string =>
+  JSON.stringify({
+    version: SOURCE_RAW_ENVELOPE_VERSION,
+    parts,
+    ...(Object.keys(objects).length === 0 ? {} : { objects }),
+  });
 
 /**
  * The parts of a stored envelope, or `null` for a payload that is not one —
@@ -239,6 +303,221 @@ export const decodeSourceRawEnvelope = (raw: string): SourceRawParts | null => {
     ? Object.fromEntries(parts.map(([name, value]) => [name, String(value)]))
     : null;
 };
+
+const isSourceRawObjectRef = (value: unknown): value is SourceRawObjectRef =>
+  typeof value === "object" &&
+  value !== null &&
+  "location" in value &&
+  typeof value.location === "string" &&
+  "sha256" in value &&
+  typeof value.sha256 === "string" &&
+  "contentType" in value &&
+  typeof value.contentType === "string" &&
+  "byteLength" in value &&
+  typeof value.byteLength === "number";
+
+/**
+ * The binary parts a stored envelope names, or `{}` for one that names none.
+ *
+ * Empty rather than null for every absence there is — not an envelope, an
+ * envelope written before binaries, an `objects` map that does not read back
+ * as references — because all of them mean the same thing to a caller: this
+ * row states no binary response. A reader that had to tell them apart would
+ * be deciding about the storage format rather than about the decision.
+ */
+export const decodeSourceRawEnvelopeObjects = (
+  raw: string,
+): SourceRawObjects => {
+  const parsed = Result.try({
+    try: (): unknown => JSON.parse(raw),
+    catch: () => null,
+  }).unwrapOr(null);
+
+  if (
+    parsed === null ||
+    typeof parsed !== "object" ||
+    !("version" in parsed) ||
+    parsed.version !== SOURCE_RAW_ENVELOPE_VERSION ||
+    !("objects" in parsed) ||
+    typeof parsed.objects !== "object" ||
+    parsed.objects === null
+  ) {
+    return {};
+  }
+
+  const objects = Object.entries(parsed.objects);
+  return objects.every(([, value]) => isSourceRawObjectRef(value))
+    ? Object.fromEntries(objects)
+    : {};
+};
+
+/**
+ * Re-write a stored envelope with the addresses its binary parts were
+ * written under.
+ *
+ * The adapter cannot name them: an address carries the corpus key the bytes
+ * landed at, and the write happens in the pipeline. So the adapter states the
+ * bytes and this closes the envelope over what storage answered.
+ */
+export const withSourceRawObjects = (
+  raw: string,
+  objects: SourceRawObjects,
+): string => {
+  const parts = decodeSourceRawEnvelope(raw);
+  return parts === null ? raw : encodeSourceRawEnvelope(parts, objects);
+};
+
+/**
+ * A stored raw payload that is not an envelope, and the part names its own
+ * keys stand for.
+ *
+ * `wrapper-json` is an adapter's own object around several responses,
+ * `bare-payload` is one response stored alone, and `document-bytes` is a
+ * payload kept as bytes. All three predate the envelope and none is written
+ * again once its adapter migrates, which is why this is a ledger rather than a
+ * shape the encoder can produce.
+ */
+export type LegacyRawShape =
+  | {
+      readonly shape: "wrapper-json";
+      readonly contentTypes: readonly (string | null)[];
+      /** Wrapper key to the part name the envelope would give that response. */
+      readonly keys: Readonly<Record<string, string>>;
+    }
+  | {
+      readonly shape: "bare-payload" | "document-bytes";
+      readonly contentTypes: readonly (string | null)[];
+      readonly part: string;
+    };
+
+/**
+ * Austria's eleven tribunals and the ministry's document service each stored
+ * the two responses they read in one object of their own, so one shape
+ * describes twelve adapters and each still deletes its own line.
+ *
+ * The keys are what those rows hold; the values are the parts the envelope
+ * gives the same two responses today, which is what lets a reader of an old
+ * row ask for `document-xml` and be answered.
+ */
+const AT_LISTING_AND_DOCUMENT_JSON = [
+  {
+    shape: "wrapper-json",
+    contentTypes: ["application/json"],
+    keys: { listing: "listing", documentXml: "document-xml" },
+  },
+] as const satisfies readonly LegacyRawShape[];
+
+const LEGACY_RAW_SHAPE_ADAPTERS = [
+  ADAPTER_KEYS.CZ_US,
+  ADAPTER_KEYS.CZ_REGIONAL,
+  ADAPTER_KEYS.SK_COURTS,
+  ADAPTER_KEYS.SK_US,
+  ADAPTER_KEYS.PL_COURTS,
+  ADAPTER_KEYS.EU_ECJ,
+  ADAPTER_KEYS.AT_COURTS,
+  ADAPTER_KEYS.AT_VFGH,
+  ADAPTER_KEYS.AT_VWGH,
+  ADAPTER_KEYS.AT_BVWG,
+  ADAPTER_KEYS.AT_LVWG,
+  ADAPTER_KEYS.AT_ASYLGH,
+  ADAPTER_KEYS.AT_UBAS,
+  ADAPTER_KEYS.AT_UVS,
+  ADAPTER_KEYS.AT_VERG,
+  ADAPTER_KEYS.AT_UMSE,
+  ADAPTER_KEYS.AT_BKS,
+  ADAPTER_KEYS.AT_FINDOK,
+] as const satisfies readonly AdapterKey[];
+
+export type LegacyRawShapeAdapter = (typeof LEGACY_RAW_SHAPE_ADAPTERS)[number];
+
+/**
+ * The adapters whose stored rows are not envelopes, and what a reader of those
+ * rows must accept.
+ *
+ * Total over the adapters that have such rows and over nothing else: a
+ * migrated adapter deletes its line, so the map's length is how much of the
+ * fleet still stores a shape only its own reader understands. The conformance
+ * suite reads committed fixtures through this map, so a line that stops
+ * describing the rows it claims to describe fails rather than rots.
+ */
+export const LEGACY_RAW_SHAPES = {
+  [ADAPTER_KEYS.CZ_US]: [
+    {
+      shape: "wrapper-json",
+      contentTypes: ["application/json"],
+      keys: {
+        textHtml: "document",
+        listingHtml: "listing",
+        abstractHtml: "abstract",
+      },
+    },
+    {
+      shape: "bare-payload",
+      contentTypes: ["text/html", null],
+      part: "document",
+    },
+  ],
+  // Kept after the adapter moved to the envelope: every row stored before it
+  // did holds the document payload alone, and the listing row that named it
+  // was never kept, so those rows are readable only through this shape.
+  [ADAPTER_KEYS.CZ_REGIONAL]: [
+    {
+      shape: "bare-payload",
+      contentTypes: ["application/json"],
+      part: "document",
+    },
+  ],
+  [ADAPTER_KEYS.SK_COURTS]: [
+    {
+      shape: "wrapper-json",
+      contentTypes: ["application/json"],
+      keys: { listItem: "listing", detail: "detail" },
+    },
+  ],
+  [ADAPTER_KEYS.SK_US]: [
+    {
+      shape: "bare-payload",
+      contentTypes: ["application/json"],
+      part: "listing",
+    },
+    {
+      // The document file, which the envelope now names as an object
+      // beside the parts rather than storing as the payload itself.
+      shape: "document-bytes",
+      contentTypes: ["application/pdf"],
+      part: "document-file",
+    },
+  ],
+  [ADAPTER_KEYS.PL_COURTS]: [
+    {
+      shape: "wrapper-json",
+      contentTypes: ["application/json"],
+      keys: { dumpItem: "listing", detail: "detail" },
+    },
+  ],
+  [ADAPTER_KEYS.EU_ECJ]: [
+    {
+      shape: "bare-payload",
+      contentTypes: [
+        "application/xhtml+xml",
+        "application/xhtml+xml; stella-storage=verbatim",
+      ],
+      part: "document",
+    },
+  ],
+  [ADAPTER_KEYS.AT_COURTS]: AT_LISTING_AND_DOCUMENT_JSON,
+  [ADAPTER_KEYS.AT_VFGH]: AT_LISTING_AND_DOCUMENT_JSON,
+  [ADAPTER_KEYS.AT_VWGH]: AT_LISTING_AND_DOCUMENT_JSON,
+  [ADAPTER_KEYS.AT_BVWG]: AT_LISTING_AND_DOCUMENT_JSON,
+  [ADAPTER_KEYS.AT_LVWG]: AT_LISTING_AND_DOCUMENT_JSON,
+  [ADAPTER_KEYS.AT_ASYLGH]: AT_LISTING_AND_DOCUMENT_JSON,
+  [ADAPTER_KEYS.AT_UBAS]: AT_LISTING_AND_DOCUMENT_JSON,
+  [ADAPTER_KEYS.AT_UVS]: AT_LISTING_AND_DOCUMENT_JSON,
+  [ADAPTER_KEYS.AT_VERG]: AT_LISTING_AND_DOCUMENT_JSON,
+  [ADAPTER_KEYS.AT_UMSE]: AT_LISTING_AND_DOCUMENT_JSON,
+  [ADAPTER_KEYS.AT_BKS]: AT_LISTING_AND_DOCUMENT_JSON,
+  [ADAPTER_KEYS.AT_FINDOK]: AT_LISTING_AND_DOCUMENT_JSON,
+} as const satisfies Record<LegacyRawShapeAdapter, readonly LegacyRawShape[]>;
 
 /**
  * A stored raw payload plus the persisted fields an adapter needs to rebuild
@@ -619,6 +898,115 @@ export const excludedSourceField = <const TText extends string>(
 });
 
 /**
+ * The adapters that may still declare a surface they do not record.
+ *
+ * Closed and hand-listed rather than derived from {@link ADAPTER_KEYS}: a
+ * source added tomorrow must record what its publisher serves or say why not,
+ * and deriving the union would hand it the exemption the day it registers.
+ * `source-surface-backlog-baseline.json` names the surfaces each of these may
+ * leave unrecorded, and both only shrink.
+ */
+export const LEGACY_BACKLOG_ADAPTERS = [
+  ADAPTER_KEYS.CZ_NS,
+  ADAPTER_KEYS.CZ_NSS,
+  ADAPTER_KEYS.SK_COURTS,
+  ADAPTER_KEYS.SK_US,
+  ADAPTER_KEYS.PL_COURTS,
+  ADAPTER_KEYS.AT_COURTS,
+  ADAPTER_KEYS.AT_VFGH,
+  ADAPTER_KEYS.AT_VWGH,
+  ADAPTER_KEYS.AT_BVWG,
+  ADAPTER_KEYS.AT_LVWG,
+  ADAPTER_KEYS.AT_ASYLGH,
+  ADAPTER_KEYS.AT_UBAS,
+  ADAPTER_KEYS.AT_UVS,
+  ADAPTER_KEYS.AT_VERG,
+  ADAPTER_KEYS.AT_UMSE,
+  ADAPTER_KEYS.AT_BKS,
+  ADAPTER_KEYS.EU_ECJ,
+] as const satisfies readonly AdapterKey[];
+
+export type LegacyAdapterKey = (typeof LEGACY_BACKLOG_ADAPTERS)[number];
+
+/** A surface this adapter records, under the part name the envelope gives it. */
+export type StoredSourceSurface = {
+  readonly disposition: "stored";
+  /** The envelope part the response is kept as. */
+  readonly part: string;
+};
+
+export type ExcludedSourceSurface = {
+  readonly disposition: "excluded";
+  readonly reason: string;
+  readonly [STATED_REASON]: true;
+};
+
+export type BacklogSourceSurface = {
+  readonly disposition: "backlog";
+  readonly reason: string;
+  /** Whose baseline line this surface occupies; only a legacy adapter has one. */
+  readonly adapter: LegacyAdapterKey;
+  readonly [STATED_REASON]: true;
+};
+
+/**
+ * What an adapter does with one surface its publisher serves for a decision.
+ *
+ * A field inventory answers "what does the page state"; this answers the
+ * question before it — which of the publisher's pages are read at all. A
+ * surface nobody decided about is the silence a field inventory cannot break,
+ * because the inventory only ever sees the pages already fetched.
+ */
+export type SourceSurfaceDisposition =
+  | StoredSourceSurface
+  | ExcludedSourceSurface
+  | BacklogSourceSurface;
+
+/** A response the crawl fetches with the decision and keeps as `part`. */
+export const storedSourceSurface = (part: string): StoredSourceSurface => ({
+  disposition: "stored",
+  part,
+});
+
+/** State why a surface the publisher serves is not recorded at all. */
+export const excludedSourceSurface = <const TText extends string>(
+  reason: StatedReason<TText>,
+): ExcludedSourceSurface => ({
+  disposition: "excluded",
+  reason,
+  [STATED_REASON]: true,
+});
+
+/**
+ * A surface that belongs in the row and is not there yet.
+ *
+ * The adapter argument is the escape's whole cost: only an adapter that
+ * already exists can be named, the committed baseline lists the surfaces each
+ * one may leave, and the conformance suite fails both ways — so the set
+ * shrinks as families enrol and can never grow with a new source.
+ */
+export const backlogSurface = <const TText extends string>(
+  adapter: LegacyAdapterKey,
+  reason: StatedReason<TText>,
+): BacklogSourceSurface => ({
+  disposition: "backlog",
+  reason,
+  adapter,
+  [STATED_REASON]: true,
+});
+
+/**
+ * Every surface an adapter's publisher serves for a decision, and its fate.
+ *
+ * An adapter writes the map `as const satisfies Record<<its SOURCE_SURFACES
+ * union>, SourceSurfaceDisposition>`, so a surface listed without a
+ * disposition does not compile.
+ */
+export type SourceSurfaceCensus = {
+  readonly surfaces: Readonly<Record<string, SourceSurfaceDisposition>>;
+};
+
+/**
  * Every field a source states for one decision, and what becomes of it.
  *
  * Scoped to the per-decision pages an adapter fetches — the labelled detail,
@@ -630,16 +1018,46 @@ export const excludedSourceField = <const TText extends string>(
  * map `as const satisfies Record<<that union>, SourceFieldDisposition>`, so a
  * name added to the list without a disposition does not compile.
  *
- * `listSourceFields` reads the same payload the parser reads and answers what
- * the publisher labelled on it. The conformance suite drives it over each
- * adapter's fixture: a name it returns that the map does not hold fails with
- * the field name, which is the check a per-adapter test cannot make about the
- * fields its author never noticed.
+ * `listSourceFields` reads the whole stored envelope, not one page: a source
+ * states fields across the responses it serves for a decision — a listing row,
+ * a detail payload, a document — and an inventory that could only see one of
+ * them would declare the others out of scope by accident. The conformance
+ * suite drives it over each adapter's fixture: a name it returns that the map
+ * does not hold fails with the field name, which is the check a per-adapter
+ * test cannot make about the fields its author never noticed.
  */
 type DeclaredSourceFieldInventory = {
   readonly status: "declared";
   readonly fields: Readonly<Record<string, SourceFieldDisposition>>;
-  readonly listSourceFields: (payload: string) => readonly string[];
+  readonly listSourceFields: (parts: SourceRawParts) => readonly string[];
+};
+
+/**
+ * The adapters that may still declare no field inventory.
+ *
+ * Exactly the names in `source-field-inventory-baseline.json`, and closed for
+ * the same reason {@link LegacyAdapterKey} is: a source registered tomorrow
+ * cannot name itself into the exemption, because the union it would have to
+ * join is written here rather than derived from the registry.
+ */
+const LEGACY_UNINVENTORIED_ADAPTERS = [
+  ADAPTER_KEYS.PL_COURTS,
+  ADAPTER_KEYS.EU_ECJ,
+] as const satisfies readonly AdapterKey[];
+
+export type LegacyUninventoriedAdapter =
+  (typeof LEGACY_UNINVENTORIED_ADAPTERS)[number];
+
+/**
+ * An adapter that has not inventoried its source fields yet, and says which
+ * one it is: the name is what the committed baseline is compared against, so a
+ * pending inventory copied between adapters fails instead of hiding one.
+ */
+export type PendingSourceFieldInventory<
+  TAdapter extends LegacyUninventoriedAdapter,
+> = {
+  readonly status: "pending-inventory";
+  readonly adapter: TAdapter;
 };
 
 /**
@@ -653,16 +1071,21 @@ type DeclaredSourceFieldInventory = {
  */
 export type SourceFieldInventory =
   | DeclaredSourceFieldInventory
-  | { readonly status: "pending-inventory" };
+  | PendingSourceFieldInventory<LegacyUninventoriedAdapter>;
 
 /**
  * For an adapter whose source fields nobody has inventoried yet. Written out
  * at the adapter rather than defaulted, so enrolment is a visible edit and the
  * baseline can name what is left.
  */
-export const PENDING_SOURCE_FIELD_INVENTORY = {
+export const pendingSourceFieldInventory = <
+  const TAdapter extends LegacyUninventoriedAdapter,
+>(
+  adapter: TAdapter,
+): PendingSourceFieldInventory<TAdapter> => ({
   status: "pending-inventory",
-} as const satisfies SourceFieldInventory;
+  adapter,
+});
 
 /**
  * Interface for court data source adapters.
@@ -740,10 +1163,19 @@ export type SourceAdapter = {
    * an adapter already fetches goes unstored, and the decision has to live in
    * the adapter rather than in whoever last read the page.
    *
-   * `PENDING_SOURCE_FIELD_INVENTORY` is the only way to not have one, and the
-   * committed baseline names every adapter allowed to use it.
+   * `pendingSourceFieldInventory` is the only way to not have one, and the
+   * committed baseline names every adapter allowed to call it.
    */
   sourceFields: SourceFieldInventory;
+  /**
+   * Every surface this publisher serves for a decision, and whether the row
+   * records it. Required, and the step before the field inventory: an
+   * inventory can only ever account for the pages an adapter already fetches,
+   * so a page nobody fetches is invisible to it. A surface left unrecorded is
+   * a `backlog` entry with a reason and a line in the committed baseline, not
+   * a page nobody wrote down.
+   */
+  sourceSurfaces: SourceSurfaceCensus;
   /**
    * Ask the publisher what it lists for a slice, so the standing
    * reconciliation loop can compare that against what is held and ingest the
