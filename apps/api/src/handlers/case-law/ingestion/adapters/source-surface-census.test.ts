@@ -51,6 +51,7 @@ import { isRecord } from "@/api/lib/type-guards";
 import {
   czNsFixture,
   czNssFixture,
+  czRegionalFixture,
   czUsFixture,
   plSnFixture,
   skCourtsFixture,
@@ -103,9 +104,7 @@ const SURFACE_EVIDENCE = {
     { kind: "built", fixture: czUsFixture },
     { kind: "page-recording", file: "cz-us-page.json.gz" },
   ],
-  [ADAPTER_KEYS.CZ_REGIONAL]: NO_CAPTURE(
-    "no recording of a crawl page exists for this adapter",
-  ),
+  [ADAPTER_KEYS.CZ_REGIONAL]: [{ kind: "built", fixture: czRegionalFixture }],
   [ADAPTER_KEYS.SK_COURTS]: [
     { kind: "built", fixture: skCourtsFixture },
     { kind: "page-recording", file: "sk-courts-page.json.gz" },

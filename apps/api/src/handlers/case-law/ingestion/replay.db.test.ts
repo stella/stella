@@ -19,7 +19,6 @@ import {
   pendingSourceFieldInventory,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type { SourceAdapter } from "@/api/handlers/case-law/ingestion/adapter";
-import { czRegionalAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-regional";
 import {
   CASE_LAW_REPLAY_SCOPE,
   countReplayability,
@@ -302,7 +301,14 @@ type StubAdapterOptions = {
   reparse: NonNullable<SourceAdapter["reparseStoredRaw"]>;
 };
 
-const stubAdapter = ({ reparse }: StubAdapterOptions): SourceAdapter => ({
+/**
+ * A replay stub that does not implement the re-parse seam.
+ *
+ * The refusal has to be checked against an adapter that lacks the seam, and
+ * naming a real one dates the test: every enrolment gives another adapter the
+ * seam, and the case then passes while testing nothing.
+ */
+const stubAdapterWithoutReparse = (): SourceAdapter => ({
   key: ADAPTER_KEYS.EU_ECJ,
   sourceFields: pendingSourceFieldInventory(ADAPTER_KEYS.EU_ECJ),
   sourceSurfaces: { surfaces: {} },
@@ -329,6 +335,10 @@ const stubAdapter = ({ reparse }: StubAdapterOptions): SourceAdapter => ({
       throw new Error("a replay must never build from publisher data");
     },
   },
+});
+
+const stubAdapter = ({ reparse }: StubAdapterOptions): SourceAdapter => ({
+  ...stubAdapterWithoutReparse(),
   reparseStoredRaw: reparse,
 });
 
@@ -347,8 +357,9 @@ describe("replay of a source", () => {
     }
 
     const refusedReads: string[] = [];
+    const withoutReparse = stubAdapterWithoutReparse();
     const refused = await replayCaseLawSource({
-      adapter: czRegionalAdapter,
+      adapter: withoutReparse,
       scopedDb,
       sourceId,
       scope: CASE_LAW_REPLAY_SCOPE.SOURCE,
@@ -360,7 +371,7 @@ describe("replay of a source", () => {
 
     expect(refused).toEqual({
       type: "unsupported",
-      adapterKey: czRegionalAdapter.key,
+      adapterKey: withoutReparse.key,
     });
     expect(refusedReads).toEqual([]);
 

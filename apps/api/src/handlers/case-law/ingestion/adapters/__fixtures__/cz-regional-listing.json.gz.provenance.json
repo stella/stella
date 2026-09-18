@@ -1,0 +1,7 @@
+{
+  "capture": "recorded",
+  "sha256": "f76df8c80247faaaa3a02768d1cf855febf70f5fa960b9af85c1263fc135fc04",
+  "sourceUrl": "https://rozhodnuti.justice.cz/api/opendata/2025/6/11?page=0",
+  "capturedAt": "2026-09-18T18:34:36.354Z",
+  "note": "day listing, 100 rows of 246; the district and appellate rows of one appeal are both on it"
+}

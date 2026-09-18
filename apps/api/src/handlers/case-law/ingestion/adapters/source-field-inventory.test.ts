@@ -47,6 +47,7 @@ import { storeTextField } from "@/api/lib/case-law/decision-text";
 import {
   czNsFixture,
   czNssFixture,
+  czRegionalFixture,
   czUsFixture,
   plSnFixture,
   skCourtsFixture,
@@ -80,7 +81,10 @@ const ADAPTER_INVENTORY_COVERAGE = {
   [ADAPTER_KEYS.CZ_NS]: { disposition: "enrolled", fixture: czNsFixture },
   [ADAPTER_KEYS.CZ_NSS]: { disposition: "enrolled", fixture: czNssFixture },
   [ADAPTER_KEYS.CZ_US]: { disposition: "enrolled", fixture: czUsFixture },
-  [ADAPTER_KEYS.CZ_REGIONAL]: PENDING,
+  [ADAPTER_KEYS.CZ_REGIONAL]: {
+    disposition: "enrolled",
+    fixture: czRegionalFixture,
+  },
   [ADAPTER_KEYS.SK_COURTS]: {
     disposition: "enrolled",
     fixture: skCourtsFixture,

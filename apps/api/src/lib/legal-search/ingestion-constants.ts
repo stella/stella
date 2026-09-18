@@ -34,7 +34,7 @@ export type AdapterKey = (typeof ADAPTER_KEYS)[keyof typeof ADAPTER_KEYS];
  * of every court corpus.
  */
 export const PARSER_VERSIONS = {
-  [ADAPTER_KEYS.CZ_REGIONAL]: 2,
+  [ADAPTER_KEYS.CZ_REGIONAL]: 3,
   [ADAPTER_KEYS.CZ_NS]: 3,
   [ADAPTER_KEYS.CZ_NSS]: 6,
   [ADAPTER_KEYS.CZ_US]: 5,

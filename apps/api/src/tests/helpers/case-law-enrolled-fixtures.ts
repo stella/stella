@@ -20,9 +20,20 @@
 
 import { panic } from "better-result";
 
+import {
+  decodeSourceRawEnvelope,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+} from "@/api/handlers/case-law/ingestion/adapter";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { buildCzNsDecision } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
 import { buildCzNssDecision } from "@/api/handlers/case-law/ingestion/adapters/cz-nss";
+import {
+  assembleCzRegionalDecision,
+  czRegionalAdapter,
+  czRegionalEnvelopeWithChain,
+  readCzRegionalDocument,
+} from "@/api/handlers/case-law/ingestion/adapters/cz-regional";
+import type { CzRegionalApiItem } from "@/api/handlers/case-law/ingestion/adapters/cz-regional";
 import { buildCzUsDecision } from "@/api/handlers/case-law/ingestion/adapters/cz-us";
 import type { ListedDecision } from "@/api/handlers/case-law/ingestion/adapters/cz-us";
 import {
@@ -321,6 +332,210 @@ export const czNssFixture = (): EnrolledAdapterFixture => ({
     return built.type === "built"
       ? built.decision
       : panic(`cz-nss fixture did not build: ${built.type}`);
+  },
+});
+
+// ── CZ Regional fixture ──────────────────────────────────
+
+/** The listing row, as a day page states one. */
+const CZ_REGIONAL_LISTING_ROW = {
+  jednaciCislo: "26 Co 43/2026-49",
+  soud: "Krajský soud v Hradci Králové",
+  autor: "JUDr. Jana Marková",
+  ecli: "ECLI:CZ:KSHK:2026:26.Co.43.2026.1",
+  predmetRizeni: "o zaplacení 32 600 Kč s příslušenstvím",
+  datumVydani: "2026-03-11",
+  datumZverejneni: "2026-06-11",
+  klicovaSlova: ["společné jmění manželů"],
+  zminenaUstanoveni: ["§ 741 z. č. 89/2012 Sb."],
+  odkaz:
+    "https://rozhodnuti.justice.cz/api/finaldoc/00000000-0000-4000-8000-000000000001",
+} satisfies CzRegionalApiItem;
+
+/** One paragraph, in the shape every section of the document uses. */
+const czRegionalParagraph = (
+  text: string,
+  styleLocalId: number,
+): Record<string, unknown> => ({
+  texts: [{ text, anonStyle: "NONE" }],
+  styleLocalId,
+  tableCellInfo: null,
+});
+
+/**
+ * The document payload, carrying every key this publisher is known to state
+ * and a value in each.
+ *
+ * Every key filled because the conformance suite walks what the fixture
+ * states: a key left empty would declare a disposition nothing exercises.
+ * `specialType` and `affectedDocs` are filled for the same reason — both are
+ * empty on most decisions, and a fixture that left them so would certify
+ * neither the EU-relevance markers nor the publisher's relation graph.
+ */
+const CZ_REGIONAL_DOCUMENT_PAYLOAD = JSON.stringify({
+  uuid: "00000000-0000-4000-8000-000000000001",
+  header: [
+    czRegionalParagraph(
+      "Krajský soud v Hradci Králové rozhodl v senátě složeném z předsedkyně JUDr. Jany Markové ve věci",
+      3,
+    ),
+    {
+      texts: [
+        { text: "žalobce: ", anonStyle: "NONE" },
+        { text: "Jméno žalobce", anonStyle: "ANON" },
+      ],
+      styleLocalId: 3,
+      tableCellInfo: null,
+    },
+  ],
+  verdict: [
+    czRegionalParagraph("I. Rozsudek okresního soudu se potvrzuje.", 7),
+  ],
+  verdictText: "I. Rozsudek okresního soudu se potvrzuje.",
+  justification: [
+    czRegionalParagraph(
+      "1. Okresní soud zamítl žalobu, kterou se žalobce domáhal zaplacení částky ze společného jmění manželů.",
+      7,
+    ),
+    czRegionalParagraph(
+      "2. Odvolací soud rozsudek okresního soudu jako věcně správný potvrdil.",
+      7,
+    ),
+  ],
+  justificationText:
+    "1. Okresní soud zamítl žalobu, kterou se žalobce domáhal zaplacení částky ze společného jmění manželů. 2. Odvolací soud rozsudek okresního soudu jako věcně správný potvrdil.",
+  information: [
+    czRegionalParagraph("Proti tomuto rozsudku není dovolání přípustné.", 3),
+  ],
+  metadata: {
+    type: "JUDGEMENT",
+    ecli: "ECLI:CZ:KSHK:2026:26.Co.43.2026.1",
+    publishedAt: "2026-06-11",
+    decisionAt: "2026-03-11",
+    caseNumber: {
+      senate: 26,
+      registry: "Co",
+      index: 43,
+      year: 2026,
+      pageNumber: 49,
+    },
+    solver: {
+      titlesBefore: "JUDr.",
+      firstName: "Jana",
+      lastName: "Marková",
+      titlesAfter: "",
+      function: "předsedkyně senátu",
+    },
+    courtCode: "KSHK",
+    caseResultType: ["POTVRZENI"],
+    caseSubject: "o zaplacení 32 600 Kč s příslušenstvím",
+    specialType: ["EP1250"],
+    affectedDocs: [
+      {
+        caseNumber: {
+          senate: 18,
+          registry: "C",
+          index: 130,
+          year: 2025,
+          pageNumber: 27,
+        },
+        affectedDate: "2025-11-13",
+        courtCode: "OSHK",
+        affectedTypes: ["CONFIRM"],
+        url: null,
+      },
+    ],
+    regulations: [
+      {
+        paragraphNumber: "741",
+        lexNumber: 89,
+        lexYear: 2012,
+        lexType: "PREDPIS_ZAKON",
+      },
+    ],
+    flags: ["SPOLECNE_JMENI_MANZELU"],
+  },
+  styles: [
+    {
+      localId: 3,
+      alignment: "LEFT",
+      hasSpaceBefore: false,
+      hasSpaceAfter: false,
+      bold: false,
+      italic: false,
+    },
+    {
+      localId: 7,
+      alignment: "LEFT",
+      hasSpaceBefore: true,
+      hasSpaceAfter: true,
+      bold: true,
+      italic: false,
+    },
+  ],
+});
+
+/**
+ * The chain payload: one later decision affecting this one, with the id the
+ * forward edge never states.
+ */
+const CZ_REGIONAL_CHAIN_PAYLOAD = JSON.stringify([
+  {
+    uuid: "00000000-0000-4000-8000-000000000002",
+    caseNumber: {
+      senate: 30,
+      registry: "Cdo",
+      index: 900,
+      year: 2026,
+      pageNumber: 71,
+    },
+    courtCode: "NS",
+    affectedDate: "2026-09-02",
+    affectedTypes: ["CANCEL"],
+  },
+]);
+
+/**
+ * Built through the two paths that write this source's envelope: the crawl
+ * assembles the listing row with the document, and the chain pass adds the
+ * part it alone fetches and re-parses the result. Driving both is what makes
+ * the `chain` part evidence of a pass that exists rather than of a payload
+ * written by hand.
+ */
+export const czRegionalFixture = (): EnrolledAdapterFixture => ({
+  buildDecision: async () => {
+    const crawled = assembleCzRegionalDecision({
+      item: CZ_REGIONAL_LISTING_ROW,
+      document: readCzRegionalDocument(CZ_REGIONAL_DOCUMENT_PAYLOAD),
+      chain: null,
+    });
+    if (crawled.type !== "built") {
+      return panic(`cz-regional fixture did not build: ${crawled.type}`);
+    }
+    const parts = decodeSourceRawEnvelope(crawled.decision.sourceRaw ?? "");
+    if (parts === null) {
+      return panic("the cz-regional fixture stored no envelope");
+    }
+
+    const reparsed = await czRegionalAdapter.reparseStoredRaw?.({
+      raw: new TextEncoder().encode(
+        czRegionalEnvelopeWithChain(parts, CZ_REGIONAL_CHAIN_PAYLOAD),
+      ),
+      contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+      caseNumber: crawled.decision.caseNumber,
+      sourceDocumentId: crawled.decision.sourceDocumentId ?? null,
+      language: crawled.decision.language,
+      court: crawled.decision.court,
+      ecli: crawled.decision.ecli ?? null,
+      decisionDate: crawled.decision.decisionDate ?? null,
+      decisionType: crawled.decision.decisionType ?? null,
+      sourceUrl: crawled.decision.sourceUrl ?? null,
+      documentUrl: crawled.decision.documentUrl ?? null,
+      metadata: crawled.decision.metadata,
+    });
+    return reparsed?.type === "parsed"
+      ? reparsed.result
+      : panic(`cz-regional fixture did not re-parse: ${reparsed?.type}`);
   },
 });
 

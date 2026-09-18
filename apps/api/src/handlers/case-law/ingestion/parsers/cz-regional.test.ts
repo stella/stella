@@ -86,16 +86,16 @@ describe("parseRegionalDecision", () => {
       expect(title?.plainText).toBe("USNESENÍ");
     });
 
-    test("synthesizes PŘÍKAZ heading", () => {
+    test("synthesizes TRESTNÍ PŘÍKAZ heading", () => {
       const input = baseInput({
-        decisionType: "příkaz",
+        decisionType: "trestní příkaz",
         header: [makePara("Soud")],
       });
 
       const { documentAst } = parseRegionalDecision(input);
 
       const title = findByRole(documentAst.blocks, "decision-title");
-      expect(title?.plainText).toBe("PŘÍKAZ");
+      expect(title?.plainText).toBe("TRESTNÍ PŘÍKAZ");
     });
 
     test("omits title for unknown decisionType", () => {

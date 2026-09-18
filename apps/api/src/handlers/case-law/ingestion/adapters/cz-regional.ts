@@ -10,25 +10,34 @@ import {
 } from "@/api/handlers/case-law/consts";
 import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import {
-  backlogSurface,
+  decodeSourceRawEnvelope,
   defineSourceAdapter,
   EMPTY_AST,
+  encodeSourceRawEnvelope,
+  excludedSourceField,
   excludedSourceSurface,
   isPersistableSourceDocumentId,
-  pendingSourceFieldInventory,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   SOURCE_TOTAL_PROBE_FAILURE,
   sourceTotalProbeFailed,
   sourceTotalRead,
+  STORED_RAW_REPARSE_REJECTION,
+  storedSourceSurface,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type {
+  DecisionJudgeInput,
   EmptyAst,
   IngestionResult,
   ListingIdentity,
   ReconciliationBuildOutcome,
   ReconciliationSlicePage,
   ReconciliationSlicePageOptions,
+  SourceFieldDisposition,
+  SourceRawParts,
   SourceSurfaceCensus,
   SourceSurfaceDisposition,
+  StoredRawReparseInput,
+  StoredRawReparseOutcome,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/adapters/calendar-day-slice-walk";
 import {
@@ -48,6 +57,8 @@ import {
   toOptionalValue,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { parseRegionalDecision } from "@/api/handlers/case-law/ingestion/parsers/cz-regional";
+import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
+import { stripAcademicTitles } from "@/api/handlers/case-law/judges/judge-name";
 import {
   TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
@@ -62,7 +73,7 @@ import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { restrictCzRegionalFinaldocUrl } from "@/api/lib/legal-search/cz-regional-finaldoc-url";
 import { logger } from "@/api/lib/observability/logger";
-import { isRecord } from "@/api/lib/type-guards";
+import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 
 /**
  * Czech Regional Courts adapter.
@@ -113,22 +124,88 @@ const arrayOrEmpty = <T>(value: T[] | null | undefined): T[] => {
 const LIST_FETCH_RETRIES = 2;
 const LIST_FETCH_RETRY_DELAY_MS = 5000;
 
+/** The envelope part each response this source serves is kept as. */
+const RAW_PART = {
+  LISTING: "listing",
+  DOCUMENT: "document",
+  CHAIN: "chain",
+} as const;
+
 /**
- * Map English decision type enums from the API to
- * lowercase Czech equivalents for consistency across
- * all CZ adapters.
+ * The stored envelope with the chain part added, which is the only change the
+ * chain pass makes to a payload it did not build.
+ *
+ * Here rather than in the pass because the part name is this adapter's, and
+ * because the enrolled fixture builds its row through the same call: the
+ * `chain` part reaches a stored envelope this way and no other, so evidence
+ * that the part is recorded comes through the assembly the pass uses rather
+ * than through a payload written by hand.
  */
-const DECISION_TYPE_MAP: Record<string, string> = {
+export const czRegionalEnvelopeWithChain = (
+  parts: SourceRawParts,
+  chainRaw: string,
+): string => encodeSourceRawEnvelope({ ...parts, [RAW_PART.CHAIN]: chainRaw });
+
+/**
+ * Whether the chain has been read for a row, stated on the row itself.
+ *
+ * Selectable, because it is what the chain pass walks: a row nothing has
+ * asked about carries no such key, and one the publisher answered for carries
+ * the list it answered with — empty where nothing affects the decision.
+ */
+export const CZ_REGIONAL_AFFECTING_DOCS_METADATA_KEY = "affectingDocs";
+
+/**
+ * What the publisher prints in `soud` for a record no court decided, and the
+ * court code the document payload carries for the same record.
+ *
+ * The feed mixes the ministry's own administrative decisions — insolvency
+ * administrator licences and the like — in with the court decisions, and
+ * states both markers on them. They are not court decisions and their
+ * identifier is not an ECLI, so they are refused at the boundary rather than
+ * stored as a court's judgment.
+ */
+const COURT_NOT_STATED = "(nezadán)";
+const COURT_CODE_NONE = "NONE";
+
+/**
+ * The decision types this API accepts, in the publisher's own Czech.
+ *
+ * `ORDER_T` is the value the API answers to; a plain `ORDER` is rejected with
+ * HTTP 400, so the entry that once mapped it never fired and its documents
+ * were stored under the enum member lowercased. The type is what the local
+ * heading is synthesized from, so the mapping is the whole difference between
+ * a document that opens with its own title and one that does not.
+ *
+ * Read through {@link mapDecisionType}, which reports a member this map has
+ * never seen instead of lowercasing it into the corpus unnoticed.
+ */
+const DECISION_TYPE_MAP: Readonly<Record<string, string>> = {
   JUDGEMENT: "rozsudek",
   RESOLUTION: "usnesení",
-  ORDER: "příkaz",
+  ORDER_T: "trestní příkaz",
 };
 
-const mapDecisionType = (type: string | undefined): string | undefined => {
+const mapDecisionType = (
+  type: string | undefined,
+  caseNumber: string,
+): string | undefined => {
   if (!type) {
     return undefined;
   }
-  return DECISION_TYPE_MAP[type] ?? type.toLowerCase();
+  const mapped = DECISION_TYPE_MAP[type];
+  if (mapped !== undefined) {
+    return mapped;
+  }
+  // A member nothing maps reaches the corpus as the enum lowercased, which no
+  // reader and no heading lookup recognises. The row is still worth storing,
+  // so the miss is reported rather than dropped.
+  logger.warn("case_law.ingestion.decision_type_unmapped", {
+    adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
+    caseNumber,
+    decisionTypeRaw: type,
+  });
+  return type.toLowerCase();
 };
 
 /** Shape of a single item in the paginated day response. */
@@ -180,8 +257,36 @@ type FinaldocSolver =
       function?: string;
     };
 
+/**
+ * The docket as the publisher decomposes it: the registry letter is the
+ * agenda (`C` civil, `T` criminal, `Co` civil appeal, …) and the page number
+ * is the sheet the listing appends to the printed reference.
+ */
+type FinaldocCaseNumber = {
+  senate?: number | null;
+  registry?: string | null;
+  index?: number | null;
+  year?: number | null;
+  pageNumber?: number | null;
+};
+
+/**
+ * One edge of the publisher's own decision graph: what this decision did to
+ * an earlier one (`affectedDocs`, inside the document payload) or what a later
+ * one did to it (the chain endpoint, which also states the counterpart's id).
+ */
+type FinaldocRelation = {
+  uuid?: string | null;
+  caseNumber?: FinaldocCaseNumber | null;
+  courtCode?: string | null;
+  affectedDate?: string | null;
+  affectedTypes?: string[] | null;
+  url?: string | null;
+};
+
 /** Response shape from /api/finaldoc/{uuid}. */
 type CzRegionalFinaldoc = {
+  uuid?: string | null;
   verdictText?: string | null;
   justificationText?: string | null;
   header?: FinaldocParagraph[] | null;
@@ -191,29 +296,20 @@ type CzRegionalFinaldoc = {
   styles?: FinaldocStyle[] | null;
   metadata?: {
     type?: string | null;
+    ecli?: string | null;
+    publishedAt?: string | null;
+    decisionAt?: string | null;
+    caseNumber?: FinaldocCaseNumber | null;
     solver?: FinaldocSolver | null;
-    caseNumber?: unknown;
+    courtCode?: string | null;
     caseResultType?: string | string[] | null;
     caseSubject?: string | null;
+    specialType?: string[] | null;
+    affectedDocs?: FinaldocRelation[] | null;
     regulations?: unknown[] | null;
     flags?: string[] | null;
     [key: string]: unknown;
   } | null;
-};
-
-type FinaldocResult = {
-  fulltext: string | undefined;
-  decisionType: string | undefined;
-  documentAst: DocumentAst | EmptyAst;
-  sourceRaw: string | undefined;
-  richMetadata: {
-    decisionTypeRaw?: string;
-    solver?: FinaldocSolver;
-    caseResultType?: string | string[];
-    caseSubject?: string;
-    regulations?: unknown[];
-    flags?: string[];
-  };
 };
 
 const isOptionalStringArray = (
@@ -235,6 +331,16 @@ const isFinaldocParagraph = (value: unknown): value is FinaldocParagraph =>
   isArrayOf(value["texts"], isFinaldocText) &&
   typeof value["styleLocalId"] === "number" &&
   "tableCellInfo" in value;
+
+/**
+ * One entry of the chain endpoint's array.
+ *
+ * Lenient like the document validator above and for the same reason: an entry
+ * whose shape drifted is still stored verbatim as the `chain` part, so the
+ * envelope is what protects the fields, not this guard.
+ */
+const isFinaldocRelation = (value: unknown): value is FinaldocRelation =>
+  isRecord(value) && isNullishString(value["uuid"]);
 
 const isFinaldocStyle = (value: unknown): value is FinaldocStyle =>
   isRecord(value) &&
@@ -260,6 +366,7 @@ const isCzRegionalMetadata = (
 
 const isCzRegionalFinaldoc = (value: unknown): value is CzRegionalFinaldoc =>
   isRecord(value) &&
+  isNullishString(value["uuid"]) &&
   isNullishString(value["verdictText"]) &&
   isNullishString(value["justificationText"]) &&
   isNullishArrayOf(value["header"], isFinaldocParagraph) &&
@@ -293,30 +400,74 @@ const isCzRegionalPageResponse = (
   isNullishNumber(value["pageNumber"]);
 
 /**
- * Fetch fulltext from the /api/finaldoc/{uuid} endpoint.
- * Parses the structured JSON into a DocumentAst when possible,
- * falling back to plain text concatenation on parser failure.
+ * One decision's document payload, as served and as read.
+ *
+ * The bytes are kept whatever the validator makes of them: a shape this
+ * adapter no longer recognises is still the publisher's own statement about
+ * the decision, and storing it is what makes the next parser free.
+ */
+type CzRegionalDocumentPayload = {
+  raw: string;
+  parsed: CzRegionalFinaldoc | null;
+};
+
+/** The chain payload for one decision, as served and as read. */
+type CzRegionalChainPayload = {
+  raw: string;
+  entries: readonly FinaldocRelation[];
+};
+
+const parsedJson = (raw: string): unknown =>
+  Result.try({
+    try: (): unknown => JSON.parse(raw),
+    catch: () => null,
+  }).unwrapOr(null);
+
+/**
+ * A document response as the part the assembler takes.
+ *
+ * The bytes and the validated shape travel together, and a payload the
+ * validator rejects still becomes a part: the response is the publisher's
+ * statement about the decision whatever this adapter can read of it.
+ */
+export const readCzRegionalDocument = (
+  raw: string,
+): CzRegionalDocumentPayload => {
+  const parsed = parsedJson(raw);
+  return { raw, parsed: isCzRegionalFinaldoc(parsed) ? parsed : null };
+};
+
+/** A chain response as its part, or null where it is not the array served. */
+export const readCzRegionalChain = (
+  raw: string,
+): CzRegionalChainPayload | null => {
+  const parsed = parsedJson(raw);
+  return isUnknownArray(parsed)
+    ? { raw, entries: parsed.filter(isFinaldocRelation) }
+    : null;
+};
+
+/**
+ * Fetch the document payload from /api/finaldoc/{uuid}.
+ *
+ * Returns the bytes and the validated shape separately, so the caller stores
+ * the response it was served rather than whatever the validator could make of
+ * it. `null` means nothing came back at all, which is the one case the caller
+ * has to tell apart: a listed decision whose document was never read must not
+ * be stored as held.
  */
 const fetchFinaldoc = async (
   docUrl: string,
-  item: IngestionResult,
+  caseNumber: string,
   signal?: AbortSignal,
-): Promise<FinaldocResult> => {
-  const empty: FinaldocResult = {
-    fulltext: undefined,
-    decisionType: undefined,
-    documentAst: EMPTY_AST,
-    sourceRaw: undefined,
-    richMetadata: {},
-  };
-
+): Promise<CzRegionalDocumentPayload | null> => {
   const target = restrictCzRegionalFinaldocUrl(docUrl);
   if (target === null) {
     logger.warn("case_law.ingestion.outbound_url_rejected", {
       adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
-      caseNumber: item.caseNumber,
+      caseNumber,
     });
-    return empty;
+    return null;
   }
 
   try {
@@ -334,148 +485,139 @@ const fetchFinaldoc = async (
     );
 
     if (!response.ok) {
-      return empty;
+      return null;
     }
 
-    const doc = await response.json();
-    // Always preserve sourceRaw even if validation fails.
-    // The raw response can be re-parsed when the validator is fixed.
-    const sourceRaw = JSON.stringify(doc);
-
-    if (!isCzRegionalFinaldoc(doc)) {
+    const payload = readCzRegionalDocument(
+      JSON.stringify(await response.json()),
+    );
+    if (payload.parsed === null) {
       // Per-document publisher-side shape drift is operational: the raw
       // response is preserved for re-parsing, so the miss is logged rather
       // than captured per document.
       logger.warn("case_law.ingestion.finaldoc_validation_failed", {
         adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
-        caseNumber: item.caseNumber,
+        caseNumber,
         docUrl: target.toString(),
       });
-
-      return {
-        fulltext: undefined,
-        decisionType: undefined,
-        documentAst: EMPTY_AST,
-        sourceRaw,
-        richMetadata: {},
-      };
     }
-
-    const decisionType = mapDecisionType(toOptionalValue(doc.metadata?.type));
-
-    const richMetadata: FinaldocResult["richMetadata"] = {};
-    const decisionTypeRaw = toOptionalValue(doc.metadata?.type);
-    if (decisionTypeRaw) {
-      richMetadata.decisionTypeRaw = decisionTypeRaw;
-    }
-    const solver = doc.metadata?.solver ?? undefined;
-    if (solver !== undefined) {
-      richMetadata.solver = solver;
-    }
-    const caseResultType = doc.metadata?.caseResultType ?? undefined;
-    if (caseResultType !== undefined) {
-      richMetadata.caseResultType = caseResultType;
-    }
-    const caseSubject = toOptionalValue(doc.metadata?.caseSubject);
-    if (caseSubject) {
-      richMetadata.caseSubject = caseSubject;
-    }
-    if (doc.metadata?.regulations) {
-      richMetadata.regulations = doc.metadata.regulations;
-    }
-    if (doc.metadata?.flags) {
-      richMetadata.flags = doc.metadata.flags;
-    }
-
-    // Plain text fallback
-    const textParts: string[] = [];
-    const verdictText = toOptionalValue(doc.verdictText);
-    if (verdictText) {
-      textParts.push(verdictText);
-    }
-    const justificationText = toOptionalValue(doc.justificationText);
-    if (justificationText) {
-      textParts.push(justificationText);
-    }
-    const plainFulltext =
-      textParts.length > 0 ? textParts.join("\n\n") : undefined;
-
-    // Try structured parser
-    try {
-      const parsed = parseRegionalDecision({
-        caseNumber: item.caseNumber,
-        ecli: item.ecli,
-        court: item.court,
-        decisionDate: item.decisionDate,
-        decisionType,
-        sourceUrl: item.sourceUrl,
-        header: arrayOrEmpty(doc.header),
-        verdict: arrayOrEmpty(doc.verdict),
-        justification: arrayOrEmpty(doc.justification),
-        information: arrayOrEmpty(doc.information),
-        styles: arrayOrEmpty(doc.styles),
-        verdictText: verdictText ?? "",
-        justificationText: justificationText ?? "",
-      });
-
-      return {
-        fulltext: parsed.fulltext || plainFulltext,
-        decisionType,
-        documentAst: parsed.documentAst,
-        sourceRaw,
-        richMetadata,
-      };
-    } catch {
-      // Parser failed; fall back to empty AST + plain text
-      return {
-        fulltext: plainFulltext,
-        decisionType,
-        documentAst: EMPTY_AST,
-        sourceRaw,
-        richMetadata,
-      };
-    }
+    return payload;
   } catch {
-    return empty;
+    return null;
   }
 };
 
 /**
- * Merge a finaldoc fetch into the decision parsed from the listing item.
- * Mutates in place, which is what the page enrichment already did; kept as
- * one function so the listing walk and the crawl cannot enrich differently.
+ * Fetch the documents that later affected this one, from
+ * `/api/finalDocChain/affectingDocs/{uuid}`.
+ *
+ * The inverse of the document payload's own `affectedDocs`, and the only
+ * surface that states the counterpart's publisher id, so the graph resolves
+ * without matching court and docket text. It costs one request per decision,
+ * which is why the crawl does not make it: the chain pass in
+ * `cz-regional-chain-backfill.ts` spends that budget under an operator and
+ * writes the part onto rows already held.
  */
-const applyFinaldoc = (
-  decision: IngestionResult,
-  result: FinaldocResult,
-): void => {
-  if (result.fulltext) {
-    decision.fulltext = result.fulltext;
+export const fetchCzRegionalAffectingDocs = async (
+  sourceDocumentId: string,
+  signal?: AbortSignal,
+): Promise<CzRegionalChainPayload | null> => {
+  const response = await fetchPublisher(
+    `${BASE_URL}/finalDocChain/affectingDocs/${encodeURIComponent(sourceDocumentId)}`,
+    {
+      adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
+      ...(signal === undefined ? {} : { signal }),
+      headers: {
+        Accept: "application/json",
+        "User-Agent": INGESTION_USER_AGENT,
+      },
+      timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+    },
+  );
+  if (!response.ok) {
+    return null;
   }
-  if (result.decisionType) {
-    decision.decisionType = result.decisionType;
-  }
-  decision.documentAst = result.documentAst;
-  decision.sourceRaw = result.sourceRaw;
-  decision.sourceRawContentType = "application/json";
-  // The publisher linked a document and nothing came back: the listed identity
-  // survives (rule 20) but the row carries the listing alone. Marking it keeps
-  // the row out of every public surface, and out of what `heldRequiresDetail`
-  // counts as held, so a later reconciliation pass asks for the document
-  // again. Only the crawl reaches this; the reconciliation path reports
-  // `detail-unavailable` before it enriches.
-  if (result.sourceRaw === undefined) {
-    decision.isListingOnly = true;
-  }
-
-  const rm = result.richMetadata;
-  if (Object.keys(rm).length > 0) {
-    decision.metadata = checkedDecisionMetadata({
-      ...decision.metadata,
-      ...rm,
-    });
-  }
+  return readCzRegionalChain(JSON.stringify(await response.json()));
 };
+
+/**
+ * The docket as the publisher prints it, rebuilt from the parts it states.
+ *
+ * A relation names the counterpart by its parts alone and a citation names a
+ * docket, so the edge is unusable until the two are spelled the same way. The
+ * sheet number is deliberately left off: it identifies a page of the file,
+ * not the decision.
+ */
+const formatCaseNumberParts = (
+  parts: FinaldocCaseNumber | null | undefined,
+): string | undefined => {
+  if (!parts) {
+    return undefined;
+  }
+  const { senate, registry, index, year } = parts;
+  if (
+    typeof senate !== "number" ||
+    typeof index !== "number" ||
+    typeof year !== "number" ||
+    !registry
+  ) {
+    return undefined;
+  }
+  return `${senate} ${registry} ${index}/${year}`;
+};
+
+/**
+ * The judge this source names, as one rapporteur.
+ *
+ * The publisher states exactly one person per decision and publishes no
+ * separate opinions, so `dissenting` is unreachable here. The Czech word it
+ * prints beside the name — `samosoudkyně` for a judge sitting alone,
+ * `předsedkyně senátu` for a panel chair — says how that one judge sat, not
+ * that a second bench role exists, so it stays on `metadata.solver` with the
+ * rest of the verbatim blob rather than becoming a role of its own.
+ */
+const solverJudges = (
+  solver: FinaldocSolver | undefined,
+): readonly DecisionJudgeInput[] => {
+  if (solver === undefined) {
+    return [];
+  }
+  const printed =
+    typeof solver === "string"
+      ? stripAcademicTitles(solver)
+      : [solver.firstName, solver.lastName]
+          .filter((part) => part !== undefined && part.trim().length > 0)
+          .join(" ");
+  return printed.length === 0
+    ? []
+    : [{ role: DECISION_JUDGE_ROLE.RAPPORTEUR, nameAsPrinted: printed }];
+};
+
+/** The same judge as the listing row pre-joins them, titles and all. */
+const listingJudges = (
+  author: string | undefined,
+): readonly DecisionJudgeInput[] => {
+  const printed = author === undefined ? "" : stripAcademicTitles(author);
+  return printed.length === 0
+    ? []
+    : [{ role: DECISION_JUDGE_ROLE.RAPPORTEUR, nameAsPrinted: printed }];
+};
+
+/**
+ * Whether the publisher states a court decided this record.
+ *
+ * The feed carries the ministry's own administrative decisions beside the
+ * courts', marked by a court field reading "not entered" and, in the document
+ * payload, a court code of `NONE`. Their identifier is a ministry reference
+ * rather than an ECLI, so storing one makes a case-law row whose court is a
+ * placeholder and whose ECLI is not one. Refusing them here keeps them out of
+ * the corpus and out of what reconciliation counts as missing.
+ */
+const isCourtListing = (item: CzRegionalApiItem): boolean =>
+  Boolean(item.soud) && item.soud?.trim() !== COURT_NOT_STATED;
+
+const isCourtDocument = (doc: CzRegionalFinaldoc | null): boolean =>
+  doc?.metadata?.courtCode?.trim() !== COURT_CODE_NONE;
 
 /**
  * The publisher's document id, which this source states only as the last
@@ -504,7 +646,7 @@ export const documentIdFromLink = (
 export const czRegionalListingIdentity = (
   item: CzRegionalApiItem,
 ): ListingIdentity => {
-  if (!item.jednaciCislo || !item.soud) {
+  if (!item.jednaciCislo || !isCourtListing(item)) {
     return { type: "unidentifiable" };
   }
   const sourceDocumentId = documentIdFromLink(item.odkaz ?? undefined);
@@ -518,12 +660,127 @@ export const czRegionalListingIdentity = (
   };
 };
 
-const parseItem = (item: CzRegionalApiItem): IngestionResult | null => {
-  if (!item.jednaciCislo || !item.soud) {
-    return null;
+/** The plain-text fallbacks the document states, and the row's text. */
+type DocumentText = {
+  plain: string | undefined;
+  verdict: string;
+  justification: string;
+};
+
+const documentTextOf = (doc: CzRegionalFinaldoc | null): DocumentText => {
+  const verdict = toOptionalValue(doc?.verdictText) ?? "";
+  const justification = toOptionalValue(doc?.justificationText) ?? "";
+  const parts = [verdict, justification].filter((part) => part.length > 0);
+  return {
+    plain: parts.length > 0 ? parts.join("\n\n") : undefined,
+    verdict,
+    justification,
+  };
+};
+
+type ParseDocumentPayloadOptions = {
+  doc: CzRegionalFinaldoc;
+  caseNumber: string;
+  ecli: string | undefined;
+  court: string;
+  decisionDate: string | undefined;
+  decisionType: string | undefined;
+  sourceUrl: string | undefined;
+};
+
+type ParsedDocument = {
+  documentAst: DocumentAst | EmptyAst;
+  fulltext: string | undefined;
+};
+
+/**
+ * The document payload as an AST. A parse failure is not the decision's
+ * failure: the payload is stored verbatim, so the text stays recoverable by
+ * re-parsing what was kept, and the row falls back to the publisher's own
+ * plain-text rendering meanwhile.
+ */
+const parseDocumentPayload = ({
+  doc,
+  caseNumber,
+  ecli,
+  court,
+  decisionDate,
+  decisionType,
+  sourceUrl,
+}: ParseDocumentPayloadOptions): ParsedDocument => {
+  const text = documentTextOf(doc);
+  try {
+    const parsed = parseRegionalDecision({
+      caseNumber,
+      ecli,
+      court,
+      decisionDate,
+      decisionType,
+      sourceUrl,
+      header: arrayOrEmpty(doc.header),
+      verdict: arrayOrEmpty(doc.verdict),
+      justification: arrayOrEmpty(doc.justification),
+      information: arrayOrEmpty(doc.information),
+      styles: arrayOrEmpty(doc.styles),
+      verdictText: text.verdict,
+      justificationText: text.justification,
+    });
+    return {
+      documentAst: parsed.documentAst,
+      fulltext: parsed.fulltext || text.plain,
+    };
+  } catch {
+    return { documentAst: EMPTY_AST, fulltext: text.plain };
+  }
+};
+
+export type CzRegionalBuildResult =
+  | { type: "built"; decision: IngestionResult }
+  /** No docket and court to key on, or a record no court decided. */
+  | { type: "unkeyable" }
+  /**
+   * The item links a document and nothing came back for it. The row is built
+   * anyway and marked `isListingOnly`, because the listing observation is
+   * durable and a crawl that dropped it would lose the identity too; the
+   * reconciliation loop parks it instead, since a detail-less row there would
+   * read as held and take the document out of every later pass.
+   */
+  | { type: "detail-unavailable"; decision: IngestionResult };
+
+type AssembleCzRegionalOptions = {
+  /** The listing row, which is the only surface stating several fields. */
+  item: CzRegionalApiItem;
+  /** The document payload, or null where none was read. */
+  document: CzRegionalDocumentPayload | null;
+  /** The chain payload, which only the chain pass supplies. */
+  chain: CzRegionalChainPayload | null;
+};
+
+/**
+ * Build one decision from the responses this source serves for it.
+ *
+ * Pure, and the one place the row's shape is decided: the crawl, the
+ * reconciliation loop, the chain pass and a re-parse of a stored envelope all
+ * come through here, so none of them can store a row the others would not.
+ *
+ * Every response is kept as a named part of the envelope. The listing row is
+ * the only surface stating `autor`, `predmetRizeni`, `klicovaSlova` and
+ * `zminenaUstanoveni` in words, so a crawl that parsed it and dropped it left
+ * those unrecoverable for every row already stored.
+ */
+export const assembleCzRegionalDecision = ({
+  item,
+  document,
+  chain,
+}: AssembleCzRegionalOptions): CzRegionalBuildResult => {
+  if (!item.jednaciCislo || !isCourtListing(item)) {
+    return { type: "unkeyable" };
+  }
+  const parsedDocument = document?.parsed ?? null;
+  if (!isCourtDocument(parsedDocument)) {
+    return { type: "unkeyable" };
   }
 
-  const raw = JSON.stringify(item);
   // This source publishes the docket with the sheet number appended.
   const { caseNumber, sheetNumber } = splitCaseReference(item.jednaciCislo);
   const publishedDocumentUrl = toOptionalValue(item.odkaz);
@@ -537,39 +794,162 @@ const parseItem = (item: CzRegionalApiItem): IngestionResult | null => {
     });
   }
 
+  const docMetadata = parsedDocument?.metadata ?? undefined;
+  const decisionTypeRaw = toOptionalValue(docMetadata?.type);
+  const decisionType = mapDecisionType(decisionTypeRaw, caseNumber);
+  // The document restates the decision's identifier and both its dates, which
+  // is what makes that payload self-sufficient: a document reached without
+  // its listing row would otherwise carry neither.
+  const ecli = toOptionalValue(docMetadata?.ecli) ?? toOptionalValue(item.ecli);
+  const decisionDate =
+    toOptionalValue(docMetadata?.decisionAt) ??
+    toOptionalValue(item.datumVydani);
+  const publishedDate =
+    toOptionalValue(docMetadata?.publishedAt) ??
+    toOptionalValue(item.datumZverejneni);
+
+  const solver = docMetadata?.solver ?? undefined;
+  const judges =
+    solver === undefined
+      ? listingJudges(toOptionalValue(item.autor))
+      : solverJudges(solver);
+
+  const affectedDocs = docMetadata?.affectedDocs ?? undefined;
+  // The publisher's own outgoing edges, spelled as dockets. The typed
+  // relation (`CANCEL`, `CONFIRM`, …) and the affected court stay on the
+  // metadata entry beside them: `publisherCitedCases` is a list of case
+  // numbers by contract, and dropping the relation would leave the graph
+  // saying only that two decisions are connected.
+  const publisherCitedCases = arrayOrEmpty(affectedDocs).flatMap((relation) => {
+    const cited = formatCaseNumberParts(relation.caseNumber);
+    return cited === undefined ? [] : [cited];
+  });
+
+  const text = documentTextOf(parsedDocument);
+  const parsed =
+    parsedDocument === null
+      ? null
+      : parseDocumentPayload({
+          doc: parsedDocument,
+          caseNumber,
+          ecli,
+          court: item.soud ?? "",
+          decisionDate,
+          decisionType,
+          sourceUrl: documentUrl?.toString(),
+        });
+  const fulltext = parsed?.fulltext ?? text.plain;
+
+  const sourceRaw = encodeSourceRawEnvelope({
+    [RAW_PART.LISTING]: JSON.stringify(item),
+    ...(document === null ? {} : { [RAW_PART.DOCUMENT]: document.raw }),
+    ...(chain === null ? {} : { [RAW_PART.CHAIN]: chain.raw }),
+  });
+
   return {
-    caseNumber,
-    sheetNumber,
-    ecli: toOptionalValue(item.ecli),
-    court: item.soud,
-    country: ADAPTER_MANIFESTS[ADAPTER_KEYS.CZ_REGIONAL].country,
-    language: "cs",
-    decisionDate: toOptionalValue(item.datumVydani),
-    sourceDocumentId: documentIdFromLink(publishedDocumentUrl),
-    sourceUrl: documentUrl?.toString(),
-    documentUrl: documentUrl?.toString(),
-    textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-    metadata: {
+    type: "built",
+    decision: {
       caseNumber,
       sheetNumber,
-      // The reference exactly as the court publishes it, docket and sheet
-      // together, so the split stays reversible from what we stored.
-      publishedCaseNumber: item.jednaciCislo,
-      ecli: toOptionalValue(item.ecli),
-      court: item.soud,
-      decisionDate: toOptionalValue(item.datumVydani),
-      decisionType: undefined,
-      author: toOptionalValue(item.autor),
-      subjectOfProceeding: toOptionalValue(item.predmetRizeni),
-      publishedDate: toOptionalValue(item.datumZverejneni),
-      keywords: item.klicovaSlova,
-      mentionedStatutes: item.zminenaUstanoveni,
+      ecli,
+      court: item.soud ?? "",
+      country: ADAPTER_MANIFESTS[ADAPTER_KEYS.CZ_REGIONAL].country,
+      language: CZ_REGIONAL_LANGUAGE,
+      decisionDate,
+      ...(decisionType === undefined ? {} : { decisionType }),
+      ...(fulltext === undefined ? {} : { fulltext }),
+      // The publisher linked a document and none is in hand: the listed
+      // identity is durable, but the row carries the listing alone. Marking
+      // it keeps the row out of every public surface, and out of what
+      // `heldRequiresDetail` counts as held, so a later pass asks again. A
+      // row the publisher links no document for is not marked: there is
+      // nothing left to ask for.
+      ...(document === null && documentUrl !== null
+        ? { isListingOnly: true }
+        : {}),
+      ...(judges.length === 0 ? {} : { judges }),
+      ...(publisherCitedCases.length === 0 ? {} : { publisherCitedCases }),
+      sourceDocumentId:
+        toOptionalValue(parsedDocument?.uuid) ??
+        documentIdFromLink(publishedDocumentUrl),
+      sourceUrl: documentUrl?.toString(),
+      documentUrl: documentUrl?.toString(),
+      textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+      metadata: checkedDecisionMetadata({
+        caseNumber,
+        sheetNumber,
+        // The reference exactly as the court publishes it, docket and sheet
+        // together, so the split stays reversible from what we stored.
+        publishedCaseNumber: item.jednaciCislo,
+        ecli,
+        court: item.soud,
+        decisionDate,
+        decisionType,
+        author: toOptionalValue(item.autor),
+        subjectOfProceeding: toOptionalValue(item.predmetRizeni),
+        publishedDate,
+        keywords: item.klicovaSlova,
+        mentionedStatutes: item.zminenaUstanoveni,
+        ...(decisionTypeRaw === undefined ? {} : { decisionTypeRaw }),
+        ...(docMetadata === undefined
+          ? {}
+          : {
+              caseNumberParts: docMetadata.caseNumber,
+              courtCode: docMetadata.courtCode,
+              solver,
+              caseResultType: docMetadata.caseResultType,
+              caseSubject: toOptionalValue(docMetadata.caseSubject),
+              specialType: docMetadata.specialType,
+              affectedDocs,
+              regulations: docMetadata.regulations,
+              flags: docMetadata.flags,
+            }),
+        ...(chain === null
+          ? {}
+          : {
+              [CZ_REGIONAL_AFFECTING_DOCS_METADATA_KEY]: chain.entries,
+            }),
+      }),
+      rawHash: hashContent(sourceRaw),
+      parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.CZ_REGIONAL],
+      documentAst: parsed?.documentAst ?? EMPTY_AST,
+      sourceRaw,
+      sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
     },
-    rawHash: hashContent(raw),
-    parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.CZ_REGIONAL],
-    // Court-specific AST parsing is not available for regional courts yet.
-    documentAst: EMPTY_AST,
   };
+};
+
+/**
+ * Fetch the document for a listed item and assemble the decision.
+ *
+ * The document is fetched once per row and the outcome says whether it came
+ * back, because the two callers need opposite things from that: the crawl
+ * stores the listing observation either way, and the reconciliation loop
+ * parks a row it could not read the document for.
+ */
+export const buildCzRegionalDecision = async (
+  item: CzRegionalApiItem,
+  signal?: AbortSignal,
+): Promise<CzRegionalBuildResult> => {
+  if (!item.jednaciCislo || !isCourtListing(item)) {
+    return { type: "unkeyable" };
+  }
+  const publishedDocumentUrl = toOptionalValue(item.odkaz);
+  // The publisher linked no document; the listing metadata is all there is,
+  // and there is nothing left to ask for, so the row is complete as built.
+  if (publishedDocumentUrl === undefined) {
+    return assembleCzRegionalDecision({ item, document: null, chain: null });
+  }
+  const document = await fetchFinaldoc(
+    publishedDocumentUrl,
+    splitCaseReference(item.jednaciCislo).caseNumber,
+    signal,
+  );
+  const built = assembleCzRegionalDecision({ item, document, chain: null });
+  if (document !== null || built.type !== "built") {
+    return built;
+  }
+  return { type: "detail-unavailable", decision: built.decision };
 };
 
 type CursorState = {
@@ -815,46 +1195,6 @@ export const listCzRegionalDayPage = async ({
   };
 };
 
-export type CzRegionalBuildResult =
-  | { type: "built"; decision: IngestionResult }
-  /** No docket and court to key on; the crawl drops these too. */
-  | { type: "unkeyable" }
-  /** The item links a document, but nothing came back for it. */
-  | { type: "detail-unavailable" };
-
-/**
- * Build one decision from a listing item, through the adapter's own parse and
- * enrichment path.
- *
- * `fetchFinaldoc` degrades to empty enrichment when the document cannot be
- * read, which is right for the crawl: the page keeps moving and the listing
- * observation is still worth storing. A caller filling gaps needs the
- * opposite, so the failure is reported instead of folded into the decision —
- * storing a detail-less row would make the identity held and take the
- * document out of every later reconciliation. The signal is `sourceRaw`,
- * which is set whenever a response body was read at all (even one the
- * validator then rejected), so its absence is exactly "nothing came back".
- */
-export const buildCzRegionalDecision = async (
-  item: CzRegionalApiItem,
-  signal?: AbortSignal,
-): Promise<CzRegionalBuildResult> => {
-  const decision = parseItem(item);
-  if (decision === null) {
-    return { type: "unkeyable" };
-  }
-  // The publisher linked no document; the listing metadata is all there is.
-  if (!decision.documentUrl) {
-    return { type: "built", decision };
-  }
-  const finaldoc = await fetchFinaldoc(decision.documentUrl, decision, signal);
-  if (finaldoc.sourceRaw === undefined) {
-    return { type: "detail-unavailable" };
-  }
-  applyFinaldoc(decision, finaldoc);
-  return { type: "built", decision };
-};
-
 /**
  * A reconciliation slice for this source is one UTC publication day, which is
  * exactly what the publisher's opendata endpoint is addressed by. `YYYY-MM-DD`
@@ -899,17 +1239,414 @@ const buildCzRegionalFromPayload = async (
     ? await buildCzRegionalDecision(payload, signal)
     : { type: "unkeyable" };
 
+// ── Source-field inventory ───────────────────────────────
+
+/**
+ * Every key this publisher states for one decision, addressed by the part
+ * that states it.
+ *
+ * Qualified rather than bare because three parts share key names: `uuid`,
+ * `caseNumber`, `courtCode` and `ecli` each appear on more than one of them
+ * and mean a different thing on each — the document's `uuid` is this
+ * decision, a chain entry's `uuid` is the decision that affected it.
+ */
+const SOURCE_FIELDS = [
+  "listing.jednaciCislo",
+  "listing.soud",
+  "listing.autor",
+  "listing.ecli",
+  "listing.predmetRizeni",
+  "listing.datumVydani",
+  "listing.datumZverejneni",
+  "listing.klicovaSlova",
+  "listing.zminenaUstanoveni",
+  "listing.odkaz",
+  "document.uuid",
+  "document.header",
+  "document.verdict",
+  "document.verdictText",
+  "document.justification",
+  "document.justificationText",
+  "document.information",
+  "document.styles",
+  "document.metadata",
+  "document.texts[].text",
+  "document.texts[].anonStyle",
+  "document.styleLocalId",
+  "document.tableCellInfo",
+  "document.styles[].localId",
+  "document.styles[].alignment",
+  "document.styles[].hasSpaceBefore",
+  "document.styles[].hasSpaceAfter",
+  "document.styles[].bold",
+  "document.styles[].italic",
+  "document.metadata.type",
+  "document.metadata.ecli",
+  "document.metadata.publishedAt",
+  "document.metadata.decisionAt",
+  "document.metadata.caseNumber",
+  "document.metadata.solver",
+  "document.metadata.courtCode",
+  "document.metadata.caseResultType",
+  "document.metadata.caseSubject",
+  "document.metadata.specialType",
+  "document.metadata.affectedDocs",
+  "document.metadata.regulations",
+  "document.metadata.flags",
+  "chain[].uuid",
+  "chain[].caseNumber",
+  "chain[].courtCode",
+  "chain[].affectedDate",
+  "chain[].affectedTypes",
+] as const;
+
+/**
+ * What becomes of each of them.
+ *
+ * The listing row and the document state several of the same facts twice, and
+ * both copies are declared: a document reached without its listing row states
+ * its own ECLI and dates, and a listing row reached without its document is
+ * the only statement of the judge, the keywords and the statutes in words.
+ */
+const CZ_REGIONAL_SOURCE_FIELDS = {
+  "listing.jednaciCislo": {
+    disposition: "stored",
+    target: { type: "result", key: "caseNumber" },
+  },
+  "listing.soud": {
+    disposition: "stored",
+    target: { type: "result", key: "court" },
+  },
+  // The deciding judge as the listing pre-joins them, titles and all. The
+  // document states the same person in parts, which is the better source, so
+  // this is what the row's bench is built from only when no document was read.
+  "listing.autor": {
+    disposition: "stored",
+    target: { type: "result", key: "judges" },
+  },
+  "listing.ecli": {
+    disposition: "stored",
+    target: { type: "result", key: "ecli" },
+  },
+  "listing.predmetRizeni": {
+    disposition: "stored",
+    target: { type: "metadata", key: "subjectOfProceeding" },
+  },
+  "listing.datumVydani": {
+    disposition: "stored",
+    target: { type: "result", key: "decisionDate" },
+  },
+  "listing.datumZverejneni": {
+    disposition: "stored",
+    target: { type: "metadata", key: "publishedDate" },
+  },
+  "listing.klicovaSlova": {
+    disposition: "stored",
+    target: { type: "metadata", key: "keywords" },
+  },
+  "listing.zminenaUstanoveni": {
+    disposition: "stored",
+    target: { type: "metadata", key: "mentionedStatutes" },
+  },
+  // The link's last segment is the publisher's own document id, which is what
+  // the row is keyed on; the link itself is the row's source address.
+  "listing.odkaz": { disposition: "stored", target: { type: "identity" } },
+  "document.uuid": { disposition: "stored", target: { type: "identity" } },
+  "document.header": { disposition: "stored", target: { type: "document" } },
+  "document.verdict": { disposition: "stored", target: { type: "document" } },
+  "document.verdictText": {
+    disposition: "stored",
+    target: { type: "document" },
+  },
+  "document.justification": {
+    disposition: "stored",
+    target: { type: "document" },
+  },
+  "document.justificationText": {
+    disposition: "stored",
+    target: { type: "document" },
+  },
+  "document.information": {
+    disposition: "stored",
+    target: { type: "document" },
+  },
+  "document.styles": { disposition: "stored", target: { type: "document" } },
+  "document.metadata": excludedSourceField(
+    "the object holding the thirteen metadata keys below, each of which carries its own disposition",
+  ),
+  "document.texts[].text": {
+    disposition: "stored",
+    target: { type: "document" },
+  },
+  // `ANON` marks a span the publisher replaced with a description of what it
+  // removed, which the document model carries as an anonymized text node.
+  "document.texts[].anonStyle": {
+    disposition: "stored",
+    target: { type: "document" },
+  },
+  "document.styleLocalId": {
+    disposition: "stored",
+    target: { type: "document" },
+  },
+  "document.tableCellInfo": excludedSourceField(
+    "a paragraph's placement inside a table; every payload sampled states it as null, so the shape a non-null value would take is unstated and nothing can be read from it",
+  ),
+  "document.styles[].localId": {
+    disposition: "stored",
+    target: { type: "document" },
+  },
+  "document.styles[].alignment": excludedSourceField(
+    "how the paragraph was aligned on the printed page; the document model carries the text and its emphasis, not its layout",
+  ),
+  "document.styles[].hasSpaceBefore": excludedSourceField(
+    "vertical spacing above the paragraph on the printed page, which the document model does not represent",
+  ),
+  "document.styles[].hasSpaceAfter": excludedSourceField(
+    "vertical spacing below the paragraph on the printed page, which the document model does not represent",
+  ),
+  "document.styles[].bold": {
+    disposition: "stored",
+    target: { type: "document" },
+  },
+  "document.styles[].italic": {
+    disposition: "stored",
+    target: { type: "document" },
+  },
+  "document.metadata.type": {
+    disposition: "stored",
+    target: { type: "result", key: "decisionType" },
+  },
+  "document.metadata.ecli": {
+    disposition: "stored",
+    target: { type: "result", key: "ecli" },
+  },
+  "document.metadata.publishedAt": {
+    disposition: "stored",
+    target: { type: "metadata", key: "publishedDate" },
+  },
+  "document.metadata.decisionAt": {
+    disposition: "stored",
+    target: { type: "result", key: "decisionDate" },
+  },
+  // The docket in parts, which is what makes the split of the printed
+  // reference checkable instead of trusted; `registry` is the agenda code.
+  "document.metadata.caseNumber": {
+    disposition: "stored",
+    target: { type: "metadata", key: "caseNumberParts" },
+  },
+  "document.metadata.solver": {
+    disposition: "stored",
+    target: { type: "result", key: "judges" },
+  },
+  // The stable court key the free-text court name only spells out.
+  "document.metadata.courtCode": {
+    disposition: "stored",
+    target: { type: "metadata", key: "courtCode" },
+  },
+  "document.metadata.caseResultType": {
+    disposition: "stored",
+    target: { type: "metadata", key: "caseResultType" },
+  },
+  "document.metadata.caseSubject": {
+    disposition: "stored",
+    target: { type: "metadata", key: "caseSubject" },
+  },
+  "document.metadata.specialType": {
+    disposition: "stored",
+    target: { type: "metadata", key: "specialType" },
+  },
+  // The publisher's own outgoing relation graph. The dockets reach
+  // `publisherCitedCases`; the relation kind and the affected court stay on
+  // the metadata entry, which is the only place they fit.
+  "document.metadata.affectedDocs": {
+    disposition: "stored",
+    target: { type: "result", key: "publisherCitedCases" },
+  },
+  "document.metadata.regulations": {
+    disposition: "stored",
+    target: { type: "metadata", key: "regulations" },
+  },
+  "document.metadata.flags": {
+    disposition: "stored",
+    target: { type: "metadata", key: "flags" },
+  },
+  // The incoming edges, whose five keys describe one entry and are stored as
+  // that entry: the affecting document's id is the one thing the forward edge
+  // never states, so the graph resolves without matching court and docket.
+  "chain[].uuid": {
+    disposition: "stored",
+    target: { type: "metadata", key: "affectingDocs" },
+  },
+  "chain[].caseNumber": {
+    disposition: "stored",
+    target: { type: "metadata", key: "affectingDocs" },
+  },
+  "chain[].courtCode": {
+    disposition: "stored",
+    target: { type: "metadata", key: "affectingDocs" },
+  },
+  "chain[].affectedDate": {
+    disposition: "stored",
+    target: { type: "metadata", key: "affectingDocs" },
+  },
+  "chain[].affectedTypes": {
+    disposition: "stored",
+    target: { type: "metadata", key: "affectingDocs" },
+  },
+} as const satisfies Record<
+  (typeof SOURCE_FIELDS)[number],
+  SourceFieldDisposition
+>;
+
+const parsedPart = (parts: SourceRawParts, part: string): unknown =>
+  parsedJson(parts[part] ?? "");
+
+/** Keys of `value`, each prefixed, or nothing where it is not an object. */
+const qualifiedKeys = (value: unknown, prefix: string): readonly string[] =>
+  isRecord(value) ? Object.keys(value).map((key) => `${prefix}${key}`) : [];
+
+/** The document's four paragraph sections, which share one paragraph shape. */
+const DOCUMENT_PARAGRAPH_SECTIONS = [
+  "header",
+  "verdict",
+  "justification",
+  "information",
+] as const;
+
+/**
+ * What the stored envelope states, read from every part of it.
+ *
+ * The page envelope's own keys (`pageSize`, `totalPages`, `totalElements`)
+ * are deliberately not here: the part is the listing row, not the page it
+ * arrived on, and those describe the walk rather than the decision.
+ */
+const unknownArray = (value: unknown): readonly unknown[] =>
+  isUnknownArray(value) ? value : [];
+
+const listCzRegionalSourceFields = (
+  parts: SourceRawParts,
+): readonly string[] => {
+  const listing = parsedPart(parts, RAW_PART.LISTING);
+  const document = parsedPart(parts, RAW_PART.DOCUMENT);
+  const chain = parsedPart(parts, RAW_PART.CHAIN);
+  const documentKey = (key: string): string => `document.${key}`;
+
+  const stated = new Set<string>([
+    ...qualifiedKeys(listing, "listing."),
+    ...qualifiedKeys(document, "document."),
+    ...qualifiedKeys(
+      isRecord(document) ? document["metadata"] : undefined,
+      "document.metadata.",
+    ),
+    ...unknownArray(
+      isRecord(document) ? document["styles"] : undefined,
+    ).flatMap((style) => qualifiedKeys(style, "document.styles[].")),
+    ...unknownArray(chain).flatMap((entry) => qualifiedKeys(entry, "chain[].")),
+  ]);
+
+  // The paragraph shape is the same in all four sections, so its keys are
+  // read once across them rather than once per section.
+  for (const section of DOCUMENT_PARAGRAPH_SECTIONS) {
+    const paragraphs = unknownArray(
+      isRecord(document) ? document[section] : undefined,
+    );
+    for (const paragraph of paragraphs) {
+      for (const key of Object.keys(isRecord(paragraph) ? paragraph : {})) {
+        // `texts` is the span array; its own keys are listed below it.
+        if (key !== "texts") {
+          stated.add(documentKey(key));
+        }
+      }
+      const spans = unknownArray(
+        isRecord(paragraph) ? paragraph["texts"] : undefined,
+      );
+      for (const span of spans) {
+        for (const key of qualifiedKeys(span, "document.texts[].")) {
+          stated.add(key);
+        }
+      }
+    }
+  }
+
+  return [...stated];
+};
+
+// ── Re-parsing a stored envelope ─────────────────────────
+
+/**
+ * Rebuild the decision this adapter would produce from a payload it stored,
+ * without contacting the publisher.
+ *
+ * The envelope holds every response the crawl read, so a parser change is
+ * replayable across the corpus. A row stored before this adapter wrote an
+ * envelope holds the document payload alone and decodes to `null`: it is
+ * reported rather than guessed at, because the listing row that would key it
+ * was never kept.
+ */
+const reparseCzRegionalStoredRaw = (
+  stored: StoredRawReparseInput,
+): StoredRawReparseOutcome => {
+  if (stored.contentType !== SOURCE_RAW_ENVELOPE_CONTENT_TYPE) {
+    return {
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.UNSUPPORTED_CONTENT,
+      detail: `stored under ${stored.contentType ?? "no content type"}`,
+    };
+  }
+  const parts = decodeSourceRawEnvelope(new TextDecoder().decode(stored.raw));
+  if (parts === null) {
+    return {
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.RAW_FIDELITY_LOST,
+      detail: "the stored payload is not an envelope",
+    };
+  }
+  const item = parsedPart(parts, RAW_PART.LISTING);
+  if (!isCzRegionalApiItem(item)) {
+    return {
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA,
+      detail: "the stored envelope holds no listing row",
+    };
+  }
+
+  const documentRaw = parts[RAW_PART.DOCUMENT];
+  const chainRaw = parts[RAW_PART.CHAIN];
+
+  const built = assembleCzRegionalDecision({
+    item,
+    document:
+      documentRaw === undefined ? null : readCzRegionalDocument(documentRaw),
+    chain: chainRaw === undefined ? null : readCzRegionalChain(chainRaw),
+  });
+  if (built.type !== "built") {
+    return {
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.NO_DOCUMENT,
+      detail: "the stored listing row states no court and docket",
+    };
+  }
+  if (
+    stored.sourceDocumentId !== null &&
+    built.decision.sourceDocumentId !== stored.sourceDocumentId
+  ) {
+    return {
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.IDENTITY_MISMATCH,
+      detail: `the envelope names ${built.decision.sourceDocumentId ?? "no id"}, the row ${stored.sourceDocumentId}`,
+    };
+  }
+  return { type: "parsed", result: built.decision };
+};
+
 /**
  * Every payload this service serves for one decision, and whether the row
  * keeps it.
  *
- * The crawl reads a day listing and then one document payload per row, and
- * keeps the document alone — as the publisher's own JSON rather than as a
- * named part, which is why the part cannot be read back from a stored row.
- * The chain of later documents affecting this one is a request per decision
- * the crawl does not make; everything else the service exposes is a
- * corpus-wide index, a completion list, an export of a result set or an
- * authenticated editing surface.
+ * Three are kept and they are the whole per-decision surface: the day
+ * listing's row, the document, and the chain of later documents affecting it.
+ * Everything else the service exposes is a corpus-wide index, a completion
+ * list, an export of a result set or an authenticated editing surface.
  */
 const SOURCE_SURFACES = [
   "year-index",
@@ -937,18 +1674,9 @@ const CZ_REGIONAL_SOURCE_SURFACES = {
     "day-index": excludedSourceSurface(
       "the same count index per day; an absent day already answers what it would state",
     ),
-    listing: backlogSurface(
-      ADAPTER_KEYS.CZ_REGIONAL,
-      "the listing row is the sole carrier of several fields and is dropped once the document payload for the row has been fetched",
-    ),
-    document: backlogSurface(
-      ADAPTER_KEYS.CZ_REGIONAL,
-      "the document payload is stored as the publisher's own JSON rather than as a named part, so a reader of a stored row cannot tell which response it holds",
-    ),
-    chain: backlogSurface(
-      ADAPTER_KEYS.CZ_REGIONAL,
-      "the chain of later documents affecting this one is one request per decision that the crawl does not make; the forward edge is inside a payload already fetched",
-    ),
+    listing: storedSourceSurface(RAW_PART.LISTING),
+    document: storedSourceSurface(RAW_PART.DOCUMENT),
+    chain: storedSourceSurface(RAW_PART.CHAIN),
     "site-search": excludedSourceSurface(
       "a subset of the listing row, with match fragments that depend on the query that produced them",
     ),
@@ -976,8 +1704,13 @@ const CZ_REGIONAL_SOURCE_SURFACES = {
 export const czRegionalAdapter = defineSourceAdapter({
   key: ADAPTER_KEYS.CZ_REGIONAL,
   sourceSurfaces: CZ_REGIONAL_SOURCE_SURFACES,
-  sourceFields: pendingSourceFieldInventory(ADAPTER_KEYS.CZ_REGIONAL),
-  language: "cs",
+  sourceFields: {
+    status: "declared",
+    fields: CZ_REGIONAL_SOURCE_FIELDS,
+    listSourceFields: listCzRegionalSourceFields,
+  },
+  reparseStoredRaw: reparseCzRegionalStoredRaw,
+  language: CZ_REGIONAL_LANGUAGE,
   minRequestIntervalMs: 200,
   // rozhodnuti.justice.cz returns 100 items per page; each
   // needs a finaldoc enrichment fetch. 30s default is too
@@ -1052,7 +1785,7 @@ export const czRegionalAdapter = defineSourceAdapter({
     firstSlice: CZ_REGIONAL_FEED_START,
     ...czRegionalDaySlices.walk,
     tipWindowDays: CZ_REGIONAL_TIP_WINDOW_DAYS,
-    // `applyFinaldoc` marks a row whose linked document did not come back
+    // A row whose linked document did not come back is marked
     // `isListingOnly`; unset, that stub would count as held and its document
     // would never be asked for again. A row the publisher links no document
     // for is not marked and stays held: there is nothing left to ask for, and
@@ -1127,31 +1860,25 @@ export const czRegionalAdapter = defineSourceAdapter({
         }
         const items = arrayOrEmpty(json.items);
 
+        // One document fetch per listed row, in batches of
+        // FINALDOC_CONCURRENCY, then the row and its document are assembled
+        // together: the envelope has to hold both, so the listing row cannot
+        // be turned into a decision before its document is in hand.
         const decisions: IngestionResult[] = [];
-        for (const item of items) {
-          const parsed = parseItem(item);
-          if (parsed) {
-            decisions.push(parsed);
-          }
-        }
-
-        // Enrich decisions with fulltext + AST from /api/finaldoc.
-        // Fetches run concurrently, in batches of FINALDOC_CONCURRENCY.
-        const enrichDecision = async (decision: IngestionResult) => {
-          if (!decision.documentUrl) {
-            return;
-          }
-
-          applyFinaldoc(
-            decision,
-            await fetchFinaldoc(decision.documentUrl, decision, signal),
+        for (let i = 0; i < items.length; i += FINALDOC_CONCURRENCY) {
+          const built = await Promise.all(
+            items
+              .slice(i, i + FINALDOC_CONCURRENCY)
+              .map(async (item) => await buildCzRegionalDecision(item, signal)),
           );
-        };
-
-        for (let i = 0; i < decisions.length; i += FINALDOC_CONCURRENCY) {
-          await Promise.all(
-            decisions.slice(i, i + FINALDOC_CONCURRENCY).map(enrichDecision),
-          );
+          for (const outcome of built) {
+            // A crawl keeps a listed row whose document did not answer: the
+            // observation is durable and `isListingOnly` keeps the document
+            // in what a later reconciliation asks for again.
+            if (outcome.type !== "unkeyable") {
+              decisions.push(outcome.decision);
+            }
+          }
         }
 
         const fetchMs = Math.round(performance.now() - fetchT0);

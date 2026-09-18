@@ -15,103 +15,16 @@
  * budget, so it runs under an operator who reads the report.
  */
 
-import { Result } from "better-result";
-import { eq } from "drizzle-orm";
-
-import { caseLawSources } from "@/api/db/schema";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import { runCzUsJudgesBackfill } from "@/api/handlers/case-law/ingestion/cz-us-judges-backfill";
-import type {
-  CzUsJudgesBackfillError,
-  CzUsJudgesBackfillReport,
-} from "@/api/handlers/case-law/ingestion/cz-us-judges-backfill";
-import type { StoredRawReader } from "@/api/handlers/case-law/ingestion/replay";
-import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane";
-import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
-import { readS3ObjectIfPresent, refreshS3 } from "@/api/lib/s3";
+import { runCaseLawSourceBackfill } from "@/api/scripts/case-law-source-backfill";
 
-const BUDGET_PREFIX = "--budget=";
-/** A stored payload is one document; nothing here should take longer. */
-const STORED_RAW_READ_TIMEOUT_MS = 30_000;
-
-const budgetArgument = process.argv
-  .slice(2)
-  .find((argument) => argument.startsWith(BUDGET_PREFIX));
-const requestBudget =
-  budgetArgument === undefined
-    ? undefined
-    : Number(budgetArgument.slice(BUDGET_PREFIX.length));
-if (requestBudget !== undefined && !Number.isSafeInteger(requestBudget)) {
-  console.error(`${BUDGET_PREFIX}<requests> takes a whole number`);
-  process.exit(1);
-}
-
-// Hold the maintenance lane before the first statement: operator passes over
-// the case-law tables serialize here instead of deadlocking on row locks.
-const { ingestionDb } = await enterCaseLawMaintenanceLane();
-await refreshS3();
-
-const source = (
-  await ingestionDb((tx) =>
-    tx
-      .select({ id: caseLawSources.id, name: caseLawSources.name })
-      .from(caseLawSources)
-      .where(eq(caseLawSources.adapterKey, ADAPTER_KEYS.CZ_US))
-      .limit(1),
-  )
-).at(0);
-
-if (!source) {
-  console.error(`No case-law source configured for ${ADAPTER_KEYS.CZ_US}`);
-  process.exit(1);
-}
-
-// `null` only where the store confirmed it holds no such object, which is a
-// durable fact about that decision. Anything else is raised: it says nothing
-// about the row, and reading it as an absent payload would step over rows
-// whose payloads are there.
-const readStoredRaw: StoredRawReader = async (key) => {
-  const bytes = await readS3ObjectIfPresent(
-    key,
-    AbortSignal.timeout(STORED_RAW_READ_TIMEOUT_MS),
-  );
-  return bytes === null ? null : new Uint8Array(bytes);
-};
-
-const sourceLease = await acquireCaseLawSourceIngestionLease({
-  scopedDb: ingestionDb,
-  sourceId: source.id,
+await runCaseLawSourceBackfill({
+  adapterKey: ADAPTER_KEYS.CZ_US,
+  argv: process.argv.slice(2),
+  run: async ({ requestBudget, ...source }) =>
+    await runCzUsJudgesBackfill({
+      ...source,
+      ...(requestBudget === undefined ? {} : { requestBudget }),
+    }),
 });
-if (sourceLease === null) {
-  console.error(
-    `Source ${ADAPTER_KEYS.CZ_US} is being ingested right now (lease held). Retry later.`,
-  );
-  process.exit(1);
-}
-
-let run: Result<CzUsJudgesBackfillReport, CzUsJudgesBackfillError>;
-try {
-  run = await runCzUsJudgesBackfill({
-    scopedDb: ingestionDb,
-    sourceId: source.id,
-    sourceLease,
-    readStoredRaw,
-    ...(requestBudget === undefined ? {} : { requestBudget }),
-  });
-} finally {
-  // Released on every path, including a rejection the run does not turn into
-  // a `Result`: a failed pass must not leave the source locked against the
-  // crawl until the lease expires.
-  await sourceLease.release();
-}
-
-if (Result.isError(run)) {
-  console.error(run.error.message);
-  // The rows this pass did commit, so a failure at the end of a long run does
-  // not read like a failure at its start.
-  console.error(JSON.stringify(run.error.report, null, 2));
-  process.exit(1);
-}
-
-console.log(JSON.stringify(run.value, null, 2));
-process.exit(0);

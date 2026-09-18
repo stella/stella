@@ -335,6 +335,9 @@ export const LEGACY_RAW_SHAPES = {
       part: "document",
     },
   ],
+  // Kept after the adapter moved to the envelope: every row stored before it
+  // did holds the document payload alone, and the listing row that named it
+  // was never kept, so those rows are readable only through this shape.
   [ADAPTER_KEYS.CZ_REGIONAL]: [
     {
       shape: "bare-payload",
@@ -782,7 +785,6 @@ export const excludedSourceField = <const TText extends string>(
 export const LEGACY_BACKLOG_ADAPTERS = [
   ADAPTER_KEYS.CZ_NS,
   ADAPTER_KEYS.CZ_NSS,
-  ADAPTER_KEYS.CZ_REGIONAL,
   ADAPTER_KEYS.SK_COURTS,
   ADAPTER_KEYS.SK_US,
   ADAPTER_KEYS.PL_COURTS,
@@ -916,7 +918,6 @@ type DeclaredSourceFieldInventory = {
  * join is written here rather than derived from the registry.
  */
 const LEGACY_UNINVENTORIED_ADAPTERS = [
-  ADAPTER_KEYS.CZ_REGIONAL,
   ADAPTER_KEYS.SK_US,
   ADAPTER_KEYS.PL_COURTS,
   ADAPTER_KEYS.AT_COURTS,

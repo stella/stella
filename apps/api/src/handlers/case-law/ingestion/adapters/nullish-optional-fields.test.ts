@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
+import { decodeSourceRawEnvelope } from "@/api/handlers/case-law/ingestion/adapter";
 import { getCaseLawIngestionMetadata } from "@/api/handlers/case-law/metadata";
 import { clearRootDbMocks } from "@/api/tests/helpers/mock-root-db";
 
@@ -199,7 +200,11 @@ describe("case-law adapter nullish optionals", () => {
     const decision = result.unwrap().decisions[0];
     expect(decision?.caseNumber).toBe("15 Co 1/2024");
     expect(decision?.fulltext).toContain("Vyrok");
-    expect(decision?.sourceRaw).toContain('"verdictText":"Vyrok"');
+    // Both responses are kept as named parts, so the payload a later parser
+    // reads is the document itself rather than the whole stored blob.
+    const parts = decodeSourceRawEnvelope(decision?.sourceRaw ?? "");
+    expect(parts?.["document"]).toContain('"verdictText":"Vyrok"');
+    expect(parts?.["listing"]).toContain('"jednaciCislo":"15 Co 1/2024"');
   });
 
   test("CZ Regional preserves decisions without a final-document URL", async () => {

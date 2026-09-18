@@ -3,7 +3,6 @@
   "backlog": {
     "cz-ns": ["document-pdf", "document-rtf", "listing", "slice-listing"],
     "cz-nss": ["listing", "original", "text"],
-    "cz-regional": ["chain", "document", "listing"],
     "sk-courts": ["bulk-dump", "document"],
     "sk-us": [
       "archive-listing",

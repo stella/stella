@@ -94,10 +94,13 @@ export const parseRegionalDecision = (
   let blockIndex = 0;
 
   // ── Decision type heading (synthesized from metadata) ──
+  // Keyed on the local-language type the adapter maps the publisher's enum
+  // to, never on the enum: `ORDER_T` is the publisher's criminal order and
+  // reaches here as "trestní příkaz".
   const titleMap: Record<string, string> = {
     rozsudek: "ROZSUDEK",
     usnesení: "USNESENÍ",
-    příkaz: "PŘÍKAZ",
+    "trestní příkaz": "TRESTNÍ PŘÍKAZ",
   };
   const title = titleMap[input.decisionType ?? ""];
   if (title) {
