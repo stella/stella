@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 1.10.0
+
+### Minor Changes
+
+- [#3550](https://github.com/stella/stella/pull/3550) [`aef1774`](https://github.com/stella/stella/commit/aef17746472f24758c790905ed26676c19b56770) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `stella task list` no longer requires `--matter-id`: without it, it lists tasks across every matter you can read, soonest due first, and each task names its matter. `--assignee me` keeps only your own assignments. Adds the `stella capability tasks list` command for the same list over HTTP.
+
 ## 1.9.0
 
 ### Minor Changes
