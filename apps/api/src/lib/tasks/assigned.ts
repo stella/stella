@@ -3,7 +3,7 @@ import { and, eq, isNull, lte, notInArray, or, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
 import { TASK_CLOSED_STATUSES } from "@stll/api-contract/entity-options";
-import type { SafeDb } from "@/api/db/safe-db";
+
 import { entities, taskAssignees } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { entityQueryScopeCondition } from "@/api/lib/entities/query-scope";
@@ -44,8 +44,7 @@ export const taskAssigneeCondition = ({
   }
 };
 
-type CountDueAssignedTasksOptions = {
-  safeDb: SafeDb;
+type DueAssignedTaskConditionOptions = {
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
   /** The civil day "due" is measured against, from `resolveWorkAsOf`. */
@@ -58,27 +57,21 @@ type CountDueAssignedTasksOptions = {
  * the organization's matters to the caller's membership). Feeds the Inbox
  * badge beside the open-signal count.
  */
-export const countDueAssignedTasks = async ({
-  safeDb,
+export const dueAssignedTaskCondition = ({
   organizationId,
   userId,
   asOf,
-}: CountDueAssignedTasksOptions) =>
-  await safeDb((tx) =>
-    tx.$count(
-      entities,
-      and(
-        entityQueryScopeCondition(
-          { type: "organization", organizationId },
-          entities.workspaceId,
-        ),
-        eq(entities.kind, "task"),
-        lte(entities.dueDate, asOf),
-        or(
-          isNull(entities.status),
-          notInArray(entities.status, [...TASK_CLOSED_STATUSES]),
-        ),
-        taskAssigneeCondition({ assignee: TASK_ASSIGNEE_FILTER.ME, userId }),
-      ),
+}: DueAssignedTaskConditionOptions): SQL =>
+  and(
+    entityQueryScopeCondition(
+      { type: "organization", organizationId },
+      entities.workspaceId,
     ),
-  );
+    eq(entities.kind, "task"),
+    lte(entities.dueDate, asOf),
+    or(
+      isNull(entities.status),
+      notInArray(entities.status, [...TASK_CLOSED_STATUSES]),
+    ),
+    taskAssigneeCondition({ assignee: TASK_ASSIGNEE_FILTER.ME, userId }),
+  ) ?? panic("Due-task condition compiled to nothing");
