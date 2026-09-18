@@ -21,6 +21,7 @@ import type {
   CommandBuilderArguments,
   RouteMap,
 } from "@stricli/core";
+import { panic } from "better-result";
 
 import packageJson from "../package.json" with { type: "json" };
 import { determineCommandExitCode } from "./cli-exit-code.js";
@@ -38,11 +39,13 @@ import {
 import { exitCodeEntries } from "./mcp-constants.js";
 import { buildCommonFlags, buildServerFlag } from "./output-flags.js";
 import type { ResourceLeafSpec, ResourceNode } from "./resource-types.js";
-import type {
-  CapabilityLeafSpec,
-  FlagSpec,
-  LeafCommandSpec,
-  RouteNode,
+import {
+  type CapabilityLeafSpec,
+  type DisabledCommands,
+  type FlagSpec,
+  type LeafCommandSpec,
+  NO_DISABLED_COMMANDS,
+  type RouteNode,
 } from "./route-types.js";
 import { runCapabilityCommand } from "./run-capability-command.js";
 import {
@@ -242,17 +245,51 @@ const fullDescription = ({
   return lines.join("\n");
 };
 
+const DISABLED_PHRASE = "disabled on this server";
+
 /** The suffix a gated-off command's brief carries in --help and tools list. */
-export const DISABLED_MARKER = "[disabled on this server]";
+export const DISABLED_MARKER: string = `[${DISABLED_PHRASE}]`;
+
+/** `DisabledCommands` as lookup sets, built once per app. */
+type DisabledLookup = {
+  tools: ReadonlySet<string>;
+  capabilities: ReadonlySet<string>;
+};
+
+/**
+ * Whether the server attested a node as gated off: a leaf it named, or a group
+ * whose every command it named. The one predicate behind every marker (leaf
+ * and group --help briefs, root --help, tools list).
+ */
+const isDisabled = (node: RouteNode, disabled: DisabledLookup): boolean => {
+  switch (node.kind) {
+    case "leaf":
+      return disabled.tools.has(node.spec.toolName);
+    case "capability-leaf":
+      return disabled.capabilities.has(node.spec.capabilityId);
+    case "route": {
+      const children = Object.values(node.children);
+      return (
+        children.length > 0 &&
+        children.every((child) => isDisabled(child, disabled))
+      );
+    }
+    default: {
+      node satisfies never;
+      return panic(`Unhandled route node: ${String(node)}`);
+    }
+  }
+};
+
+const withDisabledMarker = (brief: string, marked: boolean): string =>
+  marked ? `${brief} ${DISABLED_MARKER}` : brief;
 
 const buildLeafCommand = (
   spec: LeafCommandSpec,
-  disabled: ReadonlySet<string>,
+  disabled: boolean,
 ): RoutingTarget => {
   const flags = buildLeafFlags(spec);
-  const brief = disabled.has(spec.toolName)
-    ? `${leafBrief(spec)} ${DISABLED_MARKER}`
-    : leafBrief(spec);
+  const brief = withDisabledMarker(leafBrief(spec), disabled);
   const description = fullDescription({
     brief,
     discriminatorInject: spec.discriminatorInject,
@@ -363,9 +400,10 @@ const buildCapabilityLeafFlags = (
 
 const buildCapabilityLeafCommand = (
   spec: CapabilityLeafSpec,
+  disabled: boolean,
 ): RoutingTarget => {
   const flags = buildCapabilityLeafFlags(spec);
-  const brief = capabilityLeafBrief(spec);
+  const brief = withDisabledMarker(capabilityLeafBrief(spec), disabled);
   const description = fullDescription({
     brief,
     // Help must read the same shape `--input` validates against. The baked
@@ -402,23 +440,48 @@ const buildCapabilityLeafCommand = (
 const buildRouteNode = (
   node: RouteNode,
   brief: string,
-  disabled: ReadonlySet<string>,
+  disabled: DisabledLookup,
 ): RoutingTarget => {
   if (node.kind === "leaf") {
-    return buildLeafCommand(node.spec, disabled);
+    return buildLeafCommand(node.spec, isDisabled(node, disabled));
   }
   if (node.kind === "capability-leaf") {
-    return buildCapabilityLeafCommand(node.spec);
+    return buildCapabilityLeafCommand(node.spec, isDisabled(node, disabled));
   }
-  const routes: Record<string, RoutingTarget> = {};
-  for (const [name, child] of Object.entries(node.children)) {
-    routes[name] = buildRouteNode(child, routeBrief(name, child), disabled);
-  }
-  return buildRouteMap({ docs: { brief }, routes });
+  return buildRouteMap({
+    docs: { brief },
+    routes: buildGeneratedRoutes(node, disabled),
+  });
 };
 
-const routeBrief = (name: string, node: RouteNode): string =>
-  node.kind === "route" ? groupBrief(name, node.children) : name;
+/**
+ * A group's brief marks what the server gated off: the plain marker when every
+ * command under it is, otherwise the gated-off children by name, so a parent
+ * listing (root --help included) shows it without opening the group.
+ */
+const routeBrief = ({
+  name,
+  node,
+  disabled,
+}: {
+  name: string;
+  node: RouteNode;
+  disabled: DisabledLookup;
+}): string => {
+  if (node.kind !== "route") {
+    return name;
+  }
+  const brief = groupBrief(name, node.children);
+  if (isDisabled(node, disabled)) {
+    return `${brief} ${DISABLED_MARKER}`;
+  }
+  const gatedOff = Object.entries(node.children)
+    .filter(([, child]) => isDisabled(child, disabled))
+    .map(([childName]) => childName);
+  return gatedOff.length === 0
+    ? brief
+    : `${brief} [${DISABLED_PHRASE}: ${gatedOff.join(", ")}]`;
+};
 
 /**
  * Fold a generated `RouteNode` (route) into stricli `RoutingTarget` children,
@@ -426,14 +489,18 @@ const routeBrief = (name: string, node: RouteNode): string =>
  */
 const buildGeneratedRoutes = (
   node: RouteNode,
-  disabled: ReadonlySet<string>,
+  disabled: DisabledLookup,
 ): Record<string, RoutingTarget> => {
   if (node.kind !== "route") {
     return {};
   }
   const routes: Record<string, RoutingTarget> = {};
   for (const [name, child] of Object.entries(node.children)) {
-    routes[name] = buildRouteNode(child, routeBrief(name, child), disabled);
+    routes[name] = buildRouteNode(
+      child,
+      routeBrief({ name, node: child, disabled }),
+      disabled,
+    );
   }
   return routes;
 };
@@ -500,18 +567,23 @@ const collectLeafPaths = (
   node: RouteNode,
   path: readonly string[],
   lines: string[],
-  disabled: ReadonlySet<string>,
+  disabled: DisabledLookup,
 ): void => {
   if (node.kind === "leaf") {
-    const marker = disabled.has(node.spec.toolName)
-      ? ` ${DISABLED_MARKER}`
-      : "";
-    lines.push(`${path.join(" ")}\t(${node.spec.toolName})${marker}`);
+    lines.push(
+      withDisabledMarker(
+        `${path.join(" ")}\t(${node.spec.toolName})`,
+        isDisabled(node, disabled),
+      ),
+    );
     return;
   }
   if (node.kind === "capability-leaf") {
     lines.push(
-      `${path.join(" ")}\t(invoke_capability: ${node.spec.capabilityId})`,
+      withDisabledMarker(
+        `${path.join(" ")}\t(invoke_capability: ${node.spec.capabilityId})`,
+        isDisabled(node, disabled),
+      ),
     );
     return;
   }
@@ -539,7 +611,7 @@ const HELP_FORMATTING = {
 
 const buildRootRoute = (
   tree: RouteNode,
-  disabled: ReadonlySet<string>,
+  disabled: DisabledLookup,
 ): RouteMap<Context> => {
   const toolsListCommand = buildCommand<
     { readonly server: string | undefined },
@@ -588,10 +660,13 @@ const buildRootRoute = (
  */
 export const buildApp = (
   tree: RouteNode,
-  disabledTools: readonly string[] = [],
+  disabled: DisabledCommands = NO_DISABLED_COMMANDS,
 ): Application<Context> =>
   buildApplication(
-    buildRootRoute(tree, new Set(disabledTools)),
+    buildRootRoute(tree, {
+      tools: new Set(disabled.tools),
+      capabilities: new Set(disabled.capabilities),
+    }),
     {
       name: "stella",
       // A hand-written command's returned `CliCommandError` carries its exit

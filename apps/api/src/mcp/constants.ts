@@ -159,6 +159,11 @@ export const STELLA_MCP_OMITTED_TOOLS_HEADER_BY_REASON = {
   feature: "x-stella-feature-omitted-tools",
 } as const satisfies Record<McpToolOmissionReason, string>;
 
+// The same deployment-feature evidence for catalog capabilities, which ride
+// `invoke_capability` rather than tools/list: the exact capability ids gated off.
+export const STELLA_MCP_FEATURE_OMITTED_CAPABILITIES_HEADER =
+  "x-stella-feature-omitted-capabilities";
+
 export const MCP_EXPOSE_HEADERS = [
   "WWW-Authenticate",
   STELLA_MCP_API_CONTRACT_HEADER,
@@ -168,6 +173,7 @@ export const MCP_EXPOSE_HEADERS = [
   ...MCP_TOOL_OMISSION_REASONS.map(
     (reason) => STELLA_MCP_OMITTED_TOOLS_HEADER_BY_REASON[reason],
   ),
+  STELLA_MCP_FEATURE_OMITTED_CAPABILITIES_HEADER,
   // The per-request receipt (also on the global CORS exposeHeaders list):
   // browser-based MCP clients correlate a failed/successful call with server
   // logs the same way REST callers do.

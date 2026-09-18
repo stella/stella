@@ -6,7 +6,7 @@ import type { Context } from "./context.js";
 import { flagKey } from "./flag-name.js";
 import { generatedRouteMap } from "./generated/route-map.js";
 import { RESERVED_FLAG_KEYS } from "./reserved-flag-keys.js";
-import type { FlagSpec, RouteNode } from "./route-types.js";
+import type { DisabledCommands, FlagSpec, RouteNode } from "./route-types.js";
 
 const flagSpec = (overrides: Partial<FlagSpec>): FlagSpec => ({
   flag: "example",
@@ -134,36 +134,88 @@ describe("generated flag parser conformance", () => {
   });
 });
 
-describe("buildApp: disabled tools", () => {
+describe("buildApp: disabled commands", () => {
   type Target = Application<Context>["root"];
   const isRouteMap = (
     target: Target,
   ): target is Exclude<Target, Command<Context>> => "getAllEntries" in target;
 
-  /** `path -> brief` for every command in the assembled tree. */
+  /** `path -> brief` for every command and group in the assembled tree. */
   const briefs = (
     target: Target,
     path: readonly string[],
   ): [string, string][] =>
     isRouteMap(target)
-      ? target
-          .getAllEntries()
-          .flatMap((entry) =>
-            briefs(entry.target, [...path, entry.name.original]),
-          )
+      ? [
+          [path.join(" "), target.brief],
+          ...target
+            .getAllEntries()
+            .flatMap((entry) =>
+              briefs(entry.target, [...path, entry.name.original]),
+            ),
+        ]
       : [[path.join(" "), target.brief]];
 
-  test("a server-attested gated-off tool is marked in its --help brief and nowhere else", () => {
-    const marked = new Map(
-      briefs(buildApp(generatedRouteMap, ["list_matters"]).root, []),
-    );
+  const briefsFor = (disabled: DisabledCommands) =>
+    new Map(briefs(buildApp(generatedRouteMap, disabled).root, []));
+
+  const capabilityIdsUnder = (domain: string): string[] => {
+    const capability =
+      generatedRouteMap.kind === "route"
+        ? generatedRouteMap.children["capability"]
+        : undefined;
+    const group =
+      capability?.kind === "route" ? capability.children[domain] : undefined;
+    return group?.kind === "route"
+      ? Object.values(group.children).flatMap((child) =>
+          child.kind === "capability-leaf" ? [child.spec.capabilityId] : [],
+        )
+      : [];
+  };
+
+  test("a server-attested gated-off tool is marked in its --help brief, not its siblings", () => {
+    const marked = briefsFor({ tools: ["list_matters"], capabilities: [] });
     expect(marked.get("matter list")).toContain(DISABLED_MARKER);
     expect(marked.get("matter save")).not.toContain(DISABLED_MARKER);
   });
 
+  test("a gated-off capability is marked by id, independent of a same-named tool", () => {
+    const marked = briefsFor({
+      tools: [],
+      capabilities: ["usage.get-entitlement"],
+    });
+    expect(marked.get("capability usage get-entitlement")).toContain(
+      DISABLED_MARKER,
+    );
+    expect(marked.get("usage get")).not.toContain(DISABLED_MARKER);
+  });
+
+  test("a partly gated group names the gated-off children in its brief", () => {
+    const marked = briefsFor({
+      tools: ["list_matters"],
+      capabilities: ["time-entries.export-csv"],
+    });
+    expect(marked.get("matter")).toEndWith("[disabled on this server: list]");
+    expect(marked.get("capability time-entries")).toEndWith(
+      "[disabled on this server: export-csv]",
+    );
+  });
+
+  test("a fully gated group carries the plain marker, and its parent names it", () => {
+    const usageIds = capabilityIdsUnder("usage");
+    expect(usageIds.length).toBeGreaterThan(0);
+    const marked = briefsFor({ tools: ["get_usage"], capabilities: usageIds });
+    // Root --help lists these group briefs under COMMANDS.
+    expect(marked.get("usage")).toEndWith(DISABLED_MARKER);
+    expect(marked.get("capability usage")).toEndWith(DISABLED_MARKER);
+    expect(marked.get("capability")).toEndWith(
+      "[disabled on this server: usage]",
+    );
+  });
+
   test("without attestation nothing is marked", () => {
     const all = briefs(buildApp(generatedRouteMap).root, []);
-    expect(all.some(([, brief]) => brief.includes(DISABLED_MARKER))).toBe(
+    expect(all.some(([, brief]) => brief.includes("disabled on this"))).toBe(
       false,
     );
   });

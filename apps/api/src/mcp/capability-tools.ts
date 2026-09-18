@@ -797,6 +797,21 @@ const contextFeatureEnabled = (
     isCapabilityFeatureEnabled
   )(feature);
 
+/**
+ * Catalog capability ids gated off in this deployment, sorted: the ids
+ * `list_capabilities` hides and describe/invoke refuse with `feature_disabled`.
+ * The MCP transport attests them on every authenticated response so a client
+ * with a baked-in catalog can mark those commands instead of offering them.
+ */
+export const featureOmittedCapabilityIds = (
+  isFeatureEnabled: (
+    feature: string | undefined,
+  ) => boolean = isCapabilityFeatureEnabled,
+): readonly string[] =>
+  CATALOG.filter((entry) => !isFeatureEnabled(entry.feature))
+    .map((entry) => entry.id)
+    .sort();
+
 const listCapabilitiesHandler: McpToolHandler<
   v.InferInput<typeof LIST_CAPABILITIES_OUTPUT_SCHEMA>
 > = ({

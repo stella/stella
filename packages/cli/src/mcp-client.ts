@@ -260,6 +260,8 @@ export type RawToolsList = {
   scopeOmittedTools?: readonly string[];
   /** Tool names the server attests are gated off in this deployment. */
   featureOmittedTools?: readonly string[];
+  /** Capability ids the server attests are gated off in this deployment. */
+  featureOmittedCapabilities?: readonly string[];
 };
 
 /**
@@ -336,6 +338,13 @@ export const fetchToolsListRaw = async ({
   if (featureOmitted !== undefined) {
     out.featureOmittedTools = featureOmitted;
   }
+  const featureOmittedCapabilities = readAttestedToolNames(
+    evidence.headers,
+    STELLA_FEATURE_OMITTED_CAPABILITIES_HEADER,
+  );
+  if (featureOmittedCapabilities !== undefined) {
+    out.featureOmittedCapabilities = featureOmittedCapabilities;
+  }
   return Result.ok(out);
 };
 
@@ -347,6 +356,8 @@ const STELLA_SCOPES_HEADER = "x-stella-scopes";
 // means it attests that nothing was omitted for that reason.
 const STELLA_SCOPE_OMITTED_TOOLS_HEADER = "x-stella-scope-omitted-tools";
 const STELLA_FEATURE_OMITTED_TOOLS_HEADER = "x-stella-feature-omitted-tools";
+const STELLA_FEATURE_OMITTED_CAPABILITIES_HEADER =
+  "x-stella-feature-omitted-capabilities";
 
 const readAttestedToolNames = (
   headers: Headers,

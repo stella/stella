@@ -44,7 +44,12 @@ import {
   type RegistryDelta,
 } from "./registry-cache.js";
 import { validateFetchedToolsList } from "./registry-trust.js";
-import type { RegistryToolListing, RouteNode } from "./route-types.js";
+import {
+  type DisabledCommands,
+  NO_DISABLED_COMMANDS,
+  type RegistryToolListing,
+  type RouteNode,
+} from "./route-types.js";
 
 const SNAPSHOT_URL = new URL(
   "generated/registry-snapshot.json",
@@ -171,8 +176,8 @@ const divergenceNotice = (delta: RegistryDelta): string => {
 export type ResolvedCommandTree = {
   tree: RouteNode;
   notice?: string;
-  /** Baked tool names the server attested are gated off in this deployment. */
-  disabledTools: readonly string[];
+  /** Commands the server attested are gated off in this deployment. */
+  disabled: DisabledCommands;
 };
 
 /**
@@ -197,21 +202,24 @@ export const resolveCommandTree = async ({
   env: CacheEnv;
 }): Promise<ResolvedCommandTree> => {
   if (serverOrigin === undefined) {
-    return { tree: generatedRouteMap, disabledTools: [] };
+    return { tree: generatedRouteMap, disabled: NO_DISABLED_COMMANDS };
   }
   const file = await readCacheFile(cachePathFor(serverOrigin, env));
   if (file === undefined || file.serverOrigin !== serverOrigin) {
-    return { tree: generatedRouteMap, disabledTools: [] };
+    return { tree: generatedRouteMap, disabled: NO_DISABLED_COMMANDS };
   }
-  // Tools the server attested it omits because a deployment feature is off.
-  // They stay in the tree (the server answers a call with its own
-  // feature_disabled), and help/tools list mark them so nobody has to try.
-  const disabledTools = file.featureOmittedTools ?? [];
+  // Tools and capabilities the server attested it omits because a deployment
+  // feature is off. They stay in the tree (the server answers a call with its
+  // own feature_disabled), and help/tools list mark them so nobody has to try.
+  const disabled: DisabledCommands = {
+    tools: file.featureOmittedTools ?? [],
+    capabilities: file.featureOmittedCapabilities ?? [],
+  };
   const prunedByScope = (file.scopeOmittedTools ?? []).some(
     (name) => !isCompoundTool(name),
   );
   if (isDeltaEmpty(file.delta) && !prunedByScope) {
-    return { tree: generatedRouteMap, disabledTools };
+    return { tree: generatedRouteMap, disabled };
   }
   // Rebuild through the SAME shared builder codegen uses (curated tools from
   // the cached listings + the baked capability merge), so a diverged registry
@@ -219,7 +227,7 @@ export const resolveCommandTree = async ({
   // a tree that fails to build falls back to the baked-in tree (rule 6).
   const entries = await loadBakedCapabilityCatalog();
   if (entries === null) {
-    return { tree: generatedRouteMap, disabledTools };
+    return { tree: generatedRouteMap, disabled };
   }
   const listings = retainAttestedOmittedListings({
     fetched: file.listings,
@@ -236,14 +244,14 @@ export const resolveCommandTree = async ({
       }).tree,
   );
   if (Result.isError(built)) {
-    return { tree: generatedRouteMap, disabledTools };
+    return { tree: generatedRouteMap, disabled };
   }
   return isDeltaEmpty(file.delta)
-    ? { tree: built.value, disabledTools }
+    ? { tree: built.value, disabled }
     : {
         tree: built.value,
         notice: divergenceNotice(file.delta),
-        disabledTools,
+        disabled,
       };
 };
 
@@ -370,6 +378,9 @@ export const refreshRegistryCache = async ({
     ...(raw.value.featureOmittedTools === undefined
       ? {}
       : { featureOmittedTools: raw.value.featureOmittedTools }),
+    ...(raw.value.featureOmittedCapabilities === undefined
+      ? {}
+      : { featureOmittedCapabilities: raw.value.featureOmittedCapabilities }),
     ...(lastNudgedVersion === undefined ? {} : { lastNudgedVersion }),
   };
   await writeCacheFile(filePath, file);

@@ -886,6 +886,9 @@ describe("handleMcpHttpRequest", () => {
     );
     // Tests run as a dev deployment, where every feature-gated tool is served.
     expect(response.headers.get("x-stella-feature-omitted-tools")).toBe("");
+    expect(response.headers.get("x-stella-feature-omitted-capabilities")).toBe(
+      "",
+    );
   });
 
   test("rejects tool calls missing the required scope before dynamic resolution", async () => {
