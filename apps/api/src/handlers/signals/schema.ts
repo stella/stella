@@ -26,7 +26,7 @@ const SIGNAL_VIEW_SCHEMAS = {
   [SIGNAL_VIEW.SNOOZED]: t.Literal(SIGNAL_VIEW.SNOOZED),
   [SIGNAL_VIEW.RESOLVED]: t.Literal(SIGNAL_VIEW.RESOLVED),
 } as const satisfies Record<SignalView, TSchema>;
-const signalViewSchema = t.Union([
+export const signalViewSchema = t.Union([
   SIGNAL_VIEW_SCHEMAS.open,
   SIGNAL_VIEW_SCHEMAS.snoozed,
   SIGNAL_VIEW_SCHEMAS.resolved,

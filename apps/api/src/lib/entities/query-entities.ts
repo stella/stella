@@ -14,11 +14,12 @@ import type { SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 import type { EntityFind, OcrExportStatus } from "@stll/api-contract";
+import { ENTITY_VIEW_ROW_KIND } from "@stll/api-contract/entity-views";
 import type { ConditionNode } from "@stll/conditions";
 
 import { member, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import {
   cellMetadata,
   desktopEditSessions,
@@ -50,6 +51,10 @@ import {
   type EntityQueryScope,
 } from "@/api/lib/entities/query-scope";
 import {
+  entityWindowUnionSource,
+  windowRowKindColumn,
+} from "@/api/lib/entities/signal-window-rows";
+import {
   ENTITY_SORTABLE_FIELD_VALUE_MAX_LENGTH,
   type EntitiesWindowCursorValue,
   type EntitiesWindowCursorValues,
@@ -68,6 +73,10 @@ import {
   displayedNameExpr,
 } from "@/api/lib/entity-filters";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  brandPersistedEntityId,
+  brandPersistedSignalId,
+} from "@/api/lib/safe-id-boundaries";
 import type { ViewSort } from "@/api/lib/views-schema";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
@@ -169,6 +178,41 @@ export type QueryEntityResult = {
   assignees: QueryEntityAssignee[];
 };
 
+/**
+ * Where the window's rows come from: stored entities only, or entities UNION
+ * ALL the caller's visible signals (the Inbox), each behind its own access
+ * predicate.
+ */
+export type EntityWindowSource =
+  | { type: "entities" }
+  | {
+      type: "entities-and-signals";
+      /** The signal list's access and view predicate, from the signals slice. */
+      signalConditions: SQL;
+    };
+
+/** A signal row's entity-shaped values, as the filters and sorts saw them. */
+export type SignalWindowProjection = {
+  kind: string | null;
+  status: string | null;
+  agendaKind: string | null;
+  dueDate: string | null;
+};
+
+/** One window row in order, before hydration. */
+export type EntityWindowRow =
+  | {
+      kind: typeof ENTITY_VIEW_ROW_KIND.ENTITY;
+      id: SafeId<"entity">;
+      cursorValues: EntitiesWindowCursorValues;
+    }
+  | {
+      kind: typeof ENTITY_VIEW_ROW_KIND.SIGNAL;
+      id: SafeId<"signal">;
+      cursorValues: EntitiesWindowCursorValues;
+      projection: SignalWindowProjection;
+    };
+
 type QueryEntitiesProps = {
   safeDb: SafeDb;
   scope: EntityQueryScope;
@@ -185,6 +229,12 @@ type QueryEntitiesProps = {
   excludedKinds?: EntityKind[];
   previewableForAi?: boolean;
   extraConditions?: SQL[];
+  /**
+   * Conditions on stored entities only, applied inside the entity branch so
+   * they never reach signal rows (the Inbox lifecycle slice of tasks).
+   */
+  entityConditions?: SQL[];
+  source?: EntityWindowSource;
   // Off by default: the assignees join runs for every caller of
   // queryEntities, most of which never render an assignee. Only the callers
   // that actually need the fan-out (the kanban assignee sub-group's window
@@ -547,15 +597,33 @@ const buildSearchSortKeys = (search: string | undefined): EntitySortKey[] => {
   ];
 };
 
+// Ids are unique per table, not across the union: the row kind settles the
+// order first, so the cursor stays total when both kinds share a page.
+const sourceTiebreakKeys = (source: EntityWindowSource): EntitySortKey[] => {
+  switch (source.type) {
+    case "entities":
+      return [];
+    case "entities-and-signals":
+      return [textSortKey({ direction: "asc", expr: windowRowKindColumn })];
+    default: {
+      source satisfies never;
+      return panic(`Unhandled window source: ${String(source)}`);
+    }
+  }
+};
+
 const buildSortKeys = ({
   search,
   sorts,
+  source = { type: "entities" },
 }: {
   search?: string | undefined;
   sorts: readonly ViewSort[];
+  source?: EntityWindowSource;
 }): EntitySortKey[] => [
   ...buildSearchSortKeys(search),
   ...buildViewSortKeys(sorts),
+  ...sourceTiebreakKeys(source),
   textSortKey({ direction: "asc", expr: sql`${entities.id}` }),
 ];
 
@@ -686,6 +754,107 @@ const isGeneratedCursorValue = (
 ): value is EntitiesWindowCursorValue =>
   value === null || typeof value === "string" || typeof value === "number";
 
+type SelectWindowRowsOptions = {
+  safeDb: SafeDb;
+  source: EntityWindowSource;
+  entityAccess: SQL;
+  rowConditions: SQL[];
+  cursorValuesExpr: SQL<EntitiesWindowCursorValues>;
+  sortExpressions: SQL[];
+  limit: number;
+};
+
+/**
+ * Phase 1: the ordered ids of one window. With signals, the row source is the
+ * `entities`-named union, so `rowConditions` (filters, find, cursor) and the
+ * sort keys compile against it unchanged while each branch keeps its own
+ * access predicate inside.
+ */
+const selectWindowRows = async ({
+  safeDb,
+  source,
+  entityAccess,
+  rowConditions,
+  cursorValuesExpr,
+  sortExpressions,
+  limit,
+}: SelectWindowRowsOptions): Promise<
+  Result<EntityWindowRow[], SafeDbError>
+> => {
+  switch (source.type) {
+    case "entities": {
+      const rows = await safeDb((tx) =>
+        tx
+          .select({ cursorValues: cursorValuesExpr, id: entities.id })
+          .from(entities)
+          .where(and(entityAccess, ...rowConditions))
+          .orderBy(...sortExpressions)
+          .limit(limit),
+      );
+      return Result.isError(rows)
+        ? Result.err(rows.error)
+        : Result.ok(
+            rows.value.map((row) => ({
+              kind: ENTITY_VIEW_ROW_KIND.ENTITY,
+              id: row.id,
+              cursorValues: normalizeCursorValues(row.cursorValues),
+            })),
+          );
+    }
+    case "entities-and-signals": {
+      const rows = await safeDb((tx) =>
+        tx
+          .select({
+            cursorValues: cursorValuesExpr,
+            rowKind: sql<string>`${windowRowKindColumn}`,
+            id: sql<string>`${entities.id}`,
+            kind: sql<string | null>`${entities.kind}`,
+            status: sql<string | null>`${entities.status}`,
+            agendaKind: sql<string | null>`${entities.agendaKind}`,
+            dueDate: sql<string | null>`${entities.dueDate}::text`,
+          })
+          .from(
+            entityWindowUnionSource({
+              entityConditions: entityAccess,
+              signalConditions: source.signalConditions,
+            }),
+          )
+          .where(and(...rowConditions))
+          .orderBy(...sortExpressions)
+          .limit(limit),
+      );
+      if (Result.isError(rows)) {
+        return Result.err(rows.error);
+      }
+      return Result.ok(
+        rows.value.map(({ rowKind, id, cursorValues, ...projection }) => {
+          switch (rowKind) {
+            case ENTITY_VIEW_ROW_KIND.ENTITY:
+              return {
+                kind: ENTITY_VIEW_ROW_KIND.ENTITY,
+                id: brandPersistedEntityId(id),
+                cursorValues: normalizeCursorValues(cursorValues),
+              };
+            case ENTITY_VIEW_ROW_KIND.SIGNAL:
+              return {
+                kind: ENTITY_VIEW_ROW_KIND.SIGNAL,
+                id: brandPersistedSignalId(id),
+                cursorValues: normalizeCursorValues(cursorValues),
+                projection,
+              };
+            default:
+              return panic(`Unknown window row kind: ${rowKind}`);
+          }
+        }),
+      );
+    }
+    default: {
+      source satisfies never;
+      return panic(`Unhandled window source: ${String(source)}`);
+    }
+  }
+};
+
 const queryEntitiesGenerator = async function* ({
   safeDb,
   scope,
@@ -702,6 +871,8 @@ const queryEntitiesGenerator = async function* ({
   excludedKinds = [],
   previewableForAi = false,
   extraConditions = [],
+  entityConditions = [],
+  source = { type: "entities" },
   includeAssignees = false,
 }: QueryEntitiesProps) {
   const workspaceCondition = entityQueryScopeCondition(
@@ -718,49 +889,51 @@ const queryEntitiesGenerator = async function* ({
   const previewableConditions = previewableForAi
     ? [buildAIPreviewableEntityCondition()]
     : [];
-  const whereClause = and(
-    workspaceCondition,
+  const rowConditions = [
     ...filterConditions,
     ...searchConditions,
     ...buildFindConditions({ find, scope }),
     ...kindConditions,
     ...previewableConditions,
     ...extraConditions,
-  );
-  const sortKeys = buildSortKeys({ search, sorts });
+  ];
+  const entityAccess = and(workspaceCondition, ...entityConditions);
+  const sortKeys = buildSortKeys({ search, sorts, source });
   const cursorConditionResult = buildCursorCondition({ cursor, sortKeys });
   if (Result.isError(cursorConditionResult)) {
     return Result.err(cursorConditionResult.error);
   }
-  const paginatedWhereClause =
-    cursorConditionResult.value === null
-      ? whereClause
-      : and(whereClause, cursorConditionResult.value);
+  const cursorConditions =
+    cursorConditionResult.value === null ? [] : [cursorConditionResult.value];
   const sortExpressions = sortKeys.map(orderSortKey);
   const cursorValuesExpr = sql<EntitiesWindowCursorValues>`jsonb_build_array(${sql.join(
     sortKeys.map((key) => key.cursorExpr),
     sql`, `,
   )})`;
 
-  const idRowsResult = await safeDb((tx) =>
-    tx
-      .select({ cursorValues: cursorValuesExpr, id: entities.id })
-      .from(entities)
-      .where(paginatedWhereClause)
-      .orderBy(...sortExpressions)
-      .limit(limit),
+  const windowRows = yield* Result.await(
+    selectWindowRows({
+      safeDb,
+      source,
+      entityAccess: entityAccess ?? panic("Entity window access is empty"),
+      rowConditions: [...rowConditions, ...cursorConditions],
+      cursorValuesExpr,
+      sortExpressions,
+      limit,
+    }),
   );
 
-  const idRows = yield* idRowsResult;
-
-  const pageIds = idRows.map((r) => r.id);
+  const pageIds = windowRows.flatMap((row) =>
+    row.kind === ENTITY_VIEW_ROW_KIND.ENTITY ? [row.id] : [],
+  );
   const cursorValuesByEntityId = new Map<string, EntitiesWindowCursorValues>(
-    idRows.map((row) => [row.id, normalizeCursorValues(row.cursorValues)]),
+    windowRows.map((row) => [row.id, row.cursorValues]),
   );
 
   if (pageIds.length === 0) {
     return Result.ok({
       cursorValuesByEntityId,
+      windowRows,
       entities: [],
     });
   }
@@ -1177,6 +1350,7 @@ const queryEntitiesGenerator = async function* ({
 
   return Result.ok({
     cursorValuesByEntityId,
+    windowRows,
     entities: result,
   });
 };

@@ -48,6 +48,12 @@ export const TASK_STATUSES: readonly TaskStatus[] = Object.freeze(
   Object.values(TASK_STATUS),
 );
 
+/** The statuses a task is finished in: nothing is left to do either way. */
+export const TASK_CLOSED_STATUSES = [
+  TASK_STATUS.DONE,
+  TASK_STATUS.CANCELLED,
+] as const satisfies readonly TaskStatus[];
+
 export const isTaskStatus = (value: unknown): value is TaskStatus =>
   typeof value === "string" && TASK_STATUSES.some((status) => status === value);
 

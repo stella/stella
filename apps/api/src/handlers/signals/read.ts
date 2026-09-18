@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { and, desc, eq, isNull, lte, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
 import { SIGNAL_STATUS, SIGNAL_VIEW } from "@stll/api-contract/signals";
@@ -10,6 +10,7 @@ import type {
 } from "@stll/api-contract/signals";
 
 import { member, user } from "@/api/db/auth-schema";
+import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { signals, workspaces } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -64,6 +65,31 @@ const viewCondition = (view: SignalView, now: Date): SQL | undefined => {
   }
 };
 
+type SignalListAccessOptions = {
+  organizationId: SafeId<"organization">;
+  canTriage: boolean;
+  view: SignalView;
+  now: Date;
+};
+
+/**
+ * The access and lifecycle predicate every signal list shares: the caller's
+ * organization, the visibility rule, and the requested view. The Inbox
+ * window composes the same conditions into its union, so a signal is listed
+ * there exactly when this endpoint would list it.
+ */
+export const signalListConditions = ({
+  organizationId,
+  canTriage,
+  view,
+  now,
+}: SignalListAccessOptions): SQL =>
+  and(
+    eq(signals.organizationId, organizationId),
+    signalVisibilityCondition(canTriage),
+    viewCondition(view, now),
+  ) ?? panic("Signal list conditions compiled to nothing");
+
 const decodeSignalCursor = (cursor: string): SafeId<"signal"> | null => {
   const parts = decodePaginationCursor(cursor);
   if (!parts || parts.length !== 1) {
@@ -104,6 +130,24 @@ const signalColumns = {
   createdAt: signals.createdAt,
   updatedAt: signals.updatedAt,
 };
+
+/** The signal row with its matter name and assignee display, one join each. */
+const selectSignals = (
+  tx: Transaction,
+  organizationId: SafeId<"organization">,
+) =>
+  tx
+    .select(signalColumns)
+    .from(signals)
+    .leftJoin(workspaces, eq(workspaces.id, signals.workspaceId))
+    .leftJoin(
+      member,
+      and(
+        eq(member.userId, signals.assigneeUserId),
+        eq(member.organizationId, organizationId),
+      ),
+    )
+    .leftJoin(user, eq(user.id, member.userId));
 
 type SignalRow = Omit<
   typeof signals.$inferSelect,
@@ -149,9 +193,12 @@ export const listSignalsHandler = async function* ({
   const limit = query.limit ?? LIMITS.signalsPageSizeDefault;
   const now = new Date();
   const conditions: (SQL | undefined)[] = [
-    eq(signals.organizationId, organizationId),
-    signalVisibilityCondition(canTriage),
-    viewCondition(query.view ?? SIGNAL_VIEW.OPEN, now),
+    signalListConditions({
+      organizationId,
+      canTriage,
+      view: query.view ?? SIGNAL_VIEW.OPEN,
+      now,
+    }),
   ];
   if (workspaceFilter) {
     conditions.push(eq(signals.workspaceId, workspaceFilter));
@@ -206,18 +253,7 @@ export const listSignalsHandler = async function* ({
 
   const rows = yield* Result.await(
     safeDb((tx) =>
-      tx
-        .select(signalColumns)
-        .from(signals)
-        .leftJoin(workspaces, eq(workspaces.id, signals.workspaceId))
-        .leftJoin(
-          member,
-          and(
-            eq(member.userId, signals.assigneeUserId),
-            eq(member.organizationId, organizationId),
-          ),
-        )
-        .leftJoin(user, eq(user.id, member.userId))
+      selectSignals(tx, organizationId)
         .where(and(...conditions))
         .orderBy(desc(signals.createdAt), desc(signals.id))
         .limit(limit + 1),
@@ -251,18 +287,7 @@ export const loadVisibleSignal = async function* ({
 }: GetSignalProps) {
   const rows = yield* Result.await(
     safeDb((tx) =>
-      tx
-        .select(signalColumns)
-        .from(signals)
-        .leftJoin(workspaces, eq(workspaces.id, signals.workspaceId))
-        .leftJoin(
-          member,
-          and(
-            eq(member.userId, signals.assigneeUserId),
-            eq(member.organizationId, organizationId),
-          ),
-        )
-        .leftJoin(user, eq(user.id, member.userId))
+      selectSignals(tx, organizationId)
         .where(
           and(
             eq(signals.id, signalId),
@@ -280,6 +305,32 @@ export const loadVisibleSignal = async function* ({
     );
   }
   return Result.ok(row);
+};
+
+type ListVisibleSignalsByIdsOptions = {
+  safeDb: SafeDb;
+  access: SignalListAccessOptions;
+  signalIds: readonly SafeId<"signal">[];
+};
+
+/**
+ * Hydrates a page of signal ids chosen by another query (the Inbox window),
+ * re-applying the list's access and view predicate rather than trusting the
+ * ids. Rows come back unordered; the caller owns the order.
+ */
+export const listVisibleSignalsByIds = async ({
+  safeDb,
+  access,
+  signalIds,
+}: ListVisibleSignalsByIdsOptions) => {
+  const rows = await safeDb((tx) =>
+    selectSignals(tx, access.organizationId).where(
+      and(inArray(signals.id, [...signalIds]), signalListConditions(access)),
+    ),
+  );
+  return Result.isError(rows)
+    ? Result.err(rows.error)
+    : Result.ok(rows.value.map(serializeSignal));
 };
 
 export const openSignalCountHandler = async function* ({
