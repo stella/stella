@@ -107,11 +107,11 @@ export const AiDecidedConditions = ({
       <h3 className="text-foreground text-sm font-semibold">
         {t("templates.aiDecidedConditions")}
       </h3>
-      <ul className="flex flex-wrap gap-1.5">
+      <ul className="flex flex-col gap-1.5">
         {fields.map((field) => {
           const condition = decisionByPath.get(field.path);
           return (
-            <li key={field.path}>
+            <li className="min-w-0" key={field.path}>
               <ConditionChip
                 label={condition?.label ?? field.label ?? field.path}
                 onToggle={() => onToggle(field.path)}
@@ -177,7 +177,7 @@ const ConditionChip = ({
       // The badge sits far below the 44px touch target, so the button carries
       // the hit area without changing how big the chip looks.
       className={cn(
-        "flex min-h-11 cursor-pointer items-center rounded-full transition-opacity",
+        "flex min-h-11 w-full min-w-0 cursor-pointer items-center rounded-full transition-opacity",
         "focus-visible:ring-ring/50 focus-visible:ring-2 focus-visible:outline-none",
         pending && "opacity-60",
       )}
@@ -186,12 +186,15 @@ const ConditionChip = ({
       type="button"
     >
       <ReviewStatusBadge
+        // The label gives way before the answer does: a narrow inspector
+        // truncates the condition's name and keeps the verdict readable.
+        className="max-w-full"
         size="sm"
         tone={tone}
         variant={state.kind === "forced" ? "solid" : "outline"}
       >
-        <span className="text-foreground">{label}</span>
-        <span className="tabular-nums">{answerText()}</span>
+        <span className="text-foreground min-w-0 truncate">{label}</span>
+        <span className="shrink-0 tabular-nums">{answerText()}</span>
       </ReviewStatusBadge>
     </button>
   );
