@@ -9,9 +9,14 @@ import { panic } from "better-result";
  * through {@link parseCorpusLocation}, so a stored value of either form
  * reads the same way.
  *
- * Textual form of a packed address: `pack:<packKey>@<offset>+<length>`, with
- * offset and length as non-negative decimal safe integers. Anything that does
- * not start with `pack:` is a plain object key.
+ * Textual form of a packed address:
+ * `pack:<packKey>@<offset>+<length>#<sha256>`, with offset and length as
+ * non-negative decimal safe integers and the digest as 64 lowercase hex
+ * characters. The digest is what a range read checks the transferred bytes
+ * against: a member's address is the only thing a reader holds, so carrying
+ * the digest in it is what makes every packed read verified without a second
+ * request for the pack's footer. Anything that does not start with `pack:`
+ * is a plain object key.
  */
 export type ObjectCorpusLocation = { type: "object"; key: string };
 
@@ -20,16 +25,18 @@ export type PackedCorpusLocation = {
   packKey: string;
   offset: number;
   length: number;
+  /** sha256 of exactly the member's bytes, verified on every read. */
+  sha256: string;
 };
 
 export type CorpusLocation = ObjectCorpusLocation | PackedCorpusLocation;
 
 const PACKED_LOCATION_PREFIX = "pack:";
 
-// The pack key may itself contain `@` or `+`; the anchored digit groups at
-// the end make the last `@<digits>+<digits>` the address suffix regardless.
+// The pack key may itself contain `@` or `+`; the anchored groups at the end
+// make the last `@<digits>+<digits>#<hex>` the address suffix regardless.
 const PACKED_LOCATION_PATTERN =
-  /^pack:(?<packKey>.+)@(?<offset>\d+)\+(?<length>\d+)$/u;
+  /^pack:(?<packKey>.+)@(?<offset>\d+)\+(?<length>\d+)#(?<sha256>[0-9a-f]{64})$/u;
 
 const parseSafeInteger = (digits: string, address: string): number => {
   const value = Number(digits);
@@ -55,7 +62,13 @@ export const parseCorpusLocation = (value: string): CorpusLocation => {
   const packKey = match?.groups?.["packKey"];
   const offset = match?.groups?.["offset"];
   const length = match?.groups?.["length"];
-  if (packKey === undefined || offset === undefined || length === undefined) {
+  const sha256 = match?.groups?.["sha256"];
+  if (
+    packKey === undefined ||
+    offset === undefined ||
+    length === undefined ||
+    sha256 === undefined
+  ) {
     return panic(`Malformed packed corpus address: ${value}`);
   }
   return {
@@ -63,6 +76,7 @@ export const parseCorpusLocation = (value: string): CorpusLocation => {
     packKey,
     offset: parseSafeInteger(offset, value),
     length: parseSafeInteger(length, value),
+    sha256,
   };
 };
 
@@ -71,14 +85,10 @@ export const formatCorpusLocation = (location: CorpusLocation): string => {
     case "object":
       return location.key;
     case "packed":
-      return `${PACKED_LOCATION_PREFIX}${location.packKey}@${location.offset}+${location.length}`;
+      return `${PACKED_LOCATION_PREFIX}${location.packKey}@${location.offset}+${location.length}#${location.sha256}`;
     default: {
       location satisfies never;
       return panic(`Unhandled corpus location: ${String(location)}`);
     }
   }
 };
-
-export const isPackedLocation = (
-  location: CorpusLocation,
-): location is PackedCorpusLocation => location.type === "packed";

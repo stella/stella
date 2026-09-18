@@ -1,4 +1,4 @@
-import { panic, Result, TaggedError } from "better-result";
+import { panic, Result } from "better-result";
 import { eq } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -22,6 +22,15 @@ import {
 } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { formatCorpusLocation } from "@/api/lib/legal-search/corpus-location";
 import { deleteCorpusDocument } from "@/api/lib/legal-search/corpus-storage";
+import {
+  caseLawCorpusTombstoneWriter,
+  CORPUS_TOMBSTONE_REASON,
+} from "@/api/lib/legal-search/corpus-tombstones";
+import type { CorpusTombstoneWriter } from "@/api/lib/legal-search/corpus-tombstones";
+import { deleteS3ObjectWithSignal } from "@/api/lib/s3";
+
+/** Wall-clock bound on the one publisher-envelope delete an erasure issues. */
+const RAW_ERASE_TIMEOUT_MS = 30_000;
 
 /**
  * GDPR redaction / takedown for a case-law decision. Personal data lives
@@ -40,11 +49,13 @@ import { deleteCorpusDocument } from "@/api/lib/legal-search/corpus-storage";
  */
 type EraseCancelledIntentObjectsOptions = {
   cancelledIntents: readonly CancelledCaseLawCorpusUploadIntent[];
+  decisionId: SafeId<"caseLawDecision">;
+  tombstone: CorpusTombstoneWriter;
   deleteCorpus?: typeof deleteCorpusDocument;
 };
 
 type CancelledIntentErasure = {
-  /** Intents whose every object is gone; only these may lose their row. */
+  /** Intents whose every payload is beyond reach; only these lose their row. */
   cleanedIntentIds: SafeId<"caseLawCorpusUploadIntent">[];
   /** Intents still holding a payload; their rows stay as retry targets. */
   incomplete: {
@@ -54,12 +65,15 @@ type CancelledIntentErasure = {
 };
 
 /**
- * Erase the objects of every cancelled upload intent and split the intents
- * by outcome. A retained shared object or a failed DELETE keeps the intent
- * on the retry path exactly as it keeps a decision's pointer columns.
+ * Erase the payloads of every cancelled upload intent and split the intents
+ * by outcome. A failed DELETE keeps the intent on the retry path exactly as
+ * it keeps a decision's pointer columns; a tombstoned member is unreadable,
+ * so its reservation has nothing left to own.
  */
 export const eraseCancelledIntentObjects = async ({
   cancelledIntents,
+  decisionId,
+  tombstone,
   deleteCorpus = deleteCorpusDocument,
 }: EraseCancelledIntentObjectsOptions): Promise<CancelledIntentErasure> => {
   const erasures = await Promise.all(
@@ -71,6 +85,8 @@ export const eraseCancelledIntentObjects = async ({
           sectionsKey: intent.sectionsKey,
           astKey: intent.astKey,
         },
+        decisionId,
+        tombstone,
         deleteCorpus,
       }),
     })),
@@ -80,11 +96,18 @@ export const eraseCancelledIntentObjects = async ({
     incomplete: [],
   };
   for (const { intentId, erasure } of erasures) {
-    if (erasure.type === "deleted") {
-      result.cleanedIntentIds.push(intentId);
-      continue;
+    switch (erasure.type) {
+      case "deleted":
+      case "tombstoned":
+        result.cleanedIntentIds.push(intentId);
+        break;
+      case "incomplete":
+        result.incomplete.push({ intentId, error: erasure.error });
+        break;
+      default:
+        erasure satisfies never;
+        return panic(`Unhandled erasure: ${String(erasure)}`);
     }
-    result.incomplete.push({ intentId, error: erasure.error });
   }
   return result;
 };
@@ -94,12 +117,52 @@ type RedactInput = {
   scopedDb: ScopedDb;
   /** Test seam; production deletes through the corpus bucket client. */
   deleteCorpus?: typeof deleteCorpusDocument;
+  /** Test seam; production deletes through the documents bucket client. */
+  deleteSourceRaw?: typeof deleteS3ObjectWithSignal;
+};
+
+type EraseSourceRawPayloadOptions = {
+  sourceRawS3Key: string | null;
+  deleteSourceRaw: typeof deleteS3ObjectWithSignal;
+};
+
+/**
+ * Erase the publisher's envelope for one decision.
+ *
+ * It is stored under its own content hash as a standalone object, in the
+ * documents bucket rather than the corpus one, so erasing it is a delete and
+ * nothing else.
+ */
+const eraseSourceRawPayload = async ({
+  sourceRawS3Key,
+  deleteSourceRaw,
+}: EraseSourceRawPayloadOptions): Promise<CorpusObjectErasure> => {
+  if (sourceRawS3Key === null) {
+    return { type: "deleted" };
+  }
+  const erased = await Result.tryPromise({
+    try: async () =>
+      await deleteSourceRaw(
+        sourceRawS3Key,
+        AbortSignal.timeout(RAW_ERASE_TIMEOUT_MS),
+      ),
+    catch: (cause) => cause,
+  });
+  return Result.isError(erased)
+    ? { type: "incomplete", error: erased.error }
+    : { type: "deleted" };
 };
 
 export type RedactCaseLawDecisionOutcome =
   | { type: "not-found" }
-  /** Every store was scrubbed. */
-  | { type: "redacted" }
+  /**
+   * Every store was scrubbed. `erasure` says how the corpus payloads were
+   * reached: deleted outright, or tombstoned because they are members of a
+   * pack that carries other decisions. Both are complete erasures — a
+   * tombstoned address is served to nobody — and they are distinguished
+   * because only one of them leaves bytes for a later rewrite to reclaim.
+   */
+  | { type: "redacted"; erasure: "deleted" | "tombstoned" }
   /**
    * The row is redacted and every index copy removed, but at least one
    * corpus object still holds the payload. Its pointer columns are kept as
@@ -107,47 +170,44 @@ export type RedactCaseLawDecisionOutcome =
    */
   | { type: "corpus-objects-remain"; error: unknown };
 
-/** A pointer named a range inside an object that holds other members. */
-export class CorpusObjectRetainedError extends TaggedError(
-  "CorpusObjectRetainedError",
-)<{
-  message: string;
-  retained: string[];
-}> {}
-
 /**
- * Whether every corpus object a decision pointed at is gone.
+ * Whether every corpus payload a decision pointed at is beyond reach.
  *
- * Exported because the withdrawal path deletes the same objects and must
- * report the same partial outcome; one definition keeps the two from
- * disagreeing about what "still there" means.
+ * Exported because the withdrawal path erases the same payloads and must
+ * report the same outcomes; one definition keeps the two from disagreeing
+ * about what "still there" means.
  */
 export type CorpusObjectErasure =
   | { type: "deleted" }
   /**
-   * At least one object still holds the payload, whether its DELETE failed
-   * or it holds other members and was left in place. Either way the pointer
-   * columns must stay as retry targets.
+   * At least one payload was a member of a pack the erasure cannot delete
+   * without taking other decisions' payloads with it. Those addresses are
+   * tombstoned: no reader serves them again, which is the erasure. The
+   * bytes leave the pack when it is next rewritten.
+   */
+  | { type: "tombstoned"; tombstoned: string[] }
+  /**
+   * A DELETE failed, so an object still holds the payload. The pointer
+   * columns stay as retry targets.
    */
   | { type: "incomplete"; error: unknown };
 
 type EraseCorpusObjectsOptions = {
   keys: Parameters<typeof deleteCorpusDocument>[0];
+  decisionId: SafeId<"caseLawDecision">;
+  tombstone: CorpusTombstoneWriter;
   deleteCorpus?: typeof deleteCorpusDocument;
 };
 
-/**
- * Delete a decision's corpus objects and say whether every payload is gone.
- * A pointer into an object that holds other members leaves that object in
- * place, so its payload is not erased; that is reported the same way as a
- * failed DELETE rather than as success.
- */
+/** Erase a decision's corpus payloads and say how each one was reached. */
 export const eraseCorpusObjects = async ({
   keys,
+  decisionId,
+  tombstone,
   deleteCorpus = deleteCorpusDocument,
 }: EraseCorpusObjectsOptions): Promise<CorpusObjectErasure> => {
   const outcome = await Result.tryPromise({
-    try: async () => await deleteCorpus(keys),
+    try: async () => await deleteCorpus(keys, { decisionId, tombstone }),
     // The cause travels unchanged into the audit row and telemetry.
     catch: (cause) => cause,
   });
@@ -157,16 +217,11 @@ export const eraseCorpusObjects = async ({
   switch (outcome.value.type) {
     case "deleted":
       return { type: "deleted" };
-    case "shared-object-retained": {
-      const retained = outcome.value.retained.map(formatCorpusLocation);
+    case "tombstoned":
       return {
-        type: "incomplete",
-        error: new CorpusObjectRetainedError({
-          message: `Corpus objects hold other members and are left in place: ${retained.join(", ")}`,
-          retained,
-        }),
+        type: "tombstoned",
+        tombstoned: outcome.value.tombstoned.map(formatCorpusLocation),
       };
-    }
     default: {
       outcome.value satisfies never;
       return panic(`Unhandled value: ${String(outcome.value)}`);
@@ -204,6 +259,7 @@ export const redactCaseLawDecision = async ({
   decisionId,
   scopedDb,
   deleteCorpus = deleteCorpusDocument,
+  deleteSourceRaw = deleteS3ObjectWithSignal,
 }: RedactInput): Promise<RedactCaseLawDecisionOutcome> => {
   const fenced = await scopedDb(async (tx) => {
     const sourceLock = await Result.tryPromise({
@@ -229,6 +285,7 @@ export const redactCaseLawDecision = async ({
           textS3Key: caseLawDecisions.textS3Key,
           normalizedS3Key: caseLawDecisions.normalizedS3Key,
           astS3Key: caseLawDecisions.astS3Key,
+          sourceRawS3Key: caseLawDecisions.sourceRawS3Key,
           redactedAt: caseLawDecisions.redactedAt,
         })
         .from(caseLawDecisions)
@@ -278,6 +335,11 @@ export const redactCaseLawDecision = async ({
   // still have its personal data erased, not skipped. An incomplete erasure
   // (a failed DELETE, or an object left in place because it holds other
   // members) is recorded as a failed audit row so the outcome is visible.
+  const tombstone = caseLawCorpusTombstoneWriter({
+    scopedDb,
+    reason: CORPUS_TOMBSTONE_REASON.REDACTION,
+  });
+
   let corpusErasure: CorpusObjectErasure = { type: "deleted" };
   if (
     decision.textS3Key !== null ||
@@ -290,6 +352,8 @@ export const redactCaseLawDecision = async ({
         sectionsKey: decision.normalizedS3Key,
         astKey: decision.astS3Key,
       },
+      decisionId,
+      tombstone,
       deleteCorpus,
     });
     if (corpusErasure.type === "incomplete") {
@@ -314,6 +378,8 @@ export const redactCaseLawDecision = async ({
   // not a reason to stop.
   const { cleanedIntentIds, incomplete } = await eraseCancelledIntentObjects({
     cancelledIntents,
+    decisionId,
+    tombstone,
     deleteCorpus,
   });
   for (const { error } of incomplete) {
@@ -337,16 +403,41 @@ export const redactCaseLawDecision = async ({
     });
   }
 
-  // Clear pointers only once every object is gone; an incomplete erasure
-  // retains exact retry targets while the tombstone already blocks every
-  // reader.
-  if (corpusErasure.type === "deleted") {
+  // The publisher's own envelope carries the same text as the payloads
+  // above, so an erasure that leaves it behind has erased nothing. It is a
+  // standalone object under its own hash, so it is deleted outright.
+  const rawErasure = await eraseSourceRawPayload({
+    sourceRawS3Key: decision.sourceRawS3Key,
+    deleteSourceRaw,
+  });
+  if (rawErasure.type === "incomplete") {
+    captureError(rawErasure.error, {
+      decisionId,
+      step: "redactCaseLawDecision.deleteSourceRawPayload",
+    });
+    await recordFailedRedactionAudit({
+      decisionId,
+      error: rawErasure.error,
+      scopedDb,
+    });
+  }
+
+  // Clear pointers only once every payload is beyond reach; an incomplete
+  // erasure retains exact retry targets while the row tombstone already
+  // blocks every reader.
+  if (corpusErasure.type !== "incomplete" && rawErasure.type !== "incomplete") {
     // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
     await scopedDb((tx) => {
       // audit: skip — GDPR redaction; recorded in case_law_index_jobs below
       return tx
         .update(caseLawDecisions)
-        .set({ textS3Key: null, normalizedS3Key: null, astS3Key: null })
+        .set({
+          textS3Key: null,
+          normalizedS3Key: null,
+          astS3Key: null,
+          sourceRawS3Key: null,
+          sourceRawContentType: null,
+        })
         .where(eq(caseLawDecisions.id, decisionId));
     });
   }
@@ -355,7 +446,14 @@ export const redactCaseLawDecision = async ({
     // The failed audit row recorded above is the record of this erasure.
     return { type: "corpus-objects-remain", error: corpusErasure.error };
   }
+  if (rawErasure.type === "incomplete") {
+    return { type: "corpus-objects-remain", error: rawErasure.error };
+  }
 
+  const detail =
+    corpusErasure.type === "tombstoned"
+      ? `tombstoned: ${corpusErasure.tombstoned.join(", ")}`.slice(0, 2048)
+      : null;
   // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
   await scopedDb((tx) => {
     // audit: skip — this insert IS the append-only erasure audit row
@@ -364,8 +462,9 @@ export const redactCaseLawDecision = async ({
       operation: "redact",
       status: "succeeded",
       contentHash: null,
+      detail,
     });
   });
 
-  return { type: "redacted" };
+  return { type: "redacted", erasure: corpusErasure.type };
 };

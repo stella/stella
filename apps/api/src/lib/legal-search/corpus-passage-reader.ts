@@ -23,6 +23,7 @@ import {
   readCorpusAst,
   readCorpusText,
 } from "@/api/lib/legal-search/corpus-storage";
+import { prefetchCorpusTombstones } from "@/api/lib/legal-search/corpus-tombstones";
 import type { EmptyAst } from "@/api/lib/legal-search/document-types";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 
@@ -105,9 +106,25 @@ export type CorpusPayloadSource = {
   readAst: (storedKey: string) => Promise<DocumentAst | EmptyAst | null>;
 };
 
-const corpusPayloadStorage: CorpusPayloadSource = {
-  readText: async (storedKey) => await readCorpusText(storedKey),
-  readAst: async (storedKey) => await readCorpusAst(storedKey),
+/**
+ * The same payload source, with the denial list fetched once for every
+ * address this request is about to read. Each read would otherwise ask the
+ * tombstone table for its own address, which is a query per member.
+ */
+const hydratingPayloadSource = async (
+  pointers: readonly CorpusPassagePointer[],
+): Promise<CorpusPayloadSource> => {
+  const readTombstones = await prefetchCorpusTombstones(
+    pointers.flatMap(({ textS3Key, astS3Key }) =>
+      [textS3Key, astS3Key].filter((key): key is string => key !== null),
+    ),
+  );
+  return {
+    readText: async (storedKey) =>
+      await readCorpusText(storedKey, { readTombstones }),
+    readAst: async (storedKey) =>
+      await readCorpusAst(storedKey, { readTombstones }),
+  };
 };
 
 /** Payload reads in flight at once, over the whole request list. */
@@ -148,9 +165,11 @@ const loadPayload = async ({
 export const readCorpusPassages = async ({
   requests,
   pointers,
-  source = corpusPayloadStorage,
+  source,
   concurrency = PAYLOAD_READ_CONCURRENCY,
 }: ReadCorpusPassagesOptions): Promise<CorpusPassageResult[]> => {
+  // One denial lookup for the whole request, rather than one per member.
+  const payloadSource = source ?? (await hydratingPayloadSource(pointers));
   const pointerById = new Map(
     pointers.map((pointer) => [pointer.documentId, pointer]),
   );
@@ -170,7 +189,7 @@ export const readCorpusPassages = async ({
       return textKey === null
         ? null
         : await loadPayload({
-            source,
+            source: payloadSource,
             textKey,
             astKey: pointer?.astS3Key ?? null,
           });

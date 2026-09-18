@@ -20,6 +20,7 @@ import {
   corpusStorageInvariantViolation,
   resolveCorpusStorageMode,
 } from "@/api/lib/corpus-storage-mode";
+import { CORPUS_MEMBER_LAYOUTS } from "@/api/lib/legal-search/corpus-member-layout";
 import { QUERY_EXPANSION_MODES } from "@/api/lib/legal-search/query-expansion-mode";
 import { isUsableStaticCredential } from "@/api/lib/s3/credentials";
 import {
@@ -201,6 +202,10 @@ export const envBaseServerSchema = {
   // Where the canonical corpus payload lives. Unset derives the mode from
   // the legacy CORPUS_STORAGE_ENABLED boolean below.
   CORPUS_STORAGE_MODE: v.optional(v.picklist(CORPUS_STORAGE_MODES)),
+  // How an ingestion batch lays its payloads out in object storage. Unset
+  // keeps one object per payload; `packs` is opt-in because the bytes a
+  // packed erasure leaves behind are only reclaimed by rewriting the pack.
+  CORPUS_MEMBER_LAYOUT: v.optional(v.picklist(CORPUS_MEMBER_LAYOUTS)),
   // Superseded by CORPUS_STORAGE_MODE; still accepted, and true still
   // means "dual-write". Read `corpusStorageMode`, never this field.
   CORPUS_STORAGE_ENABLED: v.optional(

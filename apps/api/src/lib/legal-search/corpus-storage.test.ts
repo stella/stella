@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { randomFillSync } from "node:crypto";
 
 import { CASE_LAW_CORPUS_MIRROR_STATUS } from "@/api/db/schema";
+import { createSafeId } from "@/api/lib/branded-types";
 import {
   PayloadBudgetError,
   zstdCompress,
@@ -9,6 +10,8 @@ import {
 } from "@/api/lib/compression";
 import { CORPUS_STORAGE_MODES } from "@/api/lib/corpus-storage-mode";
 import {
+  CorpusMemberDigestMismatchError,
+  CorpusMemberTombstonedError,
   CorpusPayloadUnavailableError,
   TimeoutError,
 } from "@/api/lib/errors/tagged-errors";
@@ -17,6 +20,7 @@ import {
   parseCorpusLocation,
 } from "@/api/lib/legal-search/corpus-location";
 import type { PackedCorpusLocation } from "@/api/lib/legal-search/corpus-location";
+import { corpusMemberDigest } from "@/api/lib/legal-search/corpus-pack";
 import {
   corpusContentHash,
   corpusKeys,
@@ -39,6 +43,7 @@ import type {
   CorpusPayload,
   WriteCorpusResult,
 } from "@/api/lib/legal-search/corpus-storage";
+import type { CorpusTombstoneEntry } from "@/api/lib/legal-search/corpus-tombstones";
 import { EMPTY_AST } from "@/api/lib/legal-search/document-types";
 import { LIMITS } from "@/api/lib/limits";
 import { MissingCorpusObjectError } from "@/api/lib/s3";
@@ -192,8 +197,20 @@ describe("authoritative corpus pointer reread", () => {
     });
 
   test("retries one changed pointer after a confirmed absence", async () => {
-    const oldKey = `pack:legal-corpus/packs/old.pack#offset=10&length=20&sha256=${"a".repeat(64)}`;
-    const replacementKey = `pack:legal-corpus/packs/new.pack#offset=30&length=20&sha256=${"b".repeat(64)}`;
+    const oldKey = formatCorpusLocation({
+      type: "packed",
+      packKey: "legal-corpus/packs/jurisdiction=SVK/old.stlpack",
+      offset: 10,
+      length: 20,
+      sha256: "a".repeat(64),
+    });
+    const replacementKey = formatCorpusLocation({
+      type: "packed",
+      packKey: "legal-corpus/packs/jurisdiction=SVK/new.stlpack",
+      offset: 30,
+      length: 20,
+      sha256: "b".repeat(64),
+    });
     const reads: string[] = [];
     const value = await readCorpusAtAuthoritativePointer({
       storedKey: oldKey,
@@ -576,8 +593,16 @@ describe("planCorpusDocumentWrite", () => {
 });
 
 describe("readCorpusBytesAt", () => {
-  const packKey = "legal-corpus/packs/jurisdiction=SVK/01912f6a.pack";
+  const packKey = "legal-corpus/packs/jurisdiction=SVK/01912f6a.stlpack";
   const pack = new Uint8Array(64).map((_, index) => index);
+  /** The address of a member of the fake pack, digest and all. */
+  const packedAt = (offset: number, length: number): PackedCorpusLocation => ({
+    type: "packed",
+    packKey,
+    offset,
+    length,
+    sha256: corpusMemberDigest(pack.subarray(offset, offset + length)),
+  });
   const fakeRange = async ({
     key,
     offset,
@@ -594,14 +619,17 @@ describe("readCorpusBytesAt", () => {
     await Promise.reject(new Error("object read must not run"));
   const neverRange = async (): Promise<Uint8Array> =>
     await Promise.reject(new Error("range read must not run"));
+  const noTombstones = async (): Promise<ReadonlySet<string>> =>
+    await Promise.resolve(new Set<string>());
 
   test("a packed address reads exactly its range through the range reader", async () => {
     const bytes = await readCorpusBytesAt({
-      location: { type: "packed", packKey, offset: 10, length: 5 },
+      location: packedAt(10, 5),
       maxBytes: 1024,
       signal: new AbortController().signal,
       readObject: neverObject,
       readRange: fakeRange,
+      readTombstones: noTombstones,
     });
 
     expect([...bytes]).toEqual([10, 11, 12, 13, 14]);
@@ -610,7 +638,7 @@ describe("readCorpusBytesAt", () => {
   test("a packed address whose length exceeds the ceiling is refused before any read", async () => {
     let ranges = 0;
     const rejection: unknown = await readCorpusBytesAt({
-      location: { type: "packed", packKey, offset: 0, length: 1025 },
+      location: { ...packedAt(0, 1), length: 1025 },
       maxBytes: 1024,
       signal: new AbortController().signal,
       readObject: neverObject,
@@ -618,6 +646,7 @@ describe("readCorpusBytesAt", () => {
         ranges += 1;
         return await fakeRange(options);
       },
+      readTombstones: noTombstones,
     }).then(
       () => null,
       (error: unknown) => error,
@@ -625,6 +654,63 @@ describe("readCorpusBytesAt", () => {
 
     expect(rejection).toBeInstanceOf(PayloadBudgetError);
     expect(ranges).toBe(0);
+  });
+
+  test("an erased member is refused without asking the store for its bytes", async () => {
+    // The pack still holds the bytes — other decisions' payloads live in it
+    // — so nothing but the tombstone stands between a reader and them.
+    const location = packedAt(10, 5);
+    const address = formatCorpusLocation(location);
+    const asked: (readonly string[])[] = [];
+    let ranges = 0;
+    const rejection: unknown = await readCorpusBytesAt({
+      location,
+      maxBytes: 1024,
+      signal: new AbortController().signal,
+      readObject: neverObject,
+      readRange: async (options) => {
+        ranges += 1;
+        return await fakeRange(options);
+      },
+      readTombstones: async (locations) => {
+        asked.push(locations);
+        return await Promise.resolve(new Set([address]));
+      },
+    }).then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(rejection).toBeInstanceOf(CorpusMemberTombstonedError);
+    expect(rejection).toMatchObject({ location: address });
+    expect(ranges).toBe(0);
+    expect(asked).toEqual([[address]]);
+  });
+
+  test("a member whose bytes are not the ones its address names is refused", async () => {
+    // A range read that returns the requested byte count still proves
+    // nothing about which bytes came back.
+    const location = packedAt(10, 5);
+    const rejection: unknown = await readCorpusBytesAt({
+      location,
+      maxBytes: 1024,
+      signal: new AbortController().signal,
+      readObject: neverObject,
+      // The pack was rewritten under the same key: the range is served, but
+      // it now holds a different member's bytes.
+      readRange: async ({ offset, length }) =>
+        await Promise.resolve(pack.subarray(offset + 1, offset + 1 + length)),
+      readTombstones: noTombstones,
+    }).then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(rejection).toBeInstanceOf(CorpusMemberDigestMismatchError);
+    expect(rejection).toMatchObject({
+      location: formatCorpusLocation(location),
+      digest: corpusMemberDigest(pack.subarray(11, 16)),
+    });
   });
 
   test("an object key reads through the bounded object reader", async () => {
@@ -652,6 +738,7 @@ describe("readCorpusBytesAt", () => {
       packKey,
       offset: 3,
       length: member.byteLength,
+      sha256: corpusMemberDigest(member),
     });
     expect(parseCorpusLocation(address)).toMatchObject({ type: "packed" });
 
@@ -665,6 +752,7 @@ describe("readCorpusBytesAt", () => {
         seen.push({ key, offset, length });
         return await Promise.resolve(member);
       },
+      readTombstones: noTombstones,
       timeoutMs: 1000,
     });
 
@@ -683,28 +771,38 @@ describe("readCorpusBytesAt", () => {
       },
       timeoutMs: 1000,
     });
+    // A member at the bound is served as one frame, so the digest the
+    // address carries is that frame's.
+    const served = zstdCompress("x");
     const atBound = formatCorpusLocation({
       type: "packed",
       packKey,
       offset: 0,
       length: CORPUS_TRANSFER_MAX_BYTES,
+      sha256: corpusMemberDigest(served),
     });
     const pastBound = formatCorpusLocation({
       type: "packed",
       packKey,
       offset: 0,
       length: CORPUS_TRANSFER_MAX_BYTES + 1,
+      sha256: corpusMemberDigest(served),
     });
     const rangeReads: number[] = [];
     const readRange = async ({ length }: { length: number }) => {
       rangeReads.push(length);
-      return await Promise.resolve(zstdCompress("x"));
+      return await Promise.resolve(served);
     };
 
-    await readCorpusText(atBound, { readObject: neverObject, readRange });
+    await readCorpusText(atBound, {
+      readObject: neverObject,
+      readRange,
+      readTombstones: noTombstones,
+    });
     const rejection: unknown = await readCorpusText(pastBound, {
       readObject: neverObject,
       readRange,
+      readTombstones: noTombstones,
     }).then(
       () => null,
       (error: unknown) => error,
@@ -721,49 +819,77 @@ describe("deleteCorpusDocument", () => {
     "legal-corpus/documents/jurisdiction=SVK/d/h/sections.json.zst";
   const packedLocation: PackedCorpusLocation = {
     type: "packed",
-    packKey: "legal-corpus/packs/jurisdiction=SVK/01912f6a.pack",
+    packKey: "legal-corpus/packs/jurisdiction=SVK/01912f6a.stlpack",
     offset: 128,
     length: 64,
+    sha256: "e".repeat(64),
   };
   const packedAddress = formatCorpusLocation(packedLocation);
+  const decisionId = createSafeId<"caseLawDecision">();
 
-  test("a packed address issues no DELETE and reports the shared object retained", async () => {
-    const deleted: string[] = [];
+  /** Records what the erasure denied, and when, against the deletes. */
+  const recordingErasure = () => {
+    const log: string[] = [];
+    const tombstoned: CorpusTombstoneEntry[][] = [];
+    return {
+      log,
+      tombstoned,
+      tombstone: async (entries: readonly CorpusTombstoneEntry[]) => {
+        tombstoned.push([...entries]);
+        log.push("tombstone");
+        await Promise.resolve();
+      },
+      deleteObject: async (key: string) => {
+        log.push(`delete:${key}`);
+        await Promise.resolve();
+      },
+    };
+  };
+
+  test("a packed address is tombstoned instead of deleted, before any DELETE", async () => {
+    const erasure = recordingErasure();
     const outcome = await deleteCorpusDocument(
       { textKey: packedAddress, sectionsKey: objectKey, astKey: null },
       {
-        deleteObject: async (key) => {
-          deleted.push(key);
-          await Promise.resolve();
-        },
+        tombstone: erasure.tombstone,
+        decisionId,
+        deleteObject: erasure.deleteObject,
       },
     );
 
-    expect(deleted).toEqual([objectKey]);
     expect(outcome).toEqual({
-      type: "shared-object-retained",
+      type: "tombstoned",
       deletedKeys: [objectKey],
-      retained: [packedLocation],
+      tombstoned: [packedLocation],
     });
+    expect(erasure.tombstoned).toEqual([
+      [{ location: packedLocation, decisionId }],
+    ]);
+    // The pack itself is never deleted: it carries other decisions'
+    // payloads. And the denial lands first, so a caller retrying a failed
+    // object delete never finds the member readable in between.
+    expect(erasure.log).toEqual(["tombstone", `delete:${objectKey}`]);
   });
 
   test("plain object keys are deleted and reported as such", async () => {
-    const deleted: string[] = [];
+    const textKey = "legal-corpus/documents/jurisdiction=SVK/d/h/text.zst";
+    const astKey = "legal-corpus/documents/jurisdiction=SVK/d/h/ast.json.zst";
+    const erasure = recordingErasure();
     const outcome = await deleteCorpusDocument(
+      { textKey, sectionsKey: null, astKey },
       {
-        textKey: "legal-corpus/documents/jurisdiction=SVK/d/h/text.zst",
-        sectionsKey: null,
-        astKey: "legal-corpus/documents/jurisdiction=SVK/d/h/ast.json.zst",
-      },
-      {
-        deleteObject: async (key) => {
-          deleted.push(key);
-          await Promise.resolve();
-        },
+        tombstone: erasure.tombstone,
+        decisionId,
+        deleteObject: erasure.deleteObject,
       },
     );
 
-    expect(deleted).toHaveLength(2);
-    expect(outcome).toEqual({ type: "deleted", keys: deleted });
+    expect(erasure.log.toSorted()).toEqual(
+      [`delete:${textKey}`, `delete:${astKey}`, "tombstone"].toSorted(),
+    );
+    expect(outcome).toEqual({ type: "deleted", keys: [textKey, astKey] });
+    // Nothing was packed, so the erasure denies nothing: a tombstone for a
+    // deleted object would outlive the key it names.
+    expect(erasure.tombstoned).toEqual([[]]);
   });
 });

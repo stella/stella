@@ -38,7 +38,10 @@ const report = ((): { exitCode: 0 | 1; message: string } => {
     case "redacted":
       return {
         exitCode: 0,
-        message: `Redacted decision ${decisionIdArg} across all stores.`,
+        message:
+          outcome.erasure === "tombstoned"
+            ? `Redacted decision ${decisionIdArg} across all stores; its payloads were members of a shared pack, so their addresses are tombstoned and served to nobody until the pack is rewritten.`
+            : `Redacted decision ${decisionIdArg} across all stores.`,
       };
     case "not-found":
       return { exitCode: 1, message: `Decision ${decisionIdArg} not found.` };

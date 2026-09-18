@@ -4,6 +4,8 @@ import { drizzle } from "drizzle-orm/pglite";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
+  caseLawCorpusPackRefs,
+  caseLawCorpusTombstones,
   caseLawDecisions,
   caseLawIndexJobs,
   caseLawSources,
@@ -17,6 +19,7 @@ import {
   corpusIndexManifestDigest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import { ensureCorpusProjectionDesiredStateTx } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
+import { deleteCorpusDocument as realDeleteCorpusDocument } from "@/api/lib/legal-search/corpus-storage";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -54,6 +57,8 @@ afterAll(async () => {
 });
 
 beforeEach(async () => {
+  await db.delete(caseLawCorpusTombstones).where(sql`true`);
+  await db.delete(caseLawCorpusPackRefs).where(sql`true`);
   await db.delete(corpusIndexProjectionStates).where(sql`true`);
   await db.delete(caseLawIndexJobs).where(sql`true`);
   await db.delete(caseLawDecisions).where(sql`true`);
@@ -107,7 +112,7 @@ test("redaction queues the erase the projection worker applies", async () => {
     scopedDb,
   });
 
-  expect(outcome).toEqual({ type: "redacted" });
+  expect(outcome).toEqual({ type: "redacted", erasure: "deleted" });
   expect(
     await db
       .select({
@@ -141,4 +146,75 @@ test("redaction records one audit row naming no generation", async () => {
       .from(caseLawIndexJobs)
       .where(eq(caseLawIndexJobs.decisionId, DECISION_ID)),
   ).toEqual([{ generation: null, operation: "redact", status: "succeeded" }]);
+});
+
+test("redaction of packed payloads tombstones every address it cannot delete", async () => {
+  const packKey = "legal-corpus/packs/jurisdiction=CZE/f00d.stlpack";
+  const addresses = {
+    textS3Key: `pack:${packKey}@0+16#${"a".repeat(64)}`,
+    normalizedS3Key: `pack:${packKey}@16+16#${"b".repeat(64)}`,
+    astS3Key: `pack:${packKey}@32+16#${"c".repeat(64)}`,
+  };
+  await db
+    .update(caseLawDecisions)
+    .set(addresses)
+    .where(eq(caseLawDecisions.id, DECISION_ID));
+  await db.insert(caseLawCorpusPackRefs).values(
+    (["text", "sections", "ast"] as const).map((kind, index) => ({
+      decisionId: DECISION_ID,
+      kind,
+      packKey,
+      location: Object.values(addresses)[index] ?? "",
+    })),
+  );
+  const deleted: string[] = [];
+
+  const outcome = await redactCaseLawDecision({
+    decisionId: DECISION_ID,
+    scopedDb,
+    deleteCorpus: async (keys, options) =>
+      await realDeleteCorpusDocument(keys, {
+        ...options,
+        deleteObject: async (key) => {
+          deleted.push(key);
+          await Promise.resolve();
+        },
+      }),
+  });
+
+  // The pack carries other decisions, so nothing is deleted; the erasure is
+  // the refusal to serve those addresses again.
+  expect(outcome).toEqual({ type: "redacted", erasure: "tombstoned" });
+  expect(deleted).toEqual([]);
+  expect(
+    (
+      await db
+        .select({ location: caseLawCorpusTombstones.location })
+        .from(caseLawCorpusTombstones)
+        .where(eq(caseLawCorpusTombstones.decisionId, DECISION_ID))
+    ).map(({ location }) => location),
+  ).toEqual(expect.arrayContaining(Object.values(addresses)));
+  // A tombstoned member no longer keeps its pack alive for a rewrite.
+  expect(
+    await db
+      .select({ packKey: caseLawCorpusPackRefs.packKey })
+      .from(caseLawCorpusPackRefs)
+      .where(eq(caseLawCorpusPackRefs.decisionId, DECISION_ID)),
+  ).toEqual([]);
+  expect(
+    await db
+      .select({
+        textS3Key: caseLawDecisions.textS3Key,
+        normalizedS3Key: caseLawDecisions.normalizedS3Key,
+        astS3Key: caseLawDecisions.astS3Key,
+      })
+      .from(caseLawDecisions)
+      .where(eq(caseLawDecisions.id, DECISION_ID)),
+  ).toEqual([{ textS3Key: null, normalizedS3Key: null, astS3Key: null }]);
+  expect(
+    await db
+      .select({ detail: caseLawIndexJobs.detail })
+      .from(caseLawIndexJobs)
+      .where(eq(caseLawIndexJobs.decisionId, DECISION_ID)),
+  ).toEqual([{ detail: expect.stringContaining(packKey) }]);
 });

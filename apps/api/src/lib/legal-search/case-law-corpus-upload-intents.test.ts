@@ -107,26 +107,28 @@ describe("case-law corpus upload intents", () => {
     );
   });
 
-  test("locks and preflights before the external write, then retains failed writes", () => {
+  test("locks and preflights before the repoint, and records the pack with it", () => {
     const sharedLock = source.indexOf('.for("share")');
     const exclusiveLock = source.indexOf('.for("update")');
     const preflight = source.indexOf("await preflight(tx)");
-    const write = source.indexOf("await write({");
-    const failedWriteCleanup = source.indexOf(
-      "enqueueCaseLawCorpusUploadIntentCleanup",
-      write,
+    const apply = source.indexOf("await apply({");
+    const packRefs = source.indexOf("await recordCorpusPackRefsTx(");
+    const intentRemoved = source.indexOf(
+      ".delete(caseLawCorpusUploadIntents)",
+      packRefs,
     );
     const skipLocked = source.indexOf("skipLocked: true");
 
     expect(sharedLock).toBeGreaterThan(-1);
     expect(exclusiveLock).toBeGreaterThan(sharedLock);
     expect(preflight).toBeGreaterThan(exclusiveLock);
-    expect(write).toBeGreaterThan(preflight);
-    expect(failedWriteCleanup).toBeGreaterThan(write);
+    expect(apply).toBeGreaterThan(preflight);
+    // The pack reference and the pointer it describes commit together, so a
+    // pack can never be released while a row still reaches into it.
+    expect(packRefs).toBeGreaterThan(apply);
+    expect(intentRemoved).toBeGreaterThan(packRefs);
     expect(skipLocked).toBeGreaterThan(-1);
-    expect(source).toContain(
-      "active.leaseExpiresAt.getTime() > Temporal.Now.instant().epochMilliseconds",
-    );
+    expect(source).toContain("row.leaseExpiresAt.getTime() > now");
   });
 
   test("keeps rollout tombstones synchronous and historical repair bounded", () => {
@@ -192,8 +194,14 @@ describe("case-law corpus upload intents", () => {
       astKey: "ast",
       sectionsKey: "sections",
       textKey: "text",
+      packKey: null,
     };
-    const keyList = Object.values(keys);
+    const keyList = [keys.astKey, keys.sectionsKey, keys.textKey];
+    const unreferenced = {
+      currentKeys: new Set<string>(),
+      activeKeys: new Set<string>(),
+      referencedPackKeys: new Set<string>(),
+    };
     const currentKeySubsets = [
       [],
       [keys.astKey],
@@ -207,9 +215,12 @@ describe("case-law corpus upload intents", () => {
 
     for (const subset of currentKeySubsets) {
       const currentKeys = new Set(subset);
-      const plan = planCorpusUploadIntentCleanup(keys, currentKeys, new Set());
-      expect(plan.type).toBe("delete");
-      if (plan.type !== "delete") {
+      const plan = planCorpusUploadIntentCleanup(keys, {
+        ...unreferenced,
+        currentKeys,
+      });
+      expect(plan.type).toBe("release");
+      if (plan.type !== "release") {
         continue;
       }
       for (const key of Object.values(plan.keys)) {
@@ -219,8 +230,46 @@ describe("case-law corpus upload intents", () => {
 
     for (const activeKey of keyList) {
       expect(
-        planCorpusUploadIntentCleanup(keys, new Set(), new Set([activeKey])),
+        planCorpusUploadIntentCleanup(keys, {
+          ...unreferenced,
+          activeKeys: new Set([activeKey]),
+        }),
       ).toEqual({ type: "defer" });
+    }
+  });
+
+  test("never releases a reservation inside a pack something still references", () => {
+    const packKey = "legal-corpus/packs/jurisdiction=SVK/abc.stlpack";
+    const intent = {
+      astKey: `pack:${packKey}@0+10#${"a".repeat(64)}`,
+      sectionsKey: `pack:${packKey}@10+10#${"b".repeat(64)}`,
+      textKey: `pack:${packKey}@20+10#${"c".repeat(64)}`,
+      packKey,
+    };
+    const liveness = {
+      currentKeys: new Set<string>(),
+      activeKeys: new Set<string>(),
+      referencedPackKeys: new Set([packKey]),
+    };
+
+    // The reservation's own addresses are claimed by nobody, but another
+    // decision of the same batch still reaches into this pack, so the object
+    // stays. The row goes either way: a reservation with nothing to reclaim
+    // that kept its row would be retried for ever.
+    const pinned = planCorpusUploadIntentCleanup(intent, liveness);
+    expect(pinned.type).toBe("release");
+    if (pinned.type === "release") {
+      expect([...pinned.releasablePackKeys]).toEqual([]);
+    }
+    const unreferenced = planCorpusUploadIntentCleanup(intent, {
+      ...liveness,
+      referencedPackKeys: new Set(),
+    });
+    expect(unreferenced.type).toBe("release");
+    if (unreferenced.type === "release") {
+      // Nothing reaches into the pack any more, so the object is this
+      // reservation's to delete.
+      expect([...unreferenced.releasablePackKeys]).toEqual([packKey]);
     }
   });
 });

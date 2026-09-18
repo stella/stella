@@ -6,9 +6,6 @@ import {
   zstdDecompressToStringBounded,
 } from "@/api/lib/compression";
 import type { PackedCorpusLocation } from "@/api/lib/legal-search/corpus-location";
-import { LIMITS } from "@/api/lib/limits";
-import { putCorpusS3ObjectWithSignal } from "@/api/lib/s3";
-import { withTimeout } from "@/api/lib/with-timeout";
 
 /**
  * Corpus pack format.
@@ -18,14 +15,23 @@ import { withTimeout } from "@/api/lib/with-timeout";
  *
  *   member₀ bytes | member₁ bytes | … | footer | footer length | magic
  *
- * Each member is exactly the bytes of the standalone object it stands for
- * (the zstd frame), so a range read of a member decompresses through the
- * same path as an object read. The footer is zstd-compressed JSON
+ * Each member is exactly the bytes of the standalone object it stands for,
+ * so a range read of a member decompresses through the same path as an
+ * object read. The footer is zstd-compressed JSON
  * `{ version: 1, members: [{ offset, length, kind, documentId, contentHash,
- * sha256 }] }`, followed by its own byte length as an 8-byte little-endian
- * integer and the 8-byte magic `STLPACK1`. A reader that holds an address
- * never needs the footer; the footer lists the members for a reader that
- * holds only the pack.
+ * sha256, encoding }] }`, followed by its own byte length as an 8-byte
+ * little-endian integer and the 8-byte magic `STLPACK1`. A reader that holds
+ * an address never needs the footer; the footer lists the members for a
+ * reader that holds only the pack.
+ *
+ * The pack's key is derived from its members' ordered identities
+ * ({@link packKeyForMembers}): which document each member belongs to, which
+ * payload it is, its digest and its length, in layout order. Two encodings of
+ * the same members therefore name the same object with the same offsets, and
+ * a batch retried after an ambiguous PUT re-derives exactly the addresses it
+ * settled. Nothing else may share that key: a key that named only the bytes
+ * would give two documents with identical payloads one address, and erasing
+ * one of them would deny the other.
  */
 
 export const PACK_MAGIC = "STLPACK1";
@@ -34,13 +40,13 @@ const MAGIC_LENGTH = PACK_MAGIC_BYTES.byteLength;
 const FOOTER_LENGTH_FIELD_BYTES = 8;
 const TRAILER_LENGTH = FOOTER_LENGTH_FIELD_BYTES + MAGIC_LENGTH;
 export const PACK_FORMAT_VERSION = 1;
-const PACK_CONTENT_TYPE = "application/octet-stream";
+export const PACK_CONTENT_TYPE = "application/octet-stream";
 
 // Ceiling on the decoded footer, so a corrupt length field cannot ask for
 // an unbounded decode.
 const FOOTER_MAX_DECOMPRESSED_BYTES = 64 * 1024 * 1024;
 
-const PACK_MEMBER_KINDS = ["text", "sections", "ast"] as const;
+export const PACK_MEMBER_KINDS = ["text", "sections", "ast"] as const;
 export type PackMemberKind = (typeof PACK_MEMBER_KINDS)[number];
 
 export class CorpusPackError extends TaggedError("CorpusPackError")<{
@@ -50,7 +56,7 @@ export class CorpusPackError extends TaggedError("CorpusPackError")<{
 
 const packMemberSchema = v.object({
   offset: v.pipe(v.number(), v.safeInteger(), v.minValue(0)),
-  // A member is a zstd frame, which is never empty; see encodePack.
+  // A member never carries zero bytes; see encodePack.
   length: v.pipe(v.number(), v.safeInteger(), v.minValue(1)),
   kind: v.picklist(PACK_MEMBER_KINDS),
   documentId: v.string(),
@@ -81,60 +87,145 @@ export type PackedEntry = {
   location: PackedCorpusLocation;
 };
 
-type PackKeyInput = { jurisdiction: string; packId: string };
+const PACK_EXTENSION = ".stlpack";
 
-/** Pack ids are UUIDv7. */
-export const newCorpusPackId = (): string => Bun.randomUUIDv7();
-
-export const packKey = ({ jurisdiction, packId }: PackKeyInput): string =>
-  `legal-corpus/packs/jurisdiction=${jurisdiction}/${packId}.pack`;
-
-const sha256Hex = (bytes: Uint8Array): string => {
+export const corpusMemberDigest = (bytes: Uint8Array): string => {
   const hasher = new Bun.CryptoHasher("sha256");
   hasher.update(bytes);
   return hasher.digest("hex");
 };
 
-type EncodePackInput = { packKey: string; members: PackMemberInput[] };
+/** What the key commits to, per member, in layout order. */
+type PackMemberIdentity = {
+  documentId: string;
+  kind: PackMemberKind;
+  sha256: string;
+  length: number;
+};
 
-type EncodedPack = { bytes: Uint8Array; entries: PackedEntry[] };
+type PackKeyInput = {
+  jurisdiction: string;
+  /** The members as they are laid out, in that order. */
+  members: readonly PackMemberIdentity[];
+};
+
+/**
+ * The key a pack of exactly these members, in exactly this layout, lands at.
+ *
+ * The digest covers each member's owner, kind, bytes and length in layout
+ * order, so the key names one object with one set of offsets. A key over the
+ * bytes alone would not: the same batch laid out differently would collide
+ * under it while carrying different offsets, and two documents whose payloads
+ * happen to be identical would share an address, which makes one document's
+ * erasure the other document's outage.
+ */
+export const packKeyForMembers = ({
+  jurisdiction,
+  members,
+}: PackKeyInput): string => {
+  if (members.length === 0) {
+    return panic("A corpus pack key needs at least one member");
+  }
+  const hasher = new Bun.CryptoHasher("sha256");
+  for (const { documentId, kind, sha256, length } of members) {
+    hasher.update(
+      `${documentId}\u0000${kind}\u0000${sha256}\u0000${length}\u0000`,
+    );
+  }
+  return `${packJurisdictionPrefix(jurisdiction)}${hasher.digest("hex")}${PACK_EXTENSION}`;
+};
+
+/**
+ * The order a pack lays its members out in, whatever order the batch
+ * collected them: by document, then by payload kind. A page retried after a
+ * failure enqueues its decisions in whatever order it reprocesses them, and
+ * the addresses it settles must not depend on that.
+ */
+const MEMBER_KIND_ORDER: Record<PackMemberKind, number> = {
+  text: 0,
+  sections: 1,
+  ast: 2,
+};
+
+const inLayoutOrder = (
+  members: readonly PackMemberInput[],
+): PackMemberInput[] =>
+  [...members].sort((left, right) => {
+    if (left.documentId !== right.documentId) {
+      // Document ids, not words: the layout must be the same wherever this
+      // runs, which a locale-aware comparison would not guarantee.
+      return left.documentId < right.documentId ? -1 : 1;
+    }
+    return MEMBER_KIND_ORDER[left.kind] - MEMBER_KIND_ORDER[right.kind];
+  });
+
+/**
+ * The partition every pack of one jurisdiction lands under. A reader asking
+ * whether a stored address belongs to a jurisdiction asks this, so the
+ * question is answered by the key derivation rather than beside it.
+ */
+export const packJurisdictionPrefix = (jurisdiction: string): string =>
+  `legal-corpus/packs/jurisdiction=${jurisdiction}/`;
+
+type EncodePackInput = { jurisdiction: string; members: PackMemberInput[] };
+
+export type EncodedPack = {
+  packKey: string;
+  bytes: Uint8Array;
+  entries: PackedEntry[];
+};
 
 export const encodePack = async ({
-  packKey: key,
-  members,
+  jurisdiction,
+  members: collected,
 }: EncodePackInput): Promise<EncodedPack> => {
-  if (members.length === 0) {
+  if (collected.length === 0) {
     return panic("A corpus pack must carry at least one member");
   }
-  const entries: PackedEntry[] = [];
-  let offset = 0;
-  for (const { kind, documentId, contentHash, bytes } of members) {
-    // A zstd frame is never empty, and a zero-length range has no address
-    // a range read can express, so an empty member is refused before any
-    // entry is generated for it.
+  const members = inLayoutOrder(collected);
+  for (const { kind, documentId, bytes } of members) {
+    // A zero-length range has no address a range read can express, so an
+    // empty member is refused before any entry is generated for it.
     if (bytes.byteLength === 0) {
       return panic(
         `Corpus pack member ${kind} for ${documentId} carries no bytes`,
       );
     }
-    const member = {
-      offset,
-      length: bytes.byteLength,
-      kind,
-      documentId,
-      contentHash,
-      sha256: sha256Hex(bytes),
-    };
+  }
+  const digests = members.map(({ bytes }) => corpusMemberDigest(bytes));
+  const key = packKeyForMembers({
+    jurisdiction,
+    members: members.map((member, index) => ({
+      documentId: member.documentId,
+      kind: member.kind,
+      sha256: digests[index] ?? panic("Member digest lost"),
+      length: member.bytes.byteLength,
+    })),
+  });
+
+  const entries: PackedEntry[] = [];
+  let offset = 0;
+  for (const [index, member] of members.entries()) {
+    const sha256 = digests[index] ?? panic("Member digest lost");
+    const length = member.bytes.byteLength;
     entries.push({
-      member,
+      member: {
+        offset,
+        length,
+        kind: member.kind,
+        documentId: member.documentId,
+        contentHash: member.contentHash,
+        sha256,
+      },
       location: {
         type: "packed",
         packKey: key,
         offset,
-        length: bytes.byteLength,
+        length,
+        sha256,
       },
     });
-    offset += bytes.byteLength;
+    offset += length;
   }
   const footer = await zstdCompressAsync(
     JSON.stringify({
@@ -158,7 +249,7 @@ export const encodePack = async ({
   );
   cursor += FOOTER_LENGTH_FIELD_BYTES;
   bytes.set(PACK_MAGIC_BYTES, cursor);
-  return { bytes, entries };
+  return { packKey: key, bytes, entries };
 };
 
 const magicMatches = (bytes: Uint8Array): boolean =>
@@ -170,22 +261,28 @@ const magicMatches = (bytes: Uint8Array): boolean =>
  * Decode a whole pack's footer, refusing anything that does not read as a
  * version-1 pack: an object shorter than the trailer, wrong magic, a footer
  * length that does not fit inside the object, or a member that points
- * outside the payload region. Every refusal is a {@link CorpusPackError}.
+ * outside the payload region. Every refusal is a {@link CorpusPackError} the
+ * caller receives rather than catches: a pack that does not decode is an
+ * answer about that object, not a failure of the process reading it.
  */
 export const decodePackFooter = async (
   bytes: Uint8Array,
-): Promise<PackFooter> => {
+): Promise<Result<PackFooter, CorpusPackError>> => {
   // The trailer (footer length + magic) is read as a whole; checking the
   // full length first keeps the magic and length reads inside the buffer.
   if (bytes.byteLength < TRAILER_LENGTH) {
-    throw new CorpusPackError({
-      message: `Corpus pack of ${bytes.byteLength} bytes is shorter than the ${TRAILER_LENGTH}-byte trailer`,
-    });
+    return Result.err(
+      new CorpusPackError({
+        message: `Corpus pack of ${bytes.byteLength} bytes is shorter than the ${TRAILER_LENGTH}-byte trailer`,
+      }),
+    );
   }
   if (!magicMatches(bytes)) {
-    throw new CorpusPackError({
-      message: "Corpus pack does not end with the pack magic",
-    });
+    return Result.err(
+      new CorpusPackError({
+        message: "Corpus pack does not end with the pack magic",
+      }),
+    );
   }
   const lengthField = new DataView(
     bytes.buffer,
@@ -194,9 +291,11 @@ export const decodePackFooter = async (
   ).getBigUint64(0, true);
   const payloadEnd = bytes.byteLength - TRAILER_LENGTH;
   if (lengthField === 0n || lengthField > BigInt(payloadEnd)) {
-    throw new CorpusPackError({
-      message: `Corpus pack footer length ${lengthField} does not fit a ${bytes.byteLength}-byte pack`,
-    });
+    return Result.err(
+      new CorpusPackError({
+        message: `Corpus pack footer length ${lengthField} does not fit a ${bytes.byteLength}-byte pack`,
+      }),
+    );
   }
   const footerLength = Number(lengthField);
   const footerStart = payloadEnd - footerLength;
@@ -215,58 +314,24 @@ export const decodePackFooter = async (
       }),
   });
   if (Result.isError(decoded)) {
-    throw decoded.error;
+    return decoded;
   }
   const footer = v.safeParse(packFooterSchema, decoded.value);
   if (!footer.success) {
-    throw new CorpusPackError({
-      message: `Corpus pack footer is malformed: ${footer.issues.map((issue) => issue.message).join("; ")}`,
-    });
+    return Result.err(
+      new CorpusPackError({
+        message: `Corpus pack footer is malformed: ${footer.issues.map((issue) => issue.message).join("; ")}`,
+      }),
+    );
   }
   for (const member of footer.output.members) {
     if (member.offset + member.length > footerStart) {
-      throw new CorpusPackError({
-        message: `Corpus pack member at ${member.offset}+${member.length} lies outside the payload region`,
-      });
+      return Result.err(
+        new CorpusPackError({
+          message: `Corpus pack member at ${member.offset}+${member.length} lies outside the payload region`,
+        }),
+      );
     }
   }
-  return footer.output;
-};
-
-type WriteCorpusPackInput = {
-  jurisdiction: string;
-  packId: string;
-  members: PackMemberInput[];
-  signal?: AbortSignal;
-  timeoutMs?: number;
-  /** Test seam; production always PUTs through the corpus bucket client. */
-  put?: (key: string, bytes: Uint8Array, signal: AbortSignal) => Promise<void>;
-};
-
-type WriteCorpusPackResult = { packKey: string; entries: PackedEntry[] };
-
-const putPack = async (
-  key: string,
-  bytes: Uint8Array,
-  signal: AbortSignal,
-): Promise<void> =>
-  await putCorpusS3ObjectWithSignal(key, bytes, PACK_CONTENT_TYPE, signal);
-
-/** Encode the members and PUT the pack once under its derived key. */
-export const writeCorpusPack = async ({
-  jurisdiction,
-  packId,
-  members,
-  signal,
-  timeoutMs = LIMITS.corpusObjectIoTimeoutMs,
-  put = putPack,
-}: WriteCorpusPackInput): Promise<WriteCorpusPackResult> => {
-  const key = packKey({ jurisdiction, packId });
-  const { bytes, entries } = await encodePack({ packKey: key, members });
-  await withTimeout(async (writeSignal) => await put(key, bytes, writeSignal), {
-    label: "corpus-write-pack",
-    signal,
-    timeoutMs,
-  });
-  return { packKey: key, entries };
+  return Result.ok(footer.output);
 };

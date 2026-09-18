@@ -24,58 +24,89 @@ import {
 } from "@/api/lib/case-law/decision-text";
 import { DatabaseError, TimeoutError } from "@/api/lib/errors/tagged-errors";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
-import type { CorpusWriteOutcome } from "@/api/lib/legal-search/corpus-storage";
+import { parseCorpusLocation } from "@/api/lib/legal-search/corpus-location";
+import {
+  CorpusPackError,
+  decodePackFooter,
+} from "@/api/lib/legal-search/corpus-pack";
+import type { EncodedPack } from "@/api/lib/legal-search/corpus-pack";
+import type { putCorpusPacks } from "@/api/lib/legal-search/corpus-pack-writer";
 import * as realCorpusStorage from "@/api/lib/legal-search/corpus-storage";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 
 /**
  * `canonical` storage mode moves the payload out of Postgres, so what a
  * type cannot check is the ordering: the row and durable upload intent must
- * exist before external I/O, and the row may only point at objects after the
- * fenced write succeeds.
+ * exist before external I/O, and the row may only point at a pack's members
+ * after that pack is durable.
  */
 
 /** Ordered log of the side effects under test, across S3 and the DB. */
+/** A pack that does not decode fails the test rather than a case in it. */
+const unwrapPackFooter = (
+  decoded: Awaited<ReturnType<typeof decodePackFooter>>,
+): Awaited<ReturnType<typeof decodePackFooter>> extends Result<
+  infer Footer,
+  unknown
+>
+  ? Footer
+  : never => {
+  if (Result.isError(decoded)) {
+    throw decoded.error;
+  }
+  return decoded.value;
+};
+
 const events: string[] = [];
 const insertedRows: Record<string, unknown>[] = [];
 const updatedDecisionRows: Record<string, unknown>[] = [];
 
-// The double runs the real redundancy decision and fakes only the S3 I/O,
-// so a payload the planner refuses is refused here for the same reason it
-// would be in production, not because a fixture said so.
-const writeCorpusDocumentMock = mock(
-  async (
-    input: Parameters<typeof realCorpusStorage.writeCorpusDocument>[0],
-  ): Promise<CorpusWriteOutcome> => {
-    const plan = realCorpusStorage.planCorpusDocumentWrite(input);
-    if (plan.type !== "put") {
-      events.push(`corpus-skip:${plan.type}`);
-      return await Promise.resolve(plan);
+/** Every pack the batches under test handed to the transfer. */
+const transferredPacks: EncodedPack[] = [];
+
+/** The documents a pack carries members for, in the order it carries them. */
+const packedDocumentIds = (pack: EncodedPack): string[] => [
+  ...new Set(pack.entries.map(({ member }) => member.documentId)),
+];
+
+// The double fakes only the transfer. The batch still runs the real
+// redundancy decision and encodes a real pack, so a payload the planner
+// refuses contributes no member here for the same reason it would in
+// production, not because a fixture said so.
+const putPacksMock = mock(
+  async ({
+    packs,
+  }: Parameters<typeof putCorpusPacks>[0]): Promise<
+    Result<void, CorpusPackError>
+  > => {
+    for (const pack of packs) {
+      transferredPacks.push(pack);
+      events.push(`corpus-pack:${packedDocumentIds(pack).join(",")}`);
     }
-    events.push(`corpus-write:${input.documentId}`);
-    return await Promise.resolve({ type: "written", written: plan.written });
+    return await Promise.resolve(Result.ok(undefined));
   },
 );
 
-type CorpusDocumentKeys = {
-  textKey: string | null;
-  sectionsKey: string | null;
-  astKey: string | null;
+/** A transfer that fails the way an unreachable bucket does. */
+const failTheTransfer = () => {
+  putPacksMock.mockImplementationOnce(async () => {
+    events.push("corpus-pack-failed");
+    return await Promise.resolve(
+      Result.err(new CorpusPackError({ message: "bucket unreachable" })),
+    );
+  });
 };
 
-const deletedKeys: CorpusDocumentKeys[] = [];
-
-const deleteCorpusDocumentMock = mock(
-  async (keys: CorpusDocumentKeys): Promise<void> => {
-    events.push("corpus-delete");
-    deletedKeys.push(keys);
-    await Promise.resolve();
-  },
-);
+/** Row updates that repointed the mirror at durable payloads. */
+const settledDecisionRows = () =>
+  updatedDecisionRows.filter(
+    (updated) => updated["corpusMirrorStatus"] === "settled",
+  );
 
 const corpusDependencies = {
   mode: "canonical",
-  write: writeCorpusDocumentMock,
+  layout: "packs",
+  putPacks: putPacksMock,
 } satisfies CaseLawCorpusDependencies;
 
 const processDecision = async (
@@ -124,14 +155,13 @@ afterEach(() => {
   events.length = 0;
   insertedRows.length = 0;
   updatedDecisionRows.length = 0;
-  deletedKeys.length = 0;
+  transferredPacks.length = 0;
   persistedCursor = undefined;
   rowWrite = "ok";
   existingDecision = undefined;
   mirrorSettlementApplied = true;
   intentStatus = "active";
-  writeCorpusDocumentMock.mockClear();
-  deleteCorpusDocumentMock.mockClear();
+  putPacksMock.mockClear();
 });
 
 const decision: IngestionResult = {
@@ -147,9 +177,10 @@ const decision: IngestionResult = {
 };
 
 /**
- * The write the settle path records for `decision`'s canonical payload,
- * derived with the same functions the pipeline uses so the fixture cannot
- * drift from what production would store.
+ * The object-keyed write a row settled before packs existed, and the content
+ * hash `decision`'s payload settles under either way. Derived with the same
+ * functions the pipeline uses so the fixture cannot drift from what
+ * production would store.
  */
 const recordedCorpusWrite = (documentId: string) => {
   const contentHash = realCorpusStorage.corpusContentHash(
@@ -165,10 +196,15 @@ const recordedCorpusWrite = (documentId: string) => {
   };
 };
 
+/** The decision this pass works on: the row it inserted, or the one it found. */
+const processedDecisionId = () =>
+  insertedRows.at(-1)?.["id"] ?? existingDecision?.["id"];
+
 /**
  * Minimal transaction double covering the insert path: the dedup lookup,
- * the slug-collision scan, the decision insert, and the source-cursor
- * update the pipeline runs at the end of a cycle.
+ * the slug-collision scan, the decision insert, the batch's reservation of
+ * every decision it packs, and the source-cursor update the pipeline runs at
+ * the end of a cycle.
  */
 const scopedDb: ScopedDb = async (callback) => {
   const tx = {
@@ -198,6 +234,11 @@ const scopedDb: ScopedDb = async (callback) => {
           if (table === caseLawCorpusUploadIntents) {
             return [{ status: intentStatus }];
           }
+          if ("id" in selection && "redactedAt" in selection) {
+            // The batch reserves by locking every decision it packs and
+            // keeping the ones no redaction has claimed.
+            return [{ id: processedDecisionId(), redactedAt: null }];
+          }
           if ("redactedAt" in selection) {
             return [{ redactedAt: null }];
           }
@@ -212,18 +253,23 @@ const scopedDb: ScopedDb = async (callback) => {
           }),
           where: () => ({
             limit: rows,
-            for: () => ({ limit: rows }),
+            // The batch's reservation awaits `.for("share")` for the whole
+            // page; the single-row fences chain `.limit(1)` onto it.
+            for: (): unknown => Object.assign(rows(), { limit: rows }),
           }),
         };
       },
     }),
     insert: (table: unknown) => ({
-      values: (values: Record<string, unknown>) => {
+      // A batch reserves its whole page in one statement, so the values are
+      // a list wherever more than one decision contributes.
+      values: (values: Record<string, unknown> | Record<string, unknown>[]) => {
+        const inserted = Array.isArray(values) ? values : [values];
         const outcome = table === caseLawDecisions ? rowWrite : "ok";
         if (outcome === "ok") {
           if (table === caseLawDecisions) {
             events.push("row-insert");
-            insertedRows.push(values);
+            insertedRows.push(...inserted);
           } else if (table === caseLawCorpusUploadIntents) {
             events.push("intent-reserve");
           }
@@ -243,7 +289,12 @@ const scopedDb: ScopedDb = async (callback) => {
               new DatabaseError({ message: "decision insert rejected" }),
             );
           }
-          return await Promise.resolve([{ id: values["id"] }]);
+          return await Promise.resolve(
+            inserted.map((row) => ({
+              id: row["id"],
+              decisionId: row["decisionId"],
+            })),
+          );
         };
         return {
           onConflictDoNothing: () => ({ returning }),
@@ -310,11 +361,12 @@ describe("processDecision — canonical storage mode", () => {
     expect(events.slice(0, 3)).toEqual([
       "row-insert",
       "intent-reserve",
-      expect.stringContaining("corpus-write:"),
+      expect.stringContaining("corpus-pack:"),
     ]);
 
     const [row] = insertedRows;
-    expect(events[2]).toBe(`corpus-write:${String(row?.["id"])}`);
+    const decisionId = String(row?.["id"]);
+    expect(events[2]).toBe(`corpus-pack:${decisionId}`);
     expect(row).toMatchObject({
       fulltext: decision.fulltext,
       corpusMirrorStatus: "pending",
@@ -323,25 +375,47 @@ describe("processDecision — canonical storage mode", () => {
       astS3Key: null,
       contentHash: null,
     });
-    const written = recordedCorpusWrite(String(row?.["id"]));
-    expect(updatedDecisionRows.at(-1)).toMatchObject({
+
+    // One pack left the process, and it carries this decision's three
+    // payloads — the transfer a page shares, here with a page of one.
+    expect(transferredPacks).toHaveLength(1);
+    const pack = transferredPacks.at(0) ?? expect.unreachable();
+    const footer = unwrapPackFooter(await decodePackFooter(pack.bytes));
+    expect(
+      footer.members.map(({ documentId, kind }) => ({ documentId, kind })),
+    ).toEqual([
+      { documentId: decisionId, kind: "text" },
+      { documentId: decisionId, kind: "sections" },
+      { documentId: decisionId, kind: "ast" },
+    ]);
+
+    // One settlement, and it is the last thing to touch the row: the
+    // negative form of this assertion is what the failure cases below use.
+    expect(settledDecisionRows()).toHaveLength(1);
+    const settled = updatedDecisionRows.at(-1) ?? expect.unreachable();
+    expect(settled).toMatchObject({
       fulltext: null,
       sections: null,
       documentAst: null,
-      textS3Key: written.textKey,
-      normalizedS3Key: written.sectionsKey,
-      astS3Key: written.astKey,
-      contentHash: written.contentHash,
+      contentHash: recordedCorpusWrite(decisionId).contentHash,
       corpusMirrorStatus: "settled",
     });
+    // The row addresses members of that pack, not keys of its own.
+    for (const column of [
+      "textS3Key",
+      "normalizedS3Key",
+      "astS3Key",
+    ] as const) {
+      expect(parseCorpusLocation(String(settled[column]))).toMatchObject({
+        type: "packed",
+        packKey: pack.packKey,
+      });
+    }
     expect(events.at(-1)).toBe("intent-delete");
   });
 
   test("keeps a readable pending row when the corpus write fails", async () => {
-    writeCorpusDocumentMock.mockImplementationOnce(async () => {
-      events.push("corpus-write-failed");
-      return await Promise.reject(new Error("bucket unreachable"));
-    });
+    failTheTransfer();
 
     const outcome = await processDecision({
       input: decision,
@@ -356,7 +430,10 @@ describe("processDecision — canonical storage mode", () => {
       inserted: true,
       reason: "corpus-write",
     });
-    expect(events).toContain("corpus-write-failed");
+    expect(events).toContain("corpus-pack-failed");
+    // Nothing became durable, so nothing may point at it.
+    expect(transferredPacks).toEqual([]);
+    expect(settledDecisionRows()).toEqual([]);
     expect(insertedRows).toHaveLength(1);
     expect(insertedRows.at(0)).toMatchObject({
       fulltext: decision.fulltext,
@@ -410,7 +487,11 @@ describe("processDecision — canonical storage mode", () => {
       inserted: true,
       searchVectorFailed: false,
     });
-    expect(writeCorpusDocumentMock).toHaveBeenCalledTimes(1);
+    // One pack, carrying the repaired decision's members and nothing else.
+    expect(transferredPacks).toHaveLength(1);
+    expect(
+      packedDocumentIds(transferredPacks.at(0) ?? expect.unreachable()),
+    ).toEqual([decisionId]);
     expect(updatedDecisionRows[0]).toMatchObject({
       fulltext: "Recovered decision text.",
       sourceHash: "recovered-detail-hash",
@@ -426,11 +507,10 @@ describe("processDecision — canonical storage mode", () => {
     });
   });
 
-  test("keeps the objects when the failed write was a refresh", async () => {
-    // A refresh derives the same content-addressed keys from the existing
-    // id, so when only metadata or the raw source moved they are the
-    // objects the live row already points at — and its payload columns are
-    // NULL. Deleting them would empty a served decision.
+  test("keeps the served payload when the failed write was a refresh", async () => {
+    // A refresh of a row whose payload columns are NULL has nothing to fall
+    // back on: the decision is served from whatever its pointers address.
+    // A transfer that failed must therefore leave those pointers alone.
     existingDecision = {
       id: createSafeId<"caseLawDecision">(),
       metadata: {},
@@ -442,10 +522,7 @@ describe("processDecision — canonical storage mode", () => {
       sourceRawS3Key: null,
       sourceRawContentType: null,
     };
-    writeCorpusDocumentMock.mockImplementationOnce(async () => {
-      events.push("corpus-write-failed");
-      return await Promise.reject(new Error("bucket unreachable"));
-    });
+    failTheTransfer();
 
     const outcome = await processDecision({
       input: decision,
@@ -459,8 +536,9 @@ describe("processDecision — canonical storage mode", () => {
       status: "retryable",
       reason: "corpus-write",
     });
-    expect(events).toContain("corpus-write-failed");
-    expect(deleteCorpusDocumentMock).not.toHaveBeenCalled();
+    expect(events).toContain("corpus-pack-failed");
+    expect(transferredPacks).toEqual([]);
+    expect(settledDecisionRows()).toEqual([]);
   });
 
   test("retries when an expired upload intent was reclaimed", async () => {
@@ -491,7 +569,10 @@ describe("processDecision — canonical storage mode", () => {
       inserted: false,
       reason: "corpus-write",
     });
-    expect(writeCorpusDocumentMock).not.toHaveBeenCalled();
+    // The pack goes out before any row settles, so a reclaimed reservation
+    // is caught where it matters: the row is never repointed at members this
+    // pass no longer owns, and the decision comes back for the next batch.
+    expect(settledDecisionRows()).toEqual([]);
   });
 
   test("stores nothing and settles null pointers for a metadata-only decision", async () => {
@@ -511,8 +592,8 @@ describe("processDecision — canonical storage mode", () => {
       inserted: true,
       searchVectorFailed: false,
     });
-    expect(events).toContain("corpus-skip:skipped-empty");
-    expect(events.filter((e) => e.startsWith("corpus-write:"))).toHaveLength(0);
+    // An empty payload contributes no member, so the batch transfers nothing.
+    expect(transferredPacks).toEqual([]);
     const settled = updatedDecisionRows.at(-1);
     expect(settled).toMatchObject({
       corpusMirrorStatus: "settled",
@@ -562,8 +643,8 @@ describe("processDecision — canonical storage mode", () => {
       inserted: true,
       searchVectorFailed: false,
     });
-    expect(events).toContain("corpus-skip:skipped-unchanged");
-    expect(events.filter((e) => e.startsWith("corpus-write:"))).toHaveLength(0);
+    // An unchanged payload contributes no member either.
+    expect(transferredPacks).toEqual([]);
     // The mirror settles back onto the pointers it already held.
     expect(updatedDecisionRows.at(-1)).toMatchObject({
       corpusMirrorStatus: "settled",
@@ -609,24 +690,24 @@ describe("processDecision — canonical storage mode", () => {
       inserted: true,
       searchVectorFailed: false,
     });
-    // A pending row records no write, so this pass must upload and settle.
-    expect(events.filter((e) => e.startsWith("corpus-write:"))).toHaveLength(1);
-    expect(updatedDecisionRows.at(-1)).toMatchObject({
-      corpusMirrorStatus: "settled",
-    });
+    // A pending row records no write, so this pass must pack and settle.
+    expect(transferredPacks).toHaveLength(1);
+    const settled = updatedDecisionRows.at(-1) ?? expect.unreachable();
+    expect(settled).toMatchObject({ corpusMirrorStatus: "settled" });
 
-    // The next crawl pass sees the row the settle produced; with the source
-    // unchanged it advances the watermark and touches no corpus state.
-    const recorded = recordedCorpusWrite(decisionId);
+    // The next crawl pass sees the row the settle produced — the addresses
+    // it wrote, not a recomputation of them; with the source unchanged it
+    // advances the watermark and touches no corpus state.
     existingDecision = {
       ...existingDecision,
       corpusMirrorStatus: "settled",
-      contentHash: recorded.contentHash,
-      textS3Key: recorded.textKey,
-      normalizedS3Key: recorded.sectionsKey,
-      astS3Key: recorded.astKey,
+      contentHash: settled["contentHash"],
+      textS3Key: settled["textS3Key"],
+      normalizedS3Key: settled["normalizedS3Key"],
+      astS3Key: settled["astS3Key"],
     };
     events.length = 0;
+    transferredPacks.length = 0;
 
     const second = await processDecision({
       input: decision,
@@ -642,6 +723,7 @@ describe("processDecision — canonical storage mode", () => {
       searchVectorFailed: false,
     });
     expect(events.filter((e) => e.startsWith("corpus-"))).toHaveLength(0);
+    expect(transferredPacks).toEqual([]);
     expect(events).not.toContain("intent-reserve");
   });
 
@@ -667,8 +749,7 @@ describe("processDecision — canonical storage mode", () => {
     // The pipeline's halt logic branches on the error's own type, so the
     // rethrow must surface the driver error, not a Result wrapper.
     expect(rejection).toBeInstanceOf(DatabaseError);
-    expect(writeCorpusDocumentMock).not.toHaveBeenCalled();
-    expect(deleteCorpusDocumentMock).not.toHaveBeenCalled();
+    expect(putPacksMock).not.toHaveBeenCalled();
     expect(insertedRows).toHaveLength(0);
   });
 
@@ -678,16 +759,13 @@ describe("processDecision — canonical storage mode", () => {
     const rejection = await rejectionFrom();
 
     expect(rejection).toBeInstanceOf(TimeoutError);
-    expect(writeCorpusDocumentMock).not.toHaveBeenCalled();
-    expect(deleteCorpusDocumentMock).not.toHaveBeenCalled();
+    expect(putPacksMock).not.toHaveBeenCalled();
   });
 });
 
 describe("runIngestionPipeline — canonical corpus write failure", () => {
   test("holds the cursor so the next cycle retries the decision", async () => {
-    writeCorpusDocumentMock.mockImplementationOnce(
-      async () => await Promise.reject(new Error("bucket unreachable")),
-    );
+    failTheTransfer();
 
     const source = caseLawSourceRow({ name: "Canonical source" });
 

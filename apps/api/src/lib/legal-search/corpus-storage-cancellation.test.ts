@@ -1,12 +1,14 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { envBase } from "@/api/env-base";
+import { createSafeId } from "@/api/lib/branded-types";
 import {
   corpusContentHash,
   corpusKeys,
   deleteCorpusDocument,
   writeCorpusDocument,
 } from "@/api/lib/legal-search/corpus-storage";
+import type { CorpusTombstoneEntry } from "@/api/lib/legal-search/corpus-tombstones";
 import { EMPTY_AST } from "@/api/lib/legal-search/document-types";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3, FakeS3Method } from "@/api/tests/helpers/fake-s3";
@@ -70,6 +72,19 @@ const deletedKeys = {
   textKey: "corpus/text",
   sectionsKey: "corpus/sections",
   astKey: "corpus/ast",
+};
+
+// Every key above is a standalone object, so the erasure has nothing to
+// tombstone; the writer is here because a caller must always name where a
+// denial would be written.
+const erasure = {
+  decisionId: createSafeId<"caseLawDecision">(),
+  tombstone: async (
+    entries: readonly CorpusTombstoneEntry[],
+  ): Promise<void> => {
+    expect(entries).toEqual([]);
+    await Promise.resolve();
+  },
 };
 
 // The store holds every served response, so the group's three requests are
@@ -140,6 +155,7 @@ describe("corpus object cancellation", () => {
     }
     const controller = new AbortController();
     const pending = deleteCorpusDocument(deletedKeys, {
+      ...erasure,
       signal: controller.signal,
     }).then(
       () => null,
@@ -171,7 +187,7 @@ describe("corpus object cancellation", () => {
       key: deletedKeys.textKey,
     });
 
-    const rejection = await deleteCorpusDocument(deletedKeys).then(
+    const rejection = await deleteCorpusDocument(deletedKeys, erasure).then(
       () => null,
       (error: unknown) => error,
     );

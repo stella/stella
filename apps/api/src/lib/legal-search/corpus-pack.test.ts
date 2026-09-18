@@ -1,29 +1,33 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { zstdCompress, zstdDecompressToString } from "@/api/lib/compression";
+import { CorpusMemberDigestMismatchError } from "@/api/lib/errors/tagged-errors";
 import { formatCorpusLocation } from "@/api/lib/legal-search/corpus-location";
 import {
   CorpusPackError,
   decodePackFooter,
   encodePack,
-  newCorpusPackId,
+  packJurisdictionPrefix,
+  packKeyForMembers,
   PACK_FORMAT_VERSION,
   PACK_MAGIC,
-  packKey,
-  writeCorpusPack,
+  corpusMemberDigest,
 } from "@/api/lib/legal-search/corpus-pack";
-import type { PackMemberInput } from "@/api/lib/legal-search/corpus-pack";
+import type {
+  PackFooter,
+  PackFooterMember,
+  PackMemberKind,
+  PackMemberInput,
+} from "@/api/lib/legal-search/corpus-pack";
+import {
+  CORPUS_TRANSFER_MAX_BYTES,
+  readCorpusBytesAt,
+} from "@/api/lib/legal-search/corpus-storage";
 
-const sha256 = (bytes: Uint8Array): string => {
-  const hasher = new Bun.CryptoHasher("sha256");
-  hasher.update(bytes);
-  return hasher.digest("hex");
-};
-
-const PACK_KEY = packKey({
-  jurisdiction: "SVK",
-  packId: "01912f6a-4b0c-7d3e-9a1b-2c3d4e5f6a7b",
-});
+const JURISDICTION = "SVK";
+const DOCUMENT_ID = "0d2f4a5e-9c1b-4c62-8b1a-3f6f2f8f9e10";
+const CONTENT_HASH = "a".repeat(64);
 
 const payloads = {
   text: "Rozsudok v mene Slovenskej republiky.",
@@ -33,26 +37,22 @@ const payloads = {
   ast: JSON.stringify(null),
 } as const;
 
-const members: PackMemberInput[] = [
-  {
-    kind: "text",
-    documentId: "0d2f4a5e-9c1b-4c62-8b1a-3f6f2f8f9e10",
-    contentHash: "a".repeat(64),
-    bytes: zstdCompress(payloads.text),
-  },
-  {
-    kind: "sections",
-    documentId: "0d2f4a5e-9c1b-4c62-8b1a-3f6f2f8f9e10",
-    contentHash: "a".repeat(64),
-    bytes: zstdCompress(payloads.sections),
-  },
-  {
-    kind: "ast",
-    documentId: "0d2f4a5e-9c1b-4c62-8b1a-3f6f2f8f9e10",
-    contentHash: "a".repeat(64),
-    bytes: zstdCompress(payloads.ast),
-  },
-];
+/** Each fixture pairs the member as written with what its bytes decode to. */
+const fixtures = [
+  { kind: "text", decodes: payloads.text },
+  { kind: "sections", decodes: payloads.sections },
+  { kind: "ast", decodes: payloads.ast },
+] as const satisfies readonly {
+  kind: PackMemberInput["kind"];
+  decodes: string;
+}[];
+
+const members: PackMemberInput[] = fixtures.map(({ kind, decodes }) => ({
+  kind,
+  documentId: DOCUMENT_ID,
+  contentHash: CONTENT_HASH,
+  bytes: zstdCompress(decodes),
+}));
 
 const trailerOf = (bytes: Uint8Array) => ({
   magic: new TextDecoder().decode(bytes.subarray(bytes.byteLength - 8)),
@@ -63,32 +63,100 @@ const trailerOf = (bytes: Uint8Array) => ({
   ).getBigUint64(0, true),
 });
 
+/** A pack laid out by hand, so a test can write a footer the encoder never would. */
+const packAround = (
+  footerValue: unknown,
+  payload: Uint8Array = new Uint8Array(),
+): Uint8Array => {
+  const footer = zstdCompress(JSON.stringify(footerValue));
+  const bytes = new Uint8Array(payload.byteLength + footer.byteLength + 16);
+  bytes.set(payload, 0);
+  bytes.set(footer, payload.byteLength);
+  new DataView(
+    bytes.buffer,
+    payload.byteLength + footer.byteLength,
+    8,
+  ).setBigUint64(0, BigInt(footer.byteLength), true);
+  bytes.set(
+    new TextEncoder().encode(PACK_MAGIC),
+    payload.byteLength + footer.byteLength + 8,
+  );
+  return bytes;
+};
+
+const noTombstones = async (): Promise<ReadonlySet<string>> =>
+  await Promise.resolve(new Set<string>());
+
+const rangeOver =
+  (pack: Uint8Array) =>
+  async ({
+    offset,
+    length,
+  }: {
+    key: string;
+    offset: number;
+    length: number;
+  }): Promise<Uint8Array> =>
+    await Promise.resolve(pack.subarray(offset, offset + length));
+
+/** A footer that does not decode fails the test, not a case in it. */
+const unwrapFooter = (
+  decoded: Awaited<ReturnType<typeof decodePackFooter>>,
+): PackFooter => {
+  if (Result.isError(decoded)) {
+    throw decoded.error;
+  }
+  return decoded.value;
+};
+
+const readMember = async (
+  pack: Uint8Array,
+  member: PackFooterMember,
+  packKey: string,
+): Promise<Uint8Array> =>
+  await readCorpusBytesAt({
+    location: {
+      type: "packed",
+      packKey,
+      offset: member.offset,
+      length: member.length,
+      sha256: member.sha256,
+    },
+    maxBytes: CORPUS_TRANSFER_MAX_BYTES,
+    signal: new AbortController().signal,
+    readObject: async () =>
+      await Promise.reject(new Error("object read must not run")),
+    readRange: rangeOver(pack),
+    readTombstones: noTombstones,
+  });
+
 describe("corpus pack round-trip", () => {
   test("each member's range slice is the standalone object's bytes", async () => {
-    const { bytes, entries } = await encodePack({
-      packKey: PACK_KEY,
+    const { packKey, bytes, entries } = await encodePack({
+      jurisdiction: JURISDICTION,
       members,
     });
 
     expect(entries).toHaveLength(members.length);
     for (const [index, entry] of entries.entries()) {
       const input = members[index];
-      if (input === undefined) {
+      const fixture = fixtures[index];
+      if (input === undefined || fixture === undefined) {
         throw new Error("member index out of range");
       }
       const { offset, length } = entry.location;
       const slice = bytes.subarray(offset, offset + length);
-      expect(entry.location.packKey).toBe(PACK_KEY);
+      expect(entry.location.packKey).toBe(packKey);
       expect(entry.member).toEqual({
         offset,
         length,
         kind: input.kind,
         documentId: input.documentId,
         contentHash: input.contentHash,
-        sha256: sha256(input.bytes),
+        sha256: corpusMemberDigest(input.bytes),
       });
       expect([...slice]).toEqual([...input.bytes]);
-      expect(zstdDecompressToString(slice)).toBe(payloads[input.kind]);
+      expect(zstdDecompressToString(slice)).toBe(fixture.decodes);
     }
     // Members are laid out contiguously from byte zero.
     const expectedOffsets: number[] = [];
@@ -104,7 +172,7 @@ describe("corpus pack round-trip", () => {
 
   test("the footer decodes to the entries the encoder reported", async () => {
     const { bytes, entries } = await encodePack({
-      packKey: PACK_KEY,
+      jurisdiction: JURISDICTION,
       members,
     });
 
@@ -112,27 +180,70 @@ describe("corpus pack round-trip", () => {
     expect(magic).toBe(PACK_MAGIC);
     expect(footerLength).toBeGreaterThan(0n);
 
-    const footer = await decodePackFooter(bytes);
+    const footer = unwrapFooter(await decodePackFooter(bytes));
     expect(footer.version).toBe(PACK_FORMAT_VERSION);
     expect(footer.members).toEqual(entries.map(({ member }) => member));
   });
 
   test("an address formatted from an entry names the member's range", async () => {
-    const { entries } = await encodePack({ packKey: PACK_KEY, members });
+    const { packKey, entries } = await encodePack({
+      jurisdiction: JURISDICTION,
+      members,
+    });
     const first = entries.at(0);
     if (first === undefined) {
       throw new Error("pack has no entries");
     }
 
     expect(formatCorpusLocation(first.location)).toBe(
-      `pack:${PACK_KEY}@0+${first.member.length}`,
+      `pack:${packKey}@0+${first.member.length}#${first.member.sha256}`,
     );
+  });
+
+  test("a member whose stored bytes drifted from the footer digest is refused on read", async () => {
+    const { packKey, bytes } = await encodePack({
+      jurisdiction: JURISDICTION,
+      members,
+    });
+    const footer = unwrapFooter(await decodePackFooter(bytes));
+    const member = footer.members.at(0);
+    if (member === undefined) {
+      throw new Error("pack has no members");
+    }
+    const corrupt = bytes.slice();
+    const flipped = corrupt[member.offset];
+    if (flipped === undefined) {
+      throw new Error("member offset outside the pack");
+    }
+    // A different byte, whatever the original was: the digest check is
+    // what has to notice, not the arithmetic that produced it.
+    corrupt[member.offset] = flipped === 0 ? 1 : 0;
+    // The fault must reach the check: the byte really changed, and the
+    // range still returns the declared length, so only the digest can tell.
+    expect(
+      corpusMemberDigest(
+        corrupt.subarray(member.offset, member.offset + member.length),
+      ),
+    ).not.toBe(member.sha256);
+
+    const rejection: unknown = await readMember(corrupt, member, packKey).then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(rejection).toBeInstanceOf(CorpusMemberDigestMismatchError);
+    expect(rejection).toMatchObject({
+      digest: corpusMemberDigest(
+        corrupt.subarray(member.offset, member.offset + member.length),
+      ),
+      location: `pack:${packKey}@${member.offset}+${member.length}#${member.sha256}`,
+    });
   });
 
   test("an empty member list is refused", async () => {
     let captured: unknown;
     try {
-      await encodePack({ packKey: PACK_KEY, members: [] });
+      await encodePack({ jurisdiction: JURISDICTION, members: [] });
     } catch (error) {
       captured = error;
     }
@@ -147,7 +258,7 @@ describe("corpus pack round-trip", () => {
       throw new Error("fixture has no members");
     }
     const captured: unknown = await encodePack({
-      packKey: PACK_KEY,
+      jurisdiction: JURISDICTION,
       members: [first, { ...first, kind: "ast", bytes: new Uint8Array() }],
     }).then(
       () => null,
@@ -160,15 +271,66 @@ describe("corpus pack round-trip", () => {
   });
 });
 
+describe("content-addressed pack keys", () => {
+  test("the same members encode to the same key and the same bytes", async () => {
+    const first = await encodePack({ jurisdiction: JURISDICTION, members });
+    const second = await encodePack({ jurisdiction: JURISDICTION, members });
+
+    expect(second.packKey).toBe(first.packKey);
+    expect([...second.bytes]).toEqual([...first.bytes]);
+    expect(second.entries).toEqual(first.entries);
+  });
+
+  test("a changed member moves the pack to a different key", async () => {
+    const { packKey } = await encodePack({
+      jurisdiction: JURISDICTION,
+      members,
+    });
+    const [text, ...rest] = members;
+    if (text === undefined) {
+      throw new Error("fixture has no members");
+    }
+    const { packKey: changed } = await encodePack({
+      jurisdiction: JURISDICTION,
+      members: [
+        { ...text, bytes: zstdCompress(`${payloads.text} Dodatok.`) },
+        ...rest,
+      ],
+    });
+
+    expect(changed).not.toBe(packKey);
+  });
+
+  test("a jurisdiction's packs land under its partition", async () => {
+    const svk = await encodePack({ jurisdiction: "SVK", members });
+    const cze = await encodePack({ jurisdiction: "CZE", members });
+
+    expect(svk.packKey.startsWith(packJurisdictionPrefix("SVK"))).toBe(true);
+    expect(cze.packKey.startsWith(packJurisdictionPrefix("CZE"))).toBe(true);
+    // Same members, different partition: the key cannot be shared across
+    // jurisdictions, or a partition prefix would stop answering which
+    // jurisdiction a stored address belongs to.
+    expect(cze.packKey).not.toBe(svk.packKey);
+  });
+
+  test("a key needs at least one member", () => {
+    expect(() =>
+      packKeyForMembers({ jurisdiction: JURISDICTION, members: [] }),
+    ).toThrow("at least one member");
+  });
+});
+
 describe("decodePackFooter refuses malformed packs", () => {
-  const rejection = async (bytes: Uint8Array): Promise<unknown> =>
-    await decodePackFooter(bytes).then(
-      () => null,
-      (error: unknown) => error,
-    );
+  const rejection = async (bytes: Uint8Array): Promise<unknown> => {
+    const decoded = await decodePackFooter(bytes);
+    return Result.isError(decoded) ? decoded.error : null;
+  };
 
   test("wrong magic", async () => {
-    const { bytes } = await encodePack({ packKey: PACK_KEY, members });
+    const { bytes } = await encodePack({
+      jurisdiction: JURISDICTION,
+      members,
+    });
     const corrupt = bytes.slice();
     corrupt.set(new TextEncoder().encode("NOTAPACK"), corrupt.byteLength - 8);
 
@@ -178,7 +340,10 @@ describe("decodePackFooter refuses malformed packs", () => {
   });
 
   test("a footer length that does not fit the object", async () => {
-    const { bytes } = await encodePack({ packKey: PACK_KEY, members });
+    const { bytes } = await encodePack({
+      jurisdiction: JURISDICTION,
+      members,
+    });
     const corrupt = bytes.slice();
     new DataView(
       corrupt.buffer,
@@ -194,7 +359,10 @@ describe("decodePackFooter refuses malformed packs", () => {
   });
 
   test("a zero footer length", async () => {
-    const { bytes } = await encodePack({ packKey: PACK_KEY, members });
+    const { bytes } = await encodePack({
+      jurisdiction: JURISDICTION,
+      members,
+    });
     const corrupt = bytes.slice();
     new DataView(
       corrupt.buffer,
@@ -206,19 +374,9 @@ describe("decodePackFooter refuses malformed packs", () => {
   });
 
   test("an unsupported footer version", async () => {
-    const footer = zstdCompress(
-      JSON.stringify({ version: PACK_FORMAT_VERSION + 1, members: [] }),
+    const error = await rejection(
+      packAround({ version: PACK_FORMAT_VERSION + 1, members: [] }),
     );
-    const bytes = new Uint8Array(footer.byteLength + 16);
-    bytes.set(footer, 0);
-    new DataView(bytes.buffer, footer.byteLength, 8).setBigUint64(
-      0,
-      BigInt(footer.byteLength),
-      true,
-    );
-    bytes.set(new TextEncoder().encode(PACK_MAGIC), footer.byteLength + 8);
-
-    const error = await rejection(bytes);
     expect(error).toBeInstanceOf(CorpusPackError);
     expect(error).toMatchObject({
       message: expect.stringContaining("malformed"),
@@ -240,8 +398,9 @@ describe("decodePackFooter refuses malformed packs", () => {
   });
 
   test("a member that points outside the payload region", async () => {
-    const footer = zstdCompress(
-      JSON.stringify({
+    // No payload bytes at all, so a member of length 1 cannot fit.
+    const error = await rejection(
+      packAround({
         version: PACK_FORMAT_VERSION,
         members: [
           {
@@ -255,17 +414,6 @@ describe("decodePackFooter refuses malformed packs", () => {
         ],
       }),
     );
-    // No payload bytes at all, so a member of length 1 cannot fit.
-    const bytes = new Uint8Array(footer.byteLength + 16);
-    bytes.set(footer, 0);
-    new DataView(bytes.buffer, footer.byteLength, 8).setBigUint64(
-      0,
-      BigInt(footer.byteLength),
-      true,
-    );
-    bytes.set(new TextEncoder().encode(PACK_MAGIC), footer.byteLength + 8);
-
-    const error = await rejection(bytes);
     expect(error).toBeInstanceOf(CorpusPackError);
     expect(error).toMatchObject({
       message: expect.stringContaining("outside the payload region"),
@@ -303,8 +451,8 @@ describe("decodePackFooter refuses malformed packs", () => {
   });
 
   test("a footer member of zero length", async () => {
-    const footer = zstdCompress(
-      JSON.stringify({
+    const error = await rejection(
+      packAround({
         version: PACK_FORMAT_VERSION,
         members: [
           {
@@ -318,16 +466,6 @@ describe("decodePackFooter refuses malformed packs", () => {
         ],
       }),
     );
-    const bytes = new Uint8Array(footer.byteLength + 16);
-    bytes.set(footer, 0);
-    new DataView(bytes.buffer, footer.byteLength, 8).setBigUint64(
-      0,
-      BigInt(footer.byteLength),
-      true,
-    );
-    bytes.set(new TextEncoder().encode(PACK_MAGIC), footer.byteLength + 8);
-
-    const error = await rejection(bytes);
     expect(error).toBeInstanceOf(CorpusPackError);
     expect(error).toMatchObject({
       message: expect.stringContaining("malformed"),
@@ -335,33 +473,59 @@ describe("decodePackFooter refuses malformed packs", () => {
   });
 });
 
-describe("writeCorpusPack", () => {
-  test("PUTs the encoded pack once under the derived key", async () => {
-    const puts: { key: string; bytes: Uint8Array }[] = [];
-    const packId = newCorpusPackId();
+describe("pack identity names one layout and one owner set", () => {
+  const memberOf = (
+    documentId: string,
+    kind: PackMemberKind,
+    text: string,
+  ) => ({
+    documentId,
+    kind,
+    contentHash: "c".repeat(64),
+    bytes: new TextEncoder().encode(text),
+  });
 
-    const { packKey: key, entries } = await writeCorpusPack({
-      jurisdiction: "CZE",
-      packId,
-      members,
-      put: async (putKey, bytes) => {
-        puts.push({ key: putKey, bytes });
-        await Promise.resolve();
-      },
+  test("the same members in a different order land at the same addresses", async () => {
+    const one = memberOf("doc-a", "text", "Rozsudok A.");
+    const two = memberOf("doc-b", "text", "Rozsudok B.");
+    const three = memberOf("doc-b", "sections", "[]");
+
+    const forward = await encodePack({
+      jurisdiction: "SVK",
+      members: [one, two, three],
+    });
+    const shuffled = await encodePack({
+      jurisdiction: "SVK",
+      members: [three, one, two],
     });
 
-    expect(key).toBe(`legal-corpus/packs/jurisdiction=CZE/${packId}.pack`);
-    expect(puts).toHaveLength(1);
-    const put = puts.at(0);
-    if (put === undefined) {
-      throw new Error("no PUT recorded");
-    }
-    expect(put.key).toBe(key);
-    expect((await decodePackFooter(put.bytes)).members).toEqual(
-      entries.map(({ member }) => member),
+    // A retried page enqueues its decisions in whatever order it processes
+    // them; the addresses it settles must not depend on that, or the retry
+    // points rows at ranges the object under that key does not hold.
+    expect(shuffled.packKey).toBe(forward.packKey);
+    expect(shuffled.entries.map(({ location }) => location)).toEqual(
+      forward.entries.map(({ location }) => location),
     );
-    expect(entries.every(({ location }) => location.packKey === key)).toBe(
-      true,
+    expect(shuffled.bytes).toEqual(forward.bytes);
+  });
+
+  test("two documents with identical payloads never share an address", async () => {
+    const payload = "Rozsudok v mene Slovenskej republiky.";
+    const first = await encodePack({
+      jurisdiction: "SVK",
+      members: [memberOf("doc-a", "text", payload)],
+    });
+    const second = await encodePack({
+      jurisdiction: "SVK",
+      members: [memberOf("doc-b", "text", payload)],
+    });
+
+    // Byte-identical payloads are common (an empty section list, a short
+    // ruling). If they shared a key and an offset, erasing one document
+    // would deny the other document's reads.
+    expect(second.packKey).not.toBe(first.packKey);
+    expect(second.entries.at(0)?.location).not.toEqual(
+      first.entries.at(0)?.location,
     );
   });
 });

@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
 import {
-  CorpusObjectRetainedError,
   eraseCancelledIntentObjects,
   eraseCorpusObjects,
 } from "@/api/handlers/case-law/erasure";
@@ -9,60 +8,79 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { formatCorpusLocation } from "@/api/lib/legal-search/corpus-location";
 import type { PackedCorpusLocation } from "@/api/lib/legal-search/corpus-location";
 import type { CorpusDeleteOutcome } from "@/api/lib/legal-search/corpus-storage";
+import type { CorpusTombstoneEntry } from "@/api/lib/legal-search/corpus-tombstones";
 
+const decisionId = createSafeId<"caseLawDecision">();
 const objectKey =
   "legal-corpus/documents/jurisdiction=SVK/d/h/sections.json.zst";
 const packedLocation: PackedCorpusLocation = {
   type: "packed",
-  packKey: "legal-corpus/packs/jurisdiction=SVK/01912f6a.pack",
+  packKey: "legal-corpus/packs/jurisdiction=SVK/01912f6a.stlpack",
   offset: 128,
   length: 64,
+  sha256: "a".repeat(64),
 };
 const packedAddress = formatCorpusLocation(packedLocation);
 const keys = { textKey: packedAddress, sectionsKey: objectKey, astKey: null };
+
+const recordingTombstone = () => {
+  const written: CorpusTombstoneEntry[] = [];
+  return {
+    written,
+    tombstone: async (entries: readonly CorpusTombstoneEntry[]) => {
+      written.push(...entries);
+      await Promise.resolve();
+    },
+  };
+};
 
 const deleteReporting =
   (outcome: CorpusDeleteOutcome) => async (): Promise<CorpusDeleteOutcome> =>
     await Promise.resolve(outcome);
 
 describe("eraseCorpusObjects", () => {
-  test("a pointer into an object that holds other members is not reported erased", async () => {
-    // The delete itself resolves: the standalone sibling went, the shared
-    // object stayed. That resolution must not read as a complete erasure.
+  test("a member of a shared pack is erased by tombstoning its address", async () => {
+    const { tombstone } = recordingTombstone();
     const erasure = await eraseCorpusObjects({
       keys,
+      decisionId,
+      tombstone,
       deleteCorpus: deleteReporting({
-        type: "shared-object-retained",
+        type: "tombstoned",
         deletedKeys: [objectKey],
-        retained: [packedLocation],
+        tombstoned: [packedLocation],
       }),
     });
 
-    expect(erasure.type).toBe("incomplete");
-    if (erasure.type !== "incomplete") {
-      throw new Error("expected an incomplete erasure");
-    }
-    expect(erasure.error).toBeInstanceOf(CorpusObjectRetainedError);
-    expect(erasure.error).toMatchObject({
-      retained: [packedAddress],
-      message: expect.stringContaining(packedAddress),
+    // Not "incomplete": nothing serves the address again, which is what the
+    // erasure has to achieve. It stays distinguishable from a delete because
+    // only this one leaves bytes for a later rewrite of the pack.
+    expect(erasure).toEqual({
+      type: "tombstoned",
+      tombstoned: [packedAddress],
     });
   });
 
   test("a delete that resolves with every object gone is reported deleted", async () => {
+    const { tombstone } = recordingTombstone();
     expect(
       await eraseCorpusObjects({
         keys,
+        decisionId,
+        tombstone,
         deleteCorpus: deleteReporting({ type: "deleted", keys: [objectKey] }),
       }),
     ).toEqual({ type: "deleted" });
   });
 
   test("a failed delete carries its cause", async () => {
+    const { tombstone } = recordingTombstone();
     const cause = new Error("bucket unreachable");
     expect(
       await eraseCorpusObjects({
         keys,
+        decisionId,
+        tombstone,
         deleteCorpus: async () => await Promise.reject(cause),
       }),
     ).toEqual({ type: "incomplete", error: cause });
@@ -71,7 +89,7 @@ describe("eraseCorpusObjects", () => {
 
 describe("eraseCancelledIntentObjects", () => {
   const gone = createSafeId<"caseLawCorpusUploadIntent">();
-  const kept = createSafeId<"caseLawCorpusUploadIntent">();
+  const packed = createSafeId<"caseLawCorpusUploadIntent">();
   const cancelledIntents = [
     {
       id: gone,
@@ -80,14 +98,15 @@ describe("eraseCancelledIntentObjects", () => {
       astKey: objectKey,
     },
     {
-      id: kept,
+      id: packed,
       textKey: packedAddress,
       sectionsKey: packedAddress,
       astKey: packedAddress,
     },
   ];
 
-  test("only an intent whose every object is gone is cleaned", async () => {
+  test("a reservation whose members are tombstoned has nothing left to retry", async () => {
+    const { tombstone } = recordingTombstone();
     const deleteCorpus = async (intentKeys: {
       textKey: string | null;
     }): Promise<CorpusDeleteOutcome> =>
@@ -95,29 +114,30 @@ describe("eraseCancelledIntentObjects", () => {
         intentKeys.textKey === objectKey
           ? { type: "deleted", keys: [objectKey] }
           : {
-              type: "shared-object-retained",
+              type: "tombstoned",
               deletedKeys: [],
-              retained: [packedLocation],
+              tombstoned: [packedLocation],
             },
       );
 
     const erasure = await eraseCancelledIntentObjects({
       cancelledIntents,
+      decisionId,
+      tombstone,
       deleteCorpus,
     });
 
-    expect(erasure.cleanedIntentIds).toEqual([gone]);
-    expect(erasure.incomplete).toHaveLength(1);
-    expect(erasure.incomplete.at(0)?.intentId).toBe(kept);
-    expect(erasure.incomplete.at(0)?.error).toBeInstanceOf(
-      CorpusObjectRetainedError,
-    );
+    expect(new Set(erasure.cleanedIntentIds)).toEqual(new Set([gone, packed]));
+    expect(erasure.incomplete).toEqual([]);
   });
 
   test("a failed delete keeps the intent on the retry path", async () => {
+    const { tombstone } = recordingTombstone();
     const cause = new Error("delete failed");
     const erasure = await eraseCancelledIntentObjects({
       cancelledIntents,
+      decisionId,
+      tombstone,
       deleteCorpus: async () => await Promise.reject(cause),
     });
 

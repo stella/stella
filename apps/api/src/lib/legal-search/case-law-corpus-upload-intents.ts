@@ -1,4 +1,4 @@
-import { Result, TaggedError, panic } from "better-result";
+import { Result, panic } from "better-result";
 import { and, asc, eq, inArray, lte, or, sql } from "drizzle-orm";
 
 import { Temporal, DAY_IN_MS } from "@stll/time";
@@ -7,6 +7,7 @@ import type { Transaction } from "@/api/db/root";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
   CASE_LAW_CORPUS_UPLOAD_INTENT_STATUS,
+  caseLawCorpusPackRefs,
   caseLawCorpusUploadIntents,
   caseLawDecisions,
 } from "@/api/db/schema";
@@ -18,15 +19,9 @@ import {
   CorpusIndexProjectionSubjectMissingError,
   lockActiveCorpusProjectionSourceTx,
 } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
-import {
-  corpusKeys,
-  deleteCorpusDocument,
-} from "@/api/lib/legal-search/corpus-storage";
-import type {
-  CorpusDeleteOutcome,
-  CorpusWriteOutcome,
-  WriteCorpusResult,
-} from "@/api/lib/legal-search/corpus-storage";
+import { parseCorpusLocation } from "@/api/lib/legal-search/corpus-location";
+import { reclaimCorpusUpload } from "@/api/lib/legal-search/corpus-storage";
+import type { WriteCorpusResult } from "@/api/lib/legal-search/corpus-storage";
 
 const CLEANUP_RETRY_MAX_DELAY_MS = DAY_IN_MS;
 const CLEANUP_RETRY_UNIT_MS = 60 * 1000;
@@ -38,41 +33,94 @@ type CorpusUploadKeys = Pick<
 >;
 
 type CorpusUploadIntentCleanupPlan =
+  /** Another reservation claims these addresses; ask again later. */
   | { type: "defer" }
+  /**
+   * Release what this reservation owns and drop its row. `keys` are the
+   * addresses to reclaim (an address a live row points at is excluded), and
+   * `releasablePackKeys` are the packs nothing else reaches into, which are
+   * therefore the reservation's to delete.
+   */
   | {
-      type: "delete";
+      type: "release";
       keys: {
         astKey: string | null;
         sectionsKey: string | null;
         textKey: string | null;
       };
+      releasablePackKeys: ReadonlySet<string>;
     };
 
-/** A cleanup may delete only keys owned by neither a live row nor an upload. */
+type CorpusUploadIntentLiveness = {
+  /** Addresses a decision row still points at. */
+  currentKeys: ReadonlySet<string>;
+  /** Addresses another reservation still claims. */
+  activeKeys: ReadonlySet<string>;
+  /**
+   * Packs a decision row or another reservation still reaches into. A pack is
+   * shared by the batch that wrote it, so its object may only be deleted once
+   * nothing reaches into it at all.
+   */
+  referencedPackKeys: ReadonlySet<string>;
+};
+
+type PlannedCorpusUploadIntent = CorpusUploadKeys & {
+  packKey: string | null;
+};
+
+/**
+ * What a cleanup may do with one abandoned reservation.
+ *
+ * A reservation names addresses it wrote, or meant to write, before its
+ * transfer ran. Reclaiming it is not an erasure: the bytes at those addresses
+ * were never served to anyone, and the batch that retries re-derives exactly
+ * the same addresses, so nothing here may deny them. What it may do is delete
+ * objects nothing points at — the standalone keys a live row does not claim,
+ * and the pack object itself once no row and no other reservation reaches
+ * into it.
+ *
+ * The row goes either way. A reservation inside a pack that other rows still
+ * use has nothing left to reclaim, and keeping it would put it back on the
+ * retry path for ever.
+ */
 export const planCorpusUploadIntentCleanup = (
-  keys: CorpusUploadKeys,
-  currentKeys: ReadonlySet<string>,
-  activeKeys: ReadonlySet<string>,
+  intent: PlannedCorpusUploadIntent,
+  { currentKeys, activeKeys, referencedPackKeys }: CorpusUploadIntentLiveness,
 ): CorpusUploadIntentCleanupPlan => {
-  const rowKeys = [keys.astKey, keys.sectionsKey, keys.textKey];
+  const rowKeys = [intent.astKey, intent.sectionsKey, intent.textKey];
   if (rowKeys.some((key) => activeKeys.has(key))) {
     return { type: "defer" };
   }
+  const releasablePackKeys =
+    intent.packKey === null || referencedPackKeys.has(intent.packKey)
+      ? new Set<string>()
+      : new Set([intent.packKey]);
   return {
-    type: "delete",
+    type: "release",
     keys: {
-      astKey: currentKeys.has(keys.astKey) ? null : keys.astKey,
-      sectionsKey: currentKeys.has(keys.sectionsKey) ? null : keys.sectionsKey,
-      textKey: currentKeys.has(keys.textKey) ? null : keys.textKey,
+      astKey: currentKeys.has(intent.astKey) ? null : intent.astKey,
+      sectionsKey: currentKeys.has(intent.sectionsKey)
+        ? null
+        : intent.sectionsKey,
+      textKey: currentKeys.has(intent.textKey) ? null : intent.textKey,
     },
+    releasablePackKeys,
   };
 };
 
-type ReserveCaseLawCorpusUploadIntentOptions = {
+/** One decision's share of a batch's pack, as the reservation records it. */
+export type CaseLawCorpusUploadReservationInput = {
   contentHash: string;
   decisionId: SafeId<"caseLawDecision">;
-  jurisdiction: string;
-  scopedDb: ScopedDb;
+  /**
+   * Where this decision's three payloads will be: packed addresses when the
+   * batch wrote members for it, the derived object keys when it contributed
+   * none. Either way the reservation names exactly what the settlement will
+   * store, so cleanup owns it.
+   */
+  written: WriteCorpusResult;
+  /** The pack those addresses belong to, or null for object keys. */
+  packKey: string | null;
 };
 
 export type ReserveCaseLawCorpusUploadIntentResult =
@@ -84,138 +132,290 @@ export type ReserveCaseLawCorpusUploadIntentResult =
   | { type: "busy" }
   | { type: "redacted" };
 
+type ReserveCaseLawCorpusUploadIntentsOptions = {
+  reservations: readonly CaseLawCorpusUploadReservationInput[];
+  scopedDb: ScopedDb;
+};
+
+const leaseExpiry = (): Date =>
+  new Date(
+    Temporal.Now.instant().epochMilliseconds + CORPUS_UPLOAD_INTENT_LEASE_MS,
+  );
+
+const intentValues = (
+  reservation: CaseLawCorpusUploadReservationInput,
+  intentId: SafeId<"caseLawCorpusUploadIntent">,
+  leaseExpiresAt: Date,
+) => ({
+  id: intentId,
+  decisionId: reservation.decisionId,
+  textS3Key: reservation.written.textKey,
+  normalizedS3Key: reservation.written.sectionsKey,
+  astS3Key: reservation.written.astKey,
+  packKey: reservation.packKey,
+  leaseExpiresAt,
+});
+
+export type CaseLawCorpusUploadReservations = Map<
+  SafeId<"caseLawDecision">,
+  ReserveCaseLawCorpusUploadIntentResult
+>;
+
 /**
- * Reserve exact object keys before any external PUT. `FOR SHARE` serializes
- * this short reservation with redaction's `FOR UPDATE` fence: either the
- * upload is durable for cancellation, or a tombstone prevents it starting.
+ * Reserve the exact addresses of a whole batch before its transfer.
+ *
+ * One transaction for the batch, not one per decision: the reservations are
+ * what makes an upload discoverable if it lands and its row does not, and a
+ * batch that reserved half its decisions before failing would leave the rest
+ * of its pack owned by nobody. `FOR SHARE` on the decisions serializes the
+ * reservation with redaction's `FOR UPDATE` fence, so either the upload is
+ * durable for cancellation or the tombstone prevents it starting. The rows
+ * are taken in id order, so two batches that overlap queue behind each other
+ * instead of deadlocking.
+ *
+ * The failure is returned: a batch that could not reserve has an answer about
+ * the page it was given, and its caller decides whether that holds a cursor.
  */
-export const reserveCaseLawCorpusUploadIntent = async ({
-  contentHash,
-  decisionId,
-  jurisdiction,
+export const reserveCaseLawCorpusUploadIntents = async ({
+  reservations,
   scopedDb,
-}: ReserveCaseLawCorpusUploadIntentOptions): Promise<ReserveCaseLawCorpusUploadIntentResult> => {
-  const keys = corpusKeys({
-    contentHash,
-    documentId: decisionId,
-    jurisdiction,
-  });
-  return await scopedDb(async (tx) => {
-    const decision = (
-      await tx
-        .select({ redactedAt: caseLawDecisions.redactedAt })
-        .from(caseLawDecisions)
-        .where(eq(caseLawDecisions.id, decisionId))
-        .for("share")
-        .limit(1)
-    ).at(0);
-    if (!decision || decision.redactedAt !== null) {
-      return { type: "redacted" };
-    }
+}: ReserveCaseLawCorpusUploadIntentsOptions): Promise<
+  Result<CaseLawCorpusUploadReservations, unknown>
+> => {
+  const outcomes: CaseLawCorpusUploadReservations = new Map();
+  if (reservations.length === 0) {
+    return Result.ok(outcomes);
+  }
+  const byDecision = new Map(
+    reservations.map((reservation) => [reservation.decisionId, reservation]),
+  );
+  // Decision ids, not words: this fixes the order the rows are locked in.
+  const decisionIds = [...byDecision.keys()].sort((left, right) =>
+    left < right ? -1 : 1,
+  );
 
-    const intentId = createSafeId<"caseLawCorpusUploadIntent">();
-    const leaseExpiresAt = new Date(
-      Temporal.Now.instant().epochMilliseconds + CORPUS_UPLOAD_INTENT_LEASE_MS,
-    );
-    const reserved = (
-      await tx
-        .insert(caseLawCorpusUploadIntents)
-        .values({
-          id: intentId,
-          decisionId,
-          textS3Key: keys.textKey,
-          normalizedS3Key: keys.sectionsKey,
-          astS3Key: keys.astKey,
-          leaseExpiresAt,
-        })
-        .onConflictDoNothing()
-        .returning({ id: caseLawCorpusUploadIntents.id })
-    ).at(0);
-    if (reserved) {
-      return {
-        intentId,
-        type: "reserved",
-        written: { ...keys, contentHash },
-      };
-    }
+  return await Result.tryPromise({
+    try: async () =>
+      await scopedDb(async (tx) => {
+        const decisions = await tx
+          .select({
+            id: caseLawDecisions.id,
+            redactedAt: caseLawDecisions.redactedAt,
+          })
+          .from(caseLawDecisions)
+          .where(inArray(caseLawDecisions.id, decisionIds))
+          .for("share");
+        const live = new Set(
+          decisions
+            .filter(({ redactedAt }) => redactedAt === null)
+            .map(({ id }) => id),
+        );
+        for (const decisionId of decisionIds) {
+          if (!live.has(decisionId)) {
+            outcomes.set(decisionId, { type: "redacted" });
+          }
+        }
 
-    const active = (
-      await tx
-        .select({
-          id: caseLawCorpusUploadIntents.id,
-          textKey: caseLawCorpusUploadIntents.textS3Key,
-          sectionsKey: caseLawCorpusUploadIntents.normalizedS3Key,
-          astKey: caseLawCorpusUploadIntents.astS3Key,
-          leaseExpiresAt: caseLawCorpusUploadIntents.leaseExpiresAt,
-        })
-        .from(caseLawCorpusUploadIntents)
-        .where(
-          and(
-            eq(caseLawCorpusUploadIntents.decisionId, decisionId),
-            eq(
-              caseLawCorpusUploadIntents.status,
-              CASE_LAW_CORPUS_UPLOAD_INTENT_STATUS.ACTIVE,
+        const leaseExpiresAt = leaseExpiry();
+        const pending = decisionIds.filter((decisionId) =>
+          live.has(decisionId),
+        );
+        if (pending.length === 0) {
+          return outcomes;
+        }
+        const freshIds = new Map(
+          pending.map((decisionId) => [
+            decisionId,
+            createSafeId<"caseLawCorpusUploadIntent">(),
+          ]),
+        );
+        const inserted = await tx
+          .insert(caseLawCorpusUploadIntents)
+          .values(
+            pending.map((decisionId) =>
+              intentValues(
+                byDecision.get(decisionId) ?? panic("Reservation lost"),
+                freshIds.get(decisionId) ?? panic("Reserved intent id lost"),
+                leaseExpiresAt,
+              ),
             ),
-          ),
-        )
-        .for("update")
-        .limit(1)
-    ).at(0);
-    if (
-      !active ||
-      active.leaseExpiresAt.getTime() > Temporal.Now.instant().epochMilliseconds
-    ) {
-      return { type: "busy" };
-    }
+          )
+          .onConflictDoNothing()
+          .returning({
+            id: caseLawCorpusUploadIntents.id,
+            decisionId: caseLawCorpusUploadIntents.decisionId,
+          });
+        for (const { id, decisionId } of inserted) {
+          outcomes.set(decisionId, {
+            intentId: id,
+            type: "reserved",
+            written: (byDecision.get(decisionId) ?? panic("Reservation lost"))
+              .written,
+          });
+        }
 
-    const samePayload =
-      active.textKey === keys.textKey &&
-      active.sectionsKey === keys.sectionsKey &&
-      active.astKey === keys.astKey;
-    if (samePayload) {
-      await tx
-        .update(caseLawCorpusUploadIntents)
-        .set({ leaseExpiresAt })
-        .where(eq(caseLawCorpusUploadIntents.id, active.id));
-      return {
-        intentId: active.id,
-        type: "reserved",
-        written: { ...keys, contentHash },
-      };
-    }
+        // Whatever the insert did not take already carries an active
+        // reservation: either a live one (another writer owns the decision) or an
+        // expired lease this batch may take over.
+        const contended = pending.filter(
+          (decisionId) => !outcomes.has(decisionId),
+        );
+        if (contended.length === 0) {
+          return outcomes;
+        }
+        const active = await tx
+          .select({
+            id: caseLawCorpusUploadIntents.id,
+            decisionId: caseLawCorpusUploadIntents.decisionId,
+            textKey: caseLawCorpusUploadIntents.textS3Key,
+            sectionsKey: caseLawCorpusUploadIntents.normalizedS3Key,
+            astKey: caseLawCorpusUploadIntents.astS3Key,
+            leaseExpiresAt: caseLawCorpusUploadIntents.leaseExpiresAt,
+          })
+          .from(caseLawCorpusUploadIntents)
+          .where(
+            and(
+              inArray(caseLawCorpusUploadIntents.decisionId, contended),
+              eq(
+                caseLawCorpusUploadIntents.status,
+                CASE_LAW_CORPUS_UPLOAD_INTENT_STATUS.ACTIVE,
+              ),
+            ),
+          )
+          .for("update");
 
-    await tx
-      .update(caseLawCorpusUploadIntents)
-      .set({
-        status: CASE_LAW_CORPUS_UPLOAD_INTENT_STATUS.CLEANUP,
-        nextCleanupAt: new Date(),
-      })
-      .where(eq(caseLawCorpusUploadIntents.id, active.id));
-    await tx.insert(caseLawCorpusUploadIntents).values({
-      id: intentId,
-      decisionId,
-      textS3Key: keys.textKey,
-      normalizedS3Key: keys.sectionsKey,
-      astS3Key: keys.astKey,
-      leaseExpiresAt,
-    });
-    return {
-      intentId,
-      type: "reserved",
-      written: { ...keys, contentHash },
-    };
+        const now = Temporal.Now.instant().epochMilliseconds;
+        const renewed: SafeId<"caseLawCorpusUploadIntent">[] = [];
+        const superseded: SafeId<"caseLawCorpusUploadIntent">[] = [];
+        const replacements: SafeId<"caseLawDecision">[] = [];
+        for (const row of active) {
+          const reservation =
+            byDecision.get(row.decisionId) ?? panic("Reservation lost");
+          if (row.leaseExpiresAt.getTime() > now) {
+            outcomes.set(row.decisionId, { type: "busy" });
+            continue;
+          }
+          const samePayload =
+            row.textKey === reservation.written.textKey &&
+            row.sectionsKey === reservation.written.sectionsKey &&
+            row.astKey === reservation.written.astKey;
+          if (samePayload) {
+            renewed.push(row.id);
+            outcomes.set(row.decisionId, {
+              intentId: row.id,
+              type: "reserved",
+              written: reservation.written,
+            });
+            continue;
+          }
+          superseded.push(row.id);
+          replacements.push(row.decisionId);
+        }
+        for (const decisionId of contended) {
+          if (!outcomes.has(decisionId)) {
+            // The row carries no active reservation any more: another writer
+            // settled between the insert and the lock.
+            outcomes.set(decisionId, { type: "busy" });
+          }
+        }
+
+        if (renewed.length > 0) {
+          await tx
+            .update(caseLawCorpusUploadIntents)
+            .set({ leaseExpiresAt })
+            .where(inArray(caseLawCorpusUploadIntents.id, renewed));
+        }
+        if (superseded.length > 0) {
+          // The expired reservation named other addresses; it keeps its row as a
+          // cleanup target and stops being the decision's active one, which is
+          // what lets the replacement below take the partial unique index.
+          await tx
+            .update(caseLawCorpusUploadIntents)
+            .set({
+              status: CASE_LAW_CORPUS_UPLOAD_INTENT_STATUS.CLEANUP,
+              nextCleanupAt: new Date(),
+            })
+            .where(inArray(caseLawCorpusUploadIntents.id, superseded));
+          await tx
+            .insert(caseLawCorpusUploadIntents)
+            .values(
+              replacements.map((decisionId) =>
+                intentValues(
+                  byDecision.get(decisionId) ?? panic("Reservation lost"),
+                  freshIds.get(decisionId) ?? panic("Reserved intent id lost"),
+                  leaseExpiresAt,
+                ),
+              ),
+            );
+          for (const decisionId of replacements) {
+            outcomes.set(decisionId, {
+              intentId:
+                freshIds.get(decisionId) ?? panic("Reserved intent id lost"),
+              type: "reserved",
+              written: (byDecision.get(decisionId) ?? panic("Reservation lost"))
+                .written,
+            });
+          }
+        }
+        return outcomes;
+      }),
+    catch: (cause) => cause,
   });
+};
+
+/**
+ * Record which pack each of a decision's pointers now addresses, in the
+ * transaction that writes those pointers.
+ *
+ * Delete-then-insert rather than an upsert: a repoint may move a decision
+ * from a pack to standalone objects, and the reference that stops being true
+ * has to go with it or it would pin a pack nothing reaches any more.
+ */
+const recordCorpusPackRefsTx = async (
+  tx: Transaction,
+  decisionId: SafeId<"caseLawDecision">,
+  written: WriteCorpusResult | null,
+): Promise<void> => {
+  await tx
+    .delete(caseLawCorpusPackRefs)
+    .where(eq(caseLawCorpusPackRefs.decisionId, decisionId));
+  if (written === null) {
+    return;
+  }
+  const refs = (
+    [
+      ["text", written.textKey],
+      ["sections", written.sectionsKey],
+      ["ast", written.astKey],
+    ] as const
+  ).flatMap(([kind, storedKey]) => {
+    const location = parseCorpusLocation(storedKey);
+    return location.type === "packed"
+      ? [
+          {
+            decisionId,
+            kind,
+            packKey: location.packKey,
+            location: storedKey,
+          },
+        ]
+      : [];
+  });
+  if (refs.length === 0) {
+    return;
+  }
+  await tx.insert(caseLawCorpusPackRefs).values(refs);
 };
 
 export type CaseLawCorpusUploadApplyResult =
   | { type: "applied" }
   | { type: "superseded" };
 
-type WriteReservedCaseLawCorpusUploadOptions = {
+type SettleReservedCaseLawCorpusUploadOptions = {
   /**
-   * Row CAS for the settled state. `written` is null when the write
+   * Row CAS for the settled state. `written` is null when the batch
    * concluded the payload carries no document, in which case the CAS
-   * settles the mirror with null pointers instead of keys.
+   * settles the mirror with null pointers instead of addresses.
    */
   apply: (args: {
     projectionLock: ActiveCorpusProjectionSourceLock | null;
@@ -227,162 +427,143 @@ type WriteReservedCaseLawCorpusUploadOptions = {
   preflight: (tx: Transaction) => Promise<boolean>;
   scopedDb: ScopedDb;
   signal?: AbortSignal;
-  write: (args: { signal: AbortSignal }) => Promise<CorpusWriteOutcome>;
+  /** The durable addresses this settlement records, or null for none. */
+  written: WriteCorpusResult | null;
 };
 
-class CorpusUploadWriteError extends TaggedError("CorpusUploadWriteError")<{
-  cause: unknown;
-  message: string;
-}> {}
-
-export type WriteReservedCaseLawCorpusUploadResult =
+export type SettleReservedCaseLawCorpusUploadResult =
   | CaseLawCorpusUploadApplyResult
   | { type: "redacted-or-missing" }
   | { type: "intent-reclaimed" };
 
 /**
- * The exceptional transaction that holds a decision fence over its corpus
- * PUT. Redaction uses the same row lock, so it cannot win between the final
- * tombstone check and this upload. The callback applies its row CAS and the
- * active intent disappears in that same commit only after a successful write.
+ * Point a decision's row at payloads that are already durable.
+ *
+ * The transaction fences the row the way redaction does, so a redaction
+ * cannot win between the final tombstone check and this repoint. What it no
+ * longer holds is the transfer: the batch wrote its pack before reaching
+ * here, under a reservation that owns the addresses if this settlement never
+ * happens. The active intent disappears in the same commit as the pointers.
  */
-export const writeReservedCaseLawCorpusUpload = async ({
+export const settleReservedCaseLawCorpusUpload = async ({
   apply,
   decisionId,
   intentId,
   preflight,
   scopedDb,
   signal,
-  write,
-}: WriteReservedCaseLawCorpusUploadOptions): Promise<WriteReservedCaseLawCorpusUploadResult> => {
-  try {
-    return await scopedDb(async (tx) => {
-      signal?.throwIfAborted();
-      const sourceLock = await Result.tryPromise({
-        try: async () =>
-          await lockActiveCorpusProjectionSourceTx(tx, {
-            family: "case_law",
-            entityId: decisionId,
-          }),
-        catch: (cause) => cause,
-      });
-      if (Result.isError(sourceLock)) {
-        if (
-          sourceLock.error instanceof CorpusIndexProjectionSubjectMissingError
-        ) {
-          return { type: "redacted-or-missing" };
-        }
-        throw sourceLock.error;
-      }
-      const decision = (
-        await tx
-          .select({ redactedAt: caseLawDecisions.redactedAt })
-          .from(caseLawDecisions)
-          .where(eq(caseLawDecisions.id, decisionId))
-          .for("update")
-          .limit(1)
-      ).at(0);
-      if (!decision || decision.redactedAt !== null) {
-        await tx
-          .update(caseLawCorpusUploadIntents)
-          .set({
-            status: CASE_LAW_CORPUS_UPLOAD_INTENT_STATUS.CLEANUP,
-            nextCleanupAt: new Date(),
-          })
-          .where(
-            and(
-              eq(caseLawCorpusUploadIntents.id, intentId),
-              eq(
-                caseLawCorpusUploadIntents.status,
-                CASE_LAW_CORPUS_UPLOAD_INTENT_STATUS.ACTIVE,
-              ),
-            ),
-          );
+  written,
+}: SettleReservedCaseLawCorpusUploadOptions): Promise<SettleReservedCaseLawCorpusUploadResult> =>
+  await scopedDb(async (tx) => {
+    signal?.throwIfAborted();
+    const sourceLock = await Result.tryPromise({
+      try: async () =>
+        await lockActiveCorpusProjectionSourceTx(tx, {
+          family: "case_law",
+          entityId: decisionId,
+        }),
+      catch: (cause) => cause,
+    });
+    if (Result.isError(sourceLock)) {
+      if (
+        sourceLock.error instanceof CorpusIndexProjectionSubjectMissingError
+      ) {
         return { type: "redacted-or-missing" };
       }
-
-      const intent = (
-        await tx
-          .select({ status: caseLawCorpusUploadIntents.status })
-          .from(caseLawCorpusUploadIntents)
-          .where(
-            and(
-              eq(caseLawCorpusUploadIntents.id, intentId),
-              eq(caseLawCorpusUploadIntents.decisionId, decisionId),
-            ),
-          )
-          .for("update")
-          .limit(1)
-      ).at(0);
-      if (intent?.status !== CASE_LAW_CORPUS_UPLOAD_INTENT_STATUS.ACTIVE) {
-        return { type: "intent-reclaimed" };
-      }
-
-      if (!(await preflight(tx))) {
-        await tx
-          .update(caseLawCorpusUploadIntents)
-          .set({
-            status: CASE_LAW_CORPUS_UPLOAD_INTENT_STATUS.CLEANUP,
-            nextCleanupAt: new Date(),
-          })
-          .where(eq(caseLawCorpusUploadIntents.id, intentId));
-        return { type: "superseded" };
-      }
-
-      let writeOutcome: CorpusWriteOutcome;
-      try {
-        writeOutcome = await write({
-          signal: signal ?? new AbortController().signal,
-        });
-      } catch (error) {
-        throw new CorpusUploadWriteError({
-          cause: error,
-          message: "Reserved corpus upload failed",
-        });
-      }
-      const outcome = await apply({
-        projectionLock: sourceLock.value,
-        tx,
-        written: writeOutcome.written,
-      });
-      if (outcome.type === "superseded") {
-        await tx
-          .update(caseLawCorpusUploadIntents)
-          .set({
-            status: CASE_LAW_CORPUS_UPLOAD_INTENT_STATUS.CLEANUP,
-            nextCleanupAt: new Date(),
-          })
-          .where(eq(caseLawCorpusUploadIntents.id, intentId));
-        return outcome;
-      }
-
-      const removed = (
-        await tx
-          .delete(caseLawCorpusUploadIntents)
-          .where(
-            and(
-              eq(caseLawCorpusUploadIntents.id, intentId),
-              eq(
-                caseLawCorpusUploadIntents.status,
-                CASE_LAW_CORPUS_UPLOAD_INTENT_STATUS.ACTIVE,
-              ),
-            ),
-          )
-          .returning({ id: caseLawCorpusUploadIntents.id })
-      ).at(0);
-      if (!removed) {
-        return panic("Corpus upload intent disappeared before settlement");
-      }
-      return outcome;
-    });
-  } catch (error) {
-    if (error instanceof CorpusUploadWriteError) {
-      await enqueueCaseLawCorpusUploadIntentCleanup({ intentId, scopedDb });
-      throw error.cause;
+      throw sourceLock.error;
     }
-    throw error;
-  }
-};
+    const decision = (
+      await tx
+        .select({ redactedAt: caseLawDecisions.redactedAt })
+        .from(caseLawDecisions)
+        .where(eq(caseLawDecisions.id, decisionId))
+        .for("update")
+        .limit(1)
+    ).at(0);
+    if (!decision || decision.redactedAt !== null) {
+      await tx
+        .update(caseLawCorpusUploadIntents)
+        .set({
+          status: CASE_LAW_CORPUS_UPLOAD_INTENT_STATUS.CLEANUP,
+          nextCleanupAt: new Date(),
+        })
+        .where(
+          and(
+            eq(caseLawCorpusUploadIntents.id, intentId),
+            eq(
+              caseLawCorpusUploadIntents.status,
+              CASE_LAW_CORPUS_UPLOAD_INTENT_STATUS.ACTIVE,
+            ),
+          ),
+        );
+      return { type: "redacted-or-missing" };
+    }
+
+    const intent = (
+      await tx
+        .select({ status: caseLawCorpusUploadIntents.status })
+        .from(caseLawCorpusUploadIntents)
+        .where(
+          and(
+            eq(caseLawCorpusUploadIntents.id, intentId),
+            eq(caseLawCorpusUploadIntents.decisionId, decisionId),
+          ),
+        )
+        .for("update")
+        .limit(1)
+    ).at(0);
+    if (intent?.status !== CASE_LAW_CORPUS_UPLOAD_INTENT_STATUS.ACTIVE) {
+      return { type: "intent-reclaimed" };
+    }
+
+    if (!(await preflight(tx))) {
+      await tx
+        .update(caseLawCorpusUploadIntents)
+        .set({
+          status: CASE_LAW_CORPUS_UPLOAD_INTENT_STATUS.CLEANUP,
+          nextCleanupAt: new Date(),
+        })
+        .where(eq(caseLawCorpusUploadIntents.id, intentId));
+      return { type: "superseded" };
+    }
+
+    const outcome = await apply({
+      projectionLock: sourceLock.value,
+      tx,
+      written,
+    });
+    if (outcome.type === "superseded") {
+      await tx
+        .update(caseLawCorpusUploadIntents)
+        .set({
+          status: CASE_LAW_CORPUS_UPLOAD_INTENT_STATUS.CLEANUP,
+          nextCleanupAt: new Date(),
+        })
+        .where(eq(caseLawCorpusUploadIntents.id, intentId));
+      return outcome;
+    }
+
+    await recordCorpusPackRefsTx(tx, decisionId, written);
+
+    const removed = (
+      await tx
+        .delete(caseLawCorpusUploadIntents)
+        .where(
+          and(
+            eq(caseLawCorpusUploadIntents.id, intentId),
+            eq(
+              caseLawCorpusUploadIntents.status,
+              CASE_LAW_CORPUS_UPLOAD_INTENT_STATUS.ACTIVE,
+            ),
+          ),
+        )
+        .returning({ id: caseLawCorpusUploadIntents.id })
+    ).at(0);
+    if (!removed) {
+      return panic("Corpus upload intent disappeared before settlement");
+    }
+    return outcome;
+  });
 
 export type CancelledCaseLawCorpusUploadIntent = CorpusUploadKeys & {
   id: SafeId<"caseLawCorpusUploadIntent">;
@@ -422,14 +603,21 @@ export const cancelCaseLawCorpusUploadIntents = async ({
       astKey: caseLawCorpusUploadIntents.astS3Key,
     });
 
-/** Mark one failed, pre-reserved write for durable exact-key cleanup. */
-export const enqueueCaseLawCorpusUploadIntentCleanup = async ({
-  intentId,
+/**
+ * Mark the reservations of a failed batch for durable cleanup. One statement
+ * for the batch: a pack that landed without its rows leaves every one of its
+ * contributing decisions in the same state.
+ */
+export const enqueueCaseLawCorpusUploadIntentCleanups = async ({
+  intentIds,
   scopedDb,
 }: {
-  intentId: SafeId<"caseLawCorpusUploadIntent">;
+  intentIds: readonly SafeId<"caseLawCorpusUploadIntent">[];
   scopedDb: ScopedDb;
 }): Promise<void> => {
+  if (intentIds.length === 0) {
+    return;
+  }
   await scopedDb(async (tx) => {
     await tx
       .update(caseLawCorpusUploadIntents)
@@ -439,7 +627,7 @@ export const enqueueCaseLawCorpusUploadIntentCleanup = async ({
       })
       .where(
         and(
-          eq(caseLawCorpusUploadIntents.id, intentId),
+          inArray(caseLawCorpusUploadIntents.id, [...intentIds]),
           eq(
             caseLawCorpusUploadIntents.status,
             CASE_LAW_CORPUS_UPLOAD_INTENT_STATUS.ACTIVE,
@@ -486,14 +674,8 @@ export const corpusUploadCleanupDelayMs = (attemptCount: number): number =>
   );
 
 type ReconcileCaseLawCorpusUploadIntentsOptions = {
-  deleteCorpus?: (
-    keys: {
-      astKey: string | null;
-      sectionsKey: string | null;
-      textKey: string | null;
-    },
-    options?: { signal?: AbortSignal },
-  ) => Promise<CorpusDeleteOutcome>;
+  /** Test seam; production reclaims through the corpus bucket client. */
+  reclaim?: typeof reclaimCorpusUpload;
   limit: number;
   safeDb: SafeDb;
   signal?: AbortSignal;
@@ -510,7 +692,7 @@ export type ReconcileCaseLawCorpusUploadIntentsResult = {
  * without duplicate ownership.
  */
 export const reconcileCaseLawCorpusUploadIntents = async ({
-  deleteCorpus = deleteCorpusDocument,
+  reclaim = reclaimCorpusUpload,
   limit,
   safeDb,
   signal,
@@ -528,6 +710,7 @@ export const reconcileCaseLawCorpusUploadIntents = async ({
         textKey: caseLawCorpusUploadIntents.textS3Key,
         sectionsKey: caseLawCorpusUploadIntents.normalizedS3Key,
         astKey: caseLawCorpusUploadIntents.astS3Key,
+        packKey: caseLawCorpusUploadIntents.packKey,
         cleanupAttemptCount: caseLawCorpusUploadIntents.cleanupAttemptCount,
       })
       .from(caseLawCorpusUploadIntents)
@@ -594,6 +777,13 @@ export const reconcileCaseLawCorpusUploadIntents = async ({
   const cleanupResult = await safeDb(async (tx) => {
     signal?.throwIfAborted();
     const decisionIds = claimedResult.value.map(({ decisionId }) => decisionId);
+    const claimedPackKeys = [
+      ...new Set(
+        claimedResult.value
+          .map(({ packKey }) => packKey)
+          .filter((packKey): packKey is string => packKey !== null),
+      ),
+    ];
     const decisions = await tx
       .select({
         id: caseLawDecisions.id,
@@ -620,6 +810,37 @@ export const reconcileCaseLawCorpusUploadIntents = async ({
           ),
         ),
       );
+    // Is anything still reaching into these packs? Two indexed equality
+    // lookups: the pointer columns hold addresses, so asking the decisions
+    // table the same question would mean a pattern scan of it.
+    const packRefs =
+      claimedPackKeys.length === 0
+        ? []
+        : await tx
+            .select({ packKey: caseLawCorpusPackRefs.packKey })
+            .from(caseLawCorpusPackRefs)
+            .where(inArray(caseLawCorpusPackRefs.packKey, claimedPackKeys));
+    const packReservations =
+      claimedPackKeys.length === 0
+        ? []
+        : await tx
+            .select({ packKey: caseLawCorpusUploadIntents.packKey })
+            .from(caseLawCorpusUploadIntents)
+            .where(
+              and(
+                inArray(caseLawCorpusUploadIntents.packKey, claimedPackKeys),
+                eq(
+                  caseLawCorpusUploadIntents.status,
+                  CASE_LAW_CORPUS_UPLOAD_INTENT_STATUS.ACTIVE,
+                ),
+              ),
+            );
+    const referencedPackKeys = new Set([
+      ...packRefs.map(({ packKey }) => packKey),
+      ...packReservations.flatMap(({ packKey }) =>
+        packKey === null ? [] : [packKey],
+      ),
+    ]);
 
     const currentKeys = new Set(
       decisions.flatMap(({ astKey, sectionsKey, textKey }) =>
@@ -643,22 +864,41 @@ export const reconcileCaseLawCorpusUploadIntents = async ({
             astKey: row.astKey,
             sectionsKey: row.sectionsKey,
             textKey: row.textKey,
+            packKey: row.packKey,
           },
-          currentKeys,
-          activeKeys,
+          { currentKeys, activeKeys, referencedPackKeys },
         );
         if (plan.type === "defer") {
           return null;
         }
-        try {
-          await deleteCorpus(plan.keys, corpusIoOptions);
-          return row.id;
-        } catch (error) {
-          captureError(error, {
+        const released = await Result.tryPromise({
+          try: async () =>
+            await reclaim({
+              ...corpusIoOptions,
+              keys: plan.keys,
+              releasablePackKeys: plan.releasablePackKeys,
+            }),
+          catch: (cause) => cause,
+        });
+        if (Result.isError(released)) {
+          captureError(released.error, {
             corpusUploadIntentId: row.id,
-            step: "reconcileCaseLawCorpusUploadIntents.delete",
+            step: "reconcileCaseLawCorpusUploadIntents.reclaim",
           });
           return null;
+        }
+        switch (released.value.type) {
+          case "released":
+          case "retained":
+            // Either way the reservation has nothing left to own: what it
+            // named is gone, or it sits inside a pack other rows keep alive
+            // and no later attempt could reclaim it. The outcome is read
+            // rather than discarded, because a row kept here is retried for
+            // ever.
+            return row.id;
+          default:
+            released.value satisfies never;
+            return panic(`Unhandled reclaim: ${String(released.value)}`);
         }
       }),
     );
