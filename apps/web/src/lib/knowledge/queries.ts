@@ -3,7 +3,12 @@ import { panic, TaggedError } from "better-result";
 
 import { api } from "@/lib/api";
 import { DOCX_MIME, STALE_TIME } from "@/lib/consts";
-import { APIError, toAPIError, unwrapEden } from "@/lib/errors/api";
+import {
+  APIError,
+  shouldRetryAPIRequest,
+  toAPIError,
+  unwrapEden,
+} from "@/lib/errors/api";
 import { fetchWithTimeout } from "@/lib/fetch";
 import type { QueryOptionsInput } from "@/lib/react-query";
 import {
@@ -300,6 +305,10 @@ export const templateDetailOptions = (
 
       return unwrapEden(response);
     },
+    // A template id that is not this org's never becomes one: fail the 404
+    // straight away so a stale `?template=` link falls back to the list
+    // instead of retrying through the default backoff first.
+    retry: shouldRetryAPIRequest,
     staleTime: STALE_TIME.FIVE.MINUTES,
   });
 
