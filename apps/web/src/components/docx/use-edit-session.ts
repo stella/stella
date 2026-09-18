@@ -342,14 +342,20 @@ export const useEditSession = ({
     });
 
     if (response.error) {
-      setState(
-        resolveEditSessionFailure({
-          detail: userErrorMessage(response.error, "Failed to save DOCX."),
-          hasUnsavedChanges: true,
-          source: "finalize",
-          status: response.error.status,
-        }),
-      );
+      const failure = resolveEditSessionFailure({
+        detail: userErrorMessage(response.error, "Failed to save DOCX."),
+        hasUnsavedChanges: isDirty,
+        source: "finalize",
+        status: response.error.status,
+      });
+      // A released session is gone server-side: keeping the local handle would
+      // let unmount cleanup release whatever session replaced it, and keeping
+      // the dirty flag would leave the unload warning armed.
+      if (failure.status === "released") {
+        sessionRef.current = null;
+        setIsDirty(false);
+      }
+      setState(failure);
       return false;
     }
 
