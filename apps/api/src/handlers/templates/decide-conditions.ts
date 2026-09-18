@@ -27,10 +27,7 @@ const config = {
   // template would decide, and reaching them spends the org's decision model.
   permissions: { template: ["use"] },
   access: "read",
-  // A fill-form affordance: it shows and lets a person override what the fill
-  // will decide. An agent filling a template reaches the same decisions
-  // through fill_template.
-  mcp: { type: "internal", reason: "native_tool_ui" },
+  mcp: { type: "tool", name: "preview_template_conditions" },
   params: decideConditionsParamsSchema,
   body: decideConditionsBodySchema,
 } satisfies HandlerConfig;

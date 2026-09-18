@@ -231,9 +231,13 @@ export const fillTemplate = async (
   let effectiveValues: PatchValues;
   let structureErrors: TemplateStructureError[] = [];
 
-  if (isPatchValues(values)) {
-    effectiveValues = values;
-  } else if (isTemplateData(values)) {
+  // Template data first: a flat map of strings satisfies BOTH predicates, and
+  // taking the patch-values path for it skipped block-directive processing
+  // altogether, leaving every `{% if %}` and `{% for %}` tag in the delivered
+  // document as literal text. The directive pass returns null when the
+  // document carries no directive, so a document that has none reaches the
+  // same flattened values either way.
+  if (isTemplateData(values)) {
     // Raw (pre-format) values stashed by the fill pipeline so a date field that
     // is both display-formatted and referenced by a `{% if %}` compares against
     // its ISO value, not the localized string (see CONDITION_RAW_VALUES). On a
@@ -258,6 +262,8 @@ export const fillTemplate = async (
       // dot-separated patch keys
       effectiveValues = flattenTemplateData(values);
     }
+  } else if (isPatchValues(values)) {
+    effectiveValues = values;
   } else {
     panic("fillTemplate received values outside the supported data model");
   }

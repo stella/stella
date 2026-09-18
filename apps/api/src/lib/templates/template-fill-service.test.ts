@@ -6,6 +6,7 @@ import { filtersFromFieldConfig } from "@stll/template-conditions";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { toSafeId } from "@/api/lib/branded-types";
+import type { AiConditionDecider } from "@/api/lib/docx/resolve-ai-conditions";
 import type { FieldMeta } from "@/api/lib/docx/types";
 import { writeFieldFilters } from "@/api/lib/docx/write-field-filters";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -91,6 +92,33 @@ const authorFieldMarkers = async (
   for (const { path } of fields) {
     if (!written.has(path)) {
       throw new Error(`fixture has no {{${path}}} marker to configure`);
+    }
+  }
+  return buffer;
+};
+
+/**
+ * A condition the document only gates a block with has no value marker to
+ * carry its configuration, so its rule, label and AI instruction live in the
+ * `{% if %}` tag itself. Mirrors what `configure_template_fields` writes.
+ */
+const authorConditionTags = async (
+  docx: Buffer,
+  fields: readonly FieldMeta[],
+): Promise<Buffer> => {
+  const { buffer, written } = await writeFieldFilters(
+    docx,
+    [],
+    fields.map((field) => ({
+      path: field.path,
+      expression: field.condition,
+      filters:
+        field.condition === undefined ? filtersFromFieldConfig(field) : [],
+    })),
+  );
+  for (const { path } of fields) {
+    if (!written.has(path)) {
+      throw new Error(`fixture has no {% if ${path} %} tag to configure`);
     }
   }
   return buffer;
@@ -491,6 +519,230 @@ describe("fillStoredTemplateDocx use recording", () => {
 
     expect(result).toEqual({ error: "Template not found." });
     expect(updates).toBe(0);
+  });
+});
+
+describe("fillTemplateDocx condition decisions", () => {
+  /** A document whose only paragraph is gated by an AI-decided condition, so
+   *  the rendered text alone cannot say whether the condition was false or
+   *  never settled. */
+  const gatedDocx = async (): Promise<Buffer> =>
+    await authorConditionTags(
+      await authorFieldMarkers(
+        await makeDocx(
+          WRAP(
+            [
+              P("{% if is_consumer %}"),
+              P("Consumer notice. {{governing_law}}"),
+              P("{% endif %}"),
+            ].join(""),
+          ),
+        ),
+        [{ path: "governing_law", label: "Governing law", inputType: "text" }],
+      ),
+      [
+        {
+          path: "is_consumer",
+          label: "Consumer contract",
+          inputType: "boolean",
+          aiPrompt: "Is this a consumer contract?",
+        },
+      ],
+    );
+
+  const fillGated = async ({
+    decide,
+    values = { governing_law: "Czech" },
+  }: {
+    decide: AiConditionDecider;
+    values?: Record<string, unknown>;
+  }) => {
+    const result = await fillTemplateDocx({
+      source: { name: "NDA", fileName: "nda.docx", buffer: await gatedDocx() },
+      values,
+      scopedDb: stubScopedDb(),
+      organizationId,
+      requiredFields: "enforce",
+      aiCollaborators: async () => ({ decideAiCondition: decide }),
+    });
+    if (!("buffer" in result)) {
+      throw new Error("expected a filled document");
+    }
+    return result;
+  };
+
+  test("reports the decision model's answer with the probability it chose", async () => {
+    const result = await fillGated({
+      decide: async () => ({
+        decidedBy: "decision_model",
+        value: true,
+        probability: 0.94,
+      }),
+    });
+
+    expect(result.conditionDecisions).toEqual([
+      {
+        path: "is_consumer",
+        label: "Consumer contract",
+        state: "decided",
+        value: true,
+        decidedBy: "decision_model",
+        probability: 0.94,
+      },
+    ]);
+    expect((await extractTexts(result.buffer)).join("")).toContain(
+      "Consumer notice.",
+    );
+  });
+
+  test("reports the generative fallback's answer, which carries no probability", async () => {
+    const result = await fillGated({
+      decide: async () => ({ decidedBy: "generative_model", value: false }),
+    });
+
+    expect(result.conditionDecisions).toEqual([
+      {
+        path: "is_consumer",
+        label: "Consumer contract",
+        state: "decided",
+        value: false,
+        decidedBy: "generative_model",
+      },
+    ]);
+    // The gated paragraph is out, which is why the decision has to be reported.
+    expect((await extractTexts(result.buffer)).join("")).not.toContain(
+      "Consumer notice.",
+    );
+  });
+
+  test("a value the caller supplied wins and is reported as theirs", async () => {
+    let asked = false;
+    const result = await fillGated({
+      values: { governing_law: "Czech", is_consumer: true },
+      decide: async () => {
+        asked = true;
+        return { decidedBy: "generative_model", value: false };
+      },
+    });
+
+    expect(asked).toBe(false);
+    expect(result.conditionDecisions).toEqual([
+      {
+        path: "is_consumer",
+        label: "Consumer contract",
+        state: "decided",
+        value: true,
+        decidedBy: "user",
+      },
+    ]);
+  });
+
+  test("a condition no tier could settle is reported undecided, not false", async () => {
+    const result = await fillGated({ decide: async () => undefined });
+
+    expect(result.conditionDecisions).toEqual([
+      {
+        path: "is_consumer",
+        label: "Consumer contract",
+        state: "undecided",
+        reason: "failed",
+      },
+    ]);
+    expect((await extractTexts(result.buffer)).join("")).not.toContain(
+      "Consumer notice.",
+    );
+  });
+});
+
+describe("describeStoredTemplate gated blocks", () => {
+  const templateId = toSafeId<"template">("tmpl_2");
+  const s3Key = "fake-key-conditions";
+
+  const stubDescribeScopedDb = (): ScopedDb => {
+    const fakeTx = {
+      query: {
+        templates: {
+          findFirst: async () => ({
+            name: "Engagement letter",
+            fileName: "engagement.docx",
+            s3Key,
+          }),
+        },
+      },
+    };
+    // SAFETY: test stub; describeStoredTemplate only reads the templates row
+    // through this scopedDb (the DOCX comes from the fake S3 below).
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+    return (async (fn: (tx: unknown) => Promise<unknown>) =>
+      fn(fakeTx)) as unknown as ScopedDb;
+  };
+
+  test("lists every {% if %} block by its governing path and kind", async () => {
+    // A rule's filters ride on the value marker that carries the field; an
+    // AI-decided condition the document never prints has only its `{% if %}`
+    // tag to be configured in. Both shapes appear here, plus a plain boolean
+    // the person answers.
+    const buffer = await authorConditionTags(
+      await authorFieldMarkers(
+        await makeDocx(
+          WRAP(
+            [
+              P("{% if is_consumer %}"),
+              P("Consumer notice."),
+              P("{% endif %}"),
+              P("{% if is_corp %}"),
+              P("Corporate notice: {{is_corp}}"),
+              P("{% endif %}"),
+              P("{% if signed %}"),
+              P("Signed on {{signed_on}}."),
+              P("{% endif %}"),
+            ].join(""),
+          ),
+        ),
+        [
+          { path: "signed_on", label: "Signed on", inputType: "date" },
+          {
+            path: "is_corp",
+            inputType: "boolean",
+            condition: "party_type == 'corp'",
+          },
+        ],
+      ),
+      [
+        {
+          path: "is_consumer",
+          inputType: "boolean",
+          aiPrompt: "Is this a consumer contract?",
+        },
+      ],
+    );
+
+    const fakeS3 = startFakeS3();
+    try {
+      fakeS3.put("stella", s3Key, buffer);
+      const result = await describeStoredTemplate({
+        templateId,
+        organizationId,
+        scopedDb: stubDescribeScopedDb(),
+      });
+      if ("error" in result) {
+        throw new Error(result.error);
+      }
+
+      // `signed` is a plain boolean the person answers: before this it was
+      // absent from `conditions` entirely, so nothing said it gated a block.
+      expect(result.conditions).toEqual([
+        {
+          path: "is_consumer",
+          kind: "ai",
+          prompt: "Is this a consumer contract?",
+        },
+        { path: "is_corp", kind: "rule", condition: "party_type == 'corp'" },
+        { path: "signed", kind: "asked" },
+      ]);
+    } finally {
+      fakeS3.stop();
+    }
   });
 });
 

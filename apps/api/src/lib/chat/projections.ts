@@ -2061,10 +2061,31 @@ export const TEMPLATE_DESCRIBE_PROJECTION = v.strictObject({
       ),
     }),
   ),
-  // Derived fields, named the way a configure entry names them, so a
-  // caller can edit an expression and send it straight back.
+  // Every `{% if %}` block the document carries, by the field path governing
+  // it and how that path is answered: `asked` (the person), `rule` (an
+  // expression, named the way a configure entry names it so a caller can edit
+  // it and send it straight back) or `ai` (the instructions the model decides
+  // on). Org-authored structure, like the field paths above.
   conditions: v.array(
-    v.strictObject({ path: v.string(), condition: v.string() }),
+    v.variant("kind", [
+      projectionBranch(
+        v.strictObject({ path: v.string(), kind: v.literal("asked") }),
+      ),
+      projectionBranch(
+        v.strictObject({
+          path: v.string(),
+          kind: v.literal("rule"),
+          condition: v.string(),
+        }),
+      ),
+      projectionBranch(
+        v.strictObject({
+          path: v.string(),
+          kind: v.literal("ai"),
+          prompt: v.string(),
+        }),
+      ),
+    ]),
   ),
   computed: v.array(v.strictObject({ path: v.string(), formula: v.string() })),
   // Every {% for %} loop over object items: `path` belongs in `values` as an

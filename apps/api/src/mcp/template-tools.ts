@@ -59,6 +59,7 @@ import {
 } from "@/api/lib/templates/record-use";
 import { renameStoredTemplate } from "@/api/lib/templates/rename-template";
 import { containsNull } from "@/api/lib/templates/template-data";
+import { templateDecideConditionsLogic } from "@/api/lib/templates/template-decide-conditions";
 import type { TemplateFillCompletionMode } from "@/api/lib/templates/template-fill-completion";
 import {
   decideTemplateFillCompletion,
@@ -82,6 +83,12 @@ import { MCP_MAX_REQUEST_BODY_BYTES } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { OPENAI_FILE_REFERENCE_SCHEMA } from "@/api/mcp/document-file-upload";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
+import {
+  TEMPLATE_CONDITION_DECISION_OUTPUT_SCHEMA,
+  type TemplateConditionDecisionOutput,
+  toFillConditionDecision,
+  toPreviewConditionDecision,
+} from "@/api/mcp/template-condition-decisions";
 import {
   MAX_DOCX_MEGABYTES,
   MAX_INLINE_DOCX_BASE64_LENGTH,
@@ -147,7 +154,8 @@ type TemplateToolName =
   | "fill_template"
   | "save_filled_template"
   | "create_template"
-  | "configure_template_fields";
+  | "configure_template_fields"
+  | "preview_template_conditions";
 
 /** Max assembled-text length returned inline; full bytes ride along as base64. */
 const TEMPLATE_FILL_TEXT_MAX_CHARS = 16_000;
@@ -428,6 +436,7 @@ const toTemplateDetailPayload = (
 
 type TemplateDetailPayload = ReturnType<typeof toTemplateDetailPayload>;
 type TemplateDetailField = TemplateDetailPayload["fields"][number];
+type TemplateDetailCondition = TemplateDetailPayload["conditions"][number];
 
 const templateFieldOptionItems = (
   payload: TemplateDetailPayload,
@@ -506,6 +515,18 @@ const buildTemplateDetailTextFieldSpecs = (
     },
   }),
   defineTextFieldSpec({
+    path: "conditions[].prompt",
+    items: (payload: TemplateDetailPayload) => payload.conditions,
+    scope: () => organizationId,
+    read: (condition: TemplateDetailCondition) =>
+      condition.kind === "ai" ? condition.prompt : undefined,
+    apply: (condition: TemplateDetailCondition, value) => {
+      if (condition.kind === "ai") {
+        condition.prompt = value;
+      }
+    },
+  }),
+  defineTextFieldSpec({
     path: "warnings[].path",
     items: (payload: TemplateDetailPayload) => arrayOrEmpty(payload.warnings),
     scope: () => organizationId,
@@ -530,6 +551,29 @@ const buildTemplateDetailTextFieldSpecs = (
     read: (warning: TemplateWarning) => warning.hint,
     apply: (warning: TemplateWarning, value) => {
       warning.hint = value;
+    },
+  }),
+];
+
+/**
+ * The one tenant-authored string a condition preview carries: each condition's
+ * label, which is the field's label as the template's author wrote it. Paths,
+ * booleans and probabilities are structural.
+ */
+type PreviewConditionsPayload = {
+  conditions: readonly TemplateConditionDecisionOutput[];
+};
+
+const buildPreviewConditionsTextFieldSpecs = (
+  organizationId: string,
+): readonly McpTextFieldSpec<PreviewConditionsPayload>[] => [
+  defineTextFieldSpec({
+    path: "conditions[].label",
+    items: (payload: PreviewConditionsPayload) => payload.conditions,
+    scope: () => organizationId,
+    read: (condition: TemplateConditionDecisionOutput) => condition.label,
+    apply: (condition: TemplateConditionDecisionOutput, value) => {
+      condition.label = value;
     },
   }),
 ];
@@ -570,6 +614,59 @@ export const CREATE_TEMPLATE_TOOL_DEFINITION = defineValibotMcpTool({
   name: "create_template",
   scope: "stella:templates",
 });
+
+/**
+ * `preview_template_conditions`: the template plus the values to ask about.
+ * No document is produced and nothing is written, so the values are whatever
+ * the caller has so far.
+ */
+export const previewTemplateConditionsArgsSchema = nullAsAbsent(
+  v.strictObject({
+    template_id: uuidInputSchema(
+      "Template whose AI-decided conditions to ask about, as returned by list_templates",
+    ),
+    values: v.pipe(
+      v.record(v.string(), v.unknown()),
+      v.description(
+        "Map of field path to value, the same map fill_template takes. Partial is fine: the model decides on what it is given.",
+      ),
+    ),
+  }),
+);
+
+export const PREVIEW_TEMPLATE_CONDITIONS_TOOL_DEFINITION = defineValibotMcpTool(
+  {
+    description:
+      "Ask what a set of values would decide, without filling anything. One " +
+      "entry per AI-decided condition (the `ai` entries in list_templates' " +
+      "`conditions`): its `path`, `label`, and either " +
+      '`state: "decided"` with the `value` its block would be gated on and ' +
+      'the `probability` behind it, or `state: "undecided"` with a `reason` ' +
+      "(`no_decision_model`, `below_floor`, `failed`). Only the decision " +
+      "model runs, so it costs a fraction of a fill, and an undecided " +
+      "condition may still be answered at fill time by the generative " +
+      "model. Settle one yourself by putting the boolean in `values`: a " +
+      "supplied value always wins. Nothing is written.",
+    inputSchema: previewTemplateConditionsArgsSchema,
+    annotations: {
+      title: "Preview template conditions",
+      destructiveHint: false,
+      readOnlyHint: true,
+      openWorldHint: false,
+    },
+    access: "read",
+    anonymized: {
+      exposure: "anonymize",
+      // Placeholder org id: derivation only ever reads `.path`, see the
+      // builders' doc comment above.
+      textFields: deriveTextFieldPaths(
+        buildPreviewConditionsTextFieldSpecs(""),
+      ),
+    },
+    name: "preview_template_conditions",
+    scope: "stella:templates",
+  },
+);
 
 export const CONFIGURE_TEMPLATE_FIELDS_TOOL_DEFINITION = defineValibotMcpTool({
   description:
@@ -769,6 +866,7 @@ export const TEMPLATE_TOOL_DEFINITIONS = [
   },
   CREATE_TEMPLATE_TOOL_DEFINITION,
   CONFIGURE_TEMPLATE_FIELDS_TOOL_DEFINITION,
+  PREVIEW_TEMPLATE_CONDITIONS_TOOL_DEFINITION,
 ] as const satisfies readonly McpToolDefinition[];
 
 /** The whole advertised list_templates surface, so the branch dispatch below
@@ -1016,6 +1114,7 @@ const FILL_TEMPLATE_OUTPUT_SCHEMA = v.union([
     unusedValues: v.array(v.string()),
     structureErrors: v.array(TEMPLATE_STRUCTURE_ERROR_OUTPUT_SCHEMA),
     aiFieldErrors: v.array(TEMPLATE_AI_FIELD_ERROR_OUTPUT_SCHEMA),
+    decisions: v.array(TEMPLATE_CONDITION_DECISION_OUTPUT_SCHEMA),
   }),
   v.strictObject({
     completionStatus: v.picklist(["complete", "partial"]),
@@ -1028,8 +1127,17 @@ const FILL_TEMPLATE_OUTPUT_SCHEMA = v.union([
     unusedValues: v.array(v.string()),
     structureErrors: v.array(TEMPLATE_STRUCTURE_ERROR_OUTPUT_SCHEMA),
     aiFieldErrors: v.array(TEMPLATE_AI_FIELD_ERROR_OUTPUT_SCHEMA),
+    decisions: v.array(TEMPLATE_CONDITION_DECISION_OUTPUT_SCHEMA),
   }),
 ]);
+
+/** What the decision-model dry run reports: one entry per AI-decided
+ *  condition, in the shape `fill_template` reports its own decisions in, plus
+ *  the versioned model that answered (null when none could). */
+const PREVIEW_TEMPLATE_CONDITIONS_OUTPUT_SCHEMA = v.strictObject({
+  conditions: v.array(TEMPLATE_CONDITION_DECISION_OUTPUT_SCHEMA),
+  model: v.nullable(v.string()),
+});
 
 const SAVE_FILLED_TEMPLATE_OUTPUT_SCHEMA = v.variant("action", [
   v.strictObject({
@@ -1337,6 +1445,7 @@ const handleFillTemplateTool: McpToolHandler<
         reason: error.reason,
         message: error.message,
       })),
+      decisions: filled.conditionDecisions.map(toFillConditionDecision),
     });
   }
 
@@ -1380,6 +1489,10 @@ const handleFillTemplateTool: McpToolHandler<
       reason: error.reason,
       message: error.message,
     })),
+    // What each AI-decided condition was settled on: an agent reading the
+    // paragraphs cannot tell an excluded block from one the template never
+    // carried, nor a decided `false` from a condition nothing could settle.
+    decisions: filled.conditionDecisions.map(toFillConditionDecision),
   });
 };
 
@@ -2679,11 +2792,62 @@ const handleConfigureTemplateFieldsTool: TypedMcpToolHandler<
   });
 };
 
+/**
+ * `preview_template_conditions`: the decision model's answer for every
+ * AI-decided condition of one template, over the values as they stand. Shares
+ * `templateDecideConditionsLogic` with the REST route the fill form calls, so
+ * the two cannot report different answers to the same question; only the wire
+ * shape differs, and that mapping has one owner.
+ */
+const handlePreviewTemplateConditionsTool: TypedMcpToolHandler<
+  v.InferInput<typeof PREVIEW_TEMPLATE_CONDITIONS_OUTPUT_SCHEMA>
+> = async ({ args, context }) => {
+  if (!hasEffectiveAuthority(context, { template: ["use"] })) {
+    return errorResult("Forbidden");
+  }
+
+  const parsed = v.safeParse(previewTemplateConditionsArgsSchema, args);
+  if (!parsed.success) {
+    return validationErrorResult(parsed.issues);
+  }
+
+  const decideConditions =
+    context.testDependencies?.templateDecideConditionsLogic ??
+    templateDecideConditionsLogic;
+  const decided = await decideConditions({
+    scopedDb: context.scopedDb,
+    organizationId: context.organizationId,
+    templateId: brandPersistedTemplateId(parsed.output.template_id),
+    body: { values: parsed.output.values },
+  });
+  if (Result.isError(decided)) {
+    return notFoundResult(
+      decided.error.message,
+      "Call list_templates to find a template id in this organization.",
+    );
+  }
+
+  // Each condition's label is the org-authored field label; its path,
+  // probability and answer are structural. Templates are organization-scoped,
+  // so the org id is the anonymization scope.
+  const payload = {
+    conditions: decided.value.conditions.map(toPreviewConditionDecision),
+    model: decided.value.model,
+  };
+  const textFields = runTextFieldSpecs(
+    buildPreviewConditionsTextFieldSpecs(context.organizationId),
+    payload,
+  );
+
+  return { egress: "structured", payload, textFields };
+};
+
 export const TEMPLATE_TOOL_HANDLERS = {
   configure_template_fields: handleConfigureTemplateFieldsTool,
   create_template: handleCreateTemplateTool,
   fill_template: handleFillTemplateTool,
   list_templates: handleListTemplatesTool,
+  preview_template_conditions: handlePreviewTemplateConditionsTool,
   save_filled_template: handleSaveFilledTemplateTool,
 } satisfies Record<TemplateToolName, McpToolHandler>;
 
@@ -2700,6 +2864,9 @@ export const TEMPLATE_TOOL_SET = defineMcpToolSet(
     fill_template: defineMcpToolOutput(FILL_TEMPLATE_OUTPUT_SCHEMA),
     list_templates: defineChatProjectionMcpToolOutput(
       LIST_TEMPLATES_PROJECTION,
+    ),
+    preview_template_conditions: defineMcpToolOutput(
+      PREVIEW_TEMPLATE_CONDITIONS_OUTPUT_SCHEMA,
     ),
     save_filled_template: defineMcpToolOutput(
       SAVE_FILLED_TEMPLATE_OUTPUT_SCHEMA,
