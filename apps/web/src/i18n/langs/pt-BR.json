@@ -2281,7 +2281,9 @@
     "editOpenFailedTitle": "Não foi possível abrir DOCX",
     "editPermissionDenied": "Você não tem permissão para editar este documento.",
     "editSaveFailedTitle": "Não foi possível salvar DOCX",
-    "editSessionTakenOver": "Esta sessão de edição foi assumida em outro lugar.",
+    "editSessionReleased": "Este documento foi aberto para edição em outro lugar, portanto esta aba é somente leitura.",
+    "editSessionReleasedUnsaved": "Suas alterações não salvas são mantidas aqui.",
+    "editSessionReopen": "Reabrir para edição",
     "evidenceReferences": "Referências de prova",
     "evidenceUnavailable": "Não é possível abrir esta referência de prova neste caso.",
     "findReplace": {

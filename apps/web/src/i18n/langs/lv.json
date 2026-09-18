@@ -2281,7 +2281,9 @@
     "editOpenFailedTitle": "Neizdevās atvērt DOCX",
     "editPermissionDenied": "Jums nav tiesību rediģēt šo dokumentu.",
     "editSaveFailedTitle": "Neizdevās saglabāt DOCX",
-    "editSessionTakenOver": "Šo rediģēšanas sesiju pārņēma citur.",
+    "editSessionReleased": "Šis dokuments tika atvērts rediģēšanai citur, tāpēc šī cilne ir tikai lasāma.",
+    "editSessionReleasedUnsaved": "Jūsu nesaglabātās izmaiņas paliek šeit.",
+    "editSessionReopen": "Atkārtoti atvērt rediģēšanai",
     "evidenceReferences": "Pierādījumu atsauces",
     "evidenceUnavailable": "Šo pierādījuma atsauci šajā lietā nevar atvērt.",
     "findReplace": {

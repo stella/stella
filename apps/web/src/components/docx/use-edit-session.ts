@@ -27,32 +27,11 @@ import { filesKeys } from "@/lib/files/queries";
 import { toSafeId } from "@/lib/safe-id";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 
-export type EditSessionState =
-  | { status: "idle" }
-  | { status: "opening" }
-  | {
-      status: "editing";
-      sessionId: string;
-      sessionToken: string;
-      buffer: ArrayBuffer;
-      fileName: string;
-    }
-  | { status: "saving" }
-  | {
-      status: "error";
-      reason: EditSessionErrorReason;
-      source: EditSessionErrorSource;
-      detail?: string | undefined;
-    };
-
-export type EditSessionErrorReason =
-  | "authRequired"
-  | "permissionDenied"
-  | "downloadFailed"
-  | "takenOver"
-  | "unknown";
-
-type EditSessionErrorSource = "open" | "download" | "checkpoint" | "finalize";
+import {
+  resolveEditSessionFailure,
+  resolveTakenOverSession,
+} from "./use-edit-session.logic";
+import type { EditSessionState } from "./use-edit-session.logic";
 
 type FinalizeEditSessionResult =
   | {
@@ -78,6 +57,13 @@ type UseEditSessionOptions = {
 };
 
 const CHECKPOINT_DEBOUNCE_MS = 5000;
+
+/**
+ * What a checkpoint did with the bytes it was handed. `released` is not a
+ * failure to report: the lock moved to another tab mid-save, and the released
+ * session already tells the user so.
+ */
+type CheckpointOutcome = "failed" | "released" | "saved";
 
 type EditSessionReleaseContext = {
   workspaceId: string;
@@ -116,24 +102,6 @@ const releaseEditSession = async ({
     return false;
   }
   return true;
-};
-
-const getEditSessionErrorReason = (error: {
-  status: number;
-}): EditSessionErrorReason => {
-  if (error.status === 401) {
-    return "authRequired";
-  }
-
-  if (error.status === 403) {
-    return "permissionDenied";
-  }
-
-  if (error.status === 409) {
-    return "takenOver";
-  }
-
-  return "unknown";
 };
 
 export const useEditSession = ({
@@ -190,12 +158,14 @@ export const useEditSession = ({
       if (!isMounted()) {
         return false;
       }
-      setState({
-        detail: userErrorMessage(response.error, "Failed to open DOCX."),
-        status: "error",
-        reason: getEditSessionErrorReason(response.error),
-        source: "open",
-      });
+      setState(
+        resolveEditSessionFailure({
+          detail: userErrorMessage(response.error, "Failed to open DOCX."),
+          hasUnsavedChanges: isDirty,
+          source: "open",
+          status: response.error.status,
+        }),
+      );
       return false;
     }
 
@@ -256,10 +226,12 @@ export const useEditSession = ({
     return true;
   };
 
-  const saveCheckpointNow = async (docxBuffer: ArrayBuffer) => {
+  const saveCheckpointNow = async (
+    docxBuffer: ArrayBuffer,
+  ): Promise<CheckpointOutcome> => {
     const session = sessionRef.current;
     if (!session) {
-      return false;
+      return "failed";
     }
 
     const file = new File([docxBuffer], session.fileName, {
@@ -274,17 +246,22 @@ export const useEditSession = ({
     });
 
     if (response.error) {
-      if (response.error.status === 409) {
-        sessionRef.current = null;
-        setIsDirty(false);
-        setState({
-          status: "error",
-          reason: "takenOver",
-          source: "checkpoint",
-          detail: userErrorMessage(response.error, "Failed to save DOCX."),
-        });
+      // The checkpoint that lost the race holds the only copy of the user's
+      // latest work, so the released state says the changes are unsaved. Any
+      // other checkpoint failure is transient and the autosave status reports
+      // it without ending the session.
+      const takenOver = resolveTakenOverSession({
+        hasUnsavedChanges: true,
+        status: response.error.status,
+      });
+      if (takenOver === null) {
+        return "failed";
       }
-      return false;
+
+      sessionRef.current = null;
+      setIsDirty(false);
+      setState(takenOver);
+      return "released";
     }
 
     if (response.data.rotatedSessionToken) {
@@ -295,7 +272,7 @@ export const useEditSession = ({
       };
     }
     setIsDirty(false);
-    return true;
+    return "saved";
   };
 
   const saveCheckpoint = async (docxBuffer: ArrayBuffer) => {
@@ -365,12 +342,20 @@ export const useEditSession = ({
     });
 
     if (response.error) {
-      setState({
+      const failure = resolveEditSessionFailure({
         detail: userErrorMessage(response.error, "Failed to save DOCX."),
-        status: "error",
-        reason: getEditSessionErrorReason(response.error),
+        hasUnsavedChanges: isDirty,
         source: "finalize",
+        status: response.error.status,
       });
+      // A released session is gone server-side: keeping the local handle would
+      // let unmount cleanup release whatever session replaced it, and keeping
+      // the dirty flag would leave the unload warning armed.
+      if (failure.status === "released") {
+        sessionRef.current = null;
+        setIsDirty(false);
+      }
+      setState(failure);
       return false;
     }
 

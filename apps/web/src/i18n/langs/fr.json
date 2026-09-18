@@ -2281,7 +2281,9 @@
     "editOpenFailedTitle": "Impossible d’ouvrir le DOCX",
     "editPermissionDenied": "Vous n’avez pas l’autorisation de modifier ce document.",
     "editSaveFailedTitle": "Impossible d’enregistrer le DOCX",
-    "editSessionTakenOver": "Cette session de modification a été reprise ailleurs.",
+    "editSessionReleased": "Ce document a été ouvert pour modification ailleurs ; cet onglet est donc en lecture seule.",
+    "editSessionReleasedUnsaved": "Vos modifications non enregistrées sont conservées ici.",
+    "editSessionReopen": "Rouvrir pour modification",
     "evidenceReferences": "Références aux éléments de preuve",
     "evidenceUnavailable": "Cette référence à un élément de preuve ne peut pas être ouverte dans cette affaire.",
     "findReplace": {

@@ -2281,7 +2281,9 @@
     "editOpenFailedTitle": "تعذّر فتح ملف DOCX",
     "editPermissionDenied": "ليس لديك إذن لتعديل هذا المستند.",
     "editSaveFailedTitle": "تعذّر حفظ ملف DOCX",
-    "editSessionTakenOver": "فتح علامة تبويب أو نافذة أو جهاز آخر هذا المستند للتعديل، لذا تم تحرير هذه الجلسة. تم الحفاظ على التغييرات المحلية غير المحفوظة؛ أعد فتح المستند للمتابعة.",
+    "editSessionReleased": "تم فتح هذا المستند للتعديل في مكان آخر، لذا فإن علامة التبويب هذه للقراءة فقط.",
+    "editSessionReleasedUnsaved": "تظل تغييراتك غير المحفوظة هنا.",
+    "editSessionReopen": "إعادة الفتح للتعديل",
     "evidenceReferences": "مراجع الأدلة",
     "evidenceUnavailable": "لا يمكن فتح مرجع الدليل هذا في هذا الملف القانوني.",
     "findReplace": {

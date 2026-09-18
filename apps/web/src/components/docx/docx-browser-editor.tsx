@@ -48,6 +48,8 @@ import type {
   EditorMode,
 } from "@stll/folio-react";
 import { Button } from "@stll/ui/button";
+import { ReviewOutOfDateNotice } from "@stll/ui/review-out-of-date-notice";
+import type { ReviewOutOfDateReason } from "@stll/ui/review-out-of-date-notice";
 import {
   Select as StSelect,
   SelectItem as StSelectItem,
@@ -120,6 +122,7 @@ import {
   getDocxEditBlockReason,
   getDocxLeaveAction,
   getDocxEditSafety,
+  isDocxEditorUnlocked,
   selectDocxBrowserEditorBuffer,
   selectPreviewFile,
   shouldFinalizeEditSession,
@@ -142,11 +145,11 @@ import {
   shouldCommitAnonymizationDetectionResult,
 } from "./docx-edit-mode.logic";
 import type { AutosaveStatus } from "./docx-edit-mode.logic";
+import { useEditSession } from "./use-edit-session";
 import type {
   EditSessionErrorReason,
   EditSessionState,
-} from "./use-edit-session";
-import { useEditSession } from "./use-edit-session";
+} from "./use-edit-session.logic";
 
 const CHANGE_CHECKPOINT_DELAY = 2000;
 const noop = () => undefined;
@@ -1037,6 +1040,14 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
     state.status,
   ]);
 
+  // Taking the session back from the tab that took it: the same open call,
+  // which rotates the session token away from that tab in turn.
+  const reopenReleasedSession = useCallback(() => {
+    didOpenRef.current = true;
+    errorToastShownRef.current = false;
+    detached(open(), "docx-browser-editor.reopen-released-session");
+  }, [open]);
+
   useExternalSyncEffect(() => {
     if (!pendingEditRequestRef.current) {
       return;
@@ -1121,7 +1132,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
     resetError();
   }, [onClose, resetError, state, t]);
 
-  const isUnlocked = canEditCollaboratively || state.status === "editing";
+  const isUnlocked = isDocxEditorUnlocked({ canEditCollaboratively, state });
   const evidence = useEvidenceReferences(
     isUnlocked && editorMode !== "viewing",
   );
@@ -1244,11 +1255,11 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
     }
     setAutosaveStatus("syncing");
     const buffer = await ref.save({ selective: true });
-    const checkpointSaved = buffer ? await saveActiveCheckpoint(buffer) : false;
+    const outcome = buffer ? await saveActiveCheckpoint(buffer) : "failed";
     setAutosaveStatus(
       resolveCheckpointAutosaveStatus({
         buffer: buffer ?? null,
-        checkpointSaved,
+        checkpointSaved: outcome === "saved",
       }),
     );
   });
@@ -1638,14 +1649,18 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
     }
 
     setAutosaveStatus("syncing");
-    const saved = await saveActiveCheckpoint(buffer);
-    if (!saved) {
+    const checkpoint = await saveActiveCheckpoint(buffer);
+    if (checkpoint !== "saved") {
       setAutosaveStatus("pending");
-      stellaToast.add({
-        description: t("folio.saveCheckpointFailedDescription"),
-        title: t("folio.saveCheckpointFailedTitle"),
-        type: "error",
-      });
+      // A session taken over mid-save has nowhere to retry to; its banner
+      // already says the document is read-only here.
+      if (checkpoint === "failed") {
+        stellaToast.add({
+          description: t("folio.saveCheckpointFailedDescription"),
+          title: t("folio.saveCheckpointFailedTitle"),
+          type: "error",
+        });
+      }
       return false;
     }
     setAutosaveStatus("synced");
@@ -1954,11 +1969,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
     };
   });
 
-  if (
-    state.status === "error" &&
-    state.source !== "open" &&
-    state.source !== "download"
-  ) {
+  if (state.status === "error" && state.source === "finalize") {
     return (
       <StatusMessage
         actionButton={
@@ -2055,6 +2066,12 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
           onEvidenceReferencesDialogStateChange(nextOpen ? "open" : "closed");
         }}
       />
+      {state.status === "released" && (
+        <EditSessionReleasedNotice
+          hasUnsavedChanges={state.hasUnsavedChanges}
+          onReopen={reopenReleasedSession}
+        />
+      )}
       {find.isOpen && <DocxFindBar find={find} />}
       {/* Folio editor with AI overlay */}
       <div
@@ -2606,11 +2623,47 @@ const DocxBrowserEditorErrorFallback = ({
   );
 };
 
+type EditSessionReleasedNoticeProps = {
+  hasUnsavedChanges: boolean;
+  onReopen: () => void;
+};
+
+/**
+ * The session moved to another tab, window or device. Losing the lock is not a
+ * failure the user has to clear: the document stays open read-only, so this
+ * states what happened and offers the way back.
+ */
+const EditSessionReleasedNotice = ({
+  hasUnsavedChanges,
+  onReopen,
+}: EditSessionReleasedNoticeProps) => {
+  const t = useTranslations();
+  const reasons: ReviewOutOfDateReason[] = [
+    { id: "released", label: t("folio.editSessionReleased") },
+  ];
+  if (hasUnsavedChanges) {
+    reasons.push({
+      id: "unsavedChanges",
+      label: t("folio.editSessionReleasedUnsaved"),
+    });
+  }
+
+  return (
+    <div aria-live="polite" className="shrink-0 px-3 pt-3" role="status">
+      <ReviewOutOfDateNotice
+        actionLabel={t("folio.editSessionReopen")}
+        onAction={onReopen}
+        reasons={reasons}
+        tone="muted"
+      />
+    </div>
+  );
+};
+
 type EditSessionErrorMessageKey =
   | "folio.editAuthRequired"
   | "folio.editPermissionDenied"
   | "folio.editDownloadFailed"
-  | "folio.editSessionTakenOver"
   | "folio.editOpenFailed";
 
 const editSessionErrorDescriptionKey = (
@@ -2623,8 +2676,6 @@ const editSessionErrorDescriptionKey = (
       return "folio.editPermissionDenied";
     case "downloadFailed":
       return "folio.editDownloadFailed";
-    case "takenOver":
-      return "folio.editSessionTakenOver";
     case "unknown":
       return "folio.editOpenFailed";
     default: {

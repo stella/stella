@@ -2281,7 +2281,9 @@
     "editOpenFailedTitle": "Nie udało się otworzyć pliku DOCX",
     "editPermissionDenied": "Nie masz uprawnień do edycji tego dokumentu.",
     "editSaveFailedTitle": "Nie udało się zapisać pliku DOCX",
-    "editSessionTakenOver": "Ta sesja edycji została przejęta gdzie indziej.",
+    "editSessionReleased": "Ten dokument został otwarty do edycji w innym miejscu, więc ta karta jest tylko do odczytu.",
+    "editSessionReleasedUnsaved": "Twoje niezapisane zmiany pozostają tutaj.",
+    "editSessionReopen": "Otwórz ponownie do edycji",
     "evidenceReferences": "Odniesienia do dowodów",
     "evidenceUnavailable": "Nie można otworzyć tego odniesienia do dowodu w tej sprawie.",
     "findReplace": {

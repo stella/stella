@@ -2281,7 +2281,9 @@
     "editOpenFailedTitle": "A DOCX nem nyitható meg",
     "editPermissionDenied": "Nincs jogosultsága a dokumentum szerkesztéséhez.",
     "editSaveFailedTitle": "A DOCX nem menthető",
-    "editSessionTakenOver": "Ezt a szerkesztési munkamenetet máshol vették át.",
+    "editSessionReleased": "Ezt a dokumentumot máshol nyitották meg szerkesztésre, ezért ez a lap csak olvasható.",
+    "editSessionReleasedUnsaved": "A nem mentett módosításai itt megmaradnak.",
+    "editSessionReopen": "Újranyitás szerkesztésre",
     "evidenceReferences": "Bizonyíték-hivatkozások",
     "evidenceUnavailable": "Ez a bizonyíték-hivatkozás ebben az ügyben nem nyitható meg.",
     "findReplace": {

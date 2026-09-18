@@ -2281,7 +2281,9 @@
     "editOpenFailedTitle": "DOCX se nepodařilo otevřít",
     "editPermissionDenied": "Nemáte oprávnění tento dokument upravovat.",
     "editSaveFailedTitle": "DOCX se nepodařilo uložit",
-    "editSessionTakenOver": "Tento dokument byl otevřen k úpravám v jiné kartě, okně nebo zařízení, takže byla tato relace ukončena. Neuložené místní změny zůstávají zachovány — otevřete dokument znovu a pokračujte.",
+    "editSessionReleased": "Tento dokument byl otevřen k úpravám jinde, takže je tato karta jen pro čtení.",
+    "editSessionReleasedUnsaved": "Vaše neuložené změny tu zůstávají.",
+    "editSessionReopen": "Znovu otevřít k úpravám",
     "evidenceReferences": "Odkazy na důkazy",
     "evidenceUnavailable": "Tento odkaz na důkaz nelze v tomto spisu otevřít.",
     "findReplace": {
