@@ -1911,6 +1911,8 @@
       "accountDeletionSoleOwner": "Pred odstránením účtu preveďte vlastníctvo organizácií, ktorých ste jediným vlastníkom, alebo ich odstráňte.",
       "accountDeletionTaskReassignmentInvalid": "Skontrolujte každé preradenie aktívnej úlohy. Každý nový riešiteľ musí byť iným členom spisu, ktorý ešte nie je priradený k úlohe.",
       "accountDeletionTaskReassignmentLimitExceeded": "Je potrebné preradiť príliš veľa aktívnych úloh. Pred odstránením účtu niektoré úlohy dokončite alebo preraďte.",
+      "aiConfigDecisionInvalid": "Konfigurácia rozhodovacieho modelu je neplatná. Skontrolujte poskytovateľa a model.",
+      "aiConfigDecisionValidationFailed": "Rozhodovací model konfiguráciu odmietol. Skontrolujte kľúč API a model.",
       "aiConfigModelInvalid": "Konfigurácia modelu AI je neplatná. Skontrolujte vybrané modely.",
       "aiConfigProviderInvalid": "Konfigurácia poskytovateľa AI je neplatná. Skontrolujte nastavenia poskytovateľa.",
       "aiConfigProviderValidationFailed": "Poskytovateľ AI konfiguráciu odmietol. Skontrolujte kľúč API a model.",
@@ -3566,6 +3568,14 @@
       "dataRegion": "Dátový región",
       "dataRegionDescription": "Smeruje AI volania cez vybraný región kvôli dátovej suverenite.",
       "dataRegionUnsupported": "Regionálne smerovanie je dostupné iba pre Google AI (Vertex AI).",
+      "decision": {
+        "add": "Pridať rozhodovací model",
+        "description": "Otázky s pevne danou odpoveďou, napríklad kategórie dokumentov alebo polarita citácií, smerujú na tento model; bez neho na ne odpovedá generatívny model.",
+        "incomplete": "Zadajte kľúč API a model pre rozhodovací model alebo ho odstráňte.",
+        "instanceProvided": "stella už rozhodovací model poskytuje; vlastný pridajte len vtedy, ak chcete použiť iný.",
+        "label": "Rozhodovací model",
+        "modelId": "ID modelu"
+      },
       "defaultModel": "Predvolené: {model}",
       "defaultModelOption": "Predvolené",
       "deploymentNamePlaceholder": "Názov nasadenia",

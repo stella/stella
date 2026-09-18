@@ -48,6 +48,7 @@ const orgConfigForProviders = (providers: BYOKProvider[]): OrgAIConfig => ({
     },
     pdf: { provider: providers[0] ?? "anthropic", modelId: "pdf-default" },
   },
+  decision: null,
 });
 
 describe("encodeChatModelSelection / decodeChatModelSelection", () => {

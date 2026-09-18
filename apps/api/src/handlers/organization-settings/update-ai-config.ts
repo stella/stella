@@ -5,6 +5,7 @@ import { TANSTACK_AI_PROVIDERS } from "@stll/ai-catalog";
 
 import { organizationSettings } from "@/api/db/schema";
 import {
+  DECISION_MODEL_PROVIDERS,
   normalizeProviderRegion,
   type OrgAIConfig,
   type OrgAIModelSelection,
@@ -27,9 +28,12 @@ import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
+import { probeDecisionModel } from "@/api/lib/decisions/decision-model";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { isAllowedBYOKModelForRole } from "@/api/lib/tanstack-ai-models";
 import type { BYOKProvider, ModelRole } from "@/api/lib/tanstack-ai-models";
+
+import { resolveDecisionConfig } from "./ai-config-decision";
 
 const BYOK_PROVIDER_VALUES = TANSTACK_AI_PROVIDERS;
 
@@ -44,6 +48,13 @@ const modelSelectionBody = t.Object({
   modelId: t.String({ minLength: 1, maxLength: 256 }),
 });
 
+// Absent keeps the stored decision model, null clears it, an object sets it.
+const decisionBody = t.Object({
+  provider: t.UnionEnum(DECISION_MODEL_PROVIDERS),
+  apiKey: t.Optional(t.String({ minLength: 1 })),
+  modelId: t.String({ minLength: 1, maxLength: 256 }),
+});
+
 const updateAIConfigBody = t.Object({
   providers: t.Array(providerBody, { minItems: 1 }),
   overrideModels: t.Object({
@@ -52,6 +63,7 @@ const updateAIConfigBody = t.Object({
     reasoning: modelSelectionBody,
     pdf: modelSelectionBody,
   }),
+  decision: t.Optional(t.Nullable(decisionBody)),
 });
 
 const config = {
@@ -61,6 +73,8 @@ const config = {
 } satisfies HandlerConfig;
 
 const AI_CONFIG_ERROR_CODE = {
+  decisionInvalid: "ai_config_decision_invalid",
+  decisionValidationFailed: "ai_config_decision_validation_failed",
   modelInvalid: "ai_config_model_invalid",
   providerInvalid: "ai_config_provider_invalid",
   providerValidationFailed: "ai_config_provider_validation_failed",
@@ -138,6 +152,20 @@ const updateAIConfig = createSafeRootHandler(
       );
     }
 
+    const decisionResult = resolveDecisionConfig(
+      body.decision,
+      existingConfig?.decision,
+    );
+    if (!decisionResult.valid) {
+      return Result.err(
+        new HandlerError({
+          code: AI_CONFIG_ERROR_CODE.decisionInvalid,
+          status: 400,
+          message: decisionResult.error,
+        }),
+      );
+    }
+
     const newKeyProviders = new Set<BYOKProvider>();
     for (const provider of body.providers) {
       if (provider.apiKey) {
@@ -179,9 +207,27 @@ const updateAIConfig = createSafeRootHandler(
       );
     }
 
+    const decision = decisionResult.decision;
+    if (decision !== null && decisionResult.keyIsNew) {
+      const probe = await probeDecisionModel(
+        decision,
+        SETTINGS_PROBE_TIMEOUT_MS,
+      );
+      if (!probe.valid) {
+        return Result.err(
+          new HandlerError({
+            code: AI_CONFIG_ERROR_CODE.decisionValidationFailed,
+            status: 400,
+            message: probe.error,
+          }),
+        );
+      }
+    }
+
     const orgConfig: OrgAIConfig = {
       providers: providerResult.providers,
       overrideModels: modelResult.overrideModels,
+      decision,
     };
 
     const { ciphertext: newCiphertext, iv: newIv } = await encryptAIConfig(
@@ -217,6 +263,7 @@ const updateAIConfig = createSafeRootHandler(
             providers: orgConfig.providers.map(
               (providerConfig) => providerConfig.provider,
             ),
+            decision: orgConfig.decision?.provider ?? null,
           },
         });
       }),
@@ -230,6 +277,14 @@ const updateAIConfig = createSafeRootHandler(
         ...providerResponseExtras(providerConfig),
       })),
       overrideModels: orgConfig.overrideModels,
+      decision:
+        orgConfig.decision === null
+          ? null
+          : {
+              provider: orgConfig.decision.provider,
+              apiKeyMasked: maskApiKey(orgConfig.decision.apiKey),
+              modelId: orgConfig.decision.modelId,
+            },
     });
   },
 );

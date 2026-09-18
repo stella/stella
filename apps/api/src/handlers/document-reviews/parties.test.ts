@@ -75,6 +75,7 @@ const orgAIConfig = {
     pdf: { provider: "openai", modelId: "gpt-5.4" },
     reasoning: { provider: "openai", modelId: "gpt-5.4" },
   },
+  decision: null,
 } satisfies OrgAIConfig;
 
 const createHarness = ({

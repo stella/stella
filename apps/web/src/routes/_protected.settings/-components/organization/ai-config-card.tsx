@@ -17,19 +17,23 @@ import {
   createDefaultRoleModels,
   ensureRoleModelsForProviders,
   getProviderValues,
+  hasUsableDecisionModel,
   hasUsableProviderDrafts,
   providerDraftsFromStoredProviders,
   roleModelsFromOverrideModels,
+  serializeDecisionModel,
   serializeOverrideModels,
   serializeProviderDrafts,
   isProviderValue,
   PROVIDER_LABELS,
 } from "@/components/ai-config-role-models.logic";
 import type {
+  DecisionModelState,
   ModelSelection,
   ProviderCredentialDraft,
   RoleModelSelections,
   RoleValue,
+  StoredDecisionModel,
 } from "@/components/ai-config-role-models.logic";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -43,6 +47,7 @@ import {
   updateCachedAIAvailability,
 } from "@/lib/organization/ai-config-queries";
 import type { OrganizationAIConfig } from "@/lib/organization/ai-config-queries";
+import { AIConfigDecisionModel } from "@/routes/_protected.settings/-components/organization/ai-config-decision-model";
 
 export const AIConfigCard = () => {
   const activeOrganizationId = useRouteContext({
@@ -182,6 +187,15 @@ const AIConfigForm = ({ config, organizationId }: AIConfigFormProps) => {
     useState<ProviderCredentialDraft[]>(initialProviders);
   const [roleModels, setRoleModels] =
     useState<RoleModelSelections>(initialRoleModels);
+  // The decision model merges on its own terms, so the form tracks what the
+  // user did to it rather than a value: untouched keeps the stored one.
+  const [decisionState, setDecisionState] = useState<DecisionModelState>({
+    kind: "untouched",
+  });
+  const [storedDecision, setStoredDecision] =
+    useState<StoredDecisionModel | null>(
+      config.configured ? config.decision : null,
+    );
 
   const updateProviders = (nextProviders: ProviderCredentialDraft[]) => {
     const providerValues = getProviderValues(nextProviders);
@@ -215,9 +229,13 @@ const AIConfigForm = ({ config, organizationId }: AIConfigFormProps) => {
         panic("ai-config save fired with no valid override models");
       }
 
+      // An absent `decision` is what keeps the stored one, so the field is
+      // omitted rather than sent as undefined.
+      const decision = serializeDecisionModel(decisionState);
       const response = await api["organization-settings"]["ai-config"].post({
         providers: serializeProviderDrafts(providers),
         overrideModels,
+        ...(decision === undefined ? {} : { decision }),
       });
       return unwrapEden(response);
     },
@@ -230,6 +248,8 @@ const AIConfigForm = ({ config, organizationId }: AIConfigFormProps) => {
           providers: getProviderValues(nextProviders),
         }),
       );
+      setStoredDecision(data.decision);
+      setDecisionState({ kind: "untouched" });
       queryClient.setQueryData(
         aiAvailabilityOptions({ organizationId }).queryKey,
         (current) =>
@@ -274,6 +294,8 @@ const AIConfigForm = ({ config, organizationId }: AIConfigFormProps) => {
       const nextProviders = [createProviderCredentialDraft()];
       setProviders(nextProviders);
       setRoleModels(createDefaultRoleModels(getProviderValues(nextProviders)));
+      setStoredDecision(null);
+      setDecisionState({ kind: "untouched" });
       queryClient.setQueryData(
         aiAvailabilityOptions({ organizationId }).queryKey,
         (current) =>
@@ -307,9 +329,14 @@ const AIConfigForm = ({ config, organizationId }: AIConfigFormProps) => {
 
   const providerValues = getProviderValues(providers);
   const removeLabel = tCommon("remove");
-  const canSave =
+  const rolesReady =
     hasUsableProviderDrafts(providers) &&
     serializeOverrideModels({ providers: providerValues, roleModels }) !== null;
+  const decisionReady = hasUsableDecisionModel({
+    state: decisionState,
+    stored: storedDecision,
+  });
+  const canSave = rolesReady && decisionReady;
 
   return (
     <div className="flex flex-col gap-4">
@@ -363,13 +390,29 @@ const AIConfigForm = ({ config, organizationId }: AIConfigFormProps) => {
               providers={providerValues}
               roleModels={roleModels}
             />
+
+            <div className="border-t" />
+
+            <AIConfigDecisionModel
+              disabled={saveMutation.isPending}
+              instanceProvisioned={config.decisionInstanceProvisioned}
+              onStateChange={setDecisionState}
+              state={decisionState}
+              stored={storedDecision}
+            />
           </div>
         </FramePanel>
       </Frame>
 
-      {!canSave && (
+      {!rolesReady && (
         <p className="text-destructive-foreground text-xs">
           {t("aiConfig.selectModelForEachRole")}
+        </p>
+      )}
+
+      {!decisionReady && (
+        <p className="text-destructive-foreground text-xs">
+          {t("aiConfig.decision.incomplete")}
         </p>
       )}
 

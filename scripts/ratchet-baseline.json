@@ -1,7 +1,10 @@
 {
   "as-casts": {
-    "count": 0,
-    "files": {}
+    "count": 3,
+    "files": {
+      "apps/api/src/lib/decisions/decide.ts": 2,
+      "apps/api/src/lib/decisions/system-one.ts": 1
+    }
   },
   "super-linear-regexes": {
     "count": 0,
@@ -419,7 +422,7 @@
     }
   },
   "try-catch-outside-boundary": {
-    "count": 428,
+    "count": 427,
     "files": {
       "apps/api/src/handlers/ai-autocomplete/stream.ts": 1,
       "apps/api/src/handlers/api-keys/mint.ts": 1,
@@ -489,7 +492,7 @@
       "apps/api/src/lib/document-translation/segments.ts": 3,
       "apps/api/src/lib/docx-archive.ts": 1,
       "apps/api/src/lib/docx-stamp.ts": 2,
-      "apps/api/src/lib/docx/ai-field-generator.ts": 3,
+      "apps/api/src/lib/docx/ai-field-generator.ts": 2,
       "apps/api/src/lib/docx/resolve-ai-fields.ts": 1,
       "apps/api/src/lib/entities/create-from-buffer.ts": 2,
       "apps/api/src/lib/entities/query-entities.ts": 1,
@@ -887,8 +890,9 @@
     "files": {}
   },
   "lint-suppression-directives": {
-    "count": 282,
+    "count": 288,
     "files": {
+      "apps/api/scripts/ai-provider-canary.ts": 1,
       "apps/api/scripts/lib/compact-schema-defs.ts": 1,
       "apps/api/scripts/seed-case-law.ts": 1,
       "apps/api/scripts/seed-firm-knowledge.ts": 1,
@@ -944,8 +948,12 @@
       "apps/api/src/lib/agent-skills/skills.ts": 2,
       "apps/api/src/lib/analytics/posthog.ts": 1,
       "apps/api/src/lib/auth.ts": 3,
+      "apps/api/src/lib/bilingual/ai.ts": 1,
+      "apps/api/src/lib/decisions/decide.ts": 2,
+      "apps/api/src/lib/decisions/system-one.ts": 1,
       "apps/api/src/lib/desktop-edit-session-predicates.ts": 2,
       "apps/api/src/lib/document-reference.ts": 2,
+      "apps/api/src/lib/docx/ai-field-generator.ts": 1,
       "apps/api/src/lib/email/ses.ts": 1,
       "apps/api/src/lib/extraction-runs/store.ts": 1,
       "apps/api/src/lib/file-scan/scanner.ts": 1,
@@ -1364,7 +1372,7 @@
     }
   },
   "duplicate-token-blocks": {
-    "count": 119,
+    "count": 117,
     "files": {
       ".oxlint-plugins/no-ambient-nondeterminism.ts": 1,
       ".oxlint-plugins/no-auth-token-in-web-storage.ts": 1,
@@ -1435,14 +1443,12 @@
       "apps/web/src/components/chat/tool-approval-card.tsx": 1,
       "apps/web/src/components/document-icon.tsx": 4,
       "apps/web/src/components/inspector/chat-tab-panel.tsx": 1,
-      "apps/web/src/components/require-ai-key.tsx": 1,
       "apps/web/src/components/workspaces/field-value.tsx": 1,
       "apps/web/src/components/workspaces/matter-context-menu.tsx": 1,
       "apps/web/src/components/workspaces/members-section.tsx": 1,
       "apps/web/src/lib/types.ts": 1,
       "apps/web/src/routes/_protected.knowledge/-components/clause-list.tsx": 1,
       "apps/web/src/routes/_protected.knowledge/-components/template-category-sidebar.tsx": 1,
-      "apps/web/src/routes/_protected.settings/-components/organization/ai-config-card.tsx": 1,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar.tsx": 2,
       "apps/web/src/routes/law/$country/cases/$court/$language/$slug.tsx": 1,
       "apps/web/src/routes/law/$country/cases/$court/$slug.tsx": 1,
@@ -1453,7 +1459,7 @@
     }
   },
   "api-lib-top-level-entries": {
-    "count": 288,
+    "count": 289,
     "files": {
       "apps/api/src/lib/account-deletion-cleanup-queue.ts": 1,
       "apps/api/src/lib/account-deletion-effect-store.ts": 1,
@@ -1530,6 +1536,7 @@
       "apps/api/src/lib/db-pagination.ts": 1,
       "apps/api/src/lib/db-query-counter.ts": 1,
       "apps/api/src/lib/decision-date-bounds-sql.ts": 1,
+      "apps/api/src/lib/decisions": 1,
       "apps/api/src/lib/deepl": 1,
       "apps/api/src/lib/delete-account.ts": 1,
       "apps/api/src/lib/demo-account-otp.ts": 1,

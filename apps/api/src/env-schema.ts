@@ -73,6 +73,14 @@ export const envApiServerSchema = {
   AZURE_BASE_URL: v.optional(v.pipe(v.string(), v.url())),
   AZURE_API_VERSION: v.optional(v.string()),
   ANTHROPIC_API_KEY: v.optional(v.string()),
+  /**
+   * Instance decision model key (TypeSafe System One). An org may set its own
+   * in AI settings; with neither, typed decisions fall back to the generative
+   * model.
+   */
+  TYPESAFE_API_KEY: v.optional(v.string()),
+  /** A versioned Jev id pins calibrated thresholds; the alias moves on release. */
+  TYPESAFE_MODEL: v.optional(v.string()),
   BEDROCK_API_KEY: v.optional(v.string()),
   MISTRAL_API_KEY: v.optional(v.string()),
   GOOGLE_AI_API_KEY_EU: v.optional(v.string()),

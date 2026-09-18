@@ -50,6 +50,7 @@ const createOpenAIOrgAIConfig = (): OrgAIConfig => ({
     pdf: { provider: "openai", modelId: "gpt-5.4" },
     reasoning: { provider: "openai", modelId: "gpt-5.4" },
   },
+  decision: null,
 });
 
 const createAnthropicOrgAIConfig = (): OrgAIConfig => ({
@@ -65,6 +66,7 @@ const createAnthropicOrgAIConfig = (): OrgAIConfig => ({
     pdf: { provider: "anthropic", modelId: "claude-sonnet-5" },
     reasoning: { provider: "anthropic", modelId: "claude-sonnet-5" },
   },
+  decision: null,
 });
 
 const createMiddlewareContext = ({

@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 /**
- * The only two doors through which an operator script reaches the case-law
+ * The only doors through which an operator script reaches the case-law
  * tables.
  *
  * Two passes that each behave on their own can still deadlock together: a
@@ -11,8 +11,8 @@ import { panic } from "better-result";
  * its first statement, and a second pass waits at the door instead of
  * interleaving.
  *
- * A script does not import a database handle; it asks one of these two
- * functions for one, so there is no third way to reach the tables:
+ * A script does not import a database handle; it asks one of these
+ * functions for one, so there is no other way to reach the tables:
  *
  * - `enterCaseLawMaintenanceLane()` holds the lane and hands out the
  *   write-capable handles.
@@ -20,9 +20,12 @@ import { panic } from "better-result";
  *   is `READ ONLY`. A helper that writes through one fails with SQLSTATE
  *   25006 at the first statement, so a script that claims to only read
  *   cannot quietly become a writer that skipped the lane.
+ * - `openCaseLawPublicCorpusSession()` hands out the public corpus reader,
+ *   which is a different database and role than the two above.
  *
- * Both return the same shape, so a script with a plan mode and an apply mode
- * picks its door after parsing arguments and runs one body against either.
+ * The first two return the same shape, so a script with a plan mode and an
+ * apply mode picks its door after parsing arguments and runs one body
+ * against either.
  *
  * This is a different lock from `lockCitationGraph` in the resolver. That one
  * is transaction-scoped and serializes the standing walk's batches against
@@ -43,6 +46,7 @@ import { Temporal } from "@stll/time";
 
 import { runUnderCorpusSchemaLane } from "@/api/db/corpus-schema-lane";
 import type { rootDb as rootDatabase, Transaction } from "@/api/db/root";
+import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
 import { logger } from "@/api/lib/observability/logger";
 
 /**
@@ -270,3 +274,38 @@ export const openCaseLawReadOnlySession = async ({
   handles,
 }: ReadOnlySessionOptions = {}): Promise<CaseLawScriptHandles> =>
   readOnlyHandles(handles ?? (await loadWriteHandles()));
+
+/** What a pass over the public corpus may do: select and execute, nothing else. */
+export type CaseLawPublicCorpusTransaction = Pick<
+  CaseLawPublicReadTransaction,
+  "execute" | "select"
+>;
+
+/** The public corpus door's handle: one transaction runner, no root handle. */
+export type CaseLawPublicCorpusSession = {
+  corpusDb: <T>(
+    fn: (tx: CaseLawPublicCorpusTransaction) => Promise<T>,
+  ) => Promise<T>;
+};
+
+/**
+ * The handle for a pass that reads the public corpus.
+ *
+ * A third door rather than an option on the other two: they connect as the
+ * root and ingestion roles on `DATABASE_URL`, while the public corpus is its
+ * own database on `PUBLIC_LAW_DATABASE_URL`, reached as a role whose grants
+ * are checked at connect. That role holds SELECT on the published columns and
+ * nothing else, and every transaction runs under `transaction_read_only`, so
+ * the read-only claim is the server's rather than this module's: there is no
+ * `SET TRANSACTION READ ONLY` to wrap here, and no statement a wrapper could
+ * add that the role does not already refuse.
+ *
+ * No lane is taken, as with `openCaseLawReadOnlySession`: a pass that cannot
+ * write never has to wait for one that can.
+ */
+export const openCaseLawPublicCorpusSession =
+  async (): Promise<CaseLawPublicCorpusSession> => {
+    const { caseLawPublicReadDb } =
+      await import("@/api/lib/case-law-public-read-db");
+    return { corpusDb: caseLawPublicReadDb };
+  };

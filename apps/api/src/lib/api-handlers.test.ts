@@ -279,6 +279,7 @@ const createOrgAIConfig = (): OrgAIConfig => ({
     pdf: { provider: "openai", modelId: "gpt-4.1" },
     reasoning: { provider: "openai", modelId: "o3" },
   },
+  decision: null,
 });
 
 describe("createSafeRootHandler permission gate", () => {
@@ -671,6 +672,7 @@ describe("assertRunSizeConfirmedForHandler", () => {
           pdf: { provider: "openai", modelId: "gpt-5.6" },
           reasoning: { provider: "openai", modelId: "gpt-5.6" },
         },
+        decision: null,
       };
       const outcome = await assertRunSizeConfirmedForHandler({
         ...baseInput,

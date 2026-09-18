@@ -1911,6 +1911,8 @@
       "accountDeletionSoleOwner": "انقل ملكية المؤسسات التي تملكها بمفردك أو احذفها قبل حذف حسابك.",
       "accountDeletionTaskReassignmentInvalid": "راجع إعادة تعيين كل مهمة نشطة. يجب أن يكون كل مستلم عضوًا آخر في الملف القانوني وغير معيّن للمهمة بالفعل.",
       "accountDeletionTaskReassignmentLimitExceeded": "يجب إعادة تعيين عدد كبير جدًا من المهام النشطة. أكمل بعض المهام أو أعد تعيينها قبل حذف حسابك.",
+      "aiConfigDecisionInvalid": "إعداد نموذج القرار غير صالح. تحقق من المزوّد والنموذج.",
+      "aiConfigDecisionValidationFailed": "رفض نموذج القرار الإعداد. تحقق من مفتاح API والنموذج.",
       "aiConfigModelInvalid": "إعداد نموذج الذكاء الاصطناعي غير صالح. تحقق من النماذج المحددة.",
       "aiConfigProviderInvalid": "إعداد مزود الذكاء الاصطناعي غير صالح. تحقق من إعدادات المزود.",
       "aiConfigProviderValidationFailed": "رفض مزود الذكاء الاصطناعي الإعداد. تحقق من مفتاح API والنموذج.",
@@ -3566,6 +3568,14 @@
       "dataRegion": "منطقة البيانات",
       "dataRegionDescription": "يوجّه طلبات AI عبر المنطقة المحددة لضمان سيادة البيانات.",
       "dataRegionUnsupported": "التوجيه الإقليمي متاح فقط لـ Google AI (Vertex AI).",
+      "decision": {
+        "add": "إضافة نموذج قرار",
+        "description": "الأسئلة ذات الإجابة المحددة، مثل فئات المستندات وقطبية الاستشهادات، تُوجَّه إلى هذا النموذج؛ وبدونه يجيب عنها النموذج التوليدي.",
+        "incomplete": "أدخل مفتاح API ونموذجًا لنموذج القرار، أو أزِله.",
+        "instanceProvided": "توفّر stella بالفعل نموذج قرار؛ أضف نموذجك الخاص فقط لاستخدام نموذج آخر.",
+        "label": "نموذج القرار",
+        "modelId": "معرّف النموذج"
+      },
       "defaultModel": "الافتراضي: {model}",
       "defaultModelOption": "الافتراضي",
       "deploymentNamePlaceholder": "اسم النشر",
