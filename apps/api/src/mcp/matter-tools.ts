@@ -7,7 +7,6 @@ import {
   RESOURCE_TYPE,
   WORKSPACE_CONTACT_ROLES,
 } from "@stll/api-contract";
-import { TASK_ASSIGNEE_FILTERS } from "@stll/api-contract/tasks";
 
 import { LIST_ITEM_TYPES } from "@/api/db/schema";
 import { lookupBusinessRegistryShared } from "@/api/handlers/contacts/business-registries-lookup";
@@ -23,6 +22,7 @@ import { deleteEntityLinkHandler } from "@/api/handlers/tasks/entity-links-delet
 import {
   decodeTaskListCursor,
   listTasksPage,
+  TASK_ASSIGNEE_FILTERS,
 } from "@/api/handlers/tasks/list-query";
 import { archiveWorkspaceHandler } from "@/api/handlers/workspaces/archive";
 import { createWorkspaceHandler } from "@/api/handlers/workspaces/create";

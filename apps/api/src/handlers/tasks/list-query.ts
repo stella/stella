@@ -13,9 +13,6 @@ import {
 } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
-import { TASK_ASSIGNEE_FILTER } from "@stll/api-contract/tasks";
-import type { TaskAssigneeFilter } from "@stll/api-contract/tasks";
-
 import type { SafeDb } from "@/api/db/safe-db";
 import { entities, taskAssignees, workspaces } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -32,6 +29,18 @@ import type {
   UnprojectedColumns,
 } from "@/api/lib/projection-totality";
 import { brandPersistedEntityId } from "@/api/lib/safe-id-boundaries";
+
+/** Whose tasks a list returns: the caller's own assignments, or every task. */
+export const TASK_ASSIGNEE_FILTER = {
+  ME: "me",
+  ANY: "any",
+} as const;
+type TaskAssigneeFilter =
+  (typeof TASK_ASSIGNEE_FILTER)[keyof typeof TASK_ASSIGNEE_FILTER];
+export const TASK_ASSIGNEE_FILTERS = [
+  TASK_ASSIGNEE_FILTER.ME,
+  TASK_ASSIGNEE_FILTER.ANY,
+] as const satisfies readonly TaskAssigneeFilter[];
 
 /** Keyset position: the last row's due date (null sorts last) and id. */
 type TaskListCursor = {
@@ -190,8 +199,7 @@ type ListTasksPageOptions = {
 };
 
 /**
- * One task-list query shared by the HTTP route and MCP `list_tasks`, for one
- * matter or all of them. Access sits in the SQL itself: the workspace
+ * The MCP `list_tasks` query, for one matter or all of them. Access sits in the SQL itself: the workspace
  * allowlist, the organization predicate on the joined matter, and the RLS
  * policies `safeDb` runs under, so a matter outside the caller's membership
  * or organization cannot contribute a row even if it reached the allowlist.

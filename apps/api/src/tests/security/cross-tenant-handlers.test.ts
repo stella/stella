@@ -55,7 +55,7 @@ import listNotifications from "@/api/handlers/notifications/list";
 import readRateEntries from "@/api/handlers/rates/entries-read";
 import listSavedSearches from "@/api/handlers/saved-searches/list";
 import listSignals from "@/api/handlers/signals/list";
-import listTasks from "@/api/handlers/tasks/list";
+import readTaskById from "@/api/handlers/tasks/get";
 import getTemplate from "@/api/handlers/templates/get";
 import readTimeEntryById from "@/api/handlers/time-entries/get";
 import readUserFileContent from "@/api/handlers/user-files/read-content";
@@ -718,32 +718,18 @@ const isolationCases: IsolationCase[] = [
     },
   },
   {
-    // The cross-matter list has no matter in its path: only the active
-    // workspace set and the organization bound it.
-    name: "tasks across matters",
-    runAAgainstB: async ({ workspaceA }) =>
-      await runHandler(listTasks, workspaceA, { query: { limit: 100 } }),
-    runBPositive: async ({ workspaceB }) =>
-      await runHandler(listTasks, workspaceB, { query: { limit: 100 } }),
-    expectDenied: (result) =>
-      expectPageExcludesField(result, "id", workObligationEntityB),
-    expectPositive: (result) =>
-      expectPageContainsField(result, "id", workObligationEntityB),
-  },
-  {
-    // Naming a foreign matter must 404, not list it.
-    name: "tasks in a named matter",
+    name: "task read by id",
     runAAgainstB: async ({ ids: testIds, workspaceA }) =>
-      await runHandler(listTasks, workspaceA, {
-        query: { matterId: testIds.wsB1 },
+      await runHandler(readTaskById, workspaceA, {
+        params: { workspaceId: testIds.wsA1, taskId: workObligationEntityB },
       }),
     runBPositive: async ({ ids: testIds, workspaceB }) =>
-      await runHandler(listTasks, workspaceB, {
-        query: { matterId: testIds.wsB1 },
+      await runHandler(readTaskById, workspaceB, {
+        params: { workspaceId: testIds.wsB1, taskId: workObligationEntityB },
       }),
     expectDenied: expectStatus(404),
     expectPositive: (result) =>
-      expectPageContainsField(result, "id", workObligationEntityB),
+      expectRecordFieldEquals(result, "id", workObligationEntityB),
   },
   {
     name: "governed work queue",

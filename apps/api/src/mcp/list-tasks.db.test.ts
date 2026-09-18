@@ -7,14 +7,13 @@ import {
   test,
 } from "bun:test";
 
-import { TASK_ASSIGNEE_FILTER } from "@stll/api-contract/tasks";
-
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { entities, taskAssignees } from "@/api/db/schema";
 import {
   createMembershipSafeDb,
   createMembershipScopedDb,
 } from "@/api/db/scoped";
+import { TASK_ASSIGNEE_FILTER } from "@/api/handlers/tasks/list-query";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { MemberRole } from "@/api/lib/member-roles";
