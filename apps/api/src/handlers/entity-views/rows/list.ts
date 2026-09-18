@@ -207,40 +207,38 @@ const listRows = createSafeRootHandler(
     const signalsById = new Map(signalRows.map((row) => [row.id, row]));
     // A row removed between the window read and its hydration drops out; the
     // cursor still points past it, so paging neither repeats nor skips.
-    const items = page.items.flatMap((row) => {
-      switch (row.kind) {
-        case ENTITY_VIEW_ROW_KIND.ENTITY: {
-          const entity = entitiesById.get(row.id);
-          return entity
-            ? [
-                {
+    const items = page.items
+      .map((row) => {
+        switch (row.kind) {
+          case ENTITY_VIEW_ROW_KIND.ENTITY: {
+            const entity = entitiesById.get(row.id);
+            return entity
+              ? {
                   kind: ENTITY_VIEW_ROW_KIND.ENTITY,
                   entity,
                   workRisk: atRiskIds.has(row.id)
                     ? ENTITY_VIEW_WORK_RISK.AT_RISK
                     : ENTITY_VIEW_WORK_RISK.NONE,
-                } as const,
-              ]
-            : [];
-        }
-        case ENTITY_VIEW_ROW_KIND.SIGNAL: {
-          const signal = signalsById.get(row.id);
-          return signal
-            ? [
-                {
+                }
+              : null;
+          }
+          case ENTITY_VIEW_ROW_KIND.SIGNAL: {
+            const signal = signalsById.get(row.id);
+            return signal
+              ? {
                   kind: ENTITY_VIEW_ROW_KIND.SIGNAL,
                   signal,
                   projection: row.projection,
-                } as const,
-              ]
-            : [];
+                }
+              : null;
+          }
+          default: {
+            row satisfies never;
+            return panic("Unhandled window row kind");
+          }
         }
-        default: {
-          row satisfies never;
-          return panic("Unhandled window row kind");
-        }
-      }
-    });
+      })
+      .filter((item) => item !== null);
     return Result.ok({ ...page, items });
   },
 );

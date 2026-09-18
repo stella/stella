@@ -113,7 +113,7 @@ const SIGNAL_ENTITY_COLUMNS = {
 const rowKindSql = (kind: EntityViewRowKind): SQL =>
   sql`${kind}::text AS ${sql.identifier(WINDOW_ROW_KIND_COLUMN)}`;
 
-const columnAlias = (key: EntityColumnKey): SQL =>
+const columnAlias = (key: EntityColumnKey) =>
   sql.identifier(ENTITY_COLUMNS[key].name);
 
 type EntityWindowUnionOptions = {
