@@ -209,12 +209,12 @@ test("physical index ids are deployment state, not manifest identity", () => {
 });
 
 test("every declared jurisdiction routes into every case-law generation", () => {
-  expect(
+  expect(Object.keys(EXPECTED_CASE_LAW_ROUTES).sort()).toEqual(
     Object.values(CORPUS_INDEX_MANIFESTS)
       .filter((manifest) => manifest.family === "case_law")
       .map((manifest) => manifest.generation)
       .sort(),
-  ).toEqual(Object.keys(EXPECTED_CASE_LAW_ROUTES).sort());
+  );
 
   for (const [generation, routes] of Object.entries(EXPECTED_CASE_LAW_ROUTES)) {
     const manifest = requireCorpusIndexManifest("case_law", generation);
