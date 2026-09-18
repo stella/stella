@@ -71,9 +71,9 @@ export const PUBLISHER_GATES = {
       DAY_IN_MS / (NALUS_DAILY_REQUEST_LIMIT * NALUS_REQUEST_BUDGET_SHARE),
     ),
   },
-  /** ris.bka.gv.at and data.bka.gv.at. Five seconds, agreed with the publisher. */
+  /** ris.bka.gv.at and data.bka.gv.at. */
   "ris-bka": { publisher: "RIS", intervalMs: 5000 },
-  /** findok.bmf.gv.at. Agreed with the publisher. */
+  /** findok.bmf.gv.at. */
   "findok-bmf": { publisher: "Findok", intervalMs: 1500 },
   /**
    * sn.pl. A dozen requests in quick succession earned the upstream's 429
