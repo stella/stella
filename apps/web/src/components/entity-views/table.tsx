@@ -55,6 +55,7 @@ import {
   isPinnedBoundaryColumn,
 } from "@/components/workspaces/table/workspace-table/internals-helpers";
 import { WorkspaceTable } from "@/components/workspaces/table/workspace-table/workspace-table";
+import { isTaskOverdue } from "@/components/workspaces/tasks/task-overdue";
 import {
   INBOX_SIGNAL_VIEW,
   inboxSignalTabId,
@@ -68,8 +69,8 @@ import { useTableStore } from "@/lib/workspaces/table-store";
 import {
   ENTITY_VIEW_GROUP,
   entryId,
+  entryDueDate,
   entryStatus,
-  entrySuggestion,
   entryType,
   entityViewSortValues,
   isEntityViewSortColumn,
@@ -77,6 +78,7 @@ import {
 import { NewEntityViewTask } from "./new-task";
 import { useEntityTableGroups } from "./table-groups";
 import type { EntityViewEntry, EntityViewRow, EntityViewScope } from "./types";
+import { WorkRiskBadge } from "./work-risk-badge";
 
 const COLUMN_MODEL = {
   _name: { label: "common.name", icon: TextIcon, size: 300 },
@@ -485,6 +487,7 @@ const CollectionCell = ({ column, entry }: CollectionCellProps) => {
               {t("flows.status.awaitingReview")}
             </ReviewStatusBadge>
           )}
+          {entry.type === "entity" && <WorkRiskBadge risk={entry.workRisk} />}
         </button>
       );
     }
@@ -532,16 +535,22 @@ const CollectionCell = ({ column, entry }: CollectionCellProps) => {
         ? t(`tasks.priorityValues.${entry.entity.priority}`)
         : null;
     case "_due-date": {
-      const date =
-        entry.type === "entity"
-          ? entry.entity.dueDate
-          : entrySuggestion(entry)?.dueAt;
-      return date
-        ? format.dateTime(new Date(`${date.slice(0, 10)}T00:00:00Z`), {
+      const date = entryDueDate(entry);
+      if (!date) {
+        return null;
+      }
+      const overdue =
+        entry.type === "entity" &&
+        entry.entity.kind === "task" &&
+        isTaskOverdue(date, entry.entity.status);
+      return (
+        <span className={cn(overdue && "text-destructive")}>
+          {format.dateTime(new Date(`${date}T00:00:00Z`), {
             dateStyle: "medium",
             timeZone: "UTC",
-          })
-        : null;
+          })}
+        </span>
+      );
     }
     case "_assignee": {
       if (entry.type === "entity") {

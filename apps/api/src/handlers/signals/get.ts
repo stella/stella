@@ -1,13 +1,13 @@
 import { Result } from "better-result";
 
-import {
-  loadVisibleSignal,
-  serializeSignal,
-} from "@/api/handlers/signals/read";
 import { signalParamsSchema } from "@/api/handlers/signals/schema";
-import { canTriageSignals } from "@/api/handlers/signals/transition";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import {
+  canTriageSignals,
+  loadVisibleSignal,
+  serializeSignal,
+} from "@/api/lib/signals/read";
 
 const config = {
   description:

@@ -39,19 +39,13 @@ import {
 import { FilterChips } from "@/components/workspaces/view-toolbar-filters";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { usePermissions } from "@/hooks/use-permissions";
-import { useLocale } from "@/i18n/formatting-context";
 import { getLangDir, useI18nStore } from "@/i18n/i18n-store";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
-import {
-  DEFAULT_INBOX_FILTERS,
-  INBOX_VIEWS,
-  inboxKeys,
-  inboxSignalsOptions,
-} from "@/lib/inbox/queries";
+import { INBOX_VIEWS, inboxKeys } from "@/lib/inbox/queries";
 import type { InboxView } from "@/lib/inbox/queries";
 import { toSafeId } from "@/lib/safe-id";
 import type { ViewLayout, WorkspaceView } from "@/lib/types";
@@ -65,18 +59,13 @@ import { isTableView, mergeLayout } from "@/lib/workspaces/view-layout";
 
 import { defaultEntityViews } from "./defaults";
 import { EntityViewKanban } from "./kanban";
-import {
-  ENTITY_VIEW_GROUP,
-  proposalMatchesFilters,
-  sortEntityViewEntries,
-  toEntityViewRow,
-} from "./model";
+import { ENTITY_VIEW_GROUP, toEntityViewRow } from "./model";
 import {
   EntityViewColumnToggle,
   EntityViewTable,
   useEntityViewSortProperties,
 } from "./table";
-import type { EntityViewEntry, EntityViewScope } from "./types";
+import type { EntityViewScope } from "./types";
 
 const isUnsavedViewId = (id: string) =>
   id.startsWith("default:") || id.startsWith("draft:");
@@ -477,43 +466,25 @@ const EntityViewContent = ({
   onLayoutChange,
 }: EntityViewContentProps) => {
   const t = useTranslations();
-  const locale = useLocale();
   const queryClient = useQueryClient();
   const analytics = useAnalytics();
   const records = useInfiniteQuery(
-    entityViewRowsOptions({ organizationId, scope, layout: view.layout }),
-  );
-  const proposals = useInfiniteQuery(
-    inboxSignalsOptions(organizationId, {
-      ...DEFAULT_INBOX_FILTERS,
-      view: proposalView,
-      workspaceId: scope.type === "matter" ? scope.matterId : null,
+    entityViewRowsOptions({
+      organizationId,
+      scope,
+      layout: view.layout,
+      inboxView: proposalView,
     }),
   );
-  const proposalEntries = useMemo(() => {
-    if (!proposals.data) {
-      return [];
-    }
-    return proposals.data.pages
-      .flatMap((page) =>
-        page.items.map((signal) => ({ type: "proposal" as const, signal })),
-      )
-      .filter((entry) => proposalMatchesFilters(entry, view.layout.filters));
-  }, [proposals.data, view.layout.filters]);
-  const entries = useMemo(() => {
-    const loadedEntries: EntityViewEntry[] = [...proposalEntries];
-    if (records.data) {
-      for (const page of records.data.pages) {
-        loadedEntries.push(...page.items);
-      }
-    }
-    return sortEntityViewEntries({
-      entries: loadedEntries,
-      sorts: view.layout.sorts,
-      locale,
-    });
-  }, [locale, proposalEntries, records.data, view.layout.sorts]);
-  const rows = useMemo(() => entries.map(toEntityViewRow), [entries]);
+  // The server orders and pages tasks and signals as one window; rows render
+  // in the order they arrive.
+  const rows = useMemo(
+    () =>
+      records.data
+        ? records.data.pages.flatMap((page) => page.items.map(toEntityViewRow))
+        : [],
+    [records.data],
+  );
   const refresh = async () => {
     await Promise.all([
       queryClient.invalidateQueries({
@@ -524,7 +495,7 @@ const EntityViewContent = ({
       }),
       ...[
         ...new Set(
-          entries.flatMap((entry) =>
+          rows.flatMap(({ entry }) =>
             entry.type === "entity" ? [entry.workspaceId] : [],
           ),
         ),
@@ -536,30 +507,23 @@ const EntityViewContent = ({
       ),
     ]);
   };
-  const hasNextPage = records.hasNextPage || proposals.hasNextPage;
-  const loadingMore =
-    records.isFetchingNextPage || proposals.isFetchingNextPage;
+  const hasNextPage = records.hasNextPage;
+  const loadingMore = records.isFetchingNextPage;
   const onLoadMore = () => {
     if (records.hasNextPage && !records.isFetchingNextPage) {
       detached(records.fetchNextPage(), "entity-views.more-records");
-    }
-    if (proposals.hasNextPage && !proposals.isFetchingNextPage) {
-      detached(proposals.fetchNextPage(), "entity-views.more-proposals");
     }
   };
   useExternalSyncEffect(() => {
     if (records.error) {
       analytics.captureError(records.error);
     }
-    if (proposals.error) {
-      analytics.captureError(proposals.error);
-    }
-  }, [analytics, records.error, proposals.error]);
-  const loading = records.isPending || proposals.isPending;
+  }, [analytics, records.error]);
+  const loading = records.isPending;
   if (loading && !isTableView(view)) {
     return <EntityViewsPending />;
   }
-  const error = records.error ?? proposals.error;
+  const error = records.error;
   let content = null;
   if (isTableView(view)) {
     content = (
@@ -597,7 +561,6 @@ const EntityViewContent = ({
             variant="ghost"
             onClick={() => {
               detached(records.refetch(), "entity-views.retry-records");
-              detached(proposals.refetch(), "entity-views.retry-proposals");
             }}
           >
             {t("common.retry")}

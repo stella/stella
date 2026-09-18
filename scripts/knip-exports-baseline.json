@@ -1,6 +1,6 @@
 {
   "apps/api": {
-    "count": 747,
+    "count": 746,
     "files": {
       "apps/api/scripts/lib/capability-catalog.ts": 9,
       "apps/api/scripts/lib/case-law-fixture-analyses.ts": 1,
@@ -104,7 +104,6 @@
       "apps/api/src/handlers/saved-searches/schema.ts": 1,
       "apps/api/src/handlers/sharepoint/graph-oauth.ts": 1,
       "apps/api/src/handlers/sharepoint/oauth-callback.ts": 1,
-      "apps/api/src/handlers/signals/read.ts": 1,
       "apps/api/src/handlers/signals/schema.ts": 1,
       "apps/api/src/handlers/skills/ai-resource-path.ts": 1,
       "apps/api/src/handlers/skills/import-urls.logic.ts": 1,
@@ -393,7 +392,6 @@
       "apps/web/src/components/ai-suggestions/review-position-row.tsx": 1,
       "apps/web/src/components/ai-suggestions/review-store.ts": 1,
       "apps/web/src/components/ai-suggestions/review-suggestion-builder.ts": 2,
-      "apps/web/src/components/ai-suggestions/review-term-row.tsx": 3,
       "apps/web/src/components/catalogue/catalogue-badges.tsx": 1,
       "apps/web/src/components/chat-decision-passage.ts": 3,
       "apps/web/src/components/chat-editor-provider.tsx": 3,
@@ -419,8 +417,11 @@
       "apps/web/src/components/document-translation-queries.ts": 4,
       "apps/web/src/components/docx-preview-zoom.ts": 1,
       "apps/web/src/components/docx/docx-browser-editor.tsx": 1,
+      "apps/web/src/components/docx/docx-document-cache.logic.ts": 1,
+      "apps/web/src/components/docx/docx-editor-host.logic.ts": 1,
       "apps/web/src/components/docx/docx-loading-shell.tsx": 1,
       "apps/web/src/components/docx/evidence-reference.ts": 1,
+      "apps/web/src/components/docx/use-edit-session.logic.ts": 1,
       "apps/web/src/components/docx/use-folio-collaboration-room.ts": 2,
       "apps/web/src/components/file-tree/file-tree.tsx": 3,
       "apps/web/src/components/flows/flow-meta.ts": 3,

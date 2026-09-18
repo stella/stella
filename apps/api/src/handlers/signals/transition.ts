@@ -14,11 +14,6 @@ import {
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { hasMemberPermission } from "@/api/lib/permission-authorization";
-import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
-
-export const canTriageSignals = (memberRole: AuthorizedMemberRole): boolean =>
-  hasMemberPermission(memberRole, { signal: ["triage"] });
 
 export type SignalTransitionArgs = {
   tx: Transaction;

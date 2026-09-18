@@ -41,6 +41,7 @@ import { ENTITY_VIEW_GROUP, entryId, entryGroupValue } from "./model";
 import { NewEntityViewTask } from "./new-task";
 import type { EntityViewRow, EntityViewScope } from "./types";
 import { useEntityViewGroupingSchema } from "./use-grouping-schema";
+import { WorkRiskBadge } from "./work-risk-badge";
 
 type PlacedRow = { row: EntityViewRow; lane: string | null };
 type MoveTaskOptions = {
@@ -402,10 +403,11 @@ const EntityViewKanbanCell = ({
                     : undefined
                 }
                 context={
-                  <span className="text-muted-foreground text-xs">
+                  <span className="text-muted-foreground flex items-center gap-1.5 text-xs">
                     <MatterRefLink workspaceId={row.entry.workspaceId}>
                       <UserText>{row.entry.workspaceName}</UserText>
                     </MatterRefLink>
+                    <WorkRiskBadge risk={row.entry.workRisk} />
                   </span>
                 }
               />

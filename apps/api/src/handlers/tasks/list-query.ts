@@ -1,4 +1,4 @@
-import { panic, Result } from "better-result";
+import { Result } from "better-result";
 import {
   and,
   asc,
@@ -17,7 +17,7 @@ import { TASK_ASSIGNEE_FILTER } from "@stll/api-contract/tasks";
 import type { TaskAssigneeFilter } from "@stll/api-contract/tasks";
 
 import type { SafeDb } from "@/api/db/safe-db";
-import { entities, taskAssignees, workspaces } from "@/api/db/schema";
+import { entities, workspaces } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -32,6 +32,7 @@ import type {
   UnprojectedColumns,
 } from "@/api/lib/projection-totality";
 import { brandPersistedEntityId } from "@/api/lib/safe-id-boundaries";
+import { taskAssigneeCondition } from "@/api/lib/tasks/assigned";
 
 /** Keyset position: the last row's due date (null sorts last) and id. */
 type TaskListCursor = {
@@ -70,29 +71,6 @@ const afterCursorCondition = ({
         and(eq(entities.dueDate, dueDate), gt(entities.id, id)),
         isNull(entities.dueDate),
       );
-
-const assigneeCondition = ({
-  assignee,
-  userId,
-}: {
-  assignee: TaskAssigneeFilter;
-  userId: SafeId<"user">;
-}): SQL | undefined => {
-  switch (assignee) {
-    case TASK_ASSIGNEE_FILTER.ANY:
-      return undefined;
-    case TASK_ASSIGNEE_FILTER.ME:
-      // Any assignee role counts: a reviewer is as responsible as an assignee.
-      return sql`exists (select 1 from ${taskAssignees}
-        where ${taskAssignees.entityId} = ${entities.id}
-          and ${taskAssignees.workspaceId} = ${entities.workspaceId}
-          and ${taskAssignees.userId} = ${userId})`;
-    default: {
-      assignee satisfies never;
-      return panic(`Unhandled assignee filter: ${String(assignee)}`);
-    }
-  }
-};
 
 type EntityRow = typeof entities.$inferSelect;
 
@@ -241,7 +219,7 @@ export const listTasksPage = async ({
           query.dateTo === undefined
             ? undefined
             : lte(entities.dueDate, query.dateTo),
-          assigneeCondition({
+          taskAssigneeCondition({
             assignee: query.assignee ?? TASK_ASSIGNEE_FILTER.ANY,
             userId,
           }),

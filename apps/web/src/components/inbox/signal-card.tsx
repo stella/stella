@@ -63,6 +63,7 @@ import { organizationOptions } from "@/lib/organization/queries";
 import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
 import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
+import { entityViewKeys } from "@/lib/workspaces/queries/entity-views";
 import { myWorkKeys } from "@/lib/workspaces/queries/my-work";
 
 type SignalCardProps = {
@@ -110,6 +111,10 @@ export const SignalCard = ({
     await Promise.all([
       queryClient.invalidateQueries({
         queryKey: inboxKeys.all(organizationId),
+      }),
+      // Signals are rows of the shared views window.
+      queryClient.invalidateQueries({
+        queryKey: entityViewKeys.all(organizationId),
       }),
       ...(invalidateMyWork
         ? [queryClient.invalidateQueries({ queryKey: myWorkKeys.all })]

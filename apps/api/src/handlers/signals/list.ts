@@ -1,12 +1,11 @@
 import { Result } from "better-result";
 
-import { listSignalsHandler } from "@/api/handlers/signals/read";
 import { listSignalsQuerySchema } from "@/api/handlers/signals/schema";
-import { canTriageSignals } from "@/api/handlers/signals/transition";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { canTriageSignals, listSignalsHandler } from "@/api/lib/signals/read";
 
 const config = {
   description:

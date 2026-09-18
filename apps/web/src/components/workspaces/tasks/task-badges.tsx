@@ -14,9 +14,9 @@ import {
   isListItemType,
   ITEM_TYPE_TRANSLATION_KEYS,
 } from "@/components/workspaces/tasks/task-detail-constants";
+import { isTaskOverdue } from "@/components/workspaces/tasks/task-overdue";
 import { env } from "@/env";
 import { useFormatter } from "@/i18n/formatting-context";
-import { localISODate } from "@/lib/local-iso-date";
 import { UTC_CALENDAR_DATE_FORMAT } from "@/lib/relative-time";
 import type { WorkspaceEntity } from "@/lib/types";
 
@@ -35,9 +35,6 @@ const PRIORITY_CONFIG: Record<
     className: "text-foreground-muted dark:text-foreground",
   },
 };
-
-const isOverdue = (dueDate: string, status: string | null) =>
-  status !== "done" && status !== "cancelled" && dueDate < localISODate();
 
 type TaskBadgesProps = {
   entity: Pick<
@@ -60,7 +57,7 @@ export const TaskBadges = ({ entity, className }: TaskBadgesProps) => {
       ? PRIORITY_CONFIG[entity.priority]
       : null;
   const overdue = entity.dueDate
-    ? isOverdue(entity.dueDate, entity.status)
+    ? isTaskOverdue(entity.dueDate, entity.status)
     : false;
   const listItemType = isListItemType(entity.listItemType)
     ? entity.listItemType
