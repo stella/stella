@@ -56,6 +56,15 @@ for app in apps/api apps/web; do
   fi
 done
 
+# A fresh agent-created worktree has the .ai/shared submodule as an empty
+# directory, and the AI instructions step fails on a missing validator rather
+# than on anything in the change under test. (packages/template-packs/content is
+# the other submodule, but its manifest check skips itself when absent.)
+if [[ ! -f ".ai/shared/scripts/validate-skills.ts" ]]; then
+  echo "Error: .ai/shared is not initialized; run \`bun run setup:worktree\` first." >&2
+  exit 1
+fi
+
 source "$script_dir/verify-step.sh"
 
 run_ai_skill_checks() {
@@ -263,6 +272,17 @@ run_knip_exports() {
   bun scripts/knip-exports-ratchet.ts --check
 }
 
+run_instruction_reference_guard() {
+  # Agent instruction files name repository paths, package scripts, module
+  # exports and lint rule ids that nothing compiles, so a rename leaves the
+  # instruction quietly wrong. This guard resolves each one against the tree;
+  # intentional examples live in scripts/instruction-references-allowlist.json
+  # and a stale entry fails too. The --self-test run first proves each matcher
+  # still fires, so a broken guard cannot pass silently.
+  bun scripts/check-instruction-references.ts --self-test || return 1
+  bun run check:instruction-references
+}
+
 run_quarantine_exclude_guard() {
   bun test scripts/check-stll-quarantine-excludes.test.ts || return 1
   bun scripts/check-stll-quarantine-excludes.ts
@@ -340,6 +360,7 @@ run_step "Crawl posture guard" run_crawl_posture_guard
 run_step "Documentation source policy rule self-test" bun test \
   ./.oxlint-plugins/__tests__/docs-source-policy.test.ts
 run_step "Documentation source policy rule" bun run check:docs-sources
+run_step "Instruction references" run_instruction_reference_guard
 run_step "exactMirror route guard" run_exact_mirror_guard
 run_step "MCP coverage guard" run_mcp_coverage_guard
 run_step "CLI registry snapshot" run_cli_registry_snapshot

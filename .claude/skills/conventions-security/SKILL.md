@@ -55,7 +55,9 @@ the route, derive `workspaceId: SafeId<"workspace">` from the authorized
 context, and access tenant data through `scopedDb`. Never accept ownership IDs
 from body/query input or fall back to root `db` because a relation is awkward
 to express. Root/system handlers require a documented non-tenant purpose and
-tables whose RLS posture denies ordinary application access.
+tables whose RLS posture denies ordinary application access. Enforced by
+`require-safe-route-handlers/require-safe-route-handlers` and
+`no-body-ownership-ids/no-body-ownership-ids`.
 
 When an identifier comes from a related row, authorize it in the same query or
 transaction that uses it. A prior UI filter, cache lookup, or separate
@@ -67,7 +69,8 @@ Actors, workspace/organization ownership, request metadata, and before/after
 identifiers come from authenticated server context. Clients may supply a user
 action or reason where the domain requires it, but never the authoritative
 actor or tenant. Required audit writes participate in the same transaction as
-the mutation, or use a durable outbox when the sink is external.
+the mutation, or use a durable outbox when the sink is external. Enforced by
+`require-audit-on-mutation/require-audit-on-mutation`.
 
 ### Workspace status filtering
 
@@ -113,19 +116,21 @@ All user-supplied filenames must pass through `sanitizeFilename`
 (`@/api/lib/sanitize-filename`) before storage or use in file
 operations (ZIP entries, Content-Disposition headers, S3 keys).
 The sanitizer strips path separators, traversal sequences, and
-dangerous characters.
+dangerous characters. Enforced by
+`security-guards/no-raw-filename-write`.
 
 ### Cross-org user ID validation
 
 When a handler accepts a `userId` from user input (body, query, or
 params) and uses it in a query that returns user data (names, emails,
 images), validate org membership first using `validateOrgUserId` from
-`@/api/lib/branded-types`. The returned `ValidatedOrgUserId` proves
-the check happened at the type level, making cross-org user ID
+`@/api/lib/validated-org-user-id`. The returned `ValidatedOrgUserId`
+proves the check happened at the type level, making cross-org user ID
 injection structurally impossible. For read paths that resolve
 userIds stored in the database (not from user input), scope the user
 query with an `innerJoin` on the `member` table filtered by
-`session.activeOrganizationId`.
+`session.activeOrganizationId`; enforced by
+`security-guards/no-unscoped-user-query`.
 
 ### CI workflow permissions
 

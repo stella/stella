@@ -767,6 +767,6 @@ touching Cellar again. The crawl is rate-limited per decision, not
 per language variant, so a full sweep is long-running; run it as a
 deliberate operation rather than as part of a deploy.
 
-`scripts/record-eu-ecj-fixtures.ts` reaches individual decisions by
+`apps/api/scripts/record-eu-ecj-fixtures.ts` reaches individual decisions by
 CELEX number through the same adapter path, which is the quicker way
 to re-ingest a specific case.
