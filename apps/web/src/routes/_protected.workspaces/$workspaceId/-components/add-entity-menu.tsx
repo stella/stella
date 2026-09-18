@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { useState } from "react";
 
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import {
@@ -12,6 +12,7 @@ import {
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { openFilePicker } from "@stll/ui/file-picker";
 import {
   Menu,
   MenuItem,
@@ -78,7 +79,6 @@ export const AddEntityMenu = ({
   showTaskOption = true,
   uploadOnly = false,
 }: AddEntityMenuProps) => {
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
   const [styleDialogOpen, setStyleDialogOpen] = useState(false);
   const queryClient = useQueryClient();
@@ -138,7 +138,12 @@ export const AddEntityMenu = ({
     if (isUploadDisabled) {
       return;
     }
-    fileInputRef.current?.click();
+    openFilePicker({
+      multiple: true,
+      onPick: (files) => {
+        createFileEntities({ files, parentId: parentId ?? null });
+      },
+    });
   };
 
   const handleCreateDocument = async (
@@ -182,22 +187,6 @@ export const AddEntityMenu = ({
     return true;
   };
 
-  const fileInput = hasFileProperties ? (
-    <input
-      className="sr-only"
-      multiple
-      onChange={(e) => {
-        const files = e.currentTarget.files ? [...e.currentTarget.files] : [];
-        if (files.length > 0) {
-          createFileEntities({ files, parentId: parentId ?? null });
-        }
-        e.target.value = "";
-      }}
-      ref={fileInputRef}
-      type="file"
-    />
-  ) : null;
-
   if (uploadOnly && hasFileProperties) {
     const trigger = render ?? (
       <Button size="xs" variant="ghost">
@@ -206,11 +195,8 @@ export const AddEntityMenu = ({
       </Button>
     );
     return (
-      <>
-        {/* eslint-disable-next-line react/refs, react/no-clone-element -- handleUploadClick reads fileInputRef only inside the click handler; cloneElement obscures the call graph so the compiler conservatively flags a render-time ref access. cloneElement is required here to attach the click handler onto the caller-supplied `render` trigger element without knowing its concrete type. */}
-        {React.cloneElement(trigger, { onClick: handleUploadClick })}
-        {fileInput}
-      </>
+      // eslint-disable-next-line react/no-clone-element -- cloneElement attaches the click handler onto the caller-supplied `render` trigger element without knowing its concrete type.
+      React.cloneElement(trigger, { onClick: handleUploadClick })
     );
   }
 
@@ -274,7 +260,6 @@ export const AddEntityMenu = ({
           </MenuItem>
         </MenuPopup>
       </Menu>
-      {fileInput}
       {canUseTemplate && (
         <NewDocumentFromTemplateDialog
           onOpenChange={setTemplateDialogOpen}

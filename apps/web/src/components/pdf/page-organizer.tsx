@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from "react";
-import type { ChangeEvent, KeyboardEvent } from "react";
+import type { KeyboardEvent } from "react";
 
 import {
   attachClosestEdge,
@@ -51,6 +51,7 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
+import { openFilePicker } from "@stll/ui/file-picker";
 import { Input } from "@stll/ui/input";
 import { Label } from "@stll/ui/label";
 import { ScrollArea } from "@stll/ui/scroll-area";
@@ -727,7 +728,6 @@ const LoadedPDFPageOrganizer = ({
   const hotkeyPlatform = useHydrationSafeHotkeyPlatform();
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
-  const inputRef = useRef<HTMLInputElement>(null);
   const savedRef = useRef(false);
   const abortRef = useRef<AbortController | null>(null);
   const isMountedRef = useRef(true);
@@ -836,13 +836,7 @@ const LoadedPDFPageOrganizer = ({
     }
   };
 
-  const handleAddPDFs = async (event: ChangeEvent<HTMLInputElement>) => {
-    const fileList = event.target.files;
-    event.target.value = "";
-    if (!fileList || fileList.length === 0) {
-      return;
-    }
-    const files = Array.from(fileList);
+  const handleAddPDFs = async (files: File[]) => {
     if (1 + addedSources.length + files.length > MAX_PAGE_EDITOR_SOURCES) {
       stellaToast.add({
         title: documentLimitMessage,
@@ -1047,20 +1041,6 @@ const LoadedPDFPageOrganizer = ({
 
   return (
     <div className="bg-background flex h-full min-h-0 flex-col">
-      <input
-        accept="application/pdf,.pdf"
-        className="sr-only"
-        multiple
-        onChange={(event) => {
-          detached(
-            runOperation(async () => await handleAddPDFs(event)),
-            "pdf-page-organizer.add-pdfs",
-          );
-        }}
-        ref={inputRef}
-        type="file"
-      />
-
       <div className="flex min-h-0 flex-1 flex-col">
         <div
           className={cn(
@@ -1144,7 +1124,18 @@ const LoadedPDFPageOrganizer = ({
             <Button
               disabled={isBusy}
               loading={isAddingPDF}
-              onClick={() => inputRef.current?.click()}
+              onClick={() => {
+                openFilePicker({
+                  accept: "application/pdf,.pdf",
+                  multiple: true,
+                  onPick: (files) => {
+                    detached(
+                      runOperation(async () => await handleAddPDFs(files)),
+                      "pdf-page-organizer.add-pdfs",
+                    );
+                  },
+                });
+              }}
               size="sm"
               variant="outline"
             >

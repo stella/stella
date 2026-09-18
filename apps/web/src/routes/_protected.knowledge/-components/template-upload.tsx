@@ -1,10 +1,11 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 
 import { useMutation } from "@tanstack/react-query";
 import { SparklesIcon, UploadIcon, WandSparklesIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { openFilePicker } from "@stll/ui/file-picker";
 import { TextSeparator } from "@stll/ui/separator";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
@@ -31,8 +32,6 @@ export const TemplateUpload = ({
   onDiscovered,
 }: TemplateUploadProps) => {
   const t = useTranslations();
-  const inputRef = useRef<HTMLInputElement>(null);
-  const prepareInputRef = useRef<HTMLInputElement>(null);
   const [isDragOver, setIsDragOver] = useState(false);
 
   const discoverMutation = useMutation({
@@ -108,22 +107,8 @@ export const TemplateUpload = ({
     mutateDiscover(file);
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.item(0);
-    if (file) {
-      discover(file);
-    }
-    // Reset so the same file can be re-selected
-    e.target.value = "";
-  };
-
   const mutatePrepare = prepareMutation.mutate;
-  const handlePrepareFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.item(0);
-    e.target.value = "";
-    if (!file) {
-      return;
-    }
+  const prepare = (file: File) => {
     if (!isDocxFile(file)) {
       stellaToast.add({
         type: "error",
@@ -201,7 +186,12 @@ export const TemplateUpload = ({
           <div className="flex items-center gap-2">
             <Button
               disabled={loading}
-              onClick={() => inputRef.current?.click()}
+              onClick={() =>
+                openFilePicker({
+                  accept: ".docx",
+                  onPick: ([file]) => discover(file),
+                })
+              }
               size="sm"
               variant="outline"
             >
@@ -210,7 +200,12 @@ export const TemplateUpload = ({
             </Button>
             <Button
               disabled={loading}
-              onClick={() => prepareInputRef.current?.click()}
+              onClick={() =>
+                openFilePicker({
+                  accept: ".docx",
+                  onPick: ([file]) => prepare(file),
+                })
+              }
               size="sm"
               variant="outline"
             >
@@ -222,21 +217,6 @@ export const TemplateUpload = ({
             {t("templates.dragAndDrop")}
           </p>
         </div>
-
-        <input
-          accept=".docx"
-          className="hidden"
-          onChange={handleFileChange}
-          ref={inputRef}
-          type="file"
-        />
-        <input
-          accept=".docx"
-          className="hidden"
-          onChange={handlePrepareFileChange}
-          ref={prepareInputRef}
-          type="file"
-        />
       </div>
     </div>
   );

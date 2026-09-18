@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -15,6 +15,7 @@ import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { openFilePicker } from "@stll/ui/file-picker";
 import { Textarea } from "@stll/ui/textarea";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
@@ -76,7 +77,6 @@ export const TemplatePrefillPanel = ({
   const [pickedEntityIds, setPickedEntityIds] = useState<string[]>([]);
   const [dragOver, setDragOver] = useState(false);
   const [loading, setLoading] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const acceptFile = (candidate: File | undefined) => {
     if (!candidate) {
@@ -178,7 +178,12 @@ export const TemplatePrefillPanel = ({
                 "text-muted-foreground hover:text-foreground hover:border-ring flex w-full items-center justify-center gap-2 rounded-lg border border-dashed px-3 py-4 text-sm transition-colors",
                 dragOver && "border-ring text-foreground",
               )}
-              onClick={() => fileInputRef.current?.click()}
+              onClick={() => {
+                openFilePicker({
+                  accept: ".docx,.pdf",
+                  onPick: ([candidate]) => acceptFile(candidate),
+                });
+              }}
               onDragLeave={() => setDragOver(false)}
               onDragOver={(e) => {
                 e.preventDefault();
@@ -208,16 +213,6 @@ export const TemplatePrefillPanel = ({
               </Button>
             </div>
           )}
-          <input
-            accept=".docx,.pdf"
-            className="hidden"
-            onChange={(e) => {
-              acceptFile(e.target.files?.item(0) ?? undefined);
-              e.target.value = "";
-            }}
-            ref={fileInputRef}
-            type="file"
-          />
 
           {/* Paste text */}
           {pasteOpen ? (

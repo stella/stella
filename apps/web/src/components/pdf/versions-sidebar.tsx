@@ -24,6 +24,7 @@ import {
 } from "@stll/ui/alert-dialog";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { openFilePicker } from "@stll/ui/file-picker";
 import { Menu, MenuItem, MenuPopup, MenuSeparator } from "@stll/ui/menu";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { stellaToast } from "@stll/ui/toast";
@@ -105,7 +106,6 @@ export const VersionsSidebar = ({
   const t = useTranslations();
 
   const queryClient = useQueryClient();
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
 
   // The viewport is the scrollable element of the Base UI ScrollArea
@@ -368,23 +368,6 @@ export const VersionsSidebar = ({
 
   return (
     <div className="flex h-full flex-col">
-      <input
-        ref={fileInputRef}
-        accept=".docx,.pdf,.doc"
-        className="hidden"
-        type="file"
-        onChange={(e) => {
-          const file = e.target.files?.item(0);
-          if (file) {
-            detached(
-              handleUploadVersion(file),
-              "versions-sidebar.upload-version",
-            );
-          }
-          e.target.value = "";
-        }}
-      />
-
       {/* Version list */}
       <ScrollArea className="flex-1" viewportRef={viewportRef}>
         <VersionList>
@@ -450,7 +433,17 @@ export const VersionsSidebar = ({
         <Button
           className="text-muted-foreground hover:text-foreground hover:bg-accent flex h-full min-w-0 flex-1 justify-start gap-2 rounded-none border-0 px-3 font-normal before:rounded-none"
           disabled={isUploading}
-          onClick={() => fileInputRef.current?.click()}
+          onClick={() => {
+            openFilePicker({
+              accept: ".docx,.pdf,.doc",
+              onPick: ([file]) => {
+                detached(
+                  handleUploadVersion(file),
+                  "versions-sidebar.upload-version",
+                );
+              },
+            });
+          }}
           type="button"
           variant="ghost"
         >

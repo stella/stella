@@ -521,9 +521,6 @@ export const PromptBar = (props: PromptBarProps) => {
     attachments,
     canSubmit,
     editor,
-    fileInputAccept,
-    fileInputRef,
-    handleFileInputChange,
     isEmpty,
     openFilePicker,
     removeFile,
@@ -792,15 +789,6 @@ export const PromptBar = (props: PromptBarProps) => {
               />
             </div>
           )}
-          <input
-            accept={fileInputAccept}
-            className="hidden"
-            disabled={inputDisabled}
-            multiple
-            onChange={handleFileInputChange}
-            ref={fileInputRef}
-            type="file"
-          />
           {/* Shared (+) affordance on the left, identical to the main chat
               composer; opens the attach-file picker via the same controller.
               The control slot (same pattern the pending badge below uses)

@@ -40,6 +40,7 @@ import {
 } from "@stll/ui/alert-dialog";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { openFilePicker } from "@stll/ui/file-picker";
 import { Loader } from "@stll/ui/loader";
 import {
   Menu,
@@ -363,7 +364,6 @@ export const RowActions = ({
   const [translationDialogState, setTranslationDialogState] =
     useState<TranslationDialogState>({ type: "closed" });
   const { data: properties } = useQuery(propertiesOptions(workspaceId));
-  const uploadVersionInputRef = useRef<HTMLInputElement>(null);
   const duplicateTargetIdsRef = useRef(new Map<string, string>());
   const file = getFirstFile(entity);
   const name = getEntityName(entity);
@@ -921,26 +921,21 @@ export const RowActions = ({
   };
 
   const handleUploadVersionSelect = () => {
-    uploadVersionInputRef.current?.click();
-  };
+    openFilePicker({
+      accept: versionAccept,
+      onPick: ([uploadedFile]) => {
+        if (!file) {
+          return;
+        }
 
-  const handleUploadVersionChange = (
-    event: React.ChangeEvent<HTMLInputElement>,
-  ) => {
-    const uploadedFile = event.target.files?.[0];
-    if (!uploadedFile || !file) {
-      return;
-    }
-
-    uploadVersion.mutate({
-      workspaceId,
-      entityId: entity.entityId,
-      entityFileName: file.fileName,
-      file: uploadedFile,
+        uploadVersion.mutate({
+          workspaceId,
+          entityId: entity.entityId,
+          entityFileName: file.fileName,
+          file: uploadedFile,
+        });
+      },
     });
-
-    // Reset input to allow uploading the same file again
-    event.target.value = "";
   };
 
   const handleRunOcr = async (source: OcrSource | undefined) => {
@@ -1135,16 +1130,6 @@ export const RowActions = ({
         }
         workspaceId={workspaceId}
       />
-      {/* Hidden file input for upload new version */}
-      {canUploadVersion && (
-        <input
-          accept={versionAccept}
-          className="hidden"
-          onChange={handleUploadVersionChange}
-          ref={uploadVersionInputRef}
-          type="file"
-        />
-      )}
     </Menu>
   );
 };

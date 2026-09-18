@@ -1,5 +1,4 @@
 import { useRef, useState } from "react";
-import type { ChangeEvent } from "react";
 
 import type { Edge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -30,6 +29,7 @@ import {
   ColorPickerContent,
   DEFAULT_PRESETS,
 } from "@stll/ui/color-picker";
+import { openFilePicker } from "@stll/ui/file-picker";
 import { KanbanColumnHeader } from "@stll/ui/kanban";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
 import { Popover, PopoverPopup } from "@stll/ui/popover";
@@ -131,7 +131,6 @@ export const KanbanColumn = ({
   const columnRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const dragHandleRef = useRef<HTMLDivElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState(title);
 
@@ -208,15 +207,6 @@ export const KanbanColumn = ({
     onDrop: (files) => onFileUpload?.(files),
   });
   const isFileDragOver = isDropTarget && !isInnerActive;
-
-  const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) {
-      return;
-    }
-    onFileUpload?.([...files]);
-    e.target.value = "";
-  };
 
   const startEditing = () => {
     if (!onRenameColumn) {
@@ -432,17 +422,15 @@ export const KanbanColumn = ({
       ) : (
         onFileUpload && (
           <div className="border-t p-2">
-            <input
-              accept="*/*"
-              className="hidden"
-              multiple
-              onChange={handleFileChange}
-              ref={fileInputRef}
-              type="file"
-            />
             <Button
               className="w-full gap-1"
-              onClick={() => fileInputRef.current?.click()}
+              onClick={() =>
+                openFilePicker({
+                  accept: "*/*",
+                  multiple: true,
+                  onPick: (files) => onFileUpload(files),
+                })
+              }
               size="xs"
               variant="ghost"
             >

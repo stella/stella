@@ -1,10 +1,9 @@
-import { useRef } from "react";
-
 import { FilterXIcon, UploadIcon } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { openFilePicker } from "@stll/ui/file-picker";
 
 import { EmptyScreen } from "@/components/empty-screen";
 import { guideAnchor } from "@/features/guides/guide-anchor";
@@ -97,35 +96,25 @@ const WorkspaceUploadEmptyScreen = ({
   workspaceId,
 }: WorkspaceUploadEmptyScreenProps) => {
   const tWorkspaces = useTranslations("workspaces");
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [isPending, createFileEntities] = useCreateFileEntities(workspaceId);
 
   return (
-    <>
-      <EmptyScreen
-        description={description}
-        primaryAction={{
-          label: tWorkspaces("uploadDocuments"),
-          icon: UploadIcon,
-          disabled: isPending,
-          onClick: () => fileInputRef.current?.click(),
-          ...guideAnchor(GUIDE_ANCHORS.documentsUpload),
-        }}
-        title={title}
-      />
-      <input
-        className="sr-only"
-        multiple
-        onChange={(e) => {
-          const files = e.currentTarget.files ? [...e.currentTarget.files] : [];
-          if (files.length > 0) {
-            createFileEntities({ files, parentId: null });
-          }
-          e.target.value = "";
-        }}
-        ref={fileInputRef}
-        type="file"
-      />
-    </>
+    <EmptyScreen
+      description={description}
+      primaryAction={{
+        label: tWorkspaces("uploadDocuments"),
+        icon: UploadIcon,
+        disabled: isPending,
+        onClick: () =>
+          openFilePicker({
+            multiple: true,
+            onPick: (files) => {
+              createFileEntities({ files, parentId: null });
+            },
+          }),
+        ...guideAnchor(GUIDE_ANCHORS.documentsUpload),
+      }}
+      title={title}
+    />
   );
 };

@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 
 import { UploadIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -13,6 +13,7 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
+import { FileInput } from "@stll/ui/file-input";
 import { stellaToast } from "@stll/ui/toast";
 
 import { getAnalytics } from "@/lib/analytics/provider";
@@ -40,18 +41,12 @@ export const ClauseImportDialog = ({
   onImported,
 }: ClauseImportDialogProps) => {
   const t = useTranslations();
-  const inputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [previewCount, setPreviewCount] = useState<number | null>(null);
   const [importing, setImporting] = useState(false);
   const [result, setResult] = useState<ImportResult | null>(null);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selected = e.target.files?.item(0);
-    if (!selected) {
-      return;
-    }
-
+  const handleFileChange = (selected: File) => {
     setFile(selected);
     setResult(null);
 
@@ -66,9 +61,6 @@ export const ClauseImportDialog = ({
         getAnalytics().captureError(error);
         setPreviewCount(null);
       });
-
-    // Reset so the same file can be re-selected
-    e.target.value = "";
   };
 
   const handleImport = async () => {
@@ -132,25 +124,16 @@ export const ClauseImportDialog = ({
         <DialogPanel className="grid gap-4">
           <div className="flex flex-col items-center gap-3 rounded-lg border-2 border-dashed p-6">
             <UploadIcon className="text-muted-foreground size-8" />
-            <Button
-              onClick={() => inputRef.current?.click()}
-              size="sm"
-              variant="outline"
-            >
-              {t("common.chooseFile")}
-            </Button>
-            <input
+            <FileInput
               accept=".json,.csv"
-              className="hidden"
-              onChange={handleFileChange}
-              ref={inputRef}
-              type="file"
+              chooseLabel={t("common.chooseFile")}
+              emptyLabel={t("common.noFileChosen")}
+              file={file}
+              onFileChange={handleFileChange}
             />
-            {file && (
+            {previewCount !== null && (
               <p className="text-muted-foreground text-sm">
-                {file.name}
-                {previewCount !== null &&
-                  ` (${t("clauses.clauseCount", { count: previewCount })})`}
+                {t("clauses.clauseCount", { count: previewCount })}
               </p>
             )}
           </div>

@@ -1,4 +1,4 @@
-import { type CSSProperties, useRef, useState } from "react";
+import { type CSSProperties, useState } from "react";
 
 import { useQueryClient } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
@@ -159,7 +159,6 @@ export const TemplateList = ({
   const lang = useI18nStore((s) => s.lang);
   const canCreateTemplate = usePermissions({ template: ["create"] });
   const assignCategory = useAssignTemplateCategory();
-  const inputRef = useRef<HTMLInputElement>(null);
   const [discovering, setDiscovering] = useState(false);
   const [tagFilter, setTagFilter] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
@@ -211,15 +210,6 @@ export const TemplateList = ({
     }
 
     onDiscovered(file, data);
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.item(0);
-    if (file) {
-      // Errors are surfaced as toasts inside discover
-      detached(discover(file), "template-list.discover-selected");
-    }
-    e.target.value = "";
   };
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -340,25 +330,10 @@ export const TemplateList = ({
           <div className="flex shrink-0 items-center gap-2">
             <DensityToggle density={density} onChange={changeDensity} />
             {canCreateTemplate && (
-              <>
-                <Button
-                  disabled={discovering}
-                  onClick={onCreateBlank}
-                  size="sm"
-                >
-                  <PlusIcon />
-                  {discovering
-                    ? t("common.loading")
-                    : t("templates.newTemplate")}
-                </Button>
-                <input
-                  accept=".docx"
-                  className="hidden"
-                  onChange={handleFileChange}
-                  ref={inputRef}
-                  type="file"
-                />
-              </>
+              <Button disabled={discovering} onClick={onCreateBlank} size="sm">
+                <PlusIcon />
+                {discovering ? t("common.loading") : t("templates.newTemplate")}
+              </Button>
             )}
           </div>
         </div>
