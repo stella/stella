@@ -27,6 +27,10 @@ import {
   isDateOnlyPaginationCursorPart,
   isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
+import type {
+  UnbackedProjectionKeys,
+  UnprojectedColumns,
+} from "@/api/lib/projection-totality";
 import { brandPersistedEntityId } from "@/api/lib/safe-id-boundaries";
 
 /** Keyset position: the last row's due date (null sorts last) and id. */
@@ -90,6 +94,79 @@ const assigneeCondition = ({
   }
 };
 
+type EntityRow = typeof entities.$inferSelect;
+
+// The entity columns a task-list row carries. `listItemType` is sent as
+// `itemType`, the name the list contract already uses.
+const TASK_LIST_ENTITY_SELECTION = {
+  id: entities.id,
+  name: entities.name,
+  status: entities.status,
+  priority: entities.priority,
+  listItemType: entities.listItemType,
+  dueDate: entities.dueDate,
+} as const;
+
+// Columns a task-list row leaves out. The list is a summary; `list_tasks`
+// detail mode and `tasks.get` return the full task.
+const UNPROJECTED_TASK_LIST_COLUMNS = [
+  // Tenant scope: the row names its matter through the joined workspace.
+  "workspaceId",
+  // Always "task" here, fixed by the query.
+  "kind",
+  // Hierarchy, versioning, and ordering are detail and editor concerns.
+  "parentId",
+  "duplicateSourceEntityId",
+  "currentVersionId",
+  "docSequence",
+  "sortOrder",
+  // `name` is the list label; the display name belongs to documents.
+  "displayName",
+  // Authorship and timestamps are detail-view fields.
+  "createdBy",
+  "lastEditedBy",
+  "createdAt",
+  "updatedAt",
+  // Agenda scheduling and attendance: the detail read and calendar own them.
+  "agendaKind",
+  "startAt",
+  "endAt",
+  "occurredAt",
+  "remindAt",
+  "allDay",
+  "timeZone",
+  "location",
+  "onlineMeetingUrl",
+  "availability",
+  "sensitivity",
+  "organizer",
+  "attendees",
+  "recurrence",
+  "agendaSource",
+  // External-calendar sync plumbing, never shown in a list.
+  "externalSource",
+  "externalId",
+  "externalChangeKey",
+  "externalICalUid",
+  "externalData",
+  "readOnly",
+  "metadata",
+] as const satisfies readonly (keyof EntityRow)[];
+
+type MissingProjectedTaskListColumn = UnprojectedColumns<
+  EntityRow,
+  typeof TASK_LIST_ENTITY_SELECTION,
+  (typeof UNPROJECTED_TASK_LIST_COLUMNS)[number]
+>;
+type UnexpectedProjectedTaskListColumn = UnbackedProjectionKeys<
+  EntityRow,
+  typeof TASK_LIST_ENTITY_SELECTION,
+  (typeof UNPROJECTED_TASK_LIST_COLUMNS)[number]
+>;
+
+true satisfies MissingProjectedTaskListColumn extends never ? true : never;
+true satisfies UnexpectedProjectedTaskListColumn extends never ? true : never;
+
 type ListTasksPageQuery = {
   status?: string | undefined;
   assignee?: TaskAssigneeFilter | undefined;
@@ -133,12 +210,12 @@ export const listTasksPage = async ({
   const rows = await safeDb((tx) =>
     tx
       .select({
-        id: entities.id,
-        name: entities.name,
-        status: entities.status,
-        priority: entities.priority,
-        itemType: entities.listItemType,
-        dueDate: entities.dueDate,
+        id: TASK_LIST_ENTITY_SELECTION.id,
+        name: TASK_LIST_ENTITY_SELECTION.name,
+        status: TASK_LIST_ENTITY_SELECTION.status,
+        priority: TASK_LIST_ENTITY_SELECTION.priority,
+        itemType: TASK_LIST_ENTITY_SELECTION.listItemType,
+        dueDate: TASK_LIST_ENTITY_SELECTION.dueDate,
         matterId: workspaces.id,
         matterName: workspaces.name,
         matterReference: workspaces.reference,
