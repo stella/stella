@@ -32,9 +32,13 @@ import type {
 } from "@/api/lib/chat/model-ingress-guard";
 import { generateChatObject } from "@/api/lib/chat/tanstack-chat-runtime";
 import { decide } from "@/api/lib/decisions/decide";
-import { noul } from "@/api/lib/decisions/system-one";
 import type { SystemOneClient } from "@/api/lib/decisions/system-one";
 import type { AiOccurrenceAdapter } from "@/api/lib/docx/adapt-ai-fields";
+import {
+  CONDITION_DECISION_ID,
+  CONDITION_QUESTION,
+  conditionState,
+} from "@/api/lib/docx/ai-condition-question";
 import {
   maybeSkillTools,
   SKILL_REF_GENERATOR_GUIDANCE,
@@ -391,18 +395,6 @@ Reply with only the text for this field — no preamble, no quotes, no markdown.
 const AI_CONDITION_TIMEOUT_MS = 20_000;
 const AI_CONDITION_MAX_TOKENS = 400;
 
-/** The condition as one typed decision over the details the fill already holds. */
-const CONDITION_QUESTION = noul(
-  {
-    task: "Is the condition asked in `question` true for the document described by `details`?",
-  },
-  {
-    true: "The details state the condition or entail it.",
-    false:
-      "The details state that it does not hold, or do not settle it: an unsettled condition excludes its block.",
-  },
-);
-
 // strictObject + object root: OpenAI strict structured output rejects a bare
 // boolean root, so the yes/no answer rides in a single required boolean field.
 const conditionDecisionSchema = v.strictObject({
@@ -453,9 +445,9 @@ export const buildAiConditionDecider = ({
       // the decision model settles first.
       if (skillTools === undefined) {
         const decided = await decide({
-          id: "template.condition",
+          id: CONDITION_DECISION_ID,
           orgAIConfig,
-          state: { question: prompt, details: JSON.stringify(values) },
+          state: conditionState({ prompt, values }),
           question: CONDITION_QUESTION,
           abortSignal: operationSignal,
           timeoutMs: AI_CONDITION_TIMEOUT_MS,

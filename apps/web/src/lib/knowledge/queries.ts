@@ -149,6 +149,20 @@ export const knowledgeKeys = {
       ...knowledgeKeys.templates.detail(organizationId, templateId),
       FILL_DISCOVER_SEGMENT,
     ],
+    // What the decision model makes of the values entered so far. `valuesHash`
+    // is the request values' stable TanStack hash, so one entry per distinct
+    // form state: re-entering a value the user just undid hits the cache
+    // instead of the model.
+    decideConditions: (
+      organizationId: string,
+      templateId: string,
+      valuesHash: string,
+    ) => [
+      ...knowledgeKeys.templates.all(organizationId),
+      templateId,
+      "decide-conditions",
+      valuesHash,
+    ],
   },
   templateCategories: {
     all: (organizationId: string) => ["template-categories", organizationId],
