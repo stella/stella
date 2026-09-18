@@ -194,6 +194,14 @@ describe("toAPIError", () => {
       "ai_config_provider_validation_failed",
       "The AI provider rejected the configuration. Check the API key and model.",
     ],
+    [
+      "ai_config_decision_invalid",
+      "The decision model configuration is invalid. Check the provider and model.",
+    ],
+    [
+      "ai_config_decision_validation_failed",
+      "The decision model rejected the configuration. Check the API key and model.",
+    ],
   ])("localizes the actionable configuration code %s", (code, expected) => {
     const error = toAPIError({
       status: 400,

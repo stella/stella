@@ -27,6 +27,7 @@ describe("normalizeOrgAIConfig auto-heal", () => {
         reasoning: { provider: "google", modelId: "gemini-3-pro-preview" },
         pdf: { provider: "google", modelId: "gemini-3-flash-preview" },
       },
+      decision: null,
     };
 
     const healed = normalizeOrgAIConfig(config).overrideModels;
@@ -61,6 +62,7 @@ describe("normalizeOrgAIConfig auto-heal", () => {
         },
         pdf: { provider: "google", modelId: BYOK_DEFAULT_MODELS.google.pdf },
       },
+      decision: null,
     };
 
     expect(normalizeOrgAIConfig(config).overrideModels).toEqual(
@@ -81,6 +83,7 @@ describe("normalizeOrgAIConfig auto-heal", () => {
         reasoning: { provider: "mistral", modelId: "some-retired-mistral-id" },
         pdf: staleMistralPdf,
       },
+      decision: null,
     };
 
     const healed = normalizeOrgAIConfig(config).overrideModels;
@@ -114,6 +117,7 @@ describe("normalizeOrgAIConfig auto-heal", () => {
         },
         pdf: { provider: "google", modelId: BYOK_DEFAULT_MODELS.google.pdf },
       },
+      decision: null,
     };
 
     expect(normalizeOrgAIConfig(config).overrideModels.fast).toEqual(

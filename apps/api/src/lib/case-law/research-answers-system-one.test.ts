@@ -7,8 +7,13 @@ import {
   splitSystemOneQuestions,
   systemOneSourcesFromPassages,
 } from "@/api/lib/case-law/research-answers-system-one";
-import type { AnswerOutcome } from "@/api/lib/typesafe/answer-questions";
-import { SYSTEM_ONE_SOURCE_BUDGET_CHARS } from "@/api/lib/typesafe/answer-questions";
+import type { AnswerOutcome } from "@/api/lib/decisions/answer-questions";
+import {
+  decodeSystemOneAnswers,
+  planSystemOneAnswers,
+  SYSTEM_ONE_SOURCE_BUDGET_CHARS,
+} from "@/api/lib/decisions/answer-questions";
+import { decideMany } from "@/api/lib/decisions/decide";
 
 const outcome = { completedAt: "2026-09-17T10:00:00.000Z", model: "jev-1.13" };
 
@@ -158,12 +163,39 @@ describe("resolveSystemOneOutcomes", () => {
     expect(settled.outcome.run.justification.blocks).toEqual([]);
   });
 
-  test("an unsure answer is left to the generative model", () => {
+  test("an undecided question is left to the generative model", () => {
     const resolved = resolveSystemOneOutcomes({
       questions: askedFor(columns.type),
-      outcomes: new Map([
-        ["col-type", answered("Purchase agreement", { confidence: 0.55 })],
+      outcomes: new Map<string, AnswerOutcome>([
+        ["col-type", { state: "undecided", reason: "below-floor" }],
       ]),
+      excerptByAnchor,
+      run,
+    });
+    expect(resolved.settled).toEqual([]);
+    expect(resolved.fallbackColumnIds).toEqual(["col-type"]);
+  });
+
+  test("with no decision model every column is the generative model's", async () => {
+    const asked = splitSystemOneQuestions([columns.type]).asked;
+    const plan = planSystemOneAnswers({
+      document: { caseNumber: "21 Cdo 1/2020" },
+      sources: [{ id: "b1", text: "Soud rozhodl, že smlouva je kupní." }],
+      language: "cs",
+      questions: asked,
+    });
+    const { decisions, model } = await decideMany({
+      id: "case-law.research-answers",
+      orgAIConfig: null,
+      state: plan.state,
+      questions: plan.questions,
+      client: null,
+    });
+
+    expect(model).toBeNull();
+    const resolved = resolveSystemOneOutcomes({
+      questions: asked,
+      outcomes: decodeSystemOneAnswers({ plan, questions: asked, decisions }),
       excerptByAnchor,
       run,
     });

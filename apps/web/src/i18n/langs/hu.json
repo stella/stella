@@ -1892,6 +1892,8 @@
       "accountDeletionSoleOwner": "A fiók törlése előtt adja át a kizárólagos tulajdonában lévő szervezetek tulajdonjogát, vagy törölje őket.",
       "accountDeletionTaskReassignmentInvalid": "Ellenőrizze minden aktív feladat átadását. Minden célszemélynek az ügy másik, a feladathoz még nem rendelt tagjának kell lennie.",
       "accountDeletionTaskReassignmentLimitExceeded": "Túl sok aktív feladatot kell átadni. A fiók törlése előtt fejezzen be vagy adjon át néhány feladatot.",
+      "aiConfigDecisionInvalid": "A döntési modell beállítása érvénytelen. Ellenőrizze a szolgáltatót és a modellt.",
+      "aiConfigDecisionValidationFailed": "A döntési modell elutasította a beállítást. Ellenőrizze az API-kulcsot és a modellt.",
       "aiConfigModelInvalid": "Az AI-modell beállítása érvénytelen. Ellenőrizze a kiválasztott modelleket.",
       "aiConfigProviderInvalid": "Az AI-szolgáltató beállítása érvénytelen. Ellenőrizze a szolgáltató beállításait.",
       "aiConfigProviderValidationFailed": "Az AI-szolgáltató elutasította a beállítást. Ellenőrizze az API-kulcsot és a modellt.",
@@ -3550,6 +3552,14 @@
       "dataRegion": "Adatrégió",
       "dataRegionDescription": "Az adatszuverenitás érdekében a kiválasztott régión keresztül irányítja az AI-hívásokat.",
       "dataRegionUnsupported": "A regionális útválasztás csak a Google AI (Vertex AI) esetén érhető el.",
+      "decision": {
+        "add": "Döntési modell hozzáadása",
+        "description": "A rögzített válaszú kérdések, például a dokumentumkategóriák vagy a hivatkozások polaritása, ehhez a modellhez kerülnek; enélkül a generatív modell válaszol rájuk.",
+        "incomplete": "Adj meg API-kulcsot és modellt a döntési modellhez, vagy távolítsd el.",
+        "instanceProvided": "stella már biztosít döntési modellt; sajátot csak akkor adj hozzá, ha másikat szeretnél használni.",
+        "label": "Döntési modell",
+        "modelId": "Modellazonosító"
+      },
       "defaultModel": "Alapértelmezett: {model}",
       "defaultModelOption": "Alapértelmezett",
       "deploymentNamePlaceholder": "Üzembe helyezés neve",

@@ -11,8 +11,13 @@ import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { AIUsageMetering } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  decodeSystemOneAnswers,
+  planSystemOneAnswers,
+} from "@/api/lib/decisions/answer-questions";
+import { decideMany } from "@/api/lib/decisions/decide";
+import type { SystemOneClient } from "@/api/lib/decisions/system-one";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
-import { logger } from "@/api/lib/observability/logger";
 import { sanitizeForPrompt, untrustedText } from "@/api/lib/prompt-safety";
 import { splitPropertiesForBudget } from "@/api/lib/structured-output-budget";
 import { markTanStackCacheBreakpoint } from "@/api/lib/tanstack-ai-caching";
@@ -21,13 +26,6 @@ import {
   streamTanStackObjectForRole,
   structuredOutputWireJsonSchema,
 } from "@/api/lib/tanstack-ai-generate";
-import {
-  decodeSystemOneAnswers,
-  describeSystemOneReadings,
-  planSystemOneAnswers,
-} from "@/api/lib/typesafe/answer-questions";
-import type { SystemOneClient } from "@/api/lib/typesafe/system-one";
-import { getSystemOneClient } from "@/api/lib/typesafe/system-one-runtime";
 import type { Answer } from "@/api/lib/workflow/ai-answer-schema";
 import {
   buildBatchSchema,
@@ -76,8 +74,8 @@ type GenerateWorkflowDataProps = {
   onPartialAnswer?:
     | ((update: PartialAnswerUpdate) => Promise<void> | void)
     | undefined;
-  /** Injected by tests; the deployment's client (or none) otherwise. */
-  systemOne?: SystemOneClient | null | undefined;
+  /** Injected by tests; the org's resolved decision model otherwise, null for none. */
+  decisionModel?: SystemOneClient | null | undefined;
 };
 
 export type WorkflowDataOutput = Record<
@@ -156,12 +154,11 @@ export const buildWorkflowAIAnalyticsProps = ({
   ...(usageMetering ? { usageMetering } : {}),
 });
 
-/** One Jev call reads the whole batch; the caller's signal still bounds it. */
-const SYSTEM_ONE_TIMEOUT_MS = 60_000;
 const SYSTEM_ONE_ERROR_SOURCE = "workflow.generate-batch.system-one";
 
 type SystemOnePhaseOptions = {
-  client: SystemOneClient;
+  decisionModel: SystemOneClient | null | undefined;
+  orgAIConfig: OrgAIConfig | null | undefined;
   properties: AIBatchProperty[];
   files: PreparedInputFile[];
   textInputs: TextInput[];
@@ -178,13 +175,15 @@ type SystemOnePhaseResult = {
 };
 
 /**
- * Jev answers the closed-answer properties of one batch. Anything it does not
- * settle — a text property, a question the plan could not ask, an answer
- * under the confidence floor, a failed call — is left to the generative model,
- * so this phase can only add answers, never lose a property.
+ * The decision model answers the closed-answer properties of one batch.
+ * Anything it does not settle — a text property, a question the plan could not
+ * ask, an undecided answer, a deployment with no decision model at all — is
+ * left to the generative model, so this phase can only add answers, never lose
+ * a property.
  */
 const askSystemOne = async ({
-  client,
+  decisionModel,
+  orgAIConfig,
   properties,
   files,
   textInputs,
@@ -228,38 +227,21 @@ const askSystemOne = async ({
     return fallbackAll;
   }
 
-  const asked = await client.ask({
+  const { decisions } = await decideMany({
+    id: "workflow.table-batch",
+    orgAIConfig,
     state: plan.state,
     questions: plan.questions,
-    abortSignal: AbortSignal.any([
-      abortSignal,
-      AbortSignal.timeout(SYSTEM_ONE_TIMEOUT_MS),
-    ]),
+    abortSignal,
+    // One call reads the whole batch; the caller's signal still bounds it.
+    timeoutMs: 60_000,
+    client: decisionModel,
   });
-  if (Result.isError(asked)) {
-    captureError(asked.error, { source: SYSTEM_ONE_ERROR_SOURCE });
-    return fallbackAll;
-  }
-
-  const outcomes = decodeSystemOneAnswers({
-    plan,
-    questions,
-    answers: asked.value.answers,
-  });
-  const { output, fallbackPropertyIds } = outputFromSystemOneOutcomes({
+  const outcomes = decodeSystemOneAnswers({ plan, questions, decisions });
+  const { output } = outputFromSystemOneOutcomes({
     properties: systemOne,
     outcomes,
     locators,
-  });
-
-  logger.info("workflow.generate_batch.system_one", {
-    model: asked.value.model,
-    propertyCount: systemOne.length,
-    inputTokens: asked.value.usage.inputTokens,
-    latencyMs: asked.value.latencyMs,
-    answeredCount: systemOne.length - fallbackPropertyIds.length,
-    fallbackCount: fallbackPropertyIds.length,
-    readings: describeSystemOneReadings({ questions, outcomes }),
   });
 
   if (onPartialAnswer) {
@@ -296,23 +278,22 @@ export const generateWorkflowData = async ({
   serviceTier,
   usageMetering,
   onPartialAnswer,
-  systemOne,
+  decisionModel,
 }: GenerateWorkflowDataProps): Promise<
   Result<WorkflowDataOutput, WorkflowIntegrationError>
 > => {
-  const systemOneClient =
-    systemOne === undefined ? getSystemOneClient() : systemOne;
+  // Always asked: without a decision model every question comes back
+  // undecided and every property falls back, which is the generative path.
   const { output: systemOneOutput, generative: generativeProperties } =
-    systemOneClient === null
-      ? ({ output: {}, generative: properties } satisfies SystemOnePhaseResult)
-      : await askSystemOne({
-          client: systemOneClient,
-          properties,
-          files,
-          textInputs,
-          abortSignal,
-          onPartialAnswer,
-        });
+    await askSystemOne({
+      decisionModel,
+      orgAIConfig,
+      properties,
+      files,
+      textInputs,
+      abortSignal,
+      onPartialAnswer,
+    });
   // Only a batch System One answered in full ends here; an empty batch takes
   // the generative path it has always taken.
   if (properties.length > 0 && generativeProperties.length === 0) {

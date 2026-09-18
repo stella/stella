@@ -1,4 +1,3 @@
-import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import type { Fetcher } from "@stll/fetch";
@@ -12,12 +11,23 @@ import {
   classifyWithSystemOne,
   SYSTEM_ONE_POLARITY_ACCEPT_CONFIDENCE,
 } from "@/api/handlers/case-law/polarity/system-one-classifier";
-import { createSystemOneClient } from "@/api/lib/typesafe/system-one";
-import type { SystemOneClient } from "@/api/lib/typesafe/system-one";
+import { createSystemOneClient } from "@/api/lib/decisions/system-one";
+import type { SystemOneClient } from "@/api/lib/decisions/system-one";
+
+/** The question keys a request asked under; the decision primitive names them. */
+const questionKeysOf = (body: unknown): string[] => {
+  if (typeof body !== "object" || body === null || !("questions" in body)) {
+    return [];
+  }
+  const { questions } = body;
+  return typeof questions === "object" && questions !== null
+    ? Object.keys(questions)
+    : [];
+};
 
 /**
- * A client over a fake wire that answers the polarity question with a fixed
- * distribution, so the test exercises the real transport and its answer
+ * A client over a fake wire that answers every question of the request with a
+ * fixed distribution, so the test exercises the real transport and its answer
  * binding rather than a hand-typed answer.
  */
 const fakeClient = (
@@ -26,22 +36,26 @@ const fakeClient = (
 ): { client: SystemOneClient; requests: unknown[] } => {
   const requests: unknown[] = [];
   const fetcher: Fetcher = async (_input, init) => {
-    requests.push(
-      typeof init?.body === "string" ? JSON.parse(init.body) : null,
-    );
+    const body: unknown =
+      typeof init?.body === "string" ? JSON.parse(init.body) : null;
+    requests.push(body);
     const probabilities = Object.fromEntries(
       CLASSIFIABLE_POLARITIES.map((polarity) => [
         polarity,
         polarity === choice ? confidence : (1 - confidence) / 3,
       ]),
     );
+    const answers = Object.fromEntries(
+      questionKeysOf(body).map((key) => [
+        key,
+        { type: "choice", choice, probabilities, confidence },
+      ]),
+    );
     return await Promise.resolve(
       new Response(
         JSON.stringify({
           model: "jev-1.13.0",
-          answers: {
-            polarity: { type: "choice", choice, probabilities, confidence },
-          },
+          answers,
           usage: { input_tokens: 80, output_tokens: 1 },
         }),
         { status: 200, headers: { "content-type": "application/json" } },
@@ -76,16 +90,17 @@ describe("classifyWithSystemOne", () => {
       language: "cs",
     });
 
-    expect(Result.isOk(reading)).toBe(true);
-    if (Result.isError(reading)) {
-      return;
+    if (reading.state !== "decided") {
+      throw new Error("expected a decided reading");
     }
-    expect(reading.value.polarity).toBe("negative");
-    expect(reading.value.model).toBe("jev-1.13.0");
-    expect(reading.value.inputTokens).toBe(80);
+    expect(reading.answer.choice).toBe("negative");
+    expect(reading.confidence).toBe(0.9);
 
     expect(requests).toHaveLength(1);
-    expect(requests[0]).toMatchObject({
+    const [request] = requests;
+    const [questionKey] = questionKeysOf(request);
+    expect(questionKey).toBeDefined();
+    expect(request).toMatchObject({
       model: "jev-latest",
       state: {
         language: "cs",
@@ -93,7 +108,7 @@ describe("classifyWithSystemOne", () => {
         excerpt: context,
       },
       questions: {
-        polarity: {
+        [String(questionKey)]: {
           type: "choice",
           criteria: Object.fromEntries(
             CLASSIFIABLE_POLARITIES.map((polarity) => [
@@ -103,6 +118,45 @@ describe("classifyWithSystemOne", () => {
           ),
         },
       },
+    });
+  });
+
+  test("a reading under the floor is undecided, so the generative tier reads", async () => {
+    const { client } = fakeClient(
+      "negative",
+      SYSTEM_ONE_POLARITY_ACCEPT_CONFIDENCE - 0.05,
+    );
+    const reading = await classifyWithSystemOne({
+      client,
+      context,
+      citationText: "sp. zn. 21 Cdo 1234/2020",
+      language: "cs",
+    });
+
+    expect(reading).toMatchObject({
+      state: "undecided",
+      reason: "below-floor",
+    });
+  });
+
+  /**
+   * The tier is the only thing between the regex tier and the generative one,
+   * and it returns a label only on `state === "decided"`, so an undecided
+   * reading is the pre-existing LLM path. Asserted here rather than through
+   * `classifyCitation`, which would call the generative model.
+   */
+  test("with no decision model nothing is asked and nothing is decided", async () => {
+    const reading = await classifyWithSystemOne({
+      client: null,
+      context,
+      citationText: "sp. zn. 21 Cdo 1234/2020",
+      language: "cs",
+    });
+
+    expect(reading).toEqual({
+      state: "undecided",
+      reason: "no-backend",
+      confidence: null,
     });
   });
 });
@@ -119,7 +173,7 @@ describe("classifyCitation with the System One tier", () => {
       options: {
         ruleCache: emptyRuleCache("cs"),
         dryRun: true,
-        systemOne: client,
+        decisionModel: client,
       },
     });
     expect(result).toEqual({

@@ -1892,6 +1892,8 @@
       "accountDeletionSoleOwner": "Pirms konta dzēšanas nododiet īpašumtiesības vai dzēsiet organizācijas, kuru vienīgais īpašnieks esat.",
       "accountDeletionTaskReassignmentInvalid": "Pārbaudiet katra aktīvā uzdevuma pārdali. Katram saņēmējam jābūt citam lietas dalībniekam, kurš vēl nav piešķirts uzdevumam.",
       "accountDeletionTaskReassignmentLimitExceeded": "Jāpārdala pārāk daudz aktīvu uzdevumu. Pirms konta dzēšanas pabeidziet vai pārdaliet dažus uzdevumus.",
+      "aiConfigDecisionInvalid": "Lēmumu modeļa konfigurācija nav derīga. Pārbaudiet pakalpojuma sniedzēju un modeli.",
+      "aiConfigDecisionValidationFailed": "Lēmumu modelis noraidīja konfigurāciju. Pārbaudiet API atslēgu un modeli.",
       "aiConfigModelInvalid": "MI modeļa konfigurācija nav derīga. Pārbaudiet atlasītos modeļus.",
       "aiConfigProviderInvalid": "MI pakalpojuma sniedzēja konfigurācija nav derīga. Pārbaudiet pakalpojuma sniedzēja iestatījumus.",
       "aiConfigProviderValidationFailed": "MI pakalpojuma sniedzējs noraidīja konfigurāciju. Pārbaudiet API atslēgu un modeli.",
@@ -3550,6 +3552,14 @@
       "dataRegion": "Datu reģions",
       "dataRegionDescription": "Novirza AI pieprasījumus caur izvēlēto reģionu datu suverenitātes nodrošināšanai.",
       "dataRegionUnsupported": "Reģionālā maršrutēšana pieejama tikai Google AI (Vertex AI).",
+      "decision": {
+        "add": "Pievienot lēmumu modeli",
+        "description": "Jautājumi ar noteiktu atbildi, piemēram, dokumentu kategorijas vai citātu polaritāte, nonāk pie šī modeļa; bez tā uz tiem atbild ģeneratīvais modelis.",
+        "incomplete": "Ievadiet lēmumu modeļa API atslēgu un modeli vai noņemiet to.",
+        "instanceProvided": "stella jau nodrošina lēmumu modeli; pievienojiet savu tikai tad, ja vēlaties izmantot citu.",
+        "label": "Lēmumu modelis",
+        "modelId": "Modeļa ID"
+      },
       "defaultModel": "Noklusējums: {model}",
       "defaultModelOption": "Noklusējums",
       "deploymentNamePlaceholder": "Izvietojuma nosaukums",

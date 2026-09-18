@@ -170,6 +170,7 @@ const canaryConfig = (provider: CanaryProvider): OrgAIConfig => ({
     reasoning: { modelId: DEFAULT_MODELS[provider].reasoning, provider },
     pdf: { modelId: DEFAULT_MODELS[provider].pdf, provider },
   },
+  decision: null,
 });
 
 const serializeTools = (

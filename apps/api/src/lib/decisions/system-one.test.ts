@@ -8,7 +8,7 @@ import {
   createSystemOneClient,
   noul,
   score,
-} from "@/api/lib/typesafe/system-one";
+} from "@/api/lib/decisions/system-one";
 
 type Call = { url: string; body: unknown; headers: Headers };
 

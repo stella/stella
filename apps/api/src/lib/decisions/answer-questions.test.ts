@@ -1,19 +1,51 @@
 import { describe, expect, test } from "bun:test";
 
+import type { Fetcher } from "@stll/fetch";
+
 import type {
   AnswerQuestion,
   AnswerSource,
-} from "@/api/lib/typesafe/answer-questions";
+  SystemOneAnswerPlan,
+} from "@/api/lib/decisions/answer-questions";
 import {
   decodeSystemOneAnswers,
-  describeSystemOneReadings,
   isSystemOneAnswerable,
   planSystemOneAnswers,
-} from "@/api/lib/typesafe/answer-questions";
-import type {
-  SystemOneAnswers,
-  SystemOneQuestion,
-} from "@/api/lib/typesafe/system-one";
+} from "@/api/lib/decisions/answer-questions";
+import { decideMany } from "@/api/lib/decisions/decide";
+import type { Decisions } from "@/api/lib/decisions/decide";
+import { createSystemOneClient } from "@/api/lib/decisions/system-one";
+import type { SystemOneQuestion } from "@/api/lib/decisions/system-one";
+
+/**
+ * The plan's questions asked over a fake wire, so what is decoded here is
+ * what `decideMany` produces — the real binding and the real floor — rather
+ * than hand-built decisions that could drift from it.
+ */
+const decisionsFor = async (
+  plan: SystemOneAnswerPlan,
+  answers: Record<string, unknown>,
+): Promise<Decisions<Record<string, SystemOneQuestion>>> => {
+  const fetcher: Fetcher = async () =>
+    await Promise.resolve(
+      new Response(
+        JSON.stringify({
+          model: "jev-1.13.0",
+          answers,
+          usage: { input_tokens: 90, output_tokens: 2 },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+  const { decisions } = await decideMany({
+    id: "test.answer-questions",
+    orgAIConfig: null,
+    state: plan.state,
+    questions: plan.questions,
+    client: createSystemOneClient({ apiKey: "key-test", fetcher }),
+  });
+  return decisions;
+};
 
 const sources: AnswerSource[] = [
   {
@@ -173,40 +205,45 @@ describe("planSystemOneAnswers", () => {
 });
 
 describe("decodeSystemOneAnswers", () => {
-  test("a single-select answer maps back to the option value and the chosen source", () => {
+  test("a single-select answer maps back to the option value and the chosen source", async () => {
     const plan = planSystemOneAnswers({
       document,
       sources,
       language: "cs",
       questions: [contractType],
     });
-    const answers: SystemOneAnswers<Record<string, SystemOneQuestion>> = {
-      "col-type:value": choiceAnswer("o1", {
-        o1: 0.93,
-        o2: 0.04,
-        __not_stated: 0.03,
-      }),
-      "col-type:where": choiceAnswer("p1", { p1: 0.8, p2: 0.15, __none: 0.05 }),
-    };
     const outcomes = decodeSystemOneAnswers({
       plan,
       questions: [contractType],
-      answers,
+      decisions: await decisionsFor(plan, {
+        "col-type:value": choiceAnswer("o1", {
+          o1: 0.93,
+          o2: 0.04,
+          __not_stated: 0.03,
+        }),
+        "col-type:where": choiceAnswer("p1", {
+          p1: 0.8,
+          p2: 0.15,
+          __none: 0.05,
+        }),
+      }),
     });
-    expect(outcomes.get("col-type")).toMatchObject({
+    const outcome = outcomes.get("col-type");
+    expect(outcome).toMatchObject({
       state: "answered",
       answer: "Purchase agreement",
       probability: 0.93,
       confidence: 0.9,
       sourceId: "p1",
     });
-    expect(outcomes.get("col-type")?.rationale).toContain(
-      '"Purchase agreement"',
-    );
-    expect(outcomes.get("col-type")?.rationale).toContain("93%");
+    if (outcome?.state !== "answered") {
+      throw new Error("expected an answered outcome");
+    }
+    expect(outcome.rationale).toContain('"Purchase agreement"');
+    expect(outcome.rationale).toContain("93%");
   });
 
-  test("not-stated is reported as such, never as an option", () => {
+  test("not-stated is reported as such, never as an option", async () => {
     const plan = planSystemOneAnswers({
       document,
       sources,
@@ -216,7 +253,7 @@ describe("decodeSystemOneAnswers", () => {
     const outcomes = decodeSystemOneAnswers({
       plan,
       questions: [contractType],
-      answers: {
+      decisions: await decisionsFor(plan, {
         "col-type:value": choiceAnswer(
           "__not_stated",
           { o1: 0.1, o2: 0.1, __not_stated: 0.8 },
@@ -227,7 +264,7 @@ describe("decodeSystemOneAnswers", () => {
           p2: 0.1,
           __none: 0.8,
         }),
-      },
+      }),
     });
     expect(outcomes.get("col-type")).toMatchObject({
       state: "not_stated",
@@ -235,7 +272,7 @@ describe("decodeSystemOneAnswers", () => {
     });
   });
 
-  test("a multi-select keeps the options the model said yes to", () => {
+  test("a multi-select keeps the options the model said yes to", async () => {
     const question: AnswerQuestion = {
       id: "col-parties",
       question: "Which parties are named?",
@@ -265,7 +302,7 @@ describe("decodeSystemOneAnswers", () => {
     const outcomes = decodeSystemOneAnswers({
       plan,
       questions: [question],
-      answers: {
+      decisions: await decisionsFor(plan, {
         "col-parties:where": choiceAnswer("p1", {
           p1: 0.9,
           p2: 0.05,
@@ -274,7 +311,7 @@ describe("decodeSystemOneAnswers", () => {
         "col-parties:o1": { type: "noul", noul: 0.95 },
         "col-parties:o2": { type: "noul", noul: 0.9 },
         "col-parties:o3": { type: "noul", noul: 0.05 },
-      },
+      }),
     });
     expect(outcomes.get("col-parties")).toMatchObject({
       state: "answered",
@@ -284,7 +321,123 @@ describe("decodeSystemOneAnswers", () => {
     });
   });
 
-  test("a date answer is the ISO reading of the chosen candidate, anchored to its source", () => {
+  test("one option under the floor leaves the whole multi-select undecided", async () => {
+    const question: AnswerQuestion = {
+      id: "col-parties",
+      question: "Which parties are named?",
+      content: {
+        version: 1,
+        type: "multi-select",
+        options: [
+          { value: "Seller", color: "gray" },
+          { value: "Buyer", color: "gray" },
+        ],
+        fallback: null,
+      },
+    };
+    const plan = planSystemOneAnswers({
+      document,
+      sources,
+      language: "cs",
+      questions: [question],
+    });
+    const outcomes = decodeSystemOneAnswers({
+      plan,
+      questions: [question],
+      decisions: await decisionsFor(plan, {
+        "col-parties:where": choiceAnswer("p1", {
+          p1: 0.9,
+          p2: 0.05,
+          __none: 0.05,
+        }),
+        "col-parties:o1": { type: "noul", noul: 0.95 },
+        // A 0.6 yes is a 0.2 reading: the model is not sure either way.
+        "col-parties:o2": { type: "noul", noul: 0.6 },
+      }),
+    });
+    expect(outcomes.get("col-parties")).toEqual({
+      state: "undecided",
+      reason: "below-floor",
+    });
+  });
+
+  test("an undecided value question is undecided, an undecided where-question only costs the citation", async () => {
+    const plan = planSystemOneAnswers({
+      document,
+      sources,
+      language: "cs",
+      questions: [contractType],
+    });
+    const unsureValue = decodeSystemOneAnswers({
+      plan,
+      questions: [contractType],
+      decisions: await decisionsFor(plan, {
+        "col-type:value": choiceAnswer(
+          "o1",
+          { o1: 0.5, o2: 0.3, __not_stated: 0.2 },
+          0.4,
+        ),
+        "col-type:where": choiceAnswer("p1", {
+          p1: 0.8,
+          p2: 0.15,
+          __none: 0.05,
+        }),
+      }),
+    });
+    expect(unsureValue.get("col-type")).toEqual({
+      state: "undecided",
+      reason: "below-floor",
+    });
+
+    const unsureWhere = decodeSystemOneAnswers({
+      plan,
+      questions: [contractType],
+      decisions: await decisionsFor(plan, {
+        "col-type:value": choiceAnswer("o1", {
+          o1: 0.93,
+          o2: 0.04,
+          __not_stated: 0.03,
+        }),
+        "col-type:where": choiceAnswer(
+          "p1",
+          { p1: 0.4, p2: 0.35, __none: 0.25 },
+          0.3,
+        ),
+      }),
+    });
+    expect(unsureWhere.get("col-type")).toMatchObject({
+      state: "answered",
+      answer: "Purchase agreement",
+      sourceId: null,
+    });
+  });
+
+  test("with no decision model every planned question is undecided", async () => {
+    const plan = planSystemOneAnswers({
+      document,
+      sources,
+      language: "cs",
+      questions: [contractType],
+    });
+    const { decisions } = await decideMany({
+      id: "test.answer-questions",
+      orgAIConfig: null,
+      state: plan.state,
+      questions: plan.questions,
+      client: null,
+    });
+    const outcomes = decodeSystemOneAnswers({
+      plan,
+      questions: [contractType],
+      decisions,
+    });
+    expect(outcomes.get("col-type")).toEqual({
+      state: "undecided",
+      reason: "no-backend",
+    });
+  });
+
+  test("a date answer is the ISO reading of the chosen candidate, anchored to its source", async () => {
     const question: AnswerQuestion = {
       id: "col-signed",
       question: "When was the contract signed?",
@@ -299,13 +452,13 @@ describe("decodeSystemOneAnswers", () => {
     const outcomes = decodeSystemOneAnswers({
       plan,
       questions: [question],
-      answers: {
+      decisions: await decisionsFor(plan, {
         "col-signed:value": choiceAnswer("c2", {
           c1: 0.2,
           c2: 0.75,
           __not_stated: 0.05,
         }),
-      },
+      }),
     });
     expect(outcomes.get("col-signed")).toMatchObject({
       state: "answered",
@@ -314,7 +467,7 @@ describe("decodeSystemOneAnswers", () => {
     });
   });
 
-  test("an int answer carries the amount and the currency read beside it", () => {
+  test("an int answer carries the amount and the currency read beside it", async () => {
     const question: AnswerQuestion = {
       id: "col-price",
       question: "What is the purchase price?",
@@ -349,53 +502,14 @@ describe("decodeSystemOneAnswers", () => {
     const outcomes = decodeSystemOneAnswers({
       plan,
       questions: [question],
-      answers: { "col-price:value": choiceAnswer(priceKey, probabilities) },
+      decisions: await decisionsFor(plan, {
+        "col-price:value": choiceAnswer(priceKey, probabilities),
+      }),
     });
     expect(outcomes.get("col-price")).toMatchObject({
       state: "answered",
       answer: { amount: 1_250_000, currency: "CZK" },
       sourceId: "p2",
     });
-  });
-});
-
-describe("describeSystemOneReadings", () => {
-  test("lists every question with what was chosen and how sure the model was", () => {
-    const plan = planSystemOneAnswers({
-      document,
-      sources,
-      language: "cs",
-      questions: [contractType],
-    });
-    const outcomes = decodeSystemOneAnswers({
-      plan,
-      questions: [contractType],
-      answers: {
-        "col-type:value": choiceAnswer("o1", {
-          o1: 0.93,
-          o2: 0.04,
-          __not_stated: 0.03,
-        }),
-        "col-type:where": choiceAnswer("p1", {
-          p1: 0.8,
-          p2: 0.15,
-          __none: 0.05,
-        }),
-      },
-    });
-    const readings: unknown = JSON.parse(
-      describeSystemOneReadings({ questions: [contractType], outcomes }),
-    );
-    expect(readings).toEqual([
-      {
-        kind: "single-select",
-        q: "What kind of contract is this?",
-        state: "answered",
-        value: "Purchase agreement",
-        probability: 0.93,
-        confidence: 0.9,
-        source: "p1",
-      },
-    ]);
   });
 });

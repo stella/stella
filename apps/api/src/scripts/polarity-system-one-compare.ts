@@ -11,18 +11,18 @@ import { CITATION_KIND } from "@/api/handlers/case-law/citation-kind";
 import { extractContext } from "@/api/handlers/case-law/polarity/context";
 import { classifyWithLLM } from "@/api/handlers/case-law/polarity/llm-classifier";
 import {
-  classifyWithSystemOne,
+  POLARITY_QUESTION,
   SYSTEM_ONE_POLARITY_ACCEPT_CONFIDENCE,
 } from "@/api/handlers/case-law/polarity/system-one-classifier";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
-import { readCorpusText } from "@/api/lib/legal-search/corpus-storage";
-import type { DecisionSection } from "@/api/lib/legal-search/document-types";
-import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 import {
   createSystemOneClient,
   SYSTEM_ONE_USD_PER_INPUT_TOKEN,
-} from "@/api/lib/typesafe/system-one";
+} from "@/api/lib/decisions/system-one";
+import { readCorpusText } from "@/api/lib/legal-search/corpus-storage";
+import type { DecisionSection } from "@/api/lib/legal-search/document-types";
+import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 import {
   disagreements,
   DISAGREEMENT_EXAMPLES,
@@ -107,6 +107,8 @@ const client = createSystemOneClient({
   apiKey,
   model: options.model ?? env.TYPESAFE_MODEL,
 });
+
+const REQUEST_TIMEOUT_MS = 15_000;
 
 type SampledCitation = {
   id: string;
@@ -300,29 +302,36 @@ for (const citation of citations) {
   items.push({ citation, decision, context });
 }
 
+/**
+ * The raw model, not a decision: the agreement curve is what sets the floor,
+ * so every reading is kept whatever its confidence, together with the model,
+ * latency and tokens the run is priced from.
+ */
 const readWithSystemOne = async (item: ComparisonItem): Promise<JevOutcome> => {
-  const reading = await classifyWithSystemOne({
-    client,
-    context: item.context,
-    citationText: item.citation.citationText,
-    language: item.decision.language,
+  const asked = await client.ask({
+    state: {
+      language: item.decision.language,
+      citation: item.citation.citationText,
+      excerpt: item.context,
+    },
+    questions: { polarity: POLARITY_QUESTION },
+    abortSignal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   });
-  if (Result.isError(reading)) {
+  if (Result.isError(asked)) {
     return {
       status: "failed",
-      kind: reading.error.kind,
-      message: reading.error.message,
+      kind: asked.error.kind,
+      message: asked.error.message,
     };
   }
-  const { polarity, probabilities, confidence, latencyMs, inputTokens, model } =
-    reading.value;
+  const { answers, model, latencyMs, usage } = asked.value;
   return {
     status: "read",
-    polarity,
-    probabilities,
-    confidence,
+    polarity: answers.polarity.choice,
+    probabilities: answers.polarity.probabilities,
+    confidence: answers.polarity.confidence,
     latencyMs,
-    inputTokens,
+    inputTokens: usage.inputTokens,
     model,
   };
 };

@@ -43,6 +43,12 @@ import {
   splitSystemOneQuestions,
   systemOneSourcesFromPassages,
 } from "@/api/lib/case-law/research-answers-system-one";
+import {
+  decodeSystemOneAnswers,
+  planSystemOneAnswers,
+} from "@/api/lib/decisions/answer-questions";
+import { decideMany } from "@/api/lib/decisions/decide";
+import type { SystemOneClient } from "@/api/lib/decisions/system-one";
 import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
 import { readServingCorpusIndexGenerationTx } from "@/api/lib/legal-search/corpus-index-generation-store";
 import {
@@ -62,16 +68,8 @@ import {
 } from "@/api/lib/legal-search/corpus-storage";
 import { corpusIndexRoute } from "@/api/lib/legal-search/index-naming";
 import { LIMITS } from "@/api/lib/limits";
-import { logger } from "@/api/lib/observability/logger";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 import { getTanStackTextModelForRole } from "@/api/lib/tanstack-ai-models";
-import {
-  decodeSystemOneAnswers,
-  describeSystemOneReadings,
-  planSystemOneAnswers,
-} from "@/api/lib/typesafe/answer-questions";
-import type { SystemOneClient } from "@/api/lib/typesafe/system-one";
-import { getSystemOneClient } from "@/api/lib/typesafe/system-one-runtime";
 
 const ANSWER_TIMEOUT_MS = 120_000;
 
@@ -99,11 +97,11 @@ export type RunResearchAnswersDeps = {
   /** The public corpus gate the decision text is read through. */
   caseLawDb: CaseLawPublicReadDb;
   /**
-   * The client the typed-judgment tier asks. Undefined is the deployment's own
-   * (null when `TYPESAFE_API_KEY` is unset, which skips the tier); a test or a
-   * comparison run pins one.
+   * The client the typed-judgment tier asks. Undefined is the org's own
+   * resolved decision model (null when the deployment has none, which leaves
+   * every column to the generative model); a test pins one.
    */
-  systemOne?: SystemOneClient | null | undefined;
+  decisionModel?: SystemOneClient | null | undefined;
 };
 
 /** The claimed cells regrouped into the unit of work: one decision's questions. */
@@ -210,7 +208,7 @@ const answerDecision = async (
   decisionId: SafeId<"caseLawDecision">,
   claimedColumnIds: readonly SafeId<"caseLawResearchColumn">[],
   input: RunResearchAnswersInput,
-  { caseLawDb, safeDb, systemOne }: RunResearchAnswersDeps,
+  { caseLawDb, safeDb, decisionModel }: RunResearchAnswersDeps,
 ): Promise<void> => {
   const pendingColumnIds = await stillClaimedColumnsFor(
     decisionId,
@@ -273,19 +271,18 @@ const answerDecision = async (
     return;
   }
 
-  const client = systemOne === undefined ? getSystemOneClient() : systemOne;
-  const tier =
-    client === null
-      ? null
-      : await answerWithSystemOne({
-          caseLawDb,
-          client,
-          decision,
-          questions,
-          text,
-        });
-  const settled = tier?.outcomes ?? [];
-  const generativeQuestions = tier?.remaining ?? questions;
+  // Always asked: without a decision model every question comes back
+  // undecided and every column falls through to the generative call.
+  const tier = await answerWithSystemOne({
+    caseLawDb,
+    decisionModel,
+    orgAIConfig: input.orgAIConfig,
+    decision,
+    questions,
+    text,
+  });
+  const settled = tier.outcomes;
+  const generativeQuestions = tier.remaining;
   if (generativeQuestions.length === 0) {
     await writeOutcomes(safeDb, input, decisionId, settled);
     return;
@@ -619,7 +616,8 @@ const retrievePassages = async (
 
 type SystemOnePassOptions = {
   caseLawDb: CaseLawPublicReadDb;
-  client: SystemOneClient;
+  decisionModel: SystemOneClient | null | undefined;
+  orgAIConfig: OrgAIConfig | null;
   decision: ResearchDecisionRow;
   questions: readonly ResearchRunColumn[];
   text: { passages: readonly ResearchPassage[]; retrieved: boolean };
@@ -634,13 +632,14 @@ type SystemOnePass = {
 
 /**
  * Ask one decision's closed-answer questions in a single request and keep what
- * came back confident. Nothing here fails a cell: a transport error, an
- * unplannable question or a low-confidence answer leaves the column to the
+ * came back settled. Nothing here fails a cell: a transport error, an
+ * unplannable question or an undecided answer leaves the column to the
  * generative call, which is the behaviour of a deployment without the tier.
  */
 const answerWithSystemOne = async ({
   caseLawDb,
-  client,
+  decisionModel,
+  orgAIConfig,
   decision,
   questions,
   text,
@@ -680,46 +679,30 @@ const answerWithSystemOne = async ({
   if (plan.plans.size === 0) {
     return untouched;
   }
-  const answered = await client.ask({
+  const { decisions, model } = await decideMany({
+    id: "case-law.research-answers",
+    orgAIConfig,
     state: plan.state,
     questions: plan.questions,
-    abortSignal: AbortSignal.timeout(ANSWER_TIMEOUT_MS),
+    timeoutMs: ANSWER_TIMEOUT_MS,
+    client: decisionModel,
   });
-  if (Result.isError(answered)) {
-    captureError(answered.error, {
-      source: "case-law-research-answers-system-one",
-      decisionId: decision.id,
-    });
+  // No model answered, so nothing is settled and the run facts have no model
+  // to stamp: every column is the generative model's.
+  if (model === null) {
     return untouched;
   }
-  const readings = decodeSystemOneAnswers({
-    plan,
-    questions: asked,
-    answers: answered.value.answers,
-  });
   const resolved = resolveSystemOneOutcomes({
     questions: asked,
-    outcomes: readings,
+    outcomes: decodeSystemOneAnswers({ plan, questions: asked, decisions }),
     excerptByAnchor: new Map(sources.map((source) => [source.id, source.text])),
     run: {
-      model: answered.value.model,
+      model,
       completedAt: Temporal.Now.instant().toString({
         fractionalSecondDigits: 3,
       }),
       retrieved: text.retrieved || overBudget,
     },
-  });
-  logger.info("case_law.research_answers.system_one", {
-    model: answered.value.model,
-    questionCount: asked.length,
-    inputTokens: answered.value.usage.inputTokens,
-    latencyMs: answered.value.latencyMs,
-    answeredCount: resolved.settled.length,
-    fallbackCount: resolved.fallbackColumnIds.length,
-    readings: describeSystemOneReadings({
-      questions: asked,
-      outcomes: readings,
-    }),
   });
   const byColumn = new Map(
     resolved.settled.map((entry) => [entry.columnId, entry.outcome]),

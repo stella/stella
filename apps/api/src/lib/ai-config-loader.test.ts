@@ -23,6 +23,7 @@ const decryptedAIConfig: OrgAIConfig = {
     pdf: { provider: "google", modelId: "gemini-3.5-flash" },
     reasoning: { provider: "google", modelId: "gemini-3.1-pro-preview" },
   },
+  decision: null,
 };
 
 const decryptAIConfigMock = mock(async () => decryptedAIConfig);

@@ -71,6 +71,7 @@ const run = async () => {
         pdf: selection,
       },
       providers: [{ provider: "openrouter", apiKey }],
+      decision: null,
     },
     prompt: "Reply with exactly OK.",
     role: "fast",

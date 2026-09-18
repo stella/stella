@@ -23,12 +23,11 @@ import type {
   AnswerOutcome,
   AnswerQuestion,
   AnswerSource,
-} from "@/api/lib/typesafe/answer-questions";
+} from "@/api/lib/decisions/answer-questions";
 import {
   isSystemOneAnswerable,
-  SYSTEM_ONE_ACCEPT_CONFIDENCE,
   SYSTEM_ONE_SOURCE_BUDGET_CHARS,
-} from "@/api/lib/typesafe/answer-questions";
+} from "@/api/lib/decisions/answer-questions";
 import type { WorkflowDataOutput } from "@/api/lib/workflow/ai-generate-batch";
 import type {
   PreparedInputFile,
@@ -236,16 +235,16 @@ export type SystemOneOutcomeOptions = {
 
 export type SystemOneOutcomeResult = {
   output: WorkflowDataOutput;
-  /** Properties the generative model must still answer: unplanned or below the floor. */
+  /** Properties the generative model must still answer: unplanned or undecided. */
   fallbackPropertyIds: SafeId<"property">[];
 };
 
 /**
- * Accepted outcomes as batch output. Below the confidence floor, and for a
- * question the plan could not ask, the property falls back to the generative
- * model: a low-confidence judgment is not written over an answer the other
- * path could still produce. "Not stated" above the floor is an answer, and
- * `null` is how the generative path writes it.
+ * Settled outcomes as batch output. An undecided property, and one the plan
+ * could not ask, falls back to the generative model: a judgment the decision
+ * model did not take is not written over an answer the other path could still
+ * produce. "Not stated" is an answer, and `null` is how the generative path
+ * writes it.
  */
 export const outputFromSystemOneOutcomes = ({
   properties,
@@ -256,24 +255,32 @@ export const outputFromSystemOneOutcomes = ({
   const fallbackPropertyIds: SafeId<"property">[] = [];
   for (const property of properties) {
     const outcome = outcomes.get(property.id);
-    if (
-      outcome === undefined ||
-      outcome.confidence < SYSTEM_ONE_ACCEPT_CONFIDENCE
-    ) {
+    if (outcome === undefined) {
       fallbackPropertyIds.push(property.id);
       continue;
     }
-    if (outcome.state === "not_stated") {
-      output[property.id] = { answer: null, justification: [] };
-      continue;
+    switch (outcome.state) {
+      case "undecided":
+        fallbackPropertyIds.push(property.id);
+        break;
+      case "not_stated":
+        output[property.id] = { answer: null, justification: [] };
+        break;
+      case "answered":
+        output[property.id] = {
+          answer: outcome.answer,
+          justification: justificationFor(
+            outcome.rationale,
+            outcome.sourceId === null
+              ? undefined
+              : locators.get(outcome.sourceId),
+          ),
+        };
+        break;
+      default:
+        outcome satisfies never;
+        panic("Unhandled System One outcome state");
     }
-    output[property.id] = {
-      answer: outcome.answer,
-      justification: justificationFor(
-        outcome.rationale,
-        outcome.sourceId === null ? undefined : locators.get(outcome.sourceId),
-      ),
-    };
   }
   return { output, fallbackPropertyIds };
 };

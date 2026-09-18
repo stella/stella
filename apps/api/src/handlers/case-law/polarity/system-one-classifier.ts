@@ -10,15 +10,14 @@
  * quote.
  */
 
-import { Result } from "better-result";
-
+import { decide } from "@/api/lib/decisions/decide";
+import type { Decision } from "@/api/lib/decisions/decide";
 import type {
+  ChoiceAnswer,
   SystemOneClient,
-  SystemOneError,
-} from "@/api/lib/typesafe/system-one";
-import { choice } from "@/api/lib/typesafe/system-one";
+} from "@/api/lib/decisions/system-one";
+import { choice } from "@/api/lib/decisions/system-one";
 
-import { CLASSIFIABLE_POLARITIES } from "./consts";
 import type { ClassifiablePolarity } from "./consts";
 import { POLARITY_GUIDANCE } from "./guidance";
 
@@ -31,17 +30,9 @@ export const SYSTEM_ONE_POLARITY_ACCEPT_CONFIDENCE = 0.7;
 
 const REQUEST_TIMEOUT_MS = 15_000;
 
-export type SystemOnePolarityReading = {
-  polarity: ClassifiablePolarity;
-  probabilities: Record<ClassifiablePolarity, number>;
-  confidence: number;
-  model: string;
-  latencyMs: number;
-  inputTokens: number;
-};
-
 export type ClassifyWithSystemOneOptions = {
-  client: SystemOneClient;
+  /** Undefined resolves the instance's model; null skips the tier. */
+  client: SystemOneClient | null | undefined;
   /** Text surrounding the citation (a few sentences). */
   context: string;
   /** The citation reference itself, as it appears in `context`. */
@@ -52,7 +43,7 @@ export type ClassifyWithSystemOneOptions = {
 };
 
 /** The one question, built once: the vocabulary and its guidance are static. */
-const POLARITY_QUESTION = choice(
+export const POLARITY_QUESTION = choice(
   {
     task: "How does the citing court treat the decision named in `citation` in `excerpt`?",
     judge:
@@ -60,14 +51,14 @@ const POLARITY_QUESTION = choice(
     language_note:
       "`language` names the language of `excerpt`; the criteria quote phrases in Czech, Slovak and English.",
   },
-  Object.fromEntries(
-    CLASSIFIABLE_POLARITIES.map((polarity) => [
-      polarity,
-      POLARITY_GUIDANCE[polarity],
-    ]),
-  ) as Record<ClassifiablePolarity, string>,
+  // The guidance is total over the vocabulary, so it is the criteria.
+  POLARITY_GUIDANCE,
 );
 
+/**
+ * The polarity pipeline is corpus background work with no organization behind
+ * it, so it asks the instance's decision model rather than an org's.
+ */
 export const classifyWithSystemOne = async ({
   client,
   context,
@@ -75,25 +66,15 @@ export const classifyWithSystemOne = async ({
   language,
   abortSignal,
 }: ClassifyWithSystemOneOptions): Promise<
-  Result<SystemOnePolarityReading, SystemOneError>
-> => {
-  const asked = await client.ask({
+  Decision<ChoiceAnswer<ClassifiablePolarity>>
+> =>
+  await decide({
+    id: "case-law.polarity",
+    orgAIConfig: null,
     state: { language, citation: citationText, excerpt: context },
-    questions: { polarity: POLARITY_QUESTION },
-    abortSignal: abortSignal
-      ? AbortSignal.any([abortSignal, AbortSignal.timeout(REQUEST_TIMEOUT_MS)])
-      : AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    question: POLARITY_QUESTION,
+    floor: SYSTEM_ONE_POLARITY_ACCEPT_CONFIDENCE,
+    timeoutMs: REQUEST_TIMEOUT_MS,
+    abortSignal,
+    client,
   });
-  if (Result.isError(asked)) {
-    return asked;
-  }
-  const { answers, model, latencyMs, usage } = asked.value;
-  return Result.ok({
-    polarity: answers.polarity.choice,
-    probabilities: answers.polarity.probabilities,
-    confidence: answers.polarity.confidence,
-    model,
-    latencyMs,
-    inputTokens: usage.inputTokens,
-  });
-};

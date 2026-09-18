@@ -1,8 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  createDecisionModelState,
   createDefaultRoleModels,
   createProviderCredentialDraft,
+  decisionModelDraft,
   decodeModelSelection,
   encodeModelSelection,
   ensureRoleModelsForProviders,
@@ -11,16 +13,21 @@ import {
   getModelOptionsForRole,
   getProviderValues,
   getRolePickerRows,
+  hasUsableDecisionModel,
   hasUsableProviderDrafts,
   isKnownModelSelection,
   isKnownModelSelectionForRole,
   isProviderRoleSupported,
   providerDraftsFromStoredProviders,
   roleModelsFromOverrideModels,
+  serializeDecisionModel,
   serializeOverrideModels,
   serializeProviderDrafts,
 } from "@/components/ai-config-role-models.logic";
-import type { RoleModelSelections } from "@/components/ai-config-role-models.logic";
+import type {
+  RoleModelSelections,
+  StoredDecisionModel,
+} from "@/components/ai-config-role-models.logic";
 
 describe("BYOK provider and model configuration", () => {
   test("creates role defaults from the first configured provider", () => {
@@ -431,5 +438,130 @@ describe("BYOK provider and model configuration", () => {
       modelId: "mistral-large-latest",
       value: "mistral::mistral-large-latest",
     });
+  });
+});
+
+describe("decision model configuration", () => {
+  const stored: StoredDecisionModel = {
+    provider: "typesafe",
+    apiKeyMasked: "ts-live****",
+    modelId: "jev-latest",
+  };
+
+  test("omits the field while the section is untouched, so the stored model survives a save", () => {
+    expect(serializeDecisionModel({ kind: "untouched" })).toBeUndefined();
+  });
+
+  test("sends null once the model is removed", () => {
+    expect(serializeDecisionModel({ kind: "cleared" })).toBeNull();
+  });
+
+  test("sends the typed key, and omits it when the input is left empty", () => {
+    expect(
+      serializeDecisionModel({
+        kind: "set",
+        provider: "typesafe",
+        apiKey: "  ts-new-decision-key  ",
+        modelId: "  jev-latest  ",
+      }),
+    ).toEqual({
+      provider: "typesafe",
+      apiKey: "ts-new-decision-key",
+      modelId: "jev-latest",
+    });
+
+    expect(
+      serializeDecisionModel({
+        kind: "set",
+        provider: "typesafe",
+        apiKey: "   ",
+        modelId: "jev-latest",
+      }),
+    ).toEqual({ provider: "typesafe", modelId: "jev-latest" });
+  });
+
+  test("enables a new model on the default provider and model id", () => {
+    expect(createDecisionModelState()).toEqual({
+      kind: "set",
+      provider: "typesafe",
+      apiKey: "",
+      modelId: "jev-latest",
+    });
+  });
+
+  test("renders the stored model until the section is edited or cleared", () => {
+    expect(
+      decisionModelDraft({ state: { kind: "untouched" }, stored }),
+    ).toEqual({
+      provider: "typesafe",
+      apiKey: "",
+      apiKeyMasked: "ts-live****",
+      modelId: "jev-latest",
+    });
+    expect(
+      decisionModelDraft({ state: { kind: "untouched" }, stored: null }),
+    ).toBeNull();
+    expect(
+      decisionModelDraft({ state: { kind: "cleared" }, stored }),
+    ).toBeNull();
+  });
+
+  test("offers the stored key as reusable only for the provider it was issued for", () => {
+    expect(
+      decisionModelDraft({
+        state: {
+          kind: "set",
+          provider: "typesafe",
+          apiKey: "",
+          modelId: "jev-2026-01",
+        },
+        stored,
+      }),
+    ).toEqual({
+      provider: "typesafe",
+      apiKey: "",
+      apiKeyMasked: "ts-live****",
+      modelId: "jev-2026-01",
+    });
+    expect(
+      decisionModelDraft({
+        state: {
+          kind: "set",
+          provider: "typesafe",
+          apiKey: "",
+          modelId: "jev-latest",
+        },
+        stored: null,
+      }),
+    ).toEqual({ provider: "typesafe", apiKey: "", modelId: "jev-latest" });
+  });
+
+  test("blocks a save that would send a decision model with no key or no model", () => {
+    expect(
+      hasUsableDecisionModel({ state: { kind: "untouched" }, stored }),
+    ).toBe(true);
+    expect(hasUsableDecisionModel({ state: { kind: "cleared" }, stored })).toBe(
+      true,
+    );
+    expect(
+      hasUsableDecisionModel({ state: createDecisionModelState(), stored }),
+    ).toBe(true);
+    expect(
+      hasUsableDecisionModel({
+        state: createDecisionModelState(),
+        stored: null,
+      }),
+    ).toBe(false);
+    expect(
+      hasUsableDecisionModel({
+        state: {
+          kind: "set",
+          provider: "typesafe",
+          apiKey: "ts-new-decision-key",
+          modelId: "   ",
+        },
+        stored,
+      }),
+    ).toBe(false);
   });
 });

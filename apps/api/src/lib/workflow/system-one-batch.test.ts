@@ -3,8 +3,12 @@ import { describe, expect, test } from "bun:test";
 import type { FolioAIBlock } from "@stll/folio-core/server";
 
 import { toSafeId } from "@/api/lib/branded-types";
-import type { AnswerOutcome } from "@/api/lib/typesafe/answer-questions";
-import { SYSTEM_ONE_ACCEPT_CONFIDENCE } from "@/api/lib/typesafe/answer-questions";
+import type { AnswerOutcome } from "@/api/lib/decisions/answer-questions";
+import {
+  decodeSystemOneAnswers,
+  planSystemOneAnswers,
+} from "@/api/lib/decisions/answer-questions";
+import { decideMany } from "@/api/lib/decisions/decide";
 import type {
   PreparedDocxFile,
   PreparedExtractedTextFile,
@@ -17,8 +21,11 @@ import { normalizeJustification } from "@/api/lib/workflow/parse-justifications"
 import type { JustificationFilenames } from "@/api/lib/workflow/parse-justifications";
 import {
   outputFromSystemOneOutcomes,
+  questionsFromProperties,
   sourcesFromPreparedFiles,
   splitPropertiesForSystemOne,
+  SYSTEM_ONE_BATCH_LANGUAGE,
+  systemOneDocumentHeader,
 } from "@/api/lib/workflow/system-one-batch";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
@@ -273,18 +280,11 @@ describe("outputFromSystemOneOutcomes", () => {
     });
   });
 
-  test("a low-confidence answer falls back to the generative model", () => {
+  test("an undecided outcome falls back to the generative model", () => {
     const { output, fallbackPropertyIds } = outputFromSystemOneOutcomes({
       properties: [singleSelect, dateProperty],
-      outcomes: new Map([
-        [
-          singleSelect.id,
-          answered(
-            "Purchase agreement",
-            "b1",
-            SYSTEM_ONE_ACCEPT_CONFIDENCE - 0.01,
-          ),
-        ],
+      outcomes: new Map<string, AnswerOutcome>([
+        [singleSelect.id, { state: "undecided", reason: "below-floor" }],
       ]),
       locators,
     });
@@ -292,6 +292,37 @@ describe("outputFromSystemOneOutcomes", () => {
     // The unplanned date question has no outcome at all, and falls back too.
     expect(fallbackPropertyIds).toEqual([singleSelect.id, dateProperty.id]);
     expect(output).toEqual({});
+  });
+
+  test("with no decision model the whole batch is the generative model's", async () => {
+    const { sources, locators: batchLocators } = await sourcesFromPreparedFiles(
+      [docxFile],
+      [],
+    );
+    const properties = [singleSelect, dateProperty];
+    const questions = questionsFromProperties(properties);
+    const plan = planSystemOneAnswers({
+      document: systemOneDocumentHeader([docxFile]),
+      sources,
+      language: SYSTEM_ONE_BATCH_LANGUAGE,
+      questions,
+    });
+    const { decisions } = await decideMany({
+      id: "workflow.table-batch",
+      orgAIConfig: null,
+      state: plan.state,
+      questions: plan.questions,
+      client: null,
+    });
+
+    const { output, fallbackPropertyIds } = outputFromSystemOneOutcomes({
+      properties,
+      outcomes: decodeSystemOneAnswers({ plan, questions, decisions }),
+      locators: batchLocators,
+    });
+
+    expect(output).toEqual({});
+    expect(fallbackPropertyIds).toEqual([singleSelect.id, dateProperty.id]);
   });
 
   test("not stated above the floor is a null answer, not a fallback", () => {

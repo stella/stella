@@ -1892,6 +1892,8 @@
       "accountDeletionSoleOwner": "Prieš ištrindami paskyrą perduokite vien tik jums priklausančių organizacijų nuosavybę arba jas ištrinkite.",
       "accountDeletionTaskReassignmentInvalid": "Patikrinkite kiekvienos aktyvios užduoties perskyrimą. Kiekvienas gavėjas turi būti kitas bylos narys, dar nepriskirtas užduočiai.",
       "accountDeletionTaskReassignmentLimitExceeded": "Reikia perskirti per daug aktyvių užduočių. Prieš ištrindami paskyrą užbaikite arba perskirkite dalį užduočių.",
+      "aiConfigDecisionInvalid": "Sprendimų modelio konfigūracija netinkama. Patikrinkite teikėją ir modelį.",
+      "aiConfigDecisionValidationFailed": "Sprendimų modelis atmetė konfigūraciją. Patikrinkite API raktą ir modelį.",
       "aiConfigModelInvalid": "DI modelio konfigūracija netinkama. Patikrinkite pasirinktus modelius.",
       "aiConfigProviderInvalid": "DI teikėjo konfigūracija netinkama. Patikrinkite teikėjo nustatymus.",
       "aiConfigProviderValidationFailed": "DI teikėjas atmetė konfigūraciją. Patikrinkite API raktą ir modelį.",
@@ -3550,6 +3552,14 @@
       "dataRegion": "Duomenų regionas",
       "dataRegionDescription": "Nukreipia AI užklausas per pasirinktą regioną dėl duomenų suverenumo.",
       "dataRegionUnsupported": "Nukreipimas pagal regioną galimas tik su Google AI (Vertex AI).",
+      "decision": {
+        "add": "Pridėti sprendimų modelį",
+        "description": "Klausimai su fiksuotu atsakymu, pavyzdžiui, dokumentų kategorijos ar citatų poliškumas, siunčiami šiam modeliui; jo neturint, į juos atsako generatyvusis modelis.",
+        "incomplete": "Įveskite sprendimų modelio API raktą ir modelį arba jį pašalinkite.",
+        "instanceProvided": "stella jau teikia sprendimų modelį; savo pridėkite tik tada, jei norite naudoti kitą.",
+        "label": "Sprendimų modelis",
+        "modelId": "Modelio ID"
+      },
       "defaultModel": "Numatytasis: {model}",
       "defaultModelOption": "Numatytasis",
       "deploymentNamePlaceholder": "Diegimo pavadinimas",
