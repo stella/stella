@@ -33,7 +33,7 @@ jobs:
           bun-version-file: "package.json"
 
       - name: Install dependencies
-        run: bash scripts/bun-ci-retry.sh --ignore-scripts
+        run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           # .npmrc references NPM_TOKEN, but this workflow can be manually
           # dispatched on a branch ref. Do not expose the real token to

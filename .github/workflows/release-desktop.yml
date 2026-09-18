@@ -641,7 +641,7 @@ jobs:
             exit 1
           fi
           printf '  uploading %s\n' "${artifacts[@]}"
-          gh release upload "$RELEASE_REF" "${artifacts[@]}" --clobber
+          bash scripts/retry.sh gh release upload "$RELEASE_REF" "${artifacts[@]}" --clobber
 
   verify-production:
     # Build the signed desktop artifacts first, then confirm that production
@@ -709,7 +709,7 @@ jobs:
           APP_VERSION: ${{ needs.resolve.outputs.app_version }}
           REPO: ${{ github.repository }}
         shell: bash
-        run: bash scripts/build-updater-manifest.sh > latest.json && gh release upload "$RELEASE_REF" latest.json --clobber
+        run: bash scripts/build-updater-manifest.sh > latest.json && bash scripts/retry.sh gh release upload "$RELEASE_REF" latest.json --clobber
 
       # Mirror the manifest to the downloads CDN so the in-app
       # updater (which polls a stable URL on a domain we control)
@@ -808,12 +808,21 @@ jobs:
     permissions:
       contents: write # download from / upload to / edit GitHub Releases
     env:
-      # `gh` resolves the repo from GH_REPO, so no checkout is needed.
+      # `gh` resolves the repo from GH_REPO, so the checkout below serves the
+      # workflow's own scripts only, not the release source.
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       GH_REPO: ${{ github.repository }}
       RELEASE_REF: ${{ needs.resolve.outputs.release_ref }}
       PREVIOUS_TAG: ${{ needs.resolve.outputs.previous_tag }}
     steps:
+      - name: Checkout workflow policy scripts
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Keep recovery policy available for historical release commits.
+          # API_DEPLOYMENT_EXPECTED_COMMIT still verifies the release SHA.
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+
       - name: Copy previous stable desktop assets forward
         run: |
           # A carry-forward with nothing to carry is a broken invariant:
@@ -828,23 +837,16 @@ jobs:
           # Fail loudly if the previous release has no matching assets:
           # a stable release with no installers to carry means the
           # invariant above is already violated upstream.
-          gh release download "$PREVIOUS_TAG" \
+          bash scripts/retry.sh gh release download "$PREVIOUS_TAG" \
             --pattern 'Stella-*' \
             --pattern 'latest.json' \
-            --dir assets
+            --dir assets \
+            --clobber
 
           # Attach first, THEN verify production and flip --latest: the deep
           # links must resolve and the release must be deployed before
           # /releases/latest points here.
-          gh release upload "$RELEASE_REF" assets/* --clobber
-
-      - name: Checkout workflow policy scripts
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          # Keep recovery policy available for historical release commits.
-          # API_DEPLOYMENT_EXPECTED_COMMIT still verifies the release SHA.
-          ref: ${{ github.workflow_sha }}
-          persist-credentials: false
+          bash scripts/retry.sh gh release upload "$RELEASE_REF" assets/* --clobber
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2

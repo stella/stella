@@ -42,7 +42,7 @@ jobs:
         uses: stella/.github/actions/setup-bun-cached@35506c43f400ed14b8554568d5d9988a49299f0c
 
       - name: Install dependencies
-        run: bash scripts/bun-ci-retry.sh --ignore-scripts
+        run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           # .npmrc references NPM_TOKEN, but PR installs must not expose
           # the real npm token to dependency lifecycle scripts.
@@ -97,7 +97,7 @@ jobs:
         uses: stella/.github/actions/setup-bun-cached@35506c43f400ed14b8554568d5d9988a49299f0c
 
       - name: Install dependencies
-        run: bash scripts/bun-ci-retry.sh --ignore-scripts
+        run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           # .npmrc references NPM_TOKEN, but PR installs must not expose
           # the real npm token to dependency lifecycle scripts.

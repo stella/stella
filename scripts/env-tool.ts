@@ -486,9 +486,9 @@ const AUDIT_IGNORE_FILES = new Set([
   // These tests contain environment syntax as source-text fixtures or use
   // test-process-only variables that are not repository configuration.
   "packages/property-testing/src/ci-gate-coverage.test.ts",
-  "scripts/bun-ci-retry.test.sh",
   "scripts/detect-desktop-release-changes.test.sh",
   "scripts/env-tool.test.ts",
+  "scripts/retry.test.sh",
 ]);
 const AUDIT_IGNORE_PATH_SEGMENTS = new Set([".cache", "node_modules"]);
 /** Submodules: other repositories, with their own configuration surface. */
