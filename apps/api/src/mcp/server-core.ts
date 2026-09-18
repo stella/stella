@@ -18,6 +18,7 @@ import { panic, Result } from "better-result";
 import { detached } from "@/api/lib/detached";
 import { isEventStreamResponse, withSseHeartbeat } from "@/api/lib/sse";
 import { isMcpSession, type McpSession } from "@/api/mcp/auth";
+import { featureOmittedCapabilityIds } from "@/api/mcp/capability-tools";
 import type { RecordMcpSessionInitialized } from "@/api/mcp/client-identity";
 import {
   MCP_MAX_REQUEST_BODY_BYTES,
@@ -26,6 +27,7 @@ import {
   MCP_TOOL_OMISSION_REASONS,
   type McpMode,
   type McpToolOmissionReason,
+  STELLA_MCP_FEATURE_OMITTED_CAPABILITIES_HEADER,
   STELLA_MCP_OMITTED_TOOLS_HEADER_BY_REASON,
   STELLA_MCP_ORGANIZATION_HEADER,
   STELLA_MCP_SCOPES_HEADER,
@@ -257,6 +259,10 @@ const withMcpCors = (
         omitted[reason].join(" "),
       );
     }
+    headers.set(
+      STELLA_MCP_FEATURE_OMITTED_CAPABILITIES_HEADER,
+      featureOmittedCapabilityIds().join(" "),
+    );
   }
   const answer = new Response(response.body, {
     headers,

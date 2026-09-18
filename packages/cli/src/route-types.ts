@@ -199,6 +199,24 @@ export type CapabilityLeafSpec = {
   filelessField?: string;
 };
 
+/**
+ * Commands the connected server attested are gated off in this deployment.
+ * They stay in the tree (invoking one yields the server's `feature_disabled`);
+ * every listing marks them from this one value.
+ */
+export type DisabledCommands = {
+  /** Curated tool names (`x-stella-feature-omitted-tools`). */
+  tools: readonly string[];
+  /** Catalog capability ids (`x-stella-feature-omitted-capabilities`). */
+  capabilities: readonly string[];
+};
+
+/** No attestation: a server that sent no evidence, or no server at all. */
+export const NO_DISABLED_COMMANDS: DisabledCommands = {
+  tools: [],
+  capabilities: [],
+};
+
 /** stricli assembly: `LeafCommandSpec[]` folds into a nested route tree. */
 export type RouteNode =
   | { kind: "leaf"; spec: LeafCommandSpec }

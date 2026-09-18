@@ -1,9 +1,14 @@
-import { describe, expect, test } from "bun:test";
+import { beforeAll, describe, expect, test } from "bun:test";
 import { mkdtempSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
 import packageJson from "../package.json" with { type: "json" };
+import {
+  CACHE_SCHEMA_VERSION,
+  cachePathFor,
+  writeCacheFile,
+} from "./registry-cache.js";
 
 const CLI_ENTRYPOINT = path.join(import.meta.dirname, "cli.ts");
 
@@ -114,5 +119,76 @@ describe("stella CLI shell", () => {
     const result = spawnIsolated(["auth", "whoami"]);
     expect(result.exitCode).toBe(3);
     expect(result.stderr.toString()).toContain("No server configured");
+  });
+});
+
+// The server's feature-omission evidence, once cached for the configured
+// origin, marks the same commands in every listing. No token is stored, so
+// nothing reaches the network.
+describe("stella CLI: server-attested disabled commands", () => {
+  const SERVER = "https://stella.example";
+  const home = mkdtempSync(path.join(os.tmpdir(), "stella-cli-disabled-"));
+  const cacheHome = path.join(home, ".cache");
+  beforeAll(async () => {
+    await writeCacheFile(cachePathFor(SERVER, { XDG_CACHE_HOME: cacheHome }), {
+      version: CACHE_SCHEMA_VERSION,
+      serverOrigin: SERVER,
+      fetchedAt: new Date().toISOString(),
+      ttlSeconds: 86_400,
+      toolsListHash: "h",
+      listings: [],
+      delta: { added: [], removed: [], changed: [] },
+      featureOmittedTools: ["get_usage"],
+      featureOmittedCapabilities: ["usage.get-entitlement"],
+    });
+  });
+
+  const spawnAgainstServer = (args: readonly string[]) => {
+    const {
+      STELLA_SERVER_URL: _server,
+      STELLA_API_KEY: _key,
+      ...env
+    } = process.env;
+    const result = Bun.spawnSync({
+      cmd: ["bun", CLI_ENTRYPOINT, ...args],
+      env: {
+        ...env,
+        HOME: home,
+        STELLA_SERVER_URL: SERVER,
+        XDG_CACHE_HOME: cacheHome,
+        XDG_CONFIG_HOME: path.join(home, ".config"),
+      },
+      stderr: "pipe",
+      stdout: "pipe",
+    });
+    expect(result.exitCode).toBe(0);
+    return result.stdout.toString();
+  };
+
+  test("root --help marks the gated-off group and names it under capability", () => {
+    const stdout = spawnAgainstServer(["--help"]);
+    expect(stdout).toMatch(
+      /^ {2}usage +usage commands: get \[disabled on this server\]$/mu,
+    );
+    expect(stdout).toMatch(
+      /^ {2}capability +capability commands: .*\[disabled on this server: usage\]$/mu,
+    );
+  });
+
+  test("capability --help marks the gated-off capability", () => {
+    const stdout = spawnAgainstServer(["capability", "usage", "--help"]);
+    expect(stdout).toMatch(
+      /^ {2}get-entitlement .*\[disabled on this server\]$/mu,
+    );
+  });
+
+  test("tools list marks the gated-off tool and capability, and nothing else", () => {
+    const marked = spawnAgainstServer(["tools", "list"])
+      .split("\n")
+      .filter((line) => line.endsWith("[disabled on this server]"));
+    expect(marked).toEqual([
+      "capability usage get-entitlement\t(invoke_capability: usage.get-entitlement) [disabled on this server]",
+      "usage get\t(get_usage) [disabled on this server]",
+    ]);
   });
 });

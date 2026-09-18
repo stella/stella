@@ -49,6 +49,8 @@ describe("fetchToolsListRaw authenticated omission evidence", () => {
               "x-stella-scope-omitted-tools": "save_filled_template",
               "x-stella-feature-omitted-tools":
                 "list_time_entries search_case_law",
+              "x-stella-feature-omitted-capabilities":
+                "time-entries.export-csv usage.get-entitlement",
             },
           })
         );
@@ -73,6 +75,10 @@ describe("fetchToolsListRaw authenticated omission evidence", () => {
         expect(result.value.featureOmittedTools).toEqual([
           "list_time_entries",
           "search_case_law",
+        ]);
+        expect(result.value.featureOmittedCapabilities).toEqual([
+          "time-entries.export-csv",
+          "usage.get-entitlement",
         ]);
         expect(methods).toEqual([
           "initialize",
@@ -118,6 +124,7 @@ describe("fetchToolsListRaw authenticated omission evidence", () => {
         expect(result.value.grantedScopes).toBeUndefined();
         expect(result.value.scopeOmittedTools).toBeUndefined();
         expect(result.value.featureOmittedTools).toBeUndefined();
+        expect(result.value.featureOmittedCapabilities).toBeUndefined();
       }
     } finally {
       void server.stop(true);

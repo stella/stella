@@ -94,6 +94,7 @@ const okFetch =
       grantedScopes?: readonly string[];
       scopeOmittedTools?: readonly string[];
       featureOmittedTools?: readonly string[];
+      featureOmittedCapabilities?: readonly string[];
     } = {},
   ) =>
   async () =>
@@ -125,26 +126,30 @@ const writeCache = async (
 describe("resolveCommandTree (S5.3)", () => {
   test("no cache -> baked-in tree, no notice", async () => {
     const env = await makeCacheEnv();
-    const { tree, notice, disabledTools } = await resolveCommandTree({
+    const { tree, notice, disabled } = await resolveCommandTree({
       serverOrigin: ORIGIN,
       env,
     });
     expect(tree).toBe(generatedRouteMap);
     expect(notice).toBeUndefined();
-    expect(disabledTools).toEqual([]);
+    expect(disabled).toEqual({ tools: [], capabilities: [] });
   });
 
-  test("feature-omitted tools are reported as disabled for help and tools list", async () => {
+  test("feature-omitted tools and capabilities are reported as disabled for help and tools list", async () => {
     const env = await makeCacheEnv();
     await writeCache(env, {
       featureOmittedTools: ["search_case_law", "get_usage"],
+      featureOmittedCapabilities: ["usage.get-entitlement"],
     });
-    const { tree, disabledTools } = await resolveCommandTree({
+    const { tree, disabled } = await resolveCommandTree({
       serverOrigin: ORIGIN,
       env,
     });
     expect(tree).toBe(generatedRouteMap);
-    expect(disabledTools).toEqual(["search_case_law", "get_usage"]);
+    expect(disabled).toEqual({
+      tools: ["search_case_law", "get_usage"],
+      capabilities: ["usage.get-entitlement"],
+    });
   });
 
   test("empty delta -> baked-in tree", async () => {
@@ -448,6 +453,7 @@ describe("refreshRegistryCache (S5.3/S5.5)", () => {
         grantedScopes: ["stella:read", "stella:search"],
         scopeOmittedTools: [],
         featureOmittedTools: ["list_time_entries", "search_case_law"],
+        featureOmittedCapabilities: ["time-entries.export-csv"],
       }),
       bakedListings: [
         listing("list_matters"),
@@ -462,6 +468,9 @@ describe("refreshRegistryCache (S5.3/S5.5)", () => {
     expect(written?.featureOmittedTools).toEqual([
       "list_time_entries",
       "search_case_law",
+    ]);
+    expect(written?.featureOmittedCapabilities).toEqual([
+      "time-entries.export-csv",
     ]);
     const { tree, notice } = await resolveCommandTree({
       serverOrigin: ORIGIN,

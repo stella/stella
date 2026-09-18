@@ -49,6 +49,8 @@ export type RegistryCacheFile = {
   scopeOmittedTools?: readonly string[];
   /** Tool names the server attested are gated off in this deployment. */
   featureOmittedTools?: readonly string[];
+  /** Capability ids the server attested are gated off in this deployment. */
+  featureOmittedCapabilities?: readonly string[];
   /** The latest CLI version we last nudged about (update-nudge anti-nag key). */
   lastNudgedVersion?: string;
 };
@@ -311,10 +313,14 @@ export const readCacheFile = async (
   const grantedScopes = parseOptionalNames(value["grantedScopes"]);
   const scopeOmittedTools = parseOptionalNames(value["scopeOmittedTools"]);
   const featureOmittedTools = parseOptionalNames(value["featureOmittedTools"]);
+  const featureOmittedCapabilities = parseOptionalNames(
+    value["featureOmittedCapabilities"],
+  );
   if (
     grantedScopes.status === "invalid" ||
     scopeOmittedTools.status === "invalid" ||
-    featureOmittedTools.status === "invalid"
+    featureOmittedTools.status === "invalid" ||
+    featureOmittedCapabilities.status === "invalid"
   ) {
     return undefined;
   }
@@ -335,6 +341,9 @@ export const readCacheFile = async (
       : {}),
     ...(featureOmittedTools.status === "present"
       ? { featureOmittedTools: featureOmittedTools.names }
+      : {}),
+    ...(featureOmittedCapabilities.status === "present"
+      ? { featureOmittedCapabilities: featureOmittedCapabilities.names }
       : {}),
     ...(typeof lastNudgedVersion === "string" ? { lastNudgedVersion } : {}),
   };

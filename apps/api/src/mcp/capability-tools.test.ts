@@ -33,7 +33,8 @@ const consumeRateLimitMock = mock(async () => ({
 // (cleared in beforeEach). Default (empty set) behaves like everything-enabled.
 const disabledFeatures = new Set<string>();
 const { handleMcpToolCall } = await import("@/api/mcp/tools");
-const { mapHandlerResult } = await import("@/api/mcp/capability-tools");
+const { featureOmittedCapabilityIds, mapHandlerResult } =
+  await import("@/api/mcp/capability-tools");
 const { UPLOAD_PURPOSE_GATE_BY_CAPABILITY } =
   await import("@/api/mcp/upload-purpose-gate");
 const { synthesizeCapabilityContext } =
@@ -2147,6 +2148,40 @@ describe("invoke_capability deployment feature gate", () => {
       toolName: "invoke_capability",
     });
     expect(parseToolPayload<string>(result)).toContain("Date,");
+  });
+
+  test("the attested omission is exactly the set list_capabilities hides", async () => {
+    disabledFeatures.add("FEATURE_TIME_BILLING");
+    disabledFeatures.add("FEATURE_USAGE");
+    const listed = new Set<string>();
+    type CapabilityPage = {
+      items: { id: string }[];
+      nextCursor: string | null;
+    };
+    let cursor: string | null = null;
+    do {
+      const page: CapabilityPage = parseToolPayload(
+        await call("list_capabilities", {
+          limit: 50,
+          ...(cursor === null ? {} : { cursor }),
+        }),
+      );
+      for (const item of page.items) {
+        listed.add(item.id);
+      }
+      cursor = page.nextCursor;
+    } while (cursor !== null);
+
+    const hidden = capabilityCatalog
+      .map((entry) => entry.id)
+      .filter((id) => !listed.has(id))
+      .sort();
+    expect(hidden).toContain("usage.get-entitlement");
+    expect(
+      featureOmittedCapabilityIds(
+        (feature) => feature === undefined || !disabledFeatures.has(feature),
+      ),
+    ).toEqual(hidden);
   });
 
   test("describe exposes the feature flag on an enabled entry", async () => {

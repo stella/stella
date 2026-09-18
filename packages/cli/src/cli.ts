@@ -115,7 +115,7 @@ const main = async (): Promise<void> => {
   // Startup always resolves against the baked-in tree unless a validated cache
   // shows a non-empty delta, in which case build from the cached listings and
   // surface the one-line divergence notice (spec S5.3). No network here.
-  const { tree, notice, disabledTools } = await resolveCommandTree({
+  const { tree, notice, disabled } = await resolveCommandTree({
     serverOrigin: serverUrl,
     env: cacheEnv,
   });
@@ -123,7 +123,7 @@ const main = async (): Promise<void> => {
     process.stderr.write(notice);
   }
 
-  await run(buildApp(tree, disabledTools), argv, {
+  await run(buildApp(tree, disabled), argv, {
     forCommand: () => ({ configDir, process, serverUrl, token }),
     process: stricliProcess,
   });
