@@ -6,8 +6,10 @@ import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { timestampCasToken } from "@/api/lib/db/timestamp-cas";
 import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";
+import { errorSystemFields } from "@/api/lib/errors/utils";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
+import { pgErrorFields } from "@/api/lib/pg-error";
 import { CHAT_SEARCH_DISPLAY_METADATA_GENERATION } from "@/api/lib/search/chat-search-generation";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -482,7 +484,11 @@ export const backfillChatThreadSearchIndex = async ({
           feature: "chat_search.backfill",
           threadId: row.id,
         });
-        logger.error("chat_search.backfill_failed", { threadId: row.id });
+        logger.error("chat_search.backfill_failed", {
+          threadId: row.id,
+          ...errorSystemFields(error),
+          ...pgErrorFields(error),
+        });
       }
     }
 

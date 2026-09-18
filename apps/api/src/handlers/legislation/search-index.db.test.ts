@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, expect, test } from "bun:test";
+import { afterAll, beforeAll, expect, spyOn, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
@@ -23,6 +23,7 @@ import type {
   LegislationReadDb,
   LegislationReadTransaction,
 } from "@/api/lib/legislation-public-read-db";
+import { logger } from "@/api/lib/observability/logger";
 import { brandPersistedLegislationDocumentId } from "@/api/lib/safe-id-boundaries";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -380,4 +381,38 @@ test("the stale scan breaks equal update timestamps by document id", async () =>
   ).toEqual({ found: 1, indexed: 1 });
   expect(firstStaleCorpusId < laterStaleCorpusId).toBe(true);
   expect(readKeys).toEqual([firstKey]);
+});
+
+test("a failed projection names the error class in its log fields", async () => {
+  const unprojectableId = createSafeId<"legislationDocument">();
+  await db.insert(legislationDocuments).values(
+    seedDocument({
+      id: unprojectableId,
+      fulltext: "unprojectable fixture",
+      sections: null,
+      textS3Key: corpusKey,
+    }),
+  );
+
+  const errorSpy = spyOn(logger, "error");
+  try {
+    expect(
+      await backfillLegislationSearchIndex(scopedDb, 1, {
+        readText: async () => "unused corpus sentinel",
+        resolveConfig: async () => {
+          throw new TypeError("fts configuration unavailable");
+        },
+      }),
+    ).toEqual({ found: 1, indexed: 0 });
+
+    const failure = errorSpy.mock.calls.find(
+      ([signature]) => signature === "legislation.search_index.backfill_failed",
+    );
+    expect(failure?.[1]).toMatchObject({
+      documentId: unprojectableId,
+      "error.type": "TypeError",
+    });
+  } finally {
+    errorSpy.mockRestore();
+  }
 });

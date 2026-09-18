@@ -12,10 +12,12 @@ import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
+import { errorSystemFields } from "@/api/lib/errors/utils";
 import { setCorpusBackfillStatementTimeout } from "@/api/lib/legal-search/backfill-statement-timeout";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import { resolveFtsConfig } from "@/api/lib/legal-search/fts-config";
 import { logger } from "@/api/lib/observability/logger";
+import { pgErrorFields } from "@/api/lib/pg-error";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 import {
   buildSearchPreviewPassages,
@@ -296,6 +298,8 @@ export const backfillSearchIndex = async (
       captureError(error, { decisionId: row.id, step: "backfillSearchIndex" });
       logger.error("case_law.search_index.backfill_failed", {
         decisionId: row.id,
+        ...errorSystemFields(error),
+        ...pgErrorFields(error),
       });
       return 0;
     }
