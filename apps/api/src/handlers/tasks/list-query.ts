@@ -1,4 +1,4 @@
-import { panic, Result } from "better-result";
+import { Result } from "better-result";
 import {
   and,
   asc,
@@ -8,20 +8,17 @@ import {
   inArray,
   isNull,
   lte,
-  notInArray,
   or,
   sql,
 } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
-import { TASK_CLOSED_STATUSES } from "@stll/api-contract/entity-options";
 import { TASK_ASSIGNEE_FILTER } from "@stll/api-contract/tasks";
 import type { TaskAssigneeFilter } from "@stll/api-contract/tasks";
 
 import type { SafeDb } from "@/api/db/safe-db";
-import { entities, taskAssignees, workspaces } from "@/api/db/schema";
+import { entities, workspaces } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
-import { entityQueryScopeCondition } from "@/api/lib/entities/query-scope";
 import { LIMITS } from "@/api/lib/limits";
 import {
   createCursorPage,
@@ -35,6 +32,7 @@ import type {
   UnprojectedColumns,
 } from "@/api/lib/projection-totality";
 import { brandPersistedEntityId } from "@/api/lib/safe-id-boundaries";
+import { taskAssigneeCondition } from "@/api/lib/tasks/assigned";
 
 /** Keyset position: the last row's due date (null sorts last) and id. */
 type TaskListCursor = {
@@ -73,29 +71,6 @@ const afterCursorCondition = ({
         and(eq(entities.dueDate, dueDate), gt(entities.id, id)),
         isNull(entities.dueDate),
       );
-
-const assigneeCondition = ({
-  assignee,
-  userId,
-}: {
-  assignee: TaskAssigneeFilter;
-  userId: SafeId<"user">;
-}): SQL | undefined => {
-  switch (assignee) {
-    case TASK_ASSIGNEE_FILTER.ANY:
-      return undefined;
-    case TASK_ASSIGNEE_FILTER.ME:
-      // Any assignee role counts: a reviewer is as responsible as an assignee.
-      return sql`exists (select 1 from ${taskAssignees}
-        where ${taskAssignees.entityId} = ${entities.id}
-          and ${taskAssignees.workspaceId} = ${entities.workspaceId}
-          and ${taskAssignees.userId} = ${userId})`;
-    default: {
-      assignee satisfies never;
-      return panic(`Unhandled assignee filter: ${String(assignee)}`);
-    }
-  }
-};
 
 type EntityRow = typeof entities.$inferSelect;
 
@@ -244,7 +219,7 @@ export const listTasksPage = async ({
           query.dateTo === undefined
             ? undefined
             : lte(entities.dueDate, query.dateTo),
-          assigneeCondition({
+          taskAssigneeCondition({
             assignee: query.assignee ?? TASK_ASSIGNEE_FILTER.ANY,
             userId,
           }),
@@ -271,42 +246,3 @@ export const listTasksPage = async ({
     ),
   });
 };
-
-type CountDueAssignedTasksOptions = {
-  safeDb: SafeDb;
-  organizationId: SafeId<"organization">;
-  userId: SafeId<"user">;
-  /** The civil day "due" is measured against, from `resolveWorkAsOf`. */
-  asOf: string;
-};
-
-/**
- * The caller's tasks that are overdue or due today and not yet finished,
- * across every active matter of the organization they can read (RLS narrows
- * the organization's matters to the caller's membership). Feeds the Inbox
- * badge beside the open-signal count.
- */
-export const countDueAssignedTasks = async ({
-  safeDb,
-  organizationId,
-  userId,
-  asOf,
-}: CountDueAssignedTasksOptions) =>
-  await safeDb((tx) =>
-    tx.$count(
-      entities,
-      and(
-        entityQueryScopeCondition(
-          { type: "organization", organizationId },
-          entities.workspaceId,
-        ),
-        eq(entities.kind, "task"),
-        lte(entities.dueDate, asOf),
-        or(
-          isNull(entities.status),
-          notInArray(entities.status, [...TASK_CLOSED_STATUSES]),
-        ),
-        assigneeCondition({ assignee: TASK_ASSIGNEE_FILTER.ME, userId }),
-      ),
-    ),
-  );

@@ -1,11 +1,10 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
-import { countOpenSignals } from "@/api/handlers/signals/read";
-import { canTriageSignals } from "@/api/handlers/signals/transition";
-import { countDueAssignedTasks } from "@/api/handlers/tasks/list-query";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { canTriageSignals, countOpenSignals } from "@/api/lib/signals/read";
+import { countDueAssignedTasks } from "@/api/lib/tasks/assigned";
 import { resolveWorkAsOf } from "@/api/lib/work-obligations/at-risk";
 
 const config = {

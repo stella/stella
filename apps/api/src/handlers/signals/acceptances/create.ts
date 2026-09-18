@@ -13,15 +13,10 @@ import type {
   WorkObligationSource,
 } from "@/api/db/schema";
 import {
-  loadVisibleSignal,
-  serializeSignal,
-} from "@/api/handlers/signals/read";
-import {
   acceptBodySchema,
   signalParamsSchema,
 } from "@/api/handlers/signals/schema";
 import {
-  canTriageSignals,
   SIGNAL_EVENT_TYPE,
   transitionSignal,
 } from "@/api/handlers/signals/transition";
@@ -36,6 +31,11 @@ import {
   brandPersistedWorkspaceId,
 } from "@/api/lib/safe-id-boundaries";
 import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
+import {
+  canTriageSignals,
+  loadVisibleSignal,
+  serializeSignal,
+} from "@/api/lib/signals/read";
 import { createTaskEntityHandler } from "@/api/lib/tasks/create-task-entity";
 import { deployedTaskFeatures } from "@/api/lib/tasks/deployment-features";
 
