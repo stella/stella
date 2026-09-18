@@ -15,12 +15,17 @@ const LANE_MODULE = "@/api/lib/case-law/maintenance-lane";
 const DOORS = [
   "enterCaseLawMaintenanceLane",
   "openCaseLawReadOnlySession",
+  "openCaseLawPublicCorpusSession",
 ] as const;
+
+/** The module the public corpus door hands out, and no script imports. */
+const PUBLIC_READ_MODULE = "@/api/lib/case-law-public-read-db";
 
 /** The handles a script must not reach for directly: the "third way". */
 const DIRECT_HANDLE_IMPORTS = [
   /import\s*\{[^}]*\b(?:rootDb|rlsDb)\b[^}]*\}\s*from\s*"@\/api\/db\/root"/u,
   /import\s*\{[^}]*\b(?:createIngestionDb|createScopedDb)\b[^}]*\}\s*from\s*"@\/api\/db\/scoped"/u,
+  /import\s*\{[^}]*\bcaseLawPublicReadDb\b[^}]*\}\s*from\s*"@\/api\/lib\/case-law-public-read-db"/u,
 ] as const;
 
 /**
@@ -187,6 +192,23 @@ describe("case-law maintenance lane", () => {
       CASE_LAW_TABLE_MARKERS.some((marker) => source.includes(marker)),
     ).toBe(false);
     expect(isCaseLawScript("case-law-source-total.ts")).toBe(true);
+  });
+
+  // The public corpus is a third transport, on its own database and role, so
+  // its handle is a third way like the two root-backed ones: a script takes
+  // it from the door, and the lane module is the one place that imports it.
+  test("the public corpus handle belongs to the door, not to a script", () => {
+    const asAScriptWouldImportIt = `import { caseLawPublicReadDb } from "${PUBLIC_READ_MODULE}";\n`;
+    expect(
+      DIRECT_HANDLE_IMPORTS.some((pattern) =>
+        pattern.test(asAScriptWouldImportIt),
+      ),
+    ).toBe(true);
+    const lane = readFileSync(
+      path.join(API_SRC, "lib/case-law/maintenance-lane.ts"),
+      "utf-8",
+    );
+    expect(importSpecifiers(lane)).toContain(PUBLIC_READ_MODULE);
   });
 
   test("the lane key names its domain and lane apart from the graph lock", () => {

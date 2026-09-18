@@ -14,8 +14,8 @@ import {
   POLARITY_QUESTION,
   SYSTEM_ONE_POLARITY_ACCEPT_CONFIDENCE,
 } from "@/api/handlers/case-law/polarity/system-one-classifier";
-import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
-import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
+import { openCaseLawPublicCorpusSession } from "@/api/lib/case-law/maintenance-lane";
+import type { CaseLawPublicCorpusTransaction } from "@/api/lib/case-law/maintenance-lane";
 import {
   createSystemOneClient,
   SYSTEM_ONE_USD_PER_INPUT_TOKEN,
@@ -161,7 +161,7 @@ const storedLabelPredicate = (bucket: SampleBucket) => {
  * from the citations alone, and the citing decisions are read once, for the
  * rows that survive.
  */
-const languagePredicate = (tx: CaseLawPublicReadTransaction) =>
+const languagePredicate = (tx: CaseLawPublicCorpusTransaction) =>
   options.language === null
     ? undefined
     : exists(
@@ -183,7 +183,7 @@ const languagePredicate = (tx: CaseLawPublicReadTransaction) =>
  * serve.
  */
 const bucketQuery = (
-  tx: CaseLawPublicReadTransaction,
+  tx: CaseLawPublicCorpusTransaction,
   bucket: SampleBucket,
 ) => {
   const filters =
@@ -214,8 +214,10 @@ type CitingDecision = {
   textS3Key: string | null;
 };
 
+const { corpusDb } = await openCaseLawPublicCorpusSession();
+
 const readSample = async () =>
-  await caseLawPublicReadDb(async (tx) => {
+  await corpusDb(async (tx) => {
     const citations = await tx.execute<SampledCitation>(
       sql.join(
         planSampleBuckets(options).map((bucket) => bucketQuery(tx, bucket)),
