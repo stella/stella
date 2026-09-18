@@ -1,5 +1,11 @@
 # @stll/ui
 
+## 0.30.0
+
+### Minor Changes
+
+- [#3546](https://github.com/stella/stella/pull/3546) [`b983020`](https://github.com/stella/stella/commit/b983020612e73f9039b869c629c9a2dd412f17cd) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Select lists open upward when the trigger sits at the bottom of the viewport instead of landing off screen. `SelectPopup` no longer accepts `collisionAvoidance`; collision handling is Base UI's dropdown default for every select.
+
 ## 0.29.2
 
 ### Patch Changes
