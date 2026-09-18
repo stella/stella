@@ -4,9 +4,9 @@ const WORKFLOW_URL = new URL(
   "../.github/workflows/autofix.yml",
   import.meta.url,
 );
-const HELPER_URL = new URL("dependabot-empty-changeset.ts", import.meta.url);
+const HELPER_URL = new URL("dependabot-changeset.ts", import.meta.url);
 const HELPER_TEST_URL = new URL(
-  "dependabot-empty-changeset.test.ts",
+  "dependabot-changeset.test.ts",
   import.meta.url,
 );
 const CHANGESET_GUARD_URL = new URL("changeset-guard.ts", import.meta.url);
@@ -59,10 +59,10 @@ describe("Dependabot Bun autofix boundary", () => {
       "bun --no-env-file dedupe --lockfile-only --ignore-scripts",
     );
     expect(workflow).toContain(
-      `git diff --name-only "$HEAD_SHA" -- . ':(exclude)bun.lock' ':(exclude)package.json' ":(exclude)$EMPTY_CHANGESET_PATH"`,
+      `git diff --name-only "$HEAD_SHA" -- . ':(exclude)bun.lock' ':(exclude)package.json' ":(exclude)$DEPENDABOT_CHANGESET_PATH"`,
     );
     expect(workflow).toContain(
-      `git ls-files --others --exclude-standard -- . ":(exclude)$EMPTY_CHANGESET_PATH"`,
+      `git ls-files --others --exclude-standard -- . ":(exclude)$DEPENDABOT_CHANGESET_PATH"`,
     );
     expect(restrictionStep).toBeGreaterThanOrEqual(0);
     expect(trustedSourcesStep).toBeGreaterThanOrEqual(0);
@@ -77,7 +77,7 @@ describe("Dependabot Bun autofix boundary", () => {
       `if [[ "$(git rev-parse HEAD)" != "$HEAD_SHA" ]]; then`,
     );
     expect(workflow).toContain(
-      "bun --no-install --no-env-file scripts/dependabot-empty-changeset.ts",
+      "bun --no-install --no-env-file scripts/dependabot-changeset.ts",
     );
 
     const helperTest = await Bun.file(HELPER_TEST_URL).text();
@@ -148,33 +148,34 @@ describe("Dependabot Bun autofix boundary", () => {
     expect(workflow).toContain("git diff --check -- bun.lock package.json");
   });
 
-  test("adds a deterministic empty changeset for published dev dependency updates", async () => {
+  test("adds a deterministic changeset for published dependency updates and verifies it before pushing", async () => {
     const workflow = await Bun.file(WORKFLOW_URL).text();
     const changesetStep = workflow.indexOf(
-      "- name: Add missing empty dev dependency changeset",
+      "- name: Add missing Dependabot changeset",
     );
     const restrictionStep = workflow.indexOf(
       "- name: Restrict generated changes",
     );
     const pushStep = workflow.indexOf("- name: Push autofixes");
+    const writeCall = `bun --no-install --no-env-file scripts/dependabot-changeset.ts
+          --base "$BASE_SHA" --head "$HEAD_SHA" --output "$DEPENDABOT_CHANGESET_PATH"`;
+    const checkCall = `bun --no-install --no-env-file scripts/dependabot-changeset.ts \\
+            --base "$BASE_SHA" --head "$HEAD_SHA" --output "$DEPENDABOT_CHANGESET_PATH" --check`;
 
     expect(workflow).toContain('- "packages/*/package.json"');
     expect(workflow).not.toContain('- "packages/ui/**"');
     expect(workflow).toContain(
-      `EMPTY_CHANGESET_PATH: .changeset/dependabot-dev-dependencies-\${{ github.event.pull_request.number }}.md`,
+      `DEPENDABOT_CHANGESET_PATH: .changeset/dependabot-dependencies-\${{ github.event.pull_request.number }}.md`,
     );
     expect(workflow).toContain("fetch-depth: 0");
-    expect(workflow).toContain(
-      "bun --no-install --no-env-file scripts/dependabot-empty-changeset.ts",
-    );
-    expect(workflow).toContain(
-      `--base "$BASE_SHA" --head "$HEAD_SHA" --output "$EMPTY_CHANGESET_PATH"`,
-    );
-    expect(workflow).toContain(
-      `cmp -s <(printf '%s\\n' "---" "---") "$EMPTY_CHANGESET_PATH"`,
-    );
-    expect(workflow).toContain(`":(exclude)$EMPTY_CHANGESET_PATH"`);
+    expect(workflow).toContain(writeCall);
+    expect(workflow).toContain(checkCall);
+    expect(workflow).toContain(`":(exclude)$DEPENDABOT_CHANGESET_PATH"`);
     expect(changesetStep).toBeGreaterThanOrEqual(0);
+    expect(workflow.indexOf(writeCall)).toBeGreaterThan(changesetStep);
+    expect(workflow.indexOf(writeCall)).toBeLessThan(restrictionStep);
+    expect(workflow.indexOf(checkCall)).toBeGreaterThan(restrictionStep);
+    expect(workflow.indexOf(checkCall)).toBeLessThan(pushStep);
     expect(restrictionStep).toBeGreaterThan(changesetStep);
     expect(pushStep).toBeGreaterThan(restrictionStep);
   });

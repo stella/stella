@@ -25,7 +25,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     env:
-      EMPTY_CHANGESET_PATH: .changeset/dependabot-dev-dependencies-${{ github.event.pull_request.number }}.md
+      DEPENDABOT_CHANGESET_PATH: .changeset/dependabot-dependencies-${{ github.event.pull_request.number }}.md
       # autofix-ci/action v1.3.4 declares Node 24 support, but its action
       # metadata still names node20 for compatibility with older runners.
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -54,7 +54,7 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: >-
           git diff --quiet "$BASE_SHA" "$HEAD_SHA" --
-          scripts/dependabot-empty-changeset.ts
+          scripts/dependabot-changeset.ts
           scripts/changeset-guard.ts
           scripts/changeset-policy.json
           scripts/check-resolution-ranges.ts
@@ -78,16 +78,21 @@ jobs:
       - name: Resolution range guard
         run: bun --no-install --no-env-file scripts/check-resolution-ranges.ts
 
-      - name: Add missing empty dev dependency changeset
+      # A devDependency-only bump gets an empty changeset. A same-major runtime
+      # bump moves the floor consumers install, so it gets a patch changeset
+      # naming the dependency. Peer changes, major floor moves and anything
+      # the fixer cannot compare stay gated for review.
+      - name: Add missing Dependabot changeset
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: >-
-          bun --no-install --no-env-file scripts/dependabot-empty-changeset.ts
-          --base "$BASE_SHA" --head "$HEAD_SHA" --output "$EMPTY_CHANGESET_PATH"
+          bun --no-install --no-env-file scripts/dependabot-changeset.ts
+          --base "$BASE_SHA" --head "$HEAD_SHA" --output "$DEPENDABOT_CHANGESET_PATH"
 
       - name: Restrict generated changes
         env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         shell: bash
         run: |
@@ -98,19 +103,18 @@ jobs:
             exit 1
           fi
 
-          unexpected_tracked="$(git diff --name-only "$HEAD_SHA" -- . ':(exclude)bun.lock' ':(exclude)package.json' ":(exclude)$EMPTY_CHANGESET_PATH")"
-          unexpected_untracked="$(git ls-files --others --exclude-standard -- . ":(exclude)$EMPTY_CHANGESET_PATH")"
+          unexpected_tracked="$(git diff --name-only "$HEAD_SHA" -- . ':(exclude)bun.lock' ':(exclude)package.json' ":(exclude)$DEPENDABOT_CHANGESET_PATH")"
+          unexpected_untracked="$(git ls-files --others --exclude-standard -- . ":(exclude)$DEPENDABOT_CHANGESET_PATH")"
           if [[ -n "${unexpected_tracked}${unexpected_untracked}" ]]; then
-            echo "::error::Autofix changed files outside bun.lock, package.json and $EMPTY_CHANGESET_PATH."
+            echo "::error::Autofix changed files outside bun.lock, package.json and $DEPENDABOT_CHANGESET_PATH."
             git status --short
             exit 1
           fi
 
-          if [[ -e "$EMPTY_CHANGESET_PATH" || -L "$EMPTY_CHANGESET_PATH" ]] && \
-            { [[ -L "$EMPTY_CHANGESET_PATH" ]] || ! cmp -s <(printf '%s\n' "---" "---") "$EMPTY_CHANGESET_PATH"; }; then
-            echo "::error::$EMPTY_CHANGESET_PATH is not an empty changeset."
-            exit 1
-          fi
+          # The changeset is re-derived from the trusted decision and must
+          # match byte for byte; a symlink or an undue file fails here.
+          bun --no-install --no-env-file scripts/dependabot-changeset.ts \
+            --base "$BASE_SHA" --head "$HEAD_SHA" --output "$DEPENDABOT_CHANGESET_PATH" --check
 
           bun --no-install --no-env-file scripts/check-resolutions-only-change.ts --ref "$HEAD_SHA"
 

@@ -1155,7 +1155,7 @@ jobs:
           bun test
           scripts/detect-e2e-changes.test.ts
           scripts/autofix-workflow.test.ts
-          scripts/dependabot-empty-changeset.test.ts
+          scripts/dependabot-changeset.test.ts
 
       # Needs the installed workspace (fast-check, property-testing), so it
       # cannot join the no-install invariants step above.
