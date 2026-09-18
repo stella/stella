@@ -71,24 +71,25 @@ test("FileInput opens the chooser from its trigger and reports the picked file",
     name: "Source document Choose file",
   });
   const selected = page.getByLabel("Selected file");
-  const nativeInput = page.locator(
-    '[data-slot="file-input"] input[type="file"]',
-  );
 
-  const chooser = page.waitForEvent("filechooser");
-  await trigger.click();
-  await (await chooser).setFiles(sourceDocument);
+  const pick = async () => {
+    const chooser = page.waitForEvent("filechooser");
+    await trigger.click();
+    await (await chooser).setFiles(sourceDocument);
+  };
 
+  await pick();
   await expect(selected).toHaveText("smlouva.docx");
   await expect(page.locator('[data-slot="file-input-name"]')).toHaveText(
     "smlouva.docx",
   );
-  await expect(nativeInput).toHaveValue("");
+  // The chooser's input leaves the document once it settles.
+  await expect(page.locator('input[type="file"]')).toHaveCount(0);
 
   await page.getByRole("button", { name: "Clear file" }).click();
   await expect(selected).toHaveText("none");
 
-  // The input's value was cleared on change, so the same file fires again.
-  await nativeInput.setInputFiles(sourceDocument);
+  // Every pick uses a fresh input, so the same file fires again.
+  await pick();
   await expect(selected).toHaveText("smlouva.docx");
 });

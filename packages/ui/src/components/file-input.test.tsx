@@ -10,7 +10,7 @@ const labels = {
 };
 
 describe("FileInput", () => {
-  test("hides the native input and labels the trigger with the caller's copy", () => {
+  test("renders no native file input and labels the trigger with the caller's copy", () => {
     const markup = renderToStaticMarkup(
       <FileInput
         accept=".docx"
@@ -20,9 +20,7 @@ describe("FileInput", () => {
       />,
     );
 
-    expect(markup).toContain('type="file"');
-    expect(markup).toContain('class="sr-only"');
-    expect(markup).toContain('accept=".docx"');
+    expect(markup).not.toContain('type="file"');
     expect(markup).toContain('data-slot="file-input-trigger"');
     expect(markup).toContain(">Choose file<");
     expect(markup).toContain(">No file selected<");
@@ -56,12 +54,9 @@ describe("FileInput", () => {
     )?.[1];
     expect(triggerId).toBeDefined();
     expect(markup).toContain(`id="${triggerId}"`);
-    expect(markup).toMatch(
-      /<input [^>]*aria-hidden="true"(?:(?!aria-labelledby)[^>])*>/u,
-    );
   });
 
-  test("disables the trigger with the input", () => {
+  test("disables the trigger", () => {
     const markup = renderToStaticMarkup(
       <FileInput disabled file={null} onFileChange={() => {}} {...labels} />,
     );

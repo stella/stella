@@ -226,6 +226,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-legal-cliche-glyph.fixture.tsx", [
     "no-legal-cliche-glyph/no-legal-cliche-glyph",
   ]),
+  fixtureRuleOverride("no-raw-file-input.fixture.tsx", [
+    "no-raw-file-input/no-raw-file-input",
+  ]),
   fixtureRuleOverride("no-font-utility-in-reader.fixture.tsx", [
     "no-font-utility-in-reader/no-font-utility-in-reader",
   ]),
@@ -1065,6 +1068,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-direct-matter-glyph.ts",
     "./.oxlint-plugins/no-direct-entity-glyph.ts",
     "./.oxlint-plugins/no-legal-cliche-glyph.ts",
+    "./.oxlint-plugins/no-raw-file-input.ts",
     "./.oxlint-plugins/no-raw-user-avatar-primitive.ts",
     "./.oxlint-plugins/no-shadowed-user-name-helpers.ts",
     "./.oxlint-plugins/no-hand-rolled-user-identity.ts",
@@ -2282,6 +2286,22 @@ export default defineConfig({
       },
     },
     {
+      // A rendered file input paints untranslatable browser chrome, and each
+      // hidden one re-implements the same ref, click and value-reset wiring.
+      // `@stll/ui` owns the chooser (`openFilePicker`) and the labelled field
+      // (`FileInput`). Landing keeps its own editor demo out of scope.
+      files: [
+        "apps/web/src/**/*.{ts,tsx}",
+        "packages/ui/src/**/*.{ts,tsx}",
+        "packages/workspace-ui/src/**/*.{ts,tsx}",
+        "apps/desktop/src/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/no-raw-file-input.fixture.tsx",
+      ],
+      rules: {
+        "no-raw-file-input/no-raw-file-input": "error",
+      },
+    },
+    {
       // The reader's face is inherited from the reader root, which reader.css
       // sets from `--reader-body-font`. A font utility on one element inside
       // it mixes two faces in one document; chrome that is sans on purpose
@@ -3442,7 +3462,8 @@ export default defineConfig({
           "error",
           {
             paths: [
-              noZodImport, apiValibotJsonSchemaImport,
+              noZodImport,
+              apiValibotJsonSchemaImport,
               apiSafeIdBrandingImport,
               apiPortableSafeIdBrandingImport,
             ],
@@ -3496,7 +3517,13 @@ export default defineConfig({
       rules: {
         "no-restricted-imports": [
           "error",
-          { paths: [noZodImport, apiValibotJsonSchemaImport, apiPortableSafeIdBrandingImport] },
+          {
+            paths: [
+              noZodImport,
+              apiValibotJsonSchemaImport,
+              apiPortableSafeIdBrandingImport,
+            ],
+          },
         ],
       },
     },
@@ -3732,7 +3759,8 @@ export default defineConfig({
           "error",
           {
             paths: [
-              noZodImport, apiValibotJsonSchemaImport,
+              noZodImport,
+              apiValibotJsonSchemaImport,
               {
                 name: "@/api/lib/api-handlers",
                 importNames: ["createHandler", "createRootHandler"],
@@ -3785,7 +3813,10 @@ export default defineConfig({
         "apps/api/**/__tests__/**/*.{ts,tsx,js,jsx}",
       ],
       rules: {
-        "no-restricted-imports": ["error", { paths: [noZodImport, apiValibotJsonSchemaImport] }],
+        "no-restricted-imports": [
+          "error",
+          { paths: [noZodImport, apiValibotJsonSchemaImport] },
+        ],
       },
     },
     {
@@ -3840,7 +3871,8 @@ export default defineConfig({
           "error",
           {
             paths: [
-              noZodImport, apiValibotJsonSchemaImport,
+              noZodImport,
+              apiValibotJsonSchemaImport,
               apiSafeIdBrandingImport,
               apiPortableSafeIdBrandingImport,
               {
