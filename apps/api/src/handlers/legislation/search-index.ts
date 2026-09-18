@@ -20,12 +20,14 @@ import {
 } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
+import { errorSystemFields } from "@/api/lib/errors/utils";
 import { setCorpusBackfillStatementTimeout } from "@/api/lib/legal-search/backfill-statement-timeout";
 import { readCorpusText } from "@/api/lib/legal-search/corpus-storage";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import { resolveFtsConfig } from "@/api/lib/legal-search/fts-config";
 import { redistributableLegislationSource } from "@/api/lib/legal-search/legislation-redistribution";
 import { logger } from "@/api/lib/observability/logger";
+import { pgErrorFields } from "@/api/lib/pg-error";
 
 /**
  * Postgres FTS projection for legislation, mirroring
@@ -266,6 +268,8 @@ export const backfillLegislationSearchIndex = async (
       });
       logger.error("legislation.search_index.backfill_failed", {
         documentId: row.id,
+        ...errorSystemFields(error),
+        ...pgErrorFields(error),
       });
       return 0;
     }
