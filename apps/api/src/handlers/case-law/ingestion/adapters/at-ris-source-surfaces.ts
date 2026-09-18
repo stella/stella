@@ -55,17 +55,11 @@ export const atRisSourceSurfaces = (
 ): SourceSurfaceCensus => ({
   surfaces: {
     listing: storedSourceSurface("listing"),
-    "headnote-listing": backlogSurface(
-      adapter,
-      "the headnotes this publisher indexes are a population of their own, listed by a second query per slice that the crawl does not make",
-    ),
+    "headnote-listing": storedSourceSurface("headnote-listing"),
     history: excludedSourceSurface(
       "a change and deletion feed: a way to spend fewer requests, not a statement of any field",
     ),
-    "document-xml": backlogSurface(
-      adapter,
-      "the crawl builds the document address at an origin the listing no longer states, so the part is absent from every row it writes",
-    ),
+    "document-xml": storedSourceSurface("document-xml"),
     "document-html": excludedSourceSurface(
       "a transform of the same document payload the XML surface carries",
     ),
@@ -77,7 +71,7 @@ export const atRisSourceSurfaces = (
     ),
     attachments: backlogSurface(
       adapter,
-      "the images a document embeds are addressed by publisher-chosen names, their presence changes the shape the listing states, and their bytes need an object part rather than a text one",
+      "binary part; envelope object references not yet available",
     ),
     "metadata-card": excludedSourceSurface(
       "the same fields the listing states, on a host that answers an automated client with a challenge",

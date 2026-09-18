@@ -103,7 +103,7 @@ const xmlFixture = async (): Promise<string> =>
   ).text();
 
 const documentUrl = (application: string, id: string, extension: string) =>
-  `https://www.ris.bka.gv.at/Dokumente/${application}/${id}/${id}.${extension}`;
+  `https://ogd.ris.bka.gv.at/Dokumente/${application}/${id}/${id}.${extension}`;
 
 const listingResponse = ({
   application,
@@ -164,6 +164,16 @@ const listingResponse = ({
     },
   });
 
+const emptyHeadnoteListing = (application: string): Response =>
+  Response.json({
+    OgdSearchResult: {
+      OgdDocumentResults: {
+        Hits: { "@pageNumber": "1", "@pageSize": "100", "#text": "0" },
+      },
+    },
+    Applikation: application,
+  });
+
 describe("Austrian official RIS court sources", () => {
   it("uses each publisher application, identity, metadata branch, and path", async () => {
     const xml = await xmlFixture();
@@ -192,6 +202,16 @@ describe("Austrian official RIS court sources", () => {
         now: () => new Date("2026-02-01T00:00:00Z"),
         request: async (url) => {
           urls.push(url);
+          // Every decision asks for the headnotes indexed under it; these
+          // fixtures are about the application, identity and document path,
+          // so the answer is the one a decision without headnotes gets.
+          if (
+            new URL(url).searchParams.get(
+              "Dokumenttyp.SucheInRechtssaetzen",
+            ) === "true"
+          ) {
+            return emptyHeadnoteListing(source.application);
+          }
           const response = responses.shift();
           if (response === undefined) {
             throw new Error(`Unexpected RIS request: ${url}`);
@@ -211,7 +231,9 @@ describe("Austrian official RIS court sources", () => {
       expect(new URL(urls.at(0) ?? "").searchParams.get("Applikation")).toBe(
         source.application,
       );
-      expect(urls.at(1)).toBe(documentUrl(source.application, id, "xml"));
+      expect(
+        urls.filter((url) => new URL(url).pathname.startsWith("/Dokumente/")),
+      ).toEqual([documentUrl(source.application, id, "xml")]);
     }
   });
 

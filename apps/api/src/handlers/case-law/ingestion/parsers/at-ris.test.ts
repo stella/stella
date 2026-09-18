@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { describe, expect, it } from "bun:test";
 
 import { parseRisDecisionXml } from "./at-ris";
@@ -20,7 +21,7 @@ describe("Austrian RIS XML parser", () => {
       sourceUrl:
         "https://www.ris.bka.gv.at/Dokument.wxe?Abfrage=Justiz&Dokumentnummer=JJT_19250416_OGH0002_0030OB00270_2500000_000",
       xml,
-    });
+    }).unwrap();
 
     expect(parsed.validationIssues).toEqual([]);
     expect(parsed.documentAst.source.documentId).toBe(
@@ -45,33 +46,41 @@ describe("Austrian RIS XML parser", () => {
   });
 
   it("rejects a payload without publisher document content", () => {
-    expect(() =>
-      parseRisDecisionXml({
-        sourceDocumentId: "JJT_20260115_OGH0002_0010OB00001_26A0000_000",
-        caseNumber: "1 Ob 1/26a",
-        ecli: undefined,
-        court: "OGH",
-        decisionDate: "2026-01-15",
-        decisionType: "beschluss",
-        sourceUrl: undefined,
-        xml: "<risdok />",
-      }),
-    ).toThrow("RIS XML has no nutzdaten element");
+    const parsed = parseRisDecisionXml({
+      sourceDocumentId: "JJT_20260115_OGH0002_0010OB00001_26A0000_000",
+      caseNumber: "1 Ob 1/26a",
+      ecli: undefined,
+      court: "OGH",
+      decisionDate: "2026-01-15",
+      decisionType: "beschluss",
+      sourceUrl: undefined,
+      xml: "<risdok />",
+    });
+
+    expect(Result.isError(parsed)).toBe(true);
+    if (Result.isError(parsed)) {
+      expect(parsed.error.message).toBe("RIS XML has no nutzdaten element");
+    }
   });
 
   it("rejects an empty publisher document instead of storing a hollow AST", () => {
-    expect(() =>
-      parseRisDecisionXml({
-        sourceDocumentId: "JJT_20260115_OGH0002_0010OB00001_26A0000_000",
-        caseNumber: "1 Ob 1/26a",
-        ecli: undefined,
-        court: "OGH",
-        decisionDate: "2026-01-15",
-        decisionType: "beschluss",
-        sourceUrl: undefined,
-        xml: "<risdok><nutzdaten><abschnitt /></nutzdaten></risdok>",
-      }),
-    ).toThrow("RIS XML nutzdaten element has no decision text");
+    const parsed = parseRisDecisionXml({
+      sourceDocumentId: "JJT_20260115_OGH0002_0010OB00001_26A0000_000",
+      caseNumber: "1 Ob 1/26a",
+      ecli: undefined,
+      court: "OGH",
+      decisionDate: "2026-01-15",
+      decisionType: "beschluss",
+      sourceUrl: undefined,
+      xml: "<risdok><nutzdaten><abschnitt /></nutzdaten></risdok>",
+    });
+
+    expect(Result.isError(parsed)).toBe(true);
+    if (Result.isError(parsed)) {
+      expect(parsed.error.message).toBe(
+        "RIS XML nutzdaten element has no decision text",
+      );
+    }
   });
 
   it("retains text from an unknown publisher element", async () => {
@@ -89,7 +98,7 @@ describe("Austrian RIS XML parser", () => {
       decisionType: undefined,
       sourceUrl: undefined,
       xml,
-    });
+    }).unwrap();
 
     expect(parsed.fulltext).toContain("Unbekannter strukturierter Inhalt");
     expect(parsed.validationIssues).toEqual([]);

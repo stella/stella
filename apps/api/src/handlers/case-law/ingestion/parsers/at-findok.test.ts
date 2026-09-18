@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { describe, expect, it } from "bun:test";
 
 import { parseFindokDecisionXml } from "@/api/handlers/case-law/ingestion/parsers/at-findok";
@@ -17,7 +18,7 @@ describe("Austrian Findok XML parser", () => {
       sourceDocumentId: "b68202a0-55e4-4dea-9e93-971f0b71ae32",
       sourceUrl: "https://findok.bmf.gv.at/findok/iwg/152/152257/152257.1.pdf",
       xml: await fixture(),
-    });
+    }).unwrap();
 
     expect(parsed.ecli).toBe("ECLI:AT:BFG:2026:RV.7500368.2026");
     expect(parsed.keywords).toEqual(["Verwaltungsstrafsachen Wien"]);
@@ -33,16 +34,19 @@ describe("Austrian Findok XML parser", () => {
   });
 
   it("rejects an envelope without decision XHTML", () => {
-    expect(() =>
-      parseFindokDecisionXml({
-        caseNumber: "RV/7500368/2026",
-        court: "BFG",
-        decisionDate: "2026-07-14",
-        decisionType: "erkenntnis",
-        sourceDocumentId: "b68202a0-55e4-4dea-9e93-971f0b71ae32",
-        sourceUrl: "https://findok.bmf.gv.at/",
-        xml: "<Segmente />",
-      }),
-    ).toThrow("no embedded decision XHTML");
+    const parsed = parseFindokDecisionXml({
+      caseNumber: "RV/7500368/2026",
+      court: "BFG",
+      decisionDate: "2026-07-14",
+      decisionType: "erkenntnis",
+      sourceDocumentId: "b68202a0-55e4-4dea-9e93-971f0b71ae32",
+      sourceUrl: "https://findok.bmf.gv.at/",
+      xml: "<Segmente />",
+    });
+
+    expect(Result.isError(parsed)).toBe(true);
+    if (Result.isError(parsed)) {
+      expect(parsed.error.message).toContain("no embedded decision XHTML");
+    }
   });
 });

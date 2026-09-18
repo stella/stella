@@ -20,11 +20,39 @@
 
 import { panic } from "better-result";
 
+import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import {
   decodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
+import { AT_ASYLGH_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-asylgh";
+import { AT_BKS_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-bks";
+import { AT_BVWG_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-bvwg";
+import {
+  assembleAtRisDecision,
+  AT_COURTS_SOURCE,
+} from "@/api/handlers/case-law/ingestion/adapters/at-courts";
+import type { AtRisSourceDefinition } from "@/api/handlers/case-law/ingestion/adapters/at-courts";
+import {
+  assembleAtFindokDecision,
+  parseFindokManifest,
+} from "@/api/handlers/case-law/ingestion/adapters/at-findok";
+import { AT_LVWG_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-lvwg";
+import {
+  AT_RIS_APPLICATIONS,
+  atRisBranchElement,
+} from "@/api/handlers/case-law/ingestion/adapters/at-ris-fields";
+import type {
+  AtRisBranchField,
+  AtRisDocumentField,
+} from "@/api/handlers/case-law/ingestion/adapters/at-ris-fields";
+import { AT_UBAS_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-ubas";
+import { AT_UMSE_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-umse";
+import { AT_UVS_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-uvs";
+import { AT_VERG_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-verg";
+import { AT_VFGH_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-vfgh";
+import { AT_VWGH_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-vwgh";
 import { buildCzNsDecision } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
 import { buildCzNssDecision } from "@/api/handlers/case-law/ingestion/adapters/cz-nss";
 import {
@@ -985,5 +1013,451 @@ export const skUsFixture = (): EnrolledAdapterFixture => ({
       ...decision,
       sourceRaw: withSourceRawObjects(decision.sourceRaw ?? "", objects),
     };
+  },
+});
+
+/** The tribunal adapters this helper states a decision for. */
+export type AtRisFixtureAdapter = keyof typeof AT_RIS_SOURCES;
+
+/**
+ * The source definition each tribunal's adapter is built from, so a fixture
+ * is driven through the same code its crawl runs.
+ */
+export const AT_RIS_SOURCES = {
+  [ADAPTER_KEYS.AT_COURTS]: AT_COURTS_SOURCE,
+  [ADAPTER_KEYS.AT_VFGH]: AT_VFGH_SOURCE,
+  [ADAPTER_KEYS.AT_VWGH]: AT_VWGH_SOURCE,
+  [ADAPTER_KEYS.AT_BVWG]: AT_BVWG_SOURCE,
+  [ADAPTER_KEYS.AT_LVWG]: AT_LVWG_SOURCE,
+  [ADAPTER_KEYS.AT_ASYLGH]: AT_ASYLGH_SOURCE,
+  [ADAPTER_KEYS.AT_UBAS]: AT_UBAS_SOURCE,
+  [ADAPTER_KEYS.AT_UVS]: AT_UVS_SOURCE,
+  [ADAPTER_KEYS.AT_VERG]: AT_VERG_SOURCE,
+  [ADAPTER_KEYS.AT_UMSE]: AT_UMSE_SOURCE,
+  [ADAPTER_KEYS.AT_BKS]: AT_BKS_SOURCE,
+} as const satisfies Record<string, AtRisSourceDefinition>;
+
+// ── Austrian RIS fixtures ────────────────────────────────
+
+/**
+ * One decision per Austrian tribunal, stated the way its own application
+ * states one.
+ *
+ * Built from the application's declared profile rather than written out
+ * eleven times: the listing item carries a value at every field path the
+ * profile names, and the document prints a section for every content type it
+ * names, so a field added to an application's vocabulary without a value here
+ * fails this suite by name instead of going unexercised.
+ */
+const AT_RIS_DOCUMENT_ID = {
+  "at-courts": "JJT_20260115_OGH0002_0010OB00001_26A0000_000",
+  "at-vfgh": "JFT_20260115_26V00001_00",
+  "at-vwgh": "JWT_2026010012_20260115L00",
+  "at-bvwg": "BVWGT_20260115_W221_2345678_1_00",
+  "at-lvwg": "LVWGT_WI_20260115_VGW_001_001_2026_00",
+  "at-asylgh": "ASYLGHT_20131211_E1_436234_1_2013_00",
+  "at-ubas": "UBAST_20080627_319_718_1_III_12_08_00",
+  "at-uvs": "JUT_WI_20131217_06FM463_2013_00",
+  "at-verg": "VERGT_20131219_N_0117_BVA_11_2013_00",
+  "at-umse": "UMSET_20131202_US_4B_2013_8_00",
+  "at-bks": "BKST_20131211_611_997_0001_BKS_2013_00",
+} as const satisfies Record<AtRisFixtureAdapter, string>;
+
+const AT_RIS_COURT = "Oberster Gerichtshof";
+const AT_RIS_CASE_NUMBER = "1 Ob 1/26a";
+const AT_RIS_SECOND_CASE_NUMBER = "1 Ob 2/26y";
+const AT_RIS_DECISION_DATE = "2026-01-15";
+const AT_RIS_HEADNOTE_DOCUMENT_ID =
+  "JJR_20260115_OGH0002_0010OB00001_26A0000_001";
+
+/** The values the fixture states for the fields any application may carry. */
+const AT_RIS_BRANCH_VALUES: Readonly<Record<AtRisBranchField, unknown>> = {
+  Anfechtung: "Anfechtung beim Verwaltungsgerichtshof",
+  Anmerkung: "Hinweis auf eine spätere Änderung der Rechtslage",
+  Beachte: "Beachte auch die Entscheidung desselben Tages",
+  Bezug: { item: ["W221 2345678-1"] },
+  Bundesland: "Wien",
+  DokumentnummerDesVwGH: "JWT_2026010012_20260115L00",
+  DokumentnummerTyp: "L",
+  EntscheidendeBehoerde: AT_RIS_COURT,
+  Entscheidungsart: "Erkenntnis",
+  Entscheidungstexte: {
+    item: {
+      Geschaeftszahl: AT_RIS_CASE_NUMBER,
+      Dokumenttyp: "Text",
+      Entscheidungsdatum: AT_RIS_DECISION_DATE,
+      Dokumentnummer: "JJT_20260115_OGH0002_0010OB00001_26A0000_000",
+    },
+  },
+  Fachgebiete: { item: ["Arbeitsrecht"] },
+  Fundstelle: "ÖJZ 2026/12",
+  Gericht: AT_RIS_COURT,
+  Gerichtsentscheidungen: { item: ["VwGH 2020/01/0001"] },
+  HinweisAufStammrechtssatz: "GRS wie Ra 2018/14/0440 B 21. Jänner 2020 RS 1",
+  Indizes: { item: ["10/01 Bundes-Verfassungsgesetz (B-VG)"] },
+  Kurzbezeichnung: "Kraftwerk Riefensberg",
+  Kurzinformation: "Kurzinformation zum Verfahrensgegenstand",
+  Leitsatz: "Zur Auslegung des Schadenersatzrechts bei verspäteter Leistung.",
+  Rechtsgebiete: { item: ["Zivilrecht"] },
+  Rechtssatzkette:
+    "https://ogd.ris.bka.gv.at/VwghRechtssatzkette.wxe?Abfrage=Vwgh",
+  Rechtssatznummer: "1",
+  Rechtssatznummern: { item: ["RS0135001"] },
+  Sammlungsnummer: "VfSlg 20.000",
+  Stammrechtssatznummer: "JWR_2018140440_20200121L01",
+  Textnummern: { item: ["JJT_20260115_OGH0002_0010OB00001_26A0000_000"] },
+  Veroeffentlichungen: "ZVB 2026/5",
+  Verfasser: "Kammer III",
+  Vorverfahren: "N/0001-BVA/01/2026",
+};
+
+/** The heading this publisher prints over each of its document sections. */
+const AT_RIS_DOCUMENT_HEADING: Readonly<Record<AtRisDocumentField, string>> = {
+  begruendung: "Begründung",
+  betreff: "Betreff",
+  ecli: "European Case Law Identifier",
+  entscheidungsdatum: "Entscheidungsdatum",
+  entscheidungstexte: "Entscheidungstexte",
+  gericht: "Gericht",
+  gz: "Geschäftszahl",
+  hinweisstrs: "Hinweis auf Stammrechtssatz",
+  kopf: "Kopf",
+  kurzbezeichnung: "Kurzbezeichnung",
+  leitsatz: "Leitsatz",
+  norm: "Norm",
+  organ: "Entscheidende Behörde",
+  rechtlichebeurteilung: "Rechtliche Beurteilung",
+  rechtssatz: "Rechtssatz",
+  rechtssatznummer: "Rechtssatznummer",
+  spruch: "Spruch",
+  strs: "Stammrechtssatz",
+  text: "Text",
+};
+
+const AT_RIS_DOCUMENT_TEXT: Readonly<Record<AtRisDocumentField, string>> = {
+  begruendung:
+    "Die Revision ist zulässig, weil die Rechtsprechung zur Verjährung uneinheitlich ist.",
+  betreff: "Verjährung von Schadenersatzansprüchen; Beginn der Frist.",
+  ecli: "ECLI:AT:OGH0002:2026:0010OB00001.26A.0115.000",
+  entscheidungsdatum: AT_RIS_DECISION_DATE,
+  entscheidungstexte: "1 Ob 1/26a; 1 Ob 2/26y",
+  gericht: AT_RIS_COURT,
+  gz: AT_RIS_CASE_NUMBER,
+  hinweisstrs: "GRS wie Ra 2018/14/0440 B 21. Jänner 2020 RS 1",
+  kopf: "Der Oberste Gerichtshof hat als Revisionsgericht durch den Senatspräsidenten in der Rechtssache der klagenden Partei entschieden.",
+  kurzbezeichnung: "Kraftwerk Riefensberg",
+  leitsatz:
+    "Zur Auslegung des Schadenersatzrechts bei verspäteter Leistung; die Frist beginnt mit Kenntnis des Schadens.",
+  norm: "ABGB §1295",
+  organ: AT_RIS_COURT,
+  rechtlichebeurteilung:
+    "Die Revision ist aus den vom Berufungsgericht genannten Gründen nicht zulässig.",
+  rechtssatz:
+    "Der Beginn der Verjährungsfrist setzt die Kenntnis von Schaden und Schädiger voraus.",
+  rechtssatznummer: "RS0135001",
+  spruch: "Der Revision wird nicht Folge gegeben.",
+  strs: "Der Beginn der Verjährungsfrist setzt die Kenntnis von Schaden und Schädiger voraus.",
+  text: "Das Erstgericht wies das Klagebegehren ab. Das Berufungsgericht bestätigte diese Entscheidung.",
+};
+
+/** Write a value at the element path the publisher's schema spells. */
+const atPath = (
+  target: Record<string, unknown>,
+  path: readonly string[],
+  value: unknown,
+): void => {
+  let current = target;
+  for (const key of path.slice(0, -1)) {
+    const next = current[key];
+    const group = isRecord(next) ? next : {};
+    current[key] = group;
+    current = group;
+  }
+  const leaf = path.at(-1);
+  if (leaf === undefined) {
+    panic("a RIS fixture field has no element name");
+  }
+  current[leaf] = value;
+};
+
+const atRisDocumentUrl = (
+  application: string,
+  documentId: string,
+  extension: string,
+): string =>
+  `https://ogd.ris.bka.gv.at/Dokumente/${application}/${documentId}/${documentId}.${extension}`;
+
+/** The listing item, carrying a value at every field path the profile names. */
+const atRisListingItem = (
+  adapter: AtRisFixtureAdapter,
+): Record<string, unknown> => {
+  const { application, branch } = AT_RIS_APPLICATIONS[adapter];
+  const documentId = AT_RIS_DOCUMENT_ID[adapter];
+  const metadata: Record<string, unknown> = {};
+  atPath(metadata, ["Technisch", "ID"], documentId);
+  atPath(metadata, ["Technisch", "Applikation"], application);
+  atPath(metadata, ["Technisch", "Organ"], AT_RIS_COURT);
+  atPath(metadata, ["Technisch", "Einbringer"], "LG Leoben");
+  atPath(metadata, ["Technisch", "ImportTimestamp"], { "@xsi:nil": "true" });
+  atPath(metadata, ["Allgemein", "Veroeffentlicht"], "2026-01-20");
+  atPath(metadata, ["Allgemein", "Geaendert"], "2026-01-21");
+  atPath(
+    metadata,
+    ["Allgemein", "DokumentUrl"],
+    `https://ogd.ris.bka.gv.at/Dokument.wxe?Abfrage=${application}&Dokumentnummer=${documentId}`,
+  );
+  atPath(metadata, ["Judikatur", "Dokumenttyp"], "Text");
+  atPath(metadata, ["Judikatur", "Geschaeftszahl"], {
+    item: [AT_RIS_CASE_NUMBER, AT_RIS_SECOND_CASE_NUMBER],
+  });
+  atPath(metadata, ["Judikatur", "Normen"], {
+    item: ["ABGB §1295", "ZPO §502"],
+  });
+  atPath(metadata, ["Judikatur", "Entscheidungsdatum"], AT_RIS_DECISION_DATE);
+  atPath(
+    metadata,
+    ["Judikatur", "Schlagworte"],
+    "Schadenersatz, Verjährung, Vertragsrecht",
+  );
+  atPath(
+    metadata,
+    ["Judikatur", "EuropeanCaseLawIdentifier"],
+    "ECLI:AT:OGH0002:2026:0010OB00001.26A.0115.000",
+  );
+  atPath(
+    metadata,
+    ["Judikatur", "GesamteEntscheidungUrl"],
+    `https://ogd.ris.bka.gv.at/JudikaturEntscheidung.wxe?Abfrage=${application}&IncludeSelf=True`,
+  );
+  atPath(
+    metadata,
+    ["Judikatur", "EntscheidungstextUrl"],
+    `https://ogd.ris.bka.gv.at/Dokument.wxe?Abfrage=${application}&Dokumentnummer=${documentId}`,
+  );
+  atPath(
+    metadata,
+    ["Judikatur", "RechtssaetzeUrl"],
+    `https://ogd.ris.bka.gv.at/JudikaturEntscheidung.wxe?Abfrage=${application}&IncludeSelf=False`,
+  );
+  for (const field of branch) {
+    atPath(
+      metadata,
+      ["Judikatur", application, atRisBranchElement(field)],
+      AT_RIS_BRANCH_VALUES[field],
+    );
+  }
+  return {
+    Data: {
+      Metadaten: metadata,
+      Dokumentliste: {
+        ContentReference: [
+          {
+            ContentType: "MainDocument",
+            Name: "Hauptdokument",
+            Urls: {
+              ContentUrl: ["Xml", "Html", "Rtf", "Pdf"].map((dataType) => ({
+                DataType: dataType,
+                Url: atRisDocumentUrl(
+                  application,
+                  documentId,
+                  dataType.toLowerCase(),
+                ),
+              })),
+            },
+          },
+          {
+            // A document that embeds an image is listed as several
+            // references, which is the shape that made every such decision
+            // listing-only while the reader expected one.
+            ContentType: "EmbeddedAttachment",
+            Name: "Anlage 1",
+            Urls: {
+              ContentUrl: {
+                DataType: "Png",
+                Url: atRisDocumentUrl(application, documentId, "1.png"),
+              },
+            },
+          },
+        ],
+      },
+    },
+  };
+};
+
+/** The document, printing a section for every content type the profile names. */
+const atRisDocumentXml = (adapter: AtRisFixtureAdapter): string => {
+  const sections = AT_RIS_APPLICATIONS[adapter].document
+    .map(
+      (field) =>
+        `<ueberschrift typ="titel">${AT_RIS_DOCUMENT_HEADING[field]}</ueberschrift>` +
+        `<absatz ct="${field}">${AT_RIS_DOCUMENT_TEXT[field]}</absatz>`,
+    )
+    .join("");
+  return (
+    `<?xml version="1.0" encoding="UTF-8"?><risdok><metadaten/><nutzdaten>` +
+    `<kzinhalt><absatz>www.ris.bka.gv.at</absatz></kzinhalt>` +
+    `${sections}</nutzdaten></risdok>`
+  );
+};
+
+/**
+ * The headnote answer for this decision, in the shape the search endpoint
+ * returns one: a document of its own that names the decision it belongs to.
+ */
+const atRisHeadnoteListing = (adapter: AtRisFixtureAdapter): string => {
+  const { application } = AT_RIS_APPLICATIONS[adapter];
+  const documentId = AT_RIS_DOCUMENT_ID[adapter];
+  return JSON.stringify({
+    OgdSearchResult: {
+      OgdDocumentResults: {
+        Hits: { "@pageNumber": "1", "@pageSize": "100", "#text": "1" },
+        OgdDocumentReference: {
+          Data: {
+            Metadaten: {
+              Technisch: {
+                ID: AT_RIS_HEADNOTE_DOCUMENT_ID,
+                Applikation: application,
+                Organ: AT_RIS_COURT,
+              },
+              Allgemein: {
+                DokumentUrl: `https://ogd.ris.bka.gv.at/Dokument.wxe?Abfrage=${application}&Dokumentnummer=${AT_RIS_HEADNOTE_DOCUMENT_ID}`,
+              },
+              Judikatur: {
+                Dokumenttyp: "Rechtssatz",
+                Geschaeftszahl: { item: AT_RIS_CASE_NUMBER },
+                Entscheidungsdatum: AT_RIS_DECISION_DATE,
+                EuropeanCaseLawIdentifier:
+                  "ECLI:AT:OGH0002:2026:0010OB00001.26A.0115.001",
+                EntscheidungstextUrl: `https://ogd.ris.bka.gv.at/Dokument.wxe?Abfrage=${application}&Dokumentnummer=${documentId}`,
+              },
+            },
+            Dokumentliste: {
+              ContentReference: {
+                ContentType: "MainDocument",
+                Urls: {
+                  ContentUrl: {
+                    DataType: "Xml",
+                    Url: atRisDocumentUrl(
+                      application,
+                      AT_RIS_HEADNOTE_DOCUMENT_ID,
+                      "xml",
+                    ),
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+};
+
+export const atRisFixture = (
+  adapter: AtRisFixtureAdapter,
+): EnrolledAdapterFixture => ({
+  buildDecision: async () =>
+    await Promise.resolve(
+      assembleAtRisDecision(
+        AT_RIS_SOURCES[adapter],
+        atRisListingItem(adapter),
+        {
+          documentXml: atRisDocumentXml(adapter),
+          headnoteListing: atRisHeadnoteListing(adapter),
+        },
+      ),
+    ),
+});
+
+// ── Findok fixture ───────────────────────────────────────
+
+const AT_FINDOK_STAMM_NR = 152_649;
+const AT_FINDOK_DOCUMENT_ID = "ffa6f670-dc36-42cc-ae37-52683327a048";
+const AT_FINDOK_CASE_NUMBER = "RV/2100968/2026";
+
+/** The manifest, as the ministry serves one, holding this decision's row. */
+const AT_FINDOK_MANIFEST = JSON.stringify({
+  generierungsdatum: "18.09.2026 06:17",
+  data: [
+    {
+      stammNr: AT_FINDOK_STAMM_NR,
+      pathZip: `152/${AT_FINDOK_STAMM_NR}/${AT_FINDOK_STAMM_NR}.zip`,
+      pathPdf: `152/${AT_FINDOK_STAMM_NR}/${AT_FINDOK_STAMM_NR}.1.pdf`,
+      dokumenttyp: "Bescheidbeschwerde - Einzel - Erkenntnis",
+      behoerde: "BFG",
+      appdat: "10.09.2026",
+      gz: AT_FINDOK_CASE_NUMBER,
+      titel:
+        "Energiekrisenbeitrag Strom: keine verfassungsrechtlichen Bedenken",
+      gueltigAb: "01.01.2026",
+      inFindokSeitDate: "2026-09-17T14:15:26.3717",
+      inFindokSeit: "17.09.2026 02:15:26",
+      gueltig: true,
+      dokumentId: AT_FINDOK_DOCUMENT_ID,
+    },
+  ],
+});
+
+/** The envelope both archive entries share. */
+const findokEnvelope = (): string =>
+  `<Grundk><appdat>10.09.2026</appdat><appdatbis>31.12.7999</appdatbis>` +
+  `<av_veroeffentlicht>1</av_veroeffentlicht><behoerde>BFG</behoerde>` +
+  `<betreff>Energiekrisenbeitrag Strom: keine verfassungsrechtlichen Bedenken</betreff>` +
+  `<doktyptxt>Bescheidbeschwerde - Einzel - Erkenntnis</doktyptxt>` +
+  `<ecli>ECLI:AT:BFG:2026:RV.2100968.2026</ecli>` +
+  `<erstfass>${AT_FINDOK_CASE_NUMBER}</erstfass><fsgnr>[1]</fsgnr>` +
+  `<gid>d2c8016a-7c61-4607-9b46-17c3b6a732be_1_01.01.1970</gid>` +
+  `<gz>${AT_FINDOK_CASE_NUMBER}</gz>` +
+  `<lastchangedat>17.09.2026 02:15:26</lastchangedat>` +
+  `<matbez_erf_sub><matbez_erf>Steuer</matbez_erf></matbez_erf_sub>` +
+  `<matnr_erf_sub><matnr_erf>10</matnr_erf></matnr_erf_sub>` +
+  `<ngesamt_erf_sub><ngesamt_erf>§ 1 Abs. 1 EKBSG</ngesamt_erf></ngesamt_erf_sub>` +
+  `<stammnr>${AT_FINDOK_STAMM_NR}</stammnr>` +
+  `<uebersex_net_sub><uebersex_net>Entscheidungsgründe</uebersex_net></uebersex_net_sub>` +
+  `<vadat>17.09.2026 02:15:26</vadat></Grundk>`;
+
+const findokSegmentBookkeeping = (): string =>
+  `<dok_fassungsnr>1</dok_fassungsnr><dokformat>text/xhtml</dokformat>` +
+  `<fsgnr>[1]</fsgnr><gid>dce662f0-f271-4538-8adc-9bcbc0cd9a2a_1</gid>` +
+  `<id_multifassung>dce662f0-f271-4538-8adc-9bcbc0cd9a2a</id_multifassung>` +
+  `<inkraftvon>01.01.1970</inkraftvon>` +
+  `<lastchangedat>17.09.2026 02:15:26</lastchangedat>` +
+  `<neuzdat>17.09.2026 02:15:26</neuzdat><segbez>Textbeginn</segbez>` +
+  `<segnr2>1</segnr2>`;
+
+const AT_FINDOK_DECISION_XHTML =
+  "&lt;html&gt;&lt;body&gt;&lt;h1&gt;IM NAMEN DER REPUBLIK&lt;/h1&gt;" +
+  "&lt;p&gt;Das Bundesfinanzgericht hat über die Bescheidbeschwerde erkannt.&lt;/p&gt;" +
+  "&lt;p&gt;Die Beschwerde wird als unbegründet abgewiesen.&lt;/p&gt;" +
+  "&lt;/body&gt;&lt;/html&gt;";
+
+const AT_FINDOK_DECISION_XML =
+  `<?xml version="1.0" encoding="UTF-8"?><Segmente><Segment>${findokEnvelope()}` +
+  `<Segk>${findokSegmentBookkeeping()}<txt>${AT_FINDOK_DECISION_XHTML}</txt>` +
+  `</Segk></Segment></Segmente>`;
+
+const AT_FINDOK_HEADNOTE_XML =
+  `<?xml version="1.0" encoding="UTF-8"?><Segmente><Segment>${findokEnvelope()}` +
+  `<Segk>${findokSegmentBookkeeping()}<rsnr>1</rsnr>` +
+  `<ngesamt_sub><ngesamt>§ 3 Abs. 1 EKBSG</ngesamt></ngesamt_sub>` +
+  `<txtascii>Der Energiekrisenbeitrag Strom begegnet keinen verfassungsrechtlichen Bedenken.</txtascii>` +
+  `</Segk></Segment></Segmente>`;
+
+export const atFindokFixture = (): EnrolledAdapterFixture => ({
+  buildDecision: async () => {
+    const manifest = parseFindokManifest("bfg", AT_FINDOK_MANIFEST);
+    const item = manifest.items.at(0);
+    if (item === undefined) {
+      panic("the at-findok fixture manifest states no row");
+    }
+    return await Promise.resolve(
+      assembleAtFindokDecision(
+        { collection: "bfg", item },
+        {
+          documentXml: AT_FINDOK_DECISION_XML,
+          headnoteXml: AT_FINDOK_HEADNOTE_XML,
+        },
+      ),
+    );
   },
 });

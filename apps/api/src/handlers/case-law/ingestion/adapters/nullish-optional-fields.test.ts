@@ -139,10 +139,11 @@ describe("case-law adapter nullish optionals", () => {
     expect(result.isOk()).toBe(true);
     const decision = result.unwrap().decisions[0];
     expect(decision?.caseNumber).toBe("1 Ob 2/24d");
-    expect(decision?.metadata).toMatchObject({
-      statutes: [],
-      legalAreas: [],
-    });
+    expect(decision?.metadata).toMatchObject({ statutes: [] });
+    // A branch element the publisher serves empty states nothing, so the row
+    // carries no key for it rather than a list with nothing in it.
+    expect(decision?.metadata["legalAreas"]).toBeUndefined();
+    expect(decision?.metadata["adoptingDecisions"]).toBeUndefined();
   });
 
   test("CZ NS accepts a null viewentry list as an empty page", async () => {

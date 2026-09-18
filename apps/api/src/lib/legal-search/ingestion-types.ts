@@ -391,15 +391,19 @@ export type LegacyRawShape =
     };
 
 /**
- * Austria's eleven tribunals and the ministry's document service all store the
- * two responses they read under the names an envelope would give them, so one
- * shape describes twelve adapters and each still deletes its own line.
+ * Austria's eleven tribunals and the ministry's document service each stored
+ * the two responses they read in one object of their own, so one shape
+ * describes twelve adapters and each still deletes its own line.
+ *
+ * The keys are what those rows hold; the values are the parts the envelope
+ * gives the same two responses today, which is what lets a reader of an old
+ * row ask for `document-xml` and be answered.
  */
 const AT_LISTING_AND_DOCUMENT_JSON = [
   {
     shape: "wrapper-json",
     contentTypes: ["application/json"],
-    keys: { listing: "listing", documentXml: "documentXml" },
+    keys: { listing: "listing", documentXml: "document-xml" },
   },
 ] as const satisfies readonly LegacyRawShape[];
 
@@ -919,7 +923,6 @@ export const LEGACY_BACKLOG_ADAPTERS = [
   ADAPTER_KEYS.AT_VERG,
   ADAPTER_KEYS.AT_UMSE,
   ADAPTER_KEYS.AT_BKS,
-  ADAPTER_KEYS.AT_FINDOK,
   ADAPTER_KEYS.EU_ECJ,
 ] as const satisfies readonly AdapterKey[];
 
@@ -1039,18 +1042,6 @@ type DeclaredSourceFieldInventory = {
  */
 const LEGACY_UNINVENTORIED_ADAPTERS = [
   ADAPTER_KEYS.PL_COURTS,
-  ADAPTER_KEYS.AT_COURTS,
-  ADAPTER_KEYS.AT_VFGH,
-  ADAPTER_KEYS.AT_VWGH,
-  ADAPTER_KEYS.AT_BVWG,
-  ADAPTER_KEYS.AT_LVWG,
-  ADAPTER_KEYS.AT_ASYLGH,
-  ADAPTER_KEYS.AT_UBAS,
-  ADAPTER_KEYS.AT_UVS,
-  ADAPTER_KEYS.AT_VERG,
-  ADAPTER_KEYS.AT_UMSE,
-  ADAPTER_KEYS.AT_BKS,
-  ADAPTER_KEYS.AT_FINDOK,
   ADAPTER_KEYS.EU_ECJ,
 ] as const satisfies readonly AdapterKey[];
 

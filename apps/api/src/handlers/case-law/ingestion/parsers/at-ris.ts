@@ -1,4 +1,5 @@
 /** Parse the publisher-structured XML served by Austria's RIS. */
+import { Result } from "better-result";
 import * as cheerio from "cheerio";
 import { type AnyNode, type Element, isTag, isText } from "domhandler";
 
@@ -24,9 +25,20 @@ export type ParseRisDecisionInput = {
   xml: string;
 };
 
+/**
+ * The text of each section the document prints, under the content type the
+ * publisher labels it with.
+ *
+ * Sections of one content type are joined in printed order: a court writes
+ * its reasons as many paragraphs, and a reader of `text` wants the passage,
+ * not its first paragraph.
+ */
+export type RisDocumentSections = Readonly<Record<string, string>>;
+
 export type ParseRisDecisionOutput = {
   documentAst: DocumentAst;
   fulltext: string;
+  sections: RisDocumentSections;
   validationIssues: string[];
 };
 
@@ -48,6 +60,7 @@ const paragraphRole = (
   switch (contentType) {
     case "entscheidungsdatum":
     case "gericht":
+    case "organ":
     case "kopf": {
       return "intro";
     }
@@ -59,6 +72,29 @@ const paragraphRole = (
     }
     case "spruch": {
       return "holding";
+    }
+    case "begruendung":
+    case "rechtlichebeurteilung":
+    case "text": {
+      return "argumentation";
+    }
+    case "leitsatz": {
+      return "syllabus";
+    }
+    case "betreff": {
+      return "summary";
+    }
+    case "rechtssatz":
+    case "strs": {
+      return "headnotes";
+    }
+    case "ecli":
+    case "entscheidungstexte":
+    case "hinweisstrs":
+    case "kurzbezeichnung":
+    case "norm":
+    case "rechtssatznummer": {
+      return "apparatus";
     }
     case "unterschrift": {
       return "signature";
@@ -72,30 +108,71 @@ const paragraphRole = (
   }
 };
 
+/**
+ * Every content type this document labels a section with.
+ *
+ * The inventory reads the stored XML through this, so a section type the
+ * publisher starts printing arrives as a named field rather than as a
+ * paragraph nothing accounted for. Page furniture is left out for the reason
+ * the parser drops it: the header and footer repeat the host and the page
+ * number, and neither is a section of the decision. A payload with no
+ * decision element in it labels nothing, which is what the caller is told:
+ * the parser below is where an unreadable document is an error.
+ */
+export const listRisDocumentContentTypes = (xml: string): readonly string[] => {
+  const $ = cheerio.load(xml, { xml: true });
+  const content = $("nutzdaten").first();
+  const contentTypes = new Set<string>();
+  content.find("absatz[ct]").each((_, element) => {
+    if (content.find("kzinhalt, fzinhalt").find(element).length > 0) {
+      return;
+    }
+    const contentType = element.attribs["ct"];
+    if (contentType !== undefined && contentType !== "") {
+      contentTypes.add(contentType);
+    }
+  });
+  return [...contentTypes];
+};
+
 export const parseRisDecisionXml = (
   input: ParseRisDecisionInput,
-): ParseRisDecisionOutput => {
+): Result<ParseRisDecisionOutput, ParseXmlError> => {
   const $ = cheerio.load(input.xml, { xml: true });
   const content = $("nutzdaten").first();
   if (content.length === 0) {
-    throw new ParseXmlError({
-      message: "RIS XML has no nutzdaten element",
-      cause: undefined,
-    });
+    return Result.err(
+      new ParseXmlError({
+        message: "RIS XML has no nutzdaten element",
+        cause: undefined,
+      }),
+    );
   }
 
   const validationContent = content.clone();
   validationContent.find("kzinhalt, fzinhalt").remove();
   const validationText = normalizedText(validationContent.text());
   if (validationText === "") {
-    throw new ParseXmlError({
-      message: "RIS XML nutzdaten element has no decision text",
-      cause: undefined,
-    });
+    return Result.err(
+      new ParseXmlError({
+        message: "RIS XML nutzdaten element has no decision text",
+        cause: undefined,
+      }),
+    );
   }
 
   const blocks: Block[] = [];
+  const sections = new Map<string, string[]>();
   let blockIndex = 0;
+
+  const appendSection = (contentType: string, text: string): void => {
+    const printed = sections.get(contentType);
+    if (printed === undefined) {
+      sections.set(contentType, [text]);
+      return;
+    }
+    printed.push(text);
+  };
 
   const appendParagraph = (
     text: string,
@@ -144,7 +221,11 @@ export const parseRisDecisionXml = (
     }
 
     if (node.tagName === "absatz") {
-      appendParagraph(text, paragraphRole($(node).attr("ct")));
+      const contentType = $(node).attr("ct");
+      if (contentType !== undefined && contentType !== "") {
+        appendSection(contentType, text);
+      }
+      appendParagraph(text, paragraphRole(contentType));
       return;
     }
 
@@ -163,10 +244,12 @@ export const parseRisDecisionXml = (
     appendNode(node);
   });
   if (blocks.length === 0) {
-    throw new ParseXmlError({
-      message: "RIS XML decision text produced no document blocks",
-      cause: undefined,
-    });
+    return Result.err(
+      new ParseXmlError({
+        message: "RIS XML decision text produced no document blocks",
+        cause: undefined,
+      }),
+    );
   }
 
   const validation = validateAndLog(
@@ -180,7 +263,7 @@ export const parseRisDecisionXml = (
     blocks,
   );
 
-  return {
+  return Result.ok({
     documentAst: {
       version: 1,
       source: {
@@ -201,6 +284,12 @@ export const parseRisDecisionXml = (
       blocks,
     },
     fulltext: blocks.map((block) => block.plainText).join("\n\n"),
+    sections: Object.fromEntries(
+      [...sections].map(([contentType, printed]) => [
+        contentType,
+        printed.join("\n\n"),
+      ]),
+    ),
     validationIssues: validation.issues.map((issue) => issue.code),
-  };
+  });
 };

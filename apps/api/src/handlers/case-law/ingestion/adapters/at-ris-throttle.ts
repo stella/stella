@@ -11,9 +11,25 @@ import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
  * rule 21 — a `sourceUrl` replayed from storage reaches this function, and
  * nothing it carries may decide where the request goes.
  */
+/**
+ * The origins this publisher serves a decision's documents from.
+ *
+ * Two, because the listing is what states which one a document is at: the
+ * open-data host answers every document today, the citizen host answered them
+ * before, and an adapter that reconstructs the address instead of following
+ * the listed one stops fetching documents the day the publisher moves them.
+ * The address the crawl uses is checked against this list and against the
+ * path the document number implies, so a listed URL still cannot send a
+ * request anywhere else.
+ */
+export const AT_RIS_DOCUMENT_ORIGINS = [
+  "https://ogd.ris.bka.gv.at",
+  "https://www.ris.bka.gv.at",
+] as const;
+
 const RIS_HOST_POLICY = {
   type: "exact-origin",
-  origins: ["https://data.bka.gv.at", "https://www.ris.bka.gv.at"],
+  origins: ["https://data.bka.gv.at", ...AT_RIS_DOCUMENT_ORIGINS],
 } as const;
 const RIS_PATH_PREFIXES = ["/ris/api/v2.6/Judikatur", "/Dokumente/"] as const;
 

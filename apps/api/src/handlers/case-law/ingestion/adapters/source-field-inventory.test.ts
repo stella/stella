@@ -45,6 +45,8 @@ import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters/adapter-r
 import baseline from "@/api/handlers/case-law/ingestion/adapters/source-field-inventory-baseline.json";
 import { storeTextField } from "@/api/lib/case-law/decision-text";
 import {
+  atFindokFixture,
+  atRisFixture,
   czNsFixture,
   czNssFixture,
   czRegionalFixture,
@@ -93,18 +95,54 @@ const ADAPTER_INVENTORY_COVERAGE = {
   [ADAPTER_KEYS.SK_US]: { disposition: "enrolled", fixture: skUsFixture },
   [ADAPTER_KEYS.PL_COURTS]: PENDING,
   [ADAPTER_KEYS.PL_SN]: { disposition: "enrolled", fixture: plSnFixture },
-  [ADAPTER_KEYS.AT_COURTS]: PENDING,
-  [ADAPTER_KEYS.AT_VFGH]: PENDING,
-  [ADAPTER_KEYS.AT_VWGH]: PENDING,
-  [ADAPTER_KEYS.AT_BVWG]: PENDING,
-  [ADAPTER_KEYS.AT_LVWG]: PENDING,
-  [ADAPTER_KEYS.AT_ASYLGH]: PENDING,
-  [ADAPTER_KEYS.AT_UBAS]: PENDING,
-  [ADAPTER_KEYS.AT_UVS]: PENDING,
-  [ADAPTER_KEYS.AT_VERG]: PENDING,
-  [ADAPTER_KEYS.AT_UMSE]: PENDING,
-  [ADAPTER_KEYS.AT_BKS]: PENDING,
-  [ADAPTER_KEYS.AT_FINDOK]: PENDING,
+  [ADAPTER_KEYS.AT_COURTS]: {
+    disposition: "enrolled",
+    fixture: () => atRisFixture(ADAPTER_KEYS.AT_COURTS),
+  },
+  [ADAPTER_KEYS.AT_VFGH]: {
+    disposition: "enrolled",
+    fixture: () => atRisFixture(ADAPTER_KEYS.AT_VFGH),
+  },
+  [ADAPTER_KEYS.AT_VWGH]: {
+    disposition: "enrolled",
+    fixture: () => atRisFixture(ADAPTER_KEYS.AT_VWGH),
+  },
+  [ADAPTER_KEYS.AT_BVWG]: {
+    disposition: "enrolled",
+    fixture: () => atRisFixture(ADAPTER_KEYS.AT_BVWG),
+  },
+  [ADAPTER_KEYS.AT_LVWG]: {
+    disposition: "enrolled",
+    fixture: () => atRisFixture(ADAPTER_KEYS.AT_LVWG),
+  },
+  [ADAPTER_KEYS.AT_ASYLGH]: {
+    disposition: "enrolled",
+    fixture: () => atRisFixture(ADAPTER_KEYS.AT_ASYLGH),
+  },
+  [ADAPTER_KEYS.AT_UBAS]: {
+    disposition: "enrolled",
+    fixture: () => atRisFixture(ADAPTER_KEYS.AT_UBAS),
+  },
+  [ADAPTER_KEYS.AT_UVS]: {
+    disposition: "enrolled",
+    fixture: () => atRisFixture(ADAPTER_KEYS.AT_UVS),
+  },
+  [ADAPTER_KEYS.AT_VERG]: {
+    disposition: "enrolled",
+    fixture: () => atRisFixture(ADAPTER_KEYS.AT_VERG),
+  },
+  [ADAPTER_KEYS.AT_UMSE]: {
+    disposition: "enrolled",
+    fixture: () => atRisFixture(ADAPTER_KEYS.AT_UMSE),
+  },
+  [ADAPTER_KEYS.AT_BKS]: {
+    disposition: "enrolled",
+    fixture: () => atRisFixture(ADAPTER_KEYS.AT_BKS),
+  },
+  [ADAPTER_KEYS.AT_FINDOK]: {
+    disposition: "enrolled",
+    fixture: atFindokFixture,
+  },
   [ADAPTER_KEYS.EU_ECJ]: PENDING,
 } as const satisfies Record<AdapterKey, AdapterInventoryCoverage>;
 

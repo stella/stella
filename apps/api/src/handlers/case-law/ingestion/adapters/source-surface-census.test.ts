@@ -50,6 +50,8 @@ import {
 } from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
 import {
+  atFindokFixture,
+  atRisFixture,
   czNsFixture,
   czNssFixture,
   czRegionalFixture,
@@ -57,6 +59,7 @@ import {
   plSnFixture,
   skCourtsFixture,
   skUsFixture,
+  type AtRisFixtureAdapter,
   type EnrolledAdapterFixture,
 } from "@/api/tests/helpers/case-law-enrolled-fixtures";
 
@@ -86,12 +89,14 @@ type SurfaceEvidence =
 
 /**
  * The eleven tribunal adapters share every code path but the application
- * named in the query, so one recording of that path states the parts all
- * eleven write.
+ * named in the query, and each states a branch of its own, so each is driven
+ * through that path with its own application's payloads.
  */
-const AT_RIS_SHARED_PATH = [
-  { kind: "shared-path", with: ADAPTER_KEYS.AT_COURTS },
-] as const satisfies readonly SurfaceEvidence[];
+const atRisEvidence = (
+  adapter: AtRisFixtureAdapter,
+): readonly SurfaceEvidence[] => [
+  { kind: "built", fixture: () => atRisFixture(adapter) },
+];
 
 const NO_CAPTURE = (reason: string) =>
   [{ kind: "none", reason }] as const satisfies readonly SurfaceEvidence[];
@@ -120,21 +125,20 @@ const SURFACE_EVIDENCE = {
     { kind: "page-recording", file: "pl-sn-page.json.gz" },
   ],
   [ADAPTER_KEYS.AT_COURTS]: [
+    ...atRisEvidence(ADAPTER_KEYS.AT_COURTS),
     { kind: "page-recording", file: "at-courts-page.json.gz" },
   ],
-  [ADAPTER_KEYS.AT_VFGH]: AT_RIS_SHARED_PATH,
-  [ADAPTER_KEYS.AT_VWGH]: AT_RIS_SHARED_PATH,
-  [ADAPTER_KEYS.AT_BVWG]: AT_RIS_SHARED_PATH,
-  [ADAPTER_KEYS.AT_LVWG]: AT_RIS_SHARED_PATH,
-  [ADAPTER_KEYS.AT_ASYLGH]: AT_RIS_SHARED_PATH,
-  [ADAPTER_KEYS.AT_UBAS]: AT_RIS_SHARED_PATH,
-  [ADAPTER_KEYS.AT_UVS]: AT_RIS_SHARED_PATH,
-  [ADAPTER_KEYS.AT_VERG]: AT_RIS_SHARED_PATH,
-  [ADAPTER_KEYS.AT_UMSE]: AT_RIS_SHARED_PATH,
-  [ADAPTER_KEYS.AT_BKS]: AT_RIS_SHARED_PATH,
-  [ADAPTER_KEYS.AT_FINDOK]: NO_CAPTURE(
-    "no recording of a crawl page exists for this adapter",
-  ),
+  [ADAPTER_KEYS.AT_VFGH]: atRisEvidence(ADAPTER_KEYS.AT_VFGH),
+  [ADAPTER_KEYS.AT_VWGH]: atRisEvidence(ADAPTER_KEYS.AT_VWGH),
+  [ADAPTER_KEYS.AT_BVWG]: atRisEvidence(ADAPTER_KEYS.AT_BVWG),
+  [ADAPTER_KEYS.AT_LVWG]: atRisEvidence(ADAPTER_KEYS.AT_LVWG),
+  [ADAPTER_KEYS.AT_ASYLGH]: atRisEvidence(ADAPTER_KEYS.AT_ASYLGH),
+  [ADAPTER_KEYS.AT_UBAS]: atRisEvidence(ADAPTER_KEYS.AT_UBAS),
+  [ADAPTER_KEYS.AT_UVS]: atRisEvidence(ADAPTER_KEYS.AT_UVS),
+  [ADAPTER_KEYS.AT_VERG]: atRisEvidence(ADAPTER_KEYS.AT_VERG),
+  [ADAPTER_KEYS.AT_UMSE]: atRisEvidence(ADAPTER_KEYS.AT_UMSE),
+  [ADAPTER_KEYS.AT_BKS]: atRisEvidence(ADAPTER_KEYS.AT_BKS),
+  [ADAPTER_KEYS.AT_FINDOK]: [{ kind: "built", fixture: atFindokFixture }],
   [ADAPTER_KEYS.EU_ECJ]: NO_CAPTURE(
     "no recording of a crawl page exists for this adapter",
   ),

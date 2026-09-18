@@ -1,6 +1,15 @@
 import { describe, expect, it } from "bun:test";
 
 import {
+  decodeSourceRawEnvelope,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+} from "@/api/handlers/case-law/ingestion/adapter";
+import { readGzipJson } from "@/api/lib/gzip-json";
+import { isRecord } from "@/api/lib/type-guards";
+
+import {
+  assembleAtRisDecision,
+  AT_COURTS_SOURCE,
   atRisLastCompleteMonth,
   atRisMonthOf,
   atRisNextMonth,
@@ -14,7 +23,7 @@ const SECOND_SOURCE_ID = "JJT_20260115_OGH0002_0010OB00001_26A0000_001";
 const CASE_NUMBER = "1 Ob 1/26a";
 
 const documentUrl = (id: string, extension: "html" | "xml") =>
-  `https://www.ris.bka.gv.at/Dokumente/Justiz/${id}/${id}.${extension}`;
+  `https://ogd.ris.bka.gv.at/Dokumente/Justiz/${id}/${id}.${extension}`;
 
 const listingItem = (
   id: string | null = SOURCE_ID,
@@ -69,6 +78,73 @@ const listingItem = (
   },
 });
 
+const HEADNOTE_ID = "JJR_20260115_OGH0002_0010OB00001_26A0000_001";
+
+/** A headnote document of the same decision, as the publisher lists one. */
+const headnoteItem = (): Record<string, unknown> => ({
+  Data: {
+    Metadaten: {
+      Technisch: {
+        ID: HEADNOTE_ID,
+        Applikation: "Justiz",
+        Organ: "OGH",
+      },
+      Allgemein: {
+        DokumentUrl: `https://ogd.ris.bka.gv.at/Dokument.wxe?Abfrage=Justiz&Dokumentnummer=${HEADNOTE_ID}`,
+      },
+      Judikatur: {
+        Dokumenttyp: "Rechtssatz",
+        Geschaeftszahl: { item: CASE_NUMBER },
+        Entscheidungsdatum: "2026-01-15",
+        EuropeanCaseLawIdentifier:
+          "ECLI:AT:OGH0002:2026:0010OB00001.26A.0115.001",
+        EntscheidungstextUrl: `https://ogd.ris.bka.gv.at/Dokument.wxe?Abfrage=Justiz&Dokumentnummer=${SOURCE_ID}`,
+      },
+    },
+    Dokumentliste: {
+      ContentReference: {
+        ContentType: "MainDocument",
+        Urls: {
+          ContentUrl: {
+            DataType: "Xml",
+            Url: `https://ogd.ris.bka.gv.at/Dokumente/Justiz/${HEADNOTE_ID}/${HEADNOTE_ID}.xml`,
+          },
+        },
+      },
+    },
+  },
+});
+
+/** A nested element of a listing item, for a test that edits one. */
+const nestedValue = (
+  value: unknown,
+  path: readonly string[],
+): Record<string, unknown> => {
+  let current = value;
+  for (const key of path) {
+    current = isRecord(current) ? current[key] : undefined;
+  }
+  if (!isRecord(current)) {
+    throw new Error(`the listing fixture states no ${path.join("/")}`);
+  }
+  return current;
+};
+
+const contentUrlsOf = (
+  item: Record<string, unknown>,
+): Record<string, unknown>[] => {
+  const urls = nestedValue(item, [
+    "Data",
+    "Dokumentliste",
+    "ContentReference",
+    "Urls",
+  ])["ContentUrl"];
+  if (!Array.isArray(urls)) {
+    throw new TypeError("the listing fixture states no content URLs");
+  }
+  return urls.filter((entry) => isRecord(entry));
+};
+
 const listingResponse = (
   items: readonly Record<string, unknown>[],
   total = items.length,
@@ -88,19 +164,53 @@ const listingResponse = (
     },
   });
 
-const queuedRequest = (responses: readonly Response[]) => {
+/** The publisher's answer to a headnote query that matches nothing. */
+const emptyHeadnoteListing = (): Response => listingResponse([], 0);
+
+const isHeadnoteQuery = (url: string): boolean =>
+  new URL(url).searchParams.get("Dokumenttyp.SucheInRechtssaetzen") === "true";
+
+/**
+ * Answers the queue in order, except the headnote query every decision now
+ * makes: a test that says nothing about headnotes gets the answer the
+ * publisher gives for a decision with none, so the queue stays about the
+ * request under test.
+ */
+const queuedRequest = (
+  responses: readonly Response[],
+  headnotes: () => Response = emptyHeadnoteListing,
+) => {
   const queue = [...responses];
   const urls: string[] = [];
   const request = async (url: string): Promise<Response> => {
     urls.push(url);
+    if (isHeadnoteQuery(url)) {
+      return headnotes();
+    }
     const response = queue.shift();
     if (response === undefined) {
-      throw new Error(`Unexpected request: ${url}`);
+      throw new TypeError(`Unexpected request: ${url}`);
     }
     return response;
   };
   return { request, urls };
 };
+
+/** The slice pages a run asked the publisher for, in order. */
+const slicePageNumbers = (
+  urls: readonly string[],
+): readonly (string | null)[] =>
+  urls
+    .filter(
+      (url) =>
+        new URL(url).origin === "https://data.bka.gv.at" &&
+        !isHeadnoteQuery(url),
+    )
+    .map((url) => new URL(url).searchParams.get("Seitennummer"));
+
+/** The document requests a run made, in order, without the listing queries. */
+const documentRequests = (urls: readonly string[]): readonly string[] =>
+  urls.filter((url) => new URL(url).pathname.startsWith("/Dokumente/"));
 
 const fixtureXml = async (): Promise<string> =>
   await Bun.file(
@@ -164,8 +274,12 @@ describe("Austrian RIS adapter", () => {
     expect(decision?.decisionDate).toBe("2026-01-15");
     expect(decision?.decisionType).toBe("beschluss");
     expect(decision?.documentAst).not.toEqual({});
-    expect(decision?.sourceRaw).toContain('"documentXml"');
-    expect(decision?.sourceRawContentType).toBe("application/json");
+    expect(
+      Object.keys(decodeSourceRawEnvelope(decision?.sourceRaw ?? "") ?? {}),
+    ).toEqual(["listing", "document-xml", "headnote-listing"]);
+    expect(decision?.sourceRawContentType).toBe(
+      SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+    );
     expect(delays).toEqual([]);
     expect(new URL(urls[0] ?? "").searchParams.get("Applikation")).toBe(
       "Justiz",
@@ -175,7 +289,7 @@ describe("Austrian RIS adapter", () => {
         "Dokumenttyp.SucheInEntscheidungstexten",
       ),
     ).toBe("true");
-    expect(urls[1]).toBe(documentUrl(SOURCE_ID, "xml"));
+    expect(documentRequests(urls)).toEqual([documentUrl(SOURCE_ID, "xml")]);
     // Provenance cites the listing this page was read from, not the
     // per-decision document fetch that followed it.
     expect(firstPage.sourceUrl).toBe(urls[0]);
@@ -240,11 +354,7 @@ describe("Austrian RIS adapter", () => {
     ).unwrap();
 
     expect(verified.decisions).toEqual([]);
-    expect(
-      urls
-        .filter((url) => new URL(url).origin === "https://data.bka.gv.at")
-        .map((url) => new URL(url).searchParams.get("Seitennummer")),
-    ).toEqual(["1", "2", "1", "2"]);
+    expect(slicePageNumbers(urls)).toEqual(["1", "2", "1", "2"]);
   });
 
   it("restarts a stable slice whose pages contain fewer items than its total", async () => {
@@ -267,11 +377,7 @@ describe("Austrian RIS adapter", () => {
     const restarted = (await adapter.fetchPage(second.nextCursor, {})).unwrap();
 
     expect(restarted.decisions).toHaveLength(1);
-    expect(
-      urls
-        .filter((url) => new URL(url).origin === "https://data.bka.gv.at")
-        .map((url) => new URL(url).searchParams.get("Seitennummer")),
-    ).toEqual(["1", "2", "1"]);
+    expect(slicePageNumbers(urls)).toEqual(["1", "2", "1"]);
   });
 
   it("rejects a listing body for a different publisher page", async () => {
@@ -483,5 +589,133 @@ describe("Austrian RIS adapter", () => {
     expect(reconciliation.nextSlice("2026-01")).toBeNull();
     expect(reconciliation.previousSlice("2026-01")).toBe("2025-12");
     expect(reconciliation.previousSlice(reconciliation.firstSlice)).toBeNull();
+  });
+
+  it("follows the document address the listing states, at either host", async () => {
+    const xml = await fixtureXml();
+    for (const origin of [
+      "https://ogd.ris.bka.gv.at",
+      "https://www.ris.bka.gv.at",
+    ]) {
+      const listed = `${origin}/Dokumente/Justiz/${SOURCE_ID}/${SOURCE_ID}.xml`;
+      const item = listingItem();
+      const urls = contentUrlsOf(item);
+      const xmlEntry = urls.find((entry) => entry["DataType"] === "Xml");
+      if (xmlEntry === undefined) {
+        throw new TypeError("the listing fixture states no XML address");
+      }
+      xmlEntry["Url"] = listed;
+      const { request, urls: requested } = queuedRequest([
+        listingResponse([item]),
+        new Response(xml),
+      ]);
+      const adapter = createAtCourtsAdapter({ request, sleep: async () => {} });
+
+      const decision = (await adapter.fetchPage(null, {})).unwrap()
+        .decisions[0];
+
+      expect(decision?.isListingOnly).not.toBe(true);
+      expect(documentRequests(requested)).toEqual([listed]);
+    }
+  });
+
+  it("reads a decision whose document embeds images", async () => {
+    const xml = await fixtureXml();
+    const item = listingItem();
+    const documentList = nestedValue(item, ["Data", "Dokumentliste"]);
+    const reference = documentList["ContentReference"];
+    // The publisher lists such a decision as several references rather than
+    // one, which is the shape that made every one of them listing-only.
+    documentList["ContentReference"] = [
+      reference,
+      {
+        ContentType: "EmbeddedAttachment",
+        Name: "Anlage 1",
+        Urls: {
+          ContentUrl: {
+            DataType: "Png",
+            Url: `https://ogd.ris.bka.gv.at/Dokumente/Justiz/${SOURCE_ID}/${SOURCE_ID}.1.png`,
+          },
+        },
+      },
+    ];
+    const { request } = queuedRequest([
+      listingResponse([item]),
+      new Response(xml),
+    ]);
+    const adapter = createAtCourtsAdapter({ request, sleep: async () => {} });
+
+    const decision = (await adapter.fetchPage(null, {})).unwrap().decisions[0];
+
+    expect(decision?.isListingOnly).not.toBe(true);
+    expect(decision?.metadata["documentParts"]).toHaveLength(2);
+    expect(decision?.metadata["contentFormats"]).toContain("Xml");
+  });
+
+  it("stores the headnotes the publisher indexes under the decision", async () => {
+    const xml = await fixtureXml();
+    const { request, urls } = queuedRequest(
+      [listingResponse([listingItem()]), new Response(xml)],
+      () => listingResponse([headnoteItem()]),
+    );
+    const adapter = createAtCourtsAdapter({ request, sleep: async () => {} });
+
+    const decision = (await adapter.fetchPage(null, {})).unwrap().decisions[0];
+
+    const headnoteQuery = urls.find((url) => isHeadnoteQuery(url));
+    expect(
+      new URL(headnoteQuery ?? "").searchParams.get("Geschaeftszahl"),
+    ).toBe(CASE_NUMBER);
+    expect(decision?.metadata["headnotes"]).toEqual([
+      {
+        sourceDocumentId: HEADNOTE_ID,
+        caseNumbers: [CASE_NUMBER],
+        ecli: "ECLI:AT:OGH0002:2026:0010OB00001.26A.0115.001",
+        documentUrl: `https://ogd.ris.bka.gv.at/Dokument.wxe?Abfrage=Justiz&Dokumentnummer=${HEADNOTE_ID}`,
+      },
+    ]);
+    expect(
+      decodeSourceRawEnvelope(decision?.sourceRaw ?? "")?.["headnote-listing"],
+    ).toContain(HEADNOTE_ID);
+  });
+
+  it("rebuilds every recorded page row that the host move left listing-only", async () => {
+    const xml = await fixtureXml();
+    const recording: unknown = await readGzipJson(
+      new URL("__fixtures__/at-courts-page.json.gz", import.meta.url),
+    );
+    const page = isRecord(recording) ? recording["page"] : undefined;
+    const decisions = isRecord(page) ? page["decisions"] : undefined;
+    if (!Array.isArray(decisions)) {
+      throw new TypeError("the recorded page holds no decisions");
+    }
+
+    const listingItems = decisions.map((decision) => {
+      const raw: unknown = JSON.parse(
+        isRecord(decision) && typeof decision["sourceRaw"] === "string"
+          ? decision["sourceRaw"]
+          : "null",
+      );
+      const listed = isRecord(raw) ? raw["listing"] : undefined;
+      if (!isRecord(listed)) {
+        throw new Error("a recorded row holds no listing payload");
+      }
+      return listed;
+    });
+    const recordedListingOnly = decisions.filter(
+      (decision) => isRecord(decision) && decision["isListingOnly"] === true,
+    ).length;
+
+    const rebuilt = listingItems.map((item) =>
+      assembleAtRisDecision(AT_COURTS_SOURCE, item, { documentXml: xml }),
+    );
+
+    // The recording is of the defect: the publisher moved its documents to
+    // another of its hosts, the crawl kept rebuilding the old address, and
+    // every row it wrote that day carried a listing and no decision.
+    expect(recordedListingOnly).toBe(decisions.length);
+    expect(
+      rebuilt.filter((decision) => decision.isListingOnly === true),
+    ).toEqual([]);
   });
 });

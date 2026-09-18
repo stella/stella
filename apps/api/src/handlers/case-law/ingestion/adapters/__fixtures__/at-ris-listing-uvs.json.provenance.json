@@ -1,0 +1,6 @@
+{
+  "capture": "recorded",
+  "sha256": "2d78869b358036c5cbada5c486e0634819039eb710ae507c70b4be988e36d818",
+  "sourceUrl": "https://data.bka.gv.at/ris/api/v2.6/Judikatur?Applikation=Uvs&Dokumenttyp.SucheInEntscheidungstexten=true&DokumenteProSeite=OneHundred&Seitennummer=1&Sortierung.SortDirection=Ascending&Sortierung.SortedByColumn=Datum&EntscheidungsdatumVon=2013-12-02&EntscheidungsdatumBis=2013-12-02",
+  "capturedAt": "2026-09-18T18:39:35.975Z"
+}
