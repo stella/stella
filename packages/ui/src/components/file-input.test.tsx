@@ -41,6 +41,26 @@ describe("FileInput", () => {
     expect(markup).not.toContain("No file selected");
   });
 
+  test("composes the field label with the trigger's own text", () => {
+    const markup = renderToStaticMarkup(
+      <FileInput
+        aria-labelledby="source-label"
+        file={null}
+        onFileChange={() => {}}
+        {...labels}
+      />,
+    );
+
+    const triggerId = /aria-labelledby="source-label ([^"]+)"/u.exec(
+      markup,
+    )?.[1];
+    expect(triggerId).toBeDefined();
+    expect(markup).toContain(`id="${triggerId}"`);
+    expect(markup).toMatch(
+      /<input [^>]*aria-hidden="true"(?:(?!aria-labelledby)[^>])*>/u,
+    );
+  });
+
   test("disables the trigger with the input", () => {
     const markup = renderToStaticMarkup(
       <FileInput disabled file={null} onFileChange={() => {}} {...labels} />,

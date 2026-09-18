@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 import type { ChangeEvent, PropsWithChildren, ReactNode } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -419,6 +419,7 @@ const StyleSetFormDialog = ({
   styleSet,
 }: StyleSetDialogProps) => {
   const t = useTranslations();
+  const sourceLabelId = useId();
   const [name, setName] = useState(styleSet?.name ?? "");
   const [file, setFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
@@ -491,18 +492,19 @@ const StyleSetFormDialog = ({
             />
           </label>
           {!styleSet && (
-            <label className="space-y-1.5">
-              <span className="text-sm font-medium">
+            <div className="space-y-1.5">
+              <span className="text-sm font-medium" id={sourceLabelId}>
                 {t("styleSets.sourceDocument")}
               </span>
               <FileInput
                 accept=".docx"
+                aria-labelledby={sourceLabelId}
                 chooseLabel={t("common.chooseFile")}
                 emptyLabel={t("common.noFileChosen")}
                 file={file}
                 onFileChange={setFile}
               />
-            </label>
+            </div>
           )}
         </DialogPanel>
         <DialogFooter>

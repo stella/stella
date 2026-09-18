@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 
 import { panic } from "better-result";
 
+import { FileInput } from "../file-input";
 import { NumberInput } from "../number-input";
 import {
   Select,
@@ -43,6 +44,7 @@ const fixtureStyles = `
 
 const FormControlsFixture = () => {
   const [number, setNumber] = useState<number | null>(null);
+  const [file, setFile] = useState<File | null>(null);
 
   useEffect(() => {
     document.documentElement.dataset["formControlsReady"] = "true";
@@ -70,6 +72,20 @@ const FormControlsFixture = () => {
         value={number}
       />
       <output aria-label="Canonical quantity">{number ?? "empty"}</output>
+
+      <span id="source-document-label">Source document</span>
+      <FileInput
+        accept=".docx"
+        aria-labelledby="source-document-label"
+        chooseLabel="Choose file"
+        emptyLabel="No file selected"
+        file={file}
+        onFileChange={setFile}
+      />
+      <output aria-label="Selected file">{file?.name ?? "none"}</output>
+      <button onClick={() => setFile(null)} type="button">
+        Clear file
+      </button>
     </main>
   );
 };

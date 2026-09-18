@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useId, useRef } from "react";
 import type * as React from "react";
 
 import { UploadIcon } from "lucide-react";
@@ -20,8 +20,11 @@ type FileInputProps = Omit<
 };
 
 // A native `<input type="file">` paints the browser's own "Choose file" chrome,
-// which no locale can translate. The real input stays for the file dialog and
-// for `<label htmlFor>`; a `Button` carries the caller's translated label.
+// which no locale can translate. The real input stays for the file dialog; a
+// `Button` carries the caller's translated label. The visible field label goes
+// through `aria-labelledby` (a wrapping `<label>` would bind to the hidden
+// input, which assistive technology skips) and is composed with the trigger's
+// own text so the name reads "<field> <chooseLabel>".
 const FileInput = ({
   className,
   disabled,
@@ -29,9 +32,11 @@ const FileInput = ({
   onFileChange,
   chooseLabel,
   emptyLabel,
+  "aria-labelledby": labelledBy,
   ...props
 }: FileInputProps) => {
   const inputRef = useRef<HTMLInputElement>(null);
+  const triggerId = useId();
 
   return (
     <span
@@ -56,8 +61,10 @@ const FileInput = ({
         value={undefined}
       />
       <Button
+        aria-labelledby={labelledBy ? `${labelledBy} ${triggerId}` : undefined}
         data-slot="file-input-trigger"
         disabled={disabled}
+        id={triggerId}
         onClick={() => inputRef.current?.click()}
         type="button"
         variant="outline"
