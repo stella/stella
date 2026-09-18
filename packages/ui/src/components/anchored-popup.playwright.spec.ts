@@ -5,9 +5,12 @@ const fixturePath = "/src/components/fixtures/anchored-popup.fixture.html";
 const VIEWPORT = { width: 1280, height: 800 };
 const SIDES = ["top", "bottom", "left", "right"] as const;
 const COMPONENTS = ["tooltip", "popover"] as const;
+// The fixture pins one select trigger to each of these viewport edges.
+const EDGES = ["top", "bottom"] as const;
 
 type Side = (typeof SIDES)[number];
 type Component = (typeof COMPONENTS)[number];
+type Edge = (typeof EDGES)[number];
 
 test.use({
   viewport: VIEWPORT,
@@ -55,13 +58,13 @@ const RESOLVED_SIDE = {
 // offsets), so poll until the two boxes agree, then measure once.
 const expectPopupInsideViewport = async (
   page: Page,
-  component: Component,
-  side: Side,
+  component: Component | "select",
+  resolvedSide: Side,
 ) => {
   const popup = page.locator(`[data-slot="${component}-popup"]`);
   const positioner = page.locator(`[data-slot="${component}-positioner"]`);
   await expect(popup).toBeVisible();
-  await expect(positioner).toHaveAttribute("data-side", RESOLVED_SIDE[side]);
+  await expect(positioner).toHaveAttribute("data-side", resolvedSide);
 
   await expect
     .poll(async () => {
@@ -105,7 +108,37 @@ for (const component of COMPONENTS) {
     }) => {
       await openFixture(page, side);
       await open[component](page);
-      await expectPopupInsideViewport(page, component, side);
+      await expectPopupInsideViewport(page, component, RESOLVED_SIDE[side]);
     });
   }
+}
+
+// A select trigger within 20px of an edge makes Base UI give up aligning the
+// chosen item over the trigger and place the list like a dropdown. The
+// dropdown then has room on the far side only, so it must resolve there; a
+// list that stays on the requested side shrinks to the space left, which is
+// none.
+const EDGE_RESOLVED_SIDE = {
+  top: "bottom",
+  bottom: "top",
+} as const satisfies Record<Edge, Side>;
+
+for (const edge of EDGES) {
+  test(`keeps a select opened at the ${edge} edge inside the viewport`, async ({
+    page,
+  }) => {
+    await openFixture(page, "top");
+    await page
+      .getByRole("combobox", { name: `Page size at ${edge} edge` })
+      .click();
+    await expectPopupInsideViewport(page, "select", EDGE_RESOLVED_SIDE[edge]);
+
+    // Every option fits on screen, so the list must show them all rather
+    // than scroll a sliver of itself.
+    const list = page.locator('[data-slot="select-list"]');
+    const overflow = await list.evaluate(
+      (element) => element.scrollHeight - element.clientHeight,
+    );
+    expect(overflow).toBe(0);
+  });
 }

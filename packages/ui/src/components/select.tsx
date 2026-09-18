@@ -157,12 +157,11 @@ const SelectValue = ({
   );
 };
 
-const DEFAULT_COLLISION_AVOIDANCE = {
-  align: "shift",
-  fallbackAxisSide: "none",
-  side: "none",
-} as const;
-
+// Collision avoidance stays on Base UI's dropdown default (flip along the
+// side axis, shift along the align axis) and is not a prop. A select whose
+// trigger sits at a viewport edge leaves align-with-trigger mode and falls
+// back to dropdown placement; a dropdown that may not flip lands entirely off
+// screen there.
 const SelectPopup = ({
   className,
   children,
@@ -171,7 +170,6 @@ const SelectPopup = ({
   align = "start",
   alignOffset = 0,
   alignItemWithTrigger = true,
-  collisionAvoidance = DEFAULT_COLLISION_AVOIDANCE,
   ...props
 }: SelectPrimitive.Popup.Props & {
   side?: SelectPrimitive.Positioner.Props["side"];
@@ -179,7 +177,6 @@ const SelectPopup = ({
   align?: SelectPrimitive.Positioner.Props["align"];
   alignOffset?: SelectPrimitive.Positioner.Props["alignOffset"];
   alignItemWithTrigger?: SelectPrimitive.Positioner.Props["alignItemWithTrigger"];
-  collisionAvoidance?: SelectPrimitive.Positioner.Props["collisionAvoidance"];
 }) => (
   <SelectPrimitive.Portal>
     <SelectPrimitive.Positioner
@@ -187,7 +184,6 @@ const SelectPopup = ({
       alignItemWithTrigger={alignItemWithTrigger}
       alignOffset={alignOffset}
       className={cn(OVERLAY_LAYER_CLASS_NAMES.popup, "select-none")}
-      collisionAvoidance={collisionAvoidance}
       data-slot="select-positioner"
       side={side}
       sideOffset={sideOffset}
