@@ -183,7 +183,7 @@ export type QueryEntityResult = {
  * ALL the caller's visible signals (the Inbox), each behind its own access
  * predicate.
  */
-export type EntityWindowSource =
+type EntityWindowSource =
   | { type: "entities" }
   | {
       type: "entities-and-signals";
@@ -192,7 +192,7 @@ export type EntityWindowSource =
     };
 
 /** A signal row's entity-shaped values, as the filters and sorts saw them. */
-export type SignalWindowProjection = {
+type SignalWindowProjection = {
   kind: string | null;
   status: string | null;
   agendaKind: string | null;
@@ -200,7 +200,7 @@ export type SignalWindowProjection = {
 };
 
 /** One window row in order, before hydration. */
-export type EntityWindowRow =
+type EntityWindowRow =
   | {
       kind: typeof ENTITY_VIEW_ROW_KIND.ENTITY;
       id: SafeId<"entity">;

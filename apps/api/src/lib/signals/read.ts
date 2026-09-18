@@ -36,7 +36,7 @@ export const canTriageSignals = (memberRole: AuthorizedMemberRole): boolean =>
  * the correlated EXISTS is the authorization); an unscoped one only to
  * members holding the triage permission.
  */
-export const signalVisibilityCondition = (canTriage: boolean): SQL => {
+const signalVisibilityCondition = (canTriage: boolean): SQL => {
   const scopedVisible = sql`exists (select 1 from ${workspaces} w where w.id = ${signals.workspaceId})`;
   if (!canTriage) {
     return scopedVisible;
