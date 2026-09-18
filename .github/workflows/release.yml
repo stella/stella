@@ -716,7 +716,7 @@ jobs:
               --verify-tag \
               "${extra_args[@]}"
           fi
-          gh release upload "$RELEASE_REF" release-manifest.json --clobber
+          bash .workflow-source/scripts/retry.sh gh release upload "$RELEASE_REF" release-manifest.json --clobber
 
   promote:
     # Auto-promote stable releases (vX.Y.Z) to production. Any tag

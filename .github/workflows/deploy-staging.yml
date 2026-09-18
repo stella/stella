@@ -462,7 +462,7 @@ jobs:
       - name: Install dependencies
         id: smoke-deps
         if: steps.current.outputs.promoted == 'true'
-        run: bash scripts/bun-ci-retry.sh --ignore-scripts
+        run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
 

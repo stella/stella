@@ -238,12 +238,12 @@ jobs:
                 ;;
             esac
             case "$file" in
-              .github/workflows/agent-sandbox-canary.yml|.github/workflows/ci.yml|packages/agent-engine/*|package.json|bun.lock|scripts/bun-ci-retry.sh)
+              .github/workflows/agent-sandbox-canary.yml|.github/workflows/ci.yml|packages/agent-engine/*|package.json|bun.lock|scripts/retry.sh)
                 agent_sandbox_docker_required=true
                 ;;
             esac
             case "$file" in
-              apps/web/src/lib/analytics/posthog.ts|apps/web/src/lib/analytics/stack-redaction.ts|apps/web/src/lib/analytics/error-diagnostics.ts|apps/web/e2e/stack-redaction/*|apps/web/e2e/playwright.stack-redaction.config.ts|apps/web/e2e/tsconfig.json|apps/web/tsconfig.json|apps/web/package.json|scripts/bun-ci-retry.sh|bunfig.toml|package.json|bun.lock|.npmrc|.github/workflows/ci.yml)
+              apps/web/src/lib/analytics/posthog.ts|apps/web/src/lib/analytics/stack-redaction.ts|apps/web/src/lib/analytics/error-diagnostics.ts|apps/web/e2e/stack-redaction/*|apps/web/e2e/playwright.stack-redaction.config.ts|apps/web/e2e/tsconfig.json|apps/web/tsconfig.json|apps/web/package.json|scripts/retry.sh|bunfig.toml|package.json|bun.lock|.npmrc|.github/workflows/ci.yml)
                 stack_redaction_browsers_required=true
                 ;;
             esac
@@ -429,7 +429,7 @@ jobs:
           bun-version-file: "package.json"
 
       - name: Install dependencies
-        run: bash scripts/bun-ci-retry.sh --ignore-scripts
+        run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
 
@@ -552,7 +552,7 @@ jobs:
 
       - name: Install dependencies
         if: needs.ci-plan.outputs.package_checks_required == 'true'
-        run: bash scripts/bun-ci-retry.sh --ignore-scripts
+        run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           # .npmrc references NPM_TOKEN, but PR installs must not expose
           # the real npm token to dependency lifecycle scripts.
@@ -1155,6 +1155,7 @@ jobs:
           bun test
           scripts/detect-e2e-changes.test.ts
           scripts/autofix-workflow.test.ts
+          scripts/check-release-upload-retry.test.ts
           scripts/dependabot-changeset.test.ts
 
       # Needs the installed workspace (fast-check, property-testing), so it
@@ -1186,8 +1187,8 @@ jobs:
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         run: bun test scripts/env-tool.test.ts
 
-      - name: Test bun ci retry script
-        run: bash scripts/bun-ci-retry.test.sh
+      - name: Test retry script
+        run: bash scripts/retry.test.sh
 
       # Both guards decide whether a change may reach a live database or the
       # default branch, and both fail open if their comparison logic breaks:
@@ -1289,7 +1290,7 @@ jobs:
 
       - name: Install dependencies
         if: needs.ci-plan.outputs.package_checks_required == 'true'
-        run: bash scripts/bun-ci-retry.sh --ignore-scripts
+        run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           # .npmrc references NPM_TOKEN, but PR installs must not expose
           # the real npm token to dependency lifecycle scripts.
@@ -1433,7 +1434,7 @@ jobs:
 
       - name: Install dependencies
         if: steps.ui-browser-tests.outputs.required == 'true'
-        run: bash scripts/bun-ci-retry.sh --ignore-scripts
+        run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           # .npmrc references NPM_TOKEN, but PR installs must not expose
           # the real npm token to dependency lifecycle scripts.
@@ -1511,7 +1512,7 @@ jobs:
         uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
 
       - name: Install dependencies
-        run: bash scripts/bun-ci-retry.sh --ignore-scripts
+        run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           # .npmrc references NPM_TOKEN, but PR installs must not expose
           # the real npm token to dependency lifecycle scripts.
@@ -1596,7 +1597,7 @@ jobs:
         uses: stella/.github/actions/setup-bun-cached@35506c43f400ed14b8554568d5d9988a49299f0c
 
       - name: Install dependencies
-        run: bash scripts/bun-ci-retry.sh --ignore-scripts
+        run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
 
@@ -1646,7 +1647,7 @@ jobs:
         uses: stella/.github/actions/setup-bun-cached@35506c43f400ed14b8554568d5d9988a49299f0c
 
       - name: Install dependencies
-        run: bash scripts/bun-ci-retry.sh --ignore-scripts
+        run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
 
@@ -1707,7 +1708,7 @@ jobs:
         uses: stella/.github/actions/setup-bun-cached@35506c43f400ed14b8554568d5d9988a49299f0c
 
       - name: Install dependencies
-        run: bash scripts/bun-ci-retry.sh --ignore-scripts
+        run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           # .npmrc references NPM_TOKEN, but PR installs must not expose
           # the real npm token to dependency lifecycle scripts.
@@ -1771,7 +1772,7 @@ jobs:
         uses: stella/.github/actions/setup-bun-cached@35506c43f400ed14b8554568d5d9988a49299f0c
 
       - name: Install dependencies
-        run: bash scripts/bun-ci-retry.sh --ignore-scripts
+        run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
 
@@ -1814,7 +1815,7 @@ jobs:
         uses: stella/.github/actions/setup-bun-cached@35506c43f400ed14b8554568d5d9988a49299f0c
 
       - name: Install dependencies
-        run: bash scripts/bun-ci-retry.sh --ignore-scripts
+        run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           # .npmrc references NPM_TOKEN, but PR installs must not expose
           # the real npm token to dependency lifecycle scripts.
@@ -1859,7 +1860,7 @@ jobs:
         uses: stella/.github/actions/setup-bun-cached@35506c43f400ed14b8554568d5d9988a49299f0c
 
       - name: Install dependencies
-        run: bash scripts/bun-ci-retry.sh --ignore-scripts
+        run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           # .npmrc references NPM_TOKEN, but PR installs must not expose
           # the secret to install-time lifecycle scripts. The token is
@@ -2017,7 +2018,7 @@ jobs:
         uses: stella/.github/actions/setup-bun-cached@35506c43f400ed14b8554568d5d9988a49299f0c
 
       - name: Install dependencies
-        run: bash scripts/bun-ci-retry.sh --ignore-scripts
+        run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
 
@@ -2053,7 +2054,7 @@ jobs:
         uses: stella/.github/actions/setup-bun-cached@35506c43f400ed14b8554568d5d9988a49299f0c
 
       - name: Install dependencies
-        run: bash scripts/bun-ci-retry.sh --ignore-scripts
+        run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           # .npmrc references NPM_TOKEN, but PR installs must not expose
           # the real npm token to dependency lifecycle scripts.
@@ -2093,7 +2094,7 @@ jobs:
         uses: stella/.github/actions/setup-bun-cached@35506c43f400ed14b8554568d5d9988a49299f0c
 
       - name: Install dependencies
-        run: bash scripts/bun-ci-retry.sh --ignore-scripts
+        run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
 
@@ -2258,7 +2259,7 @@ jobs:
         uses: stella/.github/actions/setup-bun-cached@35506c43f400ed14b8554568d5d9988a49299f0c
 
       - name: Install dependencies
-        run: bash scripts/bun-ci-retry.sh --ignore-scripts
+        run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
 
@@ -2297,7 +2298,7 @@ jobs:
         uses: stella/.github/actions/setup-bun-cached@35506c43f400ed14b8554568d5d9988a49299f0c
 
       - name: Install dependencies
-        run: bash scripts/bun-ci-retry.sh --ignore-scripts
+        run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
 
@@ -2459,7 +2460,7 @@ jobs:
         uses: stella/.github/actions/setup-bun-cached@35506c43f400ed14b8554568d5d9988a49299f0c
 
       - name: Install dependencies
-        run: bash scripts/bun-ci-retry.sh --ignore-scripts
+        run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
 
@@ -2572,7 +2573,7 @@ jobs:
           (needs.e2e-production-shard.result == 'failure'
            || needs.e2e-vite-canary.result == 'failure')
           && needs.ci-plan.outputs.e2e_core_required == 'true'
-        run: bash scripts/bun-ci-retry.sh --ignore-scripts
+        run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
 

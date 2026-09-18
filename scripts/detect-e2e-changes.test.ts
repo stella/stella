@@ -812,7 +812,7 @@ describe("detect-e2e-changes", () => {
         "apps/web/e2e/tsconfig.json",
         "apps/web/tsconfig.json",
         "apps/web/package.json",
-        "scripts/bun-ci-retry.sh",
+        "scripts/retry.sh",
         "bunfig.toml",
         "package.json",
         "bun.lock",

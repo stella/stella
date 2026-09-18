@@ -247,7 +247,7 @@ jobs:
       # --ignore-scripts: the package builds run tsc/tsdown only and do not
       # depend on install lifecycle scripts; other CI jobs build the same
       # packages from --ignore-scripts installs.
-      - run: bash scripts/bun-ci-retry.sh --ignore-scripts
+      - run: bash scripts/retry.sh bun ci --ignore-scripts
 
       - name: Build and pack selected packages
         id: pack
