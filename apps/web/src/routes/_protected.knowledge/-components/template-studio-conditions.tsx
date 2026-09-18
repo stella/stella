@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { useState } from "react";
 
+import { panic } from "better-result";
 import {
   ArrowLeftIcon,
   CircleHelpIcon,
@@ -586,12 +587,17 @@ const ConditionFieldEditor = ({
   );
 };
 
-/** The three-tier condition-setting UI (ask-a-question, match-a-field rule,
- *  advanced raw editor), shared by the ConditionFace (editing a selected
+/** How a fresh condition is built. Mirrors `ConditionSource` for the per-field
+ *  face: a question asked in the fill form, a rule derived from other fields,
+ *  or a decision the model makes from written instructions. */
+type ConditionBuilderMode = "ask" | "rule" | "ai";
+
+/** The condition-setting UI (ask a question, match a field with a rule, let
+ *  the model decide), shared by the ConditionFace (editing a selected
  *  `{% if %}` opener) and the FieldFace's "Show only if…" section (editing the
  *  block that wraps the field's own marker). `onRewrite` is the only thing
  *  that differs between callers: it points at whichever block this builder
- *  targets. `fromKey` resets the question/advanced inputs when the target or
+ *  targets. `fromKey` resets the question and AI inputs when the target or
  *  its expression changes. */
 export const ConditionBuilder = ({
   expr,
@@ -607,7 +613,7 @@ export const ConditionBuilder = ({
   const t = useTranslations();
   // One choice, not a stack of forms: pick how this block's visibility is
   // decided and show only that mode (mirrors the per-field condition picker).
-  const [mode, setMode] = useState<"ask" | "rule">("ask");
+  const [mode, setMode] = useState<ConditionBuilderMode>("ask");
   // Two ways to set this block's visibility: reuse an existing condition, or
   // build a fresh one. Reuse leads (option A) only when something exists to
   // reuse; an "or" divider then frames the builder below as the alternative,
@@ -615,6 +621,33 @@ export const ConditionBuilder = ({
   const hasReuse = reusableConditions(fields, (key) => t(key)).some(
     (c) => c.ref !== expr.trim(),
   );
+  const renderBuilder = () => {
+    switch (mode) {
+      case "ask":
+        return (
+          <ConditionQuestionBuilder
+            expr={expr}
+            fields={fields}
+            key={fromKey}
+            onRewrite={onRewrite}
+          />
+        );
+      case "rule":
+        return <ConditionRuleBuilder fields={fields} onRewrite={onRewrite} />;
+      case "ai":
+        return (
+          <ConditionAiBuilder
+            expr={expr}
+            fields={fields}
+            key={fromKey}
+            onRewrite={onRewrite}
+          />
+        );
+      default:
+        mode satisfies never;
+        return panic(`Unhandled condition mode: ${String(mode)}`);
+    }
+  };
   return (
     <div className="flex flex-col gap-4">
       {hasReuse ? (
@@ -648,17 +681,17 @@ export const ConditionBuilder = ({
           <ListFilterIcon className="size-3.5" />
           {t("templates.studio.conditionSourceRule")}
         </Button>
+        <Button
+          className="flex-1"
+          onClick={() => setMode("ai")}
+          size="sm"
+          variant={mode === "ai" ? "secondary" : "ghost"}
+        >
+          <WandSparklesIcon className="size-3.5" />
+          {t("templates.studio.conditionSourceAi")}
+        </Button>
       </div>
-      {mode === "ask" ? (
-        <ConditionQuestionBuilder
-          expr={expr}
-          fields={fields}
-          key={fromKey}
-          onRewrite={onRewrite}
-        />
-      ) : (
-        <ConditionRuleBuilder fields={fields} onRewrite={onRewrite} />
-      )}
+      {renderBuilder()}
     </div>
   );
 };
@@ -908,6 +941,104 @@ const ConditionRuleBuilder = ({
           {t("common.cancel")}
         </Button>
       </div>
+    </section>
+  );
+};
+
+/** Third path: the model decides. Written instructions become a boolean
+ *  condition-field with an `aiPrompt`, and the block points at its path — the
+ *  same field shape the per-field source editor writes, so the condition is
+ *  reusable and re-openable there. */
+const ConditionAiBuilder = ({
+  expr,
+  fields,
+  onRewrite,
+}: {
+  expr: string;
+  fields: StudioField[];
+  onRewrite: (next: string) => boolean;
+}) => {
+  const t = useTranslations();
+  const upsertField = useTemplateStudioStore((s) => s.upsertField);
+  const existing = booleanFieldForExpr(expr, fields);
+  const [label, setLabel] = useState(existing?.label ?? "");
+  const [prompt, setPrompt] = useState(existing?.aiPrompt ?? "");
+  const fieldMention = createTemplateFieldMention(
+    fields.flatMap((f) =>
+      f.path === existing?.path
+        ? []
+        : [{ id: f.path, label: f.label || f.path }],
+    ),
+  );
+  const trimmedLabel = label.trim();
+  const trimmedPrompt = prompt.trim();
+
+  const apply = () => {
+    if (trimmedLabel === "" || trimmedPrompt === "") {
+      return;
+    }
+    // Editing the condition this block already points at: keep its path so
+    // every other `{% if path %}` referencing it follows the edit.
+    if (existing !== undefined) {
+      upsertField(existing.path, {
+        label: trimmedLabel,
+        aiPrompt: trimmedPrompt,
+        condition: undefined,
+        conditionAst: undefined,
+      });
+      return;
+    }
+    const path = freezeConditionPath(trimmedLabel, fields);
+    upsertField(path, {
+      inputType: "boolean",
+      label: trimmedLabel,
+      aiPrompt: trimmedPrompt,
+    });
+    if (!onRewrite(path)) {
+      stellaToast.add({
+        type: "error",
+        title: t("templates.studio.invalidExpression"),
+      });
+    }
+  };
+
+  return (
+    <section className="flex flex-col gap-4">
+      <div className="flex flex-col gap-1.5">
+        <Label className="text-sm">{t("common.name")}</Label>
+        <Input
+          className="h-9 text-sm"
+          onChange={(e) => setLabel(e.currentTarget.value)}
+          placeholder={t("templates.studio.conditionLabelPlaceholder")}
+          value={label}
+        />
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <Label className="text-sm">
+          {t("templates.studio.conditionAiInstructionsLabel")}
+        </Label>
+        <div className="border-input bg-background focus-within:border-ring focus-within:ring-ring/24 rounded-lg border px-2.5 py-2 transition-shadow focus-within:ring-[3px]">
+          <AIPromptInput
+            mentionExtension={fieldMention}
+            onChange={setPrompt}
+            placeholder={t("templates.studio.conditionAiPlaceholder")}
+            value={prompt}
+            valueFormat="text"
+            variant="minimal"
+          />
+        </div>
+        <p className="text-muted-foreground text-xs leading-relaxed">
+          {t("templates.studio.conditionAiInstructionsHelp")}
+        </p>
+      </div>
+      <Button
+        className="self-start"
+        disabled={trimmedLabel === "" || trimmedPrompt === ""}
+        onClick={apply}
+        size="sm"
+      >
+        {t("common.done")}
+      </Button>
     </section>
   );
 };
