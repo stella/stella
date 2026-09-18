@@ -23,6 +23,7 @@ import { panic } from "better-result";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import {
   decodeSourceRawEnvelope,
+  encodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
@@ -64,6 +65,11 @@ import {
 import type { CzRegionalApiItem } from "@/api/handlers/case-law/ingestion/adapters/cz-regional";
 import { buildCzUsDecision } from "@/api/handlers/case-law/ingestion/adapters/cz-us";
 import type { ListedDecision } from "@/api/handlers/case-law/ingestion/adapters/cz-us";
+import {
+  ecjRawParts,
+  euEcjAdapter,
+} from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
+import type { EcjSparqlBinding } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
 import {
   assembleHuBhgyDecision,
   huBhgyDocumentOf,
@@ -968,6 +974,112 @@ export const czUsFixture = (): EnrolledAdapterFixture => ({
         abstractHtml: CZ_US_ABSTRACT_PAGE,
       }) ?? panic("cz-us fixture did not build"),
     ),
+});
+
+// ── EU ECJ fixture ───────────────────────────────────────
+
+/**
+ * The decision the eu-ecj captures are of: Case C-128/22, judgment of the
+ * Grand Chamber, whose procedure language is neither of the two the parser
+ * corpus holds it in.
+ */
+const EU_ECJ_CELEX = "62022CJ0128";
+
+const EU_ECJ_CELLAR_WORK = "cc021804-9350-11ee-8aa6-01aa75ed71a1";
+
+/** The expression this fixture is of; `.0011` is the English one. */
+const EU_ECJ_EXPRESSION = `${EU_ECJ_CELLAR_WORK}.0011`;
+
+const CELLAR_RESOURCE = "http://publications.europa.eu/resource/cellar/";
+
+/**
+ * The listing row, as one binding of the adapter's own `SELECT` states it.
+ *
+ * Every value is the one Cellar answers with for this decision, so the
+ * envelope the guards read is the envelope a crawl of it would store.
+ */
+const EU_ECJ_BINDING = {
+  ecli: { type: "literal", value: "ECLI:EU:C:2023:951" },
+  date: { type: "literal", value: "2023-12-05" },
+  celex: { type: "literal", value: EU_ECJ_CELEX },
+  type: {
+    type: "uri",
+    value: "http://publications.europa.eu/ontology/cdm#judgement",
+  },
+  language: {
+    type: "uri",
+    value: "http://publications.europa.eu/resource/authority/language/ENG",
+  },
+  manifestation: {
+    type: "uri",
+    value: `${CELLAR_RESOURCE}${EU_ECJ_EXPRESSION}.05`,
+  },
+} as const satisfies EcjSparqlBinding;
+
+const EU_ECJ_ADAPTER_FIXTURES = new URL(
+  "../../handlers/case-law/ingestion/adapters/__fixtures__/",
+  import.meta.url,
+);
+
+const EU_ECJ_PARSER_FIXTURES = new URL(
+  "../../handlers/case-law/ingestion/parsers/__fixtures__/eu-ecj/",
+  import.meta.url,
+);
+
+const readGzipText = async (url: URL): Promise<string> =>
+  new TextDecoder().decode(Bun.gunzipSync(await Bun.file(url).bytes()));
+
+/**
+ * Built from the four captures the crawl would have fetched, through the
+ * adapter's own re-parse of the envelope it writes.
+ *
+ * Driving the re-parse rather than the fetch path is what makes this
+ * evidence about a stored row: the guards ask what a stored envelope states
+ * and whether the row carries it, and a fixture built by stubbing the
+ * transport would answer for the fetch instead. It also keeps the
+ * publisher's five-hundred-millisecond gate out of every run.
+ */
+export const euEcjFixture = (): EnrolledAdapterFixture => ({
+  buildDecision: async () => {
+    const parts = ecjRawParts({
+      binding: { ...EU_ECJ_BINDING },
+      html: await readGzipText(
+        new URL(`${EU_ECJ_CELEX}.en.html.gz`, EU_ECJ_PARSER_FIXTURES),
+      ),
+      notice: await readGzipText(
+        new URL("eu-ecj-notice-en.xml.gz", EU_ECJ_ADAPTER_FIXTURES),
+      ),
+      formex: await readGzipText(
+        new URL(`${EU_ECJ_CELEX}.en.fmx.xml.gz`, EU_ECJ_PARSER_FIXTURES),
+      ),
+    });
+
+    const reparsed = await euEcjAdapter.reparseStoredRaw?.({
+      raw: new TextEncoder().encode(encodeSourceRawEnvelope(parts)),
+      contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+      caseNumber: "C-128/22",
+      sourceDocumentId: `${EU_ECJ_CELEX}:en`,
+      language: "en",
+      // What the crawl read off the ECLI before the notice stated it, so the
+      // fixture proves the notice replaces the inference rather than agreeing
+      // with a value handed to it.
+      court: "",
+      ecli: EU_ECJ_BINDING.ecli.value,
+      decisionDate: EU_ECJ_BINDING.date.value,
+      decisionType: "judgment",
+      sourceUrl: `https://eur-lex.europa.eu/legal-content/EN/ALL/?uri=CELEX:${EU_ECJ_CELEX}`,
+      documentUrl: `https://publications.europa.eu/resource/cellar/${EU_ECJ_EXPRESSION}.05`,
+      metadata: {
+        celex: EU_ECJ_CELEX,
+        manifestationUri: EU_ECJ_BINDING.manifestation.value,
+        languageUri: EU_ECJ_BINDING.language.value,
+        cdmType: EU_ECJ_BINDING.type.value,
+      },
+    });
+    return reparsed?.type === "parsed"
+      ? reparsed.result
+      : panic(`eu-ecj fixture did not re-parse: ${reparsed?.type}`);
+  },
 });
 
 // ── SK courts fixture ────────────────────────────────────

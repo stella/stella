@@ -12,8 +12,10 @@ import {
 import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
 import { tipWindowSlices } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
 import {
+  decodeSourceRawEnvelope,
   listingIdentityKey,
   parseListingIdentityKey,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   STORED_RAW_REPARSE_REJECTION,
   type StoredRawReparseInput,
 } from "@/api/lib/legal-search/ingestion-types";
@@ -244,13 +246,16 @@ describe("euEcjAdapter.fetchPage", () => {
       expect(first.rawHash).toHaveLength(64);
       expect(page.decisions[2]?.decisionType).toBe("order");
 
-      // The XHTML is kept verbatim so a parser change can be replayed
-      // without re-crawling, and the parse feeds the reader directly.
-      expect(first.sourceRaw).toBe(fulltextHtml);
-      expect(new TextDecoder().decode(first.sourceRawBytes)).toBe(fulltextHtml);
-      expect(first.sourceRawContentType).toBe(
-        "application/xhtml+xml; stella-storage=verbatim",
-      );
+      // Every response fetched for the variant is kept under its own name, so
+      // a parser change can be replayed without re-crawling and a reader of
+      // the stored row can tell which payload it is holding. The XHTML is
+      // still verbatim: the envelope carries it as a JSON string, which keeps
+      // the non-breaking spaces the keyword chain is separated by.
+      const parts = decodeSourceRawEnvelope(first.sourceRaw ?? "");
+      expect(parts?.["document"]).toBe(fulltextHtml);
+      expect(JSON.parse(parts?.["listing"] ?? "null")).toEqual(enBinding);
+      expect(first.sourceRawBytes).toBeUndefined();
+      expect(first.sourceRawContentType).toBe(SOURCE_RAW_ENVELOPE_CONTENT_TYPE);
       expect(hasUsableAst(first.documentAst)).toBe(true);
       expect(first.sections?.length).toBeGreaterThan(1);
     },
@@ -533,6 +538,8 @@ type SparqlMockOptions = {
   bindings: readonly unknown[];
   /** Manifestation ids Cellar serves a document for. */
   served?: readonly string[];
+  /** Branch notice served for the work; absent means the Office serves none. */
+  notice?: string;
 };
 
 const requestUrl = (input: string | URL | Request): string => {
@@ -543,12 +550,29 @@ const requestUrl = (input: string | URL | Request): string => {
 };
 
 /** Queries the mock was asked, so a test can assert the range it listed. */
+/**
+ * The branch notice is addressed by CELEX, every other Cellar request by the
+ * manifestation's own id. Told apart here so a test about which addresses a
+ * manifestation was looked for at states exactly that, rather than counting
+ * the notice request each build also makes.
+ */
+const isNoticeRequest = (url: string): boolean =>
+  url.includes("/resource/celex/");
+
+type NoticeRequest = { url: string; language: string | undefined };
+
 const installSparqlMock = ({
   bindings,
   served = [],
-}: SparqlMockOptions): { queries: string[]; documentFetches: string[] } => {
+  notice,
+}: SparqlMockOptions): {
+  queries: string[];
+  documentFetches: string[];
+  noticeRequests: NoticeRequest[];
+} => {
   const queries: string[] = [];
   const documentFetches: string[] = [];
+  const noticeRequests: NoticeRequest[] = [];
   globalThis.fetch = asFetchMock(
     mock((input: string | URL | Request, init?: RequestInit) => {
       const url = requestUrl(input);
@@ -559,6 +583,21 @@ const installSparqlMock = ({
           new Response(JSON.stringify({ results: { bindings } }), {
             status: 200,
           }),
+        );
+      }
+      if (isNoticeRequest(url)) {
+        noticeRequests.push({
+          url,
+          language:
+            new Headers(init?.headers).get("accept-language") ?? undefined,
+        });
+        return Promise.resolve(
+          notice === undefined
+            ? new Response("Not found", { status: 404 })
+            : new Response(notice, {
+                status: 200,
+                headers: { "Content-Type": "application/xml;notice=branch" },
+              }),
         );
       }
       documentFetches.push(url);
@@ -572,7 +611,7 @@ const installSparqlMock = ({
         : Promise.resolve(new Response("Not found", { status: 404 }));
     }),
   );
-  return { queries, documentFetches };
+  return { queries, documentFetches, noticeRequests };
 };
 
 /**
@@ -1017,6 +1056,9 @@ describe("euEcjAdapter.reconciliation.buildDecision", () => {
             ),
           );
         }
+        if (isNoticeRequest(url)) {
+          return Promise.resolve(new Response("Not found", { status: 404 }));
+        }
         const accept = new Headers(init?.headers).get("accept") ?? undefined;
         fetches.push({ url, accept });
         if (!url.endsWith(`/DOC_${servedOrdinal}`)) {
@@ -1053,6 +1095,9 @@ describe("euEcjAdapter.reconciliation.buildDecision", () => {
               },
             ),
           );
+        }
+        if (isNoticeRequest(url)) {
+          return Promise.resolve(new Response("", { status: 404 }));
         }
         fetches.push(url);
         return Promise.resolve(new Response("", { status }));
@@ -1265,6 +1310,9 @@ describe("euEcjAdapter.reconciliation.buildDecision", () => {
               },
             ),
           );
+        }
+        if (isNoticeRequest(url)) {
+          return Promise.resolve(new Response("Not found", { status: 404 }));
         }
         accepts.push(new Headers(init?.headers).get("accept") ?? undefined);
         return Promise.resolve(

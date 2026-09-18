@@ -8,6 +8,10 @@ import {
   test,
 } from "bun:test";
 
+import {
+  decodeSourceRawEnvelope,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+} from "@/api/handlers/case-law/ingestion/adapter";
 import type {
   IngestionResult,
   StoredRawReparseInput,
@@ -115,11 +119,17 @@ if (!reparse) {
 }
 
 describe("eu-ecj reparseStoredRaw", () => {
-  test("stores the publisher XHTML as verbatim bytes", async () => {
+  test("keeps the publisher XHTML verbatim as a named envelope part", async () => {
     const crawled = await crawlDecision();
 
-    expect(new TextDecoder().decode(crawled.sourceRawBytes)).toBe(fulltextHtml);
-    expect(crawled.sourceRawContentType).toContain("stella-storage=verbatim");
+    // A JSON string round-trips the payload byte for byte, which is what the
+    // old verbatim-bytes path existed to guarantee: the keyword chain is
+    // separated by non-breaking spaces, and a normalizing store made the
+    // boundary between two keywords unreadable.
+    const parts = decodeSourceRawEnvelope(crawled.sourceRaw ?? "");
+    expect(parts?.["document"]).toBe(fulltextHtml);
+    expect(crawled.sourceRawBytes).toBeUndefined();
+    expect(crawled.sourceRawContentType).toBe(SOURCE_RAW_ENVELOPE_CONTENT_TYPE);
   });
 
   test("reproduces the crawl's result from the payload the crawl stored", async () => {

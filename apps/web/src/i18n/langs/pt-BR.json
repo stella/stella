@@ -739,6 +739,7 @@
       "cites": "Cita",
       "dissentByline": "Voto divergente: <bdi>{names}</bdi>",
       "judgeRole": {
+        "advocateGeneral": "Advogado-geral",
         "dissenting": "Voto divergente",
         "panelMember": "Juiz integrante",
         "presiding": "Juiz presidente",

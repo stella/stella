@@ -12,7 +12,10 @@
  *    decisions in `PORTAL_CORPUS` get a second recording in the same
  *    pass: the page encoding of the same converter output, written only
  *    together with the manifestation it is compared against.
- * 2. The seed fixture (`scripts/__fixtures__/case-law/eu-ecj.json.gz`) in
+ * 2. Notice fixtures (`adapters/__fixtures__/`): the branch notice the
+ *    repository serves for one work, recorded once per language, which is
+ *    what the conformance suites drive the adapter's envelope with.
+ * 3. The seed fixture (`scripts/__fixtures__/case-law/eu-ecj.json.gz`) in
  *    the shape `seed-case-law.ts` loads.
  *
  * Both come from `fetchDecisionsByCelex`, the adapter's own query and
@@ -25,6 +28,7 @@
  * Usage:
  *   bun apps/api/scripts/record-eu-ecj-fixtures.ts
  *   bun apps/api/scripts/record-eu-ecj-fixtures.ts --parser-only
+ *   bun apps/api/scripts/record-eu-ecj-fixtures.ts --notice-only
  *   bun apps/api/scripts/record-eu-ecj-fixtures.ts --seed-only
  */
 
@@ -414,6 +418,83 @@ const recordParserFixtures = async (): Promise<void> => {
   }
 };
 
+// ── The adapter's own envelope parts ───────────────────────
+
+/**
+ * The branch notice, in the language of one expression.
+ *
+ * Recorded twice for the same decision, in two languages, because that is
+ * what the conformance suites are held to: a row is one expression, and the
+ * notice renders the title, the docket wording and every concept label into
+ * the language it was negotiated for. One capture could not show that.
+ */
+const NOTICE_CORPUS = [
+  { celex: "62022CJ0128", cellarLanguage: "eng", stem: "eu-ecj-notice-en" },
+  { celex: "62022CJ0128", cellarLanguage: "ell", stem: "eu-ecj-notice-el" },
+] as const;
+
+const ADAPTER_FIXTURES_DIR = new URL(
+  "../src/handlers/case-law/ingestion/adapters/__fixtures__/",
+  import.meta.url,
+);
+
+type NoticeCapture = (typeof NOTICE_CORPUS)[number];
+
+const recordNotice = async ({
+  celex,
+  cellarLanguage,
+  stem,
+}: NoticeCapture): Promise<void> => {
+  const sourceUrl = `https://publications.europa.eu/resource/celex/${celex}`;
+  const response = await fetch(sourceUrl, {
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    headers: {
+      Accept: "application/xml; notice=branch",
+      "Accept-Language": cellarLanguage,
+      "User-Agent": INGESTION_USER_AGENT,
+    },
+  });
+  if (!response.ok) {
+    log(`  ${stem}: no notice served (${response.status})`);
+    return;
+  }
+
+  const name = `${stem}.xml.gz`;
+  const bytes = Bun.gzipSync(Buffer.from(await response.text()));
+  await Promise.all([
+    Bun.write(new URL(name, ADAPTER_FIXTURES_DIR), bytes),
+    Bun.write(
+      new URL(provenancePathOf(name), ADAPTER_FIXTURES_DIR),
+      formatProvenance({
+        capture: "recorded",
+        sha256: sha256Of(bytes),
+        sourceUrl,
+        capturedAt: new Date().toISOString(),
+        note: `branch notice, Accept-Language: ${cellarLanguage}`,
+      }),
+    ),
+  ]);
+  log(`  ${stem}: ${name}`);
+};
+
+/**
+ * One notice after another.
+ *
+ * Recursive rather than a loop, as the adapter's own address walk is: a
+ * recording spends the publisher's budget the way a crawl does, and asking
+ * for two notices of one work at once is not that.
+ */
+const recordNoticeFixtures = async (
+  remaining: readonly NoticeCapture[] = NOTICE_CORPUS,
+): Promise<void> => {
+  const [capture, ...rest] = remaining;
+  if (capture === undefined) {
+    return;
+  }
+  await recordNotice(capture);
+  await recordNoticeFixtures(rest);
+};
+
 /** Row shape `seed-case-law.ts` reads. */
 const toSeedRow = (decision: IngestionResult, sourceId: string) => ({
   id: seedId(`case-law-dec-eu-ecj-${decision.caseNumber}-${decision.language}`),
@@ -475,15 +556,24 @@ const recordSeedFixture = async (): Promise<void> => {
 if (import.meta.main) {
   const parserOnly = process.argv.includes("--parser-only");
   const seedOnly = process.argv.includes("--seed-only");
+  const noticeOnly = process.argv.includes("--notice-only");
+  const only = parserOnly || seedOnly || noticeOnly;
 
-  if (!seedOnly) {
+  if (parserOnly || !only) {
     log(
       `Recording parser fixtures → ${path.basename(PARSER_FIXTURES_DIR.pathname)}/`,
     );
     await recordParserFixtures();
   }
 
-  if (!parserOnly) {
+  if (noticeOnly || !only) {
+    log(
+      `Recording notice fixtures → ${path.basename(ADAPTER_FIXTURES_DIR.pathname)}/`,
+    );
+    await recordNoticeFixtures();
+  }
+
+  if (seedOnly || !only) {
     log("Recording seed fixture → __fixtures__/case-law/eu-ecj.json.gz");
     await recordSeedFixture();
   }

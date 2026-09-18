@@ -739,6 +739,7 @@
       "cites": "Zitiert",
       "dissentByline": "Sondervotum: <bdi>{names}</bdi>",
       "judgeRole": {
+        "advocateGeneral": "Generalanwalt",
         "dissenting": "Sondervotum",
         "panelMember": "Beisitzender Richter",
         "presiding": "Vorsitzender Richter",

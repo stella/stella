@@ -17,15 +17,6 @@
     "at-verg": ["attachments"],
     "at-umse": ["attachments"],
     "at-bks": ["attachments"],
-    "eu-ecj": [
-      "abstract",
-      "case-sheet",
-      "curia-listing",
-      "document",
-      "formex",
-      "gendoc",
-      "listing",
-      "notice"
-    ]
+    "eu-ecj": ["abstract", "case-sheet", "curia-listing", "gendoc"]
   }
 }

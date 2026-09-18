@@ -739,6 +739,7 @@
       "cites": "يستشهد بـ",
       "dissentByline": "رأي مخالف: <bdi>{names}</bdi>",
       "judgeRole": {
+        "advocateGeneral": "المحامي العام",
         "dissenting": "رأي مخالف",
         "panelMember": "عضو الهيئة",
         "presiding": "رئيس الهيئة",

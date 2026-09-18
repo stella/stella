@@ -1133,9 +1133,8 @@ type DeclaredSourceFieldInventory = {
  * cannot name itself into the exemption, because the union it would have to
  * join is written here rather than derived from the registry.
  */
-const LEGACY_UNINVENTORIED_ADAPTERS = [
-  ADAPTER_KEYS.EU_ECJ,
-] as const satisfies readonly AdapterKey[];
+const LEGACY_UNINVENTORIED_ADAPTERS =
+  [] as const satisfies readonly AdapterKey[];
 
 export type LegacyUninventoriedAdapter =
   (typeof LEGACY_UNINVENTORIED_ADAPTERS)[number];

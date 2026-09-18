@@ -51,6 +51,7 @@ import {
   czNssFixture,
   czRegionalFixture,
   czUsFixture,
+  euEcjFixture,
   huBhgyFixture,
   plCourtsFixture,
   plSnFixture,
@@ -148,7 +149,7 @@ const ADAPTER_INVENTORY_COVERAGE = {
     disposition: "enrolled",
     fixture: atFindokFixture,
   },
-  [ADAPTER_KEYS.EU_ECJ]: PENDING,
+  [ADAPTER_KEYS.EU_ECJ]: { disposition: "enrolled", fixture: euEcjFixture },
   [ADAPTER_KEYS.HU_BHGY]: { disposition: "enrolled", fixture: huBhgyFixture },
 } as const satisfies Record<AdapterKey, AdapterInventoryCoverage>;
 

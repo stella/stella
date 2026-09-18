@@ -18,6 +18,7 @@ export const DECISION_JUDGE_ROLES = [
   "presiding",
   "panel-member",
   "dissenting",
+  "advocate-general",
 ] as const;
 
 export type DecisionJudgeRole = (typeof DECISION_JUDGE_ROLES)[number];

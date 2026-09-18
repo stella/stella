@@ -742,6 +742,7 @@ type Messages = {
       "cites": "Cites";
       "dissentByline": "Dissenting: <bdi>{names}</bdi>";
       "judgeRole": {
+        "advocateGeneral": "Advocate General";
         "dissenting": "Dissenting opinion";
         "panelMember": "Panel member";
         "presiding": "Presiding judge";
