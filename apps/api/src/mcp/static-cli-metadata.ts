@@ -169,6 +169,13 @@ export const DEFAULT_MCP_CLI_ANNOTATIONS = defineMcpCliToolAnnotations(
       singleReadWhen: "template_id",
     },
     fill_template: { command: ["template", "fill"], scope: "templates" },
+    preview_template_conditions: {
+      command: ["template", "preview-conditions"],
+      scope: "templates",
+      itemsKey: "conditions",
+      paginationless: true,
+      inputOnly: ["values"],
+    },
     save_filled_template: {
       command: ["template", "save-filled"],
       additionalScopes: ["templates"],

@@ -105,9 +105,16 @@ type SurfaceMode = (typeof SURFACES)[number]["mode"];
 // eight named tools are unreachable to it however short the list is. The
 // default and anonymized counts are unchanged, because that audience already
 // carried the pair.
+// default 56 -> 57 and anonymized 27 -> 28 for preview_template_conditions.
+// Argued for, not absorbed: fill_template settles an AI-decided condition and
+// writes the document in one call, so asking what a set of values would decide
+// cannot be a mode of it without the fill becoming a tool whose meaning depends
+// on which argument is present. It also runs only the decision model, which is
+// a different cost and a different failure set from a fill. law does not carry
+// templates.
 const TOOL_COUNT_CEILING: Record<SurfaceMode, number> = {
-  default: 56,
-  anonymized: 27,
+  default: 57,
+  anonymized: 28,
   law: 10,
 };
 
@@ -230,9 +237,15 @@ const TOOL_COUNT_CEILING: Record<SurfaceMode, number> = {
 // replaces a bare uuid format; law pays for the pair itself, which is what the
 // audience gained. A vocabulary a model cannot see is a vocabulary it guesses,
 // and a guessed id is a not_found the model reads as an empty corpus.
+// Reporting condition decisions then measures 137_935 default and 72_955
+// anonymized, up 2_835 and 2_055: preview_template_conditions itself, plus the
+// sentence fill_template needs about `decisions`. An agent reading a filled
+// template's paragraphs cannot tell a block excluded by a decision from one the
+// document never carried, so what was decided has to be said rather than
+// inferred. law is unchanged; it carries no template tool.
 const TOOLS_LIST_PAYLOAD_CHAR_CEILING: Record<SurfaceMode, number> = {
-  default: 135_100,
-  anonymized: 70_900,
+  default: 137_935,
+  anonymized: 72_955,
   law: 28_250,
 };
 
@@ -274,9 +287,15 @@ const TOOLS_LIST_PAYLOAD_CHAR_CEILING: Record<SurfaceMode, number> = {
 // optional `workspaceId` would let a corpus read answer with a tenant field.
 // Law also gains the pair's two schemas, its `fetch` union carrying the two
 // corpus branches alone.
+// Condition decisions then measure 47_817 default and 32_654 anonymized, up
+// 1_517 and 754: one decided/undecided variant, declared once and carried by
+// both preview_template_conditions and fill_template's `decisions`, and the
+// `{% if %}` block list gaining its `kind` variant so an AI-decided block is
+// visible at all. A decided `false` and a condition nothing could settle
+// exclude the same paragraph, so the two cannot share one shape.
 const OUTPUT_SCHEMA_TOTAL_CHAR_CEILING: Record<SurfaceMode, number> = {
-  default: 46_300,
-  anonymized: 31_900,
+  default: 47_817,
+  anonymized: 32_654,
   law: 10_050,
 };
 

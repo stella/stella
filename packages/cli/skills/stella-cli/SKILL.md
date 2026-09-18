@@ -131,6 +131,7 @@ requires (request it at `stella auth login --scopes`).
 | template     | `stella template create`                   | templates                   |                                         |
 | template     | `stella template fill`                     | templates                   |                                         |
 | template     | `stella template list`                     | templates                   | paginated                               |
+| template     | `stella template preview-conditions`       | templates                   |                                         |
 | template     | `stella template save-filled new-document` | documents_write + templates |                                         |
 | template     | `stella template save-filled new-version`  | documents_write + templates |                                         |
 | time-entry   | `stella time-entry delete`                 | billing_write               | destructive (needs `--yes` off a TTY)   |
@@ -266,6 +267,8 @@ are omitted here.
   - optional: --allow-unused-values, --completion-mode (require_complete|allow_partial), --output-mode (text|docx)
 - `stella template list`
   - optional: --template-id
+- `stella template preview-conditions`
+  - `--template-id` — Template whose AI-decided conditions to ask about, as returned by list_templates (string)
 - `stella template save-filled new-document`
   - `--template-id` — Template id, as returned by list_templates (string)
   - `--matter-id` — Matter receiving the filled DOCX. (string)

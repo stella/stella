@@ -466,6 +466,7 @@ here as its CLI form). Projected from the same handler enumeration that builds
 | `templates.create-blank`                     | write              | stella:templates                         | —       | generic invoke → `stella capability templates create-blank`                                                                                                                                                                                                           |
 | `templates.create-from-style-set`            | write              | stella:templates                         | —       | generic invoke → `stella capability templates create-from-style-set`                                                                                                                                                                                                  |
 | `templates.create-from-styles`               | write              | stella:templates                         | —       | not runnable over the generic transport: requires a file in `styleSource`, which JSON cannot carry. style-sets.create-from-editor then templates.create-from-style-set covers part of this: the styles must be declared as settings rather than extracted from a DOCX |
+| `templates.decide-conditions`                | read               | stella:templates                         | —       | curated tool `preview_template_conditions`                                                                                                                                                                                                                            |
 | `templates.delete`                           | write, destructive | stella:templates                         | —       | generic invoke → `stella capability templates delete`                                                                                                                                                                                                                 |
 | `templates.discover`                         | read               | stella:templates                         | —       | not runnable over the generic transport: requires a file in `file`, which JSON cannot carry. templates.get covers part of this: returns the discovered fields of a template already stored; it cannot inspect a newly supplied DOCX                                   |
 | `templates.fill`                             | write              | stella:templates                         | —       | curated tool `fill_template`                                                                                                                                                                                                                                          |
@@ -572,7 +573,7 @@ mechanics, and similar), not gaps in coverage.
 | health_infra           | 1     |
 | hosted_billing         | 6     |
 | mcp_transport          | 11    |
-| native_tool_ui         | 9     |
+| native_tool_ui         | 8     |
 | provider_secret        | 24    |
 | public_indexing        | 5     |
 | reader_annotations     | 4     |
@@ -583,4 +584,4 @@ mechanics, and similar), not gaps in coverage.
 | upload_mechanics       | 14    |
 | url_preview            | 2     |
 
-Total: 171
+Total: 170
