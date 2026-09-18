@@ -740,6 +740,8 @@
       "dissentByline": "Opinion dissidente : <bdi>{names}</bdi>",
       "judgeRole": {
         "dissenting": "Opinion dissidente",
+        "panelMember": "Juge assesseur",
+        "presiding": "Président de la formation",
         "rapporteur": "Juge rapporteur"
       },
       "judges": "Juges",

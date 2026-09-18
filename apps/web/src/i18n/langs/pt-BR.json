@@ -740,6 +740,8 @@
       "dissentByline": "Voto divergente: <bdi>{names}</bdi>",
       "judgeRole": {
         "dissenting": "Voto divergente",
+        "panelMember": "Juiz integrante",
+        "presiding": "Juiz presidente",
         "rapporteur": "Juiz relator"
       },
       "judges": "Juízes",

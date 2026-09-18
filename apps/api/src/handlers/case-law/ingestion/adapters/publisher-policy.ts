@@ -115,6 +115,11 @@ export const PUBLISHER_GATES = {
   },
   /** www.saos.org.pl. */
   "saos-pl": { publisher: "SAOS", intervalMs: POLITE_INTERVAL_MS },
+  /** eakta.birosag.hu. */
+  "birosag-hu": {
+    publisher: "Országos Bírósági Hivatal",
+    intervalMs: POLITE_INTERVAL_MS,
+  },
   /** publications.europa.eu, both the SPARQL endpoint and Cellar. */
   "cellar-eu": {
     publisher: "EU Publications Office",
@@ -153,6 +158,7 @@ export const ADAPTER_PUBLISHER_GATES = {
   [ADAPTER_KEYS.AT_BKS]: "ris-bka",
   [ADAPTER_KEYS.AT_FINDOK]: "findok-bmf",
   [ADAPTER_KEYS.EU_ECJ]: "cellar-eu",
+  [ADAPTER_KEYS.HU_BHGY]: "birosag-hu",
 } as const satisfies Record<AdapterKey, PublisherGateId>;
 
 /** Minimum gap between two requests the adapter sends to its publisher. */

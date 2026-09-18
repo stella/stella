@@ -740,6 +740,8 @@
       "dissentByline": "Különvélemény: <bdi>{names}</bdi>",
       "judgeRole": {
         "dissenting": "Különvélemény",
+        "panelMember": "A tanács tagja",
+        "presiding": "A tanács elnöke",
         "rapporteur": "Előadó bíró"
       },
       "judges": "Bírák",

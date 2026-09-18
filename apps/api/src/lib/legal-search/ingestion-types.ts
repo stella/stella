@@ -20,6 +20,7 @@ import {
   ADAPTER_KEYS,
   type AdapterKey,
 } from "@/api/lib/legal-search/ingestion-constants";
+import { isRecord } from "@/api/lib/type-guards";
 
 export { EMPTY_AST };
 export type { EmptyAst };
@@ -573,6 +574,88 @@ export type StoredRawReparseOutcome =
       detail: string;
     };
 
+/** A rejection on its own, for a step that can refuse before a result exists. */
+export type StoredRawReparseRejected = Extract<
+  StoredRawReparseOutcome,
+  { type: "rejected" }
+>;
+
+export type StoredRawListing =
+  | {
+      type: "listing";
+      /** Every part of the envelope, for the payloads beside the listing. */
+      parts: SourceRawParts;
+      /** The listing row, verified to name the decision the database holds. */
+      listing: Record<string, unknown>;
+    }
+  | StoredRawReparseRejected;
+
+export type ReadStoredRawListingOptions = {
+  stored: StoredRawReparseInput;
+  /** The envelope part holding the publisher's listing row. */
+  part: string;
+  /** The publisher id that row states, read the way the adapter keys it. */
+  identityOf: (listing: Record<string, unknown>) => string | undefined;
+};
+
+/**
+ * The listing row inside a stored envelope, once it is known to describe the
+ * row that was selected.
+ *
+ * Four refusals stand between a stored payload and a replay — the media type,
+ * the envelope, the row's JSON, and whether the row names this decision at all
+ * — and every adapter storing an envelope has to make all four. Made once here,
+ * beside the envelope's own encoder and the rejection vocabulary, so a
+ * publisher's replay cannot quietly answer a different question from its
+ * neighbour's.
+ */
+export const readStoredRawListing = ({
+  identityOf,
+  part,
+  stored,
+}: ReadStoredRawListingOptions): StoredRawListing => {
+  if (stored.contentType !== SOURCE_RAW_ENVELOPE_CONTENT_TYPE) {
+    return {
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.UNSUPPORTED_CONTENT,
+      detail: `stored under ${stored.contentType ?? "no content type"}`,
+    };
+  }
+
+  const parts = decodeSourceRawEnvelope(new TextDecoder().decode(stored.raw));
+  const listingRaw = parts?.[part];
+  if (parts === null || listingRaw === undefined) {
+    return {
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA,
+      detail: "the stored payload holds no listing row",
+    };
+  }
+
+  const listing = Result.try({
+    try: (): unknown => JSON.parse(listingRaw),
+    catch: () => null,
+  }).unwrapOr(null);
+  if (!isRecord(listing)) {
+    return {
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.RAW_FIDELITY_LOST,
+      detail: "the stored listing row is not an object",
+    };
+  }
+
+  const identity = identityOf(listing);
+  if (identity !== stored.sourceDocumentId) {
+    return {
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.IDENTITY_MISMATCH,
+      detail: `the envelope names ${identity ?? "no id"}, the row ${stored.sourceDocumentId ?? "none"}`,
+    };
+  }
+
+  return { type: "listing", parts, listing };
+};
+
 /**
  * How a listing item would be keyed once stored, mirroring the two halves of
  * the decision identity index: the publisher's own document id where the item
@@ -1029,7 +1112,14 @@ export type SourceSurfaceCensus = {
 type DeclaredSourceFieldInventory = {
   readonly status: "declared";
   readonly fields: Readonly<Record<string, SourceFieldDisposition>>;
-  readonly listSourceFields: (parts: SourceRawParts) => readonly string[];
+  /**
+   * A promise is allowed because a stored part can be a document: the labels
+   * inside it are read by the same reader the parser uses, and that reader is
+   * asynchronous. A source whose parts are text answers synchronously.
+   */
+  readonly listSourceFields: (
+    parts: SourceRawParts,
+  ) => readonly string[] | Promise<readonly string[]>;
 };
 
 /**

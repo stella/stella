@@ -740,6 +740,8 @@
       "dissentByline": "Sondervotum: <bdi>{names}</bdi>",
       "judgeRole": {
         "dissenting": "Sondervotum",
+        "panelMember": "Beisitzender Richter",
+        "presiding": "Vorsitzender Richter",
         "rapporteur": "Berichterstatter"
       },
       "judges": "Richter",

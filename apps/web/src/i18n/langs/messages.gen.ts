@@ -743,6 +743,8 @@ type Messages = {
       "dissentByline": "Dissenting: <bdi>{names}</bdi>";
       "judgeRole": {
         "dissenting": "Dissenting opinion";
+        "panelMember": "Panel member";
+        "presiding": "Presiding judge";
         "rapporteur": "Judge rapporteur";
       };
       "judges": "Judges";

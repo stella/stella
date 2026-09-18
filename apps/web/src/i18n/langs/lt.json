@@ -740,6 +740,8 @@
       "dissentByline": "Atskiroji nuomonė: <bdi>{names}</bdi>",
       "judgeRole": {
         "dissenting": "Atskiroji nuomonė",
+        "panelMember": "Kolegijos narys",
+        "presiding": "Kolegijos pirmininkas",
         "rapporteur": "Teisėjas pranešėjas"
       },
       "judges": "Teisėjai",

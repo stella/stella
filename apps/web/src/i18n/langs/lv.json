@@ -740,6 +740,8 @@
       "dissentByline": "Atsevišķās domas: <bdi>{names}</bdi>",
       "judgeRole": {
         "dissenting": "Atsevišķās domas",
+        "panelMember": "Tiesas sastāva loceklis",
+        "presiding": "Tiesas sastāva priekšsēdētājs",
         "rapporteur": "Tiesnesis referents"
       },
       "judges": "Tiesneši",

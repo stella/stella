@@ -32,7 +32,9 @@ export const PORTRAIT_SOURCE = {
 /** How a judge is named on a decision, by the contract's own member names. */
 export const DECISION_JUDGE_ROLE = {
   RAPPORTEUR: DECISION_JUDGE_ROLES[0],
-  DISSENTING: DECISION_JUDGE_ROLES[1],
+  PRESIDING: DECISION_JUDGE_ROLES[1],
+  PANEL_MEMBER: DECISION_JUDGE_ROLES[2],
+  DISSENTING: DECISION_JUDGE_ROLES[3],
 } as const satisfies ConstantMap<DecisionJudgeRole>;
 
 /**
@@ -44,5 +46,7 @@ export const DECISION_JUDGE_ROLE = {
  */
 export const DECISION_JUDGE_ROLE_RANK = {
   rapporteur: DECISION_JUDGE_ROLES.indexOf("rapporteur"),
+  presiding: DECISION_JUDGE_ROLES.indexOf("presiding"),
+  "panel-member": DECISION_JUDGE_ROLES.indexOf("panel-member"),
   dissenting: DECISION_JUDGE_ROLES.indexOf("dissenting"),
 } satisfies Record<DecisionJudgeRole, number>;

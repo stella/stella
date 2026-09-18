@@ -52,12 +52,12 @@ import {
 } from "@/api/handlers/case-law/consts";
 import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import {
-  decodeSourceRawEnvelope,
   defineSourceAdapter,
   EMPTY_AST,
   encodeSourceRawEnvelope,
   excludedSourceSurface,
   isPersistableSourceDocumentId,
+  readStoredRawListing,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   STORED_RAW_REPARSE_REJECTION,
   storedSourceSurface,
@@ -856,43 +856,16 @@ const buildPlSnDecision = async ({
 const reparsePlSnStoredRaw = async (
   stored: StoredRawReparseInput,
 ): Promise<StoredRawReparseOutcome> => {
-  if (stored.contentType !== SOURCE_RAW_ENVELOPE_CONTENT_TYPE) {
-    return {
-      type: "rejected",
-      rejection: STORED_RAW_REPARSE_REJECTION.UNSUPPORTED_CONTENT,
-      detail: `stored under ${stored.contentType ?? "no content type"}`,
-    };
+  const read = readStoredRawListing({
+    stored,
+    part: RAW_PART.LISTING,
+    identityOf: (listing) => normalizePlSnListingItem(listing).id,
+  });
+  if (read.type === "rejected") {
+    return read;
   }
-  const parts = decodeSourceRawEnvelope(new TextDecoder().decode(stored.raw));
-  const listingRaw = parts?.[RAW_PART.LISTING];
-  if (parts === null || listingRaw === undefined) {
-    return {
-      type: "rejected",
-      rejection: STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA,
-      detail: "the stored payload holds no listing row",
-    };
-  }
-
-  const listing = Result.try({
-    try: (): unknown => JSON.parse(listingRaw),
-    catch: () => null,
-  }).unwrapOr(null);
-  if (!isRecord(listing)) {
-    return {
-      type: "rejected",
-      rejection: STORED_RAW_REPARSE_REJECTION.RAW_FIDELITY_LOST,
-      detail: "the stored listing row is not an object",
-    };
-  }
-
+  const { listing, parts } = read;
   const item = normalizePlSnListingItem(listing);
-  if (item.id !== stored.sourceDocumentId) {
-    return {
-      type: "rejected",
-      rejection: STORED_RAW_REPARSE_REJECTION.IDENTITY_MISMATCH,
-      detail: `the envelope names ${item.id ?? "no id"}, the row ${stored.sourceDocumentId ?? "none"}`,
-    };
-  }
 
   const detailPart = parts[RAW_PART.DETAIL];
   const detailPayload =

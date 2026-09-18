@@ -51,6 +51,7 @@ import {
   czNssFixture,
   czRegionalFixture,
   czUsFixture,
+  huBhgyFixture,
   plSnFixture,
   skCourtsFixture,
   skUsFixture,
@@ -144,6 +145,7 @@ const ADAPTER_INVENTORY_COVERAGE = {
     fixture: atFindokFixture,
   },
   [ADAPTER_KEYS.EU_ECJ]: PENDING,
+  [ADAPTER_KEYS.HU_BHGY]: { disposition: "enrolled", fixture: huBhgyFixture },
 } as const satisfies Record<AdapterKey, AdapterInventoryCoverage>;
 
 const DECLARED_ADAPTER_KEYS = Object.values(ADAPTER_KEYS);
@@ -289,7 +291,7 @@ describe("every adapter accounts for the fields its source states", () => {
       const decision = await coverage.fixture().buildDecision();
       const parts = storedPartsOf(key, decision);
 
-      const stated = sourceFields.listSourceFields(parts);
+      const stated = await sourceFields.listSourceFields(parts);
       expect(
         stated.length,
         `${key}: the stored envelope states no fields at all, so this suite would certify nothing. Check listSourceFields against the parts the adapter writes.`,

@@ -740,6 +740,8 @@
       "dissentByline": "رأي مخالف: <bdi>{names}</bdi>",
       "judgeRole": {
         "dissenting": "رأي مخالف",
+        "panelMember": "عضو الهيئة",
+        "presiding": "رئيس الهيئة",
         "rapporteur": "القاضي المقرر"
       },
       "judges": "القضاة",

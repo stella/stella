@@ -56,6 +56,7 @@ import {
   czNssFixture,
   czRegionalFixture,
   czUsFixture,
+  huBhgyFixture,
   plSnFixture,
   skCourtsFixture,
   skUsFixture,
@@ -142,6 +143,7 @@ const SURFACE_EVIDENCE = {
   [ADAPTER_KEYS.EU_ECJ]: NO_CAPTURE(
     "no recording of a crawl page exists for this adapter",
   ),
+  [ADAPTER_KEYS.HU_BHGY]: [{ kind: "built", fixture: huBhgyFixture }],
 } as const satisfies Record<AdapterKey, readonly SurfaceEvidence[]>;
 
 // ── Reading a stored raw back into part names ────────────
