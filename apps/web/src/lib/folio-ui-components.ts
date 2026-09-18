@@ -1,6 +1,8 @@
 import { createElement } from "react";
+import type { ComponentProps } from "react";
 
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import type { FolioUIComponents } from "@stll/folio-react";
@@ -57,6 +59,17 @@ const LocalizedColorPicker = (props: Omit<ColorPickerProps, "moreLabel">) => {
  * composite DialogPopup cannot be injected here because it creates another
  * portal, backdrop, and z-index stacking context around the popup.
  */
+type FolioInputProps = ComponentProps<FolioUIComponents["Input"]>;
+
+// Folio's contract admits every native input type; the design system routes
+// file pickers through `FileInput`, so a file request here is a contract gap.
+const FolioInput = ({ type, ...props }: FolioInputProps) => {
+  if (type === "file") {
+    return panic("folio requested an Input of type file; use FileInput");
+  }
+  return createElement(Input, { ...props, type });
+};
+
 const FolioDialogPopup = (props: DialogPrimitive.Popup.Props) =>
   createElement(DialogPrimitive.Popup, props);
 
@@ -74,7 +87,7 @@ const FolioDialogPopup = (props: DialogPrimitive.Popup.Props) =>
 export const folioUIComponents: Partial<FolioUIComponents> = {
   Button,
   Checkbox,
-  Input,
+  Input: FolioInput,
   ColorPicker: LocalizedColorPicker,
   DatePickerPopover,
   OutlineRail,

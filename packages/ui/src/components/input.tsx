@@ -20,7 +20,7 @@ type InputProps = Omit<
   "size" | "style" | "type"
 > & {
   // A file input paints untranslatable browser chrome; `FileInput` owns it.
-  type?: Exclude<React.HTMLInputTypeAttribute, "file">;
+  type?: Exclude<React.HTMLInputTypeAttribute, "file"> | undefined;
   size?: ControlSize | number;
   style?: React.CSSProperties;
   unstyled?: boolean;
