@@ -564,6 +564,42 @@ const heuristicCommandPath = (name: string): readonly string[] => {
   return [kebabCase(head), kebabCase(rest)];
 };
 
+/**
+ * The annotated base64 prop `--file <path>` fills, checked against the schema
+ * that names it. The flag's ceiling is that prop's `maxLength`, so a prop that
+ * is renamed, retyped, or loses its cap fails codegen here rather than shipping
+ * a `--file` whose stated limit is nobody's.
+ */
+const resolveLocalFileProp = ({
+  annotation,
+  properties,
+  toolName,
+}: {
+  annotation: ToolAnnotation | undefined;
+  properties: Record<string, JsonSchema>;
+  toolName: string;
+}): string | undefined => {
+  const prop = annotation?.localFileBase64Prop;
+  if (prop === undefined) {
+    return undefined;
+  }
+  const propSchema = properties[prop];
+  if (propSchema === undefined) {
+    throw new RouteGenerationError(
+      `Tool ${toolName}: localFileBase64Prop '${prop}' is not a property of its input schema`,
+    );
+  }
+  if (
+    propSchema["type"] !== "string" ||
+    typeof propSchema["maxLength"] !== "number"
+  ) {
+    throw new RouteGenerationError(
+      `Tool ${toolName}: localFileBase64Prop '${prop}' must be a string property with a maxLength; --file derives its ceiling from it`,
+    );
+  }
+  return prop;
+};
+
 const leafSpecsForTool = ({
   listing,
   annotation,
@@ -588,6 +624,11 @@ const leafSpecsForTool = ({
   const windowedText = textPath !== undefined;
   const followable = annotation?.perEntryCursor !== true;
   const confirmPassthrough = annotation?.confirmPassthrough;
+  const localFileBase64Prop = resolveLocalFileProp({
+    annotation,
+    properties,
+    toolName: listing.name,
+  });
   const mode = resolvePaginationMode(properties, annotation);
   const paginated = mode !== "none";
 
@@ -654,6 +695,7 @@ const leafSpecsForTool = ({
         ...(itemsKey === undefined ? {} : { itemsKey }),
         destructive: sub?.destructive ?? destructiveHint,
         ...(confirmPassthrough === undefined ? {} : { confirmPassthrough }),
+        ...(localFileBase64Prop === undefined ? {} : { localFileBase64Prop }),
         ...(additionalScopes === undefined ? {} : { additionalScopes }),
         ...(requestTimeoutMs === undefined ? {} : { requestTimeoutMs }),
         ...(scope === undefined ? {} : { scope }),
@@ -684,6 +726,7 @@ const leafSpecsForTool = ({
       ...(itemsKey === undefined ? {} : { itemsKey }),
       destructive: confirmPassthrough === true ? false : destructiveHint,
       ...(confirmPassthrough === undefined ? {} : { confirmPassthrough }),
+      ...(localFileBase64Prop === undefined ? {} : { localFileBase64Prop }),
       ...(additionalScopes === undefined ? {} : { additionalScopes }),
       ...(requestTimeoutMs === undefined ? {} : { requestTimeoutMs }),
       ...(scope === undefined ? {} : { scope }),

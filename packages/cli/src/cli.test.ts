@@ -122,6 +122,112 @@ describe("stella CLI shell", () => {
   });
 });
 
+// A cached delta for the configured origin, so startup resolves a diverged
+// tree. No token is stored, so nothing reaches the network.
+describe("stella CLI: registry drift reporting", () => {
+  const SERVER = "https://drift.example";
+  const home = mkdtempSync(path.join(os.tmpdir(), "stella-cli-drift-"));
+  const cacheHome = path.join(home, ".cache");
+  const REMOVED = ["save_task", "delete_task"];
+
+  beforeAll(async () => {
+    await writeCacheFile(cachePathFor(SERVER, { XDG_CACHE_HOME: cacheHome }), {
+      version: CACHE_SCHEMA_VERSION,
+      serverOrigin: SERVER,
+      fetchedAt: new Date().toISOString(),
+      ttlSeconds: 86_400,
+      toolsListHash: "h",
+      listings: [
+        {
+          name: "list_matters",
+          description: "d",
+          inputSchema: { type: "object", properties: {} },
+        },
+      ],
+      delta: {
+        added: [],
+        removed: REMOVED,
+        changed: ["lookup_business_registry"],
+      },
+    });
+  });
+
+  const spawnDrifted = (args: readonly string[]) => {
+    const {
+      STELLA_SERVER_URL: _server,
+      STELLA_API_KEY: _key,
+      ...env
+    } = process.env;
+    return Bun.spawnSync({
+      cmd: ["bun", CLI_ENTRYPOINT, ...args],
+      env: {
+        ...env,
+        HOME: home,
+        STELLA_SERVER_URL: SERVER,
+        XDG_CACHE_HOME: cacheHome,
+        XDG_CONFIG_HOME: path.join(home, ".config"),
+      },
+      stderr: "pipe",
+      stdout: "pipe",
+    });
+  };
+
+  const driftLines = (stderr: string): string[] =>
+    stderr.split("\n").filter((line) => line.includes("server registry"));
+
+  test("a domain command gets one counted line on stderr, not the tool lists", () => {
+    const result = spawnDrifted(["matter", "list", "--schema"]);
+    expect(driftLines(result.stderr.toString())).toEqual([
+      "server registry differs from this CLI build: 2 removed, 1 changed; re-run with --verbose to list the tools",
+    ]);
+    for (const tool of REMOVED) {
+      expect(result.stderr.toString()).not.toContain(tool);
+    }
+  });
+
+  test("--help, auth and compatibility say nothing about it", () => {
+    for (const args of [
+      ["--help"],
+      ["matter", "list", "--help"],
+      ["auth", "whoami"],
+      ["compatibility", "--help"],
+    ]) {
+      const result = spawnDrifted(args);
+      expect(driftLines(result.stderr.toString())).toEqual([]);
+    }
+  });
+
+  test("--verbose lists every diverged tool", () => {
+    const stderr = spawnDrifted([
+      "matter",
+      "list",
+      "--schema",
+      "--verbose",
+    ]).stderr.toString();
+    expect(stderr).toContain("2 removed, 1 changed\n");
+    expect(stderr).toContain(`  removed: ${REMOVED.join(", ")}`);
+    expect(stderr).toContain("  changed: lookup_business_registry");
+  });
+
+  test("stdout stays machine-readable under --json", () => {
+    const result = spawnDrifted(["matter", "list", "--schema", "--json"]);
+    expect(result.stdout.toString()).not.toContain("server registry");
+    expect(() => JSON.parse(result.stdout.toString())).not.toThrow();
+  });
+
+  test("a command whose tool the server dropped fails with a clear error", () => {
+    // `save_task` is removed above; its command is still in this CLI build.
+    const result = spawnDrifted(["task", "save", "--title", "x"]);
+    expect(result.exitCode).toBe(4);
+    const stderr = result.stderr.toString();
+    expect(stderr).toContain(
+      "stella task save is not available on this server",
+    );
+    expect(stderr).toContain("save_task");
+    expect(stderr).toContain("stella tools list");
+  });
+});
+
 // The server's feature-omission evidence, once cached for the configured
 // origin, marks the same commands in every listing. No token is stored, so
 // nothing reaches the network.

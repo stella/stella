@@ -13,9 +13,16 @@ import { text as readStreamText } from "node:stream/consumers";
 import { decodeAccessTokenClaims } from "./auth/jwt.js";
 import { RESOURCE_SCOPE_PREFIX } from "./auth/scopes.js";
 import type { Context } from "./context.js";
+import { expandSchemaDefs } from "./expand-schema-defs.js";
 import { flagKey } from "./flag-name.js";
 import { kebabCase } from "./generate-route-map.js";
 import { normalizeInputKeyCasing } from "./input-key-casing.js";
+import {
+  LOCAL_FILE_FLAG,
+  LOCAL_FILE_FLAG_KEY,
+  localFileLimits,
+  readLocalFileAsBase64,
+} from "./local-file-flag.js";
 import {
   callTool,
   type CallToolResult,
@@ -729,6 +736,26 @@ export const readOutputFormat = (
 };
 
 /**
+ * `--schema`: print the command's input JSON schema and stop. The schema is the
+ * registry's own, `$defs` expanded the way `--input` validation reads it, so
+ * what an agent reads here is exactly what the tool accepts over MCP. Answered
+ * before the credential check, because a schema is not the server's to hand out.
+ */
+export const writeInputSchema = ({
+  context,
+  inputSchema,
+  writers,
+}: {
+  context: Context;
+  inputSchema: Record<string, unknown>;
+  writers: Writers;
+}): void => {
+  const schema = expandSchemaDefs(inputSchema) ?? inputSchema;
+  writers.stdout(`${JSON.stringify(schema, null, 2)}\n`);
+  setExit(context, EXIT_CODES.ok);
+};
+
+/**
  * Validate the hand-parsed reserved flag VALUES (`--output`, `--limit`) up
  * front, so a mistyped value is a loud usage error (exit 2) instead of being
  * silently dropped from the request. Shared by both executors; returns the
@@ -1117,6 +1144,11 @@ export const runLeafCommand = async ({
 }): Promise<void> => {
   const writers = writersFor(context);
 
+  if (flags[RESERVED_FLAG_KEYS.schema] === true) {
+    writeInputSchema({ context, inputSchema: spec.inputSchema, writers });
+    return;
+  }
+
   const { serverUrl, token } = context;
   if (serverUrl === undefined || token === undefined) {
     writers.stderr("Not signed in. Run 'stella auth login' to authenticate.\n");
@@ -1169,6 +1201,35 @@ export const runLeafCommand = async ({
     return;
   }
   let args = built.args;
+
+  // `--file <path>`: the bytes an MCP host would attach, read here and sent in
+  // the tool's own base64 prop. Nothing about the wire call changes.
+  const localFileProp = spec.localFileBase64Prop;
+  const localFilePath = flags[LOCAL_FILE_FLAG_KEY];
+  if (localFileProp !== undefined && typeof localFilePath === "string") {
+    if (args[localFileProp] !== undefined) {
+      writers.stderr(
+        `${LOCAL_FILE_FLAG} and --${kebabCase(localFileProp)} both carry the document; pass one of them\n`,
+      );
+      setExit(context, EXIT_CODES.validation);
+      return;
+    }
+    const encoded = await readLocalFileAsBase64({
+      commandLabel: `stella ${spec.commandPath.join(" ")}`,
+      limits: localFileLimits({
+        inputSchema: spec.inputSchema,
+        prop: localFileProp,
+      }),
+      path: localFilePath,
+      prop: localFileProp,
+    });
+    if (Result.isError(encoded)) {
+      writers.stderr(`${encoded.error}\n`);
+      setExit(context, EXIT_CODES.validation);
+      return;
+    }
+    args[localFileProp] = encoded.value;
+  }
 
   if (spec.discriminatorInject !== undefined) {
     args = { ...args, ...spec.discriminatorInject };

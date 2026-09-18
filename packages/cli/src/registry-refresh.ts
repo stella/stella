@@ -7,7 +7,7 @@ import { Result } from "better-result";
 // Two entry points:
 //   - `resolveCommandTree`: read-only, no network. Picks the baked-in tree, or
 //     the cached-listings tree when the cache shows a non-empty delta, and
-//     returns the one-line stderr notice for that case.
+//     hands that delta back for `registry-drift.ts` to report.
 //   - `refreshRegistryCache`: fetch `tools/list`, validate through the S5.5
 //     trust boundary, diff vs baked-in, and write the cache. Fails closed: any
 //     transport/validation failure leaves the trusted baked-in tree in place.
@@ -145,37 +145,14 @@ const retainAttestedOmittedListings = ({
   return retained.length === 0 ? fetched : [...fetched, ...retained];
 };
 
-/** How many diverged tool names the notice spells out before summarizing. */
-const NOTICE_TOOL_NAME_LIMIT = 8;
-
-const formatNoticeToolNames = (names: readonly string[]): string => {
-  const shown = names.slice(0, NOTICE_TOOL_NAME_LIMIT).join(", ");
-  const overflow = names.length - NOTICE_TOOL_NAME_LIMIT;
-  return overflow > 0 ? `${shown} +${overflow} more` : shown;
-};
-
-/**
- * The one-line stderr notice for a diverged registry (spec S5.3). It names the
- * tools: counts alone leave no way to tell which command changed, and no
- * command prints the delta.
- */
-const divergenceNotice = (delta: RegistryDelta): string => {
-  const segments: string[] = [];
-  for (const [label, names] of [
-    ["added", delta.added],
-    ["removed", delta.removed],
-    ["changed", delta.changed],
-  ] as const) {
-    if (names.length > 0) {
-      segments.push(`${label} ${formatNoticeToolNames(names)}`);
-    }
-  }
-  return `server registry differs: ${segments.join("; ")}\n`;
-};
-
 export type ResolvedCommandTree = {
   tree: RouteNode;
-  notice?: string;
+  /**
+   * What diverged from the baked-in tree, when anything did. Reporting is
+   * `registry-drift.ts`'s job: this path takes no network and writes no disk,
+   * so it states the fact and leaves who-hears-about-it to the shell.
+   */
+  drift?: RegistryDelta;
   /** Commands the server attested are gated off in this deployment. */
   disabled: DisabledCommands;
 };
@@ -183,14 +160,11 @@ export type ResolvedCommandTree = {
 /**
  * Pick the command tree for this invocation without any network (spec S5.3).
  * The baked-in tree is the default; a valid same-origin cache with a non-empty
- * delta builds from the cached listings and carries the one-line stderr notice
- * for that divergence. The notice reflects a persistent state (the server tree
- * differs from the built-in tree until the next refresh reconciles the cache),
- * so it is emitted per invocation while divergent rather than suppressed after
- * the first: this read path takes no network and writes no disk. A cache whose
- * only divergence is a single-scope omission also builds from the listings, so
- * a command this token cannot use is not exposed; it carries no notice, because
- * the registry itself did not diverge. Provenance is pinned: a cache whose
+ * delta builds from the cached listings and reports that delta as `drift`. A
+ * cache whose only divergence is a single-scope omission also builds from the
+ * listings, so a command this token cannot use is not exposed; it reports no
+ * drift, because the registry itself did not diverge. Provenance is pinned: a
+ * cache whose
  * `serverOrigin` differs is ignored (rule 5), and a cached tree that fails to
  * build falls back to baked-in (rule 6).
  */
@@ -248,11 +222,7 @@ export const resolveCommandTree = async ({
   }
   return isDeltaEmpty(file.delta)
     ? { tree: built.value, disabled }
-    : {
-        tree: built.value,
-        notice: divergenceNotice(file.delta),
-        disabled,
-      };
+    : { tree: built.value, drift: file.delta, disabled };
 };
 
 /** The outcome of a cache-refresh attempt (spec S5.3/S5.5 + addendum nudge). */

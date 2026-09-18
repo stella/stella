@@ -147,6 +147,7 @@ export const generatedToolAnnotations: Readonly<
   create_template: {
     command: ["template", "create"],
     scope: "templates",
+    localFileBase64Prop: "docx_base64",
   },
   configure_template_fields: {
     command: ["template", "configure-fields"],

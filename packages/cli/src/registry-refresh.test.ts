@@ -124,14 +124,14 @@ const writeCache = async (
 };
 
 describe("resolveCommandTree (S5.3)", () => {
-  test("no cache -> baked-in tree, no notice", async () => {
+  test("no cache -> baked-in tree, no drift", async () => {
     const env = await makeCacheEnv();
-    const { tree, notice, disabled } = await resolveCommandTree({
+    const { tree, drift, disabled } = await resolveCommandTree({
       serverOrigin: ORIGIN,
       env,
     });
     expect(tree).toBe(generatedRouteMap);
-    expect(notice).toBeUndefined();
+    expect(drift).toBeUndefined();
     expect(disabled).toEqual({ tools: [], capabilities: [] });
   });
 
@@ -155,39 +155,32 @@ describe("resolveCommandTree (S5.3)", () => {
   test("empty delta -> baked-in tree", async () => {
     const env = await makeCacheEnv();
     await writeCache(env, { delta: { added: [], removed: [], changed: [] } });
-    const { tree, notice } = await resolveCommandTree({
+    const { tree, drift } = await resolveCommandTree({
       serverOrigin: ORIGIN,
       env,
     });
     expect(tree).toBe(generatedRouteMap);
-    expect(notice).toBeUndefined();
+    expect(drift).toBeUndefined();
   });
 
-  test("non-empty delta -> cached-listings tree + one-line notice", async () => {
+  test("non-empty delta -> cached-listings tree + the delta to report", async () => {
     const env = await makeCacheEnv();
     await writeCache(env, {
       listings: [listing("list_widgets")],
       delta: { added: ["list_widgets"], removed: [], changed: [] },
     });
-    const { tree, notice } = await resolveCommandTree({
+    const { tree, drift } = await resolveCommandTree({
       serverOrigin: ORIGIN,
       env,
     });
     expect(tree).not.toBe(generatedRouteMap);
-    expect(notice).toBe("server registry differs: added list_widgets\n");
-  });
-
-  test("the notice names the diverged tools and summarizes a long list", async () => {
-    const env = await makeCacheEnv();
-    const removed = Array.from({ length: 10 }, (_, i) => `list_gone_${i}`);
-    await writeCache(env, {
-      listings: [listing("list_matters")],
-      delta: { added: [], removed, changed: ["list_matters"] },
+    // Handed back whole: how much of it anyone sees is `registry-drift.ts`'s
+    // decision, so this path never formats or truncates it.
+    expect(drift).toEqual({
+      added: ["list_widgets"],
+      removed: [],
+      changed: [],
     });
-    const { notice } = await resolveCommandTree({ serverOrigin: ORIGIN, env });
-    expect(notice).toBe(
-      "server registry differs: removed list_gone_0, list_gone_1, list_gone_2, list_gone_3, list_gone_4, list_gone_5, list_gone_6, list_gone_7 +2 more; changed list_matters\n",
-    );
   });
 
   test("a rebuilt (diverged) tree still carries the capability leaves", async () => {
@@ -239,7 +232,7 @@ describe("resolveCommandTree (S5.3)", () => {
     ]);
   });
 
-  test("a single-scope omission prunes the command without a notice", async () => {
+  test("a single-scope omission prunes the command without reporting drift", async () => {
     const env = await makeCacheEnv();
     await writeCache(env, {
       // `save_document` needs only `documents_write`, so there is no local
@@ -249,7 +242,7 @@ describe("resolveCommandTree (S5.3)", () => {
       scopeOmittedTools: ["save_document"],
     });
 
-    const { tree, notice } = await resolveCommandTree({
+    const { tree, drift } = await resolveCommandTree({
       serverOrigin: ORIGIN,
       env,
     });
@@ -257,7 +250,7 @@ describe("resolveCommandTree (S5.3)", () => {
     expect(tree).not.toBe(generatedRouteMap);
     expect(curatedLeavesForTool(tree, "save_document")).toHaveLength(0);
     // The registry itself did not diverge, so nothing to report.
-    expect(notice).toBeUndefined();
+    expect(drift).toBeUndefined();
   });
 
   test("a compound-only scope omission keeps the baked tree", async () => {
@@ -268,13 +261,13 @@ describe("resolveCommandTree (S5.3)", () => {
       scopeOmittedTools: ["save_filled_template"],
     });
 
-    const { tree, notice } = await resolveCommandTree({
+    const { tree, drift } = await resolveCommandTree({
       serverOrigin: ORIGIN,
       env,
     });
 
     expect(tree).toBe(generatedRouteMap);
-    expect(notice).toBeUndefined();
+    expect(drift).toBeUndefined();
   });
 
   test("a feature-gated command stays in a diverged tree so the server can answer it", async () => {
@@ -354,12 +347,12 @@ describe("resolveCommandTree (S5.3)", () => {
       delta: { added: ["list_widgets"], removed: [], changed: [] },
     });
     // The cache path is keyed by ORIGIN's hash, so plant the mismatched file there.
-    const { tree, notice } = await resolveCommandTree({
+    const { tree, drift } = await resolveCommandTree({
       serverOrigin: ORIGIN,
       env,
     });
     expect(tree).toBe(generatedRouteMap);
-    expect(notice).toBeUndefined();
+    expect(drift).toBeUndefined();
   });
 });
 
@@ -442,7 +435,7 @@ describe("refreshRegistryCache (S5.3/S5.5)", () => {
     const env = await makeCacheEnv();
     // The shape a deployment with its feature flags off serves: the baked tools
     // are absent from tools/list, and the response attests why. Without that
-    // evidence they read as removals and the notice fires on every invocation.
+    // evidence they read as removals and drift is reported on every invocation.
     const outcome = await refreshRegistryCache({
       serverOrigin: ORIGIN,
       token: "t",
@@ -472,11 +465,11 @@ describe("refreshRegistryCache (S5.3/S5.5)", () => {
     expect(written?.featureOmittedCapabilities).toEqual([
       "time-entries.export-csv",
     ]);
-    const { tree, notice } = await resolveCommandTree({
+    const { tree, drift } = await resolveCommandTree({
       serverOrigin: ORIGIN,
       env,
     });
-    expect(notice).toBeUndefined();
+    expect(drift).toBeUndefined();
     expect(tree).toBe(generatedRouteMap);
   });
 

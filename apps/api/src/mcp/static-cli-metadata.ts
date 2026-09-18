@@ -215,7 +215,14 @@ export const DEFAULT_MCP_CLI_ANNOTATIONS = defineMcpCliToolAnnotations(
         },
       },
     },
-    create_template: { command: ["template", "create"], scope: "templates" },
+    create_template: {
+      command: ["template", "create"],
+      scope: "templates",
+      // A CLI caller cannot fill `file` (no host transport), and typing a DOCX
+      // as base64 on a command line hits the OS argument limit first. `--file
+      // <path>` reads the bytes and sends this same prop.
+      localFileBase64Prop: "docx_base64",
+    },
     configure_template_fields: {
       command: ["template", "configure-fields"],
       scope: "templates",

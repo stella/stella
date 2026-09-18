@@ -85,6 +85,7 @@ const cliAnnotationSchema = v.object({
     }),
   ),
   flagRename: v.optional(v.record(v.string(), v.string())),
+  localFileBase64Prop: v.optional(v.pipe(v.string(), v.minLength(1))),
   confirmPassthrough: v.optional(v.literal(true)),
 });
 
@@ -158,6 +159,9 @@ const projectToolAnnotation = (cli: ParsedCliAnnotation): ToolAnnotation => {
   }
   if (cli.flagRename !== undefined) {
     annotation.flagRename = cli.flagRename;
+  }
+  if (cli.localFileBase64Prop !== undefined) {
+    annotation.localFileBase64Prop = cli.localFileBase64Prop;
   }
   if (cli.confirmPassthrough !== undefined) {
     annotation.confirmPassthrough = cli.confirmPassthrough;

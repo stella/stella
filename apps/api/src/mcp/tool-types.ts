@@ -293,6 +293,15 @@ export type McpCliToolAnnotation = {
   };
   flagRename?: Record<string, string>;
   /**
+   * The input prop that carries a document as base64. A host fills the tool's
+   * `file` reference from its own transport; a CLI caller has no host, so the
+   * generated command grows `--file <path>` and fills THIS prop from the local
+   * bytes. It adds no tool input: the wire call is the one an MCP host could
+   * make. The prop must declare a `maxLength`, which becomes the CLI's stated
+   * and enforced ceiling.
+   */
+  localFileBase64Prop?: string;
+  /**
    * The tool is not destructive itself but gates SOME calls behind its `confirm`
    * arg (per-target destructiveness, e.g. `invoke_capability` where the invoked
    * capability's catalog flag decides). The CLI leaf then accepts `--yes`
