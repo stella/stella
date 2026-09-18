@@ -338,21 +338,3 @@ export const listVisibleSignalsByIds = async ({
     ? Result.err(rows.error)
     : Result.ok(rows.value.map(serializeSignal));
 };
-
-/** Open signals the caller can see: the list's own predicate, counted. */
-export const countOpenSignals = async ({
-  safeDb,
-  organizationId,
-  canTriage,
-}: Omit<GetSignalProps, "signalId">) =>
-  await safeDb((tx) =>
-    tx.$count(
-      signals,
-      signalListConditions({
-        organizationId,
-        canTriage,
-        view: SIGNAL_VIEW.OPEN,
-        now: new Date(),
-      }),
-    ),
-  );
