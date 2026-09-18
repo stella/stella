@@ -1318,6 +1318,7 @@ type Messages = {
     "category": "Category";
     "categoryName": "Category name";
     "changeColor": "Change color";
+    "chooseFile": "Choose file";
     "clauses": "Clauses";
     "clearDate": "Clear date";
     "close": "Close";
@@ -1468,6 +1469,7 @@ type Messages = {
     "newMatter": "New matter";
     "newRow": "New row";
     "next": "Next";
+    "noFileChosen": "No file selected";
     "noResults": "No results";
     "noVersions": "No version history";
     "none": "None";

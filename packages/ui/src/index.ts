@@ -26,6 +26,7 @@ export * from "./components/destructive-confirm-dialog";
 export * from "./components/dialog";
 export * from "./components/directional-icon";
 export * from "./components/field";
+export * from "./components/file-input";
 export * from "./components/form";
 export * from "./components/frame";
 export * from "./components/hex-color-picker";

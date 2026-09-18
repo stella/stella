@@ -27,6 +27,7 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
+import { FileInput } from "@stll/ui/file-input";
 import { Input } from "@stll/ui/input";
 import { stellaToast } from "@stll/ui/toast";
 
@@ -494,12 +495,12 @@ const StyleSetFormDialog = ({
               <span className="text-sm font-medium">
                 {t("styleSets.sourceDocument")}
               </span>
-              <Input
+              <FileInput
                 accept=".docx"
-                onChange={(event) =>
-                  setFile(event.target.files?.item(0) ?? null)
-                }
-                type="file"
+                chooseLabel={t("common.chooseFile")}
+                emptyLabel={t("common.noFileChosen")}
+                file={file}
+                onFileChange={setFile}
               />
             </label>
           )}
