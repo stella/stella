@@ -1,97 +1,49 @@
-import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
+import { queryOptions } from "@tanstack/react-query";
 
 import { SIGNAL_VIEWS } from "@stll/api-contract/signals";
-import type {
-  SignalOrigin,
-  SignalSeverity,
-  SignalView,
-} from "@stll/api-contract/signals";
+import type { SignalView } from "@stll/api-contract/signals";
 
 import { api } from "@/lib/api";
 import { STALE_TIME } from "@/lib/consts";
 import { unwrapEden } from "@/lib/errors/api";
-import { stringCursorSeed } from "@/lib/infinite-query";
+import { localISODate } from "@/lib/local-iso-date";
 import { toSafeId } from "@/lib/safe-id";
+import { myWorkKeys } from "@/lib/workspaces/queries/my-work";
 
 export const INBOX_VIEWS = SIGNAL_VIEWS;
 export type InboxView = SignalView;
 
-export type InboxFilters = {
-  view: InboxView;
-  workspaceId: string | null;
-  origin: SignalOrigin | null;
-  severity: SignalSeverity | null;
-  assignedToMe: boolean;
-};
-
-export const DEFAULT_INBOX_FILTERS: InboxFilters = {
-  view: "open",
-  workspaceId: null,
-  origin: null,
-  severity: null,
-  assignedToMe: false,
-};
-
-const INBOX_PAGE_SIZE = 30;
 const INBOX_STALE_TIME_MS = 60 * 1000;
 
 // Lives outside the route slice so every surface that mutates a signal
-// (feed, inspector view, sidebar badge) invalidates the same root.
+// (feed, inspector view, sidebar badge) invalidates the same root. It nests
+// under the work root because the badge counts due tasks too: every task
+// mutation already invalidates `myWorkKeys.all`.
 export const inboxKeys = {
-  all: (organizationId: string) => ["inbox", organizationId] as const,
-  list: (organizationId: string, filters: InboxFilters) =>
-    [
-      ...inboxKeys.all(organizationId),
-      "list",
-      filters.view,
-      filters.workspaceId,
-      filters.origin,
-      filters.severity,
-      filters.assignedToMe,
-    ] as const,
-  count: (organizationId: string) =>
-    [...inboxKeys.all(organizationId), "count"] as const,
+  all: (organizationId: string) =>
+    [...myWorkKeys.all, "inbox", organizationId] as const,
+  count: (organizationId: string, asOf: string) =>
+    [...inboxKeys.all(organizationId), "count", asOf] as const,
   detail: (organizationId: string, signalId: string) =>
     [...inboxKeys.all(organizationId), "detail", signalId] as const,
 };
 
-export const inboxSignalsOptions = (
-  organizationId: string,
-  filters: InboxFilters,
-) =>
-  infiniteQueryOptions({
-    queryKey: inboxKeys.list(organizationId, filters),
-    initialPageParam: stringCursorSeed(),
-    queryFn: async ({ signal, pageParam }) => {
-      const response = await api.signals.get({
-        query: {
-          view: filters.view,
-          limit: INBOX_PAGE_SIZE,
-          ...(filters.workspaceId
-            ? { matterId: toSafeId<"workspace">(filters.workspaceId) }
-            : {}),
-          ...(filters.origin ? { origin: filters.origin } : {}),
-          ...(filters.severity ? { severity: filters.severity } : {}),
-          ...(filters.assignedToMe ? { assignedToMe: true } : {}),
-          ...(pageParam ? { cursor: pageParam } : {}),
-        },
-        fetch: { signal },
-      });
-      return unwrapEden(response);
-    },
-    getNextPageParam: ({ nextCursor }) => nextCursor ?? undefined,
-    staleTime: INBOX_STALE_TIME_MS,
-  });
-
-/** Open-count for the navigation badge; polled gently, never suspends. */
-export const inboxCountOptions = (organizationId: string) =>
-  queryOptions({
-    queryKey: inboxKeys.count(organizationId),
+/**
+ * Badge count: open signals plus the caller's tasks due on or before their
+ * own calendar day. Polled gently, never suspends.
+ */
+export const inboxCountOptions = (organizationId: string) => {
+  const asOf = localISODate();
+  return queryOptions({
+    queryKey: inboxKeys.count(organizationId, asOf),
     queryFn: async ({ signal }) =>
-      unwrapEden(await api.signals.count.get({ fetch: { signal } })),
+      unwrapEden(
+        await api.signals.count.get({ query: { asOf }, fetch: { signal } }),
+      ),
     staleTime: INBOX_STALE_TIME_MS,
     refetchInterval: STALE_TIME.FIVE.MINUTES,
   });
+};
 
 export const inboxSignalOptions = (organizationId: string, signalId: string) =>
   queryOptions({
@@ -106,8 +58,7 @@ export const inboxSignalOptions = (organizationId: string, signalId: string) =>
   });
 
 /** Derived from the Eden response type. */
-type ListQueryFn = NonNullable<
-  ReturnType<typeof inboxSignalsOptions>["queryFn"]
+type DetailQueryFn = NonNullable<
+  ReturnType<typeof inboxSignalOptions>["queryFn"]
 >;
-type InboxPage = NonNullable<Awaited<ReturnType<ListQueryFn>>>;
-export type InboxSignal = InboxPage["items"][number];
+export type InboxSignal = NonNullable<Awaited<ReturnType<DetailQueryFn>>>;

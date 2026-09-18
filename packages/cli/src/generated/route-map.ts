@@ -17048,7 +17048,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "entity-views", "rows-list"],
                 capabilityId: "entity-views.rows.list",
                 description:
-                  "Read a table or Kanban window across accessible matters, with the same filters, sorts, fields and cursors as a matter view.",
+                  "Read a table or Kanban window across accessible matters, with the same filters, sorts, fields and cursors as a matter view. With `inboxView`, the window also holds the caller's Inbox signals for that view, ordered by the same sorts under one cursor, and limits tasks to the view's lifecycle slice. Task rows carry their governed-work risk as of `asOf`.",
                 access: "read",
                 flags: [
                   {
@@ -17099,6 +17099,17 @@ export const generatedRouteMap: RouteNode = {
                     part: "body",
                     partPath: "includeAssignees",
                   },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    description:
+                      "The caller's calendar day (YYYY-MM-DD) for work risk; defaults to the server's UTC day",
+                    flag: "--as-of",
+                    prop: "asOf",
+                    required: false,
+                    part: "body",
+                    partPath: "asOf",
+                  },
                 ],
                 inputOnly: [
                   "body.filters",
@@ -17106,6 +17117,7 @@ export const generatedRouteMap: RouteNode = {
                   "body.find",
                   "body.fieldMode",
                   "body.scope",
+                  "body.inboxView",
                   "body.group",
                 ],
                 paginated: true,
@@ -17572,6 +17584,28 @@ export const generatedRouteMap: RouteNode = {
                               },
                             },
                           ],
+                        },
+                        inboxView: {
+                          anyOf: [
+                            {
+                              const: "open",
+                              type: "string",
+                            },
+                            {
+                              const: "snoozed",
+                              type: "string",
+                            },
+                            {
+                              const: "resolved",
+                              type: "string",
+                            },
+                          ],
+                        },
+                        asOf: {
+                          format: "date",
+                          description:
+                            "The caller's calendar day (YYYY-MM-DD) for work risk; defaults to the server's UTC day",
+                          type: "string",
                         },
                         group: {
                           type: "object",

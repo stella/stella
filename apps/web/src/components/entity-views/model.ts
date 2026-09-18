@@ -4,31 +4,12 @@ import {
   ENTITY_VIEW_GROUP,
   type ENTITY_VIEW_COLUMNS,
 } from "@stll/api-contract/entity-views";
-import { SUGGESTION_KIND } from "@stll/api-contract/signals";
-import { compareByLocale } from "@stll/collation";
-import {
-  evaluateCondition,
-  foldCondition,
-  isEffectiveLeaf,
-  pruneIncomplete,
-} from "@stll/conditions";
-import type { ConditionNode } from "@stll/conditions";
 
 import { getEntityName } from "@/components/workspaces/entity-utils";
-import type { ViewLayout } from "@/lib/types";
 
 import type { EntityViewEntry, EntityViewRow } from "./types";
 
 export { ENTITY_VIEW_GROUP };
-
-export const entrySuggestion = (entry: EntityViewEntry) =>
-  entry.type === "proposal"
-    ? entry.signal.suggestions.find(
-        (suggestion) =>
-          suggestion.kind === SUGGESTION_KIND.CREATE_TASK ||
-          suggestion.kind === SUGGESTION_KIND.CREATE_DEADLINE,
-      )
-    : undefined;
 
 export const entryId = (entry: EntityViewEntry) =>
   entry.type === "entity"
@@ -38,19 +19,11 @@ export const entryId = (entry: EntityViewEntry) =>
 export const entryMatterId = (entry: EntityViewEntry) =>
   entry.type === "entity" ? entry.workspaceId : entry.signal.workspaceId;
 
-const entryKind = (entry: EntityViewEntry) => {
-  if (entry.type === "entity") {
-    return entry.entity.kind;
-  }
-  return entrySuggestion(entry) ? "task" : null;
-};
+const entryKind = (entry: EntityViewEntry) =>
+  entry.type === "entity" ? entry.entity.kind : entry.projection.kind;
 
-export const entryStatus = (entry: EntityViewEntry) => {
-  if (entry.type === "entity") {
-    return entry.entity.status;
-  }
-  return entrySuggestion(entry) ? "open" : null;
-};
+export const entryStatus = (entry: EntityViewEntry) =>
+  entry.type === "entity" ? entry.entity.status : entry.projection.status;
 
 export const entryType = (entry: EntityViewEntry) => {
   if (entry.type === "entity") {
@@ -58,54 +31,11 @@ export const entryType = (entry: EntityViewEntry) => {
       ? "deadline"
       : entry.entity.kind;
   }
-  const suggestion = entrySuggestion(entry);
-  if (suggestion?.kind === SUGGESTION_KIND.CREATE_DEADLINE) {
-    return "deadline";
-  }
-  return suggestion ? "task" : null;
+  return entry.projection.type;
 };
 
-export const proposalMatchesFilters = (
-  entry: Extract<EntityViewEntry, { type: "proposal" }>,
-  filters: readonly ConditionNode[],
-) =>
-  filters.every((filter) => {
-    const pruned = pruneIncomplete(filter);
-    if (!pruned) {
-      return true;
-    }
-    const effective = foldCondition(pruned, {
-      leaf: (node): ConditionNode | null =>
-        isEffectiveLeaf(node) ? node : null,
-      group: (node, children) => ({ ...node, children: [...children] }),
-    });
-    if (!effective) {
-      return true;
-    }
-    return evaluateCondition(effective, (operand) => {
-      switch (operand.type) {
-        case "kind":
-          return entryKind(entry);
-        case "builtin": {
-          const values = {
-            status: entryStatus(entry),
-            priority: "none",
-            agendaKind: entryType(entry),
-          } satisfies Record<typeof operand.field, string | null>;
-          return values[operand.field];
-        }
-        case "property":
-          // A proposal has no extracted/custom property values before acceptance.
-          return null;
-        case "path":
-        case "formula":
-          return panic("Unsupported view-filter operand");
-        default:
-          operand satisfies never;
-          return panic("Unknown view-filter operand");
-      }
-    });
-  });
+export const entryDueDate = (entry: EntityViewEntry) =>
+  entry.type === "entity" ? entry.entity.dueDate : entry.projection.dueDate;
 
 export const toEntityViewRow = (entry: EntityViewEntry): EntityViewRow => ({
   kind: "entity-view",
@@ -149,53 +79,9 @@ export const entityViewSortValues = {
   _status: entryStatus,
   _priority: (entry: EntityViewEntry) =>
     entry.type === "entity" ? entry.entity.priority : null,
-  "_due-date": (entry: EntityViewEntry) =>
-    entry.type === "entity"
-      ? entry.entity.dueDate
-      : (entrySuggestion(entry)?.dueAt ?? null),
+  "_due-date": entryDueDate,
 } satisfies Record<SortableColumn, (entry: EntityViewEntry) => string | null>;
 
 export const isEntityViewSortColumn = (
   value: string,
 ): value is SortableColumn => Object.hasOwn(entityViewSortValues, value);
-
-type SortEntityViewEntriesOptions = {
-  entries: readonly EntityViewEntry[];
-  sorts: ViewLayout["sorts"];
-  locale: string;
-};
-
-/** Sort the loaded window, including proposals, with absent values last. */
-export const sortEntityViewEntries = ({
-  entries,
-  sorts,
-  locale,
-}: SortEntityViewEntriesOptions) => {
-  const compare = compareByLocale(locale);
-  const accessors = sorts.map(({ propertyId, desc }) => {
-    if (!isEntityViewSortColumn(propertyId)) {
-      panic(`Unsupported collection sort: ${propertyId}`);
-    }
-    return { getValue: entityViewSortValues[propertyId], desc };
-  });
-  return entries.toSorted((left, right) => {
-    for (const { getValue, desc } of accessors) {
-      const a = getValue(left);
-      const b = getValue(right);
-      if (a === b) {
-        continue;
-      }
-      if (a === null) {
-        return 1;
-      }
-      if (b === null) {
-        return -1;
-      }
-      const order = compare(a, b);
-      if (order !== 0) {
-        return desc ? -order : order;
-      }
-    }
-    return 0;
-  });
-};

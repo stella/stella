@@ -107,6 +107,9 @@ type SeedSignalOptions = {
   workspaceId: SafeId<"workspace"> | null;
   /** A task proposal due that day, or none. */
   dueAt: string | null;
+  proposes?:
+    | typeof SUGGESTION_KIND.CREATE_TASK
+    | typeof SUGGESTION_KIND.CREATE_DEADLINE;
 };
 
 const seedSignal = async ({
@@ -114,6 +117,7 @@ const seedSignal = async ({
   organizationId,
   workspaceId,
   dueAt,
+  proposes = SUGGESTION_KIND.CREATE_TASK,
 }: SeedSignalOptions) => {
   const id = createSafeId<"signal">();
   await testDb.insert(signals).values({
@@ -139,7 +143,7 @@ const seedSignal = async ({
       workspaceId && dueAt
         ? [
             {
-              kind: SUGGESTION_KIND.CREATE_TASK,
+              kind: proposes,
               workspaceId,
               name: label,
               dueAt,
@@ -194,6 +198,13 @@ beforeAll(async () => {
     organizationId: ids.orgA,
     workspaceId: ids.wsA2,
     dueAt: "2026-01-04T09:00:00.000Z",
+  });
+  await seedSignal({
+    label: "signal A1 deadline",
+    organizationId: ids.orgA,
+    workspaceId: ids.wsA1,
+    dueAt: "2026-01-06",
+    proposes: SUGGESTION_KIND.CREATE_DEADLINE,
   });
   await seedSignal({
     label: "signal unscoped",
@@ -325,6 +336,7 @@ describe("Inbox window: entities and signals in one result set", () => {
       "signal A1",
       "signal A2",
       "task A2",
+      "signal A1 deadline",
     ]);
   });
 
@@ -381,7 +393,7 @@ describe("Inbox window: entities and signals in one result set", () => {
           body: { scope: { type: "matter", matterId: ids.wsA1 } },
         }),
       ),
-    ).toEqual(["task A1", "task A1 tied", "signal A1"]);
+    ).toEqual(["task A1", "task A1 tied", "signal A1", "signal A1 deadline"]);
   });
 
   test("unscoped signals need triage and have no task kind", async () => {
@@ -391,6 +403,36 @@ describe("Inbox window: entities and signals in one result set", () => {
       seededLabels(await readInbox({ body: { filters: [] }, role: "intern" })),
     ).not.toContain("signal unscoped");
     expect(seededLabels(await readInbox())).not.toContain("signal unscoped");
+  });
+
+  test("a type filter matches the work a signal proposes", async () => {
+    const onlyDeadlines = await readInbox({
+      body: {
+        filters: [
+          ...TASKS_ONLY,
+          {
+            type: "predicate",
+            operand: { type: "builtin", field: "agendaKind" },
+            op: "in",
+            value: ["deadline"],
+          },
+        ],
+      },
+    });
+    expect(seededLabels(onlyDeadlines)).toEqual(["signal A1 deadline"]);
+    const deadline = onlyDeadlines.items.find(
+      (row) => labels.get(rowId(row)) === "signal A1 deadline",
+    );
+    expect(
+      deadline?.kind === ENTITY_VIEW_ROW_KIND.SIGNAL
+        ? deadline.projection
+        : null,
+    ).toEqual({
+      kind: "task",
+      status: TASK_STATUS.OPEN,
+      agendaKind: "deadline",
+      dueDate: "2026-01-06",
+    });
   });
 
   test("resolved holds finished tasks; snoozed holds no tasks", async () => {
