@@ -393,6 +393,19 @@ describe("parseUsDecisionHtml", () => {
       });
     });
 
+    test("keeps the number the court printed on the opinion heading", () => {
+      const heading = "3. Odlišné stanovisko soudce Jana Nováka";
+      const parsed = parseUsDecisionHtml(baseInput(decisionWith(heading)));
+
+      // The number is stripped to recognise the heading, never to store it:
+      // a block that dropped it would take the number out of the fulltext.
+      expect(rolesOf(heading)).toContainEqual({
+        text: heading,
+        role: "section-heading",
+      });
+      expect(parsed.fulltext).toContain(heading);
+    });
+
     test("leaves prose that only mentions a separate opinion unmarked", () => {
       const mention =
         "Odlišné stanovisko soudce k dřívějšímu nálezu se s nyní " +
@@ -729,7 +742,7 @@ describe("parseUsDecisionHtml", () => {
       );
       expect(citationIndex).toBeGreaterThanOrEqual(0);
       expect(documentAst.blocks.at(citationIndex + 1)?.plainText).toBe(
-        "Odlišné stanovisko soudkyně Elišky Wagnerové.",
+        "1. Odlišné stanovisko soudkyně Elišky Wagnerové.",
       );
       expect(fulltext).toContain("Odlišné stanovisko");
     });

@@ -797,6 +797,9 @@ const classifyLines = (lines: readonly ParsedLine[]): Block[] => {
 
     // A separate opinion runs to the end of the document, so the heading
     // opens a zone rather than a section.
+    // The court numbers some of these headings. The number is stripped for
+    // the match alone: the heading block below carries the line the court
+    // printed, because what the heading is does not change what it says.
     const numberPrefix = NUMBERED_PARA_RE.exec(plainText)?.[0] ?? "";
     const unnumberedText = plainText.slice(numberPrefix.length);
     const unnumberedInlines = stripInlinePrefix(inlines, numberPrefix.length);
@@ -812,11 +815,8 @@ const classifyLines = (lines: readonly ParsedLine[]): Block[] => {
         type: "heading",
         level: 2,
         role: "section-heading",
-        inlines:
-          unnumberedInlines.length > 0
-            ? unnumberedInlines
-            : textInline(unnumberedText),
-        plainText: unnumberedText,
+        inlines,
+        plainText,
       });
       continue;
     }

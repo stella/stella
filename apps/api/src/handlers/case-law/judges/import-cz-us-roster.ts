@@ -452,12 +452,25 @@ const readCourtSite = async (
       }),
     );
   }
-  return Result.ok(
-    await fetchImpl(target.href, {
-      headers: { "User-Agent": INGESTION_USER_AGENT },
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-    }),
+  // A transport error and the timeout below both reject rather than answer,
+  // and the import states every failure through its `Result`: a rejection
+  // escaping here would take the caller past its own error branch.
+  const opened = await Result.tryPromise(
+    async () =>
+      await fetchImpl(target.href, {
+        headers: { "User-Agent": INGESTION_USER_AGENT },
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      }),
   );
+  if (Result.isError(opened)) {
+    return Result.err(
+      new CzUsRosterFetchError({
+        message: `request failed: ${opened.error.message}`,
+        sourceUrl: url,
+      }),
+    );
+  }
+  return Result.ok(opened.value);
 };
 
 const readPortrait = async (

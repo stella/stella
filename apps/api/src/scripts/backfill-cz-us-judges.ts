@@ -21,6 +21,10 @@ import { eq } from "drizzle-orm";
 import { caseLawSources } from "@/api/db/schema";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import { runCzUsJudgesBackfill } from "@/api/handlers/case-law/ingestion/cz-us-judges-backfill";
+import type {
+  CzUsJudgesBackfillError,
+  CzUsJudgesBackfillReport,
+} from "@/api/handlers/case-law/ingestion/cz-us-judges-backfill";
 import type { StoredRawReader } from "@/api/handlers/case-law/ingestion/replay";
 import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
@@ -85,19 +89,27 @@ if (sourceLease === null) {
   process.exit(1);
 }
 
-const run = await runCzUsJudgesBackfill({
-  scopedDb: ingestionDb,
-  sourceId: source.id,
-  sourceLease,
-  readStoredRaw,
-  ...(requestBudget === undefined ? {} : { requestBudget }),
-});
-// Released either way: a failed pass must not leave the source locked against
-// the crawl until the lease expires.
-await sourceLease.release();
+let run: Result<CzUsJudgesBackfillReport, CzUsJudgesBackfillError>;
+try {
+  run = await runCzUsJudgesBackfill({
+    scopedDb: ingestionDb,
+    sourceId: source.id,
+    sourceLease,
+    readStoredRaw,
+    ...(requestBudget === undefined ? {} : { requestBudget }),
+  });
+} finally {
+  // Released on every path, including a rejection the run does not turn into
+  // a `Result`: a failed pass must not leave the source locked against the
+  // crawl until the lease expires.
+  await sourceLease.release();
+}
 
 if (Result.isError(run)) {
   console.error(run.error.message);
+  // The rows this pass did commit, so a failure at the end of a long run does
+  // not read like a failure at its start.
+  console.error(JSON.stringify(run.error.report, null, 2));
   process.exit(1);
 }
 

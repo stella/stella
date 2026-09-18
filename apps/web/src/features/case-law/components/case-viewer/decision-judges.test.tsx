@@ -141,6 +141,17 @@ describe("the bench of a decision", () => {
     expect(judgePortraitSrc(RAPPORTEUR.portrait.url)).not.toContain("/v1/v1/");
   });
 
+  test.each(["//example.test/portrait.jpg", "/\\example.test/portrait.jpg"])(
+    "refuses %s, which addresses a host rather than this API",
+    (path) => {
+      // A network-path reference resolves against the scheme, not the API
+      // root, so it is not a portrait address this app composes.
+      expect(() => judgePortraitSrc(path)).toThrow(
+        "Judge portrait path is not API-root-relative",
+      );
+    },
+  );
+
   test("credits the source of the portraits it drew", () => {
     expect(render(<DecisionJudges judges={[RAPPORTEUR]} />)).toContain(
       `Portrait source: ${RAPPORTEUR.portrait.attribution}`,

@@ -1861,7 +1861,7 @@ describe("czUsAdapter judges", () => {
     });
   });
 
-  test("says so on the row when the court served no card", async () => {
+  test("says so on the row when the court could not serve the card", async () => {
     const decision = await decisionWithCard({ recordCardStatus: 500 });
 
     expect(decision?.judges).toBeUndefined();
@@ -1869,6 +1869,26 @@ describe("czUsAdapter judges", () => {
     expect(
       decodeSourceRawEnvelope(decision?.sourceRaw ?? ""),
     ).not.toHaveProperty("detail");
+  });
+
+  // The two gaps are not the same question: the backfill asks again about the
+  // one that says nothing and never about the one the court answered.
+  test("says the court holds no card where it answered 404", async () => {
+    const decision = await decisionWithCard({ recordCardStatus: 404 });
+
+    expect(decision?.judges).toBeUndefined();
+    expect(decision?.metadata["recordCard"]).toBe("absent");
+  });
+
+  test("states an empty bench where the card names no judge", async () => {
+    const decision = await decisionWithCard({
+      rapporteur: "",
+      dissenters: [],
+    });
+
+    // Empty, not absent: the pipeline replaces the stored judges only for an
+    // observation that carries the field, and this card states there are none.
+    expect(decision?.judges).toEqual([]);
   });
 });
 

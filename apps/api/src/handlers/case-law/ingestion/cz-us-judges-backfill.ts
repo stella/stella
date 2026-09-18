@@ -5,9 +5,11 @@
  * the judges who filed a separate opinion, beside the rest of its labelled
  * fields. Rows ingested before the adapter read it hold a stored payload with
  * the document but no card, so those fields are recoverable only by asking
- * the publisher again — once per decision, ever, because the run writes the
- * card into the row's stored payload and every later re-parse reads it from
- * there instead.
+ * the publisher again — once per decision that has one, because the run writes
+ * the card into the row's stored payload and every later re-parse reads it
+ * from there instead. The court's own answer that it holds no card is written
+ * onto the row for the same reason, so only a request that said nothing at all
+ * is ever repeated.
  *
  * Checkpointing is the row's own state rather than a cursor: a decision whose
  * card has been read says so in its metadata and leaves the selection, so a
@@ -21,8 +23,7 @@
  * a request budget and run as an operator job.
  */
 
-import { panic, Result } from "better-result";
-import type { UnhandledException } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import { and, asc, eq, gt, isNotNull, or, sql } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -34,6 +35,7 @@ import {
 import type { StoredRawReparseOutcome } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   CZ_US_RECORD_CARD_METADATA_KEY,
+  CZ_US_RECORD_CARD_STATE,
   czUsAdapter,
   fetchNalusRecordCard,
   openNalusSession,
@@ -93,6 +95,8 @@ const BACKFILL_STOP_REASON = {
   PUBLISHER_LIMIT: "publisher-limit",
   /** The caller cancelled. */
   CANCELLED: "cancelled",
+  /** Something outside the run's own outcomes failed; the counts are partial. */
+  FAILED: "failed",
 } as const;
 
 type BackfillStopReason =
@@ -110,6 +114,21 @@ export type CzUsJudgesBackfillReport = {
   deferred: number;
   requestsSpent: number;
 };
+
+/**
+ * A pass that stopped on something other than one of its own stop reasons.
+ *
+ * It carries the report the run had reached: the rows it applied are on the
+ * corpus whether or not the pass finished, and an operator who cannot see
+ * them cannot tell a first request that failed from a last one.
+ */
+export class CzUsJudgesBackfillError extends TaggedError(
+  "CzUsJudgesBackfillError",
+)<{
+  message: string;
+  report: CzUsJudgesBackfillReport;
+  cause: unknown;
+}> {}
 
 export type CzUsJudgesBackfillOptions = {
   scopedDb: ScopedDb;
@@ -155,7 +174,7 @@ type BackfillPageOptions = {
 };
 
 /**
- * Rows of one tier that have not been asked about yet, as a reader bound to
+ * Rows of one tier the court has not answered about yet, as a reader bound to
  * the run's handle and source.
  *
  * Both are constant for the life of a run and only the cursor moves, so they
@@ -206,8 +225,14 @@ const backfillPageReader =
             isNotNull(caseLawDecisions.sourceDocumentId),
             isNotNull(caseLawDecisions.sourceUrl),
             sql`${nalusRecordId} is not null`,
-            // Neither state: nothing has asked the court about this row's card.
-            or(sql`${recordCard} is null`, sql`${recordCard} = ''`),
+            // Nothing has asked the court about this row's card, or the answer
+            // said nothing about it. `read` and `absent` are the two durable
+            // answers and both leave the selection for good.
+            or(
+              sql`${recordCard} is null`,
+              sql`${recordCard} = ''`,
+              sql`${recordCard} = ${CZ_US_RECORD_CARD_STATE.UNAVAILABLE}`,
+            ),
             tier === BACKFILL_TIER.RULINGS
               ? eq(caseLawDecisions.decisionType, RULING_DECISION_TYPE)
               : sql`${caseLawDecisions.decisionType} is distinct from ${RULING_DECISION_TYPE}`,
@@ -248,6 +273,31 @@ const withRecordCard = (
     : encodeSourceRawEnvelope({ ...parts, detail: cardHtml });
 };
 
+/**
+ * The court's own answer that it holds no card, written onto the row.
+ *
+ * The checkpoint is the row's state, so an absence that is never written back
+ * would be re-asked on every later run: one durable answer, one request, ever.
+ * `jsonb_set` rather than a read-modify-write, so a crawl writing the same row
+ * at the same time keeps its own keys.
+ */
+const markRecordCardAbsent = async (
+  scopedDb: ScopedDb,
+  decisionId: SafeId<"caseLawDecision">,
+): Promise<void> => {
+  await scopedDb(async (tx) => {
+    // audit: skip — background case-law ingestion pipeline; public case-law data, not user actions
+    await tx
+      .update(caseLawDecisions)
+      .set({
+        metadata: sql`jsonb_set(coalesce(${caseLawDecisions.metadata}, '{}'::jsonb), ${`{${CZ_US_RECORD_CARD_METADATA_KEY}}`}::text[], ${JSON.stringify(
+          CZ_US_RECORD_CARD_STATE.ABSENT,
+        )}::text::jsonb, true)`,
+      })
+      .where(eq(caseLawDecisions.id, decisionId));
+  });
+};
+
 const reparsedWithCard = async (
   row: BackfillRow,
   raw: string,
@@ -286,7 +336,7 @@ export const runCzUsJudgesBackfill = async ({
   signal,
   onProgress,
 }: CzUsJudgesBackfillOptions): Promise<
-  Result<CzUsJudgesBackfillReport, UnhandledException>
+  Result<CzUsJudgesBackfillReport, CzUsJudgesBackfillError>
 > => {
   const report: CzUsJudgesBackfillReport = {
     stoppedBecause: BACKFILL_STOP_REASON.SOURCE_EXHAUSTED,
@@ -300,9 +350,17 @@ export const runCzUsJudgesBackfill = async ({
   const readPage = backfillPageReader(scopedDb, sourceId);
 
   // One session for the run: the card needs a court session, and opening one
-  // per decision would double what the run costs the publisher.
-  let session = await openSession(signal);
-  report.requestsSpent += 1;
+  // per decision would double what the run costs the publisher. Opened on
+  // first use, so a run with no budget and a run with no selectable row both
+  // cost the publisher nothing.
+  let session: NalusSession | null = null;
+  const currentSession = async (): Promise<NalusSession> => {
+    if (session === null) {
+      session = await openSession(signal);
+      report.requestsSpent += 1;
+    }
+    return session;
+  };
 
   const writeRow = async (
     row: BackfillRow,
@@ -349,24 +407,29 @@ export const runCzUsJudgesBackfill = async ({
   };
 
   const applyRow = async (row: BackfillRow): Promise<void> => {
-    const card = await fetchNalusRecordCard(row.nalusRecordId, session, signal);
+    const card = await fetchNalusRecordCard(
+      row.nalusRecordId,
+      await currentSession(),
+      signal,
+    );
     report.requestsSpent += 1;
 
     switch (card.type) {
-      case "read":
+      case CZ_US_RECORD_CARD_STATE.READ:
         await writeRow(row, card.html);
         return;
-      case "absent":
-        // The court states it holds no card for this record. Nothing to write
-        // back; the crawl states the row's own card state when it next
-        // observes it.
+      case CZ_US_RECORD_CARD_STATE.ABSENT:
+        // The court states it holds no card for this record. Written onto the
+        // row before the cursor moves, so the answer is spent once.
+        await sourceLease.beforeDatabaseMark();
+        await markRecordCardAbsent(scopedDb, row.id);
         report.cardAbsent += 1;
         return;
-      case "unavailable":
+      case CZ_US_RECORD_CARD_STATE.UNAVAILABLE:
         // A lapsed session answers this way too, so the next row opens a new
-        // one rather than spending the rest of the run on a dead cookie.
-        session = await openSession(signal);
-        report.requestsSpent += 1;
+        // one rather than spending the rest of the run on a dead cookie. The
+        // open waits for that row's own budget check.
+        session = null;
         report.deferred += 1;
         return;
       default:
@@ -403,7 +466,14 @@ export const runCzUsJudgesBackfill = async ({
             report.stoppedBecause = BACKFILL_STOP_REASON.PUBLISHER_LIMIT;
             return Result.ok(report);
           }
-          return applied;
+          report.stoppedBecause = BACKFILL_STOP_REASON.FAILED;
+          return Result.err(
+            new CzUsJudgesBackfillError({
+              message: applied.error.message,
+              report: { ...report },
+              cause: applied.error,
+            }),
+          );
         }
         after = row.id;
         onProgress?.({ ...report });

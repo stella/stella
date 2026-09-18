@@ -455,18 +455,23 @@ const extractAbstract = (
 // ── Record card (ResultDetail.aspx) ──────────────────────
 
 /**
- * Whether a row's record card has been read, stated on the row itself.
+ * What the court answered about a row's record card, stated on the row itself.
  *
  * Selectable, because it is what the judges backfill walks: a row stored
- * before this adapter read the card carries neither value, and one the court
- * served no card for carries `unavailable` and is not asked again.
+ * before this adapter read the card carries no value at all, `absent` is the
+ * court's own durable answer and leaves the selection for good, and
+ * `unavailable` says nothing about the row, so a later run asks again.
  */
 export const CZ_US_RECORD_CARD_METADATA_KEY = "recordCard";
 
 export const CZ_US_RECORD_CARD_STATE = {
   READ: "read",
+  ABSENT: "absent",
   UNAVAILABLE: "unavailable",
 } as const;
+
+export type CzUsRecordCardState =
+  (typeof CZ_US_RECORD_CARD_STATE)[keyof typeof CZ_US_RECORD_CARD_STATE];
 
 /**
  * The labels NALUS prints on a decision's record card, each mapped to the
@@ -800,14 +805,26 @@ const NALUS_SOURCE_FIELDS = {
   ),
 } as const satisfies Record<NalusDetailLabel, SourceFieldDisposition>;
 
+/**
+ * The record card as it reached the build.
+ *
+ * The parsed fields belong to the `read` branch alone, so a state that says
+ * the court served no card cannot carry fields and a state that says it did
+ * cannot be missing them. Any other state leaves the card's fields absent,
+ * never guessed back out of the document's prose.
+ */
+type ParsedRecordCard =
+  | {
+      state: typeof CZ_US_RECORD_CARD_STATE.READ;
+      fields: NalusDetailFields;
+    }
+  | {
+      state: Exclude<CzUsRecordCardState, typeof CZ_US_RECORD_CARD_STATE.READ>;
+    };
+
 type ParseDecisionPageOptions = {
   html: string;
-  /**
-   * The record card fetched beside the document, where one was served. Null
-   * for a payload stored before this adapter read the card: the fields it
-   * states are then absent, never guessed back out of the document's prose.
-   */
-  detail: NalusDetailFields | null;
+  recordCard: ParsedRecordCard;
   sourceUrl: string;
   sourceDocumentId: string;
   listedEcli: string | undefined;
@@ -819,7 +836,7 @@ type ParseDecisionPageOptions = {
 
 const parseDecisionPage = ({
   html,
-  detail,
+  recordCard,
   sourceUrl,
   sourceDocumentId,
   listedEcli,
@@ -832,6 +849,11 @@ const parseDecisionPage = ({
   if (!registrySign?.includes("ze dne")) {
     return null; // Empty page
   }
+
+  const detail =
+    recordCard.state === CZ_US_RECORD_CARD_STATE.READ
+      ? recordCard.fields
+      : null;
 
   const parsed = parseRegistrySign(registrySign);
   if (!parsed) {
@@ -923,7 +945,10 @@ const parseDecisionPage = ({
     decisionType: decisionForm?.toLowerCase(),
     fulltext: resolvedFulltext,
     sourceUrl,
-    ...(judges === undefined || judges.length === 0 ? {} : { judges }),
+    // Carried whenever the card was read, empty list included: a card whose
+    // rapporteur cell the court has blanked states that the decision has no
+    // judge on it, and dropping the field would leave the stored rows alone.
+    ...(judges === undefined ? {} : { judges }),
     textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
     metadata: checkedDecisionMetadata({
       caseNumber: parsed.caseNumber,
@@ -931,10 +956,7 @@ const parseDecisionPage = ({
       court,
       decisionDate: parsed.decisionDate,
       decisionType: decisionForm?.toLowerCase(),
-      [CZ_US_RECORD_CARD_METADATA_KEY]:
-        detail === null
-          ? CZ_US_RECORD_CARD_STATE.UNAVAILABLE
-          : CZ_US_RECORD_CARD_STATE.READ,
+      [CZ_US_RECORD_CARD_METADATA_KEY]: recordCard.state,
       ...(detail === null ? {} : detailMetadata(detail)),
       judge: judge || undefined,
       parallelQuotation: parallelQuotation || undefined,
@@ -1769,11 +1791,18 @@ export const openNalusSession = async (
  * lapsed session earns, and says nothing about the record. A caller that
  * conflated them would either re-ask forever or give up on a decision that
  * has a card.
+ *
+ * The three names are the row's own states, so the state a decision carries is
+ * the outcome's own tag rather than a second vocabulary mapped onto it.
+ * `status` is null where no response was served at all.
  */
 export type NalusRecordCardOutcome =
-  | { type: "read"; html: string }
-  | { type: "absent" }
-  | { type: "unavailable"; status: number };
+  | { type: typeof CZ_US_RECORD_CARD_STATE.READ; html: string }
+  | { type: typeof CZ_US_RECORD_CARD_STATE.ABSENT }
+  | {
+      type: typeof CZ_US_RECORD_CARD_STATE.UNAVAILABLE;
+      status: number | null;
+    };
 
 export const fetchNalusRecordCard = async (
   nalusRecordId: string,
@@ -1787,45 +1816,84 @@ export const fetchNalusRecordCard = async (
     headers: { Cookie: session.cookie },
   });
   if (response.ok) {
-    return { type: "read", html: await response.text() };
+    return {
+      type: CZ_US_RECORD_CARD_STATE.READ,
+      html: await response.text(),
+    };
   }
   await response.text();
   return response.status === 404 || response.status === 410
-    ? { type: "absent" }
-    : { type: "unavailable", status: response.status };
+    ? { type: CZ_US_RECORD_CARD_STATE.ABSENT }
+    : {
+        type: CZ_US_RECORD_CARD_STATE.UNAVAILABLE,
+        status: response.status,
+      };
 };
+
+/** No response was served, so the row states the recoverable gap. */
+const CARD_NOT_ASKED = {
+  type: CZ_US_RECORD_CARD_STATE.UNAVAILABLE,
+  status: null,
+} as const satisfies NalusRecordCardOutcome;
+
+/**
+ * What a payload with no card part says about the card.
+ *
+ * A re-parse asks nobody, so the row keeps the answer it already holds: an
+ * `absent` the court gave once is not downgraded to a gap a later run would
+ * spend a request on.
+ */
+const storedRecordCardOutcome = (
+  metadata: Record<string, unknown>,
+): NalusRecordCardOutcome =>
+  metadata[CZ_US_RECORD_CARD_METADATA_KEY] === CZ_US_RECORD_CARD_STATE.ABSENT
+    ? { type: CZ_US_RECORD_CARD_STATE.ABSENT }
+    : CARD_NOT_ASKED;
 
 /**
  * The record card beside the document, where the court served one.
  *
  * A failed card is not a failed decision: the document is the row, and the
- * card's fields are recoverable by the backfill that re-reads it. The row
- * says which state it is in rather than staying silent about it, so the gap
- * is selectable.
+ * card's fields are recoverable by the backfill that re-reads it. The outcome
+ * is carried through whole rather than collapsed to "no card", so the row
+ * states which of the two gaps it is in and only the recoverable one is
+ * asked about again.
  */
 const fetchRecordCard = async (
   listed: ListedDecision,
   session: NalusSession,
   signal: AbortSignal | undefined,
-): Promise<string | undefined> => {
-  if (listed.nalusRecordId === undefined) {
-    return undefined;
-  }
-  const outcome = await fetchNalusRecordCard(
-    listed.nalusRecordId,
-    session,
-    signal,
-  );
-  return outcome.type === "read" ? outcome.html : undefined;
-};
+): Promise<NalusRecordCardOutcome> =>
+  listed.nalusRecordId === undefined
+    ? CARD_NOT_ASKED
+    : await fetchNalusRecordCard(listed.nalusRecordId, session, signal);
 
 /** Every response the court served for one decision. */
 export type CzUsDecisionPayloads = {
   listed: ListedDecision;
   textHtml: string;
-  /** The record card, where one was read. */
-  detailHtml: string | undefined;
+  /** What the court answered when asked for the record card. */
+  recordCard: NalusRecordCardOutcome;
   abstractHtml: string | undefined;
+};
+
+/**
+ * The card outcome as the build reads it.
+ *
+ * A page the court served but the detail parser cannot read is not a card:
+ * the row states the recoverable gap, exactly as it does for a page the court
+ * did not serve, so a later run asks again.
+ */
+const parsedRecordCard = (
+  outcome: NalusRecordCardOutcome,
+): ParsedRecordCard => {
+  if (outcome.type !== CZ_US_RECORD_CARD_STATE.READ) {
+    return { state: outcome.type };
+  }
+  const fields = parseNalusDetail(outcome.html);
+  return fields === null
+    ? { state: CZ_US_RECORD_CARD_STATE.UNAVAILABLE }
+    : { state: CZ_US_RECORD_CARD_STATE.READ, fields };
 };
 
 /**
@@ -1838,12 +1906,18 @@ export type CzUsDecisionPayloads = {
 export const buildCzUsDecision = ({
   listed,
   textHtml,
-  detailHtml,
+  recordCard,
   abstractHtml,
 }: CzUsDecisionPayloads): IngestionResult | null => {
+  // Stored whenever the court served a page, whether or not it parsed: the
+  // payload is what a re-parse reads instead of asking the court again.
+  const detailHtml =
+    recordCard.type === CZ_US_RECORD_CARD_STATE.READ
+      ? recordCard.html
+      : undefined;
   const decision = parseDecisionPage({
     html: textHtml,
-    detail: detailHtml === undefined ? null : parseNalusDetail(detailHtml),
+    recordCard: parsedRecordCard(recordCard),
     sourceUrl: listed.sourceUrl,
     sourceDocumentId: listed.sourceDocumentId,
     listedEcli: listed.ecli,
@@ -1922,9 +1996,12 @@ const fetchListedDecision = async (
   }
   const responseHtml = await response.text();
 
-  const optionalPage = async (
-    read: () => Promise<string | undefined>,
-  ): Promise<string | undefined> => {
+  // A page beside the document: failing to read one is not failing to read
+  // the decision, so the caller states what the gap looks like on the row.
+  const optionalPage = async <T>(
+    read: () => Promise<T>,
+    whenUnread: T,
+  ): Promise<T> => {
     try {
       return await read();
     } catch (error) {
@@ -1933,12 +2010,13 @@ const fetchListedDecision = async (
       if (signal?.aborted || error instanceof NalusRateLimitedError) {
         throw error;
       }
-      return undefined;
+      return whenUnread;
     }
   };
 
-  const detailHtml = await optionalPage(
+  const recordCard = await optionalPage(
     async () => await fetchRecordCard(listed, session, signal),
+    CARD_NOT_ASKED,
   );
   const abstractHtml = await optionalPage(async () => {
     const abstractQuery = new URLSearchParams({ sz: listed.sz ?? "" });
@@ -1951,12 +2029,12 @@ const fetchListedDecision = async (
       return undefined;
     }
     return await abstractResponse.text();
-  });
+  }, undefined);
 
   const decision = buildCzUsDecision({
     listed,
     textHtml: responseHtml,
-    detailHtml,
+    recordCard,
     abstractHtml,
   });
   if (!decision) {
@@ -1968,7 +2046,9 @@ const fetchListedDecision = async (
         multiResponseSourceRaw({
           listingHtml: listed.listingHtml,
           textHtml: responseHtml,
-          detailHtml,
+          ...(recordCard.type === CZ_US_RECORD_CARD_STATE.READ
+            ? { detailHtml: recordCard.html }
+            : {}),
         }),
       ),
     };
@@ -2353,7 +2433,11 @@ const reparseStoredRaw = (
   const detailHtml = parts?.["detail"];
   const decision = parseDecisionPage({
     html: documentHtml,
-    detail: detailHtml === undefined ? null : parseNalusDetail(detailHtml),
+    recordCard: parsedRecordCard(
+      detailHtml === undefined
+        ? storedRecordCardOutcome(stored.metadata)
+        : { type: CZ_US_RECORD_CARD_STATE.READ, html: detailHtml },
+    ),
     sourceUrl: stored.sourceUrl,
     sourceDocumentId: stored.sourceDocumentId,
     listedEcli: stored.ecli ?? undefined,

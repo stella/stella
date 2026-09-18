@@ -61,6 +61,14 @@ export const DecisionJudges = ({
 };
 
 /**
+ * One slash and then something that is not a slash: an API-root-relative
+ * path. `//host/x` and `/\host/x` are network-path references that resolve
+ * against the scheme rather than the API root, so they are not addresses of
+ * this API and never reach the URL helper.
+ */
+const API_ROOT_RELATIVE_PATH = /^\/(?![/\\])/u;
+
+/**
  * Where the browser fetches one portrait from.
  *
  * The read hands over a path relative to the API root with the version
@@ -70,7 +78,7 @@ export const DecisionJudges = ({
  * is an API defect, not a portrait with a different address.
  */
 export const judgePortraitSrc = (path: string): string =>
-  path.startsWith("/")
+  API_ROOT_RELATIVE_PATH.test(path)
     ? browserApiRootUrl(`/${path.slice(1)}`)
     : panic(`Judge portrait path is not API-root-relative: ${path}`);
 

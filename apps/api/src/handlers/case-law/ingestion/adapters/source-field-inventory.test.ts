@@ -511,7 +511,7 @@ const czUsFixture = (): InventoryFixture => ({
       buildCzUsDecision({
         listed: { ...CZ_US_LISTING_ROW },
         textHtml: CZ_US_TEXT_PAGE,
-        detailHtml: CZ_US_RECORD_CARD,
+        recordCard: { type: "read", html: CZ_US_RECORD_CARD },
         abstractHtml: undefined,
       }) ?? panic("cz-us fixture did not build"),
     ),
