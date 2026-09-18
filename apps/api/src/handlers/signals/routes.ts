@@ -2,7 +2,7 @@ import Elysia from "elysia";
 
 import acceptSignal from "@/api/handlers/signals/acceptances/create";
 import assignSignal from "@/api/handlers/signals/assignments/create";
-import countOpenSignals from "@/api/handlers/signals/count";
+import countInbox from "@/api/handlers/signals/count";
 import dismissSignal from "@/api/handlers/signals/dismissals/create";
 import getSignal from "@/api/handlers/signals/get";
 import listSignals from "@/api/handlers/signals/list";
@@ -18,8 +18,9 @@ export const signalsRoute = new Elysia({ prefix: "/signals" })
     query: listSignals.config.query,
     permissions: listSignals.config.permissions,
   })
-  .get("/count", countOpenSignals.handler, {
-    permissions: countOpenSignals.config.permissions,
+  .get("/count", countInbox.handler, {
+    query: countInbox.config.query,
+    permissions: countInbox.config.permissions,
   })
   .post("/requests", createRequest.handler, {
     body: createRequest.config.body,
