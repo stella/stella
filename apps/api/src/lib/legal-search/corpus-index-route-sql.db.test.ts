@@ -2,6 +2,8 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { type SQL, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import { CASE_LAW_JURISDICTIONS } from "@stll/api-contract/case-law-jurisdictions";
+
 import { executedRows } from "@/api/lib/db/executed-rows";
 import {
   CORPUS_INDEX_MANIFESTS,
@@ -16,10 +18,9 @@ import { createTestPglite } from "@/api/tests/pglite-test-db";
  * TypeScript, which the projection writer derives `desired_index_id` from,
  * and `corpusIndexIdSqlFromManifest` in the queries that decide whether a
  * generation holds a row. Both are proved equal here against a real
- * PostgreSQL, for every declared manifest and every jurisdiction its route
- * mentions, in both letter cases. A route rule changed on one side alone
- * fails this test rather than silently dropping every hit of that
- * generation.
+ * PostgreSQL, for every declared manifest and every jurisdiction it routes, in
+ * both letter cases. A route rule changed on one side alone fails this test
+ * rather than silently dropping every hit of that generation.
  */
 
 let client: Awaited<ReturnType<typeof createTestPglite>>;
@@ -27,13 +28,15 @@ let db: ReturnType<typeof drizzle>;
 
 const DB_TEST_TIMEOUT_MS = 120_000;
 
-/** Jurisdictions the manifest's route decides an index for. */
+/** Jurisdictions the manifest routes an index for. */
 const routedJurisdictions = (
   manifest: (typeof CORPUS_INDEX_MANIFESTS)[keyof typeof CORPUS_INDEX_MANIFESTS],
 ): readonly string[] => {
   const declared =
     manifest.route.type === "case_law_group"
-      ? Object.keys(manifest.route.byJurisdiction)
+      ? // The whole declared union, not the groups the generation was created
+        // with: a jurisdiction declared today routes into every generation.
+        CASE_LAW_JURISDICTIONS
       : // The legislation route is open by design: a jurisdiction needs no
         // manifest entry, so the ones a corpus exists for stand for all.
         ["CZE", "SVK", "POL", "EU"];

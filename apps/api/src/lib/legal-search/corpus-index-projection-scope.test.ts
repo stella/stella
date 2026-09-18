@@ -68,9 +68,17 @@ test("a route scope has one manifest-validated physical predicate", () => {
       CORPUS_INDEX_MANIFESTS.case_law_v5,
     ),
   ).toBe("case_law_v5_pol");
+  // An index id off the declared jurisdictions, and a grouped jurisdiction's
+  // own code, which names no index either.
   expect(() =>
     indexIdForCorpusProjectionWorkScope(
-      { type: "route", indexId: "case_law_v5_hun" },
+      { type: "route", indexId: "case_law_v5_rou" },
+      CORPUS_INDEX_MANIFESTS.case_law_v5,
+    ),
+  ).toThrow("Corpus index id is not a manifest route");
+  expect(() =>
+    indexIdForCorpusProjectionWorkScope(
+      { type: "route", indexId: "case_law_v5_cze" },
       CORPUS_INDEX_MANIFESTS.case_law_v5,
     ),
   ).toThrow("Corpus index id is not a manifest route");
