@@ -1,5 +1,11 @@
 # @stll/ui
 
+## 0.31.0
+
+### Minor Changes
+
+- [#3551](https://github.com/stella/stella/pull/3551) [`708194f`](https://github.com/stella/stella/commit/708194f5132bb512d9aae6441d3cdb52bf984a08) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `FileInput` picks a single file behind a translated `Button` and shows the chosen name, replacing the browser's untranslatable "Choose file" chrome. `Input` no longer accepts `type="file"`.
+
 ## 0.30.0
 
 ### Minor Changes
