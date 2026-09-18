@@ -40,6 +40,7 @@ import type {
   SystemOneQuestion,
   SystemOneQuestions,
   SystemOneState,
+  SystemOneUsage,
 } from "@/api/lib/workflow/decisions/system-one";
 import {
   isSystemOneAnswerForQuestion,
@@ -108,6 +109,9 @@ type DecideManyResult<TQuestions extends SystemOneQuestions> = {
   decisions: Decisions<TQuestions>;
   /** The versioned model that answered; null when nothing was asked. */
   model: string | null;
+  /** What the call cost, for a caller that prices a run; null when nothing was asked. */
+  usage: SystemOneUsage | null;
+  latencyMs: number | null;
 };
 
 export type DecideOptions<TQuestion extends SystemOneQuestion> =
@@ -201,7 +205,12 @@ export const decideMany = async <TQuestions extends SystemOneQuestions>({
     Object.keys(questions).length === 0 ||
     (usageMetering && orgAIConfig && model.keySource === "instance")
   ) {
-    return { decisions: undecidedAll(questions, "no-backend"), model: null };
+    return {
+      decisions: undecidedAll(questions, "no-backend"),
+      model: null,
+      usage: null,
+      latencyMs: null,
+    };
   }
   const timeout = AbortSignal.timeout(timeoutMs);
   const asked = await model.ask({
@@ -216,7 +225,12 @@ export const decideMany = async <TQuestions extends SystemOneQuestions>({
       abortSignal.throwIfAborted();
     }
     captureError(asked.error, { source: "decide", decision: id });
-    return { decisions: undecidedAll(questions, "failed"), model: null };
+    return {
+      decisions: undecidedAll(questions, "failed"),
+      model: null,
+      usage: null,
+      latencyMs: null,
+    };
   }
 
   if (usageMetering) {
@@ -279,6 +293,8 @@ export const decideMany = async <TQuestions extends SystemOneQuestions>({
       ? decisions
       : panic("Decision construction lost a question"),
     model: asked.value.model,
+    usage: asked.value.usage,
+    latencyMs: asked.value.latencyMs,
   };
 };
 

@@ -4318,6 +4318,12 @@
     "validity": "Hatályos {from} és {to} között"
   },
   "styleSets": {
+    "convertConfirm": "Convert",
+    "convertDescription": "Rebuild this document inside one of your style sets. The wording stays as it is; every paragraph is matched to a style from the set. The original document is kept.",
+    "convertPending": "Converting…",
+    "convertSuccess": "Created {fileName}",
+    "convertTitle": "Convert to house style",
+    "convertToHouseStyle": "Convert to house style…",
     "create": "Létrehozás",
     "defaultBadge": "Alapértelmezett",
     "deleteConfirmation": "A megerősítéshez írja be a stíluskészlet nevét.",
@@ -4390,6 +4396,7 @@
     "importTitle": "Stíluskészlet importálása",
     "loadFailed": "A stíluskészletek nem tölthetők be",
     "newDocument": "Új dokumentum",
+    "noStyleGuide": "No style guide yet",
     "pickerDescription": "Válassza ki az új fájl formázási rendszerét.",
     "renameTitle": "Stíluskészlet átnevezése",
     "replace": "Forrás cseréje",

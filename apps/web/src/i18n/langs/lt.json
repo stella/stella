@@ -4318,6 +4318,12 @@
     "validity": "Galioja nuo {from} iki {to}"
   },
   "styleSets": {
+    "convertConfirm": "Convert",
+    "convertDescription": "Rebuild this document inside one of your style sets. The wording stays as it is; every paragraph is matched to a style from the set. The original document is kept.",
+    "convertPending": "Converting…",
+    "convertSuccess": "Created {fileName}",
+    "convertTitle": "Convert to house style",
+    "convertToHouseStyle": "Convert to house style…",
     "create": "Kurti",
     "defaultBadge": "Numatytasis",
     "deleteConfirmation": "Patvirtinkite įvesdami stilių rinkinio pavadinimą.",
@@ -4390,6 +4396,7 @@
     "importTitle": "Importuoti stilių rinkinį",
     "loadFailed": "Nepavyko įkelti stilių rinkinių",
     "newDocument": "Naujas dokumentas",
+    "noStyleGuide": "No style guide yet",
     "pickerDescription": "Pasirinkite naujo failo formatavimo sistemą.",
     "renameTitle": "Pervadinti stilių rinkinį",
     "replace": "Pakeisti šaltinį",

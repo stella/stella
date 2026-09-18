@@ -102,7 +102,7 @@ type SystemOneAnswers<TQuestions extends SystemOneQuestions> = {
   [K in keyof TQuestions]: SystemOneAnswerFor<TQuestions[K]>;
 };
 
-type SystemOneUsage = { inputTokens: number; outputTokens: number };
+export type SystemOneUsage = { inputTokens: number; outputTokens: number };
 
 type SystemOneResult<TQuestions extends SystemOneQuestions> = {
   /** The versioned model that answered, as the response reports it. */

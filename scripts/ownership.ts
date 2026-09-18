@@ -312,6 +312,23 @@ export const OWNERSHIP = [
     enforcement: { kind: "none" },
   },
   {
+    id: "house-style-conversion",
+    capability:
+      "Converting a document into a style set's house style: its style catalogue, its guide, and the per-paragraph mapping",
+    owner: ["apps/api/src/lib/house-style/"],
+    summary:
+      "A style set is a DOCX whose styles carry a firm's drafting hierarchy. " +
+      "One module reads the catalogue those styles form, one holds the " +
+      "written guide that says what each is for, one reads the features of " +
+      "the paragraphs being converted, one decides a style per paragraph " +
+      "(the decision model first, a rule over the catalogue's levels for " +
+      "whatever is left), and one writes the result into the style set's own " +
+      "package so its numbering, fonts and page setup come along. The " +
+      "handlers and the `house-style-convert` script are callers: they " +
+      "supply bytes and report the mapping, and neither re-implements a step.",
+    enforcement: { kind: "none" },
+  },
+  {
     id: "typed-decisions",
     capability:
       "Typed decisions: a choice from a closed set, a yes/no or a score, asked of a decision model",
@@ -347,6 +364,11 @@ export const OWNERSHIP = [
           path: "apps/api/src/scripts/polarity-system-one-compare.ts",
           reason:
             "Measures the raw model against the corpus with a pinned client; the floor is what it calibrates, so it reads below `decide`.",
+        },
+        {
+          path: "apps/api/src/lib/house-style/assign.test.ts",
+          reason:
+            "Builds a client over a fake wire so the two tiers are measured against answers that passed the transport's own per-question binding.",
         },
       ],
     },

@@ -4318,6 +4318,12 @@
     "validity": "Platné od {from} do {to}"
   },
   "styleSets": {
+    "convertConfirm": "Convert",
+    "convertDescription": "Rebuild this document inside one of your style sets. The wording stays as it is; every paragraph is matched to a style from the set. The original document is kept.",
+    "convertPending": "Converting…",
+    "convertSuccess": "Created {fileName}",
+    "convertTitle": "Convert to house style",
+    "convertToHouseStyle": "Convert to house style…",
     "create": "Vytvořit",
     "defaultBadge": "Výchozí",
     "deleteConfirmation": "Pro potvrzení napište název sady stylů.",
@@ -4390,6 +4396,7 @@
     "importTitle": "Importovat sadu stylů",
     "loadFailed": "Sady stylů se nepodařilo načíst",
     "newDocument": "Nový dokument",
+    "noStyleGuide": "No style guide yet",
     "pickerDescription": "Zvolte systém formátování nového souboru.",
     "renameTitle": "Přejmenovat sadu stylů",
     "replace": "Nahradit zdroj",

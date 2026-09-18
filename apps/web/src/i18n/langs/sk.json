@@ -4318,6 +4318,12 @@
     "validity": "Platné od {from} do {to}"
   },
   "styleSets": {
+    "convertConfirm": "Convert",
+    "convertDescription": "Rebuild this document inside one of your style sets. The wording stays as it is; every paragraph is matched to a style from the set. The original document is kept.",
+    "convertPending": "Converting…",
+    "convertSuccess": "Created {fileName}",
+    "convertTitle": "Convert to house style",
+    "convertToHouseStyle": "Convert to house style…",
     "create": "Vytvoriť",
     "defaultBadge": "Predvolené",
     "deleteConfirmation": "Na potvrdenie zadajte názov sady štýlov.",
@@ -4390,6 +4396,7 @@
     "importTitle": "Importovať sadu štýlov",
     "loadFailed": "Sady štýlov sa nepodarilo načítať",
     "newDocument": "Nový dokument",
+    "noStyleGuide": "No style guide yet",
     "pickerDescription": "Vyberte systém formátovania nového súboru.",
     "renameTitle": "Premenovať sadu štýlov",
     "replace": "Nahradiť zdroj",

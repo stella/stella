@@ -11,7 +11,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
 import { brandPersistedStyleSetId } from "@/api/lib/safe-id-boundaries";
-import { styleSetColumns } from "@/api/lib/style-sets";
+import { styleSetListColumns } from "@/api/lib/style-sets";
 
 const querySchema = t.Object({
   limit: t.Optional(
@@ -24,8 +24,9 @@ const config = {
   description:
     "List the organization's style sets, most recently updated first, with " +
     "cursor pagination; deleted ones are left out. Each item carries the " +
-    "name, file name, size in bytes, and timestamps, and the response also " +
-    "reports the maximum number of style sets the organization may hold.",
+    "name, file name, size in bytes, timestamps, and whether a style guide " +
+    "has been written for it, and the response also reports the maximum " +
+    "number of style sets the organization may hold.",
   permissions: { styleSet: ["use"] },
   access: "read",
   mcp: { type: "capability", reason: "template_authoring_ui" },
@@ -67,7 +68,7 @@ export default createSafeRootHandler(
       safeDb((tx) =>
         tx
           .select({
-            ...styleSetColumns,
+            ...styleSetListColumns,
             updatedAtCursor: styleSetCursor.cursorValue.as("updated_at_cursor"),
           })
           .from(styleSets)
@@ -92,6 +93,7 @@ export default createSafeRootHandler(
         sizeBytes: item.sizeBytes,
         createdAt: item.createdAt,
         updatedAt: item.updatedAt,
+        hasStyleGuide: item.hasStyleGuide,
       })),
       styleSetsCountLimit: LIMITS.styleSetsCount,
     });

@@ -1,6 +1,9 @@
 import { sql } from "drizzle-orm";
 
+import type { StyleGuide } from "@/api/lib/house-style/guide";
+
 import {
+  jsonb,
   organization,
   orgPolicies,
   p,
@@ -22,6 +25,7 @@ export const styleSets = p.pgTable(
     s3Key: p.varchar("s3_key", { length: 512 }).notNull(),
     cleanupS3Key: p.varchar("cleanup_s3_key", { length: 512 }),
     sizeBytes: p.integer("size_bytes").notNull(),
+    styleGuide: jsonb("style_guide").$type<StyleGuide>(),
     createdBy: p
       .text("created_by")
       .notNull()
