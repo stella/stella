@@ -77,10 +77,12 @@ describe("classifyMarker", () => {
     expect(classifyMarker("if individual", "statement")).toEqual({
       kind: "if",
       expr: "individual",
+      filters: [],
     });
     expect(classifyMarker("elif company", "statement")).toEqual({
       kind: "elif",
       expr: "company",
+      filters: [],
     });
     expect(classifyMarker("else", "statement")).toEqual({ kind: "else" });
     expect(classifyMarker("endif", "statement")).toEqual({ kind: "endif" });
@@ -110,6 +112,57 @@ describe("classifyMarker", () => {
   test("a tag word is not an output marker and a path is not a tag", () => {
     expect(classifyMarker("if individual")).toBeNull();
     expect(classifyMarker("tenant.name", "statement")).toBeNull();
+  });
+
+  test("a condition tag naming one field carries that boolean's chain", () => {
+    expect(
+      classifyMarker(
+        'if buyer_is_a_consumer | label("Buyer is a consumer") | ai("Is the buyer a consumer?")',
+        "statement",
+      ),
+    ).toEqual({
+      kind: "if",
+      expr: "buyer_is_a_consumer",
+      filters: [
+        {
+          name: "label",
+          args: [{ kind: "positional", value: "Buyer is a consumer" }],
+        },
+        {
+          name: "ai",
+          args: [{ kind: "positional", value: "Is the buyer a consumer?" }],
+        },
+      ],
+    });
+    expect(
+      classifyMarker('elif signed | label("Signed")', "statement"),
+    ).toEqual({
+      kind: "elif",
+      expr: "signed",
+      filters: [
+        { name: "label", args: [{ kind: "positional", value: "Signed" }] },
+      ],
+    });
+  });
+
+  test("a pipe the filter catalogue does not read stays part of the expression", () => {
+    // `items|length` is Jinja the author wrote, not a configuration: reading it
+    // as a chain would silently drop half the condition.
+    expect(classifyMarker("if items|length > 0", "statement")).toEqual({
+      kind: "if",
+      expr: "items|length > 0",
+      filters: [],
+    });
+    expect(classifyMarker("if rent > 1000 and signed", "statement")).toEqual({
+      kind: "if",
+      expr: "rent > 1000 and signed",
+      filters: [],
+    });
+    expect(classifyMarker("if signed |", "statement")).toEqual({
+      kind: "if",
+      expr: "signed |",
+      filters: [],
+    });
   });
 
   test("parses a filter chain onto the placeholder", () => {

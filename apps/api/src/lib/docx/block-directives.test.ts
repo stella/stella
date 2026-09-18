@@ -339,9 +339,38 @@ describe("scanBlockDirectives", () => {
       {
         kind: "if",
         expression: "has_guarantor",
+        filters: [],
         paragraphIndex: 1,
       },
       { kind: "endif", expression: "", paragraphIndex: 3 },
+    ]);
+  });
+
+  test("a condition tag's chain is the boolean's configuration, not its expression", () => {
+    const xml = WRAP(
+      [
+        P('{% if has_guarantor | checkbox | label("Has a guarantor") %}'),
+        P("Guarantor clause"),
+        P("{% endif %}"),
+      ].join(""),
+    );
+    const directives = scanBlockDirectives(parseBody(xml));
+
+    expect(directives).toEqual([
+      {
+        kind: "if",
+        // The evaluator reads the bare path: the chain never reaches it.
+        expression: "has_guarantor",
+        filters: [
+          { name: "checkbox", args: [] },
+          {
+            name: "label",
+            args: [{ kind: "positional", value: "Has a guarantor" }],
+          },
+        ],
+        paragraphIndex: 0,
+      },
+      { kind: "endif", expression: "", paragraphIndex: 2 },
     ]);
   });
 
@@ -589,6 +618,30 @@ describe("processBlockDirectives — conditionals", () => {
     const texts = bodyTexts(body);
     expect(texts).toEqual(["Intro", "Outro"]);
   });
+
+  test.each([
+    [true, ["Intro", "Consumer clause", "Outro"]],
+    [false, ["Intro", "Outro"]],
+  ] as const)(
+    "a configured condition fills on the boolean alone (%s)",
+    (answer, expected) => {
+      const xml = WRAP(
+        [
+          P("Intro"),
+          P(
+            '{% if buyer_is_a_consumer | checkbox | ai("Is the buyer a consumer?") %}',
+          ),
+          P("Consumer clause"),
+          P("{% endif %}"),
+          P("Outro"),
+        ].join(""),
+      );
+      const body = parseBody(xml);
+      processBlockDirectives(body, { buyer_is_a_consumer: answer });
+
+      expect(bodyTexts(body)).toEqual([...expected]);
+    },
+  );
 
   test("if/else: true branch", () => {
     const xml = WRAP(

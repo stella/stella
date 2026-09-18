@@ -222,7 +222,7 @@ export const configureTemplateDocument = async ({
 
   // A rule that decides whether a block shows goes in the tag that shows it:
   // there is no value to print, so there is no value marker to carry a chain.
-  const conditionRewrites: ConditionRewrite[] = [];
+  const conditionCandidates: (ConditionRewrite & { index: number })[] = [];
   const candidates: (FieldFilterRewrite & { index: number })[] = [];
   for (const { field, filters, index } of configured) {
     const carriers = carrierPaths(field, markers);
@@ -237,10 +237,15 @@ export const configureTemplateDocument = async ({
       );
       continue;
     }
-    if (field.condition !== undefined && declaredHere.has(field.path)) {
-      conditionRewrites.push({
+    // A condition the document only asks keeps the rest of its configuration
+    // there too: its label and its prompt have no value marker to go to. A
+    // rule answers the question instead, so its tag asks nothing.
+    if (declaredHere.has(field.path)) {
+      conditionCandidates.push({
+        index,
         path: field.path,
         expression: field.condition,
+        filters: field.condition === undefined ? filters : [],
       });
       continue;
     }
@@ -248,25 +253,58 @@ export const configureTemplateDocument = async ({
   }
 
   const refused = new Set<string>();
-  for (const candidate of candidates) {
+  const refuseUnwritable = ({
+    filters,
+    form,
+    index,
+    path,
+    reports,
+  }: {
+    filters: readonly FilterCall[];
+    form: "output" | "statement";
+    index: number;
+    path: string;
+    reports: string;
+  }): void => {
     for (const { filter, reason, value } of unwritableFilterValues(
-      candidate.filters,
-      arrays.has(candidate.path) ? "statement" : "output",
+      filters,
+      form,
     )) {
-      refused.add(candidate.path);
+      refused.add(path);
       issues.push(
         unwritableValueIssue({
           filter,
-          index: candidate.index,
-          path: candidate.declares ?? candidate.path,
+          index,
+          path: reports,
           reason,
           value: JSON.stringify(value),
         }),
       );
     }
+  };
+  for (const candidate of candidates) {
+    refuseUnwritable({
+      filters: candidate.filters,
+      form: arrays.has(candidate.path) ? "statement" : "output",
+      index: candidate.index,
+      path: candidate.path,
+      reports: candidate.declares ?? candidate.path,
+    });
+  }
+  for (const candidate of conditionCandidates) {
+    refuseUnwritable({
+      filters: candidate.filters,
+      form: "statement",
+      index: candidate.index,
+      path: candidate.path,
+      reports: candidate.path,
+    });
   }
 
   const rewrites = candidates.filter(({ path }) => !refused.has(path));
+  const conditionRewrites = conditionCandidates.filter(
+    ({ path }) => !refused.has(path),
+  );
   const { buffer: rewritten, written } = await writeFieldFilters(
     buffer,
     rewrites,
@@ -277,10 +315,8 @@ export const configureTemplateDocument = async ({
       issues.push(noCarrierIssue(declares ?? path, index));
     }
   }
-  for (const { path } of conditionRewrites) {
+  for (const { index, path } of conditionRewrites) {
     if (!written.has(path)) {
-      const index =
-        configured.find(({ field }) => field.path === path)?.index ?? 0;
       issues.push(noCarrierIssue(path, index));
     }
   }

@@ -45,12 +45,16 @@ export type FieldFilterRewrite = {
   declares?: string;
 };
 
-/** The rule to write into every `{% if %}` / `{% elif %}` tag that names this
- *  path. A rule that decides whether a block shows has no value marker to live
- *  in: the tag it gates is the document's only place for it. */
+/** What to write into every `{% if %}` / `{% elif %}` tag that names this path.
+ *  A condition the document never prints has no value marker to live in: the
+ *  tag it gates is the document's only place for its rule, and for what to call
+ *  the question and how the model should answer it. */
 export type ConditionRewrite = {
   path: string;
-  expression: string;
+  /** The rule the tag evaluates, or `undefined` for a question the filler
+   *  answers, which leaves the tag naming the path it already names. */
+  expression: string | undefined;
+  filters: readonly FilterCall[];
 };
 
 export type WriteFieldFiltersResult = {
@@ -75,7 +79,7 @@ type TextRange = { start: number; end: number; value: string };
  * document order, so one walk covers them.
  */
 type ParagraphRewriteOptions = {
-  conditions: ReadonlyMap<string, string>;
+  conditions: ReadonlyMap<string, ConditionRewrite>;
   markers: readonly ScannedMarker[];
   rewrites: ReadonlyMap<string, FieldFilterRewrite>;
   scopes: RowScope[];
@@ -105,18 +109,22 @@ const rewriteParagraph = ({
       continue;
     }
     if (meta.kind === "if" || meta.kind === "elif") {
-      // Only a tag that names one path can carry a rule for it: an expression
-      // the author already wrote is theirs, not a reference to a named rule.
-      const expression = isFieldPath(meta.expr)
-        ? conditions.get(qualifyRowScopedPlaceholder(meta.expr, scopes))
-        : undefined;
-      if (expression !== undefined) {
-        written.add(qualifyRowScopedPlaceholder(meta.expr, scopes));
+      // Only a tag that names one path can carry that path's configuration: an
+      // expression the author already wrote is theirs, not a reference to a
+      // named rule.
+      if (!isFieldPath(meta.expr)) {
+        continue;
+      }
+      const scopedPath = qualifyRowScopedPlaceholder(meta.expr, scopes);
+      const rewrite = conditions.get(scopedPath);
+      if (rewrite !== undefined) {
+        written.add(scopedPath);
         rewriteTo(
           marker,
           renderConditionTag({
             kind: meta.kind,
-            expression,
+            expression: rewrite.expression ?? meta.expr,
+            filters: rewrite.filters,
             prefix: marker.prefix,
           }),
         );
@@ -206,7 +214,7 @@ export const writeFieldFilters = async (
     rewrites.map((rewrite) => [rewrite.path, rewrite] as const),
   );
   const conditions = new Map(
-    conditionRewrites.map(({ expression, path }) => [path, expression]),
+    conditionRewrites.map((rewrite) => [rewrite.path, rewrite] as const),
   );
   const zip = await JSZip.loadAsync(docxBuffer);
   let changed = false;
