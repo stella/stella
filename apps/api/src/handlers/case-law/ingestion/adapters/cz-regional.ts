@@ -10,10 +10,12 @@ import {
 } from "@/api/handlers/case-law/consts";
 import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import {
+  backlogSurface,
   defineSourceAdapter,
   EMPTY_AST,
+  excludedSourceSurface,
   isPersistableSourceDocumentId,
-  PENDING_SOURCE_FIELD_INVENTORY,
+  pendingSourceFieldInventory,
   SOURCE_TOTAL_PROBE_FAILURE,
   sourceTotalProbeFailed,
   sourceTotalRead,
@@ -25,6 +27,8 @@ import type {
   ReconciliationBuildOutcome,
   ReconciliationSlicePage,
   ReconciliationSlicePageOptions,
+  SourceSurfaceCensus,
+  SourceSurfaceDisposition,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/adapters/calendar-day-slice-walk";
 import {
@@ -895,9 +899,84 @@ const buildCzRegionalFromPayload = async (
     ? await buildCzRegionalDecision(payload, signal)
     : { type: "unkeyable" };
 
+/**
+ * Every payload this service serves for one decision, and whether the row
+ * keeps it.
+ *
+ * The crawl reads a day listing and then one document payload per row, and
+ * keeps the document alone — as the publisher's own JSON rather than as a
+ * named part, which is why the part cannot be read back from a stored row.
+ * The chain of later documents affecting this one is a request per decision
+ * the crawl does not make; everything else the service exposes is a
+ * corpus-wide index, a completion list, an export of a result set or an
+ * authenticated editing surface.
+ */
+const SOURCE_SURFACES = [
+  "year-index",
+  "month-index",
+  "day-index",
+  "listing",
+  "document",
+  "chain",
+  "site-search",
+  "typeahead",
+  "allowed-registries",
+  "bulk-export",
+  "permalink-html",
+  "editor-workflow",
+] as const;
+
+const CZ_REGIONAL_SOURCE_SURFACES = {
+  surfaces: {
+    "year-index": excludedSourceSurface(
+      "a corpus-wide count index, useful as a coverage probe and stating no field of any decision",
+    ),
+    "month-index": excludedSourceSurface(
+      "the same count index at a narrower granularity",
+    ),
+    "day-index": excludedSourceSurface(
+      "the same count index per day; an absent day already answers what it would state",
+    ),
+    listing: backlogSurface(
+      ADAPTER_KEYS.CZ_REGIONAL,
+      "the listing row is the sole carrier of several fields and is dropped once the document payload for the row has been fetched",
+    ),
+    document: backlogSurface(
+      ADAPTER_KEYS.CZ_REGIONAL,
+      "the document payload is stored as the publisher's own JSON rather than as a named part, so a reader of a stored row cannot tell which response it holds",
+    ),
+    chain: backlogSurface(
+      ADAPTER_KEYS.CZ_REGIONAL,
+      "the chain of later documents affecting this one is one request per decision that the crawl does not make; the forward edge is inside a payload already fetched",
+    ),
+    "site-search": excludedSourceSurface(
+      "a subset of the listing row, with match fragments that depend on the query that produced them",
+    ),
+    typeahead: excludedSourceSurface(
+      "completions, not a payload about any one decision",
+    ),
+    "allowed-registries": excludedSourceSurface(
+      "corpus vocabulary, not a payload about any one decision",
+    ),
+    "bulk-export": excludedSourceSurface(
+      "an export of a result set, page-limited and scoped to the query rather than to a decision",
+    ),
+    "permalink-html": excludedSourceSurface(
+      "a client-rendered shell that states no field",
+    ),
+    "editor-workflow": excludedSourceSurface(
+      "authenticated surfaces for the service's own editors; they take submissions rather than publish decisions",
+    ),
+  } as const satisfies Record<
+    (typeof SOURCE_SURFACES)[number],
+    SourceSurfaceDisposition
+  >,
+} as const satisfies SourceSurfaceCensus;
+
 export const czRegionalAdapter = defineSourceAdapter({
   key: ADAPTER_KEYS.CZ_REGIONAL,
-  sourceFields: PENDING_SOURCE_FIELD_INVENTORY,
+  sourceSurfaces: CZ_REGIONAL_SOURCE_SURFACES,
+  sourceFields: pendingSourceFieldInventory(ADAPTER_KEYS.CZ_REGIONAL),
   language: "cs",
   minRequestIntervalMs: 200,
   // rozhodnuti.justice.cz returns 100 items per page; each

@@ -11,7 +11,7 @@ import {
   defineSourceAdapter,
   EMPTY_AST,
   isPersistableSourceDocumentId,
-  PENDING_SOURCE_FIELD_INVENTORY,
+  pendingSourceFieldInventory,
   SOURCE_TOTAL_PROBE_FAILURE,
   sourceTotalProbeFailed,
   sourceTotalRead,
@@ -23,6 +23,7 @@ import type {
   ReconciliationSlicePageOptions,
   SourceAdapter,
 } from "@/api/handlers/case-law/ingestion/adapter";
+import { atRisSourceSurfaces } from "@/api/handlers/case-law/ingestion/adapters/at-ris-source-surfaces";
 import { fetchAtRisWithRetry } from "@/api/handlers/case-law/ingestion/adapters/at-ris-throttle";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import type { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
@@ -1045,7 +1046,8 @@ const createAdapter = <const TKey extends AtRisAdapterKey>(
 ): AtRisSourceAdapter<TKey> =>
   defineSourceAdapter({
     key: source.key,
-    sourceFields: PENDING_SOURCE_FIELD_INVENTORY,
+    sourceSurfaces: atRisSourceSurfaces(source.key),
+    sourceFields: pendingSourceFieldInventory(source.key),
     language: LANGUAGE,
     minRequestIntervalMs: REQUEST_INTERVAL_MS,
     pageTimeoutMs: PAGE_TIMEOUT_MS,

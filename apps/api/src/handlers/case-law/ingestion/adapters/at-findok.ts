@@ -9,10 +9,12 @@ import {
   PARSER_VERSIONS,
 } from "@/api/handlers/case-law/consts";
 import {
+  backlogSurface,
   defineSourceAdapter,
   EMPTY_AST,
+  excludedSourceSurface,
   isPersistableSourceDocumentId,
-  PENDING_SOURCE_FIELD_INVENTORY,
+  pendingSourceFieldInventory,
   sourceTotalRead,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type {
@@ -21,6 +23,8 @@ import type {
   ReconciliationSlicePage,
   ReconciliationSlicePageOptions,
   SourceAdapter,
+  SourceSurfaceCensus,
+  SourceSurfaceDisposition,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   fetchAtFindokWithRetry,
@@ -711,6 +715,53 @@ const parseListingPayload = (
     : undefined;
 };
 
+/**
+ * Every payload this service serves for one decision, and whether the row
+ * keeps it.
+ *
+ * The crawl reads a manifest row and the archive the row points at, and stores
+ * both inside a payload shape of its own rather than as named parts. The
+ * archive holds two documents and the crawl opens one of them: the headnote
+ * document is already paid for and never read.
+ */
+const SOURCE_SURFACES = [
+  "listing",
+  "document-zip",
+  "document-xml",
+  "headnote-xml",
+  "document-pdf",
+  "web-document",
+] as const;
+
+const AT_FINDOK_SOURCE_SURFACES = {
+  surfaces: {
+    listing: backlogSurface(
+      ADAPTER_KEYS.AT_FINDOK,
+      "the manifest row is stored inside the adapter's own payload shape rather than as a named part, so a reader of a stored row cannot tell which response it holds",
+    ),
+    "document-zip": excludedSourceSurface(
+      "the archive is the transport for the document entries below; the entries are the payloads",
+    ),
+    "document-xml": backlogSurface(
+      ADAPTER_KEYS.AT_FINDOK,
+      "the decision text entry is stored inside the adapter's own payload shape rather than as a named part",
+    ),
+    "headnote-xml": backlogSurface(
+      ADAPTER_KEYS.AT_FINDOK,
+      "the second entry of the archive already downloaded is never opened, and its element names differ from the entry that is",
+    ),
+    "document-pdf": excludedSourceSurface(
+      "a heavier rendition of the same text the archive's document entry states",
+    ),
+    "web-document": excludedSourceSurface(
+      "its address carries a session-flow token, so it cannot be constructed, and the page blends material from other publishers",
+    ),
+  } as const satisfies Record<
+    (typeof SOURCE_SURFACES)[number],
+    SourceSurfaceDisposition
+  >,
+} as const satisfies SourceSurfaceCensus;
+
 export const createAtFindokAdapter = (
   dependencyOverrides: Partial<AtFindokDependencies> = {},
 ): SourceAdapter & { readonly key: typeof ADAPTER_KEYS.AT_FINDOK } => {
@@ -718,7 +769,8 @@ export const createAtFindokAdapter = (
   const loadManifest = createManifestLoader(dependencies);
   return defineSourceAdapter({
     key: ADAPTER_KEYS.AT_FINDOK,
-    sourceFields: PENDING_SOURCE_FIELD_INVENTORY,
+    sourceSurfaces: AT_FINDOK_SOURCE_SURFACES,
+    sourceFields: pendingSourceFieldInventory(ADAPTER_KEYS.AT_FINDOK),
     language: LANGUAGE,
     minRequestIntervalMs: FINDOK_REQUEST_INTERVAL_MS,
     pageTimeoutMs: 10 * 60_000,

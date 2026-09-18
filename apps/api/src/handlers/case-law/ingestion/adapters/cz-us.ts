@@ -15,12 +15,14 @@ import {
   EMPTY_AST,
   encodeSourceRawEnvelope,
   excludedSourceField,
+  excludedSourceSurface,
   isPersistableSourceDocumentId,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   STORED_RAW_REPARSE_REJECTION,
   SOURCE_TOTAL_PROBE_FAILURE,
   sourceTotalProbeFailed,
   sourceTotalRead,
+  storedSourceSurface,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type {
   EmptyAst,
@@ -31,6 +33,8 @@ import type {
   ReconciliationSlicePageOptions,
   SourceFieldDisposition,
   SourceRawParts,
+  SourceSurfaceCensus,
+  SourceSurfaceDisposition,
   StoredRawReparseInput,
   StoredRawReparseOutcome,
 } from "@/api/handlers/case-law/ingestion/adapter";
@@ -616,9 +620,20 @@ export const parseNalusDetail = (html: string): NalusDetailFields | null => {
   return fields;
 };
 
-/** Every label the record card prints, whether or not the court filled it. */
-const listNalusSourceFields = (payload: string): readonly string[] => {
-  const $ = cheerio.load(payload);
+/**
+ * Every label the record card prints, whether or not the court filled it.
+ *
+ * The card is one part of the envelope, and the only part with labelled
+ * fields: the listing row, the document and the abstract this court serves
+ * beside it are prose and markup, so reading the card reads everything this
+ * source states as a field.
+ */
+const listNalusSourceFields = (parts: SourceRawParts): readonly string[] => {
+  const recordCard = parts["detail"];
+  if (recordCard === undefined) {
+    return [];
+  }
+  const $ = cheerio.load(recordCard);
   const labels: string[] = [];
   $(RECORD_CARD_SELECTOR).each((_, row) => {
     const cells = $(row).children("td");
@@ -2505,8 +2520,69 @@ const czUsFetchError =
         })
       : adapterCatch(ADAPTER_KEYS.CZ_US, cursor)(cause);
 
+/**
+ * Every page this court serves for one decision, and whether the row keeps it.
+ *
+ * The four it keeps are the four the crawl reads: the result row, the document
+ * with its rich-text field, the abstract and the record card. The rest of the
+ * list is this court's export and print machinery, which restates what those
+ * four already carry and reaches it through a form postback that costs a page
+ * load for its tokens before it can be asked at all.
+ */
+const SOURCE_SURFACES = [
+  "session-bootstrap",
+  "listing",
+  "document",
+  "abstract",
+  "detail",
+  "document-rtf-export",
+  "document-print",
+  "detail-word-export",
+  "detail-print",
+  "detail-abstract-panel",
+  "hit-excerpt",
+  "citation-clipboard",
+] as const;
+
+const NALUS_SOURCE_SURFACES = {
+  surfaces: {
+    "session-bootstrap": excludedSourceSurface(
+      "the search form, which states no field of any decision and is read only to open the session the record card needs",
+    ),
+    listing: storedSourceSurface("listing"),
+    document: storedSourceSurface("document"),
+    abstract: storedSourceSurface("abstract"),
+    detail: storedSourceSurface("detail"),
+    "document-rtf-export": excludedSourceSurface(
+      "a word-processor rendering of the same text the document part already carries in its hidden field",
+    ),
+    "document-print": excludedSourceSurface(
+      "the document under a print stylesheet",
+    ),
+    "detail-word-export": excludedSourceSurface(
+      "a word-processor rendering of the rows the record card part already carries",
+    ),
+    "detail-print": excludedSourceSurface(
+      "the record card under a print stylesheet",
+    ),
+    "detail-abstract-panel": excludedSourceSurface(
+      "the panel served by the same endpoint as the abstract part",
+    ),
+    "hit-excerpt": excludedSourceSurface(
+      "a snippet cut around the query that produced it, so it states nothing the decision itself does not",
+    ),
+    "citation-clipboard": excludedSourceSurface(
+      "a citation assembled from fields the row already stores",
+    ),
+  } as const satisfies Record<
+    (typeof SOURCE_SURFACES)[number],
+    SourceSurfaceDisposition
+  >,
+} as const satisfies SourceSurfaceCensus;
+
 export const czUsAdapter = defineSourceAdapter({
   key: ADAPTER_KEYS.CZ_US,
+  sourceSurfaces: NALUS_SOURCE_SURFACES,
   sourceFields: {
     status: "declared",
     fields: NALUS_SOURCE_FIELDS,

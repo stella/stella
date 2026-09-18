@@ -42,10 +42,12 @@ import {
 } from "@/api/handlers/case-law/consts";
 import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import {
+  backlogSurface,
   defineSourceAdapter,
   EMPTY_AST,
+  excludedSourceSurface,
   isPersistableSourceDocumentId,
-  PENDING_SOURCE_FIELD_INVENTORY,
+  pendingSourceFieldInventory,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type {
   EmptyAst,
@@ -55,6 +57,8 @@ import type {
   ReconciliationListingItem,
   ReconciliationSlicePage,
   ReconciliationSlicePageOptions,
+  SourceSurfaceCensus,
+  SourceSurfaceDisposition,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { fetchPublisher } from "@/api/handlers/case-law/ingestion/adapters/retry";
@@ -948,9 +952,101 @@ const buildSkUsFromPayload = async (
 
 // ── Adapter ──────────────────────────────────────────────
 
+/**
+ * Every payload this court's service serves for one decision, and whether the
+ * row keeps it.
+ *
+ * Nothing is kept as a named part yet. The search row and the document file
+ * are both fetched, and the pipeline stores the bytes instead of the row, so a
+ * decision whose file arrived keeps no metadata payload at all. The service
+ * also answers with a text rendering of the same document, the docket file the
+ * document belongs to, facet counts that are the only statement of several
+ * fields, and two further corpora under the same endpoint — none of them
+ * fetched today.
+ */
+const SOURCE_SURFACES = [
+  "listing",
+  "details",
+  "document-file",
+  "document",
+  "file",
+  "facets",
+  "codelists",
+  "collection-listing",
+  "archive-listing",
+  "separate-opinion",
+  "rss",
+  "summary-export",
+  "zip-export",
+  "portal-search-page",
+  "sitemap",
+] as const;
+
+const SK_US_SOURCE_SURFACES = {
+  surfaces: {
+    listing: backlogSurface(
+      ADAPTER_KEYS.SK_US,
+      "the search row carries every metadata key this service states, and it is written to the raw payload only where the document file is absent",
+    ),
+    details: excludedSourceSurface(
+      "verified byte for byte as the same projection the search row already states",
+    ),
+    "document-file": backlogSurface(
+      ADAPTER_KEYS.SK_US,
+      "the file is kept as the whole raw payload rather than as an object beside the metadata, which is what displaces the row that names the decision",
+    ),
+    document: backlogSurface(
+      ADAPTER_KEYS.SK_US,
+      "the service renders the same document as markup at the same request cost, without the file having to be fetched first, and the crawl does not ask for it",
+    ),
+    file: backlogSurface(
+      ADAPTER_KEYS.SK_US,
+      "the docket file the document belongs to, with the publisher's own grouping of the documents under it; not fetched",
+    ),
+    facets: backlogSurface(
+      ADAPTER_KEYS.SK_US,
+      "several fields are stated only as facet counts over a result set, so reading them per decision needs a query the crawl does not make",
+    ),
+    codelists: backlogSurface(
+      ADAPTER_KEYS.SK_US,
+      "the vocabularies the coded fields resolve against are corpus-level and are not fetched",
+    ),
+    "collection-listing": backlogSurface(
+      ADAPTER_KEYS.SK_US,
+      "a second corpus under the same endpoint, with its own identifiers under the same dockets; not walked",
+    ),
+    "archive-listing": backlogSurface(
+      ADAPTER_KEYS.SK_US,
+      "a third corpus under the same endpoint, overlapping the live one under different identifiers; not walked, and the reconciliation rule has to be decided before it is",
+    ),
+    "separate-opinion": excludedSourceSurface(
+      "not a surface: the same query lists it as a document of its own, so it is a decision this adapter already reaches",
+    ),
+    rss: excludedSourceSurface(
+      "the most recent items only; the date-range listing covers them and states a count",
+    ),
+    "summary-export": excludedSourceSurface(
+      "a spreadsheet projection of listing columns, behind a challenge past its first page",
+    ),
+    "zip-export": excludedSourceSurface(
+      "a capped batch of the same document files, behind a challenge",
+    ),
+    "portal-search-page": excludedSourceSurface(
+      "a client-rendered shell; the search payload behind it is what this adapter reads",
+    ),
+    sitemap: excludedSourceSurface(
+      "it lists the portal's own layouts; no per-decision address exists for it to list",
+    ),
+  } as const satisfies Record<
+    (typeof SOURCE_SURFACES)[number],
+    SourceSurfaceDisposition
+  >,
+} as const satisfies SourceSurfaceCensus;
+
 export const skUsAdapter = defineSourceAdapter({
   key: ADAPTER_KEYS.SK_US,
-  sourceFields: PENDING_SOURCE_FIELD_INVENTORY,
+  sourceSurfaces: SK_US_SOURCE_SURFACES,
+  sourceFields: pendingSourceFieldInventory(ADAPTER_KEYS.SK_US),
   language: "sk",
   minRequestIntervalMs: MIN_REQUEST_INTERVAL_MS,
   pageTimeoutMs: 120_000,

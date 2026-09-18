@@ -16,7 +16,7 @@ import {
 } from "@/api/db/schema";
 import {
   EMPTY_AST,
-  PENDING_SOURCE_FIELD_INVENTORY,
+  pendingSourceFieldInventory,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type { SourceAdapter } from "@/api/handlers/case-law/ingestion/adapter";
 import { czRegionalAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-regional";
@@ -304,7 +304,8 @@ type StubAdapterOptions = {
 
 const stubAdapter = ({ reparse }: StubAdapterOptions): SourceAdapter => ({
   key: ADAPTER_KEYS.EU_ECJ,
-  sourceFields: PENDING_SOURCE_FIELD_INVENTORY,
+  sourceFields: pendingSourceFieldInventory(ADAPTER_KEYS.EU_ECJ),
+  sourceSurfaces: { surfaces: {} },
   name: "replay stub",
   country: "EU",
   language: "en",

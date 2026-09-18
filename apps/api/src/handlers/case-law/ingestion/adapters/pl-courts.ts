@@ -11,13 +11,16 @@ import {
   PARSER_VERSIONS,
 } from "@/api/handlers/case-law/consts";
 import {
+  backlogSurface,
   defineSourceAdapter,
   EMPTY_AST,
+  excludedSourceSurface,
   isPersistableSourceDocumentId,
-  PENDING_SOURCE_FIELD_INVENTORY,
+  pendingSourceFieldInventory,
   SOURCE_TOTAL_PROBE_FAILURE,
   sourceTotalProbeFailed,
   sourceTotalRead,
+  storedSourceSurface,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type {
   EmptyAst,
@@ -26,6 +29,8 @@ import type {
   ReconciliationBuildOutcome,
   ReconciliationSlicePage,
   ReconciliationSlicePageOptions,
+  SourceSurfaceCensus,
+  SourceSurfaceDisposition,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/adapters/calendar-day-slice-walk";
 import {
@@ -1317,9 +1322,84 @@ const buildPlCourtsFromPayload = async (
   }
 };
 
+/**
+ * Every payload the aggregator and the ministry's own service serve for one
+ * decision, and whether the row keeps it.
+ *
+ * The detail record is kept verbatim. Both listings are read and neither is:
+ * the dump row is reduced to a fixed key set before it is stored, which drops
+ * fields the detail record does not always carry, and the search slice is
+ * walked for identities alone. The ministry's own service states the presiding
+ * judge, the recorder and a corrected date that the aggregator does not, and
+ * it is a second publisher with no declared budget.
+ */
+const SOURCE_SURFACES = [
+  "listing-dump",
+  "listing-search",
+  "detail",
+  "public-page",
+  "html-download",
+  "upstream-document",
+  "citing-list",
+  "enrichment",
+  "court-dictionary",
+  "upstream-detail",
+  "upstream-listing",
+  "portal-web-ui",
+] as const;
+
+const PL_COURTS_SOURCE_SURFACES = {
+  surfaces: {
+    "listing-dump": backlogSurface(
+      ADAPTER_KEYS.PL_COURTS,
+      "the dump row is normalized to a fixed key set before it is stored, so the publisher's own row is not what a replay reads back",
+    ),
+    "listing-search": backlogSurface(
+      ADAPTER_KEYS.PL_COURTS,
+      "the search slice is walked for identities and its rows are not kept beside the decisions they name",
+    ),
+    detail: storedSourceSurface("detail"),
+    "public-page": excludedSourceSurface(
+      "the aggregator's own presentation of the detail record the row already stores",
+    ),
+    "html-download": excludedSourceSurface(
+      "the same document text inside page chrome",
+    ),
+    "upstream-document": backlogSurface(
+      ADAPTER_KEYS.PL_COURTS,
+      "the file the record points at sits on a second publisher with no declared budget, and two of the three court families serve it in formats an extractor would have to be built for",
+    ),
+    "citing-list": excludedSourceSurface(
+      "the inbound view of an edge the stored record already states outbound",
+    ),
+    enrichment: backlogSurface(
+      ADAPTER_KEYS.PL_COURTS,
+      "the endpoint is keyed by decision and offers no per-decision read, so reaching it means holding a corpus-wide dump",
+    ),
+    "court-dictionary": excludedSourceSurface(
+      "reference data, not a payload about any one decision",
+    ),
+    "upstream-detail": backlogSurface(
+      ADAPTER_KEYS.PL_COURTS,
+      "the deciding court's own record states roles and a date the aggregator does not; it is a second publisher with no declared budget",
+    ),
+    "upstream-listing": excludedSourceSurface(
+      "a second listing of the same decisions: a coverage oracle rather than a field source",
+    ),
+    "portal-web-ui": backlogSurface(
+      ADAPTER_KEYS.PL_COURTS,
+      "the page answers an automated client with a challenge under a success status, and its robots policy could not be read, so what it states is unsettled",
+    ),
+  } as const satisfies Record<
+    (typeof SOURCE_SURFACES)[number],
+    SourceSurfaceDisposition
+  >,
+} as const satisfies SourceSurfaceCensus;
+
 export const plCourtsAdapter = defineSourceAdapter({
   key: ADAPTER_KEYS.PL_COURTS,
-  sourceFields: PENDING_SOURCE_FIELD_INVENTORY,
+  sourceSurfaces: PL_COURTS_SOURCE_SURFACES,
+  sourceFields: pendingSourceFieldInventory(ADAPTER_KEYS.PL_COURTS),
   language: "pl",
   minRequestIntervalMs: 200,
   pageTimeoutMs: 280_000,

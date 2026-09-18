@@ -9,13 +9,16 @@ import {
   PARSER_VERSIONS,
 } from "@/api/handlers/case-law/consts";
 import {
+  backlogSurface,
   defineSourceAdapter,
   EMPTY_AST,
+  excludedSourceSurface,
   isPersistableSourceDocumentId,
-  PENDING_SOURCE_FIELD_INVENTORY,
+  pendingSourceFieldInventory,
   SOURCE_TOTAL_PROBE_FAILURE,
   sourceTotalProbeFailed,
   sourceTotalRead,
+  storedSourceSurface,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type {
   IngestionResult,
@@ -23,6 +26,8 @@ import type {
   ReconciliationBuildOutcome,
   ReconciliationSlicePage,
   ReconciliationSlicePageOptions,
+  SourceSurfaceCensus,
+  SourceSurfaceDisposition,
   SyncPage,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/adapters/calendar-day-slice-walk";
@@ -949,9 +954,79 @@ const collectFrontierPage = async (
   };
 };
 
+/**
+ * Every payload this service serves for one decision, and whether the row
+ * keeps it.
+ *
+ * The listing row and the detail record are both kept, each verbatim. The
+ * document file is fetched by a separate walk that keeps no part of it, so it
+ * is the one surface of this source that is read and thrown away. The rest are
+ * service-wide: a schema, registries, code lists, a hearing calendar and a
+ * mirror this project is not the publisher of.
+ */
+const SOURCE_SURFACES = [
+  "listing",
+  "detail",
+  "document",
+  "openapi",
+  "judge-registry",
+  "court-registry",
+  "portal-viewer",
+  "listing-facets",
+  "code-lists",
+  "hearing-calendar",
+  "autocomplete",
+  "bulk-dump",
+  "third-party-mirror",
+] as const;
+
+const SK_COURTS_SOURCE_SURFACES = {
+  surfaces: {
+    listing: storedSourceSurface("listing"),
+    detail: storedSourceSurface("detail"),
+    document: backlogSurface(
+      ADAPTER_KEYS.SK_COURTS,
+      "the document walk fetches the file and keeps none of it; the bytes need an object part rather than a text one",
+    ),
+    openapi: excludedSourceSurface(
+      "the service's own schema: the field list an inventory is written from, not a payload about any one decision",
+    ),
+    "judge-registry": excludedSourceSurface(
+      "a record per person rather than per decision, and the roster import is the pass that reads it",
+    ),
+    "court-registry": excludedSourceSurface(
+      "the detail record already embeds the court entry this would state",
+    ),
+    "portal-viewer": excludedSourceSurface(
+      "a page shell the publisher's robots policy disallows, over the same record the detail part carries",
+    ),
+    "listing-facets": excludedSourceSurface(
+      "counts over a result set: a coverage oracle, not a field of any decision",
+    ),
+    "code-lists": excludedSourceSurface(
+      "reference vocabulary, not a payload about any one decision",
+    ),
+    "hearing-calendar": excludedSourceSurface(
+      "it names the parties to proceedings that have not been decided; data minimization",
+    ),
+    autocomplete: excludedSourceSurface("a strict subset of the listing row"),
+    "bulk-dump": backlogSurface(
+      ADAPTER_KEYS.SK_COURTS,
+      "the open-data catalogue is a client-rendered application and answered every documented address with its own shell, so whether a dump exists is unsettled",
+    ),
+    "third-party-mirror": excludedSourceSurface(
+      "a republication by someone other than the publisher",
+    ),
+  } as const satisfies Record<
+    (typeof SOURCE_SURFACES)[number],
+    SourceSurfaceDisposition
+  >,
+} as const satisfies SourceSurfaceCensus;
+
 export const skCourtsAdapter = defineSourceAdapter({
   key: ADAPTER_KEYS.SK_COURTS,
-  sourceFields: PENDING_SOURCE_FIELD_INVENTORY,
+  sourceSurfaces: SK_COURTS_SOURCE_SURFACES,
+  sourceFields: pendingSourceFieldInventory(ADAPTER_KEYS.SK_COURTS),
   language: "sk",
   minRequestIntervalMs: 300,
   // PDF download deferred; pages now only do list + detail JSON.

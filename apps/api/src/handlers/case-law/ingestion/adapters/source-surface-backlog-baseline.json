@@ -1,0 +1,49 @@
+{
+  "comment": "Surfaces a publisher serves for a decision that the adapter does not record yet, per adapter. source-surface-census.test.ts fails when an adapter declares a backlog surface this file does not list and when this file lists one the adapter no longer declares, so the set can only shrink. Recording a surface means fetching it, storing it as a named envelope part, declaring it stored in the adapter's census, and deleting its line here.",
+  "backlog": {
+    "cz-ns": ["document-pdf", "document-rtf", "listing", "slice-listing"],
+    "cz-nss": ["listing", "original", "text"],
+    "cz-regional": ["chain", "document", "listing"],
+    "sk-courts": ["bulk-dump", "document"],
+    "sk-us": [
+      "archive-listing",
+      "codelists",
+      "collection-listing",
+      "document",
+      "document-file",
+      "facets",
+      "file",
+      "listing"
+    ],
+    "pl-courts": [
+      "enrichment",
+      "listing-dump",
+      "listing-search",
+      "portal-web-ui",
+      "upstream-detail",
+      "upstream-document"
+    ],
+    "at-courts": ["attachments", "document-xml", "headnote-listing"],
+    "at-vfgh": ["attachments", "document-xml", "headnote-listing"],
+    "at-vwgh": ["attachments", "document-xml", "headnote-listing"],
+    "at-bvwg": ["attachments", "document-xml", "headnote-listing"],
+    "at-lvwg": ["attachments", "document-xml", "headnote-listing"],
+    "at-asylgh": ["attachments", "document-xml", "headnote-listing"],
+    "at-ubas": ["attachments", "document-xml", "headnote-listing"],
+    "at-uvs": ["attachments", "document-xml", "headnote-listing"],
+    "at-verg": ["attachments", "document-xml", "headnote-listing"],
+    "at-umse": ["attachments", "document-xml", "headnote-listing"],
+    "at-bks": ["attachments", "document-xml", "headnote-listing"],
+    "at-findok": ["document-xml", "headnote-xml", "listing"],
+    "eu-ecj": [
+      "abstract",
+      "case-sheet",
+      "curia-listing",
+      "document",
+      "formex",
+      "gendoc",
+      "listing",
+      "notice"
+    ]
+  }
+}

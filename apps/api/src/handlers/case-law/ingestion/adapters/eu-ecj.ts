@@ -9,10 +9,12 @@ import {
 } from "@/api/handlers/case-law/consts";
 import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import {
+  backlogSurface,
   defineSourceAdapter,
   EMPTY_AST,
+  excludedSourceSurface,
   isPersistableSourceDocumentId,
-  PENDING_SOURCE_FIELD_INVENTORY,
+  pendingSourceFieldInventory,
   STORED_RAW_REPARSE_REJECTION,
   SOURCE_TOTAL_PROBE_FAILURE,
   sourceTotalProbeFailed,
@@ -25,6 +27,8 @@ import type {
   ReconciliationBuildOutcome,
   ReconciliationSlicePage,
   ReconciliationSlicePageOptions,
+  SourceSurfaceCensus,
+  SourceSurfaceDisposition,
   StoredRawReparseInput,
   StoredRawReparseOutcome,
 } from "@/api/handlers/case-law/ingestion/adapter";
@@ -1530,9 +1534,114 @@ const buildEcjVariant = async (
  */
 const ECJ_PAGE_TIMEOUT = 300_000;
 
+/**
+ * Every payload the repository and the court's own site serve for one language
+ * variant of a decision, and whether the row keeps it.
+ *
+ * The document is fetched and stored as a bare payload rather than as a named
+ * part, so a stored row states no part at all. The metadata notice, the
+ * structured renditions, the abstract work and the analytical case sheet are
+ * the material the crawl does not ask for; each is a request per variant, and
+ * a row is one variant. The portal's own renditions are left out in favour of
+ * the repository, which serves the same content without a challenge.
+ */
+const SOURCE_SURFACES = [
+  "listing",
+  "document",
+  "document-item-fallback",
+  "formex",
+  "gendoc",
+  "document-pdf",
+  "notice",
+  "notice-tree",
+  "abstract",
+  "complex-work-member",
+  "portal-renditions",
+  "portal-download-notice",
+  "portal-office-formats",
+  "curia-listing",
+  "curia-document",
+  "curia-print",
+  "case-sheet",
+  "curia-documents",
+  "infocuria-spa",
+] as const;
+
+const EU_ECJ_SOURCE_SURFACES = {
+  surfaces: {
+    listing: backlogSurface(
+      ADAPTER_KEYS.EU_ECJ,
+      "the query binding the crawl reads each row from is not kept, so a replay cannot rebuild the row without querying again",
+    ),
+    document: backlogSurface(
+      ADAPTER_KEYS.EU_ECJ,
+      "the document is stored as a bare payload rather than as a named part, so a reader of a stored row cannot tell which response it holds",
+    ),
+    "document-item-fallback": excludedSourceSurface(
+      "a second address for the same bytes, tried when the first answers a refusal",
+    ),
+    formex: backlogSurface(
+      ADAPTER_KEYS.EU_ECJ,
+      "the structured rendition is the only surface stating the document structure of older decisions, and the crawl does not fetch it",
+    ),
+    gendoc: backlogSurface(
+      ADAPTER_KEYS.EU_ECJ,
+      "the court's own production file carries a metadata block no fetched payload states; not fetched",
+    ),
+    "document-pdf": excludedSourceSurface(
+      "a print rendition of the document part; its address is recorded as metadata instead",
+    ),
+    notice: backlogSurface(
+      ADAPTER_KEYS.EU_ECJ,
+      "the metadata notice states the widest field set of any surface here, including roles the row infers today, and the crawl does not fetch it",
+    ),
+    "notice-tree": excludedSourceSurface(
+      "it adds the other language expressions of the same work, each of which is a row of its own",
+    ),
+    abstract: backlogSurface(
+      ADAPTER_KEYS.EU_ECJ,
+      "the abstract is a work of its own that the crawl's type filter does not match, so nothing reaches it today",
+    ),
+    "complex-work-member": excludedSourceSurface(
+      "verified to carry no expression and no manifestation",
+    ),
+    "portal-renditions": excludedSourceSurface(
+      "the portal answers an automated client with a challenge, and the repository serves the same content unchallenged",
+    ),
+    "portal-download-notice": excludedSourceSurface(
+      "the portal's robots policy disallows it",
+    ),
+    "portal-office-formats": excludedSourceSurface(
+      "the portal's robots policy disallows them for every agent and every language",
+    ),
+    "curia-listing": backlogSurface(
+      ADAPTER_KEYS.EU_ECJ,
+      "the address of the analytical case sheet cannot be constructed, so reaching it costs a search on a host with no declared budget",
+    ),
+    "curia-document": excludedSourceSurface(
+      "the same text as the document part, at an address that cannot be constructed",
+    ),
+    "curia-print": excludedSourceSurface("a print rendering of that same text"),
+    "case-sheet": backlogSurface(
+      ADAPTER_KEYS.EU_ECJ,
+      "the case sheet states analytical fields no other surface carries, and it is on a host with no declared budget whose robots policy denies individual documents",
+    ),
+    "curia-documents": excludedSourceSurface(
+      "a per-document projection of the same analysis the case sheet states",
+    ),
+    "infocuria-spa": excludedSourceSurface(
+      "a client-rendered shell with no data endpoint of its own",
+    ),
+  } as const satisfies Record<
+    (typeof SOURCE_SURFACES)[number],
+    SourceSurfaceDisposition
+  >,
+} as const satisfies SourceSurfaceCensus;
+
 export const euEcjAdapter = defineSourceAdapter({
   key: ADAPTER_KEYS.EU_ECJ,
-  sourceFields: PENDING_SOURCE_FIELD_INVENTORY,
+  sourceSurfaces: EU_ECJ_SOURCE_SURFACES,
+  sourceFields: pendingSourceFieldInventory(ADAPTER_KEYS.EU_ECJ),
   language: "en",
   minRequestIntervalMs: 1000,
   pageTimeoutMs: ECJ_PAGE_TIMEOUT,

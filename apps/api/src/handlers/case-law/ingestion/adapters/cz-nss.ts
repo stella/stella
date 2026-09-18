@@ -10,17 +10,20 @@ import {
 } from "@/api/handlers/case-law/consts";
 import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import {
+  backlogSurface,
   decodeSourceRawEnvelope,
   defineSourceAdapter,
   EMPTY_AST,
   encodeSourceRawEnvelope,
   excludedSourceField,
+  excludedSourceSurface,
   isPersistableSourceDocumentId,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   STORED_RAW_REPARSE_REJECTION,
   SOURCE_TOTAL_PROBE_FAILURE,
   sourceTotalProbeFailed,
   sourceTotalRead,
+  storedSourceSurface,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type {
   EmptyAst,
@@ -31,6 +34,8 @@ import type {
   ReconciliationSlicePageOptions,
   SourceFieldDisposition,
   SourceRawParts,
+  SourceSurfaceCensus,
+  SourceSurfaceDisposition,
   StoredRawReparseInput,
   StoredRawReparseOutcome,
 } from "@/api/handlers/case-law/ingestion/adapter";
@@ -1111,11 +1116,16 @@ const decodeNumericEntities = (value: string): string =>
     return Number.isNaN(code) ? match : String.fromCodePoint(code);
   });
 
-/** What the portal states on one detail page, by the names it gives them. */
-const listCzNssSourceFields = (html: string): readonly string[] => [
+/**
+ * What the portal states as a field, by the names it gives them.
+ *
+ * The detail part is the only one that names fields: the document and the
+ * plain-text rendering beside it are the decision itself, under no labels.
+ */
+const listCzNssSourceFields = (parts: SourceRawParts): readonly string[] => [
   ...new Set(
-    [...html.matchAll(CZ_NSS_FIELD_ID_RE)].map((match) =>
-      decodeNumericEntities(match.groups?.["field"] ?? ""),
+    [...(parts[CZ_NSS_RAW_PART.DETAIL] ?? "").matchAll(CZ_NSS_FIELD_ID_RE)].map(
+      (match) => decodeNumericEntities(match.groups?.["field"] ?? ""),
     ),
   ),
 ];
@@ -2298,8 +2308,60 @@ const parseCursor = (cursor: string | null): { date: string; page: number } => {
   };
 };
 
+/**
+ * Every page this portal serves for one decision, and whether the row keeps
+ * it.
+ *
+ * The detail page and the rich document are kept. The result row is behind a
+ * form postback and is not kept; the plain-text rendering is fetched only
+ * where the rich document is missing, so no capture of a complete decision
+ * carries it.
+ */
+const SOURCE_SURFACES = [
+  "search-form",
+  "listing",
+  "detail",
+  "document",
+  "text",
+  "original",
+  "export",
+  "citation-copy",
+] as const;
+
+const CZ_NSS_SOURCE_SURFACES = {
+  surfaces: {
+    "search-form": excludedSourceSurface(
+      "the search form, which states no field of any decision and is read only for the tokens the result postback needs",
+    ),
+    listing: backlogSurface(
+      ADAPTER_KEYS.CZ_NSS,
+      "the result row the crawl reads from the search postback is not kept beside the decision it names",
+    ),
+    detail: storedSourceSurface(CZ_NSS_RAW_PART.DETAIL),
+    document: storedSourceSurface(CZ_NSS_RAW_PART.DOCUMENT),
+    text: backlogSurface(
+      ADAPTER_KEYS.CZ_NSS,
+      "the plain-text rendering is fetched only where the rich document is absent, so the part is missing from every capture of a decision the portal served in full",
+    ),
+    original: backlogSurface(
+      ADAPTER_KEYS.CZ_NSS,
+      "the route for the publisher's own file answered a probe with a placeholder body, so whether it serves one is unsettled",
+    ),
+    export: excludedSourceSurface(
+      "an export of a result list, scoped to the query that produced it rather than to a decision",
+    ),
+    "citation-copy": excludedSourceSurface(
+      "a citation built from the result row's own cells",
+    ),
+  } as const satisfies Record<
+    (typeof SOURCE_SURFACES)[number],
+    SourceSurfaceDisposition
+  >,
+} as const satisfies SourceSurfaceCensus;
+
 export const czNssAdapter = defineSourceAdapter({
   key: ADAPTER_KEYS.CZ_NSS,
+  sourceSurfaces: CZ_NSS_SOURCE_SURFACES,
   sourceFields: {
     status: "declared",
     fields: CZ_NSS_SOURCE_FIELD_DISPOSITIONS,
