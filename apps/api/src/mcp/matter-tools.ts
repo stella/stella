@@ -1,5 +1,4 @@
 import { panic, Result } from "better-result";
-import { and, asc, eq, gte, lte, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import {
@@ -8,8 +7,9 @@ import {
   RESOURCE_TYPE,
   WORKSPACE_CONTACT_ROLES,
 } from "@stll/api-contract";
+import { TASK_ASSIGNEE_FILTERS } from "@stll/api-contract/tasks";
 
-import { entities, LIST_ITEM_TYPES } from "@/api/db/schema";
+import { LIST_ITEM_TYPES } from "@/api/db/schema";
 import { lookupBusinessRegistryShared } from "@/api/handlers/contacts/business-registries-lookup";
 import { createContactHandler } from "@/api/handlers/contacts/create";
 import { deleteContactHandler } from "@/api/handlers/contacts/delete";
@@ -20,6 +20,10 @@ import { addAssigneeHandler } from "@/api/handlers/tasks/assignees-add";
 import { removeAssigneeHandler } from "@/api/handlers/tasks/assignees-remove";
 import { createEntityLinkHandler } from "@/api/handlers/tasks/entity-links-create";
 import { deleteEntityLinkHandler } from "@/api/handlers/tasks/entity-links-delete";
+import {
+  decodeTaskListCursor,
+  listTasksPage,
+} from "@/api/handlers/tasks/list-query";
 import { archiveWorkspaceHandler } from "@/api/handlers/workspaces/archive";
 import { createWorkspaceHandler } from "@/api/handlers/workspaces/create";
 import { deleteWorkspaceHandler } from "@/api/handlers/workspaces/delete";
@@ -45,17 +49,8 @@ import {
   SAVE_MATTER_PROJECTION,
   SAVE_TASK_PROJECTION,
 } from "@/api/lib/chat/projections";
-import {
-  entityListCursorCondition,
-  entityListTimestampCursorExpr,
-} from "@/api/lib/entities/list-cursor";
 import { ENTITY_PRIORITIES, TASK_STATUSES } from "@/api/lib/entity-constants";
 import { LIMITS } from "@/api/lib/limits";
-import {
-  createCursorPage,
-  decodePaginationCursor,
-  encodePaginationCursor,
-} from "@/api/lib/pagination";
 import {
   brandPersistedContactId,
   brandPersistedEntityId,
@@ -84,14 +79,12 @@ import type {
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
   bindWorkspaceRecorder,
-  DEFAULT_LIST_LIMIT,
   ensureActiveWorkspace,
   ensureWorkspaceAccess,
   errorResult,
   getWorkspaceStatus,
   internalFailureResult,
   ISO_DATE_SCHEMA,
-  MAX_LIST_LIMIT,
   notFoundResult,
   nullAsAbsent,
   structuredErrorResult,
@@ -135,24 +128,48 @@ const DEFAULT_FILE_PROPERTY_NAME = "Documents";
 
 // --- list_tasks text-field specs -----------------------------------------
 
-/** Shape `list_tasks`'s list branch redacts: one field, per item. */
-type TaskNameTextItem = { name: string };
+/**
+ * Shape `list_tasks`'s list branch redacts. Rows can span matters, so each
+ * field is scoped to the row's own matter.
+ */
+type TaskListTextItem = {
+  name: string;
+  matterId: string;
+  matterName: string;
+  matterReference: string;
+};
+type TaskListTextPayload = { tasks: readonly TaskListTextItem[] };
 
-const TASK_LIST_TEXT_FIELD_PATH = "tasks[].name";
-
-const taskListTextFieldSpecs = (
-  workspaceId: string,
-): readonly McpTextFieldSpec<{ tasks: readonly TaskNameTextItem[] }>[] => [
-  defineTextFieldSpec({
-    path: TASK_LIST_TEXT_FIELD_PATH,
-    items: (payload) => payload.tasks,
-    scope: () => workspaceId,
-    read: (item) => item.name,
-    apply: (item, value) => {
-      item.name = value;
-    },
-  }),
-];
+const TASK_LIST_TEXT_FIELD_SPECS: readonly McpTextFieldSpec<TaskListTextPayload>[] =
+  [
+    defineTextFieldSpec({
+      path: "tasks[].name",
+      items: (payload: TaskListTextPayload) => payload.tasks,
+      scope: (item: TaskListTextItem) => item.matterId,
+      read: (item: TaskListTextItem) => item.name,
+      apply: (item: TaskListTextItem, value) => {
+        item.name = value;
+      },
+    }),
+    defineTextFieldSpec({
+      path: "tasks[].matterName",
+      items: (payload: TaskListTextPayload) => payload.tasks,
+      scope: (item: TaskListTextItem) => item.matterId,
+      read: (item: TaskListTextItem) => item.matterName,
+      apply: (item: TaskListTextItem, value) => {
+        item.matterName = value;
+      },
+    }),
+    defineTextFieldSpec({
+      path: "tasks[].matterReference",
+      items: (payload: TaskListTextPayload) => payload.tasks,
+      scope: (item: TaskListTextItem) => item.matterId,
+      read: (item: TaskListTextItem) => item.matterReference,
+      apply: (item: TaskListTextItem, value) => {
+        item.matterReference = value;
+      },
+    }),
+  ];
 
 type TaskAssigneeTextItem = { name: string | null };
 type TaskLinkTextItem = { entity: { name: string | null } };
@@ -952,86 +969,66 @@ const resolveTaskWorkspace = async ({
 };
 
 const listTasksArgsSchema = nullAsAbsent(
-  v.pipe(
-    v.strictObject({
-      matter_id: v.optional(
-        uuidInputSchema(
-          "Matter ID to list tasks in; required unless task_id is given.",
-        ),
-      ),
-      task_id: v.optional(uuidInputSchema("Task entity ID to read in detail")),
-      date_from: v.optional(
-        v.pipe(
-          ISO_DATE_SCHEMA,
-          v.maxLength(10),
-          v.description(
-            "List only tasks due on or after this ISO date (YYYY-MM-DD)",
-          ),
-        ),
-      ),
-      date_to: v.optional(
-        v.pipe(
-          ISO_DATE_SCHEMA,
-          v.maxLength(10),
-          v.description(
-            "List only tasks due on or before this ISO date (YYYY-MM-DD)",
-          ),
-        ),
-      ),
-      status: v.optional(
-        v.pipe(
-          v.string(),
-          v.minLength(1),
-          v.maxLength(32),
-          v.description("List only tasks with this status"),
-        ),
-      ),
-      limit: v.optional(
-        v.pipe(
-          v.number(),
-          v.integer(),
-          v.minValue(1),
-          v.maxValue(MAX_LIST_LIMIT),
-          v.description("Max tasks to return"),
-        ),
-      ),
-      cursor: v.optional(
-        v.pipe(
-          v.string(),
-          v.minLength(1),
-          v.maxLength(512),
-          v.description(
-            "Opaque cursor from a previous list_tasks call to fetch the next page",
-          ),
-        ),
-      ),
-    }),
-    // List mode needs a workspace to scope to; detail mode uses task_id alone.
-    v.forward(
-      v.partialCheck(
-        [["matter_id"], ["task_id"]],
-        ({ matter_id, task_id }) =>
-          task_id !== undefined || matter_id !== undefined,
-        "Provide matter_id to list tasks, or task_id to read one task",
-      ),
-      ["matter_id"],
+  v.strictObject({
+    matter_id: v.optional(
+      uuidInputSchema("Matter ID to list tasks in; omit for every matter"),
     ),
-  ),
+    task_id: v.optional(uuidInputSchema("Task entity ID to read in detail")),
+    assignee: v.optional(
+      v.pipe(
+        v.picklist(TASK_ASSIGNEE_FILTERS),
+        v.description("'me': only tasks assigned to you. Default 'any'"),
+      ),
+    ),
+    date_from: v.optional(
+      v.pipe(
+        ISO_DATE_SCHEMA,
+        v.maxLength(10),
+        v.description(
+          "List only tasks due on or after this ISO date (YYYY-MM-DD)",
+        ),
+      ),
+    ),
+    date_to: v.optional(
+      v.pipe(
+        ISO_DATE_SCHEMA,
+        v.maxLength(10),
+        v.description(
+          "List only tasks due on or before this ISO date (YYYY-MM-DD)",
+        ),
+      ),
+    ),
+    status: v.optional(
+      v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.maxLength(32),
+        v.description("List only tasks with this status"),
+      ),
+    ),
+    limit: v.optional(
+      v.pipe(
+        v.number(),
+        v.integer(),
+        v.minValue(1),
+        v.maxValue(LIMITS.myTasksPageSizeMax),
+        v.description(
+          `Max tasks to return (default ${LIMITS.myTasksPageSizeDefault})`,
+        ),
+      ),
+    ),
+    cursor: v.optional(
+      v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.maxLength(512),
+        v.description(
+          "Opaque cursor from a previous list_tasks call to fetch the next page",
+        ),
+      ),
+    ),
+  }),
 );
-
-const decodeTaskPageCursor = (
-  cursor: string,
-): { createdAt: string; id: SafeId<"entity"> } | null => {
-  const parts = decodePaginationCursor(cursor);
-  if (!parts || parts.length !== 2) {
-    return null;
-  }
-  const [createdAt, id] = parts;
-  if (typeof createdAt !== "string" || typeof id !== "string") {
-    return null;
-  }
-  return { createdAt, id: brandPersistedEntityId(id) };
-};
 
 const readTaskDetail = async ({
   context,
@@ -1210,82 +1207,59 @@ const handleListTasksTool: TypedMcpToolHandler<
     };
   }
 
-  // List mode. matter_id is guaranteed present by the schema.
-  const requestedWorkspaceId = input.matter_id ?? "";
-  const workspaceId = ensureWorkspaceAccess({
-    context,
-    workspaceId: requestedWorkspaceId,
-  });
-  if (!workspaceId) {
-    return notFoundResult("Matter not found or not accessible");
-  }
-
-  let boundary: { createdAt: string; id: SafeId<"entity"> } | null = null;
-  if (input.cursor !== undefined) {
-    boundary = decodeTaskPageCursor(input.cursor);
-    if (boundary === null) {
-      return structuredErrorResult({
-        code: "validation_error",
-        message: "Invalid cursor",
-        issues: [{ path: "cursor", message: "Invalid cursor" }],
-        hint: "Pass the 'cursor' verbatim as returned by a previous call, or omit it for the first page.",
-      });
+  // List mode: one matter when matter_id is given, otherwise every matter in
+  // this request's access map, through the same query either way.
+  let workspaceIds: readonly SafeId<"workspace">[] =
+    context.accessibleWorkspaceIds;
+  if (input.matter_id !== undefined) {
+    const workspaceId = ensureWorkspaceAccess({
+      context,
+      workspaceId: input.matter_id,
+    });
+    if (!workspaceId) {
+      return notFoundResult("Matter not found or not accessible");
     }
+    workspaceIds = [workspaceId];
   }
-  const limit = input.limit ?? DEFAULT_LIST_LIMIT;
 
-  const rows = await context.scopedDb((tx) =>
-    tx
-      .select({
-        createdAt: entityListTimestampCursorExpr(sql`${entities.createdAt}`),
-        id: entities.id,
-        name: entities.name,
-        status: entities.status,
-        priority: entities.priority,
-        itemType: entities.listItemType,
-        dueDate: entities.dueDate,
-      })
-      .from(entities)
-      .where(
-        and(
-          eq(entities.workspaceId, workspaceId),
-          eq(entities.kind, "task"),
-          input.status === undefined
-            ? undefined
-            : eq(entities.status, input.status),
-          input.date_from === undefined
-            ? undefined
-            : gte(entities.dueDate, input.date_from),
-          input.date_to === undefined
-            ? undefined
-            : lte(entities.dueDate, input.date_to),
-          entityListCursorCondition(boundary),
-        ),
-      )
-      .orderBy(asc(entities.createdAt), asc(entities.id))
-      .limit(limit + 1),
-  );
+  const cursor =
+    input.cursor === undefined ? null : decodeTaskListCursor(input.cursor);
+  if (input.cursor !== undefined && cursor === null) {
+    return structuredErrorResult({
+      code: "validation_error",
+      message: "Invalid cursor",
+      issues: [{ path: "cursor", message: "Invalid cursor" }],
+      hint: "Pass the 'cursor' verbatim as returned by a previous call, or omit it for the first page.",
+    });
+  }
 
-  const page = createCursorPage({
-    rows,
-    limit,
-    cursorForItem: (item) => encodePaginationCursor([item.createdAt, item.id]),
+  const listed = await listTasksPage({
+    safeDb: context.safeDb,
+    organizationId: context.organizationId,
+    userId: context.userId,
+    workspaceIds,
+    query: {
+      status: input.status,
+      assignee: input.assignee,
+      dateFrom: input.date_from,
+      dateTo: input.date_to,
+      limit: input.limit,
+      cursor,
+    },
   });
+  if (Result.isError(listed)) {
+    return internalFailureResult(listed.error);
+  }
 
-  const tasks = page.items.map(({ createdAt: _createdAt, ...task }) => ({
-    ...task,
-    itemType: task.itemType ?? "task",
-  }));
-
-  const textFields = runTextFieldSpecs(taskListTextFieldSpecs(workspaceId), {
-    tasks,
-  });
+  const tasks = listed.value.items;
+  const textFields = runTextFieldSpecs(TASK_LIST_TEXT_FIELD_SPECS, { tasks });
 
   return {
     egress: "structured",
-    payload: { tasks, nextCursor: page.nextCursor } satisfies v.InferInput<
-      typeof LIST_TASKS_LIST_PROJECTION
-    >,
+    payload: {
+      tasks,
+      nextCursor: listed.value.nextCursor,
+    } satisfies v.InferInput<typeof LIST_TASKS_LIST_PROJECTION>,
     textFields,
   };
 };
@@ -2207,21 +2181,20 @@ export const MATTER_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     description:
-      "List tasks in a matter, or read one task in detail. Pass task_id to " +
-      "get a single task's fields, assignees, and linked entities. Otherwise " +
-      "pass matter_id to list the matter's tasks, optionally filtered " +
-      "by a due-date range (date_from/date_to, ISO YYYY-MM-DD) and status. " +
-      "Returns each item's id, name, item type, status, priority, and due date.",
+      "List tasks, or read one task in detail. Pass task_id for one task's " +
+      "fields, assignees, and linked entities. Otherwise pass matter_id to " +
+      "list one matter's tasks, or omit it to list tasks across every matter " +
+      "you can read; filter by status, due date (date_from/date_to, ISO " +
+      "YYYY-MM-DD), or assignee. Soonest due first, undated last. Each task " +
+      "names its matter (id, name, reference).",
     inputSchema: listTasksArgsSchema,
-    jsonSchemaProjectionWaiver: {
-      ignoreActions: ["partial_check"],
-      reason:
-        "The list-vs-detail mode requirement stays authoritative in the runtime schema; a JSON Schema client cannot express it.",
-    },
     access: "read",
     anonymized: {
       exposure: "anonymize",
-      textFields: [TASK_LIST_TEXT_FIELD_PATH, ...TASK_DETAIL_TEXT_FIELD_PATHS],
+      textFields: [
+        ...deriveTextFieldPaths(TASK_LIST_TEXT_FIELD_SPECS),
+        ...TASK_DETAIL_TEXT_FIELD_PATHS,
+      ],
     },
     name: "list_tasks",
     scope: "stella:read",

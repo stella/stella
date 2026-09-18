@@ -884,6 +884,7 @@ export const CAPABILITY_DISPATCH = {
     load: async () => await import("@/api/handlers/tasks/entity-links-read"),
   },
   "tasks.get": { load: async () => await import("@/api/handlers/tasks/get") },
+  "tasks.list": { load: async () => await import("@/api/handlers/tasks/list") },
   "tasks.update": {
     load: async () => await import("@/api/handlers/tasks/update"),
   },

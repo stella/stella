@@ -85,7 +85,7 @@ import { isSkillSourceRateLimitedRequest } from "@/api/handlers/skills/source-ra
 import { smokeRoute } from "@/api/handlers/smoke/routes";
 import { styleSetsRoute } from "@/api/handlers/style-sets/routes";
 import { isStyleSetUploadRateLimitedRequest } from "@/api/handlers/style-sets/upload-rate-limit";
-import { tasksRoute } from "@/api/handlers/tasks/routes";
+import { taskListRoute, tasksRoute } from "@/api/handlers/tasks/routes";
 import { templatePacksRoute } from "@/api/handlers/template-packs/routes";
 import { templateRecipesRoute } from "@/api/handlers/template-recipes/routes";
 import { clearLookupPreviewCache } from "@/api/handlers/templates/lookup-preview-cache";
@@ -695,6 +695,7 @@ const api = new Elysia()
       .use(viewsRoute)
       .use(entityViewsRoute)
       .use(listsRoute)
+      .use(taskListRoute)
       .use(tasksRoute)
       .use(workObligationsRoute)
       .use(myWorkRoute)

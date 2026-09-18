@@ -680,21 +680,25 @@ export const LIST_PROPERTIES_PROJECTION = v.strictObject({
 });
 
 /**
- * list_tasks, list branch. Source of truth: `handleListTasksTool`
- * (`matter-tools.ts`) — selected entity columns minus the cursor timestamp.
+ * list_tasks, list branch. Source of truth: `listTasksPage`
+ * (`handlers/tasks/list-query.ts`). matter_id is optional, so rows can span
+ * matters and each task recovers its workspace from the sibling `matterId`.
  */
 export const LIST_TASKS_LIST_PROJECTION = v.strictObject({
   tasks: v.array(
     v.strictObject({
-      id: chatEntityRef({ from: "inputParam", param: "matter_id" }),
+      id: chatEntityRef({ from: "sibling", key: "matterId" }),
       name: v.string(),
       status: v.nullable(v.string()),
       priority: v.nullable(v.string()),
       itemType: v.string(),
       dueDate: v.nullable(v.string()),
+      matterId: chatRef("matter"),
+      matterName: v.string(),
+      matterReference: v.string(),
     }),
   ),
-  // Opaque `[createdAt, id]` cursor embedding an entity id, not
+  // Opaque `[dueDate, id]` cursor embedding an entity id, not
   // UUID-formatted.
   nextCursor: v.nullable(passthroughId()),
 });

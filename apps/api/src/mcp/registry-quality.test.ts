@@ -230,9 +230,13 @@ const TOOL_COUNT_CEILING: Record<SurfaceMode, number> = {
 // replaces a bare uuid format; law pays for the pair itself, which is what the
 // audience gained. A vocabulary a model cannot see is a vocabulary it guesses,
 // and a guessed id is a not_found the model reads as an empty corpus.
+// list_tasks listing across matters then measures 135_328 default and 71_147
+// anonymized: matter_id turns optional and the tool gains the `assignee`
+// filter, and the description has to say that omitting the matter widens the
+// list, or a model keeps asking which matter to look in.
 const TOOLS_LIST_PAYLOAD_CHAR_CEILING: Record<SurfaceMode, number> = {
-  default: 135_100,
-  anonymized: 70_900,
+  default: 135_400,
+  anonymized: 71_200,
   law: 28_250,
 };
 
@@ -274,9 +278,12 @@ const TOOLS_LIST_PAYLOAD_CHAR_CEILING: Record<SurfaceMode, number> = {
 // optional `workspaceId` would let a corpus read answer with a tenant field.
 // Law also gains the pair's two schemas, its `fetch` union carrying the two
 // corpus branches alone.
+// list_tasks rows then name their matter (`matterId`, `matterName`,
+// `matterReference`), measuring 46_361 default and 31_997 anonymized: a list
+// spanning matters is unreadable when a row cannot say which matter it is in.
 const OUTPUT_SCHEMA_TOTAL_CHAR_CEILING: Record<SurfaceMode, number> = {
-  default: 46_300,
-  anonymized: 31_900,
+  default: 46_400,
+  anonymized: 32_000,
   law: 10_050,
 };
 
