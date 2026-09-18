@@ -11,17 +11,17 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
-import { toSafeId } from "@/api/lib/branded-types";
-import type { DocumentAst } from "@/api/lib/case-law/document-ast";
 import type {
   DecisionDocumentOutcome,
   PendingDocument,
-} from "@/api/lib/legal-search/sk-document-backfill";
+} from "@/api/handlers/case-law/ingestion/sk-document-backfill";
 import type {
   PendingDocumentQueue,
   QueuedDocument,
-} from "@/api/lib/legal-search/sk-document-queue";
-import { DOCUMENT_TIER } from "@/api/lib/legal-search/sk-document-queue";
+} from "@/api/handlers/case-law/ingestion/sk-document-queue";
+import { DOCUMENT_TIER } from "@/api/handlers/case-law/ingestion/sk-document-queue";
+import { toSafeId } from "@/api/lib/branded-types";
+import type { DocumentAst } from "@/api/lib/case-law/document-ast";
 
 import {
   DRAIN_CHECK_SLICE_MS,

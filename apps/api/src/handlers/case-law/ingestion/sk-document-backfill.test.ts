@@ -18,7 +18,7 @@ import {
   remainingDocumentPredicate,
   requestedDocumentOrder,
   requestedDocumentPredicate,
-} from "@/api/lib/legal-search/sk-document-backfill";
+} from "@/api/handlers/case-law/ingestion/sk-document-backfill";
 
 const dialect = new PgDialect();
 

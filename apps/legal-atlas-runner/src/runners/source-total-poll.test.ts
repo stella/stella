@@ -14,7 +14,7 @@ import { describe, expect, test } from "bun:test";
 import { SOURCE_TOTAL_ORIGIN } from "@/api/db/schema";
 import type { SourceReportedTotal } from "@/api/handlers/case-law/ingestion/source-totals";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
-import { PENDING_SOURCE_FIELD_INVENTORY } from "@/api/lib/legal-search/ingestion-types";
+import { pendingSourceFieldInventory } from "@/api/lib/legal-search/ingestion-types";
 import type { SourceAdapter } from "@/api/lib/legal-search/ingestion-types";
 
 import {
@@ -41,7 +41,8 @@ const adapter = (
   }),
 ): SourceAdapter => ({
   key,
-  sourceFields: PENDING_SOURCE_FIELD_INVENTORY,
+  sourceFields: pendingSourceFieldInventory(ADAPTER_KEYS.CZ_REGIONAL),
+  sourceSurfaces: { surfaces: {} },
   name: `${key} fixture`,
   country: "CZE",
   language: "cs",

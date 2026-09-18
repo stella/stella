@@ -21,8 +21,8 @@
 import type {
   DecisionDocumentOutcome,
   PendingDocument,
-} from "@/api/lib/legal-search/sk-document-backfill";
-import type { PendingDocumentQueue } from "@/api/lib/legal-search/sk-document-queue";
+} from "@/api/handlers/case-law/ingestion/sk-document-backfill";
+import type { PendingDocumentQueue } from "@/api/handlers/case-law/ingestion/sk-document-queue";
 
 type DocumentOutcomeStatus = DecisionDocumentOutcome["status"];
 

@@ -49,6 +49,7 @@ import {
   czNssFixture,
   czUsFixture,
   plSnFixture,
+  skCourtsFixture,
   type EnrolledAdapterFixture,
 } from "@/api/tests/helpers/case-law-enrolled-fixtures";
 
@@ -80,7 +81,10 @@ const ADAPTER_INVENTORY_COVERAGE = {
   [ADAPTER_KEYS.CZ_NSS]: { disposition: "enrolled", fixture: czNssFixture },
   [ADAPTER_KEYS.CZ_US]: { disposition: "enrolled", fixture: czUsFixture },
   [ADAPTER_KEYS.CZ_REGIONAL]: PENDING,
-  [ADAPTER_KEYS.SK_COURTS]: PENDING,
+  [ADAPTER_KEYS.SK_COURTS]: {
+    disposition: "enrolled",
+    fixture: skCourtsFixture,
+  },
   [ADAPTER_KEYS.SK_US]: PENDING,
   [ADAPTER_KEYS.PL_COURTS]: PENDING,
   [ADAPTER_KEYS.PL_SN]: { disposition: "enrolled", fixture: plSnFixture },

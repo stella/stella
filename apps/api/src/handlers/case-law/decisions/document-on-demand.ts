@@ -35,14 +35,14 @@
 import { Result, UnhandledException } from "better-result";
 
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
-import { captureError } from "@/api/lib/analytics/capture";
-import type { SafeId } from "@/api/lib/branded-types";
-import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import type {
   BackfilledDocument,
   DecisionDocumentOutcome,
   PendingDocument,
-} from "@/api/lib/legal-search/sk-document-backfill";
+} from "@/api/handlers/case-law/ingestion/sk-document-backfill";
+import { captureError } from "@/api/lib/analytics/capture";
+import type { SafeId } from "@/api/lib/branded-types";
+import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import { withTimeout } from "@/api/lib/with-timeout";
 
 /** Sources that ingest metadata first and the document later. */

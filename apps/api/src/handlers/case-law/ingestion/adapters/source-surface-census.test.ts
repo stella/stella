@@ -53,6 +53,7 @@ import {
   czNssFixture,
   czUsFixture,
   plSnFixture,
+  skCourtsFixture,
   type EnrolledAdapterFixture,
 } from "@/api/tests/helpers/case-law-enrolled-fixtures";
 
@@ -106,6 +107,7 @@ const SURFACE_EVIDENCE = {
     "no recording of a crawl page exists for this adapter",
   ),
   [ADAPTER_KEYS.SK_COURTS]: [
+    { kind: "built", fixture: skCourtsFixture },
     { kind: "page-recording", file: "sk-courts-page.json.gz" },
   ],
   [ADAPTER_KEYS.SK_US]: NO_CAPTURE(

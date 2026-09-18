@@ -30,6 +30,7 @@ import {
   normalizePlSnDetail,
   readPlSnEnvelope,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-sn";
+import { assembleSkCourtsDecision } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
 import { isRecord } from "@/api/lib/type-guards";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
@@ -507,5 +508,68 @@ export const czUsFixture = (): EnrolledAdapterFixture => ({
         recordCard: { type: "read", html: CZ_US_RECORD_CARD },
         abstractHtml: CZ_US_ABSTRACT_PAGE,
       }) ?? panic("cz-us fixture did not build"),
+    ),
+});
+
+// ── SK courts fixture ────────────────────────────────────
+
+/** The court entry both `sud` and `povodnySud` are served as. */
+const skCourtEntry = (registreGuid: string, nazov: string) => ({
+  registreGuid,
+  nazov,
+  adresaString: "Záhradnícka 10, 81244 Bratislava",
+  suradnice: { zemepisnaDlzka: "17.122962", zemepisnaSirka: "48.152538" },
+});
+
+/**
+ * The listing row, as `BaseRozhodnutie` declares one.
+ *
+ * Every property of the schema carries a value, the registry columns a live
+ * listing happens to omit included: a disposition is only exercised where the
+ * envelope states the field it decides about.
+ */
+const SK_COURTS_LISTING_ROW = {
+  guid: "23ea32af-a671-41a6-b853-72f5d52b820c:26b85db6-ff6b-44ff-8fa4-a21c89805371",
+  formaRozhodnutia: "Rozsudok",
+  povaha: ["Zmeňujúce"],
+  sud: skCourtEntry("sud_105", "Mestský súd Bratislava IV"),
+  sudca: { registreGuid: "sudca_1600", meno: "JUDr. Anton Mihalovits" },
+  identifikacneCislo: "1191896318",
+  spisovaZnacka: "B1-7C/221/1991",
+  datumVydania: "20.06.1997",
+  zvyraznenie: [],
+};
+
+/** The per-decision record, as `Rozhodnutie` declares one. */
+const SK_COURTS_DETAIL_RECORD = {
+  ...SK_COURTS_LISTING_ROW,
+  ecli: "ECLI:SK:OSBA1:1997:1191896318.4",
+  oblast: ["Občianske právo"],
+  podOblast: ["Ostatné"],
+  odkazovanePredpisy: [
+    {
+      nazov: "/SK/ZZ/1991/87",
+      url: "https://www.slov-lex.sk/pravne-predpisy/SK/ZZ/1991/87",
+    },
+  ],
+  dokument: {
+    name: "Rozsudok_7C-221-1991.pdf",
+    fileExtension: "PDF",
+    size: 95_553,
+    url: "https://obcan.justice.sk/content/public/item/26b85db6-ff6b-44ff-8fa4-a21c89805371",
+    id: 4_112_887,
+  },
+  updateDate: "26.09.2023",
+  povodnySud: skCourtEntry("sud_102", "Mestský súd Bratislava I"),
+  povodnaSpisovaZnacka: "7C/221/1991",
+};
+
+export const skCourtsFixture = (): EnrolledAdapterFixture => ({
+  buildDecision: async () =>
+    await Promise.resolve(
+      assembleSkCourtsDecision({
+        item: { ...SK_COURTS_LISTING_ROW },
+        detail: { ...SK_COURTS_DETAIL_RECORD },
+      }) ?? panic("sk-courts fixture did not build"),
     ),
 });

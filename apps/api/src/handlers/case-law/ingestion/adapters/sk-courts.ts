@@ -10,14 +10,18 @@ import {
 } from "@/api/handlers/case-law/consts";
 import {
   backlogSurface,
+  decodeSourceRawEnvelope,
   defineSourceAdapter,
   EMPTY_AST,
+  encodeSourceRawEnvelope,
+  excludedSourceField,
   excludedSourceSurface,
   isPersistableSourceDocumentId,
-  pendingSourceFieldInventory,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   SOURCE_TOTAL_PROBE_FAILURE,
   sourceTotalProbeFailed,
   sourceTotalRead,
+  STORED_RAW_REPARSE_REJECTION,
   storedSourceSurface,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type {
@@ -26,8 +30,12 @@ import type {
   ReconciliationBuildOutcome,
   ReconciliationSlicePage,
   ReconciliationSlicePageOptions,
+  SourceFieldDisposition,
+  SourceRawParts,
   SourceSurfaceCensus,
   SourceSurfaceDisposition,
+  StoredRawReparseInput,
+  StoredRawReparseOutcome,
   SyncPage,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/adapters/calendar-day-slice-walk";
@@ -107,9 +115,30 @@ const arrayOrEmpty = <T>(value: T[] | null | undefined): T[] => {
   return value;
 };
 
+/**
+ * A courthouse's map position.
+ *
+ * Named but not read into: the inventory excludes both coordinates, so the
+ * guard accepts the object the schema promises rather than asserting a shape
+ * nothing depends on.
+ */
+type SkSuradnice = Readonly<Record<string, unknown>>;
+
+/**
+ * A court as this service's `BaseSud` schema declares it, excluded registry
+ * columns included.
+ *
+ * Every property the schema states is named here even where the inventory
+ * excludes it, because the two have to be comparable: a type that listed only
+ * what the adapter stores is how `oblast`, `povodnySud` and
+ * `povodnaSpisovaZnacka` arrived on a response this crawl paid for and were
+ * dropped on the floor for years.
+ */
 type SkSud = {
   registreGuid?: string | null;
   nazov?: string | null;
+  adresaString?: string | null;
+  suradnice?: SkSuradnice | null;
 };
 
 type SkSudca = {
@@ -126,12 +155,16 @@ export type SkApiItem = {
   datumVydania?: string | null;
   formaRozhodnutia?: string | null;
   povaha?: string[] | null;
+  /** Search-response highlights; empty unless the request carried a query. */
+  zvyraznenie?: string[] | null;
 };
 
 type SkDokument = {
   name?: string | null;
   fileExtension?: string | null;
   url?: string | null;
+  /** The service's own file key, declared `int64` by its schema. */
+  id?: number | null;
 };
 
 type SkOdkazovanyPredpis = {
@@ -141,10 +174,20 @@ type SkOdkazovanyPredpis = {
 
 type SkDetailItem = SkApiItem & {
   ecli?: string | null;
+  oblast?: string[] | null;
   podOblast?: string[] | null;
   odkazovanePredpisy?: SkOdkazovanyPredpis[] | null;
   dokument?: (SkDokument & { size?: number | null }) | null;
   updateDate?: string | null;
+  /**
+   * Where the file came from when it was transferred between courts, and the
+   * docket it carried there. Not an appeal: a first-instance decision nobody
+   * appealed states both, and `spisovaZnacka` is then the same docket under a
+   * prefix the receiving court added. A citation of the decision names the
+   * original, so the two are stored side by side.
+   */
+  povodnySud?: SkSud | null;
+  povodnaSpisovaZnacka?: string | null;
 };
 
 type SkApiResponse = {
@@ -166,7 +209,9 @@ const isOptionalStringArray = (
 const isSkSud = (value: unknown): value is SkSud =>
   isRecord(value) &&
   isNullishString(value["registreGuid"]) &&
-  isNullishString(value["nazov"]);
+  isNullishString(value["nazov"]) &&
+  isNullishString(value["adresaString"]) &&
+  isNullishValue(value["suradnice"], isRecord);
 
 const isSkSudca = (value: unknown): value is SkSudca =>
   isRecord(value) &&
@@ -180,6 +225,7 @@ const isSkDokument = (
   isNullishString(value["name"]) &&
   isNullishString(value["fileExtension"]) &&
   isNullishString(value["url"]) &&
+  isOptionalNumber(value["id"]) &&
   isOptionalNumber(value["size"]);
 
 const isSkOdkazovanyPredpis = (value: unknown): value is SkOdkazovanyPredpis =>
@@ -196,7 +242,8 @@ const isSkApiItem = (value: unknown): value is SkApiItem =>
   isNullishValue(value["sudca"], isSkSudca) &&
   isNullishString(value["datumVydania"]) &&
   isNullishString(value["formaRozhodnutia"]) &&
-  isOptionalStringArray(value["povaha"]);
+  isOptionalStringArray(value["povaha"]) &&
+  isOptionalStringArray(value["zvyraznenie"]);
 
 const isSkApiItemRecord = (
   value: unknown,
@@ -210,10 +257,13 @@ const isSkDetailItem = (value: unknown): value is SkDetailItem => {
 
   return (
     isNullishString(value["ecli"]) &&
+    isOptionalStringArray(value["oblast"]) &&
     isOptionalStringArray(value["podOblast"]) &&
     isNullishArrayOf(value["odkazovanePredpisy"], isSkOdkazovanyPredpis) &&
     isNullishValue(value["dokument"], isSkDokument) &&
-    isNullishString(value["updateDate"])
+    isNullishString(value["updateDate"]) &&
+    isNullishValue(value["povodnySud"], isSkSud) &&
+    isNullishString(value["povodnaSpisovaZnacka"])
   );
 };
 
@@ -383,16 +433,46 @@ const fetchDetailForItem = async (
 type SkCourtsDecisionParts = {
   /** The item exactly as the publisher listed it. */
   item: SkApiItem;
-  fields: SkCourtsIdentityFields;
   /** The per-decision record, where one was read. */
   detail: SkDetailItem | null;
 };
 
-const buildDecisionFromParts = ({
+/**
+ * Both responses this source serves for a decision, each kept verbatim under
+ * the name the envelope gives it.
+ *
+ * The detail part is absent rather than null where no record was read: a part
+ * that is there states a response, and one that is not states that none was.
+ */
+const skCourtsSourceRaw = (
+  item: SkApiItem,
+  detail: SkDetailItem | null,
+): { sourceRaw: string; sourceRawContentType: string } => ({
+  sourceRaw: encodeSourceRawEnvelope({
+    listing: JSON.stringify(item),
+    ...(detail === null ? {} : { detail: JSON.stringify(detail) }),
+  }),
+  sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+});
+
+/**
+ * Build one decision from the two responses already in hand, without
+ * contacting the publisher, or `null` for an item nothing can key.
+ *
+ * The seam the crawl, the stored-payload re-parse and the conformance
+ * fixtures all go through: a decision keyed or projected one way here is
+ * keyed and projected that way everywhere.
+ */
+export const assembleSkCourtsDecision = ({
   detail,
-  fields: { caseNumber, court },
   item,
-}: SkCourtsDecisionParts): IngestionResult => {
+}: SkCourtsDecisionParts): IngestionResult | null => {
+  const fields = skCourtsIdentityFields(item);
+  if (fields === null) {
+    return null;
+  }
+  const { caseNumber, court } = fields;
+
   // Hash only the list-endpoint payload so the
   // change-detection key stays stable regardless of
   // transient detail-fetch failures.
@@ -400,8 +480,8 @@ const buildDecisionFromParts = ({
   const rawHash = hashContent(rawJson);
 
   // PDF download is deferred to the document walk in the
-  // ingestion worker (lib/legal-search/sk-document-backfill.ts,
-  // ordered by lib/legal-search/sk-document-queue.ts).
+  // ingestion worker (ingestion/sk-document-backfill.ts,
+  // ordered by ingestion/sk-document-queue.ts).
   // Metadata-only ingestion (list + detail) lets us fly
   // through the 4.6M Slovak court decisions (~25 items/page
   // × ~4s/page) instead of blocking on 5-30s PDF downloads.
@@ -439,22 +519,32 @@ const buildDecisionFromParts = ({
       decisionType,
       guid: toOptionalValue(item.guid),
       identifikacneCislo: toOptionalValue(item.identifikacneCislo),
+      // The name this service states for a decision is the judge's or a
+      // senior court officer's, and the record carries no discriminator, so
+      // it stays a stated name rather than becoming a bench role. See the
+      // `judge-registry` surface for what would tell the two apart.
       judge: toOptionalValue(item.sudca?.meno),
       judgeRegistreGuid: toOptionalValue(item.sudca?.registreGuid),
       courtRegistreGuid: toOptionalValue(item.sud?.registreGuid),
       decisionNature: item.povaha,
+      area: detail?.oblast,
       subArea: detail?.podOblast,
       referencedLegislation: detail?.odkazovanePredpisy,
       documentName: toOptionalValue(detail?.dokument?.name),
       documentExtension: toOptionalValue(detail?.dokument?.fileExtension),
       documentSize: detail?.dokument?.size,
+      documentFileId: detail?.dokument?.id,
       updateDate: toOptionalValue(detail?.updateDate),
+      originCourt: toOptionalValue(detail?.povodnySud?.nazov),
+      originCourtRegistreGuid: toOptionalValue(
+        detail?.povodnySud?.registreGuid,
+      ),
+      originCaseNumber: toOptionalValue(detail?.povodnaSpisovaZnacka),
     },
     rawHash,
     parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.SK_COURTS],
     documentAst: EMPTY_AST,
-    sourceRaw: JSON.stringify({ listItem: item, detail }),
-    sourceRawContentType: "application/json",
+    ...skCourtsSourceRaw(item, detail),
   };
 };
 
@@ -482,16 +572,20 @@ export const buildSkCourtsDecision = async (
   item: SkApiItem,
   signal?: AbortSignal,
 ): Promise<SkCourtsBuildResult> => {
-  const fields = skCourtsIdentityFields(item);
-  if (fields === null) {
+  // Asked before the record is fetched, so an item nothing can store never
+  // costs a request; the assembler answers the same question again over what
+  // it was handed.
+  if (skCourtsIdentityFields(item) === null) {
     return { type: "unkeyable" };
   }
   const fetched = await fetchDetailForItem(item, signal);
-  const decision = buildDecisionFromParts({
+  const decision = assembleSkCourtsDecision({
     item,
-    fields,
     detail: fetched.type === "detail" ? fetched.detail : null,
   });
+  if (decision === null) {
+    return { type: "unkeyable" };
+  }
   return fetched.type === "unavailable"
     ? { type: "detail-unavailable", decision }
     : { type: "built", decision };
@@ -954,6 +1048,295 @@ const collectFrontierPage = async (
   };
 };
 
+// ── Source fields ────────────────────────────────────────
+
+/**
+ * The property paths one stored response states, spelled the way this
+ * service's own schema spells them.
+ *
+ * A nested object contributes its leaves rather than itself (`sud.nazov`, not
+ * `sud`), and a list of objects contributes one path per leaf however many
+ * entries it holds (`odkazovanePredpisy[].nazov`). That is exactly the shape
+ * `/v3/api-docs` declares, so the inventory below and the publisher's schema
+ * are comparable name for name — which is what `sk-courts.test.ts` compares.
+ */
+const statedPropertyPaths = (value: unknown, prefix: string): string[] => {
+  if (!isRecord(value)) {
+    return [];
+  }
+  return Object.entries(value).flatMap(([key, child]) => {
+    const path = `${prefix}${key}`;
+    if (isRecord(child)) {
+      return statedPropertyPaths(child, `${path}.`);
+    }
+    if (Array.isArray(child) && child.some(isRecord)) {
+      return child.flatMap((entry) => statedPropertyPaths(entry, `${path}[].`));
+    }
+    return [path];
+  });
+};
+
+/** The parts of the envelope that carry fields about the decision itself. */
+const SK_COURTS_FIELD_PARTS = ["listing", "detail"] as const;
+
+const listSkCourtsSourceFields = (parts: SourceRawParts): readonly string[] => {
+  const stated = new Set<string>();
+  for (const part of SK_COURTS_FIELD_PARTS) {
+    const payload = parts[part];
+    if (payload === undefined) {
+      continue;
+    }
+    const parsed = Result.try((): unknown => JSON.parse(payload)).unwrapOr(
+      null,
+    );
+    for (const path of statedPropertyPaths(parsed, "")) {
+      stated.add(path);
+    }
+  }
+  return [...stated];
+};
+
+/**
+ * What this service states about a decision, and what becomes of it.
+ *
+ * Keyed on the property paths of the `Rozhodnutie` schema the service itself
+ * publishes, so the map is total over the payload by construction: the detail
+ * record is a superset of the listing row, and a path the publisher adds to
+ * either reaches `listSourceFields` as an undeclared field rather than as
+ * silence.
+ *
+ * The three court-registry paths are excluded twice over, once for the
+ * deciding court and once for the transferring one: they describe a
+ * courthouse rather than a decision, and repeat unchanged on every decision
+ * that court has ever issued.
+ */
+const SK_COURTS_SOURCE_FIELDS = {
+  guid: { disposition: "stored", target: { type: "identity" } },
+  formaRozhodnutia: {
+    disposition: "stored",
+    target: { type: "result", key: "decisionType" },
+  },
+  povaha: {
+    disposition: "stored",
+    target: { type: "metadata", key: "decisionNature" },
+  },
+  "sud.registreGuid": {
+    disposition: "stored",
+    target: { type: "metadata", key: "courtRegistreGuid" },
+  },
+  "sud.nazov": {
+    disposition: "stored",
+    target: { type: "result", key: "court" },
+  },
+  "sud.adresaString": excludedSourceField(
+    "the courthouse's postal address, identical on every decision that court issues; it describes the court register, not the decision",
+  ),
+  "sud.suradnice.zemepisnaDlzka": excludedSourceField(
+    "the courthouse's map position, as for its address",
+  ),
+  "sud.suradnice.zemepisnaSirka": excludedSourceField(
+    "the courthouse's map position, as for its address",
+  ),
+  "sudca.registreGuid": {
+    disposition: "stored",
+    target: { type: "metadata", key: "judgeRegistreGuid" },
+  },
+  "sudca.meno": {
+    disposition: "stored",
+    target: { type: "metadata", key: "judge" },
+  },
+  identifikacneCislo: {
+    disposition: "stored",
+    target: { type: "metadata", key: "identifikacneCislo" },
+  },
+  spisovaZnacka: {
+    disposition: "stored",
+    target: { type: "result", key: "caseNumber" },
+  },
+  datumVydania: {
+    disposition: "stored",
+    target: { type: "result", key: "decisionDate" },
+  },
+  zvyraznenie: excludedSourceField(
+    "fragments of the decision highlighted against a search term the request carried; the crawl sends none, so it is a property of the query rather than of the decision",
+  ),
+  ecli: { disposition: "stored", target: { type: "result", key: "ecli" } },
+  oblast: { disposition: "stored", target: { type: "metadata", key: "area" } },
+  podOblast: {
+    disposition: "stored",
+    target: { type: "metadata", key: "subArea" },
+  },
+  "odkazovanePredpisy[].nazov": {
+    disposition: "stored",
+    target: { type: "metadata", key: "referencedLegislation" },
+  },
+  "odkazovanePredpisy[].url": {
+    disposition: "stored",
+    target: { type: "metadata", key: "referencedLegislation" },
+  },
+  "dokument.name": {
+    disposition: "stored",
+    target: { type: "metadata", key: "documentName" },
+  },
+  "dokument.fileExtension": {
+    disposition: "stored",
+    target: { type: "metadata", key: "documentExtension" },
+  },
+  "dokument.size": {
+    disposition: "stored",
+    target: { type: "metadata", key: "documentSize" },
+  },
+  "dokument.url": {
+    disposition: "stored",
+    target: { type: "result", key: "documentUrl" },
+  },
+  "dokument.id": {
+    disposition: "stored",
+    target: { type: "metadata", key: "documentFileId" },
+  },
+  updateDate: {
+    disposition: "stored",
+    target: { type: "metadata", key: "updateDate" },
+  },
+  "povodnySud.registreGuid": {
+    disposition: "stored",
+    target: { type: "metadata", key: "originCourtRegistreGuid" },
+  },
+  "povodnySud.nazov": {
+    disposition: "stored",
+    target: { type: "metadata", key: "originCourt" },
+  },
+  "povodnySud.adresaString": excludedSourceField(
+    "the transferring courthouse's postal address, as for the deciding court's",
+  ),
+  "povodnySud.suradnice.zemepisnaDlzka": excludedSourceField(
+    "the transferring courthouse's map position, as for the deciding court's",
+  ),
+  "povodnySud.suradnice.zemepisnaSirka": excludedSourceField(
+    "the transferring courthouse's map position, as for the deciding court's",
+  ),
+  povodnaSpisovaZnacka: {
+    disposition: "stored",
+    target: { type: "metadata", key: "originCaseNumber" },
+  },
+} as const satisfies Record<string, SourceFieldDisposition>;
+
+/** The paths the inventory decides about, for the schema diff in the tests. */
+export const SK_COURTS_SOURCE_FIELD_PATHS = Object.keys(
+  SK_COURTS_SOURCE_FIELDS,
+);
+
+// ── Stored payloads ──────────────────────────────────────
+
+const SK_COURTS_REPARSABLE_CONTENT_TYPES = new Set([
+  "application/json",
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+]);
+
+/**
+ * Read both the current envelope and the wrapper object stored before it.
+ *
+ * Rows written before the cutover carry `{ listItem, detail }` under
+ * `application/json`, and there are several million of them, so the wrapper
+ * is a shape this reader accepts forever rather than one it writes.
+ */
+const skCourtsStoredRawParts = (
+  raw: string,
+  contentType: string | null,
+): SourceRawParts | null => {
+  const envelope = decodeSourceRawEnvelope(raw);
+  if (envelope !== null) {
+    return envelope;
+  }
+  if (contentType !== null && contentType !== "application/json") {
+    return null;
+  }
+  const parsed = Result.try((): unknown => JSON.parse(raw)).unwrapOr(null);
+  if (!isRecord(parsed)) {
+    return null;
+  }
+  const listItem = parsed["listItem"];
+  const detail = parsed["detail"];
+  if (!isRecord(listItem)) {
+    return null;
+  }
+  return {
+    listing: JSON.stringify(listItem),
+    ...(isRecord(detail) ? { detail: JSON.stringify(detail) } : {}),
+  };
+};
+
+/** One stored part, back as the shape the adapter validates it against. */
+const storedPart = <T>(
+  payload: string | undefined,
+  isShape: (value: unknown) => value is T,
+): T | null => {
+  if (payload === undefined) {
+    return null;
+  }
+  const parsed = Result.try((): unknown => JSON.parse(payload)).unwrapOr(null);
+  return isShape(parsed) ? parsed : null;
+};
+
+/**
+ * Rebuild a decision from the responses already stored for it.
+ *
+ * The fields this adapter reads have grown past what it read when most rows
+ * were written — the legal area, the transferring court and the docket the
+ * file carried there all arrive on a record the crawl already paid for. They
+ * are recoverable without asking the publisher again precisely because that
+ * record was kept, which is the whole argument for storing it.
+ */
+const reparseStoredRaw = (
+  stored: StoredRawReparseInput,
+): StoredRawReparseOutcome => {
+  if (
+    stored.contentType !== null &&
+    !SK_COURTS_REPARSABLE_CONTENT_TYPES.has(stored.contentType)
+  ) {
+    return {
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.UNSUPPORTED_CONTENT,
+      detail: `stored content type ${stored.contentType}`,
+    };
+  }
+
+  const parts = skCourtsStoredRawParts(
+    new TextDecoder().decode(stored.raw),
+    stored.contentType,
+  );
+  const item = storedPart(parts?.["listing"], isSkApiItem);
+  if (item === null) {
+    return {
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.NO_DOCUMENT,
+      detail: `no listing row in the stored payload for ${stored.caseNumber}`,
+    };
+  }
+
+  const decision = assembleSkCourtsDecision({
+    item,
+    detail: storedPart(parts?.["detail"], isSkDetailItem),
+  });
+  if (decision === null) {
+    return {
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA,
+      detail: `the stored listing row for ${stored.caseNumber} states no docket and court to key on`,
+    };
+  }
+  if (decision.caseNumber !== stored.caseNumber) {
+    return {
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.IDENTITY_MISMATCH,
+      detail: `stored payload states ${decision.caseNumber}`,
+    };
+  }
+  return { type: "parsed", result: decision };
+};
+
+// ── Source surfaces ──────────────────────────────────────
+
 /**
  * Every payload this service serves for one decision, and whether the row
  * keeps it.
@@ -986,7 +1369,7 @@ const SK_COURTS_SOURCE_SURFACES = {
     detail: storedSourceSurface("detail"),
     document: backlogSurface(
       ADAPTER_KEYS.SK_COURTS,
-      "the document walk fetches the file and keeps none of it; the bytes need an object part rather than a text one",
+      "binary part; envelope object references not yet available",
     ),
     openapi: excludedSourceSurface(
       "the service's own schema: the field list an inventory is written from, not a payload about any one decision",
@@ -1026,7 +1409,12 @@ const SK_COURTS_SOURCE_SURFACES = {
 export const skCourtsAdapter = defineSourceAdapter({
   key: ADAPTER_KEYS.SK_COURTS,
   sourceSurfaces: SK_COURTS_SOURCE_SURFACES,
-  sourceFields: pendingSourceFieldInventory(ADAPTER_KEYS.SK_COURTS),
+  sourceFields: {
+    status: "declared",
+    fields: SK_COURTS_SOURCE_FIELDS,
+    listSourceFields: listSkCourtsSourceFields,
+  },
+  reparseStoredRaw,
   language: "sk",
   minRequestIntervalMs: 300,
   // PDF download deferred; pages now only do list + detail JSON.

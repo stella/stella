@@ -176,13 +176,13 @@
   {
     "kind": "source-import",
     "source": "apps/legal-atlas-runner/src/runners/case-law-ingest.ts",
-    "specifier": "@/api/lib/legal-search/sk-document-backfill",
+    "specifier": "@/api/handlers/case-law/ingestion/sk-document-backfill",
     "target": "apps/api"
   },
   {
     "kind": "source-import",
     "source": "apps/legal-atlas-runner/src/runners/case-law-ingest.ts",
-    "specifier": "@/api/lib/legal-search/sk-document-queue",
+    "specifier": "@/api/handlers/case-law/ingestion/sk-document-queue",
     "target": "apps/api"
   },
   {
@@ -242,25 +242,25 @@
   {
     "kind": "source-import",
     "source": "apps/legal-atlas-runner/src/runners/sk-document-drain.test.ts",
-    "specifier": "@/api/lib/legal-search/sk-document-backfill",
+    "specifier": "@/api/handlers/case-law/ingestion/sk-document-backfill",
     "target": "apps/api"
   },
   {
     "kind": "source-import",
     "source": "apps/legal-atlas-runner/src/runners/sk-document-drain.test.ts",
-    "specifier": "@/api/lib/legal-search/sk-document-queue",
+    "specifier": "@/api/handlers/case-law/ingestion/sk-document-queue",
     "target": "apps/api"
   },
   {
     "kind": "source-import",
     "source": "apps/legal-atlas-runner/src/runners/sk-document-drain.ts",
-    "specifier": "@/api/lib/legal-search/sk-document-backfill",
+    "specifier": "@/api/handlers/case-law/ingestion/sk-document-backfill",
     "target": "apps/api"
   },
   {
     "kind": "source-import",
     "source": "apps/legal-atlas-runner/src/runners/sk-document-drain.ts",
-    "specifier": "@/api/lib/legal-search/sk-document-queue",
+    "specifier": "@/api/handlers/case-law/ingestion/sk-document-queue",
     "target": "apps/api"
   },
   {

@@ -43,6 +43,9 @@ import {
   caseLawDecisions,
 } from "@/api/db/schema";
 import { corpusStorageMode } from "@/api/env-base";
+import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
+import { fetchPublisher } from "@/api/handlers/case-law/ingestion/adapters/retry";
+import type { PendingDocumentTierLoaders } from "@/api/handlers/case-law/ingestion/sk-document-queue";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   TEXT_ABSENCE_REASON,
@@ -54,7 +57,6 @@ import {
 } from "@/api/lib/case-law/document-ast";
 import type { CorpusStorageMode } from "@/api/lib/corpus-storage-mode";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
-import { fetchWithTimeout } from "@/api/lib/fetch";
 import {
   reserveCaseLawCorpusUploadIntent,
   writeReservedCaseLawCorpusUpload,
@@ -77,15 +79,11 @@ import type {
   CorpusPayloadColumns,
   WriteCorpusResult,
 } from "@/api/lib/legal-search/corpus-storage";
-import {
-  ADAPTER_KEYS,
-  PARSER_VERSIONS,
-} from "@/api/lib/legal-search/ingestion-constants";
+import { PARSER_VERSIONS } from "@/api/lib/legal-search/ingestion-constants";
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
 import { parseSkDecisionPdf } from "@/api/lib/legal-search/parsers/sk-courts";
 import { segmentDecision } from "@/api/lib/legal-search/segment-decision";
 import { restrictSkCourtDocumentUrl } from "@/api/lib/legal-search/sk-court-document-url";
-import type { PendingDocumentTierLoaders } from "@/api/lib/legal-search/sk-document-queue";
 import { isRecord } from "@/api/lib/type-guards";
 import { withTimeout } from "@/api/lib/with-timeout";
 
@@ -108,6 +106,17 @@ export type PendingDocument = {
  */
 const PDF_TIMEOUT_MS = 30_000;
 
+/**
+ * The decision's document, or `undefined` where the publisher states there is
+ * none to fetch.
+ *
+ * Through the adapter's own gate, and counted against its publisher's budget.
+ * One request per decision over a corpus of millions makes this walk the
+ * largest traffic the slice sends that host, so a download that paced itself
+ * was the one spend nothing could see — which is also why this module sits in
+ * the tree `publisher-gate-coverage.test.ts` scans rather than beside the
+ * parsers it feeds.
+ */
 export const fetchPdfBytes = async (
   documentUrl: string,
   signal: AbortSignal,
@@ -120,7 +129,8 @@ export const fetchPdfBytes = async (
     return undefined;
   }
 
-  const response = await fetchWithTimeout(target, {
+  const response = await fetchPublisher(target, {
+    adapterKey: ADAPTER_KEYS.SK_COURTS,
     redirect: "error",
     signal,
     timeoutMs: PDF_TIMEOUT_MS,
