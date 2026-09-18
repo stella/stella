@@ -5,14 +5,9 @@ import {
   SERVER_EXECUTED_SUGGESTION_KINDS,
   SIGNAL_ORIGIN,
   SIGNAL_SEVERITY,
-  SIGNAL_VIEW,
   SUGGESTION_KINDS,
 } from "@stll/api-contract/signals";
-import type {
-  SignalOrigin,
-  SignalSeverity,
-  SignalView,
-} from "@stll/api-contract/signals";
+import type { SignalOrigin, SignalSeverity } from "@stll/api-contract/signals";
 
 import {
   tPaginationCursor,
@@ -20,17 +15,7 @@ import {
   tSafeId,
 } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
-
-const SIGNAL_VIEW_SCHEMAS = {
-  [SIGNAL_VIEW.OPEN]: t.Literal(SIGNAL_VIEW.OPEN),
-  [SIGNAL_VIEW.SNOOZED]: t.Literal(SIGNAL_VIEW.SNOOZED),
-  [SIGNAL_VIEW.RESOLVED]: t.Literal(SIGNAL_VIEW.RESOLVED),
-} as const satisfies Record<SignalView, TSchema>;
-export const signalViewSchema = t.Union([
-  SIGNAL_VIEW_SCHEMAS.open,
-  SIGNAL_VIEW_SCHEMAS.snoozed,
-  SIGNAL_VIEW_SCHEMAS.resolved,
-]);
+import { signalViewSchema } from "@/api/lib/signals/view-schema";
 
 const SIGNAL_ORIGIN_SCHEMAS = {
   [SIGNAL_ORIGIN.MANUAL]: t.Literal(SIGNAL_ORIGIN.MANUAL),

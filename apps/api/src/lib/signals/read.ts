@@ -22,7 +22,13 @@ import {
   encodePaginationCursor,
   isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
+import { hasMemberPermission } from "@/api/lib/permission-authorization";
+import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import { brandPersistedSignalId } from "@/api/lib/safe-id-boundaries";
+
+/** Unscoped signals are visible, and triageable, only with this permission. */
+export const canTriageSignals = (memberRole: AuthorizedMemberRole): boolean =>
+  hasMemberPermission(memberRole, { signal: ["triage"] });
 
 /**
  * Visibility: a scoped signal is visible when its workspace is visible

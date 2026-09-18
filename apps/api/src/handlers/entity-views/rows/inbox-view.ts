@@ -7,9 +7,9 @@ import { SIGNAL_VIEW } from "@stll/api-contract/signals";
 import type { SignalView } from "@stll/api-contract/signals";
 
 import { entities, signals } from "@/api/db/schema";
-import { signalListConditions } from "@/api/handlers/signals/read";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { EntityQueryScope } from "@/api/lib/entities/query-scope";
+import { signalListConditions } from "@/api/lib/signals/read";
 
 const isTask = eq(entities.kind, "task");
 const isClosedTask =

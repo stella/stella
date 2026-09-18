@@ -22,7 +22,6 @@ import { deleteEntityLinkHandler } from "@/api/handlers/tasks/entity-links-delet
 import {
   decodeTaskListCursor,
   listTasksPage,
-  TASK_ASSIGNEE_FILTERS,
 } from "@/api/handlers/tasks/list-query";
 import { archiveWorkspaceHandler } from "@/api/handlers/workspaces/archive";
 import { createWorkspaceHandler } from "@/api/handlers/workspaces/create";
@@ -60,6 +59,7 @@ import {
   brandPersistedUserId,
   brandPersistedWorkspaceContactId,
 } from "@/api/lib/safe-id-boundaries";
+import { TASK_ASSIGNEE_FILTERS } from "@/api/lib/tasks/assigned";
 import { createTaskEntityHandler } from "@/api/lib/tasks/create-task-entity";
 import { updateTaskHandler } from "@/api/lib/tasks/update-task";
 import { includes } from "@/api/lib/type-guards";

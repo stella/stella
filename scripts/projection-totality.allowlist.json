@@ -292,10 +292,6 @@
     "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
   },
   {
-    "file": "apps/api/src/handlers/signals/read.ts",
-    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
-  },
-  {
     "file": "apps/api/src/handlers/skills/get.ts",
     "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
   },

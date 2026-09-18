@@ -10,9 +10,6 @@ import {
   inboxEntityCondition,
   inboxSignalCondition,
 } from "@/api/handlers/entity-views/rows/inbox-view";
-import { listVisibleSignalsByIds } from "@/api/handlers/signals/read";
-import { signalViewSchema } from "@/api/handlers/signals/schema";
-import { canTriageSignals } from "@/api/handlers/signals/transition";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
@@ -32,6 +29,11 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
 import { brandPersistedEntityId } from "@/api/lib/safe-id-boundaries";
+import {
+  canTriageSignals,
+  listVisibleSignalsByIds,
+} from "@/api/lib/signals/read";
+import { signalViewSchema } from "@/api/lib/signals/view-schema";
 import {
   listAtRiskEntityIds,
   resolveWorkAsOf,
