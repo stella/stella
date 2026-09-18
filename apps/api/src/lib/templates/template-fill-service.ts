@@ -12,6 +12,8 @@
 
 import { panic } from "better-result";
 
+import { compareCodeUnit } from "@stll/collation";
+
 import type { ScopedDb } from "@/api/db/safe-db";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -40,6 +42,8 @@ import { applyManifestFillSteps } from "@/api/lib/docx/manifest-fill-steps";
 import { fillTemplate } from "@/api/lib/docx/patch-template";
 import {
   type AiConditionDecider,
+  isAiConditionField,
+  type ResolvedAiCondition,
   resolveAiConditions,
 } from "@/api/lib/docx/resolve-ai-conditions";
 import {
@@ -62,6 +66,7 @@ import type {
   FieldValidation,
   InputType,
   LookupRegistry,
+  TemplateManifest,
 } from "@/api/lib/docx/types";
 import { isTemplateData } from "@/api/lib/docx/types";
 import { readS3ArrayBuffer } from "@/api/lib/s3";
@@ -267,14 +272,28 @@ const collectDescribedArrayGroups = (
   return groups;
 };
 
+/**
+ * One `{% if %}` block of the document, named by the field path that governs
+ * it and by how that path gets its value: the person answers it (`asked`), a
+ * rule derives it (`rule`, with the expression, named the way the `fields`
+ * overlay names it so a caller can edit it and send it straight back), or the
+ * model decides it at fill time (`ai`, with the instructions it decides on).
+ *
+ * Without this an AI-decided block is invisible: its field reads as a boolean
+ * with an `ai` source and nothing says it gates a paragraph.
+ */
+type DescribedCondition = { path: string } & (
+  | { kind: "asked" }
+  | { kind: "rule"; condition: string }
+  | { kind: "ai"; prompt: string }
+);
+
 export type DescribeTemplateResult =
   | {
       name: string;
       fields: DescribedField[];
-      /** Derived fields reported as rules rather than questions, named the
-       *  way the `fields` overlay names them so a caller can edit an
-       *  expression and send it straight back. */
-      conditions: { path: string; condition: string }[];
+      /** Every gated block the document carries; see {@link DescribedCondition}. */
+      conditions: DescribedCondition[];
       computed: { path: string; formula: string }[];
       arrays: DescribedArrayGroup[];
       /** Marker authoring mistakes found in the stored DOCX plus the ones its
@@ -308,6 +327,46 @@ const describedWarnings = async ({
         await getOrganizationRegistryAvailability({ organizationId, scopedDb }),
     })),
   ]);
+
+/**
+ * Every gated block the document carries, from the block-directive scan
+ * `discoverTemplate` already performs: `conditionPaths` is every path a
+ * `{% if %}` expression reads, so an AI-decided or user-answered block appears
+ * beside the rule-derived ones instead of only the latter. A rule field the
+ * scan did not reach (its expression gates nothing yet) still belongs here,
+ * because the configure overlay addresses it by the same name.
+ */
+const describedConditions = ({
+  conditionPaths,
+  manifest,
+}: {
+  conditionPaths: readonly string[];
+  manifest: TemplateManifest;
+}): DescribedCondition[] => {
+  const rules = new Map(
+    manifestNamedConditions(manifest).map(({ name, expression }) => [
+      name,
+      expression,
+    ]),
+  );
+  const prompts = new Map(
+    manifest.fields
+      .filter(isAiConditionField)
+      .map((field) => [field.path, field.aiPrompt]),
+  );
+  return [...new Set([...conditionPaths, ...rules.keys()])]
+    .toSorted(compareCodeUnit)
+    .map((path): DescribedCondition => {
+      const prompt = prompts.get(path);
+      if (prompt !== undefined) {
+        return { path, kind: "ai", prompt };
+      }
+      const condition = rules.get(path);
+      return condition === undefined
+        ? { path, kind: "asked" }
+        : { path, kind: "rule", condition };
+    });
+};
 
 export const describeStoredTemplate = async ({
   templateId,
@@ -370,12 +429,10 @@ export const describeStoredTemplate = async ({
         optionsFrom: field.optionsFrom ?? null,
         dateFormat: field.dateFormat ?? null,
       })),
-    // Synthesized so each boolean condition-field appears here as a rule
-    // rather than a fillable field.
-    conditions: manifestNamedConditions(manifest).map((c) => ({
-      path: c.name,
-      condition: c.expression,
-    })),
+    conditions: describedConditions({
+      conditionPaths: discovered.conditionPaths,
+      manifest,
+    }),
     computed: manifest.fields.flatMap((field) =>
       field.formula === undefined
         ? []
@@ -458,6 +515,11 @@ type FilledDocx = {
    *  draft is never written, so these fields left the fill unfilled and every
    *  boundary reports them instead of presenting the document as complete. */
   aiFieldErrors: AiFieldError[];
+  /** One entry per AI-decided boolean condition the fill settled, naming who
+   *  settled it. A `{% if %}` block's inclusion is otherwise only visible in
+   *  the rendered text, which a caller cannot tell from a block the template
+   *  never carried. */
+  conditionDecisions: ResolvedAiCondition[];
 };
 
 type FillDocxOptions<TRejection = never> = Omit<
@@ -645,11 +707,12 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
   const aiFieldErrors = drafted.errors;
   // Decide AI-decided boolean conditions (a boolean field with an aiPrompt)
   // before substitution so its {% if field_path %} block resolves correctly.
-  record = await resolveAiConditions({
+  const decidedConditions = await resolveAiConditions({
     values: record,
     fields: manifest.fields,
     decide: decideAiCondition,
   });
+  record = decidedConditions.values;
   // Rewrite each aiAdapt marker occurrence to fit its surrounding text;
   // the stub stays in `record` so uncovered occurrences still get the
   // plain global substitution below.
@@ -701,6 +764,7 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
     ),
     structureErrors: result.structureErrors,
     aiFieldErrors,
+    conditionDecisions: decidedConditions.conditions,
   };
 };
 
@@ -763,6 +827,8 @@ export type FillTemplateResult =
       unusedValues: string[];
       /** AI-drafted fields the model could not complete; unfilled above. */
       aiFieldErrors: AiFieldError[];
+      /** What each AI-decided condition was settled on, and by whom. */
+      conditionDecisions: ResolvedAiCondition[];
     }
   | { error: string }
   | { requiredFieldsRejection: MissingRequiredField[] };
@@ -782,6 +848,8 @@ export type FillTemplateWithDocxResult =
       unusedValues: string[];
       structureErrors: FilledDocx["structureErrors"];
       aiFieldErrors: AiFieldError[];
+      /** What each AI-decided condition was settled on, and by whom. */
+      conditionDecisions: ResolvedAiCondition[];
     }
   | { error: string };
 
@@ -806,6 +874,7 @@ const withExtractedText = async (
     unusedValues: filled.unusedValues,
     structureErrors: filled.structureErrors,
     aiFieldErrors: filled.aiFieldErrors,
+    conditionDecisions: filled.conditionDecisions,
   };
 };
 
@@ -888,5 +957,6 @@ export const fillStoredTemplate = async (
     unmatchedPlaceholders: filled.unmatchedPlaceholders,
     unusedValues: filled.unusedValues,
     aiFieldErrors: filled.aiFieldErrors,
+    conditionDecisions: filled.conditionDecisions,
   };
 };

@@ -62,6 +62,14 @@ const captureRequest = ({
 
 const DRAFTED_VALUE = "drafted value";
 const ADAPTED_RENDERINGS = { renderings: ["adapted"] };
+const CONDITION_DECISION = { decision: true };
+/** The two structured-output callers ask for different shapes through the one
+ *  adapter, and each parses its answer strictly, so the fake answers the shape
+ *  the prompt asked for rather than one shape for both. */
+const structuredAnswerFor = (prompt: string | undefined): object =>
+  prompt?.includes("one yes/no condition") === true
+    ? CONDITION_DECISION
+    : ADAPTED_RENDERINGS;
 /** A Polish scope paragraph the provider stops writing mid-word, which is what
  *  reaching the output ceiling looks like from the caller's side. */
 const CUT_VALUE =
@@ -131,10 +139,8 @@ const scriptedAdapter = (script: RunScript): AnyTextAdapter => {
     },
     structuredOutput: async ({ chatOptions }) => {
       captureRequest(chatOptions);
-      return {
-        data: ADAPTED_RENDERINGS,
-        rawText: JSON.stringify(ADAPTED_RENDERINGS),
-      };
+      const data = structuredAnswerFor(lastRequest().prompt);
+      return { data, rawText: JSON.stringify(data) };
     },
   };
 };
@@ -511,8 +517,30 @@ describe("buildAiConditionDecider decision tier", () => {
       tenantWorkspaceIds: [],
     });
 
-    expect(await decideCondition?.(input)).toBe(true);
+    expect(await decideCondition?.(input)).toEqual({
+      decidedBy: "decision_model",
+      value: true,
+      probability: 0.94,
+    });
     expect(capturedRequests).toEqual([]);
+  });
+
+  test("a no carries the probability of the no, not of the yes", async () => {
+    const decideCondition = buildAiConditionDecider({
+      decisionModel: decisionModel(0.04),
+      orgAIConfig,
+      organizationId,
+      resolveTextModel,
+      tenantWorkspaceIds: [],
+    });
+
+    const decided = await decideCondition?.(input);
+
+    expect(decided?.decidedBy).toBe("decision_model");
+    expect(decided).toMatchObject({ value: false });
+    expect(
+      decided?.decidedBy === "decision_model" ? decided.probability : null,
+    ).toBeCloseTo(0.96, 6);
   });
 
   test("an answer under the floor hands the condition to the generative model", async () => {
@@ -524,9 +552,11 @@ describe("buildAiConditionDecider decision tier", () => {
       tenantWorkspaceIds: [],
     });
 
-    await decideCondition?.(input);
+    const decided = await decideCondition?.(input);
 
     expect(lastRequest().prompt).toContain("Is the principal a company?");
+    // The generative tier answers without a probability: there is none to give.
+    expect(decided).toEqual({ decidedBy: "generative_model", value: true });
   });
 
   test("with no decision model the generative model answers, as before", async () => {
@@ -538,8 +568,9 @@ describe("buildAiConditionDecider decision tier", () => {
       tenantWorkspaceIds: [],
     });
 
-    await decideCondition?.(input);
+    const decided = await decideCondition?.(input);
 
     expect(capturedRequests).toHaveLength(1);
+    expect(decided?.decidedBy).toBe("generative_model");
   });
 });

@@ -10,6 +10,7 @@ import { Result } from "better-result";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import type { SafeId } from "@/api/lib/branded-types";
 import { extractText } from "@/api/lib/docx/extract-text";
+import type { ResolvedAiCondition } from "@/api/lib/docx/resolve-ai-conditions";
 import type { AiFieldError } from "@/api/lib/docx/resolve-ai-fields";
 import type {
   ExtractedParagraph,
@@ -43,6 +44,9 @@ type FillPreviewResult = {
   /** AI-drafted fields the model could not complete; their markers are
    *  unfilled in the preview above. */
   aiFieldErrors: AiFieldError[];
+  /** What each AI-decided condition was settled on, and by whom, so the form
+   *  can show the answer behind an included or excluded block. */
+  conditionDecisions: ResolvedAiCondition[];
 };
 
 /** `templates.fill-preview`'s fill logic: the shared fill pipeline in its
@@ -132,5 +136,6 @@ export const fillPreviewLogic = async ({
     unusedValues: result.unusedValues,
     structureErrors: result.structureErrors,
     aiFieldErrors: result.aiFieldErrors,
+    conditionDecisions: result.conditionDecisions,
   });
 };

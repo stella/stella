@@ -406,6 +406,10 @@ const conditionDecisionSchema = v.strictObject({
  * an aiPrompt). Returns `undefined` when the org has no usable AI config or the
  * model fails, so callers leave the condition unset — the referencing
  * `{% if %}` is then falsy and its block is excluded (the correct default).
+ *
+ * A settled condition names the tier that settled it, and the decision model's
+ * answer carries the probability it chose the side with, so the fill can report
+ * a gated block's decision rather than only its effect.
  */
 export const buildAiConditionDecider = ({
   orgAIConfig,
@@ -454,7 +458,14 @@ export const buildAiConditionDecider = ({
           client: decisionModel,
         });
         if (decided.state === "decided") {
-          return decided.answer.noul > 0.5;
+          const value = decided.answer.noul > 0.5;
+          return {
+            decidedBy: "decision_model",
+            value,
+            // The reading's probability is the yes; on a no the chosen side's
+            // is its complement (same rule the fill form's preview applies).
+            probability: value ? decided.probability : 1 - decided.probability,
+          };
         }
       }
       const { decision } = await generateFieldObject({
@@ -476,7 +487,7 @@ Decide true (yes) or false (no) for this condition.`,
         system: skillTools ? SKILL_REF_GENERATOR_GUIDANCE : undefined,
         tenantWorkspaceIds,
       });
-      return decision;
+      return { decidedBy: "generative_model", value: decision };
     } catch (error) {
       aiAnalytics?.captureError(error);
       return undefined;
