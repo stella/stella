@@ -737,10 +737,16 @@
       "abstract": "Streszczenie",
       "citedBy": "Cytowane przez",
       "cites": "Cytuje",
-      "judgeRapporteur": "Sędzia sprawozdawca",
+      "dissentByline": "Zdanie odrębne: <bdi>{names}</bdi>",
+      "judgeRole": {
+        "dissenting": "Zdanie odrębne",
+        "rapporteur": "Sędzia sprawozdawca"
+      },
+      "judges": "Sędziowie",
       "legalArea": "Dziedzina prawa",
       "legalSentence": "Teza orzeczenia",
       "popularName": "Nazwa potoczna",
+      "portraitCredit": "Źródło portretów: {source}",
       "provisionMentions": "{count, number}×",
       "provisionMentionsLabel": "{count, plural, one {# wzmianka} few {# wzmianki} many {# wzmianek} other {# wzmianki}}",
       "provisionsCited": "Powołane przepisy",

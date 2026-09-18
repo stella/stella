@@ -37,6 +37,8 @@ import type {
 import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import { buildCzNsDecision } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
 import { buildCzNssDecision } from "@/api/handlers/case-law/ingestion/adapters/cz-nss";
+import { buildCzUsDecision } from "@/api/handlers/case-law/ingestion/adapters/cz-us";
+import type { ListedDecision } from "@/api/handlers/case-law/ingestion/adapters/cz-us";
 import {
   assemblePlSnDecision,
   normalizePlSnDetail,
@@ -417,6 +419,104 @@ const plSnFixture = (): InventoryFixture => ({
   },
 });
 
+// ── CZ ÚS fixture ────────────────────────────────────────
+
+/** One labelled row of the record card, in the court's own markup. */
+const czUsCardRow = (label: string, value: string): string =>
+  `<tr><td style="font-size:10pt;">${label}</td>` +
+  `<td style="font-size:10pt;">${value}</td></tr>`;
+
+/**
+ * The record card, carrying every label this court is known to print and a
+ * value in each.
+ *
+ * Every label filled because the conformance suite walks what the fixture
+ * states: a cell left blank would declare a disposition nothing exercises.
+ * The two judge rows repeat the court's own `<br/>` separator, which is what
+ * turns one cell into the ordered list of dissenters.
+ */
+const CZ_US_RECORD_CARD = `<!DOCTYPE html><html><body>
+  <table id="tableDocumentHeader"><tr><td>Soudce zpravodaj</td></tr></table>
+  <table class='recordCardTable'>${[
+    czUsCardRow(
+      "Identifikátor evropské judikatury",
+      "ECLI:CZ:US:2026:Pl.US.9.26.1",
+    ),
+    czUsCardRow("Název soudu", "Ústavní soud České republiky"),
+    czUsCardRow("Spisová značka", "Pl.ÚS 9/26"),
+    czUsCardRow("Paralelní citace (Sbírka zákonů)", "120/2026 Sb."),
+    czUsCardRow(
+      "Paralelní citace (Sbírka nálezů a usnesení)",
+      "N 12/90 SbNU 101",
+    ),
+    czUsCardRow("Populární název", "Lhůta pro podání správní žaloby"),
+    czUsCardRow("Datum rozhodnutí", "3. 2. 2026"),
+    czUsCardRow("Datum vyhlášení", "10. 2. 2026"),
+    czUsCardRow("Datum podání", "4. 6. 2025"),
+    czUsCardRow("Datum zpřístupnění", "12. 2. 2026"),
+    czUsCardRow("Forma rozhodnutí", "Nález"),
+    czUsCardRow("Typ řízení", "O zrušení zákonů a jiných právních předpisů"),
+    czUsCardRow("Význam", "1"),
+    czUsCardRow("Navrhovatel", "SKUPINA SENÁTORŮ"),
+    czUsCardRow("Dotčený orgán", "POSLANECKÁ SNĚMOVNA PARLAMENTU ČR"),
+    czUsCardRow("Soudce zpravodaj", "Nováková Jana"),
+    czUsCardRow("Napadený akt", "zákon; 150/2002 Sb.; § 72"),
+    czUsCardRow("Typ výroku", "vyhověno<br/>zamítnuto"),
+    czUsCardRow(
+      "Dotčené ústavní zákony a mezinárodní smlouvy",
+      "2/1993 Sb./Sb.m.s., čl. 36 odst.1",
+    ),
+    czUsCardRow("Ostatní dotčené předpisy", "150/2002 Sb., § 72"),
+    czUsCardRow("Odlišné stanovisko", "Dvořák Petr<br/>Svobodová Eva"),
+    czUsCardRow("Předmět řízení", "právo na soudní a jinou právní ochranu"),
+    czUsCardRow("Věcný rejstřík", "žaloba<br/>lhůta"),
+    czUsCardRow("Jazyk rozhodnutí", "Čeština"),
+    czUsCardRow("Poznámka", "Nález byl vyhlášen ve Sbírce zákonů."),
+    czUsCardRow(
+      "URL adresa",
+      "https://nalus.usoud.cz:443/Search/GetText.aspx?sz=Pl-9-26_1",
+    ),
+  ].join("")}</table>
+</body></html>`;
+
+/** The document page, whose hidden labels key the decision's identity. */
+const CZ_US_TEXT_PAGE = `<html><body>
+  <span id="lblRegistrySign">Pl.ÚS 9/26 ze dne 3. 2. 2026</span>
+  <span id="lblDecisionForm">Nález</span>
+  <span id="lblParallelQuotation">120/2026 Sb.</span>
+  <span id="lblPopularName">Lhůta pro podání správní žaloby</span>
+  <input name="registrySignHidden" value="Pl.ÚS 9/26 #1 ze dne 3. 2. 2026" />
+  <table class="DocContent"><tr><td>
+    ${"Ústavní soud rozhodl v plénu o návrhu skupiny senátorů. ".repeat(6)}
+  </td></tr></table>
+</body></html>`;
+
+const CZ_US_LISTING_ROW = {
+  caseNumber: "Pl.ÚS 9/26",
+  counter: 1,
+  quarantineId: "cz-us-inventory-fixture",
+  quarantineRepairIds: [],
+  listingHtml: "<tr><td>Pl.ÚS 9/26 #1</td></tr>",
+  sourceDocumentId: "nalus-record:900026",
+  nalusRecordId: "900026",
+  sourceUrl: "https://nalus.usoud.cz/Search/GetText.aspx?sz=Pl-9-26_1",
+  sz: "Pl-9-26_1",
+  ecli: "ECLI:CZ:US:2026:Pl.US.9.26.1",
+} as const satisfies ListedDecision;
+
+const czUsFixture = (): InventoryFixture => ({
+  payload: CZ_US_RECORD_CARD,
+  buildDecision: async () =>
+    await Promise.resolve(
+      buildCzUsDecision({
+        listed: { ...CZ_US_LISTING_ROW },
+        textHtml: CZ_US_TEXT_PAGE,
+        recordCard: { type: "read", html: CZ_US_RECORD_CARD },
+        abstractHtml: undefined,
+      }) ?? panic("cz-us fixture did not build"),
+    ),
+});
+
 // ── Coverage declaration ─────────────────────────────────
 
 type InventoryFixture = {
@@ -444,7 +544,7 @@ const PENDING = { disposition: "pending-inventory" } as const;
 const ADAPTER_INVENTORY_COVERAGE = {
   [ADAPTER_KEYS.CZ_NS]: { disposition: "enrolled", fixture: czNsFixture },
   [ADAPTER_KEYS.CZ_NSS]: { disposition: "enrolled", fixture: czNssFixture },
-  [ADAPTER_KEYS.CZ_US]: PENDING,
+  [ADAPTER_KEYS.CZ_US]: { disposition: "enrolled", fixture: czUsFixture },
   [ADAPTER_KEYS.CZ_REGIONAL]: PENDING,
   [ADAPTER_KEYS.SK_COURTS]: PENDING,
   [ADAPTER_KEYS.SK_US]: PENDING,

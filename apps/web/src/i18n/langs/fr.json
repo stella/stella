@@ -737,10 +737,16 @@
       "abstract": "Résumé",
       "citedBy": "Cité par",
       "cites": "Cite",
-      "judgeRapporteur": "Juge rapporteur",
+      "dissentByline": "Opinion dissidente : <bdi>{names}</bdi>",
+      "judgeRole": {
+        "dissenting": "Opinion dissidente",
+        "rapporteur": "Juge rapporteur"
+      },
+      "judges": "Juges",
       "legalArea": "Domaine juridique",
       "legalSentence": "Attendu",
       "popularName": "Nom courant",
+      "portraitCredit": "Source des portraits : {source}",
       "provisionMentions": "{count, number}×",
       "provisionMentionsLabel": "{count, plural, one {# occurrence} other {# occurrences}}",
       "provisionsCited": "Dispositions citées",

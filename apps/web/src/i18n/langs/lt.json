@@ -737,10 +737,16 @@
       "abstract": "Santrauka",
       "citedBy": "Cituojama",
       "cites": "Cituoja",
-      "judgeRapporteur": "Teisėjas pranešėjas",
+      "dissentByline": "Atskiroji nuomonė: <bdi>{names}</bdi>",
+      "judgeRole": {
+        "dissenting": "Atskiroji nuomonė",
+        "rapporteur": "Teisėjas pranešėjas"
+      },
+      "judges": "Teisėjai",
       "legalArea": "Teisės sritis",
       "legalSentence": "Teisinė tezė",
       "popularName": "Populiarus pavadinimas",
+      "portraitCredit": "Portretų šaltinis: {source}",
       "provisionMentions": "{count, number}×",
       "provisionMentionsLabel": "{count, plural, one {# paminėjimas} few {# paminėjimai} many {# paminėjimo} other {# paminėjimų}}",
       "provisionsCited": "Cituojamos nuostatos",

@@ -71,6 +71,7 @@ export function PublicDecisionViewer({
   const originalUrl =
     buildDecisionFacts({
       decisionType: decision.decisionType,
+      judges: decision.judges,
       metadata: decision.metadata,
       source: decision.source,
       sourceUrl: decision.sourceUrl,

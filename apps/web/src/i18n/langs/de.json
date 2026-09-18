@@ -737,10 +737,16 @@
       "abstract": "Zusammenfassung",
       "citedBy": "Zitiert von",
       "cites": "Zitiert",
-      "judgeRapporteur": "Berichterstatter",
+      "dissentByline": "Sondervotum: <bdi>{names}</bdi>",
+      "judgeRole": {
+        "dissenting": "Sondervotum",
+        "rapporteur": "Berichterstatter"
+      },
+      "judges": "Richter",
       "legalArea": "Rechtsgebiet",
       "legalSentence": "Leitsatz",
       "popularName": "Populärer Name",
+      "portraitCredit": "Quelle der Porträts: {source}",
       "provisionMentions": "{count, number}×",
       "provisionMentionsLabel": "{count, plural, one {# Erwähnung} other {# Erwähnungen}}",
       "provisionsCited": "Angeführte Vorschriften",

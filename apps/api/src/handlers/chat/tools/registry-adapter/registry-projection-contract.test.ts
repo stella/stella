@@ -1361,6 +1361,7 @@ const CONTRACT_CORPUS = {
             },
           ],
           fulltext: "Full decision text.",
+          judges: [],
           headnote: { type: "absent", reason: "not_published" },
           sections: null,
           language: "cs",

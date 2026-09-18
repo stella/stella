@@ -1,5 +1,7 @@
 import type { ReadDecisionTextFields } from "@stll/api-contract/case-law-text-field";
 
+import type { DecisionJudge } from "@/features/case-law/decision-judges";
+
 export type PublicDecisionLanguageAlternate = {
   caseNumber: string;
   country: string;
@@ -31,6 +33,8 @@ export type PublicCaseLawDecision = {
   ecli: string | null;
   fulltext: string | null;
   id: string;
+  /** The bench, rapporteur first, as the read orders it. */
+  judges: readonly DecisionJudge[];
   language: string;
   languageAlternates: readonly PublicDecisionLanguageAlternate[];
   metadata: Record<string, unknown>;

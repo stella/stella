@@ -19,6 +19,16 @@ describe("public case-law routes", () => {
     expect(response.status).toBe(422);
   });
 
+  test("rejects a portrait request for an unreadable judge id before data access", async () => {
+    // Same shape as the cursor case above: the answer arrives before any
+    // database or object-store access, so a malformed id never reaches them.
+    const response = await publicCaseLawRoute.handle(
+      new Request("http://localhost/case/judges/not-a-uuid/portrait"),
+    );
+
+    expect(response.status).toBe(422);
+  });
+
   test("rejects invalid list cursor IDs before handler execution", async () => {
     const cursor = encodeURIComponent("2026-06-06T00:00:00.000Z_not-a-uuid");
     const response = await publicCaseLawRoute.handle(

@@ -329,6 +329,96 @@ describe("parseUsDecisionHtml", () => {
     });
   });
 
+  describe("separate opinions", () => {
+    const MAJORITY_TEXT = "Ústavní soud shledal ústavní stížnost důvodnou.";
+    const DISSENT_TEXT = "S většinovým závěrem pléna nesouhlasím.";
+
+    const decisionWith = (opinionLine: string): string => {
+      const rtf = [
+        "\\pard NÁLEZ",
+        "\\par",
+        "t a k t o :",
+        "\\par",
+        "I. Ústavní stížnosti se vyhovuje.",
+        "\\par",
+        "O d ů v o d n ě n í :",
+        "\\par",
+        `1. ${MAJORITY_TEXT}`,
+        "\\par",
+        opinionLine,
+        "\\par",
+        `2. ${DISSENT_TEXT}`,
+      ].join("\n");
+      return `
+        <html><body>
+          <span id="lblDecisionForm">NÁLEZ</span>
+          <input id="docContentHidden" value="${rtf}" />
+          <input id="docIdHidden" value="77777" />
+        </body></html>
+      `;
+    };
+
+    const roleOf = (block: Block): string | undefined =>
+      block.type === "heading" || block.type === "paragraph"
+        ? block.role
+        : undefined;
+
+    const rolesOf = (opinionLine: string) =>
+      parseUsDecisionHtml(
+        baseInput(decisionWith(opinionLine)),
+      ).documentAst.blocks.map((block) => ({
+        text: block.plainText,
+        role: roleOf(block),
+      }));
+
+    test("marks the opinion body, not the majority text or its heading", () => {
+      const heading = "Odlišné stanovisko soudce Jana Nováka";
+      const roles = rolesOf(heading);
+
+      expect(roles).toContainEqual({ text: heading, role: "section-heading" });
+      expect(roles).toContainEqual({ text: MAJORITY_TEXT, role: undefined });
+      expect(roles).toContainEqual({ text: DISSENT_TEXT, role: "dissent" });
+    });
+
+    test.each([
+      "Odlišné stanovisko soudce Jana Nováka",
+      "Odlišná stanoviska",
+      "Stanovisko menšiny",
+      "ODLIŠNÉ STANOVISKO",
+      "Odlisne stanovisko",
+    ])("opens the opinion zone at %s", (opinionLine) => {
+      expect(rolesOf(opinionLine)).toContainEqual({
+        text: DISSENT_TEXT,
+        role: "dissent",
+      });
+    });
+
+    test("keeps the number the court printed on the opinion heading", () => {
+      const heading = "3. Odlišné stanovisko soudce Jana Nováka";
+      const parsed = parseUsDecisionHtml(baseInput(decisionWith(heading)));
+
+      // The number is stripped to recognise the heading, never to store it:
+      // a block that dropped it would take the number out of the fulltext.
+      expect(rolesOf(heading)).toContainEqual({
+        text: heading,
+        role: "section-heading",
+      });
+      expect(parsed.fulltext).toContain(heading);
+    });
+
+    test("leaves prose that only mentions a separate opinion unmarked", () => {
+      const mention =
+        "Odlišné stanovisko soudce k dřívějšímu nálezu se s nyní " +
+        "posuzovanou věcí míjí, neboť vychází z jiného skutkového základu " +
+        "a z jiné právní úpravy.";
+      const roles = rolesOf(mention);
+
+      expect(mention.length).toBeGreaterThan(120);
+      expect(roles).toContainEqual({ text: mention, role: undefined });
+      expect(roles).toContainEqual({ text: DISSENT_TEXT, role: undefined });
+    });
+  });
+
   describe("closing and signature", () => {
     test("detects closing formula", () => {
       const input = baseInput(rtfDecisionHtml);
@@ -652,7 +742,7 @@ describe("parseUsDecisionHtml", () => {
       );
       expect(citationIndex).toBeGreaterThanOrEqual(0);
       expect(documentAst.blocks.at(citationIndex + 1)?.plainText).toBe(
-        "Odlišné stanovisko soudkyně Elišky Wagnerové.",
+        "1. Odlišné stanovisko soudkyně Elišky Wagnerové.",
       );
       expect(fulltext).toContain("Odlišné stanovisko");
     });

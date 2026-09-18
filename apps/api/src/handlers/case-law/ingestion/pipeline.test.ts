@@ -938,6 +938,118 @@ describe("processDecision — corpus storage off", () => {
   });
 });
 
+describe("processDecision — the decision's judges", () => {
+  type ReplacedJudges = {
+    decisionId: string;
+    judges: readonly { role: string; nameAsPrinted: string }[];
+    /** Whether the write happened inside the transaction that wrote the row. */
+    inTransaction: boolean;
+  };
+
+  type RefreshOptions = {
+    judges?: IngestionResult["judges"];
+  };
+
+  const refreshWithJudges = async ({
+    judges,
+  }: RefreshOptions): Promise<ReplacedJudges[]> => {
+    const existing = {
+      id: createSafeId<"caseLawDecision">(),
+      metadata: {},
+      sourceHash: "old-hash",
+      sourceRawS3Key: null,
+      sourceRawContentType: null,
+    };
+    const sourceId = createSafeId<"caseLawSource">();
+    const replaced: ReplacedJudges[] = [];
+    let inTransaction = false;
+
+    const scopedDb: ScopedDb = async (callback) => {
+      const tx = {
+        select: () => ({
+          from: (table: unknown) => ({
+            where: () => ({
+              for: () => ({
+                limit: async () =>
+                  await Promise.resolve(
+                    table === caseLawSources ? [{ id: sourceId }] : [],
+                  ),
+              }),
+              limit: async () => await Promise.resolve([]),
+            }),
+          }),
+        }),
+        execute: async () => await Promise.resolve([]),
+        query: {
+          caseLawDecisions: {
+            findFirst: async () => await Promise.resolve(existing),
+          },
+        },
+        update: () => ({
+          set: () => ({
+            where: () => ({
+              returning: async () => [{ id: existing.id }],
+            }),
+          }),
+        }),
+        delete: () => ({ where: async () => undefined }),
+        insert: () => ({ values: async () => undefined }),
+      };
+
+      inTransaction = true;
+      try {
+        // SAFETY: the refresh path walks only these chains; anything else
+        // would throw and fail the test loudly.
+        // eslint-disable-next-line typescript/no-unsafe-type-assertion
+        return await callback(tx as unknown as Transaction);
+      } finally {
+        inTransaction = false;
+      }
+    };
+
+    await processDecision({
+      input: {
+        ...baseResult(EMPTY_AST),
+        fulltext: "Ústavní soud rozhodl o návrhu.",
+        ...(judges === undefined ? {} : { judges }),
+      },
+      judges: {
+        replace: async (_tx, { decisionId, judges: written }) => {
+          replaced.push({ decisionId, judges: written, inTransaction });
+          await Promise.resolve();
+        },
+      },
+      observationOrder: 1n,
+      sourceId,
+      scopedDb,
+      observedAt: new Date("2026-07-31T12:00:00.000Z"),
+    });
+
+    return replaced;
+  };
+
+  test("writes them in the transaction that writes the decision row", async () => {
+    const replaced = await refreshWithJudges({
+      judges: [
+        { role: "rapporteur", nameAsPrinted: "Nováková Jana" },
+        { role: "dissenting", nameAsPrinted: "Dvořák Petr" },
+      ],
+    });
+
+    expect(replaced).toHaveLength(1);
+    expect(replaced.at(0)?.judges).toEqual([
+      { role: "rapporteur", nameAsPrinted: "Nováková Jana" },
+      { role: "dissenting", nameAsPrinted: "Dvořák Petr" },
+    ]);
+    // Outside it, a row could keep the judges of a decision it no longer is.
+    expect(replaced.at(0)?.inTransaction).toBe(true);
+  });
+
+  test("leaves the stored judges alone for an observation that names none", async () => {
+    expect(await refreshWithJudges({})).toEqual([]);
+  });
+});
+
 describe("processDecision — fields on an existing row", () => {
   // An update omits an undefined column, so a rejected date has to be
   // distinguishable from an unstated one all the way to the write: the

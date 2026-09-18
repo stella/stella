@@ -449,6 +449,12 @@ export const LIMITS = {
   caseLawResearchAnswerRationaleChars: 600,
   caseLawDecisionCitationPageSize: 50,
   /**
+   * Judges one decision may name. A bench and its dissenters are a handful of
+   * people; a decision listing more of them is a parser defect, and the read
+   * bounds what it renders rather than carrying it.
+   */
+  caseLawDecisionJudgesMax: 64,
+  /**
    * Consolidations one page of provision previews may read. Each is a whole
    * stored AST, so this bounds the memory and the storage round trips one
    * decision's citations can ask for; references past it are returned with

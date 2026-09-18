@@ -48,6 +48,7 @@ const UNPUBLISHED_DECISION = {
       value: "SYN 1/2026",
     },
   ],
+  judges: [],
   language: "en",
   languageAlternates: [],
   languageGroupKey: null,

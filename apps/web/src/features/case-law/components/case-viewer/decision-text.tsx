@@ -43,6 +43,7 @@ import { decisionReferenceTintClassName } from "@/features/case-law/citation-tre
 import { DecisionBodyUnavailable } from "@/features/case-law/components/case-viewer/decision-body-state";
 import { missingBodyReason } from "@/features/case-law/components/case-viewer/decision-body-state.logic";
 import type { DecisionDocumentState } from "@/features/case-law/components/case-viewer/decision-body-state.logic";
+import { DissentByline } from "@/features/case-law/components/case-viewer/decision-judges";
 import {
   annotationsOverlappingTextSpan,
   apparatusBlockIds,
@@ -62,6 +63,8 @@ import { HeadnoteBlock } from "@/features/case-law/components/case-viewer/headno
 import type { HeadnoteOrigin } from "@/features/case-law/components/case-viewer/headnote-block";
 import type { DecisionProvisionAnchor } from "@/features/case-law/components/case-viewer/use-decision-provision-anchors";
 import type { DecisionStatuteCitationAnchor } from "@/features/case-law/components/case-viewer/use-decision-statute-citation-anchors";
+import { dissentingJudges } from "@/features/case-law/decision-judges";
+import type { DecisionJudge } from "@/features/case-law/decision-judges";
 import { locateExternalCjeuCitations } from "@/features/case-law/fallback-legal-anchors";
 import { locateProvisionAnchors } from "@/features/case-law/provision-anchors";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
@@ -79,6 +82,7 @@ type Decision = DecisionDocumentState & {
   language: string;
   fulltext: string | null;
   documentAst?: unknown;
+  judges: readonly DecisionJudge[];
   /** Where the publisher offers this decision's data, from the read API. */
   sourceAttributionUrl: string | null;
   textFields: ReadDecisionTextFields;
@@ -683,11 +687,20 @@ const buildAnchorsByPieceId = ({
   return anchorsByPieceId;
 };
 
+/**
+ * Where a separate opinion starts: its byline is drawn above the first
+ * paragraph the court gave the `dissent` role.
+ */
+const firstDissentBlockId = (blocks: readonly Block[]): string | null =>
+  blocks.find((block) => block.type === "paragraph" && block.role === "dissent")
+    ?.id ?? null;
+
 const renderBlocksWithHoldingZone = ({
   activeMatchIndex,
   anchorsByPieceId,
   apparatusLabel,
   blocks,
+  dissent,
   footnotes,
   landingAnchorId,
   notesByAnchorId,
@@ -699,6 +712,12 @@ const renderBlocksWithHoldingZone = ({
   /** Translated label for the folded reporter-apparatus disclosure. */
   apparatusLabel: string;
   blocks: Block[];
+  /**
+   * The separate opinion's byline and the block it is drawn above. Both or
+   * neither: a byline with nobody to name, and names with no separate
+   * opinion under them, are each nothing to draw.
+   */
+  dissent: { blockId: string; byline: ReactNode } | null;
   /** Note grouping for the whole decision, top matter included. */
   footnotes: FootnoteParts;
   landingAnchorId: string | undefined;
@@ -785,11 +804,16 @@ const renderBlocksWithHoldingZone = ({
               rendered
             );
             const notes = notesByAnchorId?.get(block.anchorId);
-            if (notes === undefined) {
+            const byline =
+              dissent !== null && dissent.blockId === block.id
+                ? dissent.byline
+                : null;
+            if (notes === undefined && byline === null) {
               return body;
             }
             return (
               <>
+                {byline}
                 {body}
                 {notes}
               </>
@@ -974,6 +998,19 @@ export const DecisionText = ({
     });
   }, [landingAnchorId, searchQuery, searchResults.matchCount, shownMatchIndex]);
 
+  // A separate opinion is bylined where the court's own text does not say
+  // whose it is: the names come from the read, the place from the AST, and
+  // the byline is drawn only where both are there.
+  const dissenters = dissentingJudges(decision.judges);
+  const dissentBlockId = firstDissentBlockId(bodyBlocks);
+  const dissent =
+    dissenters.length === 0 || dissentBlockId === null
+      ? null
+      : {
+          blockId: dissentBlockId,
+          byline: <DissentByline judges={dissenters} />,
+        };
+
   // Inline links for every visible block, wherever it is drawn: the top
   // matter and the document below share one map.
   const anchorsByPieceId = buildAnchorsByPieceId({
@@ -1042,6 +1079,7 @@ export const DecisionText = ({
             apparatusLabel: t("caseLaw.reader.headMatter"),
             anchorsByPieceId,
             blocks: bodyBlocks,
+            dissent,
             footnotes,
             landingAnchorId,
             notesByAnchorId,

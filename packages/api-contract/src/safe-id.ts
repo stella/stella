@@ -21,6 +21,7 @@ export type SafeIdType =
   | "caseLawIndexJob"
   | "caseLawIngestionEvent"
   | "caseLawIngestionFailure"
+  | "caseLawJudge"
   | "caseLawMatterLink"
   | "caseLawPolarityRule"
   | "caseLawProvisionCitation"

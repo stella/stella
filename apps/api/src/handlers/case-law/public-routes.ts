@@ -42,6 +42,7 @@ import {
   readCaseLawCorpusStatusQuerySchema,
 } from "@/api/handlers/case-law/decisions/status";
 import summarizeDecisionCitations from "@/api/handlers/case-law/decisions/summarize-citations";
+import readJudgePortrait from "@/api/handlers/case-law/judges/read-portrait";
 import {
   readStatuteCitationCountsHandler,
   statuteCitationCountsQuerySchema,
@@ -346,6 +347,9 @@ export const publicCaseLawRoute = new Elysia({
   .get("/decisions/:decisionId/provisions", listDecisionProvisions.handler, {
     params: listDecisionProvisions.config.params,
     query: listDecisionProvisions.config.query,
+  })
+  .get("/judges/:judgeId/portrait", readJudgePortrait.handler, {
+    params: readJudgePortrait.config.params,
   })
   .get("/provisions/citing-decisions", listCitingDecisions.handler, {
     query: listCitingDecisions.config.query,

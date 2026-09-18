@@ -737,10 +737,16 @@
       "abstract": "الملخّص",
       "citedBy": "مستشهَد به في",
       "cites": "يستشهد بـ",
-      "judgeRapporteur": "القاضي المقرر",
+      "dissentByline": "رأي مخالف: <bdi>{names}</bdi>",
+      "judgeRole": {
+        "dissenting": "رأي مخالف",
+        "rapporteur": "القاضي المقرر"
+      },
+      "judges": "القضاة",
       "legalArea": "المجال القانوني",
       "legalSentence": "الجملة القانونية",
       "popularName": "الاسم الشائع",
+      "portraitCredit": "مصدر الصور: {source}",
       "provisionMentions": "{count, number}×",
       "provisionMentionsLabel": "{count, plural, zero {لا إشارات} one {إشارة واحدة} two {إشارتان} few {# إشارات} many {# إشارة} other {# إشارة}}",
       "provisionsCited": "الأحكام المستشهد بها",

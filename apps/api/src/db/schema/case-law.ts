@@ -5,6 +5,7 @@ import {
   CASE_LAW_RESEARCH_ANSWER_TYPES,
 } from "@stll/api-contract";
 import type { CaseLawResearchColumnTool } from "@stll/api-contract";
+import { DECISION_JUDGE_ROLES } from "@stll/api-contract/case-law-judges";
 import {
   DECISION_IDENTIFIER_MAX_LENGTH,
   DECISION_IDENTIFIER_TYPES,
@@ -31,6 +32,8 @@ import {
   unsettledCitationSql,
 } from "@/api/handlers/case-law/citation-resolution-status";
 import { CITATION_SHEET_NUMBER_MAX_LENGTH } from "@/api/handlers/case-law/citation-sheet-number";
+import { PORTRAIT_SOURCES } from "@/api/handlers/case-law/judges/consts";
+import type { JudgeExternalRefs } from "@/api/handlers/case-law/judges/consts";
 import {
   POLARITIES,
   RULE_SOURCE,
@@ -158,6 +161,14 @@ const CITATION_RESOLUTION_STATUS_SQL_VALUES = CITATION_RESOLUTION_STATUSES.map(
 
 const CITATION_RESOLUTION_RULE_SQL_VALUES = CITATION_RESOLUTION_RULES.map(
   (rule) => sql.raw(`'${rule}'`),
+);
+
+const PORTRAIT_SOURCE_SQL_VALUES = PORTRAIT_SOURCES.map((source) =>
+  sql.raw(`'${source}'`),
+);
+
+const DECISION_JUDGE_ROLE_SQL_VALUES = DECISION_JUDGE_ROLES.map((role) =>
+  sql.raw(`'${role}'`),
 );
 
 export const PROVISION_UNITS = ["section", "article"] as const;
@@ -751,6 +762,127 @@ export const caseLawDecisionIdentifiers = p.pgTable(
     p.check(
       "case_law_decision_identifiers_value_non_empty",
       sql`${t.value} <> '' AND ${t.normalizedValue} <> ''`,
+    ),
+    ...globalCaseLawPolicies(),
+    ...publicLawReaderPolicies(),
+  ],
+);
+
+/**
+ * Judges of a court, as that court publishes them.
+ *
+ * Public corpus data, like the decisions they sign: no workspace column, and
+ * the same reader roles. A judge is identified by `(country, court, name_key)`
+ * — the printed name reduced to a match key — because the publishers state a
+ * name and nothing else stable.
+ */
+export const caseLawJudges = p.pgTable(
+  "case_law_judges",
+  {
+    id: pUuid<"caseLawJudge">().primaryKey(),
+    country: p.varchar({ length: 3 }).notNull(),
+    court: p.varchar({ length: 512 }).notNull(),
+    fullName: p.varchar("full_name", { length: 256 }).notNull(),
+    nameKey: p.varchar("name_key", { length: 256 }).notNull(),
+    termStart: p.date("term_start"),
+    termEnd: p.date("term_end"),
+    externalRefs: jsonb("external_refs")
+      .$type<JudgeExternalRefs>()
+      .default({})
+      .notNull(),
+    portraitS3Key: p.varchar("portrait_s3_key", { length: 512 }),
+    portraitSource: p.text("portrait_source", { enum: PORTRAIT_SOURCES }),
+    portraitAttribution: p.varchar("portrait_attribution", { length: 512 }),
+    portraitContentType: p.varchar("portrait_content_type", { length: 64 }),
+    createdAt: timestamptz("created_at").defaultNow().notNull(),
+    updatedAt: timestamptz("updated_at").defaultNow().notNull(),
+  },
+  (t) => [
+    p
+      .uniqueIndex("case_law_judges_identity_idx")
+      .on(t.country, t.court, t.nameKey),
+    p.check("case_law_judges_name_non_empty", sql`${t.fullName} <> ''`),
+    p.check("case_law_judges_name_key_non_empty", sql`${t.nameKey} <> ''`),
+    // The four portrait columns are one fact. A key with no attribution
+    // would be served with nothing to credit it to, and an attribution with
+    // no key credits an image that does not exist.
+    p.check(
+      "case_law_judges_portrait_group",
+      sql`(${t.portraitS3Key} IS NULL) = (${t.portraitSource} IS NULL)
+        AND (${t.portraitS3Key} IS NULL) = (${t.portraitAttribution} IS NULL)
+        AND (${t.portraitS3Key} IS NULL) = (${t.portraitContentType} IS NULL)`,
+    ),
+    p.check(
+      "case_law_judges_portrait_source_values",
+      sql`${t.portraitSource} IS NULL OR ${t.portraitSource} IN (${sql.join(PORTRAIT_SOURCE_SQL_VALUES, sql.raw(","))})`,
+    ),
+    // The stored type is what the portrait route answers with, so the column
+    // is the boundary that keeps that header an image type.
+    p.check(
+      "case_law_judges_portrait_content_type_shape",
+      sql`${t.portraitContentType} IS NULL OR ${t.portraitContentType} LIKE 'image/%'`,
+    ),
+    ...globalCaseLawPolicies(),
+    ...publicLawReaderPolicies(),
+  ],
+);
+
+/**
+ * The judges a decision names, in the roles its publisher states.
+ *
+ * `name_as_printed` is stored whatever the roster holds: the decision states
+ * it, so it is a fact about the decision. `judge_id` is the match, and a null
+ * one is an unmatched name the roster does not have yet — `name_key` is what
+ * links it once the roster does.
+ */
+export const caseLawDecisionJudges = p.pgTable(
+  "case_law_decision_judges",
+  {
+    decisionId: safeUuid<"caseLawDecision">("decision_id").notNull(),
+    judgeId: safeUuid<"caseLawJudge">("judge_id"),
+    nameAsPrinted: p.varchar("name_as_printed", { length: 256 }).notNull(),
+    nameKey: p.varchar("name_key", { length: 256 }).notNull(),
+    role: p.text({ enum: DECISION_JUDGE_ROLES }).notNull(),
+    position: p.smallint().notNull(),
+  },
+  (t) => [
+    p.primaryKey({
+      columns: [t.decisionId, t.role, t.nameKey],
+      name: "case_law_decision_judges_pk",
+    }),
+    p
+      .foreignKey({
+        columns: [t.decisionId],
+        foreignColumns: [caseLawDecisions.id],
+        name: "case_law_decision_judges_decision_id_fk",
+      })
+      .onDelete("cascade"),
+    // A judge row is a roster entry, not the decision's own statement: losing
+    // it leaves the printed name and the key behind for the next import to
+    // match, rather than deleting the decision's judges with it.
+    p
+      .foreignKey({
+        columns: [t.judgeId],
+        foreignColumns: [caseLawJudges.id],
+        name: "case_law_decision_judges_judge_id_fk",
+      })
+      .onDelete("set null"),
+    p.index("case_law_decision_judges_judge_idx").on(t.judgeId),
+    p
+      .index("case_law_decision_judges_unmatched_idx")
+      .on(t.nameKey)
+      .where(isNull(t.judgeId)),
+    p.check(
+      "case_law_decision_judges_role_values",
+      sql`${t.role} IN (${sql.join(DECISION_JUDGE_ROLE_SQL_VALUES, sql.raw(","))})`,
+    ),
+    p.check(
+      "case_law_decision_judges_name_non_empty",
+      sql`${t.nameAsPrinted} <> '' AND ${t.nameKey} <> ''`,
+    ),
+    p.check(
+      "case_law_decision_judges_position_non_negative",
+      sql`${t.position} >= 0`,
     ),
     ...globalCaseLawPolicies(),
     ...publicLawReaderPolicies(),

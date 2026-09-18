@@ -737,10 +737,16 @@
       "abstract": "Resumen",
       "citedBy": "Citado por",
       "cites": "Cita",
-      "judgeRapporteur": "Juez ponente",
+      "dissentByline": "Voto particular: <bdi>{names}</bdi>",
+      "judgeRole": {
+        "dissenting": "Voto particular",
+        "rapporteur": "Juez ponente"
+      },
+      "judges": "Jueces",
       "legalArea": "Área jurídica",
       "legalSentence": "Fundamento jurídico",
       "popularName": "Nombre popular",
+      "portraitCredit": "Fuente de los retratos: {source}",
       "provisionMentions": "{count, number}×",
       "provisionMentionsLabel": "{count, plural, one {# mención} other {# menciones}}",
       "provisionsCited": "Disposiciones citadas",

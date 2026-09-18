@@ -92,6 +92,11 @@ const POST_BOOTSTRAP_SELECT_ONLY_TABLES = new Set([
   // Publisher-stated decision identifiers: global legal data read by public
   // case-law projections, written only by ingestion and the bounded backfill.
   "case_law_decision_identifiers",
+  // A court's judges and the judges each decision names: global legal data
+  // read by the public decision read, written only by the roster import and
+  // the ingestion pipeline.
+  "case_law_judges",
+  "case_law_decision_judges",
   // Durable operator progress: request code may inspect the rollout receipt;
   // only the ingestion role and the maintenance script may advance it.
   "case_law_decision_identifier_backfills",

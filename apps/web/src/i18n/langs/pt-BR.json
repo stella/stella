@@ -737,10 +737,16 @@
       "abstract": "Resumo",
       "citedBy": "Citado por",
       "cites": "Cita",
-      "judgeRapporteur": "Juiz relator",
+      "dissentByline": "Voto divergente: <bdi>{names}</bdi>",
+      "judgeRole": {
+        "dissenting": "Voto divergente",
+        "rapporteur": "Juiz relator"
+      },
+      "judges": "Juízes",
       "legalArea": "Área jurídica",
       "legalSentence": "Tese jurídica",
       "popularName": "Nome popular",
+      "portraitCredit": "Fonte dos retratos: {source}",
       "provisionMentions": "{count, number}×",
       "provisionMentionsLabel": "{count, plural, one {# menção} other {# menções}}",
       "provisionsCited": "Dispositivos citados",

@@ -47,6 +47,7 @@ import { useDecisionAnnotationSurface } from "@/features/case-law/components/cas
 import { useDecisionCitationAnchors } from "@/features/case-law/components/case-viewer/use-decision-citation-anchors";
 import { useDecisionProvisionAnchors } from "@/features/case-law/components/case-viewer/use-decision-provision-anchors";
 import { useDecisionStatuteCitationAnchors } from "@/features/case-law/components/case-viewer/use-decision-statute-citation-anchors";
+import type { DecisionJudge } from "@/features/case-law/decision-judges";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useCaseSearchStore } from "@/lib/case-search-store";
 import { detached } from "@/lib/detached";
@@ -67,6 +68,7 @@ type DecisionWorkspaceDecision = DecisionDocumentState & {
   ecli?: string | null;
   fulltext: string | null;
   id: string;
+  judges: readonly DecisionJudge[];
   language: string;
   metadata: Record<string, unknown>;
   sourceAttributionUrl: string | null;

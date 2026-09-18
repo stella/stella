@@ -58,6 +58,7 @@ const renderDecision = (abstract: string): string =>
           documentUnavailable: false,
           fulltext: null,
           id: "9b1f0f3d-5e6f-4a7b-8c9d-0e1f2a3b4c5d",
+          judges: [],
           language: "cs",
           sourceAttributionUrl: "https://rozhodnuti.nsoud.cz/detail/1",
           textFields: {
@@ -121,6 +122,7 @@ describe("a decision whose text did not resolve", () => {
               documentUnavailable: false,
               fulltext: null,
               id: "9b1f0f3d-5e6f-4a7b-8c9d-0e1f2a3b4c5d",
+              judges: [],
               language: "cs",
               sourceAttributionUrl: null,
               textFields: {
@@ -252,6 +254,7 @@ const renderSearchedDecision = ({
           documentUnavailable: false,
           fulltext: null,
           id: "9b1f0f3d-5e6f-4a7b-8c9d-0e1f2a3b4c5d",
+          judges: [],
           language: "en",
           sourceAttributionUrl: null,
           textFields: {
@@ -350,6 +353,7 @@ const renderTopMatter = ({
           documentUnavailable: false,
           fulltext: null,
           id: "9b1f0f3d-5e6f-4a7b-8c9d-0e1f2a3b4c5d",
+          judges: [],
           language: "cs",
           sourceAttributionUrl: null,
           textFields: {

@@ -1,5 +1,6 @@
 import { panic, Result } from "better-result";
 
+import type { DecisionJudgeRole } from "@stll/api-contract/case-law-judges";
 import type { CaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
 import type {
   DecisionTextFieldKey,
@@ -19,6 +20,12 @@ import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
 
 export { EMPTY_AST };
 export type { EmptyAst };
+
+/** A judge as one decision names them, before the roster is consulted. */
+export type DecisionJudgeInput = {
+  role: DecisionJudgeRole;
+  nameAsPrinted: string;
+};
 
 /** Mirrors the publisher-identity columns in the case-law schema. */
 export const SOURCE_DOCUMENT_ID_MAX_LENGTH = 256;
@@ -97,6 +104,13 @@ export type IngestionResult = {
   sourceUrl?: string | undefined;
   documentUrl?: string | undefined;
   metadata: Record<string, unknown>;
+  /**
+   * The judges the source names on this decision, in the order it prints
+   * them. Absent, not empty, for a source whose pages state none: an empty
+   * list is a publisher saying there are none, and the pipeline replaces the
+   * decision's stored judges only when an observation carries the field.
+   */
+  judges?: readonly DecisionJudgeInput[] | undefined;
   /** Publisher text stored under its existing metadata keys by the pipeline. */
   textFields: ReadDecisionTextFields;
   rawHash: string;
