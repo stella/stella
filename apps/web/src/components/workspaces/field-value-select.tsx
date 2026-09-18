@@ -64,14 +64,7 @@ export const FieldValueSelect = ({
           )}
         </SelectValue>
       </SelectTrigger>
-      <SelectPopup
-        alignItemWithTrigger={false}
-        collisionAvoidance={{
-          side: "flip",
-          align: "shift",
-          fallbackAxisSide: "none",
-        }}
-      >
+      <SelectPopup alignItemWithTrigger={false}>
         {items.map(({ label, value: option }) => (
           <SelectItem key={option.value} value={option.value}>
             <div className="flex items-center gap-x-1.5">
