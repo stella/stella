@@ -38,6 +38,7 @@ import type { DocxEditorRef } from "@stll/folio-react";
 import { Temporal } from "@stll/time";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { CONTROL_SIZE } from "@stll/ui/control-size";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { Input } from "@stll/ui/input";
 import {
@@ -49,6 +50,13 @@ import { Loader, LoaderState } from "@stll/ui/loader";
 import { Menu, MenuPopup, MenuTrigger } from "@stll/ui/menu";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { SegmentedIconToggle } from "@stll/ui/segmented-icon-toggle";
+import {
+  Select,
+  SelectItem,
+  SelectPopup,
+  SelectTrigger,
+  SelectValue,
+} from "@stll/ui/select";
 import { TextSeparator } from "@stll/ui/separator";
 import { Skeleton } from "@stll/ui/skeleton";
 import { Textarea } from "@stll/ui/textarea";
@@ -1585,24 +1593,36 @@ const StartModeToggle = ({
   );
 };
 
+/**
+ * The picker measures its own pane, not the viewport: the inspector is
+ * dragged narrower and wider independently of the window. Chips need room
+ * for every party label at once; below the `@sm` container width they wrap
+ * into a stack of rows, so a narrow pane gets the same choice as one select.
+ */
+const PERSPECTIVE_SECTION_CLASS = "@container space-y-2";
+const PERSPECTIVE_CHIP_ROW_CLASS = "hidden flex-wrap gap-1 @sm:flex";
+const PERSPECTIVE_SELECT_CLASS = "@sm:hidden";
+
 /** The picker's own shape while the document's sides are being read: the
- *  section label and one row of chips, so nothing moves when they land. */
+ *  section label and one row of chips (one select in a narrow pane), so
+ *  nothing moves when they land. */
 const PerspectivePickerSkeleton = () => {
   const t = useTranslations();
   return (
     <section
       aria-busy="true"
       aria-label={t("inspector.review.perspective.title")}
-      className="space-y-2"
+      className={PERSPECTIVE_SECTION_CLASS}
     >
       <h3 className={SECTION_LABEL_CLASS}>
         {t("inspector.review.perspective.title")}
       </h3>
-      <div className="flex flex-wrap gap-1">
+      <div className={PERSPECTIVE_CHIP_ROW_CLASS}>
         <Skeleton className="h-8 w-24 rounded-full" />
         <Skeleton className="h-8 w-28 rounded-full" />
         <Skeleton className="h-8 w-20 rounded-full" />
       </div>
+      <Skeleton className={cn(PERSPECTIVE_SELECT_CLASS, "h-8 rounded-lg")} />
     </section>
   );
 };
@@ -1616,6 +1636,31 @@ const PERSPECTIVE_CHIP_IDLE_CLASS =
 
 const partyLabel = (party: ReviewParty): string =>
   party.name === null ? party.role : `${party.role} (${party.name})`;
+
+const PERSPECTIVE_OTHER_KEY = "other";
+
+const PerspectiveChip = ({
+  checked,
+  label,
+  onPick,
+}: {
+  checked: boolean;
+  label: string;
+  onPick: () => void;
+}) => (
+  <button
+    aria-checked={checked}
+    className={cn(
+      PERSPECTIVE_CHIP_CLASS,
+      checked ? PERSPECTIVE_CHIP_CHECKED_CLASS : PERSPECTIVE_CHIP_IDLE_CLASS,
+    )}
+    onClick={onPick}
+    role="radio"
+    type="button"
+  >
+    {label}
+  </button>
+);
 
 type PerspectivePickerProps = {
   /** The target's parties as the proposal read them. */
@@ -1662,59 +1707,74 @@ const PerspectivePicker = ({
       perspective: { type: "party" as const, ...party },
     })),
   ];
+  // Null when nothing matches: the chips then show no choice and the select
+  // shows its placeholder, rather than either claiming a side it was not given.
+  const selectedKey = other
+    ? PERSPECTIVE_OTHER_KEY
+    : (options.find((option) => isSamePerspective(option.perspective, value))
+        ?.key ?? null);
+  const pick = (key: string) => {
+    if (key === PERSPECTIVE_OTHER_KEY) {
+      setOther(true);
+      onSelect(customPerspectiveInput(otherRole).perspective);
+      return;
+    }
+    const option = options.find((candidate) => candidate.key === key);
+    if (option === undefined) {
+      return;
+    }
+    setOther(false);
+    setOtherRole("");
+    onSelect(option.perspective);
+  };
+  const title = t("inspector.review.perspective.title");
+  const otherLabel = t("inspector.review.perspective.other");
   return (
-    <section className="space-y-2">
-      <h3 className={SECTION_LABEL_CLASS}>
-        {t("inspector.review.perspective.title")}
-      </h3>
+    <section className={PERSPECTIVE_SECTION_CLASS}>
+      <h3 className={SECTION_LABEL_CLASS}>{title}</h3>
       <div
-        aria-label={t("inspector.review.perspective.title")}
-        className="flex flex-wrap gap-1"
+        aria-label={title}
+        className={PERSPECTIVE_CHIP_ROW_CLASS}
         role="radiogroup"
       >
-        {options.map((option) => {
-          const checked =
-            !other && isSamePerspective(option.perspective, value);
-          return (
-            <button
-              aria-checked={checked}
-              className={cn(
-                PERSPECTIVE_CHIP_CLASS,
-                checked
-                  ? PERSPECTIVE_CHIP_CHECKED_CLASS
-                  : PERSPECTIVE_CHIP_IDLE_CLASS,
-              )}
-              key={option.key}
-              onClick={() => {
-                setOther(false);
-                setOtherRole("");
-                onSelect(option.perspective);
-              }}
-              role="radio"
-              type="button"
-            >
-              {option.label}
-            </button>
-          );
-        })}
-        <button
-          aria-checked={other}
-          className={cn(
-            PERSPECTIVE_CHIP_CLASS,
-            other
-              ? PERSPECTIVE_CHIP_CHECKED_CLASS
-              : PERSPECTIVE_CHIP_IDLE_CLASS,
-          )}
-          onClick={() => {
-            setOther(true);
-            onSelect(customPerspectiveInput(otherRole).perspective);
-          }}
-          role="radio"
-          type="button"
-        >
-          {t("inspector.review.perspective.other")}
-        </button>
+        {options.map((option) => (
+          <PerspectiveChip
+            checked={selectedKey === option.key}
+            key={option.key}
+            label={option.label}
+            onPick={() => pick(option.key)}
+          />
+        ))}
+        <PerspectiveChip
+          checked={selectedKey === PERSPECTIVE_OTHER_KEY}
+          label={otherLabel}
+          onPick={() => pick(PERSPECTIVE_OTHER_KEY)}
+        />
       </div>
+      <Select
+        onValueChange={(key) => {
+          if (key !== null) {
+            pick(key);
+          }
+        }}
+        value={selectedKey}
+      >
+        <SelectTrigger
+          aria-label={title}
+          className={PERSPECTIVE_SELECT_CLASS}
+          size={CONTROL_SIZE.sm}
+        >
+          <SelectValue placeholder={title} />
+        </SelectTrigger>
+        <SelectPopup>
+          {options.map((option) => (
+            <SelectItem key={option.key} value={option.key}>
+              {option.label}
+            </SelectItem>
+          ))}
+          <SelectItem value={PERSPECTIVE_OTHER_KEY}>{otherLabel}</SelectItem>
+        </SelectPopup>
+      </Select>
       {other && (
         <Input
           aria-label={t("inspector.review.perspective.otherPlaceholder")}
