@@ -243,22 +243,28 @@ const scanDirectivesInParagraphs = (
     if (!meta || !isBlockDirectiveKind(meta.kind)) {
       continue;
     }
-    directives.push(
-      meta.kind === "for"
-        ? {
-            kind: meta.kind,
-            expression: meta.path,
-            alias: meta.alias,
-            filters: meta.filters,
-            paragraphIndex: i,
-          }
-        : {
-            kind: meta.kind,
-            expression:
-              meta.kind === "if" || meta.kind === "elif" ? meta.expr : "",
-            paragraphIndex: i,
-          },
-    );
+    if (meta.kind === "for") {
+      directives.push({
+        kind: meta.kind,
+        expression: meta.path,
+        alias: meta.alias,
+        filters: meta.filters,
+        paragraphIndex: i,
+      });
+      continue;
+    }
+    if (meta.kind === "if" || meta.kind === "elif") {
+      // The expression is the bare one the evaluator reads: a chain on the tag
+      // configures the boolean it names and is never part of the condition.
+      directives.push({
+        kind: meta.kind,
+        expression: meta.expr,
+        filters: meta.filters,
+        paragraphIndex: i,
+      });
+      continue;
+    }
+    directives.push({ kind: meta.kind, expression: "", paragraphIndex: i });
   }
 
   return directives;

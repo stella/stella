@@ -55,9 +55,9 @@ export const formatMarker = (meta: MarkerMeta): string => {
     case "loop":
       return `{{ loop.${meta.property} }}`;
     case "if":
-      return `{% if ${meta.expr} %}`;
+      return `{% if ${meta.expr}${formatFilters(meta.filters)} %}`;
     case "elif":
-      return `{% elif ${meta.expr} %}`;
+      return `{% elif ${meta.expr}${formatFilters(meta.filters)} %}`;
     case "else":
       return "{% else %}";
     case "endif":
@@ -84,10 +84,10 @@ export const clauseSlotMarker = (name: string, version?: string): string =>
   formatMarker({ kind: "clause", name, version });
 
 export const conditionOpenTag = (expr: string): string =>
-  formatMarker({ kind: "if", expr });
+  formatMarker({ kind: "if", expr, filters: [] });
 
 export const conditionBranchTag = (expr: string): string =>
-  formatMarker({ kind: "elif", expr });
+  formatMarker({ kind: "elif", expr, filters: [] });
 
 export const CONDITION_CLOSE_TAG = formatMarker({ kind: "endif" });
 

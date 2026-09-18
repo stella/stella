@@ -129,17 +129,54 @@ describe("the configure skeleton is a fixed point", () => {
   });
 
   test("a configuration nothing in the document can carry is refused by name", async () => {
-    const document = await buildDocx(SOURCE_PARAGRAPHS);
+    // A path a compound expression reads is declared by the document and has
+    // no carrier: no marker prints it, and the tag that reads it is the
+    // author's expression, not this field's question.
+    const document = await buildDocx([
+      "{% if is_company and is_registered %}",
+      "Registered company clause.",
+      "{% endif %}",
+    ]);
 
     const configured = await configureTemplateDocument({
       buffer: document,
-      entries: [{ path: "expenses_reimbursed", label: "Reimbursed?" }],
+      entries: [{ path: "is_registered", label: "Registered?" }],
     });
 
     expect(configured.buffer).toBe(document);
     expect(configured.issues.map(({ message }) => message)).toEqual([
-      '"expenses_reimbursed" has nothing in the document to carry its configuration.',
+      '"is_registered" has nothing in the document to carry its configuration.',
     ]);
+  });
+
+  test("what to call a condition goes on the {% if %} tag that asks it", async () => {
+    const document = await buildDocx(SOURCE_PARAGRAPHS);
+
+    const configured = await configureTemplateDocument({
+      buffer: document,
+      entries: [
+        {
+          path: "expenses_reimbursed",
+          label: "Reimbursed?",
+          aiPrompt: "Does the agreement reimburse expenses?",
+        },
+      ],
+    });
+
+    expect(configured.issues).toEqual([]);
+    expect(await documentText(configured.buffer)).toContain(
+      '{% if expenses_reimbursed | checkbox | label("Reimbursed?") | ' +
+        'ai("Does the agreement reimburse expenses?") %}',
+    );
+    expect(
+      configured.manifest.fields.find(
+        ({ path }) => path === "expenses_reimbursed",
+      ),
+    ).toMatchObject({
+      inputType: "boolean",
+      label: "Reimbursed?",
+      aiPrompt: "Does the agreement reimburse expenses?",
+    });
   });
 
   test("a rule goes into the {% if %} tag that reads the path", async () => {

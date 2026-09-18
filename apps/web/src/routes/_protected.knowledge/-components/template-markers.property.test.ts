@@ -75,7 +75,18 @@ const metaOfKind = (kind: DirectiveKind): fc.Arbitrary<MarkerMeta> => {
         .map((property) => ({ kind, property }));
     case "if":
     case "elif":
-      return fc.constantFrom(...CONDITIONS).map((expr) => ({ kind, expr }));
+      // A chain belongs to a tag that names ONE boolean; an expression the
+      // author wrote carries none, which is the grammar's own restriction.
+      return fc.oneof(
+        fc
+          .constantFrom(...CONDITIONS)
+          .map((expr) => ({ kind, expr, filters: [] })),
+        fc.tuple(path, filters).map(([expr, chain]) => ({
+          kind,
+          expr,
+          filters: chain,
+        })),
+      );
     case "else":
     case "endif":
     case "endfor":

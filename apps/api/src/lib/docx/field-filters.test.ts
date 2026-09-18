@@ -9,6 +9,7 @@ import {
 } from "@stll/template-conditions";
 import type { FilterCall } from "@stll/template-conditions";
 
+import { deriveManifest } from "./derived-manifest";
 import { discoverTemplate } from "./discover-template";
 import { fieldMetaFromFilters, FIELD_META_FILTERS } from "./field-filters";
 import type { FieldMeta } from "./types";
@@ -288,6 +289,66 @@ describe("filters on a loop path", () => {
     expect(discovered.documentFields).toEqual([
       { path: "attorneys", label: "Attorneys" },
     ]);
+  });
+});
+
+describe("filters on a condition tag", () => {
+  test("configure the boolean the tag asks for", async () => {
+    const discovered = await discoverTemplate(
+      await makeDocx([
+        '{% if buyer_is_a_consumer | checkbox | label("Buyer is a consumer") | ai("Is the buyer a consumer?", sees_document=true) %}',
+        "Consumer clause",
+        "{% endif %}",
+      ]),
+    );
+
+    expect(discovered.structureErrors).toEqual([]);
+    expect(discovered.documentFields).toEqual([
+      {
+        path: "buyer_is_a_consumer",
+        inputType: "boolean",
+        label: "Buyer is a consumer",
+        aiPrompt: "Is the buyer a consumer?",
+        aiSeesDocument: true,
+      },
+    ]);
+    expect(
+      deriveManifest(discovered).fields.find(
+        ({ path }) => path === "buyer_is_a_consumer",
+      ),
+    ).toMatchObject({
+      inputType: "boolean",
+      label: "Buyer is a consumer",
+      aiPrompt: "Is the buyer a consumer?",
+    });
+  });
+
+  test("an elif branch declares the boolean it asks for too", async () => {
+    const discovered = await discoverTemplate(
+      await makeDocx([
+        "{% if is_company %}",
+        '{% elif is_a_person | checkbox | label("A person") %}',
+        "{% endif %}",
+      ]),
+    );
+
+    expect(discovered.structureErrors).toEqual([]);
+    expect(discovered.documentFields).toEqual([
+      { path: "is_a_person", inputType: "boolean", label: "A person" },
+    ]);
+  });
+
+  test("a chain a tag and a marker disagree on names both paragraphs", async () => {
+    const discovered = await discoverTemplate(
+      await makeDocx([
+        '{% if signed | checkbox | label("Signed") %}',
+        '{{ signed | checkbox | label("Signed off") }}',
+        "{% endif %}",
+      ]),
+    );
+
+    const [error] = discovered.structureErrors;
+    expect(error?.message).toContain("configured twice");
   });
 });
 

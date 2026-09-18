@@ -110,7 +110,7 @@ const directiveText = (
   switch (kind) {
     case "if":
     case "elif":
-      return formatMarker({ kind, expr });
+      return formatMarker({ kind, expr, filters: [] });
     case "for":
       return loopOpenTag(expr);
     case "else":
@@ -276,7 +276,7 @@ describe("clause body ⇄ TipTap round-trip", () => {
           attrs: {
             kind: "if",
             expression: "x",
-            text: formatMarker({ kind: "if", expr: "x" }),
+            text: formatMarker({ kind: "if", expr: "x", filters: [] }),
           },
         },
       ],

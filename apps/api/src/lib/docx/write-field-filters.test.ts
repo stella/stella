@@ -277,13 +277,44 @@ describe("writing a configuration into the document", () => {
     const { buffer, written } = await writeFieldFilters(
       docx,
       [],
-      [{ path: "is_company", expression: "kind == 'company'" }],
+      [{ path: "is_company", expression: "kind == 'company'", filters: [] }],
     );
 
     expect(written).toEqual(new Set(["is_company"]));
     const xml = await documentXml(buffer);
     expect(xml).toContain("{% if kind == 'company' %}");
     expect(xml).toContain("{% elif kind == 'company' %}");
+  });
+
+  test("a question the document only asks carries its chain on the tag", async () => {
+    const docx = await makeDocx([
+      P("{% if buyer_is_a_consumer %}"),
+      P("Consumer clause."),
+      P("{% endif %}"),
+    ]);
+
+    const { buffer, written } = await writeFieldFilters(
+      docx,
+      [],
+      [
+        {
+          path: "buyer_is_a_consumer",
+          expression: undefined,
+          filters: [
+            { name: "checkbox", args: [] },
+            {
+              name: "label",
+              args: [{ kind: "positional", value: "Buyer is a consumer" }],
+            },
+          ],
+        },
+      ],
+    );
+
+    expect(written).toEqual(new Set(["buyer_is_a_consumer"]));
+    expect(await documentXml(buffer)).toContain(
+      '{% if buyer_is_a_consumer | checkbox | label("Buyer is a consumer") %}',
+    );
   });
 
   test("a tag carrying an expression already is left alone", async () => {
@@ -295,7 +326,7 @@ describe("writing a configuration into the document", () => {
     const { buffer, written } = await writeFieldFilters(
       docx,
       [],
-      [{ path: "is_company", expression: "kind == 'person'" }],
+      [{ path: "is_company", expression: "kind == 'person'", filters: [] }],
     );
 
     expect(written).toEqual(new Set());

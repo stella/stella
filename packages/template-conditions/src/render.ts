@@ -123,23 +123,34 @@ export type ConditionTagOptions = {
   kind: "if" | "elif";
   /** The `{% if %}` expression, already serialized. */
   expression: string;
+  /** The chain the boolean this tag names carries. Only a tag whose whole
+   *  expression is one field path reads one back, so an expression tag writes
+   *  none. */
+  filters: readonly FilterCall[];
   /** The placement the tag already carried. */
   prefix: MarkerPrefix;
 };
 
 /**
- * One `{% if %}` / `{% elif %}` opener carrying its expression.
+ * One `{% if %}` / `{% elif %}` opener carrying its expression, and the field
+ * configuration of the boolean it asks for.
  *
  * A rule that decides whether a block shows belongs in the tag that shows it:
  * the tag is the only place a document has for it, so a builder's rule is
- * serialized here rather than stored beside the document under a name.
+ * serialized here rather than stored beside the document under a name. The
+ * same is true of what to call the question and how to decide it: a condition
+ * the document never prints has no value marker to hold that chain either.
  */
 export const renderConditionTag = ({
   expression,
+  filters,
   kind,
   prefix,
-}: ConditionTagOptions): string =>
-  `{%${PREFIX_TOKEN[prefix]} ${kind} ${expression} %}`;
+}: ConditionTagOptions): string => {
+  const chain = renderFilterChain(filters);
+  const head = `{%${PREFIX_TOKEN[prefix]} ${kind} ${expression}`;
+  return chain === "" ? `${head} %}` : `${head} | ${chain} %}`;
+};
 
 export type ForOpenerOptions = {
   alias: string;
