@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 1.9.0
+
+### Minor Changes
+
+- [#3549](https://github.com/stella/stella/pull/3549) [`525a7b8`](https://github.com/stella/stella/commit/525a7b857df870ec1ff38fba706cf5addd8fd42f) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Mark commands the connected server has gated off everywhere they are listed: root `--help` and group briefs name disabled groups and children, and capability commands are marked from the server's new `x-stella-feature-omitted-capabilities` evidence in `--help` and `tools list`.
+
 ## 1.8.1
 
 ### Patch Changes
