@@ -2507,7 +2507,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "name": "list_tasks",
     "scope": "stella:read",
     "access": "read",
-    "description": "List tasks in a matter, or read one task in detail. Pass task_id to get a single task's fields, assignees, and linked entities. Otherwise pass matter_id to list the matter's tasks, optionally filtered by a due-date range (date_from/date_to, ISO YYYY-MM-DD) and status. Returns each item's id, name, item type, status, priority, and due date.",
+    "description": "List tasks, or read one task in detail. Pass task_id for one task's fields, assignees, and linked entities. Otherwise pass matter_id to list one matter's tasks, or omit it to list tasks across every matter you can read; filter by status, due date (date_from/date_to, ISO YYYY-MM-DD), or assignee. Soonest due first, undated last. Each task names its matter (id, name, reference).",
     "annotations": {
       "title": "List tasks",
       "destructiveHint": false,
@@ -2522,12 +2522,20 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         "matter_id": {
           "type": "string",
           "format": "uuid",
-          "description": "Matter ID to list tasks in; required unless task_id is given."
+          "description": "Matter ID to list tasks in; omit for every matter"
         },
         "task_id": {
           "type": "string",
           "format": "uuid",
           "description": "Task entity ID to read in detail"
+        },
+        "assignee": {
+          "enum": [
+            "me",
+            "any"
+          ],
+          "type": "string",
+          "description": "'me': only tasks assigned to you. Default 'any'"
         },
         "date_from": {
           "type": "string",
@@ -2551,7 +2559,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           "type": "integer",
           "minimum": 1,
           "maximum": 100,
-          "description": "Max tasks to return"
+          "description": "Max tasks to return (default 50)"
         },
         "cursor": {
           "type": "string",
@@ -4748,7 +4756,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     "name": "list_tasks",
     "scope": "stella:read_anonymized",
     "access": "read",
-    "description": "List tasks in a matter, or read one task in detail. Pass task_id to get a single task's fields, assignees, and linked entities. Otherwise pass matter_id to list the matter's tasks, optionally filtered by a due-date range (date_from/date_to, ISO YYYY-MM-DD) and status. Returns each item's id, name, item type, status, priority, and due date.",
+    "description": "List tasks, or read one task in detail. Pass task_id for one task's fields, assignees, and linked entities. Otherwise pass matter_id to list one matter's tasks, or omit it to list tasks across every matter you can read; filter by status, due date (date_from/date_to, ISO YYYY-MM-DD), or assignee. Soonest due first, undated last. Each task names its matter (id, name, reference).",
     "annotations": {
       "title": "List tasks",
       "destructiveHint": false,
@@ -4763,12 +4771,20 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
         "matter_id": {
           "type": "string",
           "format": "uuid",
-          "description": "Matter ID to list tasks in; required unless task_id is given."
+          "description": "Matter ID to list tasks in; omit for every matter"
         },
         "task_id": {
           "type": "string",
           "format": "uuid",
           "description": "Task entity ID to read in detail"
+        },
+        "assignee": {
+          "enum": [
+            "me",
+            "any"
+          ],
+          "type": "string",
+          "description": "'me': only tasks assigned to you. Default 'any'"
         },
         "date_from": {
           "type": "string",
@@ -4792,7 +4808,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
           "type": "integer",
           "minimum": 1,
           "maximum": 100,
-          "description": "Max tasks to return"
+          "description": "Max tasks to return (default 50)"
         },
         "cursor": {
           "type": "string",

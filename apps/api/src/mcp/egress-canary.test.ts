@@ -993,32 +993,41 @@ describe("MCP anonymization canary corpus", () => {
 
   const tasksCanary = canaryTestsFor("list_tasks");
 
-  tasksCanary("list_tasks (list mode) anonymizes task names", async (tool) => {
-    const nameSeed = mkSeed(tool, 0);
-    const tx = {
-      select: () =>
-        chainableRows([
-          {
-            createdAt: "2026-01-01T00:00:00.000000",
-            id: "00000000-0000-4000-8000-0000000b0001",
-            name: nameSeed,
-            status: "open",
-            priority: "high",
-            dueDate: null,
-          },
-        ]),
-    };
-    const context = buildContext({ tx });
+  tasksCanary(
+    "list_tasks (list mode) anonymizes task and matter names",
+    async (tool) => {
+      const nameSeed = mkSeed(tool, 0);
+      const matterNameSeed = mkSeed(tool, 5);
+      const matterReferenceSeed = mkSeed(tool, 6);
+      const tx = {
+        select: () =>
+          chainableRows([
+            {
+              id: "00000000-0000-4000-8000-0000000b0001",
+              name: nameSeed,
+              status: "open",
+              priority: "high",
+              itemType: null,
+              dueDate: null,
+              matterId: "00000000-0000-4000-8000-0000000a0001",
+              matterName: matterNameSeed,
+              matterReference: matterReferenceSeed,
+            },
+          ]),
+      };
+      const context = buildContext({ tx });
 
-    const response = await MATTER_TOOL_HANDLERS.list_tasks({
-      args: { matter_id: "00000000-0000-4000-8000-0000000a0001" },
-      context,
-    });
-    const result = await finalize(context, response);
+      const response = await MATTER_TOOL_HANDLERS.list_tasks({
+        args: {},
+        context,
+      });
+      const result = await finalize(context, response);
 
-    expectNoSeedLeak(result, [nameSeed]);
-    expectSeedsQueuedForAnonymization([nameSeed]);
-  });
+      const seeds = [nameSeed, matterNameSeed, matterReferenceSeed];
+      expectNoSeedLeak(result, seeds);
+      expectSeedsQueuedForAnonymization(seeds);
+    },
+  );
 
   tasksCanary(
     "list_tasks detail anonymizes names, locations, assignees, and linked entities",

@@ -4015,7 +4015,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["task", "list"],
             toolName: "list_tasks",
-            description: "List tasks in a matter, or read one task in detail.",
+            description: "List tasks, or read one task in detail.",
             flags: [
               {
                 flag: "--matter-id",
@@ -4023,7 +4023,7 @@ export const generatedRouteMap: RouteNode = {
                 kind: "string",
                 repeatable: false,
                 description:
-                  "Matter ID to list tasks in; required unless task_id is given.",
+                  "Matter ID to list tasks in; omit for every matter",
                 required: false,
               },
               {
@@ -4032,6 +4032,15 @@ export const generatedRouteMap: RouteNode = {
                 kind: "string",
                 repeatable: false,
                 description: "Task entity ID to read in detail",
+                required: false,
+              },
+              {
+                flag: "--assignee",
+                prop: "assignee",
+                kind: "enum",
+                enum: ["me", "any"],
+                repeatable: false,
+                description: "'me': only tasks assigned to you. Default 'any'",
                 required: false,
               },
               {
@@ -4077,12 +4086,18 @@ export const generatedRouteMap: RouteNode = {
                   type: "string",
                   format: "uuid",
                   description:
-                    "Matter ID to list tasks in; required unless task_id is given.",
+                    "Matter ID to list tasks in; omit for every matter",
                 },
                 task_id: {
                   type: "string",
                   format: "uuid",
                   description: "Task entity ID to read in detail",
+                },
+                assignee: {
+                  enum: ["me", "any"],
+                  type: "string",
+                  description:
+                    "'me': only tasks assigned to you. Default 'any'",
                 },
                 date_from: {
                   type: "string",
@@ -4108,7 +4123,7 @@ export const generatedRouteMap: RouteNode = {
                   type: "integer",
                   minimum: 1,
                   maximum: 100,
-                  description: "Max tasks to return",
+                  description: "Max tasks to return (default 50)",
                 },
                 cursor: {
                   type: "string",
@@ -39718,6 +39733,126 @@ export const generatedRouteMap: RouteNode = {
                           maxLength: 36,
                           pattern:
                             "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            list: {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "tasks", "list"],
+                capabilityId: "tasks.list",
+                description:
+                  "List tasks across every matter the caller can read, soonest due first and undated last; each task names its matter. Narrow to one matter with matterId, to the caller's own assignments with assignee=me, or by status or a due-date range.",
+                access: "read",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--matter-id",
+                    prop: "matterId",
+                    required: false,
+                    part: "query",
+                    partPath: "matterId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    description: "List only tasks with this status",
+                    flag: "--status",
+                    prop: "status",
+                    required: false,
+                    part: "query",
+                    partPath: "status",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    description:
+                      "List only tasks due on or after this ISO date (YYYY-MM-DD)",
+                    flag: "--date-from",
+                    prop: "dateFrom",
+                    required: false,
+                    part: "query",
+                    partPath: "dateFrom",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    description:
+                      "List only tasks due on or before this ISO date (YYYY-MM-DD)",
+                    flag: "--date-to",
+                    prop: "dateTo",
+                    required: false,
+                    part: "query",
+                    partPath: "dateTo",
+                  },
+                ],
+                inputOnly: ["query.assignee"],
+                paginated: true,
+                paginationPart: "query",
+                itemsKey: "items",
+                destructive: false,
+                scope: "read",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    query: {
+                      type: "object",
+                      properties: {
+                        matterId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        status: {
+                          minLength: 1,
+                          maxLength: 32,
+                          description: "List only tasks with this status",
+                          type: "string",
+                        },
+                        assignee: {
+                          description:
+                            "`me` lists only tasks assigned to the caller; `any` (default) lists every task",
+                          anyOf: [
+                            {
+                              const: "me",
+                              type: "string",
+                            },
+                            {
+                              const: "any",
+                              type: "string",
+                            },
+                          ],
+                        },
+                        dateFrom: {
+                          format: "date",
+                          description:
+                            "List only tasks due on or after this ISO date (YYYY-MM-DD)",
+                          type: "string",
+                        },
+                        dateTo: {
+                          format: "date",
+                          description:
+                            "List only tasks due on or before this ISO date (YYYY-MM-DD)",
+                          type: "string",
+                        },
+                        limit: {
+                          minimum: 1,
+                          maximum: 100,
+                          type: "integer",
+                        },
+                        cursor: {
+                          maxLength: 512,
+                          description:
+                            "Opaque cursor from a previous page to fetch the next page",
                           type: "string",
                         },
                       },

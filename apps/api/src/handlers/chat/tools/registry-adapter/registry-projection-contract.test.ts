@@ -801,17 +801,20 @@ const CONTRACT_CORPUS = {
         select: selectQueue([
           [
             {
-              createdAt: new Date("2026-01-01"),
               id: uid(25),
               name: "File the brief",
               status: "open",
               priority: "high",
+              itemType: null,
               dueDate: null,
+              matterId: WS,
+              matterName: "Acme v. Beta",
+              matterReference: "2026-001",
             },
           ],
         ]),
       }),
-      expectRefPaths: ["tasks[].id"],
+      expectRefPaths: ["tasks[].id", "tasks[].matterId"],
     },
     {
       mode: "detail",

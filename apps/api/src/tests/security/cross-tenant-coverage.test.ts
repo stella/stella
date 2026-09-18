@@ -99,7 +99,6 @@ const CROSS_TENANT_WAIVERS: Record<string, WaiverReason> = {
   search: WAIVER_REASON.preExistingGap,
   skills: WAIVER_REASON.preExistingGap,
   "style-sets": WAIVER_REASON.preExistingGap,
-  tasks: WAIVER_REASON.preExistingGap,
   // The pack catalogue itself is deployment content, not tenant data; the
   // only tenant-scoped read is which of a pack's templates the organization
   // has already installed, and that is empty until the content submodule is

@@ -254,7 +254,7 @@ are omitted here.
 - `stella task delete`
   - `--task-id` — Task entity ID to delete (string)
 - `stella task list`
-  - optional: --matter-id, --task-id, --date-from, --date-to, --status
+  - optional: --matter-id, --task-id, --assignee (me|any), --date-from, --date-to, --status
 - `stella task save`
   - optional: --task-id, --matter-id, --name, --status (open|in_progress|in_review|done|cancelled), --priority (none|urgent|high|medium|low), --item-type (task|fact|issue|requirement|event), --list-id, --list-section-id, --list-description, --due-date, --workflow-reason, --add-assignee-user-id, --remove-assignee-user-id, --link-entity-id, --unlink-link-id
 - `stella template configure-fields`
@@ -309,7 +309,7 @@ code (no envelope) still maps to 5; anything else falls to 4.
 
 ## Capability commands (full surface)
 
-Beyond the curated commands above, the CLI generates 338
+Beyond the curated commands above, the CLI generates 339
 capability commands from the server's capability catalog: every safe handler
 that is not a curated tool, reached through the generic `invoke_capability`
 path. Every generated command lives at `stella capability <domain> <action>`;

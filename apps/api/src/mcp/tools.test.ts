@@ -6525,6 +6525,7 @@ describe("OpenAI-compatible MCP tools", () => {
       mock(async (callback: (tx: unknown) => unknown) => {
         const builder = {
           from: () => builder,
+          innerJoin: () => builder,
           where: () => builder,
           orderBy: () => builder,
           limit: () => rows,
@@ -6533,10 +6534,10 @@ describe("OpenAI-compatible MCP tools", () => {
       }),
     );
 
-  test("list_tasks anonymizes task names in anonymized mode", async () => {
+  test("list_tasks anonymizes task and matter names in anonymized mode", async () => {
     anonymizeTextFieldsMock.mockResolvedValue({
       entityCount: 1,
-      fields: ["[PERSON_1] deposition"],
+      fields: ["[PERSON_1] deposition", "[PERSON_1] estate", "2026-014"],
     });
 
     const result = await handleMcpToolCall({
@@ -6544,12 +6545,15 @@ describe("OpenAI-compatible MCP tools", () => {
       context: createContext({
         scopedDb: createSelectListScopedDb([
           {
-            createdAt: "2026-01-01T00:00:00.000000",
             id: "00000000-0000-4000-8000-00000007a001",
             name: "John Smith deposition",
             status: "open",
             priority: "high",
+            itemType: null,
             dueDate: "2026-02-01",
+            matterId: WORKSPACE_ID,
+            matterName: "Smith estate",
+            matterReference: "2026-014",
           },
         ]),
       }),
@@ -6559,7 +6563,7 @@ describe("OpenAI-compatible MCP tools", () => {
 
     const anonymizeInput = anonymizeTextFieldsMock.mock.calls.at(-1)?.[0];
     expect(anonymizeInput).toMatchObject({
-      fields: ["John Smith deposition"],
+      fields: ["John Smith deposition", "Smith estate", "2026-014"],
       workspaceId: WORKSPACE_ID,
     });
 
@@ -6572,6 +6576,9 @@ describe("OpenAI-compatible MCP tools", () => {
           status: "open",
           priority: "high",
           dueDate: "2026-02-01",
+          matterId: WORKSPACE_ID,
+          matterName: "[PERSON_1] estate",
+          matterReference: "2026-014",
         },
       ],
       nextCursor: null,
