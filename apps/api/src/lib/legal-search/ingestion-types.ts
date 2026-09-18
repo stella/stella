@@ -1,5 +1,6 @@
 import { panic, Result } from "better-result";
 
+import type { DecisionJudgeRole } from "@stll/api-contract/case-law-judges";
 import type { CaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
 import type {
   DecisionTextFieldKey,
@@ -7,7 +8,6 @@ import type {
 } from "@stll/api-contract/case-law-text-field";
 import type { DecisionIdentifiers } from "@stll/legal-ast/decision-identifier";
 
-import type { DecisionJudgeInput } from "@/api/handlers/case-law/judges/decision-judges";
 import type { DocumentAst } from "@/api/lib/case-law/document-ast";
 import type { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
@@ -20,6 +20,12 @@ import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
 
 export { EMPTY_AST };
 export type { EmptyAst };
+
+/** A judge as one decision names them, before the roster is consulted. */
+export type DecisionJudgeInput = {
+  role: DecisionJudgeRole;
+  nameAsPrinted: string;
+};
 
 /** Mirrors the publisher-identity columns in the case-law schema. */
 export const SOURCE_DOCUMENT_ID_MAX_LENGTH = 256;

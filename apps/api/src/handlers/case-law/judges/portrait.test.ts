@@ -6,6 +6,7 @@
  * is gone is an absence rather than a failed request.
  */
 
+import { Result } from "better-result";
 import { afterEach, beforeEach, expect, test } from "bun:test";
 
 import { envBase } from "@/api/env-base";
@@ -34,34 +35,46 @@ afterEach(() => {
 test("reads the stored bytes and the store's own validator", async () => {
   fake.put(corpusBucket, KEY, BYTES, "image/jpeg");
 
-  const portrait = await readJudgePortraitObject(
+  const read = await readJudgePortraitObject(
     { key: KEY, contentType: "image/jpeg" },
     AbortSignal.timeout(5000),
   );
 
-  expect(portrait?.bytes).toEqual(BYTES);
-  expect(portrait?.etag).toMatch(/^"[0-9a-f]+"$/u);
+  expect(Result.isOk(read)).toBe(true);
+  if (Result.isError(read)) {
+    return;
+  }
+  expect(read.value?.bytes).toEqual(BYTES);
+  expect(read.value?.etag).toMatch(/^"[0-9a-f]+"$/u);
 });
 
 test("answers with no portrait when the store holds no such object", async () => {
-  const portrait = await readJudgePortraitObject(
+  const read = await readJudgePortraitObject(
     { key: KEY, contentType: "image/jpeg" },
     AbortSignal.timeout(5000),
   );
 
-  expect(portrait).toBeNull();
+  expect(Result.isOk(read)).toBe(true);
+  if (Result.isError(read)) {
+    return;
+  }
+  expect(read.value).toBeNull();
 });
 
 test("a store failure that is not an absence still fails the read", async () => {
   fake.put(corpusBucket, KEY, BYTES, "image/jpeg");
   fake.failNext({ method: "GET", code: "AccessDenied", status: 403, key: KEY });
 
-  expect(
-    readJudgePortraitObject(
-      { key: KEY, contentType: "image/jpeg" },
-      AbortSignal.timeout(5000),
-    ),
-  ).rejects.toThrow(/403/u);
+  const read = await readJudgePortraitObject(
+    { key: KEY, contentType: "image/jpeg" },
+    AbortSignal.timeout(5000),
+  );
+
+  expect(Result.isError(read)).toBe(true);
+  if (Result.isOk(read)) {
+    return;
+  }
+  expect(read.error.message).toMatch(/403/u);
 });
 
 test("the portrait route is addressed by the judge's id", () => {

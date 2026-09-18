@@ -12,13 +12,8 @@ import {
 } from "@/api/db/schema";
 import { judgeNameKey } from "@/api/handlers/case-law/judges/judge-name";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { DecisionJudgeInput } from "@/api/lib/legal-search/ingestion-types";
 import { logger } from "@/api/lib/observability/logger";
-
-/** A judge as one decision names them, before the roster is consulted. */
-export type DecisionJudgeInput = {
-  role: DecisionJudgeRole;
-  nameAsPrinted: string;
-};
 
 /**
  * The query surface each write needs, structurally: the ingestion pipeline

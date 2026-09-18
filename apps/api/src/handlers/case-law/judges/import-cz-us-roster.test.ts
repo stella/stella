@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import {
@@ -263,12 +263,20 @@ const runImport = async (site: FakeSite, store: CzUsRosterStore) =>
     intervalMs: 0,
   });
 
+/** A run the test expects to complete; a halt is the test failing, not a case. */
+const importedRoster = async (site: FakeSite, store: CzUsRosterStore) => {
+  const imported = await runImport(site, store);
+  return Result.isError(imported)
+    ? panic(`roster import halted: ${imported.error.message}`)
+    : imported.value;
+};
+
 describe("importing the roster", () => {
   test("stores a justice the court has added, with their portrait", async () => {
     const site = await fakeSite();
     const store = fakeStore();
 
-    const result = await runImport(site, store);
+    const result = await importedRoster(site, store);
 
     expect(result).toEqual({
       seen: 1,
@@ -292,10 +300,10 @@ describe("importing the roster", () => {
   test("changes nothing on a re-run the court's pages did not change", async () => {
     const site = await fakeSite();
     const store = fakeStore();
-    await runImport(site, store);
+    await importedRoster(site, store);
     const first = new Map(store.rows);
 
-    const second = await runImport(site, store);
+    const second = await importedRoster(site, store);
 
     expect(second).toEqual({
       seen: 1,
@@ -312,11 +320,11 @@ describe("importing the roster", () => {
   test("transfers a portrait again once its bytes differ", async () => {
     const site = await fakeSite();
     const store = fakeStore();
-    await runImport(site, store);
+    await importedRoster(site, store);
     const stored = store.rows.get(judgeNameKey("Josef Baxa"));
     site.setPortrait(new Uint8Array([9, 9, 9, 9, 9]));
 
-    const second = await runImport(site, store);
+    const second = await importedRoster(site, store);
 
     expect(second.portraitsStored).toBe(1);
     expect(second.updated).toBe(1);
@@ -347,7 +355,7 @@ describe("importing the roster", () => {
         : new Response(listing, { headers: { "content-type": "text/html" } });
     };
 
-    const result = await runImport({ ...site, fetch: site404 }, store);
+    const result = await importedRoster({ ...site, fetch: site404 }, store);
 
     expect(result.seen).toBe(2);
     expect(result.inserted).toBe(1);
@@ -362,17 +370,13 @@ describe("importing the roster", () => {
     const site = await fakeSite();
     const down: RosterFetch = async () => new Response("gone", { status: 503 });
 
-    // bun-types declares `.rejects.toThrow` as void, so awaiting it trips
-    // type-aware lint; capture the rejection explicitly instead.
-    const rejection: unknown = await runImport(
-      { ...site, fetch: down },
-      store,
-    ).then(
-      () => null,
-      (error: unknown) => error,
-    );
+    const imported = await runImport({ ...site, fetch: down }, store);
 
-    expect(rejection).toBeInstanceOf(CzUsRosterListingError);
+    expect(Result.isError(imported)).toBe(true);
+    if (Result.isOk(imported)) {
+      return;
+    }
+    expect(imported.error).toBeInstanceOf(CzUsRosterListingError);
     expect(store.relinkCalls()).toBe(0);
   });
 
@@ -388,7 +392,7 @@ describe("importing the roster", () => {
       },
     };
 
-    const result = await runImport(site, contended);
+    const result = await importedRoster(site, contended);
 
     expect(result.inserted).toBe(0);
     expect(site.puts.at(0)?.key).toBe(`case-law/judges/${held}.jpg`);

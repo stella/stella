@@ -15,6 +15,7 @@
  * budget, so it runs under an operator who reads the report.
  */
 
+import { Result } from "better-result";
 import { eq } from "drizzle-orm";
 
 import { caseLawSources } from "@/api/db/schema";
@@ -84,14 +85,21 @@ if (sourceLease === null) {
   process.exit(1);
 }
 
-const report = await runCzUsJudgesBackfill({
+const run = await runCzUsJudgesBackfill({
   scopedDb: ingestionDb,
   sourceId: source.id,
   sourceLease,
   readStoredRaw,
   ...(requestBudget === undefined ? {} : { requestBudget }),
 });
+// Released either way: a failed pass must not leave the source locked against
+// the crawl until the lease expires.
 await sourceLease.release();
 
-console.log(JSON.stringify(report, null, 2));
+if (Result.isError(run)) {
+  console.error(run.error.message);
+  process.exit(1);
+}
+
+console.log(JSON.stringify(run.value, null, 2));
 process.exit(0);

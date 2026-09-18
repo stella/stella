@@ -1,4 +1,5 @@
 import { Result } from "better-result";
+import type { UnhandledException } from "better-result";
 import { eq } from "drizzle-orm";
 
 import { STELLA_API_VERSION_PREFIX } from "@stll/api-contract";
@@ -11,6 +12,7 @@ import {
   isMissingCorpusObjectError,
   readCorpusS3ObjectBounded,
 } from "@/api/lib/s3";
+import type { BoundedCorpusObject } from "@/api/lib/s3";
 
 /**
  * Where the portrait of one judge is served from, relative to the API root.
@@ -60,37 +62,31 @@ export const readJudgePortraitPointer = async (
   return { key, contentType };
 };
 
-export type JudgePortraitObject = {
-  bytes: Uint8Array;
-  etag: string | null;
-};
-
 /**
  * The portrait's bytes, or null when the store confirms the object is gone.
  *
  * A row pointing at an absent object is a defect in the import, not in the
  * request, so it is reported here and answered as a portrait this judge does
- * not have. Every other store failure still fails the read.
+ * not have. Every other store failure is returned to the caller.
  */
 export const readJudgePortraitObject = async (
   { key }: JudgePortraitPointer,
   signal: AbortSignal,
-): Promise<JudgePortraitObject | null> => {
-  const read = await Result.tryPromise({
-    try: async () =>
+): Promise<Result<BoundedCorpusObject | null, UnhandledException>> => {
+  const read = await Result.tryPromise(
+    async () =>
       await readCorpusS3ObjectBounded({
         key,
         maxBytes: PORTRAIT_MAX_BYTES,
         signal,
       }),
-    catch: (cause) => cause,
-  });
+  );
   if (Result.isOk(read)) {
-    return read.value;
+    return read;
   }
-  if (isMissingCorpusObjectError(read.error)) {
+  if (isMissingCorpusObjectError(read.error.cause)) {
     logger.error("case_law.judge_portrait_object_absent", { key });
-    return null;
+    return Result.ok(null);
   }
-  throw read.error;
+  return read;
 };

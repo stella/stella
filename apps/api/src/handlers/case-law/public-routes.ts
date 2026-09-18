@@ -279,9 +279,7 @@ const readJudgePortrait = createSafePublicHandler(
 
     // Outside the read transaction: object storage must never hold one open.
     const portrait = yield* Result.await(
-      Result.tryPromise(
-        async () => await readJudgePortraitObject(pointer, request.signal),
-      ),
+      readJudgePortraitObject(pointer, request.signal),
     );
     if (portrait === null) {
       return Result.err(

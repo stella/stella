@@ -1071,7 +1071,11 @@ export const readCorpusS3BytesBounded = async (
 
 /** A bounded corpus read together with the store's own validator. */
 export type BoundedCorpusObject = {
-  bytes: Uint8Array;
+  /**
+   * Backed by an `ArrayBuffer` rather than any `ArrayBufferLike`, so the
+   * bytes can be handed straight to a `Response` as a `BodyInit`.
+   */
+  bytes: Uint8Array<ArrayBuffer>;
   /** The store's `ETag`, passed through so a client can revalidate. */
   etag: string | null;
 };
@@ -1080,7 +1084,10 @@ export const readCorpusS3ObjectBounded = async (
   options: BoundedCorpusReadOptions,
 ): Promise<BoundedCorpusObject> => {
   const response = await boundedCorpusResponse(options);
-  return { bytes: await response.bytes(), etag: response.headers.get("etag") };
+  return {
+    bytes: new Uint8Array(await response.arrayBuffer()),
+    etag: response.headers.get("etag"),
+  };
 };
 
 type CorpusRangeReadOptions = {

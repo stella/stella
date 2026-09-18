@@ -39,7 +39,12 @@ const HONORARY_DOCTORATE_PATTERN = /\bdr\s*\.\s*h\s*\.\s*c\s*\.?/giu;
 const WHITESPACE_PATTERN = /\s+/u;
 const NON_ALPHANUMERIC_PATTERN = /[^\p{L}\p{N}]+/gu;
 const NON_LETTER_PATTERN = /[^\p{L}]/gu;
-const DANGLING_SEPARATOR_PATTERN = /^[\s,]+|[\s,]+$/gu;
+/**
+ * The lookbehind pins the trailing alternative to the first character of the
+ * run. Without it the scan retries `[\s,]+$` at every position inside a run
+ * of separators, which costs time quadratic in that run's length.
+ */
+const DANGLING_SEPARATOR_PATTERN = /^[\s,]+|(?<![\s,])[\s,]+$/gu;
 const REPEATED_SEPARATOR_PATTERN = /,(?:\s*,)+/gu;
 
 /** The comparable shape of one printed token: `Ph.D.,` and `phd` agree here. */

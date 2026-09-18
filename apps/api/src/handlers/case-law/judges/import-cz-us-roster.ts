@@ -439,51 +439,65 @@ const orNull = (value: string | undefined): string | null => value ?? null;
 const readCourtSite = async (
   url: string,
   fetchImpl: RosterFetch,
-): Promise<Response> => {
+): Promise<Result<Response, CzUsRosterFetchError>> => {
   const target = restrictOutboundUrl({
     hostPolicy: COURT_SITE_POLICY,
     rawUrl: url,
   });
   if (target === null) {
-    throw new CzUsRosterFetchError({
-      message: "link leaves the court's site",
-      sourceUrl: url,
-    });
+    return Result.err(
+      new CzUsRosterFetchError({
+        message: "link leaves the court's site",
+        sourceUrl: url,
+      }),
+    );
   }
-  return await fetchImpl(target.href, {
-    headers: { "User-Agent": INGESTION_USER_AGENT },
-    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-  });
+  return Result.ok(
+    await fetchImpl(target.href, {
+      headers: { "User-Agent": INGESTION_USER_AGENT },
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    }),
+  );
 };
 
 const readPortrait = async (
   url: string,
   fetchImpl: RosterFetch,
-): Promise<PortraitBytes> => {
-  const response = await readCourtSite(url, fetchImpl);
+): Promise<Result<PortraitBytes, CzUsRosterFetchError>> => {
+  const opened = await readCourtSite(url, fetchImpl);
+  if (Result.isError(opened)) {
+    return opened;
+  }
+  const response = opened.value;
   if (!response.ok) {
-    throw new CzUsRosterFetchError({
-      message: `portrait answered ${response.status}`,
-      sourceUrl: url,
-    });
+    return Result.err(
+      new CzUsRosterFetchError({
+        message: `portrait answered ${response.status}`,
+        sourceUrl: url,
+      }),
+    );
   }
   const served = servedPortraitType(response.headers.get("content-type") ?? "");
   if (served === undefined) {
-    throw new CzUsRosterFetchError({
-      message: "portrait served an unsupported content type",
-      sourceUrl: url,
-    });
+    return Result.err(
+      new CzUsRosterFetchError({
+        message: "portrait served an unsupported content type",
+        sourceUrl: url,
+      }),
+    );
   }
   const bytes = await response.bytes();
   // The same ceiling the portrait route reads back with: storing a larger
   // object would put a portrait in the bucket that nothing can serve.
   if (bytes.byteLength > PORTRAIT_MAX_BYTES) {
-    throw new CzUsRosterFetchError({
-      message: `portrait is ${bytes.byteLength} bytes, past the ${PORTRAIT_MAX_BYTES}-byte ceiling`,
-      sourceUrl: url,
-    });
+    return Result.err(
+      new CzUsRosterFetchError({
+        message: `portrait is ${bytes.byteLength} bytes, past the ${PORTRAIT_MAX_BYTES}-byte ceiling`,
+        sourceUrl: url,
+      }),
+    );
   }
-  return { bytes, ...served, sha256: sha256Of(bytes) };
+  return Result.ok({ bytes, ...served, sha256: sha256Of(bytes) });
 };
 
 /** What the court now states about a row that already exists. */
@@ -530,20 +544,28 @@ const applyJustice = async ({
   fetchImpl,
   s3,
   now,
-}: ApplyJusticeOptions): Promise<JusticeOutcome> => {
-  const response = await readCourtSite(entry.profileUrl, fetchImpl);
+}: ApplyJusticeOptions): Promise<
+  Result<JusticeOutcome, CzUsRosterFetchError | CzUsRosterParseError>
+> => {
+  const profile = await readCourtSite(entry.profileUrl, fetchImpl);
+  if (Result.isError(profile)) {
+    return profile;
+  }
+  const response = profile.value;
   if (!response.ok) {
-    throw new CzUsRosterFetchError({
-      message: `justice page answered ${response.status}`,
-      sourceUrl: entry.profileUrl,
-    });
+    return Result.err(
+      new CzUsRosterFetchError({
+        message: `justice page answered ${response.status}`,
+        sourceUrl: entry.profileUrl,
+      }),
+    );
   }
   const parsed = parseJusticePage({
     html: await response.text(),
     sourceUrl: entry.profileUrl,
   });
   if (Result.isError(parsed)) {
-    throw parsed.error;
+    return parsed;
   }
   const page = parsed.value;
   const found = await store.findByNameKey(nameKey);
@@ -556,10 +578,14 @@ const applyJustice = async ({
       : { row: found, inserted: false };
   const stored = opened.row;
   const termChanges = found === undefined ? {} : termPatch(found, page);
-  const portrait =
-    page.portraitUrl === undefined
-      ? undefined
-      : await readPortrait(page.portraitUrl, fetchImpl);
+  let portrait: PortraitBytes | undefined;
+  if (page.portraitUrl !== undefined) {
+    const read = await readPortrait(page.portraitUrl, fetchImpl);
+    if (Result.isError(read)) {
+      return read;
+    }
+    portrait = read.value;
+  }
   const refs = { ...stored.externalRefs, ...termChanges.externalRefs };
   const portraitChanges =
     portrait !== undefined &&
@@ -575,12 +601,12 @@ const applyJustice = async ({
       patch: { ...patch, updatedAt: now() },
     });
   }
-  return {
+  return Result.ok({
     inserted: opened.inserted,
     // A fresh row's portrait is part of inserting it, not an update on top.
     updated: !opened.inserted && Object.keys(patch).length > 0,
     portraitStored: Object.keys(portraitChanges).length > 0,
-  };
+  });
 };
 
 const insertJusticeRow = async ({
@@ -657,7 +683,9 @@ export const importCzUsRoster = async ({
   s3,
   now,
   intervalMs,
-}: CzUsRosterImportOptions): Promise<CzUsRosterImportResult> => {
+}: CzUsRosterImportOptions): Promise<
+  Result<CzUsRosterImportResult, CzUsRosterFetchError | CzUsRosterListingError>
+> => {
   const startedAt = now();
   const paced: RosterFetch = async (url, init) => {
     if (intervalMs > 0) {
@@ -676,13 +704,19 @@ export const importCzUsRoster = async ({
   const applied = new Set<string>();
 
   for (const listingUrl of CZ_US_ROSTER_LISTINGS) {
-    const response = await readCourtSite(listingUrl, paced);
+    const opened = await readCourtSite(listingUrl, paced);
+    if (Result.isError(opened)) {
+      return opened;
+    }
+    const response = opened.value;
     if (!response.ok) {
-      throw new CzUsRosterListingError({
-        message: `roster listing answered ${response.status}`,
-        httpStatus: response.status,
-        listingUrl,
-      });
+      return Result.err(
+        new CzUsRosterListingError({
+          message: `roster listing answered ${response.status}`,
+          httpStatus: response.status,
+          listingUrl,
+        }),
+      );
     }
     const entries = parseRosterListing({
       html: await response.text(),
@@ -697,8 +731,11 @@ export const importCzUsRoster = async ({
       }
       applied.add(nameKey);
       result.seen += 1;
-      const outcome = await Result.tryPromise({
-        try: async () =>
+      // The store and the object bucket report failure by rejecting, so the
+      // attempt is wrapped as well as returned. Either way one justice is
+      // terminal for that justice alone and the rest of the roster follows.
+      const attempted = await Result.tryPromise(
+        async () =>
           await applyJustice({
             entry,
             nameKey,
@@ -707,14 +744,14 @@ export const importCzUsRoster = async ({
             s3,
             now,
           }),
-        catch: (cause: unknown) =>
-          cause instanceof Error ? cause.message : String(cause),
-      });
+      );
+      const outcome = Result.flatten(attempted);
       if (Result.isError(outcome)) {
+        const reason = outcome.error.message;
         result.failures.push({
           name: entry.name,
           profileUrl: entry.profileUrl,
-          reason: outcome.error,
+          reason,
         });
         // `judgeKey`, not `nameKey`: the logger drops attribute keys that
         // read as free text before they are shipped.
@@ -722,7 +759,7 @@ export const importCzUsRoster = async ({
           country: CZ_US_COUNTRY,
           court: CZ_US_COURT,
           judgeKey: nameKey,
-          reason: outcome.error,
+          reason,
         });
         continue;
       }
@@ -744,7 +781,7 @@ export const importCzUsRoster = async ({
     relinked: result.relinked,
     failed: result.failures.length,
   });
-  return result;
+  return Result.ok(result);
 };
 
 /* -- production wiring --------------------------------------------------- */
@@ -863,6 +900,10 @@ if (import.meta.main) {
     now: () => new Date(),
     intervalMs: CZ_US_ROSTER_REQUEST_INTERVAL_MS,
   });
-  process.stdout.write(`${JSON.stringify(imported, null, 2)}\n`);
-  process.exit(imported.failures.length === 0 ? 0 : 1);
+  if (Result.isError(imported)) {
+    process.stderr.write(`${imported.error.message}\n`);
+    process.exit(1);
+  }
+  process.stdout.write(`${JSON.stringify(imported.value, null, 2)}\n`);
+  process.exit(imported.value.failures.length === 0 ? 0 : 1);
 }

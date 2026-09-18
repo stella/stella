@@ -48,7 +48,6 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { parseUsDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-us";
 import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
-import type { DecisionJudgeInput } from "@/api/handlers/case-law/judges/decision-judges";
 import { stripAcademicTitles } from "@/api/handlers/case-law/judges/judge-name";
 import { czDecisionCourt } from "@/api/lib/case-law/cz-ecli-courts";
 import {
@@ -64,6 +63,7 @@ import {
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
+import type { DecisionJudgeInput } from "@/api/lib/legal-search/ingestion-types";
 import { logger } from "@/api/lib/observability/logger";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 

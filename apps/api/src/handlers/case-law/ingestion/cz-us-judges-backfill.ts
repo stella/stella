@@ -21,7 +21,8 @@
  * a request budget and run as an operator job.
  */
 
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
+import type { UnhandledException } from "better-result";
 import { and, asc, eq, gt, isNotNull, or, sql } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -147,80 +148,83 @@ type BackfillRow = {
   nalusRecordId: string;
 };
 
-type SelectBackfillPageOptions = {
-  scopedDb: ScopedDb;
-  sourceId: SafeId<"caseLawSource">;
+type BackfillPageOptions = {
   tier: BackfillTier;
   after: SafeId<"caseLawDecision"> | null;
   limit: number;
 };
 
 /**
- * Rows of one tier that have not been asked about yet.
+ * Rows of one tier that have not been asked about yet, as a reader bound to
+ * the run's handle and source.
+ *
+ * Both are constant for the life of a run and only the cursor moves, so they
+ * are closed over once rather than threaded through every page: the walk asks
+ * for the next page, not for a query against a database.
  *
  * A row with no stored payload is out of scope: rebuilding it would mean
  * fetching the document again, which is the crawl's work and not this run's.
  * So is a row without the record id the card is addressed by.
  */
-const selectBackfillPage = async ({
-  scopedDb,
-  sourceId,
-  tier,
-  after,
-  limit,
-}: SelectBackfillPageOptions): Promise<BackfillRow[]> => {
-  const recordCard = sql<
-    string | null
-  >`${caseLawDecisions.metadata}->>${CZ_US_RECORD_CARD_METADATA_KEY}`;
-  const nalusRecordId = sql<
-    string | null
-  >`${caseLawDecisions.metadata}->>'nalusRecordId'`;
-  const rows = await scopedDb((tx) =>
-    tx
-      .select({
-        id: caseLawDecisions.id,
-        caseNumber: caseLawDecisions.caseNumber,
-        sourceDocumentId: caseLawDecisions.sourceDocumentId,
-        language: caseLawDecisions.language,
-        court: caseLawDecisions.court,
-        ecli: caseLawDecisions.ecli,
-        decisionDate: caseLawDecisions.decisionDate,
-        decisionType: caseLawDecisions.decisionType,
-        sourceUrl: caseLawDecisions.sourceUrl,
-        documentUrl: caseLawDecisions.documentUrl,
-        metadata: caseLawDecisions.metadata,
-        sourceHash: caseLawDecisions.sourceHash,
-        sourceRawS3Key: caseLawDecisions.sourceRawS3Key,
-        sourceRawContentType: caseLawDecisions.sourceRawContentType,
-        nalusRecordId,
-      })
-      .from(caseLawDecisions)
-      .where(
-        and(
-          eq(caseLawDecisions.sourceId, sourceId),
-          isNotNull(caseLawDecisions.sourceRawS3Key),
-          isNotNull(caseLawDecisions.sourceDocumentId),
-          isNotNull(caseLawDecisions.sourceUrl),
-          sql`${nalusRecordId} is not null`,
-          // Neither state: nothing has asked the court about this row's card.
-          or(sql`${recordCard} is null`, sql`${recordCard} = ''`),
-          tier === BACKFILL_TIER.RULINGS
-            ? eq(caseLawDecisions.decisionType, RULING_DECISION_TYPE)
-            : sql`${caseLawDecisions.decisionType} is distinct from ${RULING_DECISION_TYPE}`,
-          after === null ? undefined : gt(caseLawDecisions.id, after),
-        ),
-      )
-      .orderBy(asc(caseLawDecisions.id))
-      .limit(limit),
-  );
+const backfillPageReader =
+  (scopedDb: ScopedDb, sourceId: SafeId<"caseLawSource">) =>
+  async ({
+    tier,
+    after,
+    limit,
+  }: BackfillPageOptions): Promise<BackfillRow[]> => {
+    const recordCard = sql<
+      string | null
+    >`${caseLawDecisions.metadata}->>${CZ_US_RECORD_CARD_METADATA_KEY}`;
+    const nalusRecordId = sql<
+      string | null
+    >`${caseLawDecisions.metadata}->>'nalusRecordId'`;
+    const rows = await scopedDb((tx) =>
+      tx
+        .select({
+          id: caseLawDecisions.id,
+          caseNumber: caseLawDecisions.caseNumber,
+          sourceDocumentId: caseLawDecisions.sourceDocumentId,
+          language: caseLawDecisions.language,
+          court: caseLawDecisions.court,
+          ecli: caseLawDecisions.ecli,
+          decisionDate: caseLawDecisions.decisionDate,
+          decisionType: caseLawDecisions.decisionType,
+          sourceUrl: caseLawDecisions.sourceUrl,
+          documentUrl: caseLawDecisions.documentUrl,
+          metadata: caseLawDecisions.metadata,
+          sourceHash: caseLawDecisions.sourceHash,
+          sourceRawS3Key: caseLawDecisions.sourceRawS3Key,
+          sourceRawContentType: caseLawDecisions.sourceRawContentType,
+          nalusRecordId,
+        })
+        .from(caseLawDecisions)
+        .where(
+          and(
+            eq(caseLawDecisions.sourceId, sourceId),
+            isNotNull(caseLawDecisions.sourceRawS3Key),
+            isNotNull(caseLawDecisions.sourceDocumentId),
+            isNotNull(caseLawDecisions.sourceUrl),
+            sql`${nalusRecordId} is not null`,
+            // Neither state: nothing has asked the court about this row's card.
+            or(sql`${recordCard} is null`, sql`${recordCard} = ''`),
+            tier === BACKFILL_TIER.RULINGS
+              ? eq(caseLawDecisions.decisionType, RULING_DECISION_TYPE)
+              : sql`${caseLawDecisions.decisionType} is distinct from ${RULING_DECISION_TYPE}`,
+            after === null ? undefined : gt(caseLawDecisions.id, after),
+          ),
+        )
+        .orderBy(asc(caseLawDecisions.id))
+        .limit(limit),
+    );
 
-  return rows.flatMap((row) => {
-    const { nalusRecordId: recordId, sourceRawS3Key } = row;
-    return recordId === null || sourceRawS3Key === null
-      ? []
-      : [{ ...row, nalusRecordId: recordId, sourceRawS3Key }];
-  });
-};
+    return rows.flatMap((row) => {
+      const { nalusRecordId: recordId, sourceRawS3Key } = row;
+      return recordId === null || sourceRawS3Key === null
+        ? []
+        : [{ ...row, nalusRecordId: recordId, sourceRawS3Key }];
+    });
+  };
 
 /**
  * The stored payload with the card added to it.
@@ -281,7 +285,9 @@ export const runCzUsJudgesBackfill = async ({
   pageSize = DEFAULT_PAGE_SIZE,
   signal,
   onProgress,
-}: CzUsJudgesBackfillOptions): Promise<CzUsJudgesBackfillReport> => {
+}: CzUsJudgesBackfillOptions): Promise<
+  Result<CzUsJudgesBackfillReport, UnhandledException>
+> => {
   const report: CzUsJudgesBackfillReport = {
     stoppedBecause: BACKFILL_STOP_REASON.SOURCE_EXHAUSTED,
     applied: 0,
@@ -290,6 +296,8 @@ export const runCzUsJudgesBackfill = async ({
     deferred: 0,
     requestsSpent: 0,
   };
+
+  const readPage = backfillPageReader(scopedDb, sourceId);
 
   // One session for the run: the card needs a court session, and opening one
   // per decision would double what the run costs the publisher.
@@ -372,38 +380,30 @@ export const runCzUsJudgesBackfill = async ({
     for (;;) {
       if (signal?.aborted) {
         report.stoppedBecause = BACKFILL_STOP_REASON.CANCELLED;
-        return report;
+        return Result.ok(report);
       }
       if (report.requestsSpent >= requestBudget) {
         report.stoppedBecause = BACKFILL_STOP_REASON.BUDGET_SPENT;
-        return report;
+        return Result.ok(report);
       }
-      // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- keyset page per iteration; the page is the batch
-      const page = await selectBackfillPage({
-        scopedDb,
-        sourceId,
-        tier,
-        after,
-        limit: pageSize,
-      });
+      const page = await readPage({ tier, after, limit: pageSize });
       if (page.length === 0) {
         break;
       }
       for (const row of page) {
         if (report.requestsSpent >= requestBudget) {
           report.stoppedBecause = BACKFILL_STOP_REASON.BUDGET_SPENT;
-          return report;
+          return Result.ok(report);
         }
-        const applied = await Result.tryPromise({
-          try: async () => await applyRow(row),
-          catch: (cause: unknown) => cause,
-        });
+        const applied = await Result.tryPromise(
+          async () => await applyRow(row),
+        );
         if (Result.isError(applied)) {
-          if (applied.error instanceof NalusRateLimitedError) {
+          if (applied.error.cause instanceof NalusRateLimitedError) {
             report.stoppedBecause = BACKFILL_STOP_REASON.PUBLISHER_LIMIT;
-            return report;
+            return Result.ok(report);
           }
-          throw applied.error;
+          return applied;
         }
         after = row.id;
         onProgress?.({ ...report });
@@ -411,5 +411,5 @@ export const runCzUsJudgesBackfill = async ({
     }
   }
 
-  return report;
+  return Result.ok(report);
 };
