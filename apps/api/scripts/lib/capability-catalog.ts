@@ -186,6 +186,7 @@ export const DOMAIN_ACTION_VERBS = new Set([
   "create-from-legal-source",
   "create-from-style-set",
   "create-from-styles",
+  "decide-conditions",
   "delete-thread",
   "delete-version",
   "discover",

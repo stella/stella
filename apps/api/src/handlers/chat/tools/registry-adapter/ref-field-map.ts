@@ -322,6 +322,11 @@ export const READ_TOOL_REF_FIELD_MAP = {
     projection: LIST_TEMPLATES_PROJECTION,
   },
 
+  // The chat's own template fill is a hand-written tool, and it already reports
+  // what each AI-decided condition was settled on in its fill result, so
+  // projecting the dry run would add a second way to ask the same question.
+  preview_template_conditions: { chatProjectable: false },
+
   // --- Audit log: not projected to chat -------------------------------------
   // Excluded from the anonymized surface (`dynamic_tenant_payload`) for the
   // same reason it cannot be safely ref-mediated: `metadata`/`changes` are

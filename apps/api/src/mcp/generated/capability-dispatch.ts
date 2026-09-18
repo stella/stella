@@ -967,6 +967,10 @@ export const CAPABILITY_DISPATCH = {
     load: async () =>
       await import("@/api/handlers/templates/create-from-styles"),
   },
+  "templates.decide-conditions": {
+    load: async () =>
+      await import("@/api/handlers/templates/decide-conditions"),
+  },
   "templates.delete": {
     load: async () => await import("@/api/handlers/templates/delete"),
   },

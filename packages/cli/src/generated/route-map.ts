@@ -4007,6 +4007,52 @@ export const generatedRouteMap: RouteNode = {
             },
           },
         },
+        "preview-conditions": {
+          kind: "leaf",
+          spec: {
+            commandPath: ["template", "preview-conditions"],
+            toolName: "preview_template_conditions",
+            description:
+              "Ask what a set of values would decide, without filling anything.",
+            flags: [
+              {
+                flag: "--template-id",
+                prop: "template_id",
+                kind: "string",
+                repeatable: false,
+                description:
+                  "Template whose AI-decided conditions to ask about, as returned by list_templates",
+                required: true,
+              },
+            ],
+            inputOnly: ["values"],
+            paginated: false,
+            followable: true,
+            windowedText: false,
+            itemsKey: "conditions",
+            destructive: false,
+            scope: "templates",
+            inputSchema: {
+              type: "object",
+              required: ["template_id", "values"],
+              additionalProperties: false,
+              properties: {
+                template_id: {
+                  type: "string",
+                  format: "uuid",
+                  description:
+                    "Template whose AI-decided conditions to ask about, as returned by list_templates",
+                },
+                values: {
+                  type: "object",
+                  additionalProperties: {},
+                  description:
+                    "Map of field path to value, the same map fill_template takes. Partial is fine: the model decides on what it is given.",
+                },
+              },
+            },
+          },
+        },
       },
     },
     task: {
