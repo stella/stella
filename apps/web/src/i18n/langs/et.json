@@ -1352,10 +1352,12 @@
     "disconnect": "Katkesta ühendus",
     "displayName": "Kuvatav nimi",
     "document": "Dokument",
+    "documentName": "Dokumendi nimi",
     "documentReference": "Dokumendi viitenumber",
     "documentTitle": "Dokumendi pealkiri",
     "documentation": "Dokumentatsioon",
     "done": "Valmis",
+    "doubleClickToRename": "Topeltklõpsa ümbernimetamiseks",
     "download": "Laadi alla",
     "dragAndDrop": {
       "cancelled": "{count, plural, one {Teisaldamine tühistati. Üksust {itemName} ei teisaldatud.} other {Teisaldamine tühistati. {itemName} ei teisaldatud.}}",

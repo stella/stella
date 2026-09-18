@@ -1352,10 +1352,12 @@
     "disconnect": "قطع الاتصال",
     "displayName": "الاسم المعروض",
     "document": "مستند",
+    "documentName": "اسم المستند",
     "documentReference": "مرجع المستند",
     "documentTitle": "عنوان المستند",
     "documentation": "التوثيق",
     "done": "تم",
+    "doubleClickToRename": "انقر نقرًا مزدوجًا لإعادة التسمية",
     "download": "تنزيل",
     "dragAndDrop": {
       "cancelled": "{count, plural, zero {أُلغي النقل. لم تُنقل {itemName}.} one {أُلغي النقل. لم يُنقل {itemName}.} two {أُلغي النقل. لم يُنقل {itemName}.} few {أُلغي النقل. لم تُنقل {itemName}.} many {أُلغي النقل. لم تُنقل {itemName}.} other {أُلغي النقل. لم تُنقل {itemName}.}}",

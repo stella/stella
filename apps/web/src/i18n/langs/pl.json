@@ -1352,10 +1352,12 @@
     "disconnect": "Rozłącz",
     "displayName": "Nazwa wyświetlana",
     "document": "Dokument",
+    "documentName": "Nazwa dokumentu",
     "documentReference": "Numer referencyjny dokumentu",
     "documentTitle": "Tytuł dokumentu",
     "documentation": "Dokumentacja",
     "done": "Gotowe",
+    "doubleClickToRename": "Kliknij dwukrotnie, aby zmienić nazwę",
     "download": "Pobierz",
     "dragAndDrop": {
       "cancelled": "{count, plural, one {Anulowano przenoszenie. Element {itemName} nie został przeniesiony.} few {Anulowano przenoszenie. {itemName} nie zostały przeniesione.} many {Anulowano przenoszenie. {itemName} nie zostało przeniesionych.} other {Anulowano przenoszenie. {itemName} nie zostało przeniesione.}}",

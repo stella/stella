@@ -1355,10 +1355,12 @@ type Messages = {
     "disconnect": "Disconnect";
     "displayName": "Display name";
     "document": "Document";
+    "documentName": "Document name";
     "documentReference": "Document reference";
     "documentTitle": "Document title";
     "documentation": "Documentation";
     "done": "Done";
+    "doubleClickToRename": "Double-click to rename";
     "download": "Download";
     "dragAndDrop": {
       "cancelled": "{count, plural, one {Move cancelled. {itemName} was not moved.} other {Move cancelled. {itemName} were not moved.}}";

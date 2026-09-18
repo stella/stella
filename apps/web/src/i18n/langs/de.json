@@ -1352,10 +1352,12 @@
     "disconnect": "Trennen",
     "displayName": "Anzeigename",
     "document": "Dokument",
+    "documentName": "Dokumentname",
     "documentReference": "Aktenzeichen des Dokuments",
     "documentTitle": "Dokumenttitel",
     "documentation": "Dokumentation",
     "done": "Fertig",
+    "doubleClickToRename": "Zum Umbenennen doppelklicken",
     "download": "Herunterladen",
     "dragAndDrop": {
       "cancelled": "{count, plural, one {Verschieben abgebrochen. {itemName} wurde nicht verschoben.} other {Verschieben abgebrochen. {itemName} wurden nicht verschoben.}}",

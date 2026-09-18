@@ -1352,10 +1352,12 @@
     "disconnect": "Atjungti",
     "displayName": "Rodomas vardas",
     "document": "Dokumentas",
+    "documentName": "Dokumento pavadinimas",
     "documentReference": "Dokumento nuorodos numeris",
     "documentTitle": "Dokumento pavadinimas",
     "documentation": "Dokumentacija",
     "done": "Atlikta",
+    "doubleClickToRename": "Spustelėkite du kartus, kad pervadintumėte",
     "download": "Atsisiųsti",
     "dragAndDrop": {
       "cancelled": "{count, plural, one {Perkėlimas atšauktas: {itemName}.} few {Perkėlimas atšauktas: {itemName}.} other {Perkėlimas atšauktas: {itemName}.}}",
