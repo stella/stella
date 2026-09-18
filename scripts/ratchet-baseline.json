@@ -891,7 +891,7 @@
     "files": {}
   },
   "lint-suppression-directives": {
-    "count": 287,
+    "count": 288,
     "files": {
       "apps/api/scripts/ai-provider-canary.ts": 1,
       "apps/api/scripts/lib/compact-schema-defs.ts": 1,
@@ -954,6 +954,7 @@
       "apps/api/src/lib/decisions/system-one.ts": 1,
       "apps/api/src/lib/desktop-edit-session-predicates.ts": 2,
       "apps/api/src/lib/document-reference.ts": 2,
+      "apps/api/src/lib/docx/ai-field-generator.ts": 1,
       "apps/api/src/lib/email/ses.ts": 1,
       "apps/api/src/lib/extraction-runs/store.ts": 1,
       "apps/api/src/lib/file-scan/scanner.ts": 1,

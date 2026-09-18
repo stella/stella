@@ -471,6 +471,7 @@ export const buildAiConditionDecider = ({
         maxOutputTokens: AI_CONDITION_MAX_TOKENS,
         orgAIConfig,
         organizationId,
+        // oxlint-disable-next-line decision-shaped-output-schema/decision-shaped-output-schema -- the generative run is the fallback for a condition decide() above left undecided, and the only run for a skill-referencing prompt
         outputSchema: conditionDecisionSchema,
         prompt: `You are deciding one yes/no condition of a legal document. Question: ${prompt}
 
