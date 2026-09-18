@@ -113,9 +113,18 @@ export const unresolvedSchema = async (importedSchema: unknown) =>
     outputSchema: importedSchema,
   });
 
-// Allowed: only the generative entry points carry this boundary.
-export const otherCallee = parseWithSchema({
+// MUST flag: a file-local wrapper around the generative helper takes the same
+// `outputSchema` option, and the decision is written where the literal is.
+export const throughWrapper = parseWithSchema({
+  // oxlint-disable-next-line decision-shaped-output-schema/decision-shaped-output-schema -- fixture: the option name, not the callee, marks a structured-output call
   outputSchema: v.strictObject({ applies: v.boolean() }),
 });
+
+// Allowed: the wrapper itself forwards a schema it cannot resolve.
+export const wrapperBody = async (input: { outputSchema: unknown }) =>
+  await generateTanStackObjectForRole({
+    role: "fixture",
+    outputSchema: input.outputSchema,
+  });
 
 export { pipedVerdictSchema };

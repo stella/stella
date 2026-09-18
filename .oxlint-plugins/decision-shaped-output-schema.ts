@@ -22,6 +22,12 @@
 //     }),
 //   })
 //
+// The call is recognized by its `outputSchema` option, not by its callee:
+// `outputSchema` is the vocabulary of the structured-output helpers and of
+// every file-local wrapper around them, so a schema handed to a wrapper is
+// caught where the literal is written. A wrapper forwarding
+// `input.outputSchema` resolves to nothing and is not reported.
+//
 // Analysis boundary: single file, syntax only. The schema is read inline or
 // through a same-file `const`, with one level of `v.pipe(schema, ...)` peeled;
 // a schema imported from another module, returned by a helper, or composed
@@ -39,11 +45,6 @@ import {
   isIdentifier,
   unwrapExpression,
 } from "./utils.ts";
-
-const GENERATIVE_CALLEES = new Set([
-  "generateTanStackObjectForRole",
-  "streamTanStackObjectForRole",
-]);
 
 const OBJECT_SCHEMA_NAMES = new Set(["object", "strictObject", "looseObject"]);
 // Closed-set, numeric and temporal leaves: an answer, not a composition.
@@ -83,29 +84,6 @@ const isValibotCall = (node: unknown, name: string): boolean =>
 
 const callArguments = (node: AstNode): unknown[] =>
   Array.isArray(node.arguments) ? node.arguments : [];
-
-// Walk a callee subtree for one of the generative helper names, so
-// `(context.generateObjectForRole ?? generateTanStackObjectForRole)(...)`
-// is recognized alongside a bare call.
-const calleeReferencesGenerativeHelper = (
-  node: unknown,
-  visited: WeakSet<object>,
-): boolean => {
-  if (Array.isArray(node)) {
-    return node.some((item) => calleeReferencesGenerativeHelper(item, visited));
-  }
-  if (typeof node !== "object" || node === null || visited.has(node)) {
-    return false;
-  }
-  visited.add(node);
-  if (isIdentifier(node) && GENERATIVE_CALLEES.has(node.name)) {
-    return true;
-  }
-  return Object.entries(node).some(
-    ([key, value]) =>
-      key !== "parent" && calleeReferencesGenerativeHelper(value, visited),
-  );
-};
 
 // The `outputSchema: ...` Property of a call's options object, or null.
 const outputSchemaProperty = (options: AstNode): AstNode | null => {
@@ -282,9 +260,6 @@ export default eslintCompatPlugin({
             }
           },
           CallExpression(node) {
-            if (!calleeReferencesGenerativeHelper(node.callee, new WeakSet())) {
-              return;
-            }
             const options = unwrapExpression(
               Array.isArray(node.arguments) ? node.arguments.at(0) : undefined,
             );
