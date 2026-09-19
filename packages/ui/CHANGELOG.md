@@ -1,5 +1,11 @@
 # @stll/ui
 
+## 0.33.1
+
+### Patch Changes
+
+- [#3539](https://github.com/stella/stella/pull/3539) [`c40f24f`](https://github.com/stella/stella/commit/c40f24f61f7a5f000ab1728b28af473c26950baa) Thanks [@dependabot](https://github.com/apps/dependabot)! - Update `tailwind-merge` to `^3.7.0`.
+
 ## 0.33.0
 
 ### Minor Changes
