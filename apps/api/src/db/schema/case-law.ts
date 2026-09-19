@@ -1171,7 +1171,6 @@ export const caseLawCorpusTombstones = p.pgTable(
       "case_law_corpus_tombstones_reason_values",
       sql`${t.reason} IN (${sql.join(CASE_LAW_CORPUS_TOMBSTONE_REASON_SQL_VALUES, sql`, `)})`,
     ),
-    ...caseLawIngestionOnlyPolicies(),
     ...globalCaseLawPolicies(),
     ...publicLawReaderPolicies(),
   ],
