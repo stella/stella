@@ -398,6 +398,25 @@ export const ADAPTER_MANIFESTS = {
       through: OPEN_RANGE,
     },
   },
+  [ADAPTER_KEYS.HU_BHGY]: {
+    key: ADAPTER_KEYS.HU_BHGY,
+    name: "Hungarian Courts (Bírósági Határozatok Gyűjteménye)",
+    publicHomeUrl: "https://eakta.birosag.hu/anonimizalt-hatarozatok",
+    ...ADAPTER_JURISDICTIONS.HUN,
+    // Hungary issues no ECLI, so there is no court code to resolve one against.
+    ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
+    // The collection prints no "not available" stand-in: a decision without a
+    // résumé states `Rezume: null`.
+    placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
+    dateRange: {
+      // `MeghozatalIdejeTol`/`Ig` take a year, and the search form's own list
+      // opens at 1988. 1990 to 1995 answer nothing; they are inside the range
+      // rather than outside it, because the publisher offers them.
+      type: "decision-date",
+      fromInclusive: "1988-01-01",
+      through: OPEN_RANGE,
+    },
+  },
   [ADAPTER_KEYS.EU_ECJ]: {
     key: ADAPTER_KEYS.EU_ECJ,
     name: "Court of Justice of the EU (CJEU)",

@@ -740,6 +740,8 @@
       "dissentByline": "Voto particular: <bdi>{names}</bdi>",
       "judgeRole": {
         "dissenting": "Voto particular",
+        "panelMember": "Magistrado de la sala",
+        "presiding": "Presidente de la sala",
         "rapporteur": "Juez ponente"
       },
       "judges": "Jueces",

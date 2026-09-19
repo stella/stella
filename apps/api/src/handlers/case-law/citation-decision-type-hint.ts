@@ -39,16 +39,26 @@ export const CITATION_DECISION_TYPE_HINTS = [
  * candidate when `lower(decision_type)` is in its family.
  */
 export const CITATION_DECISION_TYPE_HINT_FAMILIES = {
-  [CITATION_DECISION_TYPE_HINT.MERITS]: ["nález"],
-  [CITATION_DECISION_TYPE_HINT.ORDER]: ["usnesení", "uznesenie"],
-  [CITATION_DECISION_TYPE_HINT.JUDGMENT]: ["rozsudek", "rozsudok"],
+  // `határozat` is Hungarian for a decision of any kind; `hu-bhgy` stores it
+  // only where the document names no narrower one, which is the merits
+  // decision of a body that issues nothing else (the Alkotmánybíróság, the
+  // Kúria's jogegységi határozat).
+  [CITATION_DECISION_TYPE_HINT.MERITS]: ["nález", "határozat"],
+  [CITATION_DECISION_TYPE_HINT.ORDER]: ["usnesení", "uznesenie", "végzés"],
+  [CITATION_DECISION_TYPE_HINT.JUDGMENT]: ["rozsudek", "rozsudok", "ítélet"],
   [CITATION_DECISION_TYPE_HINT.OPINION]: ["stanovisko", "stanovisko pléna"],
 } as const satisfies Record<CitationDecisionTypeHint, readonly string[]>;
 
 /**
- * Inflected forms, Czech and Slovak, lowercase, each mapped to its family.
- * Plurals are included because an enumeration ("nálezy sp. zn. … a …")
+ * Inflected forms, Czech, Slovak and Hungarian, lowercase, each mapped to its
+ * family. Plurals are included because an enumeration ("nálezy sp. zn. … a …")
  * introduces every number in it with one word.
+ *
+ * Hungarian inflects by suffix, so the forms here are the ones a citing
+ * sentence prints: the bare noun, the third-person possessive the court's name
+ * governs (`ítélete`), and the cases that introduce a number — inessive
+ * (`ítéletében`), instrumental (`ítéletével`), accusative (`ítéletet`),
+ * dative (`ítéletének`) and plural (`ítéletek`).
  */
 const HINT_WORDS = new Map<string, CitationDecisionTypeHint>(
   Object.entries({
@@ -84,6 +94,27 @@ const HINT_WORDS = new Map<string, CitationDecisionTypeHint>(
     stanovisku: CITATION_DECISION_TYPE_HINT.OPINION,
     stanoviskem: CITATION_DECISION_TYPE_HINT.OPINION,
     stanoviskom: CITATION_DECISION_TYPE_HINT.OPINION,
+    ítélet: CITATION_DECISION_TYPE_HINT.JUDGMENT,
+    ítélete: CITATION_DECISION_TYPE_HINT.JUDGMENT,
+    ítéletében: CITATION_DECISION_TYPE_HINT.JUDGMENT,
+    ítéletével: CITATION_DECISION_TYPE_HINT.JUDGMENT,
+    ítéletet: CITATION_DECISION_TYPE_HINT.JUDGMENT,
+    ítéletének: CITATION_DECISION_TYPE_HINT.JUDGMENT,
+    ítéletek: CITATION_DECISION_TYPE_HINT.JUDGMENT,
+    végzés: CITATION_DECISION_TYPE_HINT.ORDER,
+    végzése: CITATION_DECISION_TYPE_HINT.ORDER,
+    végzésében: CITATION_DECISION_TYPE_HINT.ORDER,
+    végzésével: CITATION_DECISION_TYPE_HINT.ORDER,
+    végzést: CITATION_DECISION_TYPE_HINT.ORDER,
+    végzésének: CITATION_DECISION_TYPE_HINT.ORDER,
+    végzések: CITATION_DECISION_TYPE_HINT.ORDER,
+    határozat: CITATION_DECISION_TYPE_HINT.MERITS,
+    határozata: CITATION_DECISION_TYPE_HINT.MERITS,
+    határozatában: CITATION_DECISION_TYPE_HINT.MERITS,
+    határozatával: CITATION_DECISION_TYPE_HINT.MERITS,
+    határozatot: CITATION_DECISION_TYPE_HINT.MERITS,
+    határozatának: CITATION_DECISION_TYPE_HINT.MERITS,
+    határozatok: CITATION_DECISION_TYPE_HINT.MERITS,
   } satisfies Record<string, CitationDecisionTypeHint>),
 );
 

@@ -27,12 +27,16 @@ export type DecisionJudge = {
  */
 const ROLE_ORDER = {
   rapporteur: DECISION_JUDGE_ROLES.indexOf("rapporteur"),
+  presiding: DECISION_JUDGE_ROLES.indexOf("presiding"),
+  "panel-member": DECISION_JUDGE_ROLES.indexOf("panel-member"),
   dissenting: DECISION_JUDGE_ROLES.indexOf("dissenting"),
 } satisfies Record<DecisionJudgeRole, number>;
 
 /** How each role is captioned under a judge. */
 export const DECISION_JUDGE_ROLE_LABELS = {
   dissenting: "caseLaw.viewer.judgeRole.dissenting",
+  "panel-member": "caseLaw.viewer.judgeRole.panelMember",
+  presiding: "caseLaw.viewer.judgeRole.presiding",
   rapporteur: "caseLaw.viewer.judgeRole.rapporteur",
 } as const satisfies Record<DecisionJudgeRole, TranslationKey>;
 

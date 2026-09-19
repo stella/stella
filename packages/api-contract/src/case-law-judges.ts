@@ -13,6 +13,11 @@
  * (`satisfies Record<DecisionJudgeRole, …>`) then fails to compile until the
  * new member has a declared rank, caption and parser.
  */
-export const DECISION_JUDGE_ROLES = ["rapporteur", "dissenting"] as const;
+export const DECISION_JUDGE_ROLES = [
+  "rapporteur",
+  "presiding",
+  "panel-member",
+  "dissenting",
+] as const;
 
 export type DecisionJudgeRole = (typeof DECISION_JUDGE_ROLES)[number];

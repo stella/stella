@@ -740,6 +740,8 @@
       "dissentByline": "Zdanie odrębne: <bdi>{names}</bdi>",
       "judgeRole": {
         "dissenting": "Zdanie odrębne",
+        "panelMember": "Członek składu",
+        "presiding": "Przewodniczący składu",
         "rapporteur": "Sędzia sprawozdawca"
       },
       "judges": "Sędziowie",

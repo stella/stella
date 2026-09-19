@@ -18,6 +18,7 @@ import { czNssAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-nss"
 import { czRegionalAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-regional";
 import { czUsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-us";
 import { euEcjAdapter } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
+import { huBhgyAdapter } from "@/api/handlers/case-law/ingestion/adapters/hu-bhgy";
 import { plCourtsAdapter } from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
 import { plSnAdapter } from "@/api/handlers/case-law/ingestion/adapters/pl-sn";
 import { skCourtsAdapter } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
@@ -59,6 +60,7 @@ const ADAPTER_REGISTRY = {
   [ADAPTER_KEYS.AT_BKS]: atBksAdapter,
   [ADAPTER_KEYS.AT_FINDOK]: atFindokAdapter,
   [ADAPTER_KEYS.EU_ECJ]: euEcjAdapter,
+  [ADAPTER_KEYS.HU_BHGY]: huBhgyAdapter,
 } as const satisfies AdapterRegistry;
 
 const adapterKeyFromString = (key: string): AdapterKey | undefined =>

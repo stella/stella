@@ -21,6 +21,7 @@ export const ADAPTER_KEYS = {
   AT_BKS: "at-bks",
   AT_FINDOK: "at-findok",
   EU_ECJ: "eu-ecj",
+  HU_BHGY: "hu-bhgy",
 } as const;
 
 export type AdapterKey = (typeof ADAPTER_KEYS)[keyof typeof ADAPTER_KEYS];
@@ -55,6 +56,7 @@ export const PARSER_VERSIONS = {
   [ADAPTER_KEYS.AT_BKS]: 3,
   [ADAPTER_KEYS.AT_FINDOK]: 3,
   [ADAPTER_KEYS.EU_ECJ]: 5,
+  [ADAPTER_KEYS.HU_BHGY]: 1,
 } as const satisfies Record<AdapterKey, number>;
 
 /**

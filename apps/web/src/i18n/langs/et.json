@@ -740,6 +740,8 @@
       "dissentByline": "Eriarvamus: <bdi>{names}</bdi>",
       "judgeRole": {
         "dissenting": "Eriarvamus",
+        "panelMember": "Kohtukoosseisu liige",
+        "presiding": "Eesistuja kohtunik",
         "rapporteur": "Ettekandja-kohtunik"
       },
       "judges": "Kohtunikud",

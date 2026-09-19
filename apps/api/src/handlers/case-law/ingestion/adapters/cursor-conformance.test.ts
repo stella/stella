@@ -282,6 +282,18 @@ const ADAPTER_CONFORMANCE = {
     maxSteadyStateCursors: 4,
     maxSteadyStatePositions: 1,
   },
+  [ADAPTER_KEYS.HU_BHGY]: {
+    disposition: "exercised",
+    // The search answers a window it holds nothing for with an empty list and
+    // a zero count under `Success: true`. The crawl never reaches the download
+    // from here, because it only follows listed rows.
+    exhaustedSource: () =>
+      jsonResponse({ List: [], Count: 0, Success: true, Message: null }),
+    // The sweep steps over every empty window it is allowed to before it banks
+    // where it got to, so one lap is the cursor it parks on plus the tip's.
+    maxSteadyStateCursors: 4,
+    maxSteadyStatePositions: 1,
+  },
 } as const satisfies Record<AdapterKey, AdapterCoverage>;
 
 /**

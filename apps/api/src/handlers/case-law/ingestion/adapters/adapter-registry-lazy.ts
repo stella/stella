@@ -49,6 +49,7 @@ export const ADAPTER_MODULES = {
   [ADAPTER_KEYS.AT_FINDOK]: async () =>
     (await import("./at-findok")).atFindokAdapter,
   [ADAPTER_KEYS.EU_ECJ]: async () => (await import("./eu-ecj")).euEcjAdapter,
+  [ADAPTER_KEYS.HU_BHGY]: async () => (await import("./hu-bhgy")).huBhgyAdapter,
 } as const satisfies Record<AdapterKey, AdapterLoader>;
 
 const adapterKeyFromString = (key: string): AdapterKey | undefined =>

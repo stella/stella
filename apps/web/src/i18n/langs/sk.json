@@ -740,6 +740,8 @@
       "dissentByline": "Odlišné stanovisko: <bdi>{names}</bdi>",
       "judgeRole": {
         "dissenting": "Odlišné stanovisko",
+        "panelMember": "Člen senátu",
+        "presiding": "Predseda senátu",
         "rapporteur": "Sudca spravodajca"
       },
       "judges": "Sudcovia",

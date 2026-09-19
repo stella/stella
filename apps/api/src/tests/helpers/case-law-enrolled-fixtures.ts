@@ -65,6 +65,12 @@ import type { CzRegionalApiItem } from "@/api/handlers/case-law/ingestion/adapte
 import { buildCzUsDecision } from "@/api/handlers/case-law/ingestion/adapters/cz-us";
 import type { ListedDecision } from "@/api/handlers/case-law/ingestion/adapters/cz-us";
 import {
+  assembleHuBhgyDecision,
+  huBhgyDocumentOf,
+  huBhgyRawPartsOf,
+  normalizeHuBhgyRow,
+} from "@/api/handlers/case-law/ingestion/adapters/hu-bhgy";
+import {
   assemblePlSnDecision,
   normalizePlSnDetail,
   readPlSnEnvelope,
@@ -1459,5 +1465,71 @@ export const atFindokFixture = (): EnrolledAdapterFixture => ({
         },
       ),
     );
+  },
+});
+
+// ── HU BHGY fixture ──────────────────────────────────────
+
+/**
+ * One listing row as `AnonimizaltHatarozat/Search` states it, with every field
+ * the search labels filled — the three the inventory excludes included, so the
+ * guards exercise the exclusions rather than only the stored fields.
+ *
+ * `Azonosito` is the docket in the collection's own spelling, which drops the
+ * thousands dot and the panel numeral the decision file prints.
+ */
+const HU_BHGY_LISTING_ROW = {
+  Azonosito: "Gfv.30197/2024/4",
+  MeghozoBirosag: "Kúria",
+  Kollegium: "gazdasági",
+  JogTerulet: "gazdasági jog",
+  KapcsolodoHatarozatok: [
+    {
+      KapcsolodoUgyszam: "5.Gf.40.014/2023/15",
+      KapcsolodoBirosag: "Szegedi Törvényszék",
+    },
+  ],
+  Jogszabalyhelyek:
+    "2016. évi CXXX. törvény a polgári perrendtartásról 409. § (2) - 2024-01-01",
+  HatarozatEve: 2025,
+  Szoveg: null,
+  Rezume:
+    "A felülvizsgálat engedélyezése iránti kérelemnek központi jelentőségű tartalmi eleme a jogértelmezést igénylő jogkérdés megfogalmazása.",
+  RezumeSzovegKornyezet: null,
+  EgyediAzonosito: "K-GJ-2025-179",
+  IndexelesIdeje: "2025-10-10T10:23:45.051584+02:00",
+  NemHivatkozhatoSzoveg: null,
+  IndexId: "eb8acbdd-45e9-467f-b6e4-8f36bbf41046",
+  DownloadLink: null,
+} as const;
+
+/** The captured decision file the download serves for that row. */
+const HU_BHGY_DOCUMENT = new URL(
+  "../../handlers/case-law/ingestion/parsers/__fixtures__/hu-bhgy-decision.docx",
+  import.meta.url,
+);
+
+/**
+ * Built from the row and the captured file, through the adapter's own envelope
+ * writer: the guards read the header labels back out of the stored document,
+ * so a fixture that skipped the file would certify half the inventory.
+ */
+export const huBhgyFixture = (): EnrolledAdapterFixture => ({
+  buildDecision: async () => {
+    const bytes = new Uint8Array(
+      await Bun.file(HU_BHGY_DOCUMENT).arrayBuffer(),
+    );
+    const document =
+      huBhgyDocumentOf(bytes) ??
+      panic("the hu-bhgy fixture is not a decision file");
+    const row = { ...HU_BHGY_LISTING_ROW };
+    const built = await assembleHuBhgyDecision({
+      row: normalizeHuBhgyRow(row),
+      document,
+      rawParts: huBhgyRawPartsOf(row, document),
+    });
+    return built.type === "unkeyable"
+      ? panic("hu-bhgy fixture did not build")
+      : built.decision;
   },
 });
