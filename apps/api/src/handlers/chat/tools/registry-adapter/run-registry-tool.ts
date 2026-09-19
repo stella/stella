@@ -58,6 +58,10 @@ const REGISTRY_READ_TOOL_HANDLERS = {
   search_case_law: STELLA_TOOL_HANDLERS.search_case_law,
   search_across_matters: STELLA_TOOL_HANDLERS.search_across_matters,
   list_templates: TEMPLATE_TOOL_HANDLERS.list_templates,
+  // Non-projectable (`chatProjectable: false`): chat fills templates through
+  // its own hand-written tool, which reports the same decisions in its result.
+  preview_template_conditions:
+    TEMPLATE_TOOL_HANDLERS.preview_template_conditions,
   list_documents: DOCUMENT_TOOL_HANDLERS.list_documents,
   read_document: DOCUMENT_TOOL_HANDLERS.read_document,
   list_properties: DOCUMENT_TOOL_HANDLERS.list_properties,

@@ -1216,6 +1216,7 @@ describe("OpenAI-compatible MCP tools", () => {
       "read_statute_provisions",
       "read_provision_history",
       "list_templates",
+      "preview_template_conditions",
       "list_documents",
       "read_document",
       "list_properties",

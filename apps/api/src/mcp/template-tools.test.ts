@@ -43,6 +43,7 @@ const recordTemplatePersistenceReceiptMock = mock();
 const releaseTemplatePersistenceClaimMock = mock();
 const fingerprintTemplatePersistenceRequestMock = mock();
 const configureTemplateFieldsMock = mock();
+const templateDecideConditionsLogicMock = mock();
 const loadOrgAIConfigMock = mock();
 const anonymizeTextFieldsMock = mock();
 /** Empty catalogs, one entry per requested id, like the real loaders. */
@@ -249,6 +250,7 @@ const createContext = ({
     recordTemplatePersistenceReceipt: recordTemplatePersistenceReceiptMock,
     releaseTemplatePersistenceClaim: releaseTemplatePersistenceClaimMock,
     configureTemplateFields: configureTemplateFieldsMock,
+    templateDecideConditionsLogic: templateDecideConditionsLogicMock,
     loadOrgAIConfig: loadOrgAIConfigMock,
     anonymizeTextFields: anonymizeTextFieldsMock,
     loadAnonymizationAllowlistCanonicalsByWorkspace: emptyCatalogsByWorkspace,
@@ -374,6 +376,7 @@ describe("MCP template tools", () => {
       "request-fingerprint",
     );
     configureTemplateFieldsMock.mockReset();
+    templateDecideConditionsLogicMock.mockReset();
     loadOrgAIConfigMock.mockReset();
     loadOrgAIConfigMock.mockResolvedValue(null);
     anonymizeTextFieldsMock.mockReset();
@@ -689,7 +692,11 @@ describe("MCP template tools", () => {
           dateFormat: null,
         },
       ],
-      conditions: [{ path: "isCorp", condition: "type == 'corp'" }],
+      conditions: [
+        { path: "isCorp", kind: "rule", condition: "type == 'corp'" },
+        { path: "signed", kind: "asked" },
+        { path: "is_consumer", kind: "ai", prompt: "Is this a consumer?" },
+      ],
       computed: [{ path: "total", formula: "rent * 12" }],
       arrays: [{ path: "deliverables", itemFieldPaths: ["name", "due_date"] }],
       warnings: [],
@@ -732,6 +739,13 @@ describe("MCP template tools", () => {
         }),
       ],
       computed: [{ path: "total", formula: "rent * 12" }],
+      // Every gated block, not only the rule-derived ones: an AI-decided
+      // block is otherwise a boolean field with no sign it gates a paragraph.
+      conditions: [
+        { path: "isCorp", kind: "rule", condition: "type == 'corp'" },
+        { path: "signed", kind: "asked" },
+        { path: "is_consumer", kind: "ai", prompt: "Is this a consumer?" },
+      ],
       // A `{% for %}` loop over object items is surfaced separately from the
       // flat `fields` list so a caller knows to submit it as an array.
       arrays: [{ path: "deliverables", itemFieldPaths: ["name", "due_date"] }],
@@ -864,6 +878,7 @@ describe("MCP template tools", () => {
   test("fill_template returns a complete rendered document plus the DOCX as base64 under output=docx", async () => {
     const docxBytes = Buffer.from("PK filled docx bytes");
     fillStoredTemplateWithTextStrictMock.mockResolvedValue({
+      conditionDecisions: [],
       templateName: "Lease",
       fileName: "lease.docx",
       buffer: docxBytes,
@@ -914,6 +929,7 @@ describe("MCP template tools", () => {
         },
       ],
       aiFieldErrors: [],
+      decisions: [],
     });
     // The execution is recorded (fill row + audit) so agent fills are audited.
     expect(recordTemplateFillMock).toHaveBeenCalledWith(
@@ -940,6 +956,7 @@ describe("MCP template tools", () => {
       "Signed in Prague.",
     ]);
     fillStoredTemplateWithTextStrictMock.mockResolvedValue({
+      conditionDecisions: [],
       templateName: "Lease",
       fileName: "lease.docx",
       buffer: docxBytes,
@@ -969,6 +986,261 @@ describe("MCP template tools", () => {
       unusedValues: [],
       structureErrors: [],
       aiFieldErrors: [],
+      decisions: [],
+    });
+  });
+
+  test("fill_template reports which tier settled each AI-decided condition", async () => {
+    fillStoredTemplateWithTextStrictMock.mockResolvedValue({
+      templateName: "Lease",
+      fileName: "lease.docx",
+      buffer: await makeDocxBuffer(["Lease between ACME and Tenant."]),
+      text: "Lease between ACME and Tenant.",
+      unmatchedPlaceholders: [],
+      unusedValues: [],
+      aiFieldErrors: [],
+      structureErrors: [],
+      conditionDecisions: [
+        {
+          path: "is_consumer",
+          label: "Consumer contract",
+          state: "decided",
+          value: true,
+          decidedBy: "decision_model",
+          probability: 0.94,
+        },
+        {
+          path: "has_arbitration",
+          label: "has_arbitration",
+          state: "decided",
+          value: false,
+          decidedBy: "generative_model",
+        },
+        {
+          path: "is_signed",
+          label: "Signed",
+          state: "decided",
+          value: true,
+          decidedBy: "user",
+        },
+        {
+          path: "has_penalty",
+          label: "Penalty clause",
+          state: "undecided",
+          reason: "failed",
+        },
+      ],
+    });
+
+    const result = await handleMcpToolCall({
+      args: { template_id: TEMPLATE_ID, values: { is_signed: true } },
+      context: createContext(),
+      toolName: "fill_template",
+    });
+
+    // An excluded block and a block the template never carried render the
+    // same, so each condition says what it was settled on and by whom. A
+    // condition nothing could settle is reported undecided, never as false.
+    expect(parseToolPayload(result)).toMatchObject({
+      decisions: [
+        {
+          path: "is_consumer",
+          label: "Consumer contract",
+          state: "decided",
+          value: true,
+          decided_by: "decision_model",
+          probability: 0.94,
+        },
+        {
+          path: "has_arbitration",
+          label: "has_arbitration",
+          state: "decided",
+          value: false,
+          decided_by: "generative_model",
+        },
+        {
+          path: "is_signed",
+          label: "Signed",
+          state: "decided",
+          value: true,
+          decided_by: "user",
+        },
+        {
+          path: "has_penalty",
+          label: "Penalty clause",
+          state: "undecided",
+          reason: "failed",
+        },
+      ],
+    });
+  });
+
+  test("preview_template_conditions answers each condition without filling anything", async () => {
+    templateDecideConditionsLogicMock.mockResolvedValue(
+      Result.ok({
+        conditions: [
+          {
+            path: "is_consumer",
+            label: "Consumer contract",
+            decision: {
+              state: "decided",
+              decidedBy: "decision_model",
+              value: true,
+              probability: 0.94,
+              confidence: 0.88,
+            },
+          },
+          {
+            path: "has_arbitration",
+            label: "has_arbitration",
+            // The no carries the probability of the no, not of the yes.
+            decision: {
+              state: "decided",
+              decidedBy: "decision_model",
+              value: false,
+              probability: 0.96,
+              confidence: 0.92,
+            },
+          },
+        ],
+        model: "jev-1.13.0",
+      }),
+    );
+
+    const result = await handleMcpToolCall({
+      args: {
+        template_id: TEMPLATE_ID,
+        values: { party_name: "Acme s.r.o." },
+      },
+      context: createContext(),
+      toolName: "preview_template_conditions",
+    });
+
+    expect(templateDecideConditionsLogicMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        templateId: TEMPLATE_ID,
+        organizationId: toSafeId<"organization">("org_1"),
+        body: { values: { party_name: "Acme s.r.o." } },
+        orgAIConfig: null,
+        client: null,
+        abortSignal: expect.any(AbortSignal),
+        usageMetering: expect.objectContaining({
+          actionType: "chat",
+          organizationId: toSafeId<"organization">("org_1"),
+          serviceTier: "standard",
+          userId: toSafeId<"user">("user_1"),
+          workspaceId: null,
+          callId: expect.any(String),
+        }),
+      }),
+    );
+    expect(loadOrgAIConfigMock).toHaveBeenCalledWith(
+      toSafeId<"organization">("org_1"),
+    );
+    // The same per-condition shape fill_template reports, so an agent that
+    // learned one reads the other.
+    expect(parseToolPayload(result)).toEqual({
+      conditions: [
+        {
+          path: "is_consumer",
+          label: "Consumer contract",
+          state: "decided",
+          value: true,
+          decided_by: "decision_model",
+          probability: 0.94,
+        },
+        {
+          path: "has_arbitration",
+          label: "has_arbitration",
+          state: "decided",
+          value: false,
+          decided_by: "decision_model",
+          probability: 0.96,
+        },
+      ],
+      model: "jev-1.13.0",
+    });
+    // Nothing is filled, so nothing is recorded as a use of the template.
+    expect(recordTemplateFillMock).not.toHaveBeenCalled();
+    expect(recordTemplateUseMock).not.toHaveBeenCalled();
+  });
+
+  test("preview_template_conditions names why a condition stayed undecided", async () => {
+    templateDecideConditionsLogicMock.mockResolvedValue(
+      Result.ok({
+        conditions: [
+          {
+            path: "no_model",
+            label: "No model",
+            decision: { state: "undecided", reason: "no-backend" },
+          },
+          {
+            path: "unsure",
+            label: "Unsure",
+            decision: { state: "undecided", reason: "below-floor" },
+          },
+          {
+            path: "broken",
+            label: "Broken",
+            decision: { state: "undecided", reason: "failed" },
+          },
+        ],
+        model: null,
+      }),
+    );
+
+    const result = await handleMcpToolCall({
+      args: { template_id: TEMPLATE_ID, values: {} },
+      context: createContext(),
+      toolName: "preview_template_conditions",
+    });
+
+    // Never reported as `false`: an undecided block and a block decided false
+    // are both excluded, and only one of them is worth retrying.
+    expect(parseToolPayload(result)).toEqual({
+      conditions: [
+        {
+          path: "no_model",
+          label: "No model",
+          state: "undecided",
+          reason: "no_decision_model",
+        },
+        {
+          path: "unsure",
+          label: "Unsure",
+          state: "undecided",
+          reason: "below_floor",
+        },
+        {
+          path: "broken",
+          label: "Broken",
+          state: "undecided",
+          reason: "failed",
+        },
+      ],
+      model: null,
+    });
+  });
+
+  test("preview_template_conditions reports an unknown template as not_found", async () => {
+    templateDecideConditionsLogicMock.mockResolvedValue(
+      Result.err(
+        new HandlerError({ status: 404, message: "Template not found" }),
+      ),
+    );
+
+    const result = await handleMcpToolCall({
+      args: { template_id: MISSING_TEMPLATE_ID, values: {} },
+      context: createContext(),
+      toolName: "preview_template_conditions",
+    });
+
+    expect(result.isError).toBe(true);
+    expect(parseToolPayload(result)).toMatchObject({
+      error: {
+        code: "not_found",
+        hint: "Call list_templates to find a template id in this organization.",
+      },
     });
   });
 
@@ -978,6 +1250,7 @@ describe("MCP template tools", () => {
     // any plausible budget so the assertion does not restate the constant.
     const oversized = "x".repeat(100_000);
     fillStoredTemplateWithTextStrictMock.mockResolvedValue({
+      conditionDecisions: [],
       templateName: "Lease",
       fileName: "lease.docx",
       buffer: await makeDocxBuffer([oversized, "Trailing paragraph."]),
@@ -1011,6 +1284,7 @@ describe("MCP template tools", () => {
 
   test("fill_template rejects unmatched placeholders by default", async () => {
     fillStoredTemplateWithTextStrictMock.mockResolvedValue({
+      conditionDecisions: [],
       templateName: "Lease",
       fileName: "lease.docx",
       buffer: await makeDocxBuffer(["Zakres: {{scope}}"]),
@@ -1046,6 +1320,7 @@ describe("MCP template tools", () => {
       (_, index) => `field_${index}`,
     );
     fillStoredTemplateWithTextStrictMock.mockResolvedValue({
+      conditionDecisions: [],
       templateName: "Lease",
       fileName: "lease.docx",
       buffer: Buffer.from("partial"),
@@ -1076,6 +1351,7 @@ describe("MCP template tools", () => {
 
   test("fill_template returns partial output only after an explicit completion policy", async () => {
     fillStoredTemplateWithTextStrictMock.mockResolvedValue({
+      conditionDecisions: [],
       templateName: "Lease",
       fileName: "lease.docx",
       buffer: await makeDocxBuffer([
@@ -1111,6 +1387,7 @@ describe("MCP template tools", () => {
     // The field is unfilled rather than carrying a value the model stopped
     // writing mid-word, and the tool must not report that fill as complete.
     fillStoredTemplateWithTextStrictMock.mockResolvedValue({
+      conditionDecisions: [],
       templateName: "Power of attorney",
       fileName: "poa.docx",
       buffer: Buffer.from("partial"),
@@ -1150,6 +1427,7 @@ describe("MCP template tools", () => {
 
   test("fill_template reports a failed AI draft under an explicit partial policy", async () => {
     fillStoredTemplateWithTextStrictMock.mockResolvedValue({
+      conditionDecisions: [],
       templateName: "Power of attorney",
       fileName: "poa.docx",
       buffer: await makeDocxBuffer(["Zakres: {{scope}}"]),
@@ -1285,6 +1563,7 @@ describe("MCP template tools", () => {
 
   test("fill_template permits intentional unused values only with an explicit override", async () => {
     fillStoredTemplateWithTextMock.mockResolvedValue({
+      conditionDecisions: [],
       templateName: "Lease",
       fileName: "lease.docx",
       buffer: await makeDocxBuffer(["Lease"]),
@@ -1338,6 +1617,7 @@ describe("MCP template tools", () => {
 
   test("save_filled_template creates a document without returning base64", async () => {
     fillStoredTemplateDocxMock.mockResolvedValue({
+      conditionDecisions: [],
       fileName: "lease.docx",
       buffer: Buffer.from("filled docx"),
       unmatchedPlaceholders: [],
@@ -1450,6 +1730,7 @@ describe("MCP template tools", () => {
 
   test("save_filled_template rejects failed AI fields by default and releases its claim", async () => {
     fillStoredTemplateDocxMock.mockResolvedValue({
+      conditionDecisions: [],
       fileName: "draft.docx",
       buffer: Buffer.from("optional field defaulted to blank"),
       unmatchedPlaceholders: [],
@@ -1496,6 +1777,7 @@ describe("MCP template tools", () => {
       },
     ];
     fillStoredTemplateDocxMock.mockResolvedValue({
+      conditionDecisions: [],
       fileName: "draft.docx",
       buffer: Buffer.from("optional field defaulted to blank"),
       unmatchedPlaceholders: [],
@@ -1551,6 +1833,7 @@ describe("MCP template tools", () => {
 
   test("save_filled_template create_version rejects failed AI fields by default before writing", async () => {
     fillStoredTemplateDocxMock.mockResolvedValue({
+      conditionDecisions: [],
       fileName: "draft.docx",
       buffer: Buffer.from("optional field defaulted to blank"),
       unmatchedPlaceholders: [],
@@ -1589,6 +1872,7 @@ describe("MCP template tools", () => {
 
   test("save_filled_template create_version receipts exact AI errors under an explicit partial policy", async () => {
     fillStoredTemplateDocxMock.mockResolvedValue({
+      conditionDecisions: [],
       fileName: "draft.docx",
       buffer: Buffer.from("optional field defaulted to blank"),
       unmatchedPlaceholders: [],
@@ -1659,6 +1943,7 @@ describe("MCP template tools", () => {
   test("failed row drafts return indexed value paths and record the AI shortfall", async () => {
     for (const fieldPath of ["contracts.summary", "client.contracts.summary"]) {
       fillStoredTemplateWithTextStrictMock.mockResolvedValue({
+        conditionDecisions: [],
         templateName: "Summary",
         fileName: "summary.docx",
         buffer: Buffer.from("blank optional value"),
@@ -1847,6 +2132,7 @@ describe("MCP template tools", () => {
 
   test("save_filled_template appends a version through the shared buffer service", async () => {
     fillStoredTemplateDocxMock.mockResolvedValue({
+      conditionDecisions: [],
       fileName: "lease",
       buffer: Buffer.from("filled docx v2"),
       unmatchedPlaceholders: ["signature"],
@@ -1930,6 +2216,7 @@ describe("MCP template tools", () => {
     // of it lets a key answer a question it was never asked: an allow_partial
     // save replaying as success for a later require_complete retry.
     fillStoredTemplateDocxMock.mockResolvedValue({
+      conditionDecisions: [],
       fileName: "lease",
       buffer: Buffer.from("filled docx"),
       unmatchedPlaceholders: [],
@@ -1987,6 +2274,7 @@ describe("MCP template tools", () => {
     // The persisting tool cannot be laxer than the transient one: an unfilled
     // {{placeholder}} would otherwise reach a matter as document text.
     fillStoredTemplateDocxMock.mockResolvedValue({
+      conditionDecisions: [],
       fileName: "lease",
       buffer: Buffer.from("filled docx"),
       unmatchedPlaceholders: ["signature", "landlord.name"],

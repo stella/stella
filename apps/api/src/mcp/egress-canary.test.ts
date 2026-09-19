@@ -1,4 +1,5 @@
 import type { CallToolResult } from "@modelcontextprotocol/server";
+import { Result } from "better-result";
 import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
@@ -105,6 +106,8 @@ const readOverviewHandlerMock = mock();
 const readWorkspaceContactsHandlerMock = mock();
 const readWorkspaceMembersHandlerMock = mock();
 const describeStoredTemplateMock = mock();
+const templateDecideConditionsLogicMock = mock();
+const loadOrgAIConfigMock = mock(async () => await Promise.resolve(null));
 
 const { finalizeToolEgress } = await import("@/api/mcp/egress");
 const { serializeToolResult } = await import("@/api/mcp/tool-utils");
@@ -263,6 +266,8 @@ const buildContext = ({
       readWorkspaceContactsHandler: readWorkspaceContactsHandlerMock,
       readWorkspaceMembersHandler: readWorkspaceMembersHandlerMock,
       describeStoredTemplate: describeStoredTemplateMock,
+      templateDecideConditionsLogic: templateDecideConditionsLogicMock,
+      loadOrgAIConfig: loadOrgAIConfigMock,
     },
     safeDb,
     scopedDb,
@@ -329,6 +334,8 @@ beforeEach(() => {
   readWorkspaceContactsHandlerMock.mockReset();
   readWorkspaceMembersHandlerMock.mockReset();
   describeStoredTemplateMock.mockReset();
+  templateDecideConditionsLogicMock.mockReset();
+  loadOrgAIConfigMock.mockClear();
 });
 
 afterAll(() => {
@@ -1183,6 +1190,55 @@ describe("MCP anonymization canary corpus", () => {
       const result = await finalize(context, response);
 
       const seeds = [nameSeed, labelSeed, hintSeed, aiPromptSeed];
+      expectNoSeedLeak(result, seeds);
+      expectSeedsQueuedForAnonymization(seeds);
+    },
+  );
+
+  const previewConditionsCanary = canaryTestsFor("preview_template_conditions");
+
+  previewConditionsCanary(
+    "preview_template_conditions anonymizes each condition's label",
+    async (tool) => {
+      const decidedLabelSeed = mkSeed(tool, 0);
+      const undecidedLabelSeed = mkSeed(tool, 1);
+      templateDecideConditionsLogicMock.mockResolvedValue(
+        Result.ok({
+          conditions: [
+            {
+              path: "is_consumer",
+              label: decidedLabelSeed,
+              decision: {
+                state: "decided",
+                decidedBy: "decision_model",
+                value: true,
+                probability: 0.94,
+                confidence: 0.88,
+              },
+            },
+            {
+              path: "has_arbitration",
+              label: undecidedLabelSeed,
+              decision: { state: "undecided", reason: "below-floor" },
+            },
+          ],
+          model: "jev-1.13.0",
+        }),
+      );
+      const context = buildContext();
+
+      const response = await TEMPLATE_TOOL_HANDLERS.preview_template_conditions(
+        {
+          args: {
+            template_id: "00000000-0000-4000-8000-0000000d0001",
+            values: {},
+          },
+          context,
+        },
+      );
+      const result = await finalize(context, response);
+
+      const seeds = [decidedLabelSeed, undecidedLabelSeed];
       expectNoSeedLeak(result, seeds);
       expectSeedsQueuedForAnonymization(seeds);
     },

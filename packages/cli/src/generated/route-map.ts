@@ -4007,6 +4007,51 @@ export const generatedRouteMap: RouteNode = {
             },
           },
         },
+        "preview-conditions": {
+          kind: "leaf",
+          spec: {
+            commandPath: ["template", "preview-conditions"],
+            toolName: "preview_template_conditions",
+            description: "Ask what current values decide without filling.",
+            flags: [
+              {
+                flag: "--template-id",
+                prop: "template_id",
+                kind: "string",
+                repeatable: false,
+                description:
+                  "Template whose AI-decided conditions to ask about, as returned by list_templates",
+                required: true,
+              },
+            ],
+            inputOnly: ["values"],
+            paginated: false,
+            followable: true,
+            windowedText: false,
+            itemsKey: "conditions",
+            destructive: false,
+            scope: "templates",
+            inputSchema: {
+              type: "object",
+              required: ["template_id", "values"],
+              additionalProperties: false,
+              properties: {
+                template_id: {
+                  type: "string",
+                  format: "uuid",
+                  description:
+                    "Template whose AI-decided conditions to ask about, as returned by list_templates",
+                },
+                values: {
+                  type: "object",
+                  additionalProperties: {},
+                  description:
+                    "Map of field path to value, the same map fill_template takes. Partial is fine: the model decides on what it is given.",
+                },
+              },
+            },
+          },
+        },
       },
     },
     task: {
@@ -41432,6 +41477,75 @@ export const generatedRouteMap: RouteNode = {
                           type: "string",
                         },
                         linkId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "condition-decisions-get": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: [
+                  "capability",
+                  "templates",
+                  "condition-decisions-get",
+                ],
+                capabilityId: "templates.condition-decisions.get",
+                description:
+                  "Ask the organization's decision model about every AI-decided boolean condition of a stored template, given the values entered so far, and return what it decided with its probability and confidence. Nothing is filled and no document is produced; the generative model is never called, so a condition the decision model leaves undecided is reported as such (the fill itself still falls back to the generative model). values is an object mapping each field path to its value.",
+                access: "read",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--template-id",
+                    prop: "templateId",
+                    required: true,
+                    part: "params",
+                    partPath: "templateId",
+                  },
+                ],
+                inputOnly: ["body.values"],
+                paginated: false,
+                destructive: false,
+                scope: "templates",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["values"],
+                      properties: {
+                        values: {
+                          allOf: [
+                            {
+                              additionalProperties: true,
+                              type: "object",
+                              properties: {},
+                            },
+                            {
+                              type: "object",
+                              patternProperties: {
+                                "^(.*)$": {},
+                              },
+                            },
+                          ],
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      required: ["templateId"],
+                      properties: {
+                        templateId: {
                           minLength: 36,
                           maxLength: 36,
                           pattern:

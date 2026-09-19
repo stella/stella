@@ -201,6 +201,39 @@ describe("fillTemplate — block directives e2e", () => {
     expect(joined).not.toContain("{% endif");
   });
 
+  test("expands directives when every value is a string", async () => {
+    // A flat map of strings is both a rich-patch map and template data. Taking
+    // the patch-values path for it skipped directive processing entirely, so a
+    // gated template delivered its `{% if %}` and `{% for %}` tags as literal
+    // text.
+    const xml = WRAP(
+      [
+        P("Before"),
+        P("{% if has_guarantor %}"),
+        P("Guarantor: {{guarantor_name}}"),
+        P("{% endif %}"),
+        P("{% for item in items %}"),
+        P("Item {{ item.name }}"),
+        P("{% endfor %}"),
+        P("After"),
+      ].join(""),
+    );
+    const docx = await makeDocx(xml);
+
+    const { buffer } = await fillTemplate(docx, {
+      guarantor_name: "Jan Novák",
+      has_guarantor: "yes",
+    });
+
+    const joined = (await extractTexts(buffer)).join(" ");
+    expect(joined).toContain("Jan Novák");
+    expect(joined).not.toContain("{% if");
+    expect(joined).not.toContain("{% endif");
+    // An empty loop is removed, not left standing as its own markers.
+    expect(joined).not.toContain("{% for");
+    expect(joined).not.toContain("{% endfor");
+  });
+
   test("conditional false removes content", async () => {
     const xml = WRAP(
       [

@@ -226,6 +226,12 @@ export const describeConditionChip = (
       }
       switch (decision.state) {
         case "decided":
+          if (decision.decidedBy === "user") {
+            return {
+              tone: "highlight",
+              answer: { kind: "forced", value: decision.value },
+            };
+          }
           return {
             tone: decision.value ? "success" : "neutral",
             answer: {

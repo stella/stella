@@ -153,6 +153,13 @@ export const generatedToolAnnotations: Readonly<
     command: ["template", "configure-fields"],
     scope: "templates",
   },
+  preview_template_conditions: {
+    command: ["template", "preview-conditions"],
+    scope: "templates",
+    itemsKey: "conditions",
+    paginationless: true,
+    inputOnly: ["values"],
+  },
   list_documents: {
     command: ["document", "list"],
     scope: "read",

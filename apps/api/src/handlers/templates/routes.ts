@@ -13,11 +13,11 @@ import updateTemplateClauseSlot from "@/api/handlers/templates/clauses-slot-upda
 import syncTemplateClause from "@/api/handlers/templates/clauses-sync";
 import syncAllTemplateClauses from "@/api/handlers/templates/clauses-sync-all";
 import unlinkTemplateClause from "@/api/handlers/templates/clauses-unlink";
+import decideTemplateConditions from "@/api/handlers/templates/condition-decisions/get";
 import createTemplate from "@/api/handlers/templates/create";
 import createBlankTemplate from "@/api/handlers/templates/create-blank";
 import createTemplateFromStyleSet from "@/api/handlers/templates/create-from-style-set";
 import createTemplateFromStyles from "@/api/handlers/templates/create-from-styles";
-import decideTemplateConditions from "@/api/handlers/templates/decide-conditions";
 import deleteTemplate from "@/api/handlers/templates/delete";
 import discoverTemplate from "@/api/handlers/templates/discover";
 import fillTemplate from "@/api/handlers/templates/fill";

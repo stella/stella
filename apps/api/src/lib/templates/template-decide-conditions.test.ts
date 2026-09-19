@@ -194,6 +194,7 @@ describe("decideTemplateConditions answers", () => {
         label: "Consumer contract",
         decision: {
           state: "decided",
+          decidedBy: "decision_model",
           value: true,
           probability: 0.94,
           // How far the answer sits from even.
@@ -205,6 +206,7 @@ describe("decideTemplateConditions answers", () => {
         label: "has_arbitration",
         decision: {
           state: "decided",
+          decidedBy: "decision_model",
           value: false,
           // The no, not the yes.
           probability: expect.closeTo(0.96, 6),
@@ -223,6 +225,7 @@ describe("decideTemplateConditions answers", () => {
       { state: "undecided", reason: "below-floor" },
       {
         state: "decided",
+        decidedBy: "decision_model",
         value: true,
         probability: 0.95,
         confidence: expect.closeTo(0.9, 6),
@@ -248,6 +251,100 @@ describe("decideTemplateConditions answers", () => {
       { state: "undecided", reason: "failed" },
       { state: "undecided", reason: "failed" },
     ]);
+  });
+
+  test("a supplied false wins and is omitted from the model's questions", async () => {
+    const decided = await decideTemplateConditions({
+      fields,
+      values: { ...values, is_consumer: false },
+      orgAIConfig: null,
+      client: answering({ has_arbitration: 0.9 }),
+    });
+
+    expect(decided.conditions).toEqual([
+      {
+        path: "is_consumer",
+        label: "Consumer contract",
+        decision: { state: "decided", decidedBy: "user", value: false },
+      },
+      {
+        path: "has_arbitration",
+        label: "has_arbitration",
+        decision: {
+          state: "decided",
+          decidedBy: "decision_model",
+          value: true,
+          probability: 0.9,
+          confidence: expect.closeTo(0.8, 6),
+        },
+      },
+    ]);
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toEqual(
+      expect.objectContaining({
+        questions: {
+          has_arbitration: expect.any(Object),
+        },
+      }),
+    );
+  });
+
+  test("nested supplied booleans need no model", async () => {
+    const decided = await decideTemplateConditions({
+      fields: [
+        {
+          path: "client.is_consumer",
+          inputType: "boolean",
+          aiPrompt: CONSUMER_PROMPT,
+        },
+      ],
+      values: { client: { is_consumer: true } },
+      orgAIConfig: null,
+      client: answering({}),
+    });
+
+    expect(decided).toEqual({
+      conditions: [
+        {
+          path: "client.is_consumer",
+          label: "client.is_consumer",
+          decision: { state: "decided", decidedBy: "user", value: true },
+        },
+      ],
+      model: null,
+    });
+    expect(sent).toEqual([]);
+  });
+
+  test("supplied strings use the fill engine's condition truthiness", async () => {
+    const decided = await decideTemplateConditions({
+      fields,
+      values: {
+        party_name: "Acme s.r.o.",
+        client_iban: "CZ0000",
+        is_consumer: "yes",
+        has_arbitration: "no",
+      },
+      orgAIConfig: null,
+      client: answering({}),
+    });
+
+    expect(decided).toEqual({
+      conditions: [
+        {
+          path: "is_consumer",
+          label: "Consumer contract",
+          decision: { state: "decided", decidedBy: "user", value: true },
+        },
+        {
+          path: "has_arbitration",
+          label: "has_arbitration",
+          decision: { state: "decided", decidedBy: "user", value: true },
+        },
+      ],
+      model: null,
+    });
+    expect(sent).toEqual([]);
   });
 });
 

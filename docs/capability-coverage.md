@@ -462,6 +462,7 @@ here as its CLI form). Projected from the same handler enumeration that builds
 | `templates.clauses-sync`                     | write              | stella:templates                         | —       | generic invoke → `stella capability templates clauses-sync`                                                                                                                                                                                                           |
 | `templates.clauses-sync-all`                 | write              | stella:templates                         | —       | generic invoke → `stella capability templates clauses-sync-all`                                                                                                                                                                                                       |
 | `templates.clauses-unlink`                   | write              | stella:templates                         | —       | generic invoke → `stella capability templates clauses-unlink`                                                                                                                                                                                                         |
+| `templates.condition-decisions.get`          | read               | stella:templates                         | —       | curated tool `preview_template_conditions`                                                                                                                                                                                                                            |
 | `templates.create`                           | write              | stella:templates                         | —       | curated tool `create_template`                                                                                                                                                                                                                                        |
 | `templates.create-blank`                     | write              | stella:templates                         | —       | generic invoke → `stella capability templates create-blank`                                                                                                                                                                                                           |
 | `templates.create-from-style-set`            | write              | stella:templates                         | —       | generic invoke → `stella capability templates create-from-style-set`                                                                                                                                                                                                  |
@@ -574,7 +575,7 @@ mechanics, and similar), not gaps in coverage.
 | health_infra           | 1     |
 | hosted_billing         | 6     |
 | mcp_transport          | 11    |
-| native_tool_ui         | 9     |
+| native_tool_ui         | 8     |
 | provider_secret        | 24    |
 | public_indexing        | 7     |
 | reader_annotations     | 4     |
@@ -585,4 +586,4 @@ mechanics, and similar), not gaps in coverage.
 | upload_mechanics       | 14    |
 | url_preview            | 2     |
 
-Total: 173
+Total: 172

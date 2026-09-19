@@ -29,6 +29,7 @@ const field = (overrides: Partial<ResolvedField>): ResolvedField => ({
 
 const decided = (value: boolean, probability: number): ConditionDecision => ({
   state: "decided",
+  decidedBy: "decision_model",
   value,
   probability,
   confidence: probability,
@@ -303,6 +304,18 @@ describe("describeConditionChip", () => {
 
   test("a value the user set never shows a probability", () => {
     expect(describeConditionChip({ kind: "forced", value: false })).toEqual({
+      tone: "highlight",
+      answer: { kind: "forced", value: false },
+    });
+  });
+
+  test("a user value reported by the backend stays a forced answer", () => {
+    expect(
+      describeConditionChip({
+        kind: "model",
+        decision: { state: "decided", decidedBy: "user", value: false },
+      }),
+    ).toEqual({
       tone: "highlight",
       answer: { kind: "forced", value: false },
     });

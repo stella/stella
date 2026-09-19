@@ -953,6 +953,10 @@ export const CAPABILITY_DISPATCH = {
   "templates.clauses-unlink": {
     load: async () => await import("@/api/handlers/templates/clauses-unlink"),
   },
+  "templates.condition-decisions.get": {
+    load: async () =>
+      await import("@/api/handlers/templates/condition-decisions/get"),
+  },
   "templates.create": {
     load: async () => await import("@/api/handlers/templates/create"),
   },

@@ -1634,6 +1634,40 @@
   },
   {
     "cli": {
+      "command": ["template", "preview-conditions"],
+      "scope": "templates",
+      "itemsKey": "conditions",
+      "paginationless": true,
+      "inputOnly": ["values"]
+    },
+    "name": "preview_template_conditions",
+    "description": "Ask what current values decide without filling. Returns every AI condition with `path`, `label`, and either `state: \"decided\"`, its `value`, `decided_by` (`user` or `decision_model`), and `probability` for model answers; or `state: \"undecided\"` and `reason` (`no_decision_model`, `below_floor`, `failed`). Only the decision model runs; fill may later use the generative model. A boolean in `values` wins. Nothing is written.",
+    "inputSchema": {
+      "type": "object",
+      "required": ["template_id", "values"],
+      "additionalProperties": false,
+      "properties": {
+        "template_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Template whose AI-decided conditions to ask about, as returned by list_templates"
+        },
+        "values": {
+          "type": "object",
+          "additionalProperties": {},
+          "description": "Map of field path to value, the same map fill_template takes. Partial is fine: the model decides on what it is given."
+        }
+      }
+    },
+    "annotations": {
+      "title": "Preview template conditions",
+      "destructiveHint": false,
+      "readOnlyHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "cli": {
       "command": ["document", "list"],
       "scope": "read",
       "itemsKey": "documents"

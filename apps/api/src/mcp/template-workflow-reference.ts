@@ -38,6 +38,7 @@ const TOOL = {
   listTemplates: "list_templates",
   setPracticeJurisdictions: "set_practice_jurisdictions",
   fillTemplate: "fill_template",
+  previewTemplateConditions: "preview_template_conditions",
   saveFilledTemplate: "save_filled_template",
   prepareFeedback: "prepare_feedback",
   uploadDocumentVersion: "upload_document_version",
@@ -50,6 +51,7 @@ const {
   createTemplate: CREATE_TEMPLATE,
   fillTemplate: FILL_TEMPLATE,
   listTemplates: LIST_TEMPLATES,
+  previewTemplateConditions: PREVIEW_TEMPLATE_CONDITIONS,
   saveFilledTemplate: SAVE_FILLED_TEMPLATE,
   prepareFeedback: PREPARE_FEEDBACK,
   setPracticeJurisdictions: SET_PRACTICE_JURISDICTIONS,
@@ -95,7 +97,10 @@ const WORKFLOW_STEPS: readonly WorkflowStep[] = [
       "that; use `file`. Send one of the two: a call carrying both stores " +
       "the attached `file` and ignores the inline bytes, and says so in " +
       "`warnings[]`. Returns `templateId`, `fieldCount`, the discovered " +
-      "`fields[]`, `arrays[]`, `conditions[]` and `computed[]`, and " +
+      "`fields[]`, `arrays[]`, `conditions[]` (one per `{% if %}` block: " +
+      "the field path governing it and its `kind`: `asked`, `rule` with the " +
+      "`condition` expression, or `ai` with the `prompt` the model decides " +
+      "on) and `computed[]`, and " +
       "`warnings[]` (`code`, `path`, `message`, `hint`): markers the create " +
       "accepted that will not do what you meant. Fix them in the DOCX and " +
       "send the corrected file back with this `template_id`, which publishes " +
@@ -117,8 +122,9 @@ const WORKFLOW_STEPS: readonly WorkflowStep[] = [
       "`date_format`, and `source`: who fills the field, " +
       "as one object with a `type`), " +
       "`arrays[]` (one entry per `{% for %}` loop: its `path` plus the " +
-      "`itemFieldPaths` it repeats), `conditions[]`, `computed[]` " +
-      "(each `path` + its `condition` or `formula`) and the same " +
+      "`itemFieldPaths` it repeats), `conditions[]` (every `{% if %}` " +
+      "block, by governing `path` and `kind`), `computed[]` " +
+      "(each `path` + its `formula`) and the same " +
       "`warnings[]`. Compare `fields[].path` against the markers you wrote: a " +
       "path you expected and do not see was not discovered. Fix the document " +
       `and send it back to ${CREATE_TEMPLATE} with this \`template_id\`: ` +
@@ -162,6 +168,23 @@ const WORKFLOW_STEPS: readonly WorkflowStep[] = [
       "per-registry override is not settable over MCP.",
   },
   {
+    title: "Ask what the values would decide",
+    detail:
+      `${PREVIEW_TEMPLATE_CONDITIONS} with \`template_id\` and \`values\` ` +
+      "answers every `ai` condition from `conditions[]` without filling " +
+      "anything: each entry carries its `path`, `label`, and either " +
+      '`state: "decided"` with `decided_by` and the `value` its block would ' +
+      "be gated on (`probability` is present only when `decided_by` is " +
+      '`decision_model`), or `state: "undecided"` with a `reason` ' +
+      "(`no_decision_model`, `below_floor`, `failed`). Only the decision " +
+      "model runs, so it costs a fraction of a fill. Skip this step for a " +
+      "template whose `conditions[]` carries no `ai` entry. Disagree with an " +
+      "answer, or want one settled rather than guessed? Put the boolean in " +
+      "`values` under that path: a supplied value wins at fill time. An " +
+      "undecided condition here may still be answered by the fill, which " +
+      "falls back to the generative model.",
+  },
+  {
     title: "Preview the fill",
     detail:
       `${FILL_TEMPLATE} with \`template_id\` and \`values\`, a path-to-value ` +
@@ -173,7 +196,13 @@ const WORKFLOW_STEPS: readonly WorkflowStep[] = [
       "defaults to `text`: `paragraphs` (the rendered paragraphs and table " +
       "cells), `charCount`, `truncated`, `completionStatus` (`complete` or " +
       "`partial`), `templateName`, `fileName`, `unmatchedPlaceholders`, " +
-      '`unusedValues`, `structureErrors`. `output_mode: "docx"` returns the ' +
+      "`unusedValues`, `structureErrors`, and `decisions` — one entry per " +
+      "AI-decided condition in the same shape " +
+      `${PREVIEW_TEMPLATE_CONDITIONS} returns, with \`decided_by\` naming ` +
+      "which settled it (`decision_model`, `generative_model`, or `user` " +
+      "for a value you supplied). Read it: the rendered paragraphs cannot " +
+      "tell an excluded block from one the template never carried. " +
+      '`output_mode: "docx"` returns the ' +
       "same fill with `text` and the base64 archive in `docxBase64` instead; " +
       "ask for it only when you keep the bytes. Unknown value keys fail " +
       "unless `allow_unused_values` is true. Write a date field's value as " +

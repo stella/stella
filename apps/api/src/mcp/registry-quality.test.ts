@@ -105,9 +105,16 @@ type SurfaceMode = (typeof SURFACES)[number]["mode"];
 // eight named tools are unreachable to it however short the list is. The
 // default and anonymized counts are unchanged, because that audience already
 // carried the pair.
+// default 56 -> 57 and anonymized 27 -> 28 for preview_template_conditions.
+// Argued for, not absorbed: fill_template settles an AI-decided condition and
+// writes the document in one call, so asking what a set of values would decide
+// cannot be a mode of it without the fill becoming a tool whose meaning depends
+// on which argument is present. It also runs only the decision model, which is
+// a different cost and a different failure set from a fill. law does not carry
+// templates.
 const TOOL_COUNT_CEILING: Record<SurfaceMode, number> = {
-  default: 56,
-  anonymized: 27,
+  default: 57,
+  anonymized: 28,
   law: 10,
 };
 
@@ -234,9 +241,14 @@ const TOOL_COUNT_CEILING: Record<SurfaceMode, number> = {
 // anonymized: matter_id turns optional and the tool gains the `assignee`
 // filter, and the description has to say that omitting the matter widens the
 // list, or a model keeps asking which matter to look in.
+// Reporting condition decisions adds preview_template_conditions plus the
+// sentence fill_template needs about `decisions`. An agent reading a filled
+// template's paragraphs cannot tell a block excluded by a decision from one the
+// document never carried, so what was decided has to be said rather than
+// inferred. Law is unchanged; it carries no template tool.
 const TOOLS_LIST_PAYLOAD_CHAR_CEILING: Record<SurfaceMode, number> = {
-  default: 135_400,
-  anonymized: 71_200,
+  default: 138_300,
+  anonymized: 73_300,
   law: 28_250,
 };
 
@@ -279,11 +291,18 @@ const TOOLS_LIST_PAYLOAD_CHAR_CEILING: Record<SurfaceMode, number> = {
 // Law also gains the pair's two schemas, its `fetch` union carrying the two
 // corpus branches alone.
 // list_tasks rows then name their matter (`matterId`, `matterName`,
-// `matterReference`), measuring 46_361 default and 31_997 anonymized: a list
-// spanning matters is unreadable when a row cannot say which matter it is in.
+// `matterReference`): a list spanning matters is unreadable when a row cannot
+// say which matter it is in. Condition decisions add one decided/undecided
+// variant, shared by preview_template_conditions and fill_template, plus the
+// `{% if %}` block list's `kind` variant. A decided `false` and a condition
+// nothing could settle exclude the same paragraph, so they cannot share one
+// shape. Adding `decided_by` provenance for supplied values measures 48_033
+// default and 32_831 anonymized after merging the structurally identical user
+// and generative branches; without it, an agent cannot tell an override from a
+// model answer.
 const OUTPUT_SCHEMA_TOTAL_CHAR_CEILING: Record<SurfaceMode, number> = {
-  default: 46_400,
-  anonymized: 32_000,
+  default: 48_050,
+  anonymized: 32_850,
   law: 10_050,
 };
 

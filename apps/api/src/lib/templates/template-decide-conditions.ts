@@ -18,6 +18,8 @@
 import { panic, Result } from "better-result";
 import type { Result as ResultType } from "better-result";
 
+import { evaluateCondition, resolvePath } from "@stll/template-conditions";
+
 import type { ScopedDb } from "@/api/db/safe-db";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -50,14 +52,20 @@ const DECIDE_CONDITIONS_TIMEOUT_MS = 10_000;
 type TemplateConditionDecision =
   | {
       state: "decided";
+      decidedBy: "decision_model";
       value: boolean;
       /** Probability of the side chosen, not of yes. */
       probability: number;
       confidence: number;
     }
+  | {
+      state: "decided";
+      decidedBy: "user";
+      value: boolean;
+    }
   | { state: "undecided"; reason: DecisionUndecidedReason };
 
-type TemplateConditionAnswer = {
+export type TemplateConditionAnswer = {
   path: string;
   /** The field's label as the fill form shows it; its path when unlabelled. */
   label: string;
@@ -92,6 +100,7 @@ const toConditionDecision = (
       const value = decision.answer.noul > 0.5;
       return {
         state: "decided",
+        decidedBy: "decision_model",
         value,
         // The reading's probability is the yes; on a no the chosen side's is
         // its complement.
@@ -129,9 +138,32 @@ export const decideTemplateConditions = async ({
   usageMetering,
 }: DecideTemplateConditionsOptions): Promise<TemplateConditionDecisions> => {
   const conditions = templateAiConditions(fields);
+  const supplied = new Map<string, boolean>();
   const questions: Record<string, NoulQuestion> = {};
   for (const { path, prompt } of conditions) {
+    const existing = resolvePath(path, values);
+    if (existing !== undefined && existing !== "") {
+      supplied.set(path, evaluateCondition(path, values));
+      continue;
+    }
     questions[path] = conditionQuestion(prompt);
+  }
+
+  if (supplied.size === conditions.length) {
+    return {
+      conditions: conditions.map(({ path, label }) => ({
+        path,
+        label,
+        decision: {
+          state: "decided",
+          decidedBy: "user",
+          value:
+            supplied.get(path) ??
+            panic(`Supplied decision missing for condition "${path}"`),
+        },
+      })),
+      model: null,
+    };
   }
 
   const { decisions, model } = await decideMany({
@@ -150,6 +182,18 @@ export const decideTemplateConditions = async ({
 
   return {
     conditions: conditions.map(({ path, label }) => {
+      const suppliedValue = supplied.get(path);
+      if (suppliedValue !== undefined) {
+        return {
+          path,
+          label,
+          decision: {
+            state: "decided",
+            decidedBy: "user",
+            value: suppliedValue,
+          },
+        };
+      }
       const decision = decisions[path];
       if (decision === undefined) {
         return panic(`Decision missing for condition "${path}"`);
@@ -199,10 +243,9 @@ const derivedManifestFields = async ({
 };
 
 /**
- * `templates.decide-conditions`'s logic: the stored template's manifest and
- * one decision call over the conditions it declares. Values the caller already
- * supplied are asked about all the same — the form decides which answers it
- * shows and which the person has overridden.
+ * `templates.condition-decisions.get`'s logic: the stored template's manifest
+ * and one decision call over the conditions it declares. A boolean the caller
+ * supplied is reported as theirs and omitted from the model's questions.
  *
  * The manifest column is the cache of reading the document that exists for
  * exactly this kind of read (see `derived-manifest.ts`), and the form asks on
