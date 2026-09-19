@@ -50,6 +50,7 @@ const DECISION_KEY_ROOT = "case-law-decisions";
 
 const caseLawDecisionKeys = {
   all: [DECISION_KEY_ROOT],
+  coverage: () => [...caseLawDecisionKeys.all, "coverage"],
   facets: (country: string | undefined) => [
     ...caseLawDecisionKeys.all,
     "facets",
@@ -177,6 +178,22 @@ export const caseLawCorpusStatusOptions = (country: string) =>
       );
 
       return data;
+    },
+    staleTime: ROUTE_QUERY_STALE_TIME_MS,
+  });
+
+/**
+ * How much case law the corpus holds per country and per source, and how
+ * fresh each source is. Every country in one read: the page's subject is the
+ * whole picture, so there is nothing to scope it to.
+ */
+export const caseLawCoverageOptions = () =>
+  queryOptions({
+    queryKey: caseLawDecisionKeys.coverage(),
+    queryFn: async ({ signal }) => {
+      const response = await api.case.coverage.get({ fetch: { signal } });
+
+      return unwrapPublicLawEden(response, "readPublicCaseLawCoverage");
     },
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });

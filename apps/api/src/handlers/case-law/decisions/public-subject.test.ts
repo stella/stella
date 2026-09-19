@@ -19,6 +19,11 @@ import { publicCaseLawRoute } from "@/api/handlers/case-law/public-routes";
  * reviewed as the deliberate act it is.
  */
 const SUBJECT_FREE_ROUTES = [
+  // Corpus-wide counts and per-source bookkeeping. It names no decision, and
+  // the redistribution gate the subject factory would apply per row is
+  // applied once, to the source catalogue, so a withheld feed reaches none
+  // of the figures.
+  "GET /case/coverage",
   "GET /case/decisions",
   "GET /case/decisions/facets",
   "GET /case/decisions/latest",

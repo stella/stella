@@ -6,6 +6,7 @@ import { authRelationsPart } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
+  caseLawDecisions,
   caseLawSources,
   relations,
   SOURCE_TOTAL_ORIGIN,
@@ -13,9 +14,12 @@ import {
 import type { SourceTotalOrigin } from "@/api/db/schema";
 import {
   readSourceReportedTotals,
+  refreshSourceStoredTotal,
   setSourceReportedTotal,
+  SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS,
 } from "@/api/handlers/case-law/ingestion/source-totals";
-import { createSafeId } from "@/api/lib/branded-types";
+import { createSafeId, type SafeId } from "@/api/lib/branded-types";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 // The trio is nullable in the schema and only this module keeps it whole, so
 // what is asserted here is the writer's invariant rather than the columns:
@@ -269,5 +273,174 @@ test("the database refuses a non-positive total written around the writer", asyn
     reportedTotal: null,
     reportedTotalAsOf: null,
     reportedTotalOrigin: null,
+  });
+});
+
+// ── the stored count ──────────────────────────────────────────────────────
+//
+// The same module owns the numerator, and what is asserted here is again the
+// writer's invariant rather than the column: it counts at most once per
+// interval, a count it cannot finish leaves the previous figure standing, and
+// a replay converges instead of fighting a concurrent worker.
+
+const NOW = new Date("2026-09-19T12:00:00.000Z");
+
+const seedCountedSource = async (rows: number) => {
+  const id = createSafeId<"caseLawSource">();
+  const adapterKey = `stored-total-${id}`;
+  await db
+    .insert(caseLawSources)
+    .values({ id, adapterKey, name: "stored total fixture" });
+  if (rows > 0) {
+    await db.insert(caseLawDecisions).values(
+      Array.from({ length: rows }, (_, index) => ({
+        caseNumber: `${adapterKey}-${index}`,
+        country: "CZE",
+        court: "Court",
+        language: "cs",
+        sourceId: id,
+      })),
+    );
+  }
+  return id;
+};
+
+const readStoredPair = async (sourceId: SafeId<"caseLawSource">) =>
+  (
+    await db
+      .select({
+        storedTotal: caseLawSources.storedTotal,
+        storedTotalAsOf: caseLawSources.storedTotalAsOf,
+      })
+      .from(caseLawSources)
+      .where(eq(caseLawSources.id, sourceId))
+      .limit(1)
+  ).at(0);
+
+test("the first cycle counts the source and stamps the pair", async () => {
+  const sourceId = await seedCountedSource(3);
+
+  expect(await refreshSourceStoredTotal({ scopedDb, sourceId, now: NOW })).toBe(
+    "refreshed",
+  );
+  expect(await readStoredPair(sourceId)).toEqual({
+    storedTotal: 3,
+    storedTotalAsOf: NOW,
+  });
+});
+
+test("a source counted within the interval is not recounted", async () => {
+  const sourceId = await seedCountedSource(2);
+  await refreshSourceStoredTotal({ scopedDb, sourceId, now: NOW });
+
+  // The corpus grows, but the interval has not elapsed.
+  await db.insert(caseLawDecisions).values({
+    caseNumber: `${sourceId}-late`,
+    country: "CZE",
+    court: "Court",
+    language: "cs",
+    sourceId,
+  });
+  const withinInterval = new Date(
+    NOW.getTime() + SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS - 1,
+  );
+
+  expect(
+    await refreshSourceStoredTotal({ scopedDb, sourceId, now: withinInterval }),
+  ).toBe("fresh");
+  // Proven by the figure, not by the return value: the old count stands.
+  expect(await readStoredPair(sourceId)).toEqual({
+    storedTotal: 2,
+    storedTotalAsOf: NOW,
+  });
+});
+
+test("the interval's own boundary recounts", async () => {
+  const sourceId = await seedCountedSource(1);
+  await refreshSourceStoredTotal({ scopedDb, sourceId, now: NOW });
+  await db.insert(caseLawDecisions).values({
+    caseNumber: `${sourceId}-second`,
+    country: "CZE",
+    court: "Court",
+    language: "cs",
+    sourceId,
+  });
+  const atBoundary = new Date(
+    NOW.getTime() + SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS,
+  );
+
+  expect(
+    await refreshSourceStoredTotal({ scopedDb, sourceId, now: atBoundary }),
+  ).toBe("refreshed");
+  expect(await readStoredPair(sourceId)).toEqual({
+    storedTotal: 2,
+    storedTotalAsOf: atBoundary,
+  });
+});
+
+test("replaying a refresh is a fixed point", async () => {
+  const sourceId = await seedCountedSource(4);
+  await refreshSourceStoredTotal({ scopedDb, sourceId, now: NOW });
+  const first = await readStoredPair(sourceId);
+
+  await refreshSourceStoredTotal({ scopedDb, sourceId, now: NOW });
+
+  expect(await readStoredPair(sourceId)).toEqual(first);
+});
+
+test("a count that cannot finish leaves the previous figure standing", async () => {
+  const sourceId = await seedCountedSource(2);
+  await refreshSourceStoredTotal({ scopedDb, sourceId, now: NOW });
+  const past = new Date(
+    NOW.getTime() + SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS * 2,
+  );
+
+  // A handle whose count throws, standing in for the statement timeout: the
+  // caller must see "unavailable" rather than an exception, and the stored
+  // pair must be exactly what the successful cycle wrote.
+  const failing: ScopedDb = async (callback) =>
+    await callback(
+      // Only the two members below are reached before the throw, which is
+      // what the refresh has to survive; `asTestRaw` owns the cast.
+      asTestRaw<Transaction>({
+        select: () => ({
+          from: () => ({
+            where: () => ({
+              limit: async () => [{ asOf: NOW }],
+            }),
+          }),
+        }),
+        execute: async () => {
+          throw new Error("canceling statement due to statement timeout");
+        },
+      }),
+    );
+
+  expect(
+    await refreshSourceStoredTotal({ scopedDb: failing, sourceId, now: past }),
+  ).toBe("unavailable");
+  expect(await readStoredPair(sourceId)).toEqual({
+    storedTotal: 2,
+    storedTotalAsOf: NOW,
+  });
+});
+
+test("a worker holding a stale as-of loses to the one that already wrote", async () => {
+  const sourceId = await seedCountedSource(5);
+  const fresher = new Date(
+    NOW.getTime() + SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS * 3,
+  );
+  // The winner stamps a fresh as-of first.
+  await refreshSourceStoredTotal({ scopedDb, sourceId, now: fresher });
+
+  // The loser started its cycle earlier and carries an older `now`. Its
+  // compare-and-set matches no row, so it writes nothing rather than moving
+  // the figure backwards.
+  expect(await refreshSourceStoredTotal({ scopedDb, sourceId, now: NOW })).toBe(
+    "fresh",
+  );
+  expect(await readStoredPair(sourceId)).toEqual({
+    storedTotal: 5,
+    storedTotalAsOf: fresher,
   });
 });

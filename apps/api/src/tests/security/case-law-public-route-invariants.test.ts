@@ -50,6 +50,9 @@ const LATEST_DECISIONS_FILE =
   "apps/api/src/handlers/case-law/decisions/latest.ts";
 const STATUS_DECISIONS_FILE =
   "apps/api/src/handlers/case-law/decisions/status.ts";
+const COVERAGE_ARRIVALS_FILE =
+  "apps/api/src/handlers/case-law/decisions/coverage-arrivals.ts";
+const COVERAGE_FILE = "apps/api/src/handlers/case-law/decisions/coverage.ts";
 const CITATION_GRAPH_FILE =
   "apps/api/src/handlers/case-law/decisions/citation-graph.ts";
 const LANGUAGE_ALTERNATES_FILE =
@@ -78,6 +81,7 @@ const CITATION_AUTHORITY_FILE =
  * passing an empty check.
  */
 const PUBLIC_CASE_LAW_ROUTES = [
+  "GET /case/coverage",
   "GET /case/decisions",
   "GET /case/decisions/:decisionId",
   "GET /case/decisions/:decisionId/citations",
@@ -177,6 +181,7 @@ const PUBLIC_DECISION_READ_GATES = {
     gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
     reason: "Relation definitions.",
   },
+  [COVERAGE_ARRIVALS_FILE]: { gate: PUBLIC_DECISION_READ_GATE.PREDICATE },
   [CITATION_GRAPH_FILE]: { gate: PUBLIC_DECISION_READ_GATE.PREDICATE },
   "apps/api/src/handlers/case-law/decisions/citations.ts": {
     gate: PUBLIC_DECISION_READ_GATE.PREDICATE,
@@ -739,6 +744,52 @@ describe("public case-law route boundary", () => {
       )
       .map(([path]) => path);
     expect(unexplained).toEqual([]);
+  });
+
+  test("the coverage request path never counts the corpus", async () => {
+    const [coverageSource, arrivalsSource] = await Promise.all([
+      readSource(COVERAGE_FILE),
+      readSource(COVERAGE_ARRIVALS_FILE),
+    ]);
+
+    // How much a source holds is counted on the ingestion connection and read
+    // back as an integer. A public request that counted it would walk the
+    // source's whole index range on a two-connection pool.
+    expect(coverageSource).not.toContain("source-totals");
+    expect(coverageSource).toContain("caseLawSources.storedTotal");
+    // The one read left against the decision table is a week of one source's
+    // arrivals: bounded by the window, and gated like every other public read.
+    expect(arrivalsSource).toContain("d.created_at >=");
+    expect(arrivalsSource).toContain("publishedCaseLawDecisionSqlFor");
+    expect(arrivalsSource).not.toContain("LIMIT");
+  });
+
+  test("the coverage route publishes no crawl or lease state", async () => {
+    const [coverageSource, arrivalsSource] = await Promise.all([
+      readSource(COVERAGE_FILE),
+      readSource(COVERAGE_ARRIVALS_FILE),
+    ]);
+
+    for (const source of [coverageSource, arrivalsSource]) {
+      // The crawl's position, its lease and its failures are how ingestion
+      // works, not what the corpus holds. `reported_total_origin` is read,
+      // but only through the reporter map: the raw origin never leaves.
+      expect(source).not.toContain("syncCursor");
+      expect(source).not.toContain("ingestionLease");
+      expect(source).not.toContain("observationOrder");
+      expect(source).not.toContain("walkError");
+      expect(source).not.toContain("errorMessage");
+      expect(source).not.toContain("workspace");
+      expect(source).not.toContain("organization");
+      expect(source).not.toContain("matter");
+    }
+    // The source row's own id is never part of the payload; the adapter key,
+    // which the open-source registry already names, identifies a feed.
+    expect(coverageSource).toContain("adapterKey: source.adapterKey");
+    expect(coverageSource).not.toContain("id: source.id");
+    // A withheld source contributes to nothing, rather than being gated per
+    // number further down.
+    expect(coverageSource).toContain("redistributableCaseLawSource");
   });
 
   test("the listing-only predicate has one owner", async () => {

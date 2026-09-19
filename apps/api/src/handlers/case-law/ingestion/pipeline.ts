@@ -59,6 +59,7 @@ import {
 import { publisherCitationGap } from "@/api/handlers/case-law/ingestion/citation-recall";
 import { shouldSkipRefresh } from "@/api/handlers/case-law/ingestion/refresh-policy";
 import { segmentDecision } from "@/api/handlers/case-law/ingestion/segmenter";
+import { refreshSourceStoredTotal } from "@/api/handlers/case-law/ingestion/source-totals";
 import { replaceDecisionJudges } from "@/api/handlers/case-law/judges/decision-judges";
 import { extractContext } from "@/api/handlers/case-law/polarity/context";
 import {
@@ -3144,6 +3145,17 @@ export const runIngestionPipeline = async ({
     });
   }
   cursor = checkpoint.cursor;
+
+  // After the checkpoint and outside its transaction: the count walks the
+  // source's whole index range, and holding the leased source row's
+  // transaction open for it would block the next cycle on bookkeeping. It
+  // rate-limits itself to one count per source per interval and reports its
+  // own failures, so its outcome never reaches this run's result.
+  await refreshSourceStoredTotal({
+    scopedDb,
+    sourceId: source.id,
+    now: new Date(),
+  });
 
   return {
     inserted,

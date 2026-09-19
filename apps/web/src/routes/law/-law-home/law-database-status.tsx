@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { COMPOSER_PICKER_TRIGGER_CLASS } from "@stll/ui/composer";
@@ -13,9 +14,12 @@ import { cn } from "@stll/ui/utils";
 import { caseLawCountryName } from "@/features/case-law/components/case-law-search";
 import { CourtName } from "@/features/case-law/components/court-name";
 import {
+  courtTierRowKey,
+  groupCourtRowsByTier,
+} from "@/features/case-law/court-tier-rows.logic";
+import {
   COURT_TIER_LABEL_KEYS,
   type CourtTier,
-  isCourtTier,
 } from "@/features/case-law/decision-filter-facets.logic";
 import { caseLawCorpusStatusOptions } from "@/features/case-law/queries/decisions";
 import { useFormatter } from "@/i18n/formatting-context";
@@ -79,7 +83,7 @@ export const LawDatabaseStatus = ({ country }: { country: string }) => {
           )}
         />
         {upToDate
-          ? t("lawHome.databaseUpToDate")
+          ? t("caseLaw.coverage.healthCurrent")
           : t("caseLaw.research.updated", {
               date: formatRelativeTime(updatedAt),
             })}
@@ -106,6 +110,15 @@ export const LawDatabaseStatus = ({ country }: { country: string }) => {
           </dd>
         </dl>
         {status.courts.length > 0 && <CourtBreakdown courts={status.courts} />}
+        {/* This panel answers for one jurisdiction; the coverage page answers
+            for the corpus, source by source, including the countries the
+            public search cannot reach yet. */}
+        <Link
+          className="text-muted-foreground hover:text-foreground mt-3 block text-xs underline underline-offset-2"
+          to="/law/coverage"
+        >
+          {t("caseLaw.coverage.title")}
+        </Link>
       </PopoverPanel>
     </Popover>
   );
@@ -120,7 +133,7 @@ export const LawDatabaseStatus = ({ country }: { country: string }) => {
  */
 const CourtBreakdown = ({ courts }: { courts: readonly CourtRow[] }) => {
   const t = useTranslations();
-  const byTier = groupByTier(courts);
+  const byTier = groupCourtRowsByTier(courts);
 
   return (
     <div className="-mx-1 mt-3 overflow-x-auto">
@@ -156,7 +169,7 @@ const CourtBreakdown = ({ courts }: { courts: readonly CourtRow[] }) => {
               </th>
             </tr>
             {rows.map((row) => (
-              <CourtRowCells key={rowKey(row)} row={row} tier={tier} />
+              <CourtRowCells key={courtTierRowKey(row)} row={row} tier={tier} />
             ))}
           </tbody>
         ))}
@@ -211,38 +224,4 @@ const CourtRowCells = ({ row, tier }: { row: CourtRow; tier: CourtTier }) => {
       </td>
     </tr>
   );
-};
-
-/** A row's identity within the breakdown; a tier row stands for its whole tier. */
-const rowKey = (row: CourtRow): string =>
-  row.type === "court" ? row.court : row.tier;
-
-/**
- * A tier the UI has a heading for. A label it does not know folds into the
- * catch-all, exactly as the facet rail folds one: a court the reader cannot
- * see is a court they cannot account for.
- */
-const uiTier = (tier: string): CourtTier =>
-  isCourtTier(tier) ? tier : "other";
-
-type TierGroup = { tier: CourtTier; rows: CourtRow[] };
-
-/**
- * The API returns the rows already ordered apex first, and a Map keeps the
- * order its keys arrived in, so the headings come out in that order without a
- * second sort here: re-ordering would be a second ranking of the same courts,
- * and the two would drift.
- */
-const groupByTier = (courts: readonly CourtRow[]): readonly TierGroup[] => {
-  const rowsByTier = new Map<CourtTier, CourtRow[]>();
-  for (const row of courts) {
-    const tier = uiTier(row.tier);
-    const open = rowsByTier.get(tier);
-    if (open === undefined) {
-      rowsByTier.set(tier, [row]);
-      continue;
-    }
-    open.push(row);
-  }
-  return [...rowsByTier].map(([tier, rows]) => ({ rows, tier }));
 };

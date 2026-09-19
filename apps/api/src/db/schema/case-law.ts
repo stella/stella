@@ -295,6 +295,23 @@ export const caseLawSources = p.pgTable(
     reportedTotalOrigin: p
       .varchar("reported_total_origin", { length: 16 })
       .$type<SourceTotalOrigin>(),
+    /**
+     * How many decisions the corpus holds for this source, and when it was
+     * counted.
+     *
+     * Persisted rather than computed on demand because the count is a walk of
+     * the source's whole range of
+     * `case_law_decisions_source_generation_cursor_idx`: on a corpus this size
+     * that is seconds, and the public reader that would have to run it holds a
+     * two-connection pool shared with every other public page. The ingestion
+     * side counts it on its own connection instead
+     * (`ingestion/source-totals.ts`), so a public request reads an integer.
+     *
+     * Zero is a real answer here, unlike `reported_total`: a source can be
+     * registered and hold nothing yet. The pair is one fact and moves together.
+     */
+    storedTotal: p.integer("stored_total"),
+    storedTotalAsOf: timestamptz("stored_total_as_of"),
     createdAt: timestamptz("created_at").defaultNow().notNull(),
     updatedAt: timestamptz("updated_at")
       .defaultNow()
@@ -318,6 +335,16 @@ export const caseLawSources = p.pgTable(
     p.check(
       "case_law_sources_reported_total_positive",
       sql`${t.reportedTotal} IS NULL OR ${t.reportedTotal} > 0`,
+    ),
+    p.check(
+      "case_law_sources_stored_total_pair",
+      sql`(${t.storedTotal} IS NULL) = (${t.storedTotalAsOf} IS NULL)`,
+    ),
+    // Zero, unlike the reported total's `> 0`: a registered source that holds
+    // nothing yet has been counted, and reports nothing held.
+    p.check(
+      "case_law_sources_stored_total_nonnegative",
+      sql`${t.storedTotal} IS NULL OR ${t.storedTotal} >= 0`,
     ),
     // The accepted values are read off SOURCE_TOTAL_ORIGIN rather than
     // re-listed, so a new origin cannot reach the database without also

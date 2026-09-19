@@ -631,6 +631,37 @@ type Messages = {
       "regional": "High and regional courts";
       "supreme": "Supreme courts";
     };
+    "coverage": {
+      "completeness": "Completeness";
+      "countedOn": "Counted {date}";
+      "decisionYears": "Decision years";
+      "description": "How much case law the corpus holds, per country and per court, and how fresh each source is.";
+      "exceedsReportedTotal": "Holds more than the publisher's last stated total of {date}";
+      "generatedAt": "Figures from {date}";
+      "healthCurrent": "Up to date";
+      "healthDelayed": "Delayed";
+      "healthDisabled": "Switched off";
+      "healthStalled": "Stalled";
+      "healthUnknown": "Never run";
+      "inPreparation": "In preparation";
+      "lastSync": "Last sync";
+      "notCountedSources": "{count, plural, one {# source not counted} other {# sources not counted}}";
+      "notCountedYet": "Not counted yet";
+      "notMeasuredSources": "{count, plural, one {# source not measured} other {# sources not measured}}";
+      "notMeasuredYet": "Not measured yet";
+      "publisherTotal": "Publisher's total";
+      "reportedByOperator": "Recorded by hand";
+      "reportedByPublisher": "Publisher's own count";
+      "searchable": "Searchable";
+      "searchableHint": "Decisions a search can find.";
+      "sourcesHeading": "Where these decisions come from";
+      "staleSources": "{count, plural, one {# total out of date} other {# totals out of date}}";
+      "stored": "Stored";
+      "storedHint": "Decisions held, not searchable yet.";
+      "title": "Case-law coverage";
+      "totalFrom": "Total from {date}";
+      "unavailable": "Coverage figures are unavailable right now.";
+    };
     "decisionNotFound": "Decision not found";
     "emptyState": "No decisions found. Configure a source and run a sync to import case law.";
     "filters": {
@@ -3358,7 +3389,6 @@ type Messages = {
     };
   };
   "lawHome": {
-    "databaseUpToDate": "Up to date";
     "enteringIntoForce": "Entering into force";
     "inForceFrom": "In force from {date}";
     "noRecentSearches": "No searches yet";

@@ -27,6 +27,7 @@ import {
 } from "@/api/handlers/case-law/decisions/list";
 import listDecisionCitations from "@/api/handlers/case-law/decisions/list-citations";
 import { createSafePublicSubjectFollowUpHandler } from "@/api/handlers/case-law/decisions/public-subject";
+import readCaseLawCoverage from "@/api/handlers/case-law/decisions/read-coverage";
 import { searchDecisionsHandler } from "@/api/handlers/case-law/decisions/search";
 import {
   searchDecisionsBodySchema,
@@ -307,6 +308,7 @@ export const publicCaseLawRoute = new Elysia({
     set.status = 404;
     return { error: "Not Found" } as const;
   })
+  .get("/coverage", readCaseLawCoverage.handler)
   .get("/decisions", listDecisions.handler, {
     query: listDecisions.config.query,
   })
