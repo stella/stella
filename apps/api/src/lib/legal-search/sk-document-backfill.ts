@@ -21,6 +21,7 @@
  * because either caller may reach a decision first.
  */
 
+import { panic, Result } from "better-result";
 import type { SQL } from "drizzle-orm";
 import {
   and,
@@ -43,6 +44,7 @@ import {
   caseLawDecisions,
 } from "@/api/db/schema";
 import { corpusStorageMode } from "@/api/env-base";
+import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   TEXT_ABSENCE_REASON,
@@ -54,10 +56,7 @@ import {
 } from "@/api/lib/case-law/document-ast";
 import type { CorpusStorageMode } from "@/api/lib/corpus-storage-mode";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
-import {
-  reserveCaseLawCorpusUploadIntent,
-  writeReservedCaseLawCorpusUpload,
-} from "@/api/lib/legal-search/case-law-corpus-upload-intents";
+import { settleReservedCaseLawCorpusUpload } from "@/api/lib/legal-search/case-law-corpus-upload-intents";
 import { indexDecision } from "@/api/lib/legal-search/case-law-search-index";
 import {
   type ActiveCorpusProjectionSourceLock,
@@ -65,12 +64,18 @@ import {
   synchronizeLockedCorpusProjectionDesiredStateTx,
 } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import {
-  corpusContentHash,
+  deployedCorpusTransfer,
+  openCorpusPackBatch,
+} from "@/api/lib/legal-search/corpus-pack-batch";
+import type {
+  CorpusPackBatchOutcome,
+  CorpusTransfer,
+} from "@/api/lib/legal-search/corpus-pack-batch";
+import {
   corpusMirrorColumns,
   corpusPayloadDisposition,
   EMPTY_CORPUS_CONTENT_HASHES,
   TRIMMED_CORPUS_PAYLOAD_COLUMNS,
-  writeCorpusDocument,
 } from "@/api/lib/legal-search/corpus-storage";
 import type {
   CorpusPayloadColumns,
@@ -545,11 +550,11 @@ export const loadPendingDocuments = async (
 };
 
 /**
- * The corpus writer this store uses, or null where corpus storage is
+ * How this store reaches object storage, or null where corpus storage is
  * off and the Postgres columns are the whole of it.
  */
-export const corpusDocumentWriter = (): typeof writeCorpusDocument | null =>
-  corpusStorageMode === "off" ? null : writeCorpusDocument;
+export const corpusBackfillTransfer = (): CorpusTransfer | null =>
+  corpusStorageMode === "off" ? null : deployedCorpusTransfer();
 
 export type StoreBackfilledDocumentOptions = {
   decision: PendingDocument;
@@ -558,9 +563,10 @@ export type StoreBackfilledDocumentOptions = {
   /**
    * Seam for tests, which drive the corpus path without a bucket and
    * without depending on which module happened to read the environment
-   * first. Production passes nothing.
+   * first. It carries the layout it serves, so a test cannot hand over a
+   * client the batch would never call. Production passes nothing.
    */
-  writeCorpus?: typeof writeCorpusDocument | null;
+  transfer?: CorpusTransfer | null;
   /**
    * Storage mode this store settles under. Production passes nothing;
    * tests set it for the same reason they inject the writer, so the
@@ -576,6 +582,41 @@ export type StoreBackfilledDocumentOptions = {
    * Omitted by callers with no claim of their own (the repair scripts).
    */
   claimedSourceHash?: string | null;
+};
+
+type CorpusOutcomeContext = { decisionId: SafeId<"caseLawDecision"> };
+
+/**
+ * A batch outcome as this store reports it.
+ *
+ * Only a settled decision stores a document. Everything else leaves the row
+ * exactly as it was — still queued, still without text — so the next pass
+ * fetches it again; reporting it as stored would name a document that is not
+ * there. A failed transfer is that same durable state plus a cause, so the
+ * cause is captured rather than dropped on the way out.
+ */
+const storedForCorpusOutcome = (
+  outcome: CorpusPackBatchOutcome | undefined,
+  { decisionId }: CorpusOutcomeContext,
+): boolean => {
+  switch (outcome?.type) {
+    case "settled":
+      return true;
+    case undefined:
+    case "redacted-or-missing":
+    case "busy":
+    case "retry":
+      return false;
+    case "failed":
+      captureError(outcome.error, {
+        decisionId,
+        step: "storeBackfilledDocument.corpusBatchWrite",
+      });
+      return false;
+    default:
+      outcome satisfies never;
+      return panic(`Unhandled corpus batch outcome: ${String(outcome)}`);
+  }
 };
 
 /**
@@ -616,18 +657,11 @@ export const storeBackfilledDocument = async ({
   decision,
   document,
   scopedDb,
-  writeCorpus = corpusDocumentWriter(),
+  transfer = corpusBackfillTransfer(),
   mode = corpusStorageMode,
   claimedSourceHash,
 }: StoreBackfilledDocumentOptions): Promise<"stored" | "superseded"> => {
   const sections = document.sections.length > 0 ? document.sections : null;
-  const payload = {
-    documentId: decision.id,
-    jurisdiction: decision.country,
-    text: document.fulltext,
-    sections,
-    ast: document.documentAst,
-  };
   const ownerPredicate = and(
     eq(caseLawDecisions.id, decision.id),
     isNull(caseLawDecisions.redactedAt),
@@ -686,7 +720,7 @@ export const storeBackfilledDocument = async ({
   };
 
   let stored: boolean;
-  if (writeCorpus === null) {
+  if (transfer === null) {
     stored = await scopedDb(async (tx) => {
       const projectionLock = await lockActiveCorpusProjectionSourceTx(tx, {
         family: "case_law",
@@ -695,47 +729,64 @@ export const storeBackfilledDocument = async ({
       return await applyStoredPayload(tx, null, projectionLock);
     });
   } else {
-    const intent = await reserveCaseLawCorpusUploadIntent({
-      contentHash: corpusContentHash(payload),
+    // One decision, so a batch of one member set: the same path a page of
+    // the pipeline takes, rather than a second writer with its own rules.
+    const batch = openCorpusPackBatch({ scopedDb, transfer });
+    batch.enqueue({
       decisionId: decision.id,
       jurisdiction: decision.country,
-      scopedDb,
+      payload: {
+        text: document.fulltext,
+        sections,
+        ast: document.documentAst,
+      },
+      // The queue admits only rows whose corpus stores no document
+      // (`storesNoCorpusDocument`), so no recorded write can match the
+      // fetched document's payload; there is nothing to compare.
+      stored: null,
+      settle: async ({ intentId, written: packed }) => {
+        const outcome = await settleReservedCaseLawCorpusUpload({
+          apply: async ({ projectionLock, tx, written }) => ({
+            type: (await applyStoredPayload(tx, written, projectionLock))
+              ? "applied"
+              : "superseded",
+          }),
+          decisionId: decision.id,
+          intentId,
+          preflight: async (tx) =>
+            Boolean(
+              (
+                await tx
+                  .select({ id: caseLawDecisions.id })
+                  .from(caseLawDecisions)
+                  .where(ownerPredicate)
+                  .limit(1)
+              ).at(0),
+            ),
+          scopedDb,
+          written: packed,
+        });
+        switch (outcome.type) {
+          case "applied":
+            return { type: "settled" };
+          case "superseded":
+          case "intent-reclaimed":
+            return { type: "retry" };
+          case "redacted-or-missing":
+            return { type: "redacted-or-missing" };
+          default:
+            outcome satisfies never;
+            return panic(`Unhandled settlement: ${String(outcome)}`);
+        }
+      },
     });
-    if (intent.type !== "reserved") {
-      return "superseded";
-    }
-    const outcome = await writeReservedCaseLawCorpusUpload({
-      apply: async ({ projectionLock, tx, written }) => ({
-        type: (await applyStoredPayload(tx, written, projectionLock))
-          ? "applied"
-          : "superseded",
-      }),
-      decisionId: decision.id,
-      intentId: intent.intentId,
-      preflight: async (tx) =>
-        Boolean(
-          (
-            await tx
-              .select({ id: caseLawDecisions.id })
-              .from(caseLawDecisions)
-              .where(ownerPredicate)
-              .limit(1)
-          ).at(0),
-        ),
-      scopedDb,
-      write: async ({ signal }) =>
-        await writeCorpus(
-          {
-            ...payload,
-            // The queue admits only rows whose corpus stores no document
-            // (`storesNoCorpusDocument`), so no recorded write can match
-            // the fetched document's payload; there is nothing to compare.
-            stored: null,
-          },
-          { signal },
-        ),
-    });
-    stored = outcome.type === "applied";
+    const flushed = await batch.flush();
+    stored = storedForCorpusOutcome(
+      Result.isError(flushed)
+        ? { type: "failed", error: flushed.error }
+        : flushed.value.get(decision.id),
+      { decisionId: decision.id },
+    );
   }
 
   await indexDecision(decision.id, scopedDb);

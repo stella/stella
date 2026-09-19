@@ -32,6 +32,7 @@ import { Result } from "better-result";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import { readDecisionAnalysisAst } from "@/api/lib/case-law/decision-analysis";
+import type { CorpusTombstoneReader } from "@/api/lib/legal-search/corpus-tombstones";
 import { refreshCorpusS3 } from "@/api/lib/s3";
 
 import type { DecisionAnalysisRow } from "./decision-analysis.logic";
@@ -52,15 +53,19 @@ export const prepareCorpusReads = async (): Promise<void> => {
  */
 export const readRowAst = async (
   row: DecisionAnalysisRow,
+  tombstones: CorpusTombstoneReader,
 ): Promise<DocumentAst | null> => {
   const ast = await Result.tryPromise(
     async () =>
-      await readDecisionAnalysisAst({
-        astS3Key: row.astS3Key,
-        contentHash: row.contentHash,
-        documentAst: row.documentAst,
-        id: row.id,
-      }),
+      await readDecisionAnalysisAst(
+        {
+          astS3Key: row.astS3Key,
+          contentHash: row.contentHash,
+          documentAst: row.documentAst,
+          id: row.id,
+        },
+        tombstones,
+      ),
   );
   return Result.isOk(ast) ? ast.value : null;
 };

@@ -86,10 +86,7 @@ import {
   TimeoutError,
 } from "@/api/lib/errors/tagged-errors";
 import { errorSystemFields, errorTag } from "@/api/lib/errors/utils";
-import {
-  reserveCaseLawCorpusUploadIntent,
-  writeReservedCaseLawCorpusUpload,
-} from "@/api/lib/legal-search/case-law-corpus-upload-intents";
+import { settleReservedCaseLawCorpusUpload } from "@/api/lib/legal-search/case-law-corpus-upload-intents";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import {
   type ActiveCorpusProjectionSourceLock,
@@ -97,18 +94,25 @@ import {
   lockActiveCorpusProjectionSourceTx,
   synchronizeLockedCorpusProjectionDesiredStateTx,
 } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
+import {
+  deployedCorpusTransfer,
+  openCorpusPackBatch,
+} from "@/api/lib/legal-search/corpus-pack-batch";
+import type {
+  CorpusPackBatch,
+  CorpusPackBatchOutcome,
+  CorpusTransfer,
+} from "@/api/lib/legal-search/corpus-pack-batch";
 import type {
   CorpusPayload,
   WriteCorpusResult,
 } from "@/api/lib/legal-search/corpus-storage";
 import {
   corpusMirrorColumns,
-  corpusContentHash,
   corpusPayloadDisposition,
   EMPTY_CORPUS_CONTENT_HASHES,
   storedCorpusWrite,
   TRIMMED_CORPUS_PAYLOAD_COLUMNS,
-  writeCorpusDocument,
 } from "@/api/lib/legal-search/corpus-storage";
 import {
   type StartCycleDeadlineOptions,
@@ -308,6 +312,13 @@ type ProcessDecisionAttemptOptions = {
   refresh: DecisionRefresh;
   corpus: CaseLawCorpusDependencies;
   /**
+   * The batch this decision's payloads join. A caller processing a page
+   * passes one batch for the page and flushes it when the page is done; a
+   * caller with a single decision omits it and the decision is flushed as a
+   * batch of its own.
+   */
+  corpusBatch?: CorpusPackBatch | undefined;
+  /**
    * Compiled polarity rules, reused across the decisions of one run. Omitted,
    * each decision reads the rules for its own language once; a crawl passes
    * one cache so the whole cycle reads them once per language.
@@ -317,12 +328,82 @@ type ProcessDecisionAttemptOptions = {
 
 export type CaseLawCorpusDependencies = {
   mode: CorpusStorageMode;
-  write: typeof writeCorpusDocument;
+  /**
+   * How a batch's payloads reach object storage; replaced in tests. The
+   * layout and its client travel together, so a test cannot replace a client
+   * the configured layout never calls.
+   */
+  transfer: CorpusTransfer;
 };
 
 const CASE_LAW_CORPUS_DEPENDENCIES: CaseLawCorpusDependencies = {
   mode: corpusStorageMode,
-  write: writeCorpusDocument,
+  transfer: deployedCorpusTransfer(),
+};
+
+type CorpusOutcomeContext = {
+  decisionId: SafeId<"caseLawDecision">;
+  /** Present where the caller still holds the adapter's own result. */
+  caseNumber?: string;
+  country?: string;
+};
+
+/**
+ * What one decision's share of a pack write means for its own processing.
+ *
+ * A decision that lost its reservation or its row CAS holds the cursor: the
+ * page is retried and the decision joins the next batch's pack. A failed
+ * pack write holds it too, and is logged here because the halt reason
+ * carries only a count.
+ */
+const processResultForCorpusOutcome = (
+  outcome: CorpusPackBatchOutcome | undefined,
+  { decisionId, caseNumber, country }: CorpusOutcomeContext,
+): ProcessResult => {
+  switch (outcome?.type) {
+    case undefined:
+    case "settled":
+      return {
+        status: PROCESS_DECISION_STATUS.COMPLETE,
+        inserted: true,
+        searchVectorFailed: false,
+      };
+    case "redacted-or-missing":
+      return {
+        status: PROCESS_DECISION_STATUS.COMPLETE,
+        inserted: false,
+        searchVectorFailed: false,
+      };
+    case "busy":
+    case "retry":
+      return {
+        status: PROCESS_DECISION_STATUS.RETRYABLE,
+        inserted: false,
+        reason: PROCESS_DECISION_RETRY_REASON.CORPUS_WRITE,
+      };
+    case "failed": {
+      logger.error("case_law.ingestion.corpus_write_failed", {
+        decisionId,
+        caseNumber: caseNumber ?? "",
+        country: country ?? "",
+        ...errorSystemFields(outcome.error),
+        ...pgErrorFields(outcome.error),
+        "error.detail": wrappedErrorDetail(outcome.error),
+      });
+      captureError(outcome.error, {
+        decisionId,
+        step: "processDecision.corpusWrite",
+      });
+      return {
+        status: PROCESS_DECISION_STATUS.RETRYABLE,
+        inserted: true,
+        reason: PROCESS_DECISION_RETRY_REASON.CORPUS_WRITE,
+      };
+    }
+    default:
+      outcome satisfies never;
+      return panic(`Unhandled corpus batch outcome: ${String(outcome)}`);
+  }
 };
 
 /**
@@ -883,6 +964,7 @@ const processDecisionAttempt = async ({
   contentionReconciliation,
   refresh,
   corpus,
+  corpusBatch,
   polarityRules,
 }: ProcessDecisionAttemptOptions): Promise<ProcessResult> => {
   const result = sanitizeResult(input);
@@ -1381,6 +1463,7 @@ const processDecisionAttempt = async ({
             contentionReconciliation: CONTENTION_RECONCILIATION.RETRY,
             refresh,
             corpus,
+            corpusBatch,
             judges,
             polarityRules,
           });
@@ -1513,6 +1596,7 @@ const processDecisionAttempt = async ({
             contentionReconciliation: CONTENTION_RECONCILIATION.RETRY,
             refresh,
             corpus,
+            corpusBatch,
             judges,
             polarityRules,
           });
@@ -1625,7 +1709,29 @@ const processDecisionAttempt = async ({
     sourceRawS3Key,
     s3UploadFailed: rawUploadFailed,
   } = sourceRawArtifact.artifact;
-  let s3UploadFailed = rawUploadFailed;
+  const s3UploadFailed = rawUploadFailed;
+
+  /**
+   * The raw-source retry the row carries, independent of the corpus write.
+   *
+   * An update whose raw upload failed kept its old `sourceHash` so the next
+   * pass re-observes the decision; reporting it complete would strand that
+   * retry. Every return that would otherwise report a decision this pass
+   * wrote as complete goes through here, so the single-decision path and the
+   * page-batch path answer the same way. A row that was redacted or removed
+   * while the batch ran has nothing left to re-observe, and is reported as
+   * complete with `inserted: false`, so it is left alone.
+   */
+  const withSourceRawRetry = (outcome: ProcessResult): ProcessResult =>
+    s3UploadFailed &&
+    outcome.status === PROCESS_DECISION_STATUS.COMPLETE &&
+    outcome.inserted
+      ? {
+          status: PROCESS_DECISION_STATUS.RETRYABLE,
+          inserted: true,
+          reason: PROCESS_DECISION_RETRY_REASON.CORPUS_WRITE,
+        }
+      : outcome;
 
   const preparePersistenceInputs = async () => {
     const sections = decisionSections(result);
@@ -2392,6 +2498,7 @@ const processDecisionAttempt = async ({
         contentionReconciliation: CONTENTION_RECONCILIATION.RETRY,
         refresh,
         corpus,
+        corpusBatch,
         judges,
         polarityRules,
       });
@@ -2437,28 +2544,7 @@ const processDecisionAttempt = async ({
       preservesExistingDetail || s3UploadFailed
         ? (existing?.sourceHash ?? null)
         : result.rawHash;
-    try {
-      const intent = await reserveCaseLawCorpusUploadIntent({
-        contentHash: corpusContentHash(corpusPayload),
-        decisionId,
-        jurisdiction: corpusPayload.jurisdiction,
-        scopedDb,
-      });
-      if (intent.type === "redacted") {
-        return {
-          status: PROCESS_DECISION_STATUS.COMPLETE,
-          inserted: false,
-          searchVectorFailed: false,
-        };
-      }
-      if (intent.type === "busy") {
-        return {
-          status: PROCESS_DECISION_STATUS.RETRYABLE,
-          inserted: false,
-          reason: PROCESS_DECISION_RETRY_REASON.CORPUS_WRITE,
-        };
-      }
-
+    {
       const ownerPredicate = and(
         eq(caseLawDecisions.id, decisionId),
         sql`${caseLawDecisions.sourceHash} IS NOT DISTINCT FROM ${persistedSourceHash}`,
@@ -2472,99 +2558,102 @@ const processDecisionAttempt = async ({
           ? undefined
           : sql`NOT ${pgPayloadCarriesDocument}`,
       );
-      const upload = await writeReservedCaseLawCorpusUpload({
-        apply: async ({ projectionLock, tx, written }) => {
-          const applied = await settleCaseLawCorpusMirrorTx({
+      // The payloads join the batch's pack rather than being PUT here. The
+      // settlement below runs once that pack is durable, under the same row
+      // fence redaction takes.
+      const batch =
+        corpusBatch ??
+        openCorpusPackBatch({ scopedDb, transfer: corpus.transfer });
+      batch.enqueue({
+        decisionId,
+        jurisdiction: corpusPayload.jurisdiction,
+        payload: corpusPayload,
+        // From the pre-write snapshot: the row update above moved the mirror
+        // to pending, but a settled record in that snapshot still proves
+        // those payloads were confirmed, so an identical one need not be
+        // written again.
+        stored: existing === undefined ? null : storedCorpusWrite(existing),
+        settle: async ({ intentId, written }) => {
+          const upload = await settleReservedCaseLawCorpusUpload({
+            apply: async ({ projectionLock, tx, written: settled }) => {
+              const applied = await settleCaseLawCorpusMirrorTx({
+                decisionId,
+                persistedSourceHash,
+                observationOrder,
+                mirrorCarriesDocument,
+                mode: corpus.mode,
+                tx,
+                written: settled,
+              });
+              if (!applied) {
+                return { type: "superseded" };
+              }
+              if (projectionLock !== null) {
+                await synchronizeLockedCorpusProjectionDesiredStateTx(tx, {
+                  lock: projectionLock,
+                  subject: { family: "case_law", entityId: decisionId },
+                });
+              }
+              return { type: "applied" };
+            },
             decisionId,
-            persistedSourceHash,
-            observationOrder,
-            mirrorCarriesDocument,
-            mode: corpus.mode,
-            tx,
+            intentId,
+            preflight: async (tx) =>
+              Boolean(
+                (
+                  await tx
+                    .select({ id: caseLawDecisions.id })
+                    .from(caseLawDecisions)
+                    .where(ownerPredicate)
+                    .limit(1)
+                ).at(0),
+              ),
+            scopedDb,
             written,
           });
-          if (!applied) {
-            return { type: "superseded" };
+          if (upload.type === "redacted-or-missing") {
+            return { type: "redacted-or-missing" };
           }
-          if (projectionLock !== null) {
-            await synchronizeLockedCorpusProjectionDesiredStateTx(tx, {
-              lock: projectionLock,
-              subject: { family: "case_law", entityId: decisionId },
-            });
+          if (
+            upload.type === "intent-reclaimed" ||
+            upload.type === "superseded"
+          ) {
+            const winner = await scopedDb((tx) =>
+              tx.query.caseLawDecisions.findFirst({
+                where: { id: { eq: decisionId } },
+                columns: { corpusMirrorStatus: true, redactedAt: true },
+              }),
+            );
+            if (winner?.redactedAt || !winner) {
+              return { type: "redacted-or-missing" };
+            }
+            if (
+              winner.corpusMirrorStatus ===
+              CASE_LAW_CORPUS_MIRROR_STATUS.PENDING
+            ) {
+              return { type: "retry" };
+            }
           }
-          return { type: "applied" };
+          return { type: "settled" };
         },
-        decisionId,
-        intentId: intent.intentId,
-        preflight: async (tx) =>
-          Boolean(
-            (
-              await tx
-                .select({ id: caseLawDecisions.id })
-                .from(caseLawDecisions)
-                .where(ownerPredicate)
-                .limit(1)
-            ).at(0),
-          ),
-        scopedDb,
-        write: async ({ signal: uploadSignal }) =>
-          await corpus.write(
+      });
+      if (corpusBatch === undefined) {
+        // Nobody else will flush this batch, so this decision is its own:
+        // one transfer, one member set, the same path a page takes.
+        const flushed = await batch.flush();
+        return withSourceRawRetry(
+          processResultForCorpusOutcome(
+            Result.isError(flushed)
+              ? { type: "failed", error: flushed.error }
+              : flushed.value.get(decisionId),
             {
-              ...corpusPayload,
-              // From the pre-write snapshot: the row update above moved the
-              // mirror to pending, but a settled record in that snapshot
-              // still proves these content-addressed objects were confirmed,
-              // so an identical payload need not re-PUT them.
-              stored:
-                existing === undefined ? null : storedCorpusWrite(existing),
+              decisionId,
+              caseNumber: result.caseNumber,
+              country: result.country,
             },
-            { signal: uploadSignal },
           ),
-      });
-      if (upload.type === "redacted-or-missing") {
-        return {
-          status: PROCESS_DECISION_STATUS.COMPLETE,
-          inserted: false,
-          searchVectorFailed: false,
-        };
-      }
-      if (upload.type === "intent-reclaimed" || upload.type === "superseded") {
-        const winner = await scopedDb((tx) =>
-          tx.query.caseLawDecisions.findFirst({
-            where: { id: { eq: decisionId } },
-            columns: { corpusMirrorStatus: true, redactedAt: true },
-          }),
         );
-        if (winner?.redactedAt || !winner) {
-          return {
-            status: PROCESS_DECISION_STATUS.COMPLETE,
-            inserted: false,
-            searchVectorFailed: false,
-          };
-        }
-        if (
-          winner.corpusMirrorStatus === CASE_LAW_CORPUS_MIRROR_STATUS.PENDING
-        ) {
-          return {
-            status: PROCESS_DECISION_STATUS.RETRYABLE,
-            inserted: false,
-            reason: PROCESS_DECISION_RETRY_REASON.CORPUS_WRITE,
-          };
-        }
       }
-    } catch (error) {
-      s3UploadFailed = true;
-      // The halt reason only carries a failure count; without this line the
-      // cause of a held cursor is invisible to an operator reading the log.
-      logger.error("case_law.ingestion.corpus_write_failed", {
-        decisionId,
-        caseNumber: result.caseNumber,
-        country: result.country,
-        ...errorSystemFields(error),
-        ...pgErrorFields(error),
-        "error.detail": wrappedErrorDetail(error),
-      });
-      captureError(error, { decisionId, step: "processDecision.corpusWrite" });
     }
   }
 
@@ -2573,17 +2662,11 @@ const processDecisionAttempt = async ({
   // doesn't block cursor advancement. New decisions become
   // searchable within ~30s of insertion.
 
-  return s3UploadFailed
-    ? {
-        status: PROCESS_DECISION_STATUS.RETRYABLE,
-        inserted: true,
-        reason: PROCESS_DECISION_RETRY_REASON.CORPUS_WRITE,
-      }
-    : {
-        status: PROCESS_DECISION_STATUS.COMPLETE,
-        inserted: true,
-        searchVectorFailed: false,
-      };
+  return withSourceRawRetry({
+    status: PROCESS_DECISION_STATUS.COMPLETE,
+    inserted: true,
+    searchVectorFailed: false,
+  });
 };
 
 export const processDecision = async ({
@@ -2821,6 +2904,13 @@ export const runIngestionPipeline = async ({
     try {
       let retryableDecision = false;
       const pageFailures: (typeof caseLawIngestionFailures.$inferInsert)[] = [];
+      // One pack for the page: every decision below contributes its payloads
+      // to this batch, which is written and settled once the page is
+      // processed.
+      const corpusBatch = openCorpusPackBatch({
+        scopedDb,
+        transfer: corpus.transfer,
+      });
       try {
         for (const result of page.decisions) {
           if (maxDecisions !== undefined && inserted >= maxDecisions) {
@@ -2838,6 +2928,7 @@ export const runIngestionPipeline = async ({
               observedAt,
               observationOrder,
               corpus,
+              corpusBatch,
               polarityRules,
             });
 
@@ -2932,6 +3023,39 @@ export const runIngestionPipeline = async ({
           }
         }
       } finally {
+        // The page's pack goes out here for the same reason the failures do:
+        // every mid-page exit above is a `break` or a throw, and the
+        // decisions already processed have rows waiting for their payloads.
+        // A decision whose settlement did not land holds the cursor, so the
+        // page is retried and it joins the next batch's pack.
+        //
+        // A flush that fails outright is the whole page's corpus write
+        // failing, counted as such: raising from a `finally` would replace
+        // whatever brought the page here and skip the failure rows below.
+        const corpusOutcomes = await corpusBatch.flush();
+        if (Result.isError(corpusOutcomes)) {
+          s3UploadFailures++;
+          logger.error("case_law.ingestion.corpus_write_failed", {
+            adapterKey: adapter.key,
+            cursor: cursor ?? "",
+            ...errorSystemFields(corpusOutcomes.error),
+            ...pgErrorFields(corpusOutcomes.error),
+            "error.detail": wrappedErrorDetail(corpusOutcomes.error),
+          });
+          captureError(corpusOutcomes.error, {
+            adapterKey: adapter.key,
+            step: "runIngestionPipeline.corpusPackFlush",
+          });
+        } else {
+          for (const [settledDecisionId, outcome] of corpusOutcomes.value) {
+            const settlement = processResultForCorpusOutcome(outcome, {
+              decisionId: settledDecisionId,
+            });
+            if (settlement.status === PROCESS_DECISION_STATUS.RETRYABLE) {
+              s3UploadFailures++;
+            }
+          }
+        }
         // Flush here, not after the loop: every mid-page exit above is a
         // `break` or a throw, and a `finally` still records what the page
         // collected. It runs before the cursor advance below, so a timeout

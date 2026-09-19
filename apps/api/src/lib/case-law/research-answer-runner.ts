@@ -48,15 +48,17 @@ import {
   quoteCorpusValue,
 } from "@/api/lib/legal-search/corpus-query";
 import {
+  readCorpusAst,
+  readCorpusText,
+} from "@/api/lib/legal-search/corpus-reads";
+import {
   allowsDerivedAi,
   isRedistributable,
 } from "@/api/lib/legal-search/corpus-source";
 import type { CorpusSourceDescriptor } from "@/api/lib/legal-search/corpus-source";
 import {
   parsePersistedCorpusAst,
-  readCorpusAst,
   readCorpusPayloadOrFallback,
-  readCorpusText,
 } from "@/api/lib/legal-search/corpus-storage";
 import { LIMITS } from "@/api/lib/limits";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";

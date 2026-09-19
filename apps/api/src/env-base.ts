@@ -20,6 +20,7 @@ import {
   resolveApiEnvironmentPlaceholders,
 } from "@/api/env-base-schema";
 import { resolveCorpusStorageMode } from "@/api/lib/corpus-storage-mode";
+import { resolveCorpusMemberLayout } from "@/api/lib/legal-search/corpus-member-layout";
 
 export { DEPLOYED_NODE_ENVS } from "@/api/env-base-schema";
 
@@ -61,3 +62,11 @@ export const corpusStorageMode = resolveCorpusStorageMode({
   mode: envBase.CORPUS_STORAGE_MODE,
   legacyEnabled: envBase.CORPUS_STORAGE_ENABLED,
 });
+
+/**
+ * How an ingestion batch lays its corpus payloads out. Unset keeps the
+ * single-object layout every deployment runs today.
+ */
+export const corpusMemberLayout = resolveCorpusMemberLayout(
+  envBase.CORPUS_MEMBER_LAYOUT,
+);

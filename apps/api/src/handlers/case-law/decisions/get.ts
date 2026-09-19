@@ -52,6 +52,11 @@ import {
   readCorpusText,
   parsePersistedCorpusAst,
 } from "@/api/lib/legal-search/corpus-storage";
+import {
+  corpusTombstoneReaderForTx,
+  prefetchCorpusTombstones,
+} from "@/api/lib/legal-search/corpus-tombstones";
+import type { CorpusTombstoneReader } from "@/api/lib/legal-search/corpus-tombstones";
 import type { EmptyAst } from "@/api/lib/legal-search/document-types";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -406,11 +411,20 @@ export const readDecisionHandler = definePublicLawSharedQuery(
     // Prefer canonical AST from object storage when corpus storage is
     // enabled; fall back to the Postgres column so a read is never harder
     // than today.
+    // Both of this decision's addresses, asked about once, inside the
+    // transaction the read already holds.
+    const readTombstones = await prefetchCorpusTombstones(
+      [decision.astS3Key, decision.textS3Key].filter(
+        (key): key is string => key !== null,
+      ),
+      corpusTombstoneReaderForTx(tx),
+    );
     const astRead = await resolveAst({
       astS3Key: decision.astS3Key,
       contentHash: decision.contentHash,
       pgAst: decision.documentAst,
       decisionId,
+      readTombstones,
     });
     const storedAst = astRead.payload;
     const astIsUsable = hasUsableAst(storedAst);
@@ -430,6 +444,7 @@ export const readDecisionHandler = definePublicLawSharedQuery(
         contentHash: decision.contentHash,
         decisionId,
         tx,
+        readTombstones,
       });
       fulltext = textRead.payload;
       corpusPayloadUnavailable =
@@ -591,6 +606,7 @@ type ResolveAstInput = {
   contentHash: string | null;
   pgAst: DocumentAst | EmptyAst | null;
   decisionId: SafeId<"caseLawDecision">;
+  readTombstones: CorpusTombstoneReader;
 };
 
 const resolveAst = async ({
@@ -598,6 +614,7 @@ const resolveAst = async ({
   contentHash,
   pgAst,
   decisionId,
+  readTombstones,
 }: ResolveAstInput): Promise<CorpusReadOutcome<DocumentAst | EmptyAst>> => {
   if (!corpusReadEnabled() || astS3Key === null || contentHash === null) {
     return { payload: parsePersistedCorpusAst(pgAst), unavailable: false };
@@ -608,7 +625,7 @@ const resolveAst = async ({
         documentId: decisionId,
         key: astS3Key,
         step: "readDecision.corpusAst",
-        read: async () => await readCorpusAst(astS3Key),
+        read: async () => await readCorpusAst(astS3Key, { readTombstones }),
         fallback: () => parsePersistedCorpusAst(pgAst),
       }),
     decisionId,
@@ -763,6 +780,7 @@ type ResolveFulltextInput = {
   contentHash: string | null;
   decisionId: SafeId<"caseLawDecision">;
   tx: CaseLawPublicReadTransaction;
+  readTombstones: CorpusTombstoneReader;
 };
 
 const resolveFulltext = async ({
@@ -770,6 +788,7 @@ const resolveFulltext = async ({
   contentHash,
   decisionId,
   tx,
+  readTombstones,
 }: ResolveFulltextInput): Promise<CorpusReadOutcome<string>> => {
   const postgresFulltext = async (): Promise<string | null> => {
     const fallback = await tx.query.caseLawDecisions.findFirst({
@@ -786,7 +805,7 @@ const resolveFulltext = async ({
           documentId: decisionId,
           key: textS3Key,
           step: "readDecision.corpusText",
-          read: async () => await readCorpusText(textS3Key),
+          read: async () => await readCorpusText(textS3Key, { readTombstones }),
           fallback: postgresFulltext,
         }),
       decisionId,

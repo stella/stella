@@ -9,6 +9,7 @@ import {
 
 import { CASE_LAW_CORPUS_MIRROR_STATUS } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
+import type { SafeId } from "@/api/lib/branded-types";
 import {
   PayloadBudgetError,
   zstdCompressAsync,
@@ -17,14 +18,27 @@ import {
 } from "@/api/lib/compression";
 import type { CorpusStorageMode } from "@/api/lib/corpus-storage-mode";
 import {
+  CorpusMemberDigestMismatchError,
+  CorpusMemberTombstonedError,
   CorpusPayloadUnavailableError,
   StoredAstDegradedError,
 } from "@/api/lib/errors/tagged-errors";
-import { parseCorpusLocation } from "@/api/lib/legal-search/corpus-location";
+import {
+  formatCorpusLocation,
+  parseCorpusLocation,
+} from "@/api/lib/legal-search/corpus-location";
 import type {
   CorpusLocation,
   PackedCorpusLocation,
 } from "@/api/lib/legal-search/corpus-location";
+import {
+  packJurisdictionPrefix,
+  corpusMemberDigest,
+} from "@/api/lib/legal-search/corpus-pack";
+import type {
+  CorpusTombstoneReader,
+  CorpusTombstoneWriter,
+} from "@/api/lib/legal-search/corpus-tombstones";
 import {
   emptyAstSchema,
   EMPTY_AST,
@@ -374,15 +388,54 @@ export const planCorpusDocumentWrite = ({
     ...corpusKeys({ documentId, jurisdiction, contentHash }),
     contentHash,
   };
-  const unchanged =
-    stored?.contentHash === contentHash &&
+  if (stored?.contentHash !== contentHash) {
+    return { type: "put", written };
+  }
+  const storedKeys = [stored.textKey, stored.sectionsKey, stored.astKey];
+  const atDerivedKeys =
     stored.textKey === written.textKey &&
     stored.sectionsKey === written.sectionsKey &&
     stored.astKey === written.astKey;
-  return unchanged
-    ? { type: "skipped-unchanged", written }
+  // A row whose payloads were written as members of a pack does not carry
+  // the derived object keys and never will; what the key comparison is
+  // actually asking is whether the stored payload sits under this
+  // jurisdiction's partition, which a pack address answers for itself.
+  const packedUnderJurisdiction = storedKeys.every((key) => {
+    const location = parseCorpusLocation(key);
+    return (
+      location.type === "packed" &&
+      location.packKey.startsWith(packJurisdictionPrefix(jurisdiction))
+    );
+  });
+  return atDerivedKeys || packedUnderJurisdiction
+    ? { type: "skipped-unchanged", written: stored }
     : { type: "put", written };
 };
+
+/** The three payload kinds a corpus write stores, as stored bytes. */
+export type CorpusPayloadFrames = {
+  text: Uint8Array;
+  sections: Uint8Array;
+  ast: Uint8Array;
+};
+
+/**
+ * The exact bytes of a document's three payloads.
+ *
+ * One definition for both writers: the standalone objects and the members of
+ * a pack must be byte-identical, or a document read through one path would
+ * not decode through the other — and the member digests recorded in a pack
+ * would describe bytes no object ever held.
+ */
+export const corpusPayloadFrames = async ({
+  text,
+  sections,
+  ast,
+}: CorpusPayload): Promise<CorpusPayloadFrames> => ({
+  text: await zstdCompressAsync(text ?? ""),
+  sections: await zstdCompressAsync(JSON.stringify(sections ?? null)),
+  ast: await zstdCompressAsync(JSON.stringify(ast ?? null)),
+});
 
 type CorpusMirrorState =
   | { status: typeof CASE_LAW_CORPUS_MIRROR_STATUS.PENDING }
@@ -513,6 +566,16 @@ export const corpusPayloadDisposition = ({
   }
 };
 
+/**
+ * One document, three standalone objects.
+ *
+ * Legislation ingests one document per call, with no batch to share a pack
+ * with, so it keeps writing objects. Case law writes its payloads as members
+ * of one pack per ingestion batch (corpus-pack-batch.ts); the one case-law
+ * caller left here is the atlas runner's storage backfill, which cannot reach
+ * the batch until that batch has a package owner the runner may import. The
+ * planning rule above is shared by every one of them.
+ */
 export const writeCorpusDocument = async (
   input: WriteCorpusInput,
   { signal }: CorpusIoOptions = {},
@@ -521,8 +584,8 @@ export const writeCorpusDocument = async (
   if (plan.type !== "put") {
     return plan;
   }
-  const { text, sections, ast } = input;
   const { written } = plan;
+  const frames = await corpusPayloadFrames(input);
   const keys = {
     textKey: written.textKey,
     sectionsKey: written.sectionsKey,
@@ -541,7 +604,7 @@ export const writeCorpusDocument = async (
       async (writeSignal) =>
         await putCorpusS3ObjectWithSignal(
           keys.textKey,
-          await zstdCompressAsync(text ?? ""),
+          frames.text,
           CONTENT_TYPE,
           writeSignal,
         ),
@@ -552,7 +615,7 @@ export const writeCorpusDocument = async (
       async (writeSignal) =>
         await putCorpusS3ObjectWithSignal(
           keys.sectionsKey,
-          await zstdCompressAsync(JSON.stringify(sections ?? null)),
+          frames.sections,
           CONTENT_TYPE,
           writeSignal,
         ),
@@ -563,7 +626,7 @@ export const writeCorpusDocument = async (
       async (writeSignal) =>
         await putCorpusS3ObjectWithSignal(
           keys.astKey,
-          await zstdCompressAsync(JSON.stringify(ast ?? null)),
+          frames.ast,
           CONTENT_TYPE,
           writeSignal,
         ),
@@ -600,37 +663,111 @@ type ReadCorpusBytesAtOptions = {
   /** Test seams; production reads through the corpus bucket client. */
   readObject?: BoundedObjectReader;
   readRange?: RangeReader;
+  /**
+   * Where this read asks whether a packed address is erased. Required rather
+   * than defaulted, so no path can serve a packed payload without saying
+   * where the denial is read — and so this module holds no database handle.
+   */
+  readTombstones: CorpusTombstoneReader;
 };
 
 /**
  * The bytes a corpus location names, transferred under `maxBytes`.
  *
- * An object location is a bounded whole-object GET. A packed location is a
- * range GET of exactly the member; its declared length is checked against
- * the ceiling before any request is made.
+ * An object location is a bounded whole-object GET: an erased object is
+ * deleted, so its absence is the erasure. A packed location is a range GET of
+ * exactly the member, and erasing one member deletes nothing — the pack
+ * carries other decisions' payloads — so the read asks the tombstone table
+ * first and answers as if the object were absent. What comes back is checked
+ * against the digest the address carries: a range read that returns the
+ * requested byte count still proves nothing about which bytes they are.
  */
+type ReadPackedMemberOptions = {
+  location: PackedCorpusLocation;
+  maxBytes: number;
+  signal: AbortSignal;
+  readRange: RangeReader;
+  readTombstones: CorpusTombstoneReader;
+};
+
+/**
+ * The three ways a packed member can be refused, answered before the caller
+ * sees any bytes: past the transfer ceiling, erased, or not the bytes the
+ * address records. Returned rather than thrown so the read path keeps one
+ * failure site.
+ */
+const readPackedMember = async ({
+  location,
+  maxBytes,
+  signal,
+  readRange,
+  readTombstones,
+}: ReadPackedMemberOptions): Promise<
+  Result<
+    Uint8Array,
+    | PayloadBudgetError
+    | CorpusMemberTombstonedError
+    | CorpusMemberDigestMismatchError
+  >
+> => {
+  if (location.length > maxBytes) {
+    return Result.err(
+      new PayloadBudgetError({
+        message: `Packed corpus member declares ${location.length} bytes, past the ${maxBytes}-byte ceiling`,
+      }),
+    );
+  }
+  const address = formatCorpusLocation(location);
+  const tombstoned = await readTombstones([address]);
+  if (tombstoned.has(address)) {
+    return Result.err(
+      new CorpusMemberTombstonedError({
+        message: `Corpus member is erased and is no longer served: ${address}`,
+        location: address,
+      }),
+    );
+  }
+  const bytes = await readRange({
+    key: location.packKey,
+    offset: location.offset,
+    length: location.length,
+    signal,
+  });
+  const digest = corpusMemberDigest(bytes);
+  return digest === location.sha256
+    ? Result.ok(bytes)
+    : Result.err(
+        new CorpusMemberDigestMismatchError({
+          message: `Corpus member at ${address} hashes to ${digest}, not the digest its address records`,
+          location: address,
+          digest,
+        }),
+      );
+};
+
 export const readCorpusBytesAt = async ({
   location,
   maxBytes,
   signal,
   readObject = readCorpusS3BytesBounded,
   readRange = readCorpusS3Range,
+  readTombstones,
 }: ReadCorpusBytesAtOptions): Promise<Uint8Array> => {
   switch (location.type) {
     case "object":
       return await readObject({ key: location.key, maxBytes, signal });
     case "packed": {
-      if (location.length > maxBytes) {
-        throw new PayloadBudgetError({
-          message: `Packed corpus member declares ${location.length} bytes, past the ${maxBytes}-byte ceiling`,
-        });
-      }
-      return await readRange({
-        key: location.packKey,
-        offset: location.offset,
-        length: location.length,
+      const member = await readPackedMember({
+        location,
+        maxBytes,
         signal,
+        readRange,
+        readTombstones,
       });
+      if (Result.isError(member)) {
+        throw member.error;
+      }
+      return member.value;
     }
     default: {
       location satisfies never;
@@ -639,10 +776,15 @@ export const readCorpusBytesAt = async ({
   }
 };
 
-/** Test seams for the two byte sources; production reads through the corpus bucket client. */
-type CorpusByteSourceSeams = {
+/**
+ * The byte sources behind one read. The two object-store seams are test
+ * seams over the corpus bucket client; the denial reader is the caller's
+ * answer to "where is this read's erasure list", and is required.
+ */
+export type CorpusByteSourceSeams = {
   readObject?: BoundedObjectReader;
   readRange?: RangeReader;
+  readTombstones: CorpusTombstoneReader;
 };
 
 type ReadStoredCorpusBytesOptions = CorpusByteSourceSeams & {
@@ -674,7 +816,7 @@ type ReadCorpusTextOptions = CorpusByteSourceSeams & {
  */
 export const readCorpusText = async (
   storedKey: string,
-  { timeoutMs = CORPUS_IO_TIMEOUT_MS, ...seams }: ReadCorpusTextOptions = {},
+  { timeoutMs = CORPUS_IO_TIMEOUT_MS, ...seams }: ReadCorpusTextOptions,
 ): Promise<string> => {
   const bytes = await boundedCorpusIo(
     "corpus-read-text",
@@ -687,10 +829,12 @@ export const readCorpusText = async (
 
 export const readCorpusSections = async (
   storedKey: string,
+  seams: CorpusByteSourceSeams,
 ): Promise<DecisionSection[] | null> => {
   const bytes = await boundedCorpusIo(
     "corpus-read-sections",
-    async (signal) => await readStoredCorpusBytes({ storedKey, signal }),
+    async (signal) =>
+      await readStoredCorpusBytes({ storedKey, signal, ...seams }),
   );
   const parsed: unknown = JSON.parse(
     await zstdDecompressToStringBounded(bytes, PAYLOAD_MAX_BYTES),
@@ -700,10 +844,12 @@ export const readCorpusSections = async (
 
 export const readCorpusAst = async (
   storedKey: string,
+  seams: CorpusByteSourceSeams,
 ): Promise<DocumentAst | EmptyAst | null> => {
   const bytes = await boundedCorpusIo(
     "corpus-read-ast",
-    async (signal) => await readStoredCorpusBytes({ storedKey, signal }),
+    async (signal) =>
+      await readStoredCorpusBytes({ storedKey, signal, ...seams }),
   );
   const parsed: unknown = JSON.parse(
     await zstdDecompressToStringBounded(bytes, PAYLOAD_MAX_BYTES),
@@ -776,15 +922,19 @@ export const readCorpusPayloadOrFallback = async <T>({
   if (Result.isOk(payload)) {
     return payload.value;
   }
-
-  const postgresCopy = await fallback();
+  // An erased member is not an outage, so it has no fallback: degrading to
+  // another copy of the payload is exactly what the tombstone prevents.
+  const erased = payload.error instanceof CorpusMemberTombstonedError;
+  const postgresCopy = erased ? null : await fallback();
   if (postgresCopy === null) {
-    throw new CorpusPayloadUnavailableError({
-      message: `Corpus object is unreadable and the row has no Postgres copy: ${key}`,
-      documentId,
-      key,
-      cause: payload.error,
-    });
+    throw erased
+      ? payload.error
+      : new CorpusPayloadUnavailableError({
+          message: `Corpus object is unreadable and the row has no Postgres copy: ${key}`,
+          documentId,
+          key,
+          cause: payload.error,
+        });
   }
 
   captureError(payload.error, { documentId, step });
@@ -795,55 +945,59 @@ export type CorpusDeleteOutcome =
   /** Every present pointer named a standalone object; each DELETE settled. */
   | { type: "deleted"; keys: string[] }
   /**
-   * At least one pointer addresses a range inside a shared object; that
-   * object is left in place. Standalone siblings were deleted.
+   * At least one pointer addressed a member of a pack. The pack carries
+   * other decisions' payloads, so it stays; the member's address is
+   * tombstoned and no reader serves it again. Standalone siblings were
+   * deleted.
    */
   | {
-      type: "shared-object-retained";
+      type: "tombstoned";
       deletedKeys: string[];
-      retained: PackedCorpusLocation[];
+      tombstoned: PackedCorpusLocation[];
     };
 
 type DeleteCorpusDocumentOptions = CorpusIoOptions & {
+  /**
+   * Where the addresses of packed members are recorded as unreadable.
+   * Required rather than defaulted: a caller that erases a payload must say
+   * where the denial is written, because for a packed member the denial is
+   * the whole of the erasure.
+   */
+  tombstone: CorpusTombstoneWriter;
+  /** The decision the erased payloads belong to; recorded with the denial. */
+  decisionId: SafeId<"caseLawDecision">;
   /** Test seam; production deletes through the corpus bucket client. */
   deleteObject?: (key: string, signal: AbortSignal) => Promise<void>;
 };
 
-/**
- * Delete all corpus objects for a decision version (GDPR erasure).
- * Keys are individually nullable: a partially ingested decision may have
- * only some payloads written, and every present object must still go.
- */
-export const deleteCorpusDocument = async (
-  keys: {
-    textKey: string | null;
-    sectionsKey: string | null;
-    astKey: string | null;
-  },
-  {
-    signal,
-    deleteObject = deleteCorpusS3ObjectWithSignal,
-  }: DeleteCorpusDocumentOptions = {},
-): Promise<CorpusDeleteOutcome> => {
-  const objectKeys: string[] = [];
-  const retained: PackedCorpusLocation[] = [];
-  for (const storedKey of [keys.textKey, keys.sectionsKey, keys.astKey]) {
-    if (storedKey === null) {
-      continue;
-    }
-    const location = parseCorpusLocation(storedKey);
-    if (location.type === "packed") {
-      retained.push(location);
-    } else {
-      objectKeys.push(location.key);
-    }
-  }
+type StoredKeys = {
+  textKey: string | null;
+  sectionsKey: string | null;
+  astKey: string | null;
+};
+
+const storedLocations = (keys: StoredKeys): CorpusLocation[] =>
+  [keys.textKey, keys.sectionsKey, keys.astKey]
+    .filter((storedKey): storedKey is string => storedKey !== null)
+    .map(parseCorpusLocation);
+
+type DeleteObjectsOptions = {
+  keys: readonly string[];
+  signal: AbortSignal | undefined;
+  deleteObject: (key: string, signal: AbortSignal) => Promise<void>;
+};
+
+const deleteCorpusObjects = async ({
+  keys,
+  signal,
+  deleteObject,
+}: DeleteObjectsOptions): Promise<void> => {
   const deleteController = new AbortController();
   const groupSignal =
     signal === undefined
       ? deleteController.signal
       : AbortSignal.any([deleteController.signal, signal]);
-  const operations = objectKeys.map((key) =>
+  const operations = keys.map((key) =>
     startCancellableCorpusIo(
       "corpus-delete",
       async (deleteSignal) => await deleteObject(key, deleteSignal),
@@ -854,7 +1008,95 @@ export const deleteCorpusDocument = async (
     controller: deleteController,
     operations,
   });
+};
+
+/**
+ * What an abandoned upload reservation leaves behind, and what may be done
+ * about it.
+ *
+ * This is not an erasure. The reservation named addresses before its transfer
+ * ran, so those addresses either hold bytes nobody was ever told about, or
+ * hold nothing at all — and the retry of the same batch re-derives exactly
+ * them. Denying them would make that retry's rows unreadable for good, so a
+ * reclaim never writes a tombstone: it deletes the standalone objects it
+ * named, and deletes the pack object only when nothing references it.
+ */
+export type CorpusReclaimOutcome =
+  /** Every object the reservation named is gone. */
+  | { type: "released"; keys: string[] }
+  /**
+   * The reservation named members of a pack other rows still reach into, so
+   * the object stays exactly as it is. There is nothing left for the
+   * reservation to own.
+   */
+  | { type: "retained"; packKeys: string[] };
+
+type ReclaimCorpusUploadOptions = CorpusIoOptions & {
+  keys: StoredKeys;
+  /**
+   * Packs this reservation may delete: the caller has established, under its
+   * own lock, that no decision row and no other reservation reaches into
+   * them. A pack outside this set is left alone.
+   */
+  releasablePackKeys: ReadonlySet<string>;
+  /** Test seam; production deletes through the corpus bucket client. */
+  deleteObject?: (key: string, signal: AbortSignal) => Promise<void>;
+};
+
+export const reclaimCorpusUpload = async ({
+  keys,
+  releasablePackKeys,
+  signal,
+  deleteObject = deleteCorpusS3ObjectWithSignal,
+}: ReclaimCorpusUploadOptions): Promise<CorpusReclaimOutcome> => {
+  const objectKeys: string[] = [];
+  const packKeys = new Set<string>();
+  for (const location of storedLocations(keys)) {
+    if (location.type === "packed") {
+      packKeys.add(location.packKey);
+    } else {
+      objectKeys.push(location.key);
+    }
+  }
+  const releasable = [...packKeys].filter((packKey) =>
+    releasablePackKeys.has(packKey),
+  );
+  const retained = [...packKeys].filter(
+    (packKey) => !releasablePackKeys.has(packKey),
+  );
+  await deleteCorpusObjects({
+    keys: [...objectKeys, ...releasable],
+    signal,
+    deleteObject,
+  });
   return retained.length === 0
+    ? { type: "released", keys: [...objectKeys, ...releasable] }
+    : { type: "retained", packKeys: retained };
+};
+
+export const deleteCorpusDocument = async (
+  keys: StoredKeys,
+  {
+    signal,
+    tombstone,
+    decisionId,
+    deleteObject = deleteCorpusS3ObjectWithSignal,
+  }: DeleteCorpusDocumentOptions,
+): Promise<CorpusDeleteOutcome> => {
+  const objectKeys: string[] = [];
+  const packed: PackedCorpusLocation[] = [];
+  for (const location of storedLocations(keys)) {
+    if (location.type === "packed") {
+      packed.push(location);
+    } else {
+      objectKeys.push(location.key);
+    }
+  }
+  // Denial first: a failed object delete leaves the caller retrying, and a
+  // retry must not find the packed members still readable in between.
+  await tombstone(packed.map((location) => ({ location, decisionId })));
+  await deleteCorpusObjects({ keys: objectKeys, signal, deleteObject });
+  return packed.length === 0
     ? { type: "deleted", keys: objectKeys }
-    : { type: "shared-object-retained", deletedKeys: objectKeys, retained };
+    : { type: "tombstoned", deletedKeys: objectKeys, tombstoned: packed };
 };

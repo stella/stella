@@ -1,3 +1,4 @@
+import { panic, Result } from "better-result";
 import {
   and,
   asc,
@@ -47,17 +48,17 @@ import {
   type TimestampCasToken,
   timestampMatchesCasToken,
 } from "@/api/lib/db/timestamp-cas";
-import {
-  reserveCaseLawCorpusUploadIntent,
-  writeReservedCaseLawCorpusUpload,
-} from "@/api/lib/legal-search/case-law-corpus-upload-intents";
+import { settleReservedCaseLawCorpusUpload } from "@/api/lib/legal-search/case-law-corpus-upload-intents";
 import { synchronizeLockedCorpusProjectionDesiredStateTx } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
+import { openCorpusPackBatch } from "@/api/lib/legal-search/corpus-pack-batch";
+import type {
+  CorpusPackBatch,
+  CorpusPackBatchOutcome,
+} from "@/api/lib/legal-search/corpus-pack-batch";
 import {
-  corpusContentHash,
   corpusMirrorColumns,
   EMPTY_CORPUS_CONTENT_HASHES,
   storedCorpusWrite,
-  writeCorpusDocument,
 } from "@/api/lib/legal-search/corpus-storage";
 import type {
   DecisionSection,
@@ -122,79 +123,101 @@ let written = 0;
 let skipped = 0;
 let failed = 0;
 
-const backfillRow = async (row: BackfillRow): Promise<void> => {
-  try {
-    const payload = {
-      documentId: row.id,
-      jurisdiction: row.country,
+const enqueueBackfillRow = (batch: CorpusPackBatch, row: BackfillRow): void => {
+  const ownerPredicate = and(
+    eq(caseLawDecisions.id, row.id),
+    isNull(caseLawDecisions.redactedAt),
+    sql`${caseLawDecisions.contentHash} IS NOT DISTINCT FROM ${row.contentHash}`,
+    timestampMatchesCasToken(caseLawDecisions.updatedAt, row.updatedAtToken),
+  );
+  batch.enqueue({
+    decisionId: row.id,
+    jurisdiction: row.country,
+    payload: {
       text: row.fulltext,
       sections: row.sections,
       ast: row.documentAst,
-      stored: storedCorpusWrite(row),
-    };
-    const intent = await reserveCaseLawCorpusUploadIntent({
-      contentHash: corpusContentHash(payload),
-      decisionId: row.id,
-      jurisdiction: row.country,
-      scopedDb: ingestionDb,
-    });
-    if (intent.type !== "reserved") {
+    },
+    stored: storedCorpusWrite(row),
+    settle: async ({ intentId, written: packed }) => {
+      const outcome = await settleReservedCaseLawCorpusUpload({
+        apply: async ({ projectionLock, tx, written: uploaded }) => {
+          // audit: skip — one-time corpus storage repair; derived state
+          const recorded = await tx
+            .update(caseLawDecisions)
+            .set(
+              corpusMirrorColumns({
+                status: CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
+                written: uploaded,
+              }),
+            )
+            .where(ownerPredicate)
+            .returning({ id: caseLawDecisions.id });
+          if (recorded.length > 0 && projectionLock !== null) {
+            await synchronizeLockedCorpusProjectionDesiredStateTx(tx, {
+              lock: projectionLock,
+              subject: { family: "case_law", entityId: row.id },
+            });
+          }
+          return { type: recorded.length > 0 ? "applied" : "superseded" };
+        },
+        decisionId: row.id,
+        intentId,
+        preflight: async (tx) =>
+          Boolean(
+            (
+              await tx
+                .select({ id: caseLawDecisions.id })
+                .from(caseLawDecisions)
+                .where(ownerPredicate)
+                .limit(1)
+            ).at(0),
+          ),
+        scopedDb: ingestionDb,
+        written: packed,
+      });
+      switch (outcome.type) {
+        case "applied":
+          return { type: "settled" };
+        case "superseded":
+        case "intent-reclaimed":
+          // A refused CAS is not success: the row changed under the scan and
+          // still points at its own payload, so nothing was recorded. The
+          // next run of the script sees it again.
+          return { type: "retry" };
+        case "redacted-or-missing":
+          return { type: "redacted-or-missing" };
+        default:
+          outcome satisfies never;
+          return panic(`Unhandled settlement: ${String(outcome)}`);
+      }
+    },
+  });
+};
+
+const recordOutcome = (
+  decisionId: SafeId<"caseLawDecision">,
+  outcome: CorpusPackBatchOutcome,
+): void => {
+  switch (outcome.type) {
+    case "settled":
+      written += 1;
+      return;
+    case "redacted-or-missing":
+    case "busy":
+    case "retry":
       skipped += 1;
       return;
-    }
-    const ownerPredicate = and(
-      eq(caseLawDecisions.id, row.id),
-      isNull(caseLawDecisions.redactedAt),
-      sql`${caseLawDecisions.contentHash} IS NOT DISTINCT FROM ${row.contentHash}`,
-      timestampMatchesCasToken(caseLawDecisions.updatedAt, row.updatedAtToken),
-    );
-    const outcome = await writeReservedCaseLawCorpusUpload({
-      apply: async ({ projectionLock, tx, written: uploaded }) => {
-        // audit: skip — one-time corpus storage repair; derived state
-        const recorded = await tx
-          .update(caseLawDecisions)
-          .set(
-            corpusMirrorColumns({
-              status: CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
-              written: uploaded,
-            }),
-          )
-          .where(ownerPredicate)
-          .returning({ id: caseLawDecisions.id });
-        if (recorded.length > 0 && projectionLock !== null) {
-          await synchronizeLockedCorpusProjectionDesiredStateTx(tx, {
-            lock: projectionLock,
-            subject: { family: "case_law", entityId: row.id },
-          });
-        }
-        return { type: recorded.length > 0 ? "applied" : "superseded" };
-      },
-      decisionId: row.id,
-      intentId: intent.intentId,
-      preflight: async (tx) =>
-        Boolean(
-          (
-            await tx
-              .select({ id: caseLawDecisions.id })
-              .from(caseLawDecisions)
-              .where(ownerPredicate)
-              .limit(1)
-          ).at(0),
-        ),
-      scopedDb: ingestionDb,
-      write: async ({ signal }) =>
-        await writeCorpusDocument(payload, { signal }),
-    });
-    // A refused CAS is not success: the row changed under the scan and
-    // still points at its own payload, so nothing was recorded.
-    if (outcome.type === "applied") {
-      written += 1;
-    } else {
-      skipped += 1;
-    }
-  } catch (error) {
-    failed += 1;
-    captureError(error, { decisionId: row.id, step: "backfillCorpusStorage" });
+    case "failed":
+      failed += 1;
+      captureError(outcome.error, {
+        decisionId,
+        step: "backfillCorpusStorage",
+      });
+      return;
+    default:
+      outcome satisfies never;
+      return panic(`Unhandled corpus batch outcome: ${String(outcome)}`);
   }
 };
 
@@ -233,8 +256,25 @@ while (true) {
   }
 
   for (let i = 0; i < rows.length; i += CONCURRENCY) {
-    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- bounded concurrency: drain one CONCURRENCY-sized chunk before starting the next
-    await Promise.all(rows.slice(i, i + CONCURRENCY).map(backfillRow));
+    const chunk = rows.slice(i, i + CONCURRENCY);
+    // One pack per chunk: the rows hand their payloads to one transfer
+    // instead of three object PUTs each, and every row still settles under
+    // its own fence once that pack is durable.
+    const batch = openCorpusPackBatch({ scopedDb: ingestionDb });
+    for (const row of chunk) {
+      enqueueBackfillRow(batch, row);
+    }
+    const settled = await batch.flush();
+    if (Result.isError(settled)) {
+      // The batch never reached its per-decision outcomes, so nothing in it
+      // was recorded.
+      failed += chunk.length;
+      captureError(settled.error, { step: "backfillCorpusStorage" });
+      continue;
+    }
+    for (const [decisionId, outcome] of settled.value) {
+      recordOutcome(decisionId, outcome);
+    }
   }
 
   lastId = rows.at(-1)?.id ?? lastId;

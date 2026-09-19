@@ -9,7 +9,7 @@
  * The two share the object-deletion step and nothing else.
  */
 
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { eq } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -37,6 +37,10 @@ import {
   deleteCorpusDocument,
   TRIMMED_CORPUS_PAYLOAD_COLUMNS,
 } from "@/api/lib/legal-search/corpus-storage";
+import {
+  caseLawCorpusTombstoneWriter,
+  CORPUS_TOMBSTONE_REASON,
+} from "@/api/lib/legal-search/corpus-tombstones";
 
 type WithdrawInput = {
   decisionId: SafeId<"caseLawDecision">;
@@ -139,6 +143,10 @@ export const withdrawCaseLawDecisionDocument = async ({
     return Result.ok({ type: "not-found" });
   }
 
+  const tombstone = caseLawCorpusTombstoneWriter({
+    scopedDb,
+    reason: CORPUS_TOMBSTONE_REASON.WITHDRAWAL,
+  });
   let corpusErasure: CorpusObjectErasure = { type: "deleted" };
   if (holdsCorpusObject(pointers)) {
     corpusErasure = await eraseCorpusObjects({
@@ -147,6 +155,8 @@ export const withdrawCaseLawDecisionDocument = async ({
         sectionsKey: pointers.normalizedS3Key,
         astKey: pointers.astS3Key,
       },
+      decisionId,
+      tombstone,
       deleteCorpus,
     });
   }
@@ -238,29 +248,43 @@ export const withdrawCaseLawDecisionDocument = async ({
 
   await removeDecisionFromIndex(decisionId, scopedDb);
 
-  const cancelledCleanup = await Promise.allSettled(
-    written.cancelledIntents.map(async (intent) => {
-      await deleteCorpus({
-        textKey: intent.textKey,
-        sectionsKey: intent.sectionsKey,
-        astKey: intent.astKey,
-      });
-      return intent.id;
-    }),
+  const cancelledCleanup = await Promise.all(
+    written.cancelledIntents.map(
+      async (intent) =>
+        await eraseCorpusObjects({
+          keys: {
+            textKey: intent.textKey,
+            sectionsKey: intent.sectionsKey,
+            astKey: intent.astKey,
+          },
+          decisionId,
+          tombstone,
+          deleteCorpus,
+        }).then((erasure) => ({ intentId: intent.id, erasure })),
+    ),
   );
   const cleanedIntentIds: SafeId<"caseLawCorpusUploadIntent">[] = [];
-  for (const cleanup of cancelledCleanup) {
-    if (cleanup.status === "rejected") {
-      captureError(cleanup.reason, {
-        decisionId,
-        step: "withdrawCaseLawDecisionDocument.deleteReservedCorpusUpload",
-      });
-      continue;
+  for (const { intentId, erasure } of cancelledCleanup) {
+    switch (erasure.type) {
+      case "deleted":
+      case "tombstoned":
+        // A tombstoned member is served to nobody, so the reservation that
+        // owned it has nothing left to retry.
+        cleanedIntentIds.push(intentId);
+        break;
+      case "incomplete":
+        captureError(erasure.error, {
+          decisionId,
+          step: "withdrawCaseLawDecisionDocument.deleteReservedCorpusUpload",
+        });
+        break;
+      default:
+        erasure satisfies never;
+        return panic(`Unhandled erasure: ${String(erasure)}`);
     }
-    cleanedIntentIds.push(cleanup.value);
   }
-  // Only the intents whose objects are gone lose their row; the rest stay
-  // retry targets.
+  // Only the intents whose payloads are beyond reach lose their row; the
+  // rest stay retry targets.
   await completeCaseLawCorpusUploadIntentCleanups({
     intentIds: cleanedIntentIds,
     scopedDb,

@@ -19,10 +19,13 @@ import type { Transaction } from "@/api/db/root";
 import { caseLawDecisions } from "@/api/db/schema";
 import { hasUsableAst } from "@/api/lib/case-law/document-ast";
 import { chunkDocument } from "@/api/lib/corpus-index/chunking";
+import { readCorpusTombstones } from "@/api/lib/legal-search/corpus-reads";
 import {
   readCorpusAst,
   readCorpusText,
 } from "@/api/lib/legal-search/corpus-storage";
+import { prefetchCorpusTombstones } from "@/api/lib/legal-search/corpus-tombstones";
+import type { CorpusTombstoneReader } from "@/api/lib/legal-search/corpus-tombstones";
 import type { EmptyAst } from "@/api/lib/legal-search/document-types";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 
@@ -105,9 +108,27 @@ export type CorpusPayloadSource = {
   readAst: (storedKey: string) => Promise<DocumentAst | EmptyAst | null>;
 };
 
-const corpusPayloadStorage: CorpusPayloadSource = {
-  readText: async (storedKey) => await readCorpusText(storedKey),
-  readAst: async (storedKey) => await readCorpusAst(storedKey),
+/**
+ * The same payload source, with the denial list fetched once for every
+ * address this request is about to read. Each read would otherwise ask the
+ * tombstone table for its own address, which is a query per member.
+ */
+const hydratingPayloadSource = async (
+  pointers: readonly CorpusPassagePointer[],
+  read: CorpusTombstoneReader,
+): Promise<CorpusPayloadSource> => {
+  const readTombstones = await prefetchCorpusTombstones(
+    pointers.flatMap(({ textS3Key, astS3Key }) =>
+      [textS3Key, astS3Key].filter((key): key is string => key !== null),
+    ),
+    read,
+  );
+  return {
+    readText: async (storedKey) =>
+      await readCorpusText(storedKey, { readTombstones }),
+    readAst: async (storedKey) =>
+      await readCorpusAst(storedKey, { readTombstones }),
+  };
 };
 
 /** Payload reads in flight at once, over the whole request list. */
@@ -118,6 +139,8 @@ type ReadCorpusPassagesOptions = {
   pointers: readonly CorpusPassagePointer[];
   source?: CorpusPayloadSource;
   concurrency?: number;
+  /** Test seam; production asks this deployment's denial table. */
+  readTombstones?: CorpusTombstoneReader;
 };
 
 /** A decision's payload, as the chunker takes it. */
@@ -148,8 +171,9 @@ const loadPayload = async ({
 export const readCorpusPassages = async ({
   requests,
   pointers,
-  source = corpusPayloadStorage,
+  source,
   concurrency = PAYLOAD_READ_CONCURRENCY,
+  readTombstones = readCorpusTombstones,
 }: ReadCorpusPassagesOptions): Promise<CorpusPassageResult[]> => {
   const pointerById = new Map(
     pointers.map((pointer) => [pointer.documentId, pointer]),
@@ -161,6 +185,19 @@ export const readCorpusPassages = async ({
         .map(({ documentId }) => documentId),
     ),
   ];
+  // One denial lookup for the whole request, rather than one per member, and
+  // over the payloads this request will actually read. A request that reads
+  // none — no hits, or only hits that carry no anchor — asks nothing, so it
+  // cannot fail on a query it has no use for.
+  const payloadSource =
+    source ??
+    (await hydratingPayloadSource(
+      wanted.flatMap((documentId) => {
+        const pointer = pointerById.get(documentId);
+        return pointer === undefined ? [] : [pointer];
+      }),
+      readTombstones,
+    ));
   const loaded = await mapWithConcurrency({
     items: wanted,
     limit: concurrency,
@@ -170,7 +207,7 @@ export const readCorpusPassages = async ({
       return textKey === null
         ? null
         : await loadPayload({
-            source,
+            source: payloadSource,
             textKey,
             astKey: pointer?.astS3Key ?? null,
           });

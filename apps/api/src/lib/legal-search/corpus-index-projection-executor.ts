@@ -41,9 +41,9 @@ import {
 } from "@/api/lib/legal-search/corpus-index-projection-store";
 import {
   readCorpusAst,
-  readCorpusAtAuthoritativePointer,
   readCorpusText,
-} from "@/api/lib/legal-search/corpus-storage";
+} from "@/api/lib/legal-search/corpus-reads";
+import { readCorpusAtAuthoritativePointer } from "@/api/lib/legal-search/corpus-storage";
 import { LIMITS } from "@/api/lib/limits";
 import type { IngestionTransactionRunner } from "@/api/lib/replay-safe-ingestion";
 import { S3ObjectBudgetError } from "@/api/lib/s3";

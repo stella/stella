@@ -260,6 +260,32 @@ export class CorpusPayloadUnavailableError extends TaggedError(
 }> {}
 
 /**
+ * The address named a member of a pack whose payload has been erased. The
+ * bytes may still sit inside the pack until it is rewritten; no reader serves
+ * them, and no reader degrades to another copy of them either.
+ */
+export class CorpusMemberTombstonedError extends TaggedError(
+  "CorpusMemberTombstonedError",
+)<{
+  message: string;
+  location: string;
+}> {}
+
+/**
+ * A packed member's bytes do not hash to the digest its address records: the
+ * pack was rewritten under a live pointer, or the range read returned the
+ * wrong bytes. Either way the payload is not what the row says it is, so it
+ * is refused rather than parsed.
+ */
+export class CorpusMemberDigestMismatchError extends TaggedError(
+  "CorpusMemberDigestMismatchError",
+)<{
+  message: string;
+  location: string;
+  digest: string;
+}> {}
+
+/**
  * A stored document AST carried vocabulary this reader does not declare:
  * a block role, a block kind, or an inline kind. The read served the
  * document with those degraded (see `persistedAstDegradations` in

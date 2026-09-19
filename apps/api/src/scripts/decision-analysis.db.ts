@@ -4,8 +4,9 @@
  *
  * The connection comes from `CASE_LAW_ANALYSIS_DATABASE_URL` rather than
  * the application's own, because these scripts are meant to run as
- * `stella_case_law_analysis_writer`: SELECT on the columns below and UPDATE on
- * `case_law_decisions.analysis`, nothing else. Every statement here is
+ * `stella_case_law_analysis_writer`: SELECT on the columns below and on a
+ * corpus tombstone's address, UPDATE on `case_law_decisions.analysis`, nothing
+ * else. Every statement here is
  * written against exactly that grant, so a run that reaches for anything
  * more fails loudly instead of silently needing a wider login.
  */
@@ -20,6 +21,8 @@ import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { publisherSummaryMetadataSql } from "@/api/lib/case-law/publisher-summary";
 import type { CorpusSourceDescriptor } from "@/api/lib/legal-search/corpus-source";
+import { corpusTombstoneReaderForTx } from "@/api/lib/legal-search/corpus-tombstones";
+import type { CorpusTombstoneReader } from "@/api/lib/legal-search/corpus-tombstones";
 
 import type { DecisionAnalysisRow } from "./decision-analysis.logic";
 
@@ -33,6 +36,14 @@ export const openAnalysisDatabase = (url: string) =>
     client: new SQL({ url, max: POOL_SIZE }),
     relations: databaseRelations,
   });
+
+/**
+ * Which packed members have been erased, asked of this login's own
+ * connection: a parse is read out of the corpus only after this answers.
+ */
+export const analysisTombstoneReader = (
+  db: AnalysisDatabase,
+): CorpusTombstoneReader => corpusTombstoneReaderForTx(db);
 
 const decisionColumns = {
   id: caseLawDecisions.id,

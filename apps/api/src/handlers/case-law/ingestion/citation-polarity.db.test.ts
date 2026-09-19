@@ -90,8 +90,13 @@ const scopedDb: ScopedDb = async (callback) =>
 /** Postgres holds the payload; no object store takes part in this test. */
 const corpus: CaseLawCorpusDependencies = {
   mode: "off",
-  write: () => {
-    throw new TypeError("a postgres-only plan must not write corpus objects");
+  transfer: {
+    layout: "packs",
+    putPacks: () => {
+      throw new TypeError(
+        "a postgres-only plan must not transfer corpus packs",
+      );
+    },
   },
 };
 

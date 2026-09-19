@@ -17,7 +17,10 @@ import {
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { formatCorpusLocation } from "@/api/lib/legal-search/corpus-location";
-import { packKey } from "@/api/lib/legal-search/corpus-pack";
+import {
+  packKeyForMembers,
+  corpusMemberDigest,
+} from "@/api/lib/legal-search/corpus-pack";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import type {
   LegislationReadDb,
@@ -65,14 +68,25 @@ const firstStaleCorpusId = brandPersistedLegislationDocumentId(
 const laterStaleCorpusId = brandPersistedLegislationDocumentId(
   "0198cb55-8e8b-7b95-83bf-c9e219c70004",
 );
+const memberDigest = corpusMemberDigest(
+  new TextEncoder().encode("canonical corpus sentinel"),
+);
 const corpusKey = formatCorpusLocation({
   type: "packed",
-  packKey: packKey({
+  packKey: packKeyForMembers({
     jurisdiction: "CZE",
-    packId: "0198cb55-8e8b-7b95-83bf-c9e219c70db2",
+    members: [
+      {
+        documentId: "legislation-corpus-sentinel",
+        kind: "text",
+        sha256: memberDigest,
+        length: 512,
+      },
+    ],
   }),
   offset: 4096,
   length: 512,
+  sha256: memberDigest,
 });
 
 const scopedDb: Parameters<typeof indexLegislationDocument>[1] = async (

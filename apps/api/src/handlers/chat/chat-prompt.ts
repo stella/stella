@@ -96,11 +96,12 @@ import {
 } from "@/api/lib/files/office-evidence";
 import type { OfficeEvidencePayload } from "@/api/lib/files/office-evidence-types";
 import { createFileKey } from "@/api/lib/files/utils";
-import { allowsDerivedAi } from "@/api/lib/legal-search/corpus-source";
 import {
-  readCorpusPayloadOrFallback,
   readCorpusText,
-} from "@/api/lib/legal-search/corpus-storage";
+  readCorpusTombstones,
+} from "@/api/lib/legal-search/corpus-reads";
+import { allowsDerivedAi } from "@/api/lib/legal-search/corpus-source";
+import { readCorpusPayloadOrFallback } from "@/api/lib/legal-search/corpus-storage";
 import {
   publishedLegislationDocument,
   redistributableLegislationVersion,
@@ -1772,7 +1773,7 @@ type ActiveDecisionAstPointers = {
  */
 const readActiveDecisionAst = async (row: ActiveDecisionAstPointers) => {
   const read = await Result.tryPromise(
-    async () => await readDecisionAnalysisAst(row),
+    async () => await readDecisionAnalysisAst(row, readCorpusTombstones),
   );
   if (Result.isOk(read)) {
     return read.value;

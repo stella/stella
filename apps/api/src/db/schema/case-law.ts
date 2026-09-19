@@ -57,6 +57,7 @@ import {
   CASE_LAW_DECISION_DATE_BOUNDS_CONSTRAINT,
   decisionDateWithinBoundsSql,
 } from "@/api/lib/decision-date-bounds-sql";
+import { PACK_MEMBER_KINDS } from "@/api/lib/legal-search/corpus-pack";
 import { storedObservationHasDetail } from "@/api/lib/legal-search/partial-observation-sql";
 
 import {
@@ -121,6 +122,37 @@ export const CASE_LAW_CORPUS_UPLOAD_INTENT_STATUS = {
   ACTIVE: CASE_LAW_CORPUS_UPLOAD_INTENT_STATUSES[0],
   CLEANUP: CASE_LAW_CORPUS_UPLOAD_INTENT_STATUSES[1],
 } as const;
+
+/**
+ * The member kinds a pack reference can name, taken from the pack format
+ * itself so a kind cannot exist in a written pack and not in the table that
+ * records what references it.
+ */
+export const CASE_LAW_CORPUS_PACK_MEMBER_KINDS = PACK_MEMBER_KINDS;
+
+const CASE_LAW_CORPUS_PACK_MEMBER_KIND_SQL_VALUES =
+  CASE_LAW_CORPUS_PACK_MEMBER_KINDS.map((kind) => sql`${kind}`);
+
+/**
+ * Why a location stopped being readable. Only an erasure writes one: an
+ * abandoned upload is reclaimed by deleting what it wrote, never by denying
+ * addresses a retry re-derives.
+ */
+export const CASE_LAW_CORPUS_TOMBSTONE_REASONS = [
+  "redaction",
+  "withdrawal",
+] as const;
+
+type CaseLawCorpusTombstoneReason =
+  (typeof CASE_LAW_CORPUS_TOMBSTONE_REASONS)[number];
+
+export const CASE_LAW_CORPUS_TOMBSTONE_REASON = {
+  REDACTION: "redaction",
+  WITHDRAWAL: "withdrawal",
+} as const satisfies ConstantMap<CaseLawCorpusTombstoneReason>;
+
+const CASE_LAW_CORPUS_TOMBSTONE_REASON_SQL_VALUES =
+  CASE_LAW_CORPUS_TOMBSTONE_REASONS.map((reason) => sql`${reason}`);
 
 /**
  * How a source's reported total was obtained. Not a boolean: a third
@@ -1015,6 +1047,13 @@ export const caseLawCorpusUploadIntents = p.pgTable(
       })
       .notNull(),
     astS3Key: p.varchar("ast_s3_key", { length: 512 }).notNull(),
+    /**
+     * The pack the three addresses above are members of, or null when they
+     * name standalone objects. Cleanup asks "does anything still reference
+     * this pack?" by equality on this column and on
+     * {@link caseLawCorpusPackRefs}.
+     */
+    packKey: p.varchar("pack_key", { length: 512 }),
     status: p
       .varchar({
         length: 16,
@@ -1055,7 +1094,86 @@ export const caseLawCorpusUploadIntents = p.pgTable(
       "case_law_corpus_upload_intents_cleanup_attempts_nonnegative",
       sql`${t.cleanupAttemptCount} >= 0`,
     ),
+    p.index("case_law_corpus_upload_intents_pack_idx").on(t.packKey),
     ...caseLawIngestionOnlyPolicies(),
+  ],
+);
+
+/**
+ * Which pack each stored corpus pointer addresses.
+ *
+ * A pack outlives the write that created it and is shared by the documents
+ * of one batch, so "is this pack still referenced?" cannot be answered from
+ * the pointer columns: they hold addresses, and a prefix match over them
+ * would need pattern indexes on the decisions table — which would also cost
+ * every pointer rewrite the index maintenance it avoids today. These rows
+ * carry the same fact as an equality lookup, written in the transaction that
+ * writes the pointer and removed with it.
+ */
+export const caseLawCorpusPackRefs = p.pgTable(
+  "case_law_corpus_pack_refs",
+  {
+    decisionId: safeUuid<"caseLawDecision">("decision_id").notNull(),
+    kind: p
+      .varchar({ length: 16, enum: CASE_LAW_CORPUS_PACK_MEMBER_KINDS })
+      .notNull(),
+    packKey: p.varchar("pack_key", { length: 512 }).notNull(),
+    location: p.varchar({ length: 512 }).notNull(),
+    createdAt: timestamptz("created_at").defaultNow().notNull(),
+  },
+  (t) => [
+    p.primaryKey({
+      name: "case_law_corpus_pack_refs_pk",
+      columns: [t.decisionId, t.kind],
+    }),
+    p.index("case_law_corpus_pack_refs_pack_idx").on(t.packKey),
+    p.check(
+      "case_law_corpus_pack_refs_kind_values",
+      sql`${t.kind} IN (${sql.join(CASE_LAW_CORPUS_PACK_MEMBER_KIND_SQL_VALUES, sql`, `)})`,
+    ),
+    ...caseLawIngestionOnlyPolicies(),
+  ],
+);
+
+/**
+ * Locations a reader must refuse, whatever the object behind them still
+ * holds.
+ *
+ * A standalone corpus object is erased by deleting it. A member of a pack
+ * cannot be: the pack carries other documents' payloads, and rewriting it on
+ * every erasure would rewrite every surviving member with it. The erasure
+ * records the member's address here instead, and every corpus read consults
+ * this table before it fetches a range, so the erased bytes stop being
+ * readable at the moment of the erasure. Reclaiming the bytes is a later,
+ * separate rewrite of the pack; this table is what makes the erasure
+ * immediate.
+ */
+export const caseLawCorpusTombstones = p.pgTable(
+  "case_law_corpus_tombstones",
+  {
+    location: p.varchar({ length: 512 }).primaryKey(),
+    /**
+     * The pack the denied address sits in. Carried rather than parsed out of
+     * the address, so the packs that owe a rewrite are an indexed listing:
+     * until one is rewritten, the erased bytes are still inside it.
+     */
+    packKey: p.varchar("pack_key", { length: 512 }).notNull(),
+    decisionId: safeUuid<"caseLawDecision">("decision_id").notNull(),
+    reason: p
+      .varchar({ length: 32, enum: CASE_LAW_CORPUS_TOMBSTONE_REASONS })
+      .notNull(),
+    createdAt: timestamptz("created_at").defaultNow().notNull(),
+  },
+  (t) => [
+    p.index("case_law_corpus_tombstones_decision_idx").on(t.decisionId),
+    p.index("case_law_corpus_tombstones_pack_idx").on(t.packKey),
+    p.check(
+      "case_law_corpus_tombstones_reason_values",
+      sql`${t.reason} IN (${sql.join(CASE_LAW_CORPUS_TOMBSTONE_REASON_SQL_VALUES, sql`, `)})`,
+    ),
+    ...globalCaseLawPolicies(),
+    ...publicLawReaderPolicies(),
+    ...caseLawAnalysisWriterReadPolicies(),
   ],
 );
 

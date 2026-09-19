@@ -16,6 +16,10 @@
     "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
   },
   {
+    "file": "apps/api/src/handlers/case-law/erasure.ts",
+    "reason": "operator redaction, not a client projection: the rows it reads are storage pointers it deletes, and it answers a typed outcome to the redaction script"
+  },
+  {
     "file": "apps/api/src/handlers/case-law/ingestion/pipeline.ts",
     "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
   },

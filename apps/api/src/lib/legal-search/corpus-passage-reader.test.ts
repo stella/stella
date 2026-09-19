@@ -40,6 +40,8 @@ const astOf = (blocks: Block[]): DocumentAst => ({
 const DECISION_ID = "decision-1";
 const TEXT_KEY = "corpus/decision-1/text";
 const AST_KEY = "corpus/decision-1/ast";
+/** A packed address: the form a reader has to ask the denial table about. */
+const PACKED_KEY = `pack:CZE/pack-1.stlpack@0+64#${"a".repeat(64)}`;
 
 // Long enough that the chunker closes a passage between them, so the fixture
 // has more than one anchor to address.
@@ -198,6 +200,31 @@ describe("readCorpusPassages", () => {
     expect(results).toEqual([
       { status: "unanchored", documentId: DECISION_ID },
     ]);
+  });
+
+  test("asks the denial table only about the payloads it will read", async () => {
+    // Hydrating every pointer made an unanchored-only request depend on a
+    // query it has no use for: the call failed although no corpus payload
+    // was needed, and it primed addresses no read would reach.
+    const asked: string[][] = [];
+    const packed = [
+      { documentId: DECISION_ID, textS3Key: PACKED_KEY, astS3Key: null },
+      { documentId: "d2", textS3Key: PACKED_KEY, astS3Key: null },
+    ];
+
+    const results = await readCorpusPassages({
+      requests: [{ documentId: DECISION_ID, anchorId: null }],
+      pointers: packed,
+      readTombstones: async (locations) => {
+        asked.push([...locations]);
+        return await Promise.reject(new Error("the denial table is down"));
+      },
+    });
+
+    expect(results).toEqual([
+      { status: "unanchored", documentId: DECISION_ID },
+    ]);
+    expect(asked).toEqual([]);
   });
 
   test("reports a document with no payload pointer", async () => {

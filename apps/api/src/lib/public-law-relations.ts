@@ -8,6 +8,7 @@
  */
 export const PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT = {
   caseLawCitations: "case_law_citations",
+  caseLawCorpusTombstones: "case_law_corpus_tombstones",
   caseLawDecisionIdentifiers: "case_law_decision_identifiers",
   caseLawDecisionJudges: "case_law_decision_judges",
   caseLawDecisions: "case_law_decisions",
@@ -63,6 +64,12 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     kind: "required",
     section_index: "required",
     polarity: "required",
+  },
+  // The denial list a corpus read consults before it serves a packed
+  // member. The address is the whole of the question; who was erased, why and
+  // which pack owes the rewrite stay on the owning service side.
+  case_law_corpus_tombstones: {
+    location: "required",
   },
   case_law_decision_identifiers: {
     decision_id: "required",

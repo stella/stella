@@ -36,6 +36,7 @@ import { prepareCorpusReads, readRowAst } from "./decision-analysis.ast";
 import {
   candidateAsRow,
   listCandidateRows,
+  analysisTombstoneReader,
   openAnalysisDatabase,
   type CandidateCursor,
 } from "./decision-analysis.db";
@@ -88,6 +89,7 @@ if (Result.isError(url)) {
 }
 
 const db = openAnalysisDatabase(url.value);
+const tombstones = analysisTombstoneReader(db);
 
 await prepareCorpusReads();
 
@@ -131,7 +133,7 @@ while (printed < limit) {
       break;
     }
     const row = candidateAsRow(candidate);
-    const ast = await readRowAst(row);
+    const ast = await readRowAst(row, tombstones);
     const resolved = resolveRowAnalysisInput({ ast, row });
     if (resolved.status === "rejected") {
       outcomes.push(`skipped:${resolved.reason}`);

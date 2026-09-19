@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { and, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
@@ -25,7 +26,8 @@ import {
   CORPUS_INDEX_MANIFESTS,
   corpusIndexManifestDigest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
-import { planCorpusDocumentWrite } from "@/api/lib/legal-search/corpus-storage";
+import { parseCorpusLocation } from "@/api/lib/legal-search/corpus-location";
+import type { EncodedPack } from "@/api/lib/legal-search/corpus-pack";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -35,22 +37,18 @@ let scopedDb: ScopedDb;
 
 const sourceId = createSafeId<"caseLawSource">();
 
-const corpusWrite: CaseLawCorpusDependencies["write"] = async (input) => {
-  const plan = planCorpusDocumentWrite(input);
-  switch (plan.type) {
-    case "put":
-      return await Promise.resolve({ type: "written", written: plan.written });
-    case "skipped-empty":
-    case "skipped-unchanged":
-      return await Promise.resolve(plan);
-    default:
-      return plan satisfies never;
-  }
-};
+/** Every pack the batches of this test handed to the transfer. */
+const transferred: EncodedPack[] = [];
 
 const corpus = {
   mode: "canonical",
-  write: corpusWrite,
+  transfer: {
+    layout: "packs",
+    putPacks: async ({ packs }) => {
+      transferred.push(...packs);
+      return await Promise.resolve(Result.ok(undefined));
+    },
+  },
 } satisfies CaseLawCorpusDependencies;
 
 const input = (court: string, rawHash: string): IngestionResult => ({
@@ -104,7 +102,7 @@ test("a settled case-law write advances desired state and dedup replay repairs t
   });
   const decision = (
     await db
-      .select({ id: caseLawDecisions.id })
+      .select({ id: caseLawDecisions.id, textKey: caseLawDecisions.textS3Key })
       .from(caseLawDecisions)
       .where(
         and(
@@ -116,6 +114,13 @@ test("a settled case-law write advances desired state and dedup replay repairs t
   if (decision === undefined) {
     throw new Error("expected stored case-law decision");
   }
+  // What "settled" means under canonical storage: the row addresses a member
+  // of the pack the batch transferred, not a key of its own.
+  expect(transferred).toHaveLength(1);
+  expect(parseCorpusLocation(decision.textKey ?? "")).toMatchObject({
+    type: "packed",
+    packKey: transferred.at(0)?.packKey,
+  });
   const initialState = (
     await db
       .select({

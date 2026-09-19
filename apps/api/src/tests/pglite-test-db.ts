@@ -55,6 +55,7 @@ export const CASE_LAW_ANALYSIS_WRITER_SELECT_COLUMNS = {
     "country",
     "decision_type",
     "document_ast",
+    "ast_s3_key",
     "content_hash",
     "analysis",
     "redacted_at",
@@ -63,6 +64,7 @@ export const CASE_LAW_ANALYSIS_WRITER_SELECT_COLUMNS = {
     "citation_count",
   ],
   case_law_sources: ["id", "descriptor"],
+  case_law_corpus_tombstones: ["location"],
 } as const;
 
 /**
@@ -169,7 +171,8 @@ export const ROLE_GRANT_STATEMENTS = [
       "case_law_search_documents",
       "case_law_ingestion_events",
       "case_law_ingestion_failures",
-      "case_law_index_jobs"
+      "case_law_index_jobs",
+      "case_law_corpus_tombstones"
     FROM stella
   `,
   `
@@ -238,6 +241,7 @@ export const ROLE_GRANT_STATEMENTS = [
     GRANT SELECT ON TABLE
       "case_law_reconciliation_items",
       "case_law_coverage_slices",
+      "case_law_corpus_tombstones",
       "case_law_search_document_preview_passages"
     TO stella
   `,
@@ -246,6 +250,8 @@ export const ROLE_GRANT_STATEMENTS = [
       "case_law_reconciliation_items",
       "case_law_coverage_slices",
       "case_law_corpus_upload_intents",
+      "case_law_corpus_pack_refs",
+      "case_law_corpus_tombstones",
       "case_law_decision_source_identities",
       "case_law_search_document_preview_passages",
       "case_law_citation_resolution_census",
@@ -261,6 +267,14 @@ export const ROLE_GRANT_STATEMENTS = [
   // but never updates or deletes them.
   `
     GRANT INSERT ON TABLE "case_law_index_jobs" TO stella_ingestion
+  `,
+  // Ingestion bookkeeping the migrations keep from the request role outright.
+  `
+    REVOKE ALL PRIVILEGES ON TABLE
+      "case_law_corpus_upload_intents",
+      "case_law_corpus_pack_refs",
+      "case_law_decision_source_identities"
+    FROM stella
   `,
   // Legislation corpus — same global model as case law.
   `

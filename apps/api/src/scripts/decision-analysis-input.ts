@@ -30,7 +30,11 @@ import { ANALYSIS_OUTPUT_JSON_SCHEMA } from "@/api/handlers/case-law/analysis/an
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 
 import { prepareCorpusReads, readRowAst } from "./decision-analysis.ast";
-import { openAnalysisDatabase, readDecisionRows } from "./decision-analysis.db";
+import {
+  analysisTombstoneReader,
+  openAnalysisDatabase,
+  readDecisionRows,
+} from "./decision-analysis.db";
 import {
   ANALYSIS_REJECTION,
   flagValue,
@@ -77,6 +81,7 @@ if (Result.isError(url)) {
 }
 
 const db = openAnalysisDatabase(url.value);
+const tombstones = analysisTombstoneReader(db);
 
 type InputRecord =
   | {
@@ -113,7 +118,7 @@ for (const id of ids) {
   // Sequentially, one corpus object at a time: a batch is an operator's
   // pass over the corpus, not a request, and the object store is shared
   // with the serving path.
-  const ast = await readRowAst(row);
+  const ast = await readRowAst(row, tombstones);
   const resolved = resolveRowAnalysisInput({ ast, row });
   if (resolved.status === "rejected") {
     records.push({

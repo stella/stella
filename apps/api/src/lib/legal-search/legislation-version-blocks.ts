@@ -6,9 +6,9 @@ import { legislationDocuments } from "@/api/db/schema";
 import { corpusStorageMode } from "@/api/env-base";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CorpusStorageMode } from "@/api/lib/corpus-storage-mode";
+import { readCorpusAst } from "@/api/lib/legal-search/corpus-reads";
 import {
   parsePersistedCorpusAst,
-  readCorpusAst,
   readCorpusPayloadOrFallback,
 } from "@/api/lib/legal-search/corpus-storage";
 import {

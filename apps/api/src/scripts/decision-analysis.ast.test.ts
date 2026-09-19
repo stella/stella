@@ -27,6 +27,7 @@ import {
 } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
+import type { CorpusTombstoneReader } from "@/api/lib/legal-search/corpus-tombstones";
 import type * as FakeS3Module from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 
@@ -40,6 +41,9 @@ const DECISION_ID = toSafeId<"caseLawDecision">(
   "00000000-0000-0000-0000-0000000000d1",
 );
 const AST_KEY = "cze/cz-ns/decision-d1.ast.zst";
+
+const noTombstones: CorpusTombstoneReader = async () =>
+  await Promise.resolve(new Set());
 
 const paragraph = (anchorId: string, plainText: string) => ({
   id: anchorId,
@@ -113,7 +117,7 @@ describe("readRowAst", () => {
   });
 
   test("reads the parse from object storage for a trimmed row", async () => {
-    const ast = await readRowAst(rowWith());
+    const ast = await readRowAst(rowWith(), noTombstones);
 
     expect(ast?.blocks.map((block) => block.anchorId)).toEqual(["b1", "b2"]);
   });
@@ -128,6 +132,7 @@ describe("readRowAst", () => {
           blocks: [paragraph("b9", "Kopie v řádku.")],
         },
       }),
+      noTombstones,
     );
 
     expect(ast?.blocks.map((block) => block.anchorId)).toEqual(["b9"]);
@@ -138,12 +143,13 @@ describe("readRowAst", () => {
   test("answers null when there is no parse anywhere", async () => {
     fake.failNext({ method: "GET", code: "AccessDenied", status: 403 });
 
-    expect(await readRowAst(rowWith())).toBeNull();
+    expect(await readRowAst(rowWith(), noTombstones)).toBeNull();
   });
 
   test("reads the row's column when the decision has no object at all", async () => {
     const ast = await readRowAst(
       rowWith({ astS3Key: null, contentHash: null, documentAst: storedAst }),
+      noTombstones,
     );
 
     expect(ast?.blocks.map((block) => block.anchorId)).toEqual(["b1", "b2"]);

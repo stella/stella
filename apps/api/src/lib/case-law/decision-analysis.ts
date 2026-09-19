@@ -8,6 +8,7 @@ import {
   readCorpusAst,
   readCorpusPayloadOrFallback,
 } from "@/api/lib/legal-search/corpus-storage";
+import type { CorpusTombstoneReader } from "@/api/lib/legal-search/corpus-tombstones";
 import {
   definePublicLawSharedQuery,
   PUBLIC_LAW_SHARED_QUERY,
@@ -63,13 +64,15 @@ type DecisionAstPointers = {
  * for exactly the rows object storage holds. An unreadable object with no
  * copy to fall back to throws (`CorpusPayloadUnavailableError`), the same
  * as every other reader of a trimmed row.
+ *
+ * The denial list comes from the caller: this function is shared by the
+ * application and by the operator scripts, which run on a database login of
+ * their own, so neither the reader nor this module may name a connection.
  */
-export const readDecisionAnalysisAst = async ({
-  astS3Key,
-  contentHash,
-  documentAst,
-  id,
-}: DecisionAstPointers): Promise<DocumentAst | null> => {
+export const readDecisionAnalysisAst = async (
+  { astS3Key, contentHash, documentAst, id }: DecisionAstPointers,
+  readTombstones: CorpusTombstoneReader,
+): Promise<DocumentAst | null> => {
   if (
     corpusStorageMode === "off" ||
     astS3Key === null ||
@@ -81,7 +84,7 @@ export const readDecisionAnalysisAst = async ({
     documentId: id,
     key: astS3Key,
     step: "analysis.readDecisionAst",
-    read: async () => await readCorpusAst(astS3Key),
+    read: async () => await readCorpusAst(astS3Key, { readTombstones }),
     fallback: async () => await Promise.resolve(documentAst),
   });
   return parseUsableDocumentAst(stored);

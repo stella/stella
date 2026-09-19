@@ -49,7 +49,7 @@ const READ_CONCURRENCY = 2;
 const EPOCH = 3n;
 
 /** Refused by `readCorpusBytesAt` on its declared length, before any request. */
-const OVERSIZE_PACKED_KEY = `pack:legal-corpus/pack.zst@0+${CORPUS_TRANSFER_MAX_BYTES + 1}`;
+const OVERSIZE_PACKED_KEY = `pack:legal-corpus/pack.zst@0+${CORPUS_TRANSFER_MAX_BYTES + 1}#${"a".repeat(64)}`;
 
 const documentId = (index: number): string =>
   `0198e331-e578-7000-8000-0000000001${String(index).padStart(2, "0")}`;

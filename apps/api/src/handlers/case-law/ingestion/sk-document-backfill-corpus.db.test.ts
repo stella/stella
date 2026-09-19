@@ -15,6 +15,7 @@
  * Runs in the nightly Postgres job; skipped elsewhere.
  */
 
+import { Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/bun-sql";
@@ -32,13 +33,32 @@ import {
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import type { SafeId } from "@/api/lib/branded-types";
-import type { CorpusWriteOutcome } from "@/api/lib/legal-search/corpus-storage";
-import { EMPTY_CORPUS_CONTENT_HASHES } from "@/api/lib/legal-search/corpus-storage";
+import { parseCorpusLocation } from "@/api/lib/legal-search/corpus-location";
+import {
+  CorpusPackError,
+  decodePackFooter,
+} from "@/api/lib/legal-search/corpus-pack";
+import type { PackFooter } from "@/api/lib/legal-search/corpus-pack";
+import type { CorpusTransfer } from "@/api/lib/legal-search/corpus-pack-batch";
+import {
+  corpusContentHash,
+  EMPTY_CORPUS_CONTENT_HASHES,
+} from "@/api/lib/legal-search/corpus-storage";
 import {
   markDocumentUnavailable,
   pendingDocumentPredicate,
   storeBackfilledDocument,
 } from "@/api/lib/legal-search/sk-document-backfill";
+
+/** A pack that does not decode fails the test rather than a case in it. */
+const unwrapPackFooter = (
+  decoded: Result<PackFooter, CorpusPackError>,
+): PackFooter => {
+  if (Result.isError(decoded)) {
+    throw decoded.error;
+  }
+  return decoded.value;
+};
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -72,16 +92,35 @@ const parsedAst: DocumentAst = {
   ],
 };
 
-const NEW_KEYS = {
+/** The keys a pre-migration writer left on a row, for the legacy case below. */
+const LEGACY_CONTENT_HASH = "new-content-hash";
+const LEGACY_KEYS = {
   textKey: "legal-corpus/new/text.zst",
   sectionsKey: "legal-corpus/new/sections.json.zst",
   astKey: "legal-corpus/new/ast.json.zst",
 } as const;
-const NEW_CONTENT_HASH = "new-content-hash";
-const NEW_WRITE_OUTCOME = {
-  type: "written",
-  written: { ...NEW_KEYS, contentHash: NEW_CONTENT_HASH },
-} as const satisfies CorpusWriteOutcome;
+
+/**
+ * A transfer that lands. The addresses are no longer the test's to choose:
+ * the store packs the document it was handed, and every address is a range
+ * inside that pack.
+ */
+const landingTransfer = {
+  layout: "packs",
+  putPacks: async () => await Promise.resolve(Result.ok(undefined)),
+} as const satisfies CorpusTransfer;
+
+/** The partition a jurisdiction's packs are keyed under. */
+const packPrefix = (jurisdiction: string) =>
+  `legal-corpus/packs/jurisdiction=${jurisdiction}/`;
+
+/** The key of a pack that carries this jurisdiction's members. */
+const packKeyUnder = (jurisdiction: string) =>
+  expect.stringContaining(packPrefix(jurisdiction));
+
+/** Every stored pointer addresses a member of such a pack. */
+const packedUnder = (jurisdiction: string) =>
+  expect.stringContaining(`pack:${packPrefix(jurisdiction)}`);
 
 if (!databaseUrl || !runPostgresTests) {
   describe.skip("sk-courts document backfill — corpus storage", () => {
@@ -158,6 +197,12 @@ if (!databaseUrl || !runPostgresTests) {
         { index: 0, type: "header" as const, title: null, text: "Rozsudok" },
       ],
     };
+    /** What the store hashes the document to, and settles the row with. */
+    const documentContentHash = corpusContentHash({
+      text: parsedDocument.fulltext,
+      sections: parsedDocument.sections,
+      ast: parsedDocument.documentAst,
+    });
 
     beforeAll(async () => {
       const existing = await db.query.caseLawSources.findFirst({
@@ -199,31 +244,36 @@ if (!databaseUrl || !runPostgresTests) {
         keys: true,
       });
 
-      type WriteInput = {
-        documentId: string;
-        jurisdiction: string;
-        text: string | null;
-      };
-      const corpusWrites: WriteInput[] = [];
-      /** The row's hash at the moment the objects were written. */
+      /** What each transferred pack carries, and for which document. */
+      const packedMembers: { packKey: string; documentId: string }[] = [];
+      /** The row's hash at the moment the pack was transferred. */
       const hashesDuringWrite: (string | null)[] = [];
 
       await storeBackfilledDocument({
         decision: decisionFor(id, caseNumber),
         document: parsedDocument,
         scopedDb,
-        writeCorpus: async (input): Promise<CorpusWriteOutcome> => {
-          corpusWrites.push({
-            documentId: input.documentId,
-            jurisdiction: input.jurisdiction,
-            text: input.text,
-          });
-          const during = await db.query.caseLawDecisions.findFirst({
-            where: { id: { eq: id } },
-            columns: { contentHash: true },
-          });
-          hashesDuringWrite.push(during?.contentHash ?? null);
-          return NEW_WRITE_OUTCOME;
+        transfer: {
+          layout: "packs",
+          putPacks: async ({ packs }) => {
+            for (const pack of packs) {
+              const footer = unwrapPackFooter(
+                await decodePackFooter(pack.bytes),
+              );
+              packedMembers.push(
+                ...footer.members.map(({ documentId }) => ({
+                  packKey: pack.packKey,
+                  documentId,
+                })),
+              );
+            }
+            const during = await db.query.caseLawDecisions.findFirst({
+              where: { id: { eq: id } },
+              columns: { contentHash: true },
+            });
+            hashesDuringWrite.push(during?.contentHash ?? null);
+            return Result.ok(undefined);
+          },
         },
       });
 
@@ -238,24 +288,27 @@ if (!databaseUrl || !runPostgresTests) {
         },
       });
 
-      // The document reached object storage under this decision's id
-      // and jurisdiction, not just the columns.
-      expect(corpusWrites).toEqual([
-        {
-          documentId: id,
-          jurisdiction: "SVK",
-          text: parsedDocument.fulltext,
-        },
+      // The document reached object storage as members of one pack under
+      // this decision's id and jurisdiction, not just the columns.
+      expect(packedMembers).toEqual([
+        { packKey: packKeyUnder("SVK"), documentId: id },
+        { packKey: packKeyUnder("SVK"), documentId: id },
+        { packKey: packKeyUnder("SVK"), documentId: id },
       ]);
-      // Objects first: the row still pointed at the empty payload while
-      // they were being written.
+      // The pack first: the row still pointed at the empty payload while it
+      // was being transferred.
       expect(hashesDuringWrite).toEqual([emptyHash]);
 
       expect(stored?.fulltext).toContain("Odôvodnenie");
-      expect(stored?.textS3Key).toBe(NEW_KEYS.textKey);
-      expect(stored?.normalizedS3Key).toBe(NEW_KEYS.sectionsKey);
-      expect(stored?.astS3Key).toBe(NEW_KEYS.astKey);
-      expect(stored?.contentHash).toBe(NEW_CONTENT_HASH);
+      // The row addresses the pack that was transferred, not merely some
+      // pack of this jurisdiction: the pointer and the bytes are one write.
+      expect(parseCorpusLocation(stored?.textS3Key ?? "")).toMatchObject({
+        type: "packed",
+        packKey: packedMembers.at(0)?.packKey,
+      });
+      expect(stored?.normalizedS3Key).toEqual(packedUnder("SVK"));
+      expect(stored?.astS3Key).toEqual(packedUnder("SVK"));
+      expect(stored?.contentHash).toBe(documentContentHash);
     });
 
     test("writes the columns alone where corpus storage is off", async () => {
@@ -269,7 +322,7 @@ if (!databaseUrl || !runPostgresTests) {
         decision: decisionFor(id, caseNumber),
         document: parsedDocument,
         scopedDb,
-        writeCorpus: null,
+        transfer: null,
       });
 
       const stored = await db.query.caseLawDecisions.findFirst({
@@ -301,7 +354,7 @@ if (!databaseUrl || !runPostgresTests) {
         decision: decisionFor(id, caseNumber),
         document: parsedDocument,
         scopedDb,
-        writeCorpus: async () => NEW_WRITE_OUTCOME,
+        transfer: landingTransfer,
       });
 
       const stored = await db.query.caseLawDecisions.findFirst({
@@ -317,10 +370,10 @@ if (!databaseUrl || !runPostgresTests) {
 
       expect(stored).toMatchObject({
         corpusMirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
-        textS3Key: NEW_KEYS.textKey,
-        normalizedS3Key: NEW_KEYS.sectionsKey,
-        astS3Key: NEW_KEYS.astKey,
-        contentHash: NEW_CONTENT_HASH,
+        textS3Key: packedUnder("SVK"),
+        normalizedS3Key: packedUnder("SVK"),
+        astS3Key: packedUnder("SVK"),
+        contentHash: documentContentHash,
       });
     });
 
@@ -345,7 +398,7 @@ if (!databaseUrl || !runPostgresTests) {
         document: parsedDocument,
         mode: "canonical",
         scopedDb,
-        writeCorpus: async () => NEW_WRITE_OUTCOME,
+        transfer: landingTransfer,
       });
 
       expect(outcome).toBe("stored");
@@ -368,10 +421,10 @@ if (!databaseUrl || !runPostgresTests) {
         fulltext: null,
         sections: null,
         documentAst: null,
-        textS3Key: NEW_KEYS.textKey,
-        normalizedS3Key: NEW_KEYS.sectionsKey,
-        astS3Key: NEW_KEYS.astKey,
-        contentHash: NEW_CONTENT_HASH,
+        textS3Key: packedUnder("SVK"),
+        normalizedS3Key: packedUnder("SVK"),
+        astS3Key: packedUnder("SVK"),
+        contentHash: documentContentHash,
       });
     });
 
@@ -396,7 +449,7 @@ if (!databaseUrl || !runPostgresTests) {
         document: parsedDocument,
         mode: "canonical",
         scopedDb,
-        writeCorpus: async () => NEW_WRITE_OUTCOME,
+        transfer: landingTransfer,
       });
 
       // The attempt that was overtaken, finishing with nothing to store.
@@ -415,10 +468,10 @@ if (!databaseUrl || !runPostgresTests) {
         }),
       ).toEqual({
         fulltext: null,
-        textS3Key: NEW_KEYS.textKey,
-        normalizedS3Key: NEW_KEYS.sectionsKey,
-        astS3Key: NEW_KEYS.astKey,
-        contentHash: NEW_CONTENT_HASH,
+        textS3Key: packedUnder("SVK"),
+        normalizedS3Key: packedUnder("SVK"),
+        astS3Key: packedUnder("SVK"),
+        contentHash: documentContentHash,
       });
     });
 
@@ -438,7 +491,7 @@ if (!databaseUrl || !runPostgresTests) {
           document: parsedDocument,
           mode: "canonical",
           scopedDb,
-          writeCorpus: async () => NEW_WRITE_OUTCOME,
+          transfer: landingTransfer,
         });
 
       expect(await store()).toBe("stored");
@@ -475,7 +528,7 @@ if (!databaseUrl || !runPostgresTests) {
         document: parsedDocument,
         mode: "canonical",
         scopedDb,
-        writeCorpus: async () => NEW_WRITE_OUTCOME,
+        transfer: landingTransfer,
       });
 
       expect(await stillPending()).toBe(false);
@@ -493,7 +546,7 @@ if (!databaseUrl || !runPostgresTests) {
         document: parsedDocument,
         mode: "dual-write",
         scopedDb,
-        writeCorpus: async () => NEW_WRITE_OUTCOME,
+        transfer: landingTransfer,
       });
 
       expect(
@@ -503,8 +556,8 @@ if (!databaseUrl || !runPostgresTests) {
         }),
       ).toMatchObject({
         fulltext: parsedDocument.fulltext,
-        textS3Key: NEW_KEYS.textKey,
-        contentHash: NEW_CONTENT_HASH,
+        textS3Key: packedUnder("SVK"),
+        contentHash: documentContentHash,
       });
     });
 
@@ -525,7 +578,7 @@ if (!databaseUrl || !runPostgresTests) {
         document: parsedDocument,
         mode: "canonical",
         scopedDb,
-        writeCorpus: null,
+        transfer: null,
       });
 
       expect(
@@ -552,19 +605,25 @@ if (!databaseUrl || !runPostgresTests) {
         mirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.PENDING,
       });
 
-      const failure = await storeBackfilledDocument({
+      const outcome = await storeBackfilledDocument({
         decision: decisionFor(id, caseNumber),
         document: parsedDocument,
         mode: "canonical",
         scopedDb,
-        writeCorpus: async () =>
-          await Promise.reject(new Error("bucket unreachable")),
-      }).then(
-        () => null,
-        (error: unknown) => error,
-      );
+        transfer: {
+          layout: "packs",
+          putPacks: async () =>
+            await Promise.resolve(
+              Result.err(
+                new CorpusPackError({ message: "bucket unreachable" }),
+              ),
+            ),
+        },
+      });
 
-      expect(failure).toBeInstanceOf(Error);
+      // Nothing was stored, so the decision is reported exactly as one this
+      // store did not fill: it keeps its place in the queue.
+      expect(outcome).toBe("superseded");
       expect(
         await db.query.caseLawDecisions.findFirst({
           where: { id: { eq: id } },
@@ -603,10 +662,10 @@ if (!databaseUrl || !runPostgresTests) {
       // new state transition before the CHECK constraints run.
       await db.execute(sql`
         UPDATE ${caseLawDecisions}
-        SET text_s3_key = ${NEW_KEYS.textKey},
-            normalized_s3_key = ${NEW_KEYS.sectionsKey},
-            ast_s3_key = ${NEW_KEYS.astKey},
-            content_hash = ${NEW_CONTENT_HASH}
+        SET text_s3_key = ${LEGACY_KEYS.textKey},
+            normalized_s3_key = ${LEGACY_KEYS.sectionsKey},
+            ast_s3_key = ${LEGACY_KEYS.astKey},
+            content_hash = ${LEGACY_CONTENT_HASH}
         WHERE id = ${id}
       `);
 
@@ -620,7 +679,7 @@ if (!databaseUrl || !runPostgresTests) {
         }),
       ).toMatchObject({
         corpusMirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
-        contentHash: NEW_CONTENT_HASH,
+        contentHash: LEGACY_CONTENT_HASH,
       });
     });
 
@@ -633,7 +692,7 @@ if (!databaseUrl || !runPostgresTests) {
         decision: decisionFor(id, caseNumber),
         document: parsedDocument,
         scopedDb,
-        writeCorpus: null,
+        transfer: null,
       });
 
       expect(outcome).toBe("superseded");
