@@ -136,11 +136,20 @@ through Folio gains one it does not have.
 - **Never use `transition: all`.** Always specify exact properties
   (e.g., `transition: opacity 150ms, transform 150ms`). `all`
   triggers unnecessary repaints and can animate properties you
-  didn't intend.
+  didn't intend. (enforced by
+  no-layout-motion-classes/no-layout-motion-classes and stylelint)
 - **GPU-friendly properties only.** Animate `transform` and
-  `opacity` exclusively. Never animate `width`, `height`, `top`,
-  `left`, `padding`, or `margin`; these trigger layout recalc.
-  Use `scale`/`translate` instead.
+  `opacity` exclusively. Do not animate `width`, `height`, `top`, `left`,
+  `padding`, or `margin`; these trigger layout recalc. Use
+  `scale`/`translate` instead. One exemption: a surface that
+  changes its own box (a disclosure panel or accordion, a
+  collapsible rail, a popup positioner repositioning on collision,
+  a progress bar) may transition the box property it owns, because
+  a transform moves the paint but not what siblings lay out
+  against. Each retained layout utility is listed in the rule's allowance with
+  its file and reason. (the layout-motion prohibition is enforced by
+  no-layout-motion-classes/no-layout-motion-classes and stylelint; existing
+  paint-property utilities and CSS declarations are decrease-only ratchets)
 - **Interruptible animations:** use CSS `transition` for
   interactive state changes (hover, press) so the browser can
   interrupt mid-animation. Reserve `@keyframes` for staged
@@ -196,7 +205,8 @@ through Folio gains one it does not have.
 
 - **Use `min-h-dvh`, not `h-screen`.** `h-screen` ignores the
   mobile browser chrome and causes scroll/overlap bugs. `dvh`
-  units adapt to the dynamic viewport.
+  units adapt to the dynamic viewport. (enforced by
+  no-layout-motion-classes/no-layout-motion-classes and stylelint)
 
 ## Hit Areas
 

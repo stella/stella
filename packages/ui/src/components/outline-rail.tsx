@@ -502,7 +502,7 @@ export const OutlineRail = ({
       <li key={`${node.item.id}-${node.index}`}>
         <div
           className={cn(
-            "flex items-center rounded-md pe-2.5 transition-colors",
+            "flex items-center rounded-md pe-2.5",
             // Leaf rows highlight over the panel's own bg (no occlusion needed).
             !hasChildren && highlighted && "bg-accent",
           )}
@@ -665,7 +665,7 @@ export const OutlineRail = ({
                     aria-current={isActive ? "true" : undefined}
                     aria-label={item.label}
                     className={cn(
-                      "absolute end-0 rounded-full transition-[width,height,opacity,background-color] duration-150",
+                      "absolute end-0 rounded-full transition-[width,height,opacity] duration-150",
                       isHovered || isActive
                         ? "opacity-100"
                         : "opacity-45 hover:opacity-90",
