@@ -1,7 +1,7 @@
 /**
  * Typed decisions.
  *
- * A decision is a choice from a closed set, a yes/no, or a score: something
+ * A decision is a choice from a closed set or a yes/no: something
  * a workflow needs settled and ordinary code cannot settle. `decide` asks the
  * organization's decision model, applies a confidence floor, and returns a
  * `Decision` that is either decided or says why not. The caller narrows on
@@ -26,9 +26,11 @@ import { panic, Result } from "better-result";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { captureError } from "@/api/lib/analytics/capture";
 import { resolveDecisionModel } from "@/api/lib/decisions/decision-model";
+import type { DecisionModel } from "@/api/lib/decisions/decision-model";
+import { recordDecisionUsage } from "@/api/lib/decisions/decision-usage";
+import type { DecisionUsageMetering } from "@/api/lib/decisions/decision-usage";
 import type {
   SystemOneAnswerFor,
-  SystemOneClient,
   SystemOneQuestion,
   SystemOneQuestions,
   SystemOneState,
@@ -63,7 +65,7 @@ export type Decision<TAnswer> =
   | {
       state: "decided";
       answer: TAnswer;
-      /** Probability of the chosen option, the yes for a noul, the top level for a score. */
+      /** Probability of the chosen option, or the yes probability for a noul. */
       probability: number;
       confidence: number;
     }
@@ -87,7 +89,8 @@ type DecideBaseOptions = {
   abortSignal?: AbortSignal | undefined;
   timeoutMs?: number | undefined;
   /** Injected by tests and comparison runs; the org's resolved model otherwise. */
-  client?: SystemOneClient | null | undefined;
+  client?: DecisionModel | null | undefined;
+  usageMetering?: DecisionUsageMetering | undefined;
 };
 
 export type DecideManyOptions<TQuestions extends SystemOneQuestions> =
@@ -126,12 +129,6 @@ const readAnswer = (answer: AnyAnswer): Reading => {
         probability: answer.noul,
         confidence: Math.abs(answer.noul * 2 - 1),
       };
-    case "score":
-      return {
-        answer,
-        probability: Math.max(0, ...Object.values(answer.probabilities)),
-        confidence: answer.confidence,
-      };
     default:
       answer satisfies never;
       return panic("Unhandled decision answer type");
@@ -144,8 +141,6 @@ const readingValue = (answer: AnyAnswer): string | number => {
       return answer.choice;
     case "noul":
       return answer.noul;
-    case "score":
-      return answer.score;
     default:
       answer satisfies never;
       return panic("Unhandled decision answer type");
@@ -176,10 +171,17 @@ export const decideMany = async <TQuestions extends SystemOneQuestions>({
   abortSignal,
   timeoutMs = DEFAULT_TIMEOUT_MS,
   client,
+  usageMetering,
 }: DecideManyOptions<TQuestions>): Promise<DecideManyResult<TQuestions>> => {
   const model =
     client === undefined ? resolveDecisionModel(orgAIConfig) : client;
-  if (model === null || Object.keys(questions).length === 0) {
+  // A generative BYOK preflight did not reserve platform funds. Never add an
+  // instance-funded decision to that action just because its org has no key.
+  if (
+    model === null ||
+    Object.keys(questions).length === 0 ||
+    (usageMetering && orgAIConfig && model.keySource === "instance")
+  ) {
     return { decisions: undecidedAll(questions, "no-backend"), model: null };
   }
   const timeout = AbortSignal.timeout(timeoutMs);
@@ -191,8 +193,21 @@ export const decideMany = async <TQuestions extends SystemOneQuestions>({
       : timeout,
   });
   if (Result.isError(asked)) {
+    if (abortSignal?.aborted) {
+      throw abortSignal.reason instanceof Error
+        ? abortSignal.reason
+        : new DOMException("Aborted", "AbortError");
+    }
     captureError(asked.error, { source: "decide", decision: id });
     return { decisions: undecidedAll(questions, "failed"), model: null };
+  }
+
+  if (usageMetering) {
+    await recordDecisionUsage({
+      metering: usageMetering,
+      keySource: model.keySource,
+      inputTokens: asked.value.usage.inputTokens,
+    });
   }
 
   const decisions: Record<string, Decision<AnyAnswer>> = {};

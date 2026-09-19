@@ -208,7 +208,7 @@ const updateAIConfig = createSafeRootHandler(
     }
 
     const decision = decisionResult.decision;
-    if (decision !== null && decisionResult.keyIsNew) {
+    if (decision !== null && decisionResult.needsProbe) {
       const probe = await probeDecisionModel(
         decision,
         SETTINGS_PROBE_TIMEOUT_MS,

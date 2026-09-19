@@ -85,8 +85,8 @@ export type OrgAIConfig = {
   overrideModels: Record<ModelRole, OrgAIModelSelection>;
   /**
    * The model typed decisions go to (see `lib/decisions/decide.ts`). It is
-   * not one of the generative roles: a decision model answers choice, yes/no
-   * and score questions with probabilities and writes no text, so it has its
+   * not one of the generative roles: a decision model answers choice and
+   * yes/no questions with probabilities and writes no text, so it has its
    * own provider space and its own key. Null means the org has none; the
    * instance's, if any, answers then.
    */

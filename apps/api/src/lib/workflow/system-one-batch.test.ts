@@ -99,11 +99,41 @@ describe("sourcesFromPreparedFiles", () => {
       [],
     );
 
-    expect(sources.map((source) => source.id)).toEqual(["b1", "b3"]);
+    expect(sources.map((source) => source.id)).toEqual(["F0#b1", "F0#b3"]);
     expect(sources.at(0)?.text).toBe("The purchase price is 1 250 000 CZK.");
-    expect(locators.get("b1")).toEqual({
+    expect(locators.get("F0#b1")).toEqual({
       type: "cited",
       file: "F0",
+      citation: "b1",
+    });
+  });
+
+  test("DOCX block source ids stay distinct when files reuse block ids", async () => {
+    const secondDocx: PreparedDocxFile = {
+      ...docxFile,
+      fileId: "file-3",
+      simplifiedName: "F2",
+      blocks: [block("b1", "A second file's block")],
+    };
+
+    const { sources, locators } = await sourcesFromPreparedFiles(
+      [docxFile, secondDocx],
+      [],
+    );
+
+    expect(sources.map((source) => source.id)).toEqual([
+      "F0#b1",
+      "F0#b3",
+      "F2#b1",
+    ]);
+    expect(locators.get("F0#b1")).toEqual({
+      type: "cited",
+      file: "F0",
+      citation: "b1",
+    });
+    expect(locators.get("F2#b1")).toEqual({
+      type: "cited",
+      file: "F2",
       citation: "b1",
     });
   });
@@ -172,8 +202,8 @@ describe("sourcesFromPreparedFiles", () => {
     ]);
 
     expect(sources.map((source) => source.id)).toEqual([
-      "b1",
-      "b3",
+      "F0#b1",
+      "F0#b3",
       "F1#1",
       "F1#2",
       "input-col-party",
@@ -203,7 +233,7 @@ describe("splitPropertiesForSystemOne", () => {
 
 describe("outputFromSystemOneOutcomes", () => {
   const locators = new Map([
-    ["b1", { type: "cited", file: "F0", citation: "b1" } as const],
+    ["F0#b1", { type: "cited", file: "F0", citation: "b1" } as const],
     ["F1#1", { type: "uncited" } as const],
   ]);
 
@@ -211,7 +241,7 @@ describe("outputFromSystemOneOutcomes", () => {
     const { output, fallbackPropertyIds } = outputFromSystemOneOutcomes({
       properties: [singleSelect],
       outcomes: new Map([
-        [singleSelect.id, answered("Purchase agreement", "b1", 0.9)],
+        [singleSelect.id, answered("Purchase agreement", "F0#b1", 0.9)],
       ]),
       locators,
     });

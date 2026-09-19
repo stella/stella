@@ -5,10 +5,11 @@ import { beforeEach, describe, expect, test } from "bun:test";
 import type { Fetcher } from "@stll/fetch";
 
 import type { SafeDb } from "@/api/db/safe-db";
+import { env } from "@/api/env";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { toSafeId } from "@/api/lib/branded-types";
+import type { DecisionModel } from "@/api/lib/decisions/decision-model";
 import { createSystemOneClient } from "@/api/lib/decisions/system-one";
-import type { SystemOneClient } from "@/api/lib/decisions/system-one";
 import {
   buildAiConditionDecider,
   buildAiFieldGenerator,
@@ -482,7 +483,7 @@ describe("output budgets are sized from the work asked for", () => {
 
 describe("buildAiConditionDecider decision tier", () => {
   /** A decision model over a fake wire answering the condition with one noul. */
-  const decisionModel = (yes: number): SystemOneClient => {
+  const decisionModel = (yes: number): DecisionModel => {
     const fetcher: Fetcher = async () =>
       await Promise.resolve(
         new Response(
@@ -494,7 +495,10 @@ describe("buildAiConditionDecider decision tier", () => {
           { status: 200, headers: { "content-type": "application/json" } },
         ),
       );
-    return createSystemOneClient({ apiKey: "key-test", fetcher });
+    return {
+      ...createSystemOneClient({ apiKey: "key-test", fetcher }),
+      keySource: "byok",
+    };
   };
   const input = {
     prompt: "Is the principal a company?",
@@ -541,5 +545,28 @@ describe("buildAiConditionDecider decision tier", () => {
     await decideCondition?.(input);
 
     expect(capturedRequests).toHaveLength(1);
+  });
+
+  test("an instance TypeSafe model keeps conditions available without org AI config", async () => {
+    const previousApiKey = env.TYPESAFE_API_KEY;
+    const previousRequirePersonalKey = env.REQUIRE_PERSONAL_AI_KEY;
+    env.TYPESAFE_API_KEY = "key-test";
+    env.REQUIRE_PERSONAL_AI_KEY = false;
+    try {
+      const decideCondition = buildAiConditionDecider({
+        decisionModel: decisionModel(0.94),
+        orgAIConfig: null,
+        organizationId,
+        resolveTextModel,
+        tenantWorkspaceIds: [],
+      });
+
+      expect(decideCondition).toBeDefined();
+      expect(await decideCondition?.(input)).toBe(true);
+      expect(capturedRequests).toEqual([]);
+    } finally {
+      env.TYPESAFE_API_KEY = previousApiKey;
+      env.REQUIRE_PERSONAL_AI_KEY = previousRequirePersonalKey;
+    }
   });
 });

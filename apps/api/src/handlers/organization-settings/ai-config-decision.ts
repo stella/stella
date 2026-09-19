@@ -23,8 +23,8 @@ export type DecisionConfigResult =
   | {
       valid: true;
       decision: OrgDecisionModelConfig | null;
-      /** The key came in with this request, so it still has to be probed. */
-      keyIsNew: boolean;
+      /** The credential/model pairing changed, so it still has to be probed. */
+      needsProbe: boolean;
     }
   | { valid: false; error: string };
 
@@ -33,10 +33,10 @@ export const resolveDecisionConfig = (
   existing: OrgDecisionModelConfig | null | undefined,
 ): DecisionConfigResult => {
   if (input === undefined) {
-    return { valid: true, decision: existing ?? null, keyIsNew: false };
+    return { valid: true, decision: existing ?? null, needsProbe: false };
   }
   if (input === null) {
-    return { valid: true, decision: null, keyIsNew: false };
+    return { valid: true, decision: null, needsProbe: false };
   }
 
   const modelId = input.modelId.trim();
@@ -52,7 +52,7 @@ export const resolveDecisionConfig = (
     return {
       valid: true,
       decision: { provider: input.provider, apiKey, modelId },
-      keyIsNew: true,
+      needsProbe: true,
     };
   }
 
@@ -73,6 +73,6 @@ export const resolveDecisionConfig = (
   return {
     valid: true,
     decision: { provider: input.provider, apiKey: reusableKey, modelId },
-    keyIsNew: false,
+    needsProbe: existing?.modelId !== modelId,
   };
 };

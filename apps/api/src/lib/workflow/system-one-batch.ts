@@ -93,6 +93,10 @@ const pdfPageSources = async (
 
 const PARAGRAPH_BREAK = /\n\s*\n/u;
 
+/** DOCX block ids are only unique within one file, not across a batch. */
+const docxSourceId = (simplifiedName: string, blockId: string): string =>
+  `${simplifiedName}#${blockId}`;
+
 const fileSources = async (
   file: PreparedInputFile,
 ): Promise<LocatedSource[]> => {
@@ -105,7 +109,10 @@ const fileSources = async (
           ? []
           : [
               {
-                source: { id: block.id, text: block.text },
+                source: {
+                  id: docxSourceId(file.simplifiedName, block.id),
+                  text: block.text,
+                },
                 locator: {
                   type: "cited",
                   file: file.simplifiedName,

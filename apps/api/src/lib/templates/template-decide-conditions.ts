@@ -20,18 +20,15 @@ import type { Result as ResultType } from "better-result";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
-import { loadOrgAIConfig } from "@/api/lib/ai-config-loader";
 import type { SafeId } from "@/api/lib/branded-types";
 import { decideMany } from "@/api/lib/decisions/decide";
 import type {
   Decision,
   DecisionUndecidedReason,
 } from "@/api/lib/decisions/decide";
-import type {
-  NoulAnswer,
-  NoulQuestion,
-  SystemOneClient,
-} from "@/api/lib/decisions/system-one";
+import type { DecisionModel } from "@/api/lib/decisions/decision-model";
+import type { DecisionUsageMetering } from "@/api/lib/decisions/decision-usage";
+import type { NoulAnswer, NoulQuestion } from "@/api/lib/decisions/system-one";
 import {
   CONDITION_DECISION_ID,
   conditionQuestion,
@@ -111,7 +108,8 @@ export type DecideTemplateConditionsOptions = {
   orgAIConfig: OrgAIConfig | null;
   abortSignal?: AbortSignal | undefined;
   /** Injected by tests; the org's resolved decision model otherwise. */
-  client?: SystemOneClient | null | undefined;
+  client?: DecisionModel | null | undefined;
+  usageMetering?: DecisionUsageMetering | undefined;
 };
 
 /**
@@ -125,6 +123,7 @@ export const decideTemplateConditions = async ({
   orgAIConfig,
   abortSignal,
   client,
+  usageMetering,
 }: DecideTemplateConditionsOptions): Promise<TemplateConditionDecisions> => {
   const conditions = templateAiConditions(fields);
   const questions: Record<string, NoulQuestion> = {};
@@ -143,6 +142,7 @@ export const decideTemplateConditions = async ({
     timeoutMs: DECIDE_CONDITIONS_TIMEOUT_MS,
     abortSignal,
     client,
+    usageMetering,
   });
 
   return {
@@ -162,7 +162,17 @@ export type TemplateDecideConditionsProps = {
   organizationId: SafeId<"organization">;
   templateId: SafeId<"template">;
   body: { values: Record<string, unknown> };
+  orgAIConfig: OrgAIConfig | null;
+  abortSignal: AbortSignal;
+  /** Injected by tests; the org's resolved decision model otherwise. */
+  client?: DecisionModel | null | undefined;
+  usageMetering?: DecisionUsageMetering | undefined;
 };
+
+type DerivedManifestFieldsOptions = Pick<
+  TemplateDecideConditionsProps,
+  "templateId" | "organizationId" | "scopedDb"
+>;
 
 /**
  * The fields the document declares, read out of its bytes: what a row stored
@@ -173,9 +183,7 @@ const derivedManifestFields = async ({
   templateId,
   organizationId,
   scopedDb,
-}: Omit<TemplateDecideConditionsProps, "body">): Promise<
-  FieldMeta[] | null
-> => {
+}: DerivedManifestFieldsOptions): Promise<FieldMeta[] | null> => {
   const source = await loadStoredTemplateSource({
     templateId,
     organizationId,
@@ -203,6 +211,10 @@ export const templateDecideConditionsLogic = async ({
   organizationId,
   templateId,
   body: { values },
+  orgAIConfig,
+  abortSignal,
+  client,
+  usageMetering,
 }: TemplateDecideConditionsProps): Promise<
   ResultType<TemplateConditionDecisions, HandlerError<404>>
 > => {
@@ -243,7 +255,10 @@ export const templateDecideConditionsLogic = async ({
     await decideTemplateConditions({
       fields,
       values,
-      orgAIConfig: await loadOrgAIConfig(organizationId),
+      orgAIConfig,
+      abortSignal,
+      client,
+      usageMetering,
     }),
   );
 };

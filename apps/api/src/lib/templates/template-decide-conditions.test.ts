@@ -4,8 +4,11 @@ import { beforeEach, describe, expect, test } from "bun:test";
 import type { Fetcher } from "@stll/fetch";
 
 import { toSafeId } from "@/api/lib/branded-types";
-import { createSystemOneClient } from "@/api/lib/decisions/system-one";
-import type { SystemOneClient } from "@/api/lib/decisions/system-one";
+import type { DecisionModel } from "@/api/lib/decisions/decision-model";
+import {
+  createSystemOneClient,
+  SystemOneError,
+} from "@/api/lib/decisions/system-one";
 import type { FieldMeta } from "@/api/lib/docx/types";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -56,7 +59,7 @@ const values = { party_name: "Acme s.r.o.", client_iban: "CZ0000" };
 /** The request bodies the fake wire received, newest last. */
 let sent: unknown[] = [];
 
-const answering = (nouls: Record<string, number>): SystemOneClient => {
+const answering = (nouls: Record<string, number>): DecisionModel => {
   const fetcher: Fetcher = async (_input, init) => {
     const body = init?.body;
     if (typeof body !== "string") {
@@ -80,16 +83,22 @@ const answering = (nouls: Record<string, number>): SystemOneClient => {
       ),
     );
   };
-  return createSystemOneClient({ apiKey: "key-test", fetcher });
+  return {
+    ...createSystemOneClient({ apiKey: "key-test", fetcher }),
+    keySource: "byok",
+  };
 };
 
-const refusing = (status: number): SystemOneClient => {
+const refusing = (status: number): DecisionModel => {
   const fetcher: Fetcher = async () =>
     await Promise.resolve(new Response("nope", { status }));
-  return createSystemOneClient({ apiKey: "key-test", fetcher });
+  return {
+    ...createSystemOneClient({ apiKey: "key-test", fetcher }),
+    keySource: "byok",
+  };
 };
 
-const decide = async (client: SystemOneClient | null) =>
+const decide = async (client: DecisionModel | null) =>
   await decideTemplateConditions({
     fields,
     values,
@@ -264,6 +273,8 @@ describe("templateDecideConditionsLogic access", () => {
       organizationId,
       templateId,
       body: { values: {} },
+      orgAIConfig: null,
+      abortSignal: new AbortController().signal,
     });
 
     expect(queried).toEqual([
@@ -273,5 +284,58 @@ describe("templateDecideConditionsLogic access", () => {
     if (Result.isError(result)) {
       expect(result.error.status).toBe(404);
     }
+  });
+
+  test("cancels the model call when the HTTP request is aborted", async () => {
+    const { scopedDb } = createScopedDbMock({
+      query: {
+        templates: {
+          findFirst: async () =>
+            await Promise.resolve({ manifest: { fields } }),
+        },
+      },
+    });
+    let modelSignal: AbortSignal | undefined;
+    const modelStarted = Promise.withResolvers<undefined>();
+    const client: DecisionModel = {
+      keySource: "byok",
+      model: "jev-test",
+      ask: async ({ abortSignal }) => {
+        modelSignal = abortSignal;
+        modelStarted.resolve(undefined);
+        return await new Promise((resolve) => {
+          abortSignal?.addEventListener(
+            "abort",
+            () =>
+              resolve(
+                Result.err(
+                  new SystemOneError({
+                    kind: "aborted",
+                    message: "request aborted",
+                  }),
+                ),
+              ),
+            { once: true },
+          );
+        });
+      },
+    };
+    const controller = new AbortController();
+
+    const result = templateDecideConditionsLogic({
+      scopedDb,
+      organizationId: toSafeId<"organization">("org_caller"),
+      templateId: toSafeId<"template">("tmpl_conditioned"),
+      body: { values },
+      orgAIConfig: null,
+      abortSignal: controller.signal,
+      client,
+    });
+
+    await modelStarted.promise;
+    expect(modelSignal?.aborted).toBe(false);
+    controller.abort(new DOMException("Request cancelled", "AbortError"));
+    expect(modelSignal?.aborted).toBe(true);
+    expect(result).rejects.toThrow("Request cancelled");
   });
 });

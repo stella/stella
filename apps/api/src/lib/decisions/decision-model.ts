@@ -20,10 +20,6 @@ import { createSystemOneClient, noul } from "@/api/lib/decisions/system-one";
 import type { SystemOneClient } from "@/api/lib/decisions/system-one";
 import { getSystemOneClient } from "@/api/lib/decisions/system-one-runtime";
 
-/** Clients keep no connection; the cache only spares rebuilding one per call. */
-const ORG_CLIENT_CACHE_MAX = 64;
-const orgClients = new Map<string, SystemOneClient>();
-
 /** One client constructor per provider; a provider without one cannot be added. */
 const CLIENT_BY_PROVIDER = {
   typesafe: (config) =>
@@ -33,21 +29,12 @@ const CLIENT_BY_PROVIDER = {
   (config: OrgDecisionModelConfig) => SystemOneClient
 >;
 
-const orgClient = (config: OrgDecisionModelConfig): SystemOneClient => {
-  const key = [config.provider, config.modelId, config.apiKey].join("|");
-  const cached = orgClients.get(key);
-  if (cached !== undefined) {
-    return cached;
-  }
-  if (orgClients.size >= ORG_CLIENT_CACHE_MAX) {
-    const oldest = orgClients.keys().next().value;
-    if (oldest !== undefined) {
-      orgClients.delete(oldest);
-    }
-  }
-  const client = CLIENT_BY_PROVIDER[config.provider](config);
-  orgClients.set(key, client);
-  return client;
+const orgClient = (config: OrgDecisionModelConfig): SystemOneClient =>
+  CLIENT_BY_PROVIDER[config.provider](config);
+
+/** Funding belongs to the resolved credential, including injected clients. */
+export type DecisionModel = SystemOneClient & {
+  keySource: "byok" | "instance";
 };
 
 /** Whether the instance itself carries a decision model an org may fall back on. */
@@ -56,12 +43,13 @@ export const hasInstanceDecisionModel = (): boolean =>
 
 export const resolveDecisionModel = (
   orgAIConfig: OrgAIConfig | null | undefined,
-): SystemOneClient | null => {
+): DecisionModel | null => {
   const decision = orgAIConfig?.decision ?? null;
   if (decision !== null) {
-    return orgClient(decision);
+    return { ...orgClient(decision), keySource: "byok" };
   }
-  return hasInstanceDecisionModel() ? getSystemOneClient() : null;
+  const client = hasInstanceDecisionModel() ? getSystemOneClient() : null;
+  return client === null ? null : { ...client, keySource: "instance" };
 };
 
 type DecisionModelProbeResult =
@@ -87,10 +75,7 @@ export const probeDecisionModel = async (
     return { valid: true };
   }
   const { kind, status, message } = asked.error;
-  if (
-    kind === "unconfigured" ||
-    (kind === "http" && (status === 401 || status === 403))
-  ) {
+  if (kind === "http" && (status === 401 || status === 403)) {
     return { valid: false, error: "The decision model rejected the API key" };
   }
   return { valid: false, error: message };

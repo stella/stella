@@ -32,7 +32,8 @@ import type {
 } from "@/api/lib/chat/model-ingress-guard";
 import { generateChatObject } from "@/api/lib/chat/tanstack-chat-runtime";
 import { decide } from "@/api/lib/decisions/decide";
-import type { SystemOneClient } from "@/api/lib/decisions/system-one";
+import { hasInstanceDecisionModel } from "@/api/lib/decisions/decision-model";
+import type { DecisionModel } from "@/api/lib/decisions/decision-model";
 import type { AiOccurrenceAdapter } from "@/api/lib/docx/adapt-ai-fields";
 import {
   CONDITION_DECISION_ID,
@@ -430,11 +431,15 @@ export const buildAiConditionDecider = ({
   /** External model-resolution boundary; supplied by focused integration tests. */
   resolveTextModel?: typeof resolveTanStackTextModel | undefined;
   /** The decision model; the org's when omitted, null for none. Supplied by tests. */
-  decisionModel?: SystemOneClient | null | undefined;
+  decisionModel?: DecisionModel | null | undefined;
 }): AiConditionDecider | undefined => {
-  // Resolve via org BYOK or the deployment's instance provider; skip (leave AI
-  // fields unfilled) only when neither can supply a model.
-  if (!orgAIConfig && !hasTanStackInstanceProvider()) {
+  // Resolve via org BYOK, an instance text provider, or the instance decision
+  // model; skip only when none can supply the condition's model.
+  if (
+    !orgAIConfig &&
+    !hasTanStackInstanceProvider() &&
+    !hasInstanceDecisionModel()
+  ) {
     return undefined;
   }
   return async ({ prompt, values }) => {
@@ -452,6 +457,9 @@ export const buildAiConditionDecider = ({
           abortSignal: operationSignal,
           timeoutMs: AI_CONDITION_TIMEOUT_MS,
           client: decisionModel,
+          usageMetering: aiAnalytics?.usageMetering
+            ? { ...aiAnalytics.usageMetering, callId: Bun.randomUUIDv7() }
+            : undefined,
         });
         if (decided.state === "decided") {
           return decided.answer.noul > 0.5;

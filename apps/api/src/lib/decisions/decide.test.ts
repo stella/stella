@@ -3,13 +3,12 @@ import { afterEach, describe, expect, test } from "bun:test";
 import type { Fetcher } from "@stll/fetch";
 
 import { decide, decideMany } from "@/api/lib/decisions/decide";
+import type { DecisionModel } from "@/api/lib/decisions/decision-model";
 import {
   choice,
   createSystemOneClient,
   noul,
-  score,
 } from "@/api/lib/decisions/system-one";
-import type { SystemOneClient } from "@/api/lib/decisions/system-one";
 import {
   installRecordingAnalytics,
   installRecordingLogger,
@@ -24,7 +23,12 @@ import type {
  * came through the real transport and its per-question binding rather than
  * against hand-typed answer objects.
  */
-type FakeWire = { client: SystemOneClient; calls: () => number };
+type FakeWire = { client: DecisionModel; calls: () => number };
+
+const decisionModel = (fetcher: Fetcher): DecisionModel => ({
+  ...createSystemOneClient({ apiKey: "key-test", fetcher }),
+  keySource: "byok",
+});
 
 const wireOver = (respond: () => Response): FakeWire => {
   let calls = 0;
@@ -33,7 +37,7 @@ const wireOver = (respond: () => Response): FakeWire => {
     return await Promise.resolve(respond());
   };
   return {
-    client: createSystemOneClient({ apiKey: "key-test", fetcher }),
+    client: decisionModel(fetcher),
     calls: () => calls,
   };
 };
@@ -55,8 +59,9 @@ const respondingWith = (answers: Record<string, unknown>): FakeWire =>
 const failingWire = (): FakeWire =>
   wireOver(() => new Response("bad request", { status: 400 }));
 
-const clientThatMustNotRun: SystemOneClient = {
+const clientThatMustNotRun: DecisionModel = {
   model: "jev-test",
+  keySource: "byok",
   ask: () => {
     throw new Error("no decision model is configured; nothing may be asked");
   },
@@ -67,11 +72,6 @@ const kindQuestion = choice(
   { purchase: "A sale of goods.", lease: "A letting of property." },
 );
 const signedQuestion = noul({ task: "Is the contract signed?" });
-const severityQuestion = score({ task: "How severe is the breach?" }, [
-  "none",
-  "minor",
-  "material",
-]);
 
 const choiceAnswer = (
   chosen: "purchase" | "lease",
@@ -79,15 +79,10 @@ const choiceAnswer = (
 ): unknown => ({
   type: "choice",
   choice: chosen,
-  probabilities: { purchase: chosen === "purchase" ? 0.9 : 0.1, lease: 0.1 },
-  confidence,
-});
-
-const scoreAnswer = (confidence: number): unknown => ({
-  type: "score",
-  score: 1.4,
-  legend: { "0": "none", "1": "minor", "2": "material" },
-  probabilities: { "0": 0.1, "1": 0.6, "2": 0.3 },
+  probabilities: {
+    purchase: chosen === "purchase" ? 0.9 : 0.1,
+    lease: chosen === "lease" ? 0.9 : 0.1,
+  },
   confidence,
 });
 
@@ -214,24 +209,6 @@ describe("the confidence floor, per answer type", () => {
     expect(unsure.decisions.signed.confidence).toBeCloseTo(0.4, 10);
   });
 
-  test("a score is measured by its own confidence, over its top level", async () => {
-    const wire = respondingWith({ severity: scoreAnswer(0.77) });
-    const { decisions } = await decideMany({
-      id: "test.score",
-      orgAIConfig: null,
-      state,
-      questions: { severity: severityQuestion },
-      client: wire.client,
-    });
-    const answer = decisions.severity;
-    if (answer.state !== "decided") {
-      throw new Error("expected a decided score");
-    }
-    expect(answer.answer.score).toBe(1.4);
-    expect(answer.probability).toBe(0.6);
-    expect(answer.confidence).toBe(0.77);
-  });
-
   test("a site whose wrong answer costs more passes its own floor", async () => {
     const wire = respondingWith({ kind: choiceAnswer("lease", 0.82) });
     const { decisions } = await decideMany({
@@ -280,6 +257,66 @@ describe("a failed call", () => {
       source: "decide",
       decision: "test.failed",
     });
+  });
+
+  test("an aborted call stops its enclosing operation without reporting a model outage", async () => {
+    analytics = installRecordingAnalytics();
+    const controller = new AbortController();
+    controller.abort(new DOMException("Request cancelled", "AbortError"));
+    const fetcher: Fetcher = async () => {
+      throw controller.signal.reason;
+    };
+
+    expect(
+      decideMany({
+        id: "test.aborted",
+        orgAIConfig: null,
+        state,
+        questions: { signed: signedQuestion },
+        abortSignal: controller.signal,
+        client: decisionModel(fetcher),
+      }),
+    ).rejects.toThrow("Request cancelled");
+    expect(analytics.exceptions()).toEqual([]);
+  });
+
+  test("a decision timeout falls back and is reported as an operational failure", async () => {
+    analytics = installRecordingAnalytics();
+    const fetcher: Fetcher = async (_input, init) => {
+      const signal = init?.signal;
+      if (signal === null || signal === undefined) {
+        throw new TypeError("decision requests must carry a timeout signal");
+      }
+      return await new Promise<Response>((_resolve, reject) => {
+        signal.addEventListener(
+          "abort",
+          () =>
+            reject(
+              signal.reason instanceof Error
+                ? signal.reason
+                : new DOMException("Aborted", "AbortError"),
+            ),
+          { once: true },
+        );
+      });
+    };
+
+    const { decisions, model } = await decideMany({
+      id: "test.timeout",
+      orgAIConfig: null,
+      state,
+      questions: { signed: signedQuestion },
+      timeoutMs: 1,
+      client: decisionModel(fetcher),
+    });
+
+    expect(model).toBeNull();
+    expect(decisions.signed).toEqual({
+      state: "undecided",
+      reason: "failed",
+      confidence: null,
+    });
+    expect(analytics.exceptions()).toHaveLength(1);
   });
 });
 
@@ -337,10 +374,10 @@ describe("decide", () => {
       answer: {
         type: "choice",
         choice: "lease",
-        probabilities: { purchase: 0.1, lease: 0.1 },
+        probabilities: { purchase: 0.1, lease: 0.9 },
         confidence: 0.88,
       },
-      probability: 0.1,
+      probability: 0.9,
       confidence: 0.88,
     });
   });

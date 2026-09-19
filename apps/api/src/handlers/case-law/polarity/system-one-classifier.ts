@@ -76,5 +76,5 @@ export const classifyWithSystemOne = async ({
     floor: SYSTEM_ONE_POLARITY_ACCEPT_CONFIDENCE,
     timeoutMs: REQUEST_TIMEOUT_MS,
     abortSignal,
-    client,
+    client: client ? { ...client, keySource: "instance" } : client,
   });

@@ -14,6 +14,7 @@ import { resolveCaching } from "@/api/lib/ai-config";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
+import type { AIUsageMetering } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import type {
   CaseLawPublicReadDb,
@@ -48,7 +49,7 @@ import {
   planSystemOneAnswers,
 } from "@/api/lib/decisions/answer-questions";
 import { decideMany } from "@/api/lib/decisions/decide";
-import type { SystemOneClient } from "@/api/lib/decisions/system-one";
+import type { DecisionModel } from "@/api/lib/decisions/decision-model";
 import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
 import { readServingCorpusIndexGenerationTx } from "@/api/lib/legal-search/corpus-index-generation-store";
 import {
@@ -106,7 +107,7 @@ export type RunResearchAnswersDeps = {
    * resolved decision model (null when the deployment has none, which leaves
    * every column to the generative model); a test pins one.
    */
-  decisionModel?: SystemOneClient | null | undefined;
+  decisionModel?: DecisionModel | null | undefined;
 };
 
 /** The claimed cells regrouped into the unit of work: one decision's questions. */
@@ -193,6 +194,30 @@ export const runResearchAnswers = async (
 type DecisionTextSource =
   | { kind: "passages"; passages: ResearchPassage[]; retrieved: boolean }
   | { kind: "none" };
+
+type SelectDecisionPassagesOptions = {
+  fallback: readonly ResearchPassage[];
+  retrieved: readonly ResearchPassage[];
+  budgetChars: number;
+};
+
+/** Keep retrieval provenance false when the index returned no usable passage. */
+export const selectDecisionPassages = ({
+  fallback,
+  retrieved,
+  budgetChars,
+}: SelectDecisionPassagesOptions): DecisionTextSource => {
+  const selected = selectPassagesWithinBudget(
+    retrieved.length > 0 ? retrieved : fallback,
+    {
+      budgetChars,
+      passageChars: LIMITS.caseLawResearchAnswerPassageChars,
+    },
+  );
+  return selected.length === 0
+    ? { kind: "none" }
+    : { kind: "passages", passages: selected, retrieved: retrieved.length > 0 };
+};
 
 type ResearchDecisionRow = {
   id: SafeId<"caseLawDecision">;
@@ -285,6 +310,14 @@ const answerDecision = async (
     decision,
     questions,
     text,
+    usageMetering: {
+      actionType: "case_law",
+      organizationId: input.organizationId,
+      safeDb,
+      serviceTier: "standard",
+      userId: input.userId,
+      workspaceId: null,
+    },
   });
   const settled = tier.outcomes;
   const generativeQuestions = tier.remaining;
@@ -511,16 +544,11 @@ const resolveDecisionText = async (
   }
 
   const retrieved = await retrievePassages(decision, questions, caseLawDb);
-  const selected = selectPassagesWithinBudget(
-    retrieved.length > 0 ? retrieved : passages,
-    {
-      budgetChars,
-      passageChars: LIMITS.caseLawResearchAnswerPassageChars,
-    },
-  );
-  return selected.length === 0
-    ? { kind: "none" }
-    : { kind: "passages", passages: selected, retrieved: true };
+  return selectDecisionPassages({
+    fallback: passages,
+    retrieved,
+    budgetChars,
+  });
 };
 
 /** A row's corpus object, or its Postgres copy when the object is unreadable. */
@@ -624,7 +652,8 @@ const retrievePassages = async (
 
 type SystemOnePassOptions = {
   caseLawDb: CaseLawPublicReadDb;
-  decisionModel: SystemOneClient | null | undefined;
+  decisionModel: DecisionModel | null | undefined;
+  usageMetering: AIUsageMetering;
   orgAIConfig: OrgAIConfig | null;
   decision: ResearchDecisionRow;
   questions: readonly ResearchRunColumn[];
@@ -645,6 +674,7 @@ type SystemOnePass = {
  * generative call, which is the behaviour of a deployment without the tier.
  */
 const answerWithSystemOne = async ({
+  usageMetering,
   caseLawDb,
   decisionModel,
   orgAIConfig,
@@ -694,6 +724,7 @@ const answerWithSystemOne = async ({
     questions: plan.questions,
     timeoutMs: ANSWER_TIMEOUT_MS,
     client: decisionModel,
+    usageMetering: { ...usageMetering, callId: Bun.randomUUIDv7() },
   });
   // No model answered, so nothing is settled and the run facts have no model
   // to stamp: every column is the generative model's.
@@ -709,7 +740,7 @@ const answerWithSystemOne = async ({
       completedAt: Temporal.Now.instant().toString({
         fractionalSecondDigits: 3,
       }),
-      retrieved: text.retrieved || overBudget,
+      retrieved: text.retrieved || ranked.length > 0,
     },
   });
   const byColumn = new Map(

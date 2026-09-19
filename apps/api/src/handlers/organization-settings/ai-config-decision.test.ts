@@ -15,7 +15,7 @@ describe("resolving the decision model an AI-config update stores", () => {
     expect(resolveDecisionConfig(undefined, stored)).toEqual({
       valid: true,
       decision: stored,
-      keyIsNew: false,
+      needsProbe: false,
     });
   });
 
@@ -23,7 +23,7 @@ describe("resolving the decision model an AI-config update stores", () => {
     expect(resolveDecisionConfig(undefined, null)).toEqual({
       valid: true,
       decision: null,
-      keyIsNew: false,
+      needsProbe: false,
     });
   });
 
@@ -31,7 +31,7 @@ describe("resolving the decision model an AI-config update stores", () => {
     expect(resolveDecisionConfig(null, stored)).toEqual({
       valid: true,
       decision: null,
-      keyIsNew: false,
+      needsProbe: false,
     });
   });
 
@@ -48,11 +48,11 @@ describe("resolving the decision model an AI-config update stores", () => {
         apiKey: "new-key",
         modelId: "jev-1.14",
       },
-      keyIsNew: true,
+      needsProbe: true,
     });
   });
 
-  test("an omitted key reuses the stored one without probing again", () => {
+  test("an omitted key reuses the stored one and probes a changed model", () => {
     expect(
       resolveDecisionConfig(
         { provider: "typesafe", modelId: "jev-1.14" },
@@ -65,7 +65,20 @@ describe("resolving the decision model an AI-config update stores", () => {
         apiKey: "stored-key",
         modelId: "jev-1.14",
       },
-      keyIsNew: false,
+      needsProbe: true,
+    });
+  });
+
+  test("an unchanged model and omitted key do not repeat the probe", () => {
+    expect(
+      resolveDecisionConfig(
+        { provider: "typesafe", modelId: "jev-1.13" },
+        stored,
+      ),
+    ).toEqual({
+      valid: true,
+      decision: stored,
+      needsProbe: false,
     });
   });
 
@@ -106,7 +119,7 @@ describe("resolving the decision model an AI-config update stores", () => {
         apiKey: "new-key",
         modelId: "jev-1.14",
       },
-      keyIsNew: true,
+      needsProbe: true,
     });
     expect(
       resolveDecisionConfig(

@@ -11,10 +11,17 @@ import {
   decodeSystemOneAnswers,
   isSystemOneAnswerable,
   planSystemOneAnswers,
+  SYSTEM_ONE_ANSWER_PLAN_MAX_QUESTIONS,
+  SYSTEM_ONE_ANSWER_PLAN_MAX_REQUEST_BYTES,
+  SYSTEM_ONE_SINGLE_SELECT_MAX_OPTIONS,
 } from "@/api/lib/decisions/answer-questions";
 import { decideMany } from "@/api/lib/decisions/decide";
 import type { Decisions } from "@/api/lib/decisions/decide";
-import { createSystemOneClient } from "@/api/lib/decisions/system-one";
+import {
+  createSystemOneClient,
+  DEFAULT_SYSTEM_ONE_MODEL,
+  serializeSystemOneRequest,
+} from "@/api/lib/decisions/system-one";
 import type { SystemOneQuestion } from "@/api/lib/decisions/system-one";
 
 /**
@@ -42,7 +49,10 @@ const decisionsFor = async (
     orgAIConfig: null,
     state: plan.state,
     questions: plan.questions,
-    client: createSystemOneClient({ apiKey: "key-test", fetcher }),
+    client: {
+      ...createSystemOneClient({ apiKey: "key-test", fetcher }),
+      keySource: "byok",
+    },
   });
   return decisions;
 };
@@ -79,6 +89,34 @@ const choiceAnswer = (
   probabilities: Record<string, number>,
   confidence = 0.9,
 ) => ({ type: "choice", choice, probabilities, confidence }) as const;
+
+const selectQuestion = (
+  id: string,
+  type: "single-select" | "multi-select",
+  optionCount: number,
+  optionValue = (index: number): string => `Option ${String(index + 1)}`,
+): AnswerQuestion => ({
+  id,
+  question: `Question ${id}`,
+  content: {
+    version: 1,
+    type,
+    options: Array.from({ length: optionCount }, (_, index) => ({
+      value: optionValue(index),
+      color: "gray",
+    })),
+    fallback: null,
+  },
+});
+
+const requestBytes = (plan: SystemOneAnswerPlan): number =>
+  new TextEncoder().encode(
+    serializeSystemOneRequest({
+      state: plan.state,
+      model: DEFAULT_SYSTEM_ONE_MODEL,
+      questions: plan.questions,
+    }),
+  ).byteLength;
 
 describe("planSystemOneAnswers", () => {
   test("text columns are not System One questions", () => {
@@ -131,6 +169,110 @@ describe("planSystemOneAnswers", () => {
     });
     expect(plan.unplanned).toEqual(["col-type"]);
     expect(Object.keys(plan.questions)).toEqual([]);
+  });
+
+  test("reserves the final Choice slot for not-stated", () => {
+    const atCap = planSystemOneAnswers({
+      document,
+      sources: [],
+      language: "en",
+      questions: [
+        selectQuestion(
+          "at-cap",
+          "single-select",
+          SYSTEM_ONE_SINGLE_SELECT_MAX_OPTIONS,
+        ),
+      ],
+    });
+    const overCap = planSystemOneAnswers({
+      document,
+      sources: [],
+      language: "en",
+      questions: [
+        selectQuestion(
+          "over-cap",
+          "single-select",
+          SYSTEM_ONE_SINGLE_SELECT_MAX_OPTIONS + 1,
+        ),
+      ],
+    });
+
+    const value = atCap.questions["at-cap:value"];
+    expect(value?.type).toBe("choice");
+    if (value?.type === "choice") {
+      expect(Object.keys(value.criteria)).toHaveLength(
+        SYSTEM_ONE_SINGLE_SELECT_MAX_OPTIONS + 1,
+      );
+    }
+    expect(atCap.unplanned).toEqual([]);
+    expect(overCap.unplanned).toEqual(["over-cap"]);
+    expect(overCap.questions).toEqual({});
+  });
+
+  test("keeps a property atomic at the total question cap", () => {
+    const atCap = selectQuestion(
+      "at-cap",
+      "multi-select",
+      SYSTEM_ONE_ANSWER_PLAN_MAX_QUESTIONS,
+    );
+    const plan = planSystemOneAnswers({
+      document,
+      sources: [],
+      language: "en",
+      questions: [atCap, selectQuestion("overflow", "single-select", 1)],
+    });
+
+    expect(Object.keys(plan.questions)).toHaveLength(
+      SYSTEM_ONE_ANSWER_PLAN_MAX_QUESTIONS,
+    );
+    expect(plan.plans.has("at-cap")).toBe(true);
+    expect(plan.plans.has("overflow")).toBe(false);
+    expect(plan.unplanned).toEqual(["overflow"]);
+
+    const atomicOverflow = planSystemOneAnswers({
+      document,
+      sources: [{ id: "source", text: "short" }],
+      language: "en",
+      questions: [atCap],
+    });
+    expect(atomicOverflow.questions).toEqual({});
+    expect(atomicOverflow.plans.size).toBe(0);
+    expect(atomicOverflow.unplanned).toEqual(["at-cap"]);
+  });
+
+  test("accepts the serialized byte cap and leaves cap plus one unplanned", () => {
+    const base = planSystemOneAnswers({
+      document: {},
+      sources: [],
+      language: "en",
+      questions: [selectQuestion("bytes", "single-select", 1, () => "")],
+    });
+    const padding =
+      SYSTEM_ONE_ANSWER_PLAN_MAX_REQUEST_BYTES - requestBytes(base);
+    expect(padding).toBeGreaterThan(0);
+    const valueAtCap = "x".repeat(padding);
+    const atCap = planSystemOneAnswers({
+      document: {},
+      sources: [],
+      language: "en",
+      questions: [
+        selectQuestion("bytes", "single-select", 1, () => valueAtCap),
+      ],
+    });
+    const overCap = planSystemOneAnswers({
+      document: {},
+      sources: [],
+      language: "en",
+      questions: [
+        selectQuestion("bytes", "single-select", 1, () => `${valueAtCap}x`),
+      ],
+    });
+
+    expect(requestBytes(atCap)).toBe(SYSTEM_ONE_ANSWER_PLAN_MAX_REQUEST_BYTES);
+    expect(atCap.unplanned).toEqual([]);
+    expect(overCap.questions).toEqual({});
+    expect(overCap.plans.size).toBe(0);
+    expect(overCap.unplanned).toEqual(["bytes"]);
   });
 
   test("a date column offers the dates found in the text, read in the text's language", () => {
@@ -493,10 +635,12 @@ describe("decodeSystemOneAnswers", () => {
     if (priceKey === undefined) {
       throw new Error("price candidate missing");
     }
+    const criteriaKeys = Object.keys(value.criteria);
+    const alternativeProbability = 0.1 / (criteriaKeys.length - 1);
     const probabilities = Object.fromEntries(
-      Object.keys(value.criteria).map((key) => [
+      criteriaKeys.map((key) => [
         key,
-        key === priceKey ? 0.9 : 0.01,
+        key === priceKey ? 0.9 : alternativeProbability,
       ]),
     );
     const outcomes = decodeSystemOneAnswers({

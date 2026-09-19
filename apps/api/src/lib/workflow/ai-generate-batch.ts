@@ -16,7 +16,7 @@ import {
   planSystemOneAnswers,
 } from "@/api/lib/decisions/answer-questions";
 import { decideMany } from "@/api/lib/decisions/decide";
-import type { SystemOneClient } from "@/api/lib/decisions/system-one";
+import type { DecisionModel } from "@/api/lib/decisions/decision-model";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
 import { sanitizeForPrompt, untrustedText } from "@/api/lib/prompt-safety";
 import { splitPropertiesForBudget } from "@/api/lib/structured-output-budget";
@@ -75,7 +75,7 @@ type GenerateWorkflowDataProps = {
     | ((update: PartialAnswerUpdate) => Promise<void> | void)
     | undefined;
   /** Injected by tests; the org's resolved decision model otherwise, null for none. */
-  decisionModel?: SystemOneClient | null | undefined;
+  decisionModel?: DecisionModel | null | undefined;
 };
 
 export type WorkflowDataOutput = Record<
@@ -157,7 +157,8 @@ export const buildWorkflowAIAnalyticsProps = ({
 const SYSTEM_ONE_ERROR_SOURCE = "workflow.generate-batch.system-one";
 
 type SystemOnePhaseOptions = {
-  decisionModel: SystemOneClient | null | undefined;
+  decisionModel: DecisionModel | null | undefined;
+  usageMetering: AIUsageMetering | undefined;
   orgAIConfig: OrgAIConfig | null | undefined;
   properties: AIBatchProperty[];
   files: PreparedInputFile[];
@@ -183,6 +184,7 @@ type SystemOnePhaseResult = {
  */
 const askSystemOne = async ({
   decisionModel,
+  usageMetering,
   orgAIConfig,
   properties,
   files,
@@ -236,6 +238,9 @@ const askSystemOne = async ({
     // One call reads the whole batch; the caller's signal still bounds it.
     timeoutMs: 60_000,
     client: decisionModel,
+    usageMetering: usageMetering
+      ? { ...usageMetering, callId: Bun.randomUUIDv7() }
+      : undefined,
   });
   const outcomes = decodeSystemOneAnswers({ plan, questions, decisions });
   const { output } = outputFromSystemOneOutcomes({
@@ -287,6 +292,7 @@ export const generateWorkflowData = async ({
   const { output: systemOneOutput, generative: generativeProperties } =
     await askSystemOne({
       decisionModel,
+      usageMetering,
       orgAIConfig,
       properties,
       files,

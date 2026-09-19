@@ -27,7 +27,15 @@ import type {
   Decisions,
   DecisionUndecidedReason,
 } from "@/api/lib/decisions/decide";
-import { choice, noul } from "@/api/lib/decisions/system-one";
+import {
+  choice,
+  DEFAULT_SYSTEM_ONE_MODEL,
+  noul,
+  serializeSystemOneRequest,
+  SYSTEM_ONE_MAX_CHOICE_OPTIONS,
+  SYSTEM_ONE_MAX_QUESTIONS,
+  SYSTEM_ONE_MAX_REQUEST_BYTES,
+} from "@/api/lib/decisions/system-one";
 import type {
   ChoiceAnswer,
   NoulAnswer,
@@ -43,6 +51,14 @@ import type { Answer } from "@/api/lib/workflow/ai-answer-schema";
  * so this holds with room for the questions.
  */
 export const SYSTEM_ONE_SOURCE_BUDGET_CHARS = 40_000;
+/** One slot is reserved for the planner's `__not_stated` option. */
+export const SYSTEM_ONE_SINGLE_SELECT_MAX_OPTIONS =
+  SYSTEM_ONE_MAX_CHOICE_OPTIONS - 1;
+/** Bound fan-out even when one property expands into many Noul questions. */
+export const SYSTEM_ONE_ANSWER_PLAN_MAX_QUESTIONS = SYSTEM_ONE_MAX_QUESTIONS;
+/** Keep the planned wire request within the transport's UTF-8 byte ceiling. */
+export const SYSTEM_ONE_ANSWER_PLAN_MAX_REQUEST_BYTES =
+  SYSTEM_ONE_MAX_REQUEST_BYTES;
 
 /** A Noul this far from 0.5 counts as a yes. */
 const NOUL_YES = 0.5;
@@ -113,6 +129,11 @@ type Plan =
   | { kind: "single-select"; valueKey: string; whereKey: string | null }
   | { kind: "multi-select"; optionKeys: string[]; whereKey: string | null }
   | { kind: "candidates"; valueKey: string | null; candidates: Candidate[] };
+
+type PlannedQuestion = {
+  plan: Plan;
+  questions: Record<string, SystemOneQuestion>;
+};
 
 export type SystemOneAnswerPlan = {
   state: SystemOneState;
@@ -338,11 +359,15 @@ const planSelect = (
   question: AnswerQuestion,
   content: SelectContent,
   sources: readonly AnswerSource[],
-  questions: Record<string, SystemOneQuestion>,
-): Plan | null => {
-  if (content.options.length === 0) {
+): PlannedQuestion | null => {
+  if (
+    content.options.length === 0 ||
+    (content.type === "single-select" &&
+      content.options.length > SYSTEM_ONE_SINGLE_SELECT_MAX_OPTIONS)
+  ) {
     return null;
   }
+  const questions: Record<string, SystemOneQuestion> = {};
   const where = whereQuestion(question.question, sources);
   const whereKey = where === null ? null : `${question.id}:where`;
   if (where !== null && whereKey !== null) {
@@ -363,7 +388,10 @@ const planSelect = (
       },
       criteria,
     );
-    return { kind: "single-select", valueKey, whereKey };
+    return {
+      plan: { kind: "single-select", valueKey, whereKey },
+      questions,
+    };
   }
   const optionKeys = content.options.map((option, index) => {
     const key = `${question.id}:${selectOptionKey(index)}`;
@@ -381,18 +409,21 @@ const planSelect = (
     );
     return key;
   });
-  return { kind: "multi-select", optionKeys, whereKey };
+  return {
+    plan: { kind: "multi-select", optionKeys, whereKey },
+    questions,
+  };
 };
 
 const planCandidates = (
   question: AnswerQuestion,
   candidates: Candidate[],
   noun: string,
-  questions: Record<string, SystemOneQuestion>,
-): Plan => {
+): PlannedQuestion | null => {
   if (candidates.length === 0) {
-    return { kind: "candidates", valueKey: null, candidates };
+    return null;
   }
+  const questions: Record<string, SystemOneQuestion> = {};
   const valueKey = `${question.id}:value`;
   questions[valueKey] = choice(
     {
@@ -401,8 +432,23 @@ const planCandidates = (
     },
     candidateCriteria(candidates),
   );
-  return { kind: "candidates", valueKey, candidates };
+  return {
+    plan: { kind: "candidates", valueKey, candidates },
+    questions,
+  };
 };
+
+const requestBytes = (
+  state: SystemOneState,
+  questions: Record<string, SystemOneQuestion>,
+): number =>
+  new TextEncoder().encode(
+    serializeSystemOneRequest({
+      state,
+      model: DEFAULT_SYSTEM_ONE_MODEL,
+      questions,
+    }),
+  ).byteLength;
 
 export type PlanSystemOneAnswersOptions = {
   /** Named facts about the row the sources belong to: case number, court, file name. */
@@ -425,6 +471,10 @@ export const planSystemOneAnswers = ({
   language,
   questions: asked,
 }: PlanSystemOneAnswersOptions): SystemOneAnswerPlan => {
+  const state = {
+    document,
+    sources: sources.map((source) => ({ id: source.id, text: source.text })),
+  };
   const questions: Record<string, SystemOneQuestion> = {};
   const plans = new Map<string, Plan>();
   const unplanned: string[] = [];
@@ -432,39 +482,57 @@ export const planSystemOneAnswers = ({
   let integers: Candidate[] | undefined;
   for (const question of asked) {
     const { content } = question;
-    let plan: Plan | null;
+    let staged: PlannedQuestion | null;
     switch (content.type) {
       case "single-select":
       case "multi-select":
-        plan = planSelect(question, content, sources, questions);
+        staged = planSelect(question, content, sources);
         break;
       case "date":
         dates ??= dateCandidates({ sources, language });
-        plan = planCandidates(question, dates, "dates", questions);
+        staged = planCandidates(question, dates, "dates");
         break;
       case "int":
         integers ??= integerCandidates({ sources, language });
-        plan = planCandidates(question, integers, "numbers", questions);
+        staged = planCandidates(question, integers, "numbers");
         break;
       default: {
         content satisfies never;
         panic("Unhandled answer content kind");
       }
     }
+    if (staged === null) {
+      unplanned.push(question.id);
+      continue;
+    }
+    const stagedEntries = Object.entries(staged.questions);
+    const hasKeyCollision = stagedEntries.some(([key]) =>
+      Object.hasOwn(questions, key),
+    );
+    const nextQuestions: Record<string, SystemOneQuestion> = {};
+    for (const [key, plannedQuestion] of Object.entries(questions)) {
+      nextQuestions[key] = plannedQuestion;
+    }
+    for (const [key, plannedQuestion] of stagedEntries) {
+      nextQuestions[key] = plannedQuestion;
+    }
     if (
-      plan === null ||
-      (plan.kind === "candidates" && plan.valueKey === null)
+      hasKeyCollision ||
+      Object.keys(nextQuestions).length >
+        SYSTEM_ONE_ANSWER_PLAN_MAX_QUESTIONS ||
+      requestBytes(state, nextQuestions) >
+        SYSTEM_ONE_ANSWER_PLAN_MAX_REQUEST_BYTES
     ) {
       unplanned.push(question.id);
       continue;
     }
-    plans.set(question.id, plan);
+    for (const [key, plannedQuestion] of stagedEntries) {
+      questions[key] = plannedQuestion;
+    }
+    plans.set(question.id, staged.plan);
   }
   return {
-    state: {
-      document,
-      sources: sources.map((source) => ({ id: source.id, text: source.text })),
-    },
+    state,
     questions,
     unplanned,
     plans,

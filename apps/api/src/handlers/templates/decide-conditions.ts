@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tJsonObject, tSafeId } from "@/api/lib/custom-schema";
@@ -37,13 +39,41 @@ const config = {
 
 const decideTemplateConditions = createSafeRootHandler(
   config,
-  async function* ({ scopedDb, session, params, body }) {
+  async function* ({
+    scopedDb,
+    safeDb,
+    user,
+    session,
+    params,
+    body,
+    orgAIConfig,
+    orgAIConfigStatus,
+    request,
+  }) {
+    if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
+      return Result.err(storedAIConfigUnreadableError(undefined));
+    }
+
     const decided = yield* Result.await(
       templateDecideConditionsLogic({
         scopedDb,
         organizationId: session.activeOrganizationId,
         templateId: params.templateId,
         body,
+        orgAIConfig,
+        abortSignal: request.signal,
+        // Preview has no spend reservation. Only the org's own credential may
+        // run here until the decision model has a matching usage preflight.
+        ...(orgAIConfig?.decision ? {} : { client: null }),
+        usageMetering: {
+          actionType: "chat",
+          organizationId: session.activeOrganizationId,
+          safeDb,
+          serviceTier: "standard",
+          userId: user.id,
+          workspaceId: null,
+          callId: Bun.randomUUIDv7(),
+        },
       }),
     );
     return Result.ok(decided);

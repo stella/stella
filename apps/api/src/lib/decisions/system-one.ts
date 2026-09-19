@@ -23,6 +23,18 @@ import type { Fetcher } from "@stll/fetch";
 
 export const SYSTEM_ONE_ENDPOINT = "https://api.typesafe.ai/v1/systemone";
 export const DEFAULT_SYSTEM_ONE_MODEL = "jev-latest";
+/** Jev's documented maximum cardinality for one Choice question. */
+export const SYSTEM_ONE_MAX_CHOICE_OPTIONS = 255;
+/** A local batch ceiling that bounds response size and planner fan-out. */
+export const SYSTEM_ONE_MAX_QUESTIONS = 255;
+/**
+ * Jev's shared state-and-question budget is roughly 150k English characters.
+ * Counting UTF-8 bytes is stricter for multilingual legal text and bounds the
+ * actual allocation and upload at the transport boundary.
+ */
+export const SYSTEM_ONE_MAX_REQUEST_BYTES = 150_000;
+/** Floating-point probability distributions may differ from one by this much. */
+export const SYSTEM_ONE_PROBABILITY_TOLERANCE = 1e-6;
 
 /** Responses arrive in well under a second; the timeout covers a queued retry. */
 const REQUEST_TIMEOUT_MS = 30_000;
@@ -60,14 +72,7 @@ export type NoulQuestion = {
   criteria?: { true?: SystemOneEntry; false?: SystemOneEntry } | undefined;
 };
 
-export type ScoreQuestion = {
-  type: "score";
-  instructions: SystemOneEntry;
-  /** Ordered levels, lowest first; at least two. */
-  criteria: readonly SystemOneEntry[];
-};
-
-export type SystemOneQuestion = ChoiceQuestion | NoulQuestion | ScoreQuestion;
+export type SystemOneQuestion = ChoiceQuestion | NoulQuestion;
 
 export type ChoiceAnswer<TOption extends string = string> = {
   type: "choice";
@@ -82,23 +87,12 @@ export type NoulAnswer = {
   noul: number;
 };
 
-export type ScoreAnswer = {
-  type: "score";
-  /** Probability-weighted level index; may land between levels. */
-  score: number;
-  legend: Record<string, string>;
-  probabilities: Record<string, number>;
-  confidence: number;
-};
-
 export type SystemOneAnswerFor<TQuestion extends SystemOneQuestion> =
   TQuestion extends ChoiceQuestion<infer TOption>
     ? ChoiceAnswer<TOption>
     : TQuestion extends NoulQuestion
       ? NoulAnswer
-      : TQuestion extends ScoreQuestion
-        ? ScoreAnswer
-        : never;
+      : never;
 
 export type SystemOneQuestions = Record<string, SystemOneQuestion>;
 
@@ -117,10 +111,11 @@ export type SystemOneResult<TQuestions extends SystemOneQuestions> = {
 };
 
 export const SYSTEM_ONE_ERROR_KINDS = [
-  "unconfigured",
+  "invalid_request",
   "http",
   "invalid_response",
   "network",
+  "aborted",
 ] as const;
 export type SystemOneErrorKind = (typeof SYSTEM_ONE_ERROR_KINDS)[number];
 
@@ -145,11 +140,6 @@ export const noul = (
     ? { type: "noul", instructions }
     : { type: "noul", instructions, criteria };
 
-export const score = (
-  instructions: SystemOneEntry,
-  criteria: readonly SystemOneEntry[],
-): ScoreQuestion => ({ type: "score", instructions, criteria });
-
 const unitInterval = v.pipe(v.number(), v.minValue(0), v.maxValue(1));
 
 const wireAnswerSchema = v.variant("type", [
@@ -157,13 +147,6 @@ const wireAnswerSchema = v.variant("type", [
   v.object({
     type: v.literal("choice"),
     choice: v.string(),
-    probabilities: v.record(v.string(), unitInterval),
-    confidence: unitInterval,
-  }),
-  v.object({
-    type: v.literal("score"),
-    score: v.number(),
-    legend: v.record(v.string(), v.string()),
     probabilities: v.record(v.string(), unitInterval),
     confidence: unitInterval,
   }),
@@ -190,7 +173,7 @@ const bindAnswer = (
   id: string,
   question: SystemOneQuestion,
   answer: WireAnswer,
-): Result<ChoiceAnswer | NoulAnswer | ScoreAnswer, SystemOneError> => {
+): Result<ChoiceAnswer | NoulAnswer, SystemOneError> => {
   if (answer.type !== question.type) {
     return Result.err(
       new SystemOneError({
@@ -206,12 +189,37 @@ const bindAnswer = (
   const answered = Object.keys(answer.probabilities);
   const complete =
     options.length === answered.length &&
-    options.every((option) => option in answer.probabilities);
-  if (!complete || !(answer.choice in question.criteria)) {
+    options.every((option) => Object.hasOwn(answer.probabilities, option));
+  if (!complete || !Object.hasOwn(question.criteria, answer.choice)) {
     return Result.err(
       new SystemOneError({
         kind: "invalid_response",
         message: `Answer "${id}" names options outside its question`,
+      }),
+    );
+  }
+  const probabilityTotal = Object.values(answer.probabilities).reduce(
+    (sum, probability) => sum + probability,
+    0,
+  );
+  if (Math.abs(probabilityTotal - 1) > SYSTEM_ONE_PROBABILITY_TOLERANCE) {
+    return Result.err(
+      new SystemOneError({
+        kind: "invalid_response",
+        message: `Answer "${id}" probabilities do not sum to one`,
+      }),
+    );
+  }
+  const chosenProbability = answer.probabilities[answer.choice];
+  const highestProbability = Math.max(...Object.values(answer.probabilities));
+  if (
+    chosenProbability === undefined ||
+    chosenProbability + SYSTEM_ONE_PROBABILITY_TOLERANCE < highestProbability
+  ) {
+    return Result.err(
+      new SystemOneError({
+        kind: "invalid_response",
+        message: `Answer "${id}" did not choose a maximal-probability option`,
       }),
     );
   }
@@ -223,6 +231,20 @@ export type SystemOneRequest<TQuestions extends SystemOneQuestions> = {
   questions: TQuestions;
   abortSignal?: AbortSignal | undefined;
 };
+
+type SerializeSystemOneRequestOptions = {
+  state: SystemOneState;
+  model: string;
+  questions: SystemOneQuestions;
+};
+
+/** The one wire envelope used by both request planning and the transport. */
+export const serializeSystemOneRequest = ({
+  state,
+  model,
+  questions,
+}: SerializeSystemOneRequestOptions): string =>
+  JSON.stringify({ state, model, questions });
 
 export type SystemOneClient = {
   model: string;
@@ -238,7 +260,40 @@ export type SystemOneClientOptions = {
   /** Injected by tests; the runtime's fetch otherwise. */
   fetcher?: Fetcher | undefined;
   /** Injected by tests to skip the backoff wait. */
-  sleep?: ((ms: number) => Promise<void>) | undefined;
+  sleep?:
+    | ((ms: number, abortSignal?: AbortSignal) => Promise<void>)
+    | undefined;
+};
+
+const abortError = (signal: AbortSignal): Error =>
+  signal.reason instanceof Error
+    ? signal.reason
+    : new DOMException("Aborted", "AbortError");
+
+const abortableSleep = async (
+  ms: number,
+  abortSignal?: AbortSignal,
+): Promise<void> => {
+  if (abortSignal === undefined) {
+    await Bun.sleep(ms);
+    return;
+  }
+  if (abortSignal.aborted) {
+    throw abortError(abortSignal);
+  }
+
+  let onAbort: (() => void) | undefined;
+  const aborted = new Promise<never>((_resolve, reject) => {
+    onAbort = () => reject(abortError(abortSignal));
+    abortSignal.addEventListener("abort", onAbort, { once: true });
+  });
+  try {
+    await Promise.race([Bun.sleep(ms), aborted]);
+  } finally {
+    if (onAbort !== undefined) {
+      abortSignal.removeEventListener("abort", onAbort);
+    }
+  }
 };
 
 const retryDelayMs = (response: Response, attempt: number): number => {
@@ -250,17 +305,12 @@ const retryDelayMs = (response: Response, attempt: number): number => {
   return Math.min(RETRY_BASE_DELAY_MS * 2 ** attempt, RETRY_MAX_DELAY_MS);
 };
 
-const readErrorBody = async (response: Response): Promise<string> => {
-  const text = await Result.tryPromise(async () => await response.text());
-  return Result.isOk(text) ? text.value.slice(0, 500) : "";
-};
-
 export const createSystemOneClient = ({
   apiKey,
   model = DEFAULT_SYSTEM_ONE_MODEL,
   endpoint = SYSTEM_ONE_ENDPOINT,
   fetcher,
-  sleep = async (ms) => await Bun.sleep(ms),
+  sleep = abortableSleep,
 }: SystemOneClientOptions): SystemOneClient => {
   const fetchWithTimeout = createFetchWithTimeout(fetcher ?? globalThis.fetch);
   const send = async (
@@ -282,8 +332,10 @@ export const createSystemOneClient = ({
           }),
         catch: (cause) =>
           new SystemOneError({
-            kind: "network",
-            message: "TypeSafe request failed before a response arrived",
+            kind: abortSignal?.aborted ? "aborted" : "network",
+            message: abortSignal?.aborted
+              ? "TypeSafe request was aborted"
+              : "TypeSafe request failed before a response arrived",
             cause,
           }),
       });
@@ -302,11 +354,25 @@ export const createSystemOneClient = ({
           new SystemOneError({
             kind: "http",
             status: response.status,
-            message: `TypeSafe responded ${String(response.status)}: ${await readErrorBody(response)}`,
+            message: `TypeSafe responded with HTTP ${String(response.status)}`,
           }),
         );
       }
-      await sleep(retryDelayMs(response, attempt));
+      const waited = await Result.tryPromise({
+        try: async () =>
+          await sleep(retryDelayMs(response, attempt), abortSignal),
+        catch: (cause) =>
+          new SystemOneError({
+            kind: abortSignal?.aborted ? "aborted" : "network",
+            message: abortSignal?.aborted
+              ? "TypeSafe request was aborted during retry backoff"
+              : "TypeSafe retry backoff failed",
+            cause,
+          }),
+      });
+      if (Result.isError(waited)) {
+        return waited;
+      }
     }
     return Result.err(
       new SystemOneError({
@@ -326,7 +392,38 @@ export const createSystemOneClient = ({
       Result<SystemOneResult<TQuestions>, SystemOneError>
     > => {
       const startedAt = performance.now();
-      const body = JSON.stringify({ state, model, questions });
+      const questionEntries = Object.entries(questions);
+      if (questionEntries.length > SYSTEM_ONE_MAX_QUESTIONS) {
+        return Result.err(
+          new SystemOneError({
+            kind: "invalid_request",
+            message: `TypeSafe request exceeds ${String(SYSTEM_ONE_MAX_QUESTIONS)} questions`,
+          }),
+        );
+      }
+      for (const [id, question] of questionEntries) {
+        if (
+          question.type === "choice" &&
+          Object.keys(question.criteria).length > SYSTEM_ONE_MAX_CHOICE_OPTIONS
+        ) {
+          return Result.err(
+            new SystemOneError({
+              kind: "invalid_request",
+              message: `Choice question "${id}" exceeds ${String(SYSTEM_ONE_MAX_CHOICE_OPTIONS)} options`,
+            }),
+          );
+        }
+      }
+      const body = serializeSystemOneRequest({ state, model, questions });
+      const bodyBytes = new TextEncoder().encode(body).byteLength;
+      if (bodyBytes > SYSTEM_ONE_MAX_REQUEST_BYTES) {
+        return Result.err(
+          new SystemOneError({
+            kind: "invalid_request",
+            message: `TypeSafe request is ${String(bodyBytes)} bytes; maximum is ${String(SYSTEM_ONE_MAX_REQUEST_BYTES)}`,
+          }),
+        );
+      }
       const sent = await send(body, abortSignal);
       if (Result.isError(sent)) {
         return sent;
@@ -353,8 +450,7 @@ export const createSystemOneClient = ({
           }),
         );
       }
-      const answers: Record<string, ChoiceAnswer | NoulAnswer | ScoreAnswer> =
-        {};
+      const answers: Record<string, ChoiceAnswer | NoulAnswer> = {};
       for (const [id, question] of Object.entries(questions)) {
         const answer = parsed.output.answers[id];
         if (answer === undefined) {
