@@ -27,6 +27,9 @@ export const BASELINE_PATHS = {
   typecheck: "scripts/typecheck-baseline.json",
   /** apps/api/scripts/mcp-coverage-guard.ts */
   mcpCoverage: "apps/api/mcp-coverage-baseline.json",
+  /** apps/api/src/handlers/case-law/ingestion/adapters/source-surface-census.test.ts */
+  caseLawSourceSurfaceBacklog:
+    "apps/api/src/handlers/case-law/ingestion/adapters/source-surface-backlog-baseline.json",
   /** apps/web/e2e/helpers/network.ts */
   webNetwork: "apps/web/e2e/network-baseline.json",
   // The i18n pair is produced by `packages/scripts/src/i18n-*.ts` against the
