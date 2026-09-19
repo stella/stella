@@ -16,13 +16,7 @@
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
-const SPLIT = /[\s"'`{}()]+/;
-
-// Drop Tailwind variant prefixes (sm:, hover:, dark:, group-hover:, etc.).
-const baseClass = (token: string): string => {
-  const idx = token.lastIndexOf(":");
-  return idx === -1 ? token : token.slice(idx + 1);
-};
+import { classBaseName, classTokens } from "./utils.ts";
 
 const isVerticalScroll = (c: string): boolean =>
   c === "overflow-auto" ||
@@ -34,7 +28,7 @@ const constrainsWidth = (c: string): boolean =>
   c.startsWith("max-w-") && c !== "max-w-none" && c !== "max-w-full";
 
 const isCenteredScrollColumn = (value: string): boolean => {
-  const classes = value.split(SPLIT).filter(Boolean).map(baseClass);
+  const classes = classTokens(value).map(classBaseName);
 
   const hasScroll = classes.some(isVerticalScroll);
   const hasCenter = classes.includes("mx-auto");

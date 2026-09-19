@@ -235,6 +235,37 @@ export const resolveChainRootName = (node: unknown): string | null => {
   return isIdentifier(current) ? current.name : null;
 };
 
+// --- Tailwind class strings, shared by the rules that read them -------------
+//
+// A class string reaches a rule as a `Literal` or a `TemplateElement`, with no
+// guarantee it holds only classes: `cn()` arguments, `cva` variant maps, and
+// interpolated templates all arrive here. Splitting on whitespace and the
+// punctuation that separates expressions keeps the tokens usable across all
+// three, and the split deliberately leaves `[` and `]` alone so an arbitrary
+// variant stays one token.
+
+const CLASS_TOKEN_SPLIT = /[\s"'`{}()]+/u;
+
+export const classTokens = (value: string): string[] =>
+  value.split(CLASS_TOKEN_SPLIT).filter(Boolean);
+
+/**
+ * The utility a token applies, with its Tailwind variant prefixes dropped
+ * (`sm:`, `hover:`, `group-data-[x=true]/rail:`, `[&_pre]:`). The last colon
+ * is the boundary: a colon inside an arbitrary value (`supports-[overflow:
+ * clip]:`) is still followed by one.
+ */
+export const classBaseName = (token: string): string => {
+  const boundary = token.lastIndexOf(":");
+  return boundary === -1 ? token : token.slice(boundary + 1);
+};
+
+/** The variant prefixes of a token, or "" when it carries none. */
+export const classVariants = (token: string): string => {
+  const boundary = token.lastIndexOf(":");
+  return boundary === -1 ? "" : token.slice(0, boundary);
+};
+
 // --- JSX shape, shared by the rules that read markup ------------------------
 
 // The name a JSX element is written under, descending through the member and

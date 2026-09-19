@@ -98,8 +98,8 @@
         "$TURBO_ROOT$/.oxlint-plugins/**",
         "$TURBO_ROOT$/scripts/ownership.ts",
         "$TURBO_ROOT$/scripts/result-boundary-globs.ts",
-        "$TURBO_ROOT$/scripts/shadcn-lint-policy.ts",
-        "$TURBO_ROOT$/scripts/shadcn-lint-baseline.json",
+        "$TURBO_ROOT$/scripts/design-lint-policy.ts",
+        "$TURBO_ROOT$/scripts/design-lint-baseline.json",
         "$TURBO_ROOT$/packages/typescript-config/**",
         "$TURBO_ROOT$/patches/**",
         "$TURBO_ROOT$/tsconfig.tooling.json",
@@ -121,8 +121,8 @@
         "$TURBO_ROOT$/.oxlint-plugins/**",
         "$TURBO_ROOT$/scripts/ownership.ts",
         "$TURBO_ROOT$/scripts/result-boundary-globs.ts",
-        "$TURBO_ROOT$/scripts/shadcn-lint-policy.ts",
-        "$TURBO_ROOT$/scripts/shadcn-lint-baseline.json",
+        "$TURBO_ROOT$/scripts/design-lint-policy.ts",
+        "$TURBO_ROOT$/scripts/design-lint-baseline.json",
         "$TURBO_ROOT$/packages/typescript-config/**",
         "$TURBO_ROOT$/patches/**",
         "$TURBO_ROOT$/tsconfig.tooling.json",
@@ -138,8 +138,8 @@
         "$TURBO_ROOT$/.oxlint-plugins/**",
         "$TURBO_ROOT$/scripts/ownership.ts",
         "$TURBO_ROOT$/scripts/result-boundary-globs.ts",
-        "$TURBO_ROOT$/scripts/shadcn-lint-policy.ts",
-        "$TURBO_ROOT$/scripts/shadcn-lint-baseline.json"
+        "$TURBO_ROOT$/scripts/design-lint-policy.ts",
+        "$TURBO_ROOT$/scripts/design-lint-baseline.json"
       ],
       "cache": false
     },

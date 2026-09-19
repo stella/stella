@@ -100,8 +100,8 @@ export const OXLINT_CONFIGURATION_CACHE_INPUTS = [
   "$TURBO_ROOT$/.oxlint-plugins/**",
   "$TURBO_ROOT$/scripts/ownership.ts",
   "$TURBO_ROOT$/scripts/result-boundary-globs.ts",
-  "$TURBO_ROOT$/scripts/shadcn-lint-policy.ts",
-  "$TURBO_ROOT$/scripts/shadcn-lint-baseline.json",
+  "$TURBO_ROOT$/scripts/design-lint-policy.ts",
+  "$TURBO_ROOT$/scripts/design-lint-baseline.json",
 ] as const;
 export const LINT_ONLY_CACHE_INPUTS = [
   ...OXLINT_CONFIGURATION_CACHE_INPUTS,

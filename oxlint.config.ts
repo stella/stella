@@ -11,19 +11,19 @@ import {
   stellaLowercasePluginSpecifier,
 } from "@stll/oxlint-config";
 
-import { OWNERSHIP } from "./scripts/ownership.ts";
-import {
-  RESULT_CONVENTION_ENABLED_GLOBS,
-  RESULT_CONVENTION_EXCLUDE_GLOBS,
-} from "./scripts/result-boundary-globs.ts";
-import shadcnLintBaseline from "./scripts/shadcn-lint-baseline.json" with { type: "json" };
+import designLintBaseline from "./scripts/design-lint-baseline.json" with { type: "json" };
 import {
   SHADCN_LINT_JS_PLUGINS,
   SHADCN_LINT_POLICY_OVERRIDES,
   SHADCN_LINT_RULES,
   SHADCN_LINT_SETTINGS,
-  shadcnBacklogOverrides,
-} from "./scripts/shadcn-lint-policy.ts";
+  designLintBacklogOverrides,
+} from "./scripts/design-lint-policy.ts";
+import { OWNERSHIP } from "./scripts/ownership.ts";
+import {
+  RESULT_CONVENTION_ENABLED_GLOBS,
+  RESULT_CONVENTION_EXCLUDE_GLOBS,
+} from "./scripts/result-boundary-globs.ts";
 
 // All workspaces run oxlint from the repo root via:
 //   cd ../.. && oxlint -c oxlint.config.ts --type-aware <workspace-dir>
@@ -635,7 +635,7 @@ export default defineConfig({
   rules: {
     ...libraryRules,
     // Design-system rules (@shadcn/lint): policy, overlap resolution, and
-    // backlog handling live in scripts/shadcn-lint-policy.ts.
+    // backlog handling live in scripts/design-lint-policy.ts.
     ...SHADCN_LINT_RULES,
     // Override ultracite defaults for Stella
     // The generic rule fires on every sequential await, including the ones a
@@ -1155,6 +1155,8 @@ export default defineConfig({
     "./.oxlint-plugins/no-vacuous-throw-assertion.ts",
     "./.oxlint-plugins/no-internal-module-mock.ts",
     "./.oxlint-plugins/no-centered-scroll-column.ts",
+    "./.oxlint-plugins/no-raw-overflow-scroll.ts",
+    "./.oxlint-plugins/no-imported-class-constant.ts",
     "./.oxlint-plugins/no-static-devtools-import.ts",
     "./.oxlint-plugins/no-static-catalogue-route-import.ts",
     "./.oxlint-plugins/no-workspace-field-value-drift.ts",
@@ -1203,7 +1205,6 @@ export default defineConfig({
 
   overrides: [
     ...SHADCN_LINT_POLICY_OVERRIDES,
-    ...shadcnBacklogOverrides(shadcnLintBaseline),
     ...(core.overrides ?? []),
     ...libraryOverrides,
     {
@@ -3442,7 +3443,8 @@ export default defineConfig({
           "error",
           {
             paths: [
-              noZodImport, apiValibotJsonSchemaImport,
+              noZodImport,
+              apiValibotJsonSchemaImport,
               apiSafeIdBrandingImport,
               apiPortableSafeIdBrandingImport,
             ],
@@ -3496,7 +3498,13 @@ export default defineConfig({
       rules: {
         "no-restricted-imports": [
           "error",
-          { paths: [noZodImport, apiValibotJsonSchemaImport, apiPortableSafeIdBrandingImport] },
+          {
+            paths: [
+              noZodImport,
+              apiValibotJsonSchemaImport,
+              apiPortableSafeIdBrandingImport,
+            ],
+          },
         ],
       },
     },
@@ -3732,7 +3740,8 @@ export default defineConfig({
           "error",
           {
             paths: [
-              noZodImport, apiValibotJsonSchemaImport,
+              noZodImport,
+              apiValibotJsonSchemaImport,
               {
                 name: "@/api/lib/api-handlers",
                 importNames: ["createHandler", "createRootHandler"],
@@ -3785,7 +3794,10 @@ export default defineConfig({
         "apps/api/**/__tests__/**/*.{ts,tsx,js,jsx}",
       ],
       rules: {
-        "no-restricted-imports": ["error", { paths: [noZodImport, apiValibotJsonSchemaImport] }],
+        "no-restricted-imports": [
+          "error",
+          { paths: [noZodImport, apiValibotJsonSchemaImport] },
+        ],
       },
     },
     {
@@ -3840,7 +3852,8 @@ export default defineConfig({
           "error",
           {
             paths: [
-              noZodImport, apiValibotJsonSchemaImport,
+              noZodImport,
+              apiValibotJsonSchemaImport,
               apiSafeIdBrandingImport,
               apiPortableSafeIdBrandingImport,
               {
@@ -4090,6 +4103,42 @@ export default defineConfig({
         ],
       },
     },
+    {
+      // App chrome scrolls through ScrollArea, which owns the scrollbar's
+      // width, states, and overlay behaviour; a raw overflow utility hands
+      // that to the platform and two panes in the same shell then disagree.
+      // The primitive itself has to use the native scroller it wraps, and a
+      // test asserts on class strings rather than rendering chrome.
+      files: [
+        "apps/web/src/**/*.tsx",
+        "packages/ui/src/**/*.tsx",
+        ".oxlint-plugins/__fixtures__/no-raw-overflow-scroll.fixture.tsx",
+      ],
+      excludeFiles: [
+        "**/*.{test,spec}.tsx",
+        "**/__tests__/**",
+        "packages/ui/src/components/scroll-area.tsx",
+      ],
+      rules: {
+        "no-raw-overflow-scroll/no-raw-overflow-scroll": "error",
+      },
+    },
+    {
+      // `shadcn/no-restyle` judges a className by reading its classes. An
+      // identifier imported from another module is opaque to it, so the
+      // restyle it exists to catch ships unreported. Scoped to apps/web:
+      // packages/ui composes its own class constants by design.
+      files: [
+        "apps/web/src/**/*.tsx",
+        ".oxlint-plugins/__fixtures__/no-imported-class-constant.fixture.tsx",
+      ],
+      rules: {
+        "no-imported-class-constant/no-imported-class-constant": "error",
+      },
+    },
     ...fixtureRuleOverrides,
+    // Last: oxlint resolves overrides by replacement, so a scope that enables
+    // a tracked rule after this point would hand it back to a backlog file.
+    ...designLintBacklogOverrides(designLintBaseline),
   ],
 });

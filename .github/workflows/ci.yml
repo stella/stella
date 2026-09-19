@@ -731,14 +731,14 @@ jobs:
 
       - name: Design-system lint backlog
         if: needs.ci-plan.outputs.package_checks_required == 'true'
-        # The @shadcn/lint rules are off in the files
-        # scripts/shadcn-lint-baseline.json still lists; this holds each
+        # The tracked design-system rules are off in the files
+        # scripts/design-lint-baseline.json still lists; this holds each
         # file's count at its baseline and fails when a listed file reaches
         # zero, so the list only shrinks. Regenerate:
-        # `bun scripts/shadcn-lint-baseline.ts --write`.
+        # `bun scripts/design-lint-baseline.ts --write`.
         run: |
-          bun test scripts/shadcn-lint-baseline.test.ts scripts/oxlint-config-inputs.test.ts
-          bun scripts/shadcn-lint-baseline.ts --check
+          bun test scripts/design-lint-baseline.test.ts scripts/oxlint-config-inputs.test.ts
+          bun scripts/design-lint-baseline.ts --check
 
       - name: Oxlint override union guard
         if: needs.ci-plan.outputs.package_checks_required == 'true'
