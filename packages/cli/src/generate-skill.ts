@@ -183,13 +183,20 @@ const commandFlagsBlock = (spec: LeafCommandSpec): string => {
     return `- \`${command}\` — ${hint}`;
   }
   const required = flags.filter((flag) => flag.required);
-  const optional = flags.filter((flag) => !flag.required);
+  const optional = flags
+    .filter((flag) => !flag.required)
+    .map((flag) => optionalFlagToken(flag));
+  // `--file <path>` is not schema-derived: it fills the base64 prop the
+  // annotation names, so it is listed from the same spec that builds it.
+  if (spec.localFileBase64Prop !== undefined) {
+    optional.push("--file <path>");
+  }
   const lines = [
     `- \`${command}\``,
     ...required.map((flag) => `  - ${requiredFlagLine(flag)}`),
   ];
   if (optional.length > 0) {
-    lines.push(`  - optional: ${optional.map(optionalFlagToken).join(", ")}`);
+    lines.push(`  - optional: ${optional.join(", ")}`);
   }
   return lines.join("\n");
 };
@@ -508,6 +515,15 @@ export const generateCliSkill = (
     "  argument object, `--input @file` to read JSON from a file, or `--input -` to",
     "  read JSON from stdin. Individual string flags also take gh-style `@file` / `@-`",
     "  sugar (use `@@` to pass a literal leading `@`).",
+    "- **Reading a command's contract**: `--schema` prints that command's input JSON",
+    "  schema (the same schema the MCP tool validates against) and exits 0, without",
+    "  calling the server.",
+    "- **Sending a local document**: a command whose tool takes a document also takes",
+    "  `--file <path>`; the CLI reads the file and sends it in the tool's own base64",
+    "  field, the call an MCP host would make with the file attached. `--help` states",
+    "  the size ceiling, which is the one that field's schema declares. A larger file",
+    "  is refused: send it from a host that can attach it to the tool's file",
+    "  reference, never by re-exporting the document to fit.",
     "- **Array flags** are repeatable: pass the flag once per value.",
     "- **Pagination**: list commands take `--cursor <c>` and `--limit <n>`; `--all`",
     "  follows cursors up to bounded ceilings. The `nextCursor` resume hint is written",

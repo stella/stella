@@ -1,5 +1,8 @@
 import { Result } from "better-result";
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { PassThrough } from "node:stream";
 
 import { respondToMcpLifecycle } from "../tests/mcp-test-lifecycle.js";
@@ -15,6 +18,7 @@ import {
   errorEnvelope,
   flagKey,
   flagValueProvided,
+  parseInputObject,
   readRequestReceipt,
   requestIdLine,
   reservedFlagUsageError,
@@ -490,6 +494,236 @@ describe("--input composes with flags before server validation (S5.5)", () => {
     expect(tty.exitCode()).toBeUndefined();
     expect(server.calls).toHaveLength(1);
     expect(server.calls[0]?.args).toEqual({ confirm: true, matter_id: "m1" });
+  });
+});
+
+// `--input '<json>'`, `--input @file` and `--input -` are exercised end to end
+// in cli-commands.test.ts. What is left here is how they FAIL: a source the CLI
+// could not read, and a payload of the wrong shape, both of which must name
+// what to fix rather than fall through as an empty object.
+describe("--input source failures", () => {
+  const collect = () => {
+    const stderrChunks: string[] = [];
+    return {
+      writers: {
+        stdout: () => undefined,
+        stderr: (text: string) => stderrChunks.push(text),
+      },
+      stderrText: () => stderrChunks.join(""),
+    };
+  };
+
+  test("an unreadable @<path> names the file it could not read", async () => {
+    const sink = collect();
+    expect(
+      await parseInputObject({
+        inputRaw: "@/nonexistent/args.json",
+        writers: sink.writers,
+      }),
+    ).toBeUndefined();
+    expect(sink.stderrText()).toContain(
+      "--input could not read file /nonexistent/args.json",
+    );
+  });
+
+  test("a non-object or malformed payload is rejected by shape, not by schema", async () => {
+    const sink = collect();
+    expect(
+      await parseInputObject({ inputRaw: "[1,2]", writers: sink.writers }),
+    ).toBeUndefined();
+    expect(sink.stderrText()).toContain("--input must be a JSON object.");
+
+    const broken = collect();
+    expect(
+      await parseInputObject({ inputRaw: "{oops", writers: broken.writers }),
+    ).toBeUndefined();
+    expect(broken.stderrText()).toContain("--input is not valid JSON.");
+  });
+});
+
+describe("--file <path> (local bytes into the tool's base64 prop)", () => {
+  /** `create_template` as generated: the host `file` reference is absent here. */
+  const TEMPLATE_CREATE_SPEC: LeafCommandSpec = {
+    commandPath: ["template", "create"],
+    toolName: "create_template",
+    flags: [
+      stringFlag("name"),
+      {
+        flag: "--docx-base64",
+        prop: "docx_base64",
+        kind: "string",
+        required: false,
+        repeatable: false,
+      },
+    ],
+    inputOnly: [],
+    paginated: false,
+    followable: true,
+    windowedText: false,
+    destructive: false,
+    localFileBase64Prop: "docx_base64",
+    inputSchema: {
+      type: "object",
+      properties: {
+        name: { type: "string" },
+        docx_base64: { type: "string", maxLength: 262_144 },
+      },
+    },
+  };
+
+  const writeDocx = async (bytes: number): Promise<string> => {
+    const dir = await mkdtemp(path.join(tmpdir(), "stella-leaf-docx-"));
+    docxDirs.push(dir);
+    const file = path.join(dir, "engagement-letter.docx");
+    const content = Buffer.alloc(bytes, "a");
+    content.write("PK", 0, "binary");
+    await writeFile(file, content);
+    return file;
+  };
+
+  const docxDirs: string[] = [];
+  afterEach(async () => {
+    await Promise.all(
+      docxDirs.splice(0).map(async (dir) => {
+        await rm(dir, { recursive: true, force: true });
+      }),
+    );
+  });
+
+  test("the file travels as docx_base64: the same call an MCP host could make", async () => {
+    const server = startConfirmGateServer();
+    const tty = makeTtyContext({
+      serverUrl: server.url,
+      stdinData: "",
+      isTTY: false,
+    });
+    const file = await writeDocx(2048);
+    await runLeafCommand({
+      context: tty.context,
+      flags: { name: "Engagement letter", file, confirm: true },
+      spec: TEMPLATE_CREATE_SPEC,
+    });
+    server.stop();
+    const args = server.calls[0]?.args ?? {};
+    expect(Object.keys(args).toSorted()).toEqual(["docx_base64", "name"]);
+    expect(Buffer.from(String(args["docx_base64"]), "base64").byteLength).toBe(
+      2048,
+    );
+  });
+
+  test("a 300 KB DOCX is refused before any call, naming the cap", async () => {
+    const server = startConfirmGateServer();
+    const tty = makeTtyContext({
+      serverUrl: server.url,
+      stdinData: "",
+      isTTY: false,
+    });
+    const file = await writeDocx(300 * 1024);
+    await runLeafCommand({
+      context: tty.context,
+      flags: { name: "Engagement letter", file },
+      spec: TEMPLATE_CREATE_SPEC,
+    });
+    server.stop();
+    expect(server.calls).toHaveLength(0);
+    expect(tty.exitCode()).toBe(EXIT_CODES.validation);
+    expect(tty.stderrText()).toContain("262144 base64 characters");
+    expect(tty.stderrText()).toContain("'file' reference");
+  });
+
+  test("--file beside an explicit --docx-base64 is a usage error, not a silent winner", async () => {
+    const server = startConfirmGateServer();
+    const tty = makeTtyContext({
+      serverUrl: server.url,
+      stdinData: "",
+      isTTY: false,
+    });
+    const file = await writeDocx(512);
+    await runLeafCommand({
+      context: tty.context,
+      flags: { file, docxBase64: "QUJD" },
+      spec: TEMPLATE_CREATE_SPEC,
+    });
+    server.stop();
+    expect(server.calls).toHaveLength(0);
+    expect(tty.exitCode()).toBe(EXIT_CODES.validation);
+    expect(tty.stderrText()).toContain("--file and --docx-base64");
+  });
+
+  test("a leaf that declares no local-file prop ignores the flag key entirely", async () => {
+    const server = startConfirmGateServer();
+    const tty = makeTtyContext({
+      serverUrl: server.url,
+      stdinData: "",
+      isTTY: false,
+    });
+    const { localFileBase64Prop: _prop, ...withoutLocalFile } =
+      TEMPLATE_CREATE_SPEC;
+    await runLeafCommand({
+      context: tty.context,
+      flags: { name: "x", file: "/nonexistent.docx", confirm: true },
+      spec: withoutLocalFile,
+    });
+    server.stop();
+    expect(server.calls[0]?.args).toEqual({ name: "x" });
+  });
+});
+
+describe("--schema", () => {
+  const SCHEMA_SPEC: LeafCommandSpec = {
+    commandPath: ["matter", "list"],
+    toolName: "list_matters",
+    flags: [stringFlag("matter_id")],
+    inputOnly: [],
+    paginated: false,
+    followable: true,
+    windowedText: false,
+    destructive: false,
+    inputSchema: {
+      type: "object",
+      properties: { matter_id: { $ref: "#/$defs/id" } },
+      $defs: { id: { type: "string", format: "uuid" } },
+    },
+  };
+
+  test("prints the input schema on stdout, exits 0, and calls nothing", async () => {
+    const server = startConfirmGateServer();
+    const tty = makeTtyContext({
+      serverUrl: server.url,
+      stdinData: "",
+      isTTY: false,
+    });
+    await runLeafCommand({
+      context: tty.context,
+      flags: { schema: true },
+      spec: SCHEMA_SPEC,
+    });
+    server.stop();
+    expect(server.calls).toHaveLength(0);
+    expect(tty.exitCode()).toBe(EXIT_CODES.ok);
+    expect(tty.stderrText()).toBe("");
+    // `$defs` are expanded, so what is printed is what `--input` validates
+    // against rather than an opaque `$ref`.
+    expect(JSON.parse(tty.stdoutText())).toEqual({
+      type: "object",
+      properties: { matter_id: { type: "string", format: "uuid" } },
+    });
+  });
+
+  test("answers without a credential: a schema is not the server's to hand out", async () => {
+    const tty = makeTtyContext({
+      serverUrl: "http://unused.invalid",
+      stdinData: "",
+      isTTY: false,
+    });
+    const signedOut: Context = { ...tty.context, token: undefined };
+    await runLeafCommand({
+      context: signedOut,
+      flags: { schema: true },
+      spec: SCHEMA_SPEC,
+    });
+    expect(tty.stderrText()).not.toContain("Not signed in");
+    expect(tty.stdoutText()).toContain('"type": "object"');
   });
 });
 

@@ -57,6 +57,8 @@ export type ToolAnnotation = {
     subcommands: Record<string, DiscriminatorSubcommand>;
   };
   flagRename?: Record<string, string>;
+  /** See the API-side annotation: the base64 prop `--file <path>` fills. */
+  localFileBase64Prop?: string;
   /**
    * The tool is not destructive itself but gates SOME calls behind its
    * `confirm` arg (per-target destructiveness, e.g. `invoke_capability`). The
@@ -126,6 +128,12 @@ export type LeafCommandSpec = {
   destructive: boolean;
   /** See `ToolAnnotation.confirmPassthrough`: --yes / prompt-retry confirm flow. */
   confirmPassthrough?: true;
+  /**
+   * Input prop `--file <path>` fills with the local file's base64. Present
+   * exactly when the leaf offers `--file`; the ceiling is read from this prop's
+   * `maxLength` in `inputSchema`, never restated here.
+   */
+  localFileBase64Prop?: string;
   scope?: ToolScope;
   inputSchema: JsonSchema;
 };

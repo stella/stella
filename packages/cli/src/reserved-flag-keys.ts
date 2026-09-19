@@ -14,4 +14,8 @@ export const RESERVED_FLAG_KEYS = {
   noInput: "noInput",
   /** Capability leaves only: validate server-side without executing. */
   dryRun: "dryRun",
+  /** Print the command's input JSON schema and exit, without calling the server. */
+  schema: "schema",
+  /** Expand the startup registry-drift report; read before dispatch (see `cli.ts`). */
+  verbose: "verbose",
 } as const;

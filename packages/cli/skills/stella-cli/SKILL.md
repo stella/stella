@@ -54,6 +54,15 @@ default scopes are `openid profile email offline_access stella:read stella:searc
   argument object, `--input @file` to read JSON from a file, or `--input -` to
   read JSON from stdin. Individual string flags also take gh-style `@file` / `@-`
   sugar (use `@@` to pass a literal leading `@`).
+- **Reading a command's contract**: `--schema` prints that command's input JSON
+  schema (the same schema the MCP tool validates against) and exits 0, without
+  calling the server.
+- **Sending a local document**: a command whose tool takes a document also takes
+  `--file <path>`; the CLI reads the file and sends it in the tool's own base64
+  field, the call an MCP host would make with the file attached. `--help` states
+  the size ceiling, which is the one that field's schema declares. A larger file
+  is refused: send it from a host that can attach it to the tool's file
+  reference, never by re-exporting the document to fit.
 - **Array flags** are repeatable: pass the flag once per value.
 - **Pagination**: list commands take `--cursor <c>` and `--limit <n>`; `--all`
   follows cursors up to bounded ceilings. The `nextCursor` resume hint is written
@@ -260,7 +269,7 @@ are omitted here.
 - `stella template configure-fields`
   - `--template-id` — Template to configure, as returned by create_template or list_templates (string)
 - `stella template create`
-  - optional: --template-id, --name, --docx-base64, --file.download-url, --file.file-id, --file.mime-type, --file.file-name
+  - optional: --template-id, --name, --docx-base64, --file.download-url, --file.file-id, --file.mime-type, --file.file-name, --file <path>
 - `stella template fill`
   - `--template-id` — Template id, as returned by list_templates (string)
   - optional: --allow-unused-values, --completion-mode (require_complete|allow_partial), --output-mode (text|docx)

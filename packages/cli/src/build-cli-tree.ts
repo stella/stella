@@ -36,6 +36,11 @@ import {
   buildInputContractHelp,
   formatInputExample,
 } from "./input-contract-help.js";
+import {
+  describeLimit,
+  LOCAL_FILE_FLAG_KEY,
+  localFileLimits,
+} from "./local-file-flag.js";
 import { exitCodeEntries } from "./mcp-constants.js";
 import { buildCommonFlags, buildServerFlag } from "./output-flags.js";
 import type { ResourceLeafSpec, ResourceNode } from "./resource-types.js";
@@ -104,6 +109,20 @@ export const buildFlag = (flagSpec: FlagSpec): OptionalStricliFlag => {
   return parsedStringFlag(brief);
 };
 
+/**
+ * `--file`'s help line. The size ceiling is rendered from the schema prop the
+ * bytes travel in, so help can never advertise a limit the tool does not
+ * enforce (see `local-file-flag.ts`).
+ */
+const localFileFlagBrief = (
+  prop: string,
+  inputSchema: LeafCommandSpec["inputSchema"],
+): string => {
+  const limits = localFileLimits({ inputSchema, prop });
+  const ceiling = limits === undefined ? "" : ` up to ${describeLimit(limits)}`;
+  return `Local file to send${ceiling}; read and base64-encoded into ${prop} (optional, path)`;
+};
+
 const hasLimitProp = (spec: LeafCommandSpec): boolean => {
   const properties = spec.inputSchema["properties"];
   if (typeof properties !== "object" || properties === null) {
@@ -127,6 +146,15 @@ const buildLeafFlags = (spec: LeafCommandSpec): Record<string, unknown> => {
     "Never prompt; fail closed (exit 7) where a confirmation is required",
     false,
   );
+  flags[RESERVED_FLAG_KEYS.schema] = booleanFlag(
+    "Print this command's input JSON schema and exit",
+    false,
+  );
+  if (spec.localFileBase64Prop !== undefined) {
+    flags[LOCAL_FILE_FLAG_KEY] = parsedStringFlag(
+      localFileFlagBrief(spec.localFileBase64Prop, spec.inputSchema),
+    );
+  }
 
   if (spec.paginated) {
     flags[RESERVED_FLAG_KEYS.cursor] = parsedStringFlag(
@@ -365,6 +393,10 @@ const buildCapabilityLeafFlags = (
   );
   flags[RESERVED_FLAG_KEYS.noInput] = booleanFlag(
     "Never prompt; fail closed (exit 7) where a confirmation is required",
+    false,
+  );
+  flags[RESERVED_FLAG_KEYS.schema] = booleanFlag(
+    "Print this command's input JSON schema and exit",
     false,
   );
   if (spec.access === "write") {

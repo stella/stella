@@ -3554,6 +3554,7 @@ export const generatedRouteMap: RouteNode = {
             followable: true,
             windowedText: false,
             destructive: false,
+            localFileBase64Prop: "docx_base64",
             scope: "templates",
             inputSchema: {
               type: "object",

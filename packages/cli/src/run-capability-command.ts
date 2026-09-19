@@ -25,6 +25,7 @@ import {
   setExit,
   setPath,
   streamOrRenderAllPages,
+  writeInputSchema,
   writersFor,
 } from "./run-leaf-command.js";
 
@@ -61,6 +62,11 @@ export const runCapabilityCommand = async ({
   spec: CapabilityLeafSpec;
 }): Promise<void> => {
   const writers = writersFor(context);
+
+  if (flags[RESERVED_FLAG_KEYS.schema] === true) {
+    writeInputSchema({ context, inputSchema: spec.inputSchema, writers });
+    return;
+  }
 
   const { serverUrl, token } = context;
   if (serverUrl === undefined || token === undefined) {

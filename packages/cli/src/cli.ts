@@ -17,8 +17,16 @@ import { buildApp } from "./build-cli-tree.js";
 import { normalizeProcessExitCode } from "./cli-exit-code.js";
 import { commandNeedsRegistry } from "./command-locality.js";
 import { HOME, XDG_CACHE_HOME } from "./env.js";
+import { generatedRouteMap } from "./generated/route-map.js";
 import { reportFatalError } from "./main-error-boundary.js";
+import { EXIT_CODES } from "./mcp-constants.js";
 import { preparseServerFlag } from "./preparse-server-flag.js";
+import {
+  formatRegistryDrift,
+  preparseVerboseFlag,
+  removedCommandError,
+  shouldReportRegistryDrift,
+} from "./registry-drift.js";
 import {
   refreshRegistryCache,
   resolveCommandTree,
@@ -113,14 +121,38 @@ const main = async (): Promise<void> => {
   }
 
   // Startup always resolves against the baked-in tree unless a validated cache
-  // shows a non-empty delta, in which case build from the cached listings and
-  // surface the one-line divergence notice (spec S5.3). No network here.
-  const { tree, notice, disabled } = await resolveCommandTree({
+  // shows a non-empty delta, in which case build from the cached listings
+  // (spec S5.3). No network here.
+  const { tree, drift, disabled } = await resolveCommandTree({
     serverOrigin: serverUrl,
     env: cacheEnv,
   });
-  if (notice !== undefined) {
-    process.stderr.write(notice);
+  if (drift !== undefined) {
+    // The one place the drift is reported, so "once per process" is structural
+    // rather than a latch. Always stderr: a `--json` caller pipes stdout into a
+    // parser, and a warning mixed in there is a parse error.
+    if (shouldReportRegistryDrift(argv)) {
+      process.stderr.write(
+        formatRegistryDrift({
+          delta: drift,
+          verbose: preparseVerboseFlag(argv),
+        }),
+      );
+    }
+    // Quieting the background noise must not quiet the one case that stops this
+    // command: its tool is gone from the server. Reported whatever the command,
+    // `--help` included, because there is nothing left to help with.
+    const removed = removedCommandError({
+      argv,
+      baked: generatedRouteMap,
+      delta: drift,
+    });
+    if (removed !== undefined) {
+      process.stderr.write(removed);
+      // The same class the server's own `unknown_tool` envelope maps to.
+      process.exitCode = EXIT_CODES.server;
+      return;
+    }
   }
 
   await run(buildApp(tree, disabled), argv, {

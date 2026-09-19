@@ -21,6 +21,7 @@ type CommonFlags = {
   readonly json: BooleanFlag;
   readonly table: BooleanFlag;
   readonly server: ParsedFlag;
+  readonly verbose: BooleanFlag;
 };
 
 const parsedStringFlag = (brief: string): ParsedFlag => ({
@@ -53,9 +54,11 @@ export const buildServerFlag = (): { readonly server: ParsedFlag } => ({
  * constructor makes `--json`/`--table`/`--output`/`--server` an all-command
  * invariant instead of a convention each custom command can silently miss.
  *
- * `--server` is parsed here only so the flag is accepted and documented
- * everywhere; its value is read out of argv before dispatch (`cli.ts`), since
- * the origin has to be resolved to build the context a command runs with.
+ * `--server` and `--verbose` are parsed here only so the flags are accepted and
+ * documented everywhere; both values are read out of argv before dispatch
+ * (`cli.ts`), because the origin has to be resolved to build the context a
+ * command runs with, and the registry-drift report is written before stricli
+ * routes anything.
  */
 export const buildCommonFlags = (): CommonFlags => ({
   [RESERVED_FLAG_KEYS.output]: parsedStringFlag(
@@ -63,6 +66,9 @@ export const buildCommonFlags = (): CommonFlags => ({
   ),
   [RESERVED_FLAG_KEYS.json]: booleanFlag("Output JSON (= --output json)"),
   [RESERVED_FLAG_KEYS.table]: booleanFlag("Output a table (= --output table)"),
+  [RESERVED_FLAG_KEYS.verbose]: booleanFlag(
+    "List the tools behind the startup 'server registry differs' line",
+  ),
   ...buildServerFlag(),
 });
 
@@ -71,4 +77,5 @@ export type CommonFlagValues = {
   readonly output: string | undefined;
   readonly server: string | undefined;
   readonly table: boolean | undefined;
+  readonly verbose: boolean | undefined;
 };
