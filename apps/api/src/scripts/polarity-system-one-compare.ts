@@ -14,8 +14,8 @@ import {
   POLARITY_QUESTION,
   SYSTEM_ONE_POLARITY_ACCEPT_CONFIDENCE,
 } from "@/api/handlers/case-law/polarity/system-one-classifier";
-import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
+import { openCaseLawReadOnlySession } from "@/api/lib/case-law/maintenance-lane";
 import {
   createSystemOneClient,
   SYSTEM_ONE_USD_PER_INPUT_TOKEN,
@@ -214,8 +214,10 @@ type CitingDecision = {
   textS3Key: string | null;
 };
 
+const { rootDb } = await openCaseLawReadOnlySession();
+
 const readSample = async () =>
-  await caseLawPublicReadDb(async (tx) => {
+  await rootDb.transaction(async (tx) => {
     const citations = await tx.execute<SampledCitation>(
       sql.join(
         planSampleBuckets(options).map((bucket) => bucketQuery(tx, bucket)),
