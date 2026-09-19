@@ -80,11 +80,8 @@ export const CASE_LAW_COVERAGE_AVAILABILITY = {
   IN_PREPARATION: "in-preparation",
 } as const;
 
-export type CaseLawCoverageAvailability =
-  (typeof CASE_LAW_COVERAGE_AVAILABILITY)[keyof typeof CASE_LAW_COVERAGE_AVAILABILITY];
-
 /** One court feed, as a public page may describe it. */
-export type CaseLawCoverageSource = {
+type CaseLawCoverageSource = {
   /**
    * The adapter's key, which is also its name in the open-source registry.
    * It identifies the feed without exposing the source row's own id.
@@ -113,7 +110,7 @@ type CaseLawCoverageCountryBase = {
   sources: readonly CaseLawCoverageSource[];
 };
 
-export type CaseLawCoverageCountry =
+type CaseLawCoverageCountry =
   | (CaseLawCoverageCountryBase & {
       availability: typeof CASE_LAW_COVERAGE_AVAILABILITY.SEARCHABLE;
       /** What a public search can find: the serving index's country bucket. */
@@ -128,7 +125,7 @@ export type CaseLawCoverageCountry =
       availability: typeof CASE_LAW_COVERAGE_AVAILABILITY.IN_PREPARATION;
     });
 
-export type CaseLawCoverage = {
+type CaseLawCoverage = {
   /** ISO 8601 instant the figures were computed. */
   generatedAt: string;
   /**
@@ -177,7 +174,7 @@ const MANIFEST_BY_ADAPTER_KEY = new Map(
   Object.values(ADAPTER_MANIFESTS).map((manifest) => [manifest.key, manifest]),
 );
 
-export type CaseLawCoverageSourceRow = {
+type CaseLawCoverageSourceRow = {
   id: SafeId<"caseLawSource">;
   adapterKey: string;
   enabled: boolean;

@@ -51,7 +51,7 @@ export const COVERAGE_DELAYED_WITHIN_MS = 7 * DAY_IN_MS;
  */
 export const COVERAGE_REPORTED_TOTAL_FRESH_WITHIN_MS = 30 * DAY_IN_MS;
 
-export type SourceHealthRead = {
+type SourceHealthRead = {
   /** `case_law_sources.enabled`. */
   enabled: boolean;
   /** `case_law_sources.last_sync_at`; null before the first run. */
@@ -185,7 +185,7 @@ export type CaseLawSourceCompleteness =
    */
   | { state: "count-unavailable"; reported: number; asOf: string };
 
-export type SourceCompletenessRead = {
+type SourceCompletenessRead = {
   /** The persisted trio; all three are set together or all three are null. */
   reportedTotal: number | null;
   reportedTotalAsOf: Date | null;

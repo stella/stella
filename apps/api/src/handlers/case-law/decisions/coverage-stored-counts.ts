@@ -42,7 +42,7 @@ const WEEK_IN_MS = 7 * DAY_IN_MS;
  * limit is here because a count that cannot be bounded in rows has no honest
  * answer at all once it is exceeded, and "at least N" is one.
  */
-export const COVERAGE_STORED_COUNT_CAP = 5_000_000;
+const COVERAGE_STORED_COUNT_CAP = 5_000_000;
 
 /**
  * How long the whole per-source read may run.
