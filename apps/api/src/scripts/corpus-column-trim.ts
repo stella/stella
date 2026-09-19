@@ -69,8 +69,8 @@ import {
   readCorpusAst,
   readCorpusSections,
   readCorpusText,
-  TRIMMED_CORPUS_PAYLOAD_COLUMNS,
-} from "@/api/lib/legal-search/corpus-storage";
+} from "@/api/lib/legal-search/corpus-reads";
+import { TRIMMED_CORPUS_PAYLOAD_COLUMNS } from "@/api/lib/legal-search/corpus-storage";
 import type {
   DecisionSection,
   EmptyAst,

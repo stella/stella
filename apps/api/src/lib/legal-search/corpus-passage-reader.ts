@@ -19,6 +19,7 @@ import type { Transaction } from "@/api/db/root";
 import { caseLawDecisions } from "@/api/db/schema";
 import { hasUsableAst } from "@/api/lib/case-law/document-ast";
 import { chunkDocument } from "@/api/lib/corpus-index/chunking";
+import { readCorpusTombstones } from "@/api/lib/legal-search/corpus-reads";
 import {
   readCorpusAst,
   readCorpusText,
@@ -118,6 +119,7 @@ const hydratingPayloadSource = async (
     pointers.flatMap(({ textS3Key, astS3Key }) =>
       [textS3Key, astS3Key].filter((key): key is string => key !== null),
     ),
+    readCorpusTombstones,
   );
   return {
     readText: async (storedKey) =>

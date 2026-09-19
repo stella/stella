@@ -14,7 +14,6 @@ import {
   parseCorpusLocation,
 } from "@/api/lib/legal-search/corpus-location";
 import type { PackedCorpusLocation } from "@/api/lib/legal-search/corpus-location";
-import { publicLawReadDb } from "@/api/lib/public-law-read-db";
 
 /**
  * Reader denial for erased payloads that live inside a shared pack.
@@ -29,6 +28,11 @@ import { publicLawReadDb } from "@/api/lib/public-law-read-db";
  * Only an erasure writes here. A reservation whose upload never landed owns
  * no bytes a reader was ever told about, and denying its planned addresses
  * would deny the retry that re-derives them.
+ *
+ * Every reader here answers over a handle the caller passes. The one that
+ * opens a connection of its own lives in `corpus-reads.ts`, so a module that
+ * only reads bytes — or a script that runs on a login of its own — does not
+ * reach the application's database by importing this one.
  */
 
 type CorpusTombstoneReason =
@@ -51,36 +55,23 @@ type CorpusTombstoneQueryTransaction = Pick<
 >;
 
 /** A standalone object cannot be tombstoned: erasing it deletes it. */
-const packedAddresses = (locations: readonly string[]): string[] =>
+export const packedAddresses = (locations: readonly string[]): string[] =>
   locations.filter((value) => parseCorpusLocation(value).type === "packed");
 
-/**
- * The denial list as the reader role sees it.
- *
- * Reads of public legal data run through the shared public-law boundary, so
- * the denial is asked for the same way the payload's own row is. That
- * boundary uses the reader role only where an external public-law database
- * URL is configured; otherwise it runs on the owner connection, and the grant
- * this table carries is what makes the configured deployment work.
- */
-export const readCorpusTombstones: CorpusTombstoneReader = async (
-  locations,
-) => {
-  const packed = packedAddresses(locations);
-  if (packed.length === 0) {
-    return new Set();
-  }
-  return await publicLawReadDb(async (tx) => {
-    const rows = await tx
-      .select({ location: caseLawCorpusTombstones.location })
-      .from(caseLawCorpusTombstones)
-      .where(inArray(caseLawCorpusTombstones.location, packed));
-    return new Set(rows.map(({ location }) => location));
-  });
+/** The denial query itself, over whichever handle the caller holds. */
+export const selectCorpusTombstones = async (
+  tx: CorpusTombstoneQueryTransaction,
+  packed: readonly string[],
+): Promise<ReadonlySet<string>> => {
+  const rows = await tx
+    .select({ location: caseLawCorpusTombstones.location })
+    .from(caseLawCorpusTombstones)
+    .where(inArray(caseLawCorpusTombstones.location, packed));
+  return new Set(rows.map(({ location }) => location));
 };
 
 /**
- * The same question inside a transaction the caller already holds.
+ * The denial question inside a transaction the caller already holds.
  *
  * A read that is already inside one asks there rather than opening a second
  * connection of its own, which for a decision read is two transactions per
@@ -90,14 +81,9 @@ export const corpusTombstoneReaderForTx =
   (tx: CorpusTombstoneQueryTransaction): CorpusTombstoneReader =>
   async (locations) => {
     const packed = packedAddresses(locations);
-    if (packed.length === 0) {
-      return new Set();
-    }
-    const rows = await tx
-      .select({ location: caseLawCorpusTombstones.location })
-      .from(caseLawCorpusTombstones)
-      .where(inArray(caseLawCorpusTombstones.location, packed));
-    return new Set(rows.map(({ location }) => location));
+    return packed.length === 0
+      ? new Set()
+      : await selectCorpusTombstones(tx, packed);
   };
 
 /**
@@ -115,7 +101,7 @@ export const corpusTombstoneReaderForTx =
  */
 export const prefetchCorpusTombstones = async (
   locations: readonly string[],
-  read: CorpusTombstoneReader = readCorpusTombstones,
+  read: CorpusTombstoneReader,
 ): Promise<CorpusTombstoneReader> => {
   const primed = new Set(packedAddresses(locations));
   const denied = await read([...primed]);

@@ -32,9 +32,24 @@ import { Result } from "better-result";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import { readDecisionAnalysisAst } from "@/api/lib/case-law/decision-analysis";
+import { packedAddresses } from "@/api/lib/legal-search/corpus-tombstones";
+import type { CorpusTombstoneReader } from "@/api/lib/legal-search/corpus-tombstones";
 import { refreshCorpusS3 } from "@/api/lib/s3";
 
 import type { DecisionAnalysisRow } from "./decision-analysis.logic";
+
+/**
+ * A packed member is refused outright here.
+ *
+ * Serving one means first asking `case_law_corpus_tombstones` whether it has
+ * been erased, and `stella_case_law_analysis_writer` holds no grant on that
+ * table: the login reads the columns in `decision-analysis.db.ts` and writes
+ * `analysis`, nothing else. Refusing is what that grant permits; the row is
+ * reported `ast-unavailable` and the batch continues. A standalone object
+ * cannot be tombstoned — erasing it deletes it — so it is unaffected.
+ */
+const denyPackedMembers: CorpusTombstoneReader = async (locations) =>
+  await Promise.resolve(new Set(packedAddresses(locations)));
 
 /**
  * Refresh the corpus object-store client once per run, so a task role's
@@ -55,12 +70,15 @@ export const readRowAst = async (
 ): Promise<DocumentAst | null> => {
   const ast = await Result.tryPromise(
     async () =>
-      await readDecisionAnalysisAst({
-        astS3Key: row.astS3Key,
-        contentHash: row.contentHash,
-        documentAst: row.documentAst,
-        id: row.id,
-      }),
+      await readDecisionAnalysisAst(
+        {
+          astS3Key: row.astS3Key,
+          contentHash: row.contentHash,
+          documentAst: row.documentAst,
+          id: row.id,
+        },
+        denyPackedMembers,
+      ),
   );
   return Result.isOk(ast) ? ast.value : null;
 };

@@ -35,7 +35,6 @@ import {
   packJurisdictionPrefix,
   corpusMemberDigest,
 } from "@/api/lib/legal-search/corpus-pack";
-import { readCorpusTombstones } from "@/api/lib/legal-search/corpus-tombstones";
 import type {
   CorpusTombstoneReader,
   CorpusTombstoneWriter,
@@ -664,8 +663,12 @@ type ReadCorpusBytesAtOptions = {
   /** Test seams; production reads through the corpus bucket client. */
   readObject?: BoundedObjectReader;
   readRange?: RangeReader;
-  /** Test seam; production asks the tombstone table. */
-  readTombstones?: CorpusTombstoneReader;
+  /**
+   * Where this read asks whether a packed address is erased. Required rather
+   * than defaulted, so no path can serve a packed payload without saying
+   * where the denial is read — and so this module holds no database handle.
+   */
+  readTombstones: CorpusTombstoneReader;
 };
 
 /**
@@ -748,7 +751,7 @@ export const readCorpusBytesAt = async ({
   signal,
   readObject = readCorpusS3BytesBounded,
   readRange = readCorpusS3Range,
-  readTombstones = readCorpusTombstones,
+  readTombstones,
 }: ReadCorpusBytesAtOptions): Promise<Uint8Array> => {
   switch (location.type) {
     case "object":
@@ -773,11 +776,15 @@ export const readCorpusBytesAt = async ({
   }
 };
 
-/** Test seams for the two byte sources; production reads through the corpus bucket client. */
-type CorpusByteSourceSeams = {
+/**
+ * The byte sources behind one read. The two object-store seams are test
+ * seams over the corpus bucket client; the denial reader is the caller's
+ * answer to "where is this read's erasure list", and is required.
+ */
+export type CorpusByteSourceSeams = {
   readObject?: BoundedObjectReader;
   readRange?: RangeReader;
-  readTombstones?: CorpusTombstoneReader;
+  readTombstones: CorpusTombstoneReader;
 };
 
 type ReadStoredCorpusBytesOptions = CorpusByteSourceSeams & {
@@ -809,7 +816,7 @@ type ReadCorpusTextOptions = CorpusByteSourceSeams & {
  */
 export const readCorpusText = async (
   storedKey: string,
-  { timeoutMs = CORPUS_IO_TIMEOUT_MS, ...seams }: ReadCorpusTextOptions = {},
+  { timeoutMs = CORPUS_IO_TIMEOUT_MS, ...seams }: ReadCorpusTextOptions,
 ): Promise<string> => {
   const bytes = await boundedCorpusIo(
     "corpus-read-text",
@@ -822,7 +829,7 @@ export const readCorpusText = async (
 
 export const readCorpusSections = async (
   storedKey: string,
-  seams: CorpusByteSourceSeams = {},
+  seams: CorpusByteSourceSeams,
 ): Promise<DecisionSection[] | null> => {
   const bytes = await boundedCorpusIo(
     "corpus-read-sections",
@@ -837,7 +844,7 @@ export const readCorpusSections = async (
 
 export const readCorpusAst = async (
   storedKey: string,
-  seams: CorpusByteSourceSeams = {},
+  seams: CorpusByteSourceSeams,
 ): Promise<DocumentAst | EmptyAst | null> => {
   const bytes = await boundedCorpusIo(
     "corpus-read-ast",

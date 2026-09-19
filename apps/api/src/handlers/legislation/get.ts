@@ -21,8 +21,10 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import {
   readCorpusAst,
-  readCorpusPayloadOrFallback,
   readCorpusText,
+} from "@/api/lib/legal-search/corpus-reads";
+import {
+  readCorpusPayloadOrFallback,
   parsePersistedCorpusAst,
 } from "@/api/lib/legal-search/corpus-storage";
 import type { EmptyAst } from "@/api/lib/legal-search/document-types";

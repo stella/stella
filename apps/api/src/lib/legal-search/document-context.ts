@@ -5,9 +5,9 @@ import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-rea
 import { publishedCaseLawDecisionFor } from "@/api/lib/case-law/published-decisions";
 import {
   readCorpusAst,
-  readCorpusPayloadOrFallback,
   readCorpusText,
-} from "@/api/lib/legal-search/corpus-storage";
+} from "@/api/lib/legal-search/corpus-reads";
+import { readCorpusPayloadOrFallback } from "@/api/lib/legal-search/corpus-storage";
 import type { LegalDocumentContext } from "@/api/lib/legal-search/types";
 import {
   definePublicLawSharedQuery,

@@ -26,6 +26,7 @@ import {
   readDecisionAnalysis,
   readDecisionAnalysisAst,
 } from "@/api/lib/case-law/decision-analysis";
+import { readCorpusTombstones } from "@/api/lib/legal-search/corpus-reads";
 
 import { getSystemPrompt } from "./prompts/prompt-registry";
 
@@ -80,7 +81,8 @@ export const resolveAnalysisInput = async ({
           metadata: decision.metadata,
         })
       : null;
-  const ast = reparsed ?? (await readDecisionAnalysisAst(decision));
+  const ast =
+    reparsed ?? (await readDecisionAnalysisAst(decision, readCorpusTombstones));
   if (ast === null) {
     return { kind: "unparseable-document" };
   }

@@ -35,6 +35,7 @@ import { readDecisionAnalysisAst } from "@/api/lib/case-law/decision-analysis";
 import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
 import { chunked } from "@/api/lib/chunked";
 import { errorTag } from "@/api/lib/errors/utils";
+import { readCorpusTombstones } from "@/api/lib/legal-search/corpus-reads";
 import { allowsDerivedAi } from "@/api/lib/legal-search/corpus-source";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import { LIMITS } from "@/api/lib/limits";
@@ -256,10 +257,10 @@ const readDecisionTextByDecision = async (
         const row = columns.get(String(pointer.id));
         const read = await Result.tryPromise(
           async () =>
-            await readDecisionAnalysisAst({
-              ...pointer,
-              documentAst: row?.documentAst ?? null,
-            }),
+            await readDecisionAnalysisAst(
+              { ...pointer, documentAst: row?.documentAst ?? null },
+              readCorpusTombstones,
+            ),
         );
         if (Result.isError(read)) {
           logger.warn("case_law.citation_passage.ast_unavailable", {

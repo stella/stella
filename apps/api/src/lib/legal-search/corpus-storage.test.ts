@@ -48,6 +48,10 @@ import { EMPTY_AST } from "@/api/lib/legal-search/document-types";
 import { LIMITS } from "@/api/lib/limits";
 import { MissingCorpusObjectError } from "@/api/lib/s3";
 
+/** Nothing erased: the denial list a read consults when the case is not it. */
+const noTombstones = async (): Promise<ReadonlySet<string>> =>
+  await Promise.resolve(new Set<string>());
+
 describe("corpus mirror state columns", () => {
   test("partition pending and settled pointer states", () => {
     expect(
@@ -142,6 +146,7 @@ describe("readCorpusText bounded corpus read", () => {
       });
       await readCorpusText("legal-corpus/never/text.zst", {
         readObject: async () => await neverSettles,
+        readTombstones: noTombstones,
         timeoutMs: 25,
       });
     } catch (error) {
@@ -159,6 +164,7 @@ describe("readCorpusText bounded corpus read", () => {
         seen.push({ key, maxBytes });
         return await Promise.resolve(zstdCompress("hello corpus"));
       },
+      readTombstones: noTombstones,
       timeoutMs: 1000,
     });
 
@@ -619,8 +625,6 @@ describe("readCorpusBytesAt", () => {
     await Promise.reject(new Error("object read must not run"));
   const neverRange = async (): Promise<Uint8Array> =>
     await Promise.reject(new Error("range read must not run"));
-  const noTombstones = async (): Promise<ReadonlySet<string>> =>
-    await Promise.resolve(new Set<string>());
 
   test("a packed address reads exactly its range through the range reader", async () => {
     const bytes = await readCorpusBytesAt({
@@ -724,6 +728,7 @@ describe("readCorpusBytesAt", () => {
         return await Promise.resolve(new Uint8Array([1, 2, 3]));
       },
       readRange: neverRange,
+      readTombstones: noTombstones,
     });
 
     expect([...bytes]).toEqual([1, 2, 3]);
@@ -769,6 +774,7 @@ describe("readCorpusBytesAt", () => {
         seen.push(maxBytes);
         return await Promise.resolve(zstdCompress("x"));
       },
+      readTombstones: noTombstones,
       timeoutMs: 1000,
     });
     // A member at the bound is served as one frame, so the digest the
