@@ -44,6 +44,7 @@ import type {
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
   bindWorkspaceRecorder,
+  cursorInput,
   ensureActiveWorkspace,
   errorResult,
   internalFailureResult,
@@ -78,7 +79,10 @@ const BOE_LAW_ID = /^BOE-[A-Z]-\d{4}-\d+$/u;
 /** BOE search date filters are YYYYMMDD (mirrors legislation/boe-search.ts). */
 const BOE_DATE = /^\d{8}$/u;
 /** BOE search cursor is a numeric offset (mirrors legislation/boe-search.ts). */
-const BOE_OFFSET_CURSOR = /^\d+$/u;
+const BOE_OFFSET_CURSOR = /^\d{1,5}$/u;
+
+const isBoeOffsetCursor = (value: string): boolean =>
+  BOE_OFFSET_CURSOR.test(value);
 
 /** Discriminator for the manage_organization admin write tool. */
 const MANAGE_ORG_ACTIONS = [
@@ -173,16 +177,10 @@ const listAuditLogArgsSchema = nullAsAbsent(
           v.description("Max entries to return"),
         ),
       ),
-      cursor: v.optional(
-        v.pipe(
-          v.string(),
-          v.minLength(1),
-          v.maxLength(512),
-          v.description(
-            "Opaque cursor from a previous list_audit_log call to fetch the next page",
-          ),
-        ),
-      ),
+      cursor: cursorInput({
+        description:
+          "Opaque cursor from a previous list_audit_log call to fetch the next page",
+      }),
     }),
     v.forward(
       v.partialCheck(
@@ -314,16 +312,16 @@ const searchBoeLegislationArgsSchema = nullAsAbsent(
           v.description("Max search results to return"),
         ),
       ),
-      cursor: v.optional(
-        v.pipe(
-          v.string(),
-          v.regex(BOE_OFFSET_CURSOR),
-          v.maxLength(5),
-          v.description(
-            "Opaque cursor from a previous search_boe_legislation call for the next page",
-          ),
-        ),
-      ),
+      cursor: cursorInput({
+        description:
+          "Opaque cursor from a previous search_boe_legislation call for the next page",
+        // The one surface not paginated by a base64 codec: the BOE numbers its
+        // own pages, so the offset it issued is what a continuation echoes.
+        // The offset's own width lives in the reader rather than in a declared
+        // maxLength, so a made-up value wider than an offset is read as no
+        // cursor instead of refused for being too long.
+        issuedBy: isBoeOffsetCursor,
+      }),
       law_id: v.optional(
         v.pipe(
           v.string(),

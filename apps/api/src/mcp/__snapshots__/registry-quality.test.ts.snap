@@ -3499,7 +3499,8 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         },
         "cursor": {
           "type": "string",
-          "maxLength": 5,
+          "minLength": 1,
+          "maxLength": 512,
           "description": "Opaque cursor from a previous search_boe_legislation call for the next page"
         },
         "law_id": {
@@ -5150,7 +5151,8 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
         },
         "cursor": {
           "type": "string",
-          "maxLength": 5,
+          "minLength": 1,
+          "maxLength": 512,
           "description": "Opaque cursor from a previous search_boe_legislation call for the next page"
         },
         "law_id": {

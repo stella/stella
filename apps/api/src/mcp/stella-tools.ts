@@ -129,6 +129,7 @@ import {
   buildCaseLawDecisionAppUrl,
   countryInputSchema,
   countryNormalization,
+  cursorInput,
   DEFAULT_LIST_LIMIT,
   DEFAULT_SEARCH_LIMIT,
   ensureWorkspaceAccess,
@@ -136,7 +137,6 @@ import {
   handlerResultMessage,
   ISO_DATE_SCHEMA,
   MCP_CONTENT_MAX_CHARS,
-  MAX_CURSOR_LENGTH,
   MAX_LIST_LIMIT,
   MAX_SEARCH_LIMIT,
   notFoundResult,
@@ -557,16 +557,10 @@ const listMattersArgsSchema = nullAsAbsent(
         v.description("Max matters to return (list mode)"),
       ),
     ),
-    cursor: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.maxLength(MAX_CURSOR_LENGTH),
-        v.description(
-          "Opaque cursor from a previous list_matters call to fetch the next page",
-        ),
-      ),
-    ),
+    cursor: cursorInput({
+      description:
+        "Opaque cursor from a previous list_matters call to fetch the next page",
+    }),
   }),
 );
 
@@ -587,16 +581,10 @@ const searchAcrossMattersArgsSchema = nullAsAbsent(
         v.description("Max results to return"),
       ),
     ),
-    cursor: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.maxLength(MAX_CURSOR_LENGTH),
-        v.description(
-          "Opaque cursor from a previous search_across_matters call to fetch the next page",
-        ),
-      ),
-    ),
+    cursor: cursorInput({
+      description:
+        "Opaque cursor from a previous search_across_matters call to fetch the next page",
+    }),
   }),
 );
 
@@ -657,16 +645,11 @@ const searchCaseLawArgsSchema = nullAsAbsent(
         ),
       ),
     ),
-    cursor: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.maxLength(CASE_LAW_SEARCH_CURSOR_MAX_LENGTH),
-        v.description(
-          "Opaque cursor from a previous search_case_law call. It continues the same queries, in the same order. It carries each query's own position and not what earlier pages emitted, so a decision several queries return can appear on more than one page: key results by decisionId.",
-        ),
-      ),
-    ),
+    cursor: cursorInput({
+      description:
+        "Opaque cursor from a previous search_case_law call. It continues the same queries, in the same order. It carries each query's own position and not what earlier pages emitted, so a decision several queries return can appear on more than one page: key results by decisionId.",
+      maxLength: CASE_LAW_SEARCH_CURSOR_MAX_LENGTH,
+    }),
     court: v.optional(
       v.pipe(
         v.string(),
@@ -753,16 +736,10 @@ const lookupCaseLawArgsSchema = nullAsAbsent(
 const readContentAcrossMattersArgsSchema = nullAsAbsent(
   v.strictObject({
     entity_id: uuidInputSchema("Entity ID"),
-    cursor: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.maxLength(MAX_CURSOR_LENGTH),
-        v.description(
-          "Opaque cursor from a previous call to read the next window of text",
-        ),
-      ),
-    ),
+    cursor: cursorInput({
+      description:
+        "Opaque cursor from a previous call to read the next window of text",
+    }),
   }),
 );
 
@@ -776,16 +753,10 @@ const readCaseLawDecisionArgsSchema = nullAsAbsent(
         `The decisions to read, at most ${LIMITS.caseLawDecisionBatchMax} per call. Each id is answered on its own, so one unknown id does not sink the rest.`,
       ),
     ),
-    cursor: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.maxLength(MAX_CURSOR_LENGTH),
-        v.description(
-          "Opaque cursor from a previous call to read the next window of one decision's text and citations. Accepted only alongside a single decision id.",
-        ),
-      ),
-    ),
+    cursor: cursorInput({
+      description:
+        "Opaque cursor from a previous call to read the next window of one decision's text and citations. Accepted only alongside a single decision id.",
+    }),
   }),
 );
 
@@ -809,16 +780,10 @@ const readCaseLawCitationsArgsSchema = nullAsAbsent(
         ),
       ),
     ),
-    cursor: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.maxLength(MAX_CURSOR_LENGTH),
-        v.description(
-          "Opaque cursor from a previous read_case_law_citations call to read the next page",
-        ),
-      ),
-    ),
+    cursor: cursorInput({
+      description:
+        "Opaque cursor from a previous read_case_law_citations call to read the next page",
+    }),
   }),
 );
 

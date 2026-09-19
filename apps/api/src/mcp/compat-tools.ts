@@ -49,10 +49,10 @@ import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
   buildDocumentUrl,
   buildMatterUrl,
+  cursorInput,
   DEFAULT_COMPAT_SEARCH_LIMIT,
   ensureWorkspaceAccess,
   errorResult,
-  MAX_CURSOR_LENGTH,
   MCP_CONTENT_MAX_CHARS,
   notFoundResult,
   nullAsAbsent,
@@ -275,32 +275,20 @@ const compatSearchArgsSchema = nullAsAbsent(
       v.maxLength(LIMITS.searchQueryMaxLength),
       v.description("Search query"),
     ),
-    cursor: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.maxLength(MAX_CURSOR_LENGTH),
-        v.description(
-          "Opaque cursor from a previous search call to fetch the next page",
-        ),
-      ),
-    ),
+    cursor: cursorInput({
+      description:
+        "Opaque cursor from a previous search call to fetch the next page",
+    }),
   }),
 );
 
 const compatFetchArgsSchema = nullAsAbsent(
   v.strictObject({
     id: compatIdInputSchema(`Result id from search. ${COMPAT_ID_VOCABULARY}`),
-    cursor: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.maxLength(MAX_CURSOR_LENGTH),
-        v.description(
-          "Opaque cursor from a previous fetch call to read the next window of text",
-        ),
-      ),
-    ),
+    cursor: cursorInput({
+      description:
+        "Opaque cursor from a previous fetch call to read the next window of text",
+    }),
   }),
 );
 

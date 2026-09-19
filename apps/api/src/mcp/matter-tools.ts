@@ -79,6 +79,7 @@ import type {
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
   bindWorkspaceRecorder,
+  cursorInput,
   ensureActiveWorkspace,
   ensureWorkspaceAccess,
   errorResult,
@@ -548,14 +549,9 @@ const listContactsArgsSchema = nullAsAbsent(
     type: v.optional(
       v.pipe(v.picklist(CONTACT_TYPES), v.description("Contact kind")),
     ),
-    cursor: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.maxLength(512),
-        v.description("Opaque cursor from the previous page"),
-      ),
-    ),
+    cursor: cursorInput({
+      description: "Opaque cursor from the previous page",
+    }),
     limit: v.optional(
       v.pipe(
         v.number(),
@@ -1017,16 +1013,10 @@ const listTasksArgsSchema = nullAsAbsent(
         ),
       ),
     ),
-    cursor: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.maxLength(512),
-        v.description(
-          "Opaque cursor from a previous list_tasks call to fetch the next page",
-        ),
-      ),
-    ),
+    cursor: cursorInput({
+      description:
+        "Opaque cursor from a previous list_tasks call to fetch the next page",
+    }),
   }),
 );
 

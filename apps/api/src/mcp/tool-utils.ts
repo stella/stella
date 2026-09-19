@@ -25,6 +25,7 @@ import { getCurrentRequestId } from "@/api/lib/observability/request-context";
 import {
   decodePaginationCursor,
   encodePaginationCursor,
+  isIssuablePaginationCursor,
 } from "@/api/lib/pagination";
 import { stripSearchHighlightMarkup } from "@/api/lib/search/highlight";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
@@ -959,6 +960,49 @@ export const isToolErrorResult = (
 /** Wire cap on an opaque pagination cursor, shared with the tool schemas. */
 export const MAX_CURSOR_LENGTH = 512;
 
+type CursorInputOptions = {
+  description: string;
+  maxLength?: number;
+  /**
+   * Which strings the encoder behind this property can have issued. Defaults
+   * to the shared codecs' class. A surface paginated by something else (an
+   * upstream decimal offset) passes its own, because reading its cursors
+   * against the shared class would call every one of them made up.
+   */
+  issuedBy?: (value: string) => boolean;
+};
+
+/**
+ * A pagination cursor property, with a made-up value read as absence.
+ *
+ * A client that fills every declared property has to put something in
+ * `cursor` on its first call, and what it puts there is a placeholder: `" "`,
+ * `"0"`, `"start"`, `"__start__"`. Handing those to a decoder answers
+ * `Invalid cursor` to a caller holding no cursor, so it invents another one
+ * and the call never reaches a first page. A value outside the issued class
+ * therefore means "no cursor", exactly as `null` and `""` do through
+ * {@link nullAsAbsent}.
+ *
+ * A value inside the class still goes to the tool's own decoder and still
+ * fails there when it does not decode: a truncated real cursor decodes to a
+ * readable prefix, and silently restarting that caller at page one would
+ * repeat a page it had already read.
+ */
+export const cursorInput = ({
+  description,
+  issuedBy = isIssuablePaginationCursor,
+  maxLength = MAX_CURSOR_LENGTH,
+}: CursorInputOptions) =>
+  v.optional(
+    v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.maxLength(maxLength),
+      v.description(description),
+      v.transform((value: string) => (issuedBy(value) ? value : undefined)),
+    ),
+  );
+
 export const parseOptionalCursor = ({
   args,
   key,
@@ -970,7 +1014,7 @@ export const parseOptionalCursor = ({
   if (isAbsentArgument(value)) {
     return undefined;
   }
-  if (typeof value !== "string" || value.length === 0) {
+  if (typeof value !== "string") {
     return argValidationError(
       `Invalid parameter: ${key}. Expected an opaque cursor string`,
       `Pass the '${key}' as the opaque cursor returned by a previous call, or omit it for the first page.`,
@@ -984,7 +1028,9 @@ export const parseOptionalCursor = ({
       key,
     );
   }
-  return value;
+  // The raw-argument twin of {@link cursorInput}, for the tools that still
+  // maintain their advertised schema by hand.
+  return isIssuablePaginationCursor(value) ? value : undefined;
 };
 
 export type TextWindowResult = {

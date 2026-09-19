@@ -73,6 +73,7 @@ import type {
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
   bindWorkspaceRecorder,
+  cursorInput,
   ensureActiveWorkspace,
   errorResult,
   internalFailureResult,
@@ -636,16 +637,10 @@ const listClausesArgsSchema = nullAsAbsent(
           v.description("Max clauses to return"),
         ),
       ),
-      cursor: v.optional(
-        v.pipe(
-          v.string(),
-          v.minLength(1),
-          v.maxLength(512),
-          v.description(
-            "Opaque cursor from a previous list_clauses call to fetch the next page",
-          ),
-        ),
-      ),
+      cursor: cursorInput({
+        description:
+          "Opaque cursor from a previous list_clauses call to fetch the next page",
+      }),
     }),
     // version_id selects one version of a specific clause, so it needs clause_id.
     v.forward(
@@ -1315,16 +1310,10 @@ const listPlaybooksArgsSchema = nullAsAbsent(
           v.description("Max playbooks to return"),
         ),
       ),
-      cursor: v.optional(
-        v.pipe(
-          v.string(),
-          v.minLength(1),
-          v.maxLength(512),
-          v.description(
-            "Opaque cursor from a previous list_playbooks call to fetch the next page",
-          ),
-        ),
-      ),
+      cursor: cursorInput({
+        description:
+          "Opaque cursor from a previous list_playbooks call to fetch the next page",
+      }),
     }),
     // limit/cursor page the list; they have no meaning for a single playbook_id.
     v.partialCheck(

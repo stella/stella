@@ -2446,7 +2446,7 @@ describe("OpenAI-compatible MCP tools", () => {
             passage: null,
           },
         ],
-        nextCursor: "citation_cursor_2",
+        nextCursor: "Y2l0YXRpb25fY3Vyc29yXzI",
       },
     });
 
@@ -2470,7 +2470,7 @@ describe("OpenAI-compatible MCP tools", () => {
     expect(parseToolPayload(result)).toEqual({
       decisionId: DECISION_ID,
       direction: "cited_by",
-      nextCursor: "citation_cursor_2",
+      nextCursor: "Y2l0YXRpb25fY3Vyc29yXzI",
       citations: [
         {
           citationId: "00000000-0000-4000-8000-0000000c0001",
@@ -2512,7 +2512,7 @@ describe("OpenAI-compatible MCP tools", () => {
 
     await handleMcpToolCall({
       args: {
-        cursor: "citation_cursor_2",
+        cursor: "Y2l0YXRpb25fY3Vyc29yXzI",
         decision_id: DECISION_ID,
         direction: "cites",
       },
@@ -2522,7 +2522,7 @@ describe("OpenAI-compatible MCP tools", () => {
 
     expect(readGatedDecisionCitationsMock).toHaveBeenCalledWith({
       caseLawDb: caseLawPublicReadDb,
-      cursor: "citation_cursor_2",
+      cursor: "Y2l0YXRpb25fY3Vyc29yXzI",
       decisionId: DECISION_ID,
       direction: "cites",
       limit: LIMITS.caseLawAgentCitationPageSizeDefault,
@@ -2776,6 +2776,29 @@ describe("OpenAI-compatible MCP tools", () => {
         },
       ],
       total: { type: SEARCH_TOTAL_TYPE.NOT_COUNTED },
+    });
+  });
+
+  test("search_legislation answers a made-up cursor with the first page", async () => {
+    searchLegislationHandlerMock.mockResolvedValue({
+      items: [],
+      nextCursor: null,
+      total: { type: SEARCH_TOTAL_TYPE.NOT_COUNTED },
+    });
+
+    const result = await handleMcpToolCall({
+      // What a client that must fill every declared property sends before it
+      // has a cursor to send.
+      args: { country: "cze", cursor: " ", query: "nahrada skody" },
+      context: createContext(),
+      toolName: "search_legislation",
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(searchLegislationHandlerMock.mock.calls.at(0)?.at(0)).toEqual({
+      jurisdiction: "CZE",
+      limit: 10,
+      query: "nahrada skody",
     });
   });
 
@@ -3983,7 +4006,9 @@ describe("OpenAI-compatible MCP tools", () => {
 
   test("search_across_matters rejects a malformed cursor instead of resetting to page 1", async () => {
     const result = await handleMcpToolCall({
-      args: { query: "share purchase", cursor: "not-a-valid-cursor" },
+      // Base64 of readable text: a cursor this surface could have issued, so
+      // it reaches the decoder rather than being read as no cursor at all.
+      args: { query: "share purchase", cursor: "bm90LWEtdmFsaWQtY3Vyc29y" },
       context: createContext(),
       toolName: "search_across_matters",
     });

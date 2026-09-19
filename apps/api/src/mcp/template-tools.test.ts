@@ -3687,7 +3687,9 @@ describe("MCP template tools", () => {
 
   test("list_templates (detail) rejects template_id combined with a cursor", async () => {
     const result = await handleMcpToolCall({
-      args: { template_id: TEMPLATE_ID, cursor: "abc" },
+      // Base64 of readable text: a cursor this surface could have issued, so
+      // the contradiction with template_id is what the call is refused for.
+      args: { template_id: TEMPLATE_ID, cursor: "YWJj" },
       context: createContext(),
       toolName: "list_templates",
     });
