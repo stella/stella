@@ -234,7 +234,6 @@ const SummaryBody = ({
         <Tooltip
           content={`${citation.title}\n${citation.reason}`}
           key={`${citation.id}-${start}`}
-          layer="search-child"
           render={
             <button
               className="text-foreground hover:bg-muted mx-0.5 rounded px-1 font-medium"

@@ -33,12 +33,12 @@ export const OVERLAY_LAYER_CLASS_NAMES = {
    * regardless of mount order.
    */
   "chrome-raised": "z-[81]",
-  /** Dialogs, sheets, popovers, tooltips: above chrome, below toasts. */
+  /** Dialogs, sheets, popovers: above chrome, below toasts. */
   default: "z-[85]",
   /** Search sits a hair above a plain dialog so its own popup wins. */
   search: "z-[86]",
   /**
-   * Transient popups — menu, select, combobox, context menus. Above everything
+   * Transient popups — menu, select, combobox, context menus, tooltips. Above everything
    * including the toast viewport (z-[90]), because any of them can be opened
    * *from* a dialog, a popover or a toast action and must cover its opener.
    * They sat at z-50 alongside dialogs, so which one won was decided by portal

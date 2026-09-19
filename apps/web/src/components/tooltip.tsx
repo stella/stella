@@ -2,7 +2,6 @@ import type { PropsWithChildren } from "react";
 
 import type { Tooltip as TooltipPrimitive } from "@base-ui/react/tooltip";
 
-import type { OverlayLayer } from "@stll/ui/overlay-layer";
 import {
   TooltipPopup,
   Tooltip as TooltipRoot,
@@ -16,7 +15,6 @@ type TooltipProps = {
   align?: TooltipPrimitive.Popup.State["align"];
   side?: "top" | "bottom" | "left" | "right";
   className?: string;
-  layer?: OverlayLayer | undefined;
 };
 
 const Tooltip = ({
@@ -26,7 +24,6 @@ const Tooltip = ({
   align,
   side,
   className,
-  layer,
 }: PropsWithChildren<TooltipProps>) => (
   <TooltipRoot>
     <TooltipTrigger render={render}>{children}</TooltipTrigger>
@@ -35,7 +32,6 @@ const Tooltip = ({
       // text nowrap fixes tooltip for buttons in pdf viewer controls
       className={cn("max-w-70 text-nowrap", className)}
       hidden={content === undefined || content === null || content === ""}
-      {...(layer === undefined ? {} : { layer })}
       {...(side === undefined ? {} : { side })}
     >
       {content}

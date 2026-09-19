@@ -13,7 +13,6 @@ import {
   blockDisabledKeyActivation,
   resolveButtonDisposition,
 } from "../lib/button-disposition";
-import type { OverlayLayer } from "../lib/overlay-layer";
 import { cn } from "../lib/utils";
 import { renderTooltipTrigger } from "./tooltip-trigger-helper";
 
@@ -86,11 +85,6 @@ type ButtonProps = {
   size?: VariantProps<typeof buttonVariants>["size"];
   loading?: boolean;
   tooltip?: React.ReactNode;
-  /**
-   * Overlay band for the tooltip popup. Needed when the button sits in floating
-   * chrome whose own band would otherwise paint over the popup.
-   */
-  tooltipLayer?: OverlayLayer | undefined;
 } & useRender.ComponentProps<"button">;
 
 function Button({
@@ -102,7 +96,6 @@ function Button({
   children,
   disabled,
   tooltip,
-  tooltipLayer,
   ...props
 }: ButtonProps) {
   const typeValue: React.ButtonHTMLAttributes<HTMLButtonElement>["type"] =
@@ -162,7 +155,6 @@ function Button({
   return renderTooltipTrigger({
     tooltip: tooltipContent,
     trigger: button,
-    ...(tooltipLayer === undefined ? {} : { layer: tooltipLayer }),
   });
 }
 
