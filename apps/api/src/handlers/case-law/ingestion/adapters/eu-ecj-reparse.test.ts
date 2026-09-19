@@ -189,25 +189,28 @@ describe("eu-ecj reparseStoredRaw", () => {
     });
   });
 
-  test("rejects legacy bytes whose keyword spacing is ambiguous", async () => {
-    const crawled = await crawlDecision();
-    const ambiguous = `
+  test.each(["application/xhtml+xml", "text/html", null])(
+    "rejects legacy bytes whose keyword spacing is ambiguous (%p)",
+    async (contentType) => {
+      const crawled = await crawlDecision();
+      const ambiguous = `
       <html><body>
         <p class="coj-index">(Regula (ES) 2016/679 – 2. panta 2. punkts)</p>
       </body></html>`;
 
-    const outcome = await reparse(
-      storedFrom(crawled, {
-        contentType: "application/xhtml+xml",
-        raw: new TextEncoder().encode(ambiguous),
-      }),
-    );
+      const outcome = await reparse(
+        storedFrom(crawled, {
+          contentType,
+          raw: new TextEncoder().encode(ambiguous),
+        }),
+      );
 
-    expect(outcome).toMatchObject({
-      type: "rejected",
-      rejection: "raw-fidelity-lost",
-    });
-  });
+      expect(outcome).toMatchObject({
+        type: "rejected",
+        rejection: "raw-fidelity-lost",
+      });
+    },
+  );
 
   test("rejects a row whose metadata lost the publisher id", async () => {
     const crawled = await crawlDecision();

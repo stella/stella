@@ -1526,11 +1526,13 @@ const reparseStoredRaw = (
       detail: `no manifestation in the stored payload for ${celex}`,
     };
   }
-  // Only the two bare shapes can have lost it. An envelope carries the
-  // manifestation as a JSON string, which preserves the non-breaking spaces
-  // that separate one keyword from the next.
+  // Any bare payload but the verbatim one can have lost it, the untyped early
+  // rows included. An envelope carries the manifestation as a JSON string,
+  // which preserves the non-breaking spaces that separate one keyword from the
+  // next, and the verbatim type says the bytes never passed through a string.
   if (
-    stored.contentType === ECJ_RAW_CONTENT_TYPE &&
+    stored.contentType !== SOURCE_RAW_ENVELOPE_CONTENT_TYPE &&
+    stored.contentType !== ECJ_VERBATIM_RAW_CONTENT_TYPE &&
     ecjKeywordSpacingNeedsVerbatim(html)
   ) {
     return {
