@@ -431,7 +431,7 @@ describe("case-law analysis writer role", () => {
     });
   });
 
-  test("has policies on exactly the two granted relations", async () => {
+  test("has policies on exactly the granted relations", async () => {
     const result = await testDb.execute<{ tablename: string; cmd: string }>(sql`
       SELECT tablename, cmd
       FROM pg_policies
@@ -441,6 +441,7 @@ describe("case-law analysis writer role", () => {
     `);
 
     expect(result.rows).toEqual([
+      { tablename: "case_law_corpus_tombstones", cmd: "SELECT" },
       { tablename: "case_law_decisions", cmd: "SELECT" },
       { tablename: "case_law_decisions", cmd: "UPDATE" },
       { tablename: "case_law_sources", cmd: "SELECT" },

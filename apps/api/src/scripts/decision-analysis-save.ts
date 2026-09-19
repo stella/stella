@@ -36,7 +36,11 @@ import { applyAnalysisUpdate } from "@/api/handlers/case-law/analysis/analysis-u
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 
 import { prepareCorpusReads, readRowAst } from "./decision-analysis.ast";
-import { openAnalysisDatabase, readDecisionRows } from "./decision-analysis.db";
+import {
+  analysisTombstoneReader,
+  openAnalysisDatabase,
+  readDecisionRows,
+} from "./decision-analysis.db";
 import {
   ANALYSIS_REJECTION,
   describeUpdateOutcome,
@@ -77,6 +81,7 @@ if (Result.isError(url)) {
 }
 
 const db = openAnalysisDatabase(url.value);
+const tombstones = analysisTombstoneReader(db);
 const store = createDbAnalysisStore(db);
 await prepareCorpusReads();
 
@@ -111,7 +116,7 @@ for (const parsed of parsedRecords) {
     report(record.decisionId, rejectionLine(ANALYSIS_REJECTION.notFound));
     continue;
   }
-  const ast = await readRowAst(row);
+  const ast = await readRowAst(row, tombstones);
   const resolved = resolveRowAnalysisInput({ ast, row });
   if (resolved.status === "rejected") {
     report(record.decisionId, rejectionLine(resolved.reason));

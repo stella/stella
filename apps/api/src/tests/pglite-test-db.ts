@@ -55,6 +55,7 @@ export const CASE_LAW_ANALYSIS_WRITER_SELECT_COLUMNS = {
     "country",
     "decision_type",
     "document_ast",
+    "ast_s3_key",
     "content_hash",
     "analysis",
     "redacted_at",
@@ -63,6 +64,7 @@ export const CASE_LAW_ANALYSIS_WRITER_SELECT_COLUMNS = {
     "citation_count",
   ],
   case_law_sources: ["id", "descriptor"],
+  case_law_corpus_tombstones: ["location"],
 } as const;
 
 /**

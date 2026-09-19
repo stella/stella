@@ -121,6 +121,19 @@ GRANT SELECT ON TABLE "case_law_corpus_tombstones" TO stella;--> statement-break
 -- service side.
 GRANT SELECT (location) ON TABLE "case_law_corpus_tombstones"
   TO stella_public_law_reader;--> statement-breakpoint
+-- The analysis writer reads parses out of the corpus, so it asks the same
+-- question of the same column before it fetches a packed member.
+-- stella-migration-safety: reviewed drop-object - Drops only the policy the
+-- next statement re-creates with the same name and rule, so a re-applied
+-- migration re-enters the same state; rollback is dropping the table.
+DROP POLICY IF EXISTS "case_law_analysis_writer_read"
+  ON "case_law_corpus_tombstones";--> statement-breakpoint
+CREATE POLICY "case_law_analysis_writer_read"
+  ON "case_law_corpus_tombstones"
+  AS PERMISSIVE FOR SELECT TO stella_case_law_analysis_writer
+  USING (true);--> statement-breakpoint
+GRANT SELECT (location) ON TABLE "case_law_corpus_tombstones"
+  TO stella_case_law_analysis_writer;--> statement-breakpoint
 
 -- Drizzle wraps pending migrations in one transaction, while PostgreSQL
 -- requires CREATE INDEX CONCURRENTLY to run outside a transaction block.

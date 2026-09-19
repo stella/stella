@@ -1173,6 +1173,7 @@ export const caseLawCorpusTombstones = p.pgTable(
     ),
     ...globalCaseLawPolicies(),
     ...publicLawReaderPolicies(),
+    ...caseLawAnalysisWriterReadPolicies(),
   ],
 );
 
