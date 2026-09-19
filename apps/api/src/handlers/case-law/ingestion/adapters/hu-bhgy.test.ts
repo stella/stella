@@ -230,6 +230,25 @@ describe("reading a row's own fields", () => {
     const [only] = parseHuStatuteReferences("valami egészen más");
     expect(only).toEqual({ act: {}, raw: "valami egészen más" });
   });
+
+  test("a field written as blanks states nothing", () => {
+    // Blank is how this search writes a field it holds no value for, and every
+    // reader below treats a stated field as a value: a summary, a court, an
+    // identity. Read whole, so the row keeps what it does state.
+    expect(
+      normalizeHuBhgyRow({
+        Azonosito: "Gfv.30091/2025/4",
+        Rezume: "  \n",
+        MeghozoBirosag: "   ",
+        IndexId: "\t",
+      }),
+    ).toMatchObject({
+      Azonosito: "Gfv.30091/2025/4",
+      Rezume: undefined,
+      MeghozoBirosag: undefined,
+      IndexId: undefined,
+    });
+  });
 });
 
 // ── The served document ──────────────────────────────────
@@ -525,6 +544,33 @@ describe("the crawl", () => {
         value?.decisions.map(({ sourceDocumentId }) => sourceDocumentId),
       ).toEqual(["id-9"]);
       expect(value?.nextCursor).toBe("tip|2026-09-19T13:00:00+02:00|0");
+    } finally {
+      stub.restore();
+    }
+  });
+
+  test("a row whose summary is written as blanks is collected like any other", async () => {
+    // Read as a summary, a blank `Rezume` failed the page it was on, and the
+    // cursor held on that row for every later cycle.
+    const blank = {
+      ...rowAt(9, "2026-09-19T13:00:00+02:00"),
+      Rezume: "   ",
+    };
+    const stub = stubPublisher((call) =>
+      isSearch(call)
+        ? searchResponse([blank], 10_000)
+        : new Response(DOCX_BYTES),
+    );
+    try {
+      const page = await huBhgyAdapter.fetchPage(
+        "tip|2026-09-19T12:00:00+02:00|0",
+        {},
+      );
+      const value = Result.isOk(page) ? page.value : null;
+      expect(
+        value?.decisions.map(({ sourceDocumentId }) => sourceDocumentId),
+      ).toEqual(["id-9"]);
+      expect(value?.decisions.at(0)?.textFields.headnote.type).toBe("absent");
     } finally {
       stub.restore();
     }

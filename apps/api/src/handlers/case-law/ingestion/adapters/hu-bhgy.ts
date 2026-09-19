@@ -234,8 +234,16 @@ export type HuBhgyRow = {
   DownloadLink?: string | undefined;
 };
 
+/**
+ * A field the row states, or nothing.
+ *
+ * Blank is nothing: the search writes a field it holds no value for as spaces
+ * as readily as it omits it, and a caller that reads the two apart treats
+ * whitespace as a headnote, a court or a document identity. The value is kept
+ * verbatim, because an identity is byte-exact.
+ */
 const optionalString = (value: unknown): string | undefined =>
-  typeof value === "string" && value.length > 0 ? value : undefined;
+  typeof value === "string" && value.trim() !== "" ? value : undefined;
 
 const optionalNumber = (value: unknown): number | undefined =>
   typeof value === "number" && Number.isFinite(value) ? value : undefined;
