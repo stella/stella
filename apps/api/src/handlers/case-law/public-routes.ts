@@ -5,6 +5,10 @@ import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-re
 
 import { env } from "@/api/env";
 import {
+  COVERAGE_CACHE_CONTROL,
+  readCaseLawCoverageHandler,
+} from "@/api/handlers/case-law/decisions/coverage";
+import {
   listDecisionFacetsHandler,
   listDecisionFacetsQuerySchema,
 } from "@/api/handlers/case-law/decisions/facets";
@@ -143,6 +147,27 @@ const readCaseLawCorpusStatus = createSafePublicHandler(
           await readCaseLawCorpusStatusHandler(query, caseLawPublicReadDb),
       ),
     );
+
+    return Result.ok(response);
+  },
+);
+
+/**
+ * The corpus's own coverage, every country in one answer.
+ *
+ * Not a capability: it takes no input, sets its own cache-control header, and
+ * is gated by the public-law route hook, none of which the generic invoke path
+ * can honor.
+ */
+const readCaseLawCoverage = createSafePublicHandler(
+  { mcp: { type: "internal", reason: "public_indexing" } },
+  async function* ({ set }) {
+    const response = yield* Result.await(
+      Result.tryPromise(
+        async () => await readCaseLawCoverageHandler(caseLawPublicReadDb),
+      ),
+    );
+    set.headers["cache-control"] = COVERAGE_CACHE_CONTROL;
 
     return Result.ok(response);
   },
@@ -307,6 +332,7 @@ export const publicCaseLawRoute = new Elysia({
     set.status = 404;
     return { error: "Not Found" } as const;
   })
+  .get("/coverage", readCaseLawCoverage.handler)
   .get("/decisions", listDecisions.handler, {
     query: listDecisions.config.query,
   })

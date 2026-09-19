@@ -50,6 +50,8 @@ const LATEST_DECISIONS_FILE =
   "apps/api/src/handlers/case-law/decisions/latest.ts";
 const STATUS_DECISIONS_FILE =
   "apps/api/src/handlers/case-law/decisions/status.ts";
+const COVERAGE_STORED_COUNTS_FILE =
+  "apps/api/src/handlers/case-law/decisions/coverage-stored-counts.ts";
 const CITATION_GRAPH_FILE =
   "apps/api/src/handlers/case-law/decisions/citation-graph.ts";
 const LANGUAGE_ALTERNATES_FILE =
@@ -78,6 +80,7 @@ const CITATION_AUTHORITY_FILE =
  * passing an empty check.
  */
 const PUBLIC_CASE_LAW_ROUTES = [
+  "GET /case/coverage",
   "GET /case/decisions",
   "GET /case/decisions/:decisionId",
   "GET /case/decisions/:decisionId/citations",
@@ -144,12 +147,28 @@ const PUBLIC_DECISION_READ_GATE = {
   SUBJECT: "gated-by-the-subject-factory",
   /** Names the table without reading a decision row out of it. */
   NO_ROW_READ: "reads-no-decision-row",
+  /**
+   * Counts rows, listing-only ones included, and returns only the count.
+   *
+   * The publication gate keeps a listed identity whose document never arrived
+   * out of every surface that would show it. A completeness figure is the one
+   * public statement that has to include it: the denominator is what the
+   * publisher says it holds, and a publisher counts every document it lists,
+   * so a numerator that dropped those rows would report a corpus as short of
+   * the publisher by exactly the rows the publisher would not serve. What
+   * leaves the process is an integer, never an identity.
+   *
+   * An entry needs a written reason, as `NO_ROW_READ` does, and the census
+   * below checks that both kinds carry one.
+   */
+  COUNTS_STORED: "counts-stored-rows-only",
 } as const;
 
 type PublicDecisionReadEntry =
   | { gate: typeof PUBLIC_DECISION_READ_GATE.PREDICATE }
   | { gate: typeof PUBLIC_DECISION_READ_GATE.SUBJECT }
-  | { gate: typeof PUBLIC_DECISION_READ_GATE.NO_ROW_READ; reason: string };
+  | { gate: typeof PUBLIC_DECISION_READ_GATE.NO_ROW_READ; reason: string }
+  | { gate: typeof PUBLIC_DECISION_READ_GATE.COUNTS_STORED; reason: string };
 
 /** The spellings of the one predicate, plus the marker reader the projection uses. */
 const PUBLIC_DECISION_PREDICATE_TOKENS = [
@@ -176,6 +195,13 @@ const PUBLIC_DECISION_READ_GATES = {
   "apps/api/src/db/schema/relations.ts": {
     gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
     reason: "Relation definitions.",
+  },
+  [COVERAGE_STORED_COUNTS_FILE]: {
+    gate: PUBLIC_DECISION_READ_GATE.COUNTS_STORED,
+    reason:
+      "Counts a source's rows for the completeness denominator, and counts " +
+      "the week's arrivals under the predicate. Returns two integers per " +
+      "source and no decision row.",
   },
   [CITATION_GRAPH_FILE]: { gate: PUBLIC_DECISION_READ_GATE.PREDICATE },
   "apps/api/src/handlers/case-law/decisions/citations.ts": {
@@ -730,15 +756,65 @@ describe("public case-law route boundary", () => {
     expect(unbranded).toEqual([]);
 
     // An exemption with no reason is the escape hatch this census exists to
-    // close, so the reasons are checked rather than trusted.
+    // close, so the reasons are checked rather than trusted. Both exempting
+    // gates are covered: a new one added without a reason fails here.
     const unexplained = Object.entries(PUBLIC_DECISION_READ_GATES)
       .filter(
         ([, entry]) =>
-          entry.gate === PUBLIC_DECISION_READ_GATE.NO_ROW_READ &&
+          (entry.gate === PUBLIC_DECISION_READ_GATE.NO_ROW_READ ||
+            entry.gate === PUBLIC_DECISION_READ_GATE.COUNTS_STORED) &&
           entry.reason.trim().length === 0,
       )
       .map(([path]) => path);
     expect(unexplained).toEqual([]);
+
+    // The count-only gate is the narrowest of the four and must stay that
+    // way: a module under it may aggregate, never select a decision's
+    // columns. `count(*)` is the whole of what it is allowed to take.
+    const countOnly = Object.entries(PUBLIC_DECISION_READ_GATES)
+      .filter(
+        ([, entry]) => entry.gate === PUBLIC_DECISION_READ_GATE.COUNTS_STORED,
+      )
+      .map(([path]) => path);
+    expect(countOnly).toEqual([COVERAGE_STORED_COUNTS_FILE]);
+    const countOnlySource =
+      readers.get(COVERAGE_STORED_COUNTS_FILE) ??
+      expect.unreachable("the count-only module is in the read surface");
+    expect(countOnlySource).toContain("count(*)");
+    expect(countOnlySource).not.toContain("d.fulltext");
+    expect(countOnlySource).not.toContain("d.case_number");
+    expect(countOnlySource).not.toContain("d.metadata");
+    // The arrivals arm still carries the publication predicate; only the
+    // completeness numerator is exempt.
+    expect(countOnlySource).toContain("publishedCaseLawDecisionSqlFor");
+  });
+
+  test("the coverage route publishes no crawl or lease state", async () => {
+    const [coverageSource, storedCountsSource] = await Promise.all([
+      readSource("apps/api/src/handlers/case-law/decisions/coverage.ts"),
+      readSource(COVERAGE_STORED_COUNTS_FILE),
+    ]);
+
+    for (const source of [coverageSource, storedCountsSource]) {
+      // The crawl's position, its lease and its failures are how ingestion
+      // works, not what the corpus holds. `reported_total_origin` is read,
+      // but only through the reporter map: the raw origin never leaves.
+      expect(source).not.toContain("syncCursor");
+      expect(source).not.toContain("ingestionLease");
+      expect(source).not.toContain("observationOrder");
+      expect(source).not.toContain("walkError");
+      expect(source).not.toContain("errorMessage");
+      expect(source).not.toContain("workspace");
+      expect(source).not.toContain("organization");
+      expect(source).not.toContain("matter");
+    }
+    // The source row's own id is never part of the payload; the adapter key,
+    // which the open-source registry already names, identifies a feed.
+    expect(coverageSource).toContain("adapterKey: source.adapterKey");
+    expect(coverageSource).not.toContain("id: source.id");
+    // A withheld source contributes to nothing, rather than being gated per
+    // number further down.
+    expect(coverageSource).toContain("redistributableCaseLawSource");
   });
 
   test("the listing-only predicate has one owner", async () => {

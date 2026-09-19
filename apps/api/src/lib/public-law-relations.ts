@@ -159,11 +159,20 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     status: "required",
     updated_at: "required",
   },
+  // The feed's public identity, its redistribution terms, and the coverage
+  // bookkeeping the public coverage page states. The cursor, the lease, the
+  // observation orders and the source's own configuration stay on the
+  // ingestion side: they are how the crawl works, not what the corpus holds.
   case_law_sources: {
     id: "required",
     name: "required",
     adapter_key: "required",
     descriptor: "required",
+    enabled: "required",
+    last_sync_at: "required",
+    reported_total: "required",
+    reported_total_as_of: "required",
+    reported_total_origin: "required",
   },
   corpus_index_generations: {
     family: "required",

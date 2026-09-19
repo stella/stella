@@ -18,6 +18,8 @@ import {
   corpusIndexGenerations,
 } from "@/api/db/schema";
 import { courtWeightMapFromSeed } from "@/api/handlers/case-law/court-weight-seed";
+import { readCaseLawCoverageSourcesQuery } from "@/api/handlers/case-law/decisions/coverage";
+import { readCaseLawSourceCountsQuery } from "@/api/handlers/case-law/decisions/coverage-stored-counts";
 import {
   readDecisionHandler,
   readDecisionTextColumnWritten,
@@ -810,6 +812,15 @@ describe("public-law reader role", () => {
           now: new Date(),
         });
         exercised.add(readCaseLawCourtActivityQuery.publicLawSharedQuery);
+
+        await readCaseLawCoverageSourcesQuery(tx);
+        exercised.add(readCaseLawCoverageSourcesQuery.publicLawSharedQuery);
+
+        await readCaseLawSourceCountsQuery(tx, {
+          sourceIds: [sourceId],
+          now: new Date(),
+        });
+        exercised.add(readCaseLawSourceCountsQuery.publicLawSharedQuery);
 
         await readNonRedistributableLegislationSourceIdsQuery(tx);
         exercised.add(
