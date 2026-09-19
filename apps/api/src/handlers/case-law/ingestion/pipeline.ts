@@ -67,7 +67,10 @@ import {
   selectRuleMatch,
 } from "@/api/handlers/case-law/polarity/rule-engine";
 import type { RuleCache } from "@/api/handlers/case-law/polarity/rule-engine";
-import { pgPayloadCarriesDocument } from "@/api/handlers/case-law/stored-payload";
+import {
+  corpusCarriesDocument,
+  pgPayloadCarriesDocument,
+} from "@/api/handlers/case-law/stored-payload";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -115,14 +118,17 @@ import {
 } from "@/api/lib/legal-search/cycle-deadline";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import {
+  markListingOnly,
   partialObservationFromMetadata,
   sanitizeResult,
 } from "@/api/lib/legal-search/ingestion-normalization";
+import { DOCUMENT_DELIVERY } from "@/api/lib/legal-search/ingestion-types";
 import { markupResidueIn } from "@/api/lib/legal-search/parsers/markup-residue";
 import {
   AST_MARKUP_RESIDUE,
   storedDecisionSignal,
 } from "@/api/lib/legal-search/parsers/validate-ast";
+import { metadataMarkedListingOnly } from "@/api/lib/legal-search/partial-observation-sql";
 import {
   RAW_SOURCE_FAMILY,
   writeRawSourcePayload,
@@ -1250,6 +1256,18 @@ const processDecisionAttempt = async ({
   const storedPartialObservation = existing
     ? partialObservationFromMetadata(existing.metadata)
     : { caseNumberIsPlaceholder: false, isListingOnly: false };
+  const incomingCarriesDocument = Boolean(
+    result.fulltext || hasUsableAst(result.documentAst),
+  );
+  // An inline observation fetched what the publisher serves, so one with no
+  // document is a decision a reader cannot open. It is stored unpublished,
+  // under the marker a listing-only row carries, and the same repair re-asks
+  // the publisher for it. The marker is only ever set by a write that also
+  // proves the row holds no document; a deferred source's text arrives by a
+  // queue that never passes here, so its rows are left public.
+  const storesUnpublishedWithoutDocument =
+    !incomingCarriesDocument &&
+    result.documentDelivery !== DOCUMENT_DELIVERY.DEFERRED;
   const preservesExistingDetail =
     existing !== undefined &&
     ((result.caseNumberIsPlaceholder === true &&
@@ -1378,6 +1396,14 @@ const processDecisionAttempt = async ({
         existing &&
         existing.corpusMirrorStatus === CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED &&
         refresh === DECISION_REFRESH.WHEN_SOURCE_CHANGED &&
+        // A row stored with no document before the marker existed is still
+        // public. The unchanged observation that would be skipped is the one
+        // that can mark it, so it is written instead.
+        !(
+          storesUnpublishedWithoutDocument &&
+          !storedPartialObservation.isListingOnly &&
+          !corpusCarriesDocument(existing.contentHash)
+        ) &&
         shouldSkipRefresh({
           existingMetadata: existing.metadata,
           existingSourceRawContentType: existing.sourceRawContentType,
@@ -1615,9 +1641,6 @@ const processDecisionAttempt = async ({
     // carries may replace one: the metadata is updated and the payload,
     // its object-storage pointers and the citations drawn from it are left
     // as they are.
-    const incomingCarriesDocument = Boolean(
-      result.fulltext || hasUsableAst(result.documentAst),
-    );
     const preserveStoredDocument =
       existing !== undefined &&
       !incomingCarriesDocument &&
@@ -1829,7 +1852,6 @@ const processDecisionAttempt = async ({
       corpusPayload,
       corpusPlan,
       identifierRows,
-      incomingCarriesDocument,
       incomingCitationKey,
       languageGroupKey,
       mirrorCarriesDocument,
@@ -1842,7 +1864,6 @@ const processDecisionAttempt = async ({
     corpusPayload,
     corpusPlan,
     identifierRows,
-    incomingCarriesDocument,
     incomingCitationKey,
     languageGroupKey,
     mirrorCarriesDocument,
@@ -2112,7 +2133,18 @@ const processDecisionAttempt = async ({
           const payloadApplied = (
             await tx
               .update(caseLawDecisions)
-              .set(payloadColumns)
+              .set({
+                ...payloadColumns,
+                // Decided with the write: the marker says the row holds no
+                // document, and this WHERE is the only place that is known.
+                ...(storesUnpublishedWithoutDocument
+                  ? {
+                      metadata: metadataMarkedListingOnly(
+                        caseLawDecisions.metadata,
+                      ),
+                    }
+                  : {}),
+              })
               .where(
                 and(
                   eq(caseLawDecisions.id, existing.id),
@@ -2245,7 +2277,9 @@ const processDecisionAttempt = async ({
           ...payloadColumns,
           sourceUrl: result.sourceUrl,
           documentUrl: result.documentUrl,
-          metadata: result.metadata,
+          metadata: storesUnpublishedWithoutDocument
+            ? markListingOnly(result.metadata)
+            : result.metadata,
           parserVersion: result.parserVersion ?? 0,
           sourceRaw: null,
           sourceRawS3Key,

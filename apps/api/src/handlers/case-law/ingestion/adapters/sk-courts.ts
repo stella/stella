@@ -59,6 +59,7 @@ import {
 } from "@/api/lib/case-law/decision-text";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
+import { DOCUMENT_DELIVERY } from "@/api/lib/legal-search/ingestion-types";
 import { restrictSkCourtDocumentUrl } from "@/api/lib/legal-search/sk-court-document-url";
 import type { SkDocumentFetch } from "@/api/lib/legal-search/sk-document-backfill";
 import { logger } from "@/api/lib/observability/logger";
@@ -567,6 +568,7 @@ export const assembleSkCourtsDecision = ({
     rawHash,
     parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.SK_COURTS],
     documentAst: EMPTY_AST,
+    documentDelivery: DOCUMENT_DELIVERY.DEFERRED,
     ...skCourtsSourceRaw(item, detail),
   };
 };

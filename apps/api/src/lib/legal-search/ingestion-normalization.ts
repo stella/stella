@@ -87,6 +87,24 @@ export const partialObservationFromMetadata = (
 };
 
 /**
+ * Metadata for a first write of a decision that carries no document: the
+ * marker set, any marker field the adapter's own flags produced kept. The
+ * JavaScript twin of `metadataMarkedListingOnly`.
+ */
+export const markListingOnly = (
+  metadata: Record<string, unknown>,
+): Record<string, unknown> => {
+  const stored = metadata[PARTIAL_OBSERVATION_KEY];
+  return {
+    ...metadata,
+    [PARTIAL_OBSERVATION_KEY]: {
+      ...(isRecord(stored) ? stored : {}),
+      [PARTIAL_OBSERVATION_FIELD.IS_LISTING_ONLY]: true,
+    },
+  };
+};
+
+/**
  * Sanitize text fields before DB insertion. Postgres rejects null bytes in
  * text columns. Keeping this at the ingestion boundary means adapters and
  * backfill jobs produce the same canonical representation.

@@ -36,6 +36,22 @@ export const SOURCE_DOCUMENT_ID_MAX_LENGTH = 256;
 export const isPersistableSourceDocumentId = (value: string): boolean =>
   value.length > 0 && value.length <= SOURCE_DOCUMENT_ID_MAX_LENGTH;
 
+/**
+ * How an observation stands to the decision's document.
+ *
+ * `inline`: the adapter fetched what the publisher serves for this decision,
+ * so a result with no text is a decision with no document. `deferred`: the
+ * document is fetched later by a queue of its own, and a result with no text
+ * says nothing about whether one exists.
+ */
+export const DOCUMENT_DELIVERY = {
+  DEFERRED: "deferred",
+  INLINE: "inline",
+} as const;
+
+export type DocumentDelivery =
+  (typeof DOCUMENT_DELIVERY)[keyof typeof DOCUMENT_DELIVERY];
+
 /** Result of parsing a single court decision from a source. */
 export type IngestionResult = {
   caseNumber: string;
@@ -58,6 +74,12 @@ export type IngestionResult = {
    * that an earlier fetch or repair already recovered.
    */
   isListingOnly?: boolean | undefined;
+  /**
+   * Absent means `inline`. An inline result that carries no document is
+   * stored unpublished, exactly as a listing-only one is, and is repaired the
+   * same way; a deferred one stays public while its queue fetches the text.
+   */
+  documentDelivery?: DocumentDelivery | undefined;
   /**
    * The publisher's own identifier for this document. Supply it whenever the
    * source has one: it is what makes a decision identifiable. A case number
