@@ -14,6 +14,9 @@ import type {
   RenameRule,
 } from "@/api/lib/house-style/catalogue";
 
+const EMPTY_DOCUMENT_XML =
+  '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body/></w:document>';
+
 const catalogue = (rename: readonly RenameRule[] = []) =>
   extractStyleCatalogue({
     stylesXml: HOUSE_STYLES_XML,
@@ -38,9 +41,34 @@ describe("a house style's catalogue", () => {
     expect(ids).toContain("Normal");
   });
 
-  test("leaves out a style nothing uses and a table of contents", () => {
+  test("carries a style nothing uses, after the used ones, without examples", () => {
+    const { styles } = catalogue();
+    const unused = styleNamed("UnusedFirm");
+    expect(unused.usageCount).toBe(0);
+    expect(unused.examples).toEqual([]);
+    const firstUnused = styles.findIndex((style) => style.usageCount === 0);
+    expect(
+      styles.slice(firstUnused).every((style) => style.usageCount === 0),
+    ).toBe(true);
+  });
+
+  // A stored style set is content-free: its catalogue must not depend on a body.
+  test("is the same set of styles, and the same hash, for an empty document", () => {
+    const empty = extractStyleCatalogue({
+      stylesXml: HOUSE_STYLES_XML,
+      numberingXml: HOUSE_NUMBERING_XML,
+      documentXml: EMPTY_DOCUMENT_XML,
+    });
+    expect(empty.styles.map((style) => style.id).toSorted()).toEqual(
+      catalogue()
+        .styles.map((style) => style.id)
+        .toSorted(),
+    );
+    expect(empty.hash).toBe(catalogue().hash);
+  });
+
+  test("leaves out a table of contents", () => {
     const ids = catalogue().styles.map((style) => style.id);
-    expect(ids).not.toContain("UnusedFirm");
     expect(ids).not.toContain("TOC1");
   });
 
