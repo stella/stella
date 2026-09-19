@@ -57,17 +57,17 @@ describe("source health", () => {
     ).toBe(CASE_LAW_COVERAGE_HEALTH.STALLED);
   });
 
-  test("a disabled source is paused whatever its last sync says", () => {
+  test("a disabled source reads as disabled whatever its last sync says", () => {
     expect(
       caseLawSourceHealth({
         enabled: false,
         lastSyncAt: ago(COVERAGE_DELAYED_WITHIN_MS * 10),
         now: NOW,
       }),
-    ).toBe(CASE_LAW_COVERAGE_HEALTH.PAUSED);
+    ).toBe(CASE_LAW_COVERAGE_HEALTH.DISABLED);
     expect(
       caseLawSourceHealth({ enabled: false, lastSyncAt: NOW, now: NOW }),
-    ).toBe(CASE_LAW_COVERAGE_HEALTH.PAUSED);
+    ).toBe(CASE_LAW_COVERAGE_HEALTH.DISABLED);
   });
 
   test("a source that has never synced is unknown, not stalled", () => {
@@ -98,22 +98,22 @@ describe("country health", () => {
     ).toBe(CASE_LAW_COVERAGE_HEALTH.STALLED);
   });
 
-  test("a paused source does not outrank a working one", () => {
+  test("a disabled source does not outrank a working one", () => {
     expect(
       caseLawCountryHealth([
-        CASE_LAW_COVERAGE_HEALTH.PAUSED,
+        CASE_LAW_COVERAGE_HEALTH.DISABLED,
         CASE_LAW_COVERAGE_HEALTH.CURRENT,
       ]),
     ).toBe(CASE_LAW_COVERAGE_HEALTH.CURRENT);
   });
 
-  test("a country whose every source is paused is paused", () => {
+  test("a country whose every source is switched off reads as disabled", () => {
     expect(
       caseLawCountryHealth([
-        CASE_LAW_COVERAGE_HEALTH.PAUSED,
-        CASE_LAW_COVERAGE_HEALTH.PAUSED,
+        CASE_LAW_COVERAGE_HEALTH.DISABLED,
+        CASE_LAW_COVERAGE_HEALTH.DISABLED,
       ]),
-    ).toBe(CASE_LAW_COVERAGE_HEALTH.PAUSED);
+    ).toBe(CASE_LAW_COVERAGE_HEALTH.DISABLED);
   });
 
   test("a country with no sources is unknown", () => {

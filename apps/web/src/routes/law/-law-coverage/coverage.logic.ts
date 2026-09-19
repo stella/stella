@@ -36,20 +36,20 @@ type CaseLawTotalReporter = CaseLawMeasuredCompleteness["reportedBy"];
 export const CASE_LAW_COVERAGE_HEALTH_LABEL_KEYS = {
   current: "caseLaw.coverage.healthCurrent",
   delayed: "caseLaw.coverage.healthDelayed",
-  paused: "caseLaw.coverage.healthPaused",
+  disabled: "caseLaw.coverage.healthDisabled",
   stalled: "caseLaw.coverage.healthStalled",
   unknown: "caseLaw.coverage.healthUnknown",
 } as const satisfies Record<CaseLawCoverageHealth, TranslationKey>;
 
 /**
- * `paused` and `unknown` are neutral on purpose: a source switched off on
+ * `disabled` and `unknown` are neutral on purpose: a source switched off on
  * purpose, and one that has never run, are not faults and must not read as
  * one beside a court that genuinely stopped answering.
  */
 export const CASE_LAW_COVERAGE_HEALTH_TONES = {
   current: "success",
   delayed: "warning",
-  paused: "neutral",
+  disabled: "neutral",
   stalled: "destructive",
   unknown: "neutral",
 } as const satisfies Record<CaseLawCoverageHealth, ReviewStatusTone>;

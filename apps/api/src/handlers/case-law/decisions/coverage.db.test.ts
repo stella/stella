@@ -34,7 +34,7 @@ const HOUR_IN_MS = 60 * 60 * 1000;
 /** CZE is the admitted country; SVK is ingested and not admitted. */
 const czSourceId = createSafeId<"caseLawSource">();
 const skSourceId = createSafeId<"caseLawSource">();
-const pausedSourceId = createSafeId<"caseLawSource">();
+const disabledSourceId = createSafeId<"caseLawSource">();
 const withheldSourceId = createSafeId<"caseLawSource">();
 
 const LISTING_ONLY = {
@@ -105,9 +105,9 @@ beforeAll(
         storedTotalAsOf: new Date(NOW.getTime() - 40 * HOUR_IN_MS),
       }),
       caseLawSourceRow({
-        id: pausedSourceId,
+        id: disabledSourceId,
         adapterKey: ADAPTER_KEYS.CZ_NSS,
-        name: "cz paused",
+        name: "cz disabled",
         enabled: false,
         lastSyncAt: null,
       }),
@@ -366,8 +366,8 @@ test(
     );
 
     const cze = byCountry.get("CZE");
-    // One current feed and one paused feed: the country reads current, and
-    // the paused feed is still visible in its own row.
+    // One current feed and one disabled feed: the country reads current, and
+    // the disabled feed is still visible in its own row.
     expect(cze?.health).toBe(CASE_LAW_COVERAGE_HEALTH.CURRENT);
     const czeSources = new Map(
       (cze?.sources ?? []).map((source) => [source.adapterKey, source]),
@@ -376,9 +376,9 @@ test(
       CASE_LAW_COVERAGE_HEALTH.CURRENT,
     );
     expect(czeSources.get(ADAPTER_KEYS.CZ_NSS)?.health).toBe(
-      CASE_LAW_COVERAGE_HEALTH.PAUSED,
+      CASE_LAW_COVERAGE_HEALTH.DISABLED,
     );
-    // The paused feed has never had a total recorded, and says so rather
+    // The disabled feed has never had a total recorded, and says so rather
     // than being folded into the country's ratio.
     expect(czeSources.get(ADAPTER_KEYS.CZ_NSS)?.completeness).toEqual({
       state: "not-measured-yet",

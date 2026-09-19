@@ -21,7 +21,7 @@ export const CASE_LAW_COVERAGE_HEALTH = {
   /** Last sync is older than `COVERAGE_DELAYED_WITHIN_MS`. */
   STALLED: "stalled",
   /** The source is switched off; nothing is expected to arrive. */
-  PAUSED: "paused",
+  DISABLED: "disabled",
   /** The source has never recorded a sync, so there is nothing to judge. */
   UNKNOWN: "unknown",
 } as const;
@@ -66,7 +66,7 @@ export const caseLawSourceHealth = ({
   now,
 }: SourceHealthRead): CaseLawCoverageHealth => {
   if (!enabled) {
-    return CASE_LAW_COVERAGE_HEALTH.PAUSED;
+    return CASE_LAW_COVERAGE_HEALTH.DISABLED;
   }
   if (lastSyncAt === null) {
     return CASE_LAW_COVERAGE_HEALTH.UNKNOWN;
@@ -87,13 +87,13 @@ export const caseLawSourceHealth = ({
 /**
  * How loudly a state speaks for the country it belongs to.
  *
- * `paused` sits below `current` on purpose: a source switched off is a
+ * `disabled` sits below `current` on purpose: a source switched off is a
  * decision someone took, not a fault, so it must not outrank a working
- * sibling. A country whose every source is paused is reported paused by the
+ * sibling. A country whose every source is switched off is reported `disabled` by the
  * rule below rather than by this ranking.
  */
 const HEALTH_SEVERITY = {
-  paused: 0,
+  disabled: 0,
   current: 1,
   unknown: 2,
   delayed: 3,
@@ -105,7 +105,7 @@ const HEALTH_SEVERITY = {
  *
  * The worst of the sources that are meant to be running, so a single stalled
  * court is visible rather than averaged away. A country with no sources at
- * all, or none still running, reports `unknown` and `paused` respectively:
+ * all, or none still running, reports `unknown` and `disabled` respectively:
  * neither is a corpus anyone should read as healthy.
  */
 export const caseLawCountryHealth = (
@@ -115,10 +115,10 @@ export const caseLawCountryHealth = (
     return CASE_LAW_COVERAGE_HEALTH.UNKNOWN;
   }
   const running = sources.filter(
-    (health) => health !== CASE_LAW_COVERAGE_HEALTH.PAUSED,
+    (health) => health !== CASE_LAW_COVERAGE_HEALTH.DISABLED,
   );
   if (running.length === 0) {
-    return CASE_LAW_COVERAGE_HEALTH.PAUSED;
+    return CASE_LAW_COVERAGE_HEALTH.DISABLED;
   }
   let worst = running[0] ?? CASE_LAW_COVERAGE_HEALTH.UNKNOWN;
   for (const health of running) {

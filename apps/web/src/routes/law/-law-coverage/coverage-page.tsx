@@ -318,7 +318,7 @@ const CountrySection = ({ country }: { country: CaseLawCoverageCountry }) => {
             to={country.decisionYearTo}
           />
         )}
-        <Figure label={t("caseLaw.coverage.newLast7Days")}>
+        <Figure label={t("caseLaw.corpusStatus.newLast7Days")}>
           <span className="tabular-nums">
             {format.number(country.addedLastWeek, DELTA_FORMAT)}
           </span>
@@ -407,18 +407,29 @@ const CountryCompleteness = ({
         <div className="flex gap-1.5">
           <dt>{t("caseLaw.coverage.stored")}</dt>
           <dd className="text-foreground tabular-nums">
-            <StoredDecisions
-              stored={{
-                decisions: completeness.stored,
-                asOf: completeness.storedAsOf,
-              }}
-            />
+            {/* Both figures are sums over the measured sources alone, so with
+                none measured they are zero by construction rather than by
+                observation. The ratio already withholds itself there; these
+                have to withhold themselves too, or the row reads as a
+                publisher stating it holds nothing. */}
+            {completeness.measuredSources === 0 ? (
+              NO_VALUE
+            ) : (
+              <StoredDecisions
+                stored={{
+                  decisions: completeness.stored,
+                  asOf: completeness.storedAsOf,
+                }}
+              />
+            )}
           </dd>
         </div>
         <div className="flex gap-1.5">
           <dt>{t("caseLaw.coverage.publisherTotal")}</dt>
           <dd className="text-foreground tabular-nums">
-            {format.number(completeness.reported)}
+            {completeness.measuredSources === 0
+              ? NO_VALUE
+              : format.number(completeness.reported)}
           </dd>
         </div>
       </dl>
@@ -471,7 +482,7 @@ const SourcesTableHead = () => {
           {t("caseLaw.coverage.lastSync")}
         </TableHead>
         <TableHead className="text-end" scope="col">
-          {t("caseLaw.coverage.newLast7Days")}
+          {t("caseLaw.corpusStatus.newLast7Days")}
         </TableHead>
         <TableHead scope="col">{t("caseLaw.coverage.completeness")}</TableHead>
       </TableRow>
@@ -671,7 +682,7 @@ const CourtsTable = ({ courts }: { courts: readonly CourtRow[] }) => {
             {t("common.decisions")}
           </TableHead>
           <TableHead className="text-end" scope="col">
-            {t("caseLaw.coverage.newLast7Days")}
+            {t("caseLaw.corpusStatus.newLast7Days")}
           </TableHead>
           <TableHead className="text-end" scope="col">
             {t("common.lastUpdated")}

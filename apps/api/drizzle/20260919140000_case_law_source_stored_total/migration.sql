@@ -5,8 +5,13 @@ SET statement_timeout = '5s';--> statement-breakpoint
 -- side so a public request reads an integer instead of walking the source's
 -- index range. Nullable: a source counted for the first time on its next
 -- sync cycle reads as uncounted until then, never as holding nothing.
-ALTER TABLE "case_law_sources" ADD COLUMN "stored_total" integer;--> statement-breakpoint
-ALTER TABLE "case_law_sources" ADD COLUMN "stored_total_as_of" timestamp with time zone;--> statement-breakpoint
+--
+-- IF NOT EXISTS because the COMMIT below persists these columns before the
+-- migrator writes its own row: a failure between the two leaves the columns
+-- in place and the migration unrecorded, so the retry replays this file from
+-- the top. Every statement before that COMMIT has to survive a second run.
+ALTER TABLE "case_law_sources" ADD COLUMN IF NOT EXISTS "stored_total" integer;--> statement-breakpoint
+ALTER TABLE "case_law_sources" ADD COLUMN IF NOT EXISTS "stored_total_as_of" timestamp with time zone;--> statement-breakpoint
 
 -- NOT VALID here, VALIDATE after the transaction splits, for both constraints.
 -- A validating CHECK scans every row while holding ACCESS EXCLUSIVE; NOT VALID

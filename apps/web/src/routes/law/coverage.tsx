@@ -2,6 +2,7 @@ import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 
 import { caseLawCoverageOptions } from "@/features/case-law/queries/decisions";
+import { getTranslator } from "@/i18n/i18n-store";
 import { pageTitle } from "@/lib/page-title";
 import {
   createLegalCollectionJsonLd,
@@ -16,22 +17,24 @@ import {
 
 const COVERAGE_PATH = "/law/coverage";
 
-const COVERAGE_DESCRIPTION =
-  "How much case law the public corpus holds, per country and per court, and how fresh each source is.";
-
 export const Route = createFileRoute("/law/coverage")({
   loader: async ({ context: { queryClient } }) => {
     await ensureRouteQueryData(queryClient, caseLawCoverageOptions());
   },
   head: () => {
+    const t = getTranslator();
     const title = pageTitle("caseLaw.coverage.title");
+    // The page body already renders this sentence from the catalogue; a
+    // second English copy here would serve a French reader an English
+    // description and drift from the one the page shows.
+    const description = t("caseLaw.coverage.description");
 
     return createPublicLawHead({
-      description: COVERAGE_DESCRIPTION,
+      description,
       jsonLd: createLegalCollectionJsonLd({
         aboutName: "Case-law decisions",
         canonicalUrl: createPublicLawCanonicalUrl(COVERAGE_PATH),
-        description: COVERAGE_DESCRIPTION,
+        description,
         kind: "caseLaw",
         name: title,
       }),

@@ -201,6 +201,19 @@ describe("the coverage page states what it counts", () => {
     expect(markup).toContain(messages.caseLaw.coverage.inPreparation);
     // No measurable ratio, and no zero standing in for one.
     expect(markup).not.toContain("0%");
+    // Both sums are over the measured sources alone, so with none measured
+    // they are zero by construction. Printing that zero beside the withheld
+    // ratio would read as a publisher stating it holds nothing, so the
+    // stored and publisher-total cells withhold themselves too.
+    // Anchored on the completeness heading, which appears only in the
+    // country block; "Stored" also labels the page's totals tile above it.
+    const completeness = markup.indexOf(messages.caseLaw.coverage.completeness);
+    expect(completeness).toBeGreaterThan(-1);
+    const completenessCells = markup.slice(completeness, completeness + 700);
+    expect(completenessCells).toContain(messages.caseLaw.coverage.stored);
+    expect(completenessCells).not.toContain(">0<");
+    // Three withheld figures: the ratio, the stored sum and the total.
+    expect(completenessCells.split("—").length - 1).toBe(3);
   });
 
   test("figures the endpoint cannot state read as an empty page, not as zeros", () => {
