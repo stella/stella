@@ -635,11 +635,11 @@
       "description": "Cuánta jurisprudencia contiene el corpus, por país y por tribunal, y cuán actualizada está cada fuente.",
       "exceedsReportedTotal": "Contiene más que el último total indicado por el organismo el {date}",
       "generatedAt": "Datos a {date}",
-      "healthCurrent": "Al día",
+      "healthCurrent": "Actualizado",
       "healthDelayed": "Con retraso",
-      "healthPaused": "En pausa",
+      "healthPaused": "Desactivado",
       "healthStalled": "Sin avance",
-      "healthUnknown": "Desconocida",
+      "healthUnknown": "Nunca ejecutado",
       "inPreparation": "En preparación",
       "lastSync": "Última sincronización",
       "newLast7Days": "Nuevas en 7 días",
@@ -3387,7 +3387,6 @@
     }
   },
   "lawHome": {
-    "databaseUpToDate": "Actualizado",
     "enteringIntoForce": "Próxima entrada en vigor",
     "inForceFrom": "En vigor desde el {date}",
     "noRecentSearches": "Aún no hay búsquedas",

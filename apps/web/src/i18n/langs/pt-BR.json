@@ -635,11 +635,11 @@
       "description": "Quanta jurisprudência o acervo contém, por país e por tribunal, e quão atualizada está cada fonte.",
       "exceedsReportedTotal": "Contém mais do que o último total informado pelo órgão em {date}",
       "generatedAt": "Números de {date}",
-      "healthCurrent": "Em dia",
+      "healthCurrent": "Atualizado",
       "healthDelayed": "Atrasada",
-      "healthPaused": "Pausada",
+      "healthPaused": "Desativado",
       "healthStalled": "Sem avanço",
-      "healthUnknown": "Desconhecida",
+      "healthUnknown": "Nunca executado",
       "inPreparation": "Em preparação",
       "lastSync": "Última sincronização",
       "newLast7Days": "Novas em 7 dias",
@@ -3387,7 +3387,6 @@
     }
   },
   "lawHome": {
-    "databaseUpToDate": "Atualizado",
     "enteringIntoForce": "Entrada em vigor em breve",
     "inForceFrom": "Em vigor a partir de {date}",
     "noRecentSearches": "Ainda não há pesquisas",

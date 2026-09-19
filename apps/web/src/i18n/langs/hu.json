@@ -637,9 +637,9 @@
       "generatedAt": "Adatok: {date}",
       "healthCurrent": "Naprakész",
       "healthDelayed": "Késik",
-      "healthPaused": "Szünetel",
+      "healthPaused": "Kikapcsolva",
       "healthStalled": "Elakadt",
-      "healthUnknown": "Ismeretlen",
+      "healthUnknown": "Még nem futott",
       "inPreparation": "Előkészületben",
       "lastSync": "Utolsó szinkronizálás",
       "newLast7Days": "Új 7 nap alatt",
@@ -3387,7 +3387,6 @@
     }
   },
   "lawHome": {
-    "databaseUpToDate": "Naprakész",
     "enteringIntoForce": "Hamarosan hatályba lép",
     "inForceFrom": "Hatálybalépés: {date}",
     "noRecentSearches": "Még nincsenek keresések",

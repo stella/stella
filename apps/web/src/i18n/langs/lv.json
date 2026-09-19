@@ -637,9 +637,9 @@
       "generatedAt": "Dati uz {date}",
       "healthCurrent": "Aktuāls",
       "healthDelayed": "Aizkavējas",
-      "healthPaused": "Apturēts",
+      "healthPaused": "Izslēgts",
       "healthStalled": "Apstājies",
-      "healthUnknown": "Nezināms",
+      "healthUnknown": "Nekad nav palaists",
       "inPreparation": "Sagatavošanā",
       "lastSync": "Pēdējā sinhronizācija",
       "newLast7Days": "Jaunie 7 dienās",
@@ -3387,7 +3387,6 @@
     }
   },
   "lawHome": {
-    "databaseUpToDate": "Aktuāls",
     "enteringIntoForce": "Drīzumā stāsies spēkā",
     "inForceFrom": "Stājas spēkā {date}",
     "noRecentSearches": "Meklējumu vēl nav",

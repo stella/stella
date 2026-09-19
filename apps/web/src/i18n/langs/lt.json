@@ -635,11 +635,11 @@
       "description": "Kiek teismų praktikos yra korpuse pagal valstybes ir teismus ir kiek atnaujintas kiekvienas šaltinis.",
       "exceedsReportedTotal": "Turi daugiau, nei paskutinis skelbėjo nurodytas skaičius {date}",
       "generatedAt": "Duomenys {date}",
-      "healthCurrent": "Aktualus",
+      "healthCurrent": "Atnaujinta",
       "healthDelayed": "Vėluoja",
-      "healthPaused": "Pristabdytas",
+      "healthPaused": "Išjungta",
       "healthStalled": "Sustojęs",
-      "healthUnknown": "Nežinomas",
+      "healthUnknown": "Niekada nevykdyta",
       "inPreparation": "Rengiama",
       "lastSync": "Paskutinis sinchronizavimas",
       "newLast7Days": "Nauji per 7 dienas",
@@ -3387,7 +3387,6 @@
     }
   },
   "lawHome": {
-    "databaseUpToDate": "Atnaujinta",
     "enteringIntoForce": "Netrukus įsigalios",
     "inForceFrom": "Įsigalioja {date}",
     "noRecentSearches": "Paieškų dar nėra",

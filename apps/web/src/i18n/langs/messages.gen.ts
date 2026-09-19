@@ -638,11 +638,11 @@ type Messages = {
       "description": "How much case law the corpus holds, per country and per court, and how fresh each source is.";
       "exceedsReportedTotal": "Holds more than the publisher's last stated total of {date}";
       "generatedAt": "Figures from {date}";
-      "healthCurrent": "Current";
+      "healthCurrent": "Up to date";
       "healthDelayed": "Delayed";
-      "healthPaused": "Paused";
+      "healthPaused": "Switched off";
       "healthStalled": "Stalled";
-      "healthUnknown": "Unknown";
+      "healthUnknown": "Never run";
       "inPreparation": "In preparation";
       "lastSync": "Last sync";
       "newLast7Days": "New in 7 days";
@@ -3390,7 +3390,6 @@ type Messages = {
     };
   };
   "lawHome": {
-    "databaseUpToDate": "Up to date";
     "enteringIntoForce": "Entering into force";
     "inForceFrom": "In force from {date}";
     "noRecentSearches": "No searches yet";

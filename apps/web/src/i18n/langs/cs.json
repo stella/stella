@@ -637,9 +637,9 @@
       "generatedAt": "Údaje k {date}",
       "healthCurrent": "Aktuální",
       "healthDelayed": "Se zpožděním",
-      "healthPaused": "Pozastavený",
+      "healthPaused": "Vypnuto",
       "healthStalled": "Bez postupu",
-      "healthUnknown": "Neznámý",
+      "healthUnknown": "Zatím nespuštěno",
       "inPreparation": "Připravuje se",
       "lastSync": "Poslední synchronizace",
       "newLast7Days": "Nové za 7 dní",
@@ -3387,7 +3387,6 @@
     }
   },
   "lawHome": {
-    "databaseUpToDate": "Aktuální",
     "enteringIntoForce": "Brzy nabude účinnosti",
     "inForceFrom": "Účinné od {date}",
     "noRecentSearches": "Zatím žádná hledání",

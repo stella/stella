@@ -83,7 +83,7 @@ export const LawDatabaseStatus = ({ country }: { country: string }) => {
           )}
         />
         {upToDate
-          ? t("lawHome.databaseUpToDate")
+          ? t("caseLaw.coverage.healthCurrent")
           : t("caseLaw.research.updated", {
               date: formatRelativeTime(updatedAt),
             })}

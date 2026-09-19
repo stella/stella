@@ -637,9 +637,9 @@
       "generatedAt": "Zahlen vom {date}",
       "healthCurrent": "Aktuell",
       "healthDelayed": "Verzögert",
-      "healthPaused": "Pausiert",
+      "healthPaused": "Deaktiviert",
       "healthStalled": "Stockt",
-      "healthUnknown": "Unbekannt",
+      "healthUnknown": "Noch nie gelaufen",
       "inPreparation": "In Vorbereitung",
       "lastSync": "Letzte Synchronisierung",
       "newLast7Days": "Neu in 7 Tagen",
@@ -3387,7 +3387,6 @@
     }
   },
   "lawHome": {
-    "databaseUpToDate": "Aktuell",
     "enteringIntoForce": "Tritt demnächst in Kraft",
     "inForceFrom": "In Kraft ab {date}",
     "noRecentSearches": "Noch keine Suchen",

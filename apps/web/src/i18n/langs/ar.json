@@ -635,11 +635,11 @@
       "description": "حجم الاجتهاد القضائي في قاعدة البيانات حسب الدولة والمحكمة، ومدى حداثة كل مصدر.",
       "exceedsReportedTotal": "يحتوي على أكثر من آخر إجمالي أعلنته الجهة الناشرة في {date}",
       "generatedAt": "أرقام بتاريخ {date}",
-      "healthCurrent": "محدَّث",
+      "healthCurrent": "محدّثة",
       "healthDelayed": "متأخّر",
-      "healthPaused": "موقوف مؤقتًا",
+      "healthPaused": "مُعطَّل",
       "healthStalled": "متعثّر",
-      "healthUnknown": "غير معروف",
+      "healthUnknown": "لم يُشغَّل قط",
       "inPreparation": "قيد الإعداد",
       "lastSync": "آخر مزامنة",
       "newLast7Days": "الجديد خلال 7 أيام",
@@ -3387,7 +3387,6 @@
     }
   },
   "lawHome": {
-    "databaseUpToDate": "محدّثة",
     "enteringIntoForce": "يدخل حيز النفاذ قريبًا",
     "inForceFrom": "نافذ اعتبارًا من {date}",
     "noRecentSearches": "لا توجد عمليات بحث بعد",

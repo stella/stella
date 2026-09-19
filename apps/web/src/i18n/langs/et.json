@@ -637,9 +637,9 @@
       "generatedAt": "Andmed seisuga {date}",
       "healthCurrent": "Ajakohane",
       "healthDelayed": "Hilineb",
-      "healthPaused": "Peatatud",
+      "healthPaused": "Välja lülitatud",
       "healthStalled": "Takerdunud",
-      "healthUnknown": "Teadmata",
+      "healthUnknown": "Pole kunagi käivitunud",
       "inPreparation": "Ettevalmistamisel",
       "lastSync": "Viimane sünkroonimine",
       "newLast7Days": "Uued 7 päevaga",
@@ -3387,7 +3387,6 @@
     }
   },
   "lawHome": {
-    "databaseUpToDate": "Ajakohane",
     "enteringIntoForce": "Peagi jõustuv",
     "inForceFrom": "Jõustub {date}",
     "noRecentSearches": "Otsinguid veel pole",

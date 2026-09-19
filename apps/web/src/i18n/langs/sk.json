@@ -635,11 +635,11 @@
       "description": "Koľko judikatúry korpus obsahuje podľa krajín a súdov a aký aktuálny je každý zdroj.",
       "exceedsReportedTotal": "Obsahuje viac, než vydavateľ naposledy uviedol k {date}",
       "generatedAt": "Údaje k {date}",
-      "healthCurrent": "Aktuálny",
+      "healthCurrent": "Aktuálne",
       "healthDelayed": "S oneskorením",
-      "healthPaused": "Pozastavený",
+      "healthPaused": "Vypnuté",
       "healthStalled": "Bez postupu",
-      "healthUnknown": "Neznámy",
+      "healthUnknown": "Zatiaľ nespustené",
       "inPreparation": "Pripravuje sa",
       "lastSync": "Posledná synchronizácia",
       "newLast7Days": "Nové za 7 dní",
@@ -3387,7 +3387,6 @@
     }
   },
   "lawHome": {
-    "databaseUpToDate": "Aktuálne",
     "enteringIntoForce": "Čoskoro nadobudne účinnosť",
     "inForceFrom": "Účinné od {date}",
     "noRecentSearches": "Zatiaľ žiadne vyhľadávania",
