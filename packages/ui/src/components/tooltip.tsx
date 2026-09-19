@@ -5,7 +5,6 @@ import { Tooltip as TooltipPrimitive } from "@base-ui/react/tooltip";
 import {
   OVERLAY_COLLISION_PADDING,
   OVERLAY_LAYER_CLASS_NAMES,
-  type OverlayLayer,
 } from "../lib/overlay-layer";
 import {
   CONTENT_SIZED_POSITIONER_CLASS_NAME,
@@ -28,14 +27,12 @@ const TooltipPopup = ({
   align = "center",
   sideOffset = 4,
   side = "top",
-  layer = "default",
   children,
   ...props
 }: TooltipPrimitive.Popup.Props & {
   align?: TooltipPrimitive.Positioner.Props["align"];
   side?: TooltipPrimitive.Positioner.Props["side"];
   sideOffset?: TooltipPrimitive.Positioner.Props["sideOffset"];
-  layer?: OverlayLayer;
 }) => (
   <TooltipPrimitive.Portal>
     <TooltipPrimitive.Positioner
@@ -43,7 +40,7 @@ const TooltipPopup = ({
       className={cn(
         CONTENT_SIZED_POSITIONER_CLASS_NAME,
         "transition-[top,left,right,bottom,transform] data-instant:transition-none",
-        OVERLAY_LAYER_CLASS_NAMES[layer],
+        OVERLAY_LAYER_CLASS_NAMES.popup,
       )}
       collisionPadding={OVERLAY_COLLISION_PADDING}
       data-slot="tooltip-positioner"

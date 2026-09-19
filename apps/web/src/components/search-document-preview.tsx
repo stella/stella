@@ -129,7 +129,6 @@ export const SearchDocumentPreview = ({
             onReset={() => handleResetZoom(target.fieldId)}
             onZoom={(direction) => handleZoom(target.fieldId, direction)}
             scaleOffset={scaleOffset}
-            tooltipLayer="search-child"
           />
         </ViewerOverlayBar>
       )}

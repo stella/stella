@@ -29,7 +29,6 @@ import {
   MenuRadioItem,
   MenuTrigger,
 } from "@stll/ui/menu";
-import type { OverlayLayer } from "@stll/ui/overlay-layer";
 import { Separator } from "@stll/ui/separator";
 import "@stll/folio-react/editor.css";
 
@@ -364,7 +363,6 @@ type PeekPdfControlsProps = {
   onZoom: (direction: ZoomDirection) => void;
   pdfColorControl?: PeekPdfColorControl | undefined;
   scaleOffset: number;
-  tooltipLayer?: OverlayLayer | undefined;
 };
 
 const PDFColorModeControl = ({
@@ -413,7 +411,6 @@ export const PeekPdfControls = ({
   onZoom,
   pdfColorControl,
   scaleOffset,
-  tooltipLayer,
 }: PeekPdfControlsProps) => (
   <>
     {/* The viewer's offset is measured from the fit scale, which is the
@@ -424,7 +421,6 @@ export const PeekPdfControls = ({
       level={1 + scaleOffset}
       onReset={onReset}
       onZoom={onZoom}
-      tooltipLayer={tooltipLayer}
     />
     {pdfColorControl && (
       <>

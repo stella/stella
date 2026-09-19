@@ -7,7 +7,6 @@ import {
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
-import type { OverlayLayer } from "@stll/ui/overlay-layer";
 
 export type ZoomDirection = "in" | "out";
 
@@ -24,8 +23,6 @@ type ZoomControlsProps = {
   level: number;
   onReset: () => void;
   onZoom: (direction: ZoomDirection) => void;
-  /** Needed when the buttons sit in floating chrome that paints over popups. */
-  tooltipLayer?: OverlayLayer | undefined;
 };
 
 const DEFAULT_LEVEL = 1;
@@ -42,7 +39,6 @@ export const ZoomControls = ({
   level,
   onReset,
   onZoom,
-  tooltipLayer,
 }: ZoomControlsProps) => {
   const t = useTranslations();
 
@@ -53,7 +49,6 @@ export const ZoomControls = ({
         onClick={() => onZoom("out")}
         size="icon-xs"
         tooltip={t("common.zoomOut")}
-        tooltipLayer={tooltipLayer}
         variant="ghost"
       >
         <MinusIcon className="size-3" />
@@ -63,7 +58,6 @@ export const ZoomControls = ({
         onClick={() => onZoom("in")}
         size="icon-xs"
         tooltip={t("common.zoomIn")}
-        tooltipLayer={tooltipLayer}
         variant="ghost"
       >
         <PlusIcon className="size-3" />
@@ -73,7 +67,6 @@ export const ZoomControls = ({
         onClick={onReset}
         size="icon-xs"
         tooltip={t("common.resetZoom")}
-        tooltipLayer={tooltipLayer}
         variant="ghost"
       >
         {level > DEFAULT_LEVEL ? (
