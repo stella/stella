@@ -465,6 +465,44 @@ describe("walking decision-date months oldest first", () => {
     expect(Result.isError(result)).toBe(true);
   });
 
+  // The refusal arrives at HTTP 200 inside both envelopes, for whichever task
+  // spent the allowance. Read as a payload, a refused detail is a detail with
+  // no fields and a refused document is a decision with no file: the row would
+  // be stored empty and the cursor would move past it.
+  const RATE_LIMIT = { error: "Brak tokenu", debug: { json_status: 429 } };
+
+  test.each(["searchOrzeczenia", "detailsOrzeczenie", "OrzeczeniePlikPdf"])(
+    "a rate limit answering %s fails the page with the limit's status",
+    async (refusedTask) => {
+      globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
+        const url = new URL(
+          input instanceof Request ? input.url : String(input),
+        );
+        const task = url.searchParams.get("task");
+        if (task === refusedTask) {
+          return await Promise.resolve(jsonResponse(envelope(RATE_LIMIT)));
+        }
+        const rows = [
+          {
+            id: "x",
+            sygnatura_sprawy: "I CSK 1/94",
+            forma_orzeczenia: "wyrok SN",
+          },
+        ];
+        return await Promise.resolve(
+          jsonResponse(envelope(task === "searchOrzeczenia" ? rows : [])),
+        );
+      });
+
+      const result = await plSnAdapter.fetchPage("1994-03:0", {});
+
+      expect(Result.isError(result)).toBe(true);
+      if (Result.isError(result)) {
+        expect(result.error.httpStatus).toBe(429);
+      }
+    },
+  );
+
   test("a listed row whose document the proxy withholds is still stored", async () => {
     sourceHolding("1994-03", [
       { id: "x", sygnatura_sprawy: "I CSK 1/94", forma_orzeczenia: "wyrok SN" },

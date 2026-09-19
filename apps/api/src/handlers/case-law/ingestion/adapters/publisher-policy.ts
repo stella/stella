@@ -78,9 +78,10 @@ export const PUBLISHER_GATES = {
   /**
    * sn.pl. A dozen requests in quick succession earned the upstream's 429
    * dressed as `{"error":"Brak tokenu"}`; the same pacing then answered
-   * normally.
+   * normally. A sustained request a second was still refused every few
+   * minutes, each refusal clearing within one.
    */
-  "sn-pl": { publisher: "Sąd Najwyższy", intervalMs: 1000 },
+  "sn-pl": { publisher: "Sąd Najwyższy", intervalMs: 1500 },
   /** rozhodnuti.nsoud.cz. */
   "nsoud-cz": { publisher: "Nejvyšší soud", intervalMs: POLITE_INTERVAL_MS },
   /** vyhledavac.nssoud.cz. */
