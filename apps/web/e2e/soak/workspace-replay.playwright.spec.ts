@@ -304,7 +304,9 @@ test("deterministically explores the synthetic matter workspace", async ({
       name: "workspace-replay.json",
       testInfo,
     });
-    console.log(`[workspace-replay] replay with ${replayCommand(artifactPath)}`);
+    console.log(
+      `[workspace-replay] replay with ${replayCommand(artifactPath)}`,
+    );
   } catch (error: unknown) {
     if (currentEvent !== null) {
       trail.add({
