@@ -177,6 +177,7 @@ export const WorkspaceViewSwitcher = <View extends WorkspaceViewSwitcherItem>({
         "flex min-w-0 flex-1 items-center gap-1 px-2",
         TOOLBAR_ROW_HEIGHT,
       )}
+      data-slot="workspace-view-switcher"
       dir={direction}
     >
       <div className="h-full min-w-0 flex-1" ref={setStripContainer}>

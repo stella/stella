@@ -34,6 +34,7 @@ export const SegmentedIconToggle = <T extends string>({
       "border-border/70 bg-muted/30 inline-flex shrink-0 items-center overflow-hidden rounded-md border p-0.5",
       size === "touch" ? "h-7 [@media(any-pointer:coarse)]:h-12" : "h-7",
     )}
+    data-slot="segmented-icon-toggle"
   >
     {options.map((option) => {
       const Icon = option.icon;
@@ -52,6 +53,7 @@ export const SegmentedIconToggle = <T extends string>({
                   isActive &&
                     "bg-muted text-foreground ring-border/80 hover:bg-muted hover:text-foreground shadow-xs ring-1",
                 )}
+                data-control-value={option.value}
                 onClick={() => onChange(option.value)}
                 size="icon-xs"
                 type="button"

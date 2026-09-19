@@ -162,6 +162,8 @@ export const InspectorFacetBar = <F extends string>({
         "bg-background/85 supports-[backdrop-filter]:bg-background/65 sticky top-0 z-10 flex shrink-0 items-center gap-0.5 overflow-hidden border-b px-1.5 backdrop-blur",
         TOOLBAR_ROW_HEIGHT,
       )}
+      data-active-facet={facet}
+      data-slot="inspector-facet-bar"
       ref={containerRef}
     >
       {visibleFacets.map((value) => (
@@ -172,6 +174,7 @@ export const InspectorFacetBar = <F extends string>({
           key={value}
           label={labels[value]}
           onSelect={() => onChange(value)}
+          value={value}
         />
       ))}
 
@@ -184,6 +187,7 @@ export const InspectorFacetBar = <F extends string>({
             // crammed beside it. The outline variant reads as a real
             // button, not a bare chevron.
             className="ms-auto"
+            data-slot="inspector-facet-overflow-trigger"
             render={<Button size="icon-sm" type="button" variant="outline" />}
           >
             <ChevronDownIcon />
@@ -191,6 +195,7 @@ export const InspectorFacetBar = <F extends string>({
           <MenuPopup align="end" side="bottom">
             {overflowFacets.map((value) => (
               <MenuItem
+                data-facet-overflow-value={value}
                 disabled={disabledFacets?.has(value) ?? false}
                 key={value}
                 onClick={() => onChange(value)}
@@ -210,7 +215,14 @@ export const InspectorFacetBar = <F extends string>({
         ref={measureRef}
       >
         {facets.map((value) => (
-          <span className={cn(CHIP_CLASS, INACTIVE_CHIP_CLASS)} key={value}>
+          <span
+            className={cn(CHIP_CLASS, INACTIVE_CHIP_CLASS)}
+            data-facet-option={value}
+            data-facet-option-disabled={
+              disabledFacets?.has(value) ? "" : undefined
+            }
+            key={value}
+          >
             {labels[value]}
           </span>
         ))}
@@ -248,6 +260,7 @@ const INACTIVE_CHIP_CLASS =
 
 type FacetChipProps = {
   label: string;
+  value: string;
   isActive: boolean;
   disabled: boolean;
   activeBadge: string | undefined;
@@ -256,6 +269,7 @@ type FacetChipProps = {
 
 const FacetChip = ({
   label,
+  value,
   isActive,
   disabled,
   activeBadge,
@@ -271,6 +285,7 @@ const FacetChip = ({
             disabled && "cursor-not-allowed opacity-40 hover:bg-transparent",
           )}
           data-facet-chip-active={isActive ? "" : undefined}
+          data-facet-value={value}
           disabled={disabled}
           onClick={onSelect}
           type="button"

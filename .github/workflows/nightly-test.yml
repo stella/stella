@@ -9,6 +9,113 @@ on:
 permissions: {}
 
 jobs:
+  workspace-replay:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: "package.json"
+
+      - name: Install dependencies
+        run: bash scripts/retry.sh bun ci --ignore-scripts
+        env:
+          NPM_TOKEN: ""
+
+      - name: Prepare environment
+        run: |
+          cp apps/api/.env.example apps/api/.env
+          cp apps/web/.env.example apps/web/.env
+
+      - name: Build production web
+        env:
+          VITE_FEATURE_INBOX: "true"
+          VITE_FEATURE_TIME_BILLING: "true"
+          VITE_PUBLIC_LAW_ENABLED: "true"
+          VITE_PUBLIC_TOOLS_ENABLED: "true"
+          VITE_WORKFLOWS_ENABLED: "true"
+        run: bun --filter @stll/web build
+
+      - name: Start docker stack and API server
+        id: e2e-stack
+        uses: ./.github/actions/setup-e2e-stack
+        with:
+          dockerhub-username: ${{ secrets.DOCKERHUB_USERNAME }}
+          dockerhub-token: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Install Playwright Chromium
+        if: steps.e2e-stack.outputs.status == 'ready'
+        uses: ./.github/actions/setup-playwright
+
+      - name: Start production web server
+        if: steps.e2e-stack.outputs.status == 'ready'
+        run: |
+          cd apps/web
+          NODE_ENV=production PORT=3000 nohup bun dist/runtime.js > /tmp/web-workspace-replay.log 2>&1 &
+          echo $! > /tmp/web-workspace-replay.pid
+
+      - name: Wait for production web server
+        if: steps.e2e-stack.outputs.status == 'ready'
+        run: |
+          for i in {1..60}; do
+            if curl --connect-timeout 2 --max-time 5 -sf http://localhost:3000/health > /dev/null 2>&1; then
+              echo "Production web up after ${i}s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::Production web never came up"
+          tail -200 /tmp/web-workspace-replay.log || true
+          exit 1
+
+      - name: Explore workspace interactions
+        if: steps.e2e-stack.outputs.status == 'ready'
+        env:
+          E2E_SOAK_SEED: ${{ github.run_id }}
+          E2E_SOAK_STEPS: "200"
+        run: bun --filter @stll/web test:e2e:soak
+
+      - name: Add replay instructions
+        if: failure() && steps.e2e-stack.outputs.status == 'ready'
+        run: |
+          {
+            echo "## Workspace replay failure"
+            echo
+            echo "Download the workspace replay artifact, then run:"
+            echo
+            echo '`E2E_SOAK_REPLAY=/absolute/path/to/workspace-replay.json bun --filter @stll/web test:e2e:soak`'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload replay diagnostics
+        if: failure() && steps.e2e-stack.outputs.status == 'ready'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: nightly-workspace-replay-${{ github.run_id }}
+          path: apps/web/e2e/test-results/workspace-soak/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload server logs
+        if: failure() && steps.e2e-stack.outputs.status == 'ready'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: nightly-workspace-replay-server-logs-${{ github.run_id }}
+          path: |
+            /tmp/api.log
+            /tmp/web-workspace-replay.log
+          if-no-files-found: warn
+          retention-days: 14
+
   full-test:
     runs-on: ubuntu-latest
     timeout-minutes: 45
