@@ -19,8 +19,19 @@ import type {
 
 import { isRtf, readRtf } from "@/api/lib/legal-search/parsers/rtf-reader";
 
+/**
+ * The bytes a document holds, one per character: RTF is a byte format and the
+ * reader is given bytes. A character above a byte cannot be one, and
+ * `Uint8Array.from` would keep its low eight bits and read as a case that
+ * passes, so it is refused rather than truncated.
+ */
 const bytesOf = (rtf: string): Uint8Array =>
-  Uint8Array.from(rtf, (character) => character.codePointAt(0) ?? 0);
+  Uint8Array.from(rtf, (character) => {
+    const point = character.codePointAt(0) ?? 0;
+    return point <= 0xff
+      ? point
+      : panic(`RTF is written a byte at a time: U+${point.toString(16)}`);
+  });
 
 const runsOf = (paragraph: Paragraph): Run[] =>
   paragraph.content.filter((item): item is Run => item.type === "run");
@@ -90,6 +101,9 @@ describe("code pages", () => {
   });
 
   test("`\\uN` states a code point the code page cannot", () => {
+    // The control word is six ASCII characters, written as such: the character
+    // they name is not a byte, so an RTF holding it directly is not a document
+    // this reader is ever handed.
     expect(
       paragraphsOf(String.raw`{\rtf1\ansi\ansicpg1250\uc1 a舑 ?b\par }`),
     ).toEqual(["a–b"]);
