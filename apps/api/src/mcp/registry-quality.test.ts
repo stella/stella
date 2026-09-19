@@ -296,10 +296,13 @@ const TOOLS_LIST_PAYLOAD_CHAR_CEILING: Record<SurfaceMode, number> = {
 // variant, shared by preview_template_conditions and fill_template, plus the
 // `{% if %}` block list's `kind` variant. A decided `false` and a condition
 // nothing could settle exclude the same paragraph, so they cannot share one
-// shape.
+// shape. Adding `decided_by` provenance for supplied values measures 48_033
+// default and 32_831 anonymized after merging the structurally identical user
+// and generative branches; without it, an agent cannot tell an override from a
+// model answer.
 const OUTPUT_SCHEMA_TOTAL_CHAR_CEILING: Record<SurfaceMode, number> = {
-  default: 48_000,
-  anonymized: 32_800,
+  default: 48_050,
+  anonymized: 32_850,
   law: 10_050,
 };
 
