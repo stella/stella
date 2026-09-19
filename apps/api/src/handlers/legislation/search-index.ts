@@ -26,8 +26,9 @@ import { readCorpusText } from "@/api/lib/legal-search/corpus-reads";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import { resolveFtsConfig } from "@/api/lib/legal-search/fts-config";
 import { redistributableLegislationSource } from "@/api/lib/legal-search/legislation-redistribution";
+import { boundTsvectorText } from "@/api/lib/legal-search/tsvector-bounds";
 import { logger } from "@/api/lib/observability/logger";
-import { pgErrorFields } from "@/api/lib/pg-error";
+import { isPgError, PG_ERROR, pgErrorFields } from "@/api/lib/pg-error";
 
 /**
  * Postgres FTS projection for legislation, mirroring
@@ -129,25 +130,27 @@ export const indexLegislationDocument = async (
 
   const fts = await resolveConfig(document.language);
 
-  const textExpr = fts.useUnaccent
-    ? sql`unaccent(arabic_normalize(coalesce(${document.title}, '') || ' ' || coalesce(${searchableText}, '')))`
-    : sql`arabic_normalize(coalesce(${document.title}, '') || ' ' || coalesce(${searchableText}, ''))`;
-  const tsvExpr = sql`to_tsvector(${fts.regconfig}, ${textExpr})`;
   const retryAfterExpr =
     corpusReadFailure === undefined
       ? sql`NULL`
       : sql`now() + (${CORPUS_READ_RETRY_DELAY_MS} * interval '1 millisecond')`;
 
-  await scopedDb(async (tx) => {
-    await setCorpusBackfillStatementTimeout(tx);
-    await tx.execute(sql`
+  const writeProjection = async (indexedText: string): Promise<void> => {
+    const textExpr = fts.useUnaccent
+      ? sql`unaccent(arabic_normalize(coalesce(${document.title}, '') || ' ' || coalesce(${indexedText}, '')))`
+      : sql`arabic_normalize(coalesce(${document.title}, '') || ' ' || coalesce(${indexedText}, ''))`;
+    const tsvExpr = sql`to_tsvector(${fts.regconfig}, ${textExpr})`;
+
+    await scopedDb(async (tx) => {
+      await setCorpusBackfillStatementTimeout(tx);
+      await tx.execute(sql`
     INSERT INTO legislation_search_documents (
       document_id, title, searchable_text,
       language, regconfig, updated_at, retry_after, tsv
     ) VALUES (
       ${document.id},
       ${document.title},
-      ${searchableText},
+      ${indexedText},
       ${document.language},
       ${fts.regconfig},
       now(),
@@ -163,7 +166,33 @@ export const indexLegislationDocument = async (
       retry_after = EXCLUDED.retry_after,
       tsv = EXCLUDED.tsv
   `);
-  });
+    });
+  };
+
+  const projection = await Result.tryPromise(
+    async () => await writeProjection(searchableText),
+  );
+  if (projection.isErr()) {
+    const cause =
+      projection.error instanceof UnhandledException
+        ? projection.error.cause
+        : projection.error;
+    if (!isPgError(cause, PG_ERROR.PROGRAM_LIMIT_EXCEEDED)) {
+      throw cause;
+    }
+    // A document with no projection row stays in the backfill's missing scan,
+    // which reselects it on every pass, so reaching the index on a bounded
+    // prefix is what converges. The row stores the text its vector was built
+    // from, so both are written from the same bounded value.
+    const boundedText = boundTsvectorText(searchableText);
+    logger.warn("legislation.search_index.tsvector_bounded", {
+      documentId: document.id,
+      "legislation.searchable_text_bytes": Buffer.byteLength(searchableText),
+      "legislation.indexed_text_bytes": Buffer.byteLength(boundedText),
+      ...pgErrorFields(cause),
+    });
+    await writeProjection(boundedText);
+  }
 
   if (corpusReadFailure !== undefined) {
     throw new LegislationCorpusReadError({

@@ -430,3 +430,54 @@ test("a failed projection names the error class in its log fields", async () => 
     errorSpy.mockRestore();
   }
 });
+
+test("a document whose text outgrows the tsvector ceiling is still indexed", async () => {
+  const oversizedId = brandPersistedLegislationDocumentId(
+    "0198cb55-8e8b-7b95-83bf-c9e219c70005",
+  );
+  // Postgres stores a lexeme once, so ordinary prose projects into a fraction
+  // of its own size however long the statute is. Tokens that are all distinct
+  // are what reaches the 1 MiB ceiling: an identifier table, a schedule of
+  // references, a numbered list of provisions.
+  const distinctTokens: string[] = [];
+  for (let index = 0; index < 90_000; index += 1) {
+    distinctTokens.push(`ustanoveni${index.toString(36)}`);
+  }
+  const fulltext = distinctTokens.join(" ");
+
+  await db.insert(legislationDocuments).values(
+    seedDocument({
+      id: oversizedId,
+      fulltext,
+      sections: null,
+      textS3Key: "legal-corpus/documents/oversized/text.zst",
+      // Sorts ahead of every other fixture in the backfill's missing scan.
+      createdAt: new Date("2020-01-01T00:00:00.000Z"),
+      updatedAt: new Date("2020-01-01T00:00:00.000Z"),
+    }),
+  );
+
+  expect(
+    await backfillLegislationSearchIndex(scopedDb, 1, {
+      readText: async () => "unused corpus sentinel",
+      resolveConfig: async () => ({ regconfig: "simple", useUnaccent: false }),
+    }),
+  ).toEqual({ found: 1, indexed: 1 });
+
+  const projection = (
+    await db
+      .select({
+        searchableText: legislationSearchDocuments.searchableText,
+        retryAfter: legislationSearchDocuments.retryAfter,
+        matches: sql<boolean>`${legislationSearchDocuments.tsv} @@ plainto_tsquery('simple', 'ustanoveni0')`,
+      })
+      .from(legislationSearchDocuments)
+      .where(eq(legislationSearchDocuments.documentId, oversizedId))
+  ).at(0);
+
+  // The row is what takes the document out of the missing scan, so writing a
+  // bounded projection is what stops the scan reselecting it on every pass.
+  expect(projection?.matches).toBe(true);
+  expect(projection?.retryAfter).toBeNull();
+  expect(projection?.searchableText.length).toBeLessThan(fulltext.length);
+}, 30_000);
