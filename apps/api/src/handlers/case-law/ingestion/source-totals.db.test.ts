@@ -19,6 +19,7 @@ import {
   SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS,
 } from "@/api/handlers/case-law/ingestion/source-totals";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 // The trio is nullable in the schema and only this module keeps it whole, so
 // what is asserted here is the writer's invariant rather than the columns:
@@ -398,20 +399,22 @@ test("a count that cannot finish leaves the previous figure standing", async () 
   // caller must see "unavailable" rather than an exception, and the stored
   // pair must be exactly what the successful cycle wrote.
   const failing: ScopedDb = async (callback) =>
-    await callback({
-      select: () => ({
-        from: () => ({
-          where: () => ({
-            limit: async () => [{ asOf: NOW }],
+    await callback(
+      // Only the two members below are reached before the throw, which is
+      // what the refresh has to survive; `asTestRaw` owns the cast.
+      asTestRaw<Transaction>({
+        select: () => ({
+          from: () => ({
+            where: () => ({
+              limit: async () => [{ asOf: NOW }],
+            }),
           }),
         }),
+        execute: async () => {
+          throw new Error("canceling statement due to statement timeout");
+        },
       }),
-      execute: async () => {
-        throw new Error("canceling statement due to statement timeout");
-      },
-      // SAFETY: only the two methods above are reached before the throw.
-      // eslint-disable-next-line typescript/no-unsafe-type-assertion -- narrow test double
-    } as unknown as Transaction);
+    );
 
   expect(
     await refreshSourceStoredTotal({ scopedDb: failing, sourceId, now: past }),
