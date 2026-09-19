@@ -148,28 +148,12 @@ const PUBLIC_DECISION_READ_GATE = {
   SUBJECT: "gated-by-the-subject-factory",
   /** Names the table without reading a decision row out of it. */
   NO_ROW_READ: "reads-no-decision-row",
-  /**
-   * Counts rows, listing-only ones included, and returns only the count.
-   *
-   * The publication gate keeps a listed identity whose document never arrived
-   * out of every surface that would show it. A completeness figure is the one
-   * public statement that has to include it: the denominator is what the
-   * publisher says it holds, and a publisher counts every document it lists,
-   * so a numerator that dropped those rows would report a corpus as short of
-   * the publisher by exactly the rows the publisher would not serve. What
-   * leaves the process is an integer, never an identity.
-   *
-   * An entry needs a written reason, as `NO_ROW_READ` does, and the census
-   * below checks that both kinds carry one.
-   */
-  COUNTS_STORED: "counts-stored-rows-only",
 } as const;
 
 type PublicDecisionReadEntry =
   | { gate: typeof PUBLIC_DECISION_READ_GATE.PREDICATE }
   | { gate: typeof PUBLIC_DECISION_READ_GATE.SUBJECT }
-  | { gate: typeof PUBLIC_DECISION_READ_GATE.NO_ROW_READ; reason: string }
-  | { gate: typeof PUBLIC_DECISION_READ_GATE.COUNTS_STORED; reason: string };
+  | { gate: typeof PUBLIC_DECISION_READ_GATE.NO_ROW_READ; reason: string };
 
 /** The spellings of the one predicate, plus the marker reader the projection uses. */
 const PUBLIC_DECISION_PREDICATE_TOKENS = [
@@ -751,36 +735,15 @@ describe("public case-law route boundary", () => {
     expect(unbranded).toEqual([]);
 
     // An exemption with no reason is the escape hatch this census exists to
-    // close, so the reasons are checked rather than trusted. Both exempting
-    // gates are covered: a new one added without a reason fails here.
+    // close, so the reasons are checked rather than trusted.
     const unexplained = Object.entries(PUBLIC_DECISION_READ_GATES)
       .filter(
         ([, entry]) =>
-          (entry.gate === PUBLIC_DECISION_READ_GATE.NO_ROW_READ ||
-            entry.gate === PUBLIC_DECISION_READ_GATE.COUNTS_STORED) &&
+          entry.gate === PUBLIC_DECISION_READ_GATE.NO_ROW_READ &&
           entry.reason.trim().length === 0,
       )
       .map(([path]) => path);
     expect(unexplained).toEqual([]);
-
-    // The count-only gate is the narrowest of the four and must stay that
-    // way: a module under it may aggregate, never select a decision's
-    // columns. `count(*)` is the whole of what it is allowed to take.
-    // The count-only gate stays in the vocabulary for a read that genuinely
-    // needs it, and stays narrow: a module under it may aggregate, never
-    // select a decision's columns. It has no member today, because the
-    // completeness numerator moved to the ingestion connection.
-    for (const [path, entry] of Object.entries(PUBLIC_DECISION_READ_GATES)) {
-      if (entry.gate !== PUBLIC_DECISION_READ_GATE.COUNTS_STORED) {
-        continue;
-      }
-      const source =
-        readers.get(path) ??
-        expect.unreachable(`${path} is in the read surface`);
-      expect(source).not.toContain("d.fulltext");
-      expect(source).not.toContain("d.case_number");
-      expect(source).not.toContain("d.metadata");
-    }
   });
 
   test("the coverage request path never counts the corpus", async () => {
