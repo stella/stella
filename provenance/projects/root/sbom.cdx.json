@@ -355,6 +355,9 @@
             "location": "apps/web/src/lib/folio-ui-components.ts#1"
           },
           {
+            "location": "apps/web/src/lib/folio-ui-components.ts#2"
+          },
+          {
             "location": "apps/web/src/lib/knowledge/navigation.ts#1"
           },
           {
@@ -2333,6 +2336,12 @@
           },
           {
             "location": "packages/ui/src/components/dialog.tsx#3"
+          },
+          {
+            "location": "packages/ui/src/components/file-input.tsx#3"
+          },
+          {
+            "location": "packages/ui/src/components/file-input.tsx#4"
           },
           {
             "location": "packages/ui/src/components/fixtures/anchored-popup.fixture.tsx#1"
@@ -3726,6 +3735,9 @@
             "location": "apps/web/src/lib/folio-ui-components.ts#1"
           },
           {
+            "location": "apps/web/src/lib/folio-ui-components.ts#2"
+          },
+          {
             "location": "apps/web/src/lib/knowledge/navigation.ts#1"
           },
           {
@@ -5706,6 +5718,12 @@
             "location": "packages/ui/src/components/dialog.tsx#3"
           },
           {
+            "location": "packages/ui/src/components/file-input.tsx#3"
+          },
+          {
+            "location": "packages/ui/src/components/file-input.tsx#4"
+          },
+          {
             "location": "packages/ui/src/components/fixtures/anchored-popup.fixture.tsx#1"
           },
           {
@@ -6681,7 +6699,7 @@
       "version": "2.1.9"
     },
     {
-      "bom-ref": "pkg:npm/@formatjs/icu-messageformat-parser@3.5.17",
+      "bom-ref": "pkg:npm/@formatjs/icu-messageformat-parser@3.5.18",
       "evidence": {
         "identity": [
           {
@@ -6738,13 +6756,13 @@
           "value": "node_modules/@formatjs/icu-messageformat-parser/package.json"
         }
       ],
-      "purl": "pkg:npm/%40formatjs/icu-messageformat-parser@3.5.17",
+      "purl": "pkg:npm/%40formatjs/icu-messageformat-parser@3.5.18",
       "scope": "required",
       "tags": [
         "parse"
       ],
       "type": "library",
-      "version": "3.5.17"
+      "version": "3.5.18"
     },
     {
       "bom-ref": "pkg:npm/@google/genai@2.22.0",
@@ -8118,6 +8136,9 @@
             "location": "apps/web/src/lib/folio-ui-components.ts#1"
           },
           {
+            "location": "apps/web/src/lib/folio-ui-components.ts#2"
+          },
+          {
             "location": "apps/web/src/lib/knowledge/navigation.ts#1"
           },
           {
@@ -10096,6 +10117,12 @@
           },
           {
             "location": "packages/ui/src/components/dialog.tsx#3"
+          },
+          {
+            "location": "packages/ui/src/components/file-input.tsx#3"
+          },
+          {
+            "location": "packages/ui/src/components/file-input.tsx#4"
           },
           {
             "location": "packages/ui/src/components/fixtures/anchored-popup.fixture.tsx#1"
@@ -16768,6 +16795,9 @@
             "location": "apps/web/src/lib/folio-ui-components.ts#1"
           },
           {
+            "location": "apps/web/src/lib/folio-ui-components.ts#2"
+          },
+          {
             "location": "apps/web/src/lib/knowledge/navigation.ts#1"
           },
           {
@@ -18748,6 +18778,12 @@
             "location": "packages/ui/src/components/dialog.tsx#3"
           },
           {
+            "location": "packages/ui/src/components/file-input.tsx#3"
+          },
+          {
+            "location": "packages/ui/src/components/file-input.tsx#4"
+          },
+          {
             "location": "packages/ui/src/components/fixtures/anchored-popup.fixture.tsx#1"
           },
           {
@@ -19977,6 +20013,9 @@
             "location": "apps/api/src/handlers/case-law/ingestion/adapters/at-findok.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/case-law/ingestion/adapters/at-ris-fields.ts#26"
+          },
+          {
             "location": "apps/api/src/handlers/case-law/ingestion/adapters/at-ris-throttle.ts#1"
           },
           {
@@ -20022,7 +20061,22 @@
             "location": "apps/api/src/handlers/case-law/ingestion/citation-extractor.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/case-law/ingestion/cz-regional-chain-backfill.ts#28"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/ingestion/cz-regional-chain-backfill.ts#29"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/ingestion/cz-us-judges-backfill.ts#26"
+          },
+          {
             "location": "apps/api/src/handlers/case-law/ingestion/decision-identifier-backfill.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/ingestion/parsers/at-findok.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/ingestion/parsers/at-ris.ts#2"
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/pipeline.ts#1"
@@ -20041,6 +20095,21 @@
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/status.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/judges/decision-judges.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/judges/import-cz-us-roster.ts#18"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/judges/portrait.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/judges/portrait.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/judges/read-portrait.ts#1"
           },
           {
             "location": "apps/api/src/handlers/case-law/matter-links/batch/create.ts#1"
@@ -21453,6 +21522,9 @@
             "location": "apps/api/src/handlers/tasks/get.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/tasks/list-query.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/template-packs/get.ts#1"
           },
           {
@@ -21615,9 +21687,6 @@
             "location": "apps/api/src/handlers/time-entries/batch-update.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/time-entries/create.ts#1"
-          },
-          {
             "location": "apps/api/src/handlers/time-entries/delete.ts#1"
           },
           {
@@ -21642,7 +21711,19 @@
             "location": "apps/api/src/handlers/time-entries/split.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/time-entries/suggestions/decisions/create.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/time-entries/suggestions/list.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/time-entries/suggestions/load.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/time-entries/summary/get.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/time-entries/time-entry-insert.ts#1"
           },
           {
             "location": "apps/api/src/handlers/time-entries/timer-start.ts#1"
@@ -22899,6 +22980,15 @@
             "location": "apps/api/src/mcp/cli-support-band.ts#1"
           },
           {
+            "location": "apps/api/src/mcp/compat-corpus.ts#1"
+          },
+          {
+            "location": "apps/api/src/mcp/compat-ids.ts#1"
+          },
+          {
+            "location": "apps/api/src/mcp/compat-shared.ts#1"
+          },
+          {
             "location": "apps/api/src/mcp/compat-tools.ts#1"
           },
           {
@@ -22996,6 +23086,9 @@
           },
           {
             "location": "apps/api/src/scripts/better-auth-sign-in-replay.ts#17"
+          },
+          {
+            "location": "apps/api/src/scripts/case-law-source-backfill.ts#15"
           },
           {
             "location": "apps/api/src/scripts/case-law-source-total.ts#1"
@@ -23532,6 +23625,9 @@
             "location": "apps/web/src/lib/files/upload-entity-version.ts#1"
           },
           {
+            "location": "apps/web/src/lib/folio-ui-components.ts#5"
+          },
+          {
             "location": "apps/web/src/lib/inbox/inbox.logic.ts#1"
           },
           {
@@ -23824,6 +23920,9 @@
           },
           {
             "location": "packages/cli/src/auth/token-exchange.ts#4"
+          },
+          {
+            "location": "packages/cli/src/build-cli-tree.ts#24"
           },
           {
             "location": "packages/cli/src/capability-catalog-load.ts#7"
@@ -24405,6 +24504,9 @@
             "location": "apps/web/src/features/case-law/components/case-viewer/citation-passage-preview.tsx#2"
           },
           {
+            "location": "apps/web/src/features/case-law/components/case-viewer/decision-judges.tsx#1"
+          },
+          {
             "location": "apps/web/src/features/case-law/components/case-viewer/headnote-block.tsx#4"
           },
           {
@@ -24517,6 +24619,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/activity/activity-panel.tsx#8"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/personal-timesheet-day.tsx#7"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/time-entry-narrative-field.tsx#3"
@@ -24956,10 +25061,10 @@
             "location": "apps/api/src/handlers/case-law/ingestion/adapters/cz-us.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/at-findok.ts#2"
+            "location": "apps/api/src/handlers/case-law/ingestion/parsers/at-findok.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/at-ris.ts#2"
+            "location": "apps/api/src/handlers/case-law/ingestion/parsers/at-ris.ts#3"
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/parsers/cz-ns.ts#12"
@@ -24981,6 +25086,12 @@
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/parsers/shared-inlines.ts#14"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/ingestion/parsers/sk-us.ts#26"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/judges/import-cz-us-roster.ts#19"
           },
           {
             "location": "apps/api/src/handlers/chat/chat-prompt.ts#9"
@@ -25495,10 +25606,10 @@
         ],
         "occurrences": [
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/at-findok.ts#3"
+            "location": "apps/api/src/handlers/case-law/ingestion/parsers/at-findok.ts#4"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/at-ris.ts#3"
+            "location": "apps/api/src/handlers/case-law/ingestion/parsers/at-ris.ts#4"
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/parsers/cz-ns.ts#13"
@@ -25517,6 +25628,9 @@
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/parsers/shared-inlines.ts#15"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/judges/import-cz-us-roster.ts#20"
           },
           {
             "location": "apps/api/src/handlers/external-preview/preview.ts#3"
@@ -25948,6 +26062,12 @@
             "location": "apps/api/src/handlers/case-law/ingestion/coverage-ledger.ts#15"
           },
           {
+            "location": "apps/api/src/handlers/case-law/ingestion/cz-regional-chain-backfill.ts#30"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/ingestion/cz-us-judges-backfill.ts#27"
+          },
+          {
             "location": "apps/api/src/handlers/case-law/ingestion/decision-identifier-backfill.ts#2"
           },
           {
@@ -25967,6 +26087,18 @@
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/status.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/judges/decision-judges.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/judges/decision-judges.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/judges/import-cz-us-roster.ts#21"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/judges/portrait.ts#3"
           },
           {
             "location": "apps/api/src/handlers/case-law/matter-links/delete.ts#2"
@@ -26914,6 +27046,12 @@
             "location": "apps/api/src/handlers/tasks/get.ts#2"
           },
           {
+            "location": "apps/api/src/handlers/tasks/list-query.ts#13"
+          },
+          {
+            "location": "apps/api/src/handlers/tasks/list-query.ts#14"
+          },
+          {
             "location": "apps/api/src/handlers/template-packs/organization-context.ts#1"
           },
           {
@@ -26956,9 +27094,6 @@
             "location": "apps/api/src/handlers/time-entries/batch-update.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/time-entries/create.ts#2"
-          },
-          {
             "location": "apps/api/src/handlers/time-entries/delete.ts#2"
           },
           {
@@ -26980,7 +27115,16 @@
             "location": "apps/api/src/handlers/time-entries/split.ts#2"
           },
           {
+            "location": "apps/api/src/handlers/time-entries/suggestions/decisions/create.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/time-entries/suggestions/load.ts#2"
+          },
+          {
             "location": "apps/api/src/handlers/time-entries/summary/get.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/time-entries/time-entry-insert.ts#2"
           },
           {
             "location": "apps/api/src/handlers/time-entries/timer-start.ts#2"
@@ -28012,9 +28156,6 @@
             "location": "apps/api/src/mcp/gateway/skills.ts#2"
           },
           {
-            "location": "apps/api/src/mcp/matter-tools.ts#2"
-          },
-          {
             "location": "apps/api/src/mcp/stella-tools.ts#2"
           },
           {
@@ -28085,6 +28226,9 @@
           },
           {
             "location": "apps/api/src/scripts/case-law-reconciliation-items.ts#1"
+          },
+          {
+            "location": "apps/api/src/scripts/case-law-source-backfill.ts#16"
           },
           {
             "location": "apps/api/src/scripts/corpus-column-trim.ts#13"
@@ -28486,6 +28630,9 @@
           },
           {
             "location": "apps/api/src/handlers/case-law/decisions/summarize-citations.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/judges/read-portrait.ts#2"
           },
           {
             "location": "apps/api/src/handlers/case-law/matter-links/batch/create.ts#2"
@@ -29853,10 +30000,7 @@
             "location": "apps/api/src/handlers/time-entries/batch-update.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/time-entries/create.ts#3"
-          },
-          {
-            "location": "apps/api/src/handlers/time-entries/create.ts#4"
+            "location": "apps/api/src/handlers/time-entries/create.ts#1"
           },
           {
             "location": "apps/api/src/handlers/time-entries/delete.ts#3"
@@ -29893,6 +30037,18 @@
           },
           {
             "location": "apps/api/src/handlers/time-entries/split.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/time-entries/suggestions/decisions/create.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/time-entries/suggestions/decisions/create.ts#4"
+          },
+          {
+            "location": "apps/api/src/handlers/time-entries/suggestions/list.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/time-entries/suggestions/schemas.ts#1"
           },
           {
             "location": "apps/api/src/handlers/time-entries/summary/get.ts#3"
@@ -32148,7 +32304,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/expense-row.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/personal-timesheet-day.tsx#7"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/personal-timesheet-day.tsx#8"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/rate-management-dialog.tsx#6"
@@ -32158,6 +32314,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/time-entry-row.tsx#9"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/time-suggestions-lane.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/timer-controls.tsx#4"
@@ -32415,6 +32574,9 @@
             "location": "packages/ui/src/components/directional-icon.tsx#1"
           },
           {
+            "location": "packages/ui/src/components/file-input.tsx#6"
+          },
+          {
             "location": "packages/ui/src/components/input-otp.tsx#6"
           },
           {
@@ -32572,7 +32734,7 @@
           "name": "Andris Reinman"
         }
       ],
-      "bom-ref": "pkg:npm/nodemailer@10.0.8",
+      "bom-ref": "pkg:npm/nodemailer@10.0.9",
       "description": "Easy as cake e-mail sending from your Node.js applications",
       "evidence": {
         "identity": [
@@ -32625,10 +32787,10 @@
           "value": "apps/api/node_modules/nodemailer/package.json"
         }
       ],
-      "purl": "pkg:npm/nodemailer@10.0.8",
+      "purl": "pkg:npm/nodemailer@10.0.9",
       "scope": "required",
       "type": "library",
-      "version": "10.0.8"
+      "version": "10.0.9"
     },
     {
       "authors": [
@@ -32965,7 +33127,7 @@
           "name": "engineering@posthog.com"
         }
       ],
-      "bom-ref": "pkg:npm/posthog-js@1.430.2",
+      "bom-ref": "pkg:npm/posthog-js@1.430.3",
       "description": "Posthog-js allows you to automatically capture usage and send events to PostHog.",
       "evidence": {
         "identity": [
@@ -33024,10 +33186,10 @@
           "value": "apps/web/node_modules/posthog-js/package.json"
         }
       ],
-      "purl": "pkg:npm/posthog-js@1.430.2",
+      "purl": "pkg:npm/posthog-js@1.430.3",
       "scope": "required",
       "type": "library",
-      "version": "1.430.2"
+      "version": "1.430.3"
     },
     {
       "authors": [
@@ -34367,6 +34529,9 @@
           },
           {
             "location": "apps/web/src/lib/folio-ui-components.ts#1"
+          },
+          {
+            "location": "apps/web/src/lib/folio-ui-components.ts#2"
           },
           {
             "location": "apps/web/src/lib/knowledge/navigation.ts#1"
@@ -36349,6 +36514,12 @@
             "location": "packages/ui/src/components/dialog.tsx#3"
           },
           {
+            "location": "packages/ui/src/components/file-input.tsx#3"
+          },
+          {
+            "location": "packages/ui/src/components/file-input.tsx#4"
+          },
+          {
             "location": "packages/ui/src/components/fixtures/anchored-popup.fixture.tsx#1"
           },
           {
@@ -37925,7 +38096,7 @@
             "location": "apps/web/src/lib/decision-date.ts#1"
           },
           {
-            "location": "apps/web/src/lib/folio-ui-components.ts#4"
+            "location": "apps/web/src/lib/folio-ui-components.ts#6"
           },
           {
             "location": "apps/web/src/lib/organization/mutations.ts#2"
@@ -38738,6 +38909,9 @@
             "location": "apps/web/src/features/case-law/components/case-viewer/decision-facts.tsx#4"
           },
           {
+            "location": "apps/web/src/features/case-law/components/case-viewer/decision-judges.tsx#2"
+          },
+          {
             "location": "apps/web/src/features/case-law/components/case-viewer/decision-text.tsx#4"
           },
           {
@@ -39239,7 +39413,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/matter-combobox.tsx#2"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/personal-timesheet-day.tsx#8"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/personal-timesheet-day.tsx#9"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/rate-management-dialog.tsx#7"
@@ -39255,6 +39429,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/time-entry-row.tsx#10"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/time-suggestions-lane.tsx#2"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/timer-controls.tsx#5"
@@ -40101,6 +40278,15 @@
             "location": "apps/api/src/mcp/capability-tools.ts#6"
           },
           {
+            "location": "apps/api/src/mcp/compat-contract.ts#1"
+          },
+          {
+            "location": "apps/api/src/mcp/compat-ids.ts#2"
+          },
+          {
+            "location": "apps/api/src/mcp/compat-law-tools.ts#1"
+          },
+          {
             "location": "apps/api/src/mcp/compat-tools.ts#3"
           },
           {
@@ -40122,7 +40308,7 @@
             "location": "apps/api/src/mcp/legislation-tools.ts#2"
           },
           {
-            "location": "apps/api/src/mcp/matter-tools.ts#3"
+            "location": "apps/api/src/mcp/matter-tools.ts#2"
           },
           {
             "location": "apps/api/src/mcp/research-admin-tools.ts#2"
