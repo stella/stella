@@ -179,9 +179,7 @@ const discoverInspectorFacets = async (page: Page) => {
             }
 
             await facetBar
-              .locator(
-                '[data-slot="inspector-facet-overflow-trigger"]:visible',
-              )
+              .locator('[data-slot="inspector-facet-overflow-trigger"]:visible')
               .click();
             const overflowItems = await page
               .locator("[data-facet-overflow-value]:visible")
@@ -197,9 +195,8 @@ const discoverInspectorFacets = async (page: Page) => {
             throw new Error(`Inspector facet is unavailable: ${key}`);
           },
           disabled:
-            (await optionMarker.getAttribute(
-              "data-facet-option-disabled",
-            )) !== null,
+            (await optionMarker.getAttribute("data-facet-option-disabled")) !==
+            null,
           selectedAttribute: {
             name: "data-active-facet",
             value: key,

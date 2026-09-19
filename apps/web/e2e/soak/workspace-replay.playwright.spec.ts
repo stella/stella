@@ -142,20 +142,10 @@ const replayCommand = (artifactPath: string): string =>
   [
     ...(WORKSPACE_REPLAY_ENV.webUrlOverride === undefined
       ? []
-      : [
-          shellAssignment(
-            "E2E_WEB_URL",
-            WORKSPACE_REPLAY_ENV.webUrlOverride,
-          ),
-        ]),
+      : [shellAssignment("E2E_WEB_URL", WORKSPACE_REPLAY_ENV.webUrlOverride)]),
     ...(WORKSPACE_REPLAY_ENV.apiUrlOverride === undefined
       ? []
-      : [
-          shellAssignment(
-            "E2E_API_URL",
-            WORKSPACE_REPLAY_ENV.apiUrlOverride,
-          ),
-        ]),
+      : [shellAssignment("E2E_API_URL", WORKSPACE_REPLAY_ENV.apiUrlOverride)]),
     shellAssignment("E2E_SOAK_REPLAY", artifactPath),
     "bun --filter @stll/web test:e2e:soak",
   ].join(" ");
@@ -201,8 +191,7 @@ test("deterministically explores the synthetic matter workspace", async ({
 
   await expect
     .poll(
-      async () =>
-        await apiStatus(page.request, `/workspaces/${workspace.id}`),
+      async () => await apiStatus(page.request, `/workspaces/${workspace.id}`),
       {
         message: "browser context can read the synthetic matter",
         timeout: 10_000,
