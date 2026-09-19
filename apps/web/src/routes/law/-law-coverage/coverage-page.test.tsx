@@ -21,7 +21,11 @@ const render = (node: ReactNode): string =>
     </IntlProvider>,
   );
 
+/** When the publisher's own total was read. */
 const OBSERVED_AT = "2026-09-01T00:00:00.000Z";
+
+/** When the corpus was counted, which is a separate sweep and a separate date. */
+const COUNTED_AT = "2026-09-17T00:00:00.000Z";
 
 /**
  * A source four decisions in a thousand short of the publisher's total: the
@@ -36,9 +40,10 @@ const NEARLY_COMPLETE: CaseLawCoverageSource = {
   addedLastWeek: 12,
   completeness: {
     state: "measured",
-    stored: { precision: "exact", decisions: 996 },
+    stored: 996,
+    storedAsOf: COUNTED_AT,
     reported: 1000,
-    asOf: OBSERVED_AT,
+    reportedAsOf: OBSERVED_AT,
     reportedBy: "publisher",
   },
 };
@@ -53,18 +58,29 @@ const NEVER_MEASURED: CaseLawCoverageSource = {
   completeness: { state: "not-measured-yet" },
 };
 
+/** A publisher total exists; nobody has counted what the corpus holds of it. */
+const NEVER_COUNTED: CaseLawCoverageSource = {
+  adapterKey: "cz-nss",
+  name: "Nejvyšší správní soud",
+  publicHomeUrl: "https://vyhledavac.nssoud.cz/",
+  health: "current",
+  lastSyncAt: OBSERVED_AT,
+  addedLastWeek: 0,
+  completeness: { state: "not-counted-yet" },
+};
+
 const COVERAGE: CaseLawCoverage = {
   generatedAt: "2026-09-19T08:00:00.000Z",
   totals: {
     searchable: 4_200_000,
-    stored: { precision: "at-least", decisions: 4_500_000 },
+    stored: { decisions: 4_500_000, asOf: COUNTED_AT },
   },
   countries: [
     {
       availability: "searchable",
       country: "CZE",
       health: "delayed",
-      stored: { precision: "exact", decisions: 1996 },
+      stored: { decisions: 1996, asOf: COUNTED_AT },
       addedLastWeek: 12,
       searchable: 1900,
       decisionYearFrom: 1993,
@@ -85,12 +101,12 @@ const COVERAGE: CaseLawCoverage = {
         measuredSources: 1,
         stored: 996,
         reported: 1000,
-        storedPrecision: "exact",
+        storedAsOf: COUNTED_AT,
         staleSources: 0,
-        unmeasuredSources: 1,
-        uncountedSources: 0,
+        notMeasuredSources: 1,
+        notCountedSources: 1,
       },
-      sources: [NEARLY_COMPLETE, NEVER_MEASURED],
+      sources: [NEARLY_COMPLETE, NEVER_MEASURED, NEVER_COUNTED],
     },
   ],
 };
@@ -107,10 +123,12 @@ describe("the coverage page states what it counts", () => {
     expect(markup).toContain(messages.caseLaw.coverage.storedHint);
   });
 
-  test("a count that is only a floor says so rather than printing as exact", () => {
+  test("a stored figure states when it was counted", () => {
     const markup = render(<CaseLawCoveragePage coverage={COVERAGE} />);
 
-    expect(markup).toContain("at least 4,500,000");
+    // The count is taken on the ingestion side, so the figure is only as
+    // current as its last sweep, and the page says which day that was.
+    expect(markup).toContain("Counted Sep 17, 2026");
   });
 
   test("a corpus 99.6 % of the way there prints 99, never 100", () => {
@@ -125,6 +143,17 @@ describe("the coverage page states what it counts", () => {
 
     expect(markup).toContain(messages.caseLaw.coverage.notMeasuredYet);
     expect(markup).toContain("1 source not measured");
+  });
+
+  test("a source nobody has counted is stated, and adds no zero to the ratio", () => {
+    const markup = render(<CaseLawCoveragePage coverage={COVERAGE} />);
+
+    expect(markup).toContain(messages.caseLaw.coverage.notCountedYet);
+    expect(markup).toContain("1 source not counted");
+    // The ratio is still the one measured source's 996/1000; a source with no
+    // count of its own would drag it to 50 % if it were folded in as a zero.
+    expect(markup).toContain("99%");
+    expect(markup).not.toContain("50%");
   });
 
   test("freshness is a word, with the dot only beside it", () => {
@@ -151,16 +180,16 @@ describe("the coverage page states what it counts", () => {
               availability: "in-preparation",
               country: "HUN",
               health: "unknown",
-              stored: { precision: "exact", decisions: 40 },
+              stored: { decisions: 40, asOf: null },
               addedLastWeek: 0,
               completeness: {
                 measuredSources: 0,
                 stored: 0,
                 reported: 0,
-                storedPrecision: "exact",
+                storedAsOf: null,
                 staleSources: 0,
-                unmeasuredSources: 1,
-                uncountedSources: 0,
+                notMeasuredSources: 1,
+                notCountedSources: 0,
               },
               sources: [NEVER_MEASURED],
             },

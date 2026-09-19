@@ -54,17 +54,17 @@ describe("countries are ordered by the name the reader sees", () => {
 });
 
 describe("what a percentage leaves out is stated, never folded in", () => {
-  test("each state gets its own count, unmeasured first", () => {
+  test("each state gets its own count, the unmeasured ones first", () => {
     expect(
       caseLawCoverageCompletenessNotes({
         staleSources: 2,
-        uncountedSources: 3,
-        unmeasuredSources: 1,
+        notCountedSources: 3,
+        notMeasuredSources: 1,
       }),
     ).toEqual([
-      { kind: "unmeasured", count: 1 },
+      { kind: "not-measured", count: 1 },
       { kind: "stale", count: 2 },
-      { kind: "uncounted", count: 3 },
+      { kind: "not-counted", count: 3 },
     ]);
   });
 
@@ -72,18 +72,28 @@ describe("what a percentage leaves out is stated, never folded in", () => {
     expect(
       caseLawCoverageCompletenessNotes({
         staleSources: 0,
-        uncountedSources: 0,
-        unmeasuredSources: 4,
+        notCountedSources: 0,
+        notMeasuredSources: 4,
       }),
-    ).toEqual([{ kind: "unmeasured", count: 4 }]);
+    ).toEqual([{ kind: "not-measured", count: 4 }]);
+  });
+
+  test("a source with a total but no count is stated, never folded in", () => {
+    expect(
+      caseLawCoverageCompletenessNotes({
+        staleSources: 0,
+        notCountedSources: 2,
+        notMeasuredSources: 0,
+      }),
+    ).toEqual([{ kind: "not-counted", count: 2 }]);
   });
 
   test("a country whose every source is measured carries no note", () => {
     expect(
       caseLawCoverageCompletenessNotes({
         staleSources: 0,
-        uncountedSources: 0,
-        unmeasuredSources: 0,
+        notCountedSources: 0,
+        notMeasuredSources: 0,
       }),
     ).toEqual([]);
   });

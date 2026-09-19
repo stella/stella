@@ -629,9 +629,8 @@
       "supreme": "Legfelsőbb bíróságok"
     },
     "coverage": {
-      "atLeast": "legalább {count}",
       "completeness": "Teljesség",
-      "countUnavailable": "A darabszám nem érhető el",
+      "countedOn": "Megszámolva: {date}",
       "decisionYears": "Határozatok évei",
       "description": "Mennyi ítélkezési gyakorlatot tartalmaz a korpusz országonként és bíróságonként, és mennyire friss az egyes források tartalma.",
       "exceedsReportedTotal": "Többet tartalmaz, mint a közzétevő legutóbbi, {date} szerinti összesítése",
@@ -644,6 +643,9 @@
       "inPreparation": "Előkészületben",
       "lastSync": "Utolsó szinkronizálás",
       "newLast7Days": "Új 7 nap alatt",
+      "notCountedSources": "{count, plural, one {# forrás nincs megszámolva} other {# forrás nincs megszámolva}}",
+      "notCountedYet": "Még nincs megszámolva",
+      "notMeasuredSources": "{count, plural, one {# forrás nincs megmérve} other {# forrás nincs megmérve}}",
       "notMeasuredYet": "Még nincs megmérve",
       "publisherTotal": "A közzétevő összesítése",
       "reportedByOperator": "Kézzel rögzítve",
@@ -656,9 +658,7 @@
       "storedHint": "Tárolt határozatok, még nem kereshetők.",
       "title": "Az ítélkezési gyakorlat lefedettsége",
       "totalFrom": "Összesítés {date} szerint",
-      "unavailable": "A lefedettségi adatok jelenleg nem érhetők el.",
-      "uncountedSources": "{count, plural, one {# forrás nincs megszámolva} other {# forrás nincs megszámolva}}",
-      "unmeasuredSources": "{count, plural, one {# forrás nincs megmérve} other {# forrás nincs megmérve}}"
+      "unavailable": "A lefedettségi adatok jelenleg nem érhetők el."
     },
     "decisionNotFound": "A határozat nem található",
     "emptyState": "Nem található határozat. Adjon meg egy forrást, és futtasson szinkronizálást az ítélkezési gyakorlat importálásához.",

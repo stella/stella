@@ -629,9 +629,8 @@
       "supreme": "Tribunais superiores"
     },
     "coverage": {
-      "atLeast": "pelo menos {count}",
       "completeness": "Completude",
-      "countUnavailable": "Contagem indisponível",
+      "countedOn": "Contado em {date}",
       "decisionYears": "Anos das decisões",
       "description": "Quanta jurisprudência o acervo contém, por país e por tribunal, e quão atualizada está cada fonte.",
       "exceedsReportedTotal": "Contém mais do que o último total informado pelo órgão em {date}",
@@ -644,6 +643,9 @@
       "inPreparation": "Em preparação",
       "lastSync": "Última sincronização",
       "newLast7Days": "Novas em 7 dias",
+      "notCountedSources": "{count, plural, one {# fonte sem contagem} other {# fontes sem contagem}}",
+      "notCountedYet": "Ainda não contado",
+      "notMeasuredSources": "{count, plural, one {# fonte sem medição} other {# fontes sem medição}}",
       "notMeasuredYet": "Ainda não medido",
       "publisherTotal": "Total do órgão",
       "reportedByOperator": "Informado manualmente",
@@ -656,9 +658,7 @@
       "storedHint": "Decisões armazenadas, ainda não pesquisáveis.",
       "title": "Cobertura da jurisprudência",
       "totalFrom": "Total em {date}",
-      "unavailable": "Os dados de cobertura estão indisponíveis no momento.",
-      "uncountedSources": "{count, plural, one {# fonte sem contagem} other {# fontes sem contagem}}",
-      "unmeasuredSources": "{count, plural, one {# fonte sem medição} other {# fontes sem medição}}"
+      "unavailable": "Os dados de cobertura estão indisponíveis no momento."
     },
     "decisionNotFound": "Decisão não encontrada",
     "emptyState": "Nenhuma decisão encontrada. Configure uma fonte e execute uma sincronização para importar jurisprudência.",

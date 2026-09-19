@@ -629,9 +629,8 @@
       "supreme": "Najvyššie súdy"
     },
     "coverage": {
-      "atLeast": "najmenej {count}",
       "completeness": "Úplnosť",
-      "countUnavailable": "Počet nie je k dispozícii",
+      "countedOn": "Spočítané k {date}",
       "decisionYears": "Roky rozhodnutí",
       "description": "Koľko judikatúry korpus obsahuje podľa krajín a súdov a aký aktuálny je každý zdroj.",
       "exceedsReportedTotal": "Obsahuje viac, než vydavateľ naposledy uviedol k {date}",
@@ -644,6 +643,9 @@
       "inPreparation": "Pripravuje sa",
       "lastSync": "Posledná synchronizácia",
       "newLast7Days": "Nové za 7 dní",
+      "notCountedSources": "{count, plural, one {# zdroj bez počtu} few {# zdroje bez počtu} other {# zdrojov bez počtu}}",
+      "notCountedYet": "Zatiaľ nespočítané",
+      "notMeasuredSources": "{count, plural, one {# zdroj bez merania} few {# zdroje bez merania} other {# zdrojov bez merania}}",
       "notMeasuredYet": "Zatiaľ nemerané",
       "publisherTotal": "Celkom podľa vydavateľa",
       "reportedByOperator": "Zadané ručne",
@@ -656,9 +658,7 @@
       "storedHint": "Rozhodnutia v korpuse, zatiaľ nevyhľadateľné.",
       "title": "Pokrytie judikatúry",
       "totalFrom": "Celkom k {date}",
-      "unavailable": "Údaje o pokrytí momentálne nie sú k dispozícii.",
-      "uncountedSources": "{count, plural, one {# zdroj bez počtu} few {# zdroje bez počtu} other {# zdrojov bez počtu}}",
-      "unmeasuredSources": "{count, plural, one {# zdroj bez merania} few {# zdroje bez merania} other {# zdrojov bez merania}}"
+      "unavailable": "Údaje o pokrytí momentálne nie sú k dispozícii."
     },
     "decisionNotFound": "Rozhodnutie sa nenašlo",
     "emptyState": "Žiadne rozhodnutia. Nakonfigurujte zdroj a spustite synchronizáciu na import judikatúry.",

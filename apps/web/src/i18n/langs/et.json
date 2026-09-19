@@ -629,9 +629,8 @@
       "supreme": "Riigikohtud"
     },
     "coverage": {
-      "atLeast": "vähemalt {count}",
       "completeness": "Täielikkus",
-      "countUnavailable": "Arv pole saadaval",
+      "countedOn": "Loendatud {date} seisuga",
       "decisionYears": "Lahendite aastad",
       "description": "Kui palju kohtupraktikat korpuses on, riikide ja kohtute kaupa, ning kui värske on iga allikas.",
       "exceedsReportedTotal": "Sisaldab rohkem, kui avaldaja viimati {date} seisuga teatas",
@@ -644,6 +643,9 @@
       "inPreparation": "Ettevalmistamisel",
       "lastSync": "Viimane sünkroonimine",
       "newLast7Days": "Uued 7 päevaga",
+      "notCountedSources": "{count, plural, one {# allikas loendamata} other {# allikat loendamata}}",
+      "notCountedYet": "Veel loendamata",
+      "notMeasuredSources": "{count, plural, one {# allikas mõõtmata} other {# allikat mõõtmata}}",
       "notMeasuredYet": "Veel mõõtmata",
       "publisherTotal": "Avaldaja koguarv",
       "reportedByOperator": "Käsitsi sisestatud",
@@ -656,9 +658,7 @@
       "storedHint": "Salvestatud lahendid, veel mitte otsitavad.",
       "title": "Kohtupraktika kaetus",
       "totalFrom": "Koguarv seisuga {date}",
-      "unavailable": "Kaetuse andmed ei ole praegu saadaval.",
-      "uncountedSources": "{count, plural, one {# allikas loendamata} other {# allikat loendamata}}",
-      "unmeasuredSources": "{count, plural, one {# allikas mõõtmata} other {# allikat mõõtmata}}"
+      "unavailable": "Kaetuse andmed ei ole praegu saadaval."
     },
     "decisionNotFound": "Otsust ei leitud",
     "emptyState": "Otsuseid ei leitud. Seadistage allikas ja käivitage sünkroonimine kohtupraktika importimiseks.",

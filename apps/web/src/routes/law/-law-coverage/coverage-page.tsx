@@ -253,17 +253,19 @@ const Total = ({
 );
 
 /**
- * A stored count, which states how exact it is. Counting is bounded, so a
- * corpus past the bound is a floor and must never print as an exact figure.
+ * A stored count with the instant it was taken. The count is made on the
+ * ingestion side, so the figure on the page is as old as its last sweep; a
+ * number printed without that date invites the reader to take it for live.
  */
 const StoredDecisions = ({ stored }: { stored: CaseLawStoredCount }) => {
-  const t = useTranslations();
   const format = useFormatter();
-  const count = format.number(stored.decisions);
 
-  return stored.precision === "at-least"
-    ? t("caseLaw.coverage.atLeast", { count })
-    : count;
+  return (
+    <>
+      {format.number(stored.decisions)}
+      {stored.asOf !== null && <CountedOn asOf={stored.asOf} />}
+    </>
+  );
 };
 
 /** Freshness as a word, with the dot as its second reading and never its only one. */
@@ -408,7 +410,7 @@ const CountryCompleteness = ({
             <StoredDecisions
               stored={{
                 decisions: completeness.stored,
-                precision: completeness.storedPrecision,
+                asOf: completeness.storedAsOf,
               }}
             />
           </dd>
@@ -443,12 +445,12 @@ const CompletenessNote = ({
   const t = useTranslations();
 
   switch (kind) {
-    case CASE_LAW_COMPLETENESS_NOTE_KIND.UNMEASURED:
-      return <>{t("caseLaw.coverage.unmeasuredSources", { count })}</>;
+    case CASE_LAW_COMPLETENESS_NOTE_KIND.NOT_MEASURED:
+      return <>{t("caseLaw.coverage.notMeasuredSources", { count })}</>;
     case CASE_LAW_COMPLETENESS_NOTE_KIND.STALE:
       return <>{t("caseLaw.coverage.staleSources", { count })}</>;
-    case CASE_LAW_COMPLETENESS_NOTE_KIND.UNCOUNTED:
-      return <>{t("caseLaw.coverage.uncountedSources", { count })}</>;
+    case CASE_LAW_COMPLETENESS_NOTE_KIND.NOT_COUNTED:
+      return <>{t("caseLaw.coverage.notCountedSources", { count })}</>;
     default: {
       kind satisfies never;
       return panic("Unhandled case-law completeness note kind");
@@ -541,14 +543,11 @@ const SourceCompleteness = ({
           {t("caseLaw.coverage.notMeasuredYet")}
         </span>
       );
-    case "count-unavailable":
+    case "not-counted-yet":
       return (
-        <div className="flex flex-col gap-0.5">
-          <span className="text-muted-foreground">
-            {t("caseLaw.coverage.countUnavailable")}
-          </span>
-          <ObservedOn asOf={completeness.asOf} />
-        </div>
+        <span className="text-muted-foreground">
+          {t("caseLaw.coverage.notCountedYet")}
+        </span>
       );
     case "measured":
     case "stale":
@@ -561,10 +560,14 @@ const SourceCompleteness = ({
 };
 
 /**
- * A measured source's ratio and the warranty its denominator carries. The
- * observation date appears only where the denominator is out of date or
- * already smaller than what is held: on a current total the date is noise, on
- * a lagging one it is the explanation.
+ * A measured source's ratio, the warranty its denominator carries, and when
+ * each half of the ratio was observed.
+ *
+ * The two halves are observed independently, so they get their own dates. The
+ * count's date is always shown, because the numerator is never live. The
+ * publisher's total states its date only where it is out of date or already
+ * smaller than what is held: on a current total the date is noise, on a
+ * lagging one it is the explanation.
  */
 const MeasuredCompleteness = ({
   completeness,
@@ -575,7 +578,7 @@ const MeasuredCompleteness = ({
   const format = useFormatter();
   const counts = {
     reported: completeness.reported,
-    stored: completeness.stored.decisions,
+    stored: completeness.stored,
   };
   const percent = caseLawCompletenessPercent(counts);
 
@@ -589,13 +592,14 @@ const MeasuredCompleteness = ({
       <span className="text-muted-foreground text-xs">
         {t(CASE_LAW_TOTAL_REPORTER_LABEL_KEYS[completeness.reportedBy])}
       </span>
+      <CountedOn asOf={completeness.storedAsOf} />
       {completeness.state === "stale" && (
-        <ObservedOn asOf={completeness.asOf} />
+        <ObservedOn asOf={completeness.reportedAsOf} />
       )}
       {caseLawCompletenessExceedsReported(counts) && (
         <span className="text-muted-foreground text-xs text-pretty">
           {t("caseLaw.coverage.exceedsReportedTotal", {
-            date: observedDate(completeness.asOf, format),
+            date: observedDate(completeness.reportedAsOf, format),
           })}
         </span>
       )}
@@ -603,6 +607,7 @@ const MeasuredCompleteness = ({
   );
 };
 
+/** When the publisher's total was read, which is not when the corpus was counted. */
 const ObservedOn = ({ asOf }: { asOf: string }) => {
   const t = useTranslations();
   const format = useFormatter();
@@ -610,6 +615,22 @@ const ObservedOn = ({ asOf }: { asOf: string }) => {
   return (
     <span className="text-muted-foreground text-xs">
       {t("caseLaw.coverage.totalFrom", { date: observedDate(asOf, format) })}
+    </span>
+  );
+};
+
+/**
+ * When the corpus itself was counted. Kept apart from `ObservedOn` in wording
+ * as well as in data: one date is our own sweep, the other is the publisher's
+ * statement, and reading them as one number would hide a months-wide gap.
+ */
+const CountedOn = ({ asOf }: { asOf: string }) => {
+  const t = useTranslations();
+  const format = useFormatter();
+
+  return (
+    <span className="text-muted-foreground block text-xs font-normal">
+      {t("caseLaw.coverage.countedOn", { date: observedDate(asOf, format) })}
     </span>
   );
 };

@@ -632,9 +632,8 @@ type Messages = {
       "supreme": "Supreme courts";
     };
     "coverage": {
-      "atLeast": "at least {count}";
       "completeness": "Completeness";
-      "countUnavailable": "Count unavailable";
+      "countedOn": "Counted {date}";
       "decisionYears": "Decision years";
       "description": "How much case law the corpus holds, per country and per court, and how fresh each source is.";
       "exceedsReportedTotal": "Holds more than the publisher's last stated total of {date}";
@@ -647,6 +646,9 @@ type Messages = {
       "inPreparation": "In preparation";
       "lastSync": "Last sync";
       "newLast7Days": "New in 7 days";
+      "notCountedSources": "{count, plural, one {# source not counted} other {# sources not counted}}";
+      "notCountedYet": "Not counted yet";
+      "notMeasuredSources": "{count, plural, one {# source not measured} other {# sources not measured}}";
       "notMeasuredYet": "Not measured yet";
       "publisherTotal": "Publisher's total";
       "reportedByOperator": "Recorded by hand";
@@ -660,8 +662,6 @@ type Messages = {
       "title": "Case-law coverage";
       "totalFrom": "Total from {date}";
       "unavailable": "Coverage figures are unavailable right now.";
-      "uncountedSources": "{count, plural, one {# source not counted} other {# sources not counted}}";
-      "unmeasuredSources": "{count, plural, one {# source not measured} other {# sources not measured}}";
     };
     "decisionNotFound": "Decision not found";
     "emptyState": "No decisions found. Configure a source and run a sync to import case law.";

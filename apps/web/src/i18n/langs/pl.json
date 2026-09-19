@@ -629,9 +629,8 @@
       "supreme": "Sądy najwyższe"
     },
     "coverage": {
-      "atLeast": "co najmniej {count}",
       "completeness": "Kompletność",
-      "countUnavailable": "Liczba niedostępna",
+      "countedOn": "Policzono {date}",
       "decisionYears": "Lata orzeczeń",
       "description": "Ile orzecznictwa zawiera korpus w podziale na kraje i sądy oraz jak aktualne jest każde źródło.",
       "exceedsReportedTotal": "Zawiera więcej, niż wydawca podał ostatnio na {date}",
@@ -644,6 +643,9 @@
       "inPreparation": "W przygotowaniu",
       "lastSync": "Ostatnia synchronizacja",
       "newLast7Days": "Nowe w 7 dni",
+      "notCountedSources": "{count, plural, one {# źródło bez liczby} few {# źródła bez liczby} many {# źródeł bez liczby} other {# źródła bez liczby}}",
+      "notCountedYet": "Jeszcze niepoliczone",
+      "notMeasuredSources": "{count, plural, one {# źródło bez pomiaru} few {# źródła bez pomiaru} many {# źródeł bez pomiaru} other {# źródła bez pomiaru}}",
       "notMeasuredYet": "Jeszcze niezmierzone",
       "publisherTotal": "Suma według wydawcy",
       "reportedByOperator": "Wpisane ręcznie",
@@ -656,9 +658,7 @@
       "storedHint": "Orzeczenia w korpusie, jeszcze niewyszukiwalne.",
       "title": "Zakres orzecznictwa",
       "totalFrom": "Suma z {date}",
-      "unavailable": "Dane o zakresie są chwilowo niedostępne.",
-      "uncountedSources": "{count, plural, one {# źródło bez liczby} few {# źródła bez liczby} many {# źródeł bez liczby} other {# źródła bez liczby}}",
-      "unmeasuredSources": "{count, plural, one {# źródło bez pomiaru} few {# źródła bez pomiaru} many {# źródeł bez pomiaru} other {# źródła bez pomiaru}}"
+      "unavailable": "Dane o zakresie są chwilowo niedostępne."
     },
     "decisionNotFound": "Nie znaleziono orzeczenia",
     "emptyState": "Brak orzeczeń. Skonfiguruj źródło i uruchom synchronizację, aby zaimportować orzecznictwo.",

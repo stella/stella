@@ -629,9 +629,8 @@
       "supreme": "Augstākās tiesas"
     },
     "coverage": {
-      "atLeast": "vismaz {count}",
       "completeness": "Pilnīgums",
-      "countUnavailable": "Skaits nav pieejams",
+      "countedOn": "Saskaitīts {date}",
       "decisionYears": "Nolēmumu gadi",
       "description": "Cik daudz tiesu prakses ir korpusā pa valstīm un tiesām un cik aktuāls ir katrs avots.",
       "exceedsReportedTotal": "Satur vairāk nekā publicētāja pēdējais norādītais kopskaits {date}",
@@ -644,6 +643,9 @@
       "inPreparation": "Sagatavošanā",
       "lastSync": "Pēdējā sinhronizācija",
       "newLast7Days": "Jaunie 7 dienās",
+      "notCountedSources": "{count, plural, zero {# avotu nav saskaitīti} one {# avots nav saskaitīts} other {# avoti nav saskaitīti}}",
+      "notCountedYet": "Vēl nav saskaitīts",
+      "notMeasuredSources": "{count, plural, zero {# avotu nav izmērīti} one {# avots nav izmērīts} other {# avoti nav izmērīti}}",
       "notMeasuredYet": "Vēl nav izmērīts",
       "publisherTotal": "Publicētāja kopskaits",
       "reportedByOperator": "Ievadīts manuāli",
@@ -656,9 +658,7 @@
       "storedHint": "Saglabāti nolēmumi, vēl nav meklējami.",
       "title": "Tiesu prakses aptvērums",
       "totalFrom": "Kopskaits uz {date}",
-      "unavailable": "Aptvēruma dati pašlaik nav pieejami.",
-      "uncountedSources": "{count, plural, zero {# avotu nav saskaitīti} one {# avots nav saskaitīts} other {# avoti nav saskaitīti}}",
-      "unmeasuredSources": "{count, plural, zero {# avotu nav izmērīti} one {# avots nav izmērīts} other {# avoti nav izmērīti}}"
+      "unavailable": "Aptvēruma dati pašlaik nav pieejami."
     },
     "decisionNotFound": "Lēmums nav atrasts",
     "emptyState": "Lēmumi nav atrasti. Konfigurējiet avotu un palaidiet sinhronizāciju, lai importētu tiesu praksi.",
