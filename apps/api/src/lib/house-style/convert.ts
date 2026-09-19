@@ -323,7 +323,7 @@ export const convertToHouseStyle = async ({
     return read;
   }
   const { catalogue, features } = read.value;
-  const plan = planRuleTier(catalogue);
+  const plan = planRuleTier(catalogue, guide);
   if (plan === null) {
     return Result.err(
       new HouseStyleError({
