@@ -243,8 +243,8 @@ const derivedManifestFields = async ({
 };
 
 /**
- * `templates.decide-conditions`'s logic: the stored template's manifest and
- * one decision call over the conditions it declares. A boolean the caller
+ * `templates.condition-decisions.get`'s logic: the stored template's manifest
+ * and one decision call over the conditions it declares. A boolean the caller
  * supplied is reported as theirs and omitted from the model's questions.
  *
  * The manifest column is the cache of reading the document that exists for

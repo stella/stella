@@ -953,6 +953,10 @@ export const CAPABILITY_DISPATCH = {
   "templates.clauses-unlink": {
     load: async () => await import("@/api/handlers/templates/clauses-unlink"),
   },
+  "templates.condition-decisions.get": {
+    load: async () =>
+      await import("@/api/handlers/templates/condition-decisions/get"),
+  },
   "templates.create": {
     load: async () => await import("@/api/handlers/templates/create"),
   },
@@ -966,10 +970,6 @@ export const CAPABILITY_DISPATCH = {
   "templates.create-from-styles": {
     load: async () =>
       await import("@/api/handlers/templates/create-from-styles"),
-  },
-  "templates.decide-conditions": {
-    load: async () =>
-      await import("@/api/handlers/templates/decide-conditions"),
   },
   "templates.delete": {
     load: async () => await import("@/api/handlers/templates/delete"),

@@ -41490,6 +41490,75 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
+            "condition-decisions-get": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: [
+                  "capability",
+                  "templates",
+                  "condition-decisions-get",
+                ],
+                capabilityId: "templates.condition-decisions.get",
+                description:
+                  "Ask the organization's decision model about every AI-decided boolean condition of a stored template, given the values entered so far, and return what it decided with its probability and confidence. Nothing is filled and no document is produced; the generative model is never called, so a condition the decision model leaves undecided is reported as such (the fill itself still falls back to the generative model). values is an object mapping each field path to its value.",
+                access: "read",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--template-id",
+                    prop: "templateId",
+                    required: true,
+                    part: "params",
+                    partPath: "templateId",
+                  },
+                ],
+                inputOnly: ["body.values"],
+                paginated: false,
+                destructive: false,
+                scope: "templates",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["values"],
+                      properties: {
+                        values: {
+                          allOf: [
+                            {
+                              additionalProperties: true,
+                              type: "object",
+                              properties: {},
+                            },
+                            {
+                              type: "object",
+                              patternProperties: {
+                                "^(.*)$": {},
+                              },
+                            },
+                          ],
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      required: ["templateId"],
+                      properties: {
+                        templateId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
             "create-blank": {
               kind: "capability-leaf",
               spec: {
@@ -41614,71 +41683,6 @@ export const generatedRouteMap: RouteNode = {
                           type: "string",
                         },
                         categoryId: {
-                          minLength: 36,
-                          maxLength: 36,
-                          pattern:
-                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                          type: "string",
-                        },
-                      },
-                    },
-                  },
-                },
-              },
-            },
-            "decide-conditions": {
-              kind: "capability-leaf",
-              spec: {
-                commandPath: ["capability", "templates", "decide-conditions"],
-                capabilityId: "templates.decide-conditions",
-                description:
-                  "Ask the organization's decision model about every AI-decided boolean condition of a stored template, given the values entered so far, and return what it decided with its probability and confidence. Nothing is filled and no document is produced; the generative model is never called, so a condition the decision model leaves undecided is reported as such (the fill itself still falls back to the generative model). values is an object mapping each field path to its value.",
-                access: "read",
-                flags: [
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--template-id",
-                    prop: "templateId",
-                    required: true,
-                    part: "params",
-                    partPath: "templateId",
-                  },
-                ],
-                inputOnly: ["body.values"],
-                paginated: false,
-                destructive: false,
-                scope: "templates",
-                inputSchema: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    body: {
-                      type: "object",
-                      required: ["values"],
-                      properties: {
-                        values: {
-                          allOf: [
-                            {
-                              additionalProperties: true,
-                              type: "object",
-                              properties: {},
-                            },
-                            {
-                              type: "object",
-                              patternProperties: {
-                                "^(.*)$": {},
-                              },
-                            },
-                          ],
-                        },
-                      },
-                    },
-                    params: {
-                      type: "object",
-                      required: ["templateId"],
-                      properties: {
-                        templateId: {
                           minLength: 36,
                           maxLength: 36,
                           pattern:
