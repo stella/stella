@@ -171,6 +171,15 @@ Separator, Sheet, Skeleton, Table, Tabs, Textarea, Toast, Tooltip.
   shape) comes from a variant, added in `packages/ui` when the design
   calls for one. The `shadcn/*` lint rules enforce this; their
   messages name the variant, size, or token to use.
+- A `className` on a `@stll/ui` component is written where it is
+  read: `no-imported-class-constant` rejects one that arrives as an
+  identifier imported from another module, which `shadcn/no-restyle`
+  cannot inspect.
+- App chrome scrolls through `ScrollArea` (`@stll/ui/scroll-area`),
+  which owns the scrollbar; `no-raw-overflow-scroll` rejects a raw
+  `overflow-auto`/`overflow-scroll` utility outside the textareas,
+  `<pre>` blocks, editor canvases and wide tables that need a native
+  scroller.
 - Use semantic HTML (`<nav>`, `<main>`, `<section>`) over generic
   `<div>` with ARIA roles.
 - All interactive elements require a 44x44px minimum touch target

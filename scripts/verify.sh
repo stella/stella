@@ -319,9 +319,9 @@ else
 fi
 run_step "React Compiler bailout guard" bun scripts/rc-bailouts.ts --check
 run_design_system_backlog_guard() {
-  bun test scripts/shadcn-lint-baseline.test.ts \
+  bun test scripts/design-lint-baseline.test.ts \
     scripts/oxlint-config-inputs.test.ts || return 1
-  bun scripts/shadcn-lint-baseline.ts --check
+  bun scripts/design-lint-baseline.ts --check
 }
 run_step "Design-system lint backlog" run_design_system_backlog_guard
 run_step "Oxlint override union guard" bun test \

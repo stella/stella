@@ -124,6 +124,12 @@ through Folio gains one it does not have.
 - **Image outlines:** for images on white/light backgrounds, add a
   subtle `outline: 1px solid rgb(0 0 0 / 0.06)` to define the edge
   without a heavy border.
+- **App chrome scrolls through `ScrollArea`** (`@stll/ui/scroll-area`),
+  not a raw `overflow-auto`/`overflow-scroll` utility, so every
+  scrollbar in the shell matches; `viewportRef` hands the scrolling
+  element to a virtualizer or scroll restoration. Textareas, `<pre>`
+  blocks, editor canvases and wide tables keep their native scroller.
+  `no-raw-overflow-scroll` enforces it.
 
 ## Interactions & Animations
 

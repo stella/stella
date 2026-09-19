@@ -2,7 +2,12 @@
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "workspaces": {
     ".": {
-      "entry": ["scripts/*.ts", "i18n-unused.config.js", "oxlint.config.ts"],
+      "entry": [
+        "scripts/*.ts",
+        "i18n-unused.config.js",
+        "oxlint.config.ts",
+        "oxlint.design.config.ts"
+      ],
       "ignoreDependencies": [
         "@tanstack/eslint-plugin-query",
         "@tanstack/eslint-plugin-router",

@@ -1,6 +1,7 @@
-// Design-system lint policy (`@shadcn/lint`, loaded through the Ultracite
-// `shadcn` preset). Both `oxlint.config.ts` (the repository lint) and
-// `oxlint.shadcn.config.ts` (the rule-only pass the backlog guard runs) spread
+// Design-system lint policy: the `@shadcn/lint` rules loaded through the
+// Ultracite `shadcn` preset, plus the local rules whose debt is ratcheted
+// beside them. Both `oxlint.config.ts` (the repository lint) and
+// `oxlint.design.config.ts` (the rule-only pass the backlog guard runs) spread
 // these exports, so the policy cannot drift between the two.
 //
 // Three of the six upstream rules overlap guards this repository already
@@ -19,27 +20,94 @@
 
 import type { DummyRuleMap, ExternalPluginEntry, OxlintOverride } from "oxlint";
 
+const SHADCN_PLUGIN = "shadcn";
+
 /**
  * The preset registers the plugin too; both configs declare it themselves so
  * dependency analysis reads the package off the config it inspects.
  */
 export const SHADCN_LINT_JS_PLUGINS = [
-  { name: "shadcn", specifier: "@shadcn/lint" },
+  { name: SHADCN_PLUGIN, specifier: "@shadcn/lint" },
 ] satisfies ExternalPluginEntry[];
 
-/** Rules whose merged-code debt is carried by `scripts/shadcn-lint-baseline.json`. */
-export const SHADCN_LINT_BACKLOG_RULES = [
+/** Rules whose merged-code debt is carried by `scripts/design-lint-baseline.json`. */
+export const DESIGN_LINT_BACKLOG_RULES = [
   "shadcn/no-restyle",
   "shadcn/no-arbitrary-values",
+  "no-raw-overflow-scroll/no-raw-overflow-scroll",
+  "no-imported-class-constant/no-imported-class-constant",
 ] as const;
 
-export type ShadcnLintBacklogRule = (typeof SHADCN_LINT_BACKLOG_RULES)[number];
+export type DesignLintBacklogRule = (typeof DESIGN_LINT_BACKLOG_RULES)[number];
 
 /** Per rule, the files still carrying findings and how many each carries. */
-export type ShadcnLintBacklog = Record<
-  ShadcnLintBacklogRule,
+export type DesignLintBacklog = Record<
+  DesignLintBacklogRule,
   Record<string, number>
 >;
+
+const pluginOf = (rule: DesignLintBacklogRule): string =>
+  rule.slice(0, rule.indexOf("/"));
+
+const ruleOf = (rule: DesignLintBacklogRule): string =>
+  rule.slice(rule.indexOf("/") + 1);
+
+/**
+ * `oxlint --format=json` names a finding `plugin(rule)`, for the external
+ * shadcn plugin and a local module alike. Derived from the rule ids so the
+ * report cannot be read against a different set than the one enabled.
+ */
+export const DESIGN_LINT_RULE_BY_DIAGNOSTIC_CODE: ReadonlyMap<
+  string,
+  DesignLintBacklogRule
+> = new Map(
+  DESIGN_LINT_BACKLOG_RULES.map(
+    (rule) => [`${pluginOf(rule)}(${ruleOf(rule)})`, rule] as const,
+  ),
+);
+
+/**
+ * The plugins the baseline tracks. A diagnostic from one of them that is not
+ * in the map above is a rule that was enabled without a ratchet decision, so
+ * the guard fails on it rather than dropping it.
+ */
+export const DESIGN_LINT_TRACKED_PLUGINS: ReadonlySet<string> = new Set(
+  DESIGN_LINT_BACKLOG_RULES.map(pluginOf),
+);
+
+const LOCAL_PLUGIN_PREFIX = "./.oxlint-plugins/";
+const LOCAL_PLUGIN_SUFFIX = ".ts";
+
+/**
+ * A `jsPlugins` entry of `oxlint.config.ts` that carries a tracked local rule.
+ * The design pass selects its plugins out of the repository config rather than
+ * repeating the specifiers, so it can only load what the repository loads.
+ */
+export const isDesignLintLocalPlugin = (entry: unknown): entry is string =>
+  typeof entry === "string" &&
+  entry.startsWith(LOCAL_PLUGIN_PREFIX) &&
+  entry.endsWith(LOCAL_PLUGIN_SUFFIX) &&
+  DESIGN_LINT_TRACKED_PLUGINS.has(
+    entry.slice(LOCAL_PLUGIN_PREFIX.length, -LOCAL_PLUGIN_SUFFIX.length),
+  );
+
+/** The tracked rules this repository implements, as opposed to the preset's. */
+const DESIGN_LINT_LOCAL_RULES: ReadonlySet<string> = new Set(
+  DESIGN_LINT_BACKLOG_RULES.filter((rule) => pluginOf(rule) !== SHADCN_PLUGIN),
+);
+
+/**
+ * An `overrides` entry of `oxlint.config.ts` that switches a tracked local
+ * rule on. The design pass reuses those scopes so it measures the files the
+ * repository lint reads, no others. The severity is what separates a scope
+ * from a backlog entry: `designLintBacklogOverrides` turns the same rules off
+ * over the files this pass exists to re-measure.
+ */
+export const isDesignLintLocalRuleScope = (override: OxlintOverride): boolean =>
+  Object.entries(override.rules ?? {}).some(
+    ([rule, severity]) =>
+      DESIGN_LINT_LOCAL_RULES.has(rule) && severity !== "off",
+  );
 
 export const SHADCN_LINT_RULES = {
   "shadcn/no-restyle": [
@@ -164,15 +232,37 @@ export const SHADCN_LINT_POLICY_OVERRIDES = [
 ] as const satisfies readonly OxlintOverride[];
 
 /**
- * One override per backlog rule switching it off in the files the baseline
- * still lists. `scripts/shadcn-lint-baseline.ts --check` holds each file's
- * count at or below the baseline and prunes files that reach zero, so this
- * list only shrinks; a file outside it is linted in full.
+ * What the measuring pass enables: the tracked shadcn rules under the same
+ * options the repository lint uses, and nothing else from the preset. A
+ * diagnostic the baseline script cannot map is then a rule that arrived
+ * without a ratchet decision, which it reports instead of dropping. The two
+ * local rules are scoped by file in `oxlint.config.ts`, and the design config
+ * reuses those overrides, so they stay off at the top level here.
  */
-export const shadcnBacklogOverrides = (
-  backlog: ShadcnLintBacklog,
+export const DESIGN_LINT_MEASURED_RULES = {
+  "shadcn/no-restyle": SHADCN_LINT_RULES["shadcn/no-restyle"],
+  "shadcn/no-arbitrary-values": SHADCN_LINT_RULES["shadcn/no-arbitrary-values"],
+  "shadcn/no-raw-colors": "off",
+  "shadcn/no-inline-styles": "off",
+  "shadcn/no-unknown-classes": "off",
+  "shadcn/require-static-classes": "off",
+  "no-raw-overflow-scroll/no-raw-overflow-scroll": "off",
+  "no-imported-class-constant/no-imported-class-constant": "off",
+} satisfies DummyRuleMap &
+  Record<keyof typeof SHADCN_LINT_RULES, DummyRuleMap[string]>;
+
+/**
+ * One override per backlog rule switching it off in the files the baseline
+ * still lists. `scripts/design-lint-baseline.ts --check` holds each file's
+ * count at or below the baseline and prunes files that reach zero, so this
+ * list only shrinks; a file outside it is linted in full. It is spread last
+ * in `oxlint.config.ts`: oxlint resolves overrides by replacement, so a later
+ * scope that enables a tracked rule would hand it back to a backlog file.
+ */
+export const designLintBacklogOverrides = (
+  backlog: DesignLintBacklog,
 ): OxlintOverride[] =>
-  SHADCN_LINT_BACKLOG_RULES.flatMap((rule) => {
+  DESIGN_LINT_BACKLOG_RULES.flatMap((rule) => {
     const files = Object.keys(backlog[rule]).sort();
     return files.length === 0 ? [] : [{ files, rules: { [rule]: "off" } }];
   });
