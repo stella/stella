@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
+import { errorFingerprint } from "@/api/lib/errors/utils";
 import { logger, sanitizeLogAttributes } from "@/api/lib/observability/logger";
 
 const originalStderrWrite = process.stderr.write;
@@ -97,10 +98,10 @@ describe("logger attributes", () => {
     logger.request({
       durationMs: 42,
       errorFingerprint: {
-        errorClass: "TaggedError",
-        errorCode: "DATABASE_UNAVAILABLE",
-        errorFrame: "src/server.ts:10:2",
-        pgCode: "08006",
+        "error.class": "TaggedError",
+        "error.code": "DATABASE_UNAVAILABLE",
+        "error.frame": "src/server.ts:10:2",
+        "error.cause.pg_code": "08006",
       },
       errorType: "TaggedError",
       message: "request.completed",
@@ -126,6 +127,37 @@ describe("logger attributes", () => {
       "request.duration_ms": 42,
       "request.id": "safe-request-id",
     });
+  });
+
+  test("request sink emits every field the fingerprint reports", () => {
+    const chunks: string[] = [];
+    process.stdout.write = (chunk: string | Uint8Array): boolean => {
+      chunks.push(typeof chunk === "string" ? chunk : chunk.toString());
+      return true;
+    };
+
+    // A wrapped failure is the case that distinguishes the sink from the
+    // fingerprint: the wrapper answers `error.class`, and only the cause
+    // fields say what actually failed. Asserting over the fingerprint's own
+    // output rather than a written-out key list means a field added there is
+    // covered here without this test being edited.
+    const fingerprint = errorFingerprint(
+      new Error("outer", { cause: new Error("inner") }),
+    );
+
+    logger.request({
+      durationMs: 7,
+      errorFingerprint: fingerprint,
+      message: "request.failed",
+      method: "POST",
+      route: "/test/:id",
+      severity: "ERROR",
+      statusCode: 500,
+    });
+
+    const emitted: unknown = JSON.parse(chunks.join(""));
+    expect(fingerprint["error.cause.class"]).toBe("Error");
+    expect(emitted).toMatchObject(fingerprint);
   });
 
   test("request sink never falls back to a raw unmatched URL", () => {

@@ -1,6 +1,7 @@
 import "@/api/lib/observability/otel";
 import { logs, SeverityNumber } from "@opentelemetry/api-logs";
 
+import type { ErrorFingerprint } from "@/api/lib/errors/utils";
 import { SENSITIVE_LOG_ATTRIBUTE_KEY_PATTERN } from "@/api/lib/observability/log-attribute-policy";
 
 const otelLogger = logs.getLogger("stella.api");
@@ -23,23 +24,9 @@ type LoggerAttributeValue = boolean | number | string;
 
 export type LoggerAttributes = Record<string, LoggerAttributeValue>;
 
-export type RequestErrorFingerprint = {
-  errorCauseFrame?: string | undefined;
-  errorClass?: string | undefined;
-  errorCode?: string | undefined;
-  errorFrame?: string | undefined;
-  pgCode?: string | undefined;
-  pgColumn?: string | undefined;
-  pgConstraint?: string | undefined;
-  pgRoutine?: string | undefined;
-  pgSchema?: string | undefined;
-  pgSeverity?: string | undefined;
-  pgTable?: string | undefined;
-};
-
 type RequestLogOptions = {
   durationMs: number;
-  errorFingerprint?: RequestErrorFingerprint | undefined;
+  errorFingerprint?: ErrorFingerprint | undefined;
   elysiaCode?: string | undefined;
   errorType?: string | undefined;
   message: "request.completed" | "request.failed";
@@ -178,39 +165,11 @@ const emitRequest = ({
     "request.duration_ms": durationMs,
     ...(elysiaCode === undefined ? {} : { "http.elysia_code": elysiaCode }),
     ...(errorType === undefined ? {} : { "error.type": errorType }),
-    ...(errorFingerprint?.errorCauseFrame === undefined
-      ? {}
-      : { "error.cause.frame": errorFingerprint.errorCauseFrame }),
-    ...(errorFingerprint?.errorClass === undefined
-      ? {}
-      : { "error.class": errorFingerprint.errorClass }),
-    ...(errorFingerprint?.errorCode === undefined
-      ? {}
-      : { "error.code": errorFingerprint.errorCode }),
-    ...(errorFingerprint?.errorFrame === undefined
-      ? {}
-      : { "error.frame": errorFingerprint.errorFrame }),
-    ...(errorFingerprint?.pgCode === undefined
-      ? {}
-      : { "error.cause.pg_code": errorFingerprint.pgCode }),
-    ...(errorFingerprint?.pgColumn === undefined
-      ? {}
-      : { "error.cause.pg_column": errorFingerprint.pgColumn }),
-    ...(errorFingerprint?.pgConstraint === undefined
-      ? {}
-      : { "error.cause.pg_constraint": errorFingerprint.pgConstraint }),
-    ...(errorFingerprint?.pgRoutine === undefined
-      ? {}
-      : { "error.cause.pg_routine": errorFingerprint.pgRoutine }),
-    ...(errorFingerprint?.pgSchema === undefined
-      ? {}
-      : { "error.cause.pg_schema": errorFingerprint.pgSchema }),
-    ...(errorFingerprint?.pgSeverity === undefined
-      ? {}
-      : { "error.cause.pg_severity": errorFingerprint.pgSeverity }),
-    ...(errorFingerprint?.pgTable === undefined
-      ? {}
-      : { "error.cause.pg_table": errorFingerprint.pgTable }),
+    // The fingerprint's keys are already this sink's attribute names, so the
+    // record ships whole rather than being re-listed field by field. A second
+    // copy of that key set can only ever be a shorter one, and a field it
+    // leaves out is a field no reader of this sink can get back.
+    ...sanitizeLogAttributes(errorFingerprint),
     ...(requestId === undefined ? {} : { "request.id": requestId }),
   };
 
