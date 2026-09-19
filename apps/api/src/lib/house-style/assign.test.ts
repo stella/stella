@@ -6,6 +6,9 @@ import type { Fetcher } from "@stll/fetch";
 import { createSystemOneClient } from "@/api/lib/decisions/system-one";
 import type { SystemOneClient } from "@/api/lib/decisions/system-one";
 import {
+  CANCELLED_NUMBERING_GUIDE_DRAFT,
+  CANCELLED_NUMBERING_STYLES_XML,
+  EMPTY_DOCUMENT_XML,
   HOUSE_DOCUMENT_XML,
   HOUSE_NUMBERING_XML,
   HOUSE_STYLES_XML,
@@ -24,11 +27,12 @@ import {
   extractStyleCatalogue,
   readStyleDefinitions,
 } from "@/api/lib/house-style/catalogue";
+import type { StyleCatalogue } from "@/api/lib/house-style/catalogue";
 import {
   bindStyleGuide,
   parseStyleGuideDraft,
 } from "@/api/lib/house-style/guide";
-import type { StyleGuide } from "@/api/lib/house-style/guide";
+import type { StyleGuide, StyleGuideDraft } from "@/api/lib/house-style/guide";
 import {
   extractParagraphFeatures,
   readBodyParagraphs,
@@ -41,19 +45,22 @@ const catalogue = extractStyleCatalogue({
   documentXml: HOUSE_DOCUMENT_XML,
 });
 
-const guideOf = (): StyleGuide => {
-  const draft = parseStyleGuideDraft(structuredClone(SYNTHETIC_GUIDE_DRAFT));
+const guideOf = (
+  source: StyleGuideDraft,
+  against: StyleCatalogue,
+): StyleGuide => {
+  const draft = parseStyleGuideDraft(structuredClone(source));
   if (Result.isError(draft)) {
     throw new TypeError("the synthetic guide does not parse");
   }
-  const bound = bindStyleGuide({ draft: draft.value, catalogue });
+  const bound = bindStyleGuide({ draft: draft.value, catalogue: against });
   if (Result.isError(bound)) {
     throw new TypeError("the synthetic guide does not bind to its catalogue");
   }
   return bound.value;
 };
 
-const guide = guideOf();
+const guide = guideOf(SYNTHETIC_GUIDE_DRAFT, catalogue);
 
 const features = extractParagraphFeatures({
   paragraphs: readBodyParagraphs(SOURCE_DOCUMENT_XML),
@@ -201,6 +208,38 @@ describe("the rule tier", () => {
     expect(ruleStyleId(features.at(2) ?? never(), plan ?? never())).toBe(
       "Normal",
     );
+  });
+});
+
+describe("the rule tier over a set that cancels numbering", () => {
+  const cancelled = extractStyleCatalogue({
+    stylesXml: CANCELLED_NUMBERING_STYLES_XML,
+    numberingXml: HOUSE_NUMBERING_XML,
+    documentXml: EMPTY_DOCUMENT_XML,
+  });
+  const plan = planRuleTier(
+    cancelled,
+    guideOf(CANCELLED_NUMBERING_GUIDE_DRAFT, cancelled),
+  );
+  const levelled = new Set([
+    ...(plan?.headingByLevel.values() ?? []),
+    ...(plan?.numberedBodyByLevel.values() ?? []),
+  ]);
+
+  // Cancelling the list leaves this one no depth at all, so it heads nothing.
+  // The guide lists it before the style it is based on, so while it still
+  // inherited that style's list it took level 1 from it.
+  test("drops a style its cancelled list left with no depth", () => {
+    expect(levelled.has("UnnumberedSubClauseFirm")).toBe(false);
+    expect(plan?.headingByLevel.get(1)).toBe("SubClauseFirm");
+  });
+
+  // A style's depth is its list level, or its outline level where it has no
+  // list. Cancelling the list therefore uncovers the `w:outlineLvl` the style
+  // inherits: level 3, not the list level 0 that was standing in front of it.
+  test("places a cancelled style on the outline level its list was hiding", () => {
+    expect(plan?.headingByLevel.get(3)).toBe("UnnumberedAnnexFirm");
+    expect(plan?.headingByLevel.get(0)).toBe("ClauseFirm");
   });
 });
 

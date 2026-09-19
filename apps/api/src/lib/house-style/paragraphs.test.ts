@@ -79,6 +79,22 @@ describe("the paragraphs a conversion decides", () => {
     ).toBe(true);
   });
 
+  // `w:numId` 0 on the paragraph switches its style's list off for this
+  // paragraph; read as an absent `w:numPr` it would inherit that list back.
+  test("read a paragraph's own numId 0 as unnumbered, not as silence", () => {
+    const unnumbered = featuresOf(
+      `<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>
+        <w:p><w:pPr><w:pStyle w:val="DefinitionFirm"/><w:numPr><w:numId w:val="0"/></w:numPr></w:pPr><w:r><w:t>Not a definition</w:t></w:r></w:p>
+      </w:body></w:document>`,
+    );
+    expect(unnumbered.at(0)).toMatchObject({
+      originalStyleId: "DefinitionFirm",
+      numberingLevel: null,
+      numberFormat: null,
+      numberExample: null,
+    });
+  });
+
   test("prefer a paragraph's own numbering over the style's", () => {
     const numbered = featuresOf(
       `<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>

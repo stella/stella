@@ -35,6 +35,9 @@ const unwrap = <TValue>(
   return result.value;
 };
 
+const messageOf = (result: Result<unknown, { message: string }>): string =>
+  Result.isError(result) ? result.error.message : "the call did not fail";
+
 const guideFor = async (rename: RenameRule[] = []): Promise<StyleGuide> => {
   const catalogue = unwrap(
     await readStyleCatalogue({ bytes: houseBytes, rename }),
@@ -142,6 +145,41 @@ describe("converting a document into a house style", () => {
       client: null,
     });
     expect(Result.isError(refused)).toBe(true);
+  });
+
+  // Word opens a document that carries no `word/styles.xml`: every paragraph
+  // is then on the default style. The styles a conversion applies come from
+  // the style set, so the source needs none of its own.
+  test("converts a source document that carries no style part", async () => {
+    const converted = unwrap(
+      await convertToHouseStyle({
+        styleSetBytes: houseBytes,
+        sourceBytes: await syntheticDocx({
+          documentXml: SOURCE_DOCUMENT_XML,
+          stylesXml: null,
+          numberingXml: null,
+        }),
+        guide: await guideFor(),
+        orgAIConfig: null,
+        client: null,
+      }),
+    );
+    expect(converted.rows).toHaveLength(6);
+    expect(
+      converted.rows.every(
+        ({ originalStyleId }) => originalStyleId === "Normal",
+      ),
+    ).toBe(true);
+    expect(danglingStyleReferences(await partsOf(converted.bytes))).toEqual([]);
+  });
+
+  // A style set is worth exactly the styles it defines, so the same missing
+  // part that a source document survives is refused here.
+  test("refuses a style set that carries no style part", async () => {
+    const refused = await readStyleCatalogue({
+      bytes: await syntheticDocx({ stylesXml: null, numberingXml: null }),
+    });
+    expect(messageOf(refused)).toContain("no style part");
   });
 
   test("refuses a style set whose document part is missing", async () => {
