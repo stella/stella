@@ -484,9 +484,14 @@ export const readCaseLawCoverageHandler = async (
     return { message: "Coverage is unavailable" };
   }
 
+  // One instant for the whole page: the freshness windows, the arrivals window
+  // and `generatedAt` all describe the same moment, so a reader comparing a
+  // source's last sync against the stated time is comparing like with like.
+  const now = new Date();
+
   const result = await coverage({
     excludedSourceIds: excludedSourceIds.value,
-    now: new Date(),
+    now,
     readSources: async () => await caseLawDb(readCaseLawCoverageSourcesQuery),
     readCounts: async (sourceIds) => {
       // The counts are the page's most expensive read and the one with a hard
@@ -499,7 +504,7 @@ export const readCaseLawCoverageHandler = async (
             async (tx) =>
               await readCaseLawSourceCountsQuery(tx, {
                 sourceIds,
-                now: new Date(),
+                now,
               }),
           ),
         catch: coverageError("counting stored decisions failed"),
@@ -526,7 +531,7 @@ export const readCaseLawCoverageHandler = async (
               country,
               courts: buckets.map(({ value }) => value),
               excludedSourceIds: excludedSourceIds.value,
-              now: new Date(),
+              now,
             }),
         ),
       ]);
