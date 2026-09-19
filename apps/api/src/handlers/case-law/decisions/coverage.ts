@@ -172,7 +172,10 @@ const reporterOf = (origin: string | null): CaseLawTotalReporter | null =>
  * has no manifest is history the registry no longer knows about, which the
  * loader reports rather than placing in a country it guessed.
  */
-const MANIFEST_BY_ADAPTER_KEY = new Map(
+const MANIFEST_BY_ADAPTER_KEY: ReadonlyMap<
+  string,
+  (typeof ADAPTER_MANIFESTS)[keyof typeof ADAPTER_MANIFESTS]
+> = new Map(
   Object.values(ADAPTER_MANIFESTS).map((manifest) => [manifest.key, manifest]),
 );
 
@@ -304,9 +307,13 @@ export const loadCaseLawCoverage = async ({
   for (const source of admitted) {
     const manifest = MANIFEST_BY_ADAPTER_KEY.get(source.adapterKey);
     if (manifest === undefined || !isCaseLawJurisdiction(manifest.country)) {
-      // A row whose adapter is not registered cannot be placed in a country,
-      // so it is left out of the page and reported instead of counted
-      // silently into whichever country happened to be first.
+      // A row whose adapter is not registered cannot be placed at all: the
+      // source table carries no country of its own, and the manifest that
+      // would supply one is exactly what is missing. Every figure on this
+      // page hangs off a country, so the row is left out and reported rather
+      // than counted into whichever country happened to be first. The
+      // telemetry is the point: a key with no adapter is deployment state
+      // someone has to fix, not a corpus fact a reader can act on.
       reportUnrecognizedSource(source.adapterKey);
       continue;
     }

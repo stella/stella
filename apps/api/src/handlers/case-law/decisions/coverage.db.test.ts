@@ -117,7 +117,12 @@ beforeAll(
         name: "cz withheld",
         enabled: true,
         lastSyncAt: NOW,
-        descriptor: { allowsRedistribution: false },
+        descriptor: {
+          license: "restricted",
+          attribution: "Publisher",
+          allowsRedistribution: false,
+          allowsDerivedAi: false,
+        },
       }),
     ]);
 
@@ -265,6 +270,43 @@ test(
     expect(cze?.sources.map(({ adapterKey }) => adapterKey).toSorted()).toEqual(
       [ADAPTER_KEYS.CZ_NS, ADAPTER_KEYS.CZ_NSS],
     );
+  },
+  DB_TEST_TIMEOUT_MS,
+);
+
+test(
+  "a source whose adapter is no longer registered is left out, not misfiled",
+  async () => {
+    const coverage = await loadCoverage({
+      readSources: async () => {
+        const sources = await readAsReader(readCaseLawCoverageSourcesQuery);
+        // A retired adapter leaves its row behind; the column is a varchar
+        // and the registry is deployment state, so the two legitimately
+        // disagree. Without a manifest there is no country to file it under.
+        for (const source of sources) {
+          if (source.adapterKey === ADAPTER_KEYS.SK_COURTS) {
+            source.adapterKey = "retired-adapter";
+          }
+        }
+        return sources;
+      },
+    });
+    expect(Result.isOk(coverage)).toBe(true);
+    if (Result.isError(coverage)) {
+      return;
+    }
+
+    // Slovakia had exactly that one source, so the country disappears rather
+    // than reporting an empty corpus, and nothing of it lands on a neighbour.
+    expect(
+      coverage.value.countries.map(({ country }) => country),
+    ).not.toContain("SVK");
+    expect(coverage.value.totals.stored.decisions).toBe(4);
+    for (const entry of coverage.value.countries) {
+      expect(entry.sources.map(({ adapterKey }) => adapterKey)).not.toContain(
+        "retired-adapter",
+      );
+    }
   },
   DB_TEST_TIMEOUT_MS,
 );
