@@ -134,11 +134,11 @@ function RouteComponent() {
     );
   }, [queryClient, activeOrganizationId]);
 
-  // Opening pushes, so Back returns to the list. Leaving replaces the entry it
-  // just pushed, so Back from the list does not walk into the Studio again.
+  // Studio state belongs to this route entry. Replacing it avoids leaving a
+  // duplicate list entry behind when the Studio closes.
   const openStudio = useCallback(
     async (templateId: string) => {
-      await navigate({ search: { template: templateId } });
+      await navigate({ replace: true, search: { template: templateId } });
     },
     [navigate],
   );
@@ -405,13 +405,13 @@ const TemplateDetail = ({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      {state === "loading" && (
+      {(state === "loading" || missing) && (
         <div className="flex flex-1 items-center justify-center p-8">
           <p className="text-muted-foreground text-sm">{t("common.loading")}</p>
         </div>
       )}
 
-      {state === "error" && (
+      {state === "error" && !missing && (
         <div className="flex flex-1 items-center justify-center p-8">
           <p className="text-muted-foreground text-sm">
             {t("templates.loadFailed")}
