@@ -1,5 +1,5 @@
-import { useId, useRef, useState } from "react";
-import type { ChangeEvent, PropsWithChildren, ReactNode } from "react";
+import { useId, useState } from "react";
+import type { PropsWithChildren, ReactNode } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, getRouteApi } from "@tanstack/react-router";
@@ -28,6 +28,7 @@ import {
   DialogTitle,
 } from "@stll/ui/dialog";
 import { FileInput } from "@stll/ui/file-input";
+import { openFilePicker } from "@stll/ui/file-picker";
 import { Input } from "@stll/ui/input";
 import { stellaToast } from "@stll/ui/toast";
 
@@ -73,8 +74,6 @@ const StyleSetsPage = () => {
   const canCreate = usePermissions({ styleSet: ["create"] });
   const canUpdate = usePermissions({ styleSet: ["update"] });
   const canDelete = usePermissions({ styleSet: ["delete"] });
-  const replaceInputRef = useRef<HTMLInputElement>(null);
-  const replaceTargetRef = useRef<StyleSetItem | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [renameTarget, setRenameTarget] = useState<StyleSetItem | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<StyleSetItem | null>(null);
@@ -89,10 +88,8 @@ const StyleSetsPage = () => {
     });
   };
 
-  const replace = async (file: File) => {
-    const target = replaceTargetRef.current;
-    replaceTargetRef.current = null;
-    if (!target || !isDocxFile(file)) {
+  const replace = async (target: StyleSetItem, file: File) => {
+    if (!isDocxFile(file)) {
       stellaToast.add({ type: "error", title: t("templates.invalidFileType") });
       return;
     }
@@ -138,8 +135,8 @@ const StyleSetsPage = () => {
     });
   };
 
-  const handleReplace = (file: File) => {
-    replace(file).catch((error: unknown) => {
+  const handleReplace = (target: StyleSetItem, file: File) => {
+    replace(target, file).catch((error: unknown) => {
       setBusy(false);
       showThrownError(
         t("styleSets.replaceFailed"),
@@ -147,14 +144,6 @@ const StyleSetsPage = () => {
         t(UNEXPECTED_ERROR_TRANSLATION_KEY),
       );
     });
-  };
-
-  const handleReplaceInputChange = (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.currentTarget.files?.item(0);
-    event.currentTarget.value = "";
-    if (file) {
-      handleReplace(file);
-    }
   };
 
   const remove = async () => {
@@ -279,10 +268,12 @@ const StyleSetsPage = () => {
                     <Button
                       aria-label={t("styleSets.replace")}
                       disabled={busy}
-                      onClick={() => {
-                        replaceTargetRef.current = styleSet;
-                        replaceInputRef.current?.click();
-                      }}
+                      onClick={() =>
+                        openFilePicker({
+                          accept: ".docx",
+                          onPick: ([file]) => handleReplace(styleSet, file),
+                        })
+                      }
                       size="icon-xs"
                       variant="ghost"
                     >
@@ -305,13 +296,6 @@ const StyleSetsPage = () => {
           />
         ))}
       </ul>
-      <input
-        accept=".docx"
-        className="hidden"
-        onChange={handleReplaceInputChange}
-        ref={replaceInputRef}
-        type="file"
-      />
       {importOpen && (
         <ImportStyleSetDialog
           onImported={invalidate}

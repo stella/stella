@@ -1283,7 +1283,6 @@
     "saveVersionAndLeave": "Salvar versão e sair",
     "searchClauses": "Pesquisar cláusulas...",
     "searchPlaceholder": "Pesquisar cláusulas...",
-    "selectFile": "Selecione o arquivo JSON",
     "selectVersionToCompare": "Selecione uma versão para comparar com a atual",
     "slotCustom": "Nome de slot personalizado…",
     "slotHelp": "Um slot é uma posição nomeada no documento ('{{'@clause:name'}}') onde a cláusula vinculada é inserida ao preencher o modelo.",
@@ -1758,7 +1757,6 @@
       "skippedLimitReached": "Ignorado: limite de contatos atingido"
     },
     "importStudio": {
-      "chooseFile": "Escolher um arquivo",
       "customFieldTarget": "Importar como campo personalizado",
       "defaultType": "Usar este tipo quando o arquivo não tiver uma coluna de tipo de contato",
       "delimiter": {
@@ -4471,7 +4469,6 @@
       "sourceFirm": "Escritório",
       "sourceParty": "Outra parte"
     },
-    "browseFiles": "Navegar pelos arquivos",
     "builtInLookupFormat": "Formato básico",
     "categoryDeleteConfirm": "Isso removerá a categoria. Os modelos nesta categoria não serão categorizados.",
     "categoryDeleteFailed": "Falha ao excluir categoria",

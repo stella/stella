@@ -1286,7 +1286,6 @@ type Messages = {
     "saveVersionAndLeave": "Save version & leave";
     "searchClauses": "Search clauses...";
     "searchPlaceholder": "Search clauses...";
-    "selectFile": "Select JSON file";
     "selectVersionToCompare": "Select a version to compare with current";
     "slotCustom": "Custom slot name…";
     "slotHelp": "A slot is a named position in the document ('{{'@clause:name'}}') where the linked clause is inserted when the template is filled.";
@@ -1761,7 +1760,6 @@ type Messages = {
       "skippedLimitReached": "Skipped: contacts limit reached";
     };
     "importStudio": {
-      "chooseFile": "Choose a file";
       "customFieldTarget": "Import as custom field";
       "defaultType": "Use this type when the file has no contact type column";
       "delimiter": {
@@ -4474,7 +4472,6 @@ type Messages = {
       "sourceFirm": "Firm";
       "sourceParty": "Other party";
     };
-    "browseFiles": "Browse files";
     "builtInLookupFormat": "Basic format";
     "categoryDeleteConfirm": "This will remove the category. Templates in this category will become uncategorized.";
     "categoryDeleteFailed": "Failed to delete category";

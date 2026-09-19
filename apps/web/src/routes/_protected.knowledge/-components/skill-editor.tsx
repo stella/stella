@@ -20,6 +20,7 @@ import { useTranslations } from "use-intl";
 import { SKILL_RESOURCE_PATH_PATTERN } from "@stll/api-contract";
 import { compareByLocale } from "@stll/collation";
 import { Button } from "@stll/ui/button";
+import { openFilePicker } from "@stll/ui/file-picker";
 import { Input } from "@stll/ui/input";
 import {
   Menu,
@@ -1277,7 +1278,6 @@ function RootAddMenu({
   const t = useTranslations();
   const tSkills = useTranslations("knowledge.agentSkills");
   const triggerRef = useRef<HTMLButtonElement | null>(null);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [newFileOpen, setNewFileOpen] = useState(false);
   const [path, setPath] = useState("");
 
@@ -1309,7 +1309,11 @@ function RootAddMenu({
           }
         />
         <MenuPopup>
-          <MenuItem onClick={() => fileInputRef.current?.click()}>
+          <MenuItem
+            onClick={() =>
+              openFilePicker({ multiple: true, onPick: onUploadFiles })
+            }
+          >
             <UploadIcon />
             {t("common.uploadFiles")}
           </MenuItem>
@@ -1324,21 +1328,6 @@ function RootAddMenu({
           </MenuItem>
         </MenuPopup>
       </Menu>
-      <input
-        className="hidden"
-        multiple
-        onChange={(event) => {
-          const files = event.currentTarget.files
-            ? Array.from(event.currentTarget.files)
-            : [];
-          event.currentTarget.value = "";
-          if (files.length > 0) {
-            onUploadFiles(files);
-          }
-        }}
-        ref={fileInputRef}
-        type="file"
-      />
       <Popover
         onOpenChange={(open) => {
           if (!open) {

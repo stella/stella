@@ -1283,7 +1283,6 @@
     "saveVersionAndLeave": "Uložit verzi a odejít",
     "searchClauses": "Hledat vzorová ustanovení…",
     "searchPlaceholder": "Hledat vzorová ustanovení…",
-    "selectFile": "Vybrat soubor JSON",
     "selectVersionToCompare": "Vyberte verzi pro porovnání s aktuální",
     "slotCustom": "Vlastní název slotu…",
     "slotHelp": "Slot je pojmenované místo v dokumentu ('{{'@clause:name'}}'), kam se při vyplnění vzoru vloží propojené ustanovení.",
@@ -1758,7 +1757,6 @@
       "skippedLimitReached": "Přeskočeno: dosažen limit kontaktů"
     },
     "importStudio": {
-      "chooseFile": "Vybrat soubor",
       "customFieldTarget": "Importovat jako vlastní pole",
       "defaultType": "Tento typ se použije, pokud soubor neobsahuje sloupec s typem kontaktu",
       "delimiter": {
@@ -4471,7 +4469,6 @@
       "sourceFirm": "Kancelář",
       "sourceParty": "Jiná strana"
     },
-    "browseFiles": "Procházet soubory",
     "builtInLookupFormat": "Základní formát",
     "categoryDeleteConfirm": "Tímto se kategorie odstraní. Vzory v této kategorii budou označeny jako nekategorizované.",
     "categoryDeleteFailed": "Smazání kategorie se nezdařilo",

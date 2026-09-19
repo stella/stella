@@ -35,6 +35,7 @@ import {
   isChatFileMimeType,
 } from "@stll/api-contract/chat-file-types";
 import { CHAT_CONTEXT_FILE_MAX_BYTES } from "@stll/chat-limits";
+import { openFilePicker as openBrowserFilePicker } from "@stll/ui/file-picker";
 
 import {
   decisionPassageContent,
@@ -175,12 +176,9 @@ export type ChatEditorController = {
    * guard against the destroyed state.
    */
   editor: Editor | null;
-  fileInputAccept: string;
-  fileInputRef: React.RefObject<HTMLInputElement | null>;
   focus: () => void;
   handleDragOver: (event: React.DragEvent) => void;
   handleDrop: (event: React.DragEvent) => void;
-  handleFileInputChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
   handlePaste: (event: React.ClipboardEvent) => void;
   isEmpty: boolean;
   openFilePicker: () => void;
@@ -578,7 +576,6 @@ export const useChatEditor = ({
   // eslint-disable-next-line react/refs -- latest-ref mirror: consumed by out-of-render editor handlers, must reflect this render's prop
   suggestedFollowupPromptRef.current = suggestedFollowupPrompt;
   const queryClient = useQueryClient();
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const submitHandlerRef = useRef<(() => Promise<void>) | null>(null);
   const fileIdCounterRef = useRef(0);
   const activePluginKeysRef = useRef<(string | PluginKey)[]>([]);
@@ -1402,19 +1399,12 @@ export const useChatEditor = ({
     addFiles(files);
   };
 
-  const handleFileInputChange = (
-    event: React.ChangeEvent<HTMLInputElement>,
-  ) => {
-    const { files } = event.target;
-    if (files !== null && files.length > 0) {
-      addFiles(files);
-    }
-
-    event.target.value = "";
-  };
-
   const openFilePicker = () => {
-    fileInputRef.current?.click();
+    openBrowserFilePicker({
+      accept: CHAT_FILE_INPUT_ACCEPT,
+      multiple: true,
+      onPick: addFiles,
+    });
   };
 
   const submit = useCallback(
@@ -1488,12 +1478,9 @@ export const useChatEditor = ({
     blur,
     canSubmit,
     editor,
-    fileInputAccept: CHAT_FILE_INPUT_ACCEPT,
-    fileInputRef,
     focus,
     handleDragOver,
     handleDrop,
-    handleFileInputChange,
     handlePaste,
     isEmpty,
     openFilePicker,

@@ -1283,7 +1283,6 @@
     "saveVersionAndLeave": "Zapisz wersję i wyjdź",
     "searchClauses": "Szukaj klauzul...",
     "searchPlaceholder": "Szukaj klauzul...",
-    "selectFile": "Wybierz plik JSON",
     "selectVersionToCompare": "Wybierz wersję do porównania z bieżącą",
     "slotCustom": "Własna nazwa slotu…",
     "slotHelp": "Slot to nazwane miejsce w dokumencie ('{{'@clause:name'}}'), w którym podczas wypełniania szablonu wstawiana jest powiązana klauzula.",
@@ -1758,7 +1757,6 @@
       "skippedLimitReached": "Pominięto: osiągnięto limit kontaktów"
     },
     "importStudio": {
-      "chooseFile": "Wybierz plik",
       "customFieldTarget": "Importuj jako pole niestandardowe",
       "defaultType": "Użyj tego typu, jeśli plik nie zawiera kolumny z typem kontaktu",
       "delimiter": {
@@ -4471,7 +4469,6 @@
       "sourceFirm": "Kancelaria",
       "sourceParty": "Inna strona"
     },
-    "browseFiles": "Przeglądaj pliki",
     "builtInLookupFormat": "Format podstawowy",
     "categoryDeleteConfirm": "Spowoduje to usunięcie kategorii. Szablony w tej kategorii staną się niekategoryzowane.",
     "categoryDeleteFailed": "Nie udało się usunąć kategorii",

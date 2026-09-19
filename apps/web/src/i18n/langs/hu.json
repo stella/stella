@@ -1283,7 +1283,6 @@
     "saveVersionAndLeave": "Verzió mentése és kilépés",
     "searchClauses": "Záradékok keresése...",
     "searchPlaceholder": "Záradékok keresése...",
-    "selectFile": "JSON-fájl kiválasztása",
     "selectVersionToCompare": "Válasszon egy verziót az összehasonlításhoz",
     "slotCustom": "Egyéni foglalatnév…",
     "slotHelp": "A foglalat egy megnevezett hely a dokumentumban ('{{'@clause:name'}}'), ahová a csatolt kikötés a sablon kitöltésekor beszúródik.",
@@ -1758,7 +1757,6 @@
       "skippedLimitReached": "Kihagyva: elérte a kapcsolatlimitet"
     },
     "importStudio": {
-      "chooseFile": "Fájl kiválasztása",
       "customFieldTarget": "Importálás egyéni mezőként",
       "defaultType": "Ezt a típust használja, ha a fájl nem tartalmaz kapcsolattípus-oszlopot",
       "delimiter": {
@@ -4471,7 +4469,6 @@
       "sourceFirm": "Ügyvédi iroda",
       "sourceParty": "Egyéb fél"
     },
-    "browseFiles": "Fájlok tallózása",
     "builtInLookupFormat": "Alapformátum",
     "categoryDeleteConfirm": "Ezzel a kategória törlődik. Az ide tartozó sablonok kategória nélkülivé válnak.",
     "categoryDeleteFailed": "A kategória törlése nem sikerült",

@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { UploadIcon } from "lucide-react";
@@ -14,6 +14,7 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
+import { openFilePicker } from "@stll/ui/file-picker";
 
 import { QuerySuspenseBoundary } from "@/components/query-suspense-boundary";
 import { useEntitiesCountLimit } from "@/components/workspaces/hooks/use-limits";
@@ -167,7 +168,6 @@ const UploadDocumentForMatter = ({
   workspaceId,
 }: UploadDocumentForMatterProps) => {
   const t = useTranslations();
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [isUploadPending, createFileEntities] =
     useCreateFileEntities(workspaceId);
   const isWorkflowRunning = useIsWorkflowRunning(workspaceId);
@@ -194,28 +194,18 @@ const UploadDocumentForMatter = ({
 
   return (
     <div className="flex flex-col gap-2">
-      <input
-        className="hidden"
-        disabled={disabled}
-        id={`upload-document-files-${workspaceId}`}
-        multiple
-        onChange={(event) => {
-          const files = event.currentTarget.files
-            ? [...event.currentTarget.files]
-            : [];
-          if (files.length > 0) {
-            createFileEntities({ files, parentId: null });
-            onClose();
-          }
-          event.currentTarget.value = "";
-        }}
-        ref={fileInputRef}
-        type="file"
-      />
       <Button
         className="min-h-11 border border-dashed"
         disabled={disabled}
-        onClick={() => fileInputRef.current?.click()}
+        onClick={() =>
+          openFilePicker({
+            multiple: true,
+            onPick: (files) => {
+              createFileEntities({ files, parentId: null });
+              onClose();
+            },
+          })
+        }
         type="button"
         variant="outline"
       >

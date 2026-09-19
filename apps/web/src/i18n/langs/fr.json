@@ -1283,7 +1283,6 @@
     "saveVersionAndLeave": "Enregistrer la version et quitter",
     "searchClauses": "Rechercher des clauses…",
     "searchPlaceholder": "Rechercher des clauses…",
-    "selectFile": "Sélectionner un fichier JSON",
     "selectVersionToCompare": "Sélectionnez une version à comparer avec la version actuelle",
     "slotCustom": "Nom d'emplacement personnalisé…",
     "slotHelp": "Un emplacement est une position nommée dans le document ('{{'@clause:name'}}') où la clause liée est insérée lors du remplissage du modèle.",
@@ -1758,7 +1757,6 @@
       "skippedLimitReached": "Ignoré : limite de contacts atteinte"
     },
     "importStudio": {
-      "chooseFile": "Choisir un fichier",
       "customFieldTarget": "Importer comme champ personnalisé",
       "defaultType": "Utiliser ce type si le fichier ne comporte aucune colonne de type de contact",
       "delimiter": {
@@ -4471,7 +4469,6 @@
       "sourceFirm": "Cabinet",
       "sourceParty": "Autre partie"
     },
-    "browseFiles": "Parcourir les fichiers",
     "builtInLookupFormat": "Format de base",
     "categoryDeleteConfirm": "La catégorie sera supprimée. Les modèles qui lui appartiennent seront déplacés vers « Non catégorisé ».",
     "categoryDeleteFailed": "Impossible de supprimer la catégorie",

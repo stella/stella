@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { useFormStatus } from "react-dom";
 
 import { useQuery } from "@tanstack/react-query";
@@ -16,6 +16,7 @@ import {
   ComboboxList,
   ComboboxPopup,
 } from "@stll/ui/combobox";
+import { openFilePicker } from "@stll/ui/file-picker";
 import { Frame, FramePanel } from "@stll/ui/frame";
 import { Input } from "@stll/ui/input";
 import { stellaToast } from "@stll/ui/toast";
@@ -306,7 +307,6 @@ export const AnonymizationDenyListCard = () => {
       organizationId: activeOrganizationId,
     }),
   });
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const [pendingCanonical, setPendingCanonical] = useState("");
   const [pendingLabel, setPendingLabel] = useState<LabelOption>(DEFAULT_LABEL);
@@ -484,7 +484,18 @@ export const AnonymizationDenyListCard = () => {
             <div className="flex items-center gap-2">
               <Button
                 disabled={entries === undefined || updateMutation.isPending}
-                onClick={() => fileInputRef.current?.click()}
+                onClick={() => {
+                  openFilePicker({
+                    accept:
+                      ".csv,.txt,.json,text/csv,text/plain,application/json",
+                    onPick: ([file]) => {
+                      detached(
+                        handleImportFile(file),
+                        "anonymization-deny-list-card.import-file",
+                      );
+                    },
+                  });
+                }}
                 size="sm"
                 type="button"
                 variant="outline"
@@ -495,23 +506,6 @@ export const AnonymizationDenyListCard = () => {
               <span className="text-muted-foreground text-xs">
                 {t("settings.organization.anonymization.importHint")}
               </span>
-              <input
-                accept=".csv,.txt,.json,text/csv,text/plain,application/json"
-                className="hidden"
-                onChange={(event) => {
-                  const file = event.target.files?.[0];
-                  if (!file) {
-                    return;
-                  }
-                  detached(
-                    handleImportFile(file),
-                    "anonymization-deny-list-card.import-file",
-                  );
-                  event.target.value = "";
-                }}
-                ref={fileInputRef}
-                type="file"
-              />
             </div>
           </form>
 

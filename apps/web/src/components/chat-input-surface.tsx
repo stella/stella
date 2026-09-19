@@ -143,12 +143,9 @@ export const ChatInputSurface = ({
     attachments,
     canSubmit,
     editor,
-    fileInputAccept,
-    fileInputRef,
     focus,
     handleDragOver,
     handleDrop,
-    handleFileInputChange,
     handlePaste,
     isEmpty,
     openFilePicker,
@@ -334,15 +331,6 @@ export const ChatInputSurface = ({
                   }
                 />
               </ControlGroup>
-              <input
-                accept={fileInputAccept}
-                className="hidden"
-                disabled={inputDisabled}
-                multiple
-                onChange={handleFileInputChange}
-                ref={fileInputRef}
-                type="file"
-              />
               <ControlGroup
                 className={cn(
                   "flex items-center gap-0.5",

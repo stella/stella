@@ -1283,7 +1283,6 @@
     "saveVersionAndLeave": "Uložiť verziu a odísť",
     "searchClauses": "Hľadať ustanovenia...",
     "searchPlaceholder": "Hľadať ustanovenia...",
-    "selectFile": "Vybrať súbor JSON",
     "selectVersionToCompare": "Vyberte verziu na porovnanie s aktuálnou",
     "slotCustom": "Vlastný názov slotu…",
     "slotHelp": "Slot je pomenované miesto v dokumente ('{{'@clause:name'}}'), kam sa pri vypĺňaní vzoru vloží prepojené ustanovenie.",
@@ -1758,7 +1757,6 @@
       "skippedLimitReached": "Preskočené: dosiahnutý limit kontaktov"
     },
     "importStudio": {
-      "chooseFile": "Vybrať súbor",
       "customFieldTarget": "Importovať ako vlastné pole",
       "defaultType": "Použiť tento typ, ak súbor neobsahuje stĺpec s typom kontaktu",
       "delimiter": {
@@ -4471,7 +4469,6 @@
       "sourceFirm": "Kancelária",
       "sourceParty": "Iná strana"
     },
-    "browseFiles": "Prehliadať súbory",
     "builtInLookupFormat": "Základný formát",
     "categoryDeleteConfirm": "Kategória bude odstránená. Vzory v tejto kategórii budú presunuté medzi nekategorizované.",
     "categoryDeleteFailed": "Odstránenie kategórie sa nepodarilo",

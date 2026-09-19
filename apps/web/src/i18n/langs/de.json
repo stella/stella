@@ -1283,7 +1283,6 @@
     "saveVersionAndLeave": "Version speichern und verlassen",
     "searchClauses": "Klauseln suchen …",
     "searchPlaceholder": "Klauseln suchen …",
-    "selectFile": "JSON-Datei auswählen",
     "selectVersionToCompare": "Version zum Vergleich mit der aktuellen auswählen",
     "slotCustom": "Eigener Slot-Name…",
     "slotHelp": "Ein Slot ist eine benannte Position im Dokument ('{{'@clause:name'}}'), an der die verknüpfte Klausel beim Ausfüllen der Vorlage eingefügt wird.",
@@ -1758,7 +1757,6 @@
       "skippedLimitReached": "Übersprungen: Kontaktlimit erreicht"
     },
     "importStudio": {
-      "chooseFile": "Datei auswählen",
       "customFieldTarget": "Als benutzerdefiniertes Feld importieren",
       "defaultType": "Diesen Typ verwenden, wenn die Datei keine Spalte für den Kontakttyp enthält",
       "delimiter": {
@@ -4471,7 +4469,6 @@
       "sourceFirm": "Kanzlei",
       "sourceParty": "Andere Partei"
     },
-    "browseFiles": "Dateien durchsuchen",
     "builtInLookupFormat": "Basisformat",
     "categoryDeleteConfirm": "Die Kategorie wird entfernt. Vorlagen in dieser Kategorie werden unkategorisiert.",
     "categoryDeleteFailed": "Kategorie konnte nicht gelöscht werden",

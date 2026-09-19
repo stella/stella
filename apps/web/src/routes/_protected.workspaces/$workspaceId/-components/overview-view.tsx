@@ -1,5 +1,5 @@
 import type * as React from "react";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 import {
   useMutation,
@@ -22,6 +22,7 @@ import { useTranslations } from "use-intl";
 import { compareCodeUnit } from "@stll/collation";
 import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
+import { openFilePicker } from "@stll/ui/file-picker";
 import {
   Menu,
   MenuItem,
@@ -163,13 +164,19 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { data } = useSuspenseQuery(overviewOptions(workspaceId));
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [upcomingMenu, setUpcomingMenu] = useState<UpcomingMenuState>({
     open: false,
     anchor: null,
     task: null,
   });
   const [, handleCreateFileEntities] = useCreateFileEntities(workspaceId);
+  const openUploadPicker = () =>
+    openFilePicker({
+      multiple: true,
+      onPick: (files) => {
+        handleCreateFileEntities({ files, parentId: null });
+      },
+    });
   // Views — find view IDs by layout type for stat card navigation
   const { data: views } = useQuery(viewsOptions(workspaceId));
   // The Workflows tab owns the runs fetch; this matter-overview entry point only
@@ -966,7 +973,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
           primaryAction={{
             label: tWorkspaces("uploadDocuments"),
             icon: UploadIcon,
-            onClick: () => fileInputRef.current?.click(),
+            onClick: openUploadPicker,
           }}
           showHelpBar={false}
           title={tWorkspaces("emptyDocuments.title")}
@@ -975,11 +982,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
 
       {hasActivity && (
         <div className="flex justify-end">
-          <Button
-            onClick={() => fileInputRef.current?.click()}
-            size="sm"
-            variant="outline"
-          >
+          <Button onClick={openUploadPicker} size="sm" variant="outline">
             <UploadIcon className="size-4" />
             {tWorkspaces("uploadDocuments")}
           </Button>
@@ -987,19 +990,6 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
       )}
 
       <ActivityPanel key={workspaceId} workspaceId={workspaceId} />
-      <input
-        className="hidden"
-        multiple
-        onChange={(e) => {
-          const files = e.target.files;
-          if (files && files.length > 0) {
-            handleCreateFileEntities({ files: [...files], parentId: null });
-          }
-          e.target.value = "";
-        }}
-        ref={fileInputRef}
-        type="file"
-      />
     </div>
   );
 };

@@ -1,10 +1,11 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 
 import { useQueryClient } from "@tanstack/react-query";
 import { Result } from "better-result";
 import { AlertTriangleIcon, FileTextIcon, Loader2Icon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { openFilePicker } from "@stll/ui/file-picker";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
@@ -268,7 +269,6 @@ export const ProcuracaoDropZone = ({
   onFile,
 }: ProcuracaoDropZoneProps) => {
   const t = useTranslations();
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const { ref, isDropTarget } = useExternalFileDrop({
     onDrop: (files) => {
       const file = files.at(0);
@@ -281,7 +281,7 @@ export const ProcuracaoDropZone = ({
 
   const openPicker = () => {
     if (!isExtracting) {
-      fileInputRef.current?.click();
+      openFilePicker({ accept: ".docx", onPick: ([file]) => onFile(file) });
     }
   };
 
@@ -314,19 +314,6 @@ export const ProcuracaoDropZone = ({
           {t("contacts.extractProcuracao.fileHint")}
         </span>
       </button>
-      <input
-        accept=".docx"
-        className="hidden"
-        onChange={(event) => {
-          const file = event.target.files?.[0];
-          if (file) {
-            onFile(file);
-          }
-          event.target.value = "";
-        }}
-        ref={fileInputRef}
-        type="file"
-      />
     </div>
   );
 };

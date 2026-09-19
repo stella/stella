@@ -167,6 +167,7 @@
     "./hooks/use-content-dir": "./src/hooks/use-content-dir.ts",
     "./hooks/use-mobile": "./src/hooks/use-mobile.ts",
     "./hooks/use-viewport-width": "./src/hooks/use-viewport-width.ts",
+    "./file-picker": "./src/lib/file-picker.ts",
     "./lib/overlay-layer": "./src/lib/overlay-layer.ts",
     "./lib/utils": "./src/lib/utils.ts",
     "./lib/week": "./src/lib/week.ts"

@@ -32,6 +32,7 @@ import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { openFilePicker } from "@stll/ui/file-picker";
 import {
   Select,
   SelectItem,
@@ -440,7 +441,6 @@ const UploadStep = ({
   stepHeadingRef: StepHeadingRef;
 }) => {
   const t = useTranslations();
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const isInspecting = busy === "inspecting";
   const { ref, isDropTarget } = useExternalFileDrop({
     onDrop: (files) => {
@@ -473,7 +473,13 @@ const UploadStep = ({
           isInspecting && "cursor-progress",
         )}
         disabled={isInspecting}
-        onClick={() => fileInputRef.current?.click()}
+        onClick={() => {
+          openFilePicker({
+            accept:
+              ".csv,.tsv,.txt,text/csv,text/tab-separated-values,text/plain",
+            onPick: ([selected]) => onFile(selected),
+          });
+        }}
         type="button"
       >
         {isInspecting ? (
@@ -489,22 +495,9 @@ const UploadStep = ({
         </span>
         <span className="text-muted-foreground flex items-center gap-1.5 text-sm">
           <UploadIcon className="size-4" />
-          {t("contacts.importStudio.chooseFile")}
+          {t("common.chooseFile")}
         </span>
       </button>
-      <input
-        accept=".csv,.tsv,.txt,text/csv,text/tab-separated-values,text/plain"
-        className="hidden"
-        onChange={(event) => {
-          const selected = event.target.files?.item(0);
-          event.target.value = "";
-          if (selected) {
-            onFile(selected);
-          }
-        }}
-        ref={fileInputRef}
-        type="file"
-      />
     </section>
   );
 };
