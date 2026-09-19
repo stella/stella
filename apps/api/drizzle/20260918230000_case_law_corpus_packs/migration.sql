@@ -113,6 +113,9 @@ CREATE POLICY "public_law_reader_access"
 
 GRANT SELECT, INSERT, UPDATE, DELETE
   ON TABLE "case_law_corpus_pack_refs" TO stella_ingestion;--> statement-breakpoint
+-- Ingestion bookkeeping: the request role reads corpus payloads, never which
+-- decision owns which member of a pack.
+REVOKE ALL PRIVILEGES ON TABLE "case_law_corpus_pack_refs" FROM stella;--> statement-breakpoint
 GRANT SELECT, INSERT, UPDATE, DELETE
   ON TABLE "case_law_corpus_tombstones" TO stella_ingestion;--> statement-breakpoint
 GRANT SELECT ON TABLE "case_law_corpus_tombstones" TO stella;--> statement-breakpoint

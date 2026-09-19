@@ -97,6 +97,9 @@ const POST_BOOTSTRAP_SELECT_ONLY_TABLES = new Set([
   // the ingestion pipeline.
   "case_law_judges",
   "case_law_decision_judges",
+  // Addresses erased out of shared corpus packs: every corpus read consults
+  // them before it fetches, and only the erasure path writes them.
+  "case_law_corpus_tombstones",
   // Durable operator progress: request code may inspect the rollout receipt;
   // only the ingestion role and the maintenance script may advance it.
   "case_law_decision_identifier_backfills",
@@ -142,6 +145,9 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   // the owner connection.
   "apikey",
   "case_law_corpus_upload_intents",
+  // Which decision owns which member of a corpus pack: ingestion bookkeeping
+  // beside the upload intents, never read through the request role.
+  "case_law_corpus_pack_refs",
   // Internal ingestion coordination: publisher aliases are reserved before
   // decision writes and must never be queried through the request role.
   "case_law_decision_source_identities",
