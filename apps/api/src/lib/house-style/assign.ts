@@ -165,10 +165,26 @@ const headsALevel = ({ formatting }: CatalogueStyle): boolean =>
   formatting.outlineLevel !== null ||
   (formatting.numbering !== null && formatting.numbering.format !== "none");
 
-export const planRuleTier = (catalogue: StyleCatalogue): RulePlan | null => {
+export const planRuleTier = (
+  catalogue: StyleCatalogue,
+  guide: StyleGuide,
+): RulePlan | null => {
   const headingByLevel = new Map<number, string>();
   const numberedBodyByLevel = new Map<number, string>();
   const byId = new Map(catalogue.styles.map((style) => [style.id, style]));
+  // The catalogue is everything the set defines; the guide is what the house
+  // uses. A content-free set has no usage counts, so the guide's order breaks
+  // the tie between two styles on one level.
+  const guideOrder = new Map(
+    guide.styles.map(({ id }, index) => [id, index] as const),
+  );
+  const guided = catalogue.styles
+    .filter(({ id }) => guideOrder.has(id))
+    .toSorted(
+      (left, right) =>
+        right.usageCount - left.usageCount ||
+        (guideOrder.get(left.id) ?? 0) - (guideOrder.get(right.id) ?? 0),
+    );
   const keep = (
     levels: Map<number, string>,
     level: number,
@@ -179,7 +195,7 @@ export const planRuleTier = (catalogue: StyleCatalogue): RulePlan | null => {
       levels.set(level, candidate.id);
     }
   };
-  for (const style of catalogue.styles) {
+  for (const style of guided) {
     const depth = styleDepth(style);
     if (depth === null) {
       continue;
@@ -195,8 +211,8 @@ export const planRuleTier = (catalogue: StyleCatalogue): RulePlan | null => {
   // hierarchy stands in.
   const body =
     catalogue.styles.find(({ id }) => id === catalogue.defaultStyleId) ??
-    catalogue.styles.find((style) => styleDepth(style) === null) ??
-    catalogue.styles.at(0);
+    guided.find((style) => styleDepth(style) === null) ??
+    guided.at(0);
   if (body === undefined) {
     return null;
   }
@@ -274,7 +290,7 @@ export const assignHouseStyles = async ({
   abortSignal,
   client,
 }: AssignHouseStylesOptions): Promise<AssignHouseStylesResult> => {
-  const plan = planRuleTier(catalogue);
+  const plan = planRuleTier(catalogue, guide);
   const usage: DecisionUsage = {
     requests: 0,
     inputTokens: 0,

@@ -161,7 +161,30 @@ describe("planning the questions", () => {
 });
 
 describe("the rule tier", () => {
-  const plan = planRuleTier(catalogue);
+  const plan = planRuleTier(catalogue, guide);
+
+  // A stored style set is content-free: no usage counts, and styles the house
+  // never uses sit in the catalogue beside the ones the guide names.
+  test("plans only over guided styles, in the same way without a body", () => {
+    const contentFree = extractStyleCatalogue({
+      stylesXml: HOUSE_STYLES_XML,
+      numberingXml: HOUSE_NUMBERING_XML,
+      documentXml:
+        '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body/></w:document>',
+    });
+    const withoutBody = planRuleTier(contentFree, guide);
+    const guided = new Set(guide.styles.map(({ id }) => id));
+    const levelled = [
+      ...(withoutBody?.headingByLevel.values() ?? []),
+      ...(withoutBody?.numberedBodyByLevel.values() ?? []),
+    ];
+    expect(levelled.length).toBeGreaterThan(0);
+    expect(levelled.every((id) => guided.has(id))).toBe(true);
+    expect(withoutBody?.headingByLevel.get(0)).toBe(
+      plan?.headingByLevel.get(0),
+    );
+    expect(withoutBody?.bodyStyleId).toBe(plan?.bodyStyleId);
+  });
 
   test("reads a hierarchy out of the catalogue", () => {
     expect(plan?.headingByLevel.get(0)).toBe("Heading1Firm");
