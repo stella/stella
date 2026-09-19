@@ -18,6 +18,19 @@ import { resolvePath } from "@stll/template-conditions";
 import { omitSourceBoundValues } from "./ai-visible-values";
 import type { FieldMeta } from "./types";
 
+/**
+ * A field the model decides: a boolean whose `aiPrompt` is the yes/no question
+ * it answers. The fill decides exactly these, and so does the fill form's
+ * preview of them, which is why the two share this predicate instead of
+ * mirroring it.
+ */
+export const isAiConditionField = (
+  field: FieldMeta,
+): field is FieldMeta & { aiPrompt: string } =>
+  field.inputType === "boolean" &&
+  field.aiPrompt !== undefined &&
+  field.aiPrompt !== "";
+
 export type AiConditionDecider = (input: {
   prompt: string;
   fieldPath: string;
@@ -34,12 +47,7 @@ export const resolveAiConditions = async ({
   fields: readonly FieldMeta[];
   decide: AiConditionDecider | undefined;
 }): Promise<Record<string, unknown>> => {
-  const aiConditionFields = fields.filter(
-    (field) =>
-      field.inputType === "boolean" &&
-      field.aiPrompt !== undefined &&
-      field.aiPrompt !== "",
-  );
+  const aiConditionFields = fields.filter(isAiConditionField);
   if (decide === undefined || aiConditionFields.length === 0) {
     return values;
   }
@@ -53,12 +61,8 @@ export const resolveAiConditions = async ({
     if (existing !== undefined && existing !== "") {
       continue; // user-entered value wins
     }
-    const prompt = field.aiPrompt;
-    if (prompt === undefined) {
-      continue;
-    }
     const value = await decide({
-      prompt,
+      prompt: field.aiPrompt,
       fieldPath: field.path,
       values: omitSourceBoundValues({ values: resolved, fields }),
     });

@@ -11,7 +11,11 @@ import * as v from "valibot";
 
 import { TANSTACK_AI_PROVIDERS } from "@stll/ai-catalog";
 
-import { normalizeOrgAIConfig, type OrgAIConfig } from "@/api/lib/ai-config";
+import {
+  DECISION_MODEL_PROVIDERS,
+  normalizeOrgAIConfig,
+  type OrgAIConfig,
+} from "@/api/lib/ai-config";
 import type { SafeId } from "@/api/lib/branded-types";
 import { decryptContent, encryptContent } from "@/api/lib/content-encryption";
 import type { EncryptedContent } from "@/api/lib/content-encryption";
@@ -48,6 +52,12 @@ const providerSchema = v.variant("provider", [
   }),
 ]);
 
+const decisionModelSchema = v.strictObject({
+  provider: v.picklist(DECISION_MODEL_PROVIDERS),
+  apiKey: v.pipe(v.string(), v.minLength(1)),
+  modelId: v.pipe(v.string(), v.minLength(1)),
+});
+
 /** Validate the decrypted JSON matches OrgAIConfig shape. */
 const orgAIConfigSchema = v.strictObject({
   providers: v.pipe(v.array(providerSchema), v.minLength(1)),
@@ -57,6 +67,9 @@ const orgAIConfigSchema = v.strictObject({
     reasoning: modelSelectionSchema,
     pdf: modelSelectionSchema,
   }),
+  // A blob written before the decision model existed has no key for it and
+  // reads as "none", the same state clearing the setting writes.
+  decision: v.optional(v.nullable(decisionModelSchema), null),
 });
 const parseOrgAIConfig = v.safeParser(orgAIConfigSchema);
 

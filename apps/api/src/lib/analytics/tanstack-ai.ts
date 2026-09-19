@@ -112,6 +112,8 @@ type TanStackAIAnalyticsProps = {
 };
 
 export type TanStackAIAnalyticsCallbacks = {
+  /** Shared attribution for nested non-generative model calls. */
+  readonly usageMetering?: AIUsageMetering | undefined;
   middleware: ChatMiddleware;
   captureError: (error: unknown) => void;
 };
@@ -553,6 +555,7 @@ export const createTanStackAIAnalyticsCallbacks = ({
 
   return {
     captureError: captureGenerationError,
+    usageMetering: config.usageMetering,
     middleware: {
       name: "stella-tanstack-analytics",
       // Each agent-loop iteration is one model call: `onIteration` marks its

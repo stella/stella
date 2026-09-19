@@ -393,6 +393,89 @@ describe("writing the session into the document", () => {
     expect(unplaced).toEqual([]);
   });
 
+  test("an asked condition keeps its label on the {% if %} tag that reads it", () => {
+    const doc = documentWith([
+      "{% if buyer_is_a_consumer %}",
+      "{% elif buyer_is_a_consumer %}",
+      "{% endif %}",
+    ]);
+    const { rewrites, unplaced } = markerConfigRewrites({
+      ...doc,
+      fields: [
+        studioField({
+          path: "buyer_is_a_consumer",
+          inputType: "boolean",
+          label: "Buyer is a consumer",
+        }),
+      ],
+    });
+
+    expect(rewrites.map(({ text }) => text)).toEqual([
+      '{% if buyer_is_a_consumer | checkbox | label("Buyer is a consumer") %}',
+      '{% elif buyer_is_a_consumer | checkbox | label("Buyer is a consumer") %}',
+    ]);
+    expect(unplaced).toEqual([]);
+  });
+
+  test("an AI-decided condition keeps its instructions on the tag", () => {
+    const doc = documentWith(["{% if buyer_is_a_consumer %}", "{% endif %}"]);
+    const { rewrites, unplaced } = markerConfigRewrites({
+      ...doc,
+      fields: [
+        studioField({
+          path: "buyer_is_a_consumer",
+          inputType: "boolean",
+          aiPrompt: "Is the buyer a consumer?",
+          aiSeesDocument: true,
+        }),
+      ],
+    });
+
+    expect(rewrites.map(({ text }) => text)).toEqual([
+      '{% if buyer_is_a_consumer | checkbox | ai("Is the buyer a consumer?", sees_document=true) %}',
+    ]);
+    expect(unplaced).toEqual([]);
+  });
+
+  test("a condition the document has nothing to say about stays as it was written", () => {
+    const doc = documentWith(["{% if signed %}", "{% endif %}"]);
+    const { rewrites, unplaced } = markerConfigRewrites({
+      ...doc,
+      fields: [studioField({ path: "signed", inputType: "boolean" })],
+    });
+
+    expect(rewrites).toEqual([]);
+    expect(unplaced).toEqual([]);
+  });
+
+  test("clearing an asked condition's label takes the chain off the tag again", () => {
+    const doc = documentWith(['{% if signed | checkbox | label("Signed") %}']);
+    const { rewrites, unplaced } = markerConfigRewrites({
+      ...doc,
+      fields: [studioField({ path: "signed", inputType: "boolean" })],
+    });
+
+    expect(rewrites.map(({ text }) => text)).toEqual([
+      "{% if signed | checkbox %}",
+    ]);
+    expect(unplaced).toEqual([]);
+  });
+
+  test("a condition the document also prints keeps its chain on the marker", () => {
+    const doc = documentWith(["{% if signed %}", "{{ signed }}"]);
+    const { rewrites, unplaced } = markerConfigRewrites({
+      ...doc,
+      fields: [
+        studioField({ path: "signed", inputType: "boolean", label: "Signed" }),
+      ],
+    });
+
+    expect(rewrites.map(({ text }) => text)).toEqual([
+      '{{ signed | checkbox | label("Signed") }}',
+    ]);
+    expect(unplaced).toEqual([]);
+  });
+
   test("a field the document also prints keeps its rule in its own marker", () => {
     const doc = documentWith(["{% if is_company %}", "{{ is_company }}"]);
     const { rewrites, unplaced } = markerConfigRewrites({

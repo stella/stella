@@ -13,6 +13,7 @@ import {
   type MarkerPrefix,
 } from "./markers.js";
 import {
+  renderConditionTag,
   renderForOpener,
   renderValueMarker,
   unwritableMarkerLiteral,
@@ -140,6 +141,56 @@ describe("rendering a marker the scanner reads back", () => {
       ),
       propertyConfig(),
     );
+  });
+
+  test("a condition tag round-trips its boolean's chain with its placement prefix", () => {
+    const prefixes: MarkerPrefix[] = ["none", "paragraph", "row"];
+    fc.assert(
+      fc.property(
+        fc.constantFrom("if" as const, "elif" as const),
+        path,
+        chain,
+        fc.constantFrom(...prefixes),
+        (kind, fieldPath, filters, prefix) => {
+          fc.pre(writable(filters, "statement"));
+          for (const renderedFilters of [filters, withNegativeZero(filters)]) {
+            const text = renderConditionTag({
+              kind,
+              expression: fieldPath,
+              filters: renderedFilters,
+              prefix,
+            });
+            const scanned = scanMarkers(text);
+            expect(scanned).toHaveLength(1);
+            expect(scanned[0]?.prefix).toBe(prefix);
+            expect(scanned[0]?.meta).toEqual({
+              kind,
+              expr: fieldPath,
+              filters: renderedFilters,
+            });
+          }
+        },
+      ),
+      propertyConfig(),
+    );
+  });
+
+  test("an expression tag written with no chain is the text an author typed", () => {
+    for (const expression of [
+      "signed",
+      'country == "PL"',
+      "not signed",
+      "items|length > 0",
+    ]) {
+      expect(
+        renderConditionTag({
+          kind: "if",
+          expression,
+          filters: [],
+          prefix: "none",
+        }),
+      ).toBe(`{% if ${expression} %}`);
+    }
   });
 
   test("a quoted argument carries the marker's own delimiters as content", () => {

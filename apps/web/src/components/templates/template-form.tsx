@@ -12,6 +12,7 @@ import {
   TrashIcon,
   WandSparklesIcon,
 } from "lucide-react";
+import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
 import type { ConditionNode, Operand } from "@stll/conditions";
@@ -57,6 +58,12 @@ import {
   groupSupportsRegistryAutofill,
 } from "@/components/templates/registry-autofill";
 import { LOOKUP_REGISTRY_OPTIONS } from "@/components/templates/registry-options";
+import { AiDecidedConditions } from "@/components/templates/template-ai-conditions";
+import {
+  cycleConditionOverride,
+  DECIDE_CONDITIONS_DEBOUNCE_MS,
+  isAiDecidedCondition,
+} from "@/components/templates/template-ai-conditions.logic";
 import {
   firstOfNextMonthIso,
   formatDateValue,
@@ -284,6 +291,12 @@ type TemplateFormProps = (TransientFillProps | ServerFillProps) & {
    *  state only from this callback (e.g. a preview) does not start blank
    *  when the form restores previously-entered values. */
   onValuesChange?: (values: Record<string, unknown>) => void;
+  /** Effective answers for the template's AI-decided conditions (a value the
+   *  user took over, else a settled model answer), keyed by condition path.
+   *  For a host that previews the document while the form is filled; the
+   *  model's own answers never enter the form values, so they cannot be
+   *  mistaken for something the user typed. */
+  onDecidedConditionsChange?: (decided: Record<string, boolean>) => void;
   /** Opt-in edit affordance: when set, each top-level field row shows a
    *  pencil that jumps to that field's configuration. Absent in the real
    *  fill flow so its layout stays unchanged. */
@@ -978,14 +991,26 @@ const ArrayFieldRenderer = ({
   );
 };
 
-const buildSubmitValues = (
-  values: FormValues,
-  fields: ResolvedField[],
-  conditions: NamedCondition[],
-): Record<string, unknown> => {
+type SubmitValuesOptions = {
+  values: FormValues;
+  fields: ResolvedField[];
+  /** The template's AI-decided conditions. They render no input, so a value
+   *  exists under one only while the user has taken it over; sending it makes
+   *  the fill engine's "user value wins" rule keep it over the model's
+   *  answer. */
+  conditionFields: readonly ResolvedField[];
+  conditions: NamedCondition[];
+};
+
+const buildSubmitValues = ({
+  values,
+  fields,
+  conditionFields,
+  conditions,
+}: SubmitValuesOptions): Record<string, unknown> => {
   const result = createNullRecord();
 
-  for (const field of fields) {
+  for (const field of [...fields, ...conditionFields]) {
     // Skip hidden fields
     if (!isFieldVisible(field, values, conditions)) {
       continue;
@@ -1340,6 +1365,7 @@ export const TemplateForm = ({
   onBack,
   onDone,
   onValuesChange,
+  onDecidedConditionsChange,
   onEditField,
   saveTarget,
   prefill,
@@ -1392,10 +1418,28 @@ export const TemplateForm = ({
       (f.source === undefined || !hasMatterContext) &&
       (f.count > 0 || f.inputType === "boolean" || referencedPaths.has(f.path)),
   );
-  const [values, setValues] = useState<FormValues>(() => ({
+  // Conditions the decision model answers. They are excluded from `fields`
+  // above (they carry an aiPrompt, so the form renders no input for them) and
+  // surface instead as the "Decided by AI" chips, which the user can override.
+  const aiConditionFields = allFields.filter((f) => isAiDecidedCondition(f));
+  const hasAiConditions = aiConditionFields.length > 0;
+
+  const seedValues = (): FormValues => ({
     ...buildInitialValues(fields),
     ...initialValues,
-  }));
+  });
+  const [values, setValues] = useState<FormValues>(seedValues);
+  // The decision model is asked about a settled form, not every keystroke:
+  // this snapshot trails the live values, and the query keyed on it aborts a
+  // superseded request through the signal its queryFn consumed.
+  const [decideSnapshot, setDecideSnapshot] = useState<FormValues>(seedValues);
+  const scheduleDecide = useDebouncedCallback((next: FormValues) => {
+    // A template with nothing for the model to decide never re-renders on a
+    // snapshot it would not ask about.
+    if (hasAiConditions) {
+      setDecideSnapshot(next);
+    }
+  }, DECIDE_CONDITIONS_DEBOUNCE_MS);
   // Per-fill clause edits (AI tweaks made in the fill form), keyed by slot
   // patch key; sent as `clauseOverrides` and applied only to this fill.
   const [clauseOverrides, setClauseOverrides] = useState<
@@ -1511,6 +1555,16 @@ export const TemplateForm = ({
     [onValuesChange],
   );
 
+  /** Clicking a chip cycles the condition model → forced yes → forced no →
+   *  model. A forced value lands in the form values under the condition's
+   *  path, so the fill engine's "user value wins" rule keeps it. */
+  const toggleConditionOverride = useCallback(
+    (path: string) => {
+      handleChange(path, cycleConditionOverride(valuesRef.current[path]));
+    },
+    [handleChange],
+  );
+
   /** Drop a field's prefill badge once its value is cleared (empty string or
    *  unchecked boolean). Edits keep it. */
   const clearPrefillSnippetIfEmptied = useCallback(
@@ -1537,6 +1591,10 @@ export const TemplateForm = ({
     (path: string, value: unknown) => {
       handleChange(path, value);
       clearPrefillSnippetIfEmptied(path, value);
+      // Entered values are what the decision model reads, so only they restart
+      // its debounce; taking a condition over (which goes through
+      // handleChange directly) is not a new question for the model.
+      scheduleDecide(valuesRef.current);
 
       // Only re-validate if already touched
       if (!touchedRef.current[path]) {
@@ -1553,7 +1611,13 @@ export const TemplateForm = ({
         });
       }
     },
-    [handleChange, clearPrefillSnippetIfEmptied, findFieldDef, resolveError],
+    [
+      handleChange,
+      clearPrefillSnippetIfEmptied,
+      scheduleDecide,
+      findFieldDef,
+      resolveError,
+    ],
   );
 
   const handleBlur = useCallback(
@@ -1801,7 +1865,12 @@ export const TemplateForm = ({
 
       setLoading(true);
 
-      const submitValues = buildSubmitValues(values, fields, conditions);
+      const submitValues = buildSubmitValues({
+        values,
+        fields,
+        conditionFields: aiConditionFields,
+        conditions,
+      });
 
       const fillResponse = async () => {
         if (templateId) {
@@ -1876,6 +1945,7 @@ export const TemplateForm = ({
       values,
       clauseOverrides,
       fields,
+      aiConditionFields,
       conditions,
       file,
       templateId,
@@ -1936,7 +2006,12 @@ export const TemplateForm = ({
 
     setLoading(true);
     try {
-      const submitValues = buildSubmitValues(values, fields, conditions);
+      const submitValues = buildSubmitValues({
+        values,
+        fields,
+        conditionFields: aiConditionFields,
+        conditions,
+      });
       const response = await api
         .templates({ templateId })
         ["fill-to"]({ workspaceId })
@@ -2142,13 +2217,20 @@ export const TemplateForm = ({
     return t("templates.downloadAnyway");
   };
 
-  // Filter visible non-array fields, then group
-  const visibleScalarFields = fields.filter(
-    (f) => f.kind !== "array" && isFieldVisible(f, values, conditions),
+  // Keep one live visibility projection for both the rendered inputs and the
+  // values sent to the condition preview. A hidden field may retain form
+  // state, but it must not keep influencing model decisions after it leaves
+  // the effective submission payload.
+  const visibleFields = fields.filter((field) =>
+    isFieldVisible(field, values, conditions),
+  );
+  const visibleScalarFields = visibleFields.filter(
+    (field) => field.kind !== "array",
   );
   const grouped = groupFieldsByPrefix(visibleScalarFields);
-  const arrayFields = fields.filter(
-    (f) => f.kind === "array" && isFieldVisible(f, values, conditions),
+  const arrayFields = visibleFields.filter((field) => field.kind === "array");
+  const visibleArrayIndexPaths = arrayFields.map((field) =>
+    arrayIndexKey(field.path),
   );
 
   const submitAction: SubmitAction =
@@ -2240,6 +2322,21 @@ export const TemplateForm = ({
                 onChange={setClauseOverrides}
                 overrides={clauseOverrides}
                 templateId={templateId}
+              />
+            )}
+
+            {/* Server-side fill only: the decide endpoint reads the stored
+                template, so a transient upload has nothing to ask about. */}
+            {templateId !== undefined && hasAiConditions && (
+              <AiDecidedConditions
+                fields={aiConditionFields}
+                onDecided={onDecidedConditionsChange}
+                onToggle={toggleConditionOverride}
+                snapshot={decideSnapshot}
+                templateId={templateId}
+                values={values}
+                visibleArrayIndexPaths={visibleArrayIndexPaths}
+                visibleFields={visibleFields}
               />
             )}
 

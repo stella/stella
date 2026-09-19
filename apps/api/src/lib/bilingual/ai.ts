@@ -261,6 +261,7 @@ export const decideDispositions = async (
           systemPromptOrigin: "embeds-untrusted",
           messages: request.messages,
           abortSignal: callSignal(context),
+          outputMode: "generative",
           outputSchema: dispositionSchema,
         });
         for (const row of output.rows) {

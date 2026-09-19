@@ -149,7 +149,9 @@ export type BlockDirective = {
   expression: string;
   /** The loop variable of a `{% for %}`; absent on every other directive. */
   alias?: string;
-  /** Filters written on a `{% for %}`'s path, which configure the array. */
+  /** Filters written on a `{% for %}`'s path, which configure the array, or on
+   *  an `{% if %}`/`{% elif %}`'s path, which configure the boolean it asks
+   *  for. */
   filters?: readonly FilterCall[];
   paragraphIndex: number;
 };

@@ -87,6 +87,9 @@ const CODE_ERROR_KEYS = {
     "errors.apiCodes.accountDeletionTaskReassignmentInvalid",
   account_deletion_task_reassignment_limit_exceeded:
     "errors.apiCodes.accountDeletionTaskReassignmentLimitExceeded",
+  ai_config_decision_invalid: "errors.apiCodes.aiConfigDecisionInvalid",
+  ai_config_decision_validation_failed:
+    "errors.apiCodes.aiConfigDecisionValidationFailed",
   ai_config_model_invalid: "errors.apiCodes.aiConfigModelInvalid",
   ai_config_provider_invalid: "errors.apiCodes.aiConfigProviderInvalid",
   ai_config_provider_validation_failed:

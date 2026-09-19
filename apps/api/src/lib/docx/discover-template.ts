@@ -530,6 +530,16 @@ const collectContainerStructure = ({
         fields,
         rowScopes: [...activeArrays],
       });
+      // A question the document only asks has no value marker, so the tag
+      // carries its configuration; the grammar only reads a chain off a tag
+      // whose whole expression is that one path.
+      recordFieldDeclaration({
+        declarations: documentFilters,
+        errors,
+        filters: arrayOrEmpty(directive.filters),
+        paragraphIndex: authoredIndices[i] ?? i,
+        path: qualifyRowScopedPlaceholder(directive.expression, activeArrays),
+      });
     }
     if (directive?.kind === "for") {
       const scopedPath = qualifyLoopPath(directive.expression, activeArrays);

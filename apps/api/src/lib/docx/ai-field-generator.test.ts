@@ -2,14 +2,20 @@ import { EventType } from "@tanstack/ai";
 import type { AnyTextAdapter, StreamChunk } from "@tanstack/ai";
 import { beforeEach, describe, expect, test } from "bun:test";
 
+import type { Fetcher } from "@stll/fetch";
+
 import type { SafeDb } from "@/api/db/safe-db";
+import { env } from "@/api/env";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { toSafeId } from "@/api/lib/branded-types";
 import {
+  buildAiConditionDecider,
   buildAiFieldGenerator,
   buildAiOccurrenceAdapter,
 } from "@/api/lib/docx/ai-field-generator";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
+import type { DecisionModel } from "@/api/lib/workflow/decisions/decision-model";
+import { createSystemOneClient } from "@/api/lib/workflow/decisions/system-one";
 
 // The real `chat()` engine runs here; only the provider boundary is faked, so
 // a fixture cannot invent chunk shapes the engine never emits. Each request the
@@ -472,5 +478,95 @@ describe("output budgets are sized from the work asked for", () => {
     const eight = await adaptOccurrences(8);
 
     expect(eight).toBeGreaterThan(one);
+  });
+});
+
+describe("buildAiConditionDecider decision tier", () => {
+  /** A decision model over a fake wire answering the condition with one noul. */
+  const decisionModel = (yes: number): DecisionModel => {
+    const fetcher: Fetcher = async () =>
+      await Promise.resolve(
+        new Response(
+          JSON.stringify({
+            model: "jev-1.13.0",
+            answers: { answer: { type: "noul", noul: yes } },
+            usage: { input_tokens: 40, output_tokens: 1 },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+      );
+    return {
+      ...createSystemOneClient({ apiKey: "key-test", fetcher }),
+      keySource: "byok",
+    };
+  };
+  const input = {
+    prompt: "Is the principal a company?",
+    fieldPath: "principalIsCompany",
+    values: { principalName: "Acme s.r.o." },
+  };
+
+  test("a decided answer settles the condition without reaching the generative provider", async () => {
+    const decideCondition = buildAiConditionDecider({
+      decisionModel: decisionModel(0.94),
+      orgAIConfig,
+      organizationId,
+      resolveTextModel,
+      tenantWorkspaceIds: [],
+    });
+
+    expect(await decideCondition?.(input)).toBe(true);
+    expect(capturedRequests).toEqual([]);
+  });
+
+  test("an answer under the floor hands the condition to the generative model", async () => {
+    const decideCondition = buildAiConditionDecider({
+      decisionModel: decisionModel(0.55),
+      orgAIConfig,
+      organizationId,
+      resolveTextModel,
+      tenantWorkspaceIds: [],
+    });
+
+    await decideCondition?.(input);
+
+    expect(lastRequest().prompt).toContain("Is the principal a company?");
+  });
+
+  test("with no decision model the generative model answers, as before", async () => {
+    const decideCondition = buildAiConditionDecider({
+      decisionModel: null,
+      orgAIConfig,
+      organizationId,
+      resolveTextModel,
+      tenantWorkspaceIds: [],
+    });
+
+    await decideCondition?.(input);
+
+    expect(capturedRequests).toHaveLength(1);
+  });
+
+  test("an instance TypeSafe model keeps conditions available without org AI config", async () => {
+    const previousApiKey = env.TYPESAFE_API_KEY;
+    const previousRequirePersonalKey = env.REQUIRE_PERSONAL_AI_KEY;
+    env.TYPESAFE_API_KEY = "key-test";
+    env.REQUIRE_PERSONAL_AI_KEY = false;
+    try {
+      const decideCondition = buildAiConditionDecider({
+        decisionModel: decisionModel(0.94),
+        orgAIConfig: null,
+        organizationId,
+        resolveTextModel,
+        tenantWorkspaceIds: [],
+      });
+
+      expect(decideCondition).toBeDefined();
+      expect(await decideCondition?.(input)).toBe(true);
+      expect(capturedRequests).toEqual([]);
+    } finally {
+      env.TYPESAFE_API_KEY = previousApiKey;
+      env.REQUIRE_PERSONAL_AI_KEY = previousRequirePersonalKey;
+    }
   });
 });

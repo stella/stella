@@ -36,6 +36,7 @@ const updateBody = {
     reasoning: { provider: "google", modelId: "gemini-3.1-pro-preview" },
     pdf: { provider: "google", modelId: "gemini-3.5-flash" },
   },
+  decision: null,
 };
 
 const writeRejectingTx = asTestRaw<Transaction>({

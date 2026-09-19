@@ -141,6 +141,8 @@ type GenerateTanStackTextForRoleOptions = TanStackTextForRoleOptions & {
 
 type GenerateTanStackObjectForRoleOptions<TSchema extends v.GenericSchema> =
   TanStackTextForRoleOptions & {
+    /** Explicit exception for a generative fallback or provider-path probe. */
+    outputMode?: "generative" | undefined;
     outputSchema: TSchema;
   };
 
@@ -805,6 +807,7 @@ const guardStructuredOutputBudget = ({
 export const generateTanStackObjectForRole = async <
   TSchema extends v.GenericSchema,
 >({
+  outputMode: _outputMode,
   outputSchema,
   ...options
 }: GenerateTanStackObjectForRoleOptions<TSchema>): Promise<
@@ -852,6 +855,7 @@ export const generateTanStackObjectForRole = async <
 };
 
 export const streamTanStackObjectForRole = <TSchema extends v.GenericSchema>({
+  outputMode: _outputMode,
   outputSchema,
   ...options
 }: GenerateTanStackObjectForRoleOptions<TSchema>): AsyncIterable<

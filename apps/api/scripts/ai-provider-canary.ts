@@ -964,6 +964,7 @@ const capabilityProbes = [
         }),
         organizationId: null,
         orgAIConfig: config,
+        outputMode: "generative",
         outputSchema: structuredOutputSchema,
         prompt: "Return an object whose ok field is true.",
         role: CAPABILITY_ROLE,
@@ -1508,6 +1509,7 @@ const createCanaryConfig = ({
       return {
         providers: [{ provider, apiKey }],
         overrideModels: modelSelections(provider, rotatedModelId),
+        decision: null,
       };
     default: {
       provider satisfies never;

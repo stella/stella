@@ -83,6 +83,25 @@ export type OrgAIConfig = {
    * be stored for later assignment.
    */
   overrideModels: Record<ModelRole, OrgAIModelSelection>;
+  /**
+   * The model typed decisions go to (see `lib/decisions/decide.ts`). It is
+   * not one of the generative roles: a decision model answers choice and
+   * yes/no questions with probabilities and writes no text, so it has its
+   * own provider space and its own key. Null means the org has none; the
+   * instance's, if any, answers then.
+   */
+  decision: OrgDecisionModelConfig | null;
+};
+
+export const DECISION_MODEL_PROVIDERS = ["typesafe"] as const;
+export type DecisionModelProvider = (typeof DECISION_MODEL_PROVIDERS)[number];
+
+export type OrgDecisionModelConfig = {
+  provider: DecisionModelProvider;
+  /** Decrypted API key. */
+  apiKey: string;
+  /** The provider's model id; a versioned id holds calibrated confidence floors. */
+  modelId: string;
 };
 
 export type StandardOrgAIProviderConfig = {
@@ -210,4 +229,5 @@ const healOverrideModels = (
 export const normalizeOrgAIConfig = (config: OrgAIConfig): OrgAIConfig => ({
   providers: config.providers.map(normalizeOrgAIProviderConfig),
   overrideModels: healOverrideModels(config.overrideModels),
+  decision: config.decision,
 });

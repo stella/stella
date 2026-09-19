@@ -1946,6 +1946,8 @@ type Messages = {
       "accountDeletionSoleOwner": "Transfer ownership or delete organizations you solely own before deleting your account.";
       "accountDeletionTaskReassignmentInvalid": "Review every active task reassignment. Each target must be another member of the task's matter who is not already assigned.";
       "accountDeletionTaskReassignmentLimitExceeded": "Too many active task assignments must be reassigned. Complete or reassign some tasks before deleting your account.";
+      "aiConfigDecisionInvalid": "The decision model configuration is invalid. Check the provider and model.";
+      "aiConfigDecisionValidationFailed": "The decision model rejected the configuration. Check the API key and model.";
       "aiConfigModelInvalid": "The AI model configuration is invalid. Check the selected models.";
       "aiConfigProviderInvalid": "The AI provider configuration is invalid. Check the provider settings.";
       "aiConfigProviderValidationFailed": "The AI provider rejected the configuration. Check the API key and model.";
@@ -3600,6 +3602,14 @@ type Messages = {
       "dataRegion": "Data region";
       "dataRegionDescription": "Routes AI calls through the selected region for data sovereignty.";
       "dataRegionUnsupported": "Regional routing is only available for Google AI (Vertex AI).";
+      "decision": {
+        "add": "Add decision model";
+        "description": "Questions with a fixed answer, such as document categories and citation polarity, go to this model; without one the generative model answers them.";
+        "incomplete": "Enter an API key and a model for the decision model, or remove it.";
+        "instanceProvided": "stella already provides a decision model; add your own only to use a different one.";
+        "label": "Decision model";
+        "modelId": "Model ID";
+      };
       "defaultModel": "Default: {model}";
       "defaultModelOption": "Default";
       "deploymentNamePlaceholder": "Deployment name";
@@ -4462,6 +4472,7 @@ type Messages = {
     "addPart": "Add part";
     "addTag": "Add tag";
     "aiAdaptHint": "AI adapts this wording to fit each place it appears in the document.";
+    "aiDecidedConditions": "Decided by AI";
     "aiFieldsNotDrafted": "AI could not draft these fields: {list}";
     "allTemplates": "All templates";
     "backToList": "Back to templates";
@@ -4498,10 +4509,16 @@ type Messages = {
     "conditionAddRule": "Add rule";
     "conditionAnd": "And";
     "conditionCount": "{count, plural, one {# condition} other {# conditions}}";
+    "conditionDecidedNo": "No · {probability}";
+    "conditionDecidedOnGenerate": "Decided when you generate";
+    "conditionDecidedYes": "Yes · {probability}";
     "conditionField": "Field";
+    "conditionForcedNo": "No · set by you";
+    "conditionForcedYes": "Yes · set by you";
     "conditionFormulaPlaceholder": "Enter a formula…";
     "conditionMatch": "Match";
     "conditionNamePlaceholder": "Condition name (e.g. NPF)";
+    "conditionNotSettled": "Not settled by the details, decided when you generate";
     "conditionOpAfter": "after";
     "conditionOpAtLeast": "at least";
     "conditionOpAtMost": "at most";
@@ -4518,6 +4535,7 @@ type Messages = {
     "conditionOpOnOrBefore": "on or before";
     "conditionOperator": "Operator";
     "conditionOr": "Or";
+    "conditionOverrideHint": "Click to set this yourself, click again to hand it back to AI";
     "conditionUseFieldInstead": "Use a field instead";
     "conditionUseFormula": "ƒ Calculated value…";
     "conditionValue": "Value";

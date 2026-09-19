@@ -1,6 +1,10 @@
 import { Result } from "better-result";
 
-import type { DataRegion, OrgAIConfig } from "@/api/lib/ai-config";
+import type {
+  DataRegion,
+  DecisionModelProvider,
+  OrgAIConfig,
+} from "@/api/lib/ai-config";
 import { decryptAIConfig, maskApiKey } from "@/api/lib/ai-config-crypto";
 import {
   providerResponseExtras,
@@ -11,6 +15,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { hasTanStackInstanceProvider } from "@/api/lib/tanstack-ai-models";
+import { hasInstanceDecisionModel } from "@/api/lib/workflow/decisions/decision-model";
 
 type AIConfigResult = {
   /**
@@ -20,6 +25,12 @@ type AIConfigResult = {
    * features will work.
    */
   instanceProvisioned: boolean;
+  /**
+   * Whether the instance carries a decision model of its own. When false and
+   * the org configured none, typed decisions come back undecided and every
+   * caller takes its generative or rule-based path.
+   */
+  decisionInstanceProvisioned: boolean;
 } & (
   | { configured: false }
   | {
@@ -32,6 +43,11 @@ type AIConfigResult = {
         region: DataRegion;
       }[];
       overrideModels: OrgAIConfig["overrideModels"];
+      decision: {
+        provider: DecisionModelProvider;
+        apiKeyMasked: string;
+        modelId: string;
+      } | null;
     }
 );
 
@@ -67,10 +83,12 @@ const readAIConfig = createSafeRootHandler(
     const ciphertext = row?.aiConfigEncrypted;
     const iv = row?.aiConfigIv;
     const instanceProvisioned = hasTanStackInstanceProvider();
+    const decisionInstanceProvisioned = hasInstanceDecisionModel();
 
     let result: AIConfigResult = {
       configured: false,
       instanceProvisioned,
+      decisionInstanceProvisioned,
     };
 
     if (ciphertext && iv) {
@@ -97,7 +115,16 @@ const readAIConfig = createSafeRootHandler(
           ...providerResponseExtras(providerConfig),
         })),
         overrideModels: aiConfig.overrideModels,
+        decision:
+          aiConfig.decision === null
+            ? null
+            : {
+                provider: aiConfig.decision.provider,
+                apiKeyMasked: maskApiKey(aiConfig.decision.apiKey),
+                modelId: aiConfig.decision.modelId,
+              },
         instanceProvisioned,
+        decisionInstanceProvisioned,
       };
     }
 

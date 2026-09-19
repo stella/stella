@@ -1,6 +1,6 @@
 {
   "apps/api": {
-    "count": 744,
+    "count": 740,
     "files": {
       "apps/api/scripts/lib/capability-catalog.ts": 9,
       "apps/api/scripts/lib/case-law-fixture-analyses.ts": 1,
@@ -22,7 +22,7 @@
       "apps/api/src/handlers/case-law/decisions/citation-graph.ts": 2,
       "apps/api/src/handlers/case-law/decisions/latest.ts": 2,
       "apps/api/src/handlers/case-law/decisions/search-telemetry.ts": 2,
-      "apps/api/src/handlers/case-law/document-ast.ts": 23,
+      "apps/api/src/handlers/case-law/document-ast.ts": 22,
       "apps/api/src/handlers/case-law/ingestion/adapters/retry.ts": 1,
       "apps/api/src/handlers/case-law/ingestion/adapters/test-utils.ts": 1,
       "apps/api/src/handlers/case-law/ingestion/parsers/eu-ecj-formex.ts": 1,
@@ -135,7 +135,7 @@
       "apps/api/src/lib/business-registries/dispatch.ts": 5,
       "apps/api/src/lib/case-law-public-read-db.ts": 2,
       "apps/api/src/lib/case-law/decision-identifiers.ts": 1,
-      "apps/api/src/lib/case-law/document-ast.ts": 21,
+      "apps/api/src/lib/case-law/document-ast.ts": 20,
       "apps/api/src/lib/case-law/language-alternates.ts": 1,
       "apps/api/src/lib/case-law/maintenance-lane.ts": 3,
       "apps/api/src/lib/case-law/research-answers.ts": 3,
@@ -236,7 +236,6 @@
       "apps/api/src/lib/legal-search/document-types.ts": 2,
       "apps/api/src/lib/legal-search/expansion.ts": 1,
       "apps/api/src/lib/legal-search/fts-config.ts": 2,
-      "apps/api/src/lib/legal-search/ingestion-types.ts": 1,
       "apps/api/src/lib/legal-search/legislation-ingestion-types.ts": 4,
       "apps/api/src/lib/legal-search/morphology/snowball/base-stemmer.ts": 1,
       "apps/api/src/lib/legal-search/raw-source-storage.ts": 1,
@@ -294,7 +293,6 @@
       "apps/api/src/lib/web-search/load-org-keys.ts": 2,
       "apps/api/src/lib/web-search/types.ts": 4,
       "apps/api/src/lib/workflow-queue.ts": 1,
-      "apps/api/src/lib/workflow/generate-batch.ts": 1,
       "apps/api/src/lib/workflow/materialize-playbook-run.ts": 1,
       "apps/api/src/lib/workflow/parse-justifications.ts": 1,
       "apps/api/src/lib/workflow/playbook-position-facets.ts": 2,

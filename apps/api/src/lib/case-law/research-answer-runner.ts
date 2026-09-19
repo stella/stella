@@ -14,6 +14,7 @@ import { resolveCaching } from "@/api/lib/ai-config";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
+import type { AIUsageMetering } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import type {
   CaseLawPublicReadDb,
@@ -37,6 +38,12 @@ import type {
   ResearchPassage,
   ResearchQuestion,
 } from "@/api/lib/case-law/research-answers";
+import {
+  exceedsSystemOneSourceBudget,
+  resolveSystemOneOutcomes,
+  splitSystemOneQuestions,
+  systemOneSourcesFromPassages,
+} from "@/api/lib/case-law/research-answers-system-one";
 import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
 import { readServingCorpusIndexGenerationTx } from "@/api/lib/legal-search/corpus-index-generation-store";
 import {
@@ -63,6 +70,12 @@ import {
 import { LIMITS } from "@/api/lib/limits";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 import { getTanStackTextModelForRole } from "@/api/lib/tanstack-ai-models";
+import {
+  decodeSystemOneAnswers,
+  planSystemOneAnswers,
+} from "@/api/lib/workflow/decisions/answer-questions";
+import { decideMany } from "@/api/lib/workflow/decisions/decide";
+import type { DecisionModel } from "@/api/lib/workflow/decisions/decision-model";
 
 const ANSWER_TIMEOUT_MS = 120_000;
 
@@ -89,6 +102,12 @@ export type RunResearchAnswersDeps = {
   safeDb: SafeDb;
   /** The public corpus gate the decision text is read through. */
   caseLawDb: CaseLawPublicReadDb;
+  /**
+   * The client the typed-judgment tier asks. Undefined is the org's own
+   * resolved decision model (null when the deployment has none, which leaves
+   * every column to the generative model); a test pins one.
+   */
+  decisionModel?: DecisionModel | null | undefined;
 };
 
 /** The claimed cells regrouped into the unit of work: one decision's questions. */
@@ -176,6 +195,30 @@ type DecisionTextSource =
   | { kind: "passages"; passages: ResearchPassage[]; retrieved: boolean }
   | { kind: "none" };
 
+type SelectDecisionPassagesOptions = {
+  fallback: readonly ResearchPassage[];
+  retrieved: readonly ResearchPassage[];
+  budgetChars: number;
+};
+
+/** Keep retrieval provenance false when the index returned no usable passage. */
+export const selectDecisionPassages = ({
+  fallback,
+  retrieved,
+  budgetChars,
+}: SelectDecisionPassagesOptions): DecisionTextSource => {
+  const selected = selectPassagesWithinBudget(
+    retrieved.length > 0 ? retrieved : fallback,
+    {
+      budgetChars,
+      passageChars: LIMITS.caseLawResearchAnswerPassageChars,
+    },
+  );
+  return selected.length === 0
+    ? { kind: "none" }
+    : { kind: "passages", passages: selected, retrieved: retrieved.length > 0 };
+};
+
 type ResearchDecisionRow = {
   id: SafeId<"caseLawDecision">;
   caseNumber: string;
@@ -195,7 +238,7 @@ const answerDecision = async (
   decisionId: SafeId<"caseLawDecision">,
   claimedColumnIds: readonly SafeId<"caseLawResearchColumn">[],
   input: RunResearchAnswersInput,
-  { caseLawDb, safeDb }: RunResearchAnswersDeps,
+  { caseLawDb, safeDb, decisionModel }: RunResearchAnswersDeps,
 ): Promise<void> => {
   const pendingColumnIds = await stillClaimedColumnsFor(
     decisionId,
@@ -247,9 +290,39 @@ const answerDecision = async (
     return;
   }
 
-  const text = await resolveDecisionText(decision, questions, caseLawDb);
+  const text = await resolveDecisionText(
+    decision,
+    questions,
+    caseLawDb,
+    LIMITS.caseLawResearchAnswerTextBudgetChars,
+  );
   if (text.kind === "none") {
     await fail("no_text");
+    return;
+  }
+
+  // Always asked: without a decision model every question comes back
+  // undecided and every column falls through to the generative call.
+  const tier = await answerWithSystemOne({
+    caseLawDb,
+    decisionModel,
+    orgAIConfig: input.orgAIConfig,
+    decision,
+    questions,
+    text,
+    usageMetering: {
+      actionType: "case_law",
+      organizationId: input.organizationId,
+      safeDb,
+      serviceTier: "standard",
+      userId: input.userId,
+      workspaceId: null,
+    },
+  });
+  const settled = tier.outcomes;
+  const generativeQuestions = tier.remaining;
+  if (generativeQuestions.length === 0) {
+    await writeOutcomes(safeDb, input, decisionId, settled);
     return;
   }
 
@@ -262,7 +335,7 @@ const answerDecision = async (
       decision_id: decisionId,
       jurisdiction: decision.country,
       organization_id: input.organizationId,
-      question_count: questions.length,
+      question_count: generativeQuestions.length,
     },
     sessionId: decisionId,
     traceId: Bun.randomUUIDv7(),
@@ -300,10 +373,10 @@ const answerDecision = async (
         prompt: buildResearchUserMessage({
           decision,
           passages: text.passages,
-          questions,
+          questions: generativeQuestions,
           retrieved: text.retrieved,
         }),
-        outputSchema: buildResearchAnswersSchema(questions),
+        outputSchema: buildResearchAnswersSchema(generativeQuestions),
         abortSignal: AbortSignal.timeout(ANSWER_TIMEOUT_MS),
       });
       return { modelId, output };
@@ -312,7 +385,15 @@ const answerDecision = async (
   });
   if (Result.isError(generated)) {
     aiAnalytics.captureError(generated.error);
-    await fail("model_error");
+    // Only what the generative model was asked failed; a cell the typed tier
+    // already settled keeps its answer.
+    await writeOutcomes(safeDb, input, decisionId, [
+      ...settled,
+      ...generativeQuestions.map((question): ColumnOutcome => ({
+        columnId: question.columnId,
+        outcome: { state: "failed", failureReason: "model_error" },
+      })),
+    ]);
     return;
   }
 
@@ -324,7 +405,7 @@ const answerDecision = async (
   );
   const parsed = parseResearchAnswers({
     output: generated.value.output,
-    questions,
+    questions: generativeQuestions,
     knownAnchorIds,
   });
   // The parser speaks in plain column ids; the branded ids come back from the
@@ -335,7 +416,7 @@ const answerDecision = async (
   const completedAt = Temporal.Now.instant().toString({
     fractionalSecondDigits: 3,
   });
-  const outcomes: ColumnOutcome[] = [];
+  const outcomes: ColumnOutcome[] = [...settled];
   for (const entry of parsed) {
     const columnId = brandedColumnIds.get(entry.columnId);
     if (columnId === undefined) {
@@ -440,6 +521,7 @@ const resolveDecisionText = async (
   decision: ResearchDecisionRow,
   questions: readonly ResearchQuestion[],
   caseLawDb: CaseLawPublicReadDb,
+  budgetChars: number,
 ): Promise<DecisionTextSource> => {
   const blocks = await readDecisionBlocks(decision);
   const passages: ResearchPassage[] =
@@ -457,21 +539,16 @@ const resolveDecisionText = async (
     (sum, passage) => sum + passage.excerpt.length,
     0,
   );
-  if (total <= LIMITS.caseLawResearchAnswerTextBudgetChars) {
+  if (total <= budgetChars) {
     return { kind: "passages", passages, retrieved: false };
   }
 
   const retrieved = await retrievePassages(decision, questions, caseLawDb);
-  const selected = selectPassagesWithinBudget(
-    retrieved.length > 0 ? retrieved : passages,
-    {
-      budgetChars: LIMITS.caseLawResearchAnswerTextBudgetChars,
-      passageChars: LIMITS.caseLawResearchAnswerPassageChars,
-    },
-  );
-  return selected.length === 0
-    ? { kind: "none" }
-    : { kind: "passages", passages: selected, retrieved: true };
+  return selectDecisionPassages({
+    fallback: passages,
+    retrieved,
+    budgetChars,
+  });
 };
 
 /** A row's corpus object, or its Postgres copy when the object is unreadable. */
@@ -535,7 +612,7 @@ const readDecisionFulltextPassage = async (
 /** The passages of one decision that match the questions, best first. */
 const retrievePassages = async (
   decision: ResearchDecisionRow,
-  questions: readonly ResearchQuestion[],
+  questions: readonly { question: string }[],
   caseLawDb: CaseLawPublicReadDb,
 ): Promise<ResearchPassage[]> => {
   const freeText = corpusFreeTextClause(
@@ -571,6 +648,115 @@ const retrievePassages = async (
       ? [{ anchorId, excerpt: text }]
       : [];
   });
+};
+
+type SystemOnePassOptions = {
+  caseLawDb: CaseLawPublicReadDb;
+  decisionModel: DecisionModel | null | undefined;
+  usageMetering: AIUsageMetering;
+  orgAIConfig: OrgAIConfig | null;
+  decision: ResearchDecisionRow;
+  questions: readonly ResearchRunColumn[];
+  text: { passages: readonly ResearchPassage[]; retrieved: boolean };
+};
+
+type SystemOnePass = {
+  /** The cells the tier settled, ready to write. */
+  outcomes: ColumnOutcome[];
+  /** The questions the generative model still has to answer. */
+  remaining: ResearchRunColumn[];
+};
+
+/**
+ * Ask one decision's closed-answer questions in a single request and keep what
+ * came back settled. Nothing here fails a cell: a transport error, an
+ * unplannable question or an undecided answer leaves the column to the
+ * generative call, which is the behaviour of a deployment without the tier.
+ */
+const answerWithSystemOne = async ({
+  usageMetering,
+  caseLawDb,
+  decisionModel,
+  orgAIConfig,
+  decision,
+  questions,
+  text,
+}: SystemOnePassOptions): Promise<SystemOnePass> => {
+  const untouched: SystemOnePass = { outcomes: [], remaining: [...questions] };
+  const { asked } = splitSystemOneQuestions(questions);
+  if (asked.length === 0) {
+    return untouched;
+  }
+  // The tier reads a smaller state than the generative prompt. Over that
+  // budget the passages ranked against the questions are what it is worth
+  // spending on; reading order would spend all of it on the decision's
+  // opening. Text already resolved by retrieval is ranked, so it is only cut.
+  const overBudget = exceedsSystemOneSourceBudget(text.passages);
+  const ranked =
+    overBudget && !text.retrieved
+      ? await retrievePassages(decision, asked, caseLawDb)
+      : [];
+  const sources = systemOneSourcesFromPassages(
+    ranked.length > 0 ? ranked : text.passages,
+  );
+  if (sources.length === 0) {
+    return untouched;
+  }
+  const plan = planSystemOneAnswers({
+    document: {
+      caseNumber: decision.caseNumber,
+      court: decision.court,
+      country: decision.country,
+      decisionType: decision.decisionType ?? "unknown",
+      language: decision.language,
+    },
+    sources,
+    language: decision.language,
+    questions: asked,
+  });
+  if (plan.plans.size === 0) {
+    return untouched;
+  }
+  const { decisions, model } = await decideMany({
+    id: "case-law.research-answers",
+    orgAIConfig,
+    state: plan.state,
+    questions: plan.questions,
+    timeoutMs: ANSWER_TIMEOUT_MS,
+    client: decisionModel,
+    usageMetering: { ...usageMetering, callId: Bun.randomUUIDv7() },
+  });
+  // No model answered, so nothing is settled and the run facts have no model
+  // to stamp: every column is the generative model's.
+  if (model === null) {
+    return untouched;
+  }
+  const resolved = resolveSystemOneOutcomes({
+    questions: asked,
+    outcomes: decodeSystemOneAnswers({ plan, questions: asked, decisions }),
+    excerptByAnchor: new Map(sources.map((source) => [source.id, source.text])),
+    run: {
+      model,
+      completedAt: Temporal.Now.instant().toString({
+        fractionalSecondDigits: 3,
+      }),
+      retrieved: text.retrieved || ranked.length > 0,
+    },
+  });
+  const byColumn = new Map(
+    resolved.settled.map((entry) => [entry.columnId, entry.outcome]),
+  );
+  const outcomes: ColumnOutcome[] = [];
+  const remaining: ResearchRunColumn[] = [];
+  for (const question of questions) {
+    const outcome = byColumn.get(question.columnId);
+    if (outcome === undefined) {
+      remaining.push(question);
+      continue;
+    }
+    outcomes.push({ columnId: question.columnId, outcome });
+  }
+  return { outcomes, remaining };
 };
 
 type AnswerOutcome =

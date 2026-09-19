@@ -428,6 +428,14 @@ export const TemplateFillFacet = ({
   // come back) instead of remounting away with the fill form.
   const fillValues = useTemplateStudioStore((s) => s.fillValues);
   const setFillValues = useTemplateStudioStore((s) => s.setFillValues);
+  // What the decision model (or the user, by overriding a chip) makes of the
+  // template's AI-decided conditions. Kept beside the entered values rather
+  // than inside them: a model answer is not something the person typed, so it
+  // must not persist as a fill value, but the in-document preview still needs
+  // it under the condition's path.
+  const [decidedConditions, setDecidedConditions] = useState<
+    Record<string, boolean>
+  >({});
   const detail =
     detailData && !(detailData instanceof Response) && "manifest" in detailData
       ? detailData
@@ -488,11 +496,23 @@ export const TemplateFillFacet = ({
         fileName={detail.fileName}
         initialValues={fillValues ?? undefined}
         onBack={() => undefined}
+        onDecidedConditionsChange={(decided) => {
+          setDecidedConditions(decided);
+          pushFillPreview(
+            { ...fillValues, ...decided },
+            discovered.fields,
+            clausePreview?.slotTexts,
+          );
+        }}
         onDone={() => undefined}
         onEditField={onEditField}
         onValuesChange={(values) => {
           setFillValues(values);
-          pushFillPreview(values, discovered.fields, clausePreview?.slotTexts);
+          pushFillPreview(
+            { ...values, ...decidedConditions },
+            discovered.fields,
+            clausePreview?.slotTexts,
+          );
         }}
         // No matter context here (Studio previews the fill form in
         // isolation), so the panel offers only its upload/paste-text

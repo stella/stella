@@ -765,6 +765,7 @@ export default defineConfig({
     "no-bare-error/no-bare-error": "error",
     "no-minted-auth-provider-id/no-minted-auth-provider-id": "error",
     "ai-output-strict-schema/ai-output-strict-schema": "error",
+    "decision-shaped-output-schema/decision-shaped-output-schema": "error",
     "require-complete-compaction-generation/require-complete-compaction-generation":
       "error",
     "no-coerced-optional-union-enum/no-coerced-optional-union-enum": "error",
@@ -1129,6 +1130,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-bare-error.ts",
     "./.oxlint-plugins/no-minted-auth-provider-id.ts",
     "./.oxlint-plugins/ai-output-strict-schema.ts",
+    "./.oxlint-plugins/decision-shaped-output-schema.ts",
     "./.oxlint-plugins/require-complete-compaction-generation.ts",
     "./.oxlint-plugins/require-audit-on-mutation.ts",
     "./.oxlint-plugins/require-transaction-abort.ts",

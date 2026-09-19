@@ -33,6 +33,11 @@ import type {
 import { generateChatObject } from "@/api/lib/chat/tanstack-chat-runtime";
 import type { AiOccurrenceAdapter } from "@/api/lib/docx/adapt-ai-fields";
 import {
+  CONDITION_DECISION_ID,
+  CONDITION_QUESTION,
+  conditionState,
+} from "@/api/lib/docx/ai-condition-question";
+import {
   maybeSkillTools,
   SKILL_REF_GENERATOR_GUIDANCE,
   type SkillToolsContext,
@@ -54,6 +59,9 @@ import {
 import type { TanStackTextRun } from "@/api/lib/tanstack-ai-generate";
 import { hasTanStackInstanceProvider } from "@/api/lib/tanstack-ai-models";
 import { toTanStackValibotSchema } from "@/api/lib/tanstack-ai-schema";
+import { decide } from "@/api/lib/workflow/decisions/decide";
+import { hasInstanceDecisionModel } from "@/api/lib/workflow/decisions/decision-model";
+import type { DecisionModel } from "@/api/lib/workflow/decisions/decision-model";
 
 /**
  * Usage-metering + analytics callbacks wired into every nested fill
@@ -267,7 +275,10 @@ const generateFieldText = async (
 };
 
 const generateFieldObject = async <TSchema extends v.GenericSchema>(
-  input: FieldChatInput & { outputSchema: TSchema },
+  input: FieldChatInput & {
+    outputMode?: "generative" | undefined;
+    outputSchema: TSchema;
+  },
 ): Promise<v.InferOutput<TSchema>> => {
   const { abortController, caching, messages, model, system } =
     resolveFieldChat(input);
@@ -408,6 +419,7 @@ export const buildAiConditionDecider = ({
   aiAnalytics,
   operationSignal,
   resolveTextModel = resolveTanStackTextModel,
+  decisionModel,
 }: {
   orgAIConfig: OrgAIConfig | null;
   organizationId: SafeId<"organization">;
@@ -421,21 +433,48 @@ export const buildAiConditionDecider = ({
   operationSignal?: AbortSignal | undefined;
   /** External model-resolution boundary; supplied by focused integration tests. */
   resolveTextModel?: typeof resolveTanStackTextModel | undefined;
+  /** The decision model; the org's when omitted, null for none. Supplied by tests. */
+  decisionModel?: DecisionModel | null | undefined;
 }): AiConditionDecider | undefined => {
-  // Resolve via org BYOK or the deployment's instance provider; skip (leave AI
-  // fields unfilled) only when neither can supply a model.
-  if (!orgAIConfig && !hasTanStackInstanceProvider()) {
+  // Resolve via org BYOK, an instance text provider, or the instance decision
+  // model; skip only when none can supply the condition's model.
+  if (
+    !orgAIConfig &&
+    !hasTanStackInstanceProvider() &&
+    !hasInstanceDecisionModel()
+  ) {
     return undefined;
   }
   return async ({ prompt, values }) => {
     try {
       const skillTools = maybeSkillTools(prompt, skillContext);
+      // A prompt that references a skill needs the tools to load it, which
+      // only the generative run carries; every other condition is a yes/no
+      // the decision model settles first.
+      if (skillTools === undefined) {
+        const decided = await decide({
+          id: CONDITION_DECISION_ID,
+          orgAIConfig,
+          state: conditionState({ prompt, values }),
+          question: CONDITION_QUESTION,
+          abortSignal: operationSignal,
+          timeoutMs: AI_CONDITION_TIMEOUT_MS,
+          client: decisionModel,
+          usageMetering: aiAnalytics?.usageMetering
+            ? { ...aiAnalytics.usageMetering, callId: Bun.randomUUIDv7() }
+            : undefined,
+        });
+        if (decided.state === "decided") {
+          return decided.answer.noul > 0.5;
+        }
+      }
       const { decision } = await generateFieldObject({
         abortSignal: boundedAiSignal(AI_CONDITION_TIMEOUT_MS, operationSignal),
         aiAnalytics,
         maxOutputTokens: AI_CONDITION_MAX_TOKENS,
         orgAIConfig,
         organizationId,
+        outputMode: "generative",
         outputSchema: conditionDecisionSchema,
         prompt: `You are deciding one yes/no condition of a legal document. Question: ${prompt}
 

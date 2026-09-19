@@ -390,6 +390,55 @@ export const usageUnitsFromTokens = ({
     cacheReadTokens,
     cacheWriteTokens,
   });
+  return unitsFromRawUsage({
+    rawUsageMicroUnits,
+    actionType,
+    serviceTier,
+    isByok,
+  });
+};
+
+/** Typesafe's public input rate is $0.042/MTok; output is included. */
+const DECISION_INPUT_RATE_PER_MTOK = 4200;
+
+type DecisionUsageInput = {
+  inputTokens: number;
+  actionType: UsageActionType;
+  isByok: boolean;
+};
+
+export const decisionUsageUnitsFromTokens = ({
+  inputTokens,
+  actionType,
+  isByok,
+}: DecisionUsageInput): UsageUnitsFromTokensResult =>
+  unitsFromRawUsage({
+    rawUsageMicroUnits: scaleTokenCost(
+      sanitizeTokenCount({
+        modelId: "typesafe",
+        field: "inputTokens",
+        value: inputTokens,
+      }),
+      DECISION_INPUT_RATE_PER_MTOK,
+    ),
+    actionType,
+    isByok,
+    serviceTier: "standard",
+  });
+
+type UnitsFromRawUsageOptions = {
+  rawUsageMicroUnits: number;
+  actionType: UsageActionType;
+  serviceTier: UsageServiceTier;
+  isByok: boolean;
+};
+
+const unitsFromRawUsage = ({
+  rawUsageMicroUnits,
+  actionType,
+  serviceTier,
+  isByok,
+}: UnitsFromRawUsageOptions): UsageUnitsFromTokensResult => {
   if (isByok) {
     return { rawUsageMicroUnits, unitsConsumed: 0 };
   }

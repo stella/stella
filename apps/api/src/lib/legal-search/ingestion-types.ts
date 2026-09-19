@@ -50,7 +50,7 @@ export const DOCUMENT_DELIVERY = {
   INLINE: "inline",
 } as const;
 
-export type DocumentDelivery =
+type DocumentDelivery =
   (typeof DOCUMENT_DELIVERY)[keyof typeof DOCUMENT_DELIVERY];
 
 /** Result of parsing a single court decision from a source. */
@@ -600,7 +600,7 @@ export type StoredRawReparseOutcome =
     };
 
 /** A rejection on its own, for a step that can refuse before a result exists. */
-export type StoredRawReparseRejected = Extract<
+type StoredRawReparseRejected = Extract<
   StoredRawReparseOutcome,
   { type: "rejected" }
 >;
@@ -699,7 +699,7 @@ export type ListingIdentity =
  * Mirrors `case_law_reconciliation_items.identity_key`. A key longer than the
  * column cannot be parked, so it cannot be tracked to a fixed point either.
  */
-export const LISTING_IDENTITY_KEY_MAX_LENGTH = 320;
+const LISTING_IDENTITY_KEY_MAX_LENGTH = 320;
 
 const IDENTITY_KEY_PREFIX = {
   DOCUMENT: "document:",

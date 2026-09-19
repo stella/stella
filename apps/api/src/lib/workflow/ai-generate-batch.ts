@@ -7,6 +7,7 @@ import { panic, Result } from "better-result";
 
 import { resolveCaching } from "@/api/lib/ai-config";
 import type { AIRequestServiceTier, OrgAIConfig } from "@/api/lib/ai-config";
+import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { AIUsageMetering } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -28,6 +29,12 @@ import {
   buildTextInputsMessage,
   WORKFLOW_SYSTEM_PROMPT,
 } from "@/api/lib/workflow/ai-prompts";
+import {
+  decodeSystemOneAnswers,
+  planSystemOneAnswers,
+} from "@/api/lib/workflow/decisions/answer-questions";
+import { decideMany } from "@/api/lib/workflow/decisions/decide";
+import type { DecisionModel } from "@/api/lib/workflow/decisions/decision-model";
 import type { PreparedInputFile } from "@/api/lib/workflow/generate-batch";
 import type { TextInput } from "@/api/lib/workflow/generate-batch-shared";
 import type { AIBatchProperty } from "@/api/lib/workflow/get-execution-plan";
@@ -39,8 +46,17 @@ import { getWorkflowBatchAITimeoutMs } from "@/api/lib/workflow/run-logic";
 import {
   consumePartialAnswers,
   consumeTanStackPartialAnswer,
+  formatPartialAnswer,
 } from "@/api/lib/workflow/streaming-answer";
 import type { PartialAnswerUpdate } from "@/api/lib/workflow/streaming-answer";
+import {
+  outputFromSystemOneOutcomes,
+  questionsFromProperties,
+  sourcesFromPreparedFiles,
+  splitPropertiesForSystemOne,
+  SYSTEM_ONE_BATCH_LANGUAGE,
+  systemOneDocumentHeader,
+} from "@/api/lib/workflow/system-one-batch";
 
 type GenerateWorkflowDataProps = {
   files: PreparedInputFile[];
@@ -58,9 +74,11 @@ type GenerateWorkflowDataProps = {
   onPartialAnswer?:
     | ((update: PartialAnswerUpdate) => Promise<void> | void)
     | undefined;
+  /** Injected by tests; the org's resolved decision model otherwise, null for none. */
+  decisionModel?: DecisionModel | null | undefined;
 };
 
-type WorkflowDataOutput = Record<
+export type WorkflowDataOutput = Record<
   string,
   { answer: Answer; justification: AIJustificationOutput }
 >;
@@ -136,6 +154,121 @@ export const buildWorkflowAIAnalyticsProps = ({
   ...(usageMetering ? { usageMetering } : {}),
 });
 
+const SYSTEM_ONE_ERROR_SOURCE = "workflow.generate-batch.system-one";
+
+type SystemOnePhaseOptions = {
+  decisionModel: DecisionModel | null | undefined;
+  usageMetering: AIUsageMetering | undefined;
+  orgAIConfig: OrgAIConfig | null | undefined;
+  properties: AIBatchProperty[];
+  files: PreparedInputFile[];
+  textInputs: TextInput[];
+  abortSignal: AbortSignal;
+  onPartialAnswer:
+    | ((update: PartialAnswerUpdate) => Promise<void> | void)
+    | undefined;
+};
+
+type SystemOnePhaseResult = {
+  output: WorkflowDataOutput;
+  /** What the generative model still owes, in batch order. */
+  generative: AIBatchProperty[];
+};
+
+/**
+ * The decision model answers the closed-answer properties of one batch.
+ * Anything it does not settle — a text property, a question the plan could not
+ * ask, an undecided answer, a deployment with no decision model at all — is
+ * left to the generative model, so this phase can only add answers, never lose
+ * a property.
+ */
+const askSystemOne = async ({
+  decisionModel,
+  usageMetering,
+  orgAIConfig,
+  properties,
+  files,
+  textInputs,
+  abortSignal,
+  onPartialAnswer,
+}: SystemOnePhaseOptions): Promise<SystemOnePhaseResult> => {
+  const fallbackAll: SystemOnePhaseResult = {
+    output: {},
+    generative: properties,
+  };
+  const { systemOne } = splitPropertiesForSystemOne(properties);
+  if (systemOne.length === 0) {
+    return fallbackAll;
+  }
+
+  const prepared = await Result.tryPromise({
+    try: async () => await sourcesFromPreparedFiles(files, textInputs),
+    catch: (cause) =>
+      new WorkflowIntegrationError({
+        message: "Workflow System One source preparation failed",
+        cause,
+      }),
+  });
+  if (Result.isError(prepared)) {
+    captureError(prepared.error, { source: SYSTEM_ONE_ERROR_SOURCE });
+    return fallbackAll;
+  }
+  const { sources, locators } = prepared.value;
+  if (sources.length === 0) {
+    return fallbackAll;
+  }
+
+  const questions = questionsFromProperties(systemOne);
+  const plan = planSystemOneAnswers({
+    document: systemOneDocumentHeader(files),
+    sources,
+    language: SYSTEM_ONE_BATCH_LANGUAGE,
+    questions,
+  });
+  if (Object.keys(plan.questions).length === 0) {
+    return fallbackAll;
+  }
+
+  const { decisions } = await decideMany({
+    id: "workflow.table-batch",
+    orgAIConfig,
+    state: plan.state,
+    questions: plan.questions,
+    abortSignal,
+    // One call reads the whole batch; the caller's signal still bounds it.
+    timeoutMs: 60_000,
+    client: decisionModel,
+    usageMetering: usageMetering
+      ? { ...usageMetering, callId: Bun.randomUUIDv7() }
+      : undefined,
+  });
+  const outcomes = decodeSystemOneAnswers({ plan, questions, decisions });
+  const { output } = outputFromSystemOneOutcomes({
+    properties: systemOne,
+    outcomes,
+    locators,
+  });
+
+  if (onPartialAnswer) {
+    for (const property of systemOne) {
+      const entry = output[property.id];
+      const answer =
+        entry === undefined ? null : formatPartialAnswer(entry.answer);
+      if (answer === null) {
+        continue;
+      }
+      await onPartialAnswer({ propertyId: property.id, answer });
+    }
+  }
+
+  return {
+    output,
+    generative: properties.filter(
+      (property) => output[property.id] === undefined,
+    ),
+  };
+};
+
 export const generateWorkflowData = async ({
   files,
   properties,
@@ -150,9 +283,29 @@ export const generateWorkflowData = async ({
   serviceTier,
   usageMetering,
   onPartialAnswer,
+  decisionModel,
 }: GenerateWorkflowDataProps): Promise<
   Result<WorkflowDataOutput, WorkflowIntegrationError>
 > => {
+  // Always asked: without a decision model every question comes back
+  // undecided and every property falls back, which is the generative path.
+  const { output: systemOneOutput, generative: generativeProperties } =
+    await askSystemOne({
+      decisionModel,
+      usageMetering,
+      orgAIConfig,
+      properties,
+      files,
+      textInputs,
+      abortSignal,
+      onPartialAnswer,
+    });
+  // Only a batch System One answered in full ends here; an empty batch takes
+  // the generative path it has always taken.
+  if (properties.length > 0 && generativeProperties.length === 0) {
+    return Result.ok(systemOneOutput);
+  }
+
   // Resolved up front because the schema budget is a property of the provider,
   // not of the batch: the planner groups properties by dependency signature
   // and cannot know how many of them one request may carry.
@@ -173,7 +326,7 @@ export const generateWorkflowData = async ({
   const chunks = splitPropertiesForBudget({
     provider,
     modelId,
-    properties,
+    properties: generativeProperties,
     buildSchema: (chunkProperties) =>
       structuredOutputWireJsonSchema({
         outputSchema: buildBatchSchema(chunkProperties, filenames),
@@ -383,5 +536,7 @@ export const generateWorkflowData = async ({
     return await runFromChunk(index + 1, merged);
   };
 
-  return await runFromChunk(0, {});
+  // Chunk answers accumulate onto the System One answers; the two sets of
+  // property ids are disjoint, so neither overwrites the other.
+  return await runFromChunk(0, systemOneOutput);
 };

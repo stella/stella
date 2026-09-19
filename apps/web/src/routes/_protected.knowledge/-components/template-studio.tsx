@@ -9,6 +9,7 @@ import {
 } from "react";
 import type { RefObject } from "react";
 
+import { useHotkey } from "@tanstack/react-hotkeys";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { BracesIcon, RepeatIcon, SplitIcon } from "lucide-react";
 import type { NodeType, Node as PMNode, ResolvedPos } from "prosemirror-model";
@@ -1280,6 +1281,17 @@ export const TemplateStudioPage = ({
       setIsSaving(false);
     }
   };
+
+  // Cmd/Ctrl+S saves the template instead of offering the browser's "save this
+  // page". The binding stays registered while the tab is clean so the browser
+  // dialog never appears in the Studio; with nothing to save it does nothing,
+  // which is what the header's Save affordance does by disappearing.
+  useHotkey("Mod+S", () => {
+    if (isSaving || !useTemplateStudioStore.getState().isDirty) {
+      return;
+    }
+    detached(handleSave(), "template-studio.save");
+  });
 
   // Repeatable ON: rename the field to the loop-item convention
   // (`lawyer` → `lawyer.value`, every marker rewritten), then wrap the first
