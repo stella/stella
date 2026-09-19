@@ -10,13 +10,13 @@
  * quote.
  */
 
-import { decide } from "@/api/lib/decisions/decide";
-import type { Decision } from "@/api/lib/decisions/decide";
+import { decide } from "@/api/lib/workflow/decisions/decide";
+import type { Decision } from "@/api/lib/workflow/decisions/decide";
 import type {
   ChoiceAnswer,
   SystemOneClient,
-} from "@/api/lib/decisions/system-one";
-import { choice } from "@/api/lib/decisions/system-one";
+} from "@/api/lib/workflow/decisions/system-one";
+import { choice } from "@/api/lib/workflow/decisions/system-one";
 
 import type { ClassifiablePolarity } from "./consts";
 import { POLARITY_GUIDANCE } from "./guidance";

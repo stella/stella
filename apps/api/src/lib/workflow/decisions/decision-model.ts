@@ -16,9 +16,12 @@ import type {
   OrgAIConfig,
   OrgDecisionModelConfig,
 } from "@/api/lib/ai-config";
-import { createSystemOneClient, noul } from "@/api/lib/decisions/system-one";
-import type { SystemOneClient } from "@/api/lib/decisions/system-one";
-import { getSystemOneClient } from "@/api/lib/decisions/system-one-runtime";
+import {
+  createSystemOneClient,
+  noul,
+} from "@/api/lib/workflow/decisions/system-one";
+import type { SystemOneClient } from "@/api/lib/workflow/decisions/system-one";
+import { getSystemOneClient } from "@/api/lib/workflow/decisions/system-one-runtime";
 
 /** One client constructor per provider; a provider without one cannot be added. */
 const CLIENT_BY_PROVIDER = {

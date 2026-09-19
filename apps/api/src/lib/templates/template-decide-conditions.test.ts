@@ -4,12 +4,12 @@ import { beforeEach, describe, expect, test } from "bun:test";
 import type { Fetcher } from "@stll/fetch";
 
 import { toSafeId } from "@/api/lib/branded-types";
-import type { DecisionModel } from "@/api/lib/decisions/decision-model";
+import type { FieldMeta } from "@/api/lib/docx/types";
+import type { DecisionModel } from "@/api/lib/workflow/decisions/decision-model";
 import {
   createSystemOneClient,
   SystemOneError,
-} from "@/api/lib/decisions/system-one";
-import type { FieldMeta } from "@/api/lib/docx/types";
+} from "@/api/lib/workflow/decisions/system-one";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import {

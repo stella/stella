@@ -26,8 +26,8 @@ import type {
   ClassifiablePolarity,
   Polarity,
 } from "@/api/handlers/case-law/polarity/consts";
-import { SYSTEM_ONE_ERROR_KINDS } from "@/api/lib/decisions/system-one";
-import type { SystemOneErrorKind } from "@/api/lib/decisions/system-one";
+import { SYSTEM_ONE_ERROR_KINDS } from "@/api/lib/workflow/decisions/system-one";
+import type { SystemOneErrorKind } from "@/api/lib/workflow/decisions/system-one";
 
 export class PolarityCompareArgumentError extends TaggedError(
   "PolarityCompareArgumentError",

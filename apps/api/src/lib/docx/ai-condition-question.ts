@@ -11,8 +11,8 @@
  * Pure: no model, no provider, no org config.
  */
 
-import { noul } from "@/api/lib/decisions/system-one";
-import type { NoulQuestion } from "@/api/lib/decisions/system-one";
+import { noul } from "@/api/lib/workflow/decisions/system-one";
+import type { NoulQuestion } from "@/api/lib/workflow/decisions/system-one";
 
 /** Stable decision name both boundaries log and replay under. */
 export const CONDITION_DECISION_ID = "template.condition";

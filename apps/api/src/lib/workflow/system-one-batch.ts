@@ -19,16 +19,16 @@ import { PDF } from "@libpdf/core";
 import { panic } from "better-result";
 
 import type { SafeId } from "@/api/lib/branded-types";
+import type { WorkflowDataOutput } from "@/api/lib/workflow/ai-generate-batch";
 import type {
   AnswerOutcome,
   AnswerQuestion,
   AnswerSource,
-} from "@/api/lib/decisions/answer-questions";
+} from "@/api/lib/workflow/decisions/answer-questions";
 import {
   isSystemOneAnswerable,
   SYSTEM_ONE_SOURCE_BUDGET_CHARS,
-} from "@/api/lib/decisions/answer-questions";
-import type { WorkflowDataOutput } from "@/api/lib/workflow/ai-generate-batch";
+} from "@/api/lib/workflow/decisions/answer-questions";
 import type {
   PreparedInputFile,
   PreparedPdfFile,
@@ -58,7 +58,7 @@ export const batesStamp = (simplifiedName: string, pageIndex: number): string =>
  * `uncited` keeps a citation structurally impossible for a source that has no
  * locator, rather than leaving it to the caller's discipline.
  */
-export type SourceLocator =
+type SourceLocator =
   | { type: "cited"; file: string; citation: string }
   | { type: "uncited" };
 

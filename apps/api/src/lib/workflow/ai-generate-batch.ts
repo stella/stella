@@ -11,12 +11,6 @@ import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { AIUsageMetering } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
-import {
-  decodeSystemOneAnswers,
-  planSystemOneAnswers,
-} from "@/api/lib/decisions/answer-questions";
-import { decideMany } from "@/api/lib/decisions/decide";
-import type { DecisionModel } from "@/api/lib/decisions/decision-model";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
 import { sanitizeForPrompt, untrustedText } from "@/api/lib/prompt-safety";
 import { splitPropertiesForBudget } from "@/api/lib/structured-output-budget";
@@ -35,6 +29,12 @@ import {
   buildTextInputsMessage,
   WORKFLOW_SYSTEM_PROMPT,
 } from "@/api/lib/workflow/ai-prompts";
+import {
+  decodeSystemOneAnswers,
+  planSystemOneAnswers,
+} from "@/api/lib/workflow/decisions/answer-questions";
+import { decideMany } from "@/api/lib/workflow/decisions/decide";
+import type { DecisionModel } from "@/api/lib/workflow/decisions/decision-model";
 import type { PreparedInputFile } from "@/api/lib/workflow/generate-batch";
 import type { TextInput } from "@/api/lib/workflow/generate-batch-shared";
 import type { AIBatchProperty } from "@/api/lib/workflow/get-execution-plan";

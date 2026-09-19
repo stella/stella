@@ -8,14 +8,14 @@ import type { SafeDb } from "@/api/db/safe-db";
 import { env } from "@/api/env";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { toSafeId } from "@/api/lib/branded-types";
-import type { DecisionModel } from "@/api/lib/decisions/decision-model";
-import { createSystemOneClient } from "@/api/lib/decisions/system-one";
 import {
   buildAiConditionDecider,
   buildAiFieldGenerator,
   buildAiOccurrenceAdapter,
 } from "@/api/lib/docx/ai-field-generator";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
+import type { DecisionModel } from "@/api/lib/workflow/decisions/decision-model";
+import { createSystemOneClient } from "@/api/lib/workflow/decisions/system-one";
 
 // The real `chat()` engine runs here; only the provider boundary is faked, so
 // a fixture cannot invent chunk shapes the engine never emits. Each request the

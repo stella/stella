@@ -7,13 +7,13 @@ import {
   splitSystemOneQuestions,
   systemOneSourcesFromPassages,
 } from "@/api/lib/case-law/research-answers-system-one";
-import type { AnswerOutcome } from "@/api/lib/decisions/answer-questions";
+import type { AnswerOutcome } from "@/api/lib/workflow/decisions/answer-questions";
 import {
   decodeSystemOneAnswers,
   planSystemOneAnswers,
   SYSTEM_ONE_SOURCE_BUDGET_CHARS,
-} from "@/api/lib/decisions/answer-questions";
-import { decideMany } from "@/api/lib/decisions/decide";
+} from "@/api/lib/workflow/decisions/answer-questions";
+import { decideMany } from "@/api/lib/workflow/decisions/decide";
 
 const outcome = { completedAt: "2026-09-17T10:00:00.000Z", model: "jev-1.13" };
 

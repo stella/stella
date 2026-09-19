@@ -28,10 +28,10 @@ import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
-import { probeDecisionModel } from "@/api/lib/decisions/decision-model";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { isAllowedBYOKModelForRole } from "@/api/lib/tanstack-ai-models";
 import type { BYOKProvider, ModelRole } from "@/api/lib/tanstack-ai-models";
+import { probeDecisionModel } from "@/api/lib/workflow/decisions/decision-model";
 
 import { resolveDecisionConfig } from "./ai-config-decision";
 

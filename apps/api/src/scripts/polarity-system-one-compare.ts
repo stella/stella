@@ -16,13 +16,13 @@ import {
 } from "@/api/handlers/case-law/polarity/system-one-classifier";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
 import { openCaseLawReadOnlySession } from "@/api/lib/case-law/maintenance-lane";
-import {
-  createSystemOneClient,
-  SYSTEM_ONE_USD_PER_INPUT_TOKEN,
-} from "@/api/lib/decisions/system-one";
 import { readCorpusText } from "@/api/lib/legal-search/corpus-storage";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
+import {
+  createSystemOneClient,
+  SYSTEM_ONE_USD_PER_INPUT_TOKEN,
+} from "@/api/lib/workflow/decisions/system-one";
 import {
   disagreements,
   DISAGREEMENT_EXAMPLES,

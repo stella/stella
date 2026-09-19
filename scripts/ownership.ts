@@ -316,11 +316,11 @@ export const OWNERSHIP = [
     capability:
       "Typed decisions: a choice from a closed set, a yes/no or a score, asked of a decision model",
     owner: [
-      "apps/api/src/lib/decisions/decide.ts",
-      "apps/api/src/lib/decisions/decision-model.ts",
-      "apps/api/src/lib/decisions/system-one.ts",
-      "apps/api/src/lib/decisions/system-one-runtime.ts",
-      "apps/api/src/lib/decisions/answer-questions.ts",
+      "apps/api/src/lib/workflow/decisions/decide.ts",
+      "apps/api/src/lib/workflow/decisions/decision-model.ts",
+      "apps/api/src/lib/workflow/decisions/system-one.ts",
+      "apps/api/src/lib/workflow/decisions/system-one-runtime.ts",
+      "apps/api/src/lib/workflow/decisions/answer-questions.ts",
     ],
     summary:
       "A decision model answers typed questions about a state with probability " +
@@ -338,8 +338,8 @@ export const OWNERSHIP = [
     enforcement: {
       kind: "import",
       specifiers: [
-        "@/api/lib/decisions/system-one-runtime",
-        "@/api/lib/decisions/system-one",
+        "@/api/lib/workflow/decisions/system-one-runtime",
+        "@/api/lib/workflow/decisions/system-one",
       ],
       names: ["getSystemOneClient", "createSystemOneClient"],
       allowed: [

@@ -27,20 +27,20 @@ import type {
   ResearchPassage,
   ResearchQuestion,
 } from "@/api/lib/case-law/research-answers";
-import {
-  isSystemOneAnswerable,
-  SYSTEM_ONE_SOURCE_BUDGET_CHARS,
-} from "@/api/lib/decisions/answer-questions";
-import type {
-  AnswerOutcome,
-  AnswerQuestion,
-  AnswerSource,
-} from "@/api/lib/decisions/answer-questions";
 import { LIMITS } from "@/api/lib/limits";
 import {
   fieldContentFromValidated,
   validateAnswerForContent,
 } from "@/api/lib/workflow/ai-validators";
+import {
+  isSystemOneAnswerable,
+  SYSTEM_ONE_SOURCE_BUDGET_CHARS,
+} from "@/api/lib/workflow/decisions/answer-questions";
+import type {
+  AnswerOutcome,
+  AnswerQuestion,
+  AnswerSource,
+} from "@/api/lib/workflow/decisions/answer-questions";
 
 export type SystemOneQuestionSplit<TQuestion extends ResearchQuestion> = {
   /** The tier's questions, each id the column it answers. */
@@ -92,14 +92,14 @@ export const systemOneSourcesFromPassages = (
     passageChars: SYSTEM_ONE_SOURCE_BUDGET_CHARS,
   }).map((passage) => ({ id: passage.anchorId, text: passage.excerpt }));
 
-export type SystemOneResearchOutcome =
+type SystemOneResearchOutcome =
   | { state: "answered"; answer: FieldContent; run: CaseLawResearchAnswerRun }
   | {
       state: "failed";
       failureReason: Extract<ResearchAnswerFailureReason, "not_stated">;
     };
 
-export type SystemOneColumnOutcome = {
+type SystemOneColumnOutcome = {
   columnId: string;
   outcome: SystemOneResearchOutcome;
 };

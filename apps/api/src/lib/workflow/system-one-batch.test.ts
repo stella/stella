@@ -3,12 +3,12 @@ import { describe, expect, test } from "bun:test";
 import type { FolioAIBlock } from "@stll/folio-core/server";
 
 import { toSafeId } from "@/api/lib/branded-types";
-import type { AnswerOutcome } from "@/api/lib/decisions/answer-questions";
+import type { AnswerOutcome } from "@/api/lib/workflow/decisions/answer-questions";
 import {
   decodeSystemOneAnswers,
   planSystemOneAnswers,
-} from "@/api/lib/decisions/answer-questions";
-import { decideMany } from "@/api/lib/decisions/decide";
+} from "@/api/lib/workflow/decisions/answer-questions";
+import { decideMany } from "@/api/lib/workflow/decisions/decide";
 import type {
   PreparedDocxFile,
   PreparedExtractedTextFile,

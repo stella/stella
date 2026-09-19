@@ -14,8 +14,8 @@ import {
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { hasInstanceDecisionModel } from "@/api/lib/decisions/decision-model";
 import { hasTanStackInstanceProvider } from "@/api/lib/tanstack-ai-models";
+import { hasInstanceDecisionModel } from "@/api/lib/workflow/decisions/decision-model";
 
 type AIConfigResult = {
   /**

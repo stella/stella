@@ -964,7 +964,7 @@ const capabilityProbes = [
         }),
         organizationId: null,
         orgAIConfig: config,
-        // oxlint-disable-next-line decision-shaped-output-schema/decision-shaped-output-schema -- this probe measures the generative provider's structured-output path, which the decision model does not exercise
+        outputMode: "generative",
         outputSchema: structuredOutputSchema,
         prompt: "Return an object whose ok field is true.",
         role: CAPABILITY_ROLE,

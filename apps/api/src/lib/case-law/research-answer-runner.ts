@@ -44,12 +44,6 @@ import {
   splitSystemOneQuestions,
   systemOneSourcesFromPassages,
 } from "@/api/lib/case-law/research-answers-system-one";
-import {
-  decodeSystemOneAnswers,
-  planSystemOneAnswers,
-} from "@/api/lib/decisions/answer-questions";
-import { decideMany } from "@/api/lib/decisions/decide";
-import type { DecisionModel } from "@/api/lib/decisions/decision-model";
 import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
 import { readServingCorpusIndexGenerationTx } from "@/api/lib/legal-search/corpus-index-generation-store";
 import {
@@ -76,6 +70,12 @@ import {
 import { LIMITS } from "@/api/lib/limits";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 import { getTanStackTextModelForRole } from "@/api/lib/tanstack-ai-models";
+import {
+  decodeSystemOneAnswers,
+  planSystemOneAnswers,
+} from "@/api/lib/workflow/decisions/answer-questions";
+import { decideMany } from "@/api/lib/workflow/decisions/decide";
+import type { DecisionModel } from "@/api/lib/workflow/decisions/decision-model";
 
 const ANSWER_TIMEOUT_MS = 120_000;
 

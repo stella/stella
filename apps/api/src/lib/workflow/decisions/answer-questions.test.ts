@@ -6,7 +6,7 @@ import type {
   AnswerQuestion,
   AnswerSource,
   SystemOneAnswerPlan,
-} from "@/api/lib/decisions/answer-questions";
+} from "@/api/lib/workflow/decisions/answer-questions";
 import {
   decodeSystemOneAnswers,
   isSystemOneAnswerable,
@@ -14,15 +14,14 @@ import {
   SYSTEM_ONE_ANSWER_PLAN_MAX_QUESTIONS,
   SYSTEM_ONE_ANSWER_PLAN_MAX_REQUEST_BYTES,
   SYSTEM_ONE_SINGLE_SELECT_MAX_OPTIONS,
-} from "@/api/lib/decisions/answer-questions";
-import { decideMany } from "@/api/lib/decisions/decide";
-import type { Decisions } from "@/api/lib/decisions/decide";
+} from "@/api/lib/workflow/decisions/answer-questions";
+import { decideMany } from "@/api/lib/workflow/decisions/decide";
+import type { Decisions } from "@/api/lib/workflow/decisions/decide";
 import {
   createSystemOneClient,
   DEFAULT_SYSTEM_ONE_MODEL,
   serializeSystemOneRequest,
-} from "@/api/lib/decisions/system-one";
-import type { SystemOneQuestion } from "@/api/lib/decisions/system-one";
+} from "@/api/lib/workflow/decisions/system-one";
 
 /**
  * The plan's questions asked over a fake wire, so what is decoded here is
@@ -32,7 +31,7 @@ import type { SystemOneQuestion } from "@/api/lib/decisions/system-one";
 const decisionsFor = async (
   plan: SystemOneAnswerPlan,
   answers: Record<string, unknown>,
-): Promise<Decisions<Record<string, SystemOneQuestion>>> => {
+): Promise<Decisions<SystemOneAnswerPlan["questions"]>> => {
   const fetcher: Fetcher = async () =>
     await Promise.resolve(
       new Response(

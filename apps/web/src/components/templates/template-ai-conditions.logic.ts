@@ -26,7 +26,7 @@ type DecideConditionsData = Exclude<
 
 export type DecidedCondition = DecideConditionsData["conditions"][number];
 export type ConditionDecision = DecidedCondition["decision"];
-export type UndecidedReason = Extract<
+type UndecidedReason = Extract<
   ConditionDecision,
   { state: "undecided" }
 >["reason"];
@@ -192,7 +192,7 @@ export const effectiveConditionValues = (
  * component picks a literal key per case, which keeps the interpolated
  * `probability` typed and off the union-of-every-key instantiation path.
  */
-export type ConditionChipAnswer =
+type ConditionChipAnswer =
   | { kind: "decided"; value: boolean; probability: number }
   | { kind: "forced"; value: boolean }
   | { kind: "error" }

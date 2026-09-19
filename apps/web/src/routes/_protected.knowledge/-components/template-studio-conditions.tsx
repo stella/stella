@@ -1007,7 +1007,7 @@ const ConditionAiBuilder = ({
       <div className="flex flex-col gap-1.5">
         <Label className="text-sm">{t("common.name")}</Label>
         <Input
-          className="h-9 text-sm"
+          className="h-9"
           onChange={(e) => setLabel(e.currentTarget.value)}
           placeholder={t("templates.studio.conditionLabelPlaceholder")}
           value={label}
@@ -1017,7 +1017,7 @@ const ConditionAiBuilder = ({
         <Label className="text-sm">
           {t("templates.studio.conditionAiInstructionsLabel")}
         </Label>
-        <div className="border-input bg-background focus-within:border-ring focus-within:ring-ring/24 rounded-lg border px-2.5 py-2 transition-shadow focus-within:ring-[3px]">
+        <div className="border-input bg-background focus-within:border-ring focus-within:ring-ring/24 rounded-lg border px-2.5 py-2 focus-within:ring-3">
           <AIPromptInput
             mentionExtension={fieldMention}
             onChange={setPrompt}

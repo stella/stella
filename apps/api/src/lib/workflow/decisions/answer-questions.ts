@@ -23,10 +23,11 @@ import { panic } from "better-result";
 import { normalizeDateValue, normalizeNumber } from "@stll/agent-input";
 
 import type { AiExtractablePropertyContent } from "@/api/db/schema-validators";
+import type { Answer } from "@/api/lib/workflow/ai-answer-schema";
 import type {
   Decisions,
   DecisionUndecidedReason,
-} from "@/api/lib/decisions/decide";
+} from "@/api/lib/workflow/decisions/decide";
 import {
   choice,
   DEFAULT_SYSTEM_ONE_MODEL,
@@ -35,15 +36,14 @@ import {
   SYSTEM_ONE_MAX_CHOICE_OPTIONS,
   SYSTEM_ONE_MAX_QUESTIONS,
   SYSTEM_ONE_MAX_REQUEST_BYTES,
-} from "@/api/lib/decisions/system-one";
+} from "@/api/lib/workflow/decisions/system-one";
 import type {
   ChoiceAnswer,
   NoulAnswer,
   SystemOneEntry,
   SystemOneQuestion,
   SystemOneState,
-} from "@/api/lib/decisions/system-one";
-import type { Answer } from "@/api/lib/workflow/ai-answer-schema";
+} from "@/api/lib/workflow/decisions/system-one";
 
 /**
  * Sources per request. Jev reads at most 32k tokens of state with the longest

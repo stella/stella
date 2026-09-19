@@ -261,7 +261,7 @@ export const decideDispositions = async (
           systemPromptOrigin: "embeds-untrusted",
           messages: request.messages,
           abortSignal: callSignal(context),
-          // oxlint-disable-next-line decision-shaped-output-schema/decision-shaped-output-schema -- each chunk re-reads the previous chunk's decided rows as context, so this is one document-level read rather than one question per row
+          outputMode: "generative",
           outputSchema: dispositionSchema,
         });
         for (const row of output.rows) {

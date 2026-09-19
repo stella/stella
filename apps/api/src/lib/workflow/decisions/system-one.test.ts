@@ -13,7 +13,7 @@ import {
   SYSTEM_ONE_MAX_QUESTIONS,
   SYSTEM_ONE_MAX_REQUEST_BYTES,
   SYSTEM_ONE_PROBABILITY_TOLERANCE,
-} from "@/api/lib/decisions/system-one";
+} from "@/api/lib/workflow/decisions/system-one";
 
 type Call = { url: string; body: unknown; headers: Headers };
 

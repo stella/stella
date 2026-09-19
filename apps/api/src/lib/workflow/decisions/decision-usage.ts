@@ -2,10 +2,10 @@ import { Result } from "better-result";
 
 import { captureError } from "@/api/lib/analytics/capture";
 import type { AIUsageMetering } from "@/api/lib/analytics/tanstack-ai";
-import type { DecisionModel } from "@/api/lib/decisions/decision-model";
 import { incrementLaneCounter } from "@/api/lib/usage/lane-budget";
 import { decisionUsageUnitsFromTokens } from "@/api/lib/usage/unit-model";
 import { recordUsageEvent } from "@/api/lib/usage/usage-ledger";
+import type { DecisionModel } from "@/api/lib/workflow/decisions/decision-model";
 
 export type DecisionUsageMetering = AIUsageMetering & {
   /** One identity per provider call, retained across ledger transaction retries. */

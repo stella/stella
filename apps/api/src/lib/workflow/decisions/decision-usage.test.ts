@@ -2,10 +2,13 @@ import { describe, expect, test } from "bun:test";
 
 import type { usageEvents } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
-import { decideMany } from "@/api/lib/decisions/decide";
-import type { DecisionModel } from "@/api/lib/decisions/decision-model";
-import { createSystemOneClient, noul } from "@/api/lib/decisions/system-one";
 import { decisionUsageUnitsFromTokens } from "@/api/lib/usage/unit-model";
+import { decideMany } from "@/api/lib/workflow/decisions/decide";
+import type { DecisionModel } from "@/api/lib/workflow/decisions/decision-model";
+import {
+  createSystemOneClient,
+  noul,
+} from "@/api/lib/workflow/decisions/system-one";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 

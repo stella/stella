@@ -2,13 +2,13 @@ import { afterEach, describe, expect, test } from "bun:test";
 
 import type { Fetcher } from "@stll/fetch";
 
-import { decide, decideMany } from "@/api/lib/decisions/decide";
-import type { DecisionModel } from "@/api/lib/decisions/decision-model";
+import { decide, decideMany } from "@/api/lib/workflow/decisions/decide";
+import type { DecisionModel } from "@/api/lib/workflow/decisions/decision-model";
 import {
   choice,
   createSystemOneClient,
   noul,
-} from "@/api/lib/decisions/system-one";
+} from "@/api/lib/workflow/decisions/system-one";
 import {
   installRecordingAnalytics,
   installRecordingLogger,

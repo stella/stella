@@ -25,32 +25,40 @@ import { panic, Result } from "better-result";
 
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { captureError } from "@/api/lib/analytics/capture";
-import { resolveDecisionModel } from "@/api/lib/decisions/decision-model";
-import type { DecisionModel } from "@/api/lib/decisions/decision-model";
-import { recordDecisionUsage } from "@/api/lib/decisions/decision-usage";
-import type { DecisionUsageMetering } from "@/api/lib/decisions/decision-usage";
+import { logger } from "@/api/lib/observability/logger";
+import { resolveDecisionModel } from "@/api/lib/workflow/decisions/decision-model";
+import type { DecisionModel } from "@/api/lib/workflow/decisions/decision-model";
+import { recordDecisionUsage } from "@/api/lib/workflow/decisions/decision-usage";
+import type { DecisionUsageMetering } from "@/api/lib/workflow/decisions/decision-usage";
 import type {
+  ChoiceAnswer,
+  ChoiceQuestion,
+  NoulAnswer,
+  NoulQuestion,
+  SystemOneAnswer,
   SystemOneAnswerFor,
   SystemOneQuestion,
   SystemOneQuestions,
   SystemOneState,
-} from "@/api/lib/decisions/system-one";
-import { SYSTEM_ONE_USD_PER_INPUT_TOKEN } from "@/api/lib/decisions/system-one";
-import { logger } from "@/api/lib/observability/logger";
+} from "@/api/lib/workflow/decisions/system-one";
+import {
+  isSystemOneAnswerForQuestion,
+  SYSTEM_ONE_USD_PER_INPUT_TOKEN,
+} from "@/api/lib/workflow/decisions/system-one";
 
 /**
  * Below this confidence a decision is not taken. Measured against Jev 1.13 on
  * the citation-polarity comparison; move it with the model, not per call
  * site. A site whose cost of a wrong answer is higher passes its own floor.
  */
-export const DECISION_ACCEPT_CONFIDENCE = 0.6;
+const DECISION_ACCEPT_CONFIDENCE = 0.6;
 
 /** Answers arrive in well under a second; the default covers a queued retry. */
 const DEFAULT_TIMEOUT_MS = 30_000;
 /** Readings carried into the log line; the rest of a large batch is cut. */
 const READINGS_MAX = 20;
 
-export const DECISION_UNDECIDED_REASONS = [
+const DECISION_UNDECIDED_REASONS = [
   /** No decision model is configured for the org or the instance. */
   "no-backend",
   /** The model answered under the confidence floor. */
@@ -93,10 +101,10 @@ type DecideBaseOptions = {
   usageMetering?: DecisionUsageMetering | undefined;
 };
 
-export type DecideManyOptions<TQuestions extends SystemOneQuestions> =
+type DecideManyOptions<TQuestions extends SystemOneQuestions> =
   DecideBaseOptions & { questions: TQuestions };
 
-export type DecideManyResult<TQuestions extends SystemOneQuestions> = {
+type DecideManyResult<TQuestions extends SystemOneQuestions> = {
   decisions: Decisions<TQuestions>;
   /** The versioned model that answered; null when nothing was asked. */
   model: string | null;
@@ -105,7 +113,7 @@ export type DecideManyResult<TQuestions extends SystemOneQuestions> = {
 export type DecideOptions<TQuestion extends SystemOneQuestion> =
   DecideBaseOptions & { question: TQuestion };
 
-type AnyAnswer = SystemOneAnswerFor<SystemOneQuestion>;
+type AnyAnswer = SystemOneAnswer;
 
 type Reading = {
   answer: AnyAnswer;
@@ -147,19 +155,30 @@ const readingValue = (answer: AnyAnswer): string | number => {
   }
 };
 
+const hasEveryDecision = <TQuestions extends SystemOneQuestions>(
+  questions: TQuestions,
+  decisions: Record<string, Decision<SystemOneAnswer>>,
+): decisions is Decisions<TQuestions> =>
+  Object.entries(questions).every(([id, question]) => {
+    const decision = decisions[id];
+    return (
+      decision !== undefined &&
+      (decision.state === "undecided" ||
+        isSystemOneAnswerForQuestion(question, decision.answer))
+    );
+  });
+
 const undecidedAll = <TQuestions extends SystemOneQuestions>(
   questions: TQuestions,
   reason: DecisionUndecidedReason,
 ): Decisions<TQuestions> => {
-  const decisions: Record<string, Decision<never>> = {};
+  const decisions: Record<string, Decision<SystemOneAnswer>> = {};
   for (const key of Object.keys(questions)) {
     decisions[key] = { state: "undecided", reason, confidence: null };
   }
-  // SAFETY: an undecided decision carries no answer, so it inhabits
-  // `Decision<T>` for every T, and there is one per question key, which is
-  // what the mapped type promises.
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- undecided is answer-free and the key set matches the questions
-  return decisions as Decisions<TQuestions>;
+  return hasEveryDecision(questions, decisions)
+    ? decisions
+    : panic("Undecided decision construction lost a question");
 };
 
 export const decideMany = async <TQuestions extends SystemOneQuestions>({
@@ -194,9 +213,7 @@ export const decideMany = async <TQuestions extends SystemOneQuestions>({
   });
   if (Result.isError(asked)) {
     if (abortSignal?.aborted) {
-      throw abortSignal.reason instanceof Error
-        ? abortSignal.reason
-        : new DOMException("Aborted", "AbortError");
+      abortSignal.throwIfAborted();
     }
     captureError(asked.error, { source: "decide", decision: id });
     return { decisions: undecidedAll(questions, "failed"), model: null };
@@ -210,15 +227,13 @@ export const decideMany = async <TQuestions extends SystemOneQuestions>({
     });
   }
 
-  const decisions: Record<string, Decision<AnyAnswer>> = {};
+  const decisions: Record<string, Decision<SystemOneAnswer>> = {};
   const readings: Record<string, string | number>[] = [];
   let decided = 0;
   for (const key of Object.keys(questions)) {
     const answer = asked.value.answers[key];
-    // `ask` bound one answer per question; a missing key is a transport bug
-    // and would have been an error above.
     if (answer === undefined) {
-      continue;
+      return panic(`Decision model returned no answer for "${key}"`);
     }
     const reading = readAnswer(answer);
     const accepted = reading.confidence >= floor;
@@ -260,25 +275,30 @@ export const decideMany = async <TQuestions extends SystemOneQuestions>({
     readings: JSON.stringify(readings),
   });
   return {
-    // SAFETY: `ask` returned each question's answer in that question's own
-    // type, and the loop wrapped each under its own key, which is what
-    // `Decisions<TQuestions>` maps per key.
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- per-key wrapping of an already per-key typed answer set
-    decisions: decisions as Decisions<TQuestions>,
+    decisions: hasEveryDecision(questions, decisions)
+      ? decisions
+      : panic("Decision construction lost a question"),
     model: asked.value.model,
   };
 };
 
 /** One question over one state; `decideMany` for several. */
-export const decide = async <TQuestion extends SystemOneQuestion>({
+export function decide<TOption extends string>(
+  options: DecideOptions<ChoiceQuestion<TOption>>,
+): Promise<Decision<ChoiceAnswer<TOption>>>;
+export function decide(
+  options: DecideOptions<NoulQuestion>,
+): Promise<Decision<NoulAnswer>>;
+export function decide(
+  options: DecideOptions<SystemOneQuestion>,
+): Promise<Decision<SystemOneAnswer>>;
+export async function decide({
   question,
   ...options
-}: DecideOptions<TQuestion>): Promise<
-  Decision<SystemOneAnswerFor<TQuestion>>
-> => {
+}: DecideOptions<SystemOneQuestion>): Promise<Decision<SystemOneAnswer>> {
   const { decisions } = await decideMany({
     ...options,
     questions: { answer: question },
   });
   return decisions.answer;
-};
+}

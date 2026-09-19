@@ -98,6 +98,15 @@ export const proseBesideChoice = async () =>
     }),
   });
 
+// Allowed: an explicit generative mode documents an intentional fallback or
+// provider-path probe even when its result is decision-shaped.
+export const explicitGenerativeMode = async () =>
+  await generateTanStackObjectForRole({
+    role: "fixture",
+    outputMode: "generative",
+    outputSchema: v.strictObject({ applies: v.boolean() }),
+  });
+
 // Allowed: an entry list with nothing in it decides nothing.
 export const emptySchema = async () =>
   await generateTanStackObjectForRole({

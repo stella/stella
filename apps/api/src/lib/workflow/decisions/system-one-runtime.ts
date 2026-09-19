@@ -6,8 +6,8 @@
  */
 
 import { env } from "@/api/env";
-import { createSystemOneClient } from "@/api/lib/decisions/system-one";
-import type { SystemOneClient } from "@/api/lib/decisions/system-one";
+import { createSystemOneClient } from "@/api/lib/workflow/decisions/system-one";
+import type { SystemOneClient } from "@/api/lib/workflow/decisions/system-one";
 
 let client: SystemOneClient | null | undefined;
 

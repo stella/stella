@@ -3,7 +3,8 @@
 // A generative structured-output call bills text generation for its answer.
 // When every field of the output schema is a closed choice, a yes/no, a number
 // or a date, nothing in that answer is text: the model is picking from N, and
-// `decide()` / `decideMany()` (apps/api/src/lib/decisions/decide.ts) ask the
+// `decide()` / `decideMany()`
+// (apps/api/src/lib/workflow/decisions/decide.ts) ask the
 // organization's decision model instead, under a confidence floor and with one
 // logged reading per question. A single free-text field keeps the call
 // generative, so the test is exact rather than a heuristic: a `v.string()` not
@@ -102,6 +103,27 @@ const outputSchemaProperty = (options: AstNode): AstNode | null => {
   return null;
 };
 
+// An explicit marker is reserved for calls that intentionally exercise or
+// fall back to the generative structured-output path. The helper's type owns
+// the vocabulary, so exceptions are searchable and cannot be free-form lint
+// comments.
+const hasGenerativeOutputMode = (options: AstNode): boolean => {
+  const properties = Array.isArray(options.properties)
+    ? options.properties
+    : [];
+  return properties.some((property) => {
+    if (
+      !isAstNode(property) ||
+      property.type !== "Property" ||
+      getPropertyName(property.key) !== "outputMode"
+    ) {
+      return false;
+    }
+    const value = unwrapExpression(property.value);
+    return value?.type === "Literal" && value.value === "generative";
+  });
+};
+
 // Entry values of a `v.object(...)` / `v.strictObject(...)` literal. Null when
 // the entry list is absent or carries a spread, which this walk cannot
 // enumerate.
@@ -134,7 +156,7 @@ export default eslintCompatPlugin({
             "Every field of this output is a closed choice, a boolean, a " +
             "number or a date: that is a decision, not a generation. Ask it " +
             "through decide() or decideMany() from " +
-            "@/api/lib/decisions/decide and keep the generative model for " +
+            "@/api/lib/workflow/decisions/decide and keep the generative model for " +
             "text.",
         },
       },
@@ -264,6 +286,9 @@ export default eslintCompatPlugin({
               Array.isArray(node.arguments) ? node.arguments.at(0) : undefined,
             );
             if (options?.type !== "ObjectExpression") {
+              return;
+            }
+            if (hasGenerativeOutputMode(options)) {
               return;
             }
             const property = outputSchemaProperty(options);

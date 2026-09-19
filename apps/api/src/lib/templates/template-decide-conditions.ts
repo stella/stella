@@ -21,14 +21,6 @@ import type { Result as ResultType } from "better-result";
 import type { ScopedDb } from "@/api/db/safe-db";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import type { SafeId } from "@/api/lib/branded-types";
-import { decideMany } from "@/api/lib/decisions/decide";
-import type {
-  Decision,
-  DecisionUndecidedReason,
-} from "@/api/lib/decisions/decide";
-import type { DecisionModel } from "@/api/lib/decisions/decision-model";
-import type { DecisionUsageMetering } from "@/api/lib/decisions/decision-usage";
-import type { NoulAnswer, NoulQuestion } from "@/api/lib/decisions/system-one";
 import {
   CONDITION_DECISION_ID,
   conditionQuestion,
@@ -40,11 +32,22 @@ import { isAiConditionField } from "@/api/lib/docx/resolve-ai-conditions";
 import type { FieldMeta } from "@/api/lib/docx/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { loadStoredTemplateSource } from "@/api/lib/templates/template-fill-service";
+import { decideMany } from "@/api/lib/workflow/decisions/decide";
+import type {
+  Decision,
+  DecisionUndecidedReason,
+} from "@/api/lib/workflow/decisions/decide";
+import type { DecisionModel } from "@/api/lib/workflow/decisions/decision-model";
+import type { DecisionUsageMetering } from "@/api/lib/workflow/decisions/decision-usage";
+import type {
+  NoulAnswer,
+  NoulQuestion,
+} from "@/api/lib/workflow/decisions/system-one";
 
 /** The form asks between keystrokes; a slower answer is stale when it lands. */
 const DECIDE_CONDITIONS_TIMEOUT_MS = 10_000;
 
-export type TemplateConditionDecision =
+type TemplateConditionDecision =
   | {
       state: "decided";
       value: boolean;
@@ -54,7 +57,7 @@ export type TemplateConditionDecision =
     }
   | { state: "undecided"; reason: DecisionUndecidedReason };
 
-export type TemplateConditionAnswer = {
+type TemplateConditionAnswer = {
   path: string;
   /** The field's label as the fill form shows it; its path when unlabelled. */
   label: string;

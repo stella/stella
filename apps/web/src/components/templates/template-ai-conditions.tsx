@@ -247,26 +247,26 @@ type DecideConditionsOptionsInput = QueryOptionsInput<
   DecideConditionsContext
 >;
 
+const requestConditionDecisions =
+  (key: DecideConditionsKey, values: Record<string, unknown>) =>
+  async ({ signal }: { signal: AbortSignal }) =>
+    unwrapEden(
+      await api
+        .templates({ templateId: toSafeId<"template">(key.templateId) })
+        ["decide-conditions"].post({ values }, { fetch: { signal } }),
+    );
+
 const decideConditionsOptions = ({
   key,
   context,
 }: DecideConditionsOptionsInput) =>
-  // eslint-disable-next-line @tanstack/query/exhaustive-deps -- `key.valuesHash` IS the stable hash of `context.values`; listing the object too would duplicate cache identity without changing it.
   queryOptions({
     queryKey: knowledgeKeys.templates.decideConditions(
       key.organizationId,
       key.templateId,
       key.valuesHash,
     ),
-    queryFn: async ({ signal }) =>
-      unwrapEden(
-        await api
-          .templates({ templateId: toSafeId<"template">(key.templateId) })
-          ["decide-conditions"].post(
-            { values: context.values },
-            { fetch: { signal } },
-          ),
-      ),
+    queryFn: requestConditionDecisions(key, context.values),
     // A decision over a given set of values does not change on its own, and
     // the model call is not cheap: never re-ask for a form state already
     // answered.

@@ -31,9 +31,6 @@ import type {
   GuardedSystemPrompt,
 } from "@/api/lib/chat/model-ingress-guard";
 import { generateChatObject } from "@/api/lib/chat/tanstack-chat-runtime";
-import { decide } from "@/api/lib/decisions/decide";
-import { hasInstanceDecisionModel } from "@/api/lib/decisions/decision-model";
-import type { DecisionModel } from "@/api/lib/decisions/decision-model";
 import type { AiOccurrenceAdapter } from "@/api/lib/docx/adapt-ai-fields";
 import {
   CONDITION_DECISION_ID,
@@ -62,6 +59,9 @@ import {
 import type { TanStackTextRun } from "@/api/lib/tanstack-ai-generate";
 import { hasTanStackInstanceProvider } from "@/api/lib/tanstack-ai-models";
 import { toTanStackValibotSchema } from "@/api/lib/tanstack-ai-schema";
+import { decide } from "@/api/lib/workflow/decisions/decide";
+import { hasInstanceDecisionModel } from "@/api/lib/workflow/decisions/decision-model";
+import type { DecisionModel } from "@/api/lib/workflow/decisions/decision-model";
 
 /**
  * Usage-metering + analytics callbacks wired into every nested fill
@@ -275,7 +275,10 @@ const generateFieldText = async (
 };
 
 const generateFieldObject = async <TSchema extends v.GenericSchema>(
-  input: FieldChatInput & { outputSchema: TSchema },
+  input: FieldChatInput & {
+    outputMode?: "generative" | undefined;
+    outputSchema: TSchema;
+  },
 ): Promise<v.InferOutput<TSchema>> => {
   const { abortController, caching, messages, model, system } =
     resolveFieldChat(input);
@@ -471,7 +474,7 @@ export const buildAiConditionDecider = ({
         maxOutputTokens: AI_CONDITION_MAX_TOKENS,
         orgAIConfig,
         organizationId,
-        // oxlint-disable-next-line decision-shaped-output-schema/decision-shaped-output-schema -- the generative run is the fallback for a condition decide() above left undecided, and the only run for a skill-referencing prompt
+        outputMode: "generative",
         outputSchema: conditionDecisionSchema,
         prompt: `You are deciding one yes/no condition of a legal document. Question: ${prompt}
 

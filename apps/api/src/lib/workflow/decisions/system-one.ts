@@ -15,13 +15,13 @@
  * choice outside its own criteria is a transport error, never a value.
  */
 
-import { Result, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
 import { createFetchWithTimeout } from "@stll/fetch";
 import type { Fetcher } from "@stll/fetch";
 
-export const SYSTEM_ONE_ENDPOINT = "https://api.typesafe.ai/v1/systemone";
+const SYSTEM_ONE_ENDPOINT = "https://api.typesafe.ai/v1/systemone";
 export const DEFAULT_SYSTEM_ONE_MODEL = "jev-latest";
 /** Jev's documented maximum cardinality for one Choice question. */
 export const SYSTEM_ONE_MAX_CHOICE_OPTIONS = 255;
@@ -87,6 +87,8 @@ export type NoulAnswer = {
   noul: number;
 };
 
+export type SystemOneAnswer = ChoiceAnswer | NoulAnswer;
+
 export type SystemOneAnswerFor<TQuestion extends SystemOneQuestion> =
   TQuestion extends ChoiceQuestion<infer TOption>
     ? ChoiceAnswer<TOption>
@@ -96,13 +98,13 @@ export type SystemOneAnswerFor<TQuestion extends SystemOneQuestion> =
 
 export type SystemOneQuestions = Record<string, SystemOneQuestion>;
 
-export type SystemOneAnswers<TQuestions extends SystemOneQuestions> = {
+type SystemOneAnswers<TQuestions extends SystemOneQuestions> = {
   [K in keyof TQuestions]: SystemOneAnswerFor<TQuestions[K]>;
 };
 
-export type SystemOneUsage = { inputTokens: number; outputTokens: number };
+type SystemOneUsage = { inputTokens: number; outputTokens: number };
 
-export type SystemOneResult<TQuestions extends SystemOneQuestions> = {
+type SystemOneResult<TQuestions extends SystemOneQuestions> = {
   /** The versioned model that answered, as the response reports it. */
   model: string;
   answers: SystemOneAnswers<TQuestions>;
@@ -162,6 +164,31 @@ const wireResponseSchema = v.object({
 });
 
 type WireAnswer = v.InferOutput<typeof wireAnswerSchema>;
+
+export const isSystemOneAnswerForQuestion = <
+  TQuestion extends SystemOneQuestion,
+>(
+  question: TQuestion,
+  answer: SystemOneAnswer,
+): answer is SystemOneAnswerFor<TQuestion> => {
+  if (question.type === "noul") {
+    return answer.type === "noul";
+  }
+  return (
+    answer.type === "choice" && Object.hasOwn(question.criteria, answer.choice)
+  );
+};
+
+const hasEveryAnswer = <TQuestions extends SystemOneQuestions>(
+  questions: TQuestions,
+  answers: Record<string, SystemOneAnswer>,
+): answers is SystemOneAnswers<TQuestions> =>
+  Object.entries(questions).every(([id, question]) => {
+    const answer = answers[id];
+    return (
+      answer !== undefined && isSystemOneAnswerForQuestion(question, answer)
+    );
+  });
 
 /**
  * An answer is accepted only in the shape its question promised: the same
@@ -226,7 +253,7 @@ const bindAnswer = (
   return Result.ok(answer);
 };
 
-export type SystemOneRequest<TQuestions extends SystemOneQuestions> = {
+type SystemOneRequest<TQuestions extends SystemOneQuestions> = {
   state: SystemOneState;
   questions: TQuestions;
   abortSignal?: AbortSignal | undefined;
@@ -278,9 +305,7 @@ const abortableSleep = async (
     await Bun.sleep(ms);
     return;
   }
-  if (abortSignal.aborted) {
-    throw abortError(abortSignal);
-  }
+  abortSignal.throwIfAborted();
 
   let onAbort: (() => void) | undefined;
   const aborted = new Promise<never>((_resolve, reject) => {
@@ -467,13 +492,12 @@ export const createSystemOneClient = ({
         }
         answers[id] = bound.value;
       }
+      if (!hasEveryAnswer(questions, answers)) {
+        return panic("TypeSafe answer binding lost a question");
+      }
       return Result.ok({
         model: parsed.output.model,
-        // SAFETY: `bindAnswer` checked every answer against its own question
-        // (same type; a choice inside its criteria with a probability per
-        // option), which is exactly what the mapped type promises per key.
-        // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the per-key binding above is the proof the mapped type asks for
-        answers: answers as SystemOneAnswers<TQuestions>,
+        answers,
         usage: {
           inputTokens: parsed.output.usage.input_tokens,
           outputTokens: parsed.output.usage.output_tokens,
