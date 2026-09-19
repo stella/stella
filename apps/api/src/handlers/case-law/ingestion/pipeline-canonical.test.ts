@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { afterEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -34,6 +34,8 @@ import type { putCorpusPacks } from "@/api/lib/legal-search/corpus-pack-writer";
 import * as realCorpusStorage from "@/api/lib/legal-search/corpus-storage";
 import { partialObservationFromMetadata } from "@/api/lib/legal-search/ingestion-normalization";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
+import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
+import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 
 /**
  * `canonical` storage mode moves the payload out of Postgres, so what a
@@ -766,6 +768,60 @@ describe("processDecision — canonical storage mode", () => {
 
     expect(rejection).toBeInstanceOf(TimeoutError);
     expect(putPacksMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("processDecision — a refresh whose raw-source write failed", () => {
+  let fake: FakeS3;
+
+  beforeEach(() => {
+    fake = startFakeS3();
+  });
+
+  afterEach(() => {
+    fake.stop();
+  });
+
+  test("reports the raw-source retry although the pack settled", async () => {
+    // The update kept its old `sourceHash` so the next pass re-observes the
+    // decision. A single decision is its own batch, and its corpus outcome
+    // is the whole answer only if nothing else is owed: reporting complete
+    // here would advance the cursor past a raw source that never landed.
+    fake.failNext({ method: "PUT", code: "AccessDenied", status: 403 });
+    existingDecision = {
+      id: createSafeId<"caseLawDecision">(),
+      metadata: {},
+      sourceHash: "older-hash",
+      sourceObservedAt: new Date("2026-07-31T11:00:00.000Z"),
+      sourceObservationHash: "older-hash",
+      sourceObservationOrder: 0n,
+      corpusMirrorStatus: "settled",
+      contentHash: null,
+      textS3Key: null,
+      normalizedS3Key: null,
+      astS3Key: null,
+      redactedAt: null,
+      sourceRawS3Key: "case-law/raw/older",
+      sourceRawContentType: "text/html",
+    };
+
+    const outcome = await processDecision({
+      input: { ...decision, sourceRaw: "<html></html>" },
+      observationOrder: 1n,
+      sourceId: createSafeId<"caseLawSource">(),
+      scopedDb,
+      observedAt: new Date("2026-07-31T12:00:00.000Z"),
+    });
+
+    // The corpus write itself succeeded, so the reason names the retry the
+    // page-batch path reports for the same failure.
+    expect(transferredPacks).toHaveLength(1);
+    expect(settledDecisionRows()).toHaveLength(1);
+    expect(outcome).toEqual({
+      status: "retryable",
+      inserted: true,
+      reason: "corpus-write",
+    });
   });
 });
 

@@ -1711,6 +1711,28 @@ const processDecisionAttempt = async ({
   } = sourceRawArtifact.artifact;
   const s3UploadFailed = rawUploadFailed;
 
+  /**
+   * The raw-source retry the row carries, independent of the corpus write.
+   *
+   * An update whose raw upload failed kept its old `sourceHash` so the next
+   * pass re-observes the decision; reporting it complete would strand that
+   * retry. Every return that would otherwise report a decision this pass
+   * wrote as complete goes through here, so the single-decision path and the
+   * page-batch path answer the same way. A row that was redacted or removed
+   * while the batch ran has nothing left to re-observe, and is reported as
+   * complete with `inserted: false`, so it is left alone.
+   */
+  const withSourceRawRetry = (outcome: ProcessResult): ProcessResult =>
+    s3UploadFailed &&
+    outcome.status === PROCESS_DECISION_STATUS.COMPLETE &&
+    outcome.inserted
+      ? {
+          status: PROCESS_DECISION_STATUS.RETRYABLE,
+          inserted: true,
+          reason: PROCESS_DECISION_RETRY_REASON.CORPUS_WRITE,
+        }
+      : outcome;
+
   const preparePersistenceInputs = async () => {
     const sections = decisionSections(result);
 
@@ -2619,15 +2641,17 @@ const processDecisionAttempt = async ({
         // Nobody else will flush this batch, so this decision is its own:
         // one transfer, one member set, the same path a page takes.
         const flushed = await batch.flush();
-        return processResultForCorpusOutcome(
-          Result.isError(flushed)
-            ? { type: "failed", error: flushed.error }
-            : flushed.value.get(decisionId),
-          {
-            decisionId,
-            caseNumber: result.caseNumber,
-            country: result.country,
-          },
+        return withSourceRawRetry(
+          processResultForCorpusOutcome(
+            Result.isError(flushed)
+              ? { type: "failed", error: flushed.error }
+              : flushed.value.get(decisionId),
+            {
+              decisionId,
+              caseNumber: result.caseNumber,
+              country: result.country,
+            },
+          ),
         );
       }
     }
@@ -2638,17 +2662,11 @@ const processDecisionAttempt = async ({
   // doesn't block cursor advancement. New decisions become
   // searchable within ~30s of insertion.
 
-  return s3UploadFailed
-    ? {
-        status: PROCESS_DECISION_STATUS.RETRYABLE,
-        inserted: true,
-        reason: PROCESS_DECISION_RETRY_REASON.CORPUS_WRITE,
-      }
-    : {
-        status: PROCESS_DECISION_STATUS.COMPLETE,
-        inserted: true,
-        searchVectorFailed: false,
-      };
+  return withSourceRawRetry({
+    status: PROCESS_DECISION_STATUS.COMPLETE,
+    inserted: true,
+    searchVectorFailed: false,
+  });
 };
 
 export const processDecision = async ({
