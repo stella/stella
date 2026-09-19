@@ -593,7 +593,11 @@ describe("buildAiConditionDecider decision tier", () => {
       });
 
       expect(decideCondition).toBeDefined();
-      expect(await decideCondition?.(input)).toBe(true);
+      expect(await decideCondition?.(input)).toEqual({
+        decidedBy: "decision_model",
+        value: true,
+        probability: 0.94,
+      });
       expect(capturedRequests).toEqual([]);
     } finally {
       env.TYPESAFE_API_KEY = previousApiKey;
