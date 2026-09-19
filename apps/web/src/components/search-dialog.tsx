@@ -45,6 +45,7 @@ import {
 } from "@stll/ui/command";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { MenuSection } from "@stll/ui/menu-section";
+import { ScrollArea } from "@stll/ui/scroll-area";
 import { Skeleton } from "@stll/ui/skeleton";
 import { stellaToast } from "@stll/ui/toast";
 import { contentDir } from "@stll/ui/use-content-dir";
@@ -1807,22 +1808,24 @@ export const SearchDialog = ({
                 {/* Matter filters do not apply to external registry searches. */}
                 <div
                   className={cn(
-                    "hidden w-[var(--search-facets-w,14rem)] shrink-0 overflow-y-auto border-e group-data-[registry-search=true]/search-content:hidden",
+                    "hidden min-h-0 w-[var(--search-facets-w,14rem)] shrink-0 border-e group-data-[registry-search=true]/search-content:hidden",
                     responsiveFacetVisibility(showPreview),
                   )}
                 >
-                  <SearchFacetsBody
-                    editorBuckets={editorBuckets}
-                    facetSearchParams={facetSearchParams}
-                    filters={filters}
-                    hasSearchCriteria={hasSearchCriteria}
-                    locale={locale}
-                    mimeTypeBuckets={mimeTypeBuckets}
-                    publicLawPreviewEnabled={publicLawPreviewEnabled}
-                    setFilters={setFilters}
-                    typeBuckets={typeBuckets}
-                    workspaceBuckets={workspaceBuckets}
-                  />
+                  <ScrollArea axis="vertical">
+                    <SearchFacetsBody
+                      editorBuckets={editorBuckets}
+                      facetSearchParams={facetSearchParams}
+                      filters={filters}
+                      hasSearchCriteria={hasSearchCriteria}
+                      locale={locale}
+                      mimeTypeBuckets={mimeTypeBuckets}
+                      publicLawPreviewEnabled={publicLawPreviewEnabled}
+                      setFilters={setFilters}
+                      typeBuckets={typeBuckets}
+                      workspaceBuckets={workspaceBuckets}
+                    />
+                  </ScrollArea>
                 </div>
 
                 <SearchColumnResizeHandle
@@ -1851,24 +1854,26 @@ export const SearchDialog = ({
                       ref={setResultsElement}
                     >
                       <div
-                        className="min-h-0 flex-1 overflow-y-auto"
+                        className="min-h-0 flex-1"
                         hidden={!scopeVisibility.recents}
                       >
-                        <SearchRecentsScreen
-                          filters={filters}
-                          onApplySavedSearch={applySavedSearch}
-                          onFileClick={openRecentFile}
-                          onFilePreview={setRecentPreviewFile}
-                          onSearchClick={applyRecentSearch}
-                          open={open}
-                          previewedFileId={
-                            displayedRecentFile?.entityId ?? null
-                          }
-                          query={query}
-                          recentFiles={recentFiles}
-                          recentSearches={recentSearches}
-                          visible={scopeVisibility.recents}
-                        />
+                        <ScrollArea axis="vertical">
+                          <SearchRecentsScreen
+                            filters={filters}
+                            onApplySavedSearch={applySavedSearch}
+                            onFileClick={openRecentFile}
+                            onFilePreview={setRecentPreviewFile}
+                            onSearchClick={applyRecentSearch}
+                            open={open}
+                            previewedFileId={
+                              displayedRecentFile?.entityId ?? null
+                            }
+                            query={query}
+                            recentFiles={recentFiles}
+                            recentSearches={recentSearches}
+                            visible={scopeVisibility.recents}
+                          />
+                        </ScrollArea>
                       </div>
                       {scopeVisibility.actions &&
                         filteredActions.length > 0 && (
