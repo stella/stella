@@ -2820,8 +2820,12 @@ const handlePreviewTemplateConditionsTool: TypedMcpToolHandler<
     body: { values: parsed.output.values },
     orgAIConfig,
     abortSignal:
-      context.request?.signal ??
-      AbortSignal.timeout(PREVIEW_TEMPLATE_CONDITIONS_TIMEOUT_MS),
+      context.request === undefined
+        ? AbortSignal.timeout(PREVIEW_TEMPLATE_CONDITIONS_TIMEOUT_MS)
+        : AbortSignal.any([
+            context.request.signal,
+            AbortSignal.timeout(PREVIEW_TEMPLATE_CONDITIONS_TIMEOUT_MS),
+          ]),
     // Preview has no spend reservation. Match the REST route: only the org's
     // own credential may run until the decision model has a usage preflight.
     ...(orgAIConfig?.decision ? {} : { client: null }),

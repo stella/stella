@@ -18,7 +18,7 @@
 import { panic, Result } from "better-result";
 import type { Result as ResultType } from "better-result";
 
-import { resolvePath } from "@stll/template-conditions";
+import { evaluateCondition, resolvePath } from "@stll/template-conditions";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
@@ -142,8 +142,8 @@ export const decideTemplateConditions = async ({
   const questions: Record<string, NoulQuestion> = {};
   for (const { path, prompt } of conditions) {
     const existing = resolvePath(path, values);
-    if (typeof existing === "boolean") {
-      supplied.set(path, existing);
+    if (existing !== undefined && existing !== "") {
+      supplied.set(path, evaluateCondition(path, values));
       continue;
     }
     questions[path] = conditionQuestion(prompt);

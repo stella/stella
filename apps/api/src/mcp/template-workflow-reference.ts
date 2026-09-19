@@ -173,8 +173,9 @@ const WORKFLOW_STEPS: readonly WorkflowStep[] = [
       `${PREVIEW_TEMPLATE_CONDITIONS} with \`template_id\` and \`values\` ` +
       "answers every `ai` condition from `conditions[]` without filling " +
       "anything: each entry carries its `path`, `label`, and either " +
-      '`state: "decided"` with the `value` its block would be gated on and ' +
-      'the `probability` behind it, or `state: "undecided"` with a `reason` ' +
+      '`state: "decided"` with `decided_by` and the `value` its block would ' +
+      "be gated on (`probability` is present only when `decided_by` is " +
+      '`decision_model`), or `state: "undecided"` with a `reason` ' +
       "(`no_decision_model`, `below_floor`, `failed`). Only the decision " +
       "model runs, so it costs a fraction of a fill. Skip this step for a " +
       "template whose `conditions[]` carries no `ai` entry. Disagree with an " +

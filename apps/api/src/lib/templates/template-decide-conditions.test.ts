@@ -315,6 +315,37 @@ describe("decideTemplateConditions answers", () => {
     });
     expect(sent).toEqual([]);
   });
+
+  test("supplied strings use the fill engine's condition truthiness", async () => {
+    const decided = await decideTemplateConditions({
+      fields,
+      values: {
+        party_name: "Acme s.r.o.",
+        client_iban: "CZ0000",
+        is_consumer: "yes",
+        has_arbitration: "no",
+      },
+      orgAIConfig: null,
+      client: answering({}),
+    });
+
+    expect(decided).toEqual({
+      conditions: [
+        {
+          path: "is_consumer",
+          label: "Consumer contract",
+          decision: { state: "decided", decidedBy: "user", value: true },
+        },
+        {
+          path: "has_arbitration",
+          label: "has_arbitration",
+          decision: { state: "decided", decidedBy: "user", value: true },
+        },
+      ],
+      model: null,
+    });
+    expect(sent).toEqual([]);
+  });
 });
 
 describe("templateDecideConditionsLogic access", () => {
