@@ -281,6 +281,29 @@ export const readPlSnEnvelope = (value: unknown): unknown => {
   return isRecord(inner) && "data" in inner ? inner["data"] : null;
 };
 
+type PlSnRefusal = { error: string; status: number | undefined };
+
+/**
+ * The upstream's refusal, which the proxy also relays inside the envelopes,
+ * where a payload belongs: `{"error":"Brak tokenu","debug":{"json_status":429}}`
+ * is its rate limit.
+ *
+ * Every task has to ask, not only the listing. Read as a payload, a refused
+ * detail is a detail with no fields and a refused document is a decision with
+ * no file, and the row is stored empty while the cursor moves on.
+ */
+export const readPlSnRefusal = (payload: unknown): PlSnRefusal | null => {
+  if (!isRecord(payload) || typeof payload["error"] !== "string") {
+    return null;
+  }
+  const debug = payload["debug"];
+  const status = isRecord(debug) ? debug["json_status"] : undefined;
+  return {
+    error: payload["error"],
+    status: typeof status === "number" ? status : undefined,
+  };
+};
+
 // ── Requests ─────────────────────────────────────────────
 
 const proxyUrl = (task: ProxyTask, params: Record<string, string>): string =>
@@ -374,6 +397,16 @@ const requestProxy = async ({
   if (payload === null) {
     return Result.err(
       proxyError(cursor, `${task} answered no readable envelope`),
+    );
+  }
+  const refusal = readPlSnRefusal(payload);
+  if (refusal !== null) {
+    return Result.err(
+      proxyError(
+        cursor,
+        `${task} was refused: ${refusal.error}`,
+        refusal.status,
+      ),
     );
   }
   return Result.ok({ raw, payload, url: target.toString() });
