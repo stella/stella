@@ -53,7 +53,7 @@ export type CatalogueStyle = {
   id: string;
   name: string;
   basedOn: string | null;
-  /** Non-empty paragraphs carrying this style in the style-set document. */
+  /** Non-empty paragraphs carrying this style; zero in a content-free set. */
   usageCount: number;
   formatting: StyleFormatting;
   /** Up to `MAX_EXAMPLES` paragraphs, truncated, as the style is used. */
@@ -624,17 +624,19 @@ export const extractStyleCatalogue = ({
 
   const styles: CatalogueStyle[] = [];
   for (const { id, name, basedOn, formatting } of definitions.byId.values()) {
-    const seen = usage.byStyle.get(id);
-    if (seen === undefined || isTableOfContentsStyle({ id, name })) {
+    if (isTableOfContentsStyle({ id, name })) {
       continue;
     }
+    // A stored style set is content-free, so usage cannot decide membership:
+    // the catalogue is what the set defines, and the guide picks what to use.
+    const seen = usage.byStyle.get(id);
     styles.push({
       id,
       name,
       basedOn,
-      usageCount: seen.count,
+      usageCount: seen?.count ?? 0,
       formatting,
-      examples: seen.examples,
+      examples: seen?.examples ?? [],
     });
   }
   styles.sort(
