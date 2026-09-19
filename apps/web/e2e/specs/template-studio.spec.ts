@@ -43,7 +43,16 @@ test.describe("Template Studio", () => {
         name: templateName,
       });
       await expect(templateButton).toBeVisible({ timeout: 30_000 });
+      const historyLengthBeforeOpen = await page.evaluate(
+        () => window.history.length,
+      );
       await templateButton.click();
+      await expect(page).toHaveURL(
+        `/knowledge/templates?template=${template.id}`,
+      );
+      expect(await page.evaluate(() => window.history.length)).toBe(
+        historyLengthBeforeOpen,
+      );
 
       const fixtureText = page.locator(".layout-run-text", {
         hasText: "Stella E2E test document.",
@@ -90,9 +99,12 @@ test.describe("Template Studio", () => {
       await expect(saveCompleted).toBeVisible();
       await expect(saveButton).toHaveCount(0);
 
+      // The open template is in the URL, so the reload lands back in its
+      // Studio rather than on the list.
       await page.reload({ waitUntil: "domcontentloaded" });
-      await expect(templateButton).toBeVisible({ timeout: 30_000 });
-      await templateButton.click();
+      await expect(page).toHaveURL(
+        `/knowledge/templates?template=${template.id}`,
+      );
 
       await expect(
         page.locator(".layout-run-text", { hasText: editToken.trim() }),

@@ -17,6 +17,7 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useFormatter } from "@/i18n/formatting-context";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
+import { APIError } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import {
   knowledgeKeys,
@@ -29,23 +30,14 @@ import { LeaveConfirmDialog } from "@/routes/_protected.knowledge/-components/le
 import { TemplateList } from "@/routes/_protected.knowledge/-components/template-list";
 import { TemplateStudioPage } from "@/routes/_protected.knowledge/-components/template-studio";
 import { useTemplateStudioStore } from "@/routes/_protected.knowledge/-components/template-studio-store";
+import { templatesSearchSchema } from "@/routes/_protected.knowledge/-templates-search";
 import { useTemplateNavStore } from "@/stores/knowledge/template-nav-store";
 
-type TemplateItem = {
-  id: string;
-  name: string;
-  fileName: string;
-  fieldCount: number;
-  sizeBytes: number;
-  categoryId: string | null;
-  createdAt: Date;
-};
-
 const DOCX_EXTENSION_RE = /\.docx$/iu;
-
-type View = { kind: "list" } | { kind: "detail"; template: TemplateItem };
+const NOT_FOUND_STATUS = 404;
 
 export const Route = createFileRoute("/_protected/knowledge/templates")({
+  validateSearch: templatesSearchSchema,
   component: RouteComponent,
 });
 
@@ -98,7 +90,9 @@ function RouteComponent() {
   const activeOrganizationId = protectedRouteApi.useRouteContext({
     select: (ctx) => ctx.user.activeOrganizationId,
   });
-  const [view, setView] = useState<View>({ kind: "list" });
+  // The open template lives in the URL, so a reload lands back in its Studio.
+  const openTemplateId = Route.useSearch({ select: (s) => s.template });
+  const navigate = Route.useNavigate();
   const [confirmLeave, setConfirmLeave] = useState(false);
   const [stylePickerOpen, setStylePickerOpen] = useState(false);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(
@@ -140,6 +134,22 @@ function RouteComponent() {
     );
   }, [queryClient, activeOrganizationId]);
 
+  // Studio state belongs to this route entry. Replacing it avoids leaving a
+  // duplicate list entry behind when the Studio closes.
+  const openStudio = useCallback(
+    async (templateId: string) => {
+      await navigate({ replace: true, search: { template: templateId } });
+    },
+    [navigate],
+  );
+
+  const closeStudio = useCallback(() => {
+    detached(
+      navigate({ replace: true, search: {} }),
+      "knowledge-templates.close-studio",
+    );
+  }, [navigate]);
+
   const invalidateCategories = () => {
     detached(
       queryClient.invalidateQueries({
@@ -160,8 +170,8 @@ function RouteComponent() {
         file,
         name: file.name.replace(DOCX_EXTENSION_RE, ""),
       });
-      setUploading(false);
       if (response.error) {
+        setUploading(false);
         stellaToast.add({
           type: "error",
           title: t("templates.saveFailed"),
@@ -172,22 +182,13 @@ function RouteComponent() {
         });
         return;
       }
-      const created = response.data;
       invalidateTemplates();
-      setView({
-        kind: "detail",
-        template: {
-          id: created.id,
-          name: created.name,
-          fileName: created.fileName,
-          fieldCount: created.fieldCount,
-          sizeBytes: created.sizeBytes,
-          categoryId: null,
-          createdAt: new Date(created.createdAt),
-        },
-      });
+      // Hold the upload placeholder until the Studio's URL has landed, so the
+      // list cannot flash between the two.
+      await openStudio(response.data.id);
+      setUploading(false);
     },
-    [t, invalidateTemplates],
+    [t, invalidateTemplates, openStudio],
   );
 
   const openBlankTemplate = useCallback(
@@ -210,28 +211,16 @@ function RouteComponent() {
         });
         return false;
       }
-      const created = response.data;
       invalidateTemplates();
-      setView({
-        kind: "detail",
-        template: {
-          id: created.id,
-          name: created.name,
-          fileName: created.fileName,
-          fieldCount: created.fieldCount,
-          sizeBytes: created.sizeBytes,
-          categoryId: null,
-          createdAt: new Date(created.createdAt),
-        },
-      });
+      await openStudio(response.data.id);
       return true;
     },
-    [t, invalidateTemplates],
+    [t, invalidateTemplates, openStudio],
   );
 
-  if (view.kind === "detail") {
+  if (openTemplateId !== undefined) {
     const exitDetail = () => {
-      setView({ kind: "list" });
+      closeStudio();
       invalidateTemplates();
     };
     return (
@@ -245,7 +234,8 @@ function RouteComponent() {
             }
             exitDetail();
           }}
-          template={view.template}
+          onMissing={closeStudio}
+          templateId={openTemplateId}
         />
         <LeaveConfirmDialog
           cancelLabel={t("common.goBackToEditing")}
@@ -324,7 +314,9 @@ function RouteComponent() {
         onLoadMore={() => {
           detached(fetchNextPage(), "knowledge-templates.fetch-next-page");
         }}
-        onSelect={(template) => setView({ kind: "detail", template })}
+        onSelect={(template) => {
+          detached(openStudio(template.id), "knowledge-templates.open-studio");
+        }}
         selectedCategoryId={selectedCategoryId}
         templates={templates}
       />
@@ -343,11 +335,14 @@ function RouteComponent() {
  *  lives in the Studio's inspector tab header; the name shows in the breadcrumb
  *  (published via the nav store). */
 const TemplateDetail = ({
-  template,
+  templateId,
   onBack,
+  onMissing,
 }: {
-  template: TemplateItem;
+  templateId: string;
   onBack: () => void;
+  /** The id cannot be opened by this org, so the URL must stop naming it. */
+  onMissing: () => void;
 }) => {
   const t = useTranslations();
   const format = useFormatter();
@@ -362,7 +357,8 @@ const TemplateDetail = ({
     data: detailData,
     isLoading,
     isError,
-  } = useQuery(templateDetailOptions(activeOrganizationId, template.id));
+    error,
+  } = useQuery(templateDetailOptions(activeOrganizationId, templateId));
 
   const detail =
     detailData &&
@@ -381,24 +377,41 @@ const TemplateDetail = ({
     return "ready";
   })();
 
-  // Publish the open template to the breadcrumb (Knowledge › Templates › Name)
-  // and wire its "Templates" crumb back to the list; clear on leave.
+  // A `?template=` naming a template this org cannot open (deleted, or never
+  // theirs) is not a state to sit on: drop the param and show the list. Silent
+  // on purpose — a stale link is not worth a toast.
+  const missing = APIError.is(error) && error.status === NOT_FOUND_STATUS;
   useExternalSyncEffect(() => {
-    setNavOpen({ id: template.id, name: template.name, exit: onBack });
-    return () => clearNav();
-  }, [template.id, template.name, onBack, setNavOpen, clearNav]);
+    if (missing) {
+      onMissing();
+    }
+  }, [missing, onMissing]);
 
-  const fieldCount = detail?.manifest?.fields.length ?? template.fieldCount;
+  // Publish the open template to the breadcrumb (Knowledge › Templates › Name)
+  // and wire its "Templates" crumb back to the list; clear on leave. The name
+  // arrives with the detail, so the crumb grows its tail once it loads.
+  const openName = detail?.name ?? null;
+  useExternalSyncEffect(() => {
+    if (openName === null) {
+      return undefined;
+    }
+    setNavOpen({ id: templateId, name: openName, exit: onBack });
+    return () => clearNav();
+  }, [templateId, openName, onBack, setNavOpen, clearNav]);
+
+  const fieldCount = detail
+    ? (detail.manifest?.fields.length ?? detail.fieldCount)
+    : 0;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      {state === "loading" && (
+      {(state === "loading" || missing) && (
         <div className="flex flex-1 items-center justify-center p-8">
           <p className="text-muted-foreground text-sm">{t("common.loading")}</p>
         </div>
       )}
 
-      {state === "error" && (
+      {state === "error" && !missing && (
         <div className="flex flex-1 items-center justify-center p-8">
           <p className="text-muted-foreground text-sm">
             {t("templates.loadFailed")}
@@ -410,10 +423,10 @@ const TemplateDetail = ({
         <TemplateStudioPage
           fileName={detail.fileName}
           manifest={detail.manifest}
-          metaLabel={`${t("templates.fieldCount", { count: fieldCount })} \u00b7 ${format.dateTime(new Date(template.createdAt), { dateStyle: "medium" })}`}
-          name={template.name}
+          metaLabel={`${t("templates.fieldCount", { count: fieldCount })} \u00b7 ${format.dateTime(new Date(detail.createdAt), { dateStyle: "medium" })}`}
+          name={detail.name}
           presignedUrl={detail.presignedUrl}
-          templateId={template.id}
+          templateId={templateId}
         />
       )}
     </div>
