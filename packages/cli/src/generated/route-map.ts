@@ -4012,8 +4012,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["template", "preview-conditions"],
             toolName: "preview_template_conditions",
-            description:
-              "Ask what a set of values would decide, without filling anything.",
+            description: "Ask what current values decide without filling.",
             flags: [
               {
                 flag: "--template-id",
