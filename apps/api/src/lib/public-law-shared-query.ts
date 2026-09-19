@@ -4,7 +4,7 @@ export const PUBLIC_LAW_SHARED_QUERY = {
   caseLawCorpusIndexRehydration: "case-law.corpus-index-rehydration",
   caseLawCorpusStatus: "case-law.corpus-status",
   caseLawCourtActivity: "case-law.court-activity",
-  caseLawCoverageCounts: "case-law.coverage-counts",
+  caseLawCoverageArrivals: "case-law.coverage-arrivals",
   caseLawCoverageSources: "case-law.coverage-sources",
   caseLawDecisionRead: "case-law.decision-read",
   caseLawDecisionTextPresence: "case-law.decision-text-presence",

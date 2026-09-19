@@ -19,7 +19,7 @@ import {
 } from "@/api/db/schema";
 import { courtWeightMapFromSeed } from "@/api/handlers/case-law/court-weight-seed";
 import { readCaseLawCoverageSourcesQuery } from "@/api/handlers/case-law/decisions/coverage";
-import { readCaseLawSourceCountsQuery } from "@/api/handlers/case-law/decisions/coverage-stored-counts";
+import { readCaseLawArrivalsQuery } from "@/api/handlers/case-law/decisions/coverage-arrivals";
 import {
   readDecisionHandler,
   readDecisionTextColumnWritten,
@@ -816,11 +816,11 @@ describe("public-law reader role", () => {
         await readCaseLawCoverageSourcesQuery(tx);
         exercised.add(readCaseLawCoverageSourcesQuery.publicLawSharedQuery);
 
-        await readCaseLawSourceCountsQuery(tx, {
+        await readCaseLawArrivalsQuery(tx, {
           sourceIds: [sourceId],
           now: new Date(),
         });
-        exercised.add(readCaseLawSourceCountsQuery.publicLawSharedQuery);
+        exercised.add(readCaseLawArrivalsQuery.publicLawSharedQuery);
 
         await readNonRedistributableLegislationSourceIdsQuery(tx);
         exercised.add(

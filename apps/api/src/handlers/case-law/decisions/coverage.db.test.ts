@@ -10,8 +10,8 @@ import {
   loadCaseLawCoverage,
   readCaseLawCoverageSourcesQuery,
 } from "@/api/handlers/case-law/decisions/coverage";
+import { readCaseLawArrivalsQuery } from "@/api/handlers/case-law/decisions/coverage-arrivals";
 import { CASE_LAW_COVERAGE_HEALTH } from "@/api/handlers/case-law/decisions/coverage-health";
-import { readCaseLawSourceCountsQuery } from "@/api/handlers/case-law/decisions/coverage-stored-counts";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
@@ -86,6 +86,8 @@ beforeAll(
         reportedTotal: 10,
         reportedTotalAsOf: new Date(NOW.getTime() - HOUR_IN_MS),
         reportedTotalOrigin: "adapter-poll",
+        storedTotal: 4,
+        storedTotalAsOf: new Date(NOW.getTime() - 2 * HOUR_IN_MS),
       }),
       caseLawSourceRow({
         id: skSourceId,
@@ -97,6 +99,10 @@ beforeAll(
         reportedTotal: 4,
         reportedTotalAsOf: new Date(NOW.getTime() - HOUR_IN_MS),
         reportedTotalOrigin: "operator",
+        storedTotal: 1,
+        // Older than the Czech source's count: the country sums state their
+        // oldest part, and this is what proves it.
+        storedTotalAsOf: new Date(NOW.getTime() - 40 * HOUR_IN_MS),
       }),
       caseLawSourceRow({
         id: pausedSourceId,
@@ -178,10 +184,10 @@ const loadCoverage = async (
     now: NOW,
     readSources: async () =>
       await readAsReader(readCaseLawCoverageSourcesQuery),
-    readCounts: async (sourceIds) =>
+    readArrivals: async (sourceIds) =>
       await readAsReader(
         async (tx) =>
-          await readCaseLawSourceCountsQuery(tx, { sourceIds, now: NOW }),
+          await readCaseLawArrivalsQuery(tx, { sourceIds, now: NOW }),
       ),
     readFacets: async (country) =>
       Result.ok({
@@ -206,36 +212,38 @@ test(
       ADAPTER_KEYS.CZ_NSS,
       ADAPTER_KEYS.SK_COURTS,
     ]);
+    // The stored figure is read as a column, never counted here.
+    expect(
+      sources.find(({ adapterKey }) => adapterKey === ADAPTER_KEYS.CZ_NS)
+        ?.storedTotal,
+    ).toBe(4);
 
-    const counts = await readAsReader(
+    const arrivals = await readAsReader(
       async (tx) =>
-        await readCaseLawSourceCountsQuery(tx, {
+        await readCaseLawArrivalsQuery(tx, {
           sourceIds: sources.map(({ id }) => id),
           now: NOW,
         }),
     );
-    expect(counts.size).toBe(3);
+    expect(arrivals.size).toBe(3);
   },
   DB_TEST_TIMEOUT_MS,
 );
 
 test(
-  "stored counts hold listing-only rows and the week's arrivals do not",
+  "the week's arrivals exclude a listing-only row",
   async () => {
-    const counts = await readAsReader(
+    const arrivals = await readAsReader(
       async (tx) =>
-        await readCaseLawSourceCountsQuery(tx, {
+        await readCaseLawArrivalsQuery(tx, {
           sourceIds: [czSourceId],
           now: NOW,
         }),
     );
-    const cz = counts.get(String(czSourceId));
 
-    // Four rows stored: two recent, one old, one listed but never served.
-    expect(cz?.stored).toBe(4);
-    expect(cz?.capped).toBe(false);
-    // Two arrived this week and are public; the listing-only row is not.
-    expect(cz?.addedLastWeek).toBe(2);
+    // Four rows are stored for this source: two recent, one old, one listed
+    // but never served. Only the two recent published ones arrived this week.
+    expect(arrivals.get(String(czSourceId))?.addedLastWeek).toBe(2);
   },
   DB_TEST_TIMEOUT_MS,
 );
@@ -251,8 +259,8 @@ test(
     const cze = coverage.value.countries.find(
       ({ country }) => country === "CZE",
     );
-    // Only the four rows of the admitted Czech source; the withheld source's
-    // row is absent and its feed is not listed at all.
+    // The persisted count of the admitted Czech source; the withheld source's
+    // feed is not listed at all and contributes nothing.
     expect(cze?.stored.decisions).toBe(4);
     expect(cze?.sources.map(({ adapterKey }) => adapterKey).toSorted()).toEqual(
       [ADAPTER_KEYS.CZ_NS, ADAPTER_KEYS.CZ_NSS],
@@ -277,6 +285,10 @@ test(
     expect(cze?.availability).toBe(CASE_LAW_COVERAGE_AVAILABILITY.SEARCHABLE);
     // The searchable number is the index's, not a count of the table.
     expect(cze).toMatchObject({ searchable: 3, stored: { decisions: 4 } });
+    // The country's count is stamped with its oldest source count.
+    expect(cze?.stored.asOf).toBe(
+      new Date(NOW.getTime() - 2 * HOUR_IN_MS).toISOString(),
+    );
     expect(cze).toMatchObject({ decisionYearFrom: 2019, decisionYearTo: 2026 });
 
     const svk = byCountry.get("SVK");
@@ -286,10 +298,14 @@ test(
     expect(svk).toMatchObject({ stored: { decisions: 1 } });
     expect(svk && "searchable" in svk).toBe(false);
 
-    // The two populations are reported apart and never summed.
+    // The two populations are reported apart and never summed, and the total
+    // count states the oldest of the counts behind it.
     expect(coverage.value.totals).toEqual({
       searchable: 3,
-      stored: { precision: "exact", decisions: 5 },
+      stored: {
+        decisions: 5,
+        asOf: new Date(NOW.getTime() - 40 * HOUR_IN_MS).toISOString(),
+      },
     });
   },
   DB_TEST_TIMEOUT_MS,
@@ -329,7 +345,8 @@ test(
       measuredSources: 1,
       stored: 4,
       reported: 10,
-      unmeasuredSources: 1,
+      notMeasuredSources: 1,
+      notCountedSources: 0,
     });
 
     const svk = byCountry.get("SVK");
@@ -338,7 +355,7 @@ test(
       state: "measured",
       reportedBy: "operator",
       reported: 4,
-      stored: { precision: "exact", decisions: 1 },
+      stored: 1,
     });
   },
   DB_TEST_TIMEOUT_MS,
@@ -368,9 +385,21 @@ test(
 );
 
 test(
-  "a source whose count did not finish is uncounted, never zero",
+  "a source the ingestion side has never counted says so rather than reporting zero",
   async () => {
-    const coverage = await loadCoverage({ readCounts: async () => null });
+    const coverage = await loadCoverage({
+      readSources: async () => {
+        const sources = await readAsReader(readCaseLawCoverageSourcesQuery);
+        // As a source looks before its first sync cycle stamps a count.
+        for (const source of sources) {
+          if (source.adapterKey === ADAPTER_KEYS.CZ_NS) {
+            source.storedTotal = null;
+            source.storedTotalAsOf = null;
+          }
+        }
+        return sources;
+      },
+    });
     expect(Result.isOk(coverage)).toBe(true);
     if (Result.isError(coverage)) {
       return;
@@ -381,23 +410,25 @@ test(
     expect(
       cze?.sources.find(({ adapterKey }) => adapterKey === ADAPTER_KEYS.CZ_NS)
         ?.completeness,
-    ).toMatchObject({ state: "count-unavailable", reported: 10 });
+    ).toEqual({ state: "not-counted-yet" });
+    // Its rows are not summed as zero; the country reports nothing counted.
+    expect(cze?.stored).toEqual({ decisions: 0, asOf: null });
     expect(cze?.completeness).toMatchObject({
       measuredSources: 0,
-      uncountedSources: 1,
+      notCountedSources: 1,
     });
   },
   DB_TEST_TIMEOUT_MS,
 );
 
 test(
-  "the counts read bounds its own statement and hands the budget back",
+  "the arrivals read bounds its own statement and hands the budget back",
   async () => {
     const budget = await readAsReader(async (tx) => {
       await tx.execute(
         sql`SELECT set_config('statement_timeout', '30s', true)`,
       );
-      await readCaseLawSourceCountsQuery(tx, {
+      await readCaseLawArrivalsQuery(tx, {
         sourceIds: [czSourceId],
         now: NOW,
       });
@@ -418,29 +449,29 @@ test(
 test(
   "the whole read costs a fixed number of statements however many sources exist",
   async () => {
-    // The page is one source read plus one counts read plus, per admitted
-    // country, the index's facets and one court-activity read. Nothing here
-    // grows with the number of sources, which is what keeps a corpus of
-    // millions off a two-connection pool.
+    // The page is one source read plus one week-of-arrivals read plus, per
+    // admitted country, the index's facets and one court-activity read. None
+    // of them grows with the corpus, which is what keeps a corpus of millions
+    // off a two-connection pool.
     let sourceReads = 0;
-    let countReads = 0;
+    let arrivalsReads = 0;
     const coverage = await loadCoverage({
       readSources: async () => {
         sourceReads += 1;
         return await readAsReader(readCaseLawCoverageSourcesQuery);
       },
-      readCounts: async (sourceIds) => {
-        countReads += 1;
+      readArrivals: async (sourceIds) => {
+        arrivalsReads += 1;
         return await readAsReader(
           async (tx) =>
-            await readCaseLawSourceCountsQuery(tx, { sourceIds, now: NOW }),
+            await readCaseLawArrivalsQuery(tx, { sourceIds, now: NOW }),
         );
       },
     });
 
     expect(Result.isOk(coverage)).toBe(true);
     expect(sourceReads).toBe(1);
-    expect(countReads).toBe(1);
+    expect(arrivalsReads).toBe(1);
   },
   DB_TEST_TIMEOUT_MS,
 );

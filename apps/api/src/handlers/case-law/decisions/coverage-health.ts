@@ -129,17 +129,6 @@ export const caseLawCountryHealth = (
   return worst;
 };
 
-/**
- * How exact a stored count is.
- *
- * Counting a source's rows is bounded, so a corpus larger than the bound is
- * reported as a floor rather than as a wrong exact number. The discriminator
- * travels with the number so no reader can mistake one for the other.
- */
-export type CaseLawStoredCount =
-  | { precision: "exact"; decisions: number }
-  | { precision: "at-least"; decisions: number };
-
 /** Who stated the publisher's total. */
 export const CASE_LAW_TOTAL_REPORTER = {
   /** Read from the publisher's own count endpoint. */
@@ -151,7 +140,15 @@ export const CASE_LAW_TOTAL_REPORTER = {
 export type CaseLawTotalReporter =
   (typeof CASE_LAW_TOTAL_REPORTER)[keyof typeof CASE_LAW_TOTAL_REPORTER];
 
-/** The numbers a completeness is computed from, whatever its freshness. */
+/**
+ * The numbers a completeness is computed from, and when each was observed.
+ *
+ * Both as-of instants travel with the pair because the two are observed
+ * independently and can be far apart: the corpus is counted every few hours on
+ * the ingestion side, the publisher's total whenever its count endpoint is
+ * polled. A ratio whose halves were observed months apart is still worth
+ * showing, but not without saying so.
+ */
 type CaseLawCompletenessMeasurement = {
   /**
    * Decisions the corpus holds for this source, including identities the
@@ -159,39 +156,41 @@ type CaseLawCompletenessMeasurement = {
    * the one the publisher's own total describes; it is deliberately NOT the
    * searchable count, which excludes those rows.
    */
-  stored: CaseLawStoredCount;
+  stored: number;
+  /** When the corpus was last counted for this source. ISO 8601. */
+  storedAsOf: string;
   /** What the publisher says it holds. */
   reported: number;
   /** When `reported` was observed. ISO 8601. */
-  asOf: string;
+  reportedAsOf: string;
   reportedBy: CaseLawTotalReporter;
 };
 
 /**
  * Completeness of one source, as a total state.
  *
- * Every source lands in exactly one arm, and an unmeasured source says so
- * rather than leaving a blank: for a reader checking whether a corpus is
- * being kept up, "nobody has measured this" is itself the finding.
+ * Two independent things can be unknown and they are kept apart: nobody has
+ * asked the publisher what it holds, and nobody has counted what we hold. A
+ * reader checking whether a corpus is being kept up needs to know which,
+ * because they are different jobs to go and do.
  */
 export type CaseLawSourceCompleteness =
   | ({ state: "measured" } & CaseLawCompletenessMeasurement)
+  /** The publisher's total is older than the freshness window. */
   | ({ state: "stale" } & CaseLawCompletenessMeasurement)
-  /** No total has ever been recorded for this source. */
+  /** No publisher total has ever been recorded for this source. */
   | { state: "not-measured-yet" }
-  /**
-   * A total is recorded, but counting the stored rows did not finish inside
-   * its bound. A ratio is withheld rather than guessed.
-   */
-  | { state: "count-unavailable"; reported: number; asOf: string };
+  /** A publisher total exists, but the corpus has never been counted. */
+  | { state: "not-counted-yet" };
 
 type SourceCompletenessRead = {
   /** The persisted trio; all three are set together or all three are null. */
   reportedTotal: number | null;
   reportedTotalAsOf: Date | null;
   reportedBy: CaseLawTotalReporter | null;
-  /** Null when the bounded count did not finish. */
-  stored: CaseLawStoredCount | null;
+  /** The persisted pair; both set together or both null. */
+  storedTotal: number | null;
+  storedTotalAsOf: Date | null;
   now: Date;
 };
 
@@ -200,7 +199,8 @@ export const caseLawSourceCompleteness = ({
   reportedBy,
   reportedTotal,
   reportedTotalAsOf,
-  stored,
+  storedTotal,
+  storedTotalAsOf,
 }: SourceCompletenessRead): CaseLawSourceCompleteness => {
   if (
     reportedTotal === null ||
@@ -209,14 +209,14 @@ export const caseLawSourceCompleteness = ({
   ) {
     return { state: "not-measured-yet" };
   }
-  const asOf = reportedTotalAsOf.toISOString();
-  if (stored === null) {
-    return { state: "count-unavailable", reported: reportedTotal, asOf };
+  if (storedTotal === null || storedTotalAsOf === null) {
+    return { state: "not-counted-yet" };
   }
   const measurement = {
-    stored,
+    stored: storedTotal,
+    storedAsOf: storedTotalAsOf.toISOString(),
     reported: reportedTotal,
-    asOf,
+    reportedAsOf: reportedTotalAsOf.toISOString(),
     reportedBy,
   } satisfies CaseLawCompletenessMeasurement;
   const observedMsAgo = now.getTime() - reportedTotalAsOf.getTime();
@@ -241,31 +241,29 @@ export type CaseLawCountryCompleteness = {
   /** Sum of `reported` over those sources. */
   reported: number;
   /**
-   * True when any summed source's own count hit its bound, so the sum is a
-   * floor. Kept distinct from the ratio itself.
+   * The OLDEST count among the summed sources, never the newest: a sum is
+   * only as current as its stalest part. Null when nothing was summed.
    */
-  storedPrecision: CaseLawStoredCount["precision"];
-  /** Sources whose total is older than the freshness window. */
+  storedAsOf: string | null;
+  /** Sources whose publisher total is older than the freshness window. */
   staleSources: number;
-  /** Sources no total has ever been recorded for. */
-  unmeasuredSources: number;
-  /** Sources with a total whose stored count could not be read. */
-  uncountedSources: number;
+  /** Sources no publisher total has ever been recorded for. */
+  notMeasuredSources: number;
+  /** Sources with a publisher total whose corpus has never been counted. */
+  notCountedSources: number;
 };
 
 export const caseLawCountryCompleteness = (
   sources: readonly CaseLawSourceCompleteness[],
 ): CaseLawCountryCompleteness => {
-  // Annotated rather than inferred: the literals would otherwise widen
-  // `storedPrecision` to its own literal type and refuse the loop's write.
   const totals: CaseLawCountryCompleteness = {
     measuredSources: 0,
     stored: 0,
     reported: 0,
-    storedPrecision: "exact",
+    storedAsOf: null,
     staleSources: 0,
-    unmeasuredSources: 0,
-    uncountedSources: 0,
+    notMeasuredSources: 0,
+    notCountedSources: 0,
   };
 
   for (const source of sources) {
@@ -273,10 +271,14 @@ export const caseLawCountryCompleteness = (
       case "measured":
       case "stale": {
         totals.measuredSources += 1;
-        totals.stored += source.stored.decisions;
+        totals.stored += source.stored;
         totals.reported += source.reported;
-        if (source.stored.precision === "at-least") {
-          totals.storedPrecision = "at-least";
+        // ISO 8601 UTC instants compare correctly as strings.
+        if (
+          totals.storedAsOf === null ||
+          source.storedAsOf < totals.storedAsOf
+        ) {
+          totals.storedAsOf = source.storedAsOf;
         }
         if (source.state === "stale") {
           totals.staleSources += 1;
@@ -284,11 +286,11 @@ export const caseLawCountryCompleteness = (
         break;
       }
       case "not-measured-yet": {
-        totals.unmeasuredSources += 1;
+        totals.notMeasuredSources += 1;
         break;
       }
-      case "count-unavailable": {
-        totals.uncountedSources += 1;
+      case "not-counted-yet": {
+        totals.notCountedSources += 1;
         break;
       }
       default: {

@@ -9,21 +9,20 @@ import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-re
 import { caseLawSources, SOURCE_TOTAL_ORIGIN } from "@/api/db/schema";
 import type { SourceTotalOrigin } from "@/api/db/schema";
 import {
+  type CaseLawSourceArrivals,
+  readCaseLawArrivalsQuery,
+} from "@/api/handlers/case-law/decisions/coverage-arrivals";
+import {
   CASE_LAW_TOTAL_REPORTER,
   type CaseLawCountryCompleteness,
   type CaseLawCoverageHealth,
   type CaseLawSourceCompleteness,
-  type CaseLawStoredCount,
   type CaseLawTotalReporter,
   caseLawCountryCompleteness,
   caseLawCountryHealth,
   caseLawSourceCompleteness,
   caseLawSourceHealth,
 } from "@/api/handlers/case-law/decisions/coverage-health";
-import {
-  type CaseLawSourceCounts,
-  readCaseLawSourceCountsQuery,
-} from "@/api/handlers/case-law/decisions/coverage-stored-counts";
 import { readBrowseFacetsUnderPolicy } from "@/api/handlers/case-law/decisions/facets";
 import {
   type CaseLawCourtStatusRow,
@@ -40,7 +39,6 @@ import { readNonRedistributableCaseLawSourceIds } from "@/api/lib/case-law/non-r
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
-import { createTtlResultCache } from "@/api/lib/legal-search/browse-facets-cache";
 import { CASE_LAW_SOURCE_ROWS_BOUND } from "@/api/lib/legal-search/ingestion-constants";
 import { createUnrecognizedSourceReporter } from "@/api/lib/legal-search/source-registry-membership";
 import type { LegalBrowseFacets } from "@/api/lib/legal-search/types";
@@ -103,8 +101,12 @@ type CaseLawCoverageCountryBase = {
   /** ISO 3166-1 alpha-3, or `EU` for the Court of Justice. */
   country: CaseLawJurisdiction;
   health: CaseLawCoverageHealth;
-  /** Everything the corpus holds for the country, listing-only rows included. */
-  stored: CaseLawStoredCount;
+  /**
+   * Everything the corpus holds for the country, listing-only rows included,
+   * summed from what the ingestion side counted per source. `asOf` is the
+   * oldest of those counts: the sum is only as current as its stalest part.
+   */
+  stored: { decisions: number; asOf: string | null };
   addedLastWeek: number;
   completeness: CaseLawCountryCompleteness;
   sources: readonly CaseLawCoverageSource[];
@@ -134,7 +136,7 @@ type CaseLawCoverage = {
    */
   totals: {
     searchable: number;
-    stored: CaseLawStoredCount;
+    stored: { decisions: number; asOf: string | null };
   };
   countries: readonly CaseLawCoverageCountry[];
 };
@@ -182,6 +184,8 @@ type CaseLawCoverageSourceRow = {
   reportedTotal: number | null;
   reportedTotalAsOf: Date | null;
   reportedTotalOrigin: string | null;
+  storedTotal: number | null;
+  storedTotalAsOf: Date | null;
 };
 
 /**
@@ -207,6 +211,8 @@ export const readCaseLawCoverageSourcesQuery = definePublicLawSharedQuery(
         reportedTotal: caseLawSources.reportedTotal,
         reportedTotalAsOf: caseLawSources.reportedTotalAsOf,
         reportedTotalOrigin: caseLawSources.reportedTotalOrigin,
+        storedTotal: caseLawSources.storedTotal,
+        storedTotalAsOf: caseLawSources.storedTotalAsOf,
       })
       .from(caseLawSources)
       .where(redistributableCaseLawSource)
@@ -231,19 +237,15 @@ const decisionYearBounds = (
   return { from, to };
 };
 
-const NO_COUNTS: CaseLawSourceCounts = {
-  stored: 0,
-  capped: false,
-  addedLastWeek: 0,
-};
+const NO_ARRIVALS: CaseLawSourceArrivals = { addedLastWeek: 0 };
 
 type CoverageLoad = {
   excludedSourceIds: readonly SafeId<"caseLawSource">[];
   now: Date;
   readSources: () => Promise<CaseLawCoverageSourceRow[]>;
-  readCounts: (
+  readArrivals: (
     sourceIds: readonly SafeId<"caseLawSource">[],
-  ) => Promise<ReadonlyMap<string, CaseLawSourceCounts> | null>;
+  ) => Promise<ReadonlyMap<string, CaseLawSourceArrivals>>;
   readFacets: (
     country: string,
   ) => Promise<Result<LegalBrowseFacets, { message: string }>>;
@@ -271,7 +273,7 @@ const coverageError = (fallback: string) => (cause: unknown) =>
 export const loadCaseLawCoverage = async ({
   excludedSourceIds,
   now,
-  readCounts,
+  readArrivals,
   readCourts,
   readFacets,
   readSources,
@@ -286,13 +288,17 @@ export const loadCaseLawCoverage = async ({
 
   const withheld = new Set<string>(excludedSourceIds.map(String));
   const admitted = sources.value.filter(({ id }) => !withheld.has(String(id)));
-  const counts = await readCounts(admitted.map(({ id }) => id));
+  const arrivals = await readArrivals(admitted.map(({ id }) => id));
 
   const reportUnrecognizedSource =
     createUnrecognizedSourceReporter("case_law.coverage");
   const byCountry = new Map<
     CaseLawJurisdiction,
-    { sources: CaseLawCoverageSource[]; stored: number; capped: boolean }
+    {
+      sources: CaseLawCoverageSource[];
+      stored: number;
+      storedAsOf: string | null;
+    }
   >();
 
   for (const source of admitted) {
@@ -304,18 +310,11 @@ export const loadCaseLawCoverage = async ({
       reportUnrecognizedSource(source.adapterKey);
       continue;
     }
-    const sourceCounts = counts?.get(String(source.id)) ?? NO_COUNTS;
-    const stored: CaseLawStoredCount | null =
-      counts === null
-        ? null
-        : {
-            precision: sourceCounts.capped ? "at-least" : "exact",
-            decisions: sourceCounts.stored,
-          };
+    const sourceArrivals = arrivals.get(String(source.id)) ?? NO_ARRIVALS;
     const entry = byCountry.get(manifest.country) ?? {
       sources: [],
       stored: 0,
-      capped: false,
+      storedAsOf: null,
     };
     entry.sources.push({
       adapterKey: source.adapterKey,
@@ -331,20 +330,30 @@ export const loadCaseLawCoverage = async ({
         reportedTotal: source.reportedTotal,
         reportedTotalAsOf: source.reportedTotalAsOf,
         reportedBy: reporterOf(source.reportedTotalOrigin),
-        stored,
+        storedTotal: source.storedTotal,
+        storedTotalAsOf: source.storedTotalAsOf,
         now,
       }),
-      addedLastWeek: sourceCounts.addedLastWeek,
+      addedLastWeek: sourceArrivals.addedLastWeek,
     });
-    entry.stored += sourceCounts.stored;
-    entry.capped = entry.capped || sourceCounts.capped;
+    // A source nobody has counted contributes nothing to the sum and says so
+    // through its own completeness state, rather than adding a zero that
+    // would read as "holds nothing".
+    if (source.storedTotal !== null && source.storedTotalAsOf !== null) {
+      const asOf = source.storedTotalAsOf.toISOString();
+      entry.stored += source.storedTotal;
+      entry.storedAsOf =
+        entry.storedAsOf === null || asOf < entry.storedAsOf
+          ? asOf
+          : entry.storedAsOf;
+    }
     byCountry.set(manifest.country, entry);
   }
 
   const countries: CaseLawCoverageCountry[] = [];
   let searchableTotal = 0;
   let storedTotal = 0;
-  let storedCapped = false;
+  let storedAsOf: string | null = null;
 
   // Sorted so the page's order is the payload's order and two requests a
   // minute apart cannot reshuffle the table. Codepoint order rather than the
@@ -356,10 +365,7 @@ export const loadCaseLawCoverage = async ({
     const base = {
       country,
       health: caseLawCountryHealth(entry.sources.map(({ health }) => health)),
-      stored: {
-        precision: entry.capped ? "at-least" : "exact",
-        decisions: entry.stored,
-      },
+      stored: { decisions: entry.stored, asOf: entry.storedAsOf },
       addedLastWeek: entry.sources.reduce(
         (total, { addedLastWeek }) => total + addedLastWeek,
         0,
@@ -370,7 +376,12 @@ export const loadCaseLawCoverage = async ({
       sources: entry.sources,
     } satisfies CaseLawCoverageCountryBase;
     storedTotal += entry.stored;
-    storedCapped = storedCapped || entry.capped;
+    if (
+      entry.storedAsOf !== null &&
+      (storedAsOf === null || entry.storedAsOf < storedAsOf)
+    ) {
+      storedAsOf = entry.storedAsOf;
+    }
 
     const isAdmitted = PUBLIC_CASE_LAW_COUNTRIES.some(
       (candidate) => candidate === country,
@@ -427,45 +438,14 @@ export const loadCaseLawCoverage = async ({
     generatedAt: now.toISOString(),
     totals: {
       searchable: searchableTotal,
-      stored: {
-        precision: storedCapped ? "at-least" : "exact",
-        decisions: storedTotal,
-      },
+      stored: { decisions: storedTotal, asOf: storedAsOf },
     },
     countries,
   });
 };
 
-const COVERAGE_CACHE_TTL_MS = 15 * 60 * 1000;
-/**
- * A failure is held briefly rather than retried by the next request: the
- * per-source counts run on a two-connection pool, and a read that fails slowly
- * must not be re-entered request after request.
- */
-const COVERAGE_CACHE_FAILURE_TTL_MS = 60 * 1000;
-const COVERAGE_CACHE_MAX_ENTRIES = 4;
-
-/**
- * How long a client and a shared cache may hold the page.
- *
- * Matched to the server's own window: the figures change when ingestion runs,
- * which is on the order of hours, and a page whose numbers are fifteen minutes
- * old is not misleading about a corpus measured in millions.
- */
 export const COVERAGE_CACHE_CONTROL =
   "public, max-age=900, stale-while-revalidate=3600";
-
-const coverage = createTtlResultCache({
-  load: loadCaseLawCoverage,
-  // The source policy is an input to the answer, so a revocation changes the
-  // key rather than waiting out the window; sorted because the set has no
-  // order. `now` is deliberately not in the key: it is what the window is for.
-  key: ({ excludedSourceIds }: CoverageLoad) =>
-    excludedSourceIds.toSorted().join(","),
-  ttlMs: COVERAGE_CACHE_TTL_MS,
-  failureTtlMs: COVERAGE_CACHE_FAILURE_TTL_MS,
-  maxEntries: COVERAGE_CACHE_MAX_ENTRIES,
-});
 
 export const readCaseLawCoverageHandler = async (
   caseLawDb: CaseLawPublicReadDb,
@@ -486,33 +466,30 @@ export const readCaseLawCoverageHandler = async (
   // source's last sync against the stated time is comparing like with like.
   const now = new Date();
 
-  const result = await coverage({
+  const result = await loadCaseLawCoverage({
     excludedSourceIds: excludedSourceIds.value,
     now,
     readSources: async () => await caseLawDb(readCaseLawCoverageSourcesQuery),
-    readCounts: async (sourceIds) => {
-      // The counts are the page's most expensive read and the one with a hard
-      // bound. A source whose count did not finish is reported as uncounted
-      // rather than as zero, so the statement's failure degrades the
-      // completeness column and nothing else.
-      const counts = await Result.tryPromise({
+    readArrivals: async (sourceIds) => {
+      // Bounded by one week of one source's arrivals, so unlike the corpus
+      // count it belongs on the request path. A failure leaves the window at
+      // zero rather than failing the page: how much arrived this week is the
+      // smallest claim here, and the totals beside it still answer.
+      const arrivals = await Result.tryPromise({
         try: async () =>
           await caseLawDb(
             async (tx) =>
-              await readCaseLawSourceCountsQuery(tx, {
-                sourceIds,
-                now,
-              }),
+              await readCaseLawArrivalsQuery(tx, { sourceIds, now }),
           ),
-        catch: coverageError("counting stored decisions failed"),
+        catch: coverageError("reading the week's arrivals failed"),
       });
-      if (Result.isError(counts)) {
-        logger.warn("case_law.coverage.counts_unavailable", {
-          "error.type": errorTag(counts.error),
+      if (Result.isError(arrivals)) {
+        logger.warn("case_law.coverage.arrivals_unavailable", {
+          "error.type": errorTag(arrivals.error),
         });
-        return null;
+        return new Map();
       }
-      return counts.value;
+      return arrivals.value;
     },
     readFacets: async (country) =>
       await readBrowseFacetsUnderPolicy({

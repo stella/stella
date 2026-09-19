@@ -141,16 +141,18 @@ describe("source completeness", () => {
     reportedTotal: 1000,
     reportedTotalAsOf: ago(0),
     reportedBy: CASE_LAW_TOTAL_REPORTER.PUBLISHER,
-    stored: { precision: "exact", decisions: 950 },
+    storedTotal: 950,
+    storedTotalAsOf: ago(0),
     now: NOW,
   } as const;
 
-  test("a source with a fresh total and a count is measured", () => {
+  test("a source with both numbers recorded is measured and carries both as-of instants", () => {
     expect(caseLawSourceCompleteness(measured)).toEqual({
       state: "measured",
-      stored: { precision: "exact", decisions: 950 },
+      stored: 950,
+      storedAsOf: NOW.toISOString(),
       reported: 1000,
-      asOf: NOW.toISOString(),
+      reportedAsOf: NOW.toISOString(),
       reportedBy: CASE_LAW_TOTAL_REPORTER.PUBLISHER,
     });
   });
@@ -170,111 +172,124 @@ describe("source completeness", () => {
     ).toBe("stale");
   });
 
-  test("a source nobody has measured says so rather than reporting zero", () => {
+  test("staleness is the publisher total's age, not the corpus count's", () => {
+    // The corpus count is refreshed by ingestion on its own schedule; an old
+    // count does not make the publisher's number out of date.
     expect(
       caseLawSourceCompleteness({
+        ...measured,
+        storedTotalAsOf: ago(COVERAGE_REPORTED_TOTAL_FRESH_WITHIN_MS * 4),
+      }).state,
+    ).toBe("measured");
+  });
+
+  test("a source nobody has asked the publisher about says so", () => {
+    expect(
+      caseLawSourceCompleteness({
+        ...measured,
         reportedTotal: null,
         reportedTotalAsOf: null,
         reportedBy: null,
-        stored: { precision: "exact", decisions: 950 },
-        now: NOW,
       }),
     ).toEqual({ state: "not-measured-yet" });
   });
 
-  test("a total with no stored count withholds the ratio instead of guessing", () => {
-    expect(caseLawSourceCompleteness({ ...measured, stored: null })).toEqual({
-      state: "count-unavailable",
-      reported: 1000,
-      asOf: NOW.toISOString(),
-    });
-  });
-
-  test("an operator-supplied total is carried as such", () => {
-    const completeness = caseLawSourceCompleteness({
-      ...measured,
-      reportedBy: CASE_LAW_TOTAL_REPORTER.OPERATOR,
-    });
-    expect(completeness).toMatchObject({
-      state: "measured",
-      reportedBy: CASE_LAW_TOTAL_REPORTER.OPERATOR,
-    });
-  });
-
-  test("a corpus past its counting bound is reported as a floor", () => {
+  test("a source whose corpus was never counted is distinct from one never asked about", () => {
     expect(
       caseLawSourceCompleteness({
         ...measured,
-        stored: { precision: "at-least", decisions: 500_000 },
+        storedTotal: null,
+        storedTotalAsOf: null,
       }),
-    ).toMatchObject({ stored: { precision: "at-least", decisions: 500_000 } });
+    ).toEqual({ state: "not-counted-yet" });
+  });
+
+  test("a counted but empty source reports zero held, not unknown", () => {
+    expect(
+      caseLawSourceCompleteness({ ...measured, storedTotal: 0 }),
+    ).toMatchObject({ state: "measured", stored: 0 });
+  });
+
+  test("an operator-supplied total is carried as such", () => {
+    expect(
+      caseLawSourceCompleteness({
+        ...measured,
+        reportedBy: CASE_LAW_TOTAL_REPORTER.OPERATOR,
+      }),
+    ).toMatchObject({
+      state: "measured",
+      reportedBy: CASE_LAW_TOTAL_REPORTER.OPERATOR,
+    });
   });
 });
 
 describe("country completeness", () => {
-  const exact = (decisions: number, reported: number) =>
+  const at = (iso: string) => new Date(iso).toISOString();
+  const measured = (
+    stored: number,
+    reported: number,
+    storedAsOf = at("2026-09-19T12:00:00.000Z"),
+  ) =>
     ({
       state: "measured",
-      stored: { precision: "exact", decisions },
+      stored,
+      storedAsOf,
       reported,
-      asOf: NOW.toISOString(),
+      reportedAsOf: NOW.toISOString(),
       reportedBy: CASE_LAW_TOTAL_REPORTER.PUBLISHER,
     }) satisfies CaseLawSourceCompleteness;
 
   test("only measured sources are summed and the rest are counted beside the sum", () => {
     expect(
       caseLawCountryCompleteness([
-        exact(100, 120),
-        exact(50, 50),
+        measured(100, 120),
+        measured(50, 50),
         { state: "not-measured-yet" },
-        { state: "count-unavailable", reported: 900, asOf: NOW.toISOString() },
+        { state: "not-counted-yet" },
       ]),
     ).toEqual({
       measuredSources: 2,
       stored: 150,
       reported: 170,
-      storedPrecision: "exact",
+      storedAsOf: at("2026-09-19T12:00:00.000Z"),
       staleSources: 0,
-      unmeasuredSources: 1,
-      uncountedSources: 1,
+      notMeasuredSources: 1,
+      notCountedSources: 1,
     });
+  });
+
+  test("the summed count is stamped with its oldest part, never its newest", () => {
+    const { storedAsOf } = caseLawCountryCompleteness([
+      measured(10, 10, at("2026-09-19T12:00:00.000Z")),
+      measured(20, 20, at("2026-06-01T00:00:00.000Z")),
+      measured(30, 30, at("2026-08-15T00:00:00.000Z")),
+    ]);
+    expect(storedAsOf).toBe(at("2026-06-01T00:00:00.000Z"));
   });
 
   test("a stale source is summed and counted as stale", () => {
     expect(
       caseLawCountryCompleteness([
-        { ...exact(10, 10), state: "stale" },
-        exact(5, 5),
+        { ...measured(10, 10), state: "stale" },
+        measured(5, 5),
       ]),
     ).toMatchObject({ measuredSources: 2, stored: 15, staleSources: 1 });
-  });
-
-  test("one bounded count makes the whole sum a floor", () => {
-    expect(
-      caseLawCountryCompleteness([
-        exact(10, 10),
-        {
-          ...exact(500_000, 600_000),
-          stored: { precision: "at-least", decisions: 500_000 },
-        },
-      ]).storedPrecision,
-    ).toBe("at-least");
   });
 
   test("a country holding only unmeasured sources reports no ratio at all", () => {
     expect(
       caseLawCountryCompleteness([
         { state: "not-measured-yet" },
-        { state: "not-measured-yet" },
+        { state: "not-counted-yet" },
       ]),
     ).toEqual({
       measuredSources: 0,
       stored: 0,
       reported: 0,
-      storedPrecision: "exact",
+      storedAsOf: null,
       staleSources: 0,
-      unmeasuredSources: 2,
-      uncountedSources: 0,
+      notMeasuredSources: 1,
+      notCountedSources: 1,
     });
   });
 
@@ -282,7 +297,9 @@ describe("country completeness", () => {
   // the corpus leaves stored above reported, and capping that here would hide
   // the lag from every reader instead of only from the percentage.
   test("a stored count above the publisher total survives the roll-up unchanged", () => {
-    const { reported, stored } = caseLawCountryCompleteness([exact(120, 100)]);
+    const { reported, stored } = caseLawCountryCompleteness([
+      measured(120, 100),
+    ]);
     expect(stored).toBe(120);
     expect(reported).toBe(100);
   });

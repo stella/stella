@@ -50,8 +50,9 @@ const LATEST_DECISIONS_FILE =
   "apps/api/src/handlers/case-law/decisions/latest.ts";
 const STATUS_DECISIONS_FILE =
   "apps/api/src/handlers/case-law/decisions/status.ts";
-const COVERAGE_STORED_COUNTS_FILE =
-  "apps/api/src/handlers/case-law/decisions/coverage-stored-counts.ts";
+const COVERAGE_ARRIVALS_FILE =
+  "apps/api/src/handlers/case-law/decisions/coverage-arrivals.ts";
+const COVERAGE_FILE = "apps/api/src/handlers/case-law/decisions/coverage.ts";
 const CITATION_GRAPH_FILE =
   "apps/api/src/handlers/case-law/decisions/citation-graph.ts";
 const LANGUAGE_ALTERNATES_FILE =
@@ -196,13 +197,7 @@ const PUBLIC_DECISION_READ_GATES = {
     gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
     reason: "Relation definitions.",
   },
-  [COVERAGE_STORED_COUNTS_FILE]: {
-    gate: PUBLIC_DECISION_READ_GATE.COUNTS_STORED,
-    reason:
-      "Counts a source's rows for the completeness denominator, and counts " +
-      "the week's arrivals under the predicate. Returns two integers per " +
-      "source and no decision row.",
-  },
+  [COVERAGE_ARRIVALS_FILE]: { gate: PUBLIC_DECISION_READ_GATE.PREDICATE },
   [CITATION_GRAPH_FILE]: { gate: PUBLIC_DECISION_READ_GATE.PREDICATE },
   "apps/api/src/handlers/case-law/decisions/citations.ts": {
     gate: PUBLIC_DECISION_READ_GATE.PREDICATE,
@@ -771,31 +766,48 @@ describe("public case-law route boundary", () => {
     // The count-only gate is the narrowest of the four and must stay that
     // way: a module under it may aggregate, never select a decision's
     // columns. `count(*)` is the whole of what it is allowed to take.
-    const countOnly = Object.entries(PUBLIC_DECISION_READ_GATES)
-      .filter(
-        ([, entry]) => entry.gate === PUBLIC_DECISION_READ_GATE.COUNTS_STORED,
-      )
-      .map(([path]) => path);
-    expect(countOnly).toEqual([COVERAGE_STORED_COUNTS_FILE]);
-    const countOnlySource =
-      readers.get(COVERAGE_STORED_COUNTS_FILE) ??
-      expect.unreachable("the count-only module is in the read surface");
-    expect(countOnlySource).toContain("count(*)");
-    expect(countOnlySource).not.toContain("d.fulltext");
-    expect(countOnlySource).not.toContain("d.case_number");
-    expect(countOnlySource).not.toContain("d.metadata");
-    // The arrivals arm still carries the publication predicate; only the
-    // completeness numerator is exempt.
-    expect(countOnlySource).toContain("publishedCaseLawDecisionSqlFor");
+    // The count-only gate stays in the vocabulary for a read that genuinely
+    // needs it, and stays narrow: a module under it may aggregate, never
+    // select a decision's columns. It has no member today, because the
+    // completeness numerator moved to the ingestion connection.
+    for (const [path, entry] of Object.entries(PUBLIC_DECISION_READ_GATES)) {
+      if (entry.gate !== PUBLIC_DECISION_READ_GATE.COUNTS_STORED) {
+        continue;
+      }
+      const source =
+        readers.get(path) ??
+        expect.unreachable(`${path} is in the read surface`);
+      expect(source).not.toContain("d.fulltext");
+      expect(source).not.toContain("d.case_number");
+      expect(source).not.toContain("d.metadata");
+    }
+  });
+
+  test("the coverage request path never counts the corpus", async () => {
+    const [coverageSource, arrivalsSource] = await Promise.all([
+      readSource(COVERAGE_FILE),
+      readSource(COVERAGE_ARRIVALS_FILE),
+    ]);
+
+    // How much a source holds is counted on the ingestion connection and read
+    // back as an integer. A public request that counted it would walk the
+    // source's whole index range on a two-connection pool.
+    expect(coverageSource).not.toContain("source-totals");
+    expect(coverageSource).toContain("caseLawSources.storedTotal");
+    // The one read left against the decision table is a week of one source's
+    // arrivals: bounded by the window, and gated like every other public read.
+    expect(arrivalsSource).toContain("d.created_at >=");
+    expect(arrivalsSource).toContain("publishedCaseLawDecisionSqlFor");
+    expect(arrivalsSource).not.toContain("LIMIT");
   });
 
   test("the coverage route publishes no crawl or lease state", async () => {
-    const [coverageSource, storedCountsSource] = await Promise.all([
-      readSource("apps/api/src/handlers/case-law/decisions/coverage.ts"),
-      readSource(COVERAGE_STORED_COUNTS_FILE),
+    const [coverageSource, arrivalsSource] = await Promise.all([
+      readSource(COVERAGE_FILE),
+      readSource(COVERAGE_ARRIVALS_FILE),
     ]);
 
-    for (const source of [coverageSource, storedCountsSource]) {
+    for (const source of [coverageSource, arrivalsSource]) {
       // The crawl's position, its lease and its failures are how ingestion
       // works, not what the corpus holds. `reported_total_origin` is read,
       // but only through the reporter map: the raw origin never leaves.
