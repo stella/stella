@@ -4219,6 +4219,12 @@
     "validity": "Kehtib {from} kuni {to}"
   },
   "styleSets": {
+    "convertConfirm": "Teisenda",
+    "convertDescription": "Koostab selle dokumendi uuesti ühes teie stiilikomplektis. Sõnastus jääb samaks; iga lõik saab komplektist stiili. Algne dokument säilib.",
+    "convertPending": "Teisendamine…",
+    "convertSuccess": "Loodud {fileName}",
+    "convertTitle": "Teisenda ettevõtte stiili",
+    "convertToHouseStyle": "Teisenda ettevõtte stiili…",
     "create": "Loo",
     "defaultBadge": "Vaikimisi",
     "deleteConfirmation": "Kinnitamiseks sisestage stiilikomplekti nimi.",
@@ -4291,6 +4297,7 @@
     "importTitle": "Impordi stiilikomplekt",
     "loadFailed": "Stiilikomplekte ei saanud laadida",
     "newDocument": "Uus dokument",
+    "noStyleGuide": "Stiilijuhendit veel pole",
     "pickerDescription": "Valige uue faili vormindussüsteem.",
     "renameTitle": "Nimeta stiilikomplekt ümber",
     "replace": "Asenda lähtefail",

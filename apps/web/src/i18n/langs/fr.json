@@ -4219,6 +4219,12 @@
     "validity": "En vigueur du {from} au {to}"
   },
   "styleSets": {
+    "convertConfirm": "Convertir",
+    "convertDescription": "Reconstruit ce document dans l'un de vos jeux de styles. Le texte reste identique ; chaque paragraphe reçoit un style du jeu. Le document d'origine est conservé.",
+    "convertPending": "Conversion en cours…",
+    "convertSuccess": "{fileName} créé",
+    "convertTitle": "Convertir au style maison",
+    "convertToHouseStyle": "Convertir au style maison…",
     "create": "Créer",
     "defaultBadge": "Par défaut",
     "deleteConfirmation": "Saisissez le nom du jeu de styles pour confirmer.",
@@ -4291,6 +4297,7 @@
     "importTitle": "Importer un jeu de styles",
     "loadFailed": "Impossible de charger les jeux de styles",
     "newDocument": "Nouveau document",
+    "noStyleGuide": "Pas encore de guide de style",
     "pickerDescription": "Choisissez le système de mise en forme du nouveau fichier.",
     "renameTitle": "Renommer le jeu de styles",
     "replace": "Remplacer la source",

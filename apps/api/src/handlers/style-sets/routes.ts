@@ -9,6 +9,8 @@ import previewStyleSetFromEditor from "@/api/handlers/style-sets/preview-from-ed
 import readStyleSetEditor from "@/api/handlers/style-sets/read-editor";
 import readStellaStyleEditor from "@/api/handlers/style-sets/read-stella-editor";
 import replaceStyleSet from "@/api/handlers/style-sets/replace";
+import readStyleCatalogue from "@/api/handlers/style-sets/style-catalogue/get";
+import updateStyleGuide from "@/api/handlers/style-sets/style-guide/update";
 import updateStyleSet from "@/api/handlers/style-sets/update";
 import updateStyleSetFromEditor from "@/api/handlers/style-sets/update-from-editor";
 import { isStyleSetUploadRateLimitedRequest } from "@/api/handlers/style-sets/upload-rate-limit";
@@ -68,6 +70,15 @@ export const styleSetsRoute = new Elysia({ prefix: "/style-sets" })
   .get("/:styleSetId/editor", readStyleSetEditor.handler, {
     params: readStyleSetEditor.config.params,
     permissions: readStyleSetEditor.config.permissions,
+  })
+  .get("/:styleSetId/style-catalogue", readStyleCatalogue.handler, {
+    params: readStyleCatalogue.config.params,
+    permissions: readStyleCatalogue.config.permissions,
+  })
+  .put("/:styleSetId/style-guide", updateStyleGuide.handler, {
+    body: updateStyleGuide.config.body,
+    params: updateStyleGuide.config.params,
+    permissions: updateStyleGuide.config.permissions,
   })
   .post("/:styleSetId/editor", updateStyleSetFromEditor.handler, {
     body: updateStyleSetFromEditor.config.body,

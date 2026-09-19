@@ -4219,6 +4219,12 @@
     "validity": "Hatályos {from} és {to} között"
   },
   "styleSets": {
+    "convertConfirm": "Átalakítás",
+    "convertDescription": "Újraépíti ezt a dokumentumot az egyik stíluskészletében. A szöveg változatlan marad; minden bekezdés a készlet egyik stílusát kapja. Az eredeti dokumentum megmarad.",
+    "convertPending": "Átalakítás folyamatban…",
+    "convertSuccess": "{fileName} létrehozva",
+    "convertTitle": "Átalakítás házi stílusra",
+    "convertToHouseStyle": "Átalakítás házi stílusra…",
     "create": "Létrehozás",
     "defaultBadge": "Alapértelmezett",
     "deleteConfirmation": "A megerősítéshez írja be a stíluskészlet nevét.",
@@ -4291,6 +4297,7 @@
     "importTitle": "Stíluskészlet importálása",
     "loadFailed": "A stíluskészletek nem tölthetők be",
     "newDocument": "Új dokumentum",
+    "noStyleGuide": "Még nincs stílusútmutató",
     "pickerDescription": "Válassza ki az új fájl formázási rendszerét.",
     "renameTitle": "Stíluskészlet átnevezése",
     "replace": "Forrás cseréje",

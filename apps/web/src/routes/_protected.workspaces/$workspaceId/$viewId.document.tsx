@@ -71,6 +71,7 @@ import { PlaybookFacet } from "@/components/inspector/playbook-facet";
 import PdfViewer, { PDFSuspenseFallback } from "@/components/pdf/pdf-viewer";
 import { TranslateDocumentDialog } from "@/components/translate-document-dialog";
 import { useSyncJustifications } from "@/components/workspaces/hooks/use-sync-justifications";
+import { ConvertToStyleSetDialog } from "@/features/style-sets/convert-to-style-set-dialog";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { usePermissions } from "@/hooks/use-permissions";
@@ -539,6 +540,10 @@ function RouteComponentInner({
   const t = useTranslations();
   const canUpdateEntity = usePermissions({ entity: ["update"] });
   const canCreateEntity = usePermissions({ entity: ["create"] });
+  const canConvertToStyleSet = usePermissions({
+    entity: ["create"],
+    styleSet: ["use"],
+  });
   useSyncJustifications({ workspaceId, entityIds: [entityId] });
   const scaleOffset = useWorkspaceStore((s) => s.pdfViewer.scaleOffset);
   const justificationId = Route.useSearch({
@@ -914,15 +919,25 @@ function RouteComponentInner({
                   currentPage={pageNumber}
                   downloadRenditions={downloadRenditions}
                   extraControls={
-                    <TranslateDocumentDialog
-                      disabled={!canCreateEntity}
-                      entityId={entityId}
-                      entityVersionKey={entity.currentVersionId}
-                      fieldId={fieldId}
-                      isDocx={isDocxFile}
-                      viewId={viewId}
-                      workspaceId={workspaceId}
-                    />
+                    <>
+                      <TranslateDocumentDialog
+                        disabled={!canCreateEntity}
+                        entityId={entityId}
+                        entityVersionKey={entity.currentVersionId}
+                        fieldId={fieldId}
+                        isDocx={isDocxFile}
+                        viewId={viewId}
+                        workspaceId={workspaceId}
+                      />
+                      {isDocxFile && canConvertToStyleSet ? (
+                        <ConvertToStyleSetDialog
+                          entityId={entityId}
+                          fieldId={fieldId}
+                          viewId={viewId}
+                          workspaceId={workspaceId}
+                        />
+                      ) : null}
+                    </>
                   }
                   fieldId={fieldId}
                   onEditPages={
@@ -1001,15 +1016,25 @@ function RouteComponentInner({
                         currentPage={pageNumber}
                         downloadRenditions={downloadRenditions}
                         extraControls={
-                          <TranslateDocumentDialog
-                            disabled={!canCreateEntity}
-                            entityId={entityId}
-                            entityVersionKey={entity.currentVersionId}
-                            fieldId={fieldId}
-                            isDocx
-                            viewId={viewId}
-                            workspaceId={workspaceId}
-                          />
+                          <>
+                            <TranslateDocumentDialog
+                              disabled={!canCreateEntity}
+                              entityId={entityId}
+                              entityVersionKey={entity.currentVersionId}
+                              fieldId={fieldId}
+                              isDocx
+                              viewId={viewId}
+                              workspaceId={workspaceId}
+                            />
+                            {canConvertToStyleSet ? (
+                              <ConvertToStyleSetDialog
+                                entityId={entityId}
+                                fieldId={fieldId}
+                                viewId={viewId}
+                                workspaceId={workspaceId}
+                              />
+                            ) : null}
+                          </>
                         }
                         fieldId={fieldId}
                         variant="inline"

@@ -6,6 +6,7 @@ import createBilingualEntity from "@/api/handlers/entities/bilingual/create";
 import checkStamp from "@/api/handlers/entities/check-stamp";
 import checkpointFolioCollabRoom from "@/api/handlers/entities/checkpoint-folio-collab-room";
 import clipEndpoint from "@/api/handlers/entities/clip";
+import convertToStyleSet from "@/api/handlers/entities/convert-to-style-set";
 import copyToWorkspace from "@/api/handlers/entities/copy-to-workspace";
 import createEntities from "@/api/handlers/entities/create";
 import createBlankDocument from "@/api/handlers/entities/create-blank-document";
@@ -281,6 +282,12 @@ export const entitiesRoute = new Elysia({
   .get("/entity/:entityId/field/:fieldId/file", readFieldFile.handler, {
     params: readFieldFile.config.params,
     permissions: readFieldFile.config.permissions,
+  })
+  .post("/entity/:entityId/convert-to-style-set", convertToStyleSet.handler, {
+    body: convertToStyleSet.config.body,
+    params: convertToStyleSet.config.params,
+    resourceSetUpdated: entityFileRealtimeUpdates,
+    permissions: convertToStyleSet.config.permissions,
   })
   .post("/entity/:entityId/ocr", requestOcr.handler, {
     body: requestOcr.config.body,

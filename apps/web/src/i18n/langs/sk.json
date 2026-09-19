@@ -4219,6 +4219,12 @@
     "validity": "Platné od {from} do {to}"
   },
   "styleSets": {
+    "convertConfirm": "Previesť",
+    "convertDescription": "Znova zostaví tento dokument v jednej z vašich sád štýlov. Znenie zostane nezmenené; každý odsek dostane štýl z danej sady. Pôvodný dokument zostane zachovaný.",
+    "convertPending": "Prevádza sa…",
+    "convertSuccess": "Vytvorený súbor {fileName}",
+    "convertTitle": "Previesť do firemného štýlu",
+    "convertToHouseStyle": "Previesť do firemného štýlu…",
     "create": "Vytvoriť",
     "defaultBadge": "Predvolené",
     "deleteConfirmation": "Na potvrdenie zadajte názov sady štýlov.",
@@ -4291,6 +4297,7 @@
     "importTitle": "Importovať sadu štýlov",
     "loadFailed": "Sady štýlov sa nepodarilo načítať",
     "newDocument": "Nový dokument",
+    "noStyleGuide": "Zatiaľ žiadna príručka štýlov",
     "pickerDescription": "Vyberte systém formátovania nového súboru.",
     "renameTitle": "Premenovať sadu štýlov",
     "replace": "Nahradiť zdroj",

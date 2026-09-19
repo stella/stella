@@ -4219,6 +4219,12 @@
     "validity": "Obowiązuje od {from} do {to}"
   },
   "styleSets": {
+    "convertConfirm": "Konwertuj",
+    "convertDescription": "Odtwarza ten dokument w jednym z zestawów stylów. Treść pozostaje bez zmian; każdy akapit otrzymuje styl z zestawu. Oryginalny dokument zostaje zachowany.",
+    "convertPending": "Konwertowanie…",
+    "convertSuccess": "Utworzono {fileName}",
+    "convertTitle": "Konwertuj na styl firmowy",
+    "convertToHouseStyle": "Konwertuj na styl firmowy…",
     "create": "Utwórz",
     "defaultBadge": "Domyślny",
     "deleteConfirmation": "Wpisz nazwę zestawu stylów, aby potwierdzić.",
@@ -4291,6 +4297,7 @@
     "importTitle": "Importuj zestaw stylów",
     "loadFailed": "Nie udało się wczytać zestawów stylów",
     "newDocument": "Nowy dokument",
+    "noStyleGuide": "Brak przewodnika po stylach",
     "pickerDescription": "Wybierz system formatowania nowego pliku.",
     "renameTitle": "Zmień nazwę zestawu stylów",
     "replace": "Zastąp źródło",
