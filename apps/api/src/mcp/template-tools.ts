@@ -636,40 +636,36 @@ const previewTemplateConditionsArgsSchema = nullAsAbsent(
   }),
 );
 
-const PREVIEW_TEMPLATE_CONDITIONS_TOOL_DEFINITION = defineValibotMcpTool(
-  {
-    description:
-      "Ask what a set of values would decide, without filling anything. One " +
-      "entry per AI-decided condition (the `ai` entries in list_templates' " +
-      "`conditions`): its `path`, `label`, and either " +
-      '`state: "decided"` with the `value` its block would be gated on and ' +
-      "`decided_by` (`user` or `decision_model`), plus the decision model's " +
-      '`probability` when it answered; or `state: "undecided"` with a `reason` ' +
-      "(`no_decision_model`, `below_floor`, `failed`). Only the decision " +
-      "model runs, so it costs a fraction of a fill, and an undecided " +
-      "condition may still be answered at fill time by the generative " +
-      "model. Settle one yourself by putting the boolean in `values`: a " +
-      "supplied value always wins. Nothing is written.",
-    inputSchema: previewTemplateConditionsArgsSchema,
-    annotations: {
-      title: "Preview template conditions",
-      destructiveHint: false,
-      readOnlyHint: true,
-      openWorldHint: false,
-    },
-    access: "read",
-    anonymized: {
-      exposure: "anonymize",
-      // Placeholder org id: derivation only ever reads `.path`, see the
-      // builders' doc comment above.
-      textFields: deriveTextFieldPaths(
-        buildPreviewConditionsTextFieldSpecs(""),
-      ),
-    },
-    name: "preview_template_conditions",
-    scope: "stella:templates",
+const PREVIEW_TEMPLATE_CONDITIONS_TOOL_DEFINITION = defineValibotMcpTool({
+  description:
+    "Ask what a set of values would decide, without filling anything. One " +
+    "entry per AI-decided condition (the `ai` entries in list_templates' " +
+    "`conditions`): its `path`, `label`, and either " +
+    '`state: "decided"` with the `value` its block would be gated on and ' +
+    "`decided_by` (`user` or `decision_model`), plus the decision model's " +
+    '`probability` when it answered; or `state: "undecided"` with a `reason` ' +
+    "(`no_decision_model`, `below_floor`, `failed`). Only the decision " +
+    "model runs, so it costs a fraction of a fill, and an undecided " +
+    "condition may still be answered at fill time by the generative " +
+    "model. Settle one yourself by putting the boolean in `values`: a " +
+    "supplied value always wins. Nothing is written.",
+  inputSchema: previewTemplateConditionsArgsSchema,
+  annotations: {
+    title: "Preview template conditions",
+    destructiveHint: false,
+    readOnlyHint: true,
+    openWorldHint: false,
   },
-);
+  access: "read",
+  anonymized: {
+    exposure: "anonymize",
+    // Placeholder org id: derivation only ever reads `.path`, see the
+    // builders' doc comment above.
+    textFields: deriveTextFieldPaths(buildPreviewConditionsTextFieldSpecs("")),
+  },
+  name: "preview_template_conditions",
+  scope: "stella:templates",
+});
 
 export const CONFIGURE_TEMPLATE_FIELDS_TOOL_DEFINITION = defineValibotMcpTool({
   description:
