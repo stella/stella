@@ -1,0 +1,225 @@
+{
+  "probeVersion": 1,
+  "records": [
+    {
+      "provider": "anthropic",
+      "modelId": "claude-opus-5",
+      "mimeType": "image/heic",
+      "status": "unsupported",
+      "checkedAt": "2026-09-06T18:46:09.014Z",
+      "fixtureSha256": "bccf55ba054688ef46c378595dbe362d15dbaa61aa6b0df500ce39525bae1c52",
+      "adapterVersion": "@tanstack/ai-anthropic@0.17.1",
+      "sourceRevision": "a18a8a1285d02d20b45085daec5d648fd98c9083:d7b956fbbcf3e1b8c41bf04dae376514d64b328f66e0b7a8de3353a7262d3a6b"
+    },
+    {
+      "provider": "anthropic",
+      "modelId": "claude-opus-5",
+      "mimeType": "image/heif",
+      "status": "unsupported",
+      "checkedAt": "2026-09-06T18:46:09.314Z",
+      "fixtureSha256": "bccf55ba054688ef46c378595dbe362d15dbaa61aa6b0df500ce39525bae1c52",
+      "adapterVersion": "@tanstack/ai-anthropic@0.17.1",
+      "sourceRevision": "a18a8a1285d02d20b45085daec5d648fd98c9083:d7b956fbbcf3e1b8c41bf04dae376514d64b328f66e0b7a8de3353a7262d3a6b"
+    },
+    {
+      "provider": "google",
+      "modelId": "gemini-3.1-flash-lite",
+      "mimeType": "image/heic",
+      "status": "supported",
+      "checkedAt": "2026-09-06T18:39:39.225Z",
+      "fixtureSha256": "bccf55ba054688ef46c378595dbe362d15dbaa61aa6b0df500ce39525bae1c52",
+      "adapterVersion": "@tanstack/ai-gemini@0.25.1",
+      "sourceRevision": "a18a8a1285d02d20b45085daec5d648fd98c9083:da0630aaaea027c3a84480001db3b668a16b0a5de7fcf7b5a97e0a1f1dd7ff7f"
+    },
+    {
+      "provider": "google",
+      "modelId": "gemini-3.1-flash-lite",
+      "mimeType": "image/heif",
+      "status": "supported",
+      "checkedAt": "2026-09-06T18:39:40.102Z",
+      "fixtureSha256": "bccf55ba054688ef46c378595dbe362d15dbaa61aa6b0df500ce39525bae1c52",
+      "adapterVersion": "@tanstack/ai-gemini@0.25.1",
+      "sourceRevision": "a18a8a1285d02d20b45085daec5d648fd98c9083:da0630aaaea027c3a84480001db3b668a16b0a5de7fcf7b5a97e0a1f1dd7ff7f"
+    },
+    {
+      "provider": "google",
+      "modelId": "gemini-3.1-pro-preview",
+      "mimeType": "image/heic",
+      "status": "supported",
+      "checkedAt": "2026-09-06T18:39:32.929Z",
+      "fixtureSha256": "bccf55ba054688ef46c378595dbe362d15dbaa61aa6b0df500ce39525bae1c52",
+      "adapterVersion": "@tanstack/ai-gemini@0.25.1",
+      "sourceRevision": "a18a8a1285d02d20b45085daec5d648fd98c9083:da0630aaaea027c3a84480001db3b668a16b0a5de7fcf7b5a97e0a1f1dd7ff7f"
+    },
+    {
+      "provider": "google",
+      "modelId": "gemini-3.1-pro-preview",
+      "mimeType": "image/heif",
+      "status": "supported",
+      "checkedAt": "2026-09-06T18:39:35.551Z",
+      "fixtureSha256": "bccf55ba054688ef46c378595dbe362d15dbaa61aa6b0df500ce39525bae1c52",
+      "adapterVersion": "@tanstack/ai-gemini@0.25.1",
+      "sourceRevision": "a18a8a1285d02d20b45085daec5d648fd98c9083:da0630aaaea027c3a84480001db3b668a16b0a5de7fcf7b5a97e0a1f1dd7ff7f"
+    },
+    {
+      "provider": "google",
+      "modelId": "gemini-3.5-flash",
+      "mimeType": "image/heic",
+      "status": "supported",
+      "checkedAt": "2026-09-06T18:39:36.858Z",
+      "fixtureSha256": "bccf55ba054688ef46c378595dbe362d15dbaa61aa6b0df500ce39525bae1c52",
+      "adapterVersion": "@tanstack/ai-gemini@0.25.1",
+      "sourceRevision": "a18a8a1285d02d20b45085daec5d648fd98c9083:da0630aaaea027c3a84480001db3b668a16b0a5de7fcf7b5a97e0a1f1dd7ff7f"
+    },
+    {
+      "provider": "google",
+      "modelId": "gemini-3.5-flash",
+      "mimeType": "image/heif",
+      "status": "supported",
+      "checkedAt": "2026-09-06T18:39:38.198Z",
+      "fixtureSha256": "bccf55ba054688ef46c378595dbe362d15dbaa61aa6b0df500ce39525bae1c52",
+      "adapterVersion": "@tanstack/ai-gemini@0.25.1",
+      "sourceRevision": "a18a8a1285d02d20b45085daec5d648fd98c9083:da0630aaaea027c3a84480001db3b668a16b0a5de7fcf7b5a97e0a1f1dd7ff7f"
+    },
+    {
+      "provider": "google",
+      "modelId": "gemini-3.5-flash-lite",
+      "mimeType": "image/heic",
+      "status": "supported",
+      "checkedAt": "2026-09-06T18:39:29.641Z",
+      "fixtureSha256": "bccf55ba054688ef46c378595dbe362d15dbaa61aa6b0df500ce39525bae1c52",
+      "adapterVersion": "@tanstack/ai-gemini@0.25.1",
+      "sourceRevision": "a18a8a1285d02d20b45085daec5d648fd98c9083:da0630aaaea027c3a84480001db3b668a16b0a5de7fcf7b5a97e0a1f1dd7ff7f"
+    },
+    {
+      "provider": "google",
+      "modelId": "gemini-3.5-flash-lite",
+      "mimeType": "image/heif",
+      "status": "supported",
+      "checkedAt": "2026-09-06T18:39:30.470Z",
+      "fixtureSha256": "bccf55ba054688ef46c378595dbe362d15dbaa61aa6b0df500ce39525bae1c52",
+      "adapterVersion": "@tanstack/ai-gemini@0.25.1",
+      "sourceRevision": "a18a8a1285d02d20b45085daec5d648fd98c9083:da0630aaaea027c3a84480001db3b668a16b0a5de7fcf7b5a97e0a1f1dd7ff7f"
+    },
+    {
+      "provider": "google",
+      "modelId": "gemini-3.6-flash",
+      "mimeType": "image/heic",
+      "status": "supported",
+      "checkedAt": "2026-09-06T18:39:27.651Z",
+      "fixtureSha256": "bccf55ba054688ef46c378595dbe362d15dbaa61aa6b0df500ce39525bae1c52",
+      "adapterVersion": "@tanstack/ai-gemini@0.25.1",
+      "sourceRevision": "a18a8a1285d02d20b45085daec5d648fd98c9083:da0630aaaea027c3a84480001db3b668a16b0a5de7fcf7b5a97e0a1f1dd7ff7f"
+    },
+    {
+      "provider": "google",
+      "modelId": "gemini-3.6-flash",
+      "mimeType": "image/heif",
+      "status": "supported",
+      "checkedAt": "2026-09-06T18:39:28.728Z",
+      "fixtureSha256": "bccf55ba054688ef46c378595dbe362d15dbaa61aa6b0df500ce39525bae1c52",
+      "adapterVersion": "@tanstack/ai-gemini@0.25.1",
+      "sourceRevision": "a18a8a1285d02d20b45085daec5d648fd98c9083:da0630aaaea027c3a84480001db3b668a16b0a5de7fcf7b5a97e0a1f1dd7ff7f"
+    },
+    {
+      "provider": "google",
+      "modelId": "gemini-3.7-flash",
+      "mimeType": "image/heic",
+      "status": "supported",
+      "checkedAt": "2026-09-06T18:39:22.329Z",
+      "fixtureSha256": "bccf55ba054688ef46c378595dbe362d15dbaa61aa6b0df500ce39525bae1c52",
+      "adapterVersion": "@tanstack/ai-gemini@0.25.1",
+      "sourceRevision": "a18a8a1285d02d20b45085daec5d648fd98c9083:da0630aaaea027c3a84480001db3b668a16b0a5de7fcf7b5a97e0a1f1dd7ff7f"
+    },
+    {
+      "provider": "google",
+      "modelId": "gemini-3.7-flash",
+      "mimeType": "image/heif",
+      "status": "supported",
+      "checkedAt": "2026-09-06T18:39:23.633Z",
+      "fixtureSha256": "bccf55ba054688ef46c378595dbe362d15dbaa61aa6b0df500ce39525bae1c52",
+      "adapterVersion": "@tanstack/ai-gemini@0.25.1",
+      "sourceRevision": "a18a8a1285d02d20b45085daec5d648fd98c9083:da0630aaaea027c3a84480001db3b668a16b0a5de7fcf7b5a97e0a1f1dd7ff7f"
+    },
+    {
+      "provider": "google",
+      "modelId": "gemini-3.8-flash",
+      "mimeType": "image/heic",
+      "status": "supported",
+      "checkedAt": "2026-09-06T18:39:24.796Z",
+      "fixtureSha256": "bccf55ba054688ef46c378595dbe362d15dbaa61aa6b0df500ce39525bae1c52",
+      "adapterVersion": "@tanstack/ai-gemini@0.25.1",
+      "sourceRevision": "a18a8a1285d02d20b45085daec5d648fd98c9083:da0630aaaea027c3a84480001db3b668a16b0a5de7fcf7b5a97e0a1f1dd7ff7f"
+    },
+    {
+      "provider": "google",
+      "modelId": "gemini-3.8-flash",
+      "mimeType": "image/heif",
+      "status": "supported",
+      "checkedAt": "2026-09-06T18:39:26.100Z",
+      "fixtureSha256": "bccf55ba054688ef46c378595dbe362d15dbaa61aa6b0df500ce39525bae1c52",
+      "adapterVersion": "@tanstack/ai-gemini@0.25.1",
+      "sourceRevision": "a18a8a1285d02d20b45085daec5d648fd98c9083:da0630aaaea027c3a84480001db3b668a16b0a5de7fcf7b5a97e0a1f1dd7ff7f"
+    },
+    {
+      "provider": "mistral",
+      "modelId": "mistral-medium-latest",
+      "mimeType": "image/heic",
+      "status": "inconclusive",
+      "checkedAt": "2026-09-06T18:39:45.730Z",
+      "fixtureSha256": "bccf55ba054688ef46c378595dbe362d15dbaa61aa6b0df500ce39525bae1c52",
+      "adapterVersion": "@tanstack/ai-mistral@0.4.1",
+      "sourceRevision": "a18a8a1285d02d20b45085daec5d648fd98c9083:da0630aaaea027c3a84480001db3b668a16b0a5de7fcf7b5a97e0a1f1dd7ff7f"
+    },
+    {
+      "provider": "mistral",
+      "modelId": "mistral-medium-latest",
+      "mimeType": "image/heif",
+      "status": "inconclusive",
+      "checkedAt": "2026-09-06T18:40:11.859Z",
+      "fixtureSha256": "bccf55ba054688ef46c378595dbe362d15dbaa61aa6b0df500ce39525bae1c52",
+      "adapterVersion": "@tanstack/ai-mistral@0.4.1",
+      "sourceRevision": "a18a8a1285d02d20b45085daec5d648fd98c9083:da0630aaaea027c3a84480001db3b668a16b0a5de7fcf7b5a97e0a1f1dd7ff7f"
+    },
+    {
+      "provider": "openrouter",
+      "modelId": "google/gemini-3.7-flash",
+      "mimeType": "image/heic",
+      "status": "supported",
+      "checkedAt": "2026-09-06T18:46:11.839Z",
+      "fixtureSha256": "bccf55ba054688ef46c378595dbe362d15dbaa61aa6b0df500ce39525bae1c52",
+      "adapterVersion": "@tanstack/ai-openrouter@0.18.3",
+      "sourceRevision": "a18a8a1285d02d20b45085daec5d648fd98c9083:d7b956fbbcf3e1b8c41bf04dae376514d64b328f66e0b7a8de3353a7262d3a6b"
+    },
+    {
+      "provider": "openrouter",
+      "modelId": "google/gemini-3.7-flash",
+      "mimeType": "image/heif",
+      "status": "supported",
+      "checkedAt": "2026-09-06T18:46:14.074Z",
+      "fixtureSha256": "bccf55ba054688ef46c378595dbe362d15dbaa61aa6b0df500ce39525bae1c52",
+      "adapterVersion": "@tanstack/ai-openrouter@0.18.3",
+      "sourceRevision": "a18a8a1285d02d20b45085daec5d648fd98c9083:d7b956fbbcf3e1b8c41bf04dae376514d64b328f66e0b7a8de3353a7262d3a6b"
+    },
+    {
+      "provider": "openrouter",
+      "modelId": "openai/gpt-5.6-terra",
+      "mimeType": "image/heic",
+      "status": "inconclusive",
+      "checkedAt": "2026-09-06T18:39:22.316Z",
+      "fixtureSha256": "bccf55ba054688ef46c378595dbe362d15dbaa61aa6b0df500ce39525bae1c52",
+      "adapterVersion": "@tanstack/ai-openrouter@0.18.3",
+      "sourceRevision": "a18a8a1285d02d20b45085daec5d648fd98c9083:da0630aaaea027c3a84480001db3b668a16b0a5de7fcf7b5a97e0a1f1dd7ff7f"
+    },
+    {
+      "provider": "openrouter",
+      "modelId": "openai/gpt-5.6-terra",
+      "mimeType": "image/heif",
+      "status": "inconclusive",
+      "checkedAt": "2026-09-06T18:39:23.617Z",
+      "fixtureSha256": "bccf55ba054688ef46c378595dbe362d15dbaa61aa6b0df500ce39525bae1c52",
+      "adapterVersion": "@tanstack/ai-openrouter@0.18.3",
+      "sourceRevision": "a18a8a1285d02d20b45085daec5d648fd98c9083:da0630aaaea027c3a84480001db3b668a16b0a5de7fcf7b5a97e0a1f1dd7ff7f"
+    }
+  ]
+}
