@@ -107,6 +107,7 @@ const readWorkspaceContactsHandlerMock = mock();
 const readWorkspaceMembersHandlerMock = mock();
 const describeStoredTemplateMock = mock();
 const templateDecideConditionsLogicMock = mock();
+const loadOrgAIConfigMock = mock(async () => await Promise.resolve(null));
 
 const { finalizeToolEgress } = await import("@/api/mcp/egress");
 const { serializeToolResult } = await import("@/api/mcp/tool-utils");
@@ -266,6 +267,7 @@ const buildContext = ({
       readWorkspaceMembersHandler: readWorkspaceMembersHandlerMock,
       describeStoredTemplate: describeStoredTemplateMock,
       templateDecideConditionsLogic: templateDecideConditionsLogicMock,
+      loadOrgAIConfig: loadOrgAIConfigMock,
     },
     safeDb,
     scopedDb,
@@ -333,6 +335,7 @@ beforeEach(() => {
   readWorkspaceMembersHandlerMock.mockReset();
   describeStoredTemplateMock.mockReset();
   templateDecideConditionsLogicMock.mockReset();
+  loadOrgAIConfigMock.mockClear();
 });
 
 afterAll(() => {
@@ -1207,6 +1210,7 @@ describe("MCP anonymization canary corpus", () => {
               label: decidedLabelSeed,
               decision: {
                 state: "decided",
+                decidedBy: "decision_model",
                 value: true,
                 probability: 0.94,
                 confidence: 0.88,

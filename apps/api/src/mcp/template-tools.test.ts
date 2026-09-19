@@ -1084,6 +1084,7 @@ describe("MCP template tools", () => {
             label: "Consumer contract",
             decision: {
               state: "decided",
+              decidedBy: "decision_model",
               value: true,
               probability: 0.94,
               confidence: 0.88,
@@ -1095,6 +1096,7 @@ describe("MCP template tools", () => {
             // The no carries the probability of the no, not of the yes.
             decision: {
               state: "decided",
+              decidedBy: "decision_model",
               value: false,
               probability: 0.96,
               confidence: 0.92,
@@ -1119,7 +1121,21 @@ describe("MCP template tools", () => {
         templateId: TEMPLATE_ID,
         organizationId: toSafeId<"organization">("org_1"),
         body: { values: { party_name: "Acme s.r.o." } },
+        orgAIConfig: null,
+        client: null,
+        abortSignal: expect.any(AbortSignal),
+        usageMetering: expect.objectContaining({
+          actionType: "chat",
+          organizationId: toSafeId<"organization">("org_1"),
+          serviceTier: "standard",
+          userId: toSafeId<"user">("user_1"),
+          workspaceId: null,
+          callId: expect.any(String),
+        }),
       }),
+    );
+    expect(loadOrgAIConfigMock).toHaveBeenCalledWith(
+      toSafeId<"organization">("org_1"),
     );
     // The same per-condition shape fill_template reports, so an agent that
     // learned one reads the other.

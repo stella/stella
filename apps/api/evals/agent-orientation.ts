@@ -984,6 +984,36 @@ const TASKS: readonly Task[] = [
     },
   },
   {
+    id: "preview-template-conditions",
+    request: `Preview template ${NDA_TEMPLATE_ID}'s AI-decided conditions with values {"party_name": "Beta s.r.o.", "is_consumer": false} without filling it.`,
+    mcp: {
+      toolName: "preview_template_conditions",
+      exampleArgs: {
+        template_id: NDA_TEMPLATE_ID,
+        values: { party_name: "Beta s.r.o.", is_consumer: false },
+      },
+      checkArgs: (args) => [
+        ...field(args, "template_id", NDA_TEMPLATE_ID),
+        ...(isRecord(args["values"])
+          ? [
+              ...field(args["values"], "party_name", "Beta s.r.o."),
+              ...field(args["values"], "is_consumer", false),
+            ]
+          : ["values: expected an object"]),
+      ],
+    },
+    cli: {
+      kind: "command",
+      path: ["template", "preview-conditions"],
+      flags: {
+        "template-id": NDA_TEMPLATE_ID,
+        input: JSON.stringify({
+          values: { party_name: "Beta s.r.o.", is_consumer: false },
+        }),
+      },
+    },
+  },
+  {
     id: "run-playbook",
     request: `Run playbook ${DILIGENCE_PLAYBOOK_ID} over matter ${DILIGENCE_MATTER_ID}.`,
     mcp: {

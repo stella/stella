@@ -71,7 +71,7 @@ describe("resolveAiConditions", () => {
     const { values, conditions } = await resolveAiConditions({
       values: { is_consumer: false },
       fields,
-      decide: yesDecider,
+      decide: undefined,
     });
     expect(values["is_consumer"]).toBe(false);
     expect(conditions).toEqual([
@@ -148,8 +148,14 @@ describe("resolveAiConditions", () => {
       decide: undefined,
     });
     expect("is_consumer" in values).toBe(false);
-    // Nothing was asked, so nothing is reported as decided or undecided.
-    expect(conditions).toEqual([]);
+    expect(conditions).toEqual([
+      {
+        path: "is_consumer",
+        label: "Consumer contract",
+        state: "undecided",
+        reason: "no-backend",
+      },
+    ]);
   });
 
   test("a decider returning undefined leaves the condition unset and undecided", async () => {

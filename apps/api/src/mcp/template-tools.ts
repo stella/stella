@@ -161,6 +161,7 @@ type TemplateToolName =
 /** Max assembled-text length returned inline; full bytes ride along as base64. */
 const TEMPLATE_FILL_TEXT_MAX_CHARS = 16_000;
 const SAVE_FILLED_TEMPLATE_RENDER_TIMEOUT_MS = 300_000;
+const PREVIEW_TEMPLATE_CONDITIONS_TIMEOUT_MS = 10_000;
 
 /**
  * What `fill_template` sends back. `text` is the rendered preview a caller
@@ -642,7 +643,8 @@ export const PREVIEW_TEMPLATE_CONDITIONS_TOOL_DEFINITION = defineValibotMcpTool(
       "entry per AI-decided condition (the `ai` entries in list_templates' " +
       "`conditions`): its `path`, `label`, and either " +
       '`state: "decided"` with the `value` its block would be gated on and ' +
-      'the `probability` behind it, or `state: "undecided"` with a `reason` ' +
+      "`decided_by` (`user` or `decision_model`), plus the decision model's " +
+      '`probability` when it answered; or `state: "undecided"` with a `reason` ' +
       "(`no_decision_model`, `below_floor`, `failed`). Only the decision " +
       "model runs, so it costs a fraction of a fill, and an undecided " +
       "condition may still be answered at fill time by the generative " +
@@ -2818,11 +2820,28 @@ const handlePreviewTemplateConditionsTool: TypedMcpToolHandler<
   const decideConditions =
     context.testDependencies?.templateDecideConditionsLogic ??
     templateDecideConditionsLogic;
+  const orgAIConfig = await deferOrgAIConfig(context)();
   const decided = await decideConditions({
     scopedDb: context.scopedDb,
     organizationId: context.organizationId,
     templateId: brandPersistedTemplateId(parsed.output.template_id),
     body: { values: parsed.output.values },
+    orgAIConfig,
+    abortSignal:
+      context.request?.signal ??
+      AbortSignal.timeout(PREVIEW_TEMPLATE_CONDITIONS_TIMEOUT_MS),
+    // Preview has no spend reservation. Match the REST route: only the org's
+    // own credential may run until the decision model has a usage preflight.
+    ...(orgAIConfig?.decision ? {} : { client: null }),
+    usageMetering: {
+      actionType: "chat",
+      organizationId: context.organizationId,
+      safeDb: context.safeDb,
+      serviceTier: "standard",
+      userId: context.userId,
+      workspaceId: null,
+      callId: Bun.randomUUIDv7(),
+    },
   });
   if (Result.isError(decided)) {
     return notFoundResult(

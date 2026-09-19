@@ -19,6 +19,7 @@
 
 import { evaluateCondition, resolvePath } from "@stll/template-conditions";
 
+import type { DecisionUndecidedReason } from "../workflow/decisions/decide";
 import { omitSourceBoundValues } from "./ai-visible-values";
 import type { FieldMeta } from "./types";
 
@@ -68,10 +69,12 @@ export type ResolvedAiCondition = { path: string; label: string } & (
   | {
       state: "decided";
       value: boolean;
-      decidedBy: AiConditionDecision["decidedBy"] | "user";
-      probability?: number;
+      decidedBy: "decision_model";
+      probability: number;
     }
-  | { state: "undecided"; reason: "failed" }
+  | { state: "decided"; value: boolean; decidedBy: "generative_model" }
+  | { state: "decided"; value: boolean; decidedBy: "user" }
+  | { state: "undecided"; reason: DecisionUndecidedReason }
 );
 
 export type ResolvedAiConditions = {
@@ -89,7 +92,7 @@ export const resolveAiConditions = async ({
   decide: AiConditionDecider | undefined;
 }): Promise<ResolvedAiConditions> => {
   const aiConditionFields = fields.filter(isAiConditionField);
-  if (decide === undefined || aiConditionFields.length === 0) {
+  if (aiConditionFields.length === 0) {
     return { values, conditions: [] };
   }
 
@@ -112,6 +115,15 @@ export const resolveAiConditions = async ({
         decidedBy: "user",
       });
       continue; // user-entered value wins
+    }
+    if (decide === undefined) {
+      conditions.push({
+        path: field.path,
+        label,
+        state: "undecided",
+        reason: "no-backend",
+      });
+      continue;
     }
     const decision = await decide({
       prompt: field.aiPrompt,

@@ -19,17 +19,9 @@
 import { panic } from "better-result";
 import * as v from "valibot";
 
-import type { DecisionUndecidedReason } from "@/api/lib/decisions/decide";
 import type { ResolvedAiCondition } from "@/api/lib/docx/resolve-ai-conditions";
 import type { TemplateConditionAnswer } from "@/api/lib/templates/template-decide-conditions";
-
-/** Which tier settled the condition. `user` is a value the caller supplied,
- *  which always wins over the model. */
-export const TEMPLATE_CONDITION_DECIDED_BY = [
-  "decision_model",
-  "generative_model",
-  "user",
-] as const;
+import type { DecisionUndecidedReason } from "@/api/lib/workflow/decisions/decide";
 
 /** Why a condition was not settled. */
 export const TEMPLATE_CONDITION_UNDECIDED_REASONS = [
@@ -41,16 +33,36 @@ export const TEMPLATE_CONDITION_UNDECIDED_REASONS = [
   "failed",
 ] as const;
 
-export const TEMPLATE_CONDITION_DECISION_OUTPUT_SCHEMA = v.variant("state", [
-  v.strictObject({
-    path: v.string(),
-    label: v.string(),
-    state: v.literal("decided"),
-    value: v.boolean(),
-    decided_by: v.picklist(TEMPLATE_CONDITION_DECIDED_BY),
-    /** Probability of the side chosen, not of yes; the decision model only. */
-    probability: v.optional(v.number()),
-  }),
+const TEMPLATE_CONDITION_DECISION_MODEL_OUTPUT_SCHEMA = v.strictObject({
+  path: v.string(),
+  label: v.string(),
+  state: v.literal("decided"),
+  value: v.boolean(),
+  decided_by: v.literal("decision_model"),
+  /** Probability of the side chosen, not of yes. */
+  probability: v.number(),
+});
+
+const TEMPLATE_CONDITION_GENERATIVE_OUTPUT_SCHEMA = v.strictObject({
+  path: v.string(),
+  label: v.string(),
+  state: v.literal("decided"),
+  value: v.boolean(),
+  decided_by: v.literal("generative_model"),
+});
+
+const TEMPLATE_CONDITION_USER_OUTPUT_SCHEMA = v.strictObject({
+  path: v.string(),
+  label: v.string(),
+  state: v.literal("decided"),
+  value: v.boolean(),
+  decided_by: v.literal("user"),
+});
+
+export const TEMPLATE_CONDITION_DECISION_OUTPUT_SCHEMA = v.union([
+  TEMPLATE_CONDITION_DECISION_MODEL_OUTPUT_SCHEMA,
+  TEMPLATE_CONDITION_GENERATIVE_OUTPUT_SCHEMA,
+  TEMPLATE_CONDITION_USER_OUTPUT_SCHEMA,
   v.strictObject({
     path: v.string(),
     label: v.string(),
@@ -80,16 +92,29 @@ export const toFillConditionDecision = (
 ): TemplateConditionDecisionOutput => {
   switch (condition.state) {
     case "decided":
-      return {
-        path: condition.path,
-        label: condition.label,
-        state: "decided",
-        value: condition.value,
-        decided_by: condition.decidedBy,
-        ...(condition.probability === undefined
-          ? {}
-          : { probability: condition.probability }),
-      };
+      switch (condition.decidedBy) {
+        case "decision_model":
+          return {
+            path: condition.path,
+            label: condition.label,
+            state: "decided",
+            value: condition.value,
+            decided_by: "decision_model",
+            probability: condition.probability,
+          };
+        case "generative_model":
+        case "user":
+          return {
+            path: condition.path,
+            label: condition.label,
+            state: "decided",
+            value: condition.value,
+            decided_by: condition.decidedBy,
+          };
+        default:
+          condition satisfies never;
+          return panic("Unhandled resolved condition decision source");
+      }
     case "undecided":
       return {
         path: condition.path,
@@ -103,9 +128,9 @@ export const toFillConditionDecision = (
   }
 };
 
-/** A condition the decision model was asked about without filling anything.
- *  The generative fallback never runs here, so a decided answer is always the
- *  decision model's. */
+/** A condition previewed without filling anything. The generative fallback
+ *  never runs here; a decided answer comes from the supplied values or the
+ *  decision model. */
 export const toPreviewConditionDecision = ({
   path,
   label,
@@ -113,14 +138,22 @@ export const toPreviewConditionDecision = ({
 }: TemplateConditionAnswer): TemplateConditionDecisionOutput => {
   switch (decision.state) {
     case "decided":
-      return {
-        path,
-        label,
-        state: "decided",
-        value: decision.value,
-        decided_by: "decision_model",
-        probability: decision.probability,
-      };
+      return decision.decidedBy === "user"
+        ? {
+            path,
+            label,
+            state: "decided",
+            value: decision.value,
+            decided_by: "user",
+          }
+        : {
+            path,
+            label,
+            state: "decided",
+            value: decision.value,
+            decided_by: "decision_model",
+            probability: decision.probability,
+          };
     case "undecided":
       return {
         path,
