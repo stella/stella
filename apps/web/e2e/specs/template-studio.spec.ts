@@ -43,7 +43,16 @@ test.describe("Template Studio", () => {
         name: templateName,
       });
       await expect(templateButton).toBeVisible({ timeout: 30_000 });
+      const historyLengthBeforeOpen = await page.evaluate(
+        () => window.history.length,
+      );
       await templateButton.click();
+      await expect(page).toHaveURL(
+        `/knowledge/templates?template=${template.id}`,
+      );
+      expect(await page.evaluate(() => window.history.length)).toBe(
+        historyLengthBeforeOpen,
+      );
 
       const fixtureText = page.locator(".layout-run-text", {
         hasText: "Stella E2E test document.",
