@@ -6,7 +6,9 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
+import { CONTROL_SIZE } from "@stll/ui/control-size";
 import { Input } from "@stll/ui/input";
+import { MenuSection } from "@stll/ui/menu-section";
 
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import { rememberSelectedFacetLabels } from "@/components/search-dialog.logic";
@@ -91,48 +93,41 @@ export const TimeFacetGroup = ({
   };
 
   return (
-    <div>
-      <p className="text-muted-foreground mb-2 text-xs font-medium">
-        {t("search.updatedWithin")}
-      </p>
-      <div className="space-y-0.5">
-        {TIME_PRESETS.map((preset) => {
-          const isActive = time?.mode === "preset" && time.preset === preset;
-          return (
-            <Button
-              className="h-auto w-full justify-start gap-2 px-2 py-1"
-              key={preset}
-              onClick={() => onPresetChange(preset)}
-              size="sm"
-              variant="ghost"
-            >
-              <Checkbox checked={isActive} tabIndex={-1} />
-              <span className="flex-1 truncate text-start">
-                {t(TIME_PRESET_TRANSLATION_KEYS[preset])}
-              </span>
-            </Button>
-          );
-        })}
-        <Button
-          className="h-auto w-full justify-start gap-2 px-2 py-1"
-          onClick={() => {
-            if (isCustom) {
-              onClearCustom();
-            } else {
-              onCustomChange({});
-            }
-          }}
-          size="sm"
-          variant="ghost"
-        >
-          <Checkbox checked={isCustom} tabIndex={-1} />
-          <span className="flex-1 truncate text-start">
-            {t("search.timeFilterCustom")}
-          </span>
-        </Button>
-      </div>
+    <MenuSection title={t("search.updatedWithin")}>
+      {TIME_PRESETS.map((preset) => {
+        const isActive = time?.mode === "preset" && time.preset === preset;
+        return (
+          <Button
+            key={preset}
+            onClick={() => onPresetChange(preset)}
+            size="row"
+            variant="ghost"
+          >
+            <Checkbox checked={isActive} tabIndex={-1} />
+            <span className="min-w-0 flex-1 truncate">
+              {t(TIME_PRESET_TRANSLATION_KEYS[preset])}
+            </span>
+          </Button>
+        );
+      })}
+      <Button
+        onClick={() => {
+          if (isCustom) {
+            onClearCustom();
+          } else {
+            onCustomChange({});
+          }
+        }}
+        size="row"
+        variant="ghost"
+      >
+        <Checkbox checked={isCustom} tabIndex={-1} />
+        <span className="min-w-0 flex-1 truncate">
+          {t("search.timeFilterCustom")}
+        </span>
+      </Button>
       {isCustom && (
-        <div className="mt-2 space-y-1 px-2">
+        <div className="space-y-1 px-2">
           <div>
             <p className="text-muted-foreground text-3xs font-medium tracking-wide uppercase">
               {t("search.dateFrom")}
@@ -159,7 +154,7 @@ export const TimeFacetGroup = ({
           </div>
         </div>
       )}
-    </div>
+    </MenuSection>
   );
 };
 
@@ -169,14 +164,13 @@ export const FacetGroup = ({
   selected,
   onChange,
 }: FacetGroupProps) => (
-  <div>
-    <p className="text-muted-foreground mb-2 text-xs font-medium">{title}</p>
+  <MenuSection title={title}>
     <FacetBucketList
       buckets={buckets}
       onChange={onChange}
       selected={selected}
     />
-  </div>
+  </MenuSection>
 );
 
 type FacetBucketListProps = {
@@ -192,17 +186,16 @@ const FacetBucketList = ({
 }: FacetBucketListProps) => {
   const format = useFormatter();
   return (
-    <div className="space-y-0.5">
+    <>
       {buckets.map((bucket) => (
         <Button
-          className="h-auto w-full justify-start gap-2 px-2 py-1"
           key={bucket.value}
           onClick={() => onChange(bucket.value)}
-          size="sm"
+          size="row"
           variant="ghost"
         >
           <Checkbox checked={selected.includes(bucket.value)} tabIndex={-1} />
-          <span className="flex-1 truncate text-start">
+          <span className="min-w-0 flex-1 truncate">
             {bucket.label ?? bucket.value}
           </span>
           <span className="text-muted-foreground tabular-nums">
@@ -210,7 +203,7 @@ const FacetBucketList = ({
           </span>
         </Button>
       ))}
-    </div>
+    </>
   );
 };
 
@@ -293,10 +286,8 @@ export const SearchableFacetGroup = ({
     return null;
   }
   return (
-    <div>
-      <p className="text-muted-foreground mb-2 text-xs font-medium">{title}</p>
+    <MenuSection title={title}>
       <Input
-        className="mb-1.5 h-7 px-2 text-xs"
         onChange={(event) => {
           const value = event.target.value;
           setSelectedLabels((current) =>
@@ -306,6 +297,7 @@ export const SearchableFacetGroup = ({
           debouncedSetSearch(value);
         }}
         placeholder={t("common.search")}
+        size={CONTROL_SIZE.sm}
         value={search}
       />
       <FacetBucketList
@@ -318,6 +310,6 @@ export const SearchableFacetGroup = ({
         }}
         selected={selected}
       />
-    </div>
+    </MenuSection>
   );
 };

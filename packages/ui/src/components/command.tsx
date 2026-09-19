@@ -4,11 +4,13 @@ import type * as React from "react";
 
 import { Autocomplete as AutocompletePrimitive } from "@base-ui/react/autocomplete";
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
+import { cva, type VariantProps } from "class-variance-authority";
 import { SearchIcon } from "lucide-react";
 
 import { useContentDir } from "../hooks/use-content-dir";
 import { CONTROL_SIZE } from "../lib/control-size";
 import type { ControlSize } from "../lib/control-size";
+import { MENU_ROW_CLASS_NAME } from "../lib/menu-row";
 import { cn } from "../lib/utils";
 import { DialogPopup } from "./dialog";
 
@@ -177,17 +179,31 @@ const CommandCollection = (props: AutocompletePrimitive.Collection.Props) => (
   <AutocompletePrimitive.Collection data-slot="command-collection" {...props} />
 );
 
+const commandItemVariants = cva(
+  "data-highlighted:bg-accent data-highlighted:text-accent-foreground relative flex cursor-default items-center gap-2 rounded-md px-2 py-1.5 text-sm outline-none select-none data-disabled:pointer-events-none data-disabled:opacity-64 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  {
+    defaultVariants: { size: "default" },
+    variants: {
+      size: {
+        default: "",
+        // The transparent border is the 1px a `Button` row carries from its
+        // own border, so the two render the same box in one list.
+        row: `${MENU_ROW_CLASS_NAME} border border-transparent`,
+      },
+    },
+  },
+);
+
 const CommandItem = ({
   className,
+  size,
   ...props
 }: AutocompletePrimitive.Item.Props & {
   ref?: React.Ref<HTMLDivElement>;
+  size?: VariantProps<typeof commandItemVariants>["size"];
 }) => (
   <AutocompletePrimitive.Item
-    className={cn(
-      "data-highlighted:bg-accent data-highlighted:text-accent-foreground relative flex cursor-default items-center gap-2 rounded-md px-2 py-1.5 text-sm outline-none select-none data-disabled:pointer-events-none data-disabled:opacity-64 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
-      className,
-    )}
+    className={cn(commandItemVariants({ className, size }))}
     data-slot="command-item"
     {...props}
   />

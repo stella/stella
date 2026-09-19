@@ -44,6 +44,7 @@ import {
   CommandList,
 } from "@stll/ui/command";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { MenuSection } from "@stll/ui/menu-section";
 import { Skeleton } from "@stll/ui/skeleton";
 import { stellaToast } from "@stll/ui/toast";
 import { contentDir } from "@stll/ui/use-content-dir";
@@ -123,7 +124,6 @@ import {
   toggleArrayMember,
 } from "@/components/search-filters.logic";
 import type { SearchFilters } from "@/components/search-filters.logic";
-import { SearchMenuSection } from "@/components/search-menu-section";
 import { SearchScopeFilter, SearchScopeInput } from "@/components/search-scope";
 import type { SearchScope } from "@/components/search-scope";
 import { useChatUserContext } from "@/features/chat/hooks/use-chat-user-context";
@@ -441,7 +441,8 @@ const SearchSupplementalGroups = ({
     <>
       <section className="border-t px-2 py-1">
         <Button
-          className="bg-background sticky top-0 z-10 min-h-11 w-full justify-start gap-2 px-2 text-start"
+          className="bg-background sticky top-0 z-10"
+          size="row"
           variant="ghost"
           onClick={() => onRegistryExpandedChange(true)}
         >
@@ -1806,7 +1807,7 @@ export const SearchDialog = ({
                 {/* Matter filters do not apply to external registry searches. */}
                 <div
                   className={cn(
-                    "hidden w-[var(--search-facets-w,14rem)] shrink-0 overflow-y-auto border-e px-3 py-3 group-data-[registry-search=true]/search-content:hidden",
+                    "hidden w-[var(--search-facets-w,14rem)] shrink-0 overflow-y-auto border-e group-data-[registry-search=true]/search-content:hidden",
                     responsiveFacetVisibility(showPreview),
                   )}
                 >
@@ -1871,7 +1872,7 @@ export const SearchDialog = ({
                       </div>
                       {scopeVisibility.actions &&
                         filteredActions.length > 0 && (
-                          <SearchMenuSection title={t("common.actions")}>
+                          <MenuSection title={t("common.actions")}>
                             {actionEntries.map((entry, index) => (
                               <CommandActionItem
                                 entry={entry}
@@ -1884,7 +1885,7 @@ export const SearchDialog = ({
                                 onSelect={handleActionSelect}
                               />
                             ))}
-                          </SearchMenuSection>
+                          </MenuSection>
                         )}
                       <SearchResultsContent
                         onRetry={() => {
@@ -2114,50 +2115,42 @@ const SearchFacetsBody = ({
       {hasSearchCriteria && (
         <>
           {typeBuckets.length + filters.types.length > 0 && (
-            <div className="mt-4">
-              <FacetGroup
-                buckets={selectedTypeBuckets}
-                onChange={(value) => {
-                  if (isSearchKindOption(value)) {
-                    toggleFilter("types", value);
-                  }
-                }}
-                selected={filters.types}
-                title={t("common.kind")}
-              />
-            </div>
+            <FacetGroup
+              buckets={selectedTypeBuckets}
+              onChange={(value) => {
+                if (isSearchKindOption(value)) {
+                  toggleFilter("types", value);
+                }
+              }}
+              selected={filters.types}
+              title={t("common.kind")}
+            />
           )}
-          <div className="mt-4">
-            <SearchableFacetGroup
-              defaultBuckets={mimeTypeBuckets}
-              facet="mimeType"
-              formatLabel={(bucket) => formatMimeTypeLabel(bucket.value)}
-              onChange={(value) => toggleFilter("mimeTypes", value)}
-              searchParams={facetSearchParams}
-              selected={filters.mimeTypes}
-              title={t("search.mimeType")}
-            />
-          </div>
-          <div className="mt-4">
-            <SearchableFacetGroup
-              defaultBuckets={editorBuckets}
-              facet="editor"
-              onChange={(value) => toggleFilter("editedByUserIds", value)}
-              searchParams={facetSearchParams}
-              selected={filters.editedByUserIds}
-              title={t("search.editedBy")}
-            />
-          </div>
-          <div className="mt-4">
-            <SearchableFacetGroup
-              defaultBuckets={workspaceBuckets}
-              facet="workspace"
-              onChange={(value) => toggleFilter("workspaceIds", value)}
-              searchParams={facetSearchParams}
-              selected={filters.workspaceIds}
-              title={t("common.matter")}
-            />
-          </div>
+          <SearchableFacetGroup
+            defaultBuckets={mimeTypeBuckets}
+            facet="mimeType"
+            formatLabel={(bucket) => formatMimeTypeLabel(bucket.value)}
+            onChange={(value) => toggleFilter("mimeTypes", value)}
+            searchParams={facetSearchParams}
+            selected={filters.mimeTypes}
+            title={t("search.mimeType")}
+          />
+          <SearchableFacetGroup
+            defaultBuckets={editorBuckets}
+            facet="editor"
+            onChange={(value) => toggleFilter("editedByUserIds", value)}
+            searchParams={facetSearchParams}
+            selected={filters.editedByUserIds}
+            title={t("search.editedBy")}
+          />
+          <SearchableFacetGroup
+            defaultBuckets={workspaceBuckets}
+            facet="workspace"
+            onChange={(value) => toggleFilter("workspaceIds", value)}
+            searchParams={facetSearchParams}
+            selected={filters.workspaceIds}
+            title={t("common.matter")}
+          />
         </>
       )}
     </>
