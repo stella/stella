@@ -1,5 +1,10 @@
 [
   {
+    "file": ".agents/skills/plan/SKILL.md",
+    "reference": ".agents/ARCHITECTURE.md",
+    "reason": "One of an optional list the plan skill inspects \"when present\"; this repository keeps GOALS.md and STATUS.md but no ARCHITECTURE.md."
+  },
+  {
     "file": ".claude/skills/plan/SKILL.md",
     "reference": ".agents/ARCHITECTURE.md",
     "reason": "One of an optional list the plan skill inspects \"when present\"; this repository keeps GOALS.md and STATUS.md but no ARCHITECTURE.md."

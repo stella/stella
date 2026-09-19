@@ -2,7 +2,7 @@
 
 // Instruction-reference guard.
 //
-// Agent instruction files (AGENTS.md, CLAUDE.md, .claude/skills/*/SKILL.md) name
+// Agent instruction files (AGENTS.md, CLAUDE.md, and local skill mirrors) name
 // concrete repository paths, package scripts, module exports, and lint rule ids.
 // Nothing compiles them, so a rename in the code leaves the instruction quietly
 // wrong and every agent that reads it is misled. This guard resolves each named
@@ -115,8 +115,20 @@ const BACKTICK_SPAN = /`([^`\n]+)`/gu;
 // matches across a newline.
 const EXPORT_FORM = /`([A-Za-z_$][A-Za-z0-9_$]*)`\s+from\s+`([^`\n]+)`/gu;
 
-const trimToken = (token: string): string =>
-  token.replace(/^[("']+/u, "").replace(/[).,;:'"]+$/u, "");
+const TOKEN_PREFIX_CHARACTERS = new Set(["(", '"', "'"]);
+const TOKEN_SUFFIX_CHARACTERS = new Set([")", ".", ",", ";", ":", '"', "'"]);
+
+const trimToken = (token: string): string => {
+  let start = 0;
+  while (TOKEN_PREFIX_CHARACTERS.has(token[start] ?? "")) {
+    start += 1;
+  }
+  let end = token.length;
+  while (TOKEN_SUFFIX_CHARACTERS.has(token[end - 1] ?? "")) {
+    end -= 1;
+  }
+  return token.slice(start, end);
+};
 
 const hasGlob = (token: string): boolean =>
   GLOB_CHARACTERS.some((character) => token.includes(character));
@@ -213,8 +225,8 @@ const extractReferences = (repo: Repo, text: string): Reference[] => {
   };
 
   for (const match of text.matchAll(BACKTICK_SPAN)) {
-    const span = match[1];
-    if (span === undefined || match.index === undefined) {
+    const span = match.at(1);
+    if (span === undefined) {
       continue;
     }
     const line = lineAt(text, match.index);
@@ -252,12 +264,9 @@ const extractReferences = (repo: Repo, text: string): Reference[] => {
   }
 
   for (const match of text.matchAll(EXPORT_FORM)) {
-    const [, name, specifier] = match;
-    if (
-      name === undefined ||
-      specifier === undefined ||
-      match.index === undefined
-    ) {
+    const name = match.at(1);
+    const specifier = match.at(2);
+    if (name === undefined || specifier === undefined) {
       continue;
     }
     if (!isCheckedSpecifier(specifier)) {
@@ -280,6 +289,9 @@ const isCheckedSpecifier = (specifier: string): boolean =>
 
 // --- Resolution -------------------------------------------------------------
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  value !== null && typeof value === "object" && !Array.isArray(value);
+
 const readJson = (
   repo: Repo,
   repoPath: string,
@@ -289,9 +301,7 @@ const readJson = (
     return undefined;
   }
   const parsed: unknown = JSON.parse(raw);
-  return parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)
-    ? (parsed as Record<string, unknown>)
-    : undefined;
+  return isRecord(parsed) ? parsed : undefined;
 };
 
 const packageScripts = (
@@ -299,9 +309,7 @@ const packageScripts = (
   packagePath: string,
 ): Record<string, unknown> | undefined => {
   const scripts = readJson(repo, packagePath)?.["scripts"];
-  return scripts !== null && typeof scripts === "object"
-    ? (scripts as Record<string, unknown>)
-    : undefined;
+  return isRecord(scripts) ? scripts : undefined;
 };
 
 const workspaceDirectory = (
@@ -324,6 +332,56 @@ const moduleCandidates = (base: string): string[] => [
   ...MODULE_EXTENSIONS.map((extension) => `${base}/index${extension}`),
 ];
 
+const EXPORT_CONDITIONS = ["types", "bun", "import", "module", "default"];
+
+const exportTargetPath = (target: unknown): string | undefined => {
+  if (typeof target === "string") {
+    return target;
+  }
+  if (Array.isArray(target)) {
+    return target.map(exportTargetPath).find((value) => value !== undefined);
+  }
+  if (!isRecord(target)) {
+    return undefined;
+  }
+  for (const condition of EXPORT_CONDITIONS) {
+    const resolved = exportTargetPath(target[condition]);
+    if (resolved !== undefined) {
+      return resolved;
+    }
+  }
+  return Object.values(target)
+    .map(exportTargetPath)
+    .find((value) => value !== undefined);
+};
+
+const subpathExportTarget = (
+  exports: Record<string, unknown>,
+  subpath: string,
+): string | undefined => {
+  const exact = exportTargetPath(exports[subpath]);
+  if (exact !== undefined) {
+    return exact;
+  }
+  for (const [pattern, target] of Object.entries(exports)) {
+    const wildcard = pattern.indexOf("*");
+    if (wildcard === -1) {
+      continue;
+    }
+    const prefix = pattern.slice(0, wildcard);
+    const suffix = pattern.slice(wildcard + 1);
+    if (!subpath.startsWith(prefix) || !subpath.endsWith(suffix)) {
+      continue;
+    }
+    const matched = subpath.slice(
+      prefix.length,
+      subpath.length - suffix.length,
+    );
+    return exportTargetPath(target)?.replaceAll("*", () => matched);
+  }
+  return undefined;
+};
+
 const packageEntry = (repo: Repo, specifier: string): string | undefined => {
   const withoutScope = specifier.slice("@stll/".length);
   const slash = withoutScope.indexOf("/");
@@ -336,11 +394,19 @@ const packageEntry = (repo: Repo, specifier: string): string | undefined => {
   }
 
   const exports = readJson(repo, `${directory}/package.json`)?.["exports"];
-  if (exports !== null && typeof exports === "object") {
-    const target = (exports as Record<string, unknown>)[subpath];
-    if (typeof target === "string") {
-      return path.posix.join(directory, target);
+  if (exports !== undefined) {
+    const isSubpathMap =
+      isRecord(exports) &&
+      Object.keys(exports).some((key) => key.startsWith("."));
+    let targetPath: string | undefined;
+    if (isSubpathMap) {
+      targetPath = subpathExportTarget(exports, subpath);
+    } else if (subpath === ".") {
+      targetPath = exportTargetPath(exports);
     }
+    return typeof targetPath === "string"
+      ? path.posix.join(directory, targetPath)
+      : undefined;
   }
   if (subpath === ".") {
     return `${directory}/src/index.ts`;
@@ -355,23 +421,27 @@ const resolveSpecifier = (
   for (const { prefix, root } of SPECIFIER_ALIASES) {
     if (specifier.startsWith(prefix)) {
       const base = `${root}${specifier.slice(prefix.length)}`;
-      return moduleCandidates(base).find((candidate) => repo.exists(candidate));
+      return moduleCandidates(base).find(
+        (candidate) => repo.read(candidate) !== undefined,
+      );
     }
   }
   const entry = packageEntry(repo, specifier);
   if (entry === undefined) {
     return undefined;
   }
-  return moduleCandidates(entry).find((candidate) => repo.exists(candidate));
+  return moduleCandidates(entry).find(
+    (candidate) => repo.read(candidate) !== undefined,
+  );
 };
 
+const EXPORT_DECLARATION =
+  /export\s+(?:declare\s+)?(?:default\s+)?(?:async\s+)?(?:const|let|var|function\*?|class|type|interface|enum)\s+([A-Za-z_$][A-Za-z0-9_$]*)\b/gu;
+
 const declaresExport = (source: string, name: string): boolean => {
-  const escaped = name.replace(/[$]/gu, "\\$&");
-  const declaration = new RegExp(
-    `export\\s+(?:declare\\s+)?(?:default\\s+)?(?:async\\s+)?(?:const|let|var|function\\*?|class|type|interface|enum)\\s+${escaped}\\b`,
-    "u",
-  );
-  if (declaration.test(source)) {
+  if (
+    [...source.matchAll(EXPORT_DECLARATION)].some((match) => match[1] === name)
+  ) {
     return true;
   }
   // `export { a, b as c }` and `export type { … }`, including re-export forms.
@@ -381,8 +451,11 @@ const declaresExport = (source: string, name: string): boolean => {
       continue;
     }
     const exported = clause.split(",").map((item) => {
-      const parts = item.trim().split(/\s+as\s+/u);
-      return (parts.at(-1) ?? "").trim();
+      const parts = item.trim().split(/\s/u).filter(Boolean);
+      const aliasIndex = parts.lastIndexOf("as");
+      return aliasIndex === -1
+        ? (parts.at(0) ?? "")
+        : (parts.at(aliasIndex + 1) ?? "");
     });
     if (exported.includes(name)) {
       return true;
@@ -407,8 +480,8 @@ const resolveRelative = (
   if (base === undefined) {
     return resolveSpecifier(repo, specifier);
   }
-  return moduleCandidates(base.replace(/\.js$/u, "")).find((candidate) =>
-    repo.exists(candidate),
+  return moduleCandidates(base.replace(/\.js$/u, "")).find(
+    (candidate) => repo.read(candidate) !== undefined,
   );
 };
 
@@ -436,12 +509,14 @@ const exportsName = (repo: Repo, modulePath: string, name: string): boolean => {
 };
 
 const knowsRule = (repo: Repo, ruleId: string): boolean => {
-  const rule = ruleId.split("/").at(1) ?? "";
-  if (repo.exists(`.oxlint-plugins/${rule}.ts`)) {
-    return true;
-  }
   const config = repo.read(OXLINT_CONFIG);
-  return config !== undefined && config.includes(`"${ruleId}"`);
+  if (config === undefined) {
+    return false;
+  }
+  const configuredRule = /["']([^"']+)["']\s*:/gu;
+  return [...config.matchAll(configuredRule)].some(
+    (match) => match.at(1) === ruleId,
+  );
 };
 
 // --- Checking ---------------------------------------------------------------
@@ -590,6 +665,8 @@ const INSTRUCTION_GLOBS = [
   "packages/*/AGENTS.md",
   "apps/**/CLAUDE.md",
   "packages/**/CLAUDE.md",
+  ".agents/skills/*/SKILL.md",
+  ".ai/local-skills/*/SKILL.md",
   ".claude/skills/*/SKILL.md",
 ] as const;
 
@@ -606,16 +683,25 @@ const instructionFiles = (): string[] => {
   return [...files].sort();
 };
 
+const isAllowlistEntry = (value: unknown): value is AllowlistEntry =>
+  isRecord(value) &&
+  typeof value["file"] === "string" &&
+  typeof value["reference"] === "string" &&
+  typeof value["reason"] === "string" &&
+  value["reason"].trim().length > 0;
+
 const readAllowlist = (repo: Repo): AllowlistEntry[] => {
   const raw = repo.read(ALLOWLIST_PATH);
   if (raw === undefined) {
     return [];
   }
   const parsed: unknown = JSON.parse(raw);
-  if (!Array.isArray(parsed)) {
-    panic(`${ALLOWLIST_PATH} must contain an array`);
+  if (!Array.isArray(parsed) || !parsed.every(isAllowlistEntry)) {
+    panic(
+      `${ALLOWLIST_PATH} must contain an array of non-empty { file, reference, reason } entries`,
+    );
   }
-  return parsed as AllowlistEntry[];
+  return parsed;
 };
 
 const runCheck = (): number => {
@@ -680,7 +766,8 @@ const SELF_TEST_FILES: Record<string, string> = {
   "scripts/tool.ts": "// tool\n",
   ".oxlint-plugins/no-document-cookie.ts": "// rule\n",
   ".oxlint-plugins/security-guards.ts": "// rules\n",
-  "oxlint.config.ts": '{ "security-guards/no-unscoped-user-query": "error" }',
+  "oxlint.config.ts":
+    '{ "no-document-cookie/no-document-cookie": "error", "security-guards/no-unscoped-user-query": "error" }',
 };
 
 const problemsFor = (text: string): Problem[] =>

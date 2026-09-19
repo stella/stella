@@ -16,15 +16,32 @@ const FILES: Record<string, string> = {
     scripts: { "db:migrate": "drizzle-kit migrate" },
   }),
   "apps/api/src/lib/csv.ts":
-    "export const escapeCSV = (value: string) => value;",
+    "export const escapeCSV = (value: string) => value; export const $value = 1;",
+  "apps/api/src/lib/folder/index.ts": "export const nestedValue = 1;",
   "packages/ui/package.json": JSON.stringify({
     name: "@stll/ui",
-    exports: { ".": "./src/index.ts" },
+    exports: {
+      ".": { types: "./src/index.ts", import: "./src/index.ts" },
+    },
   }),
   "packages/ui/src/index.ts": 'export { Button } from "./components/button";',
+  "packages/ui/src/private.ts": "export const privateValue = 1;",
+  "packages/transactional/package.json": JSON.stringify({
+    name: "@stll/transactional",
+    exports: { "./emails/*": "./emails/*.tsx" },
+  }),
+  "packages/transactional/emails/invite.tsx":
+    "export const InviteEmail = () => null;",
+  "packages/agent-input/package.json": JSON.stringify({
+    name: "@stll/agent-input",
+    exports: "./src/index.ts",
+  }),
+  "packages/agent-input/src/index.ts": "export const normalizeAgentInput = 1;",
   "scripts/verify.sh": "#!/usr/bin/env bash\n",
   ".oxlint-plugins/security-guards.ts": "// rules\n",
-  "oxlint.config.ts": '{ "security-guards/no-unscoped-user-query": "error" }',
+  ".oxlint-plugins/no-unscoped-query.ts": "// unrelated plugin\n",
+  "oxlint.config.ts":
+    '{ "security-guards/no-unscoped-user-query": "error", "note": "security-guards/not-registered" }',
 };
 
 const repo: Repo = {
@@ -101,6 +118,32 @@ describe("module exports", () => {
   test("resolves a package through its exports map", () => {
     expect(check("Import `Button` from `@stll/ui`.")).toEqual([]);
   });
+
+  test("resolves a directory specifier to its index module", () => {
+    expect(check("Use `nestedValue` from `@/api/lib/folder`.")).toEqual([]);
+  });
+
+  test("does not expose a package subpath missing from its exports map", () => {
+    expect(check("Import `privateValue` from `@stll/ui/private`.")).toEqual([
+      "FIXTURE.md:1: export privateValue (@stll/ui/private does not resolve to a module)",
+    ]);
+  });
+
+  test("matches declaration names containing a dollar sign", () => {
+    expect(check("Use `$value` from `@/api/lib/csv`.")).toEqual([]);
+  });
+
+  test("resolves a wildcard package export", () => {
+    expect(
+      check("Use `InviteEmail` from `@stll/transactional/emails/invite`."),
+    ).toEqual([]);
+  });
+
+  test("resolves a direct root package export", () => {
+    expect(
+      check("Use `normalizeAgentInput` from `@stll/agent-input`."),
+    ).toEqual([]);
+  });
 });
 
 describe("oxlint rule ids", () => {
@@ -113,6 +156,12 @@ describe("oxlint rule ids", () => {
   test("reports a rule its plugin no longer registers", () => {
     expect(check("Enforced by `security-guards/no-unscoped-query`.")).toEqual([
       "FIXTURE.md:1: rule security-guards/no-unscoped-query (no such oxlint plugin rule)",
+    ]);
+  });
+
+  test("does not accept a rule id mentioned only as a value", () => {
+    expect(check("Enforced by `security-guards/not-registered`.")).toEqual([
+      "FIXTURE.md:1: rule security-guards/not-registered (no such oxlint plugin rule)",
     ]);
   });
 
