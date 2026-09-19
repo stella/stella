@@ -1,5 +1,11 @@
 import { expect, test } from "bun:test";
 
+import {
+  CASE_LAW_JURISDICTIONS,
+  type CaseLawJurisdiction,
+} from "@stll/api-contract/case-law-jurisdictions";
+
+import type { CaseLawIndexGroup } from "@/api/lib/legal-search/case-law-index-groups";
 import { CORPUS_INDEX_COMMIT_TIMEOUT_SECS } from "@/api/lib/legal-search/corpus-index-config";
 import {
   CORPUS_INDEX_MANIFESTS,
@@ -29,6 +35,59 @@ const EXPECTED_DIGESTS = {
   legislation_v2:
     "dc252d8635081d8037e7f9b1aca6713181a27390e8eb6dda54139ae6a1e68583",
 } as const satisfies Record<keyof typeof CORPUS_INDEX_MANIFESTS, string>;
+
+type CaseLawManifestGeneration = {
+  [
+    TGeneration in keyof typeof CORPUS_INDEX_MANIFESTS
+  ]: (typeof CORPUS_INDEX_MANIFESTS)[TGeneration]["family"] extends "case_law"
+    ? TGeneration
+    : never;
+}[keyof typeof CORPUS_INDEX_MANIFESTS];
+
+/**
+ * Every physical index a case-law generation routes a declared jurisdiction
+ * to. The counterpart of `EXPECTED_DIGESTS`: that one pins what a generation
+ * *is*, this one pins where its rows *go*.
+ *
+ * Grow-only. Declaring a jurisdiction adds a line per generation and edits
+ * none, which is the whole point: a country is added without touching the
+ * countries already indexed. Moving or dropping an existing line moves live
+ * rows between physical indexes, which no code path can repair, so a line here
+ * may never change once its index holds splits.
+ *
+ * The baseline is literal and the routes it is checked against are derived
+ * from `CASE_LAW_INDEX_GROUP_OF`, so a group renamed or reassigned there fails
+ * this rather than silently re-pointing a generation.
+ */
+const EXPECTED_CASE_LAW_ROUTES = {
+  case_law_v5: {
+    AUT: "aut",
+    CZE: "cs_sk",
+    EU: "eu",
+    HUN: "hun",
+    POL: "pol",
+    SVK: "cs_sk",
+  },
+  case_law_v6: {
+    AUT: "aut",
+    CZE: "cs_sk",
+    EU: "eu",
+    HUN: "hun",
+    POL: "pol",
+    SVK: "cs_sk",
+  },
+  case_law_v7: {
+    AUT: "aut",
+    CZE: "cs_sk",
+    EU: "eu",
+    HUN: "hun",
+    POL: "pol",
+    SVK: "cs_sk",
+  },
+} as const satisfies Record<
+  CaseLawManifestGeneration,
+  Record<CaseLawJurisdiction, CaseLawIndexGroup>
+>;
 
 test("the final-generation registry is exact and fails closed", () => {
   expect(Object.keys(CORPUS_INDEX_MANIFESTS).sort()).toEqual([
@@ -149,22 +208,67 @@ test("physical index ids are deployment state, not manifest identity", () => {
   ]);
 });
 
-test("manifest routing is exact and case-law additions fail closed", () => {
+test("every declared jurisdiction routes into every case-law generation", () => {
+  expect(Object.keys(EXPECTED_CASE_LAW_ROUTES).sort()).toEqual(
+    Object.values(CORPUS_INDEX_MANIFESTS)
+      .filter((manifest) => manifest.family === "case_law")
+      .map((manifest) => manifest.generation)
+      .sort(),
+  );
+
+  for (const [generation, routes] of Object.entries(EXPECTED_CASE_LAW_ROUTES)) {
+    const manifest = requireCorpusIndexManifest("case_law", generation);
+    // The baseline answers for the whole declared union, so declaring a
+    // jurisdiction is not finished until its line is here.
+    expect(Object.keys(routes).sort()).toEqual(
+      [...CASE_LAW_JURISDICTIONS].sort(),
+    );
+    for (const [jurisdiction, group] of Object.entries(routes)) {
+      const indexId = `${generation}_${group}`;
+      expect([
+        corpusIndexIdFromManifest(manifest, jurisdiction),
+        corpusIndexIdFromManifest(manifest, jurisdiction.toLowerCase()),
+        requireCorpusIndexIdForManifest(manifest, indexId),
+      ]).toEqual([indexId, indexId, indexId]);
+    }
+  }
+  // Non-vacuity: the generations were built before Hungary was declared, and
+  // it reaches all three without one of them changing.
   expect(
-    corpusIndexIdFromManifest(CORPUS_INDEX_MANIFESTS.case_law_v5, "CZE"),
-  ).toBe("case_law_v5_cs_sk");
+    corpusIndexIdFromManifest(CORPUS_INDEX_MANIFESTS.case_law_v7, "HUN"),
+  ).toBe("case_law_v7_hun");
   expect(
-    corpusIndexIdFromManifest(CORPUS_INDEX_MANIFESTS.case_law_v5, "SVK"),
-  ).toBe("case_law_v5_cs_sk");
-  // Declared jurisdictions this generation was not built with, and undeclared
-  // ones alike, are unrouted: a case-law index exists only for what the
-  // generation was created with. Legislation routes any jurisdiction.
-  expect(() =>
-    corpusIndexIdFromManifest(CORPUS_INDEX_MANIFESTS.case_law_v5, "HUN"),
-  ).toThrow("Unrouted case-law jurisdiction: HUN");
+    Object.keys(CORPUS_INDEX_MANIFESTS.case_law_v7.route.byJurisdiction),
+  ).not.toContain("HUN");
+});
+
+test("the groups a generation was created with still route there", () => {
+  // A created index holds splits under its own id, so the jurisdictions it was
+  // created for may never be re-pointed at another one. The creation topology
+  // is part of the digest; this proves the live declaration still agrees with
+  // it, which is the property the digest alone cannot state.
+  for (const manifest of Object.values(CORPUS_INDEX_MANIFESTS)) {
+    if (manifest.route.type !== "case_law_group") {
+      continue;
+    }
+    const created = Object.entries(manifest.route.byJurisdiction);
+    expect(created.length).toBeGreaterThan(0);
+    for (const [jurisdiction, group] of created) {
+      expect([
+        jurisdiction,
+        corpusIndexIdFromManifest(manifest, jurisdiction),
+      ]).toEqual([jurisdiction, `${manifest.generation}_${group}`]);
+    }
+  }
+});
+
+test("case-law routing stays closed over the declared union", () => {
+  // A stored country code nobody declared a group for would otherwise derive
+  // an index of its own that nothing ever created, and the projection would
+  // drain into a 404. Legislation routes any valid code by design.
   expect(() =>
     corpusIndexIdFromManifest(CORPUS_INDEX_MANIFESTS.case_law_v5, "ROU"),
-  ).toThrow("Unrouted case-law jurisdiction: ROU");
+  ).toThrow("Undeclared case-law jurisdiction: ROU");
   expect(
     corpusIndexIdFromManifest(CORPUS_INDEX_MANIFESTS.legislation_v2, "HUN"),
   ).toBe("legislation_v2_hun");
@@ -173,7 +277,7 @@ test("manifest routing is exact and case-law additions fail closed", () => {
   ).toThrow("Invalid corpus jurisdiction");
 });
 
-test("a query routes through the generation, not the live group map", () => {
+test("a query routes where the projection writes", () => {
   // Shared index: the clause keeps the query to the scoped jurisdiction.
   expect(corpusIndexRoute(CORPUS_INDEX_MANIFESTS.case_law_v7, "CZE")).toEqual({
     indexId: "case_law_v7_cs_sk",
@@ -193,11 +297,16 @@ test("a query routes through the generation, not the live group map", () => {
   expect(
     corpusIndexRoute(CORPUS_INDEX_MANIFESTS.case_law_v7, undefined),
   ).toEqual({ indexId: "case_law_v7_*", jurisdictionClause: undefined });
-  // Declared in the live group map, unrouted by this generation: the query
-  // fails instead of naming an index the generation never created.
+  // Declared after the generation was built: the query names the same index
+  // the projection writes to, read off the live group map.
+  expect(corpusIndexRoute(CORPUS_INDEX_MANIFESTS.case_law_v7, "HUN")).toEqual({
+    indexId: "case_law_v7_hun",
+    jurisdictionClause: undefined,
+  });
+  // Off the declared union there is no group, so there is no index to name.
   expect(() =>
-    corpusIndexRoute(CORPUS_INDEX_MANIFESTS.case_law_v7, "HUN"),
-  ).toThrow("Unrouted case-law jurisdiction: HUN");
+    corpusIndexRoute(CORPUS_INDEX_MANIFESTS.case_law_v7, "XXX"),
+  ).toThrow("Undeclared case-law jurisdiction: XXX");
   expect(
     corpusIndexRoute(CORPUS_INDEX_MANIFESTS.legislation_v2, "HUN"),
   ).toEqual({ indexId: "legislation_v2_hun", jurisdictionClause: undefined });
@@ -210,10 +319,17 @@ test("physical route validation is exact for closed and open manifests", () => {
       "case_law_v5_cs_sk",
     ),
   ).toBe("case_law_v5_cs_sk");
+  // A grouped jurisdiction's own code is not an index: only the group is.
   expect(() =>
     requireCorpusIndexIdForManifest(
       CORPUS_INDEX_MANIFESTS.case_law_v5,
-      "case_law_v5_hun",
+      "case_law_v5_cze",
+    ),
+  ).toThrow("Corpus index id is not a manifest route");
+  expect(() =>
+    requireCorpusIndexIdForManifest(
+      CORPUS_INDEX_MANIFESTS.case_law_v5,
+      "case_law_v5_rou",
     ),
   ).toThrow("Corpus index id is not a manifest route");
   expect(
@@ -409,8 +525,11 @@ test("published manifests are immutable snapshots", () => {
   }
 });
 
-test("route topology and tag pruning are part of the manifest", () => {
+test("creation topology and tag pruning are part of the manifest", () => {
   const caseLaw = CORPUS_INDEX_MANIFESTS.case_law_v5;
+  // The groups this generation's indexes were created for, which is what the
+  // digest carries. Where a jurisdiction's rows go is decided live, so Hungary
+  // is absent here and routed all the same.
   expect(caseLaw.route).toEqual({
     type: "case_law_group",
     byJurisdiction: {

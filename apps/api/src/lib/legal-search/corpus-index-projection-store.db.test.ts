@@ -460,7 +460,7 @@ test("an unregistered route fails before reservation mutates state", async () =>
       reserveCorpusProjectionIntentsTx(asTestRaw<Transaction>(tx), {
         family: "case_law",
         generation: "case_law_v5",
-        scope: { type: "route", indexId: "case_law_v5_hun" },
+        scope: { type: "route", indexId: "case_law_v5_rou" },
         limit: 10,
         leaseMs: 60_000,
       }),
@@ -471,7 +471,7 @@ test("an unregistered route fails before reservation mutates state", async () =>
     );
   expect(rejection).toMatchObject({
     message:
-      "Corpus index id is not a manifest route: case_law_v5/case_law_v5_hun",
+      "Corpus index id is not a manifest route: case_law_v5/case_law_v5_rou",
   });
   expect(await db.select().from(corpusIndexProjectionIntents)).toEqual([]);
 });

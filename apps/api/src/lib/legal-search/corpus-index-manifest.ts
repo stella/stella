@@ -1,14 +1,42 @@
+/**
+ * The immutable contract of every corpus index generation: what its indexes
+ * are shaped like, what a projection writes into them, and how a jurisdiction
+ * reaches one.
+ *
+ * A generation's identity is the digest of its manifest. It is stored on the
+ * `corpus_index_generations` row, checked on every serving read, and carried
+ * by every projection fingerprint, so a manifest value that moves re-projects
+ * the whole corpus. Everything hashed here is therefore closed over what was
+ * built.
+ *
+ * Which jurisdictions a case-law generation carries is deliberately not part
+ * of that identity. Routing is decided live by `CASE_LAW_INDEX_GROUP_OF`, so a
+ * jurisdiction declared today routes into every existing generation without
+ * any of them changing. What a generation records instead is the topology it
+ * was *created* with, which is what tells an operator the one thing the
+ * declaration cannot: a group this generation routes but was not created with
+ * has no physical index yet.
+ *
+ * Index creation is Plane's, not this repository's: nothing here calls
+ * `CorpusIndexClient.createIndex`. The contract Plane owes a newly routed
+ * group is therefore stated rather than enforced here — for every serving and
+ * building generation, create `corpusIndexConfigFromManifest(manifest,
+ * corpusIndexIdFromManifest(manifest, jurisdiction))` for each declared
+ * jurisdiction, which is idempotent per group because the id is the group's
+ * and creating one group touches no other. Until that index exists the
+ * generation's projection for that group cannot drain; every other group keeps
+ * draining, because a projection attempt is per physical index.
+ */
+
 import { panic } from "better-result";
 
 import {
   CASE_LAW_JURISDICTIONS,
+  isCaseLawJurisdiction,
   type CaseLawJurisdiction,
 } from "@stll/api-contract/case-law-jurisdictions";
 
-import type {
-  CASE_LAW_INDEX_GROUP_OF,
-  CaseLawIndexGroup,
-} from "@/api/lib/legal-search/case-law-index-groups";
+import type { CASE_LAW_INDEX_GROUP_OF } from "@/api/lib/legal-search/case-law-index-groups";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
 import {
   CORPUS_FINAL_INDEX_CONFIG_VERSION,
@@ -33,6 +61,7 @@ import {
 import { QUICKWIT_V09_BINARY_VERSION } from "@/api/lib/legal-search/corpus-index-engine-version";
 import {
   CORPUS_INDEX_ID_MAX_LENGTH,
+  corpusIndexId,
   corpusIndexPattern,
   isCorpusIndexJurisdiction,
 } from "@/api/lib/legal-search/index-naming";
@@ -55,63 +84,58 @@ type CorpusIndexManifestBase = {
 };
 
 /**
- * Which jurisdictions a case-law generation routes, and to which group.
+ * The index group each of a case-law generation's physical indexes was created
+ * for, by the jurisdiction it was created for.
  *
- * Total over the declared union, so a new jurisdiction answers for every
- * generation, and each answer is either that generation's group for it or
- * `null` for "this generation does not route it". A routed entry is typed as
- * the group `CASE_LAW_INDEX_GROUP_OF` declares, so the manifest route and the
- * id `corpusIndexId` derives cannot drift: the only freedom here is whether a
- * generation carries the jurisdiction at all.
+ * Partial on purpose, against the rule that a companion map over a union is
+ * total: this records what was built, not a policy every union member must
+ * answer. A jurisdiction declared after a generation was created has no answer
+ * to give here, and demanding one is what froze the route before.
  *
- * Why it is not a view of that declaration. A generation's route is fixed when
- * its indexes are created: the manifest digest is the generation's identity,
- * every projection fingerprint carries it, and a serving row whose stored
- * digest no longer matches panics. Spreading the live map would therefore
- * re-identify every built generation, and re-project the whole corpus, the
- * moment a jurisdiction is declared. A jurisdiction declared later enters at
- * the next generation, which is when its index is created anyway.
+ * Each value is pinned to the group `CASE_LAW_INDEX_GROUP_OF` declares for
+ * that jurisdiction, so a group renamed or reassigned in the live declaration
+ * stops this snapshot compiling rather than silently re-pointing a generation
+ * whose splits already carry the old name.
  */
-type CaseLawGenerationRoute = {
-  readonly [TJurisdiction in CaseLawJurisdiction]:
-    | (typeof CASE_LAW_INDEX_GROUP_OF)[TJurisdiction]
-    | null;
+type CaseLawCreatedIndexes = {
+  readonly [
+    TJurisdiction in CaseLawJurisdiction
+  ]?: (typeof CASE_LAW_INDEX_GROUP_OF)[TJurisdiction];
 };
 
+/**
+ * How a case-law generation reaches a physical index: by index group, with the
+ * groups it was created with recorded beside the rule.
+ *
+ * `byJurisdiction` is that creation topology and nothing else. It does not
+ * route: `corpusIndexIdFromManifest` derives every id from the live
+ * `CASE_LAW_INDEX_GROUP_OF`, so a jurisdiction declared today reaches every
+ * generation without one of them changing. It is hashed because it always was
+ * and a published digest may never move, and it earns that by answering the
+ * one question the live declaration cannot: which groups already have an index
+ * under this generation, and which ones Plane still owes one.
+ */
 type CaseLawManifestRoute = {
   type: "case_law_group";
-  /** The routed entries only, so an unrouted one adds nothing to the digest. */
-  byJurisdiction: Readonly<
-    Partial<Record<CaseLawJurisdiction, CaseLawIndexGroup>>
-  >;
-};
-
-const caseLawRoute = (route: CaseLawGenerationRoute): CaseLawManifestRoute => {
-  const byJurisdiction: Partial<
-    Record<CaseLawJurisdiction, CaseLawIndexGroup>
-  > = {};
-  for (const jurisdiction of CASE_LAW_JURISDICTIONS) {
-    const group = route[jurisdiction];
-    if (group !== null) {
-      byJurisdiction[jurisdiction] = group;
-    }
-  }
-  return { type: "case_law_group", byJurisdiction };
+  byJurisdiction: CaseLawCreatedIndexes;
 };
 
 /**
  * The topology every generation built so far was created with: the five
- * jurisdictions declared before Hungary. A generation created with another
- * topology declares its own.
+ * jurisdictions declared before Hungary. A generation created with another one
+ * declares its own; this value may never be edited, because three generations
+ * are already serving under the digest it is part of.
  */
-const CASE_LAW_ROUTE_THROUGH_V7 = {
-  AUT: "aut",
-  CZE: "cs_sk",
-  EU: "eu",
-  HUN: null,
-  POL: "pol",
-  SVK: "cs_sk",
-} as const satisfies CaseLawGenerationRoute;
+const CASE_LAW_INDEXES_CREATED_THROUGH_V7 = {
+  type: "case_law_group",
+  byJurisdiction: {
+    AUT: "aut",
+    CZE: "cs_sk",
+    EU: "eu",
+    POL: "pol",
+    SVK: "cs_sk",
+  },
+} as const satisfies CaseLawManifestRoute;
 
 type CaseLawManifestBase = CorpusIndexManifestBase & {
   family: "case_law";
@@ -529,7 +553,7 @@ export const CORPUS_INDEX_MANIFESTS = deepFreeze({
       openingField: "is_opening",
       yearFacetField: "decision_year",
     },
-    route: caseLawRoute(CASE_LAW_ROUTE_THROUGH_V7),
+    route: CASE_LAW_INDEXES_CREATED_THROUGH_V7,
   },
   case_law_v6: {
     schemaVersion: CORPUS_INDEX_MANIFEST_SCHEMA_VERSION,
@@ -553,7 +577,7 @@ export const CORPUS_INDEX_MANIFESTS = deepFreeze({
         publisherSummary: STEM_FIELD_OF[PUBLISHER_SUMMARY_FIELD],
       },
     },
-    route: caseLawRoute(CASE_LAW_ROUTE_THROUGH_V7),
+    route: CASE_LAW_INDEXES_CREATED_THROUGH_V7,
   },
   case_law_v7: {
     schemaVersion: CORPUS_INDEX_MANIFEST_SCHEMA_VERSION,
@@ -578,7 +602,7 @@ export const CORPUS_INDEX_MANIFESTS = deepFreeze({
         publisherSummary: STEM_FIELD_OF[PUBLISHER_SUMMARY_FIELD],
       },
     },
-    route: caseLawRoute(CASE_LAW_ROUTE_THROUGH_V7),
+    route: CASE_LAW_INDEXES_CREATED_THROUGH_V7,
   },
   legislation_v2: {
     schemaVersion: CORPUS_INDEX_MANIFEST_SCHEMA_VERSION,
@@ -801,10 +825,15 @@ export const corpusIndexConfigFromManifest = (
 };
 
 /**
- * Resolve a canonical jurisdiction through the immutable generation route.
- * Case-law topology is closed over the manifest; a new court corpus requires
- * an explicit manifest decision. Legislation keeps the deliberate one-index-
- * per-jurisdiction rule and therefore accepts any valid jurisdiction code.
+ * Resolve a canonical jurisdiction to this generation's physical index.
+ *
+ * Case law routes through the live `CASE_LAW_INDEX_GROUP_OF` declaration, the
+ * one `corpusIndexId` and the projection trigger's SQL already read, so a
+ * jurisdiction declared today reaches every generation and no generation is
+ * edited to let it in. It still fails closed off the declared union: a country
+ * code nobody declared a group for would otherwise derive an index of its own
+ * that nothing ever created. Legislation keeps the deliberate one-index-per-
+ * jurisdiction rule and therefore accepts any valid jurisdiction code.
  */
 export const corpusIndexIdFromManifest = (
   manifest: CorpusIndexManifest,
@@ -815,28 +844,21 @@ export const corpusIndexIdFromManifest = (
     return panic(`Invalid corpus jurisdiction: ${jurisdiction}`);
   }
 
-  let suffix: string;
   switch (manifest.route.type) {
-    case "case_law_group": {
-      const route = Object.entries(manifest.route.byJurisdiction).find(
-        ([candidate]) => candidate === canonical,
-      );
-      suffix =
-        route?.at(1) ?? panic(`Unrouted case-law jurisdiction: ${canonical}`);
-      break;
+    case "case_law_group":
+      return isCaseLawJurisdiction(canonical)
+        ? corpusIndexId(manifest.generation, canonical)
+        : panic(`Undeclared case-law jurisdiction: ${canonical}`);
+    case "jurisdiction": {
+      const indexId = `${manifest.generation}_${canonical.toLowerCase()}`;
+      return indexId.length <= CORPUS_INDEX_ID_MAX_LENGTH
+        ? indexId
+        : panic(`Corpus index id exceeds storage limit: ${indexId}`);
     }
-    case "jurisdiction":
-      suffix = canonical.toLowerCase();
-      break;
     default:
       manifest.route satisfies never;
       return panic(`Unhandled route: ${String(manifest.route)}`);
   }
-
-  const indexId = `${manifest.generation}_${suffix}`;
-  return indexId.length <= CORPUS_INDEX_ID_MAX_LENGTH
-    ? indexId
-    : panic(`Corpus index id exceeds storage limit: ${indexId}`);
 };
 
 /** How many jurisdictions this manifest routes into one physical index. */
@@ -846,8 +868,12 @@ const manifestIndexJurisdictionCount = (
 ): number => {
   switch (manifest.route.type) {
     case "case_law_group":
-      return Object.values(manifest.route.byJurisdiction).filter(
-        (group) => `${manifest.generation}_${group}` === indexId,
+      // Counted over the live declaration the route itself reads, not over
+      // the generation's creation topology, which a later jurisdiction never
+      // enters.
+      return CASE_LAW_JURISDICTIONS.filter(
+        (jurisdiction) =>
+          corpusIndexId(manifest.generation, jurisdiction) === indexId,
       ).length;
     case "jurisdiction":
       return 1;
@@ -872,12 +898,12 @@ export type CorpusIndexRoute = {
 /**
  * Index selection for a query, scoped to one jurisdiction or unscoped.
  *
- * Read off the generation's own route, the same one the projection writer
- * derives `desired_index_id` from, so the index a query names is an index
- * that generation creates. A jurisdiction the generation does not route has
- * no index to read: `corpusIndexIdFromManifest` fails there rather than
- * composing a name, because a query against an index that does not exist
- * reports no matches, which reads as an empty corpus.
+ * Read off `corpusIndexIdFromManifest`, the same resolution the projection
+ * writer derives `desired_index_id` from, so a query names the index its
+ * jurisdiction's documents are written to. A code outside the declared union
+ * has no group and fails there rather than composing a name: a query against
+ * an index that does not exist reports no matches, which reads as an empty
+ * corpus.
  */
 export const corpusIndexRoute = (
   manifest: CorpusIndexManifest,
@@ -901,26 +927,25 @@ export const corpusIndexRoute = (
 };
 
 /**
- * Assert that a physical index id is one route of this immutable manifest.
- * Callers must not accept an arbitrary generation-prefixed string: grouped
- * case-law routes are closed, while legislation routes are the manifest's
- * canonical jurisdiction spelling.
+ * Assert that a physical index id is one this manifest routes a declared
+ * jurisdiction to. Callers must not accept an arbitrary generation-prefixed
+ * string: a case-law id has to be some declared jurisdiction's group, while a
+ * legislation id has to be the manifest's canonical jurisdiction spelling.
  */
 export const requireCorpusIndexIdForManifest = (
   manifest: CorpusIndexManifest,
   indexId: string,
 ): string => {
   switch (manifest.route.type) {
-    case "case_law_group": {
-      const matches = Object.values(manifest.route.byJurisdiction).some(
-        (suffix) => `${manifest.generation}_${suffix}` === indexId,
-      );
-      return matches
+    case "case_law_group":
+      return CASE_LAW_JURISDICTIONS.some(
+        (jurisdiction) =>
+          corpusIndexIdFromManifest(manifest, jurisdiction) === indexId,
+      )
         ? indexId
         : panic(
             `Corpus index id is not a manifest route: ${manifest.generation}/${indexId}`,
           );
-    }
     case "jurisdiction": {
       const prefix = `${manifest.generation}_`;
       const jurisdiction = indexId.startsWith(prefix)
