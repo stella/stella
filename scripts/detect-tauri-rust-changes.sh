@@ -8,7 +8,7 @@ desktop_rust_checks_required=false
 
 for file in "$@"; do
   case "$file" in
-    apps/desktop/src-tauri/*|apps/desktop/src/i18n/langs/*|apps/desktop/src/shared/rpc.gen.ts|packages/api-contract/src/desktop-edit-file-types.ts)
+    apps/desktop/src-tauri/*|apps/desktop/fixtures/*|apps/desktop/src/i18n/langs/*|apps/desktop/src/clipboard/clipboard-types.ts|packages/api-contract/src/desktop-account-policy.json|packages/api-contract/src/desktop-edit-file-types.ts|packages/api-contract/src/desktop-rpc.gen.ts)
       desktop_rust_checks_required=true
       break
       ;;

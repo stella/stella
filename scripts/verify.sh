@@ -143,6 +143,15 @@ run_test_input_coverage_guard() {
   bun run check:test-input-coverage
 }
 
+run_desktop_rust_inputs_guard() {
+  # The desktop native test task's turbo.json inputs, the files Rust embeds
+  # with include_str!/include_bytes! from outside the crate, and the CI Rust
+  # change detector must name the same files. The fixture tests run first so
+  # a broken guard cannot pass silently.
+  bun test scripts/check-desktop-rust-inputs.test.ts || return 1
+  bun run check:desktop-rust-inputs
+}
+
 run_module_mock_ledger_guard() {
   # The grandfathered module-mock ledger may only lose members: every line
   # must already exist on the base branch, so a new mock cannot be listed in
@@ -320,6 +329,7 @@ run_step "Oxlint override union guard" bun test \
 run_step "Ratchet guard" run_ratchet_guard
 run_step "Result boundary enrolment" run_result_boundary_enrolment_guard
 run_step "Test input coverage" run_test_input_coverage_guard
+run_step "Desktop Rust inputs" run_desktop_rust_inputs_guard
 run_step "Test shard partition" bun test scripts/test-shards.test.ts
 run_step "Module ownership" bun run check:module-ownership
 run_step "Dead columns" run_dead_columns_guard

@@ -796,6 +796,16 @@ jobs:
           bun test scripts/check-test-input-coverage.test.ts
           bun run check:test-input-coverage
 
+      - name: Desktop Rust inputs
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        # The desktop native test task's turbo.json inputs, the files Rust
+        # embeds with include_str!/include_bytes! from outside the crate, and
+        # the CI Rust change detector must name the same files. The fixture
+        # tests run first so a broken guard cannot pass silently.
+        run: |
+          bun test scripts/check-desktop-rust-inputs.test.ts
+          bun run check:desktop-rust-inputs
+
       - name: Test shard partition
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         # ci-tests runs the `test` task as a matrix of shards, and
