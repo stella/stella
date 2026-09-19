@@ -1,4 +1,12 @@
-import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  expect,
+  setSystemTime,
+  test,
+} from "bun:test";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
@@ -9,6 +17,7 @@ import { formatCorpusLocation } from "@/api/lib/legal-search/corpus-location";
 import type { PackedCorpusLocation } from "@/api/lib/legal-search/corpus-location";
 import {
   corpusTombstoneReaderForTx,
+  CORPUS_TOMBSTONE_PRIME_MAX_AGE_MS,
   prefetchCorpusTombstones,
 } from "@/api/lib/legal-search/corpus-tombstones";
 import { isRecord } from "@/api/lib/type-guards";
@@ -51,6 +60,10 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await client.close();
+});
+
+afterEach(() => {
+  setSystemTime();
 });
 
 beforeEach(async () => {
@@ -127,6 +140,41 @@ test("a hydration asks once for every address it is about to read", async () => 
   expect(asked).toHaveLength(1);
   expect([...first]).toEqual([formatCorpusLocation(erased)]);
   expect([...second]).toEqual([]);
+});
+
+test("a primed answer stops being served once it has aged out", async () => {
+  // A holder that outlives a request — a batch, a replay, a long report —
+  // would otherwise keep serving a member erased while it ran, because the
+  // denial it primed was fetched before the erasure committed.
+  const asked: string[][] = [];
+  const read = async (locations: readonly string[]) => {
+    asked.push([...locations]);
+    return await db.transaction(async (tx) =>
+      corpusTombstoneReaderForTx(asTestRaw(tx))(locations),
+    );
+  };
+  const address = formatCorpusLocation(surviving);
+  const startedAt = new Date("2026-09-19T08:00:00.000Z");
+  setSystemTime(startedAt);
+  const reader = await prefetchCorpusTombstones([address], read);
+
+  expect([...(await reader([address]))]).toEqual([]);
+
+  // The erasure commits while the holder is still reading.
+  await db.insert(caseLawCorpusTombstones).values({
+    location: address,
+    packKey: PACK_KEY,
+    decisionId: DECISION_ID,
+    reason: "redaction",
+  });
+  setSystemTime(
+    new Date(startedAt.getTime() + CORPUS_TOMBSTONE_PRIME_MAX_AGE_MS),
+  );
+
+  expect([...(await reader([address]))]).toEqual([address]);
+  // Two queries: the prime, then the re-ask the age forced. The read in
+  // between answered from the prime.
+  expect(asked).toEqual([[address], [address]]);
 });
 
 test("an address the hydration never primed is asked about, not assumed", async () => {

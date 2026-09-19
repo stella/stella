@@ -1,5 +1,7 @@
 import { inArray } from "drizzle-orm";
 
+import { Temporal } from "@stll/time";
+
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
@@ -87,31 +89,65 @@ export const corpusTombstoneReaderForTx =
   };
 
 /**
+ * How long one primed denial set may answer before it asks again.
+ *
+ * Seconds, not minutes: the set is a cache of a negative answer, so an
+ * erasure that commits after the prime is not in it. Within one request that
+ * is the window every read has anyway. Across a holder that outlives a
+ * request — a batch, a replay, a report that reads payloads for minutes — it
+ * is not: an erasure ordered at the first minute would keep being served
+ * until the holder finished. Past this age the reader asks the table again,
+ * so no answer is reused beyond the window it is sound over.
+ */
+export const CORPUS_TOMBSTONE_PRIME_MAX_AGE_MS = 5000;
+
+/**
  * One query for a whole hydration.
  *
  * A decision is read as several members, and each read would otherwise ask
  * the table for its own address. The caller that knows every address it is
- * about to read asks once and hands the answer to each read.
+ * about to read asks once and hands the answer to each read, for at most
+ * {@link CORPUS_TOMBSTONE_PRIME_MAX_AGE_MS}.
  *
  * An address outside that set is asked about rather than assumed readable. A
  * read can be repointed while it runs — `readCorpusAtAuthoritativePointer`
  * rereads the row and follows a replacement pointer the hydration never saw —
  * and a miss that answered "not denied" would serve erased bytes. This is not
  * an impossible state, so it is a second query rather than a panic.
+ *
+ * The residual race, stated plainly: a read that begins before an erasure
+ * commits and ends after it serves the same bytes a read that finished a
+ * moment earlier would have served. Nothing closes that. The member's bytes
+ * are physically in the pack until the pack is rewritten, so no fence around
+ * the object-store range read would deny them, and holding a database lock
+ * across that read would buy nothing while blocking the erasure. What is
+ * bounded here is the separate, real problem: how long one answer is reused.
  */
 export const prefetchCorpusTombstones = async (
   locations: readonly string[],
   read: CorpusTombstoneReader,
 ): Promise<CorpusTombstoneReader> => {
-  const primed = new Set(packedAddresses(locations));
+  let primed = new Set(packedAddresses(locations));
   // A prime over no packed address has no question to ask, so it asks none:
   // a caller with nothing to read must not depend on the table being up.
-  const denied =
-    primed.size === 0 ? new Set<string>() : await read([...primed]);
+  let denied = primed.size === 0 ? new Set<string>() : await read([...primed]);
+  let primedAtMs = Temporal.Now.instant().epochMilliseconds;
   return async (asked) => {
-    const unprimed = packedAddresses(asked).filter(
-      (value) => !primed.has(value),
-    );
+    const packed = packedAddresses(asked);
+    if (packed.length === 0) {
+      return new Set();
+    }
+    const nowMs = Temporal.Now.instant().epochMilliseconds;
+    if (nowMs - primedAtMs >= CORPUS_TOMBSTONE_PRIME_MAX_AGE_MS) {
+      // Aged out: this read re-asks for everything it needs rather than
+      // answering from what an earlier moment learned, and the answer it
+      // gets primes the next window.
+      primed = new Set(packed);
+      denied = await read(packed);
+      primedAtMs = Temporal.Now.instant().epochMilliseconds;
+      return new Set(asked.filter((value) => denied.has(value)));
+    }
+    const unprimed = packed.filter((value) => !primed.has(value));
     const late =
       unprimed.length === 0 ? new Set<string>() : await read(unprimed);
     return new Set(
