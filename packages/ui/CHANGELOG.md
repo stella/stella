@@ -1,5 +1,11 @@
 # @stll/ui
 
+## 0.32.0
+
+### Minor Changes
+
+- [#3578](https://github.com/stella/stella/pull/3578) [`123956f`](https://github.com/stella/stella/commit/123956f16ae7504a8a523c2831a59d9b55ca750e) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Tooltips render on the transient popup layer, so a tooltip opened from a dialog covers it. `TooltipPopup` no longer accepts `layer` and `Button` no longer accepts `tooltipLayer`.
+
 ## 0.31.0
 
 ### Minor Changes
