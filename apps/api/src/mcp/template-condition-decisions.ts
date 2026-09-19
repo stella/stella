@@ -43,26 +43,17 @@ const TEMPLATE_CONDITION_DECISION_MODEL_OUTPUT_SCHEMA = v.strictObject({
   probability: v.number(),
 });
 
-const TEMPLATE_CONDITION_GENERATIVE_OUTPUT_SCHEMA = v.strictObject({
+const TEMPLATE_CONDITION_NON_MODEL_OUTPUT_SCHEMA = v.strictObject({
   path: v.string(),
   label: v.string(),
   state: v.literal("decided"),
   value: v.boolean(),
-  decided_by: v.literal("generative_model"),
-});
-
-const TEMPLATE_CONDITION_USER_OUTPUT_SCHEMA = v.strictObject({
-  path: v.string(),
-  label: v.string(),
-  state: v.literal("decided"),
-  value: v.boolean(),
-  decided_by: v.literal("user"),
+  decided_by: v.picklist(["generative_model", "user"]),
 });
 
 export const TEMPLATE_CONDITION_DECISION_OUTPUT_SCHEMA = v.union([
   TEMPLATE_CONDITION_DECISION_MODEL_OUTPUT_SCHEMA,
-  TEMPLATE_CONDITION_GENERATIVE_OUTPUT_SCHEMA,
-  TEMPLATE_CONDITION_USER_OUTPUT_SCHEMA,
+  TEMPLATE_CONDITION_NON_MODEL_OUTPUT_SCHEMA,
   v.strictObject({
     path: v.string(),
     label: v.string(),
