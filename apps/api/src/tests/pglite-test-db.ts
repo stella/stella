@@ -240,6 +240,7 @@ export const ROLE_GRANT_STATEMENTS = [
     GRANT SELECT ON TABLE
       "case_law_reconciliation_items",
       "case_law_coverage_slices",
+      "case_law_corpus_tombstones",
       "case_law_search_document_preview_passages"
     TO stella
   `,
@@ -248,6 +249,8 @@ export const ROLE_GRANT_STATEMENTS = [
       "case_law_reconciliation_items",
       "case_law_coverage_slices",
       "case_law_corpus_upload_intents",
+      "case_law_corpus_pack_refs",
+      "case_law_corpus_tombstones",
       "case_law_decision_source_identities",
       "case_law_search_document_preview_passages",
       "case_law_citation_resolution_census",
