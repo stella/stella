@@ -93,6 +93,7 @@ import type {
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
   bindWorkspaceRecorder,
+  cursorInput,
   DEFAULT_LIST_LIMIT,
   ensureActiveWorkspace,
   ensureWorkspaceAccess,
@@ -655,16 +656,10 @@ const listDocumentsArgsSchema = nullAsAbsent(
           v.description("Max entities to return"),
         ),
       ),
-      cursor: v.optional(
-        v.pipe(
-          v.string(),
-          v.minLength(1),
-          v.maxLength(512),
-          v.description(
-            "Opaque cursor from a previous list_documents call to fetch the next page",
-          ),
-        ),
-      ),
+      cursor: cursorInput({
+        description:
+          "Opaque cursor from a previous list_documents call to fetch the next page",
+      }),
     }),
     // parent_id scopes to a folder's children, so it is meaningless in flat mode
     // (which enumerates the whole matter). Reject the explicit contradiction; an
@@ -830,16 +825,10 @@ const readDocumentArgsSchema = nullAsAbsent(
           v.description("Also return the document's version history"),
         ),
       ),
-      versions_cursor: v.optional(
-        v.pipe(
-          v.string(),
-          v.minLength(1),
-          v.maxLength(512),
-          v.description(
-            "Cursor from a previous call for the next page of version history",
-          ),
-        ),
-      ),
+      versions_cursor: cursorInput({
+        description:
+          "Cursor from a previous call for the next page of version history",
+      }),
     }),
     // A diff needs both endpoints: compare_with_version_id (base) is only
     // meaningful alongside version_id (target).
@@ -2231,16 +2220,10 @@ const listPropertiesArgsSchema = nullAsAbsent(
         v.description("Max properties to return"),
       ),
     ),
-    cursor: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.maxLength(512),
-        v.description(
-          "Opaque cursor from a previous list_properties call to fetch the next page",
-        ),
-      ),
-    ),
+    cursor: cursorInput({
+      description:
+        "Opaque cursor from a previous list_properties call to fetch the next page",
+    }),
   }),
 );
 

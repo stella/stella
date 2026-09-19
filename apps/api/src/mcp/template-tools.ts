@@ -119,6 +119,7 @@ import type {
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
   bindWorkspaceRecorder,
+  cursorInput,
   ensureActiveWorkspace,
   ensureWorkspaceAccess,
   enumProp,
@@ -781,7 +782,10 @@ const listTemplatesArgsSchema = nullAsAbsent(
         "Template id to describe its fields in detail; omit to list templates",
       ),
     ),
-    cursor: v.optional(v.pipe(v.string(), v.maxLength(512))),
+    cursor: cursorInput({
+      description:
+        "Opaque cursor from a previous list_templates call to fetch the next page",
+    }),
   }),
 );
 

@@ -490,7 +490,9 @@ describe("compat search reaching the public corpus", () => {
   test("an undecodable cursor is a validation_error naming the field", async () => {
     await withCorpus(async () => {
       const payload = await run({
-        args: { query: "promlčení", cursor: "not-a-cursor" },
+        // Base64 of readable text: in the class this surface issues, so the
+        // decoder is what refuses it rather than the made-up-cursor rule.
+        args: { query: "promlčení", cursor: "bm90LWEtY3Vyc29y" },
         context: createContext(),
         handler: COMPAT_TOOL_HANDLERS.search,
       });

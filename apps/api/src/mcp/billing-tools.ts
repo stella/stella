@@ -57,6 +57,7 @@ import type {
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
   bindWorkspaceRecorder,
+  cursorInput,
   DEFAULT_LIST_LIMIT,
   ensureActiveWorkspace,
   ensureWorkspaceAccess,
@@ -434,16 +435,10 @@ const listTimeEntriesArgsSchema = nullAsAbsent(
           v.description("Max entries to return"),
         ),
       ),
-      cursor: v.optional(
-        v.pipe(
-          v.string(),
-          v.minLength(1),
-          v.maxLength(512),
-          v.description(
-            "Opaque cursor from a previous list_time_entries call to fetch the next page",
-          ),
-        ),
-      ),
+      cursor: cursorInput({
+        description:
+          "Opaque cursor from a previous list_time_entries call to fetch the next page",
+      }),
     }),
     // List mode needs a workspace to scope to; detail mode uses time_entry_id
     // alone.
@@ -1158,16 +1153,10 @@ const listInvoicesArgsSchema = nullAsAbsent(
           v.description("Max invoices to return"),
         ),
       ),
-      cursor: v.optional(
-        v.pipe(
-          v.string(),
-          v.minLength(1),
-          v.maxLength(512),
-          v.description(
-            "Opaque cursor from a previous list_invoices call to fetch the next page",
-          ),
-        ),
-      ),
+      cursor: cursorInput({
+        description:
+          "Opaque cursor from a previous list_invoices call to fetch the next page",
+      }),
     }),
     v.forward(
       v.partialCheck(

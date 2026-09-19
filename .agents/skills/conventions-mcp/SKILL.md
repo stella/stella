@@ -87,7 +87,13 @@ whether a contract change helped.
     because guessing wrong is a wrong date or a factor of a thousand on an
     instrument. Null and the placeholder encodings are that rule for "absent"
     and live in the tool factory; the value kinds live in
-    `packages/agent-input/`. Cover each kind with a property test over
+    `packages/agent-input/`. An opaque token the server issues extends "absent"
+    one step: a client filling every declared property invents a first-call
+    cursor (`" "`, `"0"`, `"start"`), so `cursorInput` reads a value outside
+    the class its encoders emit as no cursor, while a value inside that class
+    still reaches the decoder and still fails there; restarting a damaged
+    cursor at page one would repeat a page the caller already read. Cover each
+    kind with a property test over
     its whole spelling class rather than the examples someone happened to
     write down, and add a guard (an ownership row, a census test) so a new call
     site cannot parse the kind itself. Never per-tool tolerance code, and never

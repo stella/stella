@@ -119,8 +119,6 @@ const HAND_CONSTRAINED_STRING_INPUTS: Record<string, string> = {
   // for a value-kind reader to normalize.
   "fetch.id": "an id `search` minted, echoed back verbatim",
 
-  "search_boe_legislation.cursor":
-    "an opaque server-issued page token, not a model-authored value",
   "GET /v1/legislation/search.query.cursor":
     "an opaque server-issued page token, not a model-authored value",
 

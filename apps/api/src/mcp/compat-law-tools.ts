@@ -26,8 +26,8 @@ import {
 import type { McpToolDefinition, McpToolHandler } from "@/api/mcp/tool-types";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
+  cursorInput,
   errorResult,
-  MAX_CURSOR_LENGTH,
   nullAsAbsent,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
@@ -58,16 +58,10 @@ const lawCompatSearchArgsSchema = nullAsAbsent(
       v.maxLength(LIMITS.searchQueryMaxLength),
       v.description("Search query"),
     ),
-    cursor: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.maxLength(MAX_CURSOR_LENGTH),
-        v.description(
-          "Opaque cursor from a previous search call to fetch the next page",
-        ),
-      ),
-    ),
+    cursor: cursorInput({
+      description:
+        "Opaque cursor from a previous search call to fetch the next page",
+    }),
   }),
 );
 
@@ -76,16 +70,10 @@ const lawCompatFetchArgsSchema = nullAsAbsent(
     id: compatCorpusIdInputSchema(
       `Result id from search. ${COMPAT_CORPUS_ID_VOCABULARY}`,
     ),
-    cursor: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.maxLength(MAX_CURSOR_LENGTH),
-        v.description(
-          "Opaque cursor from a previous fetch call to read the next window of text",
-        ),
-      ),
-    ),
+    cursor: cursorInput({
+      description:
+        "Opaque cursor from a previous fetch call to read the next window of text",
+    }),
   }),
 );
 

@@ -49,12 +49,12 @@ import {
   buildLegislationDocumentAppUrl,
   countryInputSchema,
   countryNormalization,
+  cursorInput,
   DEFAULT_SEARCH_LIMIT,
   errorResult,
   handlerStatusOf,
   ISO_DATE_SCHEMA,
   isToolErrorResult,
-  MAX_CURSOR_LENGTH,
   MCP_CONTENT_MAX_CHARS,
   mapValibotIssues,
   notFoundResult,
@@ -221,14 +221,9 @@ const searchLegislationArgsSchema = nullAsAbsent(
         ),
       ),
     ),
-    cursor: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.maxLength(MAX_CURSOR_LENGTH),
-        v.description("Opaque cursor from a previous search_legislation call"),
-      ),
-    ),
+    cursor: cursorInput({
+      description: "Opaque cursor from a previous search_legislation call",
+    }),
   }),
 );
 
@@ -237,16 +232,10 @@ const readStatuteArgsSchema = nullAsAbsent(
     eli: eliInputSchema,
     language: v.optional(languageInputSchema),
     as_of: v.optional(asOfInputSchema),
-    cursor: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.maxLength(MAX_CURSOR_LENGTH),
-        v.description(
-          "Opaque cursor from a previous read_statute call to read the next window of statute text",
-        ),
-      ),
-    ),
+    cursor: cursorInput({
+      description:
+        "Opaque cursor from a previous read_statute call to read the next window of statute text",
+    }),
   }),
 );
 
@@ -316,16 +305,10 @@ const readProvisionHistoryArgsSchema = nullAsAbsent(
         ),
       ),
     ),
-    cursor: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.maxLength(MAX_CURSOR_LENGTH),
-        v.description(
-          "Opaque cursor from a previous read_provision_history call to read the next page",
-        ),
-      ),
-    ),
+    cursor: cursorInput({
+      description:
+        "Opaque cursor from a previous read_provision_history call to read the next page",
+    }),
   }),
 );
 

@@ -3020,7 +3020,8 @@ export const generatedRouteMap: RouteNode = {
                 },
                 cursor: {
                   type: "string",
-                  maxLength: 5,
+                  minLength: 1,
+                  maxLength: 512,
                   description:
                     "Opaque cursor from a previous search_boe_legislation call for the next page",
                 },
