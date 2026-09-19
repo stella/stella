@@ -1,5 +1,11 @@
 # @stll/ui
 
+## 0.33.0
+
+### Minor Changes
+
+- [#3584](https://github.com/stella/stella/pull/3584) [`7b059b3`](https://github.com/stella/stella/commit/7b059b3856829ee676a73125d766c8b9c15f71fb) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `Button` and `CommandItem` gain a `row` size built from one shared metric, and `MenuSection` owns the inset, heading and row stack of a titled group of menu rows, so sibling lists in one panel share a density.
+
 ## 0.32.0
 
 ### Minor Changes
