@@ -20,7 +20,11 @@ import {
   publishedCaseLawDecision,
   publishedCaseLawDecisionSqlFor,
 } from "@/api/lib/case-law/published-decisions";
-import { partialObservationFromMetadata } from "@/api/lib/legal-search/ingestion-normalization";
+import {
+  markListingOnly,
+  partialObservationFromMetadata,
+} from "@/api/lib/legal-search/ingestion-normalization";
+import { metadataMarkedListingOnly } from "@/api/lib/legal-search/partial-observation-sql";
 import { readPgFtsBrowseFacets } from "@/api/lib/legal-search/pg-fts-browse-facets";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import {
@@ -246,6 +250,30 @@ test(
         ),
       );
     expect(rawForm.map((row) => row.id).toSorted()).toEqual(expected);
+  },
+  DB_TEST_TIMEOUT_MS,
+);
+
+test(
+  "the marker a write sets in SQL is the one the pipeline sets in JavaScript",
+  async () => {
+    // Two writers of one marker: the first write of a decision builds the
+    // metadata in JavaScript, a refresh sets it inside the guarded statement.
+    const marked = await db
+      .select({
+        id: caseLawDecisions.id,
+        metadata: metadataMarkedListingOnly(caseLawDecisions.metadata),
+      })
+      .from(caseLawDecisions)
+      .where(eq(caseLawDecisions.country, SHAPE_COUNTRY));
+
+    expect(
+      Object.fromEntries(marked.map((row) => [row.id, row.metadata])),
+    ).toEqual(
+      Object.fromEntries(
+        shapeRows.map((shape) => [shape.id, markListingOnly(shape.metadata)]),
+      ),
+    );
   },
   DB_TEST_TIMEOUT_MS,
 );

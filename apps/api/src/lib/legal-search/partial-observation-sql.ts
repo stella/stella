@@ -53,6 +53,18 @@ export const storedObservationHasDetail = (metadata: Column): SQL =>
   sql`jsonb_extract_path_text(${metadata}, ${sql.raw(`'${PARTIAL_OBSERVATION_KEY}'`)}, ${sql.raw(`'${PARTIAL_OBSERVATION_FIELD.IS_LISTING_ONLY}'`)}) is distinct from 'true'`;
 
 /**
+ * The stored metadata with the listing-only marker set, as a SQL value.
+ *
+ * For a write that decides the marker with the row's own state in its WHERE:
+ * "this row holds no document" is only true at the instant of the write, so
+ * the marker that says so is set by the same statement. Other marker fields
+ * already stored are kept; a stored marker that is not an object is replaced,
+ * since `||` would otherwise build an array the predicate cannot read.
+ */
+export const metadataMarkedListingOnly = (metadata: Column): SQL =>
+  sql`jsonb_set(coalesce(${metadata}, '{}'::jsonb), ${sql.raw(`'{${PARTIAL_OBSERVATION_KEY}}'`)}, (case when jsonb_typeof(${metadata} -> ${sql.raw(`'${PARTIAL_OBSERVATION_KEY}'`)}) = 'object' then ${metadata} -> ${sql.raw(`'${PARTIAL_OBSERVATION_KEY}'`)} else '{}'::jsonb end) || jsonb_build_object(${sql.raw(`'${PARTIAL_OBSERVATION_FIELD.IS_LISTING_ONLY}'`)}, true))`;
+
+/**
  * The same predicate as raw SQL, for the lateral joins that address the
  * decision table under an alias and never see a Drizzle column.
  *

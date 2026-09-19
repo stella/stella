@@ -12,6 +12,12 @@
  * objects are not written at all here, because the plan the preserving
  * refresh produces is not the one the mirror runs under.
  *
+ * The other half is what a refresh with no document means. From a source
+ * that defers its documents it means nothing, and the row stays public. From
+ * one that fetches them inline it means the decision has none, and the row is
+ * stored unpublished under the listing-only marker, by the same write that
+ * proves it holds no document.
+ *
  * Runs in the nightly Postgres job; skipped elsewhere.
  */
 
@@ -25,13 +31,17 @@ import { caseLawDecisions, caseLawSources, relations } from "@/api/db/schema";
 import { ADAPTER_KEYS, PARSER_VERSIONS } from "@/api/handlers/case-law/consts";
 import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
-import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
+import {
+  DOCUMENT_DELIVERY,
+  EMPTY_AST,
+} from "@/api/handlers/case-law/ingestion/adapter";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
 } from "@/api/lib/case-law/decision-text";
+import { partialObservationFromMetadata } from "@/api/lib/legal-search/ingestion-normalization";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -158,7 +168,20 @@ if (!databaseUrl || !runPostgresTests) {
       rawHash: "hash-after",
       parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.SK_COURTS],
       documentAst: EMPTY_AST,
+      documentDelivery: DOCUMENT_DELIVERY.DEFERRED,
     });
+
+    /** The same, from a source that fetches the document with the decision. */
+    const inlineResultWithoutDocument = (
+      caseNumber: string,
+    ): IngestionResult => ({
+      ...metadataOnlyResult(caseNumber),
+      documentDelivery: DOCUMENT_DELIVERY.INLINE,
+    });
+
+    const isUnpublished = async (id: SafeId<"caseLawDecision">) =>
+      partialObservationFromMetadata((await readDecision(id))?.metadata)
+        .isListingOnly;
 
     const readDecision = async (id: SafeId<"caseLawDecision">) =>
       await db.query.caseLawDecisions.findFirst({
@@ -244,59 +267,158 @@ if (!databaseUrl || !runPostgresTests) {
       expect(row?.sourceHash).toBe("hash-after");
     });
 
-    test("a document landing mid-refresh is not overwritten by the refresh", async () => {
-      // The window the guard closes: the refresh reads a decision with
-      // no document, a backfill commits one while it is deciding, and
-      // the write that follows would put the empty payload over it. The
-      // condition rides in the payload write's WHERE, so the row that
-      // acquired a document simply falls out of scope.
-      const caseNumber = `refresh-race-${suffix}`;
-      const id = await insertEmptyDecision(caseNumber);
+    test.each([DOCUMENT_DELIVERY.DEFERRED, DOCUMENT_DELIVERY.INLINE])(
+      "a document landing mid-refresh is not overwritten by a %s refresh",
+      async (documentDelivery) => {
+        // The window the guard closes: the refresh reads a decision with
+        // no document, a backfill commits one while it is deciding, and
+        // the write that follows would put the empty payload over it. The
+        // condition rides in the payload write's WHERE, so the row that
+        // acquired a document simply falls out of scope.
+        const caseNumber = `refresh-race-${documentDelivery}-${suffix}`;
+        const id = await insertEmptyDecision(caseNumber);
 
-      let transactions = 0;
-      const racingDb: ScopedDb = async (callback) => {
-        transactions += 1;
-        // Transactions in order: the decision lookup, the check for a
-        // stored document, then the row write. Injecting as the third
-        // opens exactly the window the guard closes — the check has
-        // already answered "no document", and the write is next.
-        if (transactions === 3) {
-          await db
-            .update(caseLawDecisions)
-            .set({
-              fulltext: STORED_TEXT,
-              documentAst: storedAst,
-              sections: [
-                { index: 0, type: "header", title: null, text: "Rozsudok" },
-              ],
-            })
-            .where(eq(caseLawDecisions.id, id));
-        }
-        return await scopedDb(callback);
-      };
+        let transactions = 0;
+        const racingDb: ScopedDb = async (callback) => {
+          transactions += 1;
+          // Transactions in order: the decision lookup, the check for a
+          // stored document, then the row write. Injecting as the third
+          // opens exactly the window the guard closes — the check has
+          // already answered "no document", and the write is next.
+          if (transactions === 3) {
+            await db
+              .update(caseLawDecisions)
+              .set({
+                fulltext: STORED_TEXT,
+                documentAst: storedAst,
+                sections: [
+                  { index: 0, type: "header", title: null, text: "Rozsudok" },
+                ],
+              })
+              .where(eq(caseLawDecisions.id, id));
+          }
+          return await scopedDb(callback);
+        };
+
+        await processDecision({
+          input: { ...metadataOnlyResult(caseNumber), documentDelivery },
+          observationOrder: 1n,
+          sourceId,
+          scopedDb: racingDb,
+          observedAt: new Date("2026-07-31T12:00:00.000Z"),
+        });
+
+        // If the sequence ever changes, the injection no longer lands in
+        // the window and this test would pass without exercising it.
+        expect(transactions).toBe(3);
+
+        const row = await readDecision(id);
+        expect(row?.fulltext).toBe(STORED_TEXT);
+        expect(
+          row?.documentAst && "blocks" in row.documentAst
+            ? row.documentAst.blocks.length
+            : 0,
+        ).toBe(1);
+        // The metadata this refresh carried is unconditional and lands.
+        expect(row?.metadata).toMatchObject({ judge: "New Judge" });
+        expect(row?.sourceHash).toBe("hash-after");
+        // The marker rides in the guarded write, so a row that acquired a
+        // document is not hidden by the refresh that lost the race.
+        expect(await isUnpublished(id)).toBe(false);
+      },
+    );
+
+    test("a deferred refresh with no document leaves the row public", async () => {
+      const caseNumber = `refresh-deferred-${suffix}`;
+      const id = await insertEmptyDecision(caseNumber);
 
       await processDecision({
         input: metadataOnlyResult(caseNumber),
         observationOrder: 1n,
         sourceId,
-        scopedDb: racingDb,
+        scopedDb,
         observedAt: new Date("2026-07-31T12:00:00.000Z"),
       });
 
-      // If the sequence ever changes, the injection no longer lands in
-      // the window and this test would pass without exercising it.
-      expect(transactions).toBe(3);
+      expect(await isUnpublished(id)).toBe(false);
+    });
 
-      const row = await readDecision(id);
-      expect(row?.fulltext).toBe(STORED_TEXT);
-      expect(
-        row?.documentAst && "blocks" in row.documentAst
-          ? row.documentAst.blocks.length
-          : 0,
-      ).toBe(1);
-      // The metadata this refresh carried is unconditional and lands.
-      expect(row?.metadata).toMatchObject({ judge: "New Judge" });
-      expect(row?.sourceHash).toBe("hash-after");
+    test("an inline decision with no document is stored unpublished until one arrives", async () => {
+      const caseNumber = `refresh-inline-new-${suffix}`;
+      await processDecision({
+        input: inlineResultWithoutDocument(caseNumber),
+        observationOrder: 1n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:00.000Z"),
+      });
+      const stored = await db.query.caseLawDecisions.findFirst({
+        where: { sourceId: { eq: sourceId }, caseNumber },
+        columns: { id: true },
+      });
+      if (!stored) {
+        throw new Error("expected decision row");
+      }
+      created.push(stored.id);
+      expect(await isUnpublished(stored.id)).toBe(true);
+
+      await processDecision({
+        input: {
+          ...inlineResultWithoutDocument(caseNumber),
+          fulltext: STORED_TEXT,
+          rawHash: "hash-with-document",
+        },
+        observationOrder: 2n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-08-01T12:00:00.000Z"),
+      });
+      expect(await isUnpublished(stored.id)).toBe(false);
+      expect((await readDecision(stored.id))?.fulltext).toBe(STORED_TEXT);
+    });
+
+    test("an unchanged inline observation still marks a row stored before the marker", async () => {
+      // Same source hash, so the refresh policy would skip it; the row would
+      // then stay public with nothing to read for as long as the publisher
+      // serves the same empty page.
+      const caseNumber = `refresh-inline-unmarked-${suffix}`;
+      const id = await insertEmptyDecision(caseNumber);
+
+      const observe = async (observationOrder: bigint) =>
+        await processDecision({
+          input: {
+            ...inlineResultWithoutDocument(caseNumber),
+            rawHash: "hash-before",
+          },
+          observationOrder,
+          sourceId,
+          scopedDb,
+          observedAt: new Date("2026-07-31T12:00:00.000Z"),
+        });
+
+      await observe(1n);
+      expect(await isUnpublished(id)).toBe(true);
+
+      // Marked, the same observation is a fixed point again.
+      const before = await readDecision(id);
+      await observe(2n);
+      expect((await readDecision(id))?.metadata).toEqual(before?.metadata);
+    });
+
+    test("an inline refresh with no document does not hide a stored one", async () => {
+      const caseNumber = `refresh-inline-hydrated-${suffix}`;
+      const id = await insertHydratedDecision(caseNumber);
+
+      await processDecision({
+        input: inlineResultWithoutDocument(caseNumber),
+        observationOrder: 1n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:00.000Z"),
+      });
+
+      expect(await isUnpublished(id)).toBe(false);
+      expect((await readDecision(id))?.fulltext).toBe(STORED_TEXT);
     });
 
     test("a refresh that carries a document still replaces the stored one", async () => {

@@ -540,6 +540,12 @@ promotes the row when the detail arrives; do not treat a listing-only row as
 finished, and do not delete it to hide it. "Not published" binds every public
 read, the decision page included: the row's own URL answers 404 until its
 detail arrives, so the corpus never publishes a page with no decision on it.
+A decision whose detail arrived with no document is the same page with nothing
+on it, so the pipeline stores it under the same marker and the same repair
+re-asks for it. An adapter never sets this itself: it is decided by the write
+that proves the row holds no document. An adapter whose documents arrive by a
+later queue states `documentDelivery: DOCUMENT_DELIVERY.DEFERRED` on the
+result, and its rows stay public while the queue works.
 The predicate is one, `publishedCaseLawDecision` in
 `lib/case-law/published-decisions.ts`, and
 `tests/security/case-law-public-route-invariants.test.ts` censuses the public
