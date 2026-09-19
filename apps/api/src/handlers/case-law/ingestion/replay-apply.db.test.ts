@@ -24,7 +24,6 @@ import { envBase } from "@/api/env-base";
 import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import {
   EMPTY_AST,
-  pendingSourceFieldInventory,
   STORED_RAW_REPARSE_REJECTION,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type { SourceAdapter } from "@/api/handlers/case-law/ingestion/adapter";
@@ -109,7 +108,7 @@ const stubAdapter = (
   reparse: NonNullable<SourceAdapter["reparseStoredRaw"]>,
 ): SourceAdapter => ({
   key: ADAPTER_KEYS.EU_ECJ,
-  sourceFields: pendingSourceFieldInventory(ADAPTER_KEYS.EU_ECJ),
+  sourceFields: { status: "declared", fields: {}, listSourceFields: () => [] },
   sourceSurfaces: { surfaces: {} },
   name: "replay apply stub",
   country: "EU",

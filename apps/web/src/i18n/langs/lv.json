@@ -739,6 +739,7 @@
       "cites": "Citē",
       "dissentByline": "Atsevišķās domas: <bdi>{names}</bdi>",
       "judgeRole": {
+        "advocateGeneral": "Ģenerāladvokāts",
         "dissenting": "Atsevišķās domas",
         "panelMember": "Tiesas sastāva loceklis",
         "presiding": "Tiesas sastāva priekšsēdētājs",

@@ -399,6 +399,20 @@ export type EcjDocumentSource = {
 };
 
 /**
+ * The converter that produced this manifestation, from the comment it leaves
+ * above the document.
+ *
+ * It is what tells the `coj-`prefixed class vocabulary apart from the
+ * unprefixed one the pre-version-9 pipeline emitted, so a row that carries it
+ * states which of the two layouts its parse was of.
+ */
+const CONVERTER_COMMENT =
+  /<!--\s*fmx2xhtml\s*#\s*converter_version:(?<version>[^\s#]+)/u;
+
+export const ecjConverterVersion = (html: string): string | undefined =>
+  CONVERTER_COMMENT.exec(html)?.groups?.["version"];
+
+/**
  * The decision's own markup, lifted out of whatever page carried it.
  *
  * For callers that need the source text without a parse, so that a
@@ -566,6 +580,16 @@ const extractKeywords = ($document: cheerio.Cheerio<AnyNode>): string[] => {
  * spaces before upload; once that has happened, a loose space-dash-space in
  * the keyword chain can be either a separator or part of one Latvian keyword.
  */
+/**
+ * Whether this manifestation carries a keyword chain at all.
+ *
+ * Both spellings of the class, because an inventory that asked only about the
+ * modern one would declare every pre-version-9 document as stating no
+ * keywords while the parser reads them.
+ */
+export const ecjStatesKeywordChain = (html: string): boolean =>
+  new RegExp(`class="(?:${CLASS_PREFIX})?${CLASS.index}"`, "u").test(html);
+
 export const ecjKeywordSpacingNeedsVerbatim = (html: string): boolean => {
   const $ = cheerio.load(html);
   const raw = $(sel(CLASS.index)).first().text().trim();

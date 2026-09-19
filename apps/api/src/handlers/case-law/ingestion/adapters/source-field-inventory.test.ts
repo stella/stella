@@ -10,18 +10,15 @@
  * envelope back through `listSourceFields`, and every name that comes out has
  * to be in the inventory as stored or as excluded with a reason.
  *
- * Four invariants, run over every registered adapter:
+ * Three invariants, run over every registered adapter:
  *
- * 1. The pending baseline names exactly the adapters without an inventory, and
- *    each of them names itself, so the un-inventoried set can only shrink.
- * 2. For an enrolled adapter: every field its envelope states is in the map,
- *    and every field the map stores is on the decision built from that
- *    fixture — at the metadata key, result field, document or identity the
- *    disposition names.
- * 3. The other direction: a field the map declares that the envelope never
+ * 1. Every field its envelope states is in the map, and every field the map
+ *    stores is on the decision built from that fixture — at the metadata key,
+ *    result field, document or identity the disposition names.
+ * 2. The other direction: a field the map declares that the envelope never
  *    states is a disposition nothing exercises, which reads like a decision
  *    and certifies nothing.
- * 4. What the inventory reads is the stored raw itself. A field captured later
+ * 3. What the inventory reads is the stored raw itself. A field captured later
  *    is only recoverable for stored rows if the response stating it was kept,
  *    so the reader is given the parts of the envelope and nothing else.
  */
@@ -31,10 +28,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import type { AdapterKey } from "@/api/handlers/case-law/consts";
-import {
-  decodeSourceRawEnvelope,
-  pendingSourceFieldInventory,
-} from "@/api/handlers/case-law/ingestion/adapter";
+import { decodeSourceRawEnvelope } from "@/api/handlers/case-law/ingestion/adapter";
 import type {
   IngestionResult,
   SourceFieldDisposition,
@@ -42,7 +36,6 @@ import type {
   SourceRawParts,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
-import baseline from "@/api/handlers/case-law/ingestion/adapters/source-field-inventory-baseline.json";
 import { storeTextField } from "@/api/lib/case-law/decision-text";
 import {
   atFindokFixture,
@@ -51,7 +44,9 @@ import {
   czNssFixture,
   czRegionalFixture,
   czUsFixture,
+  euEcjFixture,
   huBhgyFixture,
+  plCourtsFixture,
   plSnFixture,
   skCourtsFixture,
   skUsFixture,
@@ -67,90 +62,36 @@ afterEach(() => {
 // ── Coverage declaration ─────────────────────────────────
 
 /**
- * What this suite has to drive one adapter with. Enrolment is stated twice on
- * purpose — here and on the adapter itself — and the first assertion below
- * fails when the two disagree, so a fixture cannot quietly go missing for an
- * adapter that declares an inventory.
+ * What this suite drives each adapter with. Total over the registry, so a
+ * source registered without a fixture to read its own envelope back through
+ * does not compile.
  */
-type AdapterInventoryCoverage =
-  | {
-      readonly disposition: "enrolled";
-      readonly fixture: () => EnrolledAdapterFixture;
-    }
-  | { readonly disposition: "pending-inventory" };
-
-const PENDING = { disposition: "pending-inventory" } as const;
-
 const ADAPTER_INVENTORY_COVERAGE = {
-  [ADAPTER_KEYS.CZ_NS]: { disposition: "enrolled", fixture: czNsFixture },
-  [ADAPTER_KEYS.CZ_NSS]: { disposition: "enrolled", fixture: czNssFixture },
-  [ADAPTER_KEYS.CZ_US]: { disposition: "enrolled", fixture: czUsFixture },
-  [ADAPTER_KEYS.CZ_REGIONAL]: {
-    disposition: "enrolled",
-    fixture: czRegionalFixture,
-  },
-  [ADAPTER_KEYS.SK_COURTS]: {
-    disposition: "enrolled",
-    fixture: skCourtsFixture,
-  },
-  [ADAPTER_KEYS.SK_US]: { disposition: "enrolled", fixture: skUsFixture },
-  [ADAPTER_KEYS.PL_COURTS]: PENDING,
-  [ADAPTER_KEYS.PL_SN]: { disposition: "enrolled", fixture: plSnFixture },
-  [ADAPTER_KEYS.AT_COURTS]: {
-    disposition: "enrolled",
-    fixture: () => atRisFixture(ADAPTER_KEYS.AT_COURTS),
-  },
-  [ADAPTER_KEYS.AT_VFGH]: {
-    disposition: "enrolled",
-    fixture: () => atRisFixture(ADAPTER_KEYS.AT_VFGH),
-  },
-  [ADAPTER_KEYS.AT_VWGH]: {
-    disposition: "enrolled",
-    fixture: () => atRisFixture(ADAPTER_KEYS.AT_VWGH),
-  },
-  [ADAPTER_KEYS.AT_BVWG]: {
-    disposition: "enrolled",
-    fixture: () => atRisFixture(ADAPTER_KEYS.AT_BVWG),
-  },
-  [ADAPTER_KEYS.AT_LVWG]: {
-    disposition: "enrolled",
-    fixture: () => atRisFixture(ADAPTER_KEYS.AT_LVWG),
-  },
-  [ADAPTER_KEYS.AT_ASYLGH]: {
-    disposition: "enrolled",
-    fixture: () => atRisFixture(ADAPTER_KEYS.AT_ASYLGH),
-  },
-  [ADAPTER_KEYS.AT_UBAS]: {
-    disposition: "enrolled",
-    fixture: () => atRisFixture(ADAPTER_KEYS.AT_UBAS),
-  },
-  [ADAPTER_KEYS.AT_UVS]: {
-    disposition: "enrolled",
-    fixture: () => atRisFixture(ADAPTER_KEYS.AT_UVS),
-  },
-  [ADAPTER_KEYS.AT_VERG]: {
-    disposition: "enrolled",
-    fixture: () => atRisFixture(ADAPTER_KEYS.AT_VERG),
-  },
-  [ADAPTER_KEYS.AT_UMSE]: {
-    disposition: "enrolled",
-    fixture: () => atRisFixture(ADAPTER_KEYS.AT_UMSE),
-  },
-  [ADAPTER_KEYS.AT_BKS]: {
-    disposition: "enrolled",
-    fixture: () => atRisFixture(ADAPTER_KEYS.AT_BKS),
-  },
-  [ADAPTER_KEYS.AT_FINDOK]: {
-    disposition: "enrolled",
-    fixture: atFindokFixture,
-  },
-  [ADAPTER_KEYS.EU_ECJ]: PENDING,
-  [ADAPTER_KEYS.HU_BHGY]: { disposition: "enrolled", fixture: huBhgyFixture },
-} as const satisfies Record<AdapterKey, AdapterInventoryCoverage>;
+  [ADAPTER_KEYS.CZ_NS]: czNsFixture,
+  [ADAPTER_KEYS.CZ_NSS]: czNssFixture,
+  [ADAPTER_KEYS.CZ_US]: czUsFixture,
+  [ADAPTER_KEYS.CZ_REGIONAL]: czRegionalFixture,
+  [ADAPTER_KEYS.SK_COURTS]: skCourtsFixture,
+  [ADAPTER_KEYS.SK_US]: skUsFixture,
+  [ADAPTER_KEYS.PL_COURTS]: plCourtsFixture,
+  [ADAPTER_KEYS.PL_SN]: plSnFixture,
+  [ADAPTER_KEYS.AT_COURTS]: () => atRisFixture(ADAPTER_KEYS.AT_COURTS),
+  [ADAPTER_KEYS.AT_VFGH]: () => atRisFixture(ADAPTER_KEYS.AT_VFGH),
+  [ADAPTER_KEYS.AT_VWGH]: () => atRisFixture(ADAPTER_KEYS.AT_VWGH),
+  [ADAPTER_KEYS.AT_BVWG]: () => atRisFixture(ADAPTER_KEYS.AT_BVWG),
+  [ADAPTER_KEYS.AT_LVWG]: () => atRisFixture(ADAPTER_KEYS.AT_LVWG),
+  [ADAPTER_KEYS.AT_ASYLGH]: () => atRisFixture(ADAPTER_KEYS.AT_ASYLGH),
+  [ADAPTER_KEYS.AT_UBAS]: () => atRisFixture(ADAPTER_KEYS.AT_UBAS),
+  [ADAPTER_KEYS.AT_UVS]: () => atRisFixture(ADAPTER_KEYS.AT_UVS),
+  [ADAPTER_KEYS.AT_VERG]: () => atRisFixture(ADAPTER_KEYS.AT_VERG),
+  [ADAPTER_KEYS.AT_UMSE]: () => atRisFixture(ADAPTER_KEYS.AT_UMSE),
+  [ADAPTER_KEYS.AT_BKS]: () => atRisFixture(ADAPTER_KEYS.AT_BKS),
+  [ADAPTER_KEYS.AT_FINDOK]: atFindokFixture,
+  [ADAPTER_KEYS.EU_ECJ]: euEcjFixture,
+  [ADAPTER_KEYS.HU_BHGY]: huBhgyFixture,
+} as const satisfies Record<AdapterKey, () => EnrolledAdapterFixture>;
 
 const DECLARED_ADAPTER_KEYS = Object.values(ADAPTER_KEYS);
-
-const PENDING_BASELINE: readonly string[] = baseline.pendingInventory;
 
 const adapterFor = (key: AdapterKey) =>
   getAdapter(key) ?? panic(`${key} is declared but not registered`);
@@ -229,66 +170,12 @@ const storedPartsOf = (
 // ── Invariants ───────────────────────────────────────────
 
 describe("every adapter accounts for the fields its source states", () => {
-  test("the pending baseline names exactly the adapters without an inventory", () => {
-    const pending = DECLARED_ADAPTER_KEYS.filter(
-      (key) => adapterFor(key).sourceFields.status === "pending-inventory",
-    );
-    const enrolledButListed = PENDING_BASELINE.filter(
-      (key) => !pending.some((candidate) => candidate === key),
-    );
-    const pendingButUnlisted = pending.filter(
-      (key) => !PENDING_BASELINE.includes(key),
-    );
-
-    // A ratchet only tightens: an adapter that enrolled leaves the baseline,
-    // and a new adapter without an inventory has to be added to it in the
-    // same change rather than inheriting the exemption silently.
-    expect(
-      enrolledButListed,
-      `source-field-inventory-baseline.json still lists adapters that now declare an inventory: ${enrolledButListed.join(", ")}. Delete those lines.`,
-    ).toEqual([]);
-    expect(
-      pendingButUnlisted,
-      `these adapters call pendingSourceFieldInventory without being in source-field-inventory-baseline.json: ${pendingButUnlisted.join(", ")}. Declare their source fields, or add them to the baseline in this change.`,
-    ).toEqual([]);
-  });
-
-  test("a pending adapter names itself, so a copied exemption fails", () => {
-    const misnamed = DECLARED_ADAPTER_KEYS.flatMap((key) => {
-      const { sourceFields } = adapterFor(key);
-      return sourceFields.status === "pending-inventory" &&
-        sourceFields.adapter !== key
-        ? [`${key} claims the exemption of ${sourceFields.adapter}`]
-        : [];
-    });
-
-    expect(
-      misnamed,
-      `these adapters declare a pending inventory under another adapter's name: ${misnamed.join("; ")}.`,
-    ).toEqual([]);
-  });
-
   for (const key of DECLARED_ADAPTER_KEYS) {
-    const coverage = ADAPTER_INVENTORY_COVERAGE[key];
-
-    test(`${key}: its fixture matches how it declares itself`, () => {
-      const { status } = adapterFor(key).sourceFields;
-      expect(
-        coverage.disposition === "enrolled",
-        `${key} declares ${status} but this suite has it as ${coverage.disposition}. An adapter with an inventory needs a fixture here to drive it.`,
-      ).toBe(status === "declared");
-    });
-
-    if (coverage.disposition === "pending-inventory") {
-      continue;
-    }
+    const fixture = ADAPTER_INVENTORY_COVERAGE[key];
 
     test(`${key}: every field its source states is stored or excluded`, async () => {
       const { sourceFields } = adapterFor(key);
-      if (sourceFields.status !== "declared") {
-        throw new Error(`${key}: expected a declared inventory`);
-      }
-      const decision = await coverage.fixture().buildDecision();
+      const decision = await fixture().buildDecision();
       const parts = storedPartsOf(key, decision);
 
       const stated = await sourceFields.listSourceFields(parts);
@@ -348,26 +235,4 @@ describe("every adapter accounts for the fields its source states", () => {
       ).toEqual([]);
     });
   }
-});
-
-/**
- * The exemption is a closed union, so the checks that keep it shrinking are
- * the compiler's. Each directive below is the assertion: remove it and the
- * build fails, which is what "a new source cannot name itself into the
- * baseline" means.
- */
-describe("the inventory exemption cannot grow", () => {
-  test("a source registered tomorrow cannot claim it", () => {
-    // @ts-expect-error only the adapters on the committed baseline may call this
-    const pending = pendingSourceFieldInventory("zz-new-court");
-
-    expect(pending.status).toBe("pending-inventory");
-  });
-
-  test("an adapter that enrolled cannot claim it back", () => {
-    // @ts-expect-error cz-us left the union when it declared its inventory
-    const pending = pendingSourceFieldInventory(ADAPTER_KEYS.CZ_US);
-
-    expect(pending.status).toBe("pending-inventory");
-  });
 });

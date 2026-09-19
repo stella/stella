@@ -739,6 +739,7 @@
       "cites": "Cituoja",
       "dissentByline": "Atskiroji nuomonė: <bdi>{names}</bdi>",
       "judgeRole": {
+        "advocateGeneral": "Generalinis advokatas",
         "dissenting": "Atskiroji nuomonė",
         "panelMember": "Kolegijos narys",
         "presiding": "Kolegijos pirmininkas",

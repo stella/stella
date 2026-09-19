@@ -1,4 +1,5 @@
 import { panic, Result } from "better-result";
+import JSZip from "jszip";
 
 import { Temporal } from "@stll/time";
 
@@ -10,23 +11,30 @@ import {
 import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import {
   backlogSurface,
+  decodeSourceRawEnvelope,
   defineSourceAdapter,
   EMPTY_AST,
+  encodeSourceRawEnvelope,
+  excludedSourceField,
   excludedSourceSurface,
   isPersistableSourceDocumentId,
-  pendingSourceFieldInventory,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   STORED_RAW_REPARSE_REJECTION,
   SOURCE_TOTAL_PROBE_FAILURE,
   sourceTotalProbeFailed,
   sourceTotalRead,
+  storedSourceSurface,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type {
+  DecisionJudgeInput,
   EmptyAst,
   IngestionResult,
   ListingIdentity,
   ReconciliationBuildOutcome,
   ReconciliationSlicePage,
   ReconciliationSlicePageOptions,
+  SourceFieldDisposition,
+  SourceRawParts,
   SourceSurfaceCensus,
   SourceSurfaceDisposition,
   StoredRawReparseInput,
@@ -41,11 +49,26 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import type { ParseEcjDecisionInput } from "@/api/handlers/case-law/ingestion/parsers/eu-ecj";
 import {
+  ecjConverterVersion,
   ecjDocumentHtml,
   ecjKeywordSpacingNeedsVerbatim,
+  ecjStatesKeywordChain,
   parseEcjDecisionHtml,
 } from "@/api/handlers/case-law/ingestion/parsers/eu-ecj";
+import {
+  listEcjFormexFields,
+  parseFormexBibliography,
+} from "@/api/handlers/case-law/ingestion/parsers/eu-ecj-formex-bibliography";
+import {
+  listEcjNoticeFields,
+  parseEcjNotice,
+} from "@/api/handlers/case-law/ingestion/parsers/eu-ecj-notice";
+import type {
+  EcjNoticeFacts,
+  EcjNoticeManifestation,
+} from "@/api/handlers/case-law/ingestion/parsers/eu-ecj-notice";
 import { sectionsFromAst } from "@/api/handlers/case-law/ingestion/sections-from-ast";
+import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
 import { captureError } from "@/api/lib/analytics/capture";
 import {
   TEXT_ABSENCE_REASON,
@@ -183,7 +206,14 @@ type SparqlBinding = {
   type: string;
 };
 
-type SparqlResult = {
+/**
+ * One row of the listing, as the six `SELECT` variables bind it.
+ *
+ * Exported because it is the shape of the `listing` envelope part: a caller
+ * building a stored row has to state the binding that named it, and a
+ * second declaration of these six names could drift from the query.
+ */
+export type EcjSparqlBinding = {
   ecli: SparqlBinding;
   date: SparqlBinding;
   celex: SparqlBinding;
@@ -191,6 +221,8 @@ type SparqlResult = {
   language: SparqlBinding;
   manifestation: SparqlBinding;
 };
+
+type SparqlResult = EcjSparqlBinding;
 
 type SparqlResponse = {
   results: {
@@ -308,6 +340,68 @@ const CELEX = /^[0-9A-Z()]+$/u;
 /** Boundary check for callers that accept CELEX numbers as input. */
 export const isValidCelex = (value: string): boolean => CELEX.test(value);
 
+type ListingQueryOptions = {
+  dateFrom: string;
+  dateTo: string;
+  celexFilter?: readonly string[] | undefined;
+};
+
+/**
+ * The listing query, in the one shape this endpoint answers.
+ *
+ * Two shapes it does not, both of which a reader would write first:
+ *
+ * - `cdm:resource_legal_id_celex` holds `xsd:string`-typed literals, and a
+ *   plain `"62022CJ0128"` literal is a different RDF term. The query answers
+ *   200 with no rows, so the miss looks exactly like a decision the Office
+ *   does not hold. The datatype is therefore written out.
+ * - Selecting into an unbound `?celex` and filtering it with `STR()` puts the
+ *   whole CELEX index inside the filter, and the endpoint stops answering.
+ *   `VALUES` binds the term before the pattern is joined instead.
+ *
+ * Exported so both shapes are assertions over the builder rather than
+ * something a reader has to keep in mind.
+ */
+export const buildListingQuery = ({
+  dateFrom,
+  dateTo,
+  celexFilter,
+}: ListingQueryOptions): string => {
+  const celexClause =
+    celexFilter && celexFilter.length > 0
+      ? `\n  VALUES ?celex { ${celexFilter
+          .map((celex) => `"${celex}"^^xsd:string`)
+          .join(" ")} }`
+      : "";
+
+  return `
+PREFIX cdm: <http://publications.europa.eu/ontology/cdm#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+SELECT DISTINCT ?ecli ?date ?celex ?type ?language ?manifestation
+WHERE {${celexClause}
+  ?doc cdm:case-law_ecli ?ecli .
+  ?doc cdm:work_date_document ?date .
+  ?doc cdm:resource_legal_id_celex ?celex .
+  ?doc a ?type .
+  ?expression cdm:expression_belongs_to_work ?doc .
+  ?expression cdm:expression_uses_language ?language .
+  ?manifestation cdm:manifestation_manifests_expression ?expression .
+  ?manifestation cdm:manifestation_type ?manifestationType .
+  FILTER(?type IN (
+    cdm:judgement,
+    cdm:order,
+    cdm:order_cjeu,
+    cdm:opinion_advocate_general,
+    cdm:opinion_advocate-general
+  ))
+  FILTER(STR(?manifestationType) = "xhtml")
+  FILTER(STR(?date) >= "${dateFrom}")
+  FILTER(STR(?date) <= "${dateTo}")
+}
+ORDER BY ASC(?date) ASC(?celex) ASC(?language)
+LIMIT ${SPARQL_LIMIT}`.trim();
+};
+
 const queryDecisions = async ({
   dateFrom,
   dateTo,
@@ -333,36 +427,7 @@ const queryDecisions = async ({
     });
   }
 
-  const celexClause =
-    celexFilter && celexFilter.length > 0
-      ? `\n  FILTER(STR(?celex) IN (${celexFilter.map((celex) => `"${celex}"`).join(", ")}))`
-      : "";
-
-  const query = `
-PREFIX cdm: <http://publications.europa.eu/ontology/cdm#>
-SELECT DISTINCT ?ecli ?date ?celex ?type ?language ?manifestation
-WHERE {
-  ?doc cdm:case-law_ecli ?ecli .
-  ?doc cdm:work_date_document ?date .
-  ?doc cdm:resource_legal_id_celex ?celex .
-  ?doc a ?type .
-  ?expression cdm:expression_belongs_to_work ?doc .
-  ?expression cdm:expression_uses_language ?language .
-  ?manifestation cdm:manifestation_manifests_expression ?expression .
-  ?manifestation cdm:manifestation_type ?manifestationType .
-  FILTER(?type IN (
-    cdm:judgement,
-    cdm:order,
-    cdm:order_cjeu,
-    cdm:opinion_advocate_general,
-    cdm:opinion_advocate-general
-  ))
-  FILTER(STR(?manifestationType) = "xhtml")
-  FILTER(STR(?date) >= "${dateFrom}")
-  FILTER(STR(?date) <= "${dateTo}")${celexClause}
-}
-ORDER BY ASC(?date) ASC(?celex) ASC(?language)
-LIMIT ${SPARQL_LIMIT}`.trim();
+  const query = buildListingQuery({ dateFrom, dateTo, celexFilter });
 
   const response = await fetchPublisher(SPARQL_URL, {
     adapterKey: ADAPTER_KEYS.EU_ECJ,
@@ -1066,6 +1131,47 @@ const ECJ_VERBATIM_RAW_CONTENT_TYPE =
 const UNKNOWN_DECISION_TYPE = "unknown";
 
 /**
+ * The envelope part each response the Office serves for one language variant
+ * is kept as.
+ *
+ * A row is one expression, so every part is that expression's: the notice is
+ * fetched in the row's own language rather than once per work. The
+ * alternative saves 23 requests per decision and stores, in 23 of the 24
+ * rows, a title and a docket wording belonging to another one.
+ */
+const RAW_PART = {
+  LISTING: "listing",
+  NOTICE: "notice",
+  DOCUMENT: "document",
+  FORMEX: "formex",
+} as const;
+
+/** Cellar's addressing for a work's notice, negotiated per language. */
+const CELLAR_CELEX_PREFIX = "https://publications.europa.eu/resource/celex/";
+
+const BRANCH_NOTICE_MEDIA_TYPE = "application/xml; notice=branch";
+
+/** The manifestation type Formex is published under. */
+const FORMEX_MANIFESTATION_TYPE = "fmx4";
+
+const FORMEX_MEDIA_TYPE = "application/xml;type=fmx4";
+
+const ZIP_MEDIA_TYPE = "application/zip";
+
+/**
+ * The courts this source publishes for, by the corporate-body code the notice
+ * states, and the name a row is filed under.
+ *
+ * Read from the code rather than from the notice's own label: the same work
+ * answers 24 notices and each renders the label in its negotiated language,
+ * so a row built from the label would file one judgment under 24 courts.
+ */
+const COURT_BY_CORPORATE_BODY: Readonly<Record<string, string>> = {
+  CJ: "Court of Justice",
+  GCEU: "General Court",
+};
+
+/**
  * Fields identifying one language variant of one decision, as either the
  * SPARQL binding or the stored row supplies them.
  */
@@ -1081,25 +1187,143 @@ type EcjDecisionIdentity = {
   documentUrl: string | undefined;
 };
 
-type EcjDecisionFromHtmlOptions = EcjDecisionIdentity & {
-  html: string;
+type EcjDecisionFromPartsOptions = EcjDecisionIdentity & {
+  /** Every response fetched for this variant, under its envelope part name. */
+  parts: SourceRawParts;
   /**
-   * Metadata this result carries besides the parser-derived keywords. The
-   * crawl passes what the SPARQL binding resolved; a re-parse passes the
-   * row's stored metadata, so fields the query once recorded survive.
+   * Metadata this result carries besides what the parts state. The crawl
+   * passes what the SPARQL binding resolved; a re-parse passes the row's
+   * stored metadata, so fields the query once recorded survive.
    */
   metadata: Record<string, unknown>;
   textFields: DecisionTextFields;
 };
 
+type EcjRawPartsOptions = {
+  binding: SparqlResult;
+  html: string;
+  notice: string | undefined;
+  formex: string | undefined;
+};
+
 /**
- * Build the ingestion result for one XHTML manifestation.
+ * The responses fetched for one variant, under the names the envelope gives
+ * them.
+ *
+ * The listing part is the binding itself rather than the whole SPARQL
+ * response: a page answers for every variant of the day, and only this one's
+ * row belongs in this row's envelope. A part the Office did not serve is left
+ * out rather than stored empty, so a reader can tell a response that was
+ * fetched and was blank from one that was never fetched.
+ */
+export const ecjRawParts = ({
+  binding,
+  html,
+  notice,
+  formex,
+}: EcjRawPartsOptions): SourceRawParts => ({
+  [RAW_PART.LISTING]: JSON.stringify(binding),
+  [RAW_PART.DOCUMENT]: html,
+  ...(notice === undefined ? {} : { [RAW_PART.NOTICE]: notice }),
+  ...(formex === undefined ? {} : { [RAW_PART.FORMEX]: formex }),
+});
+
+/**
+ * The court, from the corporate body the notice names.
+ *
+ * Replaces reading the court off a substring of the ECLI, which files every
+ * non-`:T:` document under the Court of Justice and so mis-files the Civil
+ * Service Tribunal's. A code nothing maps is reported rather than defaulted:
+ * the Office adding a body is exactly the case where a silent default would
+ * file its decisions under the wrong court.
+ */
+const courtFromNotice = (code: string | undefined): string | undefined => {
+  if (code === undefined) {
+    return undefined;
+  }
+  const court = COURT_BY_CORPORATE_BODY[code];
+  if (court === undefined) {
+    logger.warn("case_law.ingestion.unmapped_cjeu_corporate_body", {
+      adapterKey: ADAPTER_KEYS.EU_ECJ,
+      corporateCode: code,
+    });
+  }
+  return court;
+};
+
+/** The bench as the notice names it, rapporteur before Advocate General. */
+const noticeJudges = (facts: EcjNoticeFacts): DecisionJudgeInput[] => {
+  const judges: DecisionJudgeInput[] = [];
+  if (facts.rapporteur !== undefined) {
+    judges.push({
+      role: DECISION_JUDGE_ROLE.RAPPORTEUR,
+      nameAsPrinted: facts.rapporteur,
+    });
+  }
+  if (facts.advocateGeneral !== undefined) {
+    judges.push({
+      role: DECISION_JUDGE_ROLE.ADVOCATE_GENERAL,
+      nameAsPrinted: facts.advocateGeneral,
+    });
+  }
+  return judges;
+};
+
+/** Keys whose value is absent are left off rather than stored as `undefined`. */
+const presentEntries = (
+  entries: Readonly<Record<string, unknown>>,
+): Record<string, unknown> =>
+  Object.fromEntries(
+    Object.entries(entries).filter(
+      ([, value]) =>
+        value !== undefined &&
+        !(Array.isArray(value) && value.length === 0) &&
+        !(
+          typeof value === "object" &&
+          value !== null &&
+          !Array.isArray(value) &&
+          Object.keys(value).length === 0
+        ),
+    ),
+  );
+
+/** What the notice states about this variant, as the row keeps it. */
+const noticeMetadata = (facts: EcjNoticeFacts): Record<string, unknown> =>
+  presentEntries({
+    lodgedOn: facts.lodgedOn,
+    form: facts.form,
+    celexType: facts.celexType,
+    recordVersion: facts.recordVersion,
+    referringCountry: facts.referringCountry,
+    procedureLanguage: facts.procedureLanguage,
+    procedureType: facts.procedureType,
+    observations: facts.observations,
+    nationalJudgment: facts.nationalJudgment,
+    interprets: facts.interprets,
+    doctrine: facts.doctrine,
+    subjectMatter: facts.subjectMatter,
+    caseLawSubjectMatter: facts.caseLawSubjectMatter,
+    caseLawDirectory: facts.caseLawDirectory,
+    caseLawDirectoryNew: facts.caseLawDirectoryNew,
+    publishedInReports: facts.publishedInReports,
+    reportsReference: facts.reportsReference,
+    ojNotice: facts.ojNotice,
+    dossier: facts.dossier,
+    caseEventWorks: facts.caseEventWorks,
+    abstractCelex: facts.abstractCelex,
+    title: facts.title,
+    caseIdentifier: facts.caseIdentifier,
+    manifestations: facts.manifestations,
+  });
+
+/**
+ * Build the ingestion result for one stored envelope.
  *
  * The crawl and the stored-payload re-parse both go through here, so the
  * two cannot produce different results for the same bytes: replaying a
  * stored payload writes exactly what a fresh crawl of it would write.
  */
-const ecjDecisionFromHtml = ({
+const ecjDecisionFromParts = ({
   celex,
   ecli,
   court,
@@ -1108,15 +1332,29 @@ const ecjDecisionFromHtml = ({
   language,
   sourceUrl,
   documentUrl,
-  html,
+  parts,
   metadata,
   textFields,
-}: EcjDecisionFromHtmlOptions): IngestionResult | undefined => {
+}: EcjDecisionFromPartsOptions): IngestionResult | undefined => {
+  const html = parts[RAW_PART.DOCUMENT];
+  if (html === undefined) {
+    return undefined;
+  }
+  const noticeXml = parts[RAW_PART.NOTICE];
+  const formexXml = parts[RAW_PART.FORMEX];
+  const facts = noticeXml === undefined ? undefined : parseEcjNotice(noticeXml);
+  const bibliography =
+    formexXml === undefined ? undefined : parseFormexBibliography(formexXml);
+  const statedCourt =
+    courtFromNotice(facts?.courtCode) ??
+    courtFromNotice(bibliography?.author) ??
+    court;
+
   const caseNumber = celexToCaseNumber(celex);
   const { documentAst, sections, fulltext, keywords } = parseManifestation({
     caseNumber,
     ecli,
-    court,
+    court: statedCourt,
     decisionDate,
     decisionType,
     sourceUrl,
@@ -1128,6 +1366,9 @@ const ecjDecisionFromHtml = ({
   if (!fulltext) {
     return undefined;
   }
+
+  const judges = facts === undefined ? [] : noticeJudges(facts);
+  const converterVersion = ecjConverterVersion(html);
 
   return {
     caseNumber,
@@ -1141,7 +1382,7 @@ const ecjDecisionFromHtml = ({
     // the collapse being undone.
     ...(sourceUrl === undefined ? {} : { legacySourceUrls: [sourceUrl] }),
     ecli,
-    court,
+    court: statedCourt,
     country: ADAPTER_MANIFESTS[ADAPTER_KEYS.EU_ECJ].country,
     language,
     decisionDate,
@@ -1149,13 +1390,29 @@ const ecjDecisionFromHtml = ({
     fulltext,
     sourceUrl,
     documentUrl,
+    // Absent, not empty, where no notice was read: an empty list is a
+    // publisher saying the decision names nobody, and a row stored before the
+    // notice was fetched would have its bench replaced by that statement.
+    ...(judges.length === 0 ? {} : { judges }),
+    ...(facts === undefined || facts.citedWorks.length === 0
+      ? {}
+      : { publisherCitedCases: facts.citedWorks }),
     metadata: checkedDecisionMetadata({
       ...metadata,
+      ...(facts === undefined ? {} : noticeMetadata(facts)),
+      ...presentEntries({ publisherCaseNumber: bibliography?.caseNumber }),
+      ...(bibliography === undefined
+        ? {}
+        : presentEntries({
+            reportsSequence: bibliography.sequence,
+            reportsPages: bibliography.pages,
+          })),
       celex,
       ecli,
       decisionDate,
       decisionType,
       keywords,
+      ...presentEntries({ converterVersion }),
     }),
     textFields,
     rawHash: hashContent(
@@ -1164,24 +1421,50 @@ const ecjDecisionFromHtml = ({
     parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.EU_ECJ],
     documentAst,
     sections,
-    sourceRaw: html,
-    sourceRawBytes: new TextEncoder().encode(html),
-    sourceRawContentType: ECJ_VERBATIM_RAW_CONTENT_TYPE,
+    // The envelope, not the manifestation alone: the query binding that named
+    // the row and the notice that states its bench are responses no address
+    // in the row would lead a replay back to.
+    sourceRaw: encodeSourceRawEnvelope(parts),
+    sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   };
 };
 
 /**
- * Media types a stored payload may carry for this adapter. `null` is
- * accepted because the only payload this adapter has ever stored is the
- * Cellar XHTML manifestation, written together with its content type;
- * anything else named is not a manifestation and is rejected rather than
- * fed to the XHTML parser.
+ * Media types a stored payload may carry for this adapter.
+ *
+ * The envelope is what this adapter writes now; the three below are what it
+ * wrote before, and every row from then holds the XHTML manifestation alone
+ * with no name on it. `null` is accepted for the same reason: an early row
+ * was written without a content type at all.
  */
 const ECJ_REPARSABLE_CONTENT_TYPES = new Set([
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   ECJ_RAW_CONTENT_TYPE,
   ECJ_VERBATIM_RAW_CONTENT_TYPE,
   "text/html",
 ]);
+
+/**
+ * The parts a stored payload holds, whether or not it is an envelope.
+ *
+ * A row written before this adapter had one carries the manifestation as a
+ * bare payload, which is a `document` part and nothing else: the query
+ * binding that named it and the notice that states its bench were never
+ * kept, so a replay of such a row rebuilds the decision the crawl then wrote
+ * rather than the one it would write today.
+ */
+const ecjStoredRawParts = (
+  raw: string,
+  contentType: string | null,
+): SourceRawParts | null => {
+  const envelope = decodeSourceRawEnvelope(raw);
+  if (envelope !== null) {
+    return envelope;
+  }
+  return contentType === SOURCE_RAW_ENVELOPE_CONTENT_TYPE
+    ? null
+    : { [RAW_PART.DOCUMENT]: raw };
+};
 
 const nonEmptyString = (value: unknown): string | undefined =>
   typeof value === "string" && value.length > 0 ? value : undefined;
@@ -1233,8 +1516,22 @@ const reparseStoredRaw = (
   const publishedLanguage = ECJ_LANGUAGES.find(
     (supported) => supported === language.toUpperCase(),
   );
-  const html = new TextDecoder().decode(stored.raw);
+  const raw = new TextDecoder().decode(stored.raw);
+  const parts = ecjStoredRawParts(raw, stored.contentType);
+  const html = parts?.[RAW_PART.DOCUMENT];
+  if (parts === null || html === undefined) {
+    return {
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.NO_DOCUMENT,
+      detail: `no manifestation in the stored payload for ${celex}`,
+    };
+  }
+  // Any bare payload but the verbatim one can have lost it, the untyped early
+  // rows included. An envelope carries the manifestation as a JSON string,
+  // which preserves the non-breaking spaces that separate one keyword from the
+  // next, and the verbatim type says the bytes never passed through a string.
   if (
+    stored.contentType !== SOURCE_RAW_ENVELOPE_CONTENT_TYPE &&
     stored.contentType !== ECJ_VERBATIM_RAW_CONTENT_TYPE &&
     ecjKeywordSpacingNeedsVerbatim(html)
   ) {
@@ -1248,7 +1545,7 @@ const reparseStoredRaw = (
   const { metadata, textFields } = splitStoredDecisionTextMetadata(
     stored.metadata,
   );
-  const result = ecjDecisionFromHtml({
+  const result = ecjDecisionFromParts({
     celex,
     ecli,
     court: stored.court,
@@ -1262,7 +1559,7 @@ const reparseStoredRaw = (
       stored.sourceUrl ??
       (publishedLanguage && eurLexSourceUrl(publishedLanguage, celex)),
     documentUrl: stored.documentUrl ?? undefined,
-    html,
+    parts,
     metadata: checkedDecisionMetadata(metadata),
     textFields,
   });
@@ -1277,9 +1574,101 @@ const reparseStoredRaw = (
 };
 
 /**
+ * The branch notice for one work, negotiated into one expression's language.
+ *
+ * Per expression and not per work: the notice renders every concept label,
+ * the title and the docket wording in the language asked for, so a row
+ * holding another expression's notice states another row's facts. The
+ * request is addressed by CELEX rather than by the work's cellar UUID, which
+ * the listing binding does not carry.
+ *
+ * A notice the Office does not serve is not a failure: the row keeps the
+ * parts it has, and the decision is stored without the fields only the
+ * notice states.
+ */
+const fetchNotice = async (
+  celex: string,
+  languageUri: string,
+  signal: AbortSignal,
+): Promise<string | undefined> => {
+  const cellarLanguage = languageUri.startsWith(CELLAR_LANGUAGE_PREFIX)
+    ? languageUri.slice(CELLAR_LANGUAGE_PREFIX.length).toLowerCase()
+    : undefined;
+  if (cellarLanguage === undefined) {
+    return undefined;
+  }
+  const response = await fetchPublisher(`${CELLAR_CELEX_PREFIX}${celex}`, {
+    adapterKey: ADAPTER_KEYS.EU_ECJ,
+    signal,
+    timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+    headers: {
+      Accept: BRANCH_NOTICE_MEDIA_TYPE,
+      "Accept-Language": cellarLanguage,
+      "User-Agent": INGESTION_USER_AGENT,
+    },
+  });
+  if (!response.ok) {
+    logger.warn("case_law.ingestion.notice_unavailable", {
+      adapterKey: ADAPTER_KEYS.EU_ECJ,
+      celex,
+      language: cellarLanguage,
+      httpStatus: response.status,
+    });
+    return undefined;
+  }
+  return await response.text();
+};
+
+/**
+ * The Formex manifestation of this expression, addressed from the notice.
+ *
+ * The notice lists every format of the expression with its type, so no
+ * second query is needed to reach this one. Cellar serves it either as the
+ * XML itself or as a one-entry zip, depending on how the document was
+ * published, and negotiates on the exact media type.
+ */
+const fetchFormex = async (
+  manifestations: readonly EcjNoticeManifestation[],
+  signal: AbortSignal,
+): Promise<string | undefined> => {
+  const manifestation = manifestations.find(
+    (candidate) => candidate.type === FORMEX_MANIFESTATION_TYPE,
+  );
+  if (manifestation === undefined) {
+    return undefined;
+  }
+  const contentUrl = `${manifestation.uri.replace("http://", "https://")}/DOC_1`;
+  const response = await fetchPublisher(contentUrl, {
+    adapterKey: ADAPTER_KEYS.EU_ECJ,
+    signal,
+    timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+    headers: {
+      Accept: `${FORMEX_MEDIA_TYPE}, ${ZIP_MEDIA_TYPE}`,
+      "User-Agent": INGESTION_USER_AGENT,
+    },
+  });
+  if (!response.ok) {
+    logger.warn("case_law.ingestion.formex_unavailable", {
+      adapterKey: ADAPTER_KEYS.EU_ECJ,
+      httpStatus: response.status,
+      url: contentUrl,
+    });
+    return undefined;
+  }
+  if (
+    mediaTypeOf(response.headers.get("content-type") ?? "") !== ZIP_MEDIA_TYPE
+  ) {
+    return await response.text();
+  }
+  const archive = await JSZip.loadAsync(await response.arrayBuffer());
+  const entry = Object.values(archive.files).find((file) => !file.dir);
+  return await entry?.async("string");
+};
+
+/**
  * Turn one SPARQL binding into an ingestion result: fetch the language
- * variant's XHTML manifestation, parse it, and attach the metadata the
- * query already resolved.
+ * variant's XHTML manifestation, the notice and the structured rendition of
+ * the same expression, and keep each under the part name it is stored as.
  *
  * Exported so fixture recording goes through the same path the crawl
  * does; a fixture that drifts from adapter output is worse than none.
@@ -1328,7 +1717,14 @@ export const buildDecision = async (
     return undefined;
   }
 
-  return ecjDecisionFromHtml({
+  const notice = await fetchNotice(celex, binding.language.value, signal);
+  const formex =
+    notice === undefined
+      ? undefined
+      : await fetchFormex(parseEcjNotice(notice).manifestations, signal);
+  const parts = ecjRawParts({ binding, html: served.html, notice, formex });
+
+  return ecjDecisionFromParts({
     celex,
     ecli,
     court,
@@ -1339,7 +1735,7 @@ export const buildDecision = async (
     // The address that answered, not the one the manifestation is named by:
     // an item-only manifestation answers 404 at its own URL.
     documentUrl: served.url,
-    html: served.html,
+    parts,
     textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
     metadata: {
       manifestationUri: binding.manifestation.value,
@@ -1525,6 +1921,590 @@ const buildEcjVariant = async (
     : { type: "built", decision };
 };
 
+// ── Source-field inventory ───────────────────────────────
+
+/** What the manifestation states that is not the decision's own text. */
+const DOCUMENT_FIELD = {
+  BODY: "document.body",
+  KEYWORDS: "document.keywords",
+  CONVERTER: "document.converterVersion",
+} as const;
+
+const noticeField = (name: string): string => `notice.${name}`;
+
+/**
+ * Every name the Office states for one decision, addressed by the part that
+ * states it.
+ *
+ * Qualified twice over, because the same tag means a different thing at each
+ * level the repository records: `notice.WORK/URI` is the decision's permanent
+ * address, `notice.EXPRESSION/URI` is this translation's, and
+ * `notice.MANIFESTATION/URI` is one format of it. Unqualified, a single
+ * disposition would stand for all three.
+ */
+const SOURCE_FIELDS = [
+  "listing.celex",
+  "listing.ecli",
+  "listing.date",
+  "listing.type",
+  "listing.language",
+  "listing.manifestation",
+  "notice.WORK/CASE-LAW_ARTICLE_JOURNAL_RELATED",
+  "notice.WORK/CASE-LAW_COMMENTED_BY_AGENT",
+  "notice.WORK/CASE-LAW_COMMUNICATED_ON_BY_COMMUNICATION_CJEU",
+  "notice.WORK/CASE-LAW_DELIVERED_BY_ADVOCATE-GENERAL",
+  "notice.WORK/CASE-LAW_DELIVERED_BY_JUDGE",
+  "notice.WORK/CASE-LAW_HAS_TYPE_PROCEDURE_CONCEPT_TYPE_PROCEDURE",
+  "notice.WORK/CASE-LAW_INTERPRETES_RESOURCE_LEGAL",
+  "notice.WORK/CASE-LAW_IS-ABOUT_CASE-LAW-SUBJECT-MATTER",
+  "notice.WORK/CASE-LAW_IS_ABOUT_CONCEPT",
+  "notice.WORK/CASE-LAW_IS_ABOUT_CONCEPT.MEMBERLIST",
+  "notice.WORK/CASE-LAW_IS_ABOUT_CONCEPT_NEW_CASE-LAW",
+  "notice.WORK/CASE-LAW_NATIONAL-JUDGEMENT",
+  "notice.WORK/CASE-LAW_ORIGINATES_IN_COUNTRY",
+  "notice.WORK/CASE-LAW_ORIGINATES_IN_COUNTRY_ROLE-QUALIFIER",
+  "notice.WORK/CASE-LAW_PUBLISHED_IN_ERECUEIL",
+  "notice.WORK/CASE-LAW_USES_PROCEDURE_LANGUAGE",
+  "notice.WORK/COMPLEX_WORK_HAS_MEMBER_WORK",
+  "notice.WORK/CREATED_BY",
+  "notice.WORK/CREATIONDATE",
+  "notice.WORK/DATE",
+  "notice.WORK/DATE_CREATION_LEGACY",
+  "notice.WORK/DATE_DOCUMENT",
+  "notice.WORK/ECLI",
+  "notice.WORK/IDENTIFIER",
+  "notice.WORK/ID_CELEX",
+  "notice.WORK/ID_SECTOR",
+  "notice.WORK/IS_ABOUT",
+  "notice.WORK/LASTMODIFICATIONDATE",
+  "notice.WORK/PART_OF",
+  "notice.WORK/RESOURCE_LEGAL_DATE_REQUEST_OPINION",
+  "notice.WORK/RESOURCE_LEGAL_ID_CELEX",
+  "notice.WORK/RESOURCE_LEGAL_IS_ABOUT_SUBJECT-MATTER",
+  "notice.WORK/RESOURCE_LEGAL_NUMBER_NATURAL_CELEX",
+  "notice.WORK/RESOURCE_LEGAL_TYPE",
+  "notice.WORK/RESOURCE_LEGAL_USES_ORIGINALLY_LANGUAGE",
+  "notice.WORK/RESOURCE_LEGAL_YEAR",
+  "notice.WORK/SAMEAS",
+  "notice.WORK/TYPE",
+  "notice.WORK/URI",
+  "notice.WORK/VERSION",
+  "notice.WORK/WORK_CITES_WORK",
+  "notice.WORK/WORK_CREATED_BY_AGENT",
+  "notice.WORK/WORK_DATE_DOCUMENT",
+  "notice.WORK/WORK_HAS_EXPRESSION",
+  "notice.WORK/WORK_HAS_RESOURCE-TYPE",
+  "notice.WORK/WORK_ID_DOCUMENT",
+  "notice.WORK/WORK_PART_OF_DOSSIER",
+  "notice.WORK/WORK_PART_OF_DOSSIER/CONTAINS",
+  "notice.WORK/WORK_PART_OF_DOSSIER/DOSSIER_CONTAINS_WORK",
+  "notice.WORK/WORK_PART_OF_DOSSIER/DOSSIER_IDENTIFIER",
+  "notice.WORK/WORK_PART_OF_DOSSIER/DOSSIER_TITLE",
+  "notice.WORK/WORK_PART_OF_DOSSIER/DOSSIER_TYPE_REFERENCE",
+  "notice.WORK/WORK_PART_OF_DOSSIER/EVENT_CONTAINS_WORK",
+  "notice.WORK/WORK_PART_OF_DOSSIER/PART_OF",
+  "notice.WORK/WORK_PART_OF_DOSSIER/TYPE",
+  "notice.WORK/WORK_PART_OF_WORK",
+  "notice.WORK/WORK_PART_OF_WORK/CONTAINER_CASE-LAW_COURT",
+  "notice.WORK/WORK_PART_OF_WORK/CONTAINER_CASE-LAW_FASCICULE",
+  "notice.WORK/WORK_PART_OF_WORK/CONTAINER_CASE-LAW_ID_NUMPUB",
+  "notice.WORK/WORK_PART_OF_WORK/CONTAINER_CASE-LAW_NUMBER",
+  "notice.WORK/WORK_PART_OF_WORK/CONTAINER_CASE-LAW_YEAR_DECISION",
+  "notice.WORK/WORK_PART_OF_WORK/CONTAINS",
+  "notice.WORK/WORK_PART_OF_WORK/EXPRESSION_TITLE",
+  "notice.WORK/WORK_PART_OF_WORK/EXPRESSION_USES_LANGUAGE",
+  "notice.WORK/WORK_PART_OF_WORK/NUMBER",
+  "notice.WORK/WORK_PART_OF_WORK/TYPE",
+  "notice.WORK/WORK_PART_OF_WORK/WORK_DATE_DOCUMENT",
+  "notice.WORK/WORK_PART_OF_WORK/WORK_HAS_RESOURCE-TYPE",
+  "notice.WORK/WORK_SUMMARIZED_BY_SUMMARY",
+  "notice.WORK/YEAR",
+  "notice.EXPRESSION/CREATIONDATE",
+  "notice.EXPRESSION/EXPRESSION_BELONGS_TO_WORK",
+  "notice.EXPRESSION/EXPRESSION_CASE-LAW_IDENTIFIER_CASE",
+  "notice.EXPRESSION/EXPRESSION_CASE-LAW_PARTIES",
+  "notice.EXPRESSION/EXPRESSION_MANIFESTED_BY_MANIFESTATION",
+  "notice.EXPRESSION/EXPRESSION_TITLE",
+  "notice.EXPRESSION/EXPRESSION_USES_LANGUAGE",
+  "notice.EXPRESSION/LANG",
+  "notice.EXPRESSION/LASTMODIFICATIONDATE",
+  "notice.EXPRESSION/PARTIES",
+  "notice.EXPRESSION/SAMEAS",
+  "notice.EXPRESSION/TITLE",
+  "notice.EXPRESSION/URI",
+  "notice.MANIFESTATION/CREATIONDATE",
+  "notice.MANIFESTATION/LASTMODIFICATIONDATE",
+  "notice.MANIFESTATION/MANIFESTATION_HAS_ITEM",
+  "notice.MANIFESTATION/MANIFESTATION_MANIFESTS_EXPRESSION",
+  "notice.MANIFESTATION/MANIFESTATION_TYPE",
+  "notice.MANIFESTATION/SAMEAS",
+  "notice.MANIFESTATION/TYPE",
+  "notice.MANIFESTATION/URI",
+  "document.body",
+  "document.keywords",
+  "document.converterVersion",
+  "formex.BIB/REF.CASE",
+  "formex.BIB/NO.CELEX",
+  "formex.BIB/NO.ECLI",
+  "formex.BIB/NO.SEQ",
+  "formex.BIB/PAGE.FIRST.ECR",
+  "formex.BIB/PAGE.SEQ",
+  "formex.BIB/PAGE.LAST.ECR",
+  "formex.BIB/PAGE.TOTAL",
+  "formex.BIB/AUTHOR",
+  "formex.body",
+] as const;
+
+/**
+ * What becomes of each of them.
+ *
+ * Three principles run through the exclusions. The repository states the same
+ * identifier under a generic name and under a specific one, and only the
+ * specific one is read. It states its own record timestamps, which move when
+ * the Office re-indexes and say nothing about the decision. And it states,
+ * for this work, every other language expression and every cited work, each
+ * of which is a row of its own or a document of its own.
+ */
+const EU_ECJ_SOURCE_FIELDS = {
+  "listing.celex": { disposition: "stored", target: { type: "identity" } },
+  "listing.ecli": {
+    disposition: "stored",
+    target: { type: "result", key: "ecli" },
+  },
+  "listing.date": {
+    disposition: "stored",
+    target: { type: "result", key: "decisionDate" },
+  },
+  "listing.type": {
+    disposition: "stored",
+    target: { type: "result", key: "decisionType" },
+  },
+  "listing.language": { disposition: "stored", target: { type: "identity" } },
+  "listing.manifestation": {
+    disposition: "stored",
+    target: { type: "result", key: "documentUrl" },
+  },
+  "notice.WORK/CASE-LAW_ARTICLE_JOURNAL_RELATED": {
+    disposition: "stored",
+    target: { type: "metadata", key: "doctrine" },
+  },
+  "notice.WORK/CASE-LAW_COMMENTED_BY_AGENT": {
+    disposition: "stored",
+    target: { type: "metadata", key: "observations" },
+  },
+  "notice.WORK/CASE-LAW_COMMUNICATED_ON_BY_COMMUNICATION_CJEU": {
+    disposition: "stored",
+    target: { type: "metadata", key: "ojNotice" },
+  },
+  "notice.WORK/CASE-LAW_DELIVERED_BY_ADVOCATE-GENERAL": {
+    disposition: "stored",
+    target: { type: "result", key: "judges" },
+  },
+  "notice.WORK/CASE-LAW_DELIVERED_BY_JUDGE": {
+    disposition: "stored",
+    target: { type: "result", key: "judges" },
+  },
+  "notice.WORK/CASE-LAW_HAS_TYPE_PROCEDURE_CONCEPT_TYPE_PROCEDURE": {
+    disposition: "stored",
+    target: { type: "metadata", key: "procedureType" },
+  },
+  "notice.WORK/CASE-LAW_INTERPRETES_RESOURCE_LEGAL": {
+    disposition: "stored",
+    target: { type: "metadata", key: "interprets" },
+  },
+  "notice.WORK/CASE-LAW_IS-ABOUT_CASE-LAW-SUBJECT-MATTER": {
+    disposition: "stored",
+    target: { type: "metadata", key: "caseLawSubjectMatter" },
+  },
+  "notice.WORK/CASE-LAW_IS_ABOUT_CONCEPT": {
+    disposition: "stored",
+    target: { type: "metadata", key: "caseLawDirectory" },
+  },
+  "notice.WORK/CASE-LAW_IS_ABOUT_CONCEPT.MEMBERLIST": excludedSourceField(
+    "a wrapper listing the directory chains stated beside it, with no level of its own",
+  ),
+  "notice.WORK/CASE-LAW_IS_ABOUT_CONCEPT_NEW_CASE-LAW": {
+    disposition: "stored",
+    target: { type: "metadata", key: "caseLawDirectoryNew" },
+  },
+  "notice.WORK/CASE-LAW_NATIONAL-JUDGEMENT": {
+    disposition: "stored",
+    target: { type: "metadata", key: "nationalJudgment" },
+  },
+  "notice.WORK/CASE-LAW_ORIGINATES_IN_COUNTRY": {
+    disposition: "stored",
+    target: { type: "metadata", key: "referringCountry" },
+  },
+  "notice.WORK/CASE-LAW_ORIGINATES_IN_COUNTRY_ROLE-QUALIFIER":
+    excludedSourceField(
+      "the same country as the originating-country field, carrying the role it is named in",
+    ),
+  "notice.WORK/CASE-LAW_PUBLISHED_IN_ERECUEIL": {
+    disposition: "stored",
+    target: { type: "metadata", key: "publishedInReports" },
+  },
+  "notice.WORK/CASE-LAW_USES_PROCEDURE_LANGUAGE": {
+    disposition: "stored",
+    target: { type: "metadata", key: "procedureLanguage" },
+  },
+  "notice.WORK/COMPLEX_WORK_HAS_MEMBER_WORK": excludedSourceField(
+    "a grouping work verified to carry no expression and no manifestation",
+  ),
+  "notice.WORK/CREATED_BY": excludedSourceField(
+    "the agent link of the created-by-agent field, without the corporate body that names the court",
+  ),
+  "notice.WORK/CREATIONDATE": excludedSourceField(
+    "when the repository first held the record, which moves when the Office re-indexes",
+  ),
+  "notice.WORK/DATE": excludedSourceField(
+    "the document date under a generic name; the dated field is read instead",
+  ),
+  "notice.WORK/DATE_CREATION_LEGACY": excludedSourceField(
+    "the document date as an earlier system recorded it",
+  ),
+  "notice.WORK/DATE_DOCUMENT": excludedSourceField(
+    "the document date under a second generic name",
+  ),
+  "notice.WORK/ECLI": {
+    disposition: "stored",
+    target: { type: "result", key: "ecli" },
+  },
+  "notice.WORK/IDENTIFIER": excludedSourceField(
+    "the ECLI with its scheme prefixed, which the ECLI field states plain",
+  ),
+  "notice.WORK/ID_CELEX": excludedSourceField(
+    "the CELEX number under a generic name",
+  ),
+  "notice.WORK/ID_SECTOR": excludedSourceField(
+    "the first character of the CELEX number, which the CELEX number carries",
+  ),
+  "notice.WORK/IS_ABOUT": excludedSourceField(
+    "the subject concepts flattened out of the chains that state their depth",
+  ),
+  "notice.WORK/LASTMODIFICATIONDATE": excludedSourceField(
+    "when the repository last touched the record, which moves when the Office re-indexes",
+  ),
+  "notice.WORK/PART_OF": excludedSourceField(
+    "the container work under a generic name; its coordinates are read from the container itself",
+  ),
+  "notice.WORK/RESOURCE_LEGAL_DATE_REQUEST_OPINION": {
+    disposition: "stored",
+    target: { type: "metadata", key: "lodgedOn" },
+  },
+  "notice.WORK/RESOURCE_LEGAL_ID_CELEX": {
+    disposition: "stored",
+    target: { type: "identity" },
+  },
+  "notice.WORK/RESOURCE_LEGAL_IS_ABOUT_SUBJECT-MATTER": {
+    disposition: "stored",
+    target: { type: "metadata", key: "subjectMatter" },
+  },
+  "notice.WORK/RESOURCE_LEGAL_NUMBER_NATURAL_CELEX": excludedSourceField(
+    "the case number digits of the CELEX number, which the CELEX number carries",
+  ),
+  "notice.WORK/RESOURCE_LEGAL_TYPE": {
+    disposition: "stored",
+    target: { type: "metadata", key: "celexType" },
+  },
+  "notice.WORK/RESOURCE_LEGAL_USES_ORIGINALLY_LANGUAGE": {
+    disposition: "stored",
+    target: { type: "metadata", key: "procedureLanguage" },
+  },
+  "notice.WORK/RESOURCE_LEGAL_YEAR": excludedSourceField(
+    "the year digits of the CELEX number, which the CELEX number carries",
+  ),
+  "notice.WORK/SAMEAS": excludedSourceField(
+    "the CELEX and ECLI forms of this work's address, both read from their own fields",
+  ),
+  "notice.WORK/TYPE": excludedSourceField(
+    "the ontology classes of the record, which describe the repository's model rather than the decision",
+  ),
+  "notice.WORK/URI": excludedSourceField(
+    "the repository address of the work, which the row holds as the address the document was served from",
+  ),
+  "notice.WORK/VERSION": {
+    disposition: "stored",
+    target: { type: "metadata", key: "recordVersion" },
+  },
+  "notice.WORK/WORK_CITES_WORK": {
+    disposition: "stored",
+    target: { type: "result", key: "publisherCitedCases" },
+  },
+  "notice.WORK/WORK_CREATED_BY_AGENT": {
+    disposition: "stored",
+    target: { type: "result", key: "court" },
+  },
+  "notice.WORK/WORK_DATE_DOCUMENT": {
+    disposition: "stored",
+    target: { type: "result", key: "decisionDate" },
+  },
+  "notice.WORK/WORK_HAS_EXPRESSION": excludedSourceField(
+    "the other language expressions of this work, each of which is a row of its own",
+  ),
+  "notice.WORK/WORK_HAS_RESOURCE-TYPE": {
+    disposition: "stored",
+    target: { type: "metadata", key: "form" },
+  },
+  "notice.WORK/WORK_ID_DOCUMENT": excludedSourceField(
+    "the CELEX number with its scheme prefixed",
+  ),
+  "notice.WORK/WORK_PART_OF_DOSSIER": {
+    disposition: "stored",
+    target: { type: "metadata", key: "dossier" },
+  },
+  "notice.WORK/WORK_PART_OF_DOSSIER/CONTAINS": excludedSourceField(
+    "the works of the case file under a generic relation, which the case event lists",
+  ),
+  "notice.WORK/WORK_PART_OF_DOSSIER/DOSSIER_CONTAINS_WORK": excludedSourceField(
+    "this decision restated as a member of its own case file",
+  ),
+  "notice.WORK/WORK_PART_OF_DOSSIER/DOSSIER_IDENTIFIER": {
+    disposition: "stored",
+    target: { type: "metadata", key: "dossier" },
+  },
+  "notice.WORK/WORK_PART_OF_DOSSIER/DOSSIER_TITLE": excludedSourceField(
+    "the docket without its scheme, which the case-file identifier carries whole",
+  ),
+  "notice.WORK/WORK_PART_OF_DOSSIER/DOSSIER_TYPE_REFERENCE":
+    excludedSourceField(
+      "that the file is a case, which is the scheme its identifier already names",
+    ),
+  "notice.WORK/WORK_PART_OF_DOSSIER/EVENT_CONTAINS_WORK": {
+    disposition: "stored",
+    target: { type: "metadata", key: "caseEventWorks" },
+  },
+  "notice.WORK/WORK_PART_OF_DOSSIER/PART_OF": excludedSourceField(
+    "the case file the delivery event belongs to, which the case-file identifier names",
+  ),
+  "notice.WORK/WORK_PART_OF_DOSSIER/TYPE": excludedSourceField(
+    "the ontology classes of the case-file record",
+  ),
+  "notice.WORK/WORK_PART_OF_WORK": {
+    disposition: "stored",
+    target: { type: "metadata", key: "reportsReference" },
+  },
+  "notice.WORK/WORK_PART_OF_WORK/CONTAINER_CASE-LAW_COURT": {
+    disposition: "stored",
+    target: { type: "metadata", key: "reportsReference" },
+  },
+  "notice.WORK/WORK_PART_OF_WORK/CONTAINER_CASE-LAW_FASCICULE": {
+    disposition: "stored",
+    target: { type: "metadata", key: "reportsReference" },
+  },
+  "notice.WORK/WORK_PART_OF_WORK/CONTAINER_CASE-LAW_ID_NUMPUB": {
+    disposition: "stored",
+    target: { type: "metadata", key: "reportsReference" },
+  },
+  "notice.WORK/WORK_PART_OF_WORK/CONTAINER_CASE-LAW_NUMBER": {
+    disposition: "stored",
+    target: { type: "metadata", key: "reportsReference" },
+  },
+  "notice.WORK/WORK_PART_OF_WORK/CONTAINER_CASE-LAW_YEAR_DECISION": {
+    disposition: "stored",
+    target: { type: "metadata", key: "reportsReference" },
+  },
+  "notice.WORK/WORK_PART_OF_WORK/CONTAINS": excludedSourceField(
+    "the decisions the Reports volume holds, which are documents of their own",
+  ),
+  "notice.WORK/WORK_PART_OF_WORK/EXPRESSION_TITLE": excludedSourceField(
+    "the title of the Reports volume, not of the decision",
+  ),
+  "notice.WORK/WORK_PART_OF_WORK/EXPRESSION_USES_LANGUAGE": excludedSourceField(
+    "the language the Reports volume's own title is given in",
+  ),
+  "notice.WORK/WORK_PART_OF_WORK/NUMBER": excludedSourceField(
+    "the container number under a generic name",
+  ),
+  "notice.WORK/WORK_PART_OF_WORK/TYPE": excludedSourceField(
+    "the ontology classes of the container record",
+  ),
+  "notice.WORK/WORK_PART_OF_WORK/WORK_DATE_DOCUMENT": excludedSourceField(
+    "the decision date restated on its container",
+  ),
+  "notice.WORK/WORK_PART_OF_WORK/WORK_HAS_RESOURCE-TYPE": excludedSourceField(
+    "that the container is the Reports of Cases, which its coordinates already name",
+  ),
+  "notice.WORK/WORK_SUMMARIZED_BY_SUMMARY": {
+    disposition: "stored",
+    target: { type: "metadata", key: "abstractCelex" },
+  },
+  "notice.WORK/YEAR": excludedSourceField("the case year under a generic name"),
+  "notice.EXPRESSION/CREATIONDATE": excludedSourceField(
+    "when the repository first held this translation's record",
+  ),
+  "notice.EXPRESSION/EXPRESSION_BELONGS_TO_WORK": excludedSourceField(
+    "the work this translation belongs to, which is what the row is keyed by",
+  ),
+  "notice.EXPRESSION/EXPRESSION_CASE-LAW_IDENTIFIER_CASE": {
+    disposition: "stored",
+    target: { type: "metadata", key: "caseIdentifier" },
+  },
+  "notice.EXPRESSION/EXPRESSION_CASE-LAW_PARTIES": excludedSourceField(
+    "the parties' names, which the decision's own text carries and bounds",
+  ),
+  "notice.EXPRESSION/EXPRESSION_MANIFESTED_BY_MANIFESTATION":
+    excludedSourceField(
+      "the formats of this translation without their types, which the format records state",
+    ),
+  "notice.EXPRESSION/EXPRESSION_TITLE": {
+    disposition: "stored",
+    target: { type: "metadata", key: "title" },
+  },
+  "notice.EXPRESSION/EXPRESSION_USES_LANGUAGE": {
+    disposition: "stored",
+    target: { type: "identity" },
+  },
+  "notice.EXPRESSION/LANG": excludedSourceField(
+    "the two-letter form of this translation's language, which the language concept states",
+  ),
+  "notice.EXPRESSION/LASTMODIFICATIONDATE": excludedSourceField(
+    "when the repository last touched this translation's record",
+  ),
+  "notice.EXPRESSION/PARTIES": excludedSourceField(
+    "the parties' names under a generic name",
+  ),
+  "notice.EXPRESSION/SAMEAS": excludedSourceField(
+    "the CELEX and ECLI forms of this translation's address",
+  ),
+  "notice.EXPRESSION/TITLE": excludedSourceField(
+    "the translated title under a generic name",
+  ),
+  "notice.EXPRESSION/URI": excludedSourceField(
+    "the repository address of this translation",
+  ),
+  "notice.MANIFESTATION/CREATIONDATE": excludedSourceField(
+    "when the repository first held this format's record",
+  ),
+  "notice.MANIFESTATION/LASTMODIFICATIONDATE": excludedSourceField(
+    "when the repository last touched this format's record",
+  ),
+  "notice.MANIFESTATION/MANIFESTATION_HAS_ITEM": excludedSourceField(
+    "the numbered items of the format, which the content stream resolves on request",
+  ),
+  "notice.MANIFESTATION/MANIFESTATION_MANIFESTS_EXPRESSION":
+    excludedSourceField(
+      "the translation this format belongs to, which is this row's",
+    ),
+  "notice.MANIFESTATION/MANIFESTATION_TYPE": {
+    disposition: "stored",
+    target: { type: "metadata", key: "manifestations" },
+  },
+  "notice.MANIFESTATION/SAMEAS": excludedSourceField(
+    "the CELEX and ECLI forms of this format's address",
+  ),
+  "notice.MANIFESTATION/TYPE": excludedSourceField(
+    "the ontology classes of the format record",
+  ),
+  "notice.MANIFESTATION/URI": {
+    disposition: "stored",
+    target: { type: "metadata", key: "manifestations" },
+  },
+  "document.body": { disposition: "stored", target: { type: "document" } },
+  "document.keywords": {
+    disposition: "stored",
+    target: { type: "metadata", key: "keywords" },
+  },
+  "document.converterVersion": {
+    disposition: "stored",
+    target: { type: "metadata", key: "converterVersion" },
+  },
+  "formex.BIB/REF.CASE": {
+    disposition: "stored",
+    target: { type: "metadata", key: "publisherCaseNumber" },
+  },
+  "formex.BIB/NO.CELEX": {
+    disposition: "stored",
+    target: { type: "identity" },
+  },
+  "formex.BIB/NO.ECLI": {
+    disposition: "stored",
+    target: { type: "result", key: "ecli" },
+  },
+  "formex.BIB/NO.SEQ": {
+    disposition: "stored",
+    target: { type: "metadata", key: "reportsSequence" },
+  },
+  "formex.BIB/PAGE.FIRST.ECR": {
+    disposition: "stored",
+    target: { type: "metadata", key: "reportsPages" },
+  },
+  "formex.BIB/PAGE.SEQ": {
+    disposition: "stored",
+    target: { type: "metadata", key: "reportsPages" },
+  },
+  "formex.BIB/PAGE.LAST.ECR": {
+    disposition: "stored",
+    target: { type: "metadata", key: "reportsPages" },
+  },
+  "formex.BIB/PAGE.TOTAL": {
+    disposition: "stored",
+    target: { type: "metadata", key: "reportsPages" },
+  },
+  "formex.BIB/AUTHOR": {
+    disposition: "stored",
+    target: { type: "result", key: "court" },
+  },
+  "formex.body": excludedSourceField(
+    "the same decision text the document part carries, in the publisher's semantic encoding; the part is kept so a later parse can be checked against it rather than read into the row today",
+  ),
+} as const satisfies Record<
+  (typeof SOURCE_FIELDS)[number],
+  SourceFieldDisposition
+>;
+
+/**
+ * What the stored envelope states, read from every part of it.
+ *
+ * The listing part is the query binding, so its own variable names are what
+ * the publisher states there; the notice and the structured rendition state
+ * theirs as element names. The manifestation is not a labelled record at all,
+ * so the three names it contributes are the facts the parse takes off it
+ * beyond the decision's own text.
+ */
+const listEuEcjSourceFields = (parts: SourceRawParts): readonly string[] => {
+  const stated = new Set<string>();
+
+  const listing = parts[RAW_PART.LISTING];
+  if (listing !== undefined) {
+    const parsed = Result.try({
+      try: (): unknown => JSON.parse(listing),
+      catch: () => null,
+    }).unwrapOr(null);
+    if (isRecord(parsed)) {
+      for (const key of Object.keys(parsed)) {
+        stated.add(`listing.${key}`);
+      }
+    }
+  }
+
+  const notice = parts[RAW_PART.NOTICE];
+  if (notice !== undefined) {
+    for (const field of listEcjNoticeFields(notice)) {
+      stated.add(noticeField(field));
+    }
+  }
+
+  const document = parts[RAW_PART.DOCUMENT];
+  if (document !== undefined) {
+    stated.add(DOCUMENT_FIELD.BODY);
+    if (ecjStatesKeywordChain(document)) {
+      stated.add(DOCUMENT_FIELD.KEYWORDS);
+    }
+    if (ecjConverterVersion(document) !== undefined) {
+      stated.add(DOCUMENT_FIELD.CONVERTER);
+    }
+  }
+
+  const formex = parts[RAW_PART.FORMEX];
+  if (formex !== undefined) {
+    for (const field of listEcjFormexFields(formex)) {
+      stated.add(field);
+    }
+  }
+
+  return [...stated];
+};
+
 // -- Adapter --
 
 /**
@@ -1538,12 +2518,16 @@ const ECJ_PAGE_TIMEOUT = 300_000;
  * Every payload the repository and the court's own site serve for one language
  * variant of a decision, and whether the row keeps it.
  *
- * The document is fetched and stored as a bare payload rather than as a named
- * part, so a stored row states no part at all. The metadata notice, the
- * structured renditions, the abstract work and the analytical case sheet are
- * the material the crawl does not ask for; each is a request per variant, and
- * a row is one variant. The portal's own renditions are left out in favour of
- * the repository, which serves the same content without a challenge.
+ * Four are kept, and a row is one language variant, so all four are that
+ * variant's: the query binding that named it, the decision's own markup, the
+ * repository's record of the decision negotiated into the row's language, and
+ * the publisher's semantic encoding of the same text.
+ *
+ * The portal's renditions are left out in favour of the repository, which
+ * serves the same content without a challenge. What is left on the backlog is
+ * the court's production file, the abstract work — a work of its own the
+ * crawl's type filter does not reach — and the two surfaces on the second
+ * publisher's host.
  */
 const SOURCE_SURFACES = [
   "listing",
@@ -1569,32 +2553,20 @@ const SOURCE_SURFACES = [
 
 const EU_ECJ_SOURCE_SURFACES = {
   surfaces: {
-    listing: backlogSurface(
-      ADAPTER_KEYS.EU_ECJ,
-      "the query binding the crawl reads each row from is not kept, so a replay cannot rebuild the row without querying again",
-    ),
-    document: backlogSurface(
-      ADAPTER_KEYS.EU_ECJ,
-      "the document is stored as a bare payload rather than as a named part, so a reader of a stored row cannot tell which response it holds",
-    ),
+    listing: storedSourceSurface(RAW_PART.LISTING),
+    document: storedSourceSurface(RAW_PART.DOCUMENT),
     "document-item-fallback": excludedSourceSurface(
       "a second address for the same bytes, tried when the first answers a refusal",
     ),
-    formex: backlogSurface(
-      ADAPTER_KEYS.EU_ECJ,
-      "the structured rendition is the only surface stating the document structure of older decisions, and the crawl does not fetch it",
-    ),
+    formex: storedSourceSurface(RAW_PART.FORMEX),
     gendoc: backlogSurface(
       ADAPTER_KEYS.EU_ECJ,
       "the court's own production file carries a metadata block no fetched payload states; not fetched",
     ),
     "document-pdf": excludedSourceSurface(
-      "a print rendition of the document part; its address is recorded as metadata instead",
+      "a print rendition of the document part, which the envelope's string parts cannot hold; its address is listed with the other formats in metadata",
     ),
-    notice: backlogSurface(
-      ADAPTER_KEYS.EU_ECJ,
-      "the metadata notice states the widest field set of any surface here, including roles the row infers today, and the crawl does not fetch it",
-    ),
+    notice: storedSourceSurface(RAW_PART.NOTICE),
     "notice-tree": excludedSourceSurface(
       "it adds the other language expressions of the same work, each of which is a row of its own",
     ),
@@ -1616,7 +2588,7 @@ const EU_ECJ_SOURCE_SURFACES = {
     ),
     "curia-listing": backlogSurface(
       ADAPTER_KEYS.EU_ECJ,
-      "the address of the analytical case sheet cannot be constructed, so reaching it costs a search on a host with no declared budget",
+      "the address of the analytical case sheet cannot be constructed, so reaching it costs a search on a second publisher's host, which has no declared budget",
     ),
     "curia-document": excludedSourceSurface(
       "the same text as the document part, at an address that cannot be constructed",
@@ -1624,7 +2596,7 @@ const EU_ECJ_SOURCE_SURFACES = {
     "curia-print": excludedSourceSurface("a print rendering of that same text"),
     "case-sheet": backlogSurface(
       ADAPTER_KEYS.EU_ECJ,
-      "the case sheet states analytical fields no other surface carries, and it is on a host with no declared budget whose robots policy denies individual documents",
+      "the case sheet states paragraph-level citations and the national provisions no other surface carries, and it is served by a second publisher whose host has no declared budget",
     ),
     "curia-documents": excludedSourceSurface(
       "a per-document projection of the same analysis the case sheet states",
@@ -1641,7 +2613,11 @@ const EU_ECJ_SOURCE_SURFACES = {
 export const euEcjAdapter = defineSourceAdapter({
   key: ADAPTER_KEYS.EU_ECJ,
   sourceSurfaces: EU_ECJ_SOURCE_SURFACES,
-  sourceFields: pendingSourceFieldInventory(ADAPTER_KEYS.EU_ECJ),
+  sourceFields: {
+    status: "declared",
+    fields: EU_ECJ_SOURCE_FIELDS,
+    listSourceFields: listEuEcjSourceFields,
+  },
   language: "en",
   minRequestIntervalMs: 1000,
   pageTimeoutMs: ECJ_PAGE_TIMEOUT,

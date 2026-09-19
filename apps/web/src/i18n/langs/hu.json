@@ -739,6 +739,7 @@
       "cites": "Hivatkozásai",
       "dissentByline": "Különvélemény: <bdi>{names}</bdi>",
       "judgeRole": {
+        "advocateGeneral": "Főtanácsnok",
         "dissenting": "Különvélemény",
         "panelMember": "A tanács tagja",
         "presiding": "A tanács elnöke",

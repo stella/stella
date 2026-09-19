@@ -56,7 +56,10 @@ import {
   czNssFixture,
   czRegionalFixture,
   czUsFixture,
+  euEcjFixture,
   huBhgyFixture,
+  plCourtsFixture,
+  plCourtsSearchFixture,
   plSnFixture,
   skCourtsFixture,
   skUsFixture,
@@ -99,9 +102,6 @@ const atRisEvidence = (
   { kind: "built", fixture: () => atRisFixture(adapter) },
 ];
 
-const NO_CAPTURE = (reason: string) =>
-  [{ kind: "none", reason }] as const satisfies readonly SurfaceEvidence[];
-
 const SURFACE_EVIDENCE = {
   [ADAPTER_KEYS.CZ_NS]: [
     { kind: "built", fixture: czNsFixture },
@@ -119,6 +119,10 @@ const SURFACE_EVIDENCE = {
   ],
   [ADAPTER_KEYS.SK_US]: [{ kind: "built", fixture: skUsFixture }],
   [ADAPTER_KEYS.PL_COURTS]: [
+    { kind: "built", fixture: plCourtsFixture },
+    // The second listing is a second decision: a row is named by the dump or
+    // by the date-filtered search, so no one envelope holds both parts.
+    { kind: "built", fixture: plCourtsSearchFixture },
     { kind: "page-recording", file: "pl-courts-page.json.gz" },
   ],
   [ADAPTER_KEYS.PL_SN]: [
@@ -140,9 +144,7 @@ const SURFACE_EVIDENCE = {
   [ADAPTER_KEYS.AT_UMSE]: atRisEvidence(ADAPTER_KEYS.AT_UMSE),
   [ADAPTER_KEYS.AT_BKS]: atRisEvidence(ADAPTER_KEYS.AT_BKS),
   [ADAPTER_KEYS.AT_FINDOK]: [{ kind: "built", fixture: atFindokFixture }],
-  [ADAPTER_KEYS.EU_ECJ]: NO_CAPTURE(
-    "no recording of a crawl page exists for this adapter",
-  ),
+  [ADAPTER_KEYS.EU_ECJ]: [{ kind: "built", fixture: euEcjFixture }],
   [ADAPTER_KEYS.HU_BHGY]: [{ kind: "built", fixture: huBhgyFixture }],
 } as const satisfies Record<AdapterKey, readonly SurfaceEvidence[]>;
 

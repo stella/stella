@@ -35,6 +35,7 @@ export const DECISION_JUDGE_ROLE = {
   PRESIDING: DECISION_JUDGE_ROLES[1],
   PANEL_MEMBER: DECISION_JUDGE_ROLES[2],
   DISSENTING: DECISION_JUDGE_ROLES[3],
+  ADVOCATE_GENERAL: DECISION_JUDGE_ROLES[4],
 } as const satisfies ConstantMap<DecisionJudgeRole>;
 
 /**
@@ -49,4 +50,5 @@ export const DECISION_JUDGE_ROLE_RANK = {
   presiding: DECISION_JUDGE_ROLES.indexOf("presiding"),
   "panel-member": DECISION_JUDGE_ROLES.indexOf("panel-member"),
   dissenting: DECISION_JUDGE_ROLES.indexOf("dissenting"),
+  "advocate-general": DECISION_JUDGE_ROLES.indexOf("advocate-general"),
 } satisfies Record<DecisionJudgeRole, number>;

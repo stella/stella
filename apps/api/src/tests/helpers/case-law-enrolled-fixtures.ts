@@ -23,6 +23,7 @@ import { panic } from "better-result";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import {
   decodeSourceRawEnvelope,
+  encodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
@@ -65,11 +66,20 @@ import type { CzRegionalApiItem } from "@/api/handlers/case-law/ingestion/adapte
 import { buildCzUsDecision } from "@/api/handlers/case-law/ingestion/adapters/cz-us";
 import type { ListedDecision } from "@/api/handlers/case-law/ingestion/adapters/cz-us";
 import {
+  ecjRawParts,
+  euEcjAdapter,
+} from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
+import type { EcjSparqlBinding } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
+import {
   assembleHuBhgyDecision,
   huBhgyDocumentOf,
   huBhgyRawPartsOf,
   normalizeHuBhgyRow,
 } from "@/api/handlers/case-law/ingestion/adapters/hu-bhgy";
+import {
+  buildPlDecision,
+  normalizeSaosDumpItem,
+} from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
 import {
   assemblePlSnDecision,
   normalizePlSnDetail,
@@ -579,6 +589,206 @@ export const czRegionalFixture = (): EnrolledAdapterFixture => ({
   },
 });
 
+// ── PL courts fixture ────────────────────────────────────
+
+/**
+ * One judgment as the aggregator's per-judgment endpoint states it.
+ *
+ * Every key the three payloads are known to carry, each with a value in it:
+ * a disposition is only exercised where the decision built from the fixture
+ * can be checked for what it decided about. The bench carries all three
+ * special roles this source states and the separate opinion names its
+ * author, because those are the fields no single court's records show.
+ */
+const PL_COURTS_JUDGMENT = {
+  id: 245_360,
+  href: "https://www.saos.org.pl/api/judgments/245360",
+  courtType: "SUPREME",
+  courtCases: [
+    { caseNumber: "III KK 195/16" },
+    { caseNumber: "III KK 196/16" },
+  ],
+  judgmentType: "SENTENCE",
+  judgmentDate: "2016-06-22",
+  judges: [
+    {
+      name: "Józef Dołhy",
+      function: "SSN",
+      specialRoles: ["PRESIDING_JUDGE"],
+    },
+    {
+      name: "Józef Szewczyk",
+      function: "SSN",
+      specialRoles: ["REASONS_FOR_JUDGMENT_AUTHOR", "REPORTING_JUDGE"],
+    },
+    { name: "Dariusz Świecki", function: "SSN", specialRoles: [] },
+  ],
+  textContent:
+    "<h2>WYROK</h2><p>Sygn. akt III KK 195/16</p>" +
+    "<p>Sąd Najwyższy oddala kasację jako oczywiście bezzasadną.</p>" +
+    "<h2>UZASADNIENIE</h2><p>Treść uzasadnienia.</p>",
+  keywords: ["kasacja"],
+  division: {
+    id: 13,
+    href: "https://www.saos.org.pl/api/scDivisions/13",
+    name: "Wydział III",
+    code: "0013",
+    type: "Karny",
+    chamber: {
+      id: 1,
+      href: "https://www.saos.org.pl/api/scChambers/1",
+      name: "Izba Karna",
+    },
+    court: {
+      id: 1,
+      href: "https://www.saos.org.pl/api/commonCourts/1",
+      name: "Sąd Najwyższy",
+      code: "00000000",
+      type: "SUPREME",
+    },
+  },
+  chambers: [
+    {
+      id: 1,
+      href: "https://www.saos.org.pl/api/scChambers/1",
+      name: "Izba Karna",
+    },
+  ],
+  personnelType: "THREE_PERSON",
+  judgmentForm: { name: "wyrok SN" },
+  source: {
+    code: "SUPREME_COURT",
+    judgmentUrl: "http://www.sn.pl/orzecznictwo/SitePages/Baza_orzeczen",
+    judgmentId: "dec1bfc4e752237043d129d346fa2543",
+    publisher: "Biuro Studiów i Analiz",
+    reviser: "Wydział Informacji",
+    publicationDate: "2016-06-23",
+  },
+  courtReporters: ["Anna Kowalska"],
+  decision: "oddala kasację",
+  summary: "Kasacja oczywiście bezzasadna.",
+  legalBases: ["art. 535 § 3 k.p.k."],
+  referencedRegulations: [
+    {
+      journalTitle:
+        "Ustawa z dnia 6 czerwca 1997 r. - Kodeks postępowania karnego",
+      journalYear: 1997,
+      journalNo: 89,
+      journalEntry: 555,
+      text: "Kodeks postępowania karnego (Dz. U. z 1997 r. Nr 89 poz. 555 - art. 535)",
+    },
+  ],
+  referencedCourtCases: [
+    { caseNumber: "III KK 257/02", judgmentIds: [243_456], generated: true },
+  ],
+  receiptDate: "2016-04-11",
+  meansOfAppeal: "kasacja",
+  judgmentResult: "ODDALONA",
+  lowerCourtJudgments: [{ caseNumber: "II Ka 12/15" }],
+  dissentingOpinions: [
+    {
+      textContent: "Zdanie odrębne co do kary.",
+      authors: ["Dariusz Świecki"],
+    },
+  ],
+} as const;
+
+type PlCourtsJudgmentKey = keyof typeof PL_COURTS_JUDGMENT;
+
+/** The keys the dump serves; the rest of the record is detail-only. */
+const PL_COURTS_DUMP_KEYS = [
+  "id",
+  "courtType",
+  "courtCases",
+  "judgmentType",
+  "judgmentDate",
+  "judges",
+  "textContent",
+  "keywords",
+  "division",
+  "source",
+  "courtReporters",
+  "decision",
+  "summary",
+  "legalBases",
+  "referencedRegulations",
+  "referencedCourtCases",
+  "receiptDate",
+  "meansOfAppeal",
+  "judgmentResult",
+  "lowerCourtJudgments",
+] as const satisfies readonly PlCourtsJudgmentKey[];
+
+/** The keys the date-filtered search serves, which are fewer again. */
+const PL_COURTS_SEARCH_KEYS = [
+  "id",
+  "href",
+  "courtType",
+  "courtCases",
+  "judgmentType",
+  "judgmentDate",
+  "judges",
+  "textContent",
+  "keywords",
+  "division",
+] as const satisfies readonly PlCourtsJudgmentKey[];
+
+const plCourtsListingRow = (
+  keys: readonly PlCourtsJudgmentKey[],
+): Record<string, unknown> =>
+  Object.fromEntries(keys.map((key) => [key, PL_COURTS_JUDGMENT[key]]));
+
+/** The per-judgment endpoint's whole answer, which wraps the record. */
+const PL_COURTS_DETAIL_PAYLOAD = JSON.stringify({
+  links: [{ rel: "self", href: PL_COURTS_JUDGMENT.href }],
+  data: PL_COURTS_JUDGMENT,
+});
+
+const plCourtsDecision = (
+  listingPart: "listing-dump" | "listing-search",
+  keys: readonly PlCourtsJudgmentKey[],
+): IngestionResult => {
+  const listingRow = plCourtsListingRow(keys);
+  return (
+    buildPlDecision({
+      listingItem: normalizeSaosDumpItem(listingRow),
+      detail: normalizeSaosDumpItem({ ...PL_COURTS_JUDGMENT }),
+      rawParts: {
+        [listingPart]: JSON.stringify(listingRow),
+        detail: PL_COURTS_DETAIL_PAYLOAD,
+      },
+    }) ?? panic("the pl-courts fixture did not build")
+  );
+};
+
+/**
+ * Built from the payloads directly rather than through the adapter's fetch
+ * path: what these guards certify is the mapping from a stated field to the
+ * row, and a stubbed transport only adds this publisher's request gate to
+ * every run.
+ */
+export const plCourtsFixture = (): EnrolledAdapterFixture => ({
+  buildDecision: async () =>
+    await Promise.resolve(
+      plCourtsDecision("listing-dump", PL_COURTS_DUMP_KEYS),
+    ),
+});
+
+/**
+ * The same decision as the reconciliation walk reaches it.
+ *
+ * A second fixture rather than a second part on the first: a row is named by
+ * the dump or by the date-filtered search, so no one envelope holds both
+ * listings, and a surface census has to read each from an envelope that
+ * could exist.
+ */
+export const plCourtsSearchFixture = (): EnrolledAdapterFixture => ({
+  buildDecision: async () =>
+    await Promise.resolve(
+      plCourtsDecision("listing-search", PL_COURTS_SEARCH_KEYS),
+    ),
+});
+
 // ── PL SN fixture ────────────────────────────────────────
 
 /** The listing row, as `searchOrzeczenia` states one. */
@@ -764,6 +974,112 @@ export const czUsFixture = (): EnrolledAdapterFixture => ({
         abstractHtml: CZ_US_ABSTRACT_PAGE,
       }) ?? panic("cz-us fixture did not build"),
     ),
+});
+
+// ── EU ECJ fixture ───────────────────────────────────────
+
+/**
+ * The decision the eu-ecj captures are of: Case C-128/22, judgment of the
+ * Grand Chamber, whose procedure language is neither of the two the parser
+ * corpus holds it in.
+ */
+const EU_ECJ_CELEX = "62022CJ0128";
+
+const EU_ECJ_CELLAR_WORK = "cc021804-9350-11ee-8aa6-01aa75ed71a1";
+
+/** The expression this fixture is of; `.0011` is the English one. */
+const EU_ECJ_EXPRESSION = `${EU_ECJ_CELLAR_WORK}.0011`;
+
+const CELLAR_RESOURCE = "http://publications.europa.eu/resource/cellar/";
+
+/**
+ * The listing row, as one binding of the adapter's own `SELECT` states it.
+ *
+ * Every value is the one Cellar answers with for this decision, so the
+ * envelope the guards read is the envelope a crawl of it would store.
+ */
+const EU_ECJ_BINDING = {
+  ecli: { type: "literal", value: "ECLI:EU:C:2023:951" },
+  date: { type: "literal", value: "2023-12-05" },
+  celex: { type: "literal", value: EU_ECJ_CELEX },
+  type: {
+    type: "uri",
+    value: "http://publications.europa.eu/ontology/cdm#judgement",
+  },
+  language: {
+    type: "uri",
+    value: "http://publications.europa.eu/resource/authority/language/ENG",
+  },
+  manifestation: {
+    type: "uri",
+    value: `${CELLAR_RESOURCE}${EU_ECJ_EXPRESSION}.05`,
+  },
+} as const satisfies EcjSparqlBinding;
+
+const EU_ECJ_ADAPTER_FIXTURES = new URL(
+  "../../handlers/case-law/ingestion/adapters/__fixtures__/",
+  import.meta.url,
+);
+
+const EU_ECJ_PARSER_FIXTURES = new URL(
+  "../../handlers/case-law/ingestion/parsers/__fixtures__/eu-ecj/",
+  import.meta.url,
+);
+
+const readGzipText = async (url: URL): Promise<string> =>
+  new TextDecoder().decode(Bun.gunzipSync(await Bun.file(url).bytes()));
+
+/**
+ * Built from the four captures the crawl would have fetched, through the
+ * adapter's own re-parse of the envelope it writes.
+ *
+ * Driving the re-parse rather than the fetch path is what makes this
+ * evidence about a stored row: the guards ask what a stored envelope states
+ * and whether the row carries it, and a fixture built by stubbing the
+ * transport would answer for the fetch instead. It also keeps the
+ * publisher's five-hundred-millisecond gate out of every run.
+ */
+export const euEcjFixture = (): EnrolledAdapterFixture => ({
+  buildDecision: async () => {
+    const parts = ecjRawParts({
+      binding: { ...EU_ECJ_BINDING },
+      html: await readGzipText(
+        new URL(`${EU_ECJ_CELEX}.en.html.gz`, EU_ECJ_PARSER_FIXTURES),
+      ),
+      notice: await readGzipText(
+        new URL("eu-ecj-notice-en.xml.gz", EU_ECJ_ADAPTER_FIXTURES),
+      ),
+      formex: await readGzipText(
+        new URL(`${EU_ECJ_CELEX}.en.fmx.xml.gz`, EU_ECJ_PARSER_FIXTURES),
+      ),
+    });
+
+    const reparsed = await euEcjAdapter.reparseStoredRaw?.({
+      raw: new TextEncoder().encode(encodeSourceRawEnvelope(parts)),
+      contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+      caseNumber: "C-128/22",
+      sourceDocumentId: `${EU_ECJ_CELEX}:en`,
+      language: "en",
+      // What the crawl read off the ECLI before the notice stated it, so the
+      // fixture proves the notice replaces the inference rather than agreeing
+      // with a value handed to it.
+      court: "",
+      ecli: EU_ECJ_BINDING.ecli.value,
+      decisionDate: EU_ECJ_BINDING.date.value,
+      decisionType: "judgment",
+      sourceUrl: `https://eur-lex.europa.eu/legal-content/EN/ALL/?uri=CELEX:${EU_ECJ_CELEX}`,
+      documentUrl: `https://publications.europa.eu/resource/cellar/${EU_ECJ_EXPRESSION}.05`,
+      metadata: {
+        celex: EU_ECJ_CELEX,
+        manifestationUri: EU_ECJ_BINDING.manifestation.value,
+        languageUri: EU_ECJ_BINDING.language.value,
+        cdmType: EU_ECJ_BINDING.type.value,
+      },
+    });
+    return reparsed?.type === "parsed"
+      ? reparsed.result
+      : panic(`eu-ecj fixture did not re-parse: ${reparsed?.type}`);
+  },
 });
 
 // ── SK courts fixture ────────────────────────────────────

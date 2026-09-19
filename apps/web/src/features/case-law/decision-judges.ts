@@ -30,10 +30,12 @@ const ROLE_ORDER = {
   presiding: DECISION_JUDGE_ROLES.indexOf("presiding"),
   "panel-member": DECISION_JUDGE_ROLES.indexOf("panel-member"),
   dissenting: DECISION_JUDGE_ROLES.indexOf("dissenting"),
+  "advocate-general": DECISION_JUDGE_ROLES.indexOf("advocate-general"),
 } satisfies Record<DecisionJudgeRole, number>;
 
 /** How each role is captioned under a judge. */
 export const DECISION_JUDGE_ROLE_LABELS = {
+  "advocate-general": "caseLaw.viewer.judgeRole.advocateGeneral",
   dissenting: "caseLaw.viewer.judgeRole.dissenting",
   "panel-member": "caseLaw.viewer.judgeRole.panelMember",
   presiding: "caseLaw.viewer.judgeRole.presiding",

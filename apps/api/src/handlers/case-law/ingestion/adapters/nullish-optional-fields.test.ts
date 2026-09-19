@@ -327,12 +327,16 @@ describe("case-law adapter nullish optionals", () => {
     expect(decision?.caseNumber).toBe("II AKa 10/24");
     expect(decision?.court).toBe("Sąd Apelacyjny w Krakowie");
     expect(decision?.decisionType).toBe("wyrok");
-    expect(decision?.decisionDate).toBe("2024-01-02");
+    // The stated year is not one a judgment can carry and this record's
+    // upstream id spells no date, so the row states none: the document's own
+    // prose says "2 stycznia 2024", and reading it would put the date of a
+    // fact recited in the judgment where the judgment's date belongs.
+    expect(decision?.decisionDate).toBeUndefined();
     expect(decision?.metadata).toMatchObject({
       dissentingOpinions: [],
     });
-    expect(decision?.sourceRaw).toContain('"dumpItem"');
-    expect(decision?.sourceRaw).toContain('"detail"');
+    const parts = decodeSourceRawEnvelope(decision?.sourceRaw ?? "");
+    expect(Object.keys(parts ?? {}).sort()).toEqual(["detail", "listing-dump"]);
   });
 
   test("PL Courts localizes fallback court names when detail court is missing", async () => {
@@ -427,7 +431,11 @@ describe("case-law adapter nullish optionals", () => {
     expect(decision?.caseNumber).toBe("III K 3/24");
     expect(decision?.court).toBe("Sąd powszechny");
     expect(decision?.decisionType).toBe("postanowienie");
-    expect(decision?.sourceRaw).toContain('"detail":null');
+    // No detail came back, so the envelope holds the listing row alone
+    // rather than a part standing for the response that never arrived.
+    expect(
+      Object.keys(decodeSourceRawEnvelope(decision?.sourceRaw ?? "") ?? {}),
+    ).toEqual(["listing-dump"]);
   });
 
   test("PL Courts falls back to dump identity fields when detail is sparse", async () => {
@@ -631,7 +639,9 @@ describe("case-law adapter nullish optionals", () => {
     expect(result.isOk()).toBe(true);
     const decision = result.unwrap().decisions[0];
     expect(decision?.caseNumber).toBe("VI K 6/24");
-    expect(decision?.sourceRaw).toContain('"detail":null');
+    expect(
+      Object.keys(decodeSourceRawEnvelope(decision?.sourceRaw ?? "") ?? {}),
+    ).toEqual(["listing-dump"]);
   });
 
   test("PL Courts sends the shared ingestion User-Agent on detail requests", async () => {

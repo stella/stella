@@ -5,14 +5,7 @@
     "cz-nss": ["listing", "original", "text"],
     "sk-courts": ["bulk-dump", "document"],
     "sk-us": ["archive-listing", "collection-listing"],
-    "pl-courts": [
-      "enrichment",
-      "listing-dump",
-      "listing-search",
-      "portal-web-ui",
-      "upstream-detail",
-      "upstream-document"
-    ],
+    "pl-courts": ["enrichment", "upstream-detail", "upstream-document"],
     "at-courts": ["attachments"],
     "at-vfgh": ["attachments"],
     "at-vwgh": ["attachments"],
@@ -24,15 +17,6 @@
     "at-verg": ["attachments"],
     "at-umse": ["attachments"],
     "at-bks": ["attachments"],
-    "eu-ecj": [
-      "abstract",
-      "case-sheet",
-      "curia-listing",
-      "document",
-      "formex",
-      "gendoc",
-      "listing",
-      "notice"
-    ]
+    "eu-ecj": ["abstract", "case-sheet", "curia-listing", "gendoc"]
   }
 }

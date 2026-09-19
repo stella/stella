@@ -739,6 +739,7 @@
       "cites": "Cite",
       "dissentByline": "Opinion dissidente : <bdi>{names}</bdi>",
       "judgeRole": {
+        "advocateGeneral": "Avocat général",
         "dissenting": "Opinion dissidente",
         "panelMember": "Juge assesseur",
         "presiding": "Président de la formation",

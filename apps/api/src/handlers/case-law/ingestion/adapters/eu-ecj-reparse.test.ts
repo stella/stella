@@ -8,6 +8,10 @@ import {
   test,
 } from "bun:test";
 
+import {
+  decodeSourceRawEnvelope,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+} from "@/api/handlers/case-law/ingestion/adapter";
 import type {
   IngestionResult,
   StoredRawReparseInput,
@@ -115,11 +119,17 @@ if (!reparse) {
 }
 
 describe("eu-ecj reparseStoredRaw", () => {
-  test("stores the publisher XHTML as verbatim bytes", async () => {
+  test("keeps the publisher XHTML verbatim as a named envelope part", async () => {
     const crawled = await crawlDecision();
 
-    expect(new TextDecoder().decode(crawled.sourceRawBytes)).toBe(fulltextHtml);
-    expect(crawled.sourceRawContentType).toContain("stella-storage=verbatim");
+    // A JSON string round-trips the payload byte for byte, which is what the
+    // old verbatim-bytes path existed to guarantee: the keyword chain is
+    // separated by non-breaking spaces, and a normalizing store made the
+    // boundary between two keywords unreadable.
+    const parts = decodeSourceRawEnvelope(crawled.sourceRaw ?? "");
+    expect(parts?.["document"]).toBe(fulltextHtml);
+    expect(crawled.sourceRawBytes).toBeUndefined();
+    expect(crawled.sourceRawContentType).toBe(SOURCE_RAW_ENVELOPE_CONTENT_TYPE);
   });
 
   test("reproduces the crawl's result from the payload the crawl stored", async () => {
@@ -179,25 +189,28 @@ describe("eu-ecj reparseStoredRaw", () => {
     });
   });
 
-  test("rejects legacy bytes whose keyword spacing is ambiguous", async () => {
-    const crawled = await crawlDecision();
-    const ambiguous = `
+  test.each(["application/xhtml+xml", "text/html", null])(
+    "rejects legacy bytes whose keyword spacing is ambiguous (%p)",
+    async (contentType) => {
+      const crawled = await crawlDecision();
+      const ambiguous = `
       <html><body>
         <p class="coj-index">(Regula (ES) 2016/679 – 2. panta 2. punkts)</p>
       </body></html>`;
 
-    const outcome = await reparse(
-      storedFrom(crawled, {
-        contentType: "application/xhtml+xml",
-        raw: new TextEncoder().encode(ambiguous),
-      }),
-    );
+      const outcome = await reparse(
+        storedFrom(crawled, {
+          contentType,
+          raw: new TextEncoder().encode(ambiguous),
+        }),
+      );
 
-    expect(outcome).toMatchObject({
-      type: "rejected",
-      rejection: "raw-fidelity-lost",
-    });
-  });
+      expect(outcome).toMatchObject({
+        type: "rejected",
+        rejection: "raw-fidelity-lost",
+      });
+    },
+  );
 
   test("rejects a row whose metadata lost the publisher id", async () => {
     const crawled = await crawlDecision();

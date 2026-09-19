@@ -739,6 +739,7 @@
       "cites": "Viitab",
       "dissentByline": "Eriarvamus: <bdi>{names}</bdi>",
       "judgeRole": {
+        "advocateGeneral": "Kohtujurist",
         "dissenting": "Eriarvamus",
         "panelMember": "Kohtukoosseisu liige",
         "presiding": "Eesistuja kohtunik",

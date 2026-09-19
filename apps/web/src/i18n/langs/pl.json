@@ -739,6 +739,7 @@
       "cites": "Cytuje",
       "dissentByline": "Zdanie odrębne: <bdi>{names}</bdi>",
       "judgeRole": {
+        "advocateGeneral": "Rzecznik generalny",
         "dissenting": "Zdanie odrębne",
         "panelMember": "Członek składu",
         "presiding": "Przewodniczący składu",

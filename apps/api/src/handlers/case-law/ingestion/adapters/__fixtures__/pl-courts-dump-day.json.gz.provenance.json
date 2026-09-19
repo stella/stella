@@ -1,0 +1,7 @@
+{
+  "capture": "recorded",
+  "sha256": "ccc92ea39313efc3545393b806952b13e32809b3e9f6d620df55c028e2ba87f7",
+  "sourceUrl": "https://www.saos.org.pl/api/dump/judgments?pageSize=100&pageNumber=0&withGenerated=true&judgmentStartDate=2018-03-22&judgmentEndDate=2018-03-22",
+  "capturedAt": "2026-09-18T20:01:02.951Z",
+  "note": "dump page for one judgment date; common-court records with benches"
+}

@@ -739,6 +739,7 @@
       "cites": "Cituje",
       "dissentByline": "Odlišné stanovisko: <bdi>{names}</bdi>",
       "judgeRole": {
+        "advocateGeneral": "Generálny advokát",
         "dissenting": "Odlišné stanovisko",
         "panelMember": "Člen senátu",
         "presiding": "Predseda senátu",

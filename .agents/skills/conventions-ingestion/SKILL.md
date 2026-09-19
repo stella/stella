@@ -138,21 +138,13 @@ An inventory has three parts, in the adapter beside the readers it mirrors:
   a reader given one of them declares the others out of scope by accident.
 
 `source-field-inventory.test.ts` drives every registered adapter from the
-registry: each enrolled adapter's fixture is built, its stored envelope goes
+registry: each adapter's fixture is built, its stored envelope goes
 through its own `listSourceFields`, every name that comes out must be in the
 map, and every field the map stores must be on the decision built from that
 fixture, at the target the disposition names. A field on the page that is in
 neither set fails with its name, and so does a field the map declares that the
-envelope never states.
-
-Enrolment is a ratchet. `pendingSourceFieldInventory(adapter)` is the one
-sanctioned way to not have an inventory, its argument is a closed union of the
-adapters that already exist, and
-`adapters/source-field-inventory-baseline.json` lists exactly which adapters
-use it. The suite fails when a pending adapter is missing from the baseline and
-when a baseline entry has since enrolled, so the set only shrinks. To enrol
-one: declare the three parts above, add a fixture to the conformance suite, and
-delete the adapter's line from the baseline.
+envelope never states. Its coverage map is total over the registry, so a source
+registered without a fixture does not compile.
 
 Refresh a fixture from the live page when the source changes. The suite
 certifies the adapter against the page it is given, so a fixture that stopped

@@ -1,4 +1,0 @@
-{
-  "comment": "Adapters that still declare PENDING_SOURCE_FIELD_INVENTORY. source-field-inventory.test.ts fails when a pending adapter is missing here and when an entry here has since declared an inventory, so this list can only shrink. Enrolling an adapter means declaring its SOURCE_FIELDS, a total disposition map, a listSourceFields reader, and a fixture in the conformance suite, then deleting its line.",
-  "pendingInventory": ["eu-ecj", "pl-courts"]
-}

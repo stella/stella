@@ -739,6 +739,7 @@
       "cites": "Cita",
       "dissentByline": "Voto particular: <bdi>{names}</bdi>",
       "judgeRole": {
+        "advocateGeneral": "Abogado General",
         "dissenting": "Voto particular",
         "panelMember": "Magistrado de la sala",
         "presiding": "Presidente de la sala",

@@ -511,11 +511,14 @@ export const LEGACY_RAW_SHAPES = {
       part: "document-file",
     },
   ],
+  // Kept after the adapter moved to the envelope: every row stored before it
+  // holds the pair in this wrapper, and the dump row it holds is the
+  // allowlisted reading of the listing response rather than the response.
   [ADAPTER_KEYS.PL_COURTS]: [
     {
       shape: "wrapper-json",
       contentTypes: ["application/json"],
-      keys: { dumpItem: "listing", detail: "detail" },
+      keys: { dumpItem: "listing-dump", detail: "detail" },
     },
   ],
   [ADAPTER_KEYS.EU_ECJ]: [
@@ -1131,7 +1134,7 @@ export type SourceSurfaceCensus = {
  * does not hold fails with the field name, which is the check a per-adapter
  * test cannot make about the fields its author never noticed.
  */
-type DeclaredSourceFieldInventory = {
+export type SourceFieldInventory = {
   readonly status: "declared";
   readonly fields: Readonly<Record<string, SourceFieldDisposition>>;
   /**
@@ -1143,61 +1146,6 @@ type DeclaredSourceFieldInventory = {
     parts: SourceRawParts,
   ) => readonly string[] | Promise<readonly string[]>;
 };
-
-/**
- * The adapters that may still declare no field inventory.
- *
- * Exactly the names in `source-field-inventory-baseline.json`, and closed for
- * the same reason {@link LegacyAdapterKey} is: a source registered tomorrow
- * cannot name itself into the exemption, because the union it would have to
- * join is written here rather than derived from the registry.
- */
-const LEGACY_UNINVENTORIED_ADAPTERS = [
-  ADAPTER_KEYS.PL_COURTS,
-  ADAPTER_KEYS.EU_ECJ,
-] as const satisfies readonly AdapterKey[];
-
-export type LegacyUninventoriedAdapter =
-  (typeof LEGACY_UNINVENTORIED_ADAPTERS)[number];
-
-/**
- * An adapter that has not inventoried its source fields yet, and says which
- * one it is: the name is what the committed baseline is compared against, so a
- * pending inventory copied between adapters fails instead of hiding one.
- */
-export type PendingSourceFieldInventory<
-  TAdapter extends LegacyUninventoriedAdapter,
-> = {
-  readonly status: "pending-inventory";
-  readonly adapter: TAdapter;
-};
-
-/**
- * An adapter's inventory, or the one sanctioned way to not have one yet.
- *
- * `pending-inventory` is a ratchet, not an option: the committed baseline in
- * `source-field-inventory-baseline.json` names exactly which adapters may
- * declare it, and the conformance suite fails both ways — a pending adapter
- * missing from the baseline, and a baseline entry that has since enrolled. The
- * set can therefore only shrink.
- */
-export type SourceFieldInventory =
-  | DeclaredSourceFieldInventory
-  | PendingSourceFieldInventory<LegacyUninventoriedAdapter>;
-
-/**
- * For an adapter whose source fields nobody has inventoried yet. Written out
- * at the adapter rather than defaulted, so enrolment is a visible edit and the
- * baseline can name what is left.
- */
-export const pendingSourceFieldInventory = <
-  const TAdapter extends LegacyUninventoriedAdapter,
->(
-  adapter: TAdapter,
-): PendingSourceFieldInventory<TAdapter> => ({
-  status: "pending-inventory",
-  adapter,
-});
 
 /**
  * Interface for court data source adapters.
@@ -1275,8 +1223,6 @@ export type SourceAdapter = {
    * an adapter already fetches goes unstored, and the decision has to live in
    * the adapter rather than in whoever last read the page.
    *
-   * `pendingSourceFieldInventory` is the only way to not have one, and the
-   * committed baseline names every adapter allowed to call it.
    */
   sourceFields: SourceFieldInventory;
   /**

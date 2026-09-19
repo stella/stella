@@ -1172,14 +1172,6 @@ describe("the responses this court served, as recorded", () => {
     return payload;
   };
 
-  const declaredFields = (): Readonly<Record<string, unknown>> => {
-    const { sourceFields } = skUsAdapter;
-    if (sourceFields.status !== "declared") {
-      throw new Error("sk-us declares no source-field inventory");
-    }
-    return sourceFields.fields;
-  };
-
   test("every key the search row carries has a disposition", async () => {
     const page = await readJsonGz("sk-us-listing.json.gz");
     const documents = page["documents"];
@@ -1187,7 +1179,7 @@ describe("the responses this court served, as recorded", () => {
       throw new Error("the recorded listing carries no documents");
     }
 
-    const fields = declaredFields();
+    const { fields } = skUsAdapter.sourceFields;
     const undeclared = [
       ...new Set(
         documents.flatMap((document) =>
@@ -1206,7 +1198,7 @@ describe("the responses this court served, as recorded", () => {
       throw new Error("the recorded facet response states no counts");
     }
 
-    const fields = declaredFields();
+    const { fields } = skUsAdapter.sourceFields;
     expect(
       Object.keys(counts).filter((key) => fields[key] === undefined),
     ).toEqual([]);
