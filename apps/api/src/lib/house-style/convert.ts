@@ -73,9 +73,20 @@ const AUTHORSHIP_ELEMENTS = [
   "Manager",
 ] as const;
 
-type DocumentParts = {
+type StyleSetParts = {
   documentXml: string;
   stylesXml: string;
+  numberingXml: string | null;
+};
+
+type SourceParts = {
+  documentXml: string;
+  /**
+   * Null where the package carries no `word/styles.xml`. Word opens such a
+   * document with every paragraph on the default style, and a conversion has
+   * no reason to be stricter: the styles it needs come from the style set.
+   */
+  stylesXml: string | null;
   numberingXml: string | null;
 };
 
@@ -102,21 +113,47 @@ const openArchive = async (
       }),
   });
 
-const readParts = async (
+const noDocumentPart = (): HouseStyleError =>
+  new HouseStyleError({ message: "The DOCX carries no document part" });
+
+/**
+ * A style set's parts. Everything a style set is worth is in the styles it
+ * defines, so a package without `word/styles.xml` is refused here rather than
+ * read into an empty catalogue no guide could be written against.
+ */
+const readStyleSetParts = async (
   archive: DocxArchive,
-): Promise<Result<DocumentParts, HouseStyleError>> => {
+): Promise<Result<StyleSetParts, HouseStyleError>> => {
   const documentXml = await archive.readEntryString(MAIN_DOCUMENT_PART_PATH);
+  if (documentXml === null) {
+    return Result.err(noDocumentPart());
+  }
   const stylesXml = await archive.readEntryString(STYLES_PART_PATH);
-  if (documentXml === null || stylesXml === null) {
+  if (stylesXml === null) {
     return Result.err(
       new HouseStyleError({
-        message: "The DOCX carries no document or style part",
+        message: "The style set's DOCX carries no style part",
       }),
     );
   }
   return Result.ok({
     documentXml,
     stylesXml,
+    numberingXml: await archive.readEntryString(NUMBERING_PART_PATH),
+  });
+};
+
+/** The parts of the document being converted; only its body is required. */
+const readSourceParts = async (
+  archive: DocxArchive,
+): Promise<Result<SourceParts, HouseStyleError>> => {
+  const documentXml = await archive.readEntryString(MAIN_DOCUMENT_PART_PATH);
+  if (documentXml === null) {
+    return Result.err(noDocumentPart());
+  }
+  return Result.ok({
+    documentXml,
+    stylesXml: await archive.readEntryString(STYLES_PART_PATH),
     numberingXml: await archive.readEntryString(NUMBERING_PART_PATH),
   });
 };
@@ -137,7 +174,7 @@ export const readStyleCatalogue = async ({
   if (Result.isError(archive)) {
     return archive;
   }
-  const parts = await readParts(archive.value);
+  const parts = await readStyleSetParts(archive.value);
   if (Result.isError(parts)) {
     return parts;
   }
@@ -297,11 +334,11 @@ export const convertToHouseStyle = async ({
   if (Result.isError(sourceArchive)) {
     return sourceArchive;
   }
-  const houseParts = await readParts(houseArchive.value);
+  const houseParts = await readStyleSetParts(houseArchive.value);
   if (Result.isError(houseParts)) {
     return houseParts;
   }
-  const sourceParts = await readParts(sourceArchive.value);
+  const sourceParts = await readSourceParts(sourceArchive.value);
   if (Result.isError(sourceParts)) {
     return sourceParts;
   }

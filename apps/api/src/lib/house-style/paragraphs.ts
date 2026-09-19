@@ -14,6 +14,7 @@
  * paragraph than the one it was taken for.
  */
 
+import { panic } from "better-result";
 import * as slimdom from "slimdom";
 
 import { paragraphText, W_NS } from "@/api/lib/docx/ooxml";
@@ -22,10 +23,14 @@ import {
   childElement,
   childElements,
   isElement,
-  numberingReference,
+  numberingDeclaration,
   resolveNumbering,
 } from "@/api/lib/house-style/catalogue";
-import type { StyleDefinitions } from "@/api/lib/house-style/catalogue";
+import type {
+  NumberingDeclaration,
+  StyleDefinitions,
+  StyleNumbering,
+} from "@/api/lib/house-style/catalogue";
 
 export const PARAGRAPH_TEXT_MAX_CHARS = 400;
 export const NEIGHBOUR_TEXT_MAX_CHARS = 160;
@@ -151,6 +156,43 @@ const runToggle = (
   return on.length === 0 ? null : on.length === runs.length;
 };
 
+type ParagraphNumberingOptions = {
+  /** What the paragraph's own `w:pPr` says; it overrides its style. */
+  declared: NumberingDeclaration;
+  definitions: StyleDefinitions;
+  styleId: string;
+  /** The numbering the paragraph's style resolved to. */
+  inherited: StyleNumbering | null;
+};
+
+/**
+ * A paragraph's numbering. `w:numId` 0 switches numbering off for this
+ * paragraph even where its style numbers it, so it answers `null` rather than
+ * falling through to the style the way a paragraph that declares nothing does.
+ */
+const paragraphNumbering = ({
+  declared,
+  definitions,
+  styleId,
+  inherited,
+}: ParagraphNumberingOptions): StyleNumbering | null => {
+  switch (declared.type) {
+    case "absent":
+      return inherited;
+    case "disabled":
+      return null;
+    case "reference":
+      return resolveNumbering({
+        numbering: definitions.numbering,
+        declaration: declared,
+        styleId,
+      });
+    default:
+      declared satisfies never;
+      return panic("Unhandled numbering declaration");
+  }
+};
+
 export type ExtractParagraphFeaturesOptions = {
   paragraphs: readonly BodyParagraph[];
   definitions: StyleDefinitions;
@@ -176,15 +218,12 @@ export const extractParagraphFeatures = ({
             return pStyle === null ? null : attr(pStyle, "val");
           })()) ?? definitions.defaultStyleId;
     const definition = definitions.byId.get(styleId) ?? null;
-    const direct = numberingReference(pPr);
-    const numbering =
-      direct === null
-        ? (definition?.formatting.numbering ?? null)
-        : resolveNumbering({
-            numbering: definitions.numbering,
-            reference: direct,
-            styleId,
-          });
+    const numbering = paragraphNumbering({
+      declared: numberingDeclaration(pPr),
+      definitions,
+      styleId,
+      inherited: definition?.formatting.numbering ?? null,
+    });
     const outlineFromParagraph =
       pPr === null ? null : childElement(pPr, "outlineLvl");
     const alignment = pPr === null ? null : childElement(pPr, "jc");

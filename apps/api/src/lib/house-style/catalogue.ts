@@ -14,6 +14,7 @@
  * style-set file invalidates a guide that no longer describes it.
  */
 
+import { panic } from "better-result";
 import * as slimdom from "slimdom";
 
 import { stableStringify } from "@stll/stable-stringify";
@@ -381,20 +382,42 @@ const EMPTY_FORMATTING: StyleFormatting = {
   numbering: null,
 };
 
-export type NumberingReference = { numId: number; level: number | null };
+/**
+ * What one layer of properties says about numbering.
+ *
+ * `w:numId` 0 is not silence: WordprocessingML reserves it for "no
+ * numbering", and it cancels the list a `w:basedOn` ancestor declared. Read
+ * as an absent `w:numPr` it would be overwritten by the inherited value and a
+ * style that switches numbering off would print numbers, so the two states are
+ * separate branches every reader has to answer for.
+ */
+export type NumberingDeclaration =
+  | { type: "absent" }
+  | { type: "disabled" }
+  | { type: "reference"; numId: number; level: number | null };
 
-export const numberingReference = (
+/** The reserved `w:numId` that turns numbering off instead of naming a list. */
+const NUMBERING_DISABLED_NUM_ID = 0;
+
+export const numberingDeclaration = (
   pPr: slimdom.Element | null,
-): NumberingReference | null => {
+): NumberingDeclaration => {
   const numPr = pPr === null ? null : childElement(pPr, "numPr");
   if (numPr === null) {
-    return null;
+    return { type: "absent" };
   }
   const numId = intAttr(childElement(numPr, "numId"), "val");
-  if (numId === null || numId === 0) {
-    return null;
+  if (numId === null) {
+    return { type: "absent" };
   }
-  return { numId, level: intAttr(childElement(numPr, "ilvl"), "val") };
+  if (numId === NUMBERING_DISABLED_NUM_ID) {
+    return { type: "disabled" };
+  }
+  return {
+    type: "reference",
+    numId,
+    level: intAttr(childElement(numPr, "ilvl"), "val"),
+  };
 };
 
 /**
@@ -530,7 +553,11 @@ export type StyleDefinitions = {
 };
 
 export type ReadStyleDefinitionsOptions = {
-  stylesXml: string;
+  /**
+   * Null where the package carries no `word/styles.xml`. Word opens such a
+   * document with every paragraph on the default style; so does this.
+   */
+  stylesXml: string | null;
   numberingXml: string | null;
   rename?: readonly RenameRule[] | undefined;
 };
@@ -546,15 +573,18 @@ export const readStyleDefinitions = ({
   numberingXml,
   rename = [],
 }: ReadStyleDefinitionsOptions): StyleDefinitions => {
-  const stylesDoc = slimdom.parseXmlDocument(stylesXml);
-  renameStylesInDocument(stylesDoc, rename);
+  const stylesDoc =
+    stylesXml === null ? null : slimdom.parseXmlDocument(stylesXml);
+  if (stylesDoc !== null) {
+    renameStylesInDocument(stylesDoc, rename);
+  }
   const numbering = readNumbering(
     numberingXml === null ? null : renameStyleReferences(numberingXml, rename),
   );
 
   const raw = new Map<string, RawStyle>();
   let defaultStyleId = "Normal";
-  for (const style of stylesDoc.getElementsByTagNameNS(W_NS, "style")) {
+  for (const style of stylesDoc?.getElementsByTagNameNS(W_NS, "style") ?? []) {
     const id = attr(style, "styleId");
     if (id === null || attr(style, "type") !== "paragraph") {
       continue;
@@ -572,7 +602,7 @@ export const readStyleDefinitions = ({
   }
 
   const docDefaults = stylesDoc
-    .getElementsByTagNameNS(W_NS, "docDefaults")
+    ?.getElementsByTagNameNS(W_NS, "docDefaults")
     .at(0);
   const runDefaults =
     docDefaults === undefined ? null : childElement(docDefaults, "rPrDefault");
@@ -584,10 +614,15 @@ export const readStyleDefinitions = ({
   const byId = new Map<string, StyleDefinition>();
   for (const style of raw.values()) {
     let formatting = base;
-    let reference: NumberingReference | null = null;
+    // Root first, so the nearest layer that speaks wins: a `disabled` layer
+    // stops what its ancestors declared instead of deferring to it.
+    let declaration: NumberingDeclaration = { type: "absent" };
     for (const layer of inheritanceChain(raw, style.id)) {
       formatting = applyLayer(formatting, layer);
-      reference = numberingReference(layer.pPr) ?? reference;
+      const own = numberingDeclaration(layer.pPr);
+      if (own.type !== "absent") {
+        declaration = own;
+      }
     }
     byId.set(style.id, {
       id: style.id,
@@ -597,7 +632,7 @@ export const readStyleDefinitions = ({
         ...formatting,
         numbering: resolveNumbering({
           numbering,
-          reference,
+          declaration,
           styleId: style.id,
         }),
       },
@@ -665,35 +700,42 @@ export const renameStyleReferences = (
 
 export const resolveNumbering = ({
   numbering,
-  reference,
+  declaration,
   styleId,
 }: {
   numbering: NumberingDefinitions;
-  reference: NumberingReference | null;
+  declaration: NumberingDeclaration;
   styleId: string;
 }): StyleNumbering | null => {
-  if (reference === null) {
-    return null;
+  switch (declaration.type) {
+    case "absent":
+    case "disabled":
+      return null;
+    case "reference": {
+      const levels = numbering.levelsByNumId.get(declaration.numId);
+      if (levels === undefined) {
+        return null;
+      }
+      // A multilevel list that drives styles names each style on its own
+      // level; the paragraph's `w:ilvl` wins where the style carries one, and
+      // a list that names nothing falls back to its first level.
+      const linked = [...levels.entries()].find(
+        ([, level]) => level.styleId === styleId,
+      );
+      const level = declaration.level ?? linked?.at(0) ?? 0;
+      const resolvedLevel = typeof level === "number" ? level : 0;
+      const own = levels.get(resolvedLevel);
+      return {
+        numId: declaration.numId,
+        level: resolvedLevel,
+        format: own?.format ?? "none",
+        example: renderNumberExample(levels, resolvedLevel),
+      };
+    }
+    default:
+      declaration satisfies never;
+      return panic("Unhandled numbering declaration");
   }
-  const levels = numbering.levelsByNumId.get(reference.numId);
-  if (levels === undefined) {
-    return null;
-  }
-  // A multilevel list that drives styles names each style on its own level;
-  // the paragraph's `w:ilvl` wins where the style carries one, and a list
-  // that names nothing falls back to its first level.
-  const linked = [...levels.entries()].find(
-    ([, level]) => level.styleId === styleId,
-  );
-  const level = reference.level ?? linked?.at(0) ?? 0;
-  const resolvedLevel = typeof level === "number" ? level : 0;
-  const own = levels.get(resolvedLevel);
-  return {
-    numId: reference.numId,
-    level: resolvedLevel,
-    format: own?.format ?? "none",
-    example: renderNumberExample(levels, resolvedLevel),
-  };
 };
 
 /**

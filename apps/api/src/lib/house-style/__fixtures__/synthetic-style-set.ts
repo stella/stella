@@ -121,9 +121,116 @@ export const SOURCE_DOCUMENT_XML = `<?xml version="1.0" encoding="UTF-8"?>
   <w:sectPr><w:pgSz w:w="12240" w:h="15840"/></w:sectPr>
 </w:body></w:document>`;
 
+export const EMPTY_DOCUMENT_XML = `<?xml version="1.0" encoding="UTF-8"?>
+<w:document ${W_ATTRIBUTE}><w:body/></w:document>`;
+
+/**
+ * A style set whose two deepest styles switch numbering off with the reserved
+ * `w:numId` 0, which `w:basedOn` would otherwise hand them from their parent.
+ *
+ * They differ in what the cancelled list was covering. `UnnumberedSubClause`
+ * is left with nothing: no list, and no `w:outlineLvl` anywhere up its chain.
+ * `UnnumberedAnnex` is left with the outline level its parent declared, which
+ * the parent's own list level had been hiding.
+ */
+export const CANCELLED_NUMBERING_STYLES_XML = `<?xml version="1.0" encoding="UTF-8"?>
+<w:styles ${W_ATTRIBUTE}>
+  <w:style w:type="paragraph" w:default="1" w:styleId="Normal">
+    <w:name w:val="Normal"/>
+  </w:style>
+  <w:style w:type="paragraph" w:styleId="ClauseFirm">
+    <w:name w:val="Clause Firm"/>
+    <w:basedOn w:val="Normal"/>
+    <w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr><w:outlineLvl w:val="0"/></w:pPr>
+  </w:style>
+  <w:style w:type="paragraph" w:styleId="SubClauseFirm">
+    <w:name w:val="Sub-clause Firm"/>
+    <w:basedOn w:val="Normal"/>
+    <w:pPr><w:numPr><w:ilvl w:val="1"/><w:numId w:val="1"/></w:numPr></w:pPr>
+  </w:style>
+  <w:style w:type="paragraph" w:styleId="UnnumberedSubClauseFirm">
+    <w:name w:val="Unnumbered Sub-clause Firm"/>
+    <w:basedOn w:val="SubClauseFirm"/>
+    <w:pPr><w:numPr><w:numId w:val="0"/></w:numPr></w:pPr>
+  </w:style>
+  <w:style w:type="paragraph" w:styleId="NumberedAnnexFirm">
+    <w:name w:val="Numbered Annex Firm"/>
+    <w:basedOn w:val="Normal"/>
+    <w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr><w:outlineLvl w:val="3"/></w:pPr>
+  </w:style>
+  <w:style w:type="paragraph" w:styleId="UnnumberedAnnexFirm">
+    <w:name w:val="Unnumbered Annex Firm"/>
+    <w:basedOn w:val="NumberedAnnexFirm"/>
+    <w:pPr><w:numPr><w:numId w:val="0"/></w:numPr></w:pPr>
+  </w:style>
+</w:styles>`;
+
+/**
+ * The prose is uniform on purpose: the rule tier reads the ids and the order
+ * a guide lists them in, never the words, and this set exists to exercise it.
+ */
+const cancelledNumberingEntry = (id: string, name: string) => ({
+  id,
+  name,
+  purpose: `${name}, in the set that cancels numbering.`,
+  use_when: `The paragraph belongs to ${name}.`,
+  do_not_use_when: "The paragraph belongs to another style of the set.",
+  hierarchy: "One of five styles, two of them cancelling their parent's list.",
+  looks_like: `As ${name} defines it.`,
+});
+
+/**
+ * Guide order breaks a tie between two styles claiming one level, so the
+ * style whose numbering is cancelled is listed first: while it still
+ * inherited its parent's list it took that level from the parent.
+ */
+export const CANCELLED_NUMBERING_GUIDE_DRAFT: StyleGuideDraft = {
+  styles: [
+    cancelledNumberingEntry(
+      "UnnumberedSubClauseFirm",
+      "Unnumbered Sub-clause Firm",
+    ),
+    cancelledNumberingEntry("ClauseFirm", "Clause Firm"),
+    cancelledNumberingEntry("SubClauseFirm", "Sub-clause Firm"),
+    cancelledNumberingEntry("NumberedAnnexFirm", "Numbered Annex Firm"),
+    cancelledNumberingEntry("UnnumberedAnnexFirm", "Unnumbered Annex Firm"),
+  ],
+};
+
+export const chainStyleId = (index: number): string => `S${String(index)}`;
+
+/**
+ * A style set built from one `w:basedOn` chain: `S0` on Normal, every later
+ * style on the one before it. Each entry is the `w:numId` that style declares:
+ * `null` declares no `w:numPr` at all, and 0 is the reserved "no numbering"
+ * that cancels what the chain hands down.
+ */
+export const chainStylesXml = (chain: readonly (number | null)[]): string => {
+  const styles = chain.map((numId, index) => {
+    const numbering =
+      numId === null
+        ? ""
+        : `<w:pPr><w:numPr><w:numId w:val="${String(numId)}"/></w:numPr></w:pPr>`;
+    const basedOn = index === 0 ? "Normal" : chainStyleId(index - 1);
+    return `<w:style w:type="paragraph" w:styleId="${chainStyleId(index)}">
+    <w:name w:val="Chain ${String(index)}"/>
+    <w:basedOn w:val="${basedOn}"/>
+    ${numbering}
+  </w:style>`;
+  });
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<w:styles ${W_ATTRIBUTE}>
+  <w:style w:type="paragraph" w:default="1" w:styleId="Normal">
+    <w:name w:val="Normal"/>
+  </w:style>
+  ${styles.join("\n  ")}
+</w:styles>`;
+};
+
 export type SyntheticPackageParts = {
   documentXml?: string;
-  stylesXml?: string;
+  /** Null writes no `word/styles.xml`, which Word also accepts. */
+  stylesXml?: string | null;
   numberingXml?: string | null;
 };
 
@@ -135,7 +242,9 @@ export const syntheticDocx = async ({
 }: SyntheticPackageParts = {}): Promise<ArrayBuffer> => {
   const zip = new JSZip();
   zip.file("word/document.xml", documentXml);
-  zip.file("word/styles.xml", stylesXml);
+  if (stylesXml !== null) {
+    zip.file("word/styles.xml", stylesXml);
+  }
   if (numberingXml !== null) {
     zip.file("word/numbering.xml", numberingXml);
   }

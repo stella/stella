@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  CANCELLED_NUMBERING_STYLES_XML,
   HOUSE_DOCUMENT_XML,
   HOUSE_NUMBERING_XML,
   HOUSE_STYLES_XML,
@@ -154,6 +155,46 @@ describe("renaming a house style's ids", () => {
   });
 });
 
+describe("a style that switches numbering off", () => {
+  const cancelled = readStyleDefinitions({
+    stylesXml: CANCELLED_NUMBERING_STYLES_XML,
+    numberingXml: HOUSE_NUMBERING_XML,
+  });
+  const numberingOf = (id: string) =>
+    cancelled.byId.get(id)?.formatting.numbering;
+
+  test("leaves the parent it is based on numbered", () => {
+    expect(numberingOf("SubClauseFirm")).toMatchObject({
+      level: 1,
+      format: "decimal",
+      example: "1.1",
+    });
+    expect(numberingOf("NumberedAnnexFirm")).toMatchObject({
+      level: 0,
+      format: "decimal",
+      example: "1.",
+    });
+  });
+
+  // `w:numId` 0 is WordprocessingML's reserved "no numbering": it cancels the
+  // list the basedOn chain hands down rather than saying nothing about it.
+  test("carries no numbering, and does not inherit its parent's list", () => {
+    expect(numberingOf("UnnumberedSubClauseFirm")).toBeNull();
+    expect(numberingOf("UnnumberedAnnexFirm")).toBeNull();
+  });
+
+  // Numbering and `w:outlineLvl` are independent in Word, so cancelling the
+  // list leaves the inherited outline level in place.
+  test("keeps the outline level it inherits, which numbering does not touch", () => {
+    expect(
+      cancelled.byId.get("UnnumberedAnnexFirm")?.formatting.outlineLevel,
+    ).toBe(3);
+    expect(
+      cancelled.byId.get("UnnumberedSubClauseFirm")?.formatting.outlineLevel,
+    ).toBeNull();
+  });
+});
+
 describe("the catalogue hash", () => {
   test("is the same for the same style set", () => {
     expect(catalogue().hash).toBe(catalogue().hash);
@@ -186,6 +227,15 @@ describe("style definitions", () => {
     });
     expect(definitions.defaultStyleId).toBe("Normal");
     expect(definitions.byId.get("UnusedFirm")).toBeDefined();
+  });
+
+  test("read a document with no style part as all-default", () => {
+    const definitions = readStyleDefinitions({
+      stylesXml: null,
+      numberingXml: null,
+    });
+    expect(definitions.defaultStyleId).toBe("Normal");
+    expect(definitions.byId.size).toBe(0);
   });
 
   test("survive a style set with no numbering part", () => {
