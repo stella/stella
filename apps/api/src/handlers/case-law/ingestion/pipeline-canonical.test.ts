@@ -32,6 +32,7 @@ import {
 import type { EncodedPack } from "@/api/lib/legal-search/corpus-pack";
 import type { putCorpusPacks } from "@/api/lib/legal-search/corpus-pack-writer";
 import * as realCorpusStorage from "@/api/lib/legal-search/corpus-storage";
+import { partialObservationFromMetadata } from "@/api/lib/legal-search/ingestion-normalization";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 
 /**
@@ -604,6 +605,12 @@ describe("processDecision — canonical storage mode", () => {
     // Nothing in object storage backs this row, so the settle must not
     // trim the Postgres payload columns.
     expect(settled).not.toHaveProperty("fulltext");
+    // A row a reader cannot open is stored unpublished under the packed
+    // layout too: the marker is decided by the write that proves the row
+    // holds no document, never by where a payload would have lived.
+    expect(
+      partialObservationFromMetadata(insertedRows.at(0)?.["metadata"]),
+    ).toMatchObject({ isListingOnly: true });
     expect(events.at(-1)).toBe("intent-delete");
   });
 
