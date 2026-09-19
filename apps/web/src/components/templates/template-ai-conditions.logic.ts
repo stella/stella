@@ -37,8 +37,9 @@ export type UndecidedReason = Extract<
  * stays invisible until the document is generated.
  */
 export const isAiDecidedCondition = (field: ResolvedField): boolean =>
+  field.inputType === "boolean" &&
   field.aiPrompt !== undefined &&
-  (field.kind === "boolean" || field.inputType === "boolean");
+  field.aiPrompt !== "";
 
 /**
  * What one chip shows. `model` defers to the backend's answer (`null` until
@@ -47,7 +48,8 @@ export const isAiDecidedCondition = (field: ResolvedField): boolean =>
  */
 export type ConditionChipState =
   | { kind: "model"; decision: ConditionDecision | null }
-  | { kind: "forced"; value: boolean };
+  | { kind: "forced"; value: boolean }
+  | { kind: "error" };
 
 export const conditionChipState = (
   forcedValue: unknown,
@@ -75,18 +77,42 @@ export const cycleConditionOverride = (
 };
 
 /**
- * The values the decide request carries: what the user entered, minus the
- * conditions themselves (the model answers those, and an override is applied
- * locally) and minus keys the form has cleared.
+ * The values the decide request carries: what the user entered in fields that
+ * remain visible, minus the conditions themselves (the model answers those,
+ * and an override is applied locally) and minus keys the form has cleared.
  */
-export const conditionRequestValues = (
-  values: Readonly<Record<string, unknown>>,
-  conditionPaths: readonly string[],
-): Record<string, unknown> => {
+type ConditionRequestValuesOptions = {
+  values: Readonly<Record<string, unknown>>;
+  conditionPaths: readonly string[];
+  visibleFields: readonly Pick<ResolvedField, "kind" | "path">[];
+  visibleArrayIndexPaths: readonly string[];
+};
+
+const belongsToVisibleField = (
+  valuePath: string,
+  fields: ConditionRequestValuesOptions["visibleFields"],
+  arrayIndexPaths: ConditionRequestValuesOptions["visibleArrayIndexPaths"],
+): boolean =>
+  arrayIndexPaths.includes(valuePath) ||
+  fields.some(
+    (field) =>
+      valuePath === field.path ||
+      (field.kind === "array" && valuePath.startsWith(`${field.path}[`)),
+  );
+
+export const conditionRequestValues = ({
+  values,
+  conditionPaths,
+  visibleFields,
+  visibleArrayIndexPaths,
+}: ConditionRequestValuesOptions): Record<string, unknown> => {
   const excluded = new Set(conditionPaths);
   return Object.fromEntries(
     Object.entries(values).filter(
-      ([path, value]) => value !== undefined && !excluded.has(path),
+      ([path, value]) =>
+        value !== undefined &&
+        !excluded.has(path) &&
+        belongsToVisibleField(path, visibleFields, visibleArrayIndexPaths),
     ),
   );
 };
@@ -116,7 +142,7 @@ export const readConditionOverrides = (
   return overrides;
 };
 
-/** An untouched form tells the model nothing, so it is never asked. */
+/** Whether the form carries an answer that can inform a decision. */
 export const hasEnteredValues = (
   values: Readonly<Record<string, unknown>>,
 ): boolean => Object.values(values).some(isEnteredValue);
@@ -128,8 +154,17 @@ const isEnteredValue = (value: unknown): boolean => {
   if (Array.isArray(value)) {
     return value.length > 0;
   }
-  return value === true || typeof value === "number";
+  return typeof value === "boolean" || typeof value === "number";
 };
+
+/** A disabled query may retain its last data. Once the effective request is
+ *  empty, treat those decisions as stale so they cannot keep driving the
+ *  document preview after the last answer is cleared. */
+export const activeConditionDecisions = (
+  requestValues: Readonly<Record<string, unknown>>,
+  conditions: readonly DecidedCondition[],
+): readonly DecidedCondition[] =>
+  hasEnteredValues(requestValues) ? conditions : [];
 
 /**
  * Effective answer per condition, keyed by field path: the user's override
@@ -160,6 +195,7 @@ export const effectiveConditionValues = (
 export type ConditionChipAnswer =
   | { kind: "decided"; value: boolean; probability: number }
   | { kind: "forced"; value: boolean }
+  | { kind: "error" }
   | { kind: "notSettled" }
   | { kind: "onGenerate" };
 
@@ -181,6 +217,8 @@ export const describeConditionChip = (
         tone: "highlight",
         answer: { kind: "forced", value: state.value },
       };
+    case "error":
+      return { tone: "destructive", answer: { kind: "error" } };
     case "model": {
       const { decision } = state;
       if (decision === null) {

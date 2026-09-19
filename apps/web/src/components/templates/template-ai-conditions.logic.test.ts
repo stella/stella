@@ -6,6 +6,7 @@ import type {
   DecidedCondition,
 } from "@/components/templates/template-ai-conditions.logic";
 import {
+  activeConditionDecisions,
   conditionChipState,
   conditionRequestValues,
   cycleConditionOverride,
@@ -21,6 +22,7 @@ import type { ResolvedField } from "@/components/templates/template-discover-typ
 const field = (overrides: Partial<ResolvedField>): ResolvedField => ({
   path: "hasGuarantor",
   kind: "boolean",
+  inputType: "boolean",
   count: 0,
   ...overrides,
 });
@@ -44,12 +46,17 @@ describe("isAiDecidedCondition", () => {
     ).toBe(true);
   });
 
-  test("an inputType-only boolean counts too", () => {
+  test("the input type, not the value kind, defines a boolean condition", () => {
     expect(
       isAiDecidedCondition(
         field({ kind: "string", inputType: "boolean", aiPrompt: "?" }),
       ),
     ).toBe(true);
+    expect(
+      isAiDecidedCondition(
+        field({ inputType: "text", aiPrompt: "Is there a guarantor?" }),
+      ),
+    ).toBe(false);
   });
 
   test("a boolean the user answers is not", () => {
@@ -58,8 +65,14 @@ describe("isAiDecidedCondition", () => {
 
   test("an AI-drafted text field is not a condition", () => {
     expect(
-      isAiDecidedCondition(field({ kind: "string", aiPrompt: "Draft it" })),
+      isAiDecidedCondition(
+        field({ kind: "string", inputType: "text", aiPrompt: "Draft it" }),
+      ),
     ).toBe(false);
+  });
+
+  test("an empty prompt is not a question for the decision model", () => {
+    expect(isAiDecidedCondition(field({ aiPrompt: "" }))).toBe(false);
   });
 });
 
@@ -118,26 +131,65 @@ describe("cycleConditionOverride", () => {
 
 describe("conditionRequestValues", () => {
   const paths = ["hasGuarantor", "isLongTerm"];
+  const visibleFields = [
+    field({ path: "landlord.name", kind: "string", inputType: "text" }),
+    field({ path: "rent", kind: "string", inputType: "number" }),
+    field({ path: "parties", kind: "array", inputType: undefined }),
+  ];
+  const visibleArrayIndexPaths = ["__array_parties"];
 
-  test("drops the conditions and the values the form cleared", () => {
+  test("keeps visible values and drops conditions, hidden values, and cleared values", () => {
     expect(
-      conditionRequestValues(
-        {
+      conditionRequestValues({
+        values: {
           "landlord.name": "Nowak",
           rent: "1200",
+          hiddenNote: "must not reach the model",
           hasGuarantor: true,
           isLongTerm: undefined,
           note: undefined,
         },
-        paths,
-      ),
+        conditionPaths: paths,
+        visibleArrayIndexPaths,
+        visibleFields,
+      }),
     ).toEqual({ "landlord.name": "Nowak", rent: "1200" });
   });
 
   test("a cleared override and an absent key produce the same request", () => {
     expect(
-      conditionRequestValues({ rent: "1200", hasGuarantor: undefined }, paths),
-    ).toEqual(conditionRequestValues({ rent: "1200" }, paths));
+      conditionRequestValues({
+        values: { rent: "1200", hasGuarantor: undefined },
+        conditionPaths: paths,
+        visibleArrayIndexPaths,
+        visibleFields,
+      }),
+    ).toEqual(
+      conditionRequestValues({
+        values: { rent: "1200" },
+        conditionPaths: paths,
+        visibleArrayIndexPaths,
+        visibleFields,
+      }),
+    );
+  });
+
+  test("keeps the index and item values of a visible array", () => {
+    expect(
+      conditionRequestValues({
+        values: {
+          __array_parties: [0],
+          "parties[0].name": "Nowak",
+          "hiddenParties[0].name": "Smith",
+        },
+        conditionPaths: paths,
+        visibleArrayIndexPaths,
+        visibleFields,
+      }),
+    ).toEqual({
+      __array_parties: [0],
+      "parties[0].name": "Nowak",
+    });
   });
 });
 
@@ -146,7 +198,7 @@ describe("hasEnteredValues", () => {
     [{}, false],
     [{ rent: "" }, false],
     [{ rent: "   " }, false],
-    [{ signed: false }, false],
+    [{ signed: false }, true],
     [{ __array_parties: [] }, false],
     [{ rent: "1200" }, true],
     [{ signed: true }, true],
@@ -154,6 +206,18 @@ describe("hasEnteredValues", () => {
     [{ __array_parties: [0] }, true],
   ])("%o → %s", (values, expected) => {
     expect(hasEnteredValues(values)).toBe(expected);
+  });
+});
+
+describe("activeConditionDecisions", () => {
+  const previous = [condition("hasGuarantor", decided(true, 0.96))];
+
+  test("drops retained query data after the last entered value is cleared", () => {
+    expect(activeConditionDecisions({ rent: "" }, previous)).toEqual([]);
+  });
+
+  test("keeps the current decisions while the request has an entered value", () => {
+    expect(activeConditionDecisions({ rent: "1200" }, previous)).toBe(previous);
   });
 });
 
@@ -221,6 +285,13 @@ describe("readConditionOverrides", () => {
 });
 
 describe("describeConditionChip", () => {
+  test("a failed preview is an explicit destructive state", () => {
+    expect(describeConditionChip({ kind: "error" })).toEqual({
+      tone: "destructive",
+      answer: { kind: "error" },
+    });
+  });
+
   test("a model answer carries the probability it is stated with", () => {
     expect(
       describeConditionChip({ kind: "model", decision: decided(true, 0.96) }),

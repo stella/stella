@@ -2217,13 +2217,20 @@ export const TemplateForm = ({
     return t("templates.downloadAnyway");
   };
 
-  // Filter visible non-array fields, then group
-  const visibleScalarFields = fields.filter(
-    (f) => f.kind !== "array" && isFieldVisible(f, values, conditions),
+  // Keep one live visibility projection for both the rendered inputs and the
+  // values sent to the condition preview. A hidden field may retain form
+  // state, but it must not keep influencing model decisions after it leaves
+  // the effective submission payload.
+  const visibleFields = fields.filter((field) =>
+    isFieldVisible(field, values, conditions),
+  );
+  const visibleScalarFields = visibleFields.filter(
+    (field) => field.kind !== "array",
   );
   const grouped = groupFieldsByPrefix(visibleScalarFields);
-  const arrayFields = fields.filter(
-    (f) => f.kind === "array" && isFieldVisible(f, values, conditions),
+  const arrayFields = visibleFields.filter((field) => field.kind === "array");
+  const visibleArrayIndexPaths = arrayFields.map((field) =>
+    arrayIndexKey(field.path),
   );
 
   const submitAction: SubmitAction =
@@ -2328,6 +2335,8 @@ export const TemplateForm = ({
                 snapshot={decideSnapshot}
                 templateId={templateId}
                 values={values}
+                visibleArrayIndexPaths={visibleArrayIndexPaths}
+                visibleFields={visibleFields}
               />
             )}
 

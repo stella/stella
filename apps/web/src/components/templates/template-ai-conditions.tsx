@@ -21,6 +21,7 @@ import { cn } from "@stll/ui/utils";
 
 import type { ConditionChipState } from "@/components/templates/template-ai-conditions.logic";
 import {
+  activeConditionDecisions,
   conditionChipState,
   conditionRequestValues,
   describeConditionChip,
@@ -51,6 +52,12 @@ type AiDecidedConditionsProps = {
   values: Record<string, unknown>;
   /** The debounced form values the decision model is asked about. */
   snapshot: Record<string, unknown>;
+  /** Fields visible in the live form. Hidden values stay out of the model's
+   *  request, matching the payload produced when the form is submitted. */
+  visibleFields: readonly ResolvedField[];
+  /** Form-state bookkeeping keys for the visible array fields. The form owns
+   *  their naming convention; this component only applies the projection. */
+  visibleArrayIndexPaths: readonly string[];
   onToggle: (path: string) => void;
   /** Effective answers (an override, else a settled model answer) for a host
    *  that previews the document while the form is filled. */
@@ -62,6 +69,8 @@ export const AiDecidedConditions = ({
   fields,
   values,
   snapshot,
+  visibleFields,
+  visibleArrayIndexPaths,
   onToggle,
   onDecided,
 }: AiDecidedConditionsProps) => {
@@ -70,21 +79,30 @@ export const AiDecidedConditions = ({
 
   const conditionPaths = fields.map((field) => field.path);
   const overrides = readConditionOverrides(values, conditionPaths);
-  const requestValues = conditionRequestValues(snapshot, conditionPaths);
+  const requestValues = conditionRequestValues({
+    values: snapshot,
+    conditionPaths,
+    visibleFields,
+    visibleArrayIndexPaths,
+  });
+  const requestEnabled = hasEnteredValues(requestValues);
 
   // `keepPreviousData` is what lets the pending state show the last answer
   // instead of blanking the chips on every burst of typing; the superseded
   // query's request is aborted through the `signal` its queryFn consumed.
-  const { data, isPlaceholderData, isFetching } = useQuery({
+  const { data, isError, isPlaceholderData, isFetching } = useQuery({
     ...decideConditionsOptions({
       key: { organizationId, templateId, valuesHash: hashKey([requestValues]) },
       context: { values: requestValues },
     }),
-    enabled: hasEnteredValues(requestValues),
+    enabled: requestEnabled,
     placeholderData: keepPreviousData,
   });
 
-  const conditions = optionalReadonlyArray(data?.conditions);
+  const conditions = activeConditionDecisions(
+    requestValues,
+    optionalReadonlyArray(data?.conditions),
+  );
   const decisionByPath = new Map(
     conditions.map((condition) => [condition.path, condition]),
   );
@@ -100,13 +118,19 @@ export const AiDecidedConditions = ({
     pushDecided();
   }, [pushDecided, decidedHash]);
 
-  const pending = isPlaceholderData || isFetching;
+  const queryFailed = requestEnabled && isError;
+  const pending = requestEnabled && (isPlaceholderData || isFetching);
 
   return (
     <section className="flex flex-col gap-2">
       <h3 className="text-foreground text-sm font-semibold">
         {t("templates.aiDecidedConditions")}
       </h3>
+      {queryFailed && (
+        <p className="text-destructive text-xs" role="alert">
+          {t("common.unexpectedError")}
+        </p>
+      )}
       <ul className="flex flex-col gap-1.5">
         {fields.map((field) => {
           const condition = decisionByPath.get(field.path);
@@ -116,10 +140,14 @@ export const AiDecidedConditions = ({
                 label={condition?.label ?? field.label ?? field.path}
                 onToggle={() => onToggle(field.path)}
                 pending={pending}
-                state={conditionChipState(
-                  overrides[field.path],
-                  condition?.decision,
-                )}
+                state={
+                  queryFailed && typeof overrides[field.path] !== "boolean"
+                    ? { kind: "error" }
+                    : conditionChipState(
+                        overrides[field.path],
+                        condition?.decision,
+                      )
+                }
               />
             </li>
           );
@@ -162,6 +190,8 @@ const ConditionChip = ({
         return answer.value
           ? t("templates.conditionForcedYes")
           : t("templates.conditionForcedNo");
+      case "error":
+        return t("common.somethingWentWrong");
       case "notSettled":
         return t("templates.conditionNotSettled");
       case "onGenerate":
