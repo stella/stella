@@ -3850,6 +3850,7 @@
     "emptyState": "Commencez à saisir pour rechercher dans tous les dossiers.",
     "estimatedResultCount": "{count, plural, one {Environ # résultat} other {Environ # résultats}}",
     "hintAskAI": "<kbd>Tab</kbd> demander à l’IA",
+    "hintClear": "<kbd>Esc</kbd> effacer",
     "hintClose": "<kbd>Esc</kbd> fermer",
     "hintNavigate": "<kbd>↑↓</kbd> naviguer",
     "hintOpen": "<kbd>↵</kbd> ouvrir",

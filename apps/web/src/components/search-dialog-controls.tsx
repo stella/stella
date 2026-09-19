@@ -88,6 +88,7 @@ export const SearchColumnResizeHandle = ({
 type SearchFooterHintProps = {
   translationKey:
     | "search.hintAskAI"
+    | "search.hintClear"
     | "search.hintClose"
     | "search.hintNavigate"
     | "search.hintOpen";

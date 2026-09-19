@@ -2013,6 +2013,7 @@ export const SearchDialog = ({
                 here so the input row stays a plain input. */}
               <SearchDialogFooter
                 scope={searchScope}
+                escapeAction={hasVisibleSearch ? "clear" : "close"}
                 canAskAI={canAskAI}
                 isAskingAI={askAIMutation.isPending}
                 mode={mode.type}
@@ -2254,8 +2255,15 @@ const SearchPreviewColumn = ({
   );
 };
 
+const ESCAPE_HINT_KEYS = {
+  clear: "search.hintClear",
+  close: "search.hintClose",
+} as const;
+
 type SearchDialogFooterProps = {
   scope: SearchScope;
+  /** What the next Esc does: it clears an active search before it closes. */
+  escapeAction: keyof typeof ESCAPE_HINT_KEYS;
   canAskAI: boolean;
   isAskingAI: boolean;
   mode: SearchDialogMode["type"];
@@ -2266,6 +2274,7 @@ type SearchDialogFooterProps = {
 
 const SearchDialogFooter = ({
   scope,
+  escapeAction,
   canAskAI,
   isAskingAI,
   mode,
@@ -2304,7 +2313,7 @@ const SearchDialogFooter = ({
             </span>
           </Button>
         )}
-        <SearchFooterHint translationKey="search.hintClose" />
+        <SearchFooterHint translationKey={ESCAPE_HINT_KEYS[escapeAction]} />
       </div>
       <div className="ms-auto flex shrink-0 items-center gap-1">
         <Button

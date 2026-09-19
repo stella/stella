@@ -3853,6 +3853,7 @@ type Messages = {
     "emptyState": "Start typing to search across all matters.";
     "estimatedResultCount": "{count, plural, one {About # result} other {About # results}}";
     "hintAskAI": "<kbd>Tab</kbd> to ask AI";
+    "hintClear": "<kbd>Esc</kbd> to clear";
     "hintClose": "<kbd>Esc</kbd> to close";
     "hintNavigate": "<kbd>↑↓</kbd> to navigate";
     "hintOpen": "<kbd>↵</kbd> to open";

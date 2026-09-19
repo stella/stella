@@ -3850,6 +3850,7 @@
     "emptyState": "Začněte psát pro vyhledávání ve všech spisech.",
     "estimatedResultCount": "{count, plural, one {Přibližně # výsledek} few {Přibližně # výsledky} other {Přibližně # výsledků}}",
     "hintAskAI": "<kbd>Tab</kbd> zeptat se AI",
+    "hintClear": "<kbd>Esc</kbd> vymazat",
     "hintClose": "<kbd>Esc</kbd> zavřít",
     "hintNavigate": "<kbd>↑↓</kbd> procházení",
     "hintOpen": "<kbd>↵</kbd> otevřít",
