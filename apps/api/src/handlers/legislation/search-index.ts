@@ -23,6 +23,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { errorSystemFields } from "@/api/lib/errors/utils";
 import { setCorpusBackfillStatementTimeout } from "@/api/lib/legal-search/backfill-statement-timeout";
 import { readCorpusText } from "@/api/lib/legal-search/corpus-reads";
+import { corpusSearchVector } from "@/api/lib/legal-search/corpus-search-vector";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import { resolveFtsConfig } from "@/api/lib/legal-search/fts-config";
 import { redistributableLegislationSource } from "@/api/lib/legal-search/legislation-redistribution";
@@ -129,10 +130,12 @@ export const indexLegislationDocument = async (
 
   const fts = await resolveConfig(document.language);
 
-  const textExpr = fts.useUnaccent
-    ? sql`unaccent(arabic_normalize(coalesce(${document.title}, '') || ' ' || coalesce(${searchableText}, '')))`
-    : sql`arabic_normalize(coalesce(${document.title}, '') || ' ' || coalesce(${searchableText}, ''))`;
-  const tsvExpr = sql`to_tsvector(${fts.regconfig}, ${textExpr})`;
+  const tsvExpr = corpusSearchVector({
+    regconfig: fts.regconfig,
+    searchableText,
+    title: document.title,
+    useUnaccent: fts.useUnaccent,
+  });
   const retryAfterExpr =
     corpusReadFailure === undefined
       ? sql`NULL`

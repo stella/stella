@@ -376,6 +376,14 @@ export const LIMITS = {
    *  of the highlight scales with the text passed in, and a full decision
    *  fulltext is orders of magnitude larger than the snippet it yields. */
   searchHeadlineDocumentMaxChars: 2000,
+  /** Leading characters of normalized corpus text (a statute or a decision,
+   *  title included) handed to `to_tsvector`. Postgres builds one tsvector's
+   *  lexeme buffer against a 1048575-byte ceiling and rejects a document that
+   *  overruns it, which leaves the projection row unwritable rather than
+   *  partially indexed. A character costs at most its four UTF-8 bytes of
+   *  lexeme plus the four-byte entry its token amortizes, so a fifth of the
+   *  ceiling stays under it whatever the script. */
+  corpusSearchVectorMaxChars: 209_715,
   /** Maximum encrypted OCR page-geometry payload before AES-GCM overhead. */
   documentOcrPayloadMaxBytes: 16 * 1024 * 1024,
   /** Maximum source PDF the local OCR provider will read and render. */

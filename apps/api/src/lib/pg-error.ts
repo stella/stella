@@ -235,6 +235,10 @@ export const PG_ERROR = {
   SERIALIZATION_FAILURE: "40001",
   UNIQUE_VIOLATION: "23505",
   INSUFFICIENT_PRIVILEGE: "42501",
+  /** A value outgrew a fixed limit of the type it was built into, such as the
+   *  lexeme buffer of one tsvector. Retrying changes nothing: the statement is
+   *  unwritable until the input is bounded. */
+  PROGRAM_LIMIT_EXCEEDED: "54000",
   READ_ONLY_SQL_TRANSACTION: "25006",
 } as const;
 

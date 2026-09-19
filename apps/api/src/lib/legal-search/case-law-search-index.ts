@@ -14,6 +14,7 @@ import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import { errorSystemFields } from "@/api/lib/errors/utils";
 import { setCorpusBackfillStatementTimeout } from "@/api/lib/legal-search/backfill-statement-timeout";
+import { corpusSearchVector } from "@/api/lib/legal-search/corpus-search-vector";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import { resolveFtsConfig } from "@/api/lib/legal-search/fts-config";
 import { logger } from "@/api/lib/observability/logger";
@@ -103,11 +104,12 @@ export const indexDecision = async (
 
   const fts = await resolveFtsConfig(decision.language);
 
-  const textExpr = fts.useUnaccent
-    ? sql`unaccent(arabic_normalize(coalesce(${title}, '') || ' ' || coalesce(${searchableText}, '')))`
-    : sql`arabic_normalize(coalesce(${title}, '') || ' ' || coalesce(${searchableText}, ''))`;
-
-  const tsvExpr = sql`to_tsvector(${fts.regconfig}, ${textExpr})`;
+  const tsvExpr = corpusSearchVector({
+    regconfig: fts.regconfig,
+    searchableText,
+    title,
+    useUnaccent: fts.useUnaccent,
+  });
   const previewGeneration = Bun.randomUUIDv7();
   const previewPassages = buildSearchPreviewPassages(title, searchableText);
 
