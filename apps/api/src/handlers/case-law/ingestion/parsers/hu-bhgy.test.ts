@@ -12,6 +12,7 @@ import { describe, expect, test } from "bun:test";
 
 import type {
   BlockContent,
+  Footnote,
   Document as FolioDocument,
   Paragraph,
   ParagraphAlignment,
@@ -49,14 +50,22 @@ const paragraphOf = ({ bold, centered, text }: LineSpec): Paragraph => ({
   ],
 });
 
-const documentOf = (lines: readonly LineSpec[]): FolioDocument => {
+const documentOf = (
+  lines: readonly LineSpec[],
+  footnotes: readonly Footnote[] = [],
+): FolioDocument => {
   const content: BlockContent[] = lines.map(paragraphOf);
-  return { package: { document: { content } } };
+  return {
+    package: {
+      document: { content },
+      ...(footnotes.length === 0 ? {} : { footnotes: [...footnotes] }),
+    },
+  };
 };
 
-const parse = (lines: readonly LineSpec[]) =>
+const parse = (lines: readonly LineSpec[], footnotes?: readonly Footnote[]) =>
   parseHuBhgyDecision({
-    document: documentOf(lines),
+    document: documentOf(lines, footnotes),
     listedCaseNumber: "Gfv.30091/2025/4",
     court: "Kúria",
     sourceUrl: "https://eakta.birosag.hu/anonimizalt-hatarozatok?azonosito=x",
@@ -283,6 +292,43 @@ describe("reading a document folio handed over", () => {
       "p:signature:Dr. Példa Anna s.k. a tanács elnöke",
       "p:apparatus:A kiadmány hiteléül:",
     ]);
+  });
+
+  test("a footnote is apparatus carrying its mark, wherever the body left off", () => {
+    // The notes are walked after the body, which by then has reached the
+    // signature block, and one may read like the document's own structure.
+    // Both were classified as the line they are not, and the mark the note
+    // hangs from went with the classification.
+    const parsed = parse(
+      [
+        { text: "Indokolás" },
+        { text: "[1] A Kúria döntése." },
+        { text: "Budapest, 2025. október 1." },
+        { text: "Dr. Példa Anna s.k. a tanács elnöke" },
+      ],
+      [
+        {
+          type: "footnote",
+          id: 3,
+          content: [paragraphOf({ text: "A Ptk. 6:1. §-a." })],
+        },
+        {
+          type: "footnote",
+          id: 4,
+          content: [paragraphOf({ text: "Indokolás" })],
+        },
+      ],
+    );
+    const notes = parsed.documentAst.blocks.filter(
+      (block) => block.type === "paragraph" && block.note !== undefined,
+    );
+    expect(notes.map(shapeOfBlock)).toEqual([
+      "p:apparatus:A Ptk. 6:1. §-a.",
+      "p:apparatus:Indokolás",
+    ]);
+    expect(notes.at(0)).toMatchObject({
+      note: { type: "footnote", label: "3", noteId: "fn-3" },
+    });
   });
 
   test("a line the parser does not recognise is still a paragraph in order", () => {

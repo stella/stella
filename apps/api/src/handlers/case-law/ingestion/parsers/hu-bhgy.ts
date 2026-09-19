@@ -944,6 +944,24 @@ export const parseHuBhgyDecision = (
       return;
     }
     lineTexts.push(line.text);
+
+    // ── A footnote's own text ──
+    //
+    // The notes are walked after the body, so every rule below reads a region
+    // and a wording this line has nothing to do with: it is the publisher's
+    // apparatus wherever the body left off, and it carries the mark it hangs
+    // from.
+    if (line.note !== undefined) {
+      builder.paragraph({
+        type: "paragraph",
+        role: "apparatus",
+        note: { type: "footnote", ...line.note },
+        inlines: inlinesOf(line.runs),
+        plainText: line.text,
+      });
+      return;
+    }
+
     const key = headingKey(line.text);
 
     if (region === "front") {
@@ -1066,17 +1084,11 @@ export const parseHuBhgyDecision = (
     const numbered = COURT_PARAGRAPH_NUMBER.exec(line.text);
     const inlines = inlinesOf(line.runs);
     const number = numbered?.groups?.["number"];
-    const role: ParagraphRole =
-      line.note === undefined ? BODY_ROLE[region] : "apparatus";
-    const note =
-      line.note === undefined
-        ? {}
-        : { note: { type: "footnote" as const, ...line.note } };
+    const role: ParagraphRole = BODY_ROLE[region];
     if (numbered === null || number === undefined) {
       builder.paragraph({
         type: "paragraph",
         role,
-        ...note,
         inlines,
         plainText: line.text,
       });
@@ -1089,7 +1101,6 @@ export const parseHuBhgyDecision = (
     builder.paragraph({
       type: "paragraph",
       role,
-      ...note,
       number: Number(number),
       inlines: rest,
       plainText: inlinesToPlainText(rest),
