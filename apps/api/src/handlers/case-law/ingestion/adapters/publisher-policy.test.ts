@@ -91,10 +91,10 @@ describe("the shared publisher gate", () => {
     ]);
   });
 
-  it("keeps the intervals the Austrian and Polish publishers agreed to", () => {
+  it("keeps the Austrian and Polish intervals", () => {
     expect(publisherRequestIntervalMs(ADAPTER_KEYS.AT_COURTS)).toBe(5000);
     expect(publisherRequestIntervalMs(ADAPTER_KEYS.AT_FINDOK)).toBe(1500);
-    expect(publisherRequestIntervalMs(ADAPTER_KEYS.PL_SN)).toBe(1000);
+    expect(publisherRequestIntervalMs(ADAPTER_KEYS.PL_SN)).toBe(1500);
   });
 
   it("derives a daily ceiling from the interval it enforces", () => {
