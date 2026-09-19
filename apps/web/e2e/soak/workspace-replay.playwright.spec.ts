@@ -11,6 +11,7 @@ import {
 import { createUploadedDocumentRoute } from "../helpers/document";
 import { test } from "../helpers/test";
 import { createTestWorkspace, deleteTestWorkspace } from "../helpers/workspace";
+import { WORKSPACE_REPLAY_ENV } from "./env";
 import {
   BoundedEventTrail,
   MAX_REPLAY_STEPS,
@@ -53,13 +54,14 @@ const readInteger = ({
   maximum,
   minimum,
   name,
+  raw,
 }: {
   defaultValue: number;
   maximum: number;
   minimum: number;
   name: string;
+  raw: string | undefined;
 }): number => {
-  const raw = process.env[name];
   if (raw === undefined) {
     return defaultValue;
   }
@@ -73,7 +75,7 @@ const readInteger = ({
 };
 
 const readRunConfig = async (): Promise<RunConfig> => {
-  const replayPath = process.env["E2E_SOAK_REPLAY"];
+  const replayPath = WORKSPACE_REPLAY_ENV.replayPath;
   if (replayPath !== undefined) {
     const serialized = await readFile(replayPath, "utf-8");
     const decoded = Result.try((): unknown => JSON.parse(serialized));
@@ -92,12 +94,14 @@ const readRunConfig = async (): Promise<RunConfig> => {
       maximum: Number.MAX_SAFE_INTEGER,
       minimum: Number.MIN_SAFE_INTEGER,
       name: "E2E_SOAK_SEED",
+      raw: WORKSPACE_REPLAY_ENV.seed,
     }),
     steps: readInteger({
       defaultValue: DEFAULT_STEPS,
       maximum: MAX_REPLAY_STEPS,
       minimum: 1,
       name: "E2E_SOAK_STEPS",
+      raw: WORKSPACE_REPLAY_ENV.steps,
     }),
     replay: null,
   };
@@ -136,12 +140,22 @@ const shellAssignment = (name: string, value: string): string =>
 
 const replayCommand = (artifactPath: string): string =>
   [
-    ...(process.env["E2E_WEB_URL"] === undefined
+    ...(WORKSPACE_REPLAY_ENV.webUrlOverride === undefined
       ? []
-      : [shellAssignment("E2E_WEB_URL", process.env["E2E_WEB_URL"])]),
-    ...(process.env["E2E_API_URL"] === undefined
+      : [
+          shellAssignment(
+            "E2E_WEB_URL",
+            WORKSPACE_REPLAY_ENV.webUrlOverride,
+          ),
+        ]),
+    ...(WORKSPACE_REPLAY_ENV.apiUrlOverride === undefined
       ? []
-      : [shellAssignment("E2E_API_URL", process.env["E2E_API_URL"])]),
+      : [
+          shellAssignment(
+            "E2E_API_URL",
+            WORKSPACE_REPLAY_ENV.apiUrlOverride,
+          ),
+        ]),
     shellAssignment("E2E_SOAK_REPLAY", artifactPath),
     "bun --filter @stll/web test:e2e:soak",
   ].join(" ");
@@ -154,15 +168,15 @@ test("deterministically explores the synthetic matter workspace", async ({
   const run = await readRunConfig();
   const workspace = await createTestWorkspace(request, "workspace-replay");
   const registered = await Result.tryPromise(
-    () =>
-      registerDeferredE2eCleanup(testInfo.project.outputDir, {
+    async () =>
+      await registerDeferredE2eCleanup(testInfo.project.outputDir, {
         type: E2E_CLEANUP_TARGET_TYPE.WORKSPACE,
         id: workspace.id,
       }),
   );
   if (Result.isError(registered)) {
     const cleanup = await Result.tryPromise(
-      () => deleteTestWorkspace(request, workspace.id),
+      async () => await deleteTestWorkspace(request, workspace.id),
     );
     if (Result.isError(cleanup)) {
       throw new AggregateError(
@@ -187,7 +201,8 @@ test("deterministically explores the synthetic matter workspace", async ({
 
   await expect
     .poll(
-      () => apiStatus(page.request, `/workspaces/${workspace.id}`),
+      async () =>
+        await apiStatus(page.request, `/workspaces/${workspace.id}`),
       {
         message: "browser context can read the synthetic matter",
         timeout: 10_000,
@@ -226,7 +241,7 @@ test("deterministically explores the synthetic matter workspace", async ({
     version: REPLAY_ARTIFACT_VERSION,
     seed: run.seed,
     stepLimit: run.replay?.stepLimit ?? run.steps,
-    commit: process.env["GITHUB_SHA"] ?? "unknown",
+    commit: WORKSPACE_REPLAY_ENV.commit,
     locale: "en-US",
     viewport,
     fixture: {

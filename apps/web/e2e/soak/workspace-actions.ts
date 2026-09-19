@@ -68,8 +68,9 @@ export const parseReplayControlSelection = (
   value: unknown,
 ): ReplayControlSelection => v.parse(replayControlSelectionSchema, value);
 
-const UINT32_RANGE = 0x1_0000_0000;
-const NON_ZERO_STATE = 0x6d2b79f5;
+const UINT32_RANGE = 4_294_967_296;
+const RANDOM_MULTIPLIER = 1_664_525;
+const RANDOM_INCREMENT = 1_013_904_223;
 
 const assertSeed = (seed: number): void => {
   if (!Number.isSafeInteger(seed)) {
@@ -85,7 +86,7 @@ export class SeededRandom {
   public constructor(seed: number) {
     assertSeed(seed);
     this.#initialSeed = seed;
-    this.#state = seed >>> 0 || NON_ZERO_STATE;
+    this.#state = ((seed % UINT32_RANGE) + UINT32_RANGE) % UINT32_RANGE;
   }
 
   public get seed(): number {
@@ -93,11 +94,8 @@ export class SeededRandom {
   }
 
   public nextUint32(): number {
-    let state = this.#state;
-    state ^= state << 13;
-    state ^= state >>> 17;
-    state ^= state << 5;
-    this.#state = state >>> 0;
+    this.#state =
+      (this.#state * RANDOM_MULTIPLIER + RANDOM_INCREMENT) % UINT32_RANGE;
     return this.#state;
   }
 

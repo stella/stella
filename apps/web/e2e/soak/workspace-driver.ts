@@ -4,8 +4,10 @@ import {
   type Page,
   type Response,
 } from "@playwright/test";
+import { panic } from "better-result";
 
 import type { BrowserErrorCollector } from "../helpers/test";
+import { WORKSPACE_REPLAY_ENV } from "./env";
 import type { ReplayStateSnapshot } from "./replay-artifact";
 import {
   HISTORY_DIRECTION,
@@ -57,9 +59,7 @@ export type HttpFailureCollector = {
 
 /** Track only method, path and status; never retain query strings or bodies. */
 export const trackApiFailures = (page: Page): HttpFailureCollector => {
-  const apiOrigin = new URL(
-    process.env["E2E_API_URL"] ?? "http://localhost:3001",
-  ).origin;
+  const apiOrigin = new URL(WORKSPACE_REPLAY_ENV.apiUrl).origin;
   const failures: HttpFailure[] = [];
   const onResponse = (response: Response) => {
     const request = response.request();
@@ -76,11 +76,13 @@ export const trackApiFailures = (page: Page): HttpFailureCollector => {
   page.on("response", onResponse);
   return {
     entries: () => failures.slice(),
-    dispose: () => page.off("response", onResponse),
+    dispose: () => {
+      page.off("response", onResponse);
+    },
   };
 };
 
-const visible = (locator: Locator) => locator.isVisible();
+const visible = async (locator: Locator) => await locator.isVisible();
 
 const routeTemplate = (page: Page): string => {
   const { pathname } = new URL(page.url());
@@ -124,7 +126,7 @@ const selectableControl = ({
 }): SelectableControl => ({
   selection: parseReplayControlSelection({ family, key }),
   locator,
-  activate: activate ?? (() => locator.click()),
+  activate: activate ?? (async () => await locator.click()),
   disabled,
   selectedAttribute,
 });
@@ -283,12 +285,12 @@ export const readWorkspaceState = async (
   const { page } = context;
   const dock = page.locator('[data-slot="inspector-dock"]');
   const dockState = await dock.getAttribute("data-state");
-  const inspectorVisible =
-    dockState === "expanded"
-      ? true
-      : dockState === "collapsed"
-        ? false
-        : undefined;
+  let inspectorVisible: boolean | undefined;
+  if (dockState === "expanded") {
+    inspectorVisible = true;
+  } else if (dockState === "collapsed") {
+    inspectorVisible = false;
+  }
 
   return {
     route: routeTemplate(page),
@@ -523,7 +525,7 @@ export const executeWorkspaceAction = async (
         timeout: 30_000,
       });
       await expect
-        .poll(() => readWorkspaceState(context), {
+        .poll(async () => await readWorkspaceState(context), {
           message: "reload restores the same structural workspace state",
           timeout: 45_000,
         })
@@ -535,6 +537,7 @@ export const executeWorkspaceAction = async (
       return;
     default:
       action satisfies never;
+      return panic(`Unhandled workspace action: ${String(action)}`);
   }
 };
 
@@ -543,9 +546,16 @@ export const assertWorkspaceInvariants = async (
 ): Promise<void> => {
   const { page } = context;
   const url = new URL(page.url());
-  expect(url.pathname, "soak action escaped the synthetic matter").toMatch(
-    new RegExp(`^/workspaces/${context.workspaceId}(?:/|$)`, "u"),
-  );
+  const workspacePath = `/workspaces/${context.workspaceId}`;
+  expect(
+    url.pathname === workspacePath ||
+      url.pathname.startsWith(`${workspacePath}/`),
+    "soak action escaped the synthetic matter",
+  ).toBe(true);
+  await expect(
+    page.locator('[data-slot="inspector-dock"]'),
+    "synthetic matter exposes the inspector dock",
+  ).toBeVisible();
   expect(
     url.pathname,
     "soak action reached an authentication route",

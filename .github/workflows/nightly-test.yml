@@ -93,7 +93,7 @@ jobs:
             echo
             echo "Download the workspace replay artifact, then run:"
             echo
-            echo '`E2E_SOAK_REPLAY=/absolute/path/to/workspace-replay.json bun --filter @stll/web test:e2e:soak`'
+            echo "\`E2E_SOAK_REPLAY=/absolute/path/to/workspace-replay.json bun --filter @stll/web test:e2e:soak\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload replay diagnostics
