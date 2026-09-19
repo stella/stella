@@ -277,7 +277,7 @@ test("case-law routing stays closed over the declared union", () => {
   ).toThrow("Invalid corpus jurisdiction");
 });
 
-test("a query routes through the generation, not the live group map", () => {
+test("a query routes where the projection writes", () => {
   // Shared index: the clause keeps the query to the scoped jurisdiction.
   expect(corpusIndexRoute(CORPUS_INDEX_MANIFESTS.case_law_v7, "CZE")).toEqual({
     indexId: "case_law_v7_cs_sk",
@@ -297,11 +297,16 @@ test("a query routes through the generation, not the live group map", () => {
   expect(
     corpusIndexRoute(CORPUS_INDEX_MANIFESTS.case_law_v7, undefined),
   ).toEqual({ indexId: "case_law_v7_*", jurisdictionClause: undefined });
-  // Declared in the live group map, unrouted by this generation: the query
-  // fails instead of naming an index the generation never created.
+  // Declared after the generation was built: the query names the same index
+  // the projection writes to, read off the live group map.
+  expect(corpusIndexRoute(CORPUS_INDEX_MANIFESTS.case_law_v7, "HUN")).toEqual({
+    indexId: "case_law_v7_hun",
+    jurisdictionClause: undefined,
+  });
+  // Off the declared union there is no group, so there is no index to name.
   expect(() =>
-    corpusIndexRoute(CORPUS_INDEX_MANIFESTS.case_law_v7, "HUN"),
-  ).toThrow("Unrouted case-law jurisdiction: HUN");
+    corpusIndexRoute(CORPUS_INDEX_MANIFESTS.case_law_v7, "XXX"),
+  ).toThrow("Undeclared case-law jurisdiction: XXX");
   expect(
     corpusIndexRoute(CORPUS_INDEX_MANIFESTS.legislation_v2, "HUN"),
   ).toEqual({ indexId: "legislation_v2_hun", jurisdictionClause: undefined });

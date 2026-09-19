@@ -898,12 +898,12 @@ export type CorpusIndexRoute = {
 /**
  * Index selection for a query, scoped to one jurisdiction or unscoped.
  *
- * Read off the generation's own route, the same one the projection writer
- * derives `desired_index_id` from, so the index a query names is an index
- * that generation creates. A jurisdiction the generation does not route has
- * no index to read: `corpusIndexIdFromManifest` fails there rather than
- * composing a name, because a query against an index that does not exist
- * reports no matches, which reads as an empty corpus.
+ * Read off `corpusIndexIdFromManifest`, the same resolution the projection
+ * writer derives `desired_index_id` from, so a query names the index its
+ * jurisdiction's documents are written to. A code outside the declared union
+ * has no group and fails there rather than composing a name: a query against
+ * an index that does not exist reports no matches, which reads as an empty
+ * corpus.
  */
 export const corpusIndexRoute = (
   manifest: CorpusIndexManifest,
