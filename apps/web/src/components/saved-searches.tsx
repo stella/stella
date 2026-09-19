@@ -33,10 +33,10 @@ import {
   DialogTitle,
 } from "@stll/ui/dialog";
 import { Input } from "@stll/ui/input";
+import { MenuSection } from "@stll/ui/menu-section";
 import type { OverlayLayer } from "@stll/ui/overlay-layer";
 import { stellaToast } from "@stll/ui/toast";
 import { contentDir } from "@stll/ui/use-content-dir";
-import { cn } from "@stll/ui/utils";
 
 import {
   canSaveSearch,
@@ -45,10 +45,6 @@ import {
   toSavedSearchCriteria,
 } from "@/components/saved-searches.logic";
 import type { SearchFilters } from "@/components/search-filters.logic";
-import {
-  SearchMenuSection,
-  SEARCH_MENU_ROW_CLASS_NAME,
-} from "@/components/search-menu-section";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -240,7 +236,7 @@ export const SavedSearches = ({
       )}
 
       {shouldShowList && (
-        <SearchMenuSection title={t("search.savedSearches")}>
+        <MenuSection title={t("search.savedSearches")}>
           {savedSearchesQuery.isPending && (
             <div className="flex h-11 items-center px-2">
               <LoaderIcon className="text-muted-foreground size-4 animate-spin" />
@@ -248,13 +244,13 @@ export const SavedSearches = ({
           )}
           {savedSearchesQuery.isError && (
             <Button
-              className="h-11 w-full justify-start px-2"
               onClick={() => {
                 detached(
                   savedSearchesQuery.refetch(),
                   "saved-searches.refetch",
                 );
               }}
+              size="row"
               variant="ghost"
             >
               {t("common.retry")}
@@ -263,9 +259,10 @@ export const SavedSearches = ({
           {savedSearches?.map((savedSearch) => (
             <div className="flex min-w-0 items-center" key={savedSearch.id}>
               <Button
-                className={cn(SEARCH_MENU_ROW_CLASS_NAME, "w-auto flex-1")}
+                className="w-auto flex-1"
                 data-search-empty-row=""
                 onClick={() => onApply(savedSearch.criteria)}
+                size="row"
                 variant="ghost"
               >
                 <BookmarkIcon className="text-muted-foreground size-4 shrink-0" />
@@ -324,7 +321,7 @@ export const SavedSearches = ({
               )}
             </Button>
           )}
-        </SearchMenuSection>
+        </MenuSection>
       )}
 
       <Dialog

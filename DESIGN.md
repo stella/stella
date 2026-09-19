@@ -149,8 +149,8 @@ popups. Do not write a shadow recipe inline.
 
 ### Component Library
 
-Components are built on **@base-ui/react** (v1.4.0), styled with
-Tailwind CSS (v4.2.2) and composed via **class-variance-authority**
+Components are built on **@base-ui/react** (v1.8.0), styled with
+Tailwind CSS (v4.3.3) and composed via **class-variance-authority**
 (CVA). Class merging uses the `cn()` utility (clsx + tailwind-merge).
 
 Registered as `@coss` in `components.json` (shadcn "new-york" preset).
@@ -200,9 +200,23 @@ Separator, Sheet, Skeleton, Table, Tabs, Textarea, Toast, Tooltip.
 - **link:** underline, no background
 
 Sizes: `default` (h-9), `sm` (h-8, small type), `xs` (h-7, small
-type), `lg` (h-10), `xl` (h-11), `icon` and `icon-*` (square).
+type), `lg` (h-10), `xl` (h-11), `icon` and `icon-*` (square),
+`row` (a menu-list row).
 A small control renders small type itself; do not add `text-xs` to
 a `sm` button, select, or input.
+
+### Menu Rows & Sections
+
+One metric for every row of a menu list, whichever component draws
+it: `min-h-8` (`min-h-11` under a coarse pointer), `px-2 py-1`, `gap-2`,
+`text-sm` at every breakpoint, a 16px leading icon or checkbox,
+start-aligned and full width.
+`MENU_ROW_CLASS_NAME` in `packages/ui` owns it, and the `row` size of
+both `Button` and `CommandItem` is built from it. `MenuSection`
+(`@stll/ui/menu-section`) owns the group around them: `px-4 py-2`, a
+`text-muted-foreground mb-1 text-xs font-medium` heading, and a
+`space-y-0.5` row stack. Sibling lists in one panel use both, so their
+indent, heading and rhythm cannot drift apart.
 
 ---
 

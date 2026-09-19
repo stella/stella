@@ -3850,6 +3850,7 @@
     "emptyState": "Kezdjen el gépelni az összes ügy közötti kereséshez.",
     "estimatedResultCount": "{count, plural, one {Körülbelül # találat} other {Körülbelül # találat}}",
     "hintAskAI": "<kbd>Tab</kbd> AI megkérdezése",
+    "hintClear": "<kbd>Esc</kbd> törlés",
     "hintClose": "<kbd>Esc</kbd> bezárás",
     "hintNavigate": "<kbd>↑↓</kbd> navigálás",
     "hintOpen": "<kbd>↵</kbd> megnyitás",

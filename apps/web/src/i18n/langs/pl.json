@@ -3850,6 +3850,7 @@
     "emptyState": "Zacznij pisać, aby przeszukać wszystkie sprawy.",
     "estimatedResultCount": "{count, plural, one {Szacunkowo # wynik} few {Szacunkowo # wyniki} many {Szacunkowo # wyników} other {Szacunkowo # wyniku}}",
     "hintAskAI": "<kbd>Tab</kbd> zapytaj AI",
+    "hintClear": "<kbd>Esc</kbd> wyczyść",
     "hintClose": "<kbd>Esc</kbd> zamknij",
     "hintNavigate": "<kbd>↑↓</kbd> nawigacja",
     "hintOpen": "<kbd>↵</kbd> otwórz",

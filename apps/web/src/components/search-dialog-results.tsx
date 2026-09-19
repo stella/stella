@@ -17,6 +17,7 @@ import { useTranslations } from "use-intl";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { CommandItem } from "@stll/ui/command";
+import { MenuSection } from "@stll/ui/menu-section";
 
 import { DocumentIcon } from "@/components/document-icon";
 import { MatterIcon } from "@/components/matter-icon";
@@ -24,10 +25,6 @@ import {
   compactMeta,
   KIND_TRANSLATION_KEYS,
 } from "@/components/search-dialog.shared";
-import {
-  SearchMenuSection,
-  SEARCH_MENU_ROW_CLASS_NAME,
-} from "@/components/search-menu-section";
 import Tooltip from "@/components/tooltip";
 import { UserIdentity } from "@/components/user-avatar";
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
@@ -91,11 +88,11 @@ export const CommandActionItem = ({
     case "command":
       return (
         <CommandItem
-          className={SEARCH_MENU_ROW_CLASS_NAME}
           data-command-action-id={action.id}
           data-command-action-index={navigation.index}
           index={navigation.index}
           onClick={() => onSelect(action.id)}
+          size="row"
           value={entry}
         >
           {content}
@@ -104,10 +101,10 @@ export const CommandActionItem = ({
     case "button":
       return (
         <Button
-          className={SEARCH_MENU_ROW_CLASS_NAME}
           data-command-action-id={action.id}
           data-search-empty-row=""
           onClick={() => onSelect(action.id)}
+          size="row"
           variant="ghost"
         >
           {content}
@@ -290,29 +287,28 @@ export const SearchRecents = ({
   return (
     <>
       {recentSearches.length > 0 && (
-        <SearchMenuSection title={t("search.recentSearches")}>
+        <MenuSection title={t("search.recentSearches")}>
           {recentSearches.map((recent) => (
             <Button
-              className={SEARCH_MENU_ROW_CLASS_NAME}
               data-search-empty-row=""
               key={recent.query}
               onClick={() => onSearchClick(recent)}
+              size="row"
               variant="ghost"
             >
               <HistoryIcon className="text-muted-foreground size-4 shrink-0" />
               <span className="truncate">{recent.query}</span>
             </Button>
           ))}
-        </SearchMenuSection>
+        </MenuSection>
       )}
       {recentFiles.length > 0 && (
-        <SearchMenuSection title={t("search.recentlyOpenedFiles")}>
+        <MenuSection title={t("search.recentlyOpenedFiles")}>
           {recentFiles.map((file) => (
             <Button
               aria-current={
                 previewedFileId === file.entityId ? "true" : undefined
               }
-              className={SEARCH_MENU_ROW_CLASS_NAME}
               data-previewing={previewedFileId === file.entityId}
               data-search-empty-row=""
               key={file.entityId}
@@ -321,6 +317,7 @@ export const SearchRecents = ({
                 onFileClick(file);
               }}
               onPointerEnter={() => onFilePreview(file)}
+              size="row"
               variant={
                 previewedFileId === file.entityId ? "secondary" : "ghost"
               }
@@ -346,7 +343,7 @@ export const SearchRecents = ({
               </span>
             </Button>
           ))}
-        </SearchMenuSection>
+        </MenuSection>
       )}
     </>
   );

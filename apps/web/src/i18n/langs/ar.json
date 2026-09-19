@@ -3850,6 +3850,7 @@
     "emptyState": "ابدأ الكتابة للبحث عبر جميع الملفات القانونية.",
     "estimatedResultCount": "{count, plural, zero {نحو صفر نتيجة} one {نحو نتيجة واحدة} two {نحو نتيجتين} few {نحو # نتائج} many {نحو # نتيجة} other {نحو # نتيجة}}",
     "hintAskAI": "<kbd>Tab</kbd> لسؤال AI",
+    "hintClear": "<kbd>Esc</kbd> للمسح",
     "hintClose": "<kbd>Esc</kbd> للإغلاق",
     "hintNavigate": "<kbd>↑↓</kbd> للتنقل",
     "hintOpen": "<kbd>↵</kbd> للفتح",

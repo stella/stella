@@ -13,6 +13,7 @@ import {
   blockDisabledKeyActivation,
   resolveButtonDisposition,
 } from "../lib/button-disposition";
+import { MENU_ROW_CLASS_NAME } from "../lib/menu-row";
 import { cn } from "../lib/utils";
 import { renderTooltipTrigger } from "./tooltip-trigger-helper";
 
@@ -50,6 +51,10 @@ const buttonVariants = cva(
         "icon-xs":
           "size-7 rounded-md before:rounded-[calc(var(--radius-md)-1px)] sm:size-6 not-in-data-[slot=input-group]:[&_svg:not([class*='size-'])]:size-4 sm:not-in-data-[slot=input-group]:[&_svg:not([class*='size-'])]:size-3.5",
         lg: "h-10 px-[calc(--spacing(3.5)-1px)] sm:h-9",
+        // One row of a menu list. The metric is shared with `CommandItem`; the
+        // rest undoes the base button's centred content and its icon inset, so
+        // a button row and a command row read as the same box.
+        row: `${MENU_ROW_CLASS_NAME} [&_svg]:mx-0`,
         // Small controls read in small type; `SelectTrigger` and `Input`
         // share the height, so a toolbar of `sm` controls shares one scale.
         sm: "h-8 gap-1.5 px-[calc(--spacing(2.5)-1px)] text-sm sm:h-7 sm:text-xs",

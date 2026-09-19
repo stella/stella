@@ -3850,6 +3850,7 @@
     "emptyState": "Pradėkite rašyti, kad ieškotumėte visose bylose.",
     "estimatedResultCount": "{count, plural, one {Apytiksliai # rezultatas} few {Apytiksliai # rezultatai} many {Apytiksliai # rezultato} other {Apytiksliai # rezultatų}}",
     "hintAskAI": "<kbd>Tab</kbd> klausti DI",
+    "hintClear": "<kbd>Esc</kbd> išvalyti",
     "hintClose": "<kbd>Esc</kbd> uždaryti",
     "hintNavigate": "<kbd>↑↓</kbd> naršyti",
     "hintOpen": "<kbd>↵</kbd> atidaryti",

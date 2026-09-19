@@ -3850,6 +3850,7 @@
     "emptyState": "Empiece a escribir para buscar en todos los asuntos.",
     "estimatedResultCount": "{count, plural, one {Aproximadamente # resultado} other {Aproximadamente # resultados}}",
     "hintAskAI": "<kbd>Tab</kbd> preguntar a la IA",
+    "hintClear": "<kbd>Esc</kbd> borrar",
     "hintClose": "<kbd>Esc</kbd> cerrar",
     "hintNavigate": "<kbd>↑↓</kbd> navegar",
     "hintOpen": "<kbd>↵</kbd> abrir",
