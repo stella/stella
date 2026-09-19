@@ -26,8 +26,8 @@ import type {
   CorpusPackBatch,
   CorpusPackBatchEntry,
   CorpusPackBatchOutcomes,
+  CorpusTransfer,
 } from "@/api/lib/legal-search/corpus-pack-batch";
-import type { putCorpusPacks } from "@/api/lib/legal-search/corpus-pack-writer";
 import {
   CORPUS_TRANSFER_MAX_BYTES,
   planCorpusDocumentWrite,
@@ -167,23 +167,26 @@ const tombstonesFrom =
 const recordingTransfer = () => {
   const transferred: EncodedPack[] = [];
   const reservedAtTransfer: string[] = [];
-  const putPacks: typeof putCorpusPacks = async ({ packs }) => {
-    transferred.push(...packs);
-    const rows = await db
-      .select({ packKey: caseLawCorpusUploadIntents.packKey })
-      .from(caseLawCorpusUploadIntents);
-    reservedAtTransfer.push(
-      ...rows.flatMap(({ packKey }) => (packKey === null ? [] : [packKey])),
-    );
-    return await Promise.resolve(Result.ok(undefined));
-  };
-  return { transferred, reservedAtTransfer, putPacks };
+  const transfer = {
+    layout: "packs",
+    putPacks: async ({ packs }) => {
+      transferred.push(...packs);
+      const rows = await db
+        .select({ packKey: caseLawCorpusUploadIntents.packKey })
+        .from(caseLawCorpusUploadIntents);
+      reservedAtTransfer.push(
+        ...rows.flatMap(({ packKey }) => (packKey === null ? [] : [packKey])),
+      );
+      return await Promise.resolve(Result.ok(undefined));
+    },
+  } as const satisfies CorpusTransfer;
+  return { transferred, reservedAtTransfer, transfer };
 };
 
 test("a page of decisions becomes one pack whose members they all address", async () => {
   const settled: SettledWrite[] = [];
-  const { transferred, reservedAtTransfer, putPacks } = recordingTransfer();
-  const batch = openCorpusPackBatch({ scopedDb, putPacks, layout: "packs" });
+  const { transferred, reservedAtTransfer, transfer } = recordingTransfer();
+  const batch = openCorpusPackBatch({ scopedDb, transfer });
   for (const [index, decisionId] of DECISION_IDS.entries()) {
     batch.enqueue(entryFor(decisionId, `Rozsudek ${index}.`, settled));
   }
@@ -233,8 +236,7 @@ test("a decision whose payload is unchanged contributes no member", async () => 
   const first = recordingTransfer();
   const firstBatch = openCorpusPackBatch({
     scopedDb,
-    layout: "packs",
-    putPacks: first.putPacks,
+    transfer: first.transfer,
   });
   firstBatch.enqueue(entryFor(FIRST_DECISION_ID, "Rozsudek.", settled));
   unwrapOutcomes(await firstBatch.flush());
@@ -244,8 +246,7 @@ test("a decision whose payload is unchanged contributes no member", async () => 
   const second = recordingTransfer();
   const secondBatch = openCorpusPackBatch({
     scopedDb,
-    layout: "packs",
-    putPacks: second.putPacks,
+    transfer: second.transfer,
   });
   secondBatch.enqueue({
     ...entryFor(FIRST_DECISION_ID, "Rozsudek.", resettled),
@@ -263,8 +264,8 @@ test("a decision whose payload is unchanged contributes no member", async () => 
 test("one decision that cannot settle leaves the rest of the page settled", async () => {
   const settled: SettledWrite[] = [];
   const failure = new Error("row fence lost");
-  const { putPacks } = recordingTransfer();
-  const batch = openCorpusPackBatch({ scopedDb, putPacks, layout: "packs" });
+  const { transfer } = recordingTransfer();
+  const batch = openCorpusPackBatch({ scopedDb, transfer });
   batch.enqueue(entryFor(FIRST_DECISION_ID, "Rozsudek 0.", settled));
   batch.enqueue(
     entryFor(SECOND_DECISION_ID, "Rozsudek 1.", settled, async () => {
@@ -333,8 +334,8 @@ const recordingSettle =
 
 test("a decision that fails after the transfer leaves its members discoverable", async () => {
   const settled: SettledWrite[] = [];
-  const { transferred, putPacks } = recordingTransfer();
-  const batch = openCorpusPackBatch({ scopedDb, putPacks, layout: "packs" });
+  const { transferred, transfer } = recordingTransfer();
+  const batch = openCorpusPackBatch({ scopedDb, transfer });
   batch.enqueue(entryFor(FIRST_DECISION_ID, "Rozsudek 0.", settled));
   batch.enqueue(
     entryFor(SECOND_DECISION_ID, "Rozsudek 1.", settled, async () => {
@@ -374,8 +375,8 @@ test("a decision that fails after the transfer leaves its members discoverable",
 
 test("a reclaimed reservation never releases a pack another row still reaches into", async () => {
   const settled: SettledWrite[] = [];
-  const { transferred, putPacks } = recordingTransfer();
-  const first = openCorpusPackBatch({ scopedDb, putPacks, layout: "packs" });
+  const { transferred, transfer } = recordingTransfer();
+  const first = openCorpusPackBatch({ scopedDb, transfer });
   first.enqueue({
     ...entryFor(FIRST_DECISION_ID, "Rozsudek 0.", settled),
     settle: recordingSettle(FIRST_DECISION_ID),
@@ -403,8 +404,7 @@ test("a reclaimed reservation never releases a pack another row still reaches in
   const reclaimed: SettledWrite[] = [];
   const second = openCorpusPackBatch({
     scopedDb,
-    layout: "packs",
-    putPacks: recordingTransfer().putPacks,
+    transfer: recordingTransfer().transfer,
   });
   second.enqueue({
     ...entryFor(SECOND_DECISION_ID, "Rozsudek 1 v2.", reclaimed),
@@ -458,11 +458,13 @@ test("a failed transfer is reclaimed without denying the addresses its retry reu
   const settled: SettledWrite[] = [];
   const failing = openCorpusPackBatch({
     scopedDb,
-    layout: "packs",
-    putPacks: async () =>
-      await Promise.resolve(
-        Result.err(new CorpusPackError({ message: "bucket unreachable" })),
-      ),
+    transfer: {
+      layout: "packs",
+      putPacks: async () =>
+        await Promise.resolve(
+          Result.err(new CorpusPackError({ message: "bucket unreachable" })),
+        ),
+    },
   });
   failing.enqueue(entryFor(FIRST_DECISION_ID, "Rozsudek 0.", settled));
   failing.enqueue(entryFor(SECOND_DECISION_ID, "Rozsudek 1.", settled));
@@ -485,8 +487,8 @@ test("a failed transfer is reclaimed without denying the addresses its retry reu
 
   // The page is retried: the same payloads derive the same addresses.
   const retried: SettledWrite[] = [];
-  const { transferred, putPacks } = recordingTransfer();
-  const retry = openCorpusPackBatch({ scopedDb, putPacks, layout: "packs" });
+  const { transferred, transfer } = recordingTransfer();
+  const retry = openCorpusPackBatch({ scopedDb, transfer });
   retry.enqueue({
     ...entryFor(FIRST_DECISION_ID, "Rozsudek 0.", retried),
     settle: recordingSettle(FIRST_DECISION_ID),
@@ -550,22 +552,22 @@ test("a failed transfer is reclaimed without denying the addresses its retry reu
 
 test("the object layout writes one object per payload and settles the same rows", async () => {
   const settled: SettledWrite[] = [];
-  const { transferred, putPacks } = recordingTransfer();
   const written: string[] = [];
   const batch = openCorpusPackBatch({
     scopedDb,
-    layout: "objects",
-    putPacks,
-    writeObjects: async (input) => {
-      const planned = planCorpusDocumentWrite(input);
-      if (planned.type !== "put") {
-        return planned;
-      }
-      written.push(planned.written.textKey);
-      return await Promise.resolve({
-        type: "written",
-        written: planned.written,
-      });
+    transfer: {
+      layout: "objects",
+      writeObjects: async (input) => {
+        const planned = planCorpusDocumentWrite(input);
+        if (planned.type !== "put") {
+          return planned;
+        }
+        written.push(planned.written.textKey);
+        return await Promise.resolve({
+          type: "written",
+          written: planned.written,
+        });
+      },
     },
   });
   batch.enqueue(entryFor(FIRST_DECISION_ID, "Rozsudek 0.", settled));
@@ -580,7 +582,8 @@ test("the object layout writes one object per payload and settles the same rows"
     { type: "settled" },
     { type: "settled" },
   ]);
-  expect(transferred).toEqual([]);
+  // Nothing is packed: an `objects` transfer carries no pack client at all,
+  // so the pack path is unreachable rather than merely unused.
   expect(written).toHaveLength(2);
   for (const { written: addresses } of settled) {
     expect(parseCorpusLocation(addresses?.textKey ?? "").type).toBe("object");
@@ -594,23 +597,25 @@ test("in the object layout one failed write costs only its own decision", async 
   const objectBatch = () =>
     openCorpusPackBatch({
       scopedDb,
-      layout: "objects",
-      writeObjects: async (input) => {
-        if (input.documentId === THIRD_DECISION_ID) {
-          // Deterministic: the same decision fails on every attempt, which
-          // is what a poisoned payload looks like to the page that carries
-          // it.
-          throw failure;
-        }
-        const planned = planCorpusDocumentWrite(input);
-        if (planned.type !== "put") {
-          return planned;
-        }
-        wroteFor.add(input.documentId);
-        return await Promise.resolve({
-          type: "written",
-          written: planned.written,
-        });
+      transfer: {
+        layout: "objects",
+        writeObjects: async (input) => {
+          if (input.documentId === THIRD_DECISION_ID) {
+            // Deterministic: the same decision fails on every attempt, which
+            // is what a poisoned payload looks like to the page that carries
+            // it.
+            throw failure;
+          }
+          const planned = planCorpusDocumentWrite(input);
+          if (planned.type !== "put") {
+            return planned;
+          }
+          wroteFor.add(input.documentId);
+          return await Promise.resolve({
+            type: "written",
+            written: planned.written,
+          });
+        },
       },
     });
 

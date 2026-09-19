@@ -15,8 +15,6 @@ import {
   formatCorpusLocation,
   parseCorpusLocation,
 } from "@/api/lib/legal-search/corpus-location";
-import type { CorpusMemberLayout } from "@/api/lib/legal-search/corpus-member-layout";
-import type { CorpusPackError } from "@/api/lib/legal-search/corpus-pack";
 import {
   corpusPackMemberWeight,
   CORPUS_PACK_MAX_BYTES,
@@ -111,15 +109,43 @@ export type CorpusPackBatch = {
   flush: () => Promise<Result<CorpusPackBatchOutcomes, unknown>>;
 };
 
+/**
+ * How a batch's payloads reach object storage.
+ *
+ * The layout and the client that serves it are one choice, so they travel as
+ * one value: a `packs` batch never calls the object writer, an `objects`
+ * batch never calls the pack transfer. Were they separable, a caller could
+ * hand over a client this batch never reaches and the deployment's own bucket
+ * client would serve the write instead — silently, because a default is not a
+ * call site.
+ */
+export type CorpusTransfer =
+  | { layout: "packs"; putPacks: typeof putCorpusPacks }
+  | { layout: "objects"; writeObjects: typeof writeCorpusDocument };
+
+/** What the deployment transfers through; the layout is configuration. */
+export const deployedCorpusTransfer = (): CorpusTransfer => {
+  const layout = corpusMemberLayout;
+  switch (layout) {
+    case "packs":
+      return { layout, putPacks: putCorpusPacks };
+    case "objects":
+      return { layout, writeObjects: writeCorpusDocument };
+    default:
+      layout satisfies never;
+      return panic(`Unhandled corpus member layout: ${String(layout)}`);
+  }
+};
+
 export type CorpusPackBatchOptions = {
   scopedDb: ScopedDb;
   signal?: AbortSignal;
-  /** How this batch lays its payloads out. Production reads the deployment. */
-  layout?: CorpusMemberLayout;
-  /** Test seam; production transfers through the corpus bucket client. */
-  putPacks?: typeof putCorpusPacks;
-  /** Test seam; production writes objects through the corpus bucket client. */
-  writeObjects?: typeof writeCorpusDocument;
+  /**
+   * How this batch's payloads reach object storage. Production reads the
+   * deployment; a test names the layout it exercises and the client that
+   * serves it.
+   */
+  transfer?: CorpusTransfer;
 };
 
 type PlannedEntry = {
@@ -202,9 +228,7 @@ const reservationsFor = (
 export const openCorpusPackBatch = ({
   scopedDb,
   signal,
-  layout = corpusMemberLayout,
-  putPacks = putCorpusPacks,
-  writeObjects = writeCorpusDocument,
+  transfer = deployedCorpusTransfer(),
 }: CorpusPackBatchOptions): CorpusPackBatch => {
   const entries: CorpusPackBatchEntry[] = [];
   const outcomes: CorpusPackBatchOutcomes = new Map();
@@ -317,7 +341,10 @@ export const openCorpusPackBatch = ({
    * The reservation comes first because an object that lands while its rows
    * do not is only recoverable if something recorded that it was going to.
    */
-  const transferPack = async (group: PlannedEntry[]): Promise<void> => {
+  const transferPack = async (
+    group: PlannedEntry[],
+    putPacks: typeof putCorpusPacks,
+  ): Promise<void> => {
     const jurisdiction =
       group.at(0)?.entry.jurisdiction ?? panic("Empty pack group");
     const packed = await planCorpusPacks({
@@ -345,7 +372,10 @@ export const openCorpusPackBatch = ({
       failGroup(group, reserved.error);
       return;
     }
-    const transferred = await putCorpusPacksThroughSeam(packed.value.packs);
+    const transferred = await putPacks({
+      packs: packed.value.packs,
+      ...(signal === undefined ? {} : { signal }),
+    });
     if (Result.isError(transferred)) {
       await releaseReservations(reserved.value);
       failGroup(group, transferred.error);
@@ -353,11 +383,6 @@ export const openCorpusPackBatch = ({
     }
     await settleGroup(group, reserved.value);
   };
-
-  const putCorpusPacksThroughSeam = async (
-    packs: Parameters<typeof putCorpusPacks>[0]["packs"],
-  ): Promise<Result<void, CorpusPackError>> =>
-    await putPacks({ packs, ...(signal === undefined ? {} : { signal }) });
 
   const releaseReservations = async (
     reserved: CaseLawCorpusUploadReservations,
@@ -378,7 +403,10 @@ export const openCorpusPackBatch = ({
    * decision that fails the same way on every attempt would take its whole
    * page down with it for ever.
    */
-  const transferObjects = async (group: PlannedEntry[]): Promise<void> => {
+  const transferObjects = async (
+    group: PlannedEntry[],
+    writeObjects: typeof writeCorpusDocument,
+  ): Promise<void> => {
     for (const entry of group) {
       entry.written = entry.reserved;
     }
@@ -486,25 +514,23 @@ export const openCorpusPackBatch = ({
             ({ members }) => members.length > 0,
           );
           if (transferring.length > 0) {
-            switch (layout) {
+            switch (transfer.layout) {
               case "packs":
                 // One pack per jurisdiction and per ceiling-sized group: the
                 // key space is partitioned by jurisdiction, and the writer
                 // buffers a whole pack before it transfers it.
                 for (const [, group] of groupByJurisdiction(transferring)) {
                   for (const packGroup of packedGroups(group)) {
-                    await transferPack(packGroup);
+                    await transferPack(packGroup, transfer.putPacks);
                   }
                 }
                 break;
               case "objects":
-                await transferObjects(transferring);
+                await transferObjects(transferring, transfer.writeObjects);
                 break;
               default:
-                layout satisfies never;
-                return panic(
-                  `Unhandled corpus member layout: ${String(layout)}`,
-                );
+                transfer satisfies never;
+                return panic(`Unhandled corpus transfer: ${String(transfer)}`);
             }
           }
 

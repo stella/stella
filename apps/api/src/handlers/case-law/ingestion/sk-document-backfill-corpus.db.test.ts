@@ -33,12 +33,13 @@ import {
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import type { SafeId } from "@/api/lib/branded-types";
+import { parseCorpusLocation } from "@/api/lib/legal-search/corpus-location";
 import {
   CorpusPackError,
   decodePackFooter,
 } from "@/api/lib/legal-search/corpus-pack";
 import type { PackFooter } from "@/api/lib/legal-search/corpus-pack";
-import type { putCorpusPacks } from "@/api/lib/legal-search/corpus-pack-writer";
+import type { CorpusTransfer } from "@/api/lib/legal-search/corpus-pack-batch";
 import {
   corpusContentHash,
   EMPTY_CORPUS_CONTENT_HASHES,
@@ -104,14 +105,22 @@ const LEGACY_KEYS = {
  * the store packs the document it was handed, and every address is a range
  * inside that pack.
  */
-const landingTransfer: typeof putCorpusPacks = async () =>
-  await Promise.resolve(Result.ok(undefined));
+const landingTransfer = {
+  layout: "packs",
+  putPacks: async () => await Promise.resolve(Result.ok(undefined)),
+} as const satisfies CorpusTransfer;
 
-/** Every stored pointer is a member of a pack under this jurisdiction. */
+/** The partition a jurisdiction's packs are keyed under. */
+const packPrefix = (jurisdiction: string) =>
+  `legal-corpus/packs/jurisdiction=${jurisdiction}/`;
+
+/** The key of a pack that carries this jurisdiction's members. */
+const packKeyUnder = (jurisdiction: string) =>
+  expect.stringContaining(packPrefix(jurisdiction));
+
+/** Every stored pointer addresses a member of such a pack. */
 const packedUnder = (jurisdiction: string) =>
-  expect.stringContaining(
-    `pack:legal-corpus/packs/jurisdiction=${jurisdiction}/`,
-  );
+  expect.stringContaining(`pack:${packPrefix(jurisdiction)}`);
 
 if (!databaseUrl || !runPostgresTests) {
   describe.skip("sk-courts document backfill — corpus storage", () => {
@@ -244,22 +253,27 @@ if (!databaseUrl || !runPostgresTests) {
         decision: decisionFor(id, caseNumber),
         document: parsedDocument,
         scopedDb,
-        putPacks: async ({ packs }) => {
-          for (const pack of packs) {
-            const footer = unwrapPackFooter(await decodePackFooter(pack.bytes));
-            packedMembers.push(
-              ...footer.members.map(({ documentId }) => ({
-                packKey: pack.packKey,
-                documentId,
-              })),
-            );
-          }
-          const during = await db.query.caseLawDecisions.findFirst({
-            where: { id: { eq: id } },
-            columns: { contentHash: true },
-          });
-          hashesDuringWrite.push(during?.contentHash ?? null);
-          return Result.ok(undefined);
+        transfer: {
+          layout: "packs",
+          putPacks: async ({ packs }) => {
+            for (const pack of packs) {
+              const footer = unwrapPackFooter(
+                await decodePackFooter(pack.bytes),
+              );
+              packedMembers.push(
+                ...footer.members.map(({ documentId }) => ({
+                  packKey: pack.packKey,
+                  documentId,
+                })),
+              );
+            }
+            const during = await db.query.caseLawDecisions.findFirst({
+              where: { id: { eq: id } },
+              columns: { contentHash: true },
+            });
+            hashesDuringWrite.push(during?.contentHash ?? null);
+            return Result.ok(undefined);
+          },
         },
       });
 
@@ -277,16 +291,21 @@ if (!databaseUrl || !runPostgresTests) {
       // The document reached object storage as members of one pack under
       // this decision's id and jurisdiction, not just the columns.
       expect(packedMembers).toEqual([
-        { packKey: packedUnder("SVK"), documentId: id },
-        { packKey: packedUnder("SVK"), documentId: id },
-        { packKey: packedUnder("SVK"), documentId: id },
+        { packKey: packKeyUnder("SVK"), documentId: id },
+        { packKey: packKeyUnder("SVK"), documentId: id },
+        { packKey: packKeyUnder("SVK"), documentId: id },
       ]);
       // The pack first: the row still pointed at the empty payload while it
       // was being transferred.
       expect(hashesDuringWrite).toEqual([emptyHash]);
 
       expect(stored?.fulltext).toContain("Odôvodnenie");
-      expect(stored?.textS3Key).toEqual(packedUnder("SVK"));
+      // The row addresses the pack that was transferred, not merely some
+      // pack of this jurisdiction: the pointer and the bytes are one write.
+      expect(parseCorpusLocation(stored?.textS3Key ?? "")).toMatchObject({
+        type: "packed",
+        packKey: packedMembers.at(0)?.packKey,
+      });
       expect(stored?.normalizedS3Key).toEqual(packedUnder("SVK"));
       expect(stored?.astS3Key).toEqual(packedUnder("SVK"));
       expect(stored?.contentHash).toBe(documentContentHash);
@@ -303,7 +322,7 @@ if (!databaseUrl || !runPostgresTests) {
         decision: decisionFor(id, caseNumber),
         document: parsedDocument,
         scopedDb,
-        putPacks: null,
+        transfer: null,
       });
 
       const stored = await db.query.caseLawDecisions.findFirst({
@@ -335,7 +354,7 @@ if (!databaseUrl || !runPostgresTests) {
         decision: decisionFor(id, caseNumber),
         document: parsedDocument,
         scopedDb,
-        putPacks: landingTransfer,
+        transfer: landingTransfer,
       });
 
       const stored = await db.query.caseLawDecisions.findFirst({
@@ -379,7 +398,7 @@ if (!databaseUrl || !runPostgresTests) {
         document: parsedDocument,
         mode: "canonical",
         scopedDb,
-        putPacks: landingTransfer,
+        transfer: landingTransfer,
       });
 
       expect(outcome).toBe("stored");
@@ -430,7 +449,7 @@ if (!databaseUrl || !runPostgresTests) {
         document: parsedDocument,
         mode: "canonical",
         scopedDb,
-        putPacks: landingTransfer,
+        transfer: landingTransfer,
       });
 
       // The attempt that was overtaken, finishing with nothing to store.
@@ -472,7 +491,7 @@ if (!databaseUrl || !runPostgresTests) {
           document: parsedDocument,
           mode: "canonical",
           scopedDb,
-          putPacks: landingTransfer,
+          transfer: landingTransfer,
         });
 
       expect(await store()).toBe("stored");
@@ -509,7 +528,7 @@ if (!databaseUrl || !runPostgresTests) {
         document: parsedDocument,
         mode: "canonical",
         scopedDb,
-        putPacks: landingTransfer,
+        transfer: landingTransfer,
       });
 
       expect(await stillPending()).toBe(false);
@@ -527,7 +546,7 @@ if (!databaseUrl || !runPostgresTests) {
         document: parsedDocument,
         mode: "dual-write",
         scopedDb,
-        putPacks: landingTransfer,
+        transfer: landingTransfer,
       });
 
       expect(
@@ -559,7 +578,7 @@ if (!databaseUrl || !runPostgresTests) {
         document: parsedDocument,
         mode: "canonical",
         scopedDb,
-        putPacks: null,
+        transfer: null,
       });
 
       expect(
@@ -591,10 +610,15 @@ if (!databaseUrl || !runPostgresTests) {
         document: parsedDocument,
         mode: "canonical",
         scopedDb,
-        putPacks: async () =>
-          await Promise.resolve(
-            Result.err(new CorpusPackError({ message: "bucket unreachable" })),
-          ),
+        transfer: {
+          layout: "packs",
+          putPacks: async () =>
+            await Promise.resolve(
+              Result.err(
+                new CorpusPackError({ message: "bucket unreachable" }),
+              ),
+            ),
+        },
       });
 
       // Nothing was stored, so the decision is reported exactly as one this
@@ -668,7 +692,7 @@ if (!databaseUrl || !runPostgresTests) {
         decision: decisionFor(id, caseNumber),
         document: parsedDocument,
         scopedDb,
-        putPacks: null,
+        transfer: null,
       });
 
       expect(outcome).toBe("superseded");

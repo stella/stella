@@ -105,8 +105,7 @@ const settledDecisionRows = () =>
 
 const corpusDependencies = {
   mode: "canonical",
-  layout: "packs",
-  putPacks: putPacksMock,
+  transfer: { layout: "packs", putPacks: putPacksMock },
 } satisfies CaseLawCorpusDependencies;
 
 const processDecision = async (

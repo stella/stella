@@ -63,9 +63,14 @@ import {
   lockActiveCorpusProjectionSourceTx,
   synchronizeLockedCorpusProjectionDesiredStateTx,
 } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
-import { openCorpusPackBatch } from "@/api/lib/legal-search/corpus-pack-batch";
-import type { CorpusPackBatchOutcome } from "@/api/lib/legal-search/corpus-pack-batch";
-import { putCorpusPacks } from "@/api/lib/legal-search/corpus-pack-writer";
+import {
+  deployedCorpusTransfer,
+  openCorpusPackBatch,
+} from "@/api/lib/legal-search/corpus-pack-batch";
+import type {
+  CorpusPackBatchOutcome,
+  CorpusTransfer,
+} from "@/api/lib/legal-search/corpus-pack-batch";
 import {
   corpusMirrorColumns,
   corpusPayloadDisposition,
@@ -545,11 +550,11 @@ export const loadPendingDocuments = async (
 };
 
 /**
- * The pack transfer this store writes through, or null where corpus
- * storage is off and the Postgres columns are the whole of it.
+ * How this store reaches object storage, or null where corpus storage is
+ * off and the Postgres columns are the whole of it.
  */
-export const corpusPackTransfer = (): typeof putCorpusPacks | null =>
-  corpusStorageMode === "off" ? null : putCorpusPacks;
+export const corpusBackfillTransfer = (): CorpusTransfer | null =>
+  corpusStorageMode === "off" ? null : deployedCorpusTransfer();
 
 export type StoreBackfilledDocumentOptions = {
   decision: PendingDocument;
@@ -558,9 +563,10 @@ export type StoreBackfilledDocumentOptions = {
   /**
    * Seam for tests, which drive the corpus path without a bucket and
    * without depending on which module happened to read the environment
-   * first. Production passes nothing.
+   * first. It carries the layout it serves, so a test cannot hand over a
+   * client the batch would never call. Production passes nothing.
    */
-  putPacks?: typeof putCorpusPacks | null;
+  transfer?: CorpusTransfer | null;
   /**
    * Storage mode this store settles under. Production passes nothing;
    * tests set it for the same reason they inject the writer, so the
@@ -604,7 +610,7 @@ const storedForCorpusOutcome = (
     case "failed":
       captureError(outcome.error, {
         decisionId,
-        step: "storeBackfilledDocument.corpusPackWrite",
+        step: "storeBackfilledDocument.corpusBatchWrite",
       });
       return false;
     default:
@@ -651,7 +657,7 @@ export const storeBackfilledDocument = async ({
   decision,
   document,
   scopedDb,
-  putPacks = corpusPackTransfer(),
+  transfer = corpusBackfillTransfer(),
   mode = corpusStorageMode,
   claimedSourceHash,
 }: StoreBackfilledDocumentOptions): Promise<"stored" | "superseded"> => {
@@ -714,7 +720,7 @@ export const storeBackfilledDocument = async ({
   };
 
   let stored: boolean;
-  if (putPacks === null) {
+  if (transfer === null) {
     stored = await scopedDb(async (tx) => {
       const projectionLock = await lockActiveCorpusProjectionSourceTx(tx, {
         family: "case_law",
@@ -723,9 +729,9 @@ export const storeBackfilledDocument = async ({
       return await applyStoredPayload(tx, null, projectionLock);
     });
   } else {
-    // One decision, so a pack of one member set: the same path a page of
+    // One decision, so a batch of one member set: the same path a page of
     // the pipeline takes, rather than a second writer with its own rules.
-    const batch = openCorpusPackBatch({ scopedDb, putPacks });
+    const batch = openCorpusPackBatch({ scopedDb, transfer });
     batch.enqueue({
       decisionId: decision.id,
       jurisdiction: decision.country,

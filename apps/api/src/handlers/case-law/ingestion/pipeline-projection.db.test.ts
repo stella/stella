@@ -42,10 +42,12 @@ const transferred: EncodedPack[] = [];
 
 const corpus = {
   mode: "canonical",
-  layout: "packs",
-  putPacks: async ({ packs }) => {
-    transferred.push(...packs);
-    return await Promise.resolve(Result.ok(undefined));
+  transfer: {
+    layout: "packs",
+    putPacks: async ({ packs }) => {
+      transferred.push(...packs);
+      return await Promise.resolve(Result.ok(undefined));
+    },
   },
 } satisfies CaseLawCorpusDependencies;
 

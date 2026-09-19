@@ -15,7 +15,7 @@ import {
   caseLawPolarityRules,
   caseLawSources,
 } from "@/api/db/schema";
-import { corpusMemberLayout, corpusStorageMode } from "@/api/env-base";
+import { corpusStorageMode } from "@/api/env-base";
 import {
   CITATION_KIND,
   classifyCitation,
@@ -94,13 +94,15 @@ import {
   lockActiveCorpusProjectionSourceTx,
   synchronizeLockedCorpusProjectionDesiredStateTx,
 } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
-import type { CorpusMemberLayout } from "@/api/lib/legal-search/corpus-member-layout";
-import { openCorpusPackBatch } from "@/api/lib/legal-search/corpus-pack-batch";
+import {
+  deployedCorpusTransfer,
+  openCorpusPackBatch,
+} from "@/api/lib/legal-search/corpus-pack-batch";
 import type {
   CorpusPackBatch,
   CorpusPackBatchOutcome,
+  CorpusTransfer,
 } from "@/api/lib/legal-search/corpus-pack-batch";
-import { putCorpusPacks } from "@/api/lib/legal-search/corpus-pack-writer";
 import type {
   CorpusPayload,
   WriteCorpusResult,
@@ -326,16 +328,17 @@ type ProcessDecisionAttemptOptions = {
 
 export type CaseLawCorpusDependencies = {
   mode: CorpusStorageMode;
-  /** How a batch lays its payloads out; the deployment decides. */
-  layout: CorpusMemberLayout;
-  /** How a batch's packs reach object storage; replaced in tests. */
-  putPacks: typeof putCorpusPacks;
+  /**
+   * How a batch's payloads reach object storage; replaced in tests. The
+   * layout and its client travel together, so a test cannot replace a client
+   * the configured layout never calls.
+   */
+  transfer: CorpusTransfer;
 };
 
 const CASE_LAW_CORPUS_DEPENDENCIES: CaseLawCorpusDependencies = {
   mode: corpusStorageMode,
-  layout: corpusMemberLayout,
-  putPacks: putCorpusPacks,
+  transfer: deployedCorpusTransfer(),
 };
 
 type CorpusOutcomeContext = {
@@ -2538,11 +2541,7 @@ const processDecisionAttempt = async ({
       // fence redaction takes.
       const batch =
         corpusBatch ??
-        openCorpusPackBatch({
-          scopedDb,
-          layout: corpus.layout,
-          putPacks: corpus.putPacks,
-        });
+        openCorpusPackBatch({ scopedDb, transfer: corpus.transfer });
       batch.enqueue({
         decisionId,
         jurisdiction: corpusPayload.jurisdiction,
@@ -2892,8 +2891,7 @@ export const runIngestionPipeline = async ({
       // processed.
       const corpusBatch = openCorpusPackBatch({
         scopedDb,
-        layout: corpus.layout,
-        putPacks: corpus.putPacks,
+        transfer: corpus.transfer,
       });
       try {
         for (const result of page.decisions) {
