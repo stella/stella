@@ -28,7 +28,7 @@ Project: root
 - @elysia/eden 1.4.10 — MIT
 - @firecrawl/anydoc 0.2.4 — MIT
 - @floating-ui/react-dom 2.1.9 — MIT
-- @formatjs/icu-messageformat-parser 3.5.17 — MIT
+- @formatjs/icu-messageformat-parser 3.5.18 — MIT
 - @google/genai 2.22.0 — Apache-2.0
 - @hocuspocus/extension-redis 4.7.0 — MIT
 - @hocuspocus/provider 4.7.0 — MIT
@@ -135,13 +135,13 @@ Project: root
 - jszip 3.10.1 — (MIT OR GPL-3.0-or-later)
 - katex 0.18.7 — MIT
 - lucide-react 1.41.0 — ISC
-- nodemailer 10.0.8 — MIT-0
+- nodemailer 10.0.9 — MIT-0
 - onnxruntime-node 1.29.0 — MIT
 - oxc-transform-react 0.148.0 — MIT
 - oxlint 1.82.0 — MIT
 - pdfjs-dist 6.3.289 — Apache-2.0
 - postal-mime 3.0.0 — MIT-0
-- posthog-js 1.430.2 — (Apache-2.0 AND MIT)
+- posthog-js 1.430.3 — (Apache-2.0 AND MIT)
 - posthog-node 5.52.1 — MIT
 - prism-react-renderer 2.4.1 — MIT
 - prosemirror-commands 1.7.2 — MIT
