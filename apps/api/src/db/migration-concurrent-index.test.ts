@@ -1662,22 +1662,126 @@ const REPLAY_SAFE_BEFORE_SPLIT: readonly RegExp[] = [
   /^SELECT\s+set_config\s*\(/iu,
   // Procedural blocks are approved one by one above, by fingerprint.
   /^DO\b/iu,
-  /^ALTER\s+TABLE\s+\S+\s+ALTER\s+(?:COLUMN\s+)?\S+\s+(?:(?:SET|DROP)\s+(?:DEFAULT|NOT\s+NULL)|SET\s+DATA\s+TYPE|TYPE)\b/iu,
-  /^ALTER\s+TABLE\s+\S+\s+VALIDATE\s+CONSTRAINT\b/iu,
   /^(?:GRANT|REVOKE)\b/iu,
   /^COMMENT\s+ON\b/iu,
   /^CREATE\s+OR\s+REPLACE\b/iu,
   /^CREATE\s+(?:UNIQUE\s+)?INDEX\s+(?:CONCURRENTLY\s+)?IF\s+NOT\s+EXISTS\b/iu,
   /^CREATE\s+(?:TABLE|SEQUENCE|EXTENSION|SCHEMA)\s+IF\s+NOT\s+EXISTS\b/iu,
   /^DROP\s+[A-Z ]+?\s+IF\s+EXISTS\b/iu,
-  /^ALTER\s+TABLE\s+\S+\s+(?:ENABLE|FORCE)\s+ROW\s+LEVEL\s+SECURITY$/iu,
-  /^ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?\S+\s+DROP\s+(?:CONSTRAINT|COLUMN)\s+IF\s+EXISTS\b/iu,
 ];
-const ADD_COLUMN_CLAUSE = /\bADD\s+COLUMN\s+(?<guard>IF\s+NOT\s+EXISTS\s+)?/giu;
-const ADD_CONSTRAINT =
-  /^ALTER\s+TABLE\s+(?<table>\S+)\s+ADD\s+CONSTRAINT\s+(?<name>"[^"]+"|\S+)/iu;
-const CREATE_NAMED_ON_TABLE =
-  /^CREATE\s+(?<kind>POLICY|TRIGGER)\s+(?<name>"[^"]+"|\S+)[\s\S]*?\bON\s+(?<table>"[^"]+"|\S+)/iu;
+
+/** One action of an `ALTER TABLE` that a second run survives on its own. */
+const REPLAY_SAFE_TABLE_ACTIONS: readonly RegExp[] = [
+  /^ADD\s+COLUMN\s+IF\s+NOT\s+EXISTS\b/iu,
+  /^DROP\s+(?:COLUMN|CONSTRAINT)\s+IF\s+EXISTS\b/iu,
+  /^ALTER\s+(?:COLUMN\s+)?\S+\s+(?:(?:SET|DROP)\s+(?:DEFAULT|NOT\s+NULL)|SET\s+DATA\s+TYPE|TYPE)\b/iu,
+  /^VALIDATE\s+CONSTRAINT\b/iu,
+  /^(?:ENABLE|FORCE)\s+ROW\s+LEVEL\s+SECURITY$/iu,
+];
+
+const IDENTIFIER = String.raw`(?:"(?:""|[^"])+"|[A-Za-z_][\w$]*)`;
+const RELATION = String.raw`(?:${IDENTIFIER}\s*\.\s*)?${IDENTIFIER}`;
+const ALTER_TABLE = new RegExp(
+  String.raw`^ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?(?:ONLY\s+)?(?<table>${RELATION})\s+(?<actions>[\s\S]+)$`,
+  "iu",
+);
+const ADD_CONSTRAINT_ACTION = new RegExp(
+  String.raw`^ADD\s+CONSTRAINT\s+(?<name>${IDENTIFIER})`,
+  "iu",
+);
+const DROP_CONSTRAINT_ACTION = new RegExp(
+  String.raw`^DROP\s+CONSTRAINT\s+IF\s+EXISTS\s+(?<name>${IDENTIFIER})`,
+  "iu",
+);
+const CREATE_NAMED_ON_TABLE = new RegExp(
+  String.raw`^CREATE\s+(?:CONSTRAINT\s+)?(?<kind>POLICY|TRIGGER)\s+(?<name>${IDENTIFIER})[\s\S]*?\bON\s+(?<table>${RELATION})`,
+  "iu",
+);
+const DROP_NAMED_ON_TABLE = new RegExp(
+  String.raw`^DROP\s+(?<kind>POLICY|TRIGGER)\s+IF\s+EXISTS\s+(?<name>${IDENTIFIER})\s+ON\s+(?<table>${RELATION})`,
+  "iu",
+);
+
+/** An identifier as PostgreSQL resolves it: unquoted folds to lower case. */
+const canonicalIdentifier = (identifier: string): string =>
+  identifier.startsWith('"')
+    ? identifier.slice(1, -1).replaceAll('""', '"')
+    : identifier.toLowerCase();
+
+/** A relation without its schema: migrations here address `public` alone. */
+const canonicalRelation = (relation: string): string => {
+  const parts = relation.match(new RegExp(IDENTIFIER, "gu")) ?? [];
+  return canonicalIdentifier(parts.at(-1) ?? relation);
+};
+
+/** Split on the commas that separate actions, not the ones inside parentheses. */
+const splitTableActions = (actions: string): string[] => {
+  const parts: string[] = [];
+  let depth = 0;
+  let quoted = false;
+  let current = "";
+  for (const character of actions) {
+    if (character === '"') {
+      quoted = !quoted;
+    }
+    if (!quoted && character === "(") {
+      depth += 1;
+    }
+    if (!quoted && character === ")") {
+      depth -= 1;
+    }
+    if (!quoted && depth === 0 && character === ",") {
+      parts.push(current.trim());
+      current = "";
+      continue;
+    }
+    current += character;
+  }
+  parts.push(current.trim());
+  return parts;
+};
+
+type DroppedObject = { kind: string; table: string; name: string };
+
+/** Every object an earlier statement dropped behind an `IF EXISTS`. */
+const droppedObjects = (earlier: readonly string[]): DroppedObject[] => {
+  const dropped: DroppedObject[] = [];
+  for (const statement of earlier) {
+    const alter = ALTER_TABLE.exec(statement)?.groups;
+    if (alter !== undefined) {
+      for (const action of splitTableActions(alter["actions"] ?? "")) {
+        const name = DROP_CONSTRAINT_ACTION.exec(action)?.groups?.["name"];
+        if (name !== undefined) {
+          dropped.push({
+            kind: "CONSTRAINT",
+            table: canonicalRelation(alter["table"] ?? ""),
+            name: canonicalIdentifier(name),
+          });
+        }
+      }
+    }
+    const named = DROP_NAMED_ON_TABLE.exec(statement)?.groups;
+    if (named !== undefined) {
+      dropped.push({
+        kind: (named["kind"] ?? "").toUpperCase(),
+        table: canonicalRelation(named["table"] ?? ""),
+        name: canonicalIdentifier(named["name"] ?? ""),
+      });
+    }
+  }
+  return dropped;
+};
+
+const wasDropped = (
+  dropped: readonly DroppedObject[],
+  wanted: DroppedObject,
+): boolean =>
+  dropped.some(
+    (candidate) =>
+      candidate.kind === wanted.kind &&
+      candidate.table === wanted.table &&
+      candidate.name === wanted.name,
+  );
 
 const isReplaySafeBeforeSplit = (
   statement: string,
@@ -1686,29 +1790,34 @@ const isReplaySafeBeforeSplit = (
   if (REPLAY_SAFE_BEFORE_SPLIT.some((pattern) => pattern.test(statement))) {
     return true;
   }
-  const columnAdds = [...statement.matchAll(ADD_COLUMN_CLAUSE)];
-  if (/^ALTER\s+TABLE\b/iu.test(statement) && columnAdds.length > 0) {
-    return columnAdds.every((match) => match.groups?.["guard"] !== undefined);
-  }
-  const constraint = ADD_CONSTRAINT.exec(statement)?.groups;
-  if (constraint !== undefined) {
-    const name = constraint["name"] ?? "";
-    return earlier.some(
-      (previous) =>
-        /\bDROP\s+CONSTRAINT\s+IF\s+EXISTS\b/iu.test(previous) &&
-        previous.includes(name),
-    );
+  const dropped = droppedObjects(earlier);
+  const alter = ALTER_TABLE.exec(statement)?.groups;
+  if (alter !== undefined) {
+    const table = canonicalRelation(alter["table"] ?? "");
+    // Every action has to survive on its own: one guarded clause says nothing
+    // about the unguarded one beside it.
+    return splitTableActions(alter["actions"] ?? "").every((action) => {
+      if (REPLAY_SAFE_TABLE_ACTIONS.some((pattern) => pattern.test(action))) {
+        return true;
+      }
+      const name = ADD_CONSTRAINT_ACTION.exec(action)?.groups?.["name"];
+      return (
+        name !== undefined &&
+        wasDropped(dropped, {
+          kind: "CONSTRAINT",
+          table,
+          name: canonicalIdentifier(name),
+        })
+      );
+    });
   }
   const named = CREATE_NAMED_ON_TABLE.exec(statement)?.groups;
   if (named !== undefined) {
-    const kind = named["kind"] ?? "";
-    const name = named["name"] ?? "";
-    return earlier.some(
-      (previous) =>
-        new RegExp(`^DROP\\s+${kind}\\s+IF\\s+EXISTS\\b`, "iu").test(
-          previous,
-        ) && previous.includes(name),
-    );
+    return wasDropped(dropped, {
+      kind: (named["kind"] ?? "").toUpperCase(),
+      table: canonicalRelation(named["table"] ?? ""),
+      name: canonicalIdentifier(named["name"] ?? ""),
+    });
   }
   return false;
 };
@@ -1784,6 +1893,64 @@ describe("split-transaction migrations", () => {
       [`CREATE TABLE IF NOT EXISTS "t" ("id" uuid)`, [], true],
       [`GRANT SELECT ("c") ON TABLE "t" TO r`, [], true],
       [`UPDATE "t" SET "c" = 1`, [], false],
+      // One guarded action does not excuse the unguarded one beside it.
+      [
+        `ALTER TABLE "t" DROP COLUMN "old", ADD COLUMN IF NOT EXISTS "new" integer`,
+        [],
+        false,
+      ],
+      [
+        `ALTER TABLE "t" DROP COLUMN IF EXISTS "old", ADD COLUMN IF NOT EXISTS "new" integer`,
+        [],
+        true,
+      ],
+      // A comma inside a CHECK is not an action boundary.
+      [
+        `ALTER TABLE "t" ADD CONSTRAINT "k" CHECK ("c" IN ('a', 'b')) NOT VALID`,
+        [`ALTER TABLE "t" DROP CONSTRAINT IF EXISTS "k"`],
+        true,
+      ],
+      // The drop has to name this object on this relation, exactly.
+      [
+        `ALTER TABLE "t" ADD CONSTRAINT "k" CHECK (true) NOT VALID`,
+        [`ALTER TABLE "other" DROP CONSTRAINT IF EXISTS "k"`],
+        false,
+      ],
+      [
+        `ALTER TABLE "t" ADD CONSTRAINT "k" CHECK (true) NOT VALID`,
+        [`ALTER TABLE "t" DROP CONSTRAINT IF EXISTS "k_longer"`],
+        false,
+      ],
+      [
+        `ALTER TABLE public."t" ADD CONSTRAINT k CHECK (true) NOT VALID`,
+        [`ALTER TABLE "t" DROP CONSTRAINT IF EXISTS "k"`],
+        true,
+      ],
+      [
+        `CREATE POLICY "p" ON "t" FOR SELECT TO r USING (true)`,
+        [`DROP POLICY IF EXISTS "p" ON "other"`],
+        false,
+      ],
+      [
+        `CREATE POLICY "p" ON "t" FOR SELECT TO r USING (true)`,
+        [`DROP POLICY IF EXISTS "p_longer" ON "t"`],
+        false,
+      ],
+      [
+        `CREATE TRIGGER "g" AFTER INSERT ON "t" FOR EACH ROW EXECUTE FUNCTION f()`,
+        [`DROP TRIGGER IF EXISTS "g" ON "other"`],
+        false,
+      ],
+      [
+        `CREATE TRIGGER "g" AFTER INSERT ON "t" FOR EACH ROW EXECUTE FUNCTION f()`,
+        [`DROP TRIGGER IF EXISTS "g_longer" ON "t"`],
+        false,
+      ],
+      [
+        `CREATE TRIGGER "g" AFTER INSERT ON "t" FOR EACH ROW EXECUTE FUNCTION f()`,
+        [`DROP TRIGGER IF EXISTS "g" ON "t"`],
+        true,
+      ],
     ];
     for (const [statement, earlier, expected] of cases) {
       expect({
