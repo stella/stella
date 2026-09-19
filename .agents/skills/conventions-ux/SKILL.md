@@ -139,16 +139,17 @@ through Folio gains one it does not have.
   didn't intend. (enforced by
   no-layout-motion-classes/no-layout-motion-classes and stylelint)
 - **GPU-friendly properties only.** Animate `transform` and
-  `opacity`. Do not animate `width`, `height`, `top`, `left`,
+  `opacity` exclusively. Do not animate `width`, `height`, `top`, `left`,
   `padding`, or `margin`; these trigger layout recalc. Use
   `scale`/`translate` instead. One exemption: a surface that
   changes its own box (a disclosure panel or accordion, a
   collapsible rail, a popup positioner repositioning on collision,
   a progress bar) may transition the box property it owns, because
   a transform moves the paint but not what siblings lay out
-  against. Such a file is listed in the rule's allowance with its
-  reason. (enforced by
-  no-layout-motion-classes/no-layout-motion-classes and stylelint)
+  against. Each retained layout utility is listed in the rule's allowance with
+  its file and reason. (the layout-motion prohibition is enforced by
+  no-layout-motion-classes/no-layout-motion-classes and stylelint; existing
+  paint-property utilities and CSS declarations are decrease-only ratchets)
 - **Interruptible animations:** use CSS `transition` for
   interactive state changes (hover, press) so the browser can
   interrupt mid-animation. Reserve `@keyframes` for staged

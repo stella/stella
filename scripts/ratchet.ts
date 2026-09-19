@@ -280,6 +280,107 @@ const countAsCasts = (content: string): number => {
   return total;
 };
 
+const LEGACY_PAINT_TRANSITION_UTILITIES: ReadonlySet<string> = new Set([
+  "transition",
+  "transition-colors",
+  "transition-shadow",
+]);
+
+const PAINT_TRANSITION_PROPERTIES = [
+  "background",
+  "background-color",
+  "backdrop-filter",
+  "border",
+  "border-color",
+  "border-radius",
+  "box-shadow",
+  "color",
+  "fill",
+  "filter",
+  "outline",
+  "stroke",
+  "text-decoration-color",
+] as const;
+
+const PAINT_TRANSITION_PROPERTY_SET: ReadonlySet<string> = new Set(
+  PAINT_TRANSITION_PROPERTIES,
+);
+
+const countLegacyPaintTransitionTokens = (value: string): number => {
+  let count = 0;
+  for (const token of value.split(/[\s"'`{}()]+/u)) {
+    const variantBoundary = token.lastIndexOf(":");
+    const bare = token.slice(variantBoundary + 1);
+    const withoutLeadingImportant = bare.startsWith("!") ? bare.slice(1) : bare;
+    const utility = withoutLeadingImportant.endsWith("!")
+      ? withoutLeadingImportant.slice(0, -1)
+      : withoutLeadingImportant;
+    if (LEGACY_PAINT_TRANSITION_UTILITIES.has(utility)) {
+      count += 1;
+      continue;
+    }
+    if (
+      utility.startsWith("transition-[") &&
+      PAINT_TRANSITION_PROPERTIES.some((property) => utility.includes(property))
+    ) {
+      count += 1;
+    }
+  }
+  return count;
+};
+
+const CSS_TRANSITION_DECLARATION =
+  /\btransition(?:-property)?\s*:\s*([^;}]+)/gu;
+
+const countLegacyPaintCssTransitions = (content: string): number => {
+  let count = 0;
+  for (const match of content.matchAll(CSS_TRANSITION_DECLARATION)) {
+    const value = match.at(1) ?? "";
+    const propertyTokens = value.split(/[\s,]+/u);
+    if (
+      propertyTokens.some(
+        (token) =>
+          token.startsWith("--") || PAINT_TRANSITION_PROPERTY_SET.has(token),
+      )
+    ) {
+      count += 1;
+    }
+  }
+  return count;
+};
+
+// The UX convention permits compositable transform/opacity transitions only.
+// The layout-motion lint rule rejects new layout transitions outright; this
+// counter freezes the older paint-property Tailwind utilities per file so
+// their remaining call sites can only shrink.
+const countLegacyPaintTransitions: FileCounter = (content, file) => {
+  if (file.endsWith(".css")) {
+    return countLegacyPaintCssTransitions(content);
+  }
+  const source = ts.createSourceFile(
+    file,
+    content,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TSX,
+  );
+  let total = 0;
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isStringLiteral(node) ||
+      ts.isNoSubstitutionTemplateLiteral(node) ||
+      ts.isTemplateHead(node) ||
+      ts.isTemplateMiddle(node) ||
+      ts.isTemplateTail(node)
+    ) {
+      total += countLegacyPaintTransitionTokens(node.text);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return total;
+};
+
 const NULLISH_ARRAY = /\?\?\s*\[\]/gu;
 
 // Same false-positive class as as-casts (a string/template can contain
@@ -1771,6 +1872,22 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
   },
   {
     scope: "file",
+    id: "legacy-paint-transitions",
+    description:
+      "legacy Tailwind utilities and CSS declarations that transition paint properties instead of transform/opacity; existing per-file debt may only shrink",
+    include: [
+      "apps/**/*.css",
+      "apps/desktop/src/**/*.{ts,tsx}",
+      "apps/landing/src/**/*.{ts,tsx}",
+      "apps/web/src/**/*.{ts,tsx}",
+      "packages/**/*.css",
+      "packages/ui/src/**/*.{ts,tsx}",
+    ],
+    exclude: isExcludedSource,
+    count: countLegacyPaintTransitions,
+  },
+  {
+    scope: "file",
     id: "super-linear-regexes",
     description:
       "regex literals with super-linear worst-case backtracking, repo-wide (one oversized input blocks the event loop); at 0 — keep it there",
@@ -2572,6 +2689,32 @@ const SELF_TEST_AS_CASTS = `${AS_CAST_FIXTURE_LINES.join("\n")}\n`;
 // multi-line template body, both single- and multi-line mapped-type remaps,
 // the block comment, and the "//" inside the url string are all excluded.
 const EXPECTED_AS_CASTS = 7;
+
+const LEGACY_PAINT_TRANSITION_FIXTURE_LINES = [
+  `const direct = "transition transition-colors";`,
+  `const variant = "hover:transition-shadow";`,
+  `const mixed = "transition-[background-color,opacity]";`,
+  `const arbitrary = \`transition-[transform,box-shadow]\`;`,
+  `const important = "focus:!transition-colors!";`,
+  `const compositable = "transition-opacity transition-transform";`,
+  `const layout = "transition-[height]";`,
+  `const control = "transition-none duration-150 transition-induced";`,
+] as const;
+const SELF_TEST_LEGACY_PAINT_TRANSITIONS = `${LEGACY_PAINT_TRANSITION_FIXTURE_LINES.join("\n")}\n`;
+const EXPECTED_LEGACY_PAINT_TRANSITIONS = 6;
+
+const SELF_TEST_LEGACY_PAINT_TRANSITIONS_CSS = `
+.paint {
+  transition: background-color 120ms ease, opacity 120ms ease;
+  transition-property: box-shadow;
+}
+.custom { transition: --theme-color 200ms; }
+.shorthands { transition: background 120ms, border 120ms; }
+.compositable { transition: opacity 100ms, transform 100ms; }
+.timing-variable { transition: opacity 100ms var(--motion-duration); }
+.disabled { transition: none; }
+`;
+const EXPECTED_LEGACY_PAINT_TRANSITIONS_CSS = 4;
 
 const SUPER_LINEAR_REGEX_FIXTURE_LINES = [
   // Counted: the shape that stalled the ingestion worker — the leading
@@ -3587,6 +3730,16 @@ const runSelfTest = (): number => {
 
   try {
     writeFixture(root, "apps/api/src/casts.ts", SELF_TEST_AS_CASTS);
+    writeFixture(
+      root,
+      "apps/web/src/legacy-paint-transitions.tsx",
+      SELF_TEST_LEGACY_PAINT_TRANSITIONS,
+    );
+    writeFixture(
+      root,
+      "apps/web/src/legacy-paint-transitions.css",
+      SELF_TEST_LEGACY_PAINT_TRANSITIONS_CSS,
+    );
     writeFixture(root, "apps/web/src/nullish.ts", SELF_TEST_NULLISH);
     writeFixture(
       root,
@@ -3984,6 +4137,11 @@ const runSelfTest = (): number => {
     }
 
     const sharedHelperMetricExpectations = [
+      [
+        "legacy-paint-transitions",
+        EXPECTED_LEGACY_PAINT_TRANSITIONS +
+          EXPECTED_LEGACY_PAINT_TRANSITIONS_CSS,
+      ],
       ["hand-rolled-user-identity", EXPECTED_HAND_ROLLED_USER_IDENTITIES],
       ["raw-user-avatar-primitive", EXPECTED_RAW_USER_AVATAR_PRIMITIVES],
       ["shadowed-user-name-helpers", EXPECTED_SHADOWED_USER_NAME_HELPERS],

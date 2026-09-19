@@ -78,25 +78,15 @@ describe("CSS correctness guard", () => {
     expect(result.results.flatMap((file) => file.warnings)).toEqual([]);
   });
 
-  test("accepts motion that names compositable properties", async () => {
+  test("accepts transform and opacity motion", async () => {
     const result = await lintCss(`
       .sample {
         transition: opacity 150ms, transform 150ms;
-        transition-property: color, box-shadow;
-      }
-      .other {
-        transition:
-          --brand-gradient-end 800ms ease,
-          background-color 120ms ease-out;
       }
       .reduced { transition: none !important; }
       @keyframes rise {
         from { opacity: 0; transform: translateY(4px); }
         to { opacity: 1; transform: none; }
-      }
-      @keyframes tint {
-        0%, 35% { background-color: currentColor; border-top-left-radius: 0; }
-        100% { background-color: transparent; }
       }
     `);
     expect(result.errored).toBe(false);

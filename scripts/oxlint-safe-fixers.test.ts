@@ -105,13 +105,13 @@ describe.serial("custom oxlint safe fixers", () => {
     });
   });
 
-  test("rewrites transition-all and the screen viewport utilities", async () => {
+  test("rewrites the screen viewport utilities", async () => {
     await expectFixedPoint({
       fileName: "subject.tsx",
       source:
-        'export const view = <div className="transition-all h-screen min-h-screen max-h-screen w-screen hover:transition-all md:min-h-screen!" />;\nexport const composed = cn("transition-all", `min-h-screen`);\n',
+        'export const view = <div className="h-screen min-h-screen max-h-screen w-screen md:min-h-screen!" />;\nexport const composed = cn(`min-h-screen`);\n',
       expected:
-        'export const view = <div className="transition h-dvh min-h-dvh max-h-dvh w-dvw hover:transition md:min-h-dvh!" />;\nexport const composed = cn("transition", `min-h-dvh`);\n',
+        'export const view = <div className="h-dvh min-h-dvh max-h-dvh w-dvw md:min-h-dvh!" />;\nexport const composed = cn(`min-h-dvh`);\n',
     });
   });
 

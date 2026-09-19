@@ -1746,56 +1746,82 @@ export default defineConfig({
         "no-layout-motion-classes/no-layout-motion-classes": [
           "error",
           {
-            // Surfaces that change their own box. A transform moves the paint
-            // and leaves the box siblings lay out against where it was, so
-            // these have no compositable spelling. The exemption covers the
-            // layout-property diagnostics only: `transition-all` and the
-            // viewport utilities stay reported here too, and an entry needs a
-            // reason naming the surface that owns the box.
+            // Surfaces that change their own box. Each exemption names the
+            // exact existing utility, so another layout transition in the same
+            // file still fails.
             allowedFiles: [
               {
                 path: "apps/web/src/routes/_protected.settings/organization.usage.tsx",
                 reason:
                   "Usage meter animates the bar width it owns as the quota fills.",
+                utilities: ["transition-[width]"],
               },
               {
                 path: "apps/web/src/routes/_protected.workspaces/-components/alphabet-index.tsx",
                 reason:
                   "Alphabet rail animates the width it owns between its collapsed and expanded states, and its hovered letter pill the max-width and font-size it owns.",
+                utilities: [
+                  "transition-[max-width,opacity,font-size]",
+                  "transition-[width,height,opacity]",
+                  "transition-[width]",
+                ],
               },
               {
                 path: "packages/ui/src/components/accordion.tsx",
                 reason:
                   "Accordion panel is a disclosure: it opens from zero to the height it owns.",
+                utilities: ["transition-[height]"],
               },
               {
                 path: "packages/ui/src/components/outline-rail.tsx",
                 reason:
                   "Outline rail marker animates the width and height it owns as the active section changes.",
+                utilities: ["transition-[width,height,opacity]"],
               },
               {
                 path: "packages/ui/src/components/popover.tsx",
                 reason:
                   "Popover popup morphs between the width and height it owns as its content changes size.",
+                utilities: ["transition-[width,height,scale,opacity]"],
               },
               {
                 path: "packages/ui/src/components/sidebar.tsx",
                 reason:
                   "Sidebar rail animates the width and inline inset it owns as it collapses to icon width.",
+                utilities: [
+                  "transition-[inset-inline-start,inset-inline-end,width]",
+                  "transition-[margin,opacity]",
+                  "transition-[width,height,padding]",
+                  "transition-[width]",
+                ],
               },
               {
                 path: "packages/ui/src/components/tabs.tsx",
                 reason:
                   "Active-tab indicator animates the width and height it owns onto the selected tab.",
+                utilities: ["transition-[width,translate]"],
               },
               {
                 path: "packages/ui/src/components/tooltip.tsx",
                 reason:
                   "Tooltip positioner animates the inset it owns when it repositions on collision, and its popup the width and height it owns.",
+                utilities: [
+                  "transition-[top,left,right,bottom,transform]",
+                  "transition-[width,height,scale,opacity]",
+                ],
               },
             ],
           },
         ],
+      },
+    },
+    {
+      files: [
+        "apps/desktop/src/**/*.{ts,tsx}",
+        "apps/landing/src/**/*.{ts,tsx}",
+      ],
+      rules: {
+        "no-layout-motion-classes/no-layout-motion-classes": "error",
       },
     },
     {

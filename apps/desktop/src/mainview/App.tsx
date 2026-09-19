@@ -752,10 +752,10 @@ const App = () => {
   const language = isSupportedLanguage(locale) ? locale : "en";
 
   return (
-    <main className="bg-background text-foreground min-h-screen">
+    <main className="bg-background text-foreground min-h-dvh">
       <div
         className={cn(
-          "mx-auto flex h-screen max-w-[30rem] flex-col px-4 pb-4",
+          "mx-auto flex h-dvh max-w-[30rem] flex-col px-4 pb-4",
           isMacDesktop ? "pt-9" : "pt-4",
         )}
       >

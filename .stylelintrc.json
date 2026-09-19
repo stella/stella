@@ -18,7 +18,7 @@
         ]
       },
       {
-        "message": "conventions-ux (Interactions & Animations): never transition `all`, and animate only compositable properties (transform, opacity, colours, shadows); a layout property forces a layout recalc on every frame. Found \"%s: %s\"."
+        "message": "conventions-ux (Interactions & Animations): never transition `all` or a layout property; layout motion forces a recalculation on every frame. Found \"%s: %s\"."
       }
     ],
     "declaration-property-value-no-unknown": true,

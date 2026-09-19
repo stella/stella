@@ -56,7 +56,11 @@ const reportedLine = (diagnostic: unknown): number | null => {
  * reads as a rule regression when it drifts.
  */
 type LintOptions = {
-  allowedFiles?: readonly { path: string; reason: string }[];
+  allowedFiles?: readonly {
+    path: string;
+    reason: string;
+    utilities: readonly string[];
+  }[];
   fileName?: string;
 };
 
@@ -124,33 +128,35 @@ describe.serial(RULE_NAME, () => {
       `export const _b = () => <span className={cn("min-h-screen", extra)} />;`,
       "export const _c = () => <div className={`md:transition-[height]`} />;",
       `export const PANEL = { wide: "w-screen max-h-screen" };`,
-      `export const _d = () => <p className="animate-[margin-inline_200ms]" />;`,
       // The `!` modifier and stacked variants are the same utility.
-      `export const _e = () => <p className="group-hover:transition-all!" />;`,
+      `export const _d = () => <p className="group-hover:transition-all!" />;`,
+      `export const _e = () => <p className="transition-[font-size]" />;`,
       "",
     ].join("\n");
 
     expect(await lint(source)).toEqual([1, 2, 3, 4, 5, 6]);
   });
 
-  test("exempts a listed box-owning surface, and only that file", async () => {
+  test("exempts only the listed utility in the listed box-owning surface", async () => {
     const source = [
       `export const _a = () => <div className="w-(--rail) transition-[width]" />;`,
+      `export const _b = () => <div className="h-(--panel) transition-[height]" />;`,
       "",
     ].join("\n");
     const allowedFiles = [
       {
         path: "collapsible-rail.tsx",
         reason: "Collapsible rail animates the width it owns.",
+        utilities: ["transition-[width]"],
       },
     ] as const;
 
     expect(
       await lint(source, { allowedFiles, fileName: "collapsible-rail.tsx" }),
-    ).toEqual([]);
+    ).toEqual([2]);
     expect(
       await lint(source, { allowedFiles, fileName: "ordinary-card.tsx" }),
-    ).toEqual([1]);
+    ).toEqual([1, 2]);
   });
 
   test("keeps transition-all and the viewport units reported in an allowed file", async () => {
@@ -166,6 +172,7 @@ describe.serial(RULE_NAME, () => {
           {
             path: "collapsible-rail.tsx",
             reason: "Collapsible rail animates the width it owns.",
+            utilities: ["transition-[width]"],
           },
         ],
         fileName: "collapsible-rail.tsx",
@@ -177,12 +184,15 @@ describe.serial(RULE_NAME, () => {
     const source = [
       `export const _a = () => <p className="transition-opacity duration-150" />;`,
       `export const _b = () => <span className="transition-transform" />;`,
-      `export const _c = () => <div className="transition transition-colors" />;`,
+      `export const _c = () => <div className="transition-none" />;`,
       `export const _d = () => <section className={cn("min-h-dvh", extra)} />;`,
       `export const _e = () => <p className="h-dvh max-h-dvh w-dvw" />;`,
       `export const _f = () => <p className="animate-[pulse_700ms_ease-in-out_3]" />;`,
+      // Arbitrary animation values name keyframes, not CSS properties. The
+      // stylesheet rule checks what those keyframes animate.
+      `export const _g = () => <p className="animate-[height_200ms_ease-out]" />;`,
       // A rounded corner names a physical side, not an animated layout property.
-      `export const _g = () => <p className="animate-in rounded-tl-md" />;`,
+      `export const _h = () => <p className="animate-in rounded-tl-md" />;`,
       "",
     ].join("\n");
 

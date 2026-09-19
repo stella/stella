@@ -3,20 +3,19 @@
 //
 // Interactions & Animations: `transition: all` repaints properties nobody chose
 // to animate, and `width`/`height`/`top`/`left`/`right`/`bottom`/`inset`/
-// `margin`/`padding` force a layout recalc on every frame. Compositable
-// properties (`transform`, `opacity`, colours, shadows) do not.
+// `margin`/`padding`/`flex-basis`/`font-size` force a layout recalc on every
+// frame. Transform and opacity do not.
 //
 // Viewport & Responsive: `h-screen`/`w-screen` resolve against `100vh`/`100vw`,
 // which ignores mobile browser chrome and leaves the page scrolled or
 // overlapped. The dynamic-viewport units track it.
 //
 // Flagged:
-//   <div className="transition-all duration-150" />          → transition
+//   <div className="transition-all duration-150" />
 //   <div className="transition-[height] md:transition-[top]" />
 //   <div className={cn("min-h-screen", className)} />        → min-h-dvh
-//   <div className="animate-[height_200ms] w-screen" />
 // Allowed:
-//   transition, transition-opacity, transition-transform, transition-colors
+//   transition-opacity, transition-transform
 //   min-h-dvh, h-dvh, max-h-dvh, w-dvw
 //   animate-[pulse_700ms_ease-in-out_3]
 //
@@ -24,9 +23,9 @@
 // panel, a collapsible rail, a popup positioner repositioning on collision, or a
 // progress bar may transition the box property it owns, because a transform
 // moves the paint but not what siblings lay out against. Those files are named
-// in the `allowedFiles` option with a reason each, and the exemption covers only
-// the layout-property diagnostics: `transition-all` and the viewport utilities
-// stay reported everywhere.
+// in the `allowedFiles` option with the exact utilities and a reason each. The
+// exemption covers only those existing layout transitions: `transition-all`,
+// viewport utilities, and any new layout-transition spelling stay reported.
 //
 // Every class string in the configured scope is checked, not only the
 // `className` attribute: these utilities travel through `cn()`/`cva()`/`clsx()`
@@ -48,7 +47,7 @@ const SPLIT = /[\s"'`{}()]+/u;
 // rather than `\b`: Tailwind writes arbitrary values as `transition-[width_150ms]`,
 // where `_` is a word character and would defeat `\b`.
 const LAYOUT_PROPERTY =
-  /(^|[^a-z])(width|height|top|left|right|bottom|inset|margin|padding)([^a-z]|$)/u;
+  /(^|[^a-z])(width|height|top|left|right|bottom|inset|margin|padding|flex-basis|font-size)([^a-z]|$)/u;
 
 // Maps rather than object literals: the lookup key is an arbitrary token out of
 // a source string, and `"constructor" in {}` or `record["__proto__"]` answers
@@ -60,18 +59,9 @@ const VIEWPORT_REPLACEMENTS: ReadonlyMap<string, string> = new Map([
   ["w-screen", "w-dvw"],
 ]);
 
-const FIXABLE_UTILITIES: ReadonlyMap<string, string> = new Map([
-  ...VIEWPORT_REPLACEMENTS,
-  // Tailwind's bare `transition` animates its curated property set, which is
-  // what a `transition-all` author almost always meant.
-  ["transition-all", "transition"],
-]);
+const FIXABLE_UTILITIES = VIEWPORT_REPLACEMENTS;
 
-type MessageId =
-  | "layoutAnimation"
-  | "layoutTransition"
-  | "transitionAll"
-  | "viewportUnit";
+type MessageId = "layoutTransition" | "transitionAll" | "viewportUnit";
 
 type UtilityParts = {
   leadingImportant: boolean;
@@ -100,18 +90,12 @@ const utilityParts = (token: string): UtilityParts => {
   };
 };
 
-// The two diagnostics a box-owning surface is allowed to keep.
-const LAYOUT_MESSAGE_IDS: ReadonlySet<MessageId> = new Set([
-  "layoutAnimation",
-  "layoutTransition",
-]);
-
 const filenameOf = (context): string =>
   context.filename ?? context.getFilename?.() ?? "";
 
-// Each entry needs a reason: the allowance grows only when someone can name the
-// surface that owns the box, which is what the convention asks for.
-const isAllowedFile = (context, options): boolean => {
+// Each entry needs exact utilities and a reason. An existing box-owning motion
+// may remain without granting every future layout transition in the same file.
+const allowedUtilitiesFor = (context, options): ReadonlySet<string> => {
   const allowedFiles =
     typeof options === "object" &&
     options !== null &&
@@ -120,14 +104,22 @@ const isAllowedFile = (context, options): boolean => {
       ? options.allowedFiles
       : [];
   const filename = filenameOf(context);
-  return allowedFiles.some(
-    (allowedFile) =>
+  const allowedUtilities = allowedFiles.flatMap((allowedFile) => {
+    const matches =
       typeof allowedFile === "object" &&
       allowedFile !== null &&
       typeof allowedFile.path === "string" &&
       typeof allowedFile.reason === "string" &&
-      filename.endsWith(allowedFile.path),
-  );
+      allowedFile.reason.trim() !== "" &&
+      Array.isArray(allowedFile.utilities) &&
+      filename.endsWith(allowedFile.path);
+    return matches
+      ? allowedFile.utilities.filter(
+          (utility) => typeof utility === "string" && utility !== "",
+        )
+      : [];
+  });
+  return new Set(allowedUtilities);
 };
 
 const messageIdForUtility = (utility: string): MessageId | undefined => {
@@ -143,7 +135,7 @@ const messageIdForUtility = (utility: string): MessageId | undefined => {
   if (utility.startsWith("transition-")) {
     return "layoutTransition";
   }
-  return utility.startsWith("animate-[") ? "layoutAnimation" : undefined;
+  return undefined;
 };
 
 /**
@@ -156,17 +148,18 @@ const messageIdForUtility = (utility: string): MessageId | undefined => {
  */
 const messageIdIn = (
   value: string,
-  ownsItsBox: boolean,
+  allowedUtilities: ReadonlySet<string>,
 ): MessageId | undefined => {
   for (const token of value.split(SPLIT)) {
     if (token === "") {
       continue;
     }
-    const messageId = messageIdForUtility(utilityParts(token).utility);
+    const { utility } = utilityParts(token);
+    const messageId = messageIdForUtility(utility);
     if (messageId === undefined) {
       continue;
     }
-    if (ownsItsBox && LAYOUT_MESSAGE_IDS.has(messageId)) {
+    if (messageId === "layoutTransition" && allowedUtilities.has(utility)) {
       continue;
     }
     return messageId;
@@ -282,9 +275,15 @@ export default eslintCompatPlugin({
                   type: "object",
                   properties: {
                     path: { type: "string" },
-                    reason: { type: "string" },
+                    reason: { type: "string", minLength: 1 },
+                    utilities: {
+                      type: "array",
+                      items: { type: "string", minLength: 1 },
+                      minItems: 1,
+                      uniqueItems: true,
+                    },
                   },
-                  required: ["path", "reason"],
+                  required: ["path", "reason", "utilities"],
                   additionalProperties: false,
                 },
               },
@@ -293,24 +292,17 @@ export default eslintCompatPlugin({
           },
         ],
         messages: {
-          layoutAnimation:
-            "conventions-ux (Interactions & Animations): animate transform " +
-            "and opacity only. This animation names a layout property " +
-            "(width, height, top, left, right, bottom, inset, margin, " +
-            "padding), which forces a layout recalc on every frame. Use " +
-            "scale/translate instead.",
           layoutTransition:
             "conventions-ux (Interactions & Animations): animate transform " +
             "and opacity only. This transition names a layout property " +
             "(width, height, top, left, right, bottom, inset, margin, " +
-            "padding), which forces a layout recalc on every frame. Use " +
-            "scale/translate instead.",
+            "padding, flex-basis, font-size), which forces a layout recalc " +
+            "on every frame. Use scale/translate instead.",
           transitionAll:
             "conventions-ux (Interactions & Animations): never transition " +
             "`all`; it repaints properties nobody chose to animate. Use " +
-            "`transition` for Tailwind's default property set, or name the " +
-            "property: transition-opacity, transition-transform, " +
-            "transition-colors, transition-shadow.",
+            "an exact compositable property: transition-opacity or " +
+            "transition-transform.",
           viewportUnit:
             "conventions-ux (Viewport & Responsive): `h-screen`/`w-screen` " +
             "resolve against 100vh/100vw and ignore mobile browser chrome, " +
@@ -319,24 +311,27 @@ export default eslintCompatPlugin({
         },
       },
       createOnce(context) {
-        let ownsItsBox = false;
+        let allowedUtilities: ReadonlySet<string> = new Set();
 
         return {
           before() {
-            ownsItsBox = isAllowedFile(context, context.options?.at(0));
+            allowedUtilities = allowedUtilitiesFor(
+              context,
+              context.options.at(0),
+            );
             return true;
           },
           Literal(node) {
             if (typeof node.value !== "string") {
               return;
             }
-            const messageId = messageIdIn(node.value, ownsItsBox);
+            const messageId = messageIdIn(node.value, allowedUtilities);
             if (messageId !== undefined) {
               report(context, node, messageId);
             }
           },
           TemplateElement(node) {
-            const messageId = messageIdIn(node.value.raw, ownsItsBox);
+            const messageId = messageIdIn(node.value.raw, allowedUtilities);
             if (messageId !== undefined) {
               report(context, node, messageId);
             }
