@@ -204,7 +204,7 @@ const TEMPLATE_FILL_COMPLETION_MODE_PROP = {
  * refusing taught nothing, because two models sent both on every attempt of
  * every task and never dropped one on retry.
  */
-export const createTemplateArgsSchema = nullAsAbsent(
+const createTemplateArgsSchema = nullAsAbsent(
   v.pipe(
     v.strictObject({
       template_id: v.optional(
@@ -622,7 +622,7 @@ export const CREATE_TEMPLATE_TOOL_DEFINITION = defineValibotMcpTool({
  * No document is produced and nothing is written, so the values are whatever
  * the caller has so far.
  */
-export const previewTemplateConditionsArgsSchema = nullAsAbsent(
+const previewTemplateConditionsArgsSchema = nullAsAbsent(
   v.strictObject({
     template_id: uuidInputSchema(
       "Template whose AI-decided conditions to ask about, as returned by list_templates",
@@ -636,7 +636,7 @@ export const previewTemplateConditionsArgsSchema = nullAsAbsent(
   }),
 );
 
-export const PREVIEW_TEMPLATE_CONDITIONS_TOOL_DEFINITION = defineValibotMcpTool(
+const PREVIEW_TEMPLATE_CONDITIONS_TOOL_DEFINITION = defineValibotMcpTool(
   {
     description:
       "Ask what a set of values would decide, without filling anything. One " +
@@ -709,7 +709,7 @@ export const CONFIGURE_TEMPLATE_FIELDS_TOOL_DEFINITION = defineValibotMcpTool({
   scope: "stella:templates",
 });
 
-export const TEMPLATE_TOOL_DEFINITIONS = [
+const TEMPLATE_TOOL_DEFINITIONS = [
   {
     annotations: {
       title: "List templates",

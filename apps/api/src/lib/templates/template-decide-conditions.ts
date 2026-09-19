@@ -49,7 +49,7 @@ import type {
 /** The form asks between keystrokes; a slower answer is stale when it lands. */
 const DECIDE_CONDITIONS_TIMEOUT_MS = 10_000;
 
-export type TemplateConditionDecision =
+type TemplateConditionDecision =
   | {
       state: "decided";
       decidedBy: "decision_model";

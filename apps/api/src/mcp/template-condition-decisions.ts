@@ -24,7 +24,7 @@ import type { TemplateConditionAnswer } from "@/api/lib/templates/template-decid
 import type { DecisionUndecidedReason } from "@/api/lib/workflow/decisions/decide";
 
 /** Why a condition was not settled. */
-export const TEMPLATE_CONDITION_UNDECIDED_REASONS = [
+const TEMPLATE_CONDITION_UNDECIDED_REASONS = [
   /** The organization has no decision model configured. */
   "no_decision_model",
   /** The decision model answered under the confidence floor. */

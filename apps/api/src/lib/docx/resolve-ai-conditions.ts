@@ -39,7 +39,7 @@ export const isAiConditionField = (
 /** How an AI-decided condition is shown: its label, or its path unlabelled.
  *  Shared with the fill form's preview so the two name the same condition
  *  identically. */
-export const aiConditionLabel = (field: FieldMeta): string =>
+const aiConditionLabel = (field: FieldMeta): string =>
   field.label ?? field.path;
 
 /**
@@ -48,7 +48,7 @@ export const aiConditionLabel = (field: FieldMeta): string =>
  * the decider still means "leave unset", so an unanswerable condition keeps
  * excluding its block.
  */
-export type AiConditionDecision =
+type AiConditionDecision =
   | { decidedBy: "decision_model"; value: boolean; probability: number }
   | { decidedBy: "generative_model"; value: boolean };
 
