@@ -30,6 +30,7 @@ delete process.env["MICROSOFT_AUTH_TENANT_ID"];
 // on the Postgres copy, so force the mode off rather than leaving hermeticity
 // to whatever each machine happens to have configured.
 delete process.env["CORPUS_STORAGE_MODE"];
+delete process.env["CORPUS_MEMBER_LAYOUT"];
 delete process.env["CORPUS_STORAGE_ENABLED"];
 delete process.env["CORPUS_INDEX_Q09_ENDPOINT"];
 delete process.env["CORPUS_INDEX_Q09_SEARCH_ENDPOINT"];
