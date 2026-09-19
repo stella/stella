@@ -283,18 +283,37 @@ describe("the crawl cursor", () => {
       offset: 140,
     };
     expect(parseHuBhgyCursor(encodeHuBhgyCursor(sweep))).toEqual(sweep);
-    const tip = {
+    const head = {
       phase: "tip" as const,
+      walk: "head" as const,
       frontier: "2026-09-19T12:19:50+02:00",
-      offset: 0,
     };
-    expect(parseHuBhgyCursor(encodeHuBhgyCursor(tip))).toEqual(tip);
+    expect(parseHuBhgyCursor(encodeHuBhgyCursor(head))).toEqual(head);
+    const catchUp = {
+      phase: "tip" as const,
+      walk: "catch-up" as const,
+      frontier: "2026-09-19T12:19:50+02:00",
+      pending: "2026-09-19T18:00:00+02:00",
+      offset: 40,
+    };
+    expect(parseHuBhgyCursor(encodeHuBhgyCursor(catchUp))).toEqual(catchUp);
   });
 
   test("a cursor nothing wrote reads as none, so the sweep opens a boundary", () => {
     // Never as the tip: a shape this adapter does not recognise has to resume
     // the sweep, not skip what it has not walked (rule 13).
-    for (const cursor of [null, "", "2020-03:0", "sweep|x|1900|e-polg|0"]) {
+    for (const cursor of [
+      null,
+      "",
+      "2020-03:0",
+      "sweep|x|1900|e-polg|0",
+      // The grammar the tip carried before it banked a pending frontier: read
+      // as a head cursor it would take an offset for a frontier.
+      "tip|2026-09-19T12:19:50+02:00|0",
+      // A catch-up standing at the head would bank `pending` over the rows
+      // between it and the frontier, which no walk has read.
+      "tip|catch-up|2026-09-19T12:19:50+02:00|2026-09-19T18:00:00+02:00|0",
+    ]) {
       expect(parseHuBhgyCursor(cursor)).toBeNull();
     }
   });
@@ -512,7 +531,7 @@ describe("the crawl", () => {
   test("a quiet tip cycle costs one request and returns the cursor it was given", async () => {
     // Rule 19: the steady state is a frontier, so a cycle on which nothing was
     // published writes nothing and asks for nothing more.
-    const cursor = "tip|2026-09-19T12:00:00+02:00|0";
+    const cursor = "tip|head|2026-09-19T12:00:00+02:00";
     const stub = stubPublisher(() =>
       searchResponse([rowAt(1, "2026-09-19T11:00:00+02:00")], 10_000),
     );
@@ -536,14 +555,14 @@ describe("the crawl", () => {
     );
     try {
       const page = await huBhgyAdapter.fetchPage(
-        "tip|2026-09-19T12:00:00+02:00|0",
+        "tip|head|2026-09-19T12:00:00+02:00",
         {},
       );
       const value = Result.isOk(page) ? page.value : null;
       expect(
         value?.decisions.map(({ sourceDocumentId }) => sourceDocumentId),
       ).toEqual(["id-9"]);
-      expect(value?.nextCursor).toBe("tip|2026-09-19T13:00:00+02:00|0");
+      expect(value?.nextCursor).toBe("tip|head|2026-09-19T13:00:00+02:00");
     } finally {
       stub.restore();
     }
@@ -563,7 +582,7 @@ describe("the crawl", () => {
     );
     try {
       const page = await huBhgyAdapter.fetchPage(
-        "tip|2026-09-19T12:00:00+02:00|0",
+        "tip|head|2026-09-19T12:00:00+02:00",
         {},
       );
       const value = Result.isOk(page) ? page.value : null;
@@ -574,6 +593,166 @@ describe("the crawl", () => {
     } finally {
       stub.restore();
     }
+  });
+});
+
+// ── The tip as a state machine ───────────────────────────
+
+/**
+ * The tip walks a listing the publisher keeps writing to, so the properties
+ * that matter are about the whole sequence of cycles rather than any one of
+ * them. Two of them, and they are opposites:
+ *
+ * - every row the publisher adds is collected, however many arrive at once;
+ * - a cycle that returns the cursor it was given has nothing left to collect.
+ *
+ * The first fails if the frontier ever moves past a row the walk has not read;
+ * the second fails if the walk parks somewhere it cannot leave.
+ */
+describe("the tip against a listing that grows while it walks", () => {
+  const originalSleep = Bun.sleep;
+
+  beforeEach(() => {
+    Bun.sleep = async () => {
+      /* no pacing against a stub */
+    };
+  });
+
+  afterEach(() => {
+    Bun.sleep = originalSleep;
+  });
+
+  /** An RTF the reader parses cleanly, so a walk is about the cursor alone. */
+  const RTF_BYTES = new TextEncoder().encode(
+    "{\\rtf1\\ansi\\ansicpg1250 Indokolas\\par A Kuria dontese.\\par }",
+  );
+
+  /** The publisher's own listing: newest first, written to at the head. */
+  const growingListing = () => {
+    const rows: Record<string, unknown>[] = [];
+    let published = 0;
+    return {
+      publish: (count: number): void => {
+        for (let step = 0; step < count; step += 1) {
+          published += 1;
+          rows.unshift(
+            rowAt(
+              published,
+              new Date(Date.UTC(2026, 0, 1, 0, published)).toISOString(),
+            ),
+          );
+        }
+      },
+      newest: (): string =>
+        normalizeHuBhgyRow(rows.at(0) ?? {}).IndexelesIdeje ?? "",
+      identities: (): string[] =>
+        rows.map((row) => normalizeHuBhgyRow(row).IndexId ?? ""),
+      page: (offset: number): Response =>
+        searchResponse(rows.slice(offset, offset + 20), rows.length),
+    };
+  };
+
+  const offsetOf = (body: string): number =>
+    Number(new URLSearchParams(body).get("ResultStartIndex") ?? "0");
+
+  type Cycle = { cursor: string; next: string; collected: string[] };
+
+  const cycle = async (
+    listing: ReturnType<typeof growingListing>,
+    cursor: string,
+  ): Promise<Cycle> => {
+    const stub = stubPublisher((call) =>
+      isSearch(call)
+        ? listing.page(offsetOf(call.body))
+        : new Response(RTF_BYTES),
+    );
+    try {
+      const page = await huBhgyAdapter.fetchPage(cursor, {});
+      if (Result.isError(page)) {
+        throw page.error;
+      }
+      return {
+        cursor,
+        next: page.value.nextCursor ?? "",
+        collected: page.value.decisions.map(
+          ({ sourceDocumentId }) => sourceDocumentId ?? "",
+        ),
+      };
+    } finally {
+      stub.restore();
+    }
+  };
+
+  /**
+   * Run the schedule — rows published before each cycle — then cycle on until
+   * the cursor stops moving, asserting both properties as it goes.
+   */
+  const walk = async (schedule: readonly number[]): Promise<Cycle[]> => {
+    const listing = growingListing();
+    listing.publish(1);
+    let cursor = `tip|head|${listing.newest()}`;
+    const held = new Set(listing.identities());
+    const cycles: Cycle[] = [];
+    const QUIET_CYCLE_BUDGET = 24;
+
+    for (const [step, publish] of [
+      ...schedule,
+      ...Array.from({ length: QUIET_CYCLE_BUDGET }, () => 0),
+    ].entries()) {
+      listing.publish(publish);
+      const run = await cycle(listing, cursor);
+      cycles.push(run);
+      for (const identity of run.collected) {
+        held.add(identity);
+      }
+      const outstanding = listing
+        .identities()
+        .filter((identity) => !held.has(identity));
+      if (run.next === run.cursor) {
+        // Standing still is the quiet cycle, and it is a claim: there is
+        // nothing left to collect. A walk parked anywhere else keeps its
+        // uncollected rows forever.
+        expect({ step, outstanding }).toEqual({ step, outstanding: [] });
+        return cycles;
+      }
+      cursor = run.next;
+    }
+    throw new Error(`the tip never settled: ${cycles.length} cycles`);
+  };
+
+  test("a steady trickle is collected and the cursor settles at the head", async () => {
+    const cycles = await walk([1, 0, 2, 1, 0, 0, 3]);
+    expect(cycles.at(-1)?.next.startsWith("tip|head|")).toBe(true);
+  });
+
+  test("a burst deeper than the catch-up ceiling loses none of it", async () => {
+    // 130 rows is past `MAX_TIP_PAGES * CRAWL_PAGE_SIZE`, which is where the
+    // walk used to bank the oldest row it had read as the frontier: every row
+    // below that one was then covered without ever having been listed.
+    const cycles = await walk([130, 0, 0, 0, 1, 0, 0, 2]);
+    expect(
+      cycles.some(({ cursor }) => cursor.startsWith("tip|catch-up|")),
+    ).toBe(true);
+    expect(cycles.at(-1)?.next.startsWith("tip|head|")).toBe(true);
+  });
+
+  test("a catch-up that lands on the frontier returns to the head", async () => {
+    // A burst that is a whole number of pages puts the frontier's own row
+    // first on the page the walk resumes at, so the cycle reads nothing new.
+    // Standing still there left the tip asking for that offset instead of the
+    // head, for as long as the listing did not shift under it.
+    const cycles = await walk([140]);
+    expect(cycles.at(-1)?.next.startsWith("tip|head|")).toBe(true);
+    expect(
+      cycles.filter(({ cursor }) => cursor.startsWith("tip|catch-up|")).length,
+    ).toBeGreaterThan(1);
+  });
+
+  test("rows arriving mid-catch-up are collected too", async () => {
+    // The listing shifts under the walk while it is part-way down, so the
+    // offset it resumes at names a different row each cycle.
+    const cycles = await walk([60, 5, 5, 5, 5, 5, 0, 0, 1]);
+    expect(cycles.at(-1)?.next.startsWith("tip|head|")).toBe(true);
   });
 });
 
@@ -600,7 +779,7 @@ describe("a listed decision the download will not serve", () => {
     );
     try {
       const page = await huBhgyAdapter.fetchPage(
-        "tip|2026-09-19T12:00:00+02:00|0",
+        "tip|head|2026-09-19T12:00:00+02:00",
         {},
       );
       const [decision] = Result.isOk(page) ? page.value.decisions : [];
@@ -634,7 +813,7 @@ describe("a listed decision the download will not serve", () => {
     );
     try {
       const page = await huBhgyAdapter.fetchPage(
-        "tip|2026-09-19T12:00:00+02:00|0",
+        "tip|head|2026-09-19T12:00:00+02:00",
         {},
       );
       expect(
@@ -662,7 +841,7 @@ describe("replaying a stored envelope", () => {
     let stored;
     try {
       const page = await huBhgyAdapter.fetchPage(
-        "tip|2000-01-01T00:00:00+01:00|0",
+        "tip|head|2000-01-01T00:00:00+01:00",
         {},
       );
       [stored] = Result.isOk(page) ? page.value.decisions : [];
@@ -754,7 +933,7 @@ describe("what a stored row keeps", () => {
     );
     try {
       const page = await huBhgyAdapter.fetchPage(
-        "tip|2000-01-01T00:00:00+01:00|0",
+        "tip|head|2000-01-01T00:00:00+01:00",
         {},
       );
       const [decision] = Result.isOk(page) ? page.value.decisions : [];

@@ -164,11 +164,13 @@ const SATURATION_COUNT = 10_000;
 const CRAWL_PAGE_SIZE = 20;
 
 /**
- * Pages the tip may walk back in one cycle.
+ * Pages the tip may walk back before the depth is worth an operator's
+ * attention.
  *
- * The catch-up is bounded by the offset ceiling either way; this keeps one
- * cycle's cost in proportion to a cycle, and what a cycle does not reach stays
- * ahead of the frontier it banks.
+ * Not a stopping point: the rows below a catch-up are exactly the ones the
+ * frontier has not covered, so abandoning them would hide them from every
+ * later cycle. One cycle costs one page either way; what this bounds is how
+ * far behind the publisher the walk gets before it says so.
  */
 const MAX_TIP_PAGES = 5;
 
@@ -1356,6 +1358,17 @@ const buildHuBhgyFromPayload = async (
 
 // ── Crawl cursor ─────────────────────────────────────────
 
+/**
+ * Where the crawl is.
+ *
+ * The tip is one of two things, and the difference is what may move the
+ * frontier. At the head, the newest row the cycle reads becomes the frontier,
+ * because every row above it was read. Part-way down a catch-up, the frontier
+ * stays where it was and the walk carries the newest row it has read as
+ * `pending`: a frontier moved to a row further down would cover the rows
+ * between that row and the head of the catch-up, which this walk has not read,
+ * and no later cycle would ever look at them again.
+ */
 type HuBhgyCursor =
   | {
       phase: "sweep";
@@ -1365,20 +1378,39 @@ type HuBhgyCursor =
       slug: KollegiumSlug;
       offset: number;
     }
-  | { phase: "tip"; frontier: string; offset: number };
+  | { phase: "tip"; walk: "head"; frontier: string }
+  | {
+      phase: "tip";
+      walk: "catch-up";
+      /** The frontier the catch-up started from; it holds until the walk meets it. */
+      frontier: string;
+      /** The newest row this walk has read: the frontier it banks when it does. */
+      pending: string;
+      offset: number;
+    };
 
 const CURSOR_SEPARATOR = "|";
 
-export const encodeHuBhgyCursor = (cursor: HuBhgyCursor): string =>
-  cursor.phase === "sweep"
-    ? [
-        "sweep",
-        cursor.boundary,
-        String(cursor.year),
-        cursor.slug,
+export const encodeHuBhgyCursor = (cursor: HuBhgyCursor): string => {
+  if (cursor.phase === "sweep") {
+    return [
+      "sweep",
+      cursor.boundary,
+      String(cursor.year),
+      cursor.slug,
+      String(cursor.offset),
+    ].join(CURSOR_SEPARATOR);
+  }
+  return cursor.walk === "head"
+    ? ["tip", "head", cursor.frontier].join(CURSOR_SEPARATOR)
+    : [
+        "tip",
+        "catch-up",
+        cursor.frontier,
+        cursor.pending,
         String(cursor.offset),
-      ].join(CURSOR_SEPARATOR)
-    : ["tip", cursor.frontier, String(cursor.offset)].join(CURSOR_SEPARATOR);
+      ].join(CURSOR_SEPARATOR);
+};
 
 const isSlug = (value: string): value is KollegiumSlug =>
   KOLLEGIUM_BY_SLUG.has(value);
@@ -1396,11 +1428,32 @@ export const parseHuBhgyCursor = (
   }
   const parts = cursor.split(CURSOR_SEPARATOR);
   const [phase] = parts;
-  if (phase === "tip" && parts.length === 3) {
-    const offset = Number(parts[2]);
-    return parts[1] === undefined || !Number.isSafeInteger(offset)
-      ? null
-      : { phase: "tip", frontier: parts[1], offset };
+  if (phase === "tip") {
+    const [, walk, frontier, pending, offset] = parts;
+    if (frontier === undefined) {
+      return null;
+    }
+    if (walk === "head") {
+      return parts.length === 3
+        ? { phase: "tip", walk: "head", frontier }
+        : null;
+    }
+    const offsetValue = Number(offset);
+    // A catch-up that has not left the head is a head cursor; parsing one
+    // would let the walk bank `pending` over rows it never read.
+    return walk === "catch-up" &&
+      parts.length === 5 &&
+      pending !== undefined &&
+      Number.isSafeInteger(offsetValue) &&
+      offsetValue > 0
+      ? {
+          phase: "tip",
+          walk: "catch-up",
+          frontier,
+          pending,
+          offset: offsetValue,
+        }
+      : null;
   }
   if (phase !== "sweep" || parts.length !== 5) {
     return null;
@@ -1601,8 +1654,8 @@ const sweepPage = async (
               // behind the frontier (rule 19).
               encodeHuBhgyCursor({
                 phase: "tip",
+                walk: "head",
                 frontier: start.boundary,
-                offset: 0,
               })
             : encodeHuBhgyCursor({
                 ...start,
@@ -1620,8 +1673,8 @@ const sweepPage = async (
         sourceUrl: url,
         nextCursor: encodeHuBhgyCursor({
           phase: "tip",
+          walk: "head",
           frontier: start.boundary,
-          offset: 0,
         }),
       });
     }
@@ -1643,13 +1696,10 @@ const tipPage = async (
   signal?: AbortSignal,
 ): Promise<Result<SyncPage, AdapterFetchError>> => {
   const cursor = encodeHuBhgyCursor(start);
+  const offset = start.walk === "head" ? 0 : start.offset;
   const listed = await search({
     cursor,
-    query: {
-      sort: SORT.PUBLISHED_DESC,
-      offset: start.offset,
-      pageSize: CRAWL_PAGE_SIZE,
-    },
+    query: { sort: SORT.PUBLISHED_DESC, offset, pageSize: CRAWL_PAGE_SIZE },
     signal,
   });
   if (Result.isError(listed)) {
@@ -1670,9 +1720,26 @@ const tipPage = async (
     fresh.push(row);
   }
 
+  /** The newest row this walk has read, which is the frontier it will bank. */
+  const pending =
+    start.walk === "catch-up"
+      ? start.pending
+      : (normalizeHuBhgyRow(fresh[0] ?? {}).IndexelesIdeje ?? start.frontier);
+
+  /** The walk has met the frontier it started from: the head is next. */
+  const caughtUp = (): string =>
+    encodeHuBhgyCursor({ phase: "tip", walk: "head", frontier: pending });
+
   if (fresh.length === 0) {
-    // A quiet cycle: one request, and the cursor it was given.
-    return Result.ok({ decisions: [], sourceUrl: url, nextCursor: cursor });
+    // At the head, the quiet cycle rule 19 asks for: one request, and the
+    // cursor it was given. Part-way down it is the end of a catch-up — the
+    // walk has reached rows the frontier covers — and standing still there
+    // would leave the tip reading this offset instead of the head.
+    return Result.ok({
+      decisions: [],
+      sourceUrl: url,
+      nextCursor: start.walk === "head" ? cursor : caughtUp(),
+    });
   }
 
   const collected = await collectDecisions({ cursor, rows: fresh, signal });
@@ -1684,40 +1751,32 @@ const tipPage = async (
     return Result.ok({ decisions, sourceUrl: url, nextCursor: cursor });
   }
 
-  if (!reachedFrontier) {
-    const nextOffset = start.offset + fresh.length;
-    if (nextOffset >= MAX_TIP_PAGES * CRAWL_PAGE_SIZE) {
-      // The catch-up is longer than a cycle should be. Advancing the frontier
-      // to the oldest row consumed keeps every later cycle bounded, and what it
-      // has not reached stays ahead of the new frontier.
-      const oldest = normalizeHuBhgyRow(fresh.at(-1) ?? {}).IndexelesIdeje;
-      return Result.ok({
-        decisions,
-        sourceUrl: url,
-        nextCursor: encodeHuBhgyCursor({
-          phase: "tip",
-          frontier: oldest ?? start.frontier,
-          offset: 0,
-        }),
-      });
-    }
-    // A descending listing only grows at its head, so resuming at this offset
-    // can re-read a row but cannot step over one.
-    return Result.ok({
-      decisions,
-      sourceUrl: url,
-      nextCursor: encodeHuBhgyCursor({ ...start, offset: nextOffset }),
-    });
+  if (reachedFrontier) {
+    return Result.ok({ decisions, sourceUrl: url, nextCursor: caughtUp() });
   }
 
-  const newest = normalizeHuBhgyRow(fresh[0] ?? {}).IndexelesIdeje;
+  const nextOffset = offset + fresh.length;
+  if (nextOffset >= MAX_TIP_PAGES * CRAWL_PAGE_SIZE) {
+    // The walk is further behind the publisher than a catch-up should ever
+    // get. It keeps going — the rows below it are the ones nothing else will
+    // collect — and says so, because the depth is what an operator acts on.
+    logger.warn("case_law.ingestion.tip_catch_up_deep", {
+      adapterKey: ADAPTER_KEYS.HU_BHGY,
+      offset: nextOffset,
+      frontier: start.frontier,
+    });
+  }
+  // A descending listing only grows at its head, so resuming at this offset
+  // can re-read a row but cannot step over one.
   return Result.ok({
     decisions,
     sourceUrl: url,
     nextCursor: encodeHuBhgyCursor({
       phase: "tip",
-      frontier: newest ?? start.frontier,
-      offset: 0,
+      walk: "catch-up",
+      frontier: start.frontier,
+      pending,
+      offset: nextOffset,
     }),
   });
 };
