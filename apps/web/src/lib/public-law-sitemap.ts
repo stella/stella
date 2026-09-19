@@ -309,10 +309,11 @@ export const createPublicLawStaticSitemapXml = ({
 `;
   }
 
-  // The home is the entry point. The results screen is not listed: an
-  // unfiltered request redirects to the home, and every decision has its own
-  // entry in the per-country sitemaps.
-  const entries = (["/law"] as const).map((path) =>
+  // The home is the entry point, and the coverage page is what the corpus
+  // says about itself. The results screen is not listed: an unfiltered request
+  // redirects to the home, and every decision has its own entry in the
+  // per-country sitemaps.
+  const entries = (["/law", "/law/coverage"] as const).map((path) =>
     createPublicLawCanonicalUrl(path),
   );
 

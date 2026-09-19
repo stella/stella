@@ -631,6 +631,38 @@ type Messages = {
       "regional": "High and regional courts";
       "supreme": "Supreme courts";
     };
+    "coverage": {
+      "atLeast": "at least {count}";
+      "completeness": "Completeness";
+      "countUnavailable": "Count unavailable";
+      "decisionYears": "Decision years";
+      "description": "How much case law the corpus holds, per country and per court, and how fresh each source is.";
+      "exceedsReportedTotal": "Holds more than the publisher's last stated total of {date}";
+      "generatedAt": "Figures from {date}";
+      "healthCurrent": "Current";
+      "healthDelayed": "Delayed";
+      "healthPaused": "Paused";
+      "healthStalled": "Stalled";
+      "healthUnknown": "Unknown";
+      "inPreparation": "In preparation";
+      "lastSync": "Last sync";
+      "newLast7Days": "New in 7 days";
+      "notMeasuredYet": "Not measured yet";
+      "publisherTotal": "Publisher's total";
+      "reportedByOperator": "Recorded by hand";
+      "reportedByPublisher": "Publisher's own count";
+      "searchable": "Searchable";
+      "searchableHint": "Decisions a search can find.";
+      "sourcesHeading": "Where these decisions come from";
+      "staleSources": "{count, plural, one {# total out of date} other {# totals out of date}}";
+      "stored": "Stored";
+      "storedHint": "Decisions held, not searchable yet.";
+      "title": "Case-law coverage";
+      "totalFrom": "Total from {date}";
+      "unavailable": "Coverage figures are unavailable right now.";
+      "uncountedSources": "{count, plural, one {# source not counted} other {# sources not counted}}";
+      "unmeasuredSources": "{count, plural, one {# source not measured} other {# sources not measured}}";
+    };
     "decisionNotFound": "Decision not found";
     "emptyState": "No decisions found. Configure a source and run a sync to import case law.";
     "filters": {

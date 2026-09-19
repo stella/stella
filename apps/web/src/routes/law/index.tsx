@@ -470,6 +470,14 @@ function LawHome() {
             </Fragment>
           );
         })}
+        {/* What the corpus says about itself: every country it holds, the
+            ones the public search cannot reach yet included. */}
+        <Link
+          className="text-muted-foreground hover:text-foreground px-2 pt-2 text-xs underline underline-offset-2"
+          to="/law/coverage"
+        >
+          {t("caseLaw.coverage.title")}
+        </Link>
       </LandingSection>
       <LandingSection
         heading={

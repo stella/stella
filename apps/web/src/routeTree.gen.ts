@@ -30,6 +30,7 @@ import { Route as AuthOtpRouteImport } from './routes/auth/otp'
 import { Route as AuthTwoFactorRouteImport } from './routes/auth/two-factor'
 import { Route as DevAvtRouteImport } from './routes/dev_.avt'
 import { Route as LawIndexRouteImport } from './routes/law/index'
+import { Route as LawCoverageRouteImport } from './routes/law/coverage'
 import { Route as McpOauthCallbackRouteImport } from './routes/mcp.oauth-callback'
 import { Route as SitemapsLawDotxmlRouteImport } from './routes/sitemaps/law[.]xml'
 import { Route as SitemapsToolsDotxmlRouteImport } from './routes/sitemaps/tools[.]xml'
@@ -205,6 +206,11 @@ const DevAvtRoute = DevAvtRouteImport.update({
 const LawIndexRoute = LawIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => LawRouteRoute,
+} as any)
+const LawCoverageRoute = LawCoverageRouteImport.update({
+  id: '/coverage',
+  path: '/coverage',
   getParentRoute: () => LawRouteRoute,
 } as any)
 const McpOauthCallbackRoute = McpOauthCallbackRouteImport.update({
@@ -637,6 +643,7 @@ export interface FileRoutesByFullPath {
   '/auth/otp': typeof AuthOtpRoute
   '/auth/two-factor': typeof AuthTwoFactorRoute
   '/dev/avt': typeof DevAvtRoute
+  '/law/coverage': typeof LawCoverageRoute
   '/mcp/oauth-callback': typeof McpOauthCallbackRoute
   '/sitemaps/law.xml': typeof SitemapsLawDotxmlRoute
   '/sitemaps/tools.xml': typeof SitemapsToolsDotxmlRoute
@@ -725,6 +732,7 @@ export interface FileRoutesByTo {
   '/auth/otp': typeof AuthOtpRoute
   '/auth/two-factor': typeof AuthTwoFactorRoute
   '/dev/avt': typeof DevAvtRoute
+  '/law/coverage': typeof LawCoverageRoute
   '/mcp/oauth-callback': typeof McpOauthCallbackRoute
   '/sitemaps/law.xml': typeof SitemapsLawDotxmlRoute
   '/sitemaps/tools.xml': typeof SitemapsToolsDotxmlRoute
@@ -818,6 +826,7 @@ export interface FileRoutesById {
   '/auth/otp': typeof AuthOtpRoute
   '/auth/two-factor': typeof AuthTwoFactorRoute
   '/dev_/avt': typeof DevAvtRoute
+  '/law/coverage': typeof LawCoverageRoute
   '/mcp/oauth-callback': typeof McpOauthCallbackRoute
   '/sitemaps/law.xml': typeof SitemapsLawDotxmlRoute
   '/sitemaps/tools.xml': typeof SitemapsToolsDotxmlRoute
@@ -914,6 +923,7 @@ export interface FileRouteTypes {
     | '/auth/otp'
     | '/auth/two-factor'
     | '/dev/avt'
+    | '/law/coverage'
     | '/mcp/oauth-callback'
     | '/sitemaps/law.xml'
     | '/sitemaps/tools.xml'
@@ -1002,6 +1012,7 @@ export interface FileRouteTypes {
     | '/auth/otp'
     | '/auth/two-factor'
     | '/dev/avt'
+    | '/law/coverage'
     | '/mcp/oauth-callback'
     | '/sitemaps/law.xml'
     | '/sitemaps/tools.xml'
@@ -1094,6 +1105,7 @@ export interface FileRouteTypes {
     | '/auth/otp'
     | '/auth/two-factor'
     | '/dev_/avt'
+    | '/law/coverage'
     | '/mcp/oauth-callback'
     | '/sitemaps/law.xml'
     | '/sitemaps/tools.xml'
@@ -1339,6 +1351,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/law/'
       preLoaderRoute: typeof LawIndexRouteImport
+      parentRoute: typeof LawRouteRoute
+    }
+    '/law/coverage': {
+      id: '/law/coverage'
+      path: '/coverage'
+      fullPath: '/law/coverage'
+      preLoaderRoute: typeof LawCoverageRouteImport
       parentRoute: typeof LawRouteRoute
     }
     '/mcp/oauth-callback': {
@@ -1871,6 +1890,7 @@ const AuthRouteRouteWithChildren = AuthRouteRoute._addFileChildren(
 )
 
 interface LawRouteRouteChildren {
+  LawCoverageRoute: typeof LawCoverageRoute
   LawIndexRoute: typeof LawIndexRoute
   LawCasesIndexRoute: typeof LawCasesIndexRoute
   LawCasesResearchTableIdRoute: typeof LawCasesResearchTableIdRoute
@@ -1883,6 +1903,7 @@ interface LawRouteRouteChildren {
 }
 
 const LawRouteRouteChildren: LawRouteRouteChildren = {
+  LawCoverageRoute: LawCoverageRoute,
   LawIndexRoute: LawIndexRoute,
   LawCasesIndexRoute: LawCasesIndexRoute,
   LawCasesResearchTableIdRoute: LawCasesResearchTableIdRoute,
@@ -2172,10 +2193,13 @@ export const routeTree = rootRouteImport
   ._addFileTypes<FileRouteTypes>()
 
 import type { getRouter } from './router.tsx'
+
 import type { createStart } from '@tanstack/react-start'
+
 declare module '@tanstack/react-start' {
   interface Register {
     ssr: true
+
     router: Awaited<ReturnType<typeof getRouter>>
   }
 }
