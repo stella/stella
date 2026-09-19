@@ -1,12 +1,15 @@
 /**
  * Citation polarity classifier.
  *
- * Orchestrates the two-tier classification pipeline:
- * 1. Try regex rules first (fast, free)
- * 2. Fall back to LLM classification
- * 3. Track surface forms for auto-promotion to regex rules
+ * Orchestrates the classification cascade:
+ * 1. Regex rules first (fast, free)
+ * 2. A System One reading (Jev) when the deployment has a key: a typed
+ *    choice with calibrated confidence, accepted above a floor
+ * 3. The generative model for what the earlier tiers did not settle; it
+ *    also extracts the key phrase a rule can be promoted from
+ * 4. Track surface forms for auto-promotion to regex rules
  *
- * Over time, the regex ruleset grows and LLM usage drops.
+ * Over time, the regex ruleset grows and model usage drops.
  */
 
 import { eq, sql } from "drizzle-orm";
@@ -26,19 +29,25 @@ import {
   matchRule,
 } from "@/api/handlers/case-law/polarity/rule-engine";
 import type { RuleCache } from "@/api/handlers/case-law/polarity/rule-engine";
+import {
+  classifyWithSystemOne,
+  SYSTEM_ONE_POLARITY_ACCEPT_CONFIDENCE,
+} from "@/api/handlers/case-law/polarity/system-one-classifier";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { SystemOneClient } from "@/api/lib/typesafe/system-one";
+import { getSystemOneClient } from "@/api/lib/typesafe/system-one-runtime";
 
 export { extractContext } from "@/api/handlers/case-law/polarity/context";
 
 type ClassifyResult = {
   polarity: Polarity;
   ruleId: SafeId<"caseLawPolarityRule"> | null;
-  source: "regex" | "llm" | "fallback";
+  source: "regex" | "system-one" | "llm" | "fallback";
   /**
    * How much the deciding tier trusts this label: the rule's stored
-   * confidence for a regex match, the model's own for an LLM call, and null
-   * on the fallback, where nothing read the text.
+   * confidence for a regex match, the model's own for a System One or LLM
+   * call, and null on the fallback, where nothing read the text.
    *
    * `case_law_citations` has no column for it yet, so `persistPolarity`
    * drops it and only in-process callers see it.
@@ -63,6 +72,11 @@ type ClassifyCitationArgs = {
     abortSignal?: AbortSignal;
     ruleCache?: RuleCache;
     dryRun?: boolean;
+    /**
+     * The System One tier's client; the deployment's when omitted, null to
+     * skip the tier. Injected so a comparison run can pin a model.
+     */
+    systemOne?: SystemOneClient | null;
   };
 };
 
@@ -101,7 +115,34 @@ export const classifyCitation = async ({
     };
   }
 
-  // Tier 2: LLM classification
+  // Tier 2: System One. A confident reading is the label; anything else
+  // falls through, including a transport failure, which is telemetry
+  // rather than an `unknown` polarity: the generative tier still reads.
+  const systemOne =
+    options?.systemOne === undefined ? getSystemOneClient() : options.systemOne;
+  if (systemOne !== null) {
+    const reading = await classifyWithSystemOne({
+      client: systemOne,
+      context,
+      citationText,
+      language,
+      abortSignal: options?.abortSignal,
+    });
+    if (reading.isErr()) {
+      captureError(reading.error, { language, tier: "system-one" });
+    } else if (
+      reading.value.confidence >= SYSTEM_ONE_POLARITY_ACCEPT_CONFIDENCE
+    ) {
+      return {
+        polarity: reading.value.polarity,
+        ruleId: null,
+        source: "system-one",
+        confidence: reading.value.confidence,
+      };
+    }
+  }
+
+  // Tier 3: LLM classification
   // Note: LLM is called even in dry-run mode (only DB writes
   // are suppressed). Use small --limit values for cost preview.
   const llmResult = await classifyWithLLM({

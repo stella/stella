@@ -66,6 +66,7 @@ const INTERNAL_SERVER_KEYS = new Set([
   "AI_MODEL_FAST",
   "AI_MODEL_PDF",
   "AI_MODEL_REASONING",
+  "TYPESAFE_MODEL",
   "AI_PROVIDER",
   "AI_PROVIDER_BASE_URL",
   "AZURE_API_VERSION",
@@ -386,6 +387,10 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Directory holding the template-pack content. Set by the container image; unset in a source tree.",
   TRANSACTIONAL_EMAIL_FROM:
     "Verified sender address used for every transactional email.",
+  TYPESAFE_API_KEY:
+    "TypeSafe System One (Jev) API key. Unset, citation polarity and table answers use the generative model alone.",
+  TYPESAFE_MODEL:
+    'System One model id sent to TypeSafe. Defaults to "jev-latest"; pin a versioned id to hold calibrated thresholds.',
   USE_MOCK_AI:
     "Return canned AI responses in local development and tests. Deployed runtimes reject this setting.",
   VITE_API_URL: "API base URL used by the SPA for Eden treaty requests.",

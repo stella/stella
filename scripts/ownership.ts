@@ -312,6 +312,26 @@ export const OWNERSHIP = [
     enforcement: { kind: "none" },
   },
   {
+    id: "system-one-transport",
+    capability: "Typed judgments from a TypeSafe System One model (Jev)",
+    owner: [
+      "apps/api/src/lib/typesafe/system-one.ts",
+      "apps/api/src/lib/typesafe/system-one-runtime.ts",
+      "apps/api/src/lib/typesafe/answer-questions.ts",
+    ],
+    summary:
+      "A System One model answers typed questions about a state with probability " +
+      "distributions; it generates nothing. `system-one.ts` owns the wire contract, " +
+      "response validation and rate-limit retry, `system-one-runtime.ts` the " +
+      "deployment's credential, and `answer-questions.ts` the one translation of a " +
+      "table column (select, date, int) into questions and back into the `Answer` " +
+      "the generative path writes, so the two paths fill the same cell. Text " +
+      "columns and low-confidence answers stay on the generative model; a caller " +
+      "that gates on confidence reads `SYSTEM_ONE_ACCEPT_CONFIDENCE` here rather " +
+      "than choosing its own floor.",
+    enforcement: { kind: "none" },
+  },
+  {
     id: "pdf-rendering",
     capability: "Rendering an uploaded file to a PDF derivative",
     owner: ["apps/api/src/lib/files/gotenberg.ts"],
