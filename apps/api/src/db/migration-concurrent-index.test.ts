@@ -1650,3 +1650,146 @@ SELECT 1;`;
     expect(await collectUnsafeTypeChanges()).toEqual([]);
   });
 });
+
+/**
+ * A migration that splits the migrator's transaction commits everything
+ * before its `COMMIT` ahead of the migration row. A failure after that point
+ * replays the file from the top, so every statement before the split has to
+ * be one a second run survives.
+ */
+const REPLAY_SAFE_BEFORE_SPLIT: readonly RegExp[] = [
+  /^SET\b/iu,
+  /^SELECT\s+set_config\s*\(/iu,
+  // Procedural blocks are approved one by one above, by fingerprint.
+  /^DO\b/iu,
+  /^ALTER\s+TABLE\s+\S+\s+ALTER\s+(?:COLUMN\s+)?\S+\s+(?:(?:SET|DROP)\s+(?:DEFAULT|NOT\s+NULL)|SET\s+DATA\s+TYPE|TYPE)\b/iu,
+  /^ALTER\s+TABLE\s+\S+\s+VALIDATE\s+CONSTRAINT\b/iu,
+  /^(?:GRANT|REVOKE)\b/iu,
+  /^COMMENT\s+ON\b/iu,
+  /^CREATE\s+OR\s+REPLACE\b/iu,
+  /^CREATE\s+(?:UNIQUE\s+)?INDEX\s+(?:CONCURRENTLY\s+)?IF\s+NOT\s+EXISTS\b/iu,
+  /^CREATE\s+(?:TABLE|SEQUENCE|EXTENSION|SCHEMA)\s+IF\s+NOT\s+EXISTS\b/iu,
+  /^DROP\s+[A-Z ]+?\s+IF\s+EXISTS\b/iu,
+  /^ALTER\s+TABLE\s+\S+\s+(?:ENABLE|FORCE)\s+ROW\s+LEVEL\s+SECURITY$/iu,
+  /^ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?\S+\s+DROP\s+(?:CONSTRAINT|COLUMN)\s+IF\s+EXISTS\b/iu,
+];
+const ADD_COLUMN_CLAUSE = /\bADD\s+COLUMN\s+(?<guard>IF\s+NOT\s+EXISTS\s+)?/giu;
+const ADD_CONSTRAINT =
+  /^ALTER\s+TABLE\s+(?<table>\S+)\s+ADD\s+CONSTRAINT\s+(?<name>"[^"]+"|\S+)/iu;
+const CREATE_NAMED_ON_TABLE =
+  /^CREATE\s+(?<kind>POLICY|TRIGGER)\s+(?<name>"[^"]+"|\S+)[\s\S]*?\bON\s+(?<table>"[^"]+"|\S+)/iu;
+
+const isReplaySafeBeforeSplit = (
+  statement: string,
+  earlier: readonly string[],
+): boolean => {
+  if (REPLAY_SAFE_BEFORE_SPLIT.some((pattern) => pattern.test(statement))) {
+    return true;
+  }
+  const columnAdds = [...statement.matchAll(ADD_COLUMN_CLAUSE)];
+  if (/^ALTER\s+TABLE\b/iu.test(statement) && columnAdds.length > 0) {
+    return columnAdds.every((match) => match.groups?.["guard"] !== undefined);
+  }
+  const constraint = ADD_CONSTRAINT.exec(statement)?.groups;
+  if (constraint !== undefined) {
+    const name = constraint["name"] ?? "";
+    return earlier.some(
+      (previous) =>
+        /\bDROP\s+CONSTRAINT\s+IF\s+EXISTS\b/iu.test(previous) &&
+        previous.includes(name),
+    );
+  }
+  const named = CREATE_NAMED_ON_TABLE.exec(statement)?.groups;
+  if (named !== undefined) {
+    const kind = named["kind"] ?? "";
+    const name = named["name"] ?? "";
+    return earlier.some(
+      (previous) =>
+        new RegExp(`^DROP\\s+${kind}\\s+IF\\s+EXISTS\\b`, "iu").test(
+          previous,
+        ) && previous.includes(name),
+    );
+  }
+  return false;
+};
+
+/**
+ * Earlier migrations are applied history and cannot be rewritten, so the rule
+ * binds from the day it was written. A migration directory sorts by its
+ * timestamp, which makes the boundary a plain string comparison.
+ */
+const REPLAY_SAFE_SPLIT_FROM = "20260919";
+
+const collectUnreplayableSplitPrefixes = async (): Promise<string[]> => {
+  const violations: string[] = [];
+  for await (const relativePath of new Bun.Glob("20*/migration.sql").scan({
+    cwd: MIGRATIONS_DIR,
+  })) {
+    if (relativePath < REPLAY_SAFE_SPLIT_FROM) {
+      continue;
+    }
+    const statements = splitSqlStatements(
+      await Bun.file(nodePath.join(MIGRATIONS_DIR, relativePath)).text(),
+    );
+    const split = statements.findIndex((statement) =>
+      /^COMMIT$/iu.test(statement),
+    );
+    if (split === -1) {
+      continue;
+    }
+    const prefix = statements.slice(0, split);
+    for (const [index, statement] of prefix.entries()) {
+      if (!isReplaySafeBeforeSplit(statement, prefix.slice(0, index))) {
+        violations.push(
+          `${relativePath}: ${statement.replaceAll(/\s+/gu, " ").slice(0, 90)}`,
+        );
+      }
+    }
+  }
+  return violations.toSorted();
+};
+
+describe("split-transaction migrations", () => {
+  test("every statement before the split survives a replay", async () => {
+    expect(await collectUnreplayableSplitPrefixes()).toEqual([]);
+  });
+
+  test("tells a replayable statement from one a second run would fail on", () => {
+    const cases: readonly (readonly [string, readonly string[], boolean])[] = [
+      [`ALTER TABLE "t" ADD COLUMN "c" integer`, [], false],
+      [`ALTER TABLE "t" ADD COLUMN IF NOT EXISTS "c" integer`, [], true],
+      [
+        `ALTER TABLE "t" ADD COLUMN IF NOT EXISTS "a" integer, ADD COLUMN "b" integer`,
+        [],
+        false,
+      ],
+      [`ALTER TABLE "t" ADD CONSTRAINT "k" CHECK (true) NOT VALID`, [], false],
+      [
+        `ALTER TABLE "t" ADD CONSTRAINT "k" CHECK (true) NOT VALID`,
+        [`ALTER TABLE "t" DROP CONSTRAINT IF EXISTS "k"`],
+        true,
+      ],
+      [
+        `ALTER TABLE "t" ADD CONSTRAINT "k" CHECK (true) NOT VALID`,
+        [`ALTER TABLE "t" DROP CONSTRAINT IF EXISTS "other"`],
+        false,
+      ],
+      [`CREATE POLICY "p" ON "t" FOR SELECT TO r USING (true)`, [], false],
+      [
+        `CREATE POLICY "p" ON "t" FOR SELECT TO r USING (true)`,
+        [`DROP POLICY IF EXISTS "p" ON "t"`],
+        true,
+      ],
+      [`CREATE TABLE "t" ("id" uuid)`, [], false],
+      [`CREATE TABLE IF NOT EXISTS "t" ("id" uuid)`, [], true],
+      [`GRANT SELECT ("c") ON TABLE "t" TO r`, [], true],
+      [`UPDATE "t" SET "c" = 1`, [], false],
+    ];
+    for (const [statement, earlier, expected] of cases) {
+      expect({
+        statement,
+        replaySafe: isReplaySafeBeforeSplit(statement, earlier),
+      }).toEqual({ statement, replaySafe: expected });
+    }
+  });
+});
