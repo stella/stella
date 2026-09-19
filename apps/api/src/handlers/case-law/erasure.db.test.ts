@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
@@ -112,7 +113,10 @@ test("redaction queues the erase the projection worker applies", async () => {
     scopedDb,
   });
 
-  expect(outcome).toEqual({ type: "redacted", erasure: "deleted" });
+  expect(Result.isOk(outcome) && outcome.value).toEqual({
+    type: "redacted",
+    erasure: "deleted",
+  });
   expect(
     await db
       .select({
@@ -184,7 +188,10 @@ test("redaction of packed payloads tombstones every address it cannot delete", a
 
   // The pack carries other decisions, so nothing is deleted; the erasure is
   // the refusal to serve those addresses again.
-  expect(outcome).toEqual({ type: "redacted", erasure: "tombstoned" });
+  expect(Result.isOk(outcome) && outcome.value).toEqual({
+    type: "redacted",
+    erasure: "tombstoned",
+  });
   expect(deleted).toEqual([]);
   expect(
     (

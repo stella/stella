@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 
 /**
  * GDPR redaction / takedown for a single case-law decision: strips
@@ -28,12 +28,20 @@ if (decisionIdArg === undefined || decisionIdArg.length === 0) {
 await refreshS3();
 await refreshCorpusS3();
 
-const outcome = await redactCaseLawDecision({
+const redaction = await redactCaseLawDecision({
   decisionId: toSafeId<"caseLawDecision">(decisionIdArg),
   scopedDb: ingestionDb,
 });
 
 const report = ((): { exitCode: 0 | 1; message: string } => {
+  if (Result.isError(redaction)) {
+    // The fence failed, so nothing was written and nothing was erased.
+    return {
+      exitCode: 1,
+      message: `Decision ${decisionIdArg} was not redacted; run it again: ${redaction.error.message}`,
+    };
+  }
+  const outcome = redaction.value;
   switch (outcome.type) {
     case "redacted":
       return {

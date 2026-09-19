@@ -9,6 +9,7 @@ import {
 } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
+import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import {
   cancelCaseLawCorpusUploadIntents,
   completeCaseLawCorpusUploadIntentCleanups,
@@ -255,13 +256,37 @@ const recordFailedRedactionAudit = async ({
   });
 };
 
+/** What the fencing transaction settled. */
+type RedactionFence =
+  | {
+      type: "fenced";
+      cancelledIntents: Awaited<
+        ReturnType<typeof cancelCaseLawCorpusUploadIntents>
+      >;
+      decision: Pick<
+        typeof caseLawDecisions.$inferSelect,
+        | "id"
+        | "textS3Key"
+        | "normalizedS3Key"
+        | "astS3Key"
+        | "sourceRawS3Key"
+        | "redactedAt"
+      >;
+    }
+  /** No such row, or none the projection knows: nothing to redact. */
+  | { type: "missing" }
+  /** The fence itself failed, which says nothing about the row. */
+  | { type: "lock-failed"; cause: unknown };
+
 export const redactCaseLawDecision = async ({
   decisionId,
   scopedDb,
   deleteCorpus = deleteCorpusDocument,
   deleteSourceRaw = deleteS3ObjectWithSignal,
-}: RedactInput): Promise<RedactCaseLawDecisionOutcome> => {
-  const fenced = await scopedDb(async (tx) => {
+}: RedactInput): Promise<
+  Result<RedactCaseLawDecisionOutcome, DatabaseError>
+> => {
+  const fenced = await scopedDb(async (tx): Promise<RedactionFence> => {
     const sourceLock = await Result.tryPromise({
       try: async () =>
         await lockActiveCorpusProjectionSourceTx(tx, {
@@ -271,12 +296,14 @@ export const redactCaseLawDecision = async ({
       catch: (cause) => cause,
     });
     if (Result.isError(sourceLock)) {
-      if (
-        sourceLock.error instanceof CorpusIndexProjectionSubjectMissingError
-      ) {
-        return null;
-      }
-      throw sourceLock.error;
+      // A subject the projection does not know is the row not being there,
+      // which is an answer. Anything else — a lock timeout, a dropped
+      // connection — says nothing about the row, so it is carried back
+      // instead of being recorded as an erasure that never happened.
+      return sourceLock.error instanceof
+        CorpusIndexProjectionSubjectMissingError
+        ? { type: "missing" }
+        : { type: "lock-failed", cause: sourceLock.error };
     }
     const decision = (
       await tx
@@ -293,8 +320,8 @@ export const redactCaseLawDecision = async ({
         .for("update")
         .limit(1)
     ).at(0);
-    if (!decision) {
-      return null;
+    if (decision === undefined) {
+      return { type: "missing" };
     }
 
     // audit: skip — GDPR redaction; recorded in case_law_index_jobs below
@@ -319,11 +346,24 @@ export const redactCaseLawDecision = async ({
         subject: { family: "case_law", entityId: decisionId },
       });
     }
-    return { cancelledIntents, decision };
+    return { type: "fenced", cancelledIntents, decision };
   });
 
-  if (!fenced) {
-    return { type: "not-found" };
+  switch (fenced.type) {
+    case "fenced":
+      break;
+    case "missing":
+      return Result.ok({ type: "not-found" });
+    case "lock-failed":
+      return Result.err(
+        new DatabaseError({
+          message: `Case-law redaction could not fence ${decisionId}`,
+          cause: fenced.cause,
+        }),
+      );
+    default:
+      fenced satisfies never;
+      return panic(`Unhandled fence: ${String(fenced)}`);
   }
   const { cancelledIntents, decision } = fenced;
 
@@ -444,10 +484,16 @@ export const redactCaseLawDecision = async ({
 
   if (corpusErasure.type === "incomplete") {
     // The failed audit row recorded above is the record of this erasure.
-    return { type: "corpus-objects-remain", error: corpusErasure.error };
+    return Result.ok({
+      type: "corpus-objects-remain",
+      error: corpusErasure.error,
+    });
   }
   if (rawErasure.type === "incomplete") {
-    return { type: "corpus-objects-remain", error: rawErasure.error };
+    return Result.ok({
+      type: "corpus-objects-remain",
+      error: rawErasure.error,
+    });
   }
 
   const detail =
@@ -466,5 +512,5 @@ export const redactCaseLawDecision = async ({
     });
   });
 
-  return { type: "redacted", erasure: corpusErasure.type };
+  return Result.ok({ type: "redacted", erasure: corpusErasure.type });
 };
