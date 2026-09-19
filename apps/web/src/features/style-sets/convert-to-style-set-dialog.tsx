@@ -21,6 +21,7 @@ import {
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
+import { openEntityInInspector } from "@/components/chat/entity-open";
 import { styleSetsOptions } from "@/features/style-sets/style-set-queries";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -133,6 +134,9 @@ const ConvertToStyleSetDialogBody = ({
       params: { workspaceId, viewId },
       search: { entity: result.value.entityId, field: result.value.fieldId },
     });
+    // The restyled copy now fills the main view; its source goes beside it so
+    // the two can be read against each other, rather than the copy's metadata.
+    await openEntityInInspector(entityId, "", workspaceId);
   };
 
   const handleConvert = () => {
