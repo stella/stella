@@ -28,6 +28,13 @@ import { withTimeout } from "@/api/lib/with-timeout";
  * whole; nothing else splits a batch, so the number of packs a batch writes
  * is a function of its bytes alone.
  *
+ * The split falls between documents, never inside one. A document's upload
+ * reservation records the one pack its payloads went into, so a document
+ * whose members straddled two packs would leave the second pack owned by
+ * nothing: a settlement that failed could not reclaim it, and its bytes would
+ * stay in storage with no record naming them. A document heavier than the
+ * ceiling therefore gets an oversized pack of its own rather than a split.
+ *
  * The key of each pack is derived from its members, so a batch replayed after
  * an ambiguous failure addresses the same object: the writer HEADs it and
  * skips the PUT when the store already holds it.
@@ -43,6 +50,15 @@ export type CorpusPackMemberInput = {
   contentHash: string;
   bytes: Uint8Array;
 };
+
+/**
+ * One document's members of this batch, planned as a unit.
+ *
+ * The planner never splits a document across packs, so the caller states
+ * which members belong together rather than handing over a flat list whose
+ * boundaries only its own ordering would carry.
+ */
+export type CorpusPackDocument = readonly CorpusPackMemberInput[];
 
 /** A document's members of this batch, by kind. */
 export type PackedMemberLocations = Partial<
@@ -62,7 +78,8 @@ export type PlannedCorpusPacks = WriteCorpusPackResult & {
 
 type PlanCorpusPacksOptions = {
   jurisdiction: string;
-  members: readonly CorpusPackMemberInput[];
+  /** The batch's documents, each one the members that travel together. */
+  documents: readonly CorpusPackDocument[];
 };
 
 type PutCorpusPacksOptions = {
@@ -91,26 +108,46 @@ const putPack = async (
 const FOOTER_BYTES_PER_MEMBER = 320;
 
 /**
- * Split a batch's members into packs no larger than the ceiling, counting the
- * footer each member will carry: the writer buffers the whole object, so the
- * bound has to cover what it will hold, not only the payload bytes. A member
- * that exceeds the ceiling on its own still gets a pack — it is under the
- * per-member transfer ceiling, which is what a reader has to move.
+ * What one member costs a pack's ceiling. A caller that decides which members
+ * travel together asks this rather than counting payload bytes, so its bound
+ * and the writer's are the same bound.
+ */
+export const corpusPackMemberWeight = (bytes: Uint8Array): number =>
+  bytes.byteLength + FOOTER_BYTES_PER_MEMBER;
+
+/** What a whole document costs the ceiling, footer entries included. */
+const documentWeight = (document: CorpusPackDocument): number =>
+  document.reduce(
+    (total, { bytes }) => total + corpusPackMemberWeight(bytes),
+    0,
+  );
+
+/**
+ * Split a batch's documents into packs no larger than the ceiling, counting
+ * the footer each member will carry: the writer buffers the whole object, so
+ * the bound has to cover what it will hold, not only the payload bytes. A
+ * document that exceeds the ceiling on its own still gets one pack — its
+ * members are each under the per-member transfer ceiling, which is what a
+ * reader has to move, and splitting it would put its payloads in a pack its
+ * reservation does not name.
  */
 const packGroups = (
-  members: readonly CorpusPackMemberInput[],
+  documents: readonly CorpusPackDocument[],
 ): CorpusPackMemberInput[][] => {
   const groups: CorpusPackMemberInput[][] = [];
   let current: CorpusPackMemberInput[] = [];
   let currentBytes = 0;
-  for (const member of members) {
-    const weight = member.bytes.byteLength + FOOTER_BYTES_PER_MEMBER;
+  for (const document of documents) {
+    if (document.length === 0) {
+      continue;
+    }
+    const weight = documentWeight(document);
     if (current.length > 0 && currentBytes + weight > CORPUS_PACK_MAX_BYTES) {
       groups.push(current);
       current = [];
       currentBytes = 0;
     }
-    current.push(member);
+    current.push(...document);
     currentBytes += weight;
   }
   if (current.length > 0) {
@@ -120,9 +157,11 @@ const packGroups = (
 };
 
 const oversizedMember = (
-  members: readonly CorpusPackMemberInput[],
+  documents: readonly CorpusPackDocument[],
 ): CorpusPackMemberInput | undefined =>
-  members.find(({ bytes }) => bytes.byteLength > CORPUS_TRANSFER_MAX_BYTES);
+  documents
+    .flat()
+    .find(({ bytes }) => bytes.byteLength > CORPUS_TRANSFER_MAX_BYTES);
 
 /**
  * Encode a batch's members and give every one of them its address.
@@ -133,14 +172,14 @@ const oversizedMember = (
  */
 export const planCorpusPacks = async ({
   jurisdiction,
-  members,
+  documents,
 }: PlanCorpusPacksOptions): Promise<
   Result<PlannedCorpusPacks, CorpusPackError>
 > => {
-  if (members.length === 0) {
+  if (documents.every(({ length }) => length === 0)) {
     return Result.ok({ packs: [], packKeys: [], locations: new Map() });
   }
-  const oversized = oversizedMember(members);
+  const oversized = oversizedMember(documents);
   if (oversized !== undefined) {
     return Result.err(
       new CorpusPackError({
@@ -150,7 +189,7 @@ export const planCorpusPacks = async ({
   }
   const locations = new Map<string, PackedMemberLocations>();
   const packs: EncodedPack[] = [];
-  for (const group of packGroups(members)) {
+  for (const group of packGroups(documents)) {
     const pack = await encodePack({ jurisdiction, members: group });
     packs.push(pack);
     for (const { member, location } of pack.entries) {
@@ -203,11 +242,3 @@ export const putCorpusPacks = async ({
   }
   return Result.ok(undefined);
 };
-
-/**
- * What one member costs a pack's ceiling. A caller that decides which members
- * travel together asks this rather than counting payload bytes, so its bound
- * and the writer's are the same bound.
- */
-export const corpusPackMemberWeight = (bytes: Uint8Array): number =>
-  bytes.byteLength + FOOTER_BYTES_PER_MEMBER;

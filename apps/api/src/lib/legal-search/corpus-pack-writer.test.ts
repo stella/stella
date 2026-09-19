@@ -13,32 +13,41 @@ import {
   planCorpusPacks,
   putCorpusPacks,
 } from "@/api/lib/legal-search/corpus-pack-writer";
-import type { CorpusPackMemberInput } from "@/api/lib/legal-search/corpus-pack-writer";
+import type {
+  CorpusPackDocument,
+  CorpusPackMemberInput,
+} from "@/api/lib/legal-search/corpus-pack-writer";
 
 const JURISDICTION = "CZE";
 const FIRST_DOCUMENT = "0d2f4a5e-9c1b-4c62-8b1a-3f6f2f8f9e10";
 const SECOND_DOCUMENT = "3a1c7b92-5d4e-4f08-9c62-1b8e5d2a4c77";
 
-const members: CorpusPackMemberInput[] = [
-  {
-    documentId: FIRST_DOCUMENT,
-    kind: "text",
-    contentHash: "a".repeat(64),
-    bytes: zstdCompress("Rozsudek jménem republiky."),
-  },
-  {
-    documentId: FIRST_DOCUMENT,
-    kind: "sections",
-    contentHash: "a".repeat(64),
-    bytes: zstdCompress('[{"index":0,"type":"ruling"}]'),
-  },
-  {
-    documentId: SECOND_DOCUMENT,
-    kind: "text",
-    contentHash: "b".repeat(64),
-    bytes: zstdCompress("Usnesení Nejvyššího soudu."),
-  },
+const documents: CorpusPackDocument[] = [
+  [
+    {
+      documentId: FIRST_DOCUMENT,
+      kind: "text",
+      contentHash: "a".repeat(64),
+      bytes: zstdCompress("Rozsudek jménem republiky."),
+    },
+    {
+      documentId: FIRST_DOCUMENT,
+      kind: "sections",
+      contentHash: "a".repeat(64),
+      bytes: zstdCompress('[{"index":0,"type":"ruling"}]'),
+    },
+  ],
+  [
+    {
+      documentId: SECOND_DOCUMENT,
+      kind: "text",
+      contentHash: "b".repeat(64),
+      bytes: zstdCompress("Usnesení Nejvyššího soudu."),
+    },
+  ],
 ];
+
+const members: CorpusPackMemberInput[] = documents.flat();
 
 type RecordedPut = { key: string; bytes: Uint8Array };
 
@@ -64,7 +73,7 @@ describe("planning a batch's packs", () => {
   test("every member has an address before anything is transferred", async () => {
     const planned = await planCorpusPacks({
       jurisdiction: JURISDICTION,
-      members,
+      documents,
     });
     if (Result.isError(planned)) {
       throw planned.error;
@@ -112,7 +121,7 @@ describe("planning a batch's packs", () => {
   test("a batch with no members plans no pack", async () => {
     const planned = await planCorpusPacks({
       jurisdiction: JURISDICTION,
-      members: [],
+      documents: [],
     });
     if (Result.isError(planned)) {
       throw planned.error;
@@ -130,7 +139,7 @@ describe("transferring a batch's packs", () => {
 
     const planned = await planCorpusPacks({
       jurisdiction: JURISDICTION,
-      members,
+      documents,
     });
     if (Result.isError(planned)) {
       throw planned.error;
@@ -188,14 +197,14 @@ describe("transferring a batch's packs", () => {
     // an ambiguous failure addresses the object the first attempt landed.
     const first = await planCorpusPacks({
       jurisdiction: JURISDICTION,
-      members,
+      documents,
     });
     if (Result.isError(first)) {
       throw first.error;
     }
     const replay = await planCorpusPacks({
       jurisdiction: JURISDICTION,
-      members,
+      documents,
     });
     if (Result.isError(replay)) {
       throw replay.error;
@@ -217,7 +226,7 @@ describe("transferring a batch's packs", () => {
   test("a failed transfer is reported as a pack error, not thrown", async () => {
     const planned = await planCorpusPacks({
       jurisdiction: JURISDICTION,
-      members,
+      documents,
     });
     if (Result.isError(planned)) {
       throw planned.error;
@@ -248,9 +257,9 @@ describe("the ceiling counts what the writer will buffer", () => {
   test("a member that fills the ceiling on its own travels alone", async () => {
     const planned = await planCorpusPacks({
       jurisdiction: JURISDICTION,
-      members: [
-        large(FIRST_DOCUMENT, CORPUS_PACK_MAX_BYTES - 1024),
-        large(SECOND_DOCUMENT, 1024),
+      documents: [
+        [large(FIRST_DOCUMENT, CORPUS_PACK_MAX_BYTES - 1024)],
+        [large(SECOND_DOCUMENT, 1024)],
       ],
     });
     if (Result.isError(planned)) {
@@ -260,6 +269,45 @@ describe("the ceiling counts what the writer will buffer", () => {
     // Two packs, not one 64 MiB object with a second member appended: the
     // writer holds a whole pack in memory before it transfers it.
     expect(planned.value.packKeys).toHaveLength(2);
+  });
+
+  test("a document heavier than the ceiling stays in one pack", async () => {
+    // Every member is under the per-member transfer ceiling, so the document
+    // is storable; together they pass the pack ceiling. Splitting them would
+    // put payloads in a pack the decision's one upload reservation does not
+    // name, and a failed settlement could never reclaim it.
+    const half = Math.floor(CORPUS_PACK_MAX_BYTES / 2);
+    const oversized = [
+      large(FIRST_DOCUMENT, half),
+      { ...large(FIRST_DOCUMENT, half), kind: "sections" as const },
+      { ...large(FIRST_DOCUMENT, half), kind: "ast" as const },
+    ];
+    expect(
+      oversized.reduce(
+        (total, { bytes }) => total + corpusPackMemberWeight(bytes),
+        0,
+      ),
+    ).toBeGreaterThan(CORPUS_PACK_MAX_BYTES);
+
+    const planned = await planCorpusPacks({
+      jurisdiction: JURISDICTION,
+      documents: [oversized],
+    });
+    if (Result.isError(planned)) {
+      throw planned.error;
+    }
+
+    expect(planned.value.packKeys).toHaveLength(1);
+    const located = planned.value.locations.get(FIRST_DOCUMENT) ?? {};
+    expect(Object.keys(located).toSorted()).toEqual([
+      "ast",
+      "sections",
+      "text",
+    ]);
+    // One pack key across every kind is what the reservation records.
+    expect(
+      new Set(Object.values(located).map(({ packKey }) => packKey)).size,
+    ).toBe(1);
   });
 
   test("the footer a member will carry counts against the ceiling", async () => {
@@ -284,7 +332,7 @@ describe("the ceiling counts what the writer will buffer", () => {
 
     const planned = await planCorpusPacks({
       jurisdiction: JURISDICTION,
-      members: quarters,
+      documents: quarters.map((member) => [member]),
     });
     if (Result.isError(planned)) {
       throw planned.error;

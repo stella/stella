@@ -176,12 +176,32 @@ const packedWrite = (
 });
 
 /**
+ * The one pack a decision's payloads went into.
+ *
+ * A reservation records a single pack key, so a decision spread over two
+ * packs would leave the second owned by nothing. The planner keeps a
+ * document whole; this reads that back rather than trusting it, because the
+ * alternative to a crash here is bytes in storage no cleanup can claim.
+ */
+const solePackKey = (locations: PackedMemberLocations): string => {
+  const keys = new Set(Object.values(locations).map(({ packKey }) => packKey));
+  return keys.size === 1
+    ? ([...keys].at(0) ?? panic("Packed member lost its pack"))
+    : panic(
+        `Packed members of one decision span ${keys.size} packs: ${[...keys].join(", ")}`,
+      );
+};
+
+/**
  * The decisions that travel in one pack.
  *
  * A decision's three payloads stay together: they settle as one row, and an
  * address inside a pack the row does not otherwise reach into would leave the
- * reservation naming two packs. The bound counts what the writer will buffer,
- * footer included.
+ * reservation naming two packs. The writer holds to that too, so a decision
+ * heavier than the ceiling is alone in its group and lands in one oversized
+ * pack rather than being split. The bound counts what the writer will buffer,
+ * footer included, so a group is one pack and a failed transfer costs the
+ * decisions of one pack.
  */
 const packedGroups = (planned: readonly PlannedEntry[]): PlannedEntry[][] => {
   const groups: PlannedEntry[][] = [];
@@ -349,7 +369,7 @@ export const openCorpusPackBatch = ({
       group.at(0)?.entry.jurisdiction ?? panic("Empty pack group");
     const packed = await planCorpusPacks({
       jurisdiction,
-      members: group.flatMap(({ members }) => members),
+      documents: group.map(({ members }) => members),
     });
     if (Result.isError(packed)) {
       failGroup(group, packed.error);
@@ -361,8 +381,7 @@ export const openCorpusPackBatch = ({
         return panic("Planned members lost their addresses");
       }
       member.written = packedWrite(locations, member.reserved.contentHash);
-      member.packKey =
-        locations.text?.packKey ?? panic("Packed member lost its pack");
+      member.packKey = solePackKey(locations);
     }
     const reserved = await reserveCaseLawCorpusUploadIntents({
       reservations: reservationsFor(group),
