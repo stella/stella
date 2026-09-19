@@ -894,6 +894,20 @@ jobs:
           bun test ./.oxlint-plugins/__tests__/docs-source-policy.test.ts
           bun run check:docs-sources
 
+      - name: Instruction references
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        # AGENTS.md, CLAUDE.md and .claude/skills/*/SKILL.md name repository
+        # paths, package scripts, module exports and oxlint rule ids that
+        # nothing compiles, so a rename leaves the instruction quietly wrong and
+        # every agent reading it is misled. This guard resolves each named
+        # reference against the tree. Intentional examples live in
+        # scripts/instruction-references-allowlist.json, and an entry that
+        # suppresses nothing fails as stale. The --self-test run first proves
+        # each matcher still fires, so a broken guard cannot pass silently.
+        run: |
+          bun scripts/check-instruction-references.ts --self-test
+          bun run check:instruction-references
+
       - name: Capability catalog drift guard
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         # The committed capability catalog (every `tool`/`covered` safe handler,

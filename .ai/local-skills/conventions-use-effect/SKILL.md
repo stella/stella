@@ -258,7 +258,8 @@ error.
 
 ## Scope
 
-Enforced in `apps/web/src`. `packages/folio` is intentionally exempt: it is
-upstream-synced and is an inherently imperative editor where most effects are
-legitimate external-system sync, so the rule would generate suppression noise
-and fight every upstream merge for little benefit.
+Enforced in `apps/web/src`. The folio editor ships as the external
+`@stll/folio-react` dependency and stays outside that scope: it is an inherently
+imperative editor where most effects are legitimate external-system sync, so the
+rule would generate suppression noise and fight every upstream merge for little
+benefit.
