@@ -25,6 +25,7 @@ import {
   readCorpusText,
 } from "@/api/lib/legal-search/corpus-storage";
 import { prefetchCorpusTombstones } from "@/api/lib/legal-search/corpus-tombstones";
+import type { CorpusTombstoneReader } from "@/api/lib/legal-search/corpus-tombstones";
 import type { EmptyAst } from "@/api/lib/legal-search/document-types";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 
@@ -114,12 +115,13 @@ export type CorpusPayloadSource = {
  */
 const hydratingPayloadSource = async (
   pointers: readonly CorpusPassagePointer[],
+  read: CorpusTombstoneReader,
 ): Promise<CorpusPayloadSource> => {
   const readTombstones = await prefetchCorpusTombstones(
     pointers.flatMap(({ textS3Key, astS3Key }) =>
       [textS3Key, astS3Key].filter((key): key is string => key !== null),
     ),
-    readCorpusTombstones,
+    read,
   );
   return {
     readText: async (storedKey) =>
@@ -137,6 +139,8 @@ type ReadCorpusPassagesOptions = {
   pointers: readonly CorpusPassagePointer[];
   source?: CorpusPayloadSource;
   concurrency?: number;
+  /** Test seam; production asks this deployment's denial table. */
+  readTombstones?: CorpusTombstoneReader;
 };
 
 /** A decision's payload, as the chunker takes it. */
@@ -169,9 +173,8 @@ export const readCorpusPassages = async ({
   pointers,
   source,
   concurrency = PAYLOAD_READ_CONCURRENCY,
+  readTombstones = readCorpusTombstones,
 }: ReadCorpusPassagesOptions): Promise<CorpusPassageResult[]> => {
-  // One denial lookup for the whole request, rather than one per member.
-  const payloadSource = source ?? (await hydratingPayloadSource(pointers));
   const pointerById = new Map(
     pointers.map((pointer) => [pointer.documentId, pointer]),
   );
@@ -182,6 +185,19 @@ export const readCorpusPassages = async ({
         .map(({ documentId }) => documentId),
     ),
   ];
+  // One denial lookup for the whole request, rather than one per member, and
+  // over the payloads this request will actually read. A request that reads
+  // none — no hits, or only hits that carry no anchor — asks nothing, so it
+  // cannot fail on a query it has no use for.
+  const payloadSource =
+    source ??
+    (await hydratingPayloadSource(
+      wanted.flatMap((documentId) => {
+        const pointer = pointerById.get(documentId);
+        return pointer === undefined ? [] : [pointer];
+      }),
+      readTombstones,
+    ));
   const loaded = await mapWithConcurrency({
     items: wanted,
     limit: concurrency,

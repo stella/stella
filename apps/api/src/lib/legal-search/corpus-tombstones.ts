@@ -104,7 +104,10 @@ export const prefetchCorpusTombstones = async (
   read: CorpusTombstoneReader,
 ): Promise<CorpusTombstoneReader> => {
   const primed = new Set(packedAddresses(locations));
-  const denied = await read([...primed]);
+  // A prime over no packed address has no question to ask, so it asks none:
+  // a caller with nothing to read must not depend on the table being up.
+  const denied =
+    primed.size === 0 ? new Set<string>() : await read([...primed]);
   return async (asked) => {
     const unprimed = packedAddresses(asked).filter(
       (value) => !primed.has(value),
