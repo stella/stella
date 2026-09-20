@@ -993,6 +993,7 @@ const CONTRACT_CORPUS = {
                     sourceId: uid(36),
                     issue: "Confidentiality term",
                     severity: "high",
+                    purpose: "Bounds how long the recipient stays bound",
                     guidance: "Cap at 3 years",
                     enabled: true,
                     ask: {
@@ -1020,6 +1021,28 @@ const CONTRACT_CORPUS = {
                           rules: [{ id: uid(39), text: "Indefinite" }],
                         },
                       },
+                    },
+                  },
+                  {
+                    mode: "graded",
+                    sourceId: uid(99),
+                    issue: "Liability cap",
+                    severity: "high",
+                    enabled: true,
+                    ask: { mode: "auto" },
+                    standard: {
+                      source: "reference",
+                      termKind: "parameter",
+                      passages: [
+                        {
+                          id: uid(100),
+                          workspaceId: uid(101),
+                          entityId: uid(102),
+                          fileFieldId: uid(103),
+                          entityVersionId: uid(104),
+                          blockId: "block-1",
+                        },
+                      ],
                     },
                   },
                 ],

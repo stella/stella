@@ -938,6 +938,7 @@ const playbookStandardProjection = v.variant("source", [
   projectionBranch(
     v.strictObject({
       source: v.literal("reference"),
+      termKind: v.string(),
       passages: v.array(
         v.strictObject({
           id: strippedField(),
@@ -1011,6 +1012,7 @@ const playbookPositionProjection = v.variant("mode", [
       standard: playbookStandardProjection,
       check: v.optional(unenumeratedJson()),
       ask: playbookAskConfigProjection,
+      purpose: v.optional(v.string()),
       guidance: v.optional(v.string()),
       negotiation: v.optional(
         v.strictObject({

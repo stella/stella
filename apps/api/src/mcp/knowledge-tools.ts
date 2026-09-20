@@ -19,6 +19,7 @@ import {
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
+  type AssertNoExtraFields,
   DELETED_TRUE_PROJECTION,
   type LIST_CLAUSES_DETAIL_PROJECTION,
   type LIST_CLAUSES_LIST_PROJECTION,
@@ -1351,11 +1352,16 @@ const readPlaybookDetail = async ({
     { playbook },
   );
 
+  // `playbook` is forwarded verbatim, so a bare `satisfies` gets no
+  // excess-property check below the top level: a field added to
+  // `positionSchema` would typecheck here and fail the strict parse in chat.
+  type ListPlaybooksDetailPayload = AssertNoExtraFields<
+    { playbook: typeof playbook },
+    v.InferInput<typeof LIST_PLAYBOOKS_DETAIL_PROJECTION>
+  >;
   return {
     egress: "structured",
-    payload: { playbook } satisfies v.InferInput<
-      typeof LIST_PLAYBOOKS_DETAIL_PROJECTION
-    >,
+    payload: { playbook } satisfies ListPlaybooksDetailPayload,
     textFields,
   } as const;
 };
