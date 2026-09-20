@@ -98,7 +98,7 @@
     "setup:dev:api": "bun run dev:api",
     "setup:dev:desktop": "bun run dev:desktop",
     "setup:dev:web": "bun run dev:web",
-    "setup:mcp": "bun install --cwd .claude/mcp",
+    "setup:mcp": "bun install --cwd .claude/mcp --frozen-lockfile",
     "setup:worktree": "bash scripts/setup-worktree.sh",
     "hooks:install": "lefthook install",
     "knip": "knip-bun",

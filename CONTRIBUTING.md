@@ -11,7 +11,7 @@ and coordinate development.
 
 1. Fork the repository and clone your fork.
 2. Install dependencies: `bun install`
-3. (Optional) Set up Claude Code docs server: `bun run setup:mcp`
+3. (Optional) Set up the documentation MCP server: `bun run setup:mcp`
 4. Start the dev environment: `bun run dev`
 
 `bun run dev` now prepares the local stack for the current checkout,
