@@ -308,6 +308,25 @@ const lastInvocationArgs = async (page: Page, command: string) =>
     return invocation.args;
   }, command);
 
+/**
+ * Resolves once a tooltip popup is on screen, or once the open delay has
+ * passed without one. Tooltips open on a timer, so a missing popup is only
+ * conclusive after that window.
+ */
+const waitForTooltip = async (page: Page) =>
+  page.evaluate(async () => {
+    const deadline = performance.now() + 800;
+    while (performance.now() < deadline) {
+      if (document.querySelector('[data-slot="tooltip-popup"]')) {
+        return true;
+      }
+      await new Promise((resolve) => {
+        setTimeout(resolve, 25);
+      });
+    }
+    return false;
+  });
+
 const DIRECTIONS = [
   {
     groupKey: "ArrowRight",
@@ -1056,15 +1075,20 @@ test("Escape closes the active overlay before hiding the clipboard", async ({
   await page.keyboard.press("Escape");
   await expect(menuSetting).toBeHidden();
   expect(await invocationCount(page, "clipboard_hide")).toBe(1);
-  // Closing the menu returns focus to its trigger, which opens the trigger's
-  // tooltip: the next overlay in the chain, and the next Escape's owner.
-  const triggerTooltip = page.locator('[data-slot="tooltip-popup"]', {
-    hasText: "More options",
-  });
-  await expect(triggerTooltip).toBeVisible();
-  await page.keyboard.press("Escape");
+  // Closing the menu returns focus to its trigger. Browsers that count that
+  // focus as visible open the trigger's tooltip, which becomes the next
+  // overlay in the chain and owns the next Escape; browsers that do not open
+  // it go straight to hiding. Either way the window waits for an empty chain,
+  // so wait out the tooltip's open delay before deciding which case this is.
+  const triggerTooltip = page.locator('[data-slot="tooltip-popup"]');
+  const tooltipOpened = await waitForTooltip(page);
+  if (tooltipOpened) {
+    await expect(triggerTooltip).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(triggerTooltip).toBeHidden();
+    expect(await invocationCount(page, "clipboard_hide")).toBe(1);
+  }
   await expect(triggerTooltip).toBeHidden();
-  expect(await invocationCount(page, "clipboard_hide")).toBe(1);
   await page.keyboard.press("Escape");
   await expect
     .poll(async () => await invocationCount(page, "clipboard_hide"))
