@@ -909,6 +909,10 @@ test("inline clip naming uses the full footer width", async ({ page }) => {
 
   await expect(input).toBeFocused();
   await expect(card.locator("footer kbd")).toHaveCount(0);
+  // Enter and Shift+Enter finish the rename here, so the copy hints must go.
+  await expect(card.locator("[data-clipboard-format-shortcuts]")).toHaveCount(
+    0,
+  );
   expect((await input.boundingBox())?.width ?? 0).toBeGreaterThan(190);
 });
 

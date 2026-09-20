@@ -642,7 +642,9 @@ const ClipboardCard = ({
       >
         <div className="relative min-h-0 flex-1 self-stretch overflow-hidden p-5">
           {previewContent}
-          {active && item.type === "formattedText" ? (
+          {/* Renaming takes both keys for itself: Enter commits the name and
+              Shift+Enter is swallowed with it, so the hints would lie. */}
+          {active && !editingName && item.type === "formattedText" ? (
             <span
               className="bg-background/90 text-muted-foreground ring-foreground/8 text-3xs pointer-events-none absolute inset-x-3 bottom-3 flex flex-wrap items-center justify-center gap-x-1.5 gap-y-0.5 rounded-lg px-2 py-1 leading-4 shadow-sm ring-1 backdrop-blur-md"
               data-clipboard-format-shortcuts=""
