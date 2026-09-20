@@ -300,6 +300,16 @@ export const readWorkspaceState = async (
   };
 };
 
+/**
+ * The fixture document's chip in the grid. The inspector rail labels an open
+ * document's tab with the same file name, so an unscoped lookup by accessible
+ * name resolves to both the chip and the tab once the document is open.
+ */
+const fixtureFileButton = ({ document, page }: WorkspaceDriverContext) =>
+  page
+    .locator('[data-slot="workspace-grid-cell"]')
+    .getByRole("button", { exact: true, name: document.fileName });
+
 const addCandidate = (
   candidates: WeightedWorkspaceAction[],
   action: WorkspaceAction,
@@ -331,10 +341,7 @@ export const availableWorkspaceActions = async (
     }
   }
 
-  const fileButton = page.getByRole("button", {
-    exact: true,
-    name: context.document.fileName,
-  });
+  const fileButton = fixtureFileButton(context);
   if ((await visible(fileButton)) && !documentIsLoaded(context)) {
     addCandidate(candidates, {
       type: WORKSPACE_ACTION_TYPE.openFixtureDocument,
@@ -456,12 +463,7 @@ export const executeWorkspaceAction = async (
     }
     case WORKSPACE_ACTION_TYPE.openFixtureDocument: {
       const previousUrl = page.url();
-      await page
-        .getByRole("button", {
-          exact: true,
-          name: context.document.fileName,
-        })
-        .click();
+      await fixtureFileButton(context).click();
       await expect(
         page.getByRole("toolbar", { name: "AI message composer" }),
       ).toBeVisible({ timeout: 45_000 });
@@ -490,12 +492,7 @@ export const executeWorkspaceAction = async (
     }
     case WORKSPACE_ACTION_TYPE.setDocumentDialog:
       if (action.open) {
-        await page
-          .getByRole("button", {
-            exact: true,
-            name: context.document.fileName,
-          })
-          .click({ button: "right" });
+        await fixtureFileButton(context).click({ button: "right" });
         const translate = page.getByRole("menuitem", {
           exact: true,
           name: "Translate",
