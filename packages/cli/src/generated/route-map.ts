@@ -5094,7 +5094,7 @@ export const generatedRouteMap: RouteNode = {
                           enabled: {
                             type: "boolean",
                             description:
-                              "false skips the position in runs; defaults to true",
+                              "false skips the position in runs. Defaults to true; omit on a replace to keep the stored value",
                           },
                           ask: {
                             type: "object",
@@ -5154,7 +5154,7 @@ export const generatedRouteMap: RouteNode = {
                           enabled: {
                             type: "boolean",
                             description:
-                              "false skips the position in runs; defaults to true",
+                              "false skips the position in runs. Defaults to true; omit on a replace to keep the stored value",
                           },
                           severity: {
                             enum: ["blocker", "high", "medium", "low"],

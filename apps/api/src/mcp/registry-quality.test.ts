@@ -252,8 +252,8 @@ const TOOL_COUNT_CEILING: Record<SurfaceMode, number> = {
 // template's paragraphs cannot tell a block excluded by a decision from one the
 // document never carried, so what was decided has to be said rather than
 // inferred. Law is unchanged; it carries no template tool.
-// save_playbook then measures 145_338 default, up 7_220 from 138_118: its
-// entry is 7_219 chars, of which the input schema is 5_471. The stored
+// save_playbook then measures 145_426 default, up 7_308 from 138_118: its
+// entry is 7_307 chars, of which the input schema is 5_559. The stored
 // `positionSchema` serializes to 32_190, so the tool advertises its own
 // snake_case position input instead: no rule or entry ids, no derived ask, no
 // deterministic check and no reference standard (all server-owned or
@@ -262,7 +262,7 @@ const TOOL_COUNT_CEILING: Record<SurfaceMode, number> = {
 // the skill rather than repeated per field. Pinned exactly. Anonymized and law
 // do not carry the tool.
 const TOOLS_LIST_PAYLOAD_CHAR_CEILING: Record<SurfaceMode, number> = {
-  default: 145_338,
+  default: 145_426,
   anonymized: 73_300,
   law: 28_250,
 };

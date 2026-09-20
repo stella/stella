@@ -3091,7 +3091,7 @@
                   },
                   "enabled": {
                     "type": "boolean",
-                    "description": "false skips the position in runs; defaults to true"
+                    "description": "false skips the position in runs. Defaults to true; omit on a replace to keep the stored value"
                   },
                   "ask": {
                     "type": "object",
@@ -3144,7 +3144,7 @@
                   },
                   "enabled": {
                     "type": "boolean",
-                    "description": "false skips the position in runs; defaults to true"
+                    "description": "false skips the position in runs. Defaults to true; omit on a replace to keep the stored value"
                   },
                   "severity": {
                     "enum": ["blocker", "high", "medium", "low"],
