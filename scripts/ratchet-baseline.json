@@ -241,7 +241,7 @@
     "files": {}
   },
   "throw-outside-boundary": {
-    "count": 1058,
+    "count": 1057,
     "files": {
       "apps/api/src/handlers/case-law/decisions/latest.ts": 3,
       "apps/api/src/handlers/case-law/ingestion/adapters/at-courts.ts": 9,
@@ -295,7 +295,6 @@
       "apps/api/src/handlers/invoices/add-entries.ts": 2,
       "apps/api/src/handlers/invoices/create.ts": 2,
       "apps/api/src/handlers/invoices/transition.ts": 2,
-      "apps/api/src/handlers/legislation/search-index.ts": 1,
       "apps/api/src/handlers/lists/generation-candidates/acceptance/create.ts": 1,
       "apps/api/src/handlers/mcp-connectors/create-connector.ts": 1,
       "apps/api/src/handlers/properties/create-batch.ts": 3,
@@ -569,7 +568,7 @@
     }
   },
   "try-catch-outside-boundary": {
-    "count": 421,
+    "count": 419,
     "files": {
       "apps/api/src/handlers/ai-autocomplete/stream.ts": 1,
       "apps/api/src/handlers/api-keys/mint.ts": 1,
@@ -615,7 +614,6 @@
       "apps/api/src/handlers/feedback/intake-guards.ts": 4,
       "apps/api/src/handlers/hosted-usage-webhook/receive.ts": 3,
       "apps/api/src/handlers/legislation/ingestion.ts": 1,
-      "apps/api/src/handlers/legislation/search-index.ts": 1,
       "apps/api/src/handlers/mcp-connectors/oauth-callback.ts": 1,
       "apps/api/src/handlers/playbooks/derive-ask.ts": 1,
       "apps/api/src/handlers/sharepoint/graph-client.ts": 2,
@@ -653,7 +651,6 @@
       "apps/api/src/lib/files/extract-office-evidence.ts": 1,
       "apps/api/src/lib/files/office-evidence-worker.ts": 1,
       "apps/api/src/lib/files/pdf-worker.ts": 1,
-      "apps/api/src/lib/legal-search/case-law-search-index.ts": 1,
       "apps/api/src/lib/legal-search/corpus-storage.ts": 1,
       "apps/api/src/lib/locale.ts": 1,
       "apps/api/src/lib/mcp-upstream/cached-tools.ts": 1,

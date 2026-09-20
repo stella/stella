@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { and, asc, eq, gt, isNull, notExists, or, sql } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -43,7 +44,7 @@ export const indexDecision = async (
   decisionId: SafeId<"caseLawDecision">,
   scopedDb: ScopedDb,
   resolveConfig: typeof resolveFtsConfig = resolveFtsConfig,
-): Promise<void> => {
+): Promise<Result<void, unknown>> => {
   const [decision] = await scopedDb((tx) =>
     tx
       .select({
@@ -82,7 +83,7 @@ export const indexDecision = async (
     // projection row. The three probes below carry the same gate, so a row
     // this one refuses is not handed back on the next backfill pass.
     await removeDecisionFromIndex(decisionId, scopedDb);
-    return;
+    return Result.ok(undefined);
   }
 
   const title = `${decision.caseNumber} — ${decision.court}`;
@@ -188,14 +189,20 @@ export const indexDecision = async (
     searchableText,
     writeProjection,
   );
-  if (projection.bounded) {
+  if (Result.isError(projection)) {
+    return Result.err(projection.error);
+  }
+  if (projection.value.bounded) {
     logger.warn("case_law.search_index.tsvector_bounded", {
       decisionId: decision.id,
       "case_law.searchable_text_bytes": Buffer.byteLength(searchableText),
-      "case_law.indexed_text_bytes": Buffer.byteLength(projection.indexedText),
-      ...pgErrorFields(projection.cause),
+      "case_law.indexed_text_bytes": Buffer.byteLength(
+        projection.value.indexedText,
+      ),
+      ...pgErrorFields(projection.value.cause),
     });
   }
+  return Result.ok(undefined);
 };
 
 /**
@@ -310,18 +317,29 @@ export const backfillSearchIndex = async (
   const rows = [...missing, ...stale];
 
   const indexRow = async (row: { id: string }): Promise<number> => {
-    try {
-      await indexDecision(brandPersistedCaseLawDecisionId(row.id), scopedDb);
+    const indexed = (
+      await Result.tryPromise({
+        try: async () =>
+          await indexDecision(
+            brandPersistedCaseLawDecisionId(row.id),
+            scopedDb,
+          ),
+        catch: (cause) => cause,
+      })
+    ).andThen((result) => result);
+    if (Result.isOk(indexed)) {
       return 1;
-    } catch (error) {
-      captureError(error, { decisionId: row.id, step: "backfillSearchIndex" });
-      logger.error("case_law.search_index.backfill_failed", {
-        decisionId: row.id,
-        ...errorSystemFields(error),
-        ...pgErrorFields(error),
-      });
-      return 0;
     }
+    captureError(indexed.error, {
+      decisionId: row.id,
+      step: "backfillSearchIndex",
+    });
+    logger.error("case_law.search_index.backfill_failed", {
+      decisionId: row.id,
+      ...errorSystemFields(indexed.error),
+      ...pgErrorFields(indexed.error),
+    });
+    return 0;
   };
 
   let indexed = 0;

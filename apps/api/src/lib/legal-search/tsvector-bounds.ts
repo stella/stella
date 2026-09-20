@@ -1,4 +1,4 @@
-import { Result, UnhandledException } from "better-result";
+import { Result } from "better-result";
 
 import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
 
@@ -33,6 +33,7 @@ const isContinuationByte = (byte: number | undefined): boolean =>
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
+const WHITESPACE = /\s/u;
 
 /**
  * `text` shortened until its projection fits Postgres's `tsvector` ceiling.
@@ -53,7 +54,11 @@ export const boundTsvectorText = (text: string): string => {
   }
 
   const bounded = decoder.decode(bytes.subarray(0, end));
-  const whole = bounded.replace(/\S+$/u, "").trimEnd();
+  let wordEnd = bounded.length;
+  while (wordEnd > 0 && !WHITESPACE.test(bounded.charAt(wordEnd - 1))) {
+    wordEnd -= 1;
+  }
+  const whole = bounded.slice(0, wordEnd).trimEnd();
   return whole === "" ? bounded : whole;
 };
 
@@ -70,7 +75,7 @@ type TsvectorProjectionWrite =
 /**
  * Runs `write` over the whole text and, only once Postgres has refused that
  * projection for outgrowing the tsvector ceiling, once more over
- * {@link boundTsvectorText}. Any other failure propagates unchanged.
+ * {@link boundTsvectorText}. Any other failure is handed back unchanged.
  *
  * A projection row with no row at all stays in its backfill's missing scan,
  * which reselects it on every pass, so landing a bounded row is what makes the
@@ -80,17 +85,24 @@ type TsvectorProjectionWrite =
 export const writeProjectionWithinTsvectorCeiling = async (
   text: string,
   write: (indexedText: string) => Promise<void>,
-): Promise<TsvectorProjectionWrite> => {
-  const whole = await Result.tryPromise(async () => await write(text));
+): Promise<Result<TsvectorProjectionWrite, unknown>> => {
+  const whole = await Result.tryPromise({
+    try: async () => await write(text),
+    catch: (cause) => cause,
+  });
   if (Result.isOk(whole)) {
-    return { bounded: false };
+    return Result.ok({ bounded: false });
   }
-  const cause =
-    whole.error instanceof UnhandledException ? whole.error.cause : whole.error;
-  if (!isPgError(cause, PG_ERROR.PROGRAM_LIMIT_EXCEEDED)) {
-    throw cause;
+  if (!isPgError(whole.error, PG_ERROR.PROGRAM_LIMIT_EXCEEDED)) {
+    return Result.err(whole.error);
   }
   const indexedText = boundTsvectorText(text);
-  await write(indexedText);
-  return { bounded: true, indexedText, cause };
+  const bounded = await Result.tryPromise({
+    try: async () => await write(indexedText),
+    catch: (cause) => cause,
+  });
+  if (Result.isError(bounded)) {
+    return Result.err(bounded.error);
+  }
+  return Result.ok({ bounded: true, indexedText, cause: whole.error });
 };

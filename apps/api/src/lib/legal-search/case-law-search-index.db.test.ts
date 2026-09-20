@@ -10,6 +10,7 @@
  */
 
 import type { PGlite } from "@electric-sql/pglite";
+import { Result } from "better-result";
 import { afterAll, beforeAll, expect, spyOn, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
@@ -120,7 +121,9 @@ afterAll(async () => {
 test("a decision within the tsvector ceiling indexes its whole searchable text", async () => {
   const warn = spyOn(logger, "warn");
   try {
-    await indexDecision(shortId, scopedDb, resolveConfig);
+    expect(
+      Result.isOk(await indexDecision(shortId, scopedDb, resolveConfig)),
+    ).toBe(true);
 
     const projection = (
       await db
@@ -143,7 +146,9 @@ test(
   async () => {
     const warn = spyOn(logger, "warn");
     try {
-      await indexDecision(oversizedId, scopedDb, resolveConfig);
+      expect(
+        Result.isOk(await indexDecision(oversizedId, scopedDb, resolveConfig)),
+      ).toBe(true);
 
       const projection = (
         await db

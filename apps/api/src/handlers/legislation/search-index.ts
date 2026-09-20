@@ -68,7 +68,7 @@ export const indexLegislationDocument = async (
     readText,
     resolveConfig,
   }: LegislationSearchIndexDependencies = DEFAULT_DEPENDENCIES,
-): Promise<void> => {
+): Promise<Result<void, unknown>> => {
   const [document] = await scopedDb((tx) =>
     tx
       .select({
@@ -96,7 +96,7 @@ export const indexLegislationDocument = async (
 
   if (!document) {
     await removeLegislationFromIndex(documentId, scopedDb);
-    return;
+    return Result.ok(undefined);
   }
 
   let bodyText: string;
@@ -173,23 +173,29 @@ export const indexLegislationDocument = async (
     searchableText,
     writeProjection,
   );
-  if (projection.bounded) {
+  if (Result.isError(projection)) {
+    return Result.err(projection.error);
+  }
+  if (projection.value.bounded) {
     logger.warn("legislation.search_index.tsvector_bounded", {
       documentId: document.id,
       "legislation.searchable_text_bytes": Buffer.byteLength(searchableText),
       "legislation.indexed_text_bytes": Buffer.byteLength(
-        projection.indexedText,
+        projection.value.indexedText,
       ),
-      ...pgErrorFields(projection.cause),
+      ...pgErrorFields(projection.value.cause),
     });
   }
 
   if (corpusReadFailure !== undefined) {
-    throw new LegislationCorpusReadError({
-      message: "Canonical legislation corpus payload is unavailable",
-      cause: corpusReadFailure.cause,
-    });
+    return Result.err(
+      new LegislationCorpusReadError({
+        message: "Canonical legislation corpus payload is unavailable",
+        cause: corpusReadFailure.cause,
+      }),
+    );
   }
+  return Result.ok(undefined);
 };
 
 type LegislationSearchIndexBackfillResult = { found: number; indexed: number };
@@ -277,21 +283,26 @@ export const backfillLegislationSearchIndex = async (
   const indexRow = async (row: {
     id: SafeId<"legislationDocument">;
   }): Promise<number> => {
-    try {
-      await indexLegislationDocument(row.id, scopedDb, dependencies);
+    const indexed = (
+      await Result.tryPromise({
+        try: async () =>
+          await indexLegislationDocument(row.id, scopedDb, dependencies),
+        catch: (cause) => cause,
+      })
+    ).andThen((result) => result);
+    if (Result.isOk(indexed)) {
       return 1;
-    } catch (error) {
-      captureError(error, {
-        documentId: row.id,
-        step: "backfillLegislationSearchIndex",
-      });
-      logger.error("legislation.search_index.backfill_failed", {
-        documentId: row.id,
-        ...errorSystemFields(error),
-        ...pgErrorFields(error),
-      });
-      return 0;
     }
+    captureError(indexed.error, {
+      documentId: row.id,
+      step: "backfillLegislationSearchIndex",
+    });
+    logger.error("legislation.search_index.backfill_failed", {
+      documentId: row.id,
+      ...errorSystemFields(indexed.error),
+      ...pgErrorFields(indexed.error),
+    });
+    return 0;
   };
 
   let indexed = 0;
