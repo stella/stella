@@ -610,7 +610,8 @@ const runTask = async ({
     trace.push({ name: `${raw.name}${RAW_CALL_SUFFIX}`, input: raw.input });
   }
 
-  const [playbook] = store.playbooks();
+  const playbooks = store.playbooks();
+  const [playbook] = playbooks;
   const finalPositions = playbook?.positions.items ?? null;
   const score = scorePlaybookRun({
     calls: saveCalls,
@@ -619,6 +620,15 @@ const runTask = async ({
     seededPositions: task.seed.at(0)?.positions.items ?? [],
     turnError: turn.error,
   });
+  // Every task ends on one playbook. With more, the positions may sit in a
+  // row the score did not read, so its position defects prove nothing.
+  if (playbooks.length > 1) {
+    score.defects.push(
+      `${playbooks.length} playbooks are stored; the task expects one`,
+    );
+    score.steps.saved = false;
+    score.outcome = score.outcome === "pass" ? "partial" : score.outcome;
+  }
   // What the tool stored must be what the HTTP route would have accepted.
   if (
     playbook !== undefined &&
