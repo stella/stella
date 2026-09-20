@@ -17,12 +17,14 @@ import { DOCUMENT_UPLOAD_APP_RESOURCE_URI } from "@/api/mcp/document-file-upload
 import {
   buildFeedbackWorkflowReference,
   FEEDBACK_WORKFLOW_REFERENCE_URI,
+  FEEDBACK_WORKFLOW_TOOL_NAMES,
 } from "@/api/mcp/feedback-workflow-reference";
 import {
   buildLegislationWorkflowReference,
   hasLegislationWorkflowContent,
   LEGISLATION_WORKFLOW_REFERENCE_URI,
 } from "@/api/mcp/legislation-workflow-reference";
+import { getStaticMcpToolDefinition } from "@/api/mcp/static-tool-definitions";
 import {
   buildFieldReference,
   TEMPLATE_FIELD_REFERENCE_URI,
@@ -172,9 +174,12 @@ const STATIC_RESOURCES: readonly StaticResource[] = [
       "prepare_feedback call.",
     mimeType: "text/markdown",
     listed: true,
-    // The feedback tools are excluded from the anonymized surface, and the law
-    // audience carries neither, so the procedure would be unusable on both.
-    isServedInMode: (mode) => mode === "default" || mode === "documents",
+    // Served exactly where both calls it describes are listed, read off the
+    // tool lists rather than a second list of audience names.
+    isServedInMode: (mode) =>
+      FEEDBACK_WORKFLOW_TOOL_NAMES.every(
+        (name) => getStaticMcpToolDefinition(name, mode) !== undefined,
+      ),
     read: buildFeedbackWorkflowReference,
   },
   {

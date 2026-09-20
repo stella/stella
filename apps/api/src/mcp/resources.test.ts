@@ -35,6 +35,7 @@ const FIELD_REFERENCE_URI = "stella://reference/template-fields";
 const WORKFLOW_REFERENCE_URI = "stella://reference/template-workflow";
 const LEGISLATION_WORKFLOW_REFERENCE_URI =
   "stella://reference/legislation-workflow";
+const FEEDBACK_WORKFLOW_REFERENCE_URI = "stella://reference/feedback-workflow";
 const PRODUCT_IDENTITY_URI = "stella://about";
 
 /** The storage-only CSP every bundled upload panel is served with. */
@@ -88,9 +89,21 @@ describe("MCP resources", () => {
       expect(uris).toContain(FIELD_REFERENCE_URI);
       expect(uris).toContain(WORKFLOW_REFERENCE_URI);
       expect(uris).toContain(LEGISLATION_WORKFLOW_REFERENCE_URI);
-      // The reference documents are static, public, and tenant-independent, so
-      // the set is identical across these modes.
-      expect(uris).toEqual(listMcpResources("default").map((r) => r.uri));
+    }
+  });
+
+  test("only a surface that lists both feedback tools serves their workflow", () => {
+    const defaultUris = listMcpResources("default").map((r) => r.uri);
+    expect(defaultUris).toContain(FEEDBACK_WORKFLOW_REFERENCE_URI);
+    // The anonymized surface differs from the default one by exactly this
+    // reference: its tools are excluded there, so the procedure is too.
+    expect(listMcpResources("anonymized").map((r) => r.uri)).toEqual(
+      defaultUris.filter((uri) => uri !== FEEDBACK_WORKFLOW_REFERENCE_URI),
+    );
+    for (const mode of ["anonymized", "documents", "law"] as const) {
+      expect(listMcpResources(mode).map((r) => r.uri)).not.toContain(
+        FEEDBACK_WORKFLOW_REFERENCE_URI,
+      );
     }
   });
 
@@ -102,7 +115,11 @@ describe("MCP resources", () => {
     expect(uris).toEqual(
       listMcpResources("default")
         .map((resource) => resource.uri)
-        .filter((uri) => uri !== LEGISLATION_WORKFLOW_REFERENCE_URI),
+        .filter(
+          (uri) =>
+            uri !== LEGISLATION_WORKFLOW_REFERENCE_URI &&
+            uri !== FEEDBACK_WORKFLOW_REFERENCE_URI,
+        ),
     );
   });
 

@@ -6637,7 +6637,7 @@ export const generatedRouteMap: RouteNode = {
                 kind: "string",
                 repeatable: false,
                 description:
-                  "The requestId a failing tool returned in its error envelope. Kept verbatim (it is the only field that is not redacted) because it is how a maintainer finds the failing call in the server logs. A value that is not letters, digits, dot, underscore or hyphen is dropped.",
+                  "The requestId from a failing tool's error envelope. Kept verbatim, never redacted: it is how a maintainer finds the call. Letters, digits, dot, underscore and hyphen only; anything else is dropped.",
                 required: false,
               },
               {
@@ -6742,7 +6742,7 @@ export const generatedRouteMap: RouteNode = {
                       type: "string",
                       maxLength: 64,
                       description:
-                        "The requestId a failing tool returned in its error envelope. Kept verbatim (it is the only field that is not redacted) because it is how a maintainer finds the failing call in the server logs. A value that is not letters, digits, dot, underscore or hyphen is dropped.",
+                        "The requestId from a failing tool's error envelope. Kept verbatim, never redacted: it is how a maintainer finds the call. Letters, digits, dot, underscore and hyphen only; anything else is dropped.",
                     },
                     route: {
                       type: "string",
@@ -6873,7 +6873,7 @@ export const generatedRouteMap: RouteNode = {
                 kind: "string",
                 repeatable: false,
                 description:
-                  "The requestId a failing tool returned in its error envelope. Kept verbatim (it is the only field that is not redacted) because it is how a maintainer finds the failing call in the server logs. A value that is not letters, digits, dot, underscore or hyphen is dropped.",
+                  "The requestId from a failing tool's error envelope. Kept verbatim, never redacted: it is how a maintainer finds the call. Letters, digits, dot, underscore and hyphen only; anything else is dropped.",
                 required: false,
               },
               {
@@ -6979,7 +6979,7 @@ export const generatedRouteMap: RouteNode = {
                       type: "string",
                       maxLength: 64,
                       description:
-                        "The requestId a failing tool returned in its error envelope. Kept verbatim (it is the only field that is not redacted) because it is how a maintainer finds the failing call in the server logs. A value that is not letters, digits, dot, underscore or hyphen is dropped.",
+                        "The requestId from a failing tool's error envelope. Kept verbatim, never redacted: it is how a maintainer finds the call. Letters, digits, dot, underscore and hyphen only; anything else is dropped.",
                     },
                     route: {
                       type: "string",

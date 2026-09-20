@@ -204,7 +204,9 @@ describe("submitFeedbackReport", () => {
         reporter: MCP_REPORTER,
         deps: baseDeps({
           store,
-          capture: (error) => captured.push(error),
+          capture: (error) => {
+            captured.push(error);
+          },
           email: {
             isConfigured: () => true,
             send,
@@ -307,7 +309,12 @@ describe("submitFeedbackReport", () => {
     await submitFeedbackReport({
       input: REPORT,
       reporter: MCP_REPORTER,
-      deps: baseDeps({ store, analytics: (event) => events.push(event) }),
+      deps: baseDeps({
+        store,
+        analytics: (event) => {
+          events.push(event);
+        },
+      }),
     });
 
     expect(events).toHaveLength(1);

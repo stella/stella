@@ -87,6 +87,12 @@ describe("policy coverage", () => {
     // not tenant-scoped — it has a deny-all RLS policy plus REVOKE ALL from
     // stella, so the org-policy coverage requirement does not apply.
     "agent_delegation",
+    // Filed feedback reports: organization_id/user_id record who filed a
+    // report for the maintainers' private view and are never a tenant scope.
+    // The table has no read surface at all: RLS is enabled with no policy and
+    // every privilege is revoked from stella (asserted in
+    // rls-table-grants.test.ts), so there is no org policy to require.
+    "feedback_reports",
     // A notification is addressed to a person, not to a matter: recipient and
     // organization are what admit the row, and its nullable workspace_id is a
     // link pointer the client resolves through the ordinary authorized routes,

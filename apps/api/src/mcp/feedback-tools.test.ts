@@ -186,8 +186,7 @@ describe("submit_feedback confirmation gate", () => {
 
     expect(result.isError).toBe(true);
     const [content] = result.content;
-    const text =
-      content !== undefined && content.type === "text" ? content.text : "";
+    const text = content?.type === "text" ? content.text : "";
     expect(text).toContain("confirmation_required");
     expect(text).toContain("confirm: true");
   });

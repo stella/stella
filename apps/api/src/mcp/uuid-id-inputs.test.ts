@@ -55,6 +55,11 @@ const NON_UUID_ID_INPUTS: Record<string, string> = {
   // `pattern` is the same grammar the reader tests, and the reader runs before
   // anything reaches SQL, so a malformed id is still a validation issue.
   "fetch.id": "OpenAI-compatible compat id, not a bare uuid",
+  // The request id from a failed call's error envelope: an opaque log key the
+  // reader shape-checks and stores inside the report's jsonb context. It never
+  // reaches a uuid column.
+  "prepare_feedback.context.request_id": "opaque request log key, not a uuid",
+  "submit_feedback.context.request_id": "opaque request log key, not a uuid",
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
