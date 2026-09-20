@@ -1632,6 +1632,29 @@ const httpFailureReason = (response: Response, requestUrl: string): string => {
 };
 
 /**
+ * Whether the search submit's redirect is the court accepting the search.
+ *
+ * NALUS answers a valid submit with a 302 to the results page and a submit it
+ * refuses with a 302 to its error page, so the status alone does not say which
+ * happened. Only the target does, and the crawl never follows it: it reads
+ * {@link RESULTS_URL} either way, which the court serves as an empty shell
+ * once the search behind it failed. Reading the target here keeps a refused
+ * search a search failure, rather than one spent request later a results page
+ * that parses into nothing.
+ */
+const redirectsToResults = (response: Response): boolean => {
+  const location = response.headers.get("location");
+  if (location === null || !URL.canParse(location, SEARCH_URL)) {
+    return false;
+  }
+  const target = new URL(location, SEARCH_URL);
+  const results = new URL(RESULTS_URL);
+  return (
+    target.origin === results.origin && target.pathname === results.pathname
+  );
+};
+
+/**
  * One NALUS response, with the court's rate-limit refusal raised as the halt
  * it is.
  *
@@ -1725,7 +1748,7 @@ const fetchSearchPage = async ({
     },
     body: form.toString(),
   });
-  if (submit.status !== 302) {
+  if (submit.status !== 302 || !redirectsToResults(submit)) {
     if (submit.ok) {
       const $ = cheerio.load(await submit.text());
       const noResults = $("#ctl00_MainContent_lbError").text().trim();
