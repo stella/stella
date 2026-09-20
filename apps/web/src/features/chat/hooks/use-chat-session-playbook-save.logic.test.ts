@@ -1,4 +1,4 @@
-import { QueryClient } from "@tanstack/react-query";
+import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { describe, expect, test } from "bun:test";
 
 import type { PlaybookSaveMessage } from "@/components/chat/chat-ui-tools";
@@ -85,6 +85,40 @@ describe("playbook save cache reconciliation", () => {
       expect(isInvalidated(queryClient, queryKey)).toBe(true);
     }
     expect(isInvalidated(queryClient, OTHER_ORGANIZATION_KEY)).toBe(false);
+  });
+
+  test("a detail an open editor is watching is left alone, so its save still meets the conflict", async () => {
+    const queryClient = seededQueryClient();
+    const detailKey = knowledgeKeys.playbooks.detail(
+      ORGANIZATION_ID,
+      PLAYBOOK_ID,
+    );
+    // Invalidating a watched query refetches it at once, which clears its
+    // invalidated flag again, so the flag cannot tell the two cases apart.
+    // What the editor would see is the refetch itself.
+    let refetches = 0;
+    const unsubscribe = new QueryObserver(queryClient, {
+      queryKey: detailKey,
+      queryFn: () => {
+        refetches += 1;
+        return { seeded: true };
+      },
+      staleTime: Infinity,
+    }).subscribe(() => undefined);
+
+    await reconcile({
+      messages: saveMessages({ output: { playbookId: PLAYBOOK_ID } }),
+      queryClient,
+    });
+    unsubscribe();
+
+    expect(refetches).toBe(0);
+    expect(
+      isInvalidated(
+        queryClient,
+        knowledgeKeys.playbooks.list(ORGANIZATION_ID, { limit: 50 }),
+      ),
+    ).toBe(true);
   });
 
   test("a refused or unfinished save invalidates nothing", async () => {
