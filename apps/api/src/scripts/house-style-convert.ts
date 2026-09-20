@@ -64,6 +64,16 @@ const readBytes = async (path: string): Promise<ArrayBuffer> => {
   return await file.arrayBuffer();
 };
 
+/** A JSON input reported like every other input: a message, not a stack trace. */
+const readJson = async (path: string): Promise<unknown> => {
+  const text = new TextDecoder().decode(await readBytes(path));
+  const read = Result.try({
+    try: (): unknown => JSON.parse(text),
+    catch: (cause) => cause,
+  });
+  return Result.isError(read) ? abort(`not valid JSON: ${path}`) : read.value;
+};
+
 const houseBytes = await readBytes(command.house);
 
 if (command.type === "catalogue") {
@@ -92,8 +102,7 @@ const convert = async (options: ConvertCommand): Promise<void> => {
   if (Result.isError(catalogue)) {
     abort(catalogue.error.message);
   }
-  const guideJson: unknown = await Bun.file(options.guide).json();
-  const draft = parseStyleGuideDraft(guideJson);
+  const draft = parseStyleGuideDraft(await readJson(options.guide));
   if (Result.isError(draft)) {
     abort(draft.error.message);
   }
