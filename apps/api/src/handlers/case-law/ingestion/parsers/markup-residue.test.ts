@@ -234,10 +234,10 @@ const PARSER_FAMILIES: {
 
 // ── The documented sweep ────────────────────────────────────
 
-describe("the sweep documented in CLAUDE.md", () => {
+describe("the sweep documented in AGENTS.md", () => {
   test("names every rule's pattern", async () => {
     const doc = await Bun.file(
-      path.join(import.meta.dir, "..", "..", "CLAUDE.md"),
+      path.join(import.meta.dir, "..", "..", "AGENTS.md"),
     ).text();
     const sweepStart = doc.indexOf("FROM case_law_decisions d");
     expect(sweepStart).toBeGreaterThan(0);

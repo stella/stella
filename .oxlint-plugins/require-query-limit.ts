@@ -1,7 +1,7 @@
 // Require an explicit bound on Drizzle list reads so a query cannot
 // silently return an unbounded result set as a table grows.
 //
-// CLAUDE.md / conventions-db + conventions-scale mandate: "Every list
+// AGENTS.md / conventions-db + conventions-scale mandate: "Every list
 // query MUST take a limit; never an unbounded findMany/select." An
 // unbounded read is invisible in dev (small tables) and turns into a
 // memory / latency cliff at Magic Circle scale.
@@ -52,12 +52,13 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
 import { getPropertyName, isAstNode } from "./utils.ts";
+import type { AstNode } from "./utils.ts";
 
 const getType = (node: unknown): string | null => {
   if (typeof node !== "object" || node === null || !("type" in node)) {
     return null;
   }
-  const { type } = node as { type: unknown };
+  const { type } = node;
   return typeof type === "string" ? type : null;
 };
 
@@ -65,7 +66,7 @@ const getField = (node: unknown, field: string): unknown => {
   if (typeof node !== "object" || node === null || !(field in node)) {
     return null;
   }
-  return (node as Record<string, unknown>)[field];
+  return node[field];
 };
 
 const isComputed = (node: unknown): boolean =>
@@ -170,7 +171,10 @@ const findManyLimitState = (callExpression: unknown): FindManyState => {
 // or `true` (to-one / load-all, left alone). A relation config that has
 // an `orderBy` but no `limit` is an unbounded ordered list read, the same
 // signal the SQL-builder branch uses. Nested `with` is walked too.
-const scanWithObject = (context: unknown, withObject: unknown): void => {
+const scanWithObject = (
+  reportUnboundedRelation: (node: AstNode) => void,
+  withObject: unknown,
+): void => {
   if (getType(withObject) !== "ObjectExpression") {
     return;
   }
@@ -206,16 +210,13 @@ const scanWithObject = (context: unknown, withObject: unknown): void => {
         nestedWith = getField(property, "value");
       }
     }
-    if (orderByKey !== null && !hasLimit) {
+    if (isAstNode(orderByKey) && !hasLimit) {
       // Report on the `orderBy` key so the diagnostic — and any
       // disable-next-line — lands on the `orderBy:` line.
-      (context as { report: (descriptor: unknown) => void }).report({
-        node: orderByKey,
-        messageId: "withRelationNoLimit",
-      });
+      reportUnboundedRelation(orderByKey);
     }
     if (nestedWith !== null) {
-      scanWithObject(context, nestedWith);
+      scanWithObject(reportUnboundedRelation, nestedWith);
     }
   }
 };
@@ -225,7 +226,7 @@ const scanWithObject = (context: unknown, withObject: unknown): void => {
 // `findFirst` (a bounded parent row can still eager-load an unbounded
 // child list).
 const scanRelationalWith = (
-  context: unknown,
+  reportUnboundedRelation: (node: AstNode) => void,
   callExpression: unknown,
 ): void => {
   const args = getField(callExpression, "arguments");
@@ -245,7 +246,7 @@ const scanRelationalWith = (
       continue;
     }
     if (getPropertyName(getField(property, "key")) === "with") {
-      scanWithObject(context, getField(property, "value"));
+      scanWithObject(reportUnboundedRelation, getField(property, "value"));
     }
   }
 };
@@ -292,7 +293,14 @@ export default eslintCompatPlugin({
               ) {
                 context.report({ node, messageId: "findManyNoLimit" });
               }
-              scanRelationalWith(context, node);
+              scanRelationalWith(
+                (relationNode) =>
+                  context.report({
+                    node: relationNode,
+                    messageId: "withRelationNoLimit",
+                  }),
+                node,
+              );
               return;
             }
 

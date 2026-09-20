@@ -12,7 +12,7 @@ import { propertiesOptions } from "@/lib/workspaces/queries/properties";
 // @stll/api-contract, so only the current count is fetched.
 //
 // These hooks are consumed inside menus and other chrome surfaces, so
-// they use useQuery (not useSuspenseQuery) per CLAUDE.md — a cache miss
+// they use useQuery (not useSuspenseQuery) per AGENTS.md — a cache miss
 // must not suspend the surrounding layout. While the query is loading
 // we treat the limit as not-reached so the action stays available; the
 // backend is the source of truth and will reject if the limit is hit.

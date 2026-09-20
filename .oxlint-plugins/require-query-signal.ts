@@ -236,7 +236,7 @@ const rootIdentifier = (node) => {
 const HTTP_VERBS = new Set(["get", "post", "put", "patch", "delete", "head"]);
 
 // The Eden client is always imported as `api` from `@/lib/api` (see
-// CLAUDE.md). A call chain rooted at that identifier and ending in an HTTP
+// AGENTS.md). A call chain rooted at that identifier and ending in an HTTP
 // verb hits the network.
 const isEdenApiCallee = (callee, isEdenApiRoot) => {
   const unwrapped = unwrapTS(callee);
@@ -368,7 +368,7 @@ export default eslintCompatPlugin({
             return false;
           }
           const variable = resolveVariable(node);
-          if (variable === null || variable.defs.length !== 1) {
+          if (variable?.defs.length !== 1) {
             return false;
           }
           const definition = variable.defs.at(0);
@@ -402,8 +402,7 @@ export default eslintCompatPlugin({
         ): AstNode | null => {
           const variable = resolveVariable(identifier);
           if (
-            variable === null ||
-            variable.defs.length !== 1 ||
+            variable?.defs.length !== 1 ||
             visited.has(variable) ||
             hasReassignment(variable)
           ) {

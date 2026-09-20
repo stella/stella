@@ -16,17 +16,30 @@ repository first (step 3) and query it explicitly; in a fork checkout, `gh`
 defaults to the fork and would miss an upstream PR:
 
 ```bash
-git branch --show-current
+HEAD_BRANCH="$(git symbolic-ref --quiet --short HEAD)" || {
+  echo "detached HEAD; cannot identify a pull request branch" >&2
+  exit 1
+}
+HEAD_SHA="$(git rev-parse --verify HEAD)"
 git status --short
-gh pr list --repo "$BASE_REPO" --head "$(git branch --show-current)" \
-  --state all \
-  --json number,state,isDraft,headRefName,headRepositoryOwner,baseRefName,url
+: "${BASE_REPO:?set BASE_REPO to the resolved owner/name base repository}"
+: "${HEAD_REPO:?set HEAD_REPO to the resolved owner/name head repository}"
+PR_CANDIDATES="$(gh pr list --repo "$BASE_REPO" --head "$HEAD_BRANCH" \
+  --state open \
+  --json number,state,isDraft,headRefName,headRefOid,headRepository,baseRefName,url)"
 ```
 
-An empty PR list means no PR exists. `--head` filters by branch name alone, so
-in a fork workflow the list can hold another contributor's PR from a branch of
-the same name: treat a result as this checkout's PR only when its
-`headRepositoryOwner` is the owner your head remote pushes to.
+Resolve `BASE_REPO` before the query and resolve `HEAD_REPO` from the branch's
+configured push remote. Do not guess either identity from an account name. Filter
+`PR_CANDIDATES` to entries whose `headRepository.nameWithOwner` equals `HEAD_REPO`
+and whose `headRefOid` equals `HEAD_SHA`, then accept exactly one match and assign
+its `number` to `PR_NUMBER`. An empty candidate list means no open PR exists. A
+missing repository identity or head SHA, more than one exact match, or a detached
+or otherwise ambiguous local branch must stop the workflow before any candidate's
+base is used. A non-empty list with no exact match belongs to another head and is
+not this checkout's PR. `--head` filters by branch name alone, so matching only the
+owner is insufficient: an organization can own multiple repositories in one fork
+network.
 
 Authentication, network, or repository errors must remain visible and stop the
 workflow before history changes or publication.
@@ -59,11 +72,19 @@ If it is installed and `gh stack view` identifies a stack, use
 absent or the branch is not stacked, use ordinary Git; do not install an
 optional extension merely to prepare a normal PR.
 
-For an existing PR, read its `baseRefName` and base repository with `gh pr
-view`. Match that repository to a configured Git remote, fetch the PR base from
-that remote, and rebase onto the fetched base. If no configured remote matches,
-fetch the base repository URL directly and rebase onto `FETCH_HEAD`; do not add
-or rewrite remotes silently.
+For an existing PR, read its metadata from the exact match rather than the
+checkout's implicit repository context:
+
+```bash
+PR_METADATA="$(gh pr view "$PR_NUMBER" --repo "$BASE_REPO" --json number,baseRefName,headRefOid,headRepository,url)"
+```
+
+Treat the explicit `BASE_REPO` as the base repository and reject a response whose
+PR number, head repository, or head SHA no longer matches the identity established
+in step 1. Match `BASE_REPO` to a configured Git remote, fetch the PR base from that
+remote, and rebase onto the fetched base. If no configured remote matches, fetch
+the base repository URL directly and rebase onto `FETCH_HEAD`; do not add or
+rewrite remotes silently.
 
 For a branch without a PR, prefer its configured upstream remote and that
 remote's default branch. Fall back to `origin` only when no upstream is
@@ -117,6 +138,11 @@ normally. Use `--force-with-lease`, never plain force, only after intentionally
 rebasing a published branch. For a stack, submit every layer and verify each PR
 targets its parent.
 
+Refresh `HEAD_SHA` from the final local commit immediately before pushing. Push
+the explicit local branch to its resolved `HEAD_REPO` destination, then verify the
+remote branch resolves to that SHA; do not let an implicit push target select the
+repository or branch.
+
 ## 8. Open or Update Review State
 
 - An explicit draft request creates or preserves a draft.
@@ -127,6 +153,12 @@ targets its parent.
 Write a concise title and body describing only the visible implementation.
 Follow repository rules for attribution and public context. Do not add a test
 plan unless requested.
+
+For an existing PR, update only `PR_NUMBER` in `BASE_REPO`; never rely on the
+checkout's implicit repository or branch selection. For a new PR, pass the resolved
+base repository, base branch, and head repository and branch explicitly. After any
+create or update, refetch that exact PR and require its repository identity and
+`headRefOid` to equal `BASE_REPO` and the pushed `HEAD_SHA` before reporting it.
 
 Report the URL, readiness, checks run or skipped, and any blocker. Do not begin
 bot monitoring, merge, or deployment unless the user requested that broader

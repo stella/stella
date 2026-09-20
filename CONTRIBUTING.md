@@ -125,7 +125,7 @@ unprefixed global names.
 - **Commits**: use [Conventional Commits](https://www.conventionalcommits.org/)
   (`feat:`, `fix:`, `chore:`, `docs:`).
 - **TypeScript**: strict mode, `type` over `interface`, no `any`,
-  no non-null assertions. See [CLAUDE.md](CLAUDE.md) for full
+  no non-null assertions. See [AGENTS.md](AGENTS.md) for full
   coding conventions.
 - **Linting**: Oxlint (Ultracite plus the [custom guards](.oxlint-plugins/README.md))
   for TypeScript; `bun run lint:css` runs Stylelint's correctness checks over

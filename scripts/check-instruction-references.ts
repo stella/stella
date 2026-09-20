@@ -2,7 +2,7 @@
 
 // Instruction-reference guard.
 //
-// Agent instruction files (AGENTS.md, CLAUDE.md, and local skill mirrors) name
+// Agent instruction files (AGENTS.md, scoped guides, and local skill mirrors) name
 // concrete repository paths, package scripts, module exports, and lint rule ids.
 // Nothing compiles them, so a rename in the code leaves the instruction quietly
 // wrong and every agent that reads it is misled. This guard resolves each named
@@ -656,15 +656,12 @@ const diskRepo = (): Repo => {
   };
 };
 
-// Every agent instruction file: the root pair, each workspace's own, the nested
-// per-area CLAUDE.md files, and the skills.
+// Every agent instruction file: root and workspace AGENTS.md files, nested
+// guides, and skills.
 const INSTRUCTION_GLOBS = [
   "AGENTS.md",
-  "CLAUDE.md",
-  "apps/*/AGENTS.md",
+  "apps/**/AGENTS.md",
   "packages/*/AGENTS.md",
-  "apps/**/CLAUDE.md",
-  "packages/**/CLAUDE.md",
   ".agents/skills/*/SKILL.md",
   ".ai/local-skills/*/SKILL.md",
   ".claude/skills/*/SKILL.md",

@@ -15,6 +15,11 @@ Resolve the PR, repository, branch, current head SHA, base branch, draft state,
 required checks, review state, and applicable repository instructions. Work from
 a clean isolated checkout of the PR head. Preserve unrelated changes.
 
+Pin every GitHub query and mutation to the resolved full `owner/name` repository
+and PR number. Require every refreshed PR to retain that identity, and evaluate
+checks, reviews, replies, resolutions, and merge eligibility only for its exact
+current head SHA. Stop and restart the evaluation when the head changes.
+
 Rebase or restack according to repository policy before trusting results. Review
 conflict resolutions and push safely. Preserve an explicit draft state unless the
 user asks to mark the PR ready.
@@ -46,10 +51,12 @@ Never request an automated review (`@coderabbitai review`, `@codex review`, or a
 timed re-request after a rate limit); reviews arrive on their own. Budget the loop:
 at most two review rounds after the first green head. When actionable findings keep
 arriving past that, keep the green head and triage the remaining findings yourself
-with a concrete accept, push-back, or defer. Open one stacked follow-up PR for the
-accepted fixes, then reply to each deferred finding with that PR's URL, and resolve
-the thread where the finding has one: the named follow-up is the disposition, not a
-promise. A deferred top-level comment stays open; the reply is its terminal state.
+with a concrete accept, push-back, or defer. Open one named follow-up PR for the
+accepted fixes; make it stacked only when repository policy or the existing branch
+stack requires that. Then reply to each deferred finding with that PR's URL, and
+resolve the thread where the finding has one: the named follow-up is the
+disposition, not a promise. A deferred top-level comment stays open; the reply is
+its terminal state.
 
 The budget never defers a release-blocking defect. A finding that names a
 security, authorization, data-loss, or data-corruption defect, and survives

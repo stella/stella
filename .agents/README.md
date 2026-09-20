@@ -3,7 +3,7 @@
 Working directory for AI agents. Track planning, decisions, and
 implementation progress here.
 
-See [CLAUDE.md](../CLAUDE.md) for project guidelines.
+See [AGENTS.md](../AGENTS.md) for project guidelines.
 
 ## Structure
 

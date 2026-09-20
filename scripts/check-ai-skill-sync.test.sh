@@ -95,7 +95,8 @@ for state in committed staged unstaged untracked deleted renamed staged-revert; 
 done
 
 path_index=0
-for instruction in AGENTS.md apps/api/AGENTS.md apps/api/CLAUDE.md \
+for instruction in AGENTS.md apps/api/AGENTS.md \
+  apps/api/src/handlers/case-law/AGENTS.md \
   packages/new/GEMINI.md .agents/skills/example/SKILL.md \
   .claude/skills/example/SKILL.md .ai/manifest.json .gitmodules; do
   fixture="$(new_repo "path-$path_index")"
