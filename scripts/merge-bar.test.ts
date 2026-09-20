@@ -32,6 +32,7 @@ describe("merge handoff state", () => {
             isDraft: false,
             mergeable: "MERGEABLE",
             headRefOid: HEAD_SHA,
+            baseRefName: "main",
             autoMergeRequest: null,
             mergeQueueEntry: null,
           },
@@ -48,6 +49,7 @@ fi
 [ "$GH_TOKEN" = read-fixture ] || exit 93
 case "$*" in
   *reviewThreads*) printf '%s\\n' '{"nodes":[],"pageInfo":{"hasNextPage":false}}';;
+  *rules/branches/main*) printf '%s\\n' '[{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"Overlay check"}]}}]';;
   *check-runs*) printf 'Overlay check\\tcompleted\\tsuccess\\n';;
   *headRefOid*)
     if [ "$1" = api ]; then printf '%s\\n' '${response}';
@@ -96,6 +98,7 @@ esac
             isDraft: false,
             mergeable: "UNKNOWN",
             headRefOid: HEAD_SHA,
+            baseRefName: "main",
             autoMergeRequest: null,
             mergeQueueEntry: { id: "entry" },
           },
@@ -104,7 +107,13 @@ esac
     });
     writeFileSync(
       executable,
-      `#!/bin/sh\nif [ "$1" != api ] || [ "$2" != graphql ]; then exit 99; fi\nprintf '%s\\n' '${response}'\n`,
+      `#!/bin/sh
+case "$*" in
+  *rules/branches/main*) printf '%s\\n' '[{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"ci-result"}]}},{"type":"merge_queue","parameters":{}}]';;
+  *'api graphql'*) printf '%s\\n' '${response}';;
+  *) exit 99;;
+esac
+`,
     );
     chmodSync(executable, 0o700);
     try {
@@ -166,6 +175,7 @@ const passingSnapshot = (
 ): MergeBarSnapshot => ({
   pullRequest: {
     number: 2137,
+    baseRefName: "main",
     state: "OPEN",
     isDraft: false,
     mergeable: "MERGEABLE",
@@ -199,40 +209,89 @@ const failedGate = (snapshot: MergeBarSnapshot) => {
 };
 
 describe("merge bar", () => {
-  test("lands through the queue only where one exists", () => {
-    expect(mergeBarRepositoryPolicy("stella/stella")).toEqual({
-      requiredCheckRuns: ["ci-result"],
+  test("uses the target branch's live required checks for public repositories", () => {
+    expect(
+      mergeBarRepositoryPolicy("stella/tooling", [
+        {
+          type: "required_status_checks",
+          parameters: { required_status_checks: [{ context: "checks" }] },
+        },
+      ]),
+    ).toEqual({
+      requiredCheckRuns: ["checks"],
+      migrationDirectory: null,
+      landing: "merge",
+    });
+  });
+
+  test("derives required checks and merge-queue landing from active branch rules", () => {
+    const stellaRules = [
+      {
+        type: "required_status_checks",
+        parameters: {
+          required_status_checks: [
+            { context: "ci-result" },
+            { context: "dependency-review" },
+          ],
+        },
+      },
+      { type: "merge_queue", parameters: {} },
+    ];
+    expect(mergeBarRepositoryPolicy("stella/stella", stellaRules)).toEqual({
+      requiredCheckRuns: ["ci-result", "dependency-review"],
       migrationDirectory: "apps/api/drizzle",
       landing: "merge-when-ready",
     });
-    expect(mergeBarRepositoryPolicy("Stella/Stella").landing).toBe(
+    expect(mergeBarRepositoryPolicy("Stella/Stella", stellaRules).landing).toBe(
       "merge-when-ready",
     );
-    expect(mergeBarRepositoryPolicy("stella/stella-infra")).toEqual({
-      requiredCheckRuns: [
-        "Lint & Validate",
-        "Plan (production)",
-        "Plan (staging)",
-      ],
-      migrationDirectory: null,
-      landing: "merge",
-    });
-    // A repository this one does not enumerate is private: the bar cannot
-    // read its workflows, so it lands with a plain merge and still demands a
-    // named check rather than merging on an empty check list.
-    expect(mergeBarRepositoryPolicy(PRIVATE_REPO)).toEqual({
-      requiredCheckRuns: ["Overlay check"],
-      migrationDirectory: null,
-      landing: "merge",
-    });
-    expect(mergeBarRepositoryPolicy("stella/unknown")).toEqual(
-      mergeBarRepositoryPolicy(PRIVATE_REPO),
+
+    const infraRules = [
+      {
+        type: "required_status_checks",
+        parameters: {
+          required_status_checks: [
+            { context: "Lint & Validate" },
+            { context: "Plan (production)" },
+            { context: "Plan (staging)" },
+          ],
+        },
+      },
+    ];
+    expect(mergeBarRepositoryPolicy("stella/stella-infra", infraRules)).toEqual(
+      {
+        requiredCheckRuns: [
+          "Lint & Validate",
+          "Plan (production)",
+          "Plan (staging)",
+        ],
+        migrationDirectory: null,
+        landing: "merge",
+      },
+    );
+  });
+
+  test("refuses a repository with no live required checks", () => {
+    expect(() => mergeBarRepositoryPolicy(PRIVATE_REPO, [])).toThrow(
+      "No required status checks are active for stella/private",
     );
   });
 
   test("every configured required check must be present and green", () => {
     const { requiredCheckRuns } = mergeBarRepositoryPolicy(
       "stella/stella-infra",
+      [
+        {
+          type: "required_status_checks",
+          parameters: {
+            required_status_checks: [
+              { context: "Lint & Validate" },
+              { context: "Plan (production)" },
+              { context: "Plan (staging)" },
+            ],
+          },
+        },
+      ],
     );
     const checkRuns = requiredCheckRuns.map((name) => ({
       name,
