@@ -56,6 +56,7 @@ import {
 } from "@/api/lib/case-law/document-ast";
 import type { CorpusStorageMode } from "@/api/lib/corpus-storage-mode";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
+import { errorSystemFields } from "@/api/lib/errors/utils";
 import { settleReservedCaseLawCorpusUpload } from "@/api/lib/legal-search/case-law-corpus-upload-intents";
 import { indexDecision } from "@/api/lib/legal-search/case-law-search-index";
 import {
@@ -90,6 +91,8 @@ import { parseSkDecisionPdf } from "@/api/lib/legal-search/parsers/sk-courts";
 import { segmentDecision } from "@/api/lib/legal-search/segment-decision";
 import { restrictSkCourtDocumentUrl } from "@/api/lib/legal-search/sk-court-document-url";
 import type { PendingDocumentTierLoaders } from "@/api/lib/legal-search/sk-document-queue";
+import { logger } from "@/api/lib/observability/logger";
+import { pgErrorFields } from "@/api/lib/pg-error";
 import { isRecord } from "@/api/lib/type-guards";
 import { withTimeout } from "@/api/lib/with-timeout";
 
@@ -789,7 +792,22 @@ export const storeBackfilledDocument = async ({
     );
   }
 
-  await indexDecision(decision.id, scopedDb);
+  const indexed = await indexDecision(decision.id, scopedDb);
+  if (Result.isError(indexed)) {
+    // The text is stored; its projection is derived state the search-index
+    // backfill reselects while the row is missing. Failing the store here
+    // would make the queue fetch and parse the document again only to find
+    // the row already filled.
+    captureError(indexed.error, {
+      decisionId: decision.id,
+      step: "storeBackfilledDocument.indexDecision",
+    });
+    logger.error("case_law.search_index.store_projection_failed", {
+      decisionId: decision.id,
+      ...errorSystemFields(indexed.error),
+      ...pgErrorFields(indexed.error),
+    });
+  }
   // A missed compare-and-set is a superseded store, not a stored document:
   // the source moved while this fetch was in flight, and the queue's next
   // pass fetches the current version. Reporting it as stored would count a

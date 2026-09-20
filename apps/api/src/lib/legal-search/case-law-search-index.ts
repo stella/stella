@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { and, asc, eq, gt, isNull, notExists, or, sql } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -16,6 +17,7 @@ import { errorSystemFields } from "@/api/lib/errors/utils";
 import { setCorpusBackfillStatementTimeout } from "@/api/lib/legal-search/backfill-statement-timeout";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import { resolveFtsConfig } from "@/api/lib/legal-search/fts-config";
+import { writeProjectionWithinTsvectorCeiling } from "@/api/lib/legal-search/tsvector-bounds";
 import { logger } from "@/api/lib/observability/logger";
 import { pgErrorFields } from "@/api/lib/pg-error";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
@@ -41,7 +43,8 @@ const sectionsToPlainText = (
 export const indexDecision = async (
   decisionId: SafeId<"caseLawDecision">,
   scopedDb: ScopedDb,
-): Promise<void> => {
+  resolveConfig: typeof resolveFtsConfig = resolveFtsConfig,
+): Promise<Result<void, unknown>> => {
   const [decision] = await scopedDb((tx) =>
     tx
       .select({
@@ -80,7 +83,7 @@ export const indexDecision = async (
     // projection row. The three probes below carry the same gate, so a row
     // this one refuses is not handed back on the next backfill pass.
     await removeDecisionFromIndex(decisionId, scopedDb);
-    return;
+    return Result.ok(undefined);
   }
 
   const title = `${decision.caseNumber} — ${decision.court}`;
@@ -101,48 +104,49 @@ export const indexDecision = async (
     .filter(Boolean)
     .join(" ");
 
-  const fts = await resolveFtsConfig(decision.language);
+  const fts = await resolveConfig(decision.language);
 
-  const textExpr = fts.useUnaccent
-    ? sql`unaccent(arabic_normalize(coalesce(${title}, '') || ' ' || coalesce(${searchableText}, '')))`
-    : sql`arabic_normalize(coalesce(${title}, '') || ' ' || coalesce(${searchableText}, ''))`;
-
-  const tsvExpr = sql`to_tsvector(${fts.regconfig}, ${textExpr})`;
   const previewGeneration = Bun.randomUUIDv7();
   const previewPassages = buildSearchPreviewPassages(title, searchableText);
 
-  await scopedDb(async (tx) => {
-    // Raise statement timeout for the tsvector upsert.
-    // to_tsvector + unaccent on very long court decisions is
-    // CPU-intensive. The helper scopes the higher timeout to
-    // this transaction only; user-facing queries keep the default.
-    await setCorpusBackfillStatementTimeout(tx);
-    const writableDecision = await tx
-      .select({ id: caseLawDecisions.id })
-      .from(caseLawDecisions)
-      .where(
-        and(
-          eq(caseLawDecisions.id, decision.id),
-          isNull(caseLawDecisions.redactedAt),
-        ),
-      )
-      .for("share")
-      .limit(1);
-    if (!writableDecision.at(0)) {
-      // audit: skip — search index maintenance; rebuilds derived state
-      await tx
-        .delete(caseLawSearchDocuments)
-        .where(eq(caseLawSearchDocuments.decisionId, decision.id));
-      return;
-    }
-    await tx.execute(sql`
+  const writeProjection = async (indexedText: string): Promise<void> => {
+    const textExpr = fts.useUnaccent
+      ? sql`unaccent(arabic_normalize(coalesce(${title}, '') || ' ' || coalesce(${indexedText}, '')))`
+      : sql`arabic_normalize(coalesce(${title}, '') || ' ' || coalesce(${indexedText}, ''))`;
+    const tsvExpr = sql`to_tsvector(${fts.regconfig}, ${textExpr})`;
+
+    await scopedDb(async (tx) => {
+      // Raise statement timeout for the tsvector upsert.
+      // to_tsvector + unaccent on very long court decisions is
+      // CPU-intensive. The helper scopes the higher timeout to
+      // this transaction only; user-facing queries keep the default.
+      await setCorpusBackfillStatementTimeout(tx);
+      const writableDecision = await tx
+        .select({ id: caseLawDecisions.id })
+        .from(caseLawDecisions)
+        .where(
+          and(
+            eq(caseLawDecisions.id, decision.id),
+            isNull(caseLawDecisions.redactedAt),
+          ),
+        )
+        .for("share")
+        .limit(1);
+      if (!writableDecision.at(0)) {
+        // audit: skip — search index maintenance; rebuilds derived state
+        await tx
+          .delete(caseLawSearchDocuments)
+          .where(eq(caseLawSearchDocuments.decisionId, decision.id));
+        return;
+      }
+      await tx.execute(sql`
     INSERT INTO case_law_search_documents (
       decision_id, title, searchable_text,
       language, regconfig, updated_at, tsv
     ) VALUES (
       ${decision.id},
       ${title},
-      ${searchableText},
+      ${indexedText},
       ${decision.language},
       ${fts.regconfig},
       now(),
@@ -156,11 +160,11 @@ export const indexDecision = async (
       updated_at = EXCLUDED.updated_at,
       tsv = EXCLUDED.tsv
   `);
-    await tx.execute(sql`
+      await tx.execute(sql`
       DELETE FROM case_law_search_document_preview_passages
       WHERE decision_id = ${decision.id}
     `);
-    await tx.execute(sql`
+      await tx.execute(sql`
       INSERT INTO case_law_search_document_preview_passages (
         decision_id, generation, ordinal, content, tsv
       ) VALUES ${buildSearchPreviewPassageValueRows({
@@ -171,12 +175,34 @@ export const indexDecision = async (
         useUnaccent: fts.useUnaccent,
       })}
     `);
-    await tx.execute(sql`
+      await tx.execute(sql`
       UPDATE case_law_search_documents
       SET preview_generation = ${previewGeneration}::uuid
       WHERE decision_id = ${decision.id}
     `);
-  });
+    });
+  };
+
+  // Preview passages are cut from the whole text before the bound applies: each
+  // passage projects into its own small vector, so they never reach the ceiling.
+  const projection = await writeProjectionWithinTsvectorCeiling(
+    searchableText,
+    writeProjection,
+  );
+  if (Result.isError(projection)) {
+    return Result.err(projection.error);
+  }
+  if (projection.value.bounded) {
+    logger.warn("case_law.search_index.tsvector_bounded", {
+      decisionId: decision.id,
+      "case_law.searchable_text_bytes": Buffer.byteLength(searchableText),
+      "case_law.indexed_text_bytes": Buffer.byteLength(
+        projection.value.indexedText,
+      ),
+      ...pgErrorFields(projection.value.cause),
+    });
+  }
+  return Result.ok(undefined);
 };
 
 /**
@@ -291,18 +317,29 @@ export const backfillSearchIndex = async (
   const rows = [...missing, ...stale];
 
   const indexRow = async (row: { id: string }): Promise<number> => {
-    try {
-      await indexDecision(brandPersistedCaseLawDecisionId(row.id), scopedDb);
+    const indexed = (
+      await Result.tryPromise({
+        try: async () =>
+          await indexDecision(
+            brandPersistedCaseLawDecisionId(row.id),
+            scopedDb,
+          ),
+        catch: (cause) => cause,
+      })
+    ).andThen((result) => result);
+    if (Result.isOk(indexed)) {
       return 1;
-    } catch (error) {
-      captureError(error, { decisionId: row.id, step: "backfillSearchIndex" });
-      logger.error("case_law.search_index.backfill_failed", {
-        decisionId: row.id,
-        ...errorSystemFields(error),
-        ...pgErrorFields(error),
-      });
-      return 0;
     }
+    captureError(indexed.error, {
+      decisionId: row.id,
+      step: "backfillSearchIndex",
+    });
+    logger.error("case_law.search_index.backfill_failed", {
+      decisionId: row.id,
+      ...errorSystemFields(indexed.error),
+      ...pgErrorFields(indexed.error),
+    });
+    return 0;
   };
 
   let indexed = 0;

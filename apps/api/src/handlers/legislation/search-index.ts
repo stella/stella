@@ -26,6 +26,7 @@ import { readCorpusText } from "@/api/lib/legal-search/corpus-reads";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import { resolveFtsConfig } from "@/api/lib/legal-search/fts-config";
 import { redistributableLegislationSource } from "@/api/lib/legal-search/legislation-redistribution";
+import { writeProjectionWithinTsvectorCeiling } from "@/api/lib/legal-search/tsvector-bounds";
 import { logger } from "@/api/lib/observability/logger";
 import { pgErrorFields } from "@/api/lib/pg-error";
 
@@ -67,7 +68,7 @@ export const indexLegislationDocument = async (
     readText,
     resolveConfig,
   }: LegislationSearchIndexDependencies = DEFAULT_DEPENDENCIES,
-): Promise<void> => {
+): Promise<Result<void, unknown>> => {
   const [document] = await scopedDb((tx) =>
     tx
       .select({
@@ -95,7 +96,7 @@ export const indexLegislationDocument = async (
 
   if (!document) {
     await removeLegislationFromIndex(documentId, scopedDb);
-    return;
+    return Result.ok(undefined);
   }
 
   let bodyText: string;
@@ -129,25 +130,27 @@ export const indexLegislationDocument = async (
 
   const fts = await resolveConfig(document.language);
 
-  const textExpr = fts.useUnaccent
-    ? sql`unaccent(arabic_normalize(coalesce(${document.title}, '') || ' ' || coalesce(${searchableText}, '')))`
-    : sql`arabic_normalize(coalesce(${document.title}, '') || ' ' || coalesce(${searchableText}, ''))`;
-  const tsvExpr = sql`to_tsvector(${fts.regconfig}, ${textExpr})`;
   const retryAfterExpr =
     corpusReadFailure === undefined
       ? sql`NULL`
       : sql`now() + (${CORPUS_READ_RETRY_DELAY_MS} * interval '1 millisecond')`;
 
-  await scopedDb(async (tx) => {
-    await setCorpusBackfillStatementTimeout(tx);
-    await tx.execute(sql`
+  const writeProjection = async (indexedText: string): Promise<void> => {
+    const textExpr = fts.useUnaccent
+      ? sql`unaccent(arabic_normalize(coalesce(${document.title}, '') || ' ' || coalesce(${indexedText}, '')))`
+      : sql`arabic_normalize(coalesce(${document.title}, '') || ' ' || coalesce(${indexedText}, ''))`;
+    const tsvExpr = sql`to_tsvector(${fts.regconfig}, ${textExpr})`;
+
+    await scopedDb(async (tx) => {
+      await setCorpusBackfillStatementTimeout(tx);
+      await tx.execute(sql`
     INSERT INTO legislation_search_documents (
       document_id, title, searchable_text,
       language, regconfig, updated_at, retry_after, tsv
     ) VALUES (
       ${document.id},
       ${document.title},
-      ${searchableText},
+      ${indexedText},
       ${document.language},
       ${fts.regconfig},
       now(),
@@ -163,14 +166,36 @@ export const indexLegislationDocument = async (
       retry_after = EXCLUDED.retry_after,
       tsv = EXCLUDED.tsv
   `);
-  });
+    });
+  };
 
-  if (corpusReadFailure !== undefined) {
-    throw new LegislationCorpusReadError({
-      message: "Canonical legislation corpus payload is unavailable",
-      cause: corpusReadFailure.cause,
+  const projection = await writeProjectionWithinTsvectorCeiling(
+    searchableText,
+    writeProjection,
+  );
+  if (Result.isError(projection)) {
+    return Result.err(projection.error);
+  }
+  if (projection.value.bounded) {
+    logger.warn("legislation.search_index.tsvector_bounded", {
+      documentId: document.id,
+      "legislation.searchable_text_bytes": Buffer.byteLength(searchableText),
+      "legislation.indexed_text_bytes": Buffer.byteLength(
+        projection.value.indexedText,
+      ),
+      ...pgErrorFields(projection.value.cause),
     });
   }
+
+  if (corpusReadFailure !== undefined) {
+    return Result.err(
+      new LegislationCorpusReadError({
+        message: "Canonical legislation corpus payload is unavailable",
+        cause: corpusReadFailure.cause,
+      }),
+    );
+  }
+  return Result.ok(undefined);
 };
 
 type LegislationSearchIndexBackfillResult = { found: number; indexed: number };
@@ -258,21 +283,26 @@ export const backfillLegislationSearchIndex = async (
   const indexRow = async (row: {
     id: SafeId<"legislationDocument">;
   }): Promise<number> => {
-    try {
-      await indexLegislationDocument(row.id, scopedDb, dependencies);
+    const indexed = (
+      await Result.tryPromise({
+        try: async () =>
+          await indexLegislationDocument(row.id, scopedDb, dependencies),
+        catch: (cause) => cause,
+      })
+    ).andThen((result) => result);
+    if (Result.isOk(indexed)) {
       return 1;
-    } catch (error) {
-      captureError(error, {
-        documentId: row.id,
-        step: "backfillLegislationSearchIndex",
-      });
-      logger.error("legislation.search_index.backfill_failed", {
-        documentId: row.id,
-        ...errorSystemFields(error),
-        ...pgErrorFields(error),
-      });
-      return 0;
     }
+    captureError(indexed.error, {
+      documentId: row.id,
+      step: "backfillLegislationSearchIndex",
+    });
+    logger.error("legislation.search_index.backfill_failed", {
+      documentId: row.id,
+      ...errorSystemFields(indexed.error),
+      ...pgErrorFields(indexed.error),
+    });
+    return 0;
   };
 
   let indexed = 0;
