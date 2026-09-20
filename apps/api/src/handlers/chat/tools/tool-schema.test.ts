@@ -70,7 +70,10 @@ import {
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { BUSINESS_REGISTRY_DISPATCH } from "@/api/lib/business-registries/dispatch";
-import { chatToolMapToArray } from "@/api/lib/chat/chat-tool-types";
+import {
+  CHAT_TOOL_SET_PURPOSE,
+  chatToolMapToArray,
+} from "@/api/lib/chat/chat-tool-types";
 import { projectChatToolSchemasForProvider } from "@/api/lib/chat/provider-tool-projection";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
@@ -890,7 +893,7 @@ describe("chat tool schemas", () => {
     expect(
       getChatTools({
         ...baseArgs,
-        includeRememberToolForValidation: true,
+        purpose: CHAT_TOOL_SET_PURPOSE.validation,
       }),
     ).toHaveProperty(REMEMBER_TOOL_NAME);
   });
@@ -2370,7 +2373,7 @@ describe("chat tool schemas", () => {
             getChatTools({
               ...mutualExclusionArgs,
               editApplyMode,
-              includeAllDocxEditToolsForValidation: true,
+              purpose: CHAT_TOOL_SET_PURPOSE.validation,
             }),
           );
         }
@@ -2384,7 +2387,7 @@ describe("chat tool schemas", () => {
             ...mutualExclusionArgs,
             hasActiveDocxEditClient: false,
             editApplyMode: "auto",
-            includeAllDocxEditToolsForValidation: true,
+            purpose: CHAT_TOOL_SET_PURPOSE.validation,
           }),
         );
       });

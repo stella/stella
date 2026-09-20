@@ -3,6 +3,7 @@ import {
   type ApprovalRequiredBuiltInChatToolName,
   type BuiltInChatToolPolicyKindByName,
 } from "@stll/api-contract";
+import { DOCX_SUGGESTION_SURFACE } from "@stll/api-contract/chat-docx-suggestions";
 import type { DocxSuggestionSurface } from "@stll/api-contract/chat-docx-suggestions";
 import { roles } from "@stll/permissions";
 import type { SkillMetadata } from "@stll/skills";
@@ -75,8 +76,10 @@ import type {
   BusinessRegistrySlug,
   RegistryHandler,
 } from "@/api/lib/business-registries/dispatch";
+import { CHAT_TOOL_SET_PURPOSE } from "@/api/lib/chat/chat-tool-types";
 import type {
   ChatToolMap,
+  ChatToolSetPurpose,
   ChatUIToolsFor,
 } from "@/api/lib/chat/chat-tool-types";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
@@ -444,24 +447,22 @@ type GetChatToolsProps = {
    */
   docxEditRepresentation?: DocxEditRepresentation | undefined;
   /**
-   * Validation-only widening for continuation messages. A pending DOCX tool
-   * call was issued under the mode selected on the previous request, so its
-   * call/result must remain schema-valid even if the user changed the composer
-   * mode before approving it. Both variants share the `suggest_changes` name,
-   * so widening registers the queue variant whenever a client surface exists
-   * (its schemas admit a persisted call of either variant) and falls back to
-   * the apply variant when only its preconditions hold. Live streaming
-   * callers must leave this false so the model still receives exactly one
-   * DOCX edit tool.
+   * Defaults to `run`. The `validation` set widens every group a run can gate
+   * out between two requests on one thread:
+   *
+   * - DOCX edits: a pending call was issued under the mode selected on the
+   *   previous request, so its call/result must remain schema-valid even if the
+   *   user changed the composer mode before approving it. Both variants share
+   *   the `suggest_changes` name, so widening registers the queue variant
+   *   whenever a client surface exists (its schemas admit a persisted call of
+   *   either variant) and falls back to the apply variant when only its
+   *   preconditions hold. A run still receives exactly one DOCX edit tool.
+   * - `remember`: historical calls must remain schema-valid after the
+   *   deployment feature is disabled, even though a run must no longer
+   *   advertise or execute the tool.
+   * - Skill catalog tools: see `createSkillTools`.
    */
-  includeAllDocxEditToolsForValidation?: boolean | undefined;
-  /**
-   * Validation-only compatibility for persisted turns. Historical `remember`
-   * calls must remain schema-valid after the deployment feature is disabled,
-   * even though the live provider toolset must no longer advertise or execute
-   * the tool.
-   */
-  includeRememberToolForValidation?: boolean | undefined;
+  purpose?: ChatToolSetPurpose | undefined;
   /** Fresh abort budget for server-side tools that make their own AI request. */
   createAIAbortSignal?: (() => AbortSignal) | undefined;
   /** Preserve the request's provider prompt-cache setting in nested review. */
@@ -611,12 +612,12 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     workspaceStatusById,
     editApplyMode = DEFAULT_CHAT_EDIT_APPLY_MODE,
     docxEditRepresentation = DEFAULT_DOCX_EDIT_REPRESENTATION,
-    includeAllDocxEditToolsForValidation = false,
-    includeRememberToolForValidation = false,
+    purpose = CHAT_TOOL_SET_PURPOSE.run,
     createAIAbortSignal = () => AbortSignal.timeout(120_000),
     promptCachingEnabled = false,
     usageLane,
   } = props;
+  const forValidation = purpose === CHAT_TOOL_SET_PURPOSE.validation;
   const orgTools = createOrgTools({
     accessibleWorkspaceIds: toolWorkspaceIds,
     organizationId,
@@ -663,6 +664,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
   const skillTools = createSkillTools({
     activeSkillContext,
     organizationId,
+    purpose,
     recordAuditEvent,
     safeDb,
     skills: skillMetadata ?? getChatSkillMetadata(),
@@ -707,7 +709,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     workspaceStatusById,
   });
   const automaticDocxEditAvailableForValidation =
-    includeAllDocxEditToolsForValidation &&
+    forValidation &&
     resolveRegisteredDocxEditMode({
       activeFile,
       editApplyMode: CHAT_EDIT_APPLY_MODE.auto,
@@ -753,7 +755,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
   // preconditions; the remaining narrowings below only refine the types.)
   const manualSuggestChangesRegistered =
     registeredDocxEditMode === CHAT_EDIT_APPLY_MODE.manual ||
-    (includeAllDocxEditToolsForValidation && hasActiveDocxEditClient);
+    (forValidation && hasActiveDocxEditClient);
   const autoApplySuggestChangesTarget =
     !manualSuggestChangesRegistered &&
     (registeredDocxEditMode === CHAT_EDIT_APPLY_MODE.auto ||
@@ -814,7 +816,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
   // (schema-only construction) get no remember tool rather than an
   // unaudited or cross-matter write path.
   const rememberTools =
-    !(memoryEnabled || includeRememberToolForValidation) ||
+    !(memoryEnabled || forValidation) ||
     recordAuditEvent === undefined ||
     resolveMemorySourceWorkspaceIds === undefined
       ? {}
@@ -1003,3 +1005,35 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     },
   });
 };
+
+type GetChatValidationToolsProps = Omit<
+  GetChatToolsProps,
+  | "docxSuggestionSurface"
+  | "hasActiveDocxEditClient"
+  | "hasActiveDocxFileClient"
+  | "purpose"
+  | "skillMetadata"
+  | "thirdPartyBoundary"
+>;
+
+/**
+ * The tool set an incoming message's tool calls are validated against. It
+ * never executes, so every surface- and catalog-dependent group is registered
+ * at its widest: for any request, this set must contain every tool a run on
+ * the same thread could have exposed.
+ */
+export const getChatValidationTools = (
+  props: GetChatValidationToolsProps,
+): ChatToolMap =>
+  getChatTools({
+    ...props,
+    purpose: CHAT_TOOL_SET_PURPOSE.validation,
+    // `spawn_subagents` never executes here, so a raw (non-anonymizing)
+    // boundary is correct; it also keeps the raw-only folder review tool.
+    thirdPartyBoundary: { type: "raw" },
+    hasActiveDocxEditClient: true,
+    hasActiveDocxFileClient: true,
+    // Persisted calls may come from either surface; the file overlay's
+    // operation set is the superset.
+    docxSuggestionSurface: DOCX_SUGGESTION_SURFACE.fileOverlay,
+  });

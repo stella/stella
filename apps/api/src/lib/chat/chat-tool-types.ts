@@ -28,6 +28,21 @@ export type ChatTool = Omit<
 
 export type ChatToolMap = Record<string, ChatTool | undefined>;
 
+/**
+ * Why a tool set is being built. A `run` set is what the model may call this
+ * turn. A `validation` set only checks the tool calls of an incoming message
+ * and never executes, so it must admit every call an earlier run on the thread
+ * could have produced: tools that a catalog, feature flag, or composer mode
+ * gates out of the current run stay registered, with schemas no stricter than
+ * the run's.
+ */
+export const CHAT_TOOL_SET_PURPOSE = {
+  run: "run",
+  validation: "validation",
+} as const;
+export type ChatToolSetPurpose =
+  (typeof CHAT_TOOL_SET_PURPOSE)[keyof typeof CHAT_TOOL_SET_PURPOSE];
+
 // Registry values are already constrained by `ChatToolMap`; only remove the
 // optional slot here. Re-extracting against broad `AnyTool` erases concrete
 // schema inference because its collection boundary intentionally uses `any`.

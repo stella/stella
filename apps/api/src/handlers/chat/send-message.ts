@@ -120,6 +120,7 @@ import {
   areTemplateAuthoringToolsRegistered,
   areWebResearchToolsRegistered,
   getChatTools,
+  getChatValidationTools,
   resolveRegisteredDocxEditMode,
 } from "@/api/handlers/chat/tools/chat-tools";
 import {
@@ -1010,7 +1011,7 @@ const prepareValidatedIncomingMessage = async ({
     // Validation tools include the broadest workspace surface, but
     // still honor thread/org gates for tools whose presence is an
     // explicit user or administrator opt-in.
-    const validationTools = getChatTools({
+    const validationTools = getChatValidationTools({
       organizationId,
       memberRole: memberRole.role,
       orgAIConfig,
@@ -1023,11 +1024,6 @@ const prepareValidatedIncomingMessage = async ({
       threadId: body.threadId,
       workspaceId,
       userId,
-      // Schema validation only; this tool set's `spawn_subagents` never
-      // executes, so a raw (non-anonymizing) boundary is correct here —
-      // the real per-request boundary is created below and threaded
-      // into the streaming tool set instead.
-      thirdPartyBoundary: { type: "raw" },
       // Schema validation runs against the user's full accessible
       // set; per-tool scope checks happen at execute time below.
       toolWorkspaceIds: resolveToolWorkspaceIds({
@@ -1035,15 +1031,8 @@ const prepareValidatedIncomingMessage = async ({
         accessibleWorkspaceIds,
       }),
       activeFile: activeFileForTools,
-      hasActiveDocxEditClient: true,
-      hasActiveDocxFileClient: true,
-      // Validation must admit persisted calls from either surface; the file
-      // overlay's operation set is the superset.
-      docxSuggestionSurface: DOCX_SUGGESTION_SURFACE.fileOverlay,
       editApplyMode,
       docxEditRepresentation,
-      includeAllDocxEditToolsForValidation: true,
-      includeRememberToolForValidation: true,
       webSearchEnabled: validationThreadState.webSearchEnabled,
       webSearchProviders,
       externalTools: externalToolsForValidation,
