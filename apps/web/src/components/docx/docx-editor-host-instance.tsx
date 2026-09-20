@@ -59,6 +59,9 @@ export const HostedDocxEditor = ({ hostKey }: { hostKey: string }) => {
   const setAttachedSlot = useDocxEditorHostStore((s) => s.setAttachedSlot);
   const [container] = useState(createHostContainer);
 
+  // The claim is read against the mounted slots, so `target` is null only while
+  // no slot holds an element at all: the frame before the first slot registers
+  // one, and the grace window. The instance then stays in its container.
   useExternalSyncEffect(() => {
     if (target === null || slot === undefined) {
       return;

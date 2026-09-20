@@ -1,4 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
+
+import { propertyConfig } from "@stll/property-testing";
 
 import { DOCUMENT_PANE } from "@/components/inspector/document-pane";
 
@@ -14,9 +17,13 @@ import {
   nextDocxEditorSweepAt,
   releaseDocxEditorSlot,
   selectActiveDocxEditorClaim,
+  selectMountedDocxEditorClaim,
   sweepDocxEditorRegistry,
 } from "./docx-editor-host.logic";
-import type { DocxEditorClaim } from "./docx-editor-host.logic";
+import type {
+  DocxEditorClaim,
+  DocxEditorSlotName,
+} from "./docx-editor-host.logic";
 
 const document = {
   workspaceId: "matter-1",
@@ -51,6 +58,22 @@ const inspectorClaim = (sequence: number): DocxEditorClaim => ({
   slot: DOCX_EDITOR_SLOT.inspector,
   surface: "inspector",
 });
+
+const claimFor = (
+  slot: DocxEditorSlotName,
+  sequence: number,
+): DocxEditorClaim =>
+  slot === DOCX_EDITOR_SLOT.main
+    ? mainClaim(sequence)
+    : inspectorClaim(sequence);
+
+const bothSlotsClaimed = claimDocxEditorSlot(
+  claimDocxEditorSlot(EMPTY_DOCX_EDITOR_REGISTRY, {
+    claim: mainClaim(1),
+    hostKey,
+  }),
+  { claim: inspectorClaim(2), hostKey },
+);
 
 describe("hosted DOCX editor: pane vocabulary", () => {
   test("every arrangement names the slot its document is read in", () => {
@@ -158,6 +181,26 @@ describe("hosted DOCX editor: releasing", () => {
     expect(selectActiveDocxEditorClaim(released[hostKey])?.slot).toBe(
       DOCX_EDITOR_SLOT.inspector,
     );
+  });
+
+  test("releasing the newer of two slots hands the instance to the older one", () => {
+    const released = releaseDocxEditorSlot(bothSlotsClaimed, {
+      hostKey,
+      now: 1000,
+      sequence: 2,
+      slot: DOCX_EDITOR_SLOT.inspector,
+    });
+
+    expect(released[hostKey]?.claims).toEqual([mainClaim(1)]);
+    expect(selectActiveDocxEditorClaim(released[hostKey])).toEqual(
+      mainClaim(1),
+    );
+    // A slot still holds the instance, so there is no grace window to sweep:
+    // the departed slot must not keep the entry pointed at a gone target.
+    expect(released[hostKey]?.releasedAt).toBeNull();
+    expect(
+      nextDocxEditorSweepAt(released, DOCX_EDITOR_RELEASE_GRACE_MS),
+    ).toBeNull();
   });
 
   test("a stale teardown cannot take the same slot's newer claim with it", () => {
@@ -286,5 +329,106 @@ describe("hosted DOCX editor: the grace window", () => {
         500,
       ),
     ).toBeNull();
+  });
+});
+
+describe("hosted DOCX editor: which slot shows the instance", () => {
+  test("a claim whose slot has not mounted its target leaves the editor in the mounted one", () => {
+    expect(
+      selectMountedDocxEditorClaim(
+        bothSlotsClaimed[hostKey],
+        (slot) => slot === DOCX_EDITOR_SLOT.main,
+      ),
+    ).toEqual(mainClaim(1));
+  });
+
+  test("the newest slot that has mounted its target takes the instance", () => {
+    expect(
+      selectMountedDocxEditorClaim(bothSlotsClaimed[hostKey], () => true),
+    ).toEqual(inspectorClaim(2));
+  });
+
+  test("with no slot mounted the instance keeps rendering rather than being dropped", () => {
+    const graced = releaseDocxEditorSlot(
+      claimDocxEditorSlot(EMPTY_DOCX_EDITOR_REGISTRY, {
+        claim: mainClaim(1),
+        hostKey,
+      }),
+      { hostKey, now: 1000, sequence: 1, slot: DOCX_EDITOR_SLOT.main },
+    );
+
+    expect(selectMountedDocxEditorClaim(graced[hostKey], () => false)).toEqual(
+      mainClaim(1),
+    );
+  });
+});
+
+const slotOperations = fc.array(
+  fc.record({
+    kind: fc.constantFrom("claim", "release"),
+    slot: fc.constantFrom(DOCX_EDITOR_SLOT.main, DOCX_EDITOR_SLOT.inspector),
+    /** Whether the teardown names a sequence the slot no longer holds, which
+     *  is what a fast remount inside one slot produces. */
+    stale: fc.boolean(),
+  }),
+  { maxLength: 24, minLength: 1 },
+);
+
+describe("hosted DOCX editor: any order of claims and releases", () => {
+  test("a slot that still holds a claim always drives the instance", () => {
+    fc.assert(
+      fc.property(slotOperations, (operations) => {
+        let registry = EMPTY_DOCX_EDITOR_REGISTRY;
+        let sequence = 0;
+        const held = new Map<DocxEditorSlotName, number>();
+
+        for (const [step, operation] of operations.entries()) {
+          if (operation.kind === "claim") {
+            sequence += 1;
+            held.set(operation.slot, sequence);
+            registry = claimDocxEditorSlot(registry, {
+              claim: claimFor(operation.slot, sequence),
+              hostKey,
+            });
+          } else {
+            const registered = held.get(operation.slot);
+            const releasing =
+              operation.stale || registered === undefined
+                ? sequence + 1
+                : registered;
+            if (releasing === registered) {
+              held.delete(operation.slot);
+            }
+            registry = releaseDocxEditorSlot(registry, {
+              hostKey,
+              now: step,
+              sequence: releasing,
+              slot: operation.slot,
+            });
+          }
+
+          const entry = registry[hostKey];
+          if (entry === undefined) {
+            continue;
+          }
+          const active = selectActiveDocxEditorClaim(entry);
+          expect(entry.releasedAt === null).toBe(entry.claims.length > 0);
+
+          if (entry.claims.length === 0) {
+            // Nothing holds the instance: it keeps the claim it was last shown
+            // under, so the grace window still has something to render.
+            expect(active).not.toBeNull();
+            continue;
+          }
+          // The claim driving the instance is one of the live ones, by
+          // identity, and the newest of them.
+          expect(entry.claims.some((claim) => claim === active)).toBe(true);
+          expect(active?.sequence).toBe(
+            Math.max(...entry.claims.map((claim) => claim.sequence)),
+          );
+        }
+      }),
+      propertyConfig(),
+    );
   });
 });

@@ -136,25 +136,49 @@ export type DocxEditorHostRegistry = Readonly<
 
 export const EMPTY_DOCX_EDITOR_REGISTRY: DocxEditorHostRegistry = {};
 
+const newestClaim = (
+  claims: readonly DocxEditorClaim[],
+): DocxEditorClaim | null => {
+  let newest: DocxEditorClaim | null = null;
+  for (const claim of claims) {
+    if (newest === null || claim.sequence > newest.sequence) {
+      newest = claim;
+    }
+  }
+  return newest;
+};
+
 /**
  * The claim the hosted instance renders: the most recently registered live
  * one, or — while nothing claims it — the one it was last shown under, so the
  * instance survives the window between the two halves of a swap.
+ *
+ * A slot that has gone away never drives the instance while a mounted one
+ * holds a claim: `lastClaim` is the grace-window fallback, not a candidate
+ * beside the live claims. Releasing the newest slot therefore hands the
+ * instance back to the older live slot instead of leaving the departed one
+ * pointing at a target that no longer exists.
  */
 export const selectActiveDocxEditorClaim = (
   entry: DocxEditorHostEntry | undefined,
-): DocxEditorClaim | null => {
-  if (entry === undefined) {
-    return null;
-  }
-  let best = entry.lastClaim;
-  for (const claim of entry.claims) {
-    if (claim.sequence > best.sequence) {
-      best = claim;
-    }
-  }
-  return best;
-};
+): DocxEditorClaim | null =>
+  entry === undefined ? null : (newestClaim(entry.claims) ?? entry.lastClaim);
+
+/**
+ * The claim the instance is shown under, chosen from the slots that have
+ * registered a target element rather than from the registry alone: the newest
+ * live claim whose slot is mounted. A slot that has claimed but not yet
+ * mounted its element, and the grace window where nothing claims the instance
+ * at all, fall back to the active claim and leave the editor where it is.
+ */
+export const selectMountedDocxEditorClaim = (
+  entry: DocxEditorHostEntry | undefined,
+  isSlotMounted: (slot: DocxEditorSlotName) => boolean,
+): DocxEditorClaim | null =>
+  entry === undefined
+    ? null
+    : (newestClaim(entry.claims.filter((claim) => isSlotMounted(claim.slot))) ??
+      selectActiveDocxEditorClaim(entry));
 
 /** Whether a slot is currently showing the instance, or it is only waiting out
  *  its grace window. */
@@ -220,8 +244,7 @@ export const releaseDocxEditorSlot = (
       claims,
       // The instance keeps the claim it was last shown under until something
       // claims it again, so releasing never blanks the editor.
-      lastClaim:
-        selectActiveDocxEditorClaim({ ...entry, claims }) ?? entry.lastClaim,
+      lastClaim: newestClaim(claims) ?? entry.lastClaim,
       releasedAt: claims.length === 0 ? now : null,
     },
   };

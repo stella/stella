@@ -15,7 +15,7 @@ import {
   EMPTY_DOCX_EDITOR_REGISTRY,
   nextDocxEditorSweepAt,
   releaseDocxEditorSlot,
-  selectActiveDocxEditorClaim,
+  selectMountedDocxEditorClaim,
   sweepDocxEditorRegistry,
 } from "./docx-editor-host.logic";
 import type {
@@ -162,11 +162,19 @@ export const selectDocxEditorHostKeys = (
   state: DocxEditorHostState,
 ): readonly string[] => Object.keys(state.registry);
 
+/**
+ * The claim the instance renders under. Read against the slots that have
+ * registered their element, so the claim and the DOM node the editor is moved
+ * into always name the same slot.
+ */
 export const selectDocxEditorClaim = (
   state: DocxEditorHostState,
   hostKey: string,
 ): DocxEditorClaim | null =>
-  selectActiveDocxEditorClaim(state.registry[hostKey]);
+  selectMountedDocxEditorClaim(
+    state.registry[hostKey],
+    (slot) => state.slotElements[slotElementKey(hostKey, slot)] !== undefined,
+  );
 
 export const selectDocxEditorSlotElement = (
   state: DocxEditorHostState,
