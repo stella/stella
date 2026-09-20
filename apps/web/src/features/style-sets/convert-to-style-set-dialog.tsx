@@ -18,6 +18,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@stll/ui/dialog";
+import { ScrollArea } from "@stll/ui/scroll-area";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
@@ -159,33 +160,37 @@ const ConvertToStyleSetDialogBody = ({
         </DialogDescription>
       </DialogHeader>
       <DialogPanel>
-        <div className="max-h-64 space-y-2 overflow-y-auto">
-          {data?.items.map((styleSet) => (
-            <StyleSetChoice
-              disabled={!styleSet.hasStyleGuide || converting}
-              hint={styleSet.hasStyleGuide ? null : t("styleSets.noStyleGuide")}
-              key={styleSet.id}
-              name={styleSet.name}
-              onSelect={() => setSelectedStyleSetId(styleSet.id)}
-              selected={selectedStyleSetId === styleSet.id}
-            />
-          ))}
-          {isLoading && (
-            <p className="text-muted-foreground p-2 text-sm">
-              {t("common.loading")}
-            </p>
-          )}
-          {isError && (
-            <p className="text-destructive p-2 text-sm">
-              {t("styleSets.loadFailed")}
-            </p>
-          )}
-          {!isLoading && !isError && data?.items.length === 0 && (
-            <p className="text-muted-foreground p-2 text-sm">
-              {t("common.noResults")}
-            </p>
-          )}
-        </div>
+        <ScrollArea axis="vertical" className="max-h-64">
+          <div className="space-y-2">
+            {data?.items.map((styleSet) => (
+              <StyleSetChoice
+                disabled={!styleSet.hasStyleGuide || converting}
+                hint={
+                  styleSet.hasStyleGuide ? null : t("styleSets.noStyleGuide")
+                }
+                key={styleSet.id}
+                name={styleSet.name}
+                onSelect={() => setSelectedStyleSetId(styleSet.id)}
+                selected={selectedStyleSetId === styleSet.id}
+              />
+            ))}
+            {isLoading && (
+              <p className="text-muted-foreground p-2 text-sm">
+                {t("common.loading")}
+              </p>
+            )}
+            {isError && (
+              <p className="text-destructive p-2 text-sm">
+                {t("styleSets.loadFailed")}
+              </p>
+            )}
+            {!isLoading && !isError && data?.items.length === 0 && (
+              <p className="text-muted-foreground p-2 text-sm">
+                {t("common.noResults")}
+              </p>
+            )}
+          </div>
+        </ScrollArea>
       </DialogPanel>
       <DialogFooter>
         <DialogClose render={<Button disabled={converting} variant="ghost" />}>

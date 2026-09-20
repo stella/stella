@@ -32,8 +32,8 @@ import type {
   StyleNumbering,
 } from "@/api/lib/house-style/catalogue";
 
-export const PARAGRAPH_TEXT_MAX_CHARS = 400;
-export const NEIGHBOUR_TEXT_MAX_CHARS = 160;
+const PARAGRAPH_TEXT_MAX_CHARS = 400;
+const NEIGHBOUR_TEXT_MAX_CHARS = 160;
 
 /** A paragraph as the body holds it, with the traversal's own facts. */
 export type BodyParagraph = {
@@ -99,7 +99,7 @@ export const stripManualMarker = (text: string): ManualMarker => {
     : { marker: matched[0], text: text.slice(matched[0].length) };
 };
 
-export type ParagraphNeighbour = { text: string; style: string };
+type ParagraphNeighbour = { text: string; style: string };
 
 export type ParagraphFeatures = {
   /** Position among the non-empty paragraphs, which is what is decided. */

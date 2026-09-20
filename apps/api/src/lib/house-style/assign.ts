@@ -31,7 +31,7 @@ import type {
 } from "@/api/lib/workflow/decisions/system-one";
 
 /** The decision's stable name, for its log line and a later replay. */
-export const HOUSE_STYLE_DECISION_ID = "document.house-style";
+const HOUSE_STYLE_DECISION_ID = "document.house-style";
 
 /** The option that says no house style fits; the rule tier then answers. */
 export const NO_HOUSE_STYLE = "__none";
@@ -42,13 +42,13 @@ export const NO_HOUSE_STYLE = "__none";
  * grows with the paragraph count times the style count; a style set with
  * twenty styles overran the model's input limit at twenty-four paragraphs.
  */
-export const DEFAULT_BATCH_SIZE = 12;
-export const DEFAULT_BATCH_CONCURRENCY = 4;
+const DEFAULT_BATCH_SIZE = 12;
+const DEFAULT_BATCH_CONCURRENCY = 4;
 
-export const ASSIGNMENT_TIERS = ["decision-model", "rule"] as const;
+const ASSIGNMENT_TIERS = ["decision-model", "rule"] as const;
 export type AssignmentTier = (typeof ASSIGNMENT_TIERS)[number];
 
-export type ParagraphAssignment = {
+type ParagraphAssignment = {
   index: number;
   styleId: string;
   tier: AssignmentTier;
@@ -70,7 +70,7 @@ export const planDecisionBatches = (
 };
 
 /** One question id per paragraph, derived from its position, so answers bind back. */
-export const questionKey = (index: number): string => `p${String(index)}`;
+const questionKey = (index: number): string => `p${String(index)}`;
 
 const paragraphState = (features: ParagraphFeatures): SystemOneEntry => ({
   index: features.index,
@@ -252,7 +252,7 @@ export const ruleStyleId = (
   return plan.bodyStyleId;
 };
 
-export type DecisionUsage = {
+type DecisionUsage = {
   requests: number;
   inputTokens: number;
   latenciesMs: number[];

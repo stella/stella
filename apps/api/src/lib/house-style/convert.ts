@@ -195,7 +195,7 @@ export type ConversionRow = {
   tier: AssignmentTier;
 };
 
-export type StyleCount = { styleId: string; name: string; count: number };
+type StyleCount = { styleId: string; name: string; count: number };
 
 export type ConversionSummary = {
   paragraphs: number;
@@ -246,7 +246,7 @@ const snippetOf = (text: string): string => {
     : `${points.slice(0, SNIPPET_MAX_CHARS - 1).join("")}…`;
 };
 
-export type SummariseConversionOptions = {
+type SummariseConversionOptions = {
   rows: readonly ConversionRow[];
   catalogue: StyleCatalogue;
   usage: {
@@ -259,7 +259,7 @@ export type SummariseConversionOptions = {
   strippedManualMarkers: number;
 };
 
-export const summariseConversion = ({
+const summariseConversion = ({
   rows,
   catalogue,
   usage,

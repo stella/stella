@@ -37,7 +37,7 @@ const prose = v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(2000));
  * Snake_case keys: the entry travels into the decision model's state as it
  * is written, and the model reads the key names as part of the question.
  */
-export const styleGuideEntrySchema = v.strictObject({
+const styleGuideEntrySchema = v.strictObject({
   id: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(256)),
   name: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(256)),
   /** One line: what the style is for. Glosses the option in a question. */
@@ -50,14 +50,12 @@ export const styleGuideEntrySchema = v.strictObject({
   looks_like: prose,
 });
 
-export type StyleGuideEntry = v.InferOutput<typeof styleGuideEntrySchema>;
-
 /**
  * What a caller authors. `catalogueHash` is optional because a guide can be
  * written before it is bound to anything; when it is there, binding refuses a
  * catalogue it does not name rather than applying a guide to another file.
  */
-export const styleGuideDraftSchema = v.strictObject({
+const styleGuideDraftSchema = v.strictObject({
   catalogueHash: v.optional(v.pipe(v.string(), v.minLength(1))),
   styles: v.pipe(v.array(styleGuideEntrySchema), v.minLength(1)),
 });
@@ -65,7 +63,7 @@ export const styleGuideDraftSchema = v.strictObject({
 export type StyleGuideDraft = v.InferOutput<typeof styleGuideDraftSchema>;
 
 /** What a style set stores: the same entries, bound to a catalogue. */
-export const styleGuideSchema = v.strictObject({
+const styleGuideSchema = v.strictObject({
   ...styleGuideDraftSchema.entries,
   catalogueHash: v.pipe(v.string(), v.minLength(1)),
 });

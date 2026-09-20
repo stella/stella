@@ -372,7 +372,7 @@ export const emptyXmlElements = (
 };
 
 /** One element emptied in place, keeping its attributes. */
-export const emptyXmlElement = (xml: string, name: string): string =>
+const emptyXmlElement = (xml: string, name: string): string =>
   xml.replaceAll(
     new RegExp(`<${name}(\\s[^>]*)?>[\\s\\S]*?</${name}>`, "gu"),
     (_match: string, attributes: string | undefined) =>

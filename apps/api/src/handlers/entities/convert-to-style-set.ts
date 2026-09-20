@@ -20,7 +20,7 @@ const bodySchema = t.Object({
 });
 
 /** The style set has no style guide, so nothing can be converted into it. */
-export const STYLE_GUIDE_MISSING_CODE = "style_guide_missing";
+const STYLE_GUIDE_MISSING_CODE = "style_guide_missing";
 
 const DOCX_SUFFIX = /\.docx$/iu;
 

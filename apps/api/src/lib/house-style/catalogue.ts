@@ -32,7 +32,7 @@ export type StyleNumbering = {
 };
 
 /** Effective paragraph formatting, after `basedOn` and the document defaults. */
-export type StyleFormatting = {
+type StyleFormatting = {
   font: string | null;
   sizePt: number | null;
   bold: boolean;
@@ -72,8 +72,8 @@ export type StyleCatalogue = {
 /** A substring rewrite over style ids and display names, e.g. a house prefix. */
 export type RenameRule = { from: string; to: string };
 
-export const MAX_EXAMPLES = 3;
-export const EXAMPLE_MAX_CHARS = 240;
+const MAX_EXAMPLES = 3;
+const EXAMPLE_MAX_CHARS = 240;
 const HALF_POINTS_PER_POINT = 2;
 /** The style Word falls back to when no `w:style` declares `w:default`. */
 const DEFAULT_STYLE_ID = "Normal";
@@ -105,7 +105,7 @@ export const applyRename = (
  * renamed `styles.xml` still matches the `numbering.xml` levels that link to
  * its styles and the paragraphs that carry them.
  */
-export const renameStylesInDocument = (
+const renameStylesInDocument = (
   doc: slimdom.Document,
   rules: readonly RenameRule[],
 ): void => {
@@ -302,7 +302,7 @@ const PLACEHOLDER = /%(?<level>\d)/gu;
  * decimal levels reads "1.1", "(%4)" under lowerLetter reads "(a)". A bullet
  * keeps its literal character, which is what `w:lvlText` already holds.
  */
-export const renderNumberExample = (
+const renderNumberExample = (
   levels: Map<number, NumberingLevel>,
   level: number,
 ): string => {
@@ -542,7 +542,7 @@ const isTableOfContentsStyle = ({ id, name }: { id: string; name: string }) =>
   /^toc/iu.test(id) || /^toc/iu.test(name.replaceAll(" ", ""));
 
 /** One paragraph style, with its formatting already resolved. */
-export type StyleDefinition = {
+type StyleDefinition = {
   id: string;
   name: string;
   basedOn: string | null;
@@ -748,7 +748,7 @@ export const resolveNumbering = ({
  * a guide describes what the styles are, so a re-uploaded file with the same
  * styles keeps its guide and a changed hierarchy does not.
  */
-export const catalogueHash = (styles: readonly CatalogueStyle[]): string => {
+const catalogueHash = (styles: readonly CatalogueStyle[]): string => {
   const canonical = [...styles]
     .map(({ id, name, formatting }) => ({ id, name, formatting }))
     .sort((left, right) => (left.id < right.id ? -1 : 1));
