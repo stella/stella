@@ -483,6 +483,19 @@ describe("MCP knowledge tools", () => {
     });
   });
 
+  test("save_playbook stores an empty scope as unscoped", async () => {
+    const { scopedDb, writes } = createPlaybookWriteScopedDb();
+
+    const result = await handleMcpToolCall({
+      args: { name: "NDA playbook", scope: {} },
+      context: createPlaybookWriteContext(scopedDb),
+      toolName: "save_playbook",
+    });
+
+    expect(result.isError).toBeFalsy();
+    expect(writes[0]?.["scope"]).toBeNull();
+  });
+
   test("save_playbook keeps the stored name, description, scope, and unnamed positions on an update", async () => {
     const { scopedDb, writes } = createPlaybookWriteScopedDb();
 

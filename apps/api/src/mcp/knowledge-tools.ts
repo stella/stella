@@ -1588,11 +1588,13 @@ const toPlaybookScope = ({
   }
   const documentTypeKey = input.document_type_key ?? stored?.documentTypeKey;
   const perspective = input.perspective ?? stored?.perspective;
-  return {
+  const scope = {
     ...(documentTypeKey === undefined ? {} : { documentTypeKey }),
     ...(perspective === undefined ? {} : { perspective }),
     ...(stored?.trigger === undefined ? {} : { trigger: stored.trigger }),
   };
+  // An unscoped playbook is stored as null, never as an empty object.
+  return Object.keys(scope).length === 0 ? null : scope;
 };
 
 const NO_POSITION_INPUTS: readonly PlaybookPositionInput[] = [];
