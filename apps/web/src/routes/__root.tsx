@@ -8,6 +8,7 @@ import {
   HeadContent,
   Outlet,
   Scripts,
+  type ErrorComponentProps,
 } from "@tanstack/react-router";
 
 import { AppProviders } from "@/app-providers";
@@ -47,10 +48,26 @@ export const Route = createRootRouteWithContext<{
     links: [{ rel: "icon", href: "/favicon.svg", type: "image/svg+xml" }],
   }),
   pendingComponent: () => <DefaultPendingComponent className="h-dvh" />,
-  errorComponent: (props) => (
-    <DefaultErrorComponent className="h-dvh" {...props} />
-  ),
+  errorComponent: RootErrorComponent,
 });
+
+function RootErrorComponent(props: ErrorComponentProps) {
+  const appContext = Route.useRouteContext({
+    select: (context) => ({
+      analyticsValue: context.analyticsValue,
+      queryClient: context.queryClient,
+    }),
+  });
+
+  return (
+    <AppProviders
+      analyticsValue={appContext.analyticsValue}
+      queryClient={appContext.queryClient}
+    >
+      <DefaultErrorComponent className="h-dvh" {...props} />
+    </AppProviders>
+  );
+}
 
 function RootComponent() {
   const appContext = Route.useRouteContext({

@@ -38,6 +38,9 @@ describe("InspectorFacetBar", () => {
     expect(markup).toContain("Alpha");
     expect(markup).toContain("Beta");
     expect(markup).toContain("Gamma");
+    expect(markup).toContain('data-slot="inspector-facet-bar"');
+    expect(markup).toContain('data-active-facet="alpha"');
+    expect(markup).toContain('data-facet-option="gamma"');
   });
 
   test("marks the active facet, and only the active facet", () => {
@@ -58,6 +61,7 @@ describe("InspectorFacetBar", () => {
     expect(classesOf(buttonFor(markup, "Gamma"))).not.toContain(
       "bg-foreground",
     );
+    expect(buttonFor(markup, "Beta")).toContain('data-facet-value="beta"');
   });
 
   test("honours disabledFacets: only the listed facets are disabled", () => {
@@ -73,6 +77,9 @@ describe("InspectorFacetBar", () => {
     );
 
     expect(buttonFor(markup, "Gamma")).toContain("disabled");
+    expect(markup).toContain(
+      'data-facet-option="gamma" data-facet-option-disabled=""',
+    );
     expect(buttonFor(markup, "Alpha")).not.toContain("disabled");
     expect(buttonFor(markup, "Beta")).not.toContain("disabled");
   });

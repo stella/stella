@@ -471,6 +471,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
         // later — the pane's width is the reader's to choose, never the
         // content's to demand.
         className="flex h-full bg-(--matter-background-tint) shadow-lg [--background:var(--matter-background-tint)] *:min-w-0"
+        data-slot="inspector"
         style={
           inspectorMatterColor === null
             ? undefined

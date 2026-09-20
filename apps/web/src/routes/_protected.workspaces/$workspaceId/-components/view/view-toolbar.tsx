@@ -137,7 +137,10 @@ export const ViewToolbar = ({
   const columnToggleGroups = useMatterColumnToggleGroups(properties);
 
   return (
-    <ViewToolbarChrome className="md:ms-auto md:justify-end">
+    <ViewToolbarChrome
+      className="md:ms-auto md:justify-end"
+      data-slot="workspace-view-toolbar"
+    >
       <ExtractionRunProgress workspaceId={workspaceId} />
 
       {view.layout.type === "filesystem" && folderState.hasFolders && (

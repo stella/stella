@@ -33,6 +33,7 @@ describe("WorkspaceViewSwitcher", () => {
     );
 
     expect(markup).toContain("Saved views");
+    expect(markup).toContain('data-slot="workspace-view-switcher"');
     expect(markup).toContain('dir="ltr"');
     expect(markup).toContain("All matters");
     expect(markup).toContain("Deadlines");
