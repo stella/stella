@@ -198,6 +198,8 @@ type MockSearchOptions = {
   recordCardStatus?: number;
   unparseableDetail?: boolean;
   renderPositionOffset?: number;
+  /** Where the search submit's 302 points, when not the results page. */
+  submitLocation?: string;
   onPost?: (form: URLSearchParams, headers: Headers) => void;
   onDetail?: (url: URL, init?: RequestInit) => void;
 };
@@ -244,6 +246,7 @@ const installSearchMock = ({
   recordCardStatus = 200,
   unparseableDetail = false,
   renderPositionOffset = 0,
+  submitLocation = "/Search/Results.aspx",
   onPost,
   onDetail,
 }: MockSearchOptions): void => {
@@ -271,7 +274,7 @@ const installSearchMock = ({
             ? new Response(makeNoResultsPage())
             : new Response(null, {
                 status: 302,
-                headers: { Location: "/Search/Results.aspx" },
+                headers: { Location: submitLocation },
               }),
         );
       }
@@ -1683,6 +1686,52 @@ describe("czUsAdapter.fetchPage", () => {
     const result = await czUsAdapter.fetchPage(historicalCursor(2024), {});
 
     expect(Result.isOk(result)).toBe(true);
+  });
+
+  test("reads a submit redirected away from the results page as a failure", async () => {
+    installSearchMock({
+      rows: [
+        {
+          id: "3001",
+          sz: "I-1-24_1",
+          caseNumber: "I.\u00daS 1/24",
+          date: "1. 2. 2024",
+        },
+      ],
+      submitLocation: "/Error.aspx",
+    });
+
+    const result = await czUsAdapter.fetchPage(historicalCursor(2024), {});
+
+    if (!Result.isError(result)) {
+      throw new TypeError("a refused search must not produce a page");
+    }
+    expect(result.error.message).toBe(
+      "NALUS search returned HTTP 302 to https://nalus.usoud.cz/Error.aspx",
+    );
+    // The form read and the submit, and nothing after them: unchecked, the
+    // crawl spent a further request on the results page the court serves
+    // empty once the search behind it failed, and blamed that empty page.
+    expect(fetchCallCount()).toBe(2);
+  });
+
+  test("accepts the submit redirect a valid search is answered with", async () => {
+    installSearchMock({
+      rows: [
+        {
+          id: "3002",
+          sz: "I-2-24_1",
+          caseNumber: "I.\u00daS 2/24",
+          date: "1. 2. 2024",
+        },
+      ],
+    });
+
+    const page = unwrap(
+      await czUsAdapter.fetchPage(historicalCursor(2024), {}),
+    );
+
+    expect(page.decisions).toHaveLength(1);
   });
 
   test("names where a redirected request was sent, without its query", async () => {
