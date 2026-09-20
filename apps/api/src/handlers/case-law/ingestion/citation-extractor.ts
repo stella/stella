@@ -370,8 +370,14 @@ const CITATION_PATTERNS: RegExp[] = [
     "gu",
   ),
 
-  // ECLI: "ECLI:CZ:NS:2020:21.CDO.1234.2020.1"
-  /ECLI:[A-Z]{2}:[A-Z]{1,8}:\d{4}:[\w.]+/gu,
+  // ECLI: "ECLI:CZ:NS:2020:21.CDO.1234.2020.1". The court code is
+  // alphanumeric, not letters-only: Slovak courts that exist several times
+  // in one city number the duplicates, and the number is part of the code
+  // ("ECLI:SK:OSKE1:2018:7117220342.4" for Okresný súd Košice I). A
+  // letters-only class drops the whole numbered-court family silently.
+  // Requiring a leading letter keeps a missing code from letting the year
+  // stand in for one.
+  /ECLI:[A-Z]{2}:[A-Z][A-Z\d]{0,7}:\d{4}:[\w.]+/gu,
 
   // CJEU judgments cite their own case-law with the ECLI suffix only,
   // dropping the "ECLI:" literal: "C‑156/21, EU:C:2022:97", "60/81,
