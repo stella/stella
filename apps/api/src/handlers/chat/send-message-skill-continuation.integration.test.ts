@@ -398,18 +398,19 @@ describe("continuing a turn that called skill tools", () => {
     expect(streamChatMock).toHaveBeenCalledTimes(1);
   });
 
-  test("still rejects a continuation whose persisted call names no stella tool", async () => {
+  test("accepts a settled persisted call to a tool no current set defines", async () => {
     const result = await answerAskUser(
       completedSkillCallParts({
         input: { skillName: INSTALLED_SKILL_SLUG },
-        // A name no tool set defines; the cast stands in for a forged or stale
-        // transcript, which the type would otherwise exclude.
-        name: asTestRaw<"load-skill">("load-skill-forged"),
+        // Stands in for a tool renamed or removed since the call ran; the type
+        // would otherwise exclude the name. Only the awaited call is judged
+        // against this request's tools.
+        name: asTestRaw<"load-skill">("load-skill-since-renamed"),
         output: {},
       }),
     );
 
-    expect(result).toMatchObject({ code: 400 });
-    expect(streamChatMock).not.toHaveBeenCalled();
+    expect(result).toBeInstanceOf(Response);
+    expect(streamChatMock).toHaveBeenCalledTimes(1);
   });
 });

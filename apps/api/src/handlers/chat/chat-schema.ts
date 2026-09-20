@@ -570,10 +570,11 @@ export const validateMessage = async ({
     const candidateMessage = toPersistableChatMessage({
       id: message.id,
       role: message.role,
-      parts: partsResult.value,
+      parts: partsResult.value.parts,
       ...(metadata === undefined ? {} : { metadata }),
     });
     const toolValidationResult = validateToolCallParts({
+      clientAuthoredCallIds: partsResult.value.clientAuthoredCallIds,
       message: candidateMessage,
       tools,
     });
@@ -663,6 +664,21 @@ const resolveValidatedChatMetadata = ({
   }).metadata;
 };
 
+/**
+ * `clientAuthoredCallIds` names the tool calls whose content the client
+ * contributed to. On a continuation that is only the awaited calls it answered:
+ * every other part is the server's own persisted copy, valid against the tool
+ * set of the run that wrote it, and is not judged against this request's. Which
+ * tools a request registers depends on state that moves between two requests
+ * (installed skills, feature flags, roles, connectors, composer mode), so
+ * re-judging history would reject the server's own turn. `undefined` means the
+ * whole message is client-authored.
+ */
+type ValidatedIncomingChatParts = {
+  clientAuthoredCallIds: ReadonlySet<string> | undefined;
+  parts: ChatPart[];
+};
+
 const validateIncomingChatParts = ({
   message,
   persistedMessage,
@@ -671,7 +687,7 @@ const validateIncomingChatParts = ({
   message: RawIncomingMessage;
   persistedMessage: ValidateMessageInput["persistedMessage"];
   resume: AgUiResume | undefined;
-}): Result<ChatPart[], HandlerError<400>> => {
+}): Result<ValidatedIncomingChatParts, HandlerError<400>> => {
   const validatedParts: ChatPart[] = [];
   for (const part of message.parts) {
     if (isIncomingChatPart(part)) {
@@ -709,15 +725,22 @@ const validateIncomingChatParts = ({
     if (Result.isError(continuationResult)) {
       return Result.err(continuationResult.error);
     }
-    return Result.ok(
-      applyValidatedContinuationTransitions({
+    const clientAuthoredCallIds = new Set<string>();
+    for (const [callId, validatedCall] of continuationResult.value) {
+      if (validatedCall.type === "transitioned") {
+        clientAuthoredCallIds.add(callId);
+      }
+    }
+    return Result.ok({
+      clientAuthoredCallIds,
+      parts: applyValidatedContinuationTransitions({
         incomingParts: validatedParts,
         persistedParts,
         validatedCallsById: continuationResult.value,
       }),
-    );
+    });
   }
-  return Result.ok(validatedParts);
+  return Result.ok({ clientAuthoredCallIds: undefined, parts: validatedParts });
 };
 
 const applyValidatedContinuationTransitions = ({
@@ -1329,25 +1352,38 @@ const isChatMessageMetadataEmpty = (metadata: ChatMessageMetadata): boolean =>
 
 export const validateToolCallParts = ({
   allowPartialInput = false,
+  clientAuthoredCallIds,
   message,
   tools,
 }: {
   allowPartialInput?: boolean;
+  /** See `ValidatedIncomingChatParts`; `undefined` validates every call. */
+  clientAuthoredCallIds?: ReadonlySet<string> | undefined;
   message: ChatMessage;
   tools: ChatToolMap;
 }): Result<ChatPart[], HandlerError<400>> => {
   const toolCallsById = new Map<string, ValidatedToolCallPart>();
+  const serverAuthoredCallIds = new Set<string>();
   const parts: ChatPart[] = [];
 
   for (const part of message.parts) {
     if (part.type === "tool-call") {
-      if (toolCallsById.has(part.id)) {
+      if (toolCallsById.has(part.id) || serverAuthoredCallIds.has(part.id)) {
         return Result.err(
           new HandlerError({
             status: 400,
             message: `Duplicate chat tool call id: ${part.id}`,
           }),
         );
+      }
+
+      if (
+        clientAuthoredCallIds !== undefined &&
+        !clientAuthoredCallIds.has(part.id)
+      ) {
+        serverAuthoredCallIds.add(part.id);
+        parts.push(part);
+        continue;
       }
 
       const toolCallResult = validateToolCallPart({
@@ -1364,7 +1400,10 @@ export const validateToolCallParts = ({
       continue;
     }
 
-    if (part.type !== "tool-result") {
+    if (
+      part.type !== "tool-result" ||
+      serverAuthoredCallIds.has(part.toolCallId)
+    ) {
       parts.push(part);
       continue;
     }

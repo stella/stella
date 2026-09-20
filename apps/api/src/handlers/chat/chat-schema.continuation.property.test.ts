@@ -92,10 +92,14 @@ const continuationOutcome = async ({
   canonicalInput,
   echoedInput,
   echoedArguments = stringifyDifferently(echoedInput),
+  historicalToolName = TOOL_NAME,
+  tools = clientTools,
 }: {
   canonicalInput: Record<string, unknown>;
   echoedInput: Record<string, unknown>;
   echoedArguments?: string;
+  historicalToolName?: string;
+  tools?: ChatToolMap;
 }): Promise<string> => {
   const id = toSafeId<"chatMessage">("msg_property_continuation");
   const persistedContent = chatMessageContentFromMessage(
@@ -106,7 +110,7 @@ const continuationOutcome = async ({
         {
           type: "tool-call",
           id: HISTORICAL_CALL_ID,
-          name: TOOL_NAME,
+          name: historicalToolName,
           arguments: JSON.stringify({ alpha: "history" }),
           input: { alpha: "history" },
           output: OUTPUT,
@@ -161,7 +165,7 @@ const continuationOutcome = async ({
     ],
     safeDb: noDbReads,
     threadId: toSafeId<"chatThread">("thread_property_continuation"),
-    tools: clientTools,
+    tools,
     userId: toSafeId<"user">("user_property_continuation"),
   });
   return Result.isOk(result) ? ACCEPTED : result.error.message;
@@ -204,6 +208,43 @@ test(
   },
   propertyTestTimeout(15_000),
 );
+
+// Which tools a request registers moves between two requests (an uninstalled
+// skill, a closed feature gate, a renamed tool), so the server's own settled
+// calls must never be re-judged against the current set.
+test(
+  "a settled historical call is accepted whatever tools this request registers",
+  async () => {
+    await fc.assert(
+      fc.asyncProperty(
+        inputArbitrary,
+        fc.string({ minLength: 1, maxLength: 24 }),
+        async (canonicalInput, historicalToolName) => {
+          expect(
+            await continuationOutcome({
+              canonicalInput,
+              echoedInput: nullWidenedRecord(canonicalInput),
+              historicalToolName,
+            }),
+          ).toBe(ACCEPTED);
+        },
+      ),
+      propertyConfig({ numRuns: 60 }),
+    );
+  },
+  propertyTestTimeout(15_000),
+);
+
+test("the awaited call the client answers is still judged against the tool set", async () => {
+  const canonicalInput = { alpha: "a" };
+  expect(
+    await continuationOutcome({
+      canonicalInput,
+      echoedInput: canonicalInput,
+      tools: {},
+    }),
+  ).toBe("Invalid chat message");
+});
 
 test("a pathologically nested echo is rejected, not a server fault", async () => {
   const depth = 100_000;
