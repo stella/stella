@@ -31,6 +31,11 @@ import type {
   RenameRule,
   StyleCatalogue,
 } from "@/api/lib/house-style/catalogue";
+import {
+  isStyleGuideCurrent,
+  STYLE_GUIDE_STALE_MESSAGE,
+  StyleGuideStaleError,
+} from "@/api/lib/house-style/guide";
 import type { StyleGuide } from "@/api/lib/house-style/guide";
 import {
   extractParagraphFeatures,
@@ -324,7 +329,7 @@ export const convertToHouseStyle = async ({
   abortSignal,
   client,
 }: ConvertToHouseStyleOptions): Promise<
-  Result<ConversionResult, HouseStyleError>
+  Result<ConversionResult, HouseStyleError | StyleGuideStaleError>
 > => {
   const houseArchive = await openArchive(styleSetBytes);
   if (Result.isError(houseArchive)) {
@@ -360,6 +365,19 @@ export const convertToHouseStyle = async ({
     return read;
   }
   const { catalogue, features } = read.value;
+  // The guide describes styles by id. Applied to a style set whose file has
+  // been replaced since, its entries can name styles that are gone, and the
+  // rule tier would quietly convert the document into the default style
+  // rather than the house style the guide was written for.
+  if (!isStyleGuideCurrent(guide, catalogue)) {
+    return Result.err(
+      new StyleGuideStaleError({
+        message: STYLE_GUIDE_STALE_MESSAGE,
+        writtenFor: guide.catalogueHash,
+        catalogueHash: catalogue.hash,
+      }),
+    );
+  }
   const plan = planRuleTier(catalogue, guide);
   if (plan === null) {
     return Result.err(
@@ -369,17 +387,35 @@ export const convertToHouseStyle = async ({
     );
   }
 
-  const { assignments, usage } = await assignHouseStyles({
-    features,
-    guide,
-    catalogue,
-    orgAIConfig,
-    limit,
-    ...(batchSize === undefined ? {} : { batchSize }),
-    ...(concurrency === undefined ? {} : { concurrency }),
-    ...(abortSignal ? { abortSignal } : {}),
-    ...(client === undefined ? {} : { client }),
+  // A deciding batch throws when the caller's deadline passes, and this
+  // function's contract is a Result: an abort has to leave through the same
+  // boundary every other conversion failure does.
+  const assigned = await Result.tryPromise({
+    try: async () =>
+      await assignHouseStyles({
+        features,
+        guide,
+        catalogue,
+        orgAIConfig,
+        limit,
+        ...(batchSize === undefined ? {} : { batchSize }),
+        ...(concurrency === undefined ? {} : { concurrency }),
+        ...(abortSignal ? { abortSignal } : {}),
+        ...(client === undefined ? {} : { client }),
+      }),
+    catch: (cause) =>
+      new HouseStyleError({
+        message:
+          abortSignal?.aborted === true
+            ? "The conversion was stopped before every paragraph was decided"
+            : "The document's paragraphs could not be decided",
+        cause,
+      }),
   });
+  if (Result.isError(assigned)) {
+    return assigned;
+  }
+  const { assignments, usage } = assigned.value;
 
   const styleByIndex = new Map(
     assignments.map(({ index, styleId }) => [index, styleId]),

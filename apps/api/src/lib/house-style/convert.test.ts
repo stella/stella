@@ -22,6 +22,7 @@ import {
   parseStyleGuideDraft,
 } from "@/api/lib/house-style/guide";
 import type { StyleGuide, StyleGuideDraft } from "@/api/lib/house-style/guide";
+import { createSystemOneClient } from "@/api/lib/workflow/decisions/system-one";
 
 const houseBytes = await syntheticDocx();
 const sourceBytes = await syntheticDocx({ documentXml: SOURCE_DOCUMENT_XML });
@@ -180,6 +181,42 @@ describe("converting a document into a house style", () => {
       bytes: await syntheticDocx({ stylesXml: null, numberingXml: null }),
     });
     expect(messageOf(refused)).toContain("no style part");
+  });
+
+  // Replacing the style set's file leaves the stored guide describing styles
+  // that may be gone. Converting anyway would fall back to the default style
+  // and report the document as converted into the house style.
+  test("refuses a guide written against another version of the style set", async () => {
+    const stale = await convertToHouseStyle({
+      styleSetBytes: houseBytes,
+      sourceBytes,
+      guide: { ...(await guideFor()), catalogueHash: "written-for-another" },
+      orgAIConfig: null,
+      client: null,
+    });
+    expect(Result.isError(stale) && stale.error._tag).toBe(
+      "StyleGuideStaleError",
+    );
+  });
+
+  // `decideMany` throws once the deadline passes; a conversion answers with
+  // its Result either way.
+  test("returns an aborted conversion rather than throwing", async () => {
+    const aborted = await convertToHouseStyle({
+      styleSetBytes: houseBytes,
+      sourceBytes,
+      guide: await guideFor(),
+      orgAIConfig: null,
+      abortSignal: AbortSignal.abort(),
+      client: {
+        ...createSystemOneClient({
+          apiKey: "key-test",
+          fetcher: async () => await Promise.reject(new Error("aborted")),
+        }),
+        keySource: "instance",
+      },
+    });
+    expect(messageOf(aborted)).toContain("stopped before");
   });
 
   test("refuses a style set whose document part is missing", async () => {

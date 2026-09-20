@@ -22,7 +22,18 @@ const bodySchema = t.Object({
 /** The style set has no style guide, so nothing can be converted into it. */
 const STYLE_GUIDE_MISSING_CODE = "style_guide_missing";
 
+/** The style set's file was replaced after its guide was written. */
+const STYLE_GUIDE_STALE_CODE = "style_guide_stale";
+
 const DOCX_SUFFIX = /\.docx$/iu;
+
+/**
+ * How long a conversion may spend deciding paragraphs. Each batch has its own
+ * model timeout, but a long document keeps starting batches after one, so
+ * without a deadline of its own the request outlives the connection serving
+ * it. Kept under the server's HTTP idle timeout so the caller is told.
+ */
+const CONVERSION_DEADLINE_MS = 60_000;
 
 const config = {
   description:
@@ -85,14 +96,24 @@ export default createSafeHandler(
       sourceBytes: source.buffer,
       guide: styleSet.styleGuide,
       orgAIConfig,
+      abortSignal: AbortSignal.timeout(CONVERSION_DEADLINE_MS),
     });
     if (Result.isError(converted)) {
+      const { error } = converted;
       return Result.err(
-        new HandlerError({
-          status: 422,
-          message: converted.error.message,
-          cause: converted.error,
-        }),
+        error._tag === "StyleGuideStaleError"
+          ? new HandlerError({
+              status: 409,
+              code: STYLE_GUIDE_STALE_CODE,
+              message:
+                "This style set's file has changed since its style guide was written, so a document cannot be converted into it yet.",
+              cause: error,
+            })
+          : new HandlerError({
+              status: 422,
+              message: error.message,
+              cause: error,
+            }),
       );
     }
 
@@ -106,23 +127,22 @@ export default createSafeHandler(
         buffer: Buffer.from(converted.value.bytes),
         name: `${source.fileName.replace(DOCX_SUFFIX, "")} (${styleSet.name})`,
         parentId: body.parentId ?? null,
-      }),
-    );
-
-    yield* Result.await(
-      safeDb(async (tx) => {
-        await recordAuditEvent(tx, {
-          action: AUDIT_ACTION.EXECUTE,
-          resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
-          resourceId: params.entityId,
-          metadata: {
-            styleSetId: body.styleSetId,
-            convertedEntityId: created.entityId,
-            paragraphs: converted.value.summary.paragraphs,
-            decidedByModel: converted.value.summary.byTier["decision-model"],
-          },
-        });
-        return null;
+        // The record of what was converted commits with the document it
+        // describes: written afterwards, a failed write leaves the document
+        // in the matter and the conversion reported as an error.
+        afterCreate: async (tx, persisted) => {
+          await recordAuditEvent(tx, {
+            action: AUDIT_ACTION.EXECUTE,
+            resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
+            resourceId: params.entityId,
+            metadata: {
+              styleSetId: body.styleSetId,
+              convertedEntityId: persisted.entityId,
+              paragraphs: converted.value.summary.paragraphs,
+              decidedByModel: converted.value.summary.byTier["decision-model"],
+            },
+          });
+        },
       }),
     );
 

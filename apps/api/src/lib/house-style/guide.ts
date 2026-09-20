@@ -31,6 +31,9 @@ export class StyleGuideStaleError extends TaggedError("StyleGuideStaleError")<{
   catalogueHash: string;
 }> {}
 
+export const STYLE_GUIDE_STALE_MESSAGE =
+  "The style guide was written against a different version of this style set";
+
 const prose = v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(2000));
 
 /**
@@ -104,8 +107,7 @@ export const bindStyleGuide = ({
   ) {
     return Result.err(
       new StyleGuideStaleError({
-        message:
-          "The style guide was written against a different version of this style set",
+        message: STYLE_GUIDE_STALE_MESSAGE,
         writtenFor: draft.catalogueHash,
         catalogueHash: catalogue.hash,
       }),
