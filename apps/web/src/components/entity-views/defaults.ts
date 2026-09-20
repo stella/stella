@@ -1,3 +1,5 @@
+import type { ENTITY_VIEW_COLUMNS } from "@stll/api-contract/entity-views";
+
 import type { WorkspaceView } from "@/lib/types";
 
 import { ENTITY_VIEW_GROUP } from "./model";
@@ -16,7 +18,13 @@ export const defaultEntityViews = (labels: {
         value: ["task"],
       },
     ],
-    sorts: [],
+    // Soonest due first: overdue work leads, undated rows trail.
+    sorts: [
+      {
+        propertyId: "_due-date" satisfies keyof typeof ENTITY_VIEW_COLUMNS,
+        desc: false,
+      },
+    ],
     hiddenProperties: [],
     calculations: [],
   };
