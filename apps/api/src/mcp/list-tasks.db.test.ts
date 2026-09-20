@@ -13,10 +13,10 @@ import {
   createMembershipSafeDb,
   createMembershipScopedDb,
 } from "@/api/db/scoped";
-import { TASK_ASSIGNEE_FILTER } from "@/api/lib/tasks/assigned";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { MemberRole } from "@/api/lib/member-roles";
+import { TASK_ASSIGNEE_FILTER } from "@/api/lib/tasks/assigned";
 import { loadAccessibleMcpWorkspaces } from "@/api/mcp/context";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { MATTER_TOOL_HANDLERS } from "@/api/mcp/matter-tools";
