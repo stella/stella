@@ -26,6 +26,7 @@ import type {
   Tiers,
   TierRule,
 } from "@/api/lib/workflow/playbook-positions";
+import { gradedPositionHasContent } from "@/api/lib/workflow/playbook-positions-validation";
 import { uuidInputSchema } from "@/api/mcp/tool-utils";
 
 /** Answer types an AI ask can extract that need no further configuration. */
@@ -84,7 +85,10 @@ const positionCommonInput = {
   enabled: v.optional(
     v.pipe(
       v.boolean(),
-      v.description("false skips the position in runs; defaults to true"),
+      v.description(
+        "false skips the position in runs. Defaults to true; omit on a " +
+          "replace to keep the stored value",
+      ),
     ),
   ),
 };
@@ -202,7 +206,8 @@ export type PlaybookMergeIssueCode =
   | "duplicate_issue"
   | "reference_standard"
   | "mode_change"
-  | "too_many_positions";
+  | "too_many_positions"
+  | "empty_tiers";
 
 export type PlaybookMergeIssue = {
   code: PlaybookMergeIssueCode;
@@ -292,7 +297,7 @@ const toExtractPosition = ({
           : contentForAnswerType(input.ask.answer_type),
     },
     ...(guidance === undefined ? {} : { guidance }),
-    enabled: input.enabled ?? true,
+    enabled: input.enabled ?? stored?.enabled ?? true,
   };
 };
 
@@ -405,7 +410,7 @@ const toGradedPosition = ({
             ...(escalation === undefined ? {} : { escalation }),
           },
         }),
-    enabled: input.enabled ?? true,
+    enabled: input.enabled ?? stored?.enabled ?? true,
   };
 };
 
@@ -531,6 +536,18 @@ export const mergePlaybookPositions = ({
               storedPosition?.mode === "graded" ? storedPosition : undefined,
             mintId,
           });
+
+    // Checked on the built position, not the input: a stored deterministic
+    // `check` grades on its own, so its position may carry empty tiers.
+    if (position.mode === "graded" && !gradedPositionHasContent(position)) {
+      issues.push({
+        code: "empty_tiers",
+        path: `${path}.tiers`,
+        message:
+          "A graded position needs at least one rule, fallback entry, or ideal wording to grade against",
+      });
+      continue;
+    }
 
     written.push({
       sourceId,

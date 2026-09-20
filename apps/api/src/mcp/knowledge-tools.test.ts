@@ -517,6 +517,55 @@ describe("MCP knowledge tools", () => {
     });
   });
 
+  test.each([
+    ["no positions", { positions: [] }],
+    ["no removals", { remove_source_ids: [] }],
+    [
+      "the stored definition fields",
+      {
+        name: STORED_PLAYBOOK.name,
+        description: STORED_PLAYBOOK.description,
+        scope: { perspective: STORED_PLAYBOOK.scope.perspective },
+      },
+    ],
+    [
+      "a position as it is stored",
+      {
+        positions: [
+          {
+            mode: "extract",
+            source_id: STORED_EXTRACT_POSITION.sourceId,
+            issue: STORED_EXTRACT_POSITION.issue,
+            ask: { question: STORED_EXTRACT_POSITION.ask.question },
+          },
+        ],
+      },
+    ],
+  ])(
+    "save_playbook leaves an approved playbook alone when the call sends %s",
+    async (_label, change) => {
+      const { scopedDb, writes } = createPlaybookWriteScopedDb();
+
+      const result = await handleMcpToolCall({
+        args: {
+          playbook_id: PLAYBOOK_ID,
+          expected_updated_at: STORED_UPDATED_AT.toISOString(),
+          ...change,
+        },
+        context: createPlaybookWriteContext(scopedDb),
+        toolName: "save_playbook",
+      });
+
+      expect(result.isError).toBeFalsy();
+      expect(writes).toEqual([]);
+      expect(parseToolPayload(result)).toMatchObject({
+        updatedAt: STORED_UPDATED_AT.toISOString(),
+        positions: [],
+        removed: [],
+      });
+    },
+  );
+
   test("save_playbook answers a stale token with the calls that recover from it", async () => {
     const { scopedDb, writes } = createPlaybookWriteScopedDb({
       lockedUpdatedAt: new Date("2026-09-20T10:03:00.000Z"),
@@ -574,6 +623,48 @@ describe("MCP knowledge tools", () => {
         ],
         hint: expect.stringContaining("source_id"),
       },
+    });
+  });
+
+  test("save_playbook refuses a graded entry with nothing to grade against and saves the entries beside it", async () => {
+    const { scopedDb, writes } = createPlaybookWriteScopedDb();
+
+    const result = await handleMcpToolCall({
+      args: {
+        playbook_id: PLAYBOOK_ID,
+        expected_updated_at: STORED_UPDATED_AT.toISOString(),
+        positions: [
+          {
+            mode: "extract",
+            issue: "Term",
+            ask: { question: "How long is the term?" },
+          },
+          {
+            mode: "graded",
+            issue: "Liability cap",
+            severity: "high",
+            tiers: { ideal: "" },
+          },
+        ],
+      },
+      context: createPlaybookWriteContext(scopedDb),
+      toolName: "save_playbook",
+    });
+
+    expect(result.isError).toBeFalsy();
+    expect(writes).toHaveLength(1);
+    expect(writes[0]?.["positions"]).toMatchObject({
+      items: [STORED_EXTRACT_POSITION, { issue: "Term" }],
+    });
+    expect(parseToolPayload(result)).toMatchObject({
+      positions: [{ issue: "Term", change: "added" }],
+      issues: [
+        {
+          code: "empty_tiers",
+          path: "positions.1.tiers",
+          hint: expect.stringContaining("mode extract"),
+        },
+      ],
     });
   });
 

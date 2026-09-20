@@ -1,4 +1,5 @@
 import { Result } from "better-result";
+import { deepEquals } from "bun";
 import * as v from "valibot";
 
 import { AGENT_INPUT_NORMALIZATION_KIND } from "@stll/agent-input";
@@ -1619,6 +1620,10 @@ const PLAYBOOK_MERGE_ISSUE_HINTS = {
     "add the new one without source_id.",
   too_many_positions:
     "Remove positions with remove_source_ids before adding more.",
+  empty_tiers:
+    "Resend this entry with at least one acceptable or not_acceptable rule, " +
+    "a fallback entry, or ideal wording; a position that only captures a " +
+    "value takes mode extract.",
 } as const satisfies Record<PlaybookMergeIssueCode, string>;
 
 const toSavePlaybookIssues = (issues: readonly PlaybookMergeIssue[]) =>
@@ -1792,13 +1797,32 @@ const handleSavePlaybookTool: TypedMcpToolHandler<
     return savePlaybookRefusedResult(merged.issues);
   }
 
-  const { orgAIConfig, orgAIConfigStatus, promptCachingEnabled } =
-    await loadOrgSettings();
+  const name = input.name ?? stored.value.name;
   const description = input.description ?? stored.value.description;
   const scope = toPlaybookScope({
     stored: stored.value.scope,
     input: input.scope,
   });
+  // The replace resets the playbook to draft and clears its approval, so a
+  // call that leaves every field as stored must not reach it.
+  if (
+    name === stored.value.name &&
+    description === stored.value.description &&
+    deepEquals(scope, stored.value.scope) &&
+    deepEquals(merged.items, stored.value.positions.items)
+  ) {
+    return toolDataResult({
+      playbookId,
+      updatedAt: stored.value.updatedAt,
+      positionCount: merged.items.length,
+      positions: [],
+      removed: [],
+      issues: toSavePlaybookIssues(merged.issues),
+    } satisfies v.InferInput<typeof SAVE_PLAYBOOK_PROJECTION>);
+  }
+
+  const { orgAIConfig, orgAIConfigStatus, promptCachingEnabled } =
+    await loadOrgSettings();
   const updated = await Result.gen(() =>
     updatePlaybookDefinitionHandler({
       safeDb: context.safeDb,
@@ -1809,7 +1833,7 @@ const handleSavePlaybookTool: TypedMcpToolHandler<
       promptCachingEnabled,
       recordAuditEvent: context.recordAuditEvent,
       body: {
-        name: input.name ?? stored.value.name,
+        name,
         ...(description === null ? {} : { description }),
         ...(scope === null ? {} : { scope }),
         positions: { version: 3, items: merged.items },

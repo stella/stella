@@ -17,6 +17,11 @@ import {
 } from "@/api/lib/workflow/playbook-positions";
 import type { Position } from "@/api/lib/workflow/playbook-positions";
 import {
+  findDuplicateTierId,
+  gradedPositionHasContent,
+} from "@/api/lib/workflow/playbook-positions-validation";
+import { isTierStandard } from "@/api/lib/workflow/position-runtime";
+import {
   mergePlaybookPositions,
   PLAYBOOK_ANSWER_TYPES,
   playbookPositionInputSchema,
@@ -730,6 +735,76 @@ describe("save_playbook position merge, over the input class", () => {
           stored,
           positions: [readBackToInput(projected)],
         });
+
+        expect(result.issues).toEqual([]);
+        expect(result.items).toEqual(stored);
+      }),
+      propertyConfig({ numRuns: 300 }),
+    );
+  });
+
+  test("whatever the merge writes passes the shared position checks, and every other entry is refused by path", () => {
+    // Two line texts, so a ladder repeats a line often.
+    const line = fc.record({ text: fc.constantFrom("a", "b") });
+    const tiersArbitrary = fc.record(
+      {
+        acceptable: fc.array(line, { maxLength: 3 }),
+        ideal: fc.constantFrom("", "Preferred wording"),
+        fallback: fc.array(line, { maxLength: 2 }),
+        not_acceptable: fc.array(line, { maxLength: 3 }),
+      },
+      { requiredKeys: [] },
+    );
+
+    fc.assert(
+      fc.property(
+        storedArbitrary,
+        fc.array(fc.tuple(fc.nat(), fc.boolean(), tiersArbitrary), {
+          minLength: 1,
+          maxLength: 5,
+        }),
+        (stored, entries) => {
+          const positions = entries.map(([pick, replace, tiers], index) => {
+            const target = stored[pick % stored.length];
+            return v.parse(
+              playbookPositionInputSchema,
+              replace && target?.mode === "graded"
+                ? gradedInput({
+                    source_id: target.sourceId,
+                    issue: target.issue,
+                    tiers,
+                  })
+                : gradedInput({ issue: `new ${index}`, tiers }),
+            );
+          });
+          const { items, written, issues } = merge({ stored, positions });
+
+          for (const position of items) {
+            if (position.mode !== "graded") {
+              continue;
+            }
+            expect(gradedPositionHasContent(position)).toBe(true);
+            expect(
+              isTierStandard(position) ? findDuplicateTierId(position) : null,
+            ).toBeNull();
+          }
+          const refused = positions.filter((_, index) =>
+            issues.some(({ path }) => path.startsWith(`positions.${index}`)),
+          );
+          expect(written.length + refused.length).toBe(positions.length);
+        },
+      ),
+      propertyConfig({ numRuns: 300 }),
+    );
+  });
+
+  test("a replace that leaves out enabled keeps the stored value", () => {
+    fc.assert(
+      fc.property(storedArbitrary, fc.nat(), (stored, pick) => {
+        const index = pick % stored.length;
+        const projected = readThroughChatProjection(stored)[index];
+        const { enabled: _enabled, ...input } = readBackToInput(projected);
+        const result = merge({ stored, positions: [input] });
 
         expect(result.issues).toEqual([]);
         expect(result.items).toEqual(stored);
