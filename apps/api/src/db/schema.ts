@@ -16,6 +16,7 @@ export * from "./schema/lists";
 export * from "./schema/chat";
 export * from "./schema/docx-suggestions";
 export * from "./schema/extraction-runs";
+export * from "./schema/file-comparisons";
 export * from "./schema/document-processing";
 export * from "./schema/bilingual";
 export * from "./schema/document-translations";

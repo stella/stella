@@ -13,11 +13,13 @@ import { Temporal } from "@stll/time";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import type { FieldContent } from "@/api/db/schema-validators";
+import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type {
   HandlerConfig,
   SafeHandlerGenerator,
 } from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
@@ -35,6 +37,14 @@ import {
 import { LIMITS } from "@/api/lib/limits";
 import { buildDocumentUrl } from "@/api/lib/mcp-connectors/app-urls";
 import { brandPersistedUserFileId } from "@/api/lib/safe-id-boundaries";
+import {
+  deliverTemporaryRedline,
+  TEMPORARY_REDLINE_FAILURE_MESSAGE,
+} from "@/api/lib/uploads/file-comparison/deliver-redline";
+import type {
+  TemporaryRedlineDelivery,
+  TemporaryRedlineFailure,
+} from "@/api/lib/uploads/file-comparison/deliver-redline";
 import { withTimeout } from "@/api/lib/with-timeout";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
@@ -45,11 +55,12 @@ export const DOCUMENT_COMPARE_REQUEST_TIMEOUT_MS = 600_000;
 const DOCUMENT_COMPARE_DEADLINE_MS = 550_000;
 
 const TRACKED_CHANGE_DISPOSITIONS = ["keep", "accept", "reject"] as const;
-type TrackedChangeDisposition = (typeof TRACKED_CHANGE_DISPOSITIONS)[number];
+export type TrackedChangeDisposition =
+  (typeof TRACKED_CHANGE_DISPOSITIONS)[number];
 
 const COMPARE_MODES = ["strict", "best-effort"] as const;
-type CompareMode = (typeof COMPARE_MODES)[number];
-type CompareGranularity = "word" | "character";
+export type CompareMode = (typeof COMPARE_MODES)[number];
+export type CompareGranularity = "word" | "character";
 
 const compareSelectionSchema = t.Union([
   t.Object(
@@ -80,6 +91,7 @@ const trackedChangeDispositionSchema = t.Union([
 
 const compareOutputSchema = t.Union([
   t.Object({ type: t.Literal("preview") }, { additionalProperties: false }),
+  t.Object({ type: t.Literal("download") }, { additionalProperties: false }),
   t.Object({ type: t.Literal("version") }, { additionalProperties: false }),
 ]);
 
@@ -90,6 +102,8 @@ const config = {
     "or compare one target with its immediate predecessor. Strict mode " +
     "refuses an unverified redline; best-effort returns it with explicit " +
     "verification failures. Output preview compares without writing; output " +
+    "download writes each redline to temporary storage and returns an " +
+    "expiring link without saving it to the document; output " +
     "version explicitly saves each successful redline as a derived document " +
     "version without replacing the current version. The operation may " +
     "partially succeed across multiple targets, so inspect every result status. " +
@@ -97,12 +111,13 @@ const config = {
     "retrying a lost response does not create a duplicate. " +
     "Folio-exact review preserves both document endpoints; compatibility reports " +
     "when pending history requires Folio and may be discarded by Word on save. " +
-    "Created results include an openUrl and a temporary DOCX download URL. " +
+    "Created results include an openUrl and a temporary DOCX download URL; " +
+    "downloadable results carry the temporary link alone. " +
     "Show these links to the user; if download delivery is unavailable, the " +
     "redline is already saved: open it in stella instead of creating it again.",
   requestTimeoutMs: DOCUMENT_COMPARE_REQUEST_TIMEOUT_MS,
   permissions: { entity: ["update"] },
-  mcp: { type: "capability", reason: "document_processing" },
+  mcp: { type: "tool", name: "compare_documents" },
   access: "write",
   params: workspaceParams({ documentId: tSafeId("entity") }),
   body: t.Object(
@@ -127,8 +142,9 @@ const config = {
   ),
 } satisfies HandlerConfig;
 
-type CompareFailureCode =
+export type CompareFailureCode =
   | "apply_failed"
+  | "delivery_failed"
   | "document_too_large"
   | "final_paragraph_mark"
   | "invalid_options"
@@ -142,7 +158,7 @@ type CompareFailureCode =
   | "tracked_change_resolution_failed"
   | "version_not_found";
 
-type CompareFailure = {
+export type CompareFailure = {
   code: CompareFailureCode;
   message: string;
   hint: string;
@@ -180,6 +196,19 @@ type PreviewedComparison = {
   compatibility: CompareResult["compatibility"];
 };
 
+/** The redline exists only as an expiring object; the document is untouched. */
+type DownloadableComparison = {
+  status: "downloadable";
+  baseVersionId: SafeId<"entityVersion">;
+  targetVersionId: SafeId<"entityVersion">;
+  fileName: string;
+  download: TemporaryRedlineDelivery;
+  changes: readonly CompareChange[];
+  verification: CompareResult["verification"];
+  unsupported: CompareResult["unsupported"];
+  compatibility: CompareResult["compatibility"];
+};
+
 type FailedComparison = {
   status: "failed";
   baseVersionId: SafeId<"entityVersion">;
@@ -187,11 +216,16 @@ type FailedComparison = {
   error: CompareFailure;
 };
 
-type DocumentCompareResponse = {
-  results: (CreatedComparison | PreviewedComparison | FailedComparison)[];
+export type DocumentCompareResponse = {
+  results: (
+    | CreatedComparison
+    | DownloadableComparison
+    | PreviewedComparison
+    | FailedComparison
+  )[];
 };
 
-type CompareHandlerProps = {
+export type DocumentCompareProps = {
   safeDb: SafeDb;
   scopedDb: ScopedDb;
   workspaceId: SafeId<"workspace">;
@@ -200,7 +234,8 @@ type CompareHandlerProps = {
   session: { activeOrganizationId: SafeId<"organization"> };
   user: { id: SafeId<"user"> };
   recordAuditEvent: AuditRecorder;
-  request: Request;
+  /** Caller's cancellation, ANDed with this operation's own deadline. */
+  abortSignal: AbortSignal;
 };
 
 type ResolvedVersion = {
@@ -306,24 +341,106 @@ const applyDisposition = async (
   }
 };
 
-type DocumentCompareDependencies = {
+export type CompareDocxBuffersDependencies = {
   applyDisposition: typeof applyDisposition;
   compareDocx: typeof compareDocx;
+  withTimeout: typeof withTimeout;
+};
+
+type DocumentCompareDependencies = CompareDocxBuffersDependencies & {
   createEntityVersionFromBuffer: typeof createEntityVersionFromBuffer;
+  deliverTemporaryRedline: typeof deliverTemporaryRedline;
   readEntityVersionFile: typeof readEntityVersionFile;
   readFileHandler: typeof readFileHandler;
   resolveDocxEditAuthorName: typeof resolveDocxEditAuthorName;
-  withTimeout: typeof withTimeout;
+};
+
+type CompareDocxBuffersOptions = {
+  author: string;
+  base: { buffer: ArrayBuffer; trackedChanges: TrackedChangeDisposition };
+  granularity: CompareGranularity;
+  mode: CompareMode;
+  /** The caller's cancellation, already ANDed with its own deadline. */
+  signal: AbortSignal;
+  target: { buffer: ArrayBuffer; trackedChanges: TrackedChangeDisposition };
+  /** Stamped on every revision the redline carries. */
+  timestamp: string;
 };
 
 const DEFAULT_DOCUMENT_COMPARE_DEPENDENCIES: DocumentCompareDependencies = {
   applyDisposition,
   compareDocx,
   createEntityVersionFromBuffer,
+  deliverTemporaryRedline,
   readEntityVersionFile,
   readFileHandler,
   resolveDocxEditAuthorName,
   withTimeout,
+};
+
+/**
+ * One comparison, from two DOCX buffers to a redline or a typed failure. The
+ * stored-version path below and the staged-upload path in
+ * `file-comparison-run.ts` differ in where the bytes come from and what
+ * happens to the result, and in nothing else: the dispositions, the deadlines
+ * and the error mapping are this function.
+ */
+export const compareDocxBuffers = async (
+  {
+    author,
+    base,
+    granularity,
+    mode,
+    signal,
+    target,
+    timestamp,
+  }: CompareDocxBuffersOptions,
+  dependencies: CompareDocxBuffersDependencies = DEFAULT_DOCUMENT_COMPARE_DEPENDENCIES,
+): Promise<Result<CompareResult, CompareFailure>> => {
+  const comparedAttempt = await Result.tryPromise({
+    try: async () =>
+      await dependencies.withTimeout(
+        async () => {
+          const [preparedBase, preparedTarget] = await Promise.all([
+            dependencies.applyDisposition(base.buffer, base.trackedChanges),
+            dependencies.applyDisposition(target.buffer, target.trackedChanges),
+          ]);
+          return await dependencies.compareDocx(preparedBase, preparedTarget, {
+            author,
+            revisionFormat: "folio-exact",
+            timestamp,
+            granularity,
+            onUnverified: mode === "best-effort" ? "emit" : "refuse",
+          });
+        },
+        {
+          label: "documents.compare.folio",
+          signal,
+          timeoutMs: DOCUMENT_COMPARE_TIMEOUT_MS,
+        },
+      ),
+    catch: (cause) => cause,
+  });
+  if (Result.isError(comparedAttempt)) {
+    return Result.err(
+      TimeoutError.is(comparedAttempt.error)
+        ? failure(
+            "timeout",
+            "The document comparison timed out.",
+            "Retry with a smaller or closer pair of versions.",
+          )
+        : failure(
+            "tracked_change_resolution_failed",
+            "Tracked changes in a source version could not be resolved.",
+            "Retry with tracked changes set to keep, or repair the source version.",
+          ),
+    );
+  }
+
+  const compared = comparedAttempt.value;
+  return Result.isError(compared)
+    ? Result.err(mapCompareDocxError(compared.error))
+    : Result.ok(compared.value);
 };
 
 const resolveVersion = (
@@ -359,10 +476,9 @@ const resolveVersion = (
   };
 };
 
-const redlineFileName = (targetFileName: string): string => {
-  const withoutExtension = targetFileName.replace(/\.docx$/iu, "");
-  return `${withoutExtension} redline.docx`;
-};
+/** The redline's file name, from the name of the file it compares to. */
+export const redlineFileName = (targetFileName: string): string =>
+  `${targetFileName.replace(/\.docx$/iu, "")} redline.docx`;
 
 const comparisonSource = ({
   pair,
@@ -386,7 +502,13 @@ const comparisonSource = ({
   targetTrackedChanges,
 });
 
-const createCompareHandler = (dependencies: DocumentCompareDependencies) =>
+/**
+ * The comparison itself, reachable without an HTTP context: the REST endpoint
+ * below and the `compare_documents` MCP tool both run this one generator.
+ */
+export const createDocumentCompareGenerator = (
+  dependencies: DocumentCompareDependencies = DEFAULT_DOCUMENT_COMPARE_DEPENDENCIES,
+) =>
   async function* ({
     safeDb,
     scopedDb,
@@ -396,10 +518,10 @@ const createCompareHandler = (dependencies: DocumentCompareDependencies) =>
     session,
     user,
     recordAuditEvent,
-    request,
-  }: CompareHandlerProps): SafeHandlerGenerator<DocumentCompareResponse> {
+    abortSignal,
+  }: DocumentCompareProps): SafeHandlerGenerator<DocumentCompareResponse> {
     const comparisonSignal = AbortSignal.any([
-      request.signal,
+      abortSignal,
       AbortSignal.timeout(DOCUMENT_COMPARE_DEADLINE_MS),
     ]);
     const documentId = params.documentId;
@@ -675,6 +797,62 @@ const createCompareHandler = (dependencies: DocumentCompareDependencies) =>
       return await loading;
     };
 
+    /**
+     * What the staged-upload path records for the same operation, with the
+     * matter named because this one has it: the two sizes and a change count,
+     * never the file names or anything the comparison read.
+     */
+    const recordDownloadAudit = async ({
+      changeCount,
+      pair,
+    }: {
+      changeCount: number;
+      pair: ResolvedPair;
+    }): Promise<void> => {
+      const recorded = await safeDb(async (tx) => {
+        await recordAuditEvent(tx, {
+          action: AUDIT_ACTION.EXECUTE,
+          resourceType: AUDIT_RESOURCE_TYPE.FILE_COMPARISON,
+          resourceId: pair.base.id,
+          metadata: {
+            baseSizeBytes: pair.base.file.sizeBytes,
+            baseVersionId: pair.base.id,
+            changeCount,
+            targetSizeBytes: pair.target.file.sizeBytes,
+            targetVersionId: pair.target.id,
+          },
+          workspaceId,
+        });
+      });
+      if (Result.isError(recorded)) {
+        // The caller already holds the link; withdrawing it over a failed
+        // audit write would lose the redline as well as the record.
+        captureError(recorded.error, { documentId, workspaceId });
+      }
+    };
+
+    /** One target's redline as an expiring object, plus the record of it. */
+    const deliverRedline = async ({
+      compared,
+      fileName,
+      pair,
+    }: {
+      compared: CompareResult;
+      fileName: string;
+      pair: ResolvedPair;
+    }): Promise<Result<TemporaryRedlineDelivery, TemporaryRedlineFailure>> => {
+      const delivered = await dependencies.deliverTemporaryRedline({
+        bytes: new Uint8Array(compared.buffer),
+        fileName,
+        organizationId: session.activeOrganizationId,
+        scopedDb,
+        signal: comparisonSignal,
+        userId: user.id,
+      });
+      await recordDownloadAudit({ changeCount: compared.changes.length, pair });
+      return delivered;
+    };
+
     type PersistComparisonArgs = {
       compared: CompareResult;
       expectedCurrentVersionId: SafeId<"entityVersion">;
@@ -774,67 +952,30 @@ const createCompareHandler = (dependencies: DocumentCompareDependencies) =>
         continue;
       }
 
-      const comparedAttempt = await Result.tryPromise({
-        try: async () =>
-          await dependencies.withTimeout(
-            async () => {
-              const [preparedBase, preparedTarget] = await Promise.all([
-                dependencies.applyDisposition(
-                  baseBuffer.value,
-                  body.baseTrackedChanges,
-                ),
-                dependencies.applyDisposition(
-                  targetBuffer.value,
-                  body.targetTrackedChanges,
-                ),
-              ]);
-              return await dependencies.compareDocx(
-                preparedBase,
-                preparedTarget,
-                {
-                  author,
-                  revisionFormat: "folio-exact",
-                  timestamp: target.createdAt.toISOString(),
-                  granularity,
-                  onUnverified: mode === "best-effort" ? "emit" : "refuse",
-                },
-              );
-            },
-            {
-              label: "documents.compare.folio",
-              signal: comparisonSignal,
-              timeoutMs: DOCUMENT_COMPARE_TIMEOUT_MS,
-            },
-          ),
-        catch: (cause) => cause,
-      });
-      if (Result.isError(comparedAttempt)) {
-        results.push({
-          status: "failed",
-          baseVersionId: base.id,
-          targetVersionId: target.id,
-          error: TimeoutError.is(comparedAttempt.error)
-            ? failure(
-                "timeout",
-                "The document comparison timed out.",
-                "Retry with a smaller or closer pair of versions.",
-              )
-            : failure(
-                "tracked_change_resolution_failed",
-                "Tracked changes in a source version could not be resolved.",
-                "Retry with tracked changes set to keep, or repair the source version.",
-              ),
-        });
-        continue;
-      }
-
-      const compared = comparedAttempt.value;
+      const compared = await compareDocxBuffers(
+        {
+          author,
+          base: {
+            buffer: baseBuffer.value,
+            trackedChanges: body.baseTrackedChanges,
+          },
+          granularity,
+          mode,
+          signal: comparisonSignal,
+          target: {
+            buffer: targetBuffer.value,
+            trackedChanges: body.targetTrackedChanges,
+          },
+          timestamp: target.createdAt.toISOString(),
+        },
+        dependencies,
+      );
       if (Result.isError(compared)) {
         results.push({
           status: "failed",
           baseVersionId: base.id,
           targetVersionId: target.id,
-          error: mapCompareDocxError(compared.error),
+          error: compared.error,
         });
         continue;
       }
@@ -853,6 +994,43 @@ const createCompareHandler = (dependencies: DocumentCompareDependencies) =>
         continue;
       }
 
+      if (body.output.type === "download") {
+        const fileName = redlineFileName(target.file.fileName);
+        const delivered = await deliverRedline({
+          compared: compared.value,
+          fileName,
+          pair,
+        });
+        if (Result.isError(delivered)) {
+          results.push({
+            status: "failed",
+            baseVersionId: base.id,
+            targetVersionId: target.id,
+            error: failure(
+              "delivery_failed",
+              `${TEMPORARY_REDLINE_FAILURE_MESSAGE[delivered.error.step]}.`,
+              "Retry the comparison, or use output preview for the change summary alone.",
+            ),
+          });
+          continue;
+        }
+        results.push({
+          status: "downloadable",
+          baseVersionId: base.id,
+          targetVersionId: target.id,
+          fileName,
+          download: delivered.value,
+          changes: compared.value.changes,
+          verification: compared.value.verification,
+          unsupported: compared.value.unsupported,
+          compatibility: compared.value.compatibility,
+        });
+        continue;
+      }
+
+      // Everything below saves a derived version; a fourth output mode has to
+      // decide here rather than fall into it.
+      body.output.type satisfies "version";
       const persisted = await persistComparison({
         compared: compared.value,
         expectedCurrentVersionId,
@@ -952,7 +1130,12 @@ const createCompareHandler = (dependencies: DocumentCompareDependencies) =>
 
 export const createDocumentCompareHandler = (
   dependencies: DocumentCompareDependencies = DEFAULT_DOCUMENT_COMPARE_DEPENDENCIES,
-) => createSafeHandler(config, createCompareHandler(dependencies));
+) => {
+  const compare = createDocumentCompareGenerator(dependencies);
+  return createSafeHandler(config, (ctx) =>
+    compare({ ...ctx, abortSignal: ctx.request.signal }),
+  );
+};
 
 const documentCompare = createDocumentCompareHandler();
 

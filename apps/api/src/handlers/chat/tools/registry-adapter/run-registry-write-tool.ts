@@ -57,6 +57,8 @@ const REGISTRY_WRITE_TOOL_HANDLERS = {
   open_document_version_upload:
     DOCUMENT_TOOL_HANDLERS.open_document_version_upload,
   delete_document: DOCUMENT_TOOL_HANDLERS.delete_document,
+  compare_documents: DOCUMENT_TOOL_HANDLERS.compare_documents,
+  prepare_file_comparison: DOCUMENT_TOOL_HANDLERS.prepare_file_comparison,
   set_field_value: DOCUMENT_TOOL_HANDLERS.set_field_value,
   save_time_entry: BILLING_TOOL_HANDLERS.save_time_entry,
   delete_time_entry: BILLING_TOOL_HANDLERS.delete_time_entry,

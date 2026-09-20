@@ -40,6 +40,10 @@ import {
   reconcileDocumentReviewRuns,
 } from "@/api/lib/scheduler/tasks/document-review-run-reconcile";
 import {
+  SWEEP_FILE_COMPARISON_UPLOADS_TASK,
+  sweepFileComparisonUploads,
+} from "@/api/lib/scheduler/tasks/file-comparison-sweep";
+import {
   REPAIR_FILE_DERIVATIVES_TASK,
   repairFileDerivatives,
 } from "@/api/lib/scheduler/tasks/file-derivative-repair";
@@ -117,6 +121,7 @@ const SCHEDULER_TASKS = {
   [RECONCILE_CASE_LAW_CORPUS_UPLOAD_INTENTS_TASK]:
     reconcileCaseLawCorpusUploadIntentsTask,
   [RECONCILE_BUFFER_INTENTS_TASK]: reconcileBufferIntents,
+  [SWEEP_FILE_COMPARISON_UPLOADS_TASK]: sweepFileComparisonUploads,
   [REPAIR_CHAT_SEARCH_INDEX_TASK]: repairChatSearchIndex,
   [REPAIR_SEARCH_PROJECTIONS_TASK]: repairSearchProjections,
   [CHAT_THREAD_COMPACTOR_TASK]: compactChatThreads,

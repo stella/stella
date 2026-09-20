@@ -35,6 +35,7 @@ import {
   desktopEditSessions,
   entities,
   fileChatThreads,
+  fileComparisonUploads,
   folioCollabRoomTokens,
   folioCollabRooms,
   mcpOAuthState,
@@ -81,6 +82,7 @@ import {
   brandPersistedUserId,
   brandPersistedWorkspaceId,
 } from "@/api/lib/safe-id-boundaries";
+import { fileComparisonObjectKey } from "@/api/lib/uploads/file-comparison/uploads";
 
 // ── Extracted steps for verifyAndDeleteUser ─────────────────────────────
 //
@@ -942,6 +944,48 @@ export const deletePendingUploads = async ({
     .where(eq(pendingUploads.userId, currentUserId));
 };
 
+export type DeleteFileComparisonUploadsParams = {
+  tx: Transaction;
+  currentUserId: string;
+  s3KeysToDelete: string[];
+};
+
+export const DELETE_FILE_COMPARISON_UPLOADS_TABLES = [
+  fileComparisonUploads,
+] as const satisfies readonly PgTable[];
+
+/**
+ * 8b. Short-lived comparison staging. Every row names exactly one object, and
+ * nothing else can name it once the row is gone, so the keys are collected
+ * before the delete rather than left to the expiry sweep.
+ */
+export const deleteFileComparisonUploads = async ({
+  tx,
+  currentUserId,
+  s3KeysToDelete,
+}: DeleteFileComparisonUploadsParams): Promise<void> => {
+  const stagedRows = await tx
+    .select({
+      id: fileComparisonUploads.id,
+      organizationId: fileComparisonUploads.organizationId,
+    })
+    .from(fileComparisonUploads)
+    .where(eq(fileComparisonUploads.userId, currentUserId))
+    .for("update");
+  s3KeysToDelete.push(
+    ...stagedRows.map((row) =>
+      fileComparisonObjectKey({
+        organizationId: row.organizationId,
+        uploadId: row.id,
+      }),
+    ),
+  );
+
+  await tx
+    .delete(fileComparisonUploads)
+    .where(eq(fileComparisonUploads.userId, currentUserId));
+};
+
 export type DeleteUserFilesParams = {
   tx: Transaction;
   currentUserId: string;
@@ -1142,6 +1186,7 @@ export const ACCOUNT_DELETION_MANUAL_TABLES = [
   ...RESET_FOLIO_COLLAB_USER_STATE_TABLES,
   ...DELETE_DESKTOP_EDIT_SESSIONS_TABLES,
   ...DELETE_PENDING_UPLOADS_TABLES,
+  ...DELETE_FILE_COMPARISON_UPLOADS_TABLES,
   ...DELETE_USER_FILES_TABLES,
   ...DELETE_CHAT_THREADS_TABLES,
   ...DELETE_WORKSPACE_VIEW_TEMPLATES_TABLES,

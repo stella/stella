@@ -12,6 +12,7 @@ import {
   documentProcessingRuns,
   entityDeletionCleanupRequests,
   fields,
+  fileComparisonUploads,
   folioCollabRooms,
   pendingUploads,
   propertyDependencies,
@@ -48,6 +49,7 @@ import {
   pendingUploadS3KeysForDeletion,
 } from "@/api/lib/pending-upload-keys";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
+import { fileComparisonObjectKey } from "@/api/lib/uploads/file-comparison/uploads";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 /**
@@ -77,6 +79,9 @@ import { DOCX_MIME_TYPE } from "@/api/mime-types";
  *                                 checkpoint slots.
  *   {org}/{matter}/tmp/{upload}   staged uploads that never finalized, plus the
  *                                 final key each one had already reserved.
+ *   {org}/tmp/comparisons/{row}   the two DOCX files staged for a redline of
+ *                                 files stella does not store, and the redline
+ *                                 itself, one object per row.
  *   {org}/templates/…             template documents and their versions.
  *   {org}/style-sets/…            style-set packages, including one a
  *                                 replacement superseded.
@@ -567,6 +572,51 @@ const recordChatAttachmentPage = async (
   await recordChatAttachmentPage(scope, record, teardownScope, lastRow.id);
 };
 
+/**
+ * Comparison staging belongs to the organization and never had a matter: the
+ * rows carry no workspace, so a matter deletion owns none of them and only the
+ * organization walk reads this table.
+ */
+const recordFileComparisonUploadPage = async (
+  scope: OrganizationTeardownScope,
+  record: TeardownPageSink,
+  cursor: PageCursor<"fileComparisonUpload"> = null,
+): Promise<void> => {
+  const page = await scope.tx
+    .select({
+      id: fileComparisonUploads.id,
+      organizationId: fileComparisonUploads.organizationId,
+    })
+    .from(fileComparisonUploads)
+    .where(
+      and(
+        eq(fileComparisonUploads.organizationId, scope.organizationId),
+        cursor === null ? undefined : gt(fileComparisonUploads.id, cursor),
+      ),
+    )
+    .orderBy(asc(fileComparisonUploads.id))
+    .limit(TEARDOWN_PAGE_SIZE);
+  if (page.length === 0) {
+    return;
+  }
+
+  await record(
+    null,
+    page.map((row) =>
+      fileComparisonObjectKey({
+        organizationId: row.organizationId,
+        uploadId: row.id,
+      }),
+    ),
+  );
+
+  const lastRow = page.length < TEARDOWN_PAGE_SIZE ? undefined : page.at(-1);
+  if (!lastRow) {
+    return;
+  }
+  await recordFileComparisonUploadPage(scope, record, lastRow.id);
+};
+
 const recordTemplatePage = async (
   scope: OrganizationTeardownScope,
   record: TeardownPageSink,
@@ -777,6 +827,7 @@ export const recordOrganizationStorageTeardown = async ({
   await cancelRecoverableUploads(tx, workspaceIds);
 
   await recordChatAttachmentPage(scope, record, { type: "organization" });
+  await recordFileComparisonUploadPage(scope, record);
   await recordTemplatePage(scope, record);
   await recordTemplateVersionPage(scope, record);
   await recordStyleSetPage(scope, record);

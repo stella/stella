@@ -118,8 +118,22 @@ type SurfaceMode = (typeof SURFACES)[number]["mode"];
 // author one. It cannot be a mode of save_clause (a different object with a
 // different permission) or of run_playbook (a write to the definition versus a
 // review over a matter). Write-only, so the anonymized ceiling is unchanged.
+// default 58 -> 59 for compare_documents. Argued for, not absorbed: producing
+// a redline was reachable only as a capability, so an agent asked to compare
+// two versions had to discover it through list_capabilities first. It is not a
+// mode of save_document or upload_document_version: it reads two stored
+// versions, runs the DOCX comparison, and may write a derived version, which
+// is a different cost and a different failure set from either. The anonymized
+// count is unchanged; a write never appears there.
+// default 59 -> 60 for prepare_file_comparison. Argued for, not absorbed: an
+// agent handed two .docx files that are not in stella has no way to get bytes
+// to the server, and compare_documents cannot take them inline because a DOCX
+// does not fit a tool call. Reserving the upload is a separate call because the
+// client PUTs between the two, and folding it into compare_documents would make
+// that tool's meaning depend on whether files were attached. The anonymized
+// count is unchanged; a write never appears there.
 const TOOL_COUNT_CEILING: Record<SurfaceMode, number> = {
-  default: 58,
+  default: 60,
   anonymized: 28,
   law: 10,
 };
@@ -261,8 +275,19 @@ const TOOL_COUNT_CEILING: Record<SurfaceMode, number> = {
 // depth cap), one-line field descriptions, and the authoring grammar left to
 // the skill rather than repeated per field. Pinned exactly. Anonymized and law
 // do not carry the tool.
+// compare_documents adds 4_712 (measured on its own from 138_119 to 142_831):
+// 2_712 of that is its input schema, whose `source` union states each
+// selection's own version ids rather than a set of optional ones a model could
+// fill contradictorily, and whose description says what each tracked-changes
+// disposition compares. prepare_file_comparison and the `uploads` source add
+// 3_853 more: about 2_100 is the new tool (two file descriptors, each stating
+// the size limit and what the checksum is of, plus a description that spells
+// out the PUT and the call after it), and the rest is compare_documents' third
+// source variant and the third output_mode its description distinguishes.
+// Measured 154_051 default. Anonymized and law are unchanged: both tools are
+// writes, so neither surface carries them.
 const TOOLS_LIST_PAYLOAD_CHAR_CEILING: Record<SurfaceMode, number> = {
-  default: 145_426,
+  default: 154_100,
   anonymized: 73_300,
   law: 28_250,
 };
@@ -319,8 +344,17 @@ const TOOLS_LIST_PAYLOAD_CHAR_CEILING: Record<SurfaceMode, number> = {
 // the next save passes back, each written position's `sourceId` with whether
 // it was added or changed, and the per-entry `issues[]` that lets one refused
 // position come back with its fix while the rest of the call is saved.
+// compare_documents adds 988: one result per target, discriminated on
+// `status`, carrying the change counts, the saved version and its links. The
+// changes themselves are deliberately not in it, since that list grows with the
+// document and is the document rather than a report on it. The staged-upload
+// path adds 1_321: three result variants naming upload ids rather than version
+// ids, because echoing an upload id back as `baseVersionId` would invite a call
+// that cannot resolve, plus prepare_file_comparison's own output, which is two
+// signed PUTs and the next call spelled out. Measured 51_274 default.
+// Anonymized and law are unchanged.
 const OUTPUT_SCHEMA_TOTAL_CHAR_CEILING: Record<SurfaceMode, number> = {
-  default: 48_916,
+  default: 51_300,
   anonymized: 32_850,
   law: 10_050,
 };

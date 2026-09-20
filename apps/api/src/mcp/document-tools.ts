@@ -67,8 +67,18 @@ import { resolveExtractionMimeType } from "@/api/lib/search/extract-content";
 import { canExtractMimeType } from "@/api/lib/search/extractable-mime-types";
 import { buildLineDiffSegments } from "@/api/lib/text-diff";
 import type { VersionDiffSegment } from "@/api/lib/text-diff";
-import { includes } from "@/api/lib/type-guards";
 import type { McpRequestContext } from "@/api/mcp/context";
+import {
+  COMPARE_DOCUMENTS_OUTPUT_CONTRACT,
+  COMPARE_DOCUMENTS_TOOL_DEFINITION,
+  handleCompareDocumentsTool,
+} from "@/api/mcp/document-compare-tool";
+import {
+  documentEntityNotAvailable,
+  LISTABLE_ENTITY_KINDS,
+  resolveDocumentWriteTarget,
+  resolveEntityWorkspace,
+} from "@/api/mcp/document-entity-access";
 import {
   DOCUMENT_UPLOAD_APP_RESOURCE_URI,
   OPEN_DOCUMENT_VERSION_UPLOAD_INPUT_SCHEMA,
@@ -78,12 +88,16 @@ import {
 } from "@/api/mcp/document-file-upload";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
 import {
+  handlePrepareFileComparisonTool,
+  PREPARE_FILE_COMPARISON_OUTPUT_CONTRACT,
+  PREPARE_FILE_COMPARISON_TOOL_DEFINITION,
+} from "@/api/mcp/file-comparison-prepare-tool";
+import {
   defineTextFieldSpec,
   deriveTextFieldPaths,
   runTextFieldSpecs,
 } from "@/api/mcp/text-field-spec";
 import type {
-  InternalToolErrorResult,
   InternalToolResult,
   McpTextFieldSpec,
   McpToolDefinition,
@@ -116,6 +130,8 @@ import {
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 
 type DocumentToolName =
+  | "compare_documents"
+  | "prepare_file_comparison"
   | "list_documents"
   | "read_document"
   | "save_document"
@@ -124,9 +140,6 @@ type DocumentToolName =
   | "delete_document"
   | "list_properties"
   | "set_field_value";
-
-/** Kinds surfaced by list_documents; tasks/messages/links are other tools. */
-const LISTABLE_ENTITY_KINDS = ["document", "folder"] as const;
 
 const PROPERTY_WRITE_METHODS = {
   file: "unsupported",
@@ -534,78 +547,6 @@ const OPEN_DOCUMENT_VERSION_UPLOAD_OUTPUT_SCHEMA = v.strictObject({
   entityId: v.string(),
   workspaceId: v.string(),
 });
-
-/** Entity kind the document tools operate on (same set list_documents surfaces). */
-type DocumentEntityKind = (typeof LISTABLE_ENTITY_KINDS)[number];
-
-const isDocumentEntityKind = (kind: string): kind is DocumentEntityKind =>
-  includes(LISTABLE_ENTITY_KINDS, kind);
-
-/**
- * Outcome of resolving an entity for a document tool. `wrong-kind` is kept
- * distinct from `not-found` so callers can tell a caller that their own
- * (accessible) entity is a task/message/link rather than silently 404ing.
- */
-type ResolvedDocumentEntity =
-  | {
-      status: "ok";
-      workspaceId: SafeId<"workspace">;
-      kind: DocumentEntityKind;
-      name: string;
-    }
-  | { status: "not-found" }
-  | { status: "wrong-kind" };
-
-/**
- * Resolve the accessible workspace that owns an entity. The document tools
- * (read/update/delete/set_field_value) only operate on the kinds list_documents
- * surfaces (document, folder); other kinds an entity ID happens to name are
- * rejected as `wrong-kind` rather than acted on.
- */
-const resolveEntityWorkspace = async ({
-  context,
-  entityId,
-}: {
-  context: McpRequestContext;
-  entityId: SafeId<"entity">;
-}): Promise<ResolvedDocumentEntity> => {
-  if (context.accessibleWorkspaceIds.length === 0) {
-    return { status: "not-found" };
-  }
-  const entity = await context.scopedDb((tx) =>
-    tx.query.entities.findFirst({
-      where: {
-        id: { eq: entityId },
-        workspaceId: { in: context.accessibleWorkspaceIds },
-      },
-      columns: { workspaceId: true, kind: true, name: true },
-    }),
-  );
-  if (!entity) {
-    return { status: "not-found" };
-  }
-  if (!isDocumentEntityKind(entity.kind)) {
-    return { status: "wrong-kind" };
-  }
-  return {
-    status: "ok",
-    workspaceId: entity.workspaceId,
-    kind: entity.kind,
-    name: entity.name,
-  };
-};
-
-/**
- * Map a non-`ok` entity resolution to a tool error. `wrong-kind` names the
- * caller's own accessible entity's shape (no cross-tenant disclosure); a
- * miss stays a generic not-found so a probed ID reveals nothing.
- */
-const documentEntityNotAvailable = (
-  resolution: { status: "not-found" } | { status: "wrong-kind" },
-) =>
-  resolution.status === "wrong-kind"
-    ? errorResult("Not a document or folder entity")
-    : notFoundResult("Document not found or not accessible");
 
 // The list cursor is [createdAt, entityId]; the query resolves the (createdAt,
 // id) boundary via the keyset condition. A malformed cursor is rejected here so
@@ -2030,43 +1971,6 @@ const handleSaveDocumentTool: TypedMcpToolHandler<
   return await updateDocumentEntity({ context, input });
 };
 
-type DocumentVersionUploadTargetResult =
-  | {
-      status: "ok";
-      entityId: SafeId<"entity">;
-      workspaceId: SafeId<"workspace">;
-    }
-  | { status: "error"; response: InternalToolErrorResult };
-
-const resolveDocumentVersionUploadTarget = async ({
-  context,
-  entityId: rawEntityId,
-}: {
-  context: McpRequestContext;
-  entityId: string;
-}): Promise<DocumentVersionUploadTargetResult> => {
-  if (!hasEffectiveAuthority(context, { entity: ["update"] })) {
-    return { status: "error", response: errorResult("Forbidden") };
-  }
-
-  const entityId = brandPersistedEntityId(rawEntityId);
-  const owner = await resolveEntityWorkspace({ context, entityId });
-  if (owner.status !== "ok") {
-    return {
-      status: "error",
-      response: documentEntityNotAvailable(owner),
-    };
-  }
-  const active = ensureActiveWorkspace({
-    context,
-    workspaceId: owner.workspaceId,
-  });
-  if (typeof active !== "string") {
-    return { status: "error", response: active };
-  }
-  return { entityId, status: "ok", workspaceId: owner.workspaceId };
-};
-
 const handleUploadDocumentVersionTool: TypedMcpToolHandler<
   v.InferInput<typeof UPLOAD_DOCUMENT_VERSION_OUTPUT_SCHEMA>
 > = async ({ args, context }) => {
@@ -2078,7 +1982,7 @@ const handleUploadDocumentVersionTool: TypedMcpToolHandler<
     return validationErrorResult(parsed.issues);
   }
 
-  const target = await resolveDocumentVersionUploadTarget({
+  const target = await resolveDocumentWriteTarget({
     context,
     entityId: parsed.output.entity_id,
   });
@@ -2105,7 +2009,7 @@ const handleOpenDocumentVersionUploadTool: TypedMcpToolHandler<
     return validationErrorResult(parsed.issues);
   }
 
-  const target = await resolveDocumentVersionUploadTarget({
+  const target = await resolveDocumentWriteTarget({
     context,
     entityId: parsed.output.entity_id,
   });
@@ -2580,6 +2484,8 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
   }),
   UPLOAD_DOCUMENT_VERSION_TOOL_DEFINITION,
   OPEN_DOCUMENT_VERSION_UPLOAD_TOOL_DEFINITION,
+  COMPARE_DOCUMENTS_TOOL_DEFINITION,
+  PREPARE_FILE_COMPARISON_TOOL_DEFINITION,
   defineValibotMcpTool({
     annotations: {
       title: "Delete document",
@@ -2651,6 +2557,8 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
 ] as const satisfies readonly McpToolDefinition[];
 
 export const DOCUMENT_TOOL_HANDLERS = {
+  compare_documents: handleCompareDocumentsTool,
+  prepare_file_comparison: handlePrepareFileComparisonTool,
   delete_document: handleDeleteDocumentTool,
   list_documents: handleListDocumentsTool,
   list_properties: handleListPropertiesTool,
@@ -2666,6 +2574,8 @@ export const DOCUMENT_TOOL_SET = defineMcpToolSet(
   DOCUMENT_TOOL_DEFINITIONS,
   DOCUMENT_TOOL_HANDLERS,
   {
+    compare_documents: COMPARE_DOCUMENTS_OUTPUT_CONTRACT,
+    prepare_file_comparison: PREPARE_FILE_COMPARISON_OUTPUT_CONTRACT,
     delete_document: defineChatProjectionMcpToolOutput(DELETED_TRUE_PROJECTION),
     list_documents: defineChatProjectionMcpToolOutput(
       LIST_DOCUMENTS_PROJECTION,

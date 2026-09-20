@@ -116,9 +116,9 @@ here as its CLI form). Projected from the same handler enumeration that builds
 
 ## documents
 
-| Capability          | Access | Scope                  | Feature | Reachable via                                          |
-| ------------------- | ------ | ---------------------- | ------- | ------------------------------------------------------ |
-| `documents.compare` | write  | stella:documents_write | —       | generic invoke → `stella capability documents compare` |
+| Capability          | Access | Scope                  | Feature | Reachable via                    |
+| ------------------- | ------ | ---------------------- | ------- | -------------------------------- |
+| `documents.compare` | write  | stella:documents_write | —       | curated tool `compare_documents` |
 
 ## entities
 

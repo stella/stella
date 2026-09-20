@@ -117,6 +117,7 @@ type HarnessOptions = {
   rows?: ReturnType<typeof versionRow>[];
   timeoutLabel?: string;
   downloadFails?: boolean;
+  temporaryDeliveryFails?: boolean;
 };
 
 const createHarness = ({
@@ -130,6 +131,7 @@ const createHarness = ({
   rows = [baseRow, firstTargetRow],
   timeoutLabel,
   downloadFails = false,
+  temporaryDeliveryFails = false,
 }: HarnessOptions = {}) => {
   const tx = {
     query: {
@@ -236,10 +238,20 @@ const createHarness = ({
       };
     },
   );
+  const deliverTemporaryRedlineMock = mock(
+    async (_options: Parameters<Dependencies["deliverTemporaryRedline"]>[0]) =>
+      temporaryDeliveryFails
+        ? Result.err({ step: "store" as const })
+        : Result.ok({
+            downloadUrl: "https://files.example/tmp/redline.docx",
+            expiresAt: "2026-09-20T12:00:00.000Z",
+          }),
+  );
   const dependencies = asTestRaw<Dependencies>({
     applyDisposition: applyDispositionMock,
     compareDocx: compareDocxMock,
     createEntityVersionFromBuffer: createEntityVersionFromBufferMock,
+    deliverTemporaryRedline: deliverTemporaryRedlineMock,
     readEntityVersionFile: readEntityVersionFileMock,
     readFileHandler: readFileHandlerMock,
     resolveDocxEditAuthorName: async () => "Ada Lovelace",
@@ -247,7 +259,10 @@ const createHarness = ({
   });
   const definition = createDocumentCompareHandler(dependencies);
   type Ctx = Parameters<typeof definition.handler>[0];
-  const auditRecorder = mock(async () => {});
+  const auditedEvents: unknown[] = [];
+  const auditRecorder = mock(async (_tx: unknown, event: unknown) => {
+    auditedEvents.push(event);
+  });
   const context = asTestRaw<Ctx>({
     body: {
       filePropertyId: propertyId,
@@ -283,11 +298,13 @@ const createHarness = ({
 
   return {
     applyDispositionMock,
+    auditedEvents,
     auditRecorder,
     compareDocxMock,
     context,
     createEntityVersionFromBufferMock,
     definition,
+    deliverTemporaryRedlineMock,
     readEntityVersionFileMock,
     readFileHandlerMock,
     withTimeoutMock,
@@ -594,6 +611,69 @@ describe("documents.compare", () => {
     });
     expect(harness.createEntityVersionFromBufferMock).not.toHaveBeenCalled();
     expect(harness.readFileHandlerMock).not.toHaveBeenCalled();
+  });
+
+  test("delivers a download as a temporary link without touching the document", async () => {
+    const harness = createHarness();
+
+    const result = await harness.definition.handler({
+      ...harness.context,
+      body: { ...harness.context.body, output: { type: "download" } },
+    });
+
+    expect(result).toEqual({
+      results: [
+        {
+          status: "downloadable",
+          baseVersionId,
+          targetVersionId: firstTargetId,
+          fileName: "Agreement v2 redline.docx",
+          download: {
+            downloadUrl: "https://files.example/tmp/redline.docx",
+            expiresAt: "2026-09-20T12:00:00.000Z",
+          },
+          changes: [],
+          verification: { status: "verified" },
+          unsupported: [],
+          compatibility: { status: "standard-ooxml" },
+        },
+      ],
+    });
+    expect(
+      harness.deliverTemporaryRedlineMock.mock.calls.at(0)?.[0],
+    ).toMatchObject({
+      fileName: "Agreement v2 redline.docx",
+      organizationId,
+      scopedDb: harness.context.scopedDb,
+      userId,
+    });
+    // Nothing is written to the entity, and no stored file is read back.
+    expect(harness.createEntityVersionFromBufferMock).not.toHaveBeenCalled();
+    expect(harness.readFileHandlerMock).not.toHaveBeenCalled();
+    expect(harness.auditedEvents.at(0)).toMatchObject({
+      action: "execute",
+      resourceType: "file_comparison",
+      metadata: {
+        baseSizeBytes: 128,
+        changeCount: 0,
+        targetSizeBytes: 128,
+      },
+      workspaceId,
+    });
+  });
+
+  test("reports a failed temporary delivery per target without saving anything", async () => {
+    const harness = createHarness({ temporaryDeliveryFails: true });
+
+    const result = await harness.definition.handler({
+      ...harness.context,
+      body: { ...harness.context.body, output: { type: "download" } },
+    });
+
+    expect(result).toMatchObject({
+      results: [{ status: "failed", error: { code: "delivery_failed" } }],
+    });
+    expect(harness.createEntityVersionFromBufferMock).not.toHaveBeenCalled();
   });
 
   test("applies the opposite tracked-change dispositions independently", async () => {

@@ -36,7 +36,7 @@ import { Temporal } from "@stll/time";
 import { envBase } from "@/api/env-base";
 import { contentDisposition } from "@/api/lib/content-disposition";
 import { detached } from "@/api/lib/detached";
-import { resolveS3Credentials } from "@/api/lib/s3";
+import { resolveS3Credentials, TEMP_UPLOAD_TAGGING } from "@/api/lib/s3";
 import { RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS } from "@/api/lib/security-headers";
 
 export class S3PresignError extends TaggedError("S3PresignError")<{
@@ -129,9 +129,6 @@ const SCOPED_CLIENT_REFRESH_SKEW_MS = 60 * 1000;
 /** Bound the process-wide STS client cache across organizations/workspaces. */
 export const SCOPED_CLIENT_CACHE_MAX_ENTRIES = 256;
 const AWS_SDK_REQUEST_TIMEOUT_MS = 30_000;
-const TEMP_UPLOAD_TAG_KEY = "stella-upload-stage";
-const TEMP_UPLOAD_TAG_VALUE = "tmp";
-const TEMP_UPLOAD_TAGGING = `${TEMP_UPLOAD_TAG_KEY}=${TEMP_UPLOAD_TAG_VALUE}`;
 const S3_GET_OBJECT_ACTION = "s3:GetObject" as const;
 
 // Set only by `configureS3PresignForTesting`; production always uses the env.

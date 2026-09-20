@@ -1112,82 +1112,153 @@ const TASKS: readonly Task[] = [
   {
     id: "compare-document-versions",
     request:
-      "Use documents.compare to create a strict word-level tracked-changes comparison in matter " +
-      "11111111-1111-4111-8111-111111111111 for file property 55555555-5555-4555-8555-555555555555 on document " +
-      "22222222-2222-4222-8222-222222222222, comparing target version " +
-      "44444444-4444-4444-8444-444444444444 with its immediate predecessor. " +
-      "Keep tracked changes in the base, accept tracked changes in the target, " +
-      "and save the comparison as a derived version.",
+      "Redline these two versions of document 22222222-2222-4222-8222-222222222222: " +
+      "compare version 44444444-4444-4444-8444-444444444444 with the version before it. " +
+      "Keep the tracked changes that are already in the older version, accept the ones in " +
+      "the newer version, and save the redline as a new version of the document.",
     mcp: {
-      toolName: "invoke_capability",
-      preflight: { type: "capability-described" },
+      toolName: "compare_documents",
       exampleArgs: {
-        capability: "documents.compare",
-        input: {
-          params: {
-            matterId: "11111111-1111-4111-8111-111111111111",
-            documentId: "22222222-2222-4222-8222-222222222222",
-          },
-          body: {
-            filePropertyId: "55555555-5555-4555-8555-555555555555",
-            selection: {
-              type: "previous",
-              targetVersionId: "44444444-4444-4444-8444-444444444444",
-            },
-            mode: "strict",
-            granularity: "word",
-            baseTrackedChanges: "keep",
-            targetTrackedChanges: "accept",
-            output: { type: "version" },
-          },
+        source: {
+          type: "previous",
+          document_id: "22222222-2222-4222-8222-222222222222",
+          target_version_id: "44444444-4444-4444-8444-444444444444",
         },
+        base_tracked_changes: "keep",
+        target_tracked_changes: "accept",
+        output_mode: "version",
       },
       checkArgs: (args) => [
-        ...field(args, "capability", "documents.compare"),
+        ...nestedField(args, ["source", "type"], "previous"),
         ...nestedField(
           args,
-          ["input", "params", "matterId"],
-          "11111111-1111-4111-8111-111111111111",
-        ),
-        ...nestedField(
-          args,
-          ["input", "params", "documentId"],
+          ["source", "document_id"],
           "22222222-2222-4222-8222-222222222222",
         ),
         ...nestedField(
           args,
-          ["input", "body", "selection", "type"],
-          "previous",
-        ),
-        ...nestedField(
-          args,
-          ["input", "body", "selection", "targetVersionId"],
+          ["source", "target_version_id"],
           "44444444-4444-4444-8444-444444444444",
         ),
-        ...nestedField(
-          args,
-          ["input", "body", "filePropertyId"],
-          "55555555-5555-4555-8555-555555555555",
-        ),
-        ...nestedField(args, ["input", "body", "mode"], "strict"),
-        ...nestedField(args, ["input", "body", "granularity"], "word"),
-        ...nestedField(args, ["input", "body", "baseTrackedChanges"], "keep"),
-        ...nestedField(
-          args,
-          ["input", "body", "targetTrackedChanges"],
-          "accept",
-        ),
-        ...nestedField(args, ["input", "body", "output", "type"], "version"),
+        ...field(args, "base_tracked_changes", "keep"),
+        ...field(args, "target_tracked_changes", "accept"),
+        ...field(args, "output_mode", "version"),
       ],
     },
     cli: {
       kind: "command",
-      path: ["capability", "documents", "compare"],
+      path: ["document", "compare"],
+      // `source` is a discriminated object, so the leaf carries it through
+      // `--input` and takes the scalar dispositions as flags.
       flags: {
-        "matter-id": "11111111-1111-4111-8111-111111111111",
-        "document-id": "22222222-2222-4222-8222-222222222222",
+        "base-tracked-changes": "keep",
+        "target-tracked-changes": "accept",
+        "output-mode": "version",
         input:
-          '{"body":{"filePropertyId":"55555555-5555-4555-8555-555555555555","selection":{"type":"previous","targetVersionId":"44444444-4444-4444-8444-444444444444"},"mode":"strict","granularity":"word","baseTrackedChanges":"keep","targetTrackedChanges":"accept","output":{"type":"version"}}}',
+          '{"source":{"type":"previous","document_id":"22222222-2222-4222-8222-222222222222","target_version_id":"44444444-4444-4444-8444-444444444444"}}',
+      },
+    },
+  },
+  {
+    id: "prepare-file-comparison",
+    request:
+      "I've attached two Word files, Draft.docx (18342 bytes, sha256 " +
+      "3f1a2b4c5d6e7f809a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f6071) and " +
+      "Revised.docx (19004 bytes, sha256 " +
+      "9f8e7d6c5b4a39281706f5e4d3c2b1a09f8e7d6c5b4a39281706f5e4d3c2b1a0). " +
+      "Redline them for me. They are not saved in stella.",
+    mcp: {
+      toolName: "prepare_file_comparison",
+      exampleArgs: {
+        base: {
+          name: "Draft.docx",
+          size: 18_342,
+          sha256_hex:
+            "3f1a2b4c5d6e7f809a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f6071",
+        },
+        target: {
+          name: "Revised.docx",
+          size: 19_004,
+          sha256_hex:
+            "9f8e7d6c5b4a39281706f5e4d3c2b1a09f8e7d6c5b4a39281706f5e4d3c2b1a0",
+        },
+      },
+      checkArgs: (args) => [
+        ...nestedField(args, ["base", "name"], "Draft.docx"),
+        ...nestedField(args, ["base", "size"], 18_342),
+        ...nestedField(
+          args,
+          ["base", "sha256_hex"],
+          "3f1a2b4c5d6e7f809a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f6071",
+        ),
+        ...nestedField(args, ["target", "name"], "Revised.docx"),
+        ...nestedField(args, ["target", "size"], 19_004),
+        ...nestedField(
+          args,
+          ["target", "sha256_hex"],
+          "9f8e7d6c5b4a39281706f5e4d3c2b1a09f8e7d6c5b4a39281706f5e4d3c2b1a0",
+        ),
+      ],
+    },
+    cli: {
+      kind: "command",
+      path: ["document", "comparison", "prepare"],
+      flags: {
+        input:
+          '{"base":{"name":"Draft.docx","size":18342,"sha256_hex":"3f1a2b4c5d6e7f809a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f6071"},"target":{"name":"Revised.docx","size":19004,"sha256_hex":"9f8e7d6c5b4a39281706f5e4d3c2b1a09f8e7d6c5b4a39281706f5e4d3c2b1a0"}}',
+      },
+    },
+  },
+  {
+    id: "compare-staged-uploads",
+    // The second half of the same workflow: the model is handed the `next`
+    // payload prepare_file_comparison returned and has to copy it back rather
+    // than compose a source of its own.
+    request:
+      "Both files are uploaded. prepare_file_comparison returned " +
+      '{"tool":"compare_documents","source":{"type":"uploads",' +
+      '"base_upload_id":"77777777-7777-4777-8777-777777777777",' +
+      '"target_upload_id":"88888888-8888-4888-8888-888888888888"}}. ' +
+      "Accept the tracked changes already in both files and give me the " +
+      "redline to download.",
+    mcp: {
+      toolName: "compare_documents",
+      exampleArgs: {
+        source: {
+          type: "uploads",
+          base_upload_id: "77777777-7777-4777-8777-777777777777",
+          target_upload_id: "88888888-8888-4888-8888-888888888888",
+        },
+        base_tracked_changes: "accept",
+        target_tracked_changes: "accept",
+        output_mode: "download",
+      },
+      checkArgs: (args) => [
+        ...nestedField(args, ["source", "type"], "uploads"),
+        ...nestedField(
+          args,
+          ["source", "base_upload_id"],
+          "77777777-7777-4777-8777-777777777777",
+        ),
+        ...nestedField(
+          args,
+          ["source", "target_upload_id"],
+          "88888888-8888-4888-8888-888888888888",
+        ),
+        ...field(args, "base_tracked_changes", "accept"),
+        ...field(args, "target_tracked_changes", "accept"),
+        ...field(args, "output_mode", "download"),
+      ],
+    },
+    cli: {
+      kind: "command",
+      path: ["document", "compare"],
+      flags: {
+        "base-tracked-changes": "accept",
+        "target-tracked-changes": "accept",
+        "output-mode": "download",
+        input:
+          '{"source":{"type":"uploads","base_upload_id":"77777777-7777-4777-8777-777777777777","target_upload_id":"88888888-8888-4888-8888-888888888888"}}',
       },
     },
   },

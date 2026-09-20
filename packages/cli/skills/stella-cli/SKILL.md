@@ -107,6 +107,8 @@ requires (request it at `stella auth login --scopes`).
 | contact      | `stella contact lookup-registry`           | read                        |                                         |
 | contact      | `stella contact read`                      | read                        |                                         |
 | contact      | `stella contact save`                      | matters_write               |                                         |
+| document     | `stella document compare`                  | documents_write             |                                         |
+| document     | `stella document comparison prepare`       | documents_write             |                                         |
 | document     | `stella document content`                  | read                        | paginated; windowed text                |
 | document     | `stella document delete`                   | documents_write             | destructive (needs `--yes` off a TTY)   |
 | document     | `stella document field set`                | documents_write             |                                         |
@@ -194,6 +196,13 @@ are omitted here.
   - `--contact-id` — Contact ID (string)
 - `stella contact save`
   - optional: --contact-id, --type (person|organization), --display-name, --first-name, --last-name, --organization-name, --notes
+- `stella document compare`
+  - `--base-tracked-changes` — Tracked changes the base version already carries: accept compares its final text, keep leaves them in place, reject compares its original text. (enum: keep, accept, reject)
+  - `--target-tracked-changes` — Tracked changes the target version already carries: accept compares its final text, keep leaves them in place, reject compares its original text. (enum: keep, accept, reject)
+  - `--output-mode` — preview compares without writing. download returns each redline as a temporary link and saves nothing to the document. version saves each redline as a derived version and needs a stored-version source. (enum: preview, download, version)
+  - optional: --mode (strict|best-effort), --granularity (word|character)
+- `stella document comparison prepare`
+  - optional: --base.name, --base.size, --base.sha256-hex, --target.name, --target.size, --target.sha256-hex
 - `stella document content`
   - `--entity-id` — Entity ID (string)
 - `stella document delete`

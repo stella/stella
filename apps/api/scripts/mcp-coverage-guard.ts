@@ -121,6 +121,8 @@ const TOOLS_WITHOUT_ENUMERABLE_ENDPOINT: Record<string, string> = {
     "no dedicated endpoint: MCP handler reads extractedContent directly (apps/api/src/mcp/stella-tools.ts)",
   fetch:
     "no dedicated endpoint: compat alias, MCP handler reads extractedContent directly (apps/api/src/mcp/compat-tools.ts)",
+  prepare_file_comparison:
+    "no dedicated endpoint: MCP-only tool reserving short-lived comparison staging outside matter storage (apps/api/src/mcp/file-comparison-prepare-tool.ts)",
   prepare_feedback:
     "no dedicated endpoint: MCP-only tool, prepares a sanitized GitHub issue URL and gh command (apps/api/src/mcp/feedback-tools.ts)",
   list_capabilities:

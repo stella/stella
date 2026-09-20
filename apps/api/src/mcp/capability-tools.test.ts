@@ -243,6 +243,7 @@ describe("documents.compare capability contract", () => {
       id: string;
       scope: string;
       handlerKind: string;
+      disposition: { type: string; name?: string };
       inputSchema: {
         body?: {
           properties?: {
@@ -252,10 +253,15 @@ describe("documents.compare capability contract", () => {
         };
       };
     }>(described);
+    // The endpoint now backs the curated compare_documents tool. It stays in
+    // the catalog and stays generically invocable, the way every other
+    // tool-backed capability does; the disposition is what tells an agent that
+    // reached it here to call the tool instead.
     expect(describedPayload).toMatchObject({
       id: "documents.compare",
       scope: "stella:documents_write",
       handlerKind: "workspace",
+      disposition: { type: "tool", name: "compare_documents" },
     });
     const variants =
       describedPayload.inputSchema.body?.properties?.selection?.anyOf;
@@ -286,6 +292,11 @@ describe("documents.compare capability contract", () => {
       expect.objectContaining({
         properties: expect.objectContaining({
           type: expect.objectContaining({ const: "preview" }),
+        }),
+      }),
+      expect.objectContaining({
+        properties: expect.objectContaining({
+          type: expect.objectContaining({ const: "download" }),
         }),
       }),
       expect.objectContaining({

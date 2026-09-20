@@ -209,6 +209,13 @@ const compareDocumentDependencies = {
     stampable: false,
   }),
   resolveDocxEditAuthorName: async () => "Cross-tenant test user",
+  // The isolation cases all ask for a saved version; a temporary redline never
+  // reaches another tenant because the object key leads with the organization.
+  deliverTemporaryRedline: async () =>
+    Result.ok({
+      downloadUrl: "https://files.example/redline.docx",
+      expiresAt: "2026-09-20T00:00:00.000Z",
+    }),
   withTimeout: async (operation) =>
     await operation(new AbortController().signal),
 } satisfies CompareDocumentDependencies;
