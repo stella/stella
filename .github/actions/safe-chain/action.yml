@@ -14,14 +14,16 @@ description: >
   signals over the same dependency graph.
 
   Keep the scanning job's Bun cache cold: Safe Chain's Bun integration proxies
-  registry downloads and cannot rescan tarballs restored before it starts.
+  registry downloads and cannot rescan tarballs restored before it starts. The
+  cache below holds only the hash-pinned Safe Chain binary, no packages.
 
   Safe Chain is AGPL-3.0-or-later. It is installed as a standalone CI tool and
   must never be added to package.json: dependency-review.yml blocks AGPL in the
   dependency graph, and stella ships under Apache-2.0.
 
-  POSIX runners only (ubuntu, macos). The installer is a shell script and does
-  not run on the windows jobs.
+  Linux x64 runners only. The release binary is fetched here rather than by the
+  upstream installer, whose own download retries nothing and so turns a single
+  reset connection into a failed job.
 
 inputs:
   version:
@@ -31,7 +33,7 @@ inputs:
   sha256:
     description: >
       Expected SHA-256 of that release's install-safe-chain.sh. Must be updated
-      together with `version`; a mismatch fails the job rather than executing an
+      together with `version`; a mismatch fails the job rather than trusting an
       unverified installer.
     required: false
     default: d41816ab564e9b9238946786433eec15e2d0e699698fa81c1fd1bdd3a78adf5c
@@ -39,6 +41,12 @@ inputs:
 runs:
   using: composite
   steps:
+    - name: Restore Safe Chain binary
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/.safe-chain/bin
+        key: safe-chain-${{ inputs.version }}-${{ inputs.sha256 }}-${{ runner.os }}-${{ runner.arch }}
+
     - name: Install Safe Chain
       shell: bash
       env:
@@ -47,29 +55,62 @@ runs:
       run: |
         set -euo pipefail
 
+        # The asset name below is platform-specific, so refuse to guess rather
+        # than install a binary for the wrong platform.
+        if [[ "$RUNNER_OS" != "Linux" || "$RUNNER_ARCH" != "X64" ]]; then
+          echo "::error::Safe Chain is installed here for Linux X64 only," \
+               "got ${RUNNER_OS} ${RUNNER_ARCH}"
+          exit 1
+        fi
+
+        fetch() {
+          curl -fsSL --retry 5 --retry-delay 2 --retry-all-errors \
+            --retry-connrefused --connect-timeout 20 "$1" -o "$2"
+        }
+
+        release="https://github.com/AikidoSec/safe-chain/releases/download/${SAFE_CHAIN_RELEASE_VERSION}"
+
         installer="$(mktemp)"
         trap 'rm -f "$installer"' EXIT
 
-        curl -fsSL --retry 3 --retry-delay 2 \
-          "https://github.com/AikidoSec/safe-chain/releases/download/${SAFE_CHAIN_RELEASE_VERSION}/install-safe-chain.sh" \
-          -o "$installer"
+        fetch "${release}/install-safe-chain.sh" "$installer"
 
-        # macOS runners have shasum but not sha256sum.
-        if command -v sha256sum >/dev/null 2>&1; then
-          actual="$(sha256sum "$installer" | cut -d' ' -f1)"
-        else
-          actual="$(shasum -a 256 "$installer" | cut -d' ' -f1)"
-        fi
-
+        actual="$(sha256sum "$installer" | cut -d' ' -f1)"
         if [[ "$actual" != "$SAFE_CHAIN_SHA256" ]]; then
           echo "::error::Safe Chain installer hash mismatch for ${SAFE_CHAIN_RELEASE_VERSION}:" \
                "expected ${SAFE_CHAIN_SHA256}, got ${actual}"
           exit 1
         fi
 
-        # --ci installs PATH shims instead of shell aliases, so non-interactive
-        # `run:` steps pick them up.
-        sh "$installer" --ci
+        # The installer is the root of trust and stays pinned, but it is read,
+        # not run: its own binary download has no retry. Its baked-in asset
+        # hash becomes the binary's pin, so there is one hash to maintain.
+        # Upstream skips verification when that hash is empty; we never do.
+        expected_binary="$(sed -nE 's/^SHA256_LINUXSTATIC_X64="([0-9a-f]{64})"$/\1/p' "$installer" | head -n1)"
+        if [[ ! "$expected_binary" =~ ^[0-9a-f]{64}$ ]]; then
+          echo "::error::No SHA256_LINUXSTATIC_X64 hash in the Safe Chain ${SAFE_CHAIN_RELEASE_VERSION} installer;" \
+               "refusing to install an unverified binary"
+          exit 1
+        fi
+
+        bin="${HOME}/.safe-chain/bin/safe-chain"
+        if [[ ! -f "$bin" ]]; then
+          mkdir -p "$(dirname "$bin")"
+          fetch "${release}/safe-chain-linuxstatic-x64" "$bin"
+        fi
+
+        # A restored cache is untrusted input, so verify on a hit too.
+        actual="$(sha256sum "$bin" | cut -d' ' -f1)"
+        if [[ "$actual" != "$expected_binary" ]]; then
+          echo "::error::Safe Chain binary hash mismatch for ${SAFE_CHAIN_RELEASE_VERSION}:" \
+               "expected ${expected_binary}, got ${actual}"
+          exit 1
+        fi
+        chmod +x "$bin"
+
+        # setup-ci installs PATH shims instead of shell aliases, so
+        # non-interactive `run:` steps pick them up, and writes GITHUB_PATH.
+        "$bin" setup-ci
 
         # Safe Chain also defaults to a 48-hour package-age filter. Stella's
         # 5-day gate and its reviewed exclusions live in bunfig.toml, so keep
