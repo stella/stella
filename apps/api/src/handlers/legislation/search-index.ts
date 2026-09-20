@@ -26,9 +26,9 @@ import { readCorpusText } from "@/api/lib/legal-search/corpus-reads";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import { resolveFtsConfig } from "@/api/lib/legal-search/fts-config";
 import { redistributableLegislationSource } from "@/api/lib/legal-search/legislation-redistribution";
-import { boundTsvectorText } from "@/api/lib/legal-search/tsvector-bounds";
+import { writeProjectionWithinTsvectorCeiling } from "@/api/lib/legal-search/tsvector-bounds";
 import { logger } from "@/api/lib/observability/logger";
-import { isPgError, PG_ERROR, pgErrorFields } from "@/api/lib/pg-error";
+import { pgErrorFields } from "@/api/lib/pg-error";
 
 /**
  * Postgres FTS projection for legislation, mirroring
@@ -169,29 +169,19 @@ export const indexLegislationDocument = async (
     });
   };
 
-  const projection = await Result.tryPromise(
-    async () => await writeProjection(searchableText),
+  const projection = await writeProjectionWithinTsvectorCeiling(
+    searchableText,
+    writeProjection,
   );
-  if (projection.isErr()) {
-    const cause =
-      projection.error instanceof UnhandledException
-        ? projection.error.cause
-        : projection.error;
-    if (!isPgError(cause, PG_ERROR.PROGRAM_LIMIT_EXCEEDED)) {
-      throw cause;
-    }
-    // A document with no projection row stays in the backfill's missing scan,
-    // which reselects it on every pass, so reaching the index on a bounded
-    // prefix is what converges. The row stores the text its vector was built
-    // from, so both are written from the same bounded value.
-    const boundedText = boundTsvectorText(searchableText);
+  if (projection.bounded) {
     logger.warn("legislation.search_index.tsvector_bounded", {
       documentId: document.id,
       "legislation.searchable_text_bytes": Buffer.byteLength(searchableText),
-      "legislation.indexed_text_bytes": Buffer.byteLength(boundedText),
-      ...pgErrorFields(cause),
+      "legislation.indexed_text_bytes": Buffer.byteLength(
+        projection.indexedText,
+      ),
+      ...pgErrorFields(projection.cause),
     });
-    await writeProjection(boundedText);
   }
 
   if (corpusReadFailure !== undefined) {

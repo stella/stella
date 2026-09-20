@@ -1,3 +1,7 @@
+import { Result, UnhandledException } from "better-result";
+
+import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
+
 /**
  * Postgres stores a `tsvector` in at most 1 MiB and raises
  * `program_limit_exceeded` from `make_tsvector` for a value that does not fit.
@@ -51,4 +55,42 @@ export const boundTsvectorText = (text: string): string => {
   const bounded = decoder.decode(bytes.subarray(0, end));
   const whole = bounded.replace(/\S+$/u, "").trimEnd();
   return whole === "" ? bounded : whole;
+};
+
+type TsvectorProjectionWrite =
+  | { bounded: false }
+  | {
+      bounded: true;
+      /** The prefix the row was written from, so the row and its vector agree. */
+      indexedText: string;
+      /** Postgres's refusal of the whole text, for the caller's log line. */
+      cause: unknown;
+    };
+
+/**
+ * Runs `write` over the whole text and, only once Postgres has refused that
+ * projection for outgrowing the tsvector ceiling, once more over
+ * {@link boundTsvectorText}. Any other failure propagates unchanged.
+ *
+ * A projection row with no row at all stays in its backfill's missing scan,
+ * which reselects it on every pass, so landing a bounded row is what makes the
+ * scan converge. `write` owns its transaction: the refused statement aborts the
+ * one it ran in, and the retry needs a fresh one.
+ */
+export const writeProjectionWithinTsvectorCeiling = async (
+  text: string,
+  write: (indexedText: string) => Promise<void>,
+): Promise<TsvectorProjectionWrite> => {
+  const whole = await Result.tryPromise(async () => await write(text));
+  if (Result.isOk(whole)) {
+    return { bounded: false };
+  }
+  const cause =
+    whole.error instanceof UnhandledException ? whole.error.cause : whole.error;
+  if (!isPgError(cause, PG_ERROR.PROGRAM_LIMIT_EXCEEDED)) {
+    throw cause;
+  }
+  const indexedText = boundTsvectorText(text);
+  await write(indexedText);
+  return { bounded: true, indexedText, cause };
 };
