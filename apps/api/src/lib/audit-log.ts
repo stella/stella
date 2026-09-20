@@ -256,6 +256,7 @@ const AUDIT_ACTIVITY_CATEGORY_BY_RESOURCE_TYPE = {
   usage_event: "other",
   desktop_edit_session: "other",
   expense: "other",
+  feedback_report: "other",
   flow_definition: "other",
   folio_collab_room: "other",
   signal: "other",

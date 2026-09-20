@@ -128,7 +128,9 @@ const TOOLS_WITHOUT_ENUMERABLE_ENDPOINT: Record<string, string> = {
   open_file_comparison:
     "no dedicated endpoint: MCP-only launcher for the portable two-file comparison App, which stages through prepare_file_comparison (apps/api/src/mcp/file-comparison-picker-tool.ts)",
   prepare_feedback:
-    "no dedicated endpoint: MCP-only tool, prepares a sanitized GitHub issue URL and gh command (apps/api/src/mcp/feedback-tools.ts)",
+    "no dedicated endpoint: sanitize-only draft step, returns the report for human approval and writes nothing (apps/api/src/mcp/feedback-tools.ts)",
+  submit_feedback:
+    "inline endpoint: apps/api/src/handlers/feedback/routes.ts POST /v1/feedback (same submitFeedbackReport service)",
   list_capabilities:
     "no dedicated endpoint: curated meta-tool over the capability catalog (apps/api/src/mcp/capability-tools.ts)",
   describe_capability:

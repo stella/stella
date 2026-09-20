@@ -82,6 +82,7 @@ export type SafeIdType =
   | "flowDefinition"
   | "flowRun"
   | "flowRunStep"
+  | "feedbackReport"
   | "signal"
   | "signalEvent"
   | "scoutRun"

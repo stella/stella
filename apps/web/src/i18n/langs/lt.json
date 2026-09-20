@@ -2015,7 +2015,39 @@
     "uploadFailed": "Įkėlimas nepavyko"
   },
   "feedback": {
-    "trigger": "Atsiliepimai"
+    "area": "Sritis",
+    "areas": {
+      "desktop": "Darbalaukio programa",
+      "legislation": "Teisės aktai",
+      "mcpCli": "MCP ir CLI",
+      "other": "Kažkas kita",
+      "webApp": "Žiniatinklio programa"
+    },
+    "copyReceipt": "Kopijuoti pranešimo numerį",
+    "description": "Parašykite, kas neveikia arba ko trūksta. Vienas pranešimas apie vieną problemą.",
+    "errorTitle": "Klaida {reference}",
+    "included": "Pridedama: <bdi>{route}</bdi>, versija <bdi>{version}</bdi>",
+    "kinds": {
+      "bug": "Klaida",
+      "idea": "Idėja",
+      "missingCapability": "Trūkstama funkcija"
+    },
+    "privacyNote": "Serveris pašalina el. pašto adresus, identifikatorius, nuorodas ir slaptus duomenis. Neįklijuokite bylų ar klientų pavadinimų nei dokumentų teksto.",
+    "rateLimited": "Per pastarąją valandą išsiųsta per daug pranešimų. Bandykite vėliau.",
+    "receiptDeduplicated": "Tai jau žinome. Jūsų pranešimas prijungtas prie esamo.",
+    "receiptDescription": "Išsaugokite numerį, jei norėsite pasiteirauti.",
+    "receiptLabel": "Pranešimo numeris",
+    "receiptTitle": "Pranešimas gautas",
+    "send": "Siųsti pranešimą",
+    "steps": "Veiksmai pakartoti",
+    "stepsHint": "Neprivaloma.",
+    "stepsPlaceholder": "1. Atverti… 2. Pasirinkti… 3. …",
+    "subject": "Trumpa santrauka",
+    "subjectPlaceholder": "Viena eilutė: kas negerai arba ko trūksta",
+    "title": "Siųsti atsiliepimą",
+    "trigger": "Atsiliepimai",
+    "whatHappened": "Kas nutiko",
+    "whatHappenedPlaceholder": "Ką darėte ir ką pamatėte vietoj to"
   },
   "fileDetail": {
     "base": "Bazinė",
@@ -3873,9 +3905,7 @@
     "descriptionNone": "Bandykite dar kartą. Jei problema išlieka, grįžkite į savo bylas.",
     "descriptionReport": "Bandykite dar kartą. Jei problema išlieka, grįžkite į savo bylas arba praneškite apie ją naudodami toliau pateiktą nuorodą.",
     "reference": "Klaidos nuoroda",
-    "reportBody": "Klaidos nuoroda: {reference}\n\nKas nutiko?\n",
     "reportProblem": "Pranešti apie problemą",
-    "reportSubject": "stella klaida: {reference}",
     "title": "Nepavyko atidaryti šio puslapio"
   },
   "search": {

@@ -5,12 +5,14 @@ import { AuthClientError } from "@/lib/errors/auth";
 import { CriticalQueryTimeoutError } from "@/lib/react-query";
 
 import {
-  buildErrorReportMailto,
   isNetworkError,
   recoverRouteError,
   resolveRouteErrorRecovery,
   resolveRouteErrorSupport,
 } from "./route-components.logic";
+import type { RouteErrorSupport } from "./route-components.logic";
+
+type SupportOptions = Parameters<typeof resolveRouteErrorSupport>[0];
 
 describe("route error recovery", () => {
   test("reloads for every browser dynamic-import failure shape", () => {
@@ -125,43 +127,33 @@ describe("route network error classification", () => {
 });
 
 describe("route error support", () => {
-  test("uses a deployment-configured feedback recipient", () => {
-    expect(
-      resolveRouteErrorSupport({
-        deployment: "selfHosted",
-        feedbackRecipient: "ops@example.test",
-      }),
-    ).toEqual({ type: "report", recipient: "ops@example.test" });
-  });
+  test.each([
+    ["hosted", "authenticated", { type: "report" }],
+    ["selfHosted", "authenticated", { type: "report" }],
+    ["selfHosted", "anonymous", { type: "administrator" }],
+    ["selfHosted", "checking", { type: "administrator" }],
+    ["hosted", "anonymous", { type: "none" }],
+    ["hosted", "checking", { type: "none" }],
+  ] as const satisfies readonly (readonly [
+    SupportOptions["deployment"],
+    SupportOptions["session"],
+    RouteErrorSupport,
+  ])[])(
+    "offers %s deployments with a %s session the matching destination",
+    (deployment, session, expected) => {
+      expect(resolveRouteErrorSupport({ deployment, session })).toEqual(
+        expected,
+      );
+    },
+  );
 
-  test("directs self-hosted users to their administrator when email is unset", () => {
-    expect(
-      resolveRouteErrorSupport({
-        deployment: "selfHosted",
-        feedbackRecipient: undefined,
-      }),
-    ).toEqual({ type: "administrator" });
-  });
-
-  test("does not invent a support destination for unconfigured hosted deployments", () => {
-    expect(
-      resolveRouteErrorSupport({
-        deployment: "hosted",
-        feedbackRecipient: undefined,
-      }),
-    ).toEqual({ type: "none" });
-  });
-
-  test("builds a report containing only caller-provided support copy", () => {
-    const href = buildErrorReportMailto({
-      body: "Error reference: ERR-DEAD-BEEF-1234",
-      recipient: "ops@example.test",
-      subject: "stella error ERR-DEAD-BEEF-1234",
-    });
-
-    expect(decodeURIComponent(href)).toBe(
-      "mailto:ops@example.test?subject=stella error ERR-DEAD-BEEF-1234&body=Error reference: ERR-DEAD-BEEF-1234",
-    );
-    expect(href).not.toContain("workspaces");
+  test("never offers reporting to a session that cannot post a report", () => {
+    for (const deployment of ["hosted", "selfHosted"] as const) {
+      for (const session of ["anonymous", "checking"] as const) {
+        expect(resolveRouteErrorSupport({ deployment, session }).type).not.toBe(
+          "report",
+        );
+      }
+    }
   });
 });

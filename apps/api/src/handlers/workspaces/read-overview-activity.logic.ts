@@ -175,6 +175,7 @@ export const ACTIVITY_TARGET_SOURCE_BY_RESOURCE_TYPE = {
   desktop_edit_session: null,
   document_type: null,
   expense: null,
+  feedback_report: null,
   flow_definition: null,
   folio_collab_room: null,
   invoice: null,

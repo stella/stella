@@ -2015,7 +2015,39 @@
     "uploadFailed": "Échec de l'import"
   },
   "feedback": {
-    "trigger": "Commentaires"
+    "area": "Domaine",
+    "areas": {
+      "desktop": "Application de bureau",
+      "legislation": "Législation",
+      "mcpCli": "MCP et CLI",
+      "other": "Autre chose",
+      "webApp": "Application web"
+    },
+    "copyReceipt": "Copier le numéro de signalement",
+    "description": "Dites-nous ce qui ne marche pas ou ce qui manque. Un problème par signalement.",
+    "errorTitle": "Erreur {reference}",
+    "included": "Joint : <bdi>{route}</bdi>, version <bdi>{version}</bdi>",
+    "kinds": {
+      "bug": "Anomalie",
+      "idea": "Idée",
+      "missingCapability": "Fonction manquante"
+    },
+    "privacyNote": "Le serveur supprime les adresses e-mail, identifiants, liens et secrets. Ne collez pas de noms de dossiers ou de clients, ni de texte de document.",
+    "rateLimited": "Trop de signalements durant la dernière heure. Réessayez plus tard.",
+    "receiptDeduplicated": "Nous l’avions déjà. Votre signalement y a été rattaché.",
+    "receiptDescription": "Conservez ce numéro si vous souhaitez faire un suivi.",
+    "receiptLabel": "Numéro de signalement",
+    "receiptTitle": "Signalement reçu",
+    "send": "Envoyer le signalement",
+    "steps": "Étapes pour reproduire",
+    "stepsHint": "Facultatif.",
+    "stepsPlaceholder": "1. Ouvrir… 2. Sélectionner… 3. …",
+    "subject": "Résumé court",
+    "subjectPlaceholder": "Une ligne : ce qui ne va pas ou ce qui manque",
+    "title": "Envoyer un retour",
+    "trigger": "Commentaires",
+    "whatHappened": "Ce qui s’est passé",
+    "whatHappenedPlaceholder": "Ce que vous avez fait, et ce que vous avez vu à la place"
   },
   "fileDetail": {
     "base": "Base",
@@ -3873,9 +3905,7 @@
     "descriptionNone": "Réessayez. Si le problème persiste, retournez à vos dossiers.",
     "descriptionReport": "Réessayez. Si le problème persiste, retournez à vos dossiers ou signalez-le avec la référence ci-dessous.",
     "reference": "Référence de l’erreur",
-    "reportBody": "Référence de l’erreur : {reference}\n\nQue s’est-il passé ?\n",
     "reportProblem": "Signaler un problème",
-    "reportSubject": "Erreur stella {reference}",
     "title": "Cette page n’a pas pu être ouverte"
   },
   "search": {

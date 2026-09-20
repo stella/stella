@@ -6536,16 +6536,39 @@ export const generatedRouteMap: RouteNode = {
             commandPath: ["feedback", "prepare"],
             toolName: "prepare_feedback",
             description:
-              "Prepare a bug, feature request, or docs issue for the stella maintainers.",
+              "Draft a bug, idea, missing-capability or docs report for the stella maintainers and get it back sanitized.",
             flags: [
               {
                 flag: "--kind",
                 prop: "kind",
                 kind: "enum",
-                enum: ["bug", "feature_request", "docs", "other"],
+                enum: ["bug", "idea", "missing_capability", "docs"],
                 repeatable: false,
                 description:
-                  "Feedback category: bug, feature_request, docs, or other",
+                  "bug (it behaved wrongly), idea (it could be better), missing_capability (there is no way to do this), docs (the reference or description is wrong or missing).",
+                required: true,
+              },
+              {
+                flag: "--area",
+                prop: "area",
+                kind: "enum",
+                enum: [
+                  "matters",
+                  "documents",
+                  "templates",
+                  "case_law",
+                  "legislation",
+                  "contacts",
+                  "tasks",
+                  "billing",
+                  "chat",
+                  "mcp_cli",
+                  "web_app",
+                  "desktop",
+                  "other",
+                ],
+                repeatable: false,
+                description: "Which part of stella the report is about.",
                 required: true,
               },
               {
@@ -6554,26 +6577,85 @@ export const generatedRouteMap: RouteNode = {
                 kind: "string",
                 repeatable: false,
                 description:
-                  "Short one-line summary of the issue; no tenant data, ids, or secrets",
+                  "One line naming the problem, not the symptom's location.",
                 required: true,
               },
               {
-                flag: "--body",
-                prop: "body",
+                flag: "--what-happened",
+                prop: "what_happened",
+                kind: "string",
+                repeatable: false,
+                description: "What stella actually did.",
+                required: true,
+              },
+              {
+                flag: "--expected",
+                prop: "expected",
+                kind: "string",
+                repeatable: false,
+                description: "What you expected instead.",
+                required: false,
+              },
+              {
+                flag: "--steps",
+                prop: "steps",
                 kind: "string",
                 repeatable: false,
                 description:
-                  "Markdown details: reproduction steps, expected vs actual behavior, environment. Never include tenant data, client or matter names, ids, or secrets; they are redacted server-side.",
-                required: true,
+                  "Numbered steps that reproduce it, in terms of tool calls.",
+                required: false,
               },
               {
-                flag: "--channel",
-                prop: "channel",
-                kind: "enum",
-                enum: ["github"],
+                flag: "--evidence",
+                prop: "evidence",
+                kind: "string",
                 repeatable: false,
                 description:
-                  "Delivery channel. github returns a prefilled issue URL the human submits under their own GitHub account.",
+                  "The error envelope, the refused input, or the wrong output, verbatim but without tenant content.",
+                required: false,
+              },
+              {
+                flag: "--context.client",
+                prop: "context.client",
+                kind: "enum",
+                enum: ["mcp", "cli", "web", "desktop", "other"],
+                repeatable: false,
+                description: "Which client you are driving stella from.",
+                required: false,
+              },
+              {
+                flag: "--context.client-version",
+                prop: "context.client_version",
+                kind: "string",
+                repeatable: false,
+                description: "Version string of that client.",
+                required: false,
+              },
+              {
+                flag: "--context.request-id",
+                prop: "context.request_id",
+                kind: "string",
+                repeatable: false,
+                description:
+                  "The requestId a failing tool returned in its error envelope. Kept verbatim (it is the only field that is not redacted) because it is how a maintainer finds the failing call in the server logs.",
+                required: false,
+              },
+              {
+                flag: "--context.route",
+                prop: "context.route",
+                kind: "string",
+                repeatable: false,
+                description:
+                  "Tool name, CLI command or page the problem appeared on.",
+                required: false,
+              },
+              {
+                flag: "--context.error-reference",
+                prop: "context.error_reference",
+                kind: "string",
+                repeatable: false,
+                description:
+                  "Error code from the envelope, if the call returned one.",
                 required: false,
               },
             ],
@@ -6585,35 +6667,342 @@ export const generatedRouteMap: RouteNode = {
             scope: "feedback",
             inputSchema: {
               type: "object",
-              required: ["kind", "title", "body"],
+              required: ["kind", "area", "title", "what_happened"],
               additionalProperties: false,
               properties: {
                 kind: {
-                  enum: ["bug", "feature_request", "docs", "other"],
+                  enum: ["bug", "idea", "missing_capability", "docs"],
                   type: "string",
                   description:
-                    "Feedback category: bug, feature_request, docs, or other",
+                    "bug (it behaved wrongly), idea (it could be better), missing_capability (there is no way to do this), docs (the reference or description is wrong or missing).",
+                },
+                area: {
+                  enum: [
+                    "matters",
+                    "documents",
+                    "templates",
+                    "case_law",
+                    "legislation",
+                    "contacts",
+                    "tasks",
+                    "billing",
+                    "chat",
+                    "mcp_cli",
+                    "web_app",
+                    "desktop",
+                    "other",
+                  ],
+                  type: "string",
+                  description: "Which part of stella the report is about.",
                 },
                 title: {
                   type: "string",
                   minLength: 1,
                   maxLength: 200,
                   description:
-                    "Short one-line summary of the issue; no tenant data, ids, or secrets",
+                    "One line naming the problem, not the symptom's location.",
                 },
-                body: {
+                what_happened: {
                   type: "string",
                   minLength: 1,
-                  maxLength: 8000,
-                  description:
-                    "Markdown details: reproduction steps, expected vs actual behavior, environment. Never include tenant data, client or matter names, ids, or secrets; they are redacted server-side.",
+                  maxLength: 4000,
+                  description: "What stella actually did.",
                 },
-                channel: {
-                  enum: ["github"],
+                expected: {
+                  type: "string",
+                  maxLength: 2000,
+                  description: "What you expected instead.",
+                },
+                steps: {
+                  type: "string",
+                  maxLength: 4000,
+                  description:
+                    "Numbered steps that reproduce it, in terms of tool calls.",
+                },
+                evidence: {
+                  type: "string",
+                  maxLength: 4000,
+                  description:
+                    "The error envelope, the refused input, or the wrong output, verbatim but without tenant content.",
+                },
+                context: {
+                  type: "object",
+                  properties: {
+                    client: {
+                      enum: ["mcp", "cli", "web", "desktop", "other"],
+                      type: "string",
+                      description: "Which client you are driving stella from.",
+                    },
+                    client_version: {
+                      type: "string",
+                      maxLength: 120,
+                      description: "Version string of that client.",
+                    },
+                    request_id: {
+                      type: "string",
+                      pattern: "^[A-Za-z0-9._-]{1,64}$",
+                      description:
+                        "The requestId a failing tool returned in its error envelope. Kept verbatim (it is the only field that is not redacted) because it is how a maintainer finds the failing call in the server logs.",
+                    },
+                    route: {
+                      type: "string",
+                      maxLength: 120,
+                      description:
+                        "Tool name, CLI command or page the problem appeared on.",
+                    },
+                    error_reference: {
+                      type: "string",
+                      maxLength: 120,
+                      description:
+                        "Error code from the envelope, if the call returned one.",
+                    },
+                  },
+                  required: [],
+                  additionalProperties: false,
+                  description:
+                    "Where the problem appeared, so a maintainer can find the call.",
+                },
+              },
+            },
+          },
+        },
+        submit: {
+          kind: "leaf",
+          spec: {
+            commandPath: ["feedback", "submit"],
+            toolName: "submit_feedback",
+            description:
+              "File the report prepared by prepare_feedback with the stella maintainers.",
+            flags: [
+              {
+                flag: "--kind",
+                prop: "kind",
+                kind: "enum",
+                enum: ["bug", "idea", "missing_capability", "docs"],
+                repeatable: false,
+                description:
+                  "bug (it behaved wrongly), idea (it could be better), missing_capability (there is no way to do this), docs (the reference or description is wrong or missing).",
+                required: true,
+              },
+              {
+                flag: "--area",
+                prop: "area",
+                kind: "enum",
+                enum: [
+                  "matters",
+                  "documents",
+                  "templates",
+                  "case_law",
+                  "legislation",
+                  "contacts",
+                  "tasks",
+                  "billing",
+                  "chat",
+                  "mcp_cli",
+                  "web_app",
+                  "desktop",
+                  "other",
+                ],
+                repeatable: false,
+                description: "Which part of stella the report is about.",
+                required: true,
+              },
+              {
+                flag: "--title",
+                prop: "title",
+                kind: "string",
+                repeatable: false,
+                description:
+                  "One line naming the problem, not the symptom's location.",
+                required: true,
+              },
+              {
+                flag: "--what-happened",
+                prop: "what_happened",
+                kind: "string",
+                repeatable: false,
+                description: "What stella actually did.",
+                required: true,
+              },
+              {
+                flag: "--expected",
+                prop: "expected",
+                kind: "string",
+                repeatable: false,
+                description: "What you expected instead.",
+                required: false,
+              },
+              {
+                flag: "--steps",
+                prop: "steps",
+                kind: "string",
+                repeatable: false,
+                description:
+                  "Numbered steps that reproduce it, in terms of tool calls.",
+                required: false,
+              },
+              {
+                flag: "--evidence",
+                prop: "evidence",
+                kind: "string",
+                repeatable: false,
+                description:
+                  "The error envelope, the refused input, or the wrong output, verbatim but without tenant content.",
+                required: false,
+              },
+              {
+                flag: "--context.client",
+                prop: "context.client",
+                kind: "enum",
+                enum: ["mcp", "cli", "web", "desktop", "other"],
+                repeatable: false,
+                description: "Which client you are driving stella from.",
+                required: false,
+              },
+              {
+                flag: "--context.client-version",
+                prop: "context.client_version",
+                kind: "string",
+                repeatable: false,
+                description: "Version string of that client.",
+                required: false,
+              },
+              {
+                flag: "--context.request-id",
+                prop: "context.request_id",
+                kind: "string",
+                repeatable: false,
+                description:
+                  "The requestId a failing tool returned in its error envelope. Kept verbatim (it is the only field that is not redacted) because it is how a maintainer finds the failing call in the server logs.",
+                required: false,
+              },
+              {
+                flag: "--context.route",
+                prop: "context.route",
+                kind: "string",
+                repeatable: false,
+                description:
+                  "Tool name, CLI command or page the problem appeared on.",
+                required: false,
+              },
+              {
+                flag: "--context.error-reference",
+                prop: "context.error_reference",
+                kind: "string",
+                repeatable: false,
+                description:
+                  "Error code from the envelope, if the call returned one.",
+                required: false,
+              },
+            ],
+            inputOnly: [],
+            paginated: false,
+            followable: true,
+            windowedText: false,
+            destructive: false,
+            confirmPassthrough: true,
+            scope: "feedback",
+            inputSchema: {
+              type: "object",
+              required: ["kind", "area", "title", "what_happened"],
+              additionalProperties: false,
+              properties: {
+                kind: {
+                  enum: ["bug", "idea", "missing_capability", "docs"],
                   type: "string",
                   description:
-                    "Delivery channel. github returns a prefilled issue URL the human submits under their own GitHub account.",
-                  default: "github",
+                    "bug (it behaved wrongly), idea (it could be better), missing_capability (there is no way to do this), docs (the reference or description is wrong or missing).",
+                },
+                area: {
+                  enum: [
+                    "matters",
+                    "documents",
+                    "templates",
+                    "case_law",
+                    "legislation",
+                    "contacts",
+                    "tasks",
+                    "billing",
+                    "chat",
+                    "mcp_cli",
+                    "web_app",
+                    "desktop",
+                    "other",
+                  ],
+                  type: "string",
+                  description: "Which part of stella the report is about.",
+                },
+                title: {
+                  type: "string",
+                  minLength: 1,
+                  maxLength: 200,
+                  description:
+                    "One line naming the problem, not the symptom's location.",
+                },
+                what_happened: {
+                  type: "string",
+                  minLength: 1,
+                  maxLength: 4000,
+                  description: "What stella actually did.",
+                },
+                expected: {
+                  type: "string",
+                  maxLength: 2000,
+                  description: "What you expected instead.",
+                },
+                steps: {
+                  type: "string",
+                  maxLength: 4000,
+                  description:
+                    "Numbered steps that reproduce it, in terms of tool calls.",
+                },
+                evidence: {
+                  type: "string",
+                  maxLength: 4000,
+                  description:
+                    "The error envelope, the refused input, or the wrong output, verbatim but without tenant content.",
+                },
+                context: {
+                  type: "object",
+                  properties: {
+                    client: {
+                      enum: ["mcp", "cli", "web", "desktop", "other"],
+                      type: "string",
+                      description: "Which client you are driving stella from.",
+                    },
+                    client_version: {
+                      type: "string",
+                      maxLength: 120,
+                      description: "Version string of that client.",
+                    },
+                    request_id: {
+                      type: "string",
+                      pattern: "^[A-Za-z0-9._-]{1,64}$",
+                      description:
+                        "The requestId a failing tool returned in its error envelope. Kept verbatim (it is the only field that is not redacted) because it is how a maintainer finds the failing call in the server logs.",
+                    },
+                    route: {
+                      type: "string",
+                      maxLength: 120,
+                      description:
+                        "Tool name, CLI command or page the problem appeared on.",
+                    },
+                    error_reference: {
+                      type: "string",
+                      maxLength: 120,
+                      description:
+                        "Error code from the envelope, if the call returned one.",
+                    },
+                  },
+                  required: [],
+                  additionalProperties: false,
+                  description:
+                    "Where the problem appeared, so a maintainer can find the call.",
+                },
+                confirm: {
+                  type: "boolean",
+                  description:
+                    "Must be true to send the report. Set it only after a human user has read the prepared report and approved sending it.",
                 },
               },
             },

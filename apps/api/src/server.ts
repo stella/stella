@@ -42,7 +42,10 @@ import { entitiesRoute } from "@/api/handlers/entities/routes";
 import { entityViewsRoute } from "@/api/handlers/entity-views/routes";
 import { expensesRoute } from "@/api/handlers/expenses/routes";
 import { externalPreviewRoute } from "@/api/handlers/external-preview/routes";
-import { feedbackPublicRoute } from "@/api/handlers/feedback/routes";
+import {
+  feedbackPublicRoute,
+  feedbackRoute,
+} from "@/api/handlers/feedback/routes";
 import { fieldsRoute } from "@/api/handlers/fields/routes";
 import { filesRoute } from "@/api/handlers/files/routes";
 import { flowsRoute } from "@/api/handlers/flows/routes";
@@ -555,6 +558,7 @@ const api = new Elysia()
   )
   .use(aiAutocompleteRoute)
   .use(feedbackPublicRoute)
+  .use(feedbackRoute)
   .use(memoriesRoute)
   .use(notificationsRoute)
   .use(devPublicRoute)

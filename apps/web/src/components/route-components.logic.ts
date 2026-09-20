@@ -1,5 +1,6 @@
 import { panic } from "better-result";
 
+import type { ClientAuthStatus } from "@/hooks/use-client-auth-status";
 import { APIError } from "@/lib/errors/api";
 import { AuthClientError } from "@/lib/errors/auth";
 import { CriticalQueryTimeoutError } from "@/lib/react-query";
@@ -85,21 +86,25 @@ export const recoverRouteError = async ({
 };
 
 export type RouteErrorSupport =
-  | { type: "report"; recipient: string }
+  | { type: "report" }
   | { type: "administrator" }
   | { type: "none" };
 
 type ResolveRouteErrorSupportOptions = {
   deployment: "hosted" | "selfHosted";
-  feedbackRecipient: string | undefined;
+  session: ClientAuthStatus["status"];
 };
 
+/** Reporting posts to the authenticated feedback route, so it is offered only
+ *  to a signed-in session. A session still being checked counts as signed out:
+ *  the screen must resolve without waiting on a query that may itself be the
+ *  thing that failed. */
 export const resolveRouteErrorSupport = ({
   deployment,
-  feedbackRecipient,
+  session,
 }: ResolveRouteErrorSupportOptions): RouteErrorSupport => {
-  if (feedbackRecipient) {
-    return { type: "report", recipient: feedbackRecipient };
+  if (session === "authenticated") {
+    return { type: "report" };
   }
 
   if (deployment === "selfHosted") {
@@ -108,19 +113,6 @@ export const resolveRouteErrorSupport = ({
 
   return { type: "none" };
 };
-
-type BuildErrorReportMailtoOptions = {
-  body: string;
-  recipient: string;
-  subject: string;
-};
-
-export const buildErrorReportMailto = ({
-  body,
-  recipient,
-  subject,
-}: BuildErrorReportMailtoOptions): string =>
-  `mailto:${recipient}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 
 export const isNetworkError = (error: unknown): boolean => {
   if (CriticalQueryTimeoutError.is(error)) {

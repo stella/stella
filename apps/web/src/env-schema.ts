@@ -79,7 +79,6 @@ export const envWebClientSchema = {
   VITE_FEATURE_INBOX: featureFlagSchema,
   /** Lets a production deployment expose per-browser beta previews. */
   VITE_BETA_FEATURES_ENABLED: featureFlagSchema,
-  VITE_FEEDBACK_EMAIL_TO: v.optional(v.pipe(v.string(), v.email())),
   VITE_TERMS_URL: v.optional(linkUrlSchema, "/terms"),
   // Base URL the desktop-app download buttons point at. Defaults
   // to upstream GitHub releases; self-hosters who mirror the

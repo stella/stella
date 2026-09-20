@@ -361,6 +361,11 @@ export const generatedToolAnnotations: Readonly<
     command: ["feedback", "prepare"],
     scope: "feedback",
   },
+  submit_feedback: {
+    command: ["feedback", "submit"],
+    scope: "feedback",
+    confirmPassthrough: true,
+  },
   list_capabilities: {
     command: ["capability", "list"],
     scope: "read",

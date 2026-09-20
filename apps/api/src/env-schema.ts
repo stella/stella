@@ -167,8 +167,23 @@ export const envApiServerSchema = {
   SMTP_USERNAME: v.optional(v.string()),
   SMTP_PASSWORD: v.optional(v.string()),
   TRANSACTIONAL_EMAIL_FROM: v.optional(v.string()),
-  /** Destination address for the public feedback intake. */
+  /** Destination address for maintainer feedback email. */
   FEEDBACK_EMAIL_TO: v.optional(v.pipe(v.string(), v.email())),
+  /**
+   * GitHub issue delivery for filed feedback. Both are required together: a
+   * token with no repository has nothing to post to, and a repository with no
+   * token cannot be posted to. Unset, reports are stored and emailed only.
+   */
+  FEEDBACK_GITHUB_TOKEN: v.optional(v.pipe(v.string(), v.minLength(1))),
+  FEEDBACK_GITHUB_REPO: v.optional(
+    v.pipe(
+      v.string(),
+      v.regex(
+        /^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/u,
+        "FEEDBACK_GITHUB_REPO must be owner/repo",
+      ),
+    ),
+  ),
   FRONTEND_URL: v.pipe(v.string(), v.url()),
   PUBLIC_URL: v.optional(v.pipe(v.string(), v.url())),
   GOTENBERG_URL: v.pipe(v.string(), v.url()),

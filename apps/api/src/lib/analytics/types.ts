@@ -1,3 +1,9 @@
+import type {
+  FeedbackArea,
+  FeedbackKind,
+  FeedbackVia,
+} from "@stll/api-contract/feedback";
+
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ResolvedTanStackTextModelInfo } from "@/api/lib/tanstack-ai-models";
 import type { McpCredentialType } from "@/api/mcp/auth";
@@ -8,6 +14,7 @@ export const SERVER_ANALYTICS_EVENTS = {
   aiGenerationCompleted: "ai_generation_completed",
   aiGenerationFailed: "ai_generation_failed",
   exception: "$exception",
+  feedbackReportSubmitted: "feedback_report_submitted",
   mcpSessionInitialized: "mcp_session_initialized",
 } as const;
 
@@ -89,6 +96,33 @@ export type McpSessionInitializedProperties = {
   mode: McpMode;
 };
 
+/**
+ * What happened to one delivery channel for one report. Not a boolean: a
+ * deployment with no GitHub token, a channel that was never tried because the
+ * report duplicated an earlier one, and a channel that was tried and refused
+ * are three different facts.
+ */
+export type FeedbackDeliveryOutcome =
+  | "delivered"
+  | "failed"
+  | "not_configured"
+  | "skipped_duplicate";
+
+/**
+ * One filed report, as telemetry. Content never appears here: the event says
+ * what kind of report was filed about which area, through which entry point,
+ * how much the sanitizer removed, and where it went.
+ */
+export type FeedbackReportSubmittedProperties = {
+  kind: FeedbackKind;
+  area: FeedbackArea;
+  via: FeedbackVia;
+  redactions: number;
+  deduplicated: boolean;
+  email_delivery: FeedbackDeliveryOutcome;
+  github_delivery: FeedbackDeliveryOutcome;
+};
+
 export type ExceptionListEntry = {
   mechanism: { handled: boolean; synthetic: boolean; type: string };
   type: string;
@@ -135,6 +169,10 @@ export type ServerAnalyticsCaptureParams = ServerAnalyticsCaptureBase &
     | {
         event: typeof SERVER_ANALYTICS_EVENTS.exception;
         properties: ExceptionProperties;
+      }
+    | {
+        event: typeof SERVER_ANALYTICS_EVENTS.feedbackReportSubmitted;
+        properties: FeedbackReportSubmittedProperties;
       }
     | {
         event: typeof SERVER_ANALYTICS_EVENTS.mcpSessionInitialized;

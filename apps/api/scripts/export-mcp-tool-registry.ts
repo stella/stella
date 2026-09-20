@@ -53,7 +53,10 @@ const deriveCliAnnotation = (
     return annotation;
   }
 
-  if (behavior.type === "capability-catalog") {
+  if (behavior.type === "capability-catalog" || behavior.type === "outbound") {
+    // The leaf prompts before it runs, and `--yes` pre-approves: a catalog
+    // target decides its own risk at dispatch, and an outbound call is refused
+    // by the same server-side gate a destructive one is.
     return { ...annotation, confirmPassthrough: true };
   }
 
@@ -178,7 +181,11 @@ const submissionTools = Object.fromEntries(
     }
     if (tool.name === "prepare_feedback") {
       readOnlyJustification =
-        "Sanitizes user-provided feedback and returns draft submission links without publishing or changing any record.";
+        "Sanitizes user-provided feedback and returns it for human review without storing, sending, or changing any record.";
+    }
+    if (tool.name === "submit_feedback") {
+      readOnlyJustification =
+        "Stores the human-approved feedback report and delivers it to the maintainers configured by the deployment.";
     }
 
     let openWorldJustification = privateOpenWorldJustification;
@@ -187,7 +194,11 @@ const submissionTools = Object.fromEntries(
     }
     if (tool.name === "prepare_feedback") {
       openWorldJustification =
-        "Only prepares a GitHub issue URL and command; it does not submit or publish them.";
+        "Only sanitizes the draft and returns it; it contacts nothing.";
+    }
+    if (tool.name === "submit_feedback") {
+      openWorldJustification =
+        "Sends the approved report to the maintainer channels the deployment configures, which may include a public issue tracker.";
     }
 
     let destructiveJustification = nonDestructiveJustification;
@@ -202,6 +213,10 @@ const submissionTools = Object.fromEntries(
     if (behavior?.type === "capability-catalog") {
       destructiveJustification =
         "Can dispatch a catalog capability marked destructive; destructive targets require explicit confirmation.";
+    }
+    if (behavior?.type === "outbound") {
+      destructiveJustification =
+        "Deletes nothing, but sends content out of the private workspace and therefore requires explicit confirmation.";
     }
 
     return [

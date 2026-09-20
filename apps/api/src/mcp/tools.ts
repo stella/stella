@@ -94,36 +94,60 @@ export const findUndeclaredArguments = ({
   return undeclared.length === 0 ? undefined : { declared, undeclared };
 };
 
-const requiresTransportConfirmation = (
+/**
+ * Whether this call needs `confirm: true`, and what to tell a model that
+ * omitted it. One switch, not two: the decision and the refusal it produces
+ * cannot describe different operations.
+ */
+type TransportConfirmation =
+  | { required: false }
+  | { required: true; message: string; hint: string };
+
+const NO_CONFIRMATION: TransportConfirmation = { required: false };
+
+const irreversibleConfirmation = (toolName: string): TransportConfirmation => ({
+  required: true,
+  message: `${toolName} is an irreversible operation and was called without confirmation`,
+  hint: "This operation is irreversible. Confirm with the human user, then retry with confirm: true.",
+});
+
+const transportConfirmation = (
   definition: McpToolDefinition,
   args: Record<string, unknown>,
-): boolean => {
+): TransportConfirmation => {
   const behavior = definition.destructiveBehavior;
   if (behavior === undefined) {
-    return false;
+    return NO_CONFIRMATION;
   }
 
   switch (behavior.type) {
     case "always":
-      return true;
+      return irreversibleConfirmation(definition.name);
+    case "outbound":
+      return {
+        required: true,
+        message: `${definition.name} sends data outside this workspace and was called without confirmation`,
+        hint: `${behavior.reason} Show the human user exactly what will be sent, get their approval, then retry with confirm: true.`,
+      };
     case "input-discriminator": {
       const value = args[behavior.property];
-      return (
-        typeof value === "string" && behavior.destructiveValues.includes(value)
-      );
+      return typeof value === "string" &&
+        behavior.destructiveValues.includes(value)
+        ? irreversibleConfirmation(definition.name)
+        : NO_CONFIRMATION;
     }
     case "capability-catalog":
       // The handler resolves the selected capability from the canonical
       // catalog, then applies its target-specific confirmation gate.
-      return false;
+      return NO_CONFIRMATION;
     case "upstream":
       // Dynamic connector tools are executed by their owning MCP server. Its
       // advertised risk remains visible to clients, while the upstream server
       // owns any operation-specific confirmation protocol.
-      return false;
+      return NO_CONFIRMATION;
     default:
       behavior satisfies never;
-      return panic("Unhandled MCP destructive behavior");
+      return panic("Unhandled MCP confirmation behavior");
   }
 };
 
@@ -307,19 +331,17 @@ export const handleMcpToolCall = async ({
   }
   const normalizedArgs = normalized.value;
 
-  // Resolve confirmation from the registry's canonical destructive behavior.
+  // Resolve confirmation from the registry's canonical behavior.
   // Capability-catalog and upstream tools defer the final decision to their
   // owning dispatch boundary because the selected target determines risk.
-  const requiresConfirmation = requiresTransportConfirmation(
-    staticTool,
-    normalizedArgs,
-  );
-  if (requiresConfirmation && normalizedArgs["confirm"] !== true) {
+  const confirmation = transportConfirmation(staticTool, normalizedArgs);
+  const requiresConfirmation = confirmation.required;
+  if (confirmation.required && normalizedArgs["confirm"] !== true) {
     return serializeToolResult(
       structuredErrorResult({
         code: "confirmation_required",
-        message: `${toolName} is an irreversible operation and was called without confirmation`,
-        hint: "This operation is irreversible. Confirm with the human user, then retry with confirm: true.",
+        message: confirmation.message,
+        hint: confirmation.hint,
       }),
     );
   }

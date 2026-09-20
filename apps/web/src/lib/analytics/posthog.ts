@@ -669,6 +669,8 @@ export const createPostHogAnalytics = ({
         case WEB_ANALYTICS_EVENTS.pageLeft:
         case WEB_ANALYTICS_EVENTS.identify:
         case WEB_ANALYTICS_EVENTS.guideStepSkipped:
+        case WEB_ANALYTICS_EVENTS.feedbackDialogOpened:
+        case WEB_ANALYTICS_EVENTS.feedbackReportSubmitted:
           return sanitizeSdkUrlContext(event, routeTemplateHistory, "resolved");
         default: {
           event.event satisfies never;
@@ -732,6 +734,12 @@ export const createPostHogAnalytics = ({
     },
     captureGuideStepSkipped: (properties) => {
       posthog.capture(WEB_ANALYTICS_EVENTS.guideStepSkipped, properties);
+    },
+    captureFeedbackDialogOpened: (properties) => {
+      posthog.capture(WEB_ANALYTICS_EVENTS.feedbackDialogOpened, properties);
+    },
+    captureFeedbackReportSubmitted: (properties) => {
+      posthog.capture(WEB_ANALYTICS_EVENTS.feedbackReportSubmitted, properties);
     },
     captureRouteErrorLifecycle: async (properties) =>
       import("@/lib/analytics/posthog-route-error")

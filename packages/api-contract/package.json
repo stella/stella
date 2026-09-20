@@ -20,6 +20,7 @@
     "./desktop-rpc": "./src/desktop-rpc.gen.ts",
     "./document-translation": "./src/document-translation.ts",
     "./entity-views": "./src/entity-views.ts",
+    "./feedback": "./src/feedback.ts",
     "./entity-options": "./src/entity-options.ts",
     "./folio-collab": "./src/folio-collab.ts",
     "./legal-reader-annotations": "./src/legal-reader-annotations.ts",

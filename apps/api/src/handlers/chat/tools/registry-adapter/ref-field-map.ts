@@ -161,8 +161,9 @@ export const READ_TOOL_REF_FIELD_MAP = {
   fetch: { chatProjectable: false },
   search: { chatProjectable: false },
 
-  // The feedback helper only prepares sanitized GitHub issue content. It is
-  // served through MCP/CLI and never projected into the in-app chat surface.
+  // The feedback draft step only sanitizes text. It is served through MCP/CLI
+  // and never projected into the in-app chat surface, which files feedback
+  // through its own UI instead.
   prepare_feedback: { chatProjectable: false },
 
   // --- Matters / contacts / content -----------------------------------------
@@ -555,4 +556,8 @@ export const WRITE_TOOL_REF_FIELD_MAP = {
   // transport; its authority is enforced per capability inside the handler, and
   // it is never dispatched from chat.
   invoke_capability: { chatProjectable: false },
+
+  // Sends a report out of the workspace after a human approves it. The in-app
+  // chat has its own feedback UI, so the tool stays off that surface.
+  submit_feedback: { chatProjectable: false },
 } as const satisfies Record<RegistryWriteToolName, RegistryRefFieldMapEntry>;

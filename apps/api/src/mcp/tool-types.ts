@@ -173,10 +173,30 @@ export type McpToolDestructiveBehavior =
   | { type: "capability-catalog" }
   | { type: "upstream" };
 
+/**
+ * A call that sends workspace-authored content outside the workspace. It
+ * destroys nothing, so `destructiveHint` stays false and clients must not
+ * render it as a deletion, but it is irreversible in the sense that matters to
+ * a human: the content is gone from their control once it lands. The transport
+ * gate treats it exactly like a destructive call and refuses without
+ * `confirm: true`; `reason` is what the refusal tells the model it is about to
+ * do.
+ */
+export type McpToolOutboundBehavior = { type: "outbound"; reason: string };
+
+/** Every behavior the transport confirmation gate reads. */
+export type McpToolConfirmationBehavior =
+  | McpToolDestructiveBehavior
+  | McpToolOutboundBehavior;
+
 type McpToolDestructiveBranch =
   | {
       annotations: McpToolAnnotations & { destructiveHint: false };
       destructiveBehavior?: undefined;
+    }
+  | {
+      annotations: McpToolAnnotations & { destructiveHint: false };
+      destructiveBehavior: McpToolOutboundBehavior;
     }
   | {
       annotations: McpToolAnnotations & { destructiveHint: true };

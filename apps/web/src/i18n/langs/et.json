@@ -2015,7 +2015,39 @@
     "uploadFailed": "Üleslaadimine ebaõnnestus"
   },
   "feedback": {
-    "trigger": "Tagasiside"
+    "area": "Valdkond",
+    "areas": {
+      "desktop": "Töölauarakendus",
+      "legislation": "Õigusaktid",
+      "mcpCli": "MCP ja CLI",
+      "other": "Midagi muud",
+      "webApp": "Veebirakendus"
+    },
+    "copyReceipt": "Kopeeri teatenumber",
+    "description": "Kirjutage, mis on katki või mis puudub. Üks probleem ühe teate kohta.",
+    "errorTitle": "Viga {reference}",
+    "included": "Kaasas: <bdi>{route}</bdi>, versioon <bdi>{version}</bdi>",
+    "kinds": {
+      "bug": "Viga",
+      "idea": "Idee",
+      "missingCapability": "Puuduv funktsioon"
+    },
+    "privacyNote": "Server eemaldab e-posti aadressid, identifikaatorid, lingid ja saladused. Ärge kleepige toimikute ega klientide nimesid, samuti dokumenditeksti.",
+    "rateLimited": "Viimase tunni jooksul on saadetud liiga palju teateid. Proovige hiljem uuesti.",
+    "receiptDeduplicated": "Seda me juba teame. Teie teade lisati olemasolevale.",
+    "receiptDescription": "Hoidke teatenumber alles, kui soovite hiljem järele küsida.",
+    "receiptLabel": "Teatenumber",
+    "receiptTitle": "Teade vastu võetud",
+    "send": "Saada teade",
+    "steps": "Sammud kordamiseks",
+    "stepsHint": "Valikuline.",
+    "stepsPlaceholder": "1. Ava… 2. Vali… 3. …",
+    "subject": "Lühikokkuvõte",
+    "subjectPlaceholder": "Üks rida: mis on valesti või mis puudub",
+    "title": "Saada tagasisidet",
+    "trigger": "Tagasiside",
+    "whatHappened": "Mis juhtus",
+    "whatHappenedPlaceholder": "Mida tegite ja mida nägite selle asemel"
   },
   "fileDetail": {
     "base": "Alus",
@@ -3873,9 +3905,7 @@
     "descriptionNone": "Proovi uuesti. Kui probleem püsib, naase oma toimikute juurde.",
     "descriptionReport": "Proovi uuesti. Kui probleem püsib, naase oma toimikute juurde või teata sellest alloleva viitega.",
     "reference": "Vea viide",
-    "reportBody": "Vea viide: {reference}\n\nMis juhtus?\n",
     "reportProblem": "Teata probleemist",
-    "reportSubject": "stella tõrge {reference}",
     "title": "Seda lehte ei saanud avada"
   },
   "search": {

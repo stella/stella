@@ -22,6 +22,24 @@ describe("sanitizeFeedbackText", () => {
       redactions: 1,
     },
     {
+      name: "ULID",
+      input: "decision 01J8ZQ9K2M3N4P5Q6R7S8T9VWX missing",
+      expected: "decision [redacted-id] missing",
+      redactions: 1,
+    },
+    {
+      name: "ULID sitting inside a longer token is left to the secret passes",
+      input: "key 01J8ZQ9K2M3N4P5Q6R7S8T9VWX01J8ZQ9K2M3N4P5Q6R7S8T9VWX now",
+      expected: "key [redacted-secret] now",
+      redactions: 1,
+    },
+    {
+      name: "a lowercase word of ULID length is not an id",
+      input: "abcdefghijklmnopqrstuvwxyz stays",
+      expected: "abcdefghijklmnopqrstuvwxyz stays",
+      redactions: 0,
+    },
+    {
       name: "JWT-looking blob",
       input:
         "token eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w2n done", // gitleaks:allow -- fake JWT fixture exercising the sanitizer's redaction

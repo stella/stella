@@ -137,8 +137,14 @@ type SurfaceMode = (typeof SURFACES)[number]["mode"];
 // way to PUT bytes, so the panel moves them from the user's browser and the
 // links tool moves them server-side, each with its own failure set. Writes,
 // so the anonymized count is unchanged.
+// default 62 -> 63 for submit_feedback. Argued for, not absorbed: the draft
+// step must stay read-only and send nothing, because showing the human the
+// sanitized text before it leaves the workspace is the whole control. One tool
+// doing both would put the model, alone, in charge of that decision. Write-only
+// and excluded from the anonymized surface, so that ceiling is unchanged; law
+// carries no feedback tool.
 const TOOL_COUNT_CEILING: Record<SurfaceMode, number> = {
-  default: 62,
+  default: 63,
   anonymized: 28,
   law: 10,
 };
@@ -295,8 +301,12 @@ const TOOL_COUNT_CEILING: Record<SurfaceMode, number> = {
 // prepare_file_comparison_from_links (two link descriptors) sit under the
 // default ceiling with the usual headroom; writes, so the other surfaces are
 // unchanged.
+// submit_feedback adds the send step for the already-advertised feedback
+// report: its schema repeats the sanitized fixed-point payload and adds the
+// explicit human confirmation gate. The exact combined measurement is pinned
+// after regeneration below.
 const TOOLS_LIST_PAYLOAD_CHAR_CEILING: Record<SurfaceMode, number> = {
-  default: 157_700,
+  default: 164_000,
   anonymized: 73_300,
   law: 28_250,
 };
@@ -365,8 +375,11 @@ const TOOLS_LIST_PAYLOAD_CHAR_CEILING: Record<SurfaceMode, number> = {
 // prepare_file_comparison_from_links echoes the same next call plus the two
 // derived names and sizes; open_file_comparison returns nothing. Writes, so
 // the other surfaces are unchanged.
+// submit_feedback adds the receipt, per-channel delivery outcomes and the
+// no-channel warning. The exact combined measurement is pinned after
+// regeneration below.
 const OUTPUT_SCHEMA_TOTAL_CHAR_CEILING: Record<SurfaceMode, number> = {
-  default: 52_300,
+  default: 54_000,
   anonymized: 32_850,
   law: 10_050,
 };
@@ -939,12 +952,46 @@ describe("destructive write-tool behavior", () => {
     expect(offenders).toEqual([]);
   });
 
-  test("non-destructive tools do not declare destructive behavior", () => {
+  test("non-destructive tools declare no behavior except an outbound send", () => {
     const offenders = writeTools
       .filter((tool) => !tool.annotations.destructiveHint)
-      .filter((tool) => tool.destructiveBehavior !== undefined)
+      .filter(
+        (tool) =>
+          tool.destructiveBehavior !== undefined &&
+          tool.destructiveBehavior.type !== "outbound",
+      )
       .map((tool) => tool.name);
     expect(offenders).toEqual([]);
+  });
+
+  test("an outbound send is never advertised as a destructive operation", () => {
+    // The two facts are independent and must not be conflated: `outbound`
+    // gates the confirmation prompt, `destructiveHint` tells a client to
+    // render the call as a deletion. A send destroys nothing.
+    const offenders = DEFAULT_MCP_TOOL_DEFINITIONS.filter(
+      (tool) =>
+        tool.destructiveBehavior?.type === "outbound" &&
+        tool.annotations.destructiveHint,
+    ).map((tool) => tool.name);
+    expect(offenders).toEqual([]);
+  });
+
+  test("an outbound tool states what it sends, and advertises confirm", () => {
+    const outbound = DEFAULT_MCP_TOOL_DEFINITIONS.filter(
+      (tool) => tool.destructiveBehavior?.type === "outbound",
+    );
+    expect(outbound.length).toBeGreaterThan(0);
+
+    for (const tool of outbound) {
+      const behavior = tool.destructiveBehavior;
+      expect(behavior?.type === "outbound" ? behavior.reason : "").toContain(
+        tool.name,
+      );
+      expect(Object.keys(getInputProperties(tool))).toContain("confirm");
+      // The refusal names `confirm: true`; a description that never mentions
+      // it leaves a model to discover the gate by being refused.
+      expect(tool.description).toContain("confirm: true");
+    }
   });
 });
 

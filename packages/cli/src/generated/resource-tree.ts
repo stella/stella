@@ -64,6 +64,15 @@ export const generatedResourceTree: ResourceNode = {
             uri: "stella://reference/legislation-workflow",
           },
         },
+        "feedback-workflow": {
+          kind: "leaf",
+          spec: {
+            kind: "show",
+            commandPath: ["reference", "show", "feedback-workflow"],
+            name: "feedback-workflow",
+            uri: "stella://reference/feedback-workflow",
+          },
+        },
       },
     },
   },

@@ -4,14 +4,16 @@ import { Temporal } from "@stll/time";
  * (`POST /public/feedback`). This is an unauthenticated write endpoint, so it
  * needs bounding an attacker cannot escape by omitting a header.
  *
- * Two primitives, both Redis-backed with an in-memory fallback so a Redis blip
- * degrades to per-process limiting instead of failing open:
- *   - `consumeCounter`: fixed-window INCR+PEXPIRE counter (the intake's per-IP
- *     submission rate and the MCP tool's per-organization delivery rate both
- *     ride on this, keyed under distinct buckets);
- *   - `claimDedup` / `releaseDedup`: SETNX+PEXPIRE content dedup so an identical
- *     report submitted twice in the dedup window is rejected once, with a
- *     release path so a failed delivery does not block re-submission.
+ * One primitive, Redis-backed with an in-memory fallback so a Redis blip
+ * degrades to per-process limiting instead of failing open: `consumeCounter`,
+ * a fixed-window INCR+PEXPIRE counter. The intake's per-IP submission rate,
+ * the MCP tool's per-organization rate and the web route's per-user rate all
+ * ride on it under distinct buckets.
+ *
+ * Content deduplication is deliberately NOT here. It is a fingerprint lookup
+ * against the stored reports (`handlers/feedback/submit.ts`), so a resend
+ * answers with the original receipt instead of an error, and the window
+ * survives a Redis restart.
  *
  * Structure mirrors `mcp/gateway/rate-limit.ts` (same Redis client, same
  * command-timeout and fallback-cleanup discipline) rather than importing it:
@@ -41,9 +43,6 @@ const counterKey = ({ bucket, key }: { bucket: string; key: string }) =>
     suffix: `counter:${bucket}`,
   });
 
-const dedupKey = (key: string) =>
-  coordinationKey({ scope: "feedback-intake", slot: key, suffix: "dedup" });
-
 const REDIS_COMMAND_TIMEOUT_MS = 500;
 const FALLBACK_CLEANUP_THRESHOLD = 10_000;
 const FALLBACK_CLEANUP_INTERVAL_MS = 60_000;
@@ -55,14 +54,6 @@ const CONSUME_SCRIPT = `
 local current = redis.call("INCR", KEYS[1])
 if current == 1 then
   redis.call("PEXPIRE", KEYS[1], ARGV[1])
-end
-return current
-`;
-
-const RELEASE_COUNTER_SCRIPT = `
-local current = redis.call("DECR", KEYS[1])
-if current <= 0 then
-  redis.call("DEL", KEYS[1])
 end
 return current
 `;
@@ -86,12 +77,6 @@ export type FeedbackIntakeGuards = {
     windowMs: number;
     max: number;
   }) => Promise<boolean>;
-  /** Best-effort release of a previously consumed counter slot after a failed delivery. */
-  releaseCounter: (input: { bucket: string; key: string }) => Promise<void>;
-  /** True when this content is seen for the first time in the window (claimed); false when it duplicates a live claim. */
-  claimDedup: (input: { key: string; ttlMs: number }) => Promise<boolean>;
-  /** Best-effort release of a prior claim so a failed delivery does not block re-submission. */
-  releaseDedup: (input: { key: string }) => Promise<void>;
 };
 
 export const createFeedbackIntakeGuards = ({
@@ -110,9 +95,7 @@ export const createFeedbackIntakeGuards = ({
 }: FeedbackIntakeGuardsOptions = {}): FeedbackIntakeGuards => {
   let redis: RedisLike | null = null;
   const counterFallback = new Map<string, CounterEntry>();
-  const dedupFallback = new Map<string, number>();
   const counterCleanupState: FallbackCleanupState = { nextCleanupAt: 0 };
-  const dedupCleanupState: FallbackCleanupState = { nextCleanupAt: 0 };
 
   const getRedis = () => {
     redis ??= createRedis();
@@ -147,77 +130,7 @@ export const createFeedbackIntakeGuards = ({
     }
   };
 
-  const claimDedup: FeedbackIntakeGuards["claimDedup"] = async ({
-    key,
-    ttlMs,
-  }) => {
-    try {
-      const reply = await withCommandTimeout({
-        command: getRedis().send("SET", [
-          dedupKey(key),
-          "1",
-          "NX",
-          "PX",
-          String(ttlMs),
-        ]),
-        commandTimeoutMs,
-        label: "feedback-intake-redis-command",
-      });
-      // Redis SET ... NX returns "OK" when it set the key, nil otherwise.
-      return reply === "OK";
-    } catch (error) {
-      onRedisError(error);
-      return claimDedupFallback({
-        fallback: dedupFallback,
-        key,
-        now: now(),
-        cleanupState: dedupCleanupState,
-        ttlMs,
-      });
-    }
-  };
-
-  const releaseDedup: FeedbackIntakeGuards["releaseDedup"] = async ({
-    key,
-  }) => {
-    try {
-      await withCommandTimeout({
-        command: getRedis().send("DEL", [dedupKey(key)]),
-        commandTimeoutMs,
-        label: "feedback-intake-redis-command",
-      });
-    } catch (error) {
-      onRedisError(error);
-      dedupFallback.delete(key);
-    }
-  };
-
-  const releaseCounter: FeedbackIntakeGuards["releaseCounter"] = async ({
-    bucket,
-    key,
-  }) => {
-    const scoped = `${bucket}:${key}`;
-    try {
-      await withCommandTimeout({
-        command: getRedis().send("EVAL", [
-          RELEASE_COUNTER_SCRIPT,
-          "1",
-          counterKey({ bucket, key }),
-        ]),
-        commandTimeoutMs,
-        label: "feedback-intake-redis-command",
-      });
-    } catch (error) {
-      onRedisError(error);
-      releaseCounterFallback({
-        fallback: counterFallback,
-        key: scoped,
-        now: now(),
-      });
-    }
-  };
-
-  return { claimDedup, consumeCounter, releaseCounter, releaseDedup };
+  return { consumeCounter };
 };
 
 const evalCounter = async ({
@@ -271,49 +184,6 @@ const consumeCounterFallback = ({
   return true;
 };
 
-const releaseCounterFallback = ({
-  fallback,
-  key,
-  now,
-}: {
-  fallback: Map<string, CounterEntry>;
-  key: string;
-  now: number;
-}): void => {
-  const current = fallback.get(key);
-  if (!current || current.expiresAt <= now) {
-    fallback.delete(key);
-    return;
-  }
-  if (current.count <= 1) {
-    fallback.delete(key);
-    return;
-  }
-  current.count -= 1;
-};
-
-const claimDedupFallback = ({
-  cleanupState,
-  fallback,
-  key,
-  now,
-  ttlMs,
-}: {
-  cleanupState: FallbackCleanupState;
-  fallback: Map<string, number>;
-  key: string;
-  now: number;
-  ttlMs: number;
-}): boolean => {
-  const expiresAt = fallback.get(key);
-  if (expiresAt !== undefined && expiresAt > now) {
-    return false;
-  }
-  fallback.set(key, now + ttlMs);
-  cleanupDedupFallback(fallback, now, cleanupState);
-  return true;
-};
-
 const cleanupCounterFallback = (
   fallback: Map<string, CounterEntry>,
   now: number,
@@ -325,22 +195,6 @@ const cleanupCounterFallback = (
   state.nextCleanupAt = now + FALLBACK_CLEANUP_INTERVAL_MS;
   for (const [key, entry] of fallback) {
     if (entry.expiresAt <= now) {
-      fallback.delete(key);
-    }
-  }
-};
-
-const cleanupDedupFallback = (
-  fallback: Map<string, number>,
-  now: number,
-  state: FallbackCleanupState,
-) => {
-  if (fallback.size < FALLBACK_CLEANUP_THRESHOLD || now < state.nextCleanupAt) {
-    return;
-  }
-  state.nextCleanupAt = now + FALLBACK_CLEANUP_INTERVAL_MS;
-  for (const [key, expiresAt] of fallback) {
-    if (expiresAt <= now) {
       fallback.delete(key);
     }
   }

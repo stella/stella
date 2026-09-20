@@ -2015,7 +2015,39 @@
     "uploadFailed": "فشل الرفع"
   },
   "feedback": {
-    "trigger": "ملاحظات"
+    "area": "المجال",
+    "areas": {
+      "desktop": "تطبيق سطح المكتب",
+      "legislation": "التشريعات",
+      "mcpCli": "MCP وواجهة الأوامر",
+      "other": "شيء آخر",
+      "webApp": "تطبيق الويب"
+    },
+    "copyReceipt": "نسخ رقم البلاغ",
+    "description": "أخبرنا بما تعطّل أو بما ينقص. بلاغ واحد لكل مشكلة.",
+    "errorTitle": "خطأ {reference}",
+    "included": "المرفق: <bdi>{route}</bdi>، الإصدار <bdi>{version}</bdi>",
+    "kinds": {
+      "bug": "خلل",
+      "idea": "فكرة",
+      "missingCapability": "وظيفة ناقصة"
+    },
+    "privacyNote": "تتم إزالة عناوين البريد الإلكتروني والمعرّفات والروابط والأسرار على الخادم. لا تلصق أسماء الملفات القانونية أو العملاء، ولا نصوص المستندات.",
+    "rateLimited": "أُرسلت بلاغات كثيرة خلال الساعة الماضية. حاول لاحقًا.",
+    "receiptDeduplicated": "هذا معروف لدينا بالفعل. أُضيف بلاغك إليه.",
+    "receiptDescription": "احتفظ برقم البلاغ إن أردت المتابعة.",
+    "receiptLabel": "رقم البلاغ",
+    "receiptTitle": "تم استلام البلاغ",
+    "send": "إرسال البلاغ",
+    "steps": "خطوات إعادة الإنتاج",
+    "stepsHint": "اختياري.",
+    "stepsPlaceholder": "١. افتح… ٢. اختر… ٣. …",
+    "subject": "ملخّص قصير",
+    "subjectPlaceholder": "سطر واحد: ما الخطأ أو ما الناقص",
+    "title": "إرسال ملاحظات",
+    "trigger": "ملاحظات",
+    "whatHappened": "ما الذي حدث",
+    "whatHappenedPlaceholder": "ما الذي فعلته وما الذي ظهر بدلًا منه"
   },
   "fileDetail": {
     "base": "الأساس",
@@ -3873,9 +3905,7 @@
     "descriptionNone": "حاول مرة أخرى. إذا استمرت المشكلة، فارجع إلى ملفاتك القانونية.",
     "descriptionReport": "حاول مرة أخرى. إذا استمرت المشكلة، فارجع إلى ملفاتك القانونية أو أبلغ عنها باستخدام المرجع أدناه.",
     "reference": "مرجع الخطأ",
-    "reportBody": "مرجع الخطأ: {reference}\n\nماذا حدث؟\n",
     "reportProblem": "الإبلاغ عن مشكلة",
-    "reportSubject": "خطأ في stella: {reference}",
     "title": "تعذر فتح هذه الصفحة"
   },
   "search": {

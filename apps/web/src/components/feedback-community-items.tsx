@@ -4,7 +4,7 @@ import { MenuItem } from "@stll/ui/menu";
 import { COMMUNITY_FORUM_URL, GITHUB_FEEDBACK_URL } from "@/lib/consts";
 import { sanitizeHref } from "@/lib/sanitize-href";
 
-const COMMUNITY_CHANNELS = [
+export const COMMUNITY_CHANNELS = [
   { name: "Discord", href: COMMUNITY_FORUM_URL, icon: DiscordLogoIcon },
   { name: "GitHub", href: GITHUB_FEEDBACK_URL, icon: GitHubLogoIcon },
 ] as const;

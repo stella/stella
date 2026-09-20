@@ -153,6 +153,11 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   "case_law_decision_source_identities",
   "account_deletion_effect_chunks",
   "entity_deletion_effect_chunks",
+  // Filed feedback reports: no tenant read surface, and the request role must
+  // be able neither to read one nor to file one under another reporter's
+  // identity. Written only through the owner connection in
+  // lib/feedback/report-store.ts.
+  "feedback_reports",
 ]);
 
 const SQL_IDENTIFIER_PATTERN =

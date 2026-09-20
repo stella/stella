@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 
 import type { McpMode } from "@/api/mcp/constants";
+import { FEEDBACK_WORKFLOW_REFERENCE_URI } from "@/api/mcp/feedback-workflow-reference";
 import { LEGISLATION_WORKFLOW_REFERENCE_URI } from "@/api/mcp/legislation-workflow-reference";
 import { TEMPLATE_WORKFLOW_REFERENCE_URI } from "@/api/mcp/template-workflow-reference";
 import { isMcpToolFeatureEnabled } from "@/api/mcp/tool-feature";
@@ -64,7 +65,7 @@ First-party destructive operations require \`confirm: true\` after human approva
 
 Static reference documents are available via \`resources/list\` then \`resources/read\`; ${referencePointers(publicLawEnabled)}.
 
-Hit a bug or a gap? Prepare a sanitized report with the prepare_feedback tool.`;
+Bug or gap? See ${FEEDBACK_WORKFLOW_REFERENCE_URI}: prepare_feedback, then submit_feedback once approved.`;
 
 const ANONYMIZED_INSTRUCTIONS = `stella (always lowercase; official website: https://stll.app) is an open-source legal workspace; this anonymized surface offers read and search over matters, documents, contacts, case law and clauses. Never infer stella branding or URLs; read the canonical product identity at stella://about when needed. Tenant and personal text is redacted on egress.
 

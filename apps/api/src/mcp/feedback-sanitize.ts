@@ -4,13 +4,14 @@
  * The MCP surface is driven almost entirely by AI agents. When an agent files a
  * bug or gap with `prepare_feedback`, its free-text title/body can accidentally
  * carry a client email, a tenant id, an auth token, or an internal URL. This
- * module strips the obvious shapes before the text is ever shown to a human for
- * approval or emailed to a maintainer. It is a coarse safety net, not a
- * guarantee: the real control is human approval (github channel: nothing is
- * published until the human submits; email channel: a confirmation-token
- * handshake). Tenant-entity-name redaction (the WASM anonymization pipeline) is
- * deliberately not run here — it is workspace-bound and heavy, and feedback is
- * org-scoped free text, so regex + human approval is the accepted baseline.
+ * module strips the obvious shapes before the text is ever stored, shown to a
+ * human for approval, or delivered to a maintainer. It is a coarse safety net,
+ * not a guarantee: the real control is human approval, which `prepare_feedback`
+ * makes possible by returning the sanitized report for the human to read before
+ * `submit_feedback` sends it. Tenant-entity-name redaction (the WASM
+ * anonymization pipeline) is deliberately not run here — it is workspace-bound
+ * and heavy, and feedback is org-scoped free text, so regex plus human approval
+ * is the accepted baseline.
  *
  * Pass order is load-bearing: JWT/secret shapes run before URL so a secret in a
  * query string of a preserved public URL is still redacted while the URL is kept.
@@ -82,6 +83,12 @@ const EMAIL_REGEX = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/gu;
 
 const UUID_REGEX =
   /\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b/gu;
+
+// ULID: 26 Crockford base32 characters (I, L, O and U are not in the alphabet).
+// Runs after UUID and after every secret pass, so a longer token that happens
+// to contain 26 admissible characters is already a placeholder by the time
+// this looks, and the word boundaries keep it from biting a substring.
+const ULID_REGEX = /\b[0-9A-HJKMNP-TV-Z]{26}\b/gu;
 
 const IPV4_REGEX = /\b\d{1,3}(?:\.\d{1,3}){3}\b/gu;
 
@@ -178,6 +185,10 @@ export const sanitizeFeedbackText = (input: string): SanitizeFeedbackResult => {
     return REDACTED_EMAIL;
   });
   text = text.replace(UUID_REGEX, () => {
+    bump();
+    return REDACTED_ID;
+  });
+  text = text.replace(ULID_REGEX, () => {
     bump();
     return REDACTED_ID;
   });

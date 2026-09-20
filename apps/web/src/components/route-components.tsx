@@ -4,7 +4,7 @@ import { CancelledError, useQueryClient } from "@tanstack/react-query";
 import { Link, Navigate } from "@tanstack/react-router";
 import type { ErrorComponentProps } from "@tanstack/react-router";
 import { panic, Result } from "better-result";
-import { CopyIcon, MailIcon, RefreshCcwIcon } from "lucide-react";
+import { CopyIcon, MegaphoneIcon, RefreshCcwIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { copyToClipboard } from "@stll/clipboard";
@@ -13,9 +13,9 @@ import { Loader } from "@stll/ui/loader";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
+import { FeedbackDialog } from "@/components/feedback-dialog";
 import { MattersNavIcon } from "@/components/matter-icon";
 import {
-  buildErrorReportMailto,
   isNetworkError,
   recoverRouteError,
   resolveRouteErrorRecovery,
@@ -23,6 +23,7 @@ import {
 } from "@/components/route-components.logic";
 import { StellaMark } from "@/components/stella-mark";
 import { env } from "@/env";
+import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useSignOut } from "@/hooks/use-sign-out";
@@ -32,7 +33,6 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { useRouteErrorLifecycle } from "@/lib/analytics/route-error-lifecycle-context";
 import { detached } from "@/lib/detached";
 import { isMemberError, isUnauthorizedError } from "@/lib/errors/auth";
-import { sanitizeHref } from "@/lib/sanitize-href";
 
 type DefaultErrorComponentProps = ErrorComponentProps & {
   className?: string;
@@ -232,11 +232,13 @@ const UnexpectedRouteError = ({
   const [errorReference, setErrorReference] = useState<ErrorReference | null>(
     null,
   );
+  const [reportOpen, setReportOpen] = useState(false);
+  const authStatus = useClientAuthStatus();
   const visibleErrorReference = errorReference ?? PENDING_ERROR_REFERENCE;
   const recovery = resolveRouteErrorRecovery(routeError);
   const support = resolveRouteErrorSupport({
     deployment: env.VITE_SELFHOST ? "selfHosted" : "hosted",
-    feedbackRecipient: env.VITE_FEEDBACK_EMAIL_TO,
+    session: authStatus.status,
   });
   let description: string;
   switch (support.type) {
@@ -282,19 +284,6 @@ const UnexpectedRouteError = ({
     }
     stellaToast.add({ title: t("common.copied"), type: "success" });
   };
-
-  const reportHref =
-    support.type === "report" && errorReference !== null
-      ? buildErrorReportMailto({
-          recipient: support.recipient,
-          subject: t("routeError.reportSubject", {
-            reference: errorReference,
-          }),
-          body: t("routeError.reportBody", {
-            reference: errorReference,
-          }),
-        })
-      : null;
 
   const handleRecovery = () => {
     if (errorReference === null) {
@@ -360,19 +349,19 @@ const UnexpectedRouteError = ({
           <Button render={<Link from="/" to="/workspaces" />} variant="outline">
             <MattersNavIcon /> {t("routeError.backToMatters")}
           </Button>
-          {reportHref ? (
-            <Button
-              render={
-                <a
-                  aria-label={t("routeError.reportProblem")}
-                  href={sanitizeHref(reportHref)}
-                />
-              }
-              variant="ghost"
-            >
-              <MailIcon /> {t("routeError.reportProblem")}
-            </Button>
-          ) : null}
+          {support.type === "report" && errorReference !== null && (
+            <>
+              <Button onClick={() => setReportOpen(true)} variant="ghost">
+                <MegaphoneIcon /> {t("routeError.reportProblem")}
+              </Button>
+              <FeedbackDialog
+                errorReference={errorReference}
+                onOpenChange={setReportOpen}
+                open={reportOpen}
+                source="route_error"
+              />
+            </>
+          )}
         </div>
 
         <div className="border-border bg-muted/40 flex items-center justify-between gap-3 rounded-xl border p-3">
