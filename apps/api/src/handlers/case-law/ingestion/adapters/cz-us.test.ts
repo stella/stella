@@ -41,12 +41,37 @@ type ResultRow = {
   textActionLabel?: string | undefined;
 };
 
+/**
+ * The page sizes the court's form renders, and the only ones it accepts back.
+ *
+ * Read off the mock's own form rather than declared beside it, so the two
+ * cannot state different sets: the submit below validates against whatever
+ * this page offered, the way the court's WebForms event validation does.
+ */
+const offeredPageSizes = (form: string): string[] =>
+  [...form.matchAll(/<option value="(?<size>\d+)"/gu)].map(
+    ({ groups }) => groups?.["size"] ?? "",
+  );
+
 const makeSearchForm = (): string => `
 <html><body>
   <input id="__VIEWSTATE" value="view-state" />
   <input id="__VIEWSTATEGENERATOR" value="generator" />
   <input id="__EVENTVALIDATION" value="validation" />
+  <select name="ctl00$MainContent$resultsPageSize" id="ctl00_MainContent_resultsPageSize">
+    <option value="10">10</option>
+    <option selected="selected" value="20">20</option>
+    <option value="40">40</option>
+    <option value="80">80</option>
+  </select>
 </body></html>`;
+
+/**
+ * What the court answers a submit it refused: the results page is still
+ * served, and it carries no results.
+ */
+const makeRefusedResultsPage = (): string =>
+  '<html><body><div id="ctl00_MainContent_pnlResults"></div></body></html>';
 
 const makeNoResultsPage = (): string => `
 <html><body>
@@ -230,6 +255,8 @@ const installRedirectMock = (location: string): void => {
   );
 };
 
+let searchRefused = false;
+
 const installSearchMock = ({
   rows = [],
   rangeFrom = 1,
@@ -249,6 +276,7 @@ const installSearchMock = ({
 }: MockSearchOptions): void => {
   const bySz = new Map(rows.map((row) => [row.sz, row]));
   nalusRequests = 0;
+  searchRefused = false;
   globalThis.fetch = asFetchMock(
     mock((input: string | URL | Request, init?: RequestInit) => {
       nalusRequests += 1;
@@ -262,10 +290,25 @@ const installSearchMock = ({
         );
       }
       if (url.pathname.endsWith("/Search/Search.aspx") && method === "POST") {
-        onPost?.(
-          new URLSearchParams(typeof init?.body === "string" ? init.body : ""),
-          new Headers(init?.headers),
+        const form = new URLSearchParams(
+          typeof init?.body === "string" ? init.body : "",
         );
+        onPost?.(form, new Headers(init?.headers));
+        // The court validates the submitted page size against the options it
+        // rendered and redirects a submit carrying any other value to its
+        // error page, so a size outside the form's own set never reaches a
+        // result set here either.
+        searchRefused = !offeredPageSizes(makeSearchForm()).includes(
+          form.get("ctl00$MainContent$resultsPageSize") ?? "",
+        );
+        if (searchRefused) {
+          return Promise.resolve(
+            new Response(null, {
+              status: 302,
+              headers: { Location: "/Error.aspx" },
+            }),
+          );
+        }
         return Promise.resolve(
           empty
             ? new Response(makeNoResultsPage())
@@ -278,7 +321,14 @@ const installSearchMock = ({
       if (url.pathname.endsWith("/Search/Results.aspx")) {
         return Promise.resolve(
           new Response(
-            makeResultsPage(rows, rangeFrom, reported, renderPositionOffset),
+            searchRefused
+              ? makeRefusedResultsPage()
+              : makeResultsPage(
+                  rows,
+                  rangeFrom,
+                  reported,
+                  renderPositionOffset,
+                ),
           ),
         );
       }
@@ -434,6 +484,26 @@ describe("czUsAdapter.fetchPage", () => {
 
     const verified = unwrap(await czUsAdapter.fetchPage(page.nextCursor, {}));
     expect(verified.nextCursor).toBe(historicalCursor(1994));
+  });
+
+  test("asks the search form for a page size it offers", async () => {
+    let submitted: URLSearchParams | undefined;
+    installSearchMock({
+      rows: [{ sz: "1-1-93_1", caseNumber: "I.ÚS 1/93", date: "1. 1. 1993" }],
+      onPost: (form) => {
+        submitted = form;
+      },
+    });
+
+    // The court refuses a size it did not render, and the refusal reaches the
+    // crawl as a results page with no count banner on it, so a page read here
+    // at all is what proves the size was one the form offers.
+    const page = unwrap(await czUsAdapter.fetchPage(null, {}));
+
+    expect(offeredPageSizes(makeSearchForm())).toContain(
+      submitted?.get("ctl00$MainContent$resultsPageSize") ?? "",
+    );
+    expect(page.decisions).toHaveLength(1);
   });
 
   test("names the results listing, not the session bootstrap, as its source", async () => {

@@ -171,14 +171,29 @@ const nalusIdentities = ({
 };
 
 /**
- * Rows per crawl page.
+ * The result sizes the search form offers.
+ *
+ * `resultsPageSize` is a WebForms dropdown, so the court validates a submit
+ * against the options it rendered: a size outside this set is refused, and
+ * the refusal is a redirect to the court's error page rather than an error on
+ * the results page. The crawl reads `Results.aspx` either way, so an
+ * unoffered size surfaces one step later as a results page with nothing on it
+ * to parse. Any size this adapter asks for has to be one of these.
+ */
+const OFFERED_PAGE_SIZES = [10, 20, 40, 80] as const;
+
+type OfferedPageSize = (typeof OFFERED_PAGE_SIZES)[number];
+
+/**
+ * Rows per crawl page, the smallest size the form offers.
  *
  * Sized against the gate rather than the court: every row costs a text, a
  * record-card and an abstract request, each of which waits its NALUS slot, so
  * the page size is what decides a page's wall clock. See
- * {@link CZ_US_PAGE_TIMEOUT_MS}.
+ * {@link CZ_US_PAGE_TIMEOUT_MS}. The gate wants the smallest page it can get;
+ * {@link OFFERED_PAGE_SIZES} decides which sizes exist to choose from.
  */
-export const RESULTS_PAGE_SIZE = 12;
+export const RESULTS_PAGE_SIZE = 10 satisfies OfferedPageSize;
 
 /** Search requests one result page costs: bootstrap GET, POST, results page. */
 const REQUESTS_PER_LISTING = 3;
@@ -203,13 +218,13 @@ const CZ_US_PAGE_TIMEOUT_MS =
 const CZ_US_MAX_CYCLE_MS = 30 * 60 * 1000;
 
 /**
- * Result size for a listing walk, the largest the search form offers. The
- * crawl takes forty at a time because every row it keeps costs a text and an
- * abstract fetch; a listing walk fetches no documents, so it asks for the whole
- * eighty. NALUS honours it: a 2013 query answers `Výsledky 1 - 80 z celkem
- * 4345`, and `?page=1` answers `81 - 160`.
+ * Result size for a listing walk, the largest size the form offers. The crawl
+ * takes the smallest because every row it keeps costs a text and an abstract
+ * fetch; a listing walk fetches no documents, so it asks for the whole eighty.
+ * NALUS honours it: a 2013 query answers `Výsledky 1 - 80 z celkem 4345`, and
+ * `?page=1` answers `81 - 160`.
  */
-const LISTING_PAGE_SIZE = 80;
+const LISTING_PAGE_SIZE = 80 satisfies OfferedPageSize;
 
 /** Detail/abstract pairs fetched concurrently from the court. */
 const DOCUMENT_CONCURRENCY = 5;
