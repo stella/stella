@@ -98,7 +98,7 @@ const continuationOutcome = async ({
   canonicalInput: Record<string, unknown>;
   echoedInput: Record<string, unknown>;
   echoedArguments?: string;
-  historicalToolName?: string;
+  historicalToolName?: typeof TOOL_NAME | ExternalToolName;
   tools?: ChatToolMap;
 }): Promise<string> => {
   const id = toSafeId<"chatMessage">("msg_property_continuation");
@@ -209,6 +209,13 @@ test(
   propertyTestTimeout(15_000),
 );
 
+type ExternalToolName = `mcp__${string}`;
+// The one open-ended member of the tool-name type, and never in `clientTools`:
+// to the validator it is as unknown as a since-renamed built-in.
+const unregisteredToolNameArbitrary = fc
+  .string({ minLength: 1, maxLength: 24 })
+  .map((suffix): ExternalToolName => `mcp__${suffix}`);
+
 // Which tools a request registers moves between two requests (an uninstalled
 // skill, a closed feature gate, a renamed tool), so the server's own settled
 // calls must never be re-judged against the current set.
@@ -218,7 +225,7 @@ test(
     await fc.assert(
       fc.asyncProperty(
         inputArbitrary,
-        fc.string({ minLength: 1, maxLength: 24 }),
+        unregisteredToolNameArbitrary,
         async (canonicalInput, historicalToolName) => {
           expect(
             await continuationOutcome({
