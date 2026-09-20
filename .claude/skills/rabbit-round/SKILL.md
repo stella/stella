@@ -15,6 +15,13 @@ Resolve the repository, PR, current head SHA, requester identity, draft state,
 and applicable comment-attribution rules. Fail visibly if the PR cannot be
 identified.
 
+Pin every GitHub query and mutation to the resolved full `owner/name` repository
+and PR number; never rely on the checkout's implicit repository or branch. Require
+each fetched PR's repository identity, number, and `headRefOid` to match the
+captured identity. Before replying to or resolving feedback, refetch that exact PR
+and stop if its head changed; results from one head never authorize a mutation on
+another.
+
 Fetch paginated review threads through GitHub GraphQL so unresolved state and
 thread replies are preserved. Fetch top-level issue comments separately. Record
 every participant and reply author in a thread, which comments apply to the
