@@ -13,6 +13,14 @@ import {
 
 const HEAD_SHA = "1f0c3a7d9e5b4c2a8d6f0e1b3c5a7d9e5b4c2a8d";
 const OTHER_SHA = "9e5b4c2a8d6f0e1b3c5a7d9e5b4c2a8d6f0e1b3c";
+const CHECK_STARTED_AT = "2026-09-20T12:00:00Z";
+
+const checkRun = (
+  name: string,
+  status: string,
+  conclusion: string | null,
+  { id = 1, startedAt = CHECK_STARTED_AT } = {},
+) => ({ id, name, status, conclusion, startedAt });
 
 /** Any repository this one does not enumerate, which the bar treats alike. */
 const PRIVATE_REPO = "stella/private";
@@ -50,7 +58,7 @@ fi
 case "$*" in
   *reviewThreads*) printf '%s\\n' '{"nodes":[],"pageInfo":{"hasNextPage":false}}';;
   *rules/branches/main*) printf '%s\\n' '[{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"Overlay check"}]}}]';;
-  *check-runs*) printf 'Overlay check\\tcompleted\\tsuccess\\n';;
+  *check-runs*) printf '1\\tOverlay check\\tcompleted\\tsuccess\\t2026-09-20T12:00:00Z\\n';;
   *headRefOid*)
     if [ "$1" = api ]; then printf '%s\\n' '${response}';
     else printf '%s\\n' '{"headRefOid":"${HEAD_SHA}"}'; fi;;
@@ -185,8 +193,8 @@ const passingSnapshot = (
   landing: "merge",
   checkRunsHeadSha: HEAD_SHA,
   checkRuns: [
-    { name: "ci-result", status: "completed", conclusion: "success" },
-    { name: "typecheck", status: "completed", conclusion: "success" },
+    checkRun("ci-result", "completed", "success"),
+    checkRun("typecheck", "completed", "success", { id: 2 }),
   ],
   requiredCheckRuns: ["ci-result"],
   reviewThreads: [{ id: "PRRT_kwDOabcdef", isResolved: true }],
@@ -293,11 +301,9 @@ describe("merge bar", () => {
         },
       ],
     );
-    const checkRuns = requiredCheckRuns.map((name) => ({
-      name,
-      status: "completed",
-      conclusion: "success",
-    }));
+    const checkRuns = requiredCheckRuns.map((name, index) =>
+      checkRun(name, "completed", "success", { id: index + 1 }),
+    );
     expect(
       evaluateMergeBar(passingSnapshot({ requiredCheckRuns, checkRuns }))
         .decision,
@@ -332,8 +338,8 @@ describe("merge bar", () => {
       failedGate(
         passingSnapshot({
           checkRuns: [
-            { name: "typecheck", status: "completed", conclusion: "success" },
-            { name: "lint", status: "completed", conclusion: "success" },
+            checkRun("typecheck", "completed", "success"),
+            checkRun("lint", "completed", "success", { id: 2 }),
           ],
         }),
       ),
@@ -399,7 +405,7 @@ describe("merge bar", () => {
       failedGate(
         passingSnapshot({
           checkRuns: [
-            { name: "ci-result", status: "in_progress", conclusion: null },
+            checkRun("ci-result", "in_progress", null),
           ],
         }),
       ),
@@ -415,7 +421,7 @@ describe("merge bar", () => {
         passingSnapshot({
           landing: "merge-when-ready",
           checkRuns: [
-            { name: "ci-result", status: "in_progress", conclusion: null },
+            checkRun("ci-result", "in_progress", null),
           ],
         }),
       ).decision,
@@ -430,7 +436,7 @@ describe("merge bar", () => {
         passingSnapshot({
           landing: "merge-when-ready",
           checkRuns: [
-            { name: "ci-result", status: "completed", conclusion: "failure" },
+            checkRun("ci-result", "completed", "failure"),
           ],
         }),
       ),
@@ -445,7 +451,46 @@ describe("merge bar", () => {
       failedGate(
         passingSnapshot({
           checkRuns: [
-            { name: "ci-result", status: "completed", conclusion: "failure" },
+            checkRun("ci-result", "completed", "failure"),
+          ],
+        }),
+      ),
+    ).toEqual({
+      decision: "abort",
+      reasons: ["REQUIRED_CHECK_NOT_SUCCESSFUL"],
+    });
+  });
+
+  test("uses the latest run when a required check name is repeated", () => {
+    expect(
+      evaluateMergeBar(
+        passingSnapshot({
+          checkRuns: [
+            checkRun("ci-result", "completed", "success", {
+              id: 2,
+              startedAt: "2026-09-20T12:01:00Z",
+            }),
+            checkRun("ci-result", "completed", "cancelled", {
+              startedAt: "2026-09-20T12:00:00Z",
+            }),
+          ],
+        }),
+      ).decision,
+    ).toBe("merge");
+  });
+
+  test("a latest failed rerun cannot inherit an older success", () => {
+    expect(
+      failedGate(
+        passingSnapshot({
+          checkRuns: [
+            checkRun("ci-result", "completed", "failure", {
+              id: 2,
+              startedAt: "2026-09-20T12:01:00Z",
+            }),
+            checkRun("ci-result", "completed", "success", {
+              startedAt: "2026-09-20T12:00:00Z",
+            }),
           ],
         }),
       ),
@@ -460,7 +505,7 @@ describe("merge bar", () => {
       failedGate(
         passingSnapshot({
           checkRuns: [
-            { name: "ci-result", status: "completed", conclusion: "skipped" },
+            checkRun("ci-result", "completed", "skipped"),
           ],
         }),
       ),
