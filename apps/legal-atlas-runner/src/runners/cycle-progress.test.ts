@@ -464,6 +464,7 @@ describe("stepStallAlert", () => {
     ]);
     expect(steps.filter((step) => step.capture)).toHaveLength(1);
     expect(steps.findIndex((step) => step.capture)).toBe(THRESHOLD - 1);
+    expect(steps.at(-1)?.state.captured).toBe(true);
   });
 
   test("below the threshold nothing is signalled", () => {
@@ -478,6 +479,7 @@ describe("stepStallAlert", () => {
     const steps = runStalls([...outage, true, ...outage]);
 
     expect(steps.filter((step) => step.capture)).toHaveLength(2);
+    expect(steps.at(THRESHOLD)?.state).toEqual(INITIAL_STALL_ALERT);
   });
 
   test("intermittent progress keeps the streak from accumulating", () => {

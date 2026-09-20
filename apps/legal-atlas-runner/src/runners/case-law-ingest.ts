@@ -111,6 +111,7 @@ import {
   stepCadence,
   stepStallAlert,
 } from "./cycle-progress";
+import { ingestionHealthRecord } from "./ingestion-health";
 import { formatLogDetail } from "./log-detail";
 import {
   RECOMPUTE_OUTCOME,
@@ -412,6 +413,9 @@ const inFlightCycles = new Set<string>();
  */
 const cyclesSinceWatchdogTick = new Set<string>();
 
+/** Sources whose current no-progress episode reached the alert threshold. */
+const stalledAdapters = new Set<AdapterKey>();
+
 const writeHeartbeat = () => {
   void Bun.write(
     HEARTBEAT_PATH,
@@ -466,10 +470,14 @@ let pagesSinceStart = 0;
  */
 const logHeartbeat = (): void => {
   logInfo(
-    `[health] case_law.ingestion.heartbeat ` +
-      `uptimeSec=${Math.round(process.uptime())} ` +
-      `pagesSinceStart=${pagesSinceStart} ` +
-      `activeCycles=${inFlightCycles.size}`,
+    JSON.stringify(
+      ingestionHealthRecord({
+        uptimeSec: Math.round(process.uptime()),
+        pagesSinceStart,
+        activeCycles: inFlightCycles.size,
+        stalledAdapters,
+      }),
+    ),
   );
 };
 
@@ -877,6 +885,11 @@ const runAdapterLoop = async ({ adapterKey, name }: SourceDef) => {
         SUSTAINED_FAILURE_THRESHOLD,
       );
       stallAlert = stall.state;
+      if (stallAlert.captured) {
+        stalledAdapters.add(adapterKey);
+      } else {
+        stalledAdapters.delete(adapterKey);
+      }
       if (stall.sustained !== null) {
         logger.error("case_law.ingestion.sustained_failure", {
           adapterKey,
