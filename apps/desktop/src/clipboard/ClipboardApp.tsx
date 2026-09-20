@@ -151,12 +151,14 @@ import {
 } from "./clipboard-types";
 import type {
   ClipboardCaptureStatus,
+  ClipboardCopyFormat,
   ClipboardCopyErrorKind,
   ClipboardRetention,
   ClipboardGroup,
   ClipboardGroupColor,
   ClipboardItem,
   ClipboardSnapshot,
+  ClipboardSourceAppExclusion,
   ClipboardSourceAppVisual,
 } from "./clipboard-types";
 import {
@@ -239,6 +241,8 @@ const EMPTY_SNAPSHOT = {
   persistence: { status: "initializing" },
   retention: "month",
   screenCapture: "hidden",
+  sourceAppExclusionLimit: 0,
+  sourceAppExclusions: [],
   sourceAppVisuals: [],
   welcomeStatus: "initializing",
 } satisfies ClipboardSnapshot;
@@ -331,7 +335,7 @@ type ClipboardCardProps = {
     item: ClipboardItem,
     index: number,
   ) => void;
-  onCopy: (item: ClipboardItem) => void;
+  onCopy: (item: ClipboardItem, format?: ClipboardCopyFormat) => void;
   onRename: (id: string, name: string) => void;
   onSelect: (index: number) => void;
   query: string;
@@ -344,6 +348,82 @@ type ClipboardCardStyle = CSSProperties & {
 
 type ClipboardGroupStyle = CSSProperties & {
   "--clipboard-group-accent"?: string;
+};
+
+type ClipboardCardFooterMetadataProps = {
+  active: boolean;
+  characterCount: number | null;
+  copiedAt: string;
+  copiedAtLabel: string;
+  editingName: boolean;
+  imagePreviewStatus: ClipboardImagePreviewStatus;
+  index: number;
+  itemType: ClipboardItem["type"];
+  onRetryImagePreview: () => void;
+  relativeTime: string;
+};
+
+const ClipboardCardFooterMetadata = ({
+  active,
+  characterCount,
+  copiedAt,
+  copiedAtLabel,
+  editingName,
+  imagePreviewStatus,
+  index,
+  itemType,
+  onRetryImagePreview,
+  relativeTime,
+}: ClipboardCardFooterMetadataProps) => {
+  const t = useTranslations("clipboard");
+  const format = useFormatter();
+  if (editingName) {
+    return null;
+  }
+  const itemMetadata =
+    active && characterCount !== null ? (
+      <span
+        aria-label={t("characterCount", { count: characterCount })}
+        className="text-muted-foreground flex shrink-0 items-center gap-0.5 text-xs tabular-nums"
+        title={t("characterCount", { count: characterCount })}
+      >
+        <span aria-hidden="true">{format.number(characterCount)}</span>
+      </span>
+    ) : (
+      <time
+        className="text-muted-foreground shrink-0 text-xs tabular-nums"
+        dateTime={copiedAt}
+        title={copiedAtLabel}
+      >
+        <span aria-hidden="true">{relativeTime}</span>
+        <span className="sr-only">{copiedAtLabel}</span>
+      </time>
+    );
+
+  return (
+    <>
+      {itemMetadata}
+      {itemType === "image" && imagePreviewStatus === "error" ? (
+        <Button
+          aria-label={t("retryImagePreview")}
+          className="size-11 shrink-0 rounded-full"
+          onClick={onRetryImagePreview}
+          size="icon"
+          title={t("retryImagePreview")}
+          type="button"
+          variant="ghost"
+        >
+          <RotateCcwIcon aria-hidden="true" className="size-4" />
+        </Button>
+      ) : null}
+      {index < 9 ? (
+        <kbd className="bg-muted text-muted-foreground text-3xs shrink-0 rounded-md px-1.5 py-0.5 font-mono tabular-nums">
+          {PRIMARY_MODIFIER_LABEL}
+          {index + 1}
+        </kbd>
+      ) : null}
+    </>
+  );
 };
 
 const ClipboardCard = ({
@@ -555,30 +635,48 @@ const ClipboardCard = ({
         })}
         className="flex min-h-0 flex-1 flex-col self-stretch text-start focus-visible:outline-none"
         data-clipboard-card-trigger=""
-        onClick={() => onCopy(item)}
+        onClick={() => onCopy(item, "original")}
         onContextMenu={(event) => onOpenMenu(event, item, index)}
         onFocus={() => onSelect(index)}
         type="button"
       >
         <div className="relative min-h-0 flex-1 self-stretch overflow-hidden p-5">
           {previewContent}
+          {/* Renaming takes both keys for itself: Enter commits the name and
+              Shift+Enter is swallowed with it, so the hints would lie. */}
+          {active && !editingName && item.type === "formattedText" ? (
+            <span
+              className="bg-background/90 text-muted-foreground ring-foreground/8 text-3xs pointer-events-none absolute inset-x-3 bottom-3 flex flex-wrap items-center justify-center gap-x-1.5 gap-y-0.5 rounded-lg px-2 py-1 leading-4 shadow-sm ring-1 backdrop-blur-md"
+              data-clipboard-format-shortcuts=""
+            >
+              <span className="flex items-center gap-1 whitespace-nowrap">
+                <kbd className="font-mono">↵</kbd>
+                {t("originalFormatting")}
+              </span>
+              <span aria-hidden="true">·</span>
+              <span className="flex items-center gap-1 whitespace-nowrap">
+                <kbd className="font-mono">⇧↵</kbd>
+                {t("plainText")}
+              </span>
+            </span>
+          ) : null}
         </div>
       </button>
 
       <footer className="clipboard-card-footer flex h-12 shrink-0 items-center gap-2 px-4">
-        <span
-          className="relative flex shrink-0 items-center"
-          title={sourceTitle ?? groupName ?? metadataTitle}
-        >
-          {metadataIcon}
-        </span>
+        {editingName ? null : (
+          <span
+            className="relative flex shrink-0 items-center"
+            title={sourceTitle ?? groupName ?? metadataTitle}
+          >
+            {metadataIcon}
+          </span>
+        )}
         {editingName ? (
           <Input
             aria-label={t("editItem")}
             autoFocus
-            // The negative start margin keeps the typed text where the label
-            // sat, so entering edit mode does not shift it right by the padding.
-            className="-ms-2 h-8 min-w-0 flex-1 rounded-lg px-2 text-sm font-semibold"
+            className="h-8 min-w-0 flex-1 rounded-lg px-2 text-sm font-semibold"
             data-clipboard-name-input=""
             maxLength={MAX_ITEM_NAME_CHARACTERS}
             onBlur={finishNameEdit}
@@ -617,42 +715,21 @@ const ClipboardCard = ({
             />
           </button>
         )}
-        {/* The footer has room for one figure: the highlighted card shows
-            its length, the rest their age; the tooltip keeps the full time. */}
-        <time
-          className="text-muted-foreground shrink-0 text-xs tabular-nums"
-          dateTime={item.copiedAt}
-          title={copiedAtLabel}
-        >
-          <span aria-hidden="true">
-            {active && characterCount !== null
-              ? t("characterCount", { count: characterCount })
-              : relativeTime}
-          </span>
-          <span className="sr-only">{copiedAtLabel}</span>
-        </time>
-        {item.type === "image" && imagePreviewStatus === "error" ? (
-          <Button
-            aria-label={t("retryImagePreview")}
-            className="size-11 shrink-0 rounded-full"
-            onClick={() => {
-              setImagePreviewStatus("loading");
-              setImagePreviewRetryToken((token) => token + 1);
-            }}
-            size="icon"
-            title={t("retryImagePreview")}
-            type="button"
-            variant="ghost"
-          >
-            <RotateCcwIcon aria-hidden="true" className="size-4" />
-          </Button>
-        ) : null}
-        {index < 9 ? (
-          <kbd className="bg-muted text-muted-foreground text-3xs shrink-0 rounded-md px-1.5 py-0.5 font-mono tabular-nums">
-            {PRIMARY_MODIFIER_LABEL}
-            {index + 1}
-          </kbd>
-        ) : null}
+        <ClipboardCardFooterMetadata
+          active={active}
+          characterCount={characterCount}
+          copiedAt={item.copiedAt}
+          copiedAtLabel={copiedAtLabel}
+          editingName={editingName}
+          imagePreviewStatus={imagePreviewStatus}
+          index={index}
+          itemType={item.type}
+          onRetryImagePreview={() => {
+            setImagePreviewStatus("loading");
+            setImagePreviewRetryToken((token) => token + 1);
+          }}
+          relativeTime={relativeTime}
+        />
       </footer>
     </article>
   );
@@ -953,11 +1030,15 @@ type ClipboardContextMenuProps = {
   groups: ClipboardGroup[];
   menu: Exclude<ClipboardContextMenuState, { type: "closed" }>;
   onClose: () => void;
+  onCopy: (item: ClipboardItem, format: ClipboardCopyFormat) => void;
   onCreateGroup: (itemId: string) => void;
   onDelete: (id: string) => void;
   onDuplicate: (id: string) => void;
   onEdit: (id: string) => void;
+  onExcludeSourceApp: (id: string) => void;
   onMove: (id: string, groupId: string | null) => void;
+  sourceAppExclusionLimit: number;
+  sourceAppExclusions: ClipboardSourceAppExclusion[];
 };
 
 const ClipboardContextMenu = ({
@@ -965,16 +1046,28 @@ const ClipboardContextMenu = ({
   groups,
   menu,
   onClose,
+  onCopy,
   onCreateGroup,
   onDelete,
   onDuplicate,
   onEdit,
+  onExcludeSourceApp,
   onMove,
+  sourceAppExclusionLimit,
+  sourceAppExclusions,
 }: ClipboardContextMenuProps) => {
   const t = useTranslations("clipboard");
   const anchor = {
     getBoundingClientRect: () => new DOMRect(menu.x, menu.y, 0, 0),
   };
+  const sourceApp = menu.item.sourceApp;
+  const sourceAppCanBeExcluded =
+    sourceApp !== null &&
+    sourceApp.identifier !== null &&
+    !sourceAppExclusions.some(
+      ({ identifier }) =>
+        identifier.toLowerCase() === sourceApp.identifier?.toLowerCase(),
+    );
 
   return (
     <Menu
@@ -987,6 +1080,36 @@ const ClipboardContextMenu = ({
     >
       <MenuTrigger nativeButton={false} render={<span className="sr-only" />} />
       <MenuPopup anchor={anchor} className="w-56" finalFocus={false}>
+        {menu.item.type === "formattedText" ? (
+          <MenuSub>
+            <MenuSubTrigger className="min-h-11 rounded-xl">
+              <ClipboardIcon />
+              {t("pasteTextAs")}
+            </MenuSubTrigger>
+            <MenuSubPopup className="w-56">
+              <MenuItem
+                className="min-h-11 rounded-xl"
+                onClick={() => {
+                  onCopy(menu.item, "original");
+                  onClose();
+                }}
+              >
+                <CopyPlusIcon />
+                {t("originalFormatting")}
+              </MenuItem>
+              <MenuItem
+                className="min-h-11 rounded-xl"
+                onClick={() => {
+                  onCopy(menu.item, "plainText");
+                  onClose();
+                }}
+              >
+                <FileTextIcon />
+                {t("plainText")}
+              </MenuItem>
+            </MenuSubPopup>
+          </MenuSub>
+        ) : null}
         <MenuItem
           className="min-h-11 rounded-xl"
           onClick={() => {
@@ -1064,6 +1187,27 @@ const ClipboardContextMenu = ({
             </MenuItem>
           </MenuSubPopup>
         </MenuSub>
+        {sourceAppCanBeExcluded ? (
+          <>
+            <MenuSeparator />
+            <MenuItem
+              className="min-h-11 rounded-xl"
+              disabled={sourceAppExclusions.length >= sourceAppExclusionLimit}
+              onClick={() => {
+                onExcludeSourceApp(menu.item.id);
+                onClose();
+              }}
+            >
+              <ShieldAlertIcon />
+              <span>
+                {t.rich("excludeSourceApp", {
+                  bdi: (chunks) => <bdi dir="auto">{chunks}</bdi>,
+                  source: sourceApp.name,
+                })}
+              </span>
+            </MenuItem>
+          </>
+        ) : null}
         <MenuSeparator />
         <MenuItem
           className="min-h-11 rounded-xl"
@@ -1676,9 +1820,12 @@ const ClipboardApp = () => {
     }
   };
 
-  const copyItem = (item: ClipboardItem) => {
+  const copyItem = (
+    item: ClipboardItem,
+    format: ClipboardCopyFormat = "original",
+  ) => {
     setError((current) => (current?.source === "operation" ? null : current));
-    void invoke("clipboard_copy_item", { id: item.id }).catch(
+    void invoke("clipboard_copy_item", { format, id: item.id }).catch(
       (error: unknown) => {
         // An unrecognised rejection means the clip never left the window.
         const kind = isClipboardCopyError(error) ? error.kind : "copy";
@@ -1691,6 +1838,11 @@ const ClipboardApp = () => {
         setError({ message: t(feedback.messageKey), source: "operation" });
       },
     );
+  };
+
+  const copyItemFromEnter = (item: ClipboardItem, shiftKey: boolean) => {
+    const format = shiftKey && item.type !== "image" ? "plainText" : "original";
+    copyItem(item, format);
   };
 
   const openEditor = (id: string) => {
@@ -1859,7 +2011,7 @@ const ClipboardApp = () => {
     if (event.pointerType !== "mouse") {
       return;
     }
-    const position = { x: event.screenX, y: event.screenY };
+    const position = { x: event.clientX, y: event.clientY };
     const moved = clipboardPointerMoved(railPointerRef.current, position);
     railPointerRef.current = position;
     if (!moved || !(event.target instanceof Element)) {
@@ -1868,7 +2020,13 @@ const ClipboardApp = () => {
     const index = event.target.closest<HTMLElement>("[data-clipboard-index]")
       ?.dataset["clipboardIndex"];
     if (index !== undefined) {
-      setSelectedIndex(Number(index));
+      const nextIndex = Number(index);
+      const item = filteredItems.at(nextIndex);
+      if (!item) {
+        return;
+      }
+      setSelectedIndex(nextIndex);
+      revealCard({ rail: event.currentTarget, id: item.id, focus: false });
     }
   };
 
@@ -2021,7 +2179,7 @@ const ClipboardApp = () => {
         const item = resolveActionItem();
         if (item) {
           event.preventDefault();
-          copyItem(item);
+          copyItemFromEnter(item, event.shiftKey);
         }
       } else if (activeItem && shouldReturnToTimelineFromInput(inputKey)) {
         event.preventDefault();
@@ -2106,7 +2264,7 @@ const ClipboardApp = () => {
       const item = resolveActionItem();
       if (item) {
         event.preventDefault();
-        copyItem(item);
+        copyItemFromEnter(item, event.shiftKey);
       }
       return;
     }
@@ -2238,6 +2396,7 @@ const ClipboardApp = () => {
           groups={snapshot.groups}
           menu={contextMenu}
           onClose={closeContextMenu}
+          onCopy={copyItem}
           onCreateGroup={(itemId) =>
             setDialog({
               color: nextGroupColor,
@@ -2253,9 +2412,14 @@ const ClipboardApp = () => {
             applySnapshotCommand("clipboard_duplicate_item", { id })
           }
           onEdit={openEditor}
+          onExcludeSourceApp={(id) =>
+            applySnapshotCommand("clipboard_exclude_item_source_app", { id })
+          }
           onMove={(id, groupId) =>
             applySnapshotCommand("clipboard_set_item_group", { groupId, id })
           }
+          sourceAppExclusionLimit={snapshot.sourceAppExclusionLimit}
+          sourceAppExclusions={snapshot.sourceAppExclusions}
         />
       )}
       {feedback}
@@ -2664,6 +2828,38 @@ const ClipboardApp = () => {
                         </MenuRadioGroup>
                       </MenuSubPopup>
                     </MenuSub>
+                    {snapshot.sourceAppExclusions.length > 0 ? (
+                      <MenuSub>
+                        <MenuSubTrigger className="min-h-11 rounded-xl">
+                          <ShieldAlertIcon />
+                          {t("excludedApplications")}
+                        </MenuSubTrigger>
+                        <MenuSubPopup className="max-h-72 w-64">
+                          {snapshot.sourceAppExclusions.map((exclusion) => (
+                            <MenuItem
+                              className="min-h-11 rounded-xl"
+                              key={exclusion.identifier}
+                              onClick={() => {
+                                applySnapshotCommand(
+                                  "clipboard_remove_source_app_exclusion",
+                                  { identifier: exclusion.identifier },
+                                );
+                              }}
+                            >
+                              <RotateCcwIcon />
+                              <span className="truncate">
+                                {t.rich("removeSourceAppExclusion", {
+                                  bdi: (chunks) => (
+                                    <bdi dir="auto">{chunks}</bdi>
+                                  ),
+                                  source: exclusion.name,
+                                })}
+                              </span>
+                            </MenuItem>
+                          ))}
+                        </MenuSubPopup>
+                      </MenuSub>
+                    ) : null}
                     <MenuCheckboxItem
                       checked={snapshot.screenCapture === "visible"}
                       className="min-h-11 rounded-xl"

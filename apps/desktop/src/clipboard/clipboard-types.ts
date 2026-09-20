@@ -65,6 +65,15 @@ export type ClipboardItem =
 
 export type ClipboardCaptureStatus = "active" | "paused";
 
+const CLIPBOARD_COPY_FORMATS = ["original", "plainText"] as const;
+
+export type ClipboardCopyFormat = (typeof CLIPBOARD_COPY_FORMATS)[number];
+
+export type ClipboardSourceAppExclusion = {
+  identifier: string;
+  name: string;
+};
+
 /** A group accent as lowercase `#rrggbb`, the shape the native side normalises to. */
 export type ClipboardGroupColor = string & {
   readonly __brand: "ClipboardGroupColor";
@@ -108,6 +117,8 @@ export type ClipboardSnapshot = {
   persistence: ClipboardPersistence;
   retention: ClipboardRetention;
   screenCapture: ClipboardScreenCapture;
+  sourceAppExclusionLimit: number;
+  sourceAppExclusions: ClipboardSourceAppExclusion[];
   sourceAppVisuals: ClipboardSourceAppVisual[];
   welcomeStatus: ClipboardWelcomeStatus;
 };
@@ -140,6 +151,16 @@ const isClipboardSourceAppVisual = (
       value["iconDataUrl"].startsWith("data:image/png;base64,") &&
       value["iconDataUrl"].length <= 48 * 1024)) &&
   typeof value["key"] === "string";
+
+const isClipboardSourceAppExclusion = (
+  value: unknown,
+): value is ClipboardSourceAppExclusion =>
+  isRecord(value) &&
+  typeof value["identifier"] === "string" &&
+  value["identifier"].length > 0 &&
+  value["identifier"].trim() === value["identifier"] &&
+  typeof value["name"] === "string" &&
+  value["name"].trim().length > 0;
 
 export const isClipboardItem = (value: unknown): value is ClipboardItem => {
   if (
@@ -259,6 +280,8 @@ export const isClipboardSnapshot = (
     return false;
   }
   const captureStatus = value["captureStatus"];
+  const sourceAppExclusionLimit = value["sourceAppExclusionLimit"];
+  const sourceAppExclusions = value["sourceAppExclusions"];
   return (
     (captureStatus === "active" || captureStatus === "paused") &&
     isGroupLimit(value["groupLimit"]) &&
@@ -269,6 +292,10 @@ export const isClipboardSnapshot = (
     isPersistence(value["persistence"]) &&
     isClipboardRetention(value["retention"]) &&
     isClipboardScreenCapture(value["screenCapture"]) &&
+    isGroupLimit(sourceAppExclusionLimit) &&
+    Array.isArray(sourceAppExclusions) &&
+    sourceAppExclusions.length <= sourceAppExclusionLimit &&
+    sourceAppExclusions.every(isClipboardSourceAppExclusion) &&
     Array.isArray(value["sourceAppVisuals"]) &&
     value["sourceAppVisuals"].every(isClipboardSourceAppVisual) &&
     (value["welcomeStatus"] === "pending" ||

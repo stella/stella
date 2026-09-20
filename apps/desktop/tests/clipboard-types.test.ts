@@ -21,6 +21,8 @@ const snapshotWithWelcomeStatus = (welcomeStatus: unknown) => ({
   persistence: { imageCleanup: "idle", status: "encrypted" },
   retention: "month",
   screenCapture: "hidden",
+  sourceAppExclusionLimit: 128,
+  sourceAppExclusions: [],
   sourceAppVisuals: [],
   welcomeStatus,
 });
@@ -67,6 +69,35 @@ describe("clipboard snapshot group limit", () => {
         groupLimit: 24,
       }),
     ).toBe(true);
+  });
+});
+
+describe("clipboard snapshot source app exclusions", () => {
+  test("accepts bounded exclusions and rejects malformed or over-limit lists", () => {
+    expect(
+      isClipboardSnapshot({
+        ...snapshotWithWelcomeStatus("completed"),
+        sourceAppExclusions: [
+          { identifier: "com.example.editor", name: "Editor" },
+        ],
+      }),
+    ).toBe(true);
+    expect(
+      isClipboardSnapshot({
+        ...snapshotWithWelcomeStatus("completed"),
+        sourceAppExclusions: [{ identifier: "", name: "Editor" }],
+      }),
+    ).toBe(false);
+    expect(
+      isClipboardSnapshot({
+        ...snapshotWithWelcomeStatus("completed"),
+        sourceAppExclusionLimit: 1,
+        sourceAppExclusions: [
+          { identifier: "com.example.editor", name: "Editor" },
+          { identifier: "com.example.browser", name: "Browser" },
+        ],
+      }),
+    ).toBe(false);
   });
 });
 

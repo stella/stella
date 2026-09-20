@@ -8,16 +8,32 @@ import type { ClipboardSnapshot } from "../../src/clipboard/clipboard-types";
 import arMessages from "../../src/i18n/langs/ar.json" with { type: "json" };
 import enMessages from "../../src/i18n/langs/en.json" with { type: "json" };
 
-const CLIPBOARD_ITEMS = Array.from({ length: 14 }, (_, index) => ({
-  copiedAt: "2026-09-08T05:00:00.000Z",
-  groupId: index === 1 ? "work" : null,
-  groupedAt: index === 1 ? "2026-09-08T05:00:00.000Z" : null,
-  id: `clip-${index + 1}`,
-  name: `Clip ${index + 1}`,
-  plainText: `Clipboard item ${index + 1}`,
-  sourceApp: null,
-  type: "text" as const,
-})) satisfies ClipboardSnapshot["items"];
+const CLIPBOARD_ITEMS = Array.from({ length: 14 }, (_, index) => {
+  const item = {
+    copiedAt: "2026-09-08T05:00:00.000Z",
+    groupId: index === 1 ? "work" : null,
+    groupedAt: index === 1 ? "2026-09-08T05:00:00.000Z" : null,
+    id: `clip-${index + 1}`,
+    name: `Clip ${index + 1}`,
+    plainText: `Clipboard item ${index + 1}`,
+    sourceApp:
+      index === 0
+        ? {
+            identifier: "com.example.editor",
+            name: "Example Editor",
+            page: null,
+            visualKey: null,
+          }
+        : null,
+  };
+  return index === 0
+    ? {
+        ...item,
+        html: "<strong>Clipboard item 1</strong>",
+        type: "formattedText" as const,
+      }
+    : { ...item, type: "text" as const };
+}) satisfies ClipboardSnapshot["items"];
 
 const SNAPSHOT = {
   captureStatus: "active",
@@ -27,6 +43,8 @@ const SNAPSHOT = {
   persistence: { imageCleanup: "idle", status: "encrypted" },
   retention: "month",
   screenCapture: "hidden",
+  sourceAppExclusionLimit: 128,
+  sourceAppExclusions: [],
   sourceAppVisuals: [],
   welcomeStatus: "completed",
 } satisfies ClipboardSnapshot;
@@ -121,6 +139,26 @@ const installNativeBoundary = async (page: Page, language: "ar" | "en") => {
               screenCapture:
                 args["capture"] === "visible" ? "visible" : "hidden",
             };
+          }
+          if (command === "clipboard_exclude_item_source_app") {
+            const item = clipboardSnapshot.items.find(
+              ({ id }) => id === args["id"],
+            );
+            const sourceApp = item?.sourceApp;
+            return sourceApp?.identifier
+              ? {
+                  ...clipboardSnapshot,
+                  sourceAppExclusions: [
+                    {
+                      identifier: sourceApp.identifier.toLowerCase(),
+                      name: sourceApp.name,
+                    },
+                  ],
+                }
+              : clipboardSnapshot;
+          }
+          if (command === "clipboard_remove_source_app_exclusion") {
+            return { ...clipboardSnapshot, sourceAppExclusions: [] };
           }
           if (command === "get_desktop_language") {
             return nativeLanguage;
@@ -242,6 +280,32 @@ const invocationCount = async (page: Page, command: string) =>
         "command" in invocation &&
         invocation.command === expectedCommand,
     ).length;
+  }, command);
+
+const lastInvocationArgs = async (page: Page, command: string) =>
+  page.evaluate((expectedCommand) => {
+    const invocations: unknown = Reflect.get(
+      window,
+      "__STELLA_TEST_INVOCATIONS__",
+    );
+    if (!Array.isArray(invocations)) {
+      return null;
+    }
+    const invocation: unknown = invocations.findLast(
+      (candidate) =>
+        typeof candidate === "object" &&
+        candidate !== null &&
+        "command" in candidate &&
+        candidate.command === expectedCommand,
+    );
+    if (
+      typeof invocation !== "object" ||
+      invocation === null ||
+      !("args" in invocation)
+    ) {
+      return null;
+    }
+    return invocation.args;
   }, command);
 
 const DIRECTIONS = [
@@ -506,6 +570,87 @@ for (const {
       expect(language === "ar" ? -offset : offset).toBeGreaterThan(0);
     });
 
+    test("pointer selection fully reveals a partially visible clip", async ({
+      page,
+    }) => {
+      await openClipboard(page, language);
+      const rail = page.getByRole("list");
+      await rail.evaluate(
+        (node, toward) =>
+          node.scrollTo({ behavior: "instant", left: toward * 350 }),
+        language === "ar" ? -1 : 1,
+      );
+      await expect
+        .poll(async () =>
+          rail.evaluate((node) => {
+            const railBounds = node.getBoundingClientRect();
+            return Array.from(
+              node.querySelectorAll<HTMLElement>("[data-clipboard-id]"),
+            ).some((card) => {
+              const bounds = card.getBoundingClientRect();
+              const visible =
+                bounds.right > railBounds.left &&
+                bounds.left < railBounds.right;
+              const clipped =
+                bounds.left < railBounds.left - 30 ||
+                bounds.right > railBounds.right + 30;
+              return visible && clipped;
+            });
+          }),
+        )
+        .toBe(true);
+      const target = await rail.evaluate((node) => {
+        const railBounds = node.getBoundingClientRect();
+        const card = Array.from(
+          node.querySelectorAll<HTMLElement>("[data-clipboard-id]"),
+        ).find((candidate) => {
+          const bounds = candidate.getBoundingClientRect();
+          const visible =
+            bounds.right > railBounds.left && bounds.left < railBounds.right;
+          const clipped =
+            bounds.left < railBounds.left - 30 ||
+            bounds.right > railBounds.right + 30;
+          return visible && clipped;
+        });
+        if (!card) {
+          return null;
+        }
+        const bounds = card.getBoundingClientRect();
+        const visibleLeft = Math.max(bounds.left, railBounds.left) + 2;
+        const visibleRight = Math.min(bounds.right, railBounds.right) - 2;
+        return {
+          id: card.dataset["clipboardId"],
+          x: (visibleLeft + visibleRight) / 2,
+          y: bounds.top + bounds.height / 2,
+        };
+      });
+      expect(target).not.toBeNull();
+      if (!target?.id) {
+        throw new TypeError("Partially visible clipboard card is missing");
+      }
+      const search = page.getByRole("searchbox");
+      await search.focus();
+      await expect(search).toBeFocused();
+      await page.mouse.move(target.x, target.y);
+      await page.mouse.move(target.x + 1, target.y);
+
+      const selected = page.locator(`[data-clipboard-id="${target.id}"]`);
+      await expect(selected).toHaveAttribute("aria-current", "true");
+      await expect
+        .poll(async () =>
+          selected.evaluate((card) => {
+            const railBounds = card.parentElement?.getBoundingClientRect();
+            const cardBounds = card.getBoundingClientRect();
+            return Boolean(
+              railBounds &&
+              cardBounds.left >= railBounds.left + 19 &&
+              cardBounds.right <= railBounds.right - 19,
+            );
+          }),
+        )
+        .toBe(true);
+    });
+
     test("a scroll the rail never observed is reconciled by the next commit", async ({
       page,
     }) => {
@@ -663,6 +808,113 @@ for (const {
     });
   });
 }
+
+test("formatted clips expose copy variants and reversible app exclusions", async ({
+  page,
+}) => {
+  const cards = await openClipboard(page, "en");
+  await cards.first().click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Paste text as" }).hover();
+  await page.getByRole("menuitem", { name: "Plain text" }).click();
+  expect(await lastInvocationArgs(page, "clipboard_copy_item")).toEqual({
+    format: "plainText",
+    id: "clip-1",
+  });
+
+  await cards.first().click({ button: "right" });
+  await page
+    .getByRole("menuitem", {
+      name: "Stop saving new clips from Example Editor",
+    })
+    .click();
+  expect(
+    await lastInvocationArgs(page, "clipboard_exclude_item_source_app"),
+  ).toEqual({ id: "clip-1" });
+
+  await page.getByRole("button", { name: "More options" }).click();
+  await page.getByRole("menuitem", { name: "Excluded applications" }).hover();
+  await page
+    .getByRole("menuitem", {
+      name: "Save new clips from Example Editor again",
+    })
+    .click();
+  expect(
+    await lastInvocationArgs(page, "clipboard_remove_source_app_exclusion"),
+  ).toEqual({ identifier: "com.example.editor" });
+});
+
+test("formatted clips advertise and execute both keyboard paste formats", async ({
+  page,
+}) => {
+  const cards = await openClipboard(page, "en");
+  const shortcuts = page.locator("[data-clipboard-format-shortcuts]");
+  await expect(shortcuts).toContainText("Original formatting");
+  await expect(shortcuts).toContainText("Plain text");
+  await expect(shortcuts.locator("kbd")).toHaveText(["↵", "⇧↵"]);
+
+  await page.keyboard.press("Shift+Enter");
+  expect(await lastInvocationArgs(page, "clipboard_copy_item")).toEqual({
+    format: "plainText",
+    id: "clip-1",
+  });
+
+  await page.keyboard.press("Enter");
+  expect(await lastInvocationArgs(page, "clipboard_copy_item")).toEqual({
+    format: "original",
+    id: "clip-1",
+  });
+
+  await page.keyboard.press("ArrowRight");
+  await expect(cards.nth(1)).toBeFocused();
+  await expect(shortcuts).toHaveCount(0);
+});
+
+test("source application names stay isolated inside RTL actions", async ({
+  page,
+}) => {
+  const cards = await openClipboard(page, "ar");
+  await cards.first().click({ button: "right" });
+  const excludeLabel = arMessages.clipboard.excludeSourceApp.replace(
+    "<bdi>{source}</bdi>",
+    "Example Editor",
+  );
+  const excludeAction = page.getByRole("menuitem", { name: excludeLabel });
+  await expect(excludeAction.locator("bdi[dir=auto]")).toHaveText(
+    "Example Editor",
+  );
+  await excludeAction.click();
+
+  await page
+    .getByRole("button", { name: arMessages.clipboard.moreOptions })
+    .click();
+  await page
+    .getByRole("menuitem", {
+      name: arMessages.clipboard.excludedApplications,
+    })
+    .hover();
+  const restoreLabel = arMessages.clipboard.removeSourceAppExclusion.replace(
+    "<bdi>{source}</bdi>",
+    "Example Editor",
+  );
+  await expect(
+    page.getByRole("menuitem", { name: restoreLabel }).locator("bdi[dir=auto]"),
+  ).toHaveText("Example Editor");
+});
+
+test("inline clip naming uses the full footer width", async ({ page }) => {
+  await openClipboard(page, "en");
+  const card = page.locator('[data-clipboard-id="clip-1"]');
+  await card.locator('button[title="Edit clip"]').click();
+  const input = card.locator("[data-clipboard-name-input]");
+
+  await expect(input).toBeFocused();
+  await expect(card.locator("footer kbd")).toHaveCount(0);
+  // Enter and Shift+Enter finish the rename here, so the copy hints must go.
+  await expect(card.locator("[data-clipboard-format-shortcuts]")).toHaveCount(
+    0,
+  );
+  expect((await input.boundingBox())?.width ?? 0).toBeGreaterThan(190);
+});
 
 test("keyboard navigation mounts and focuses virtualized cards", async ({
   page,

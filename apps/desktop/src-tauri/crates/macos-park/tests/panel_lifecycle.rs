@@ -5,7 +5,8 @@ include!("../src/park.rs");
 
 #[cfg(target_os = "macos")]
 fn main() {
-  use objc2::rc::autoreleasepool;
+  use objc2::rc::{Retained, autoreleasepool};
+  use objc2::runtime::{AnyObject, ClassBuilder};
   use objc2_app_kit::NSBackingStoreType;
   use objc2_foundation::{NSPoint, NSRect, NSSize};
   use objc2_web_kit::{WKWebView, WKWebViewConfiguration};
@@ -70,18 +71,35 @@ fn main() {
     // after the runtime NSWindow is converted into this NSPanel subclass.
     // SAFETY: initialized on the main thread and retained until after close;
     // disabling release-on-close prevents AppKit consuming that ownership.
-    let panel = unsafe {
-      let panel = NSWindow::initWithContentRect_styleMask_backing_defer(
-        NSWindow::alloc(main_thread),
-        frame,
-        NSWindowStyleMask::Borderless,
-        NSBackingStoreType::Buffered,
-        false,
-      );
+    let panel: Retained<NSWindow> = unsafe {
+      let mut tao_window = ClassBuilder::new(c"StellaTestTaoWindow", NSWindow::class())
+        .expect("test Tao window class must only be registered once");
+      tao_window.add_ivar::<Bool>(c"focusable");
+      let tao_window = tao_window.register();
+      let allocated: *mut AnyObject = msg_send![tao_window, alloc];
+      let panel: *mut NSWindow = msg_send![
+        allocated,
+        initWithContentRect: frame,
+        styleMask: NSWindowStyleMask::Borderless,
+        backing: NSBackingStoreType::Buffered,
+        defer: false,
+      ];
+      let panel = Retained::from_raw(panel).expect("test Tao window must initialize");
       panel.setReleasedWhenClosed(false);
       panel
     };
-    make_nonactivating_panel(&panel);
+    let original_panel_class = panel.class();
+    assert!(!class_layouts_match(
+      NSWindow::class(),
+      ClipboardPanel::class()
+    ));
+    assert!(class_layouts_match(
+      original_panel_class,
+      ClipboardPanel::class()
+    ));
+
+    assert!(make_nonactivating_panel(&panel));
+    assert_eq!(panel.class(), ClipboardPanel::class());
     panel.setAlphaValue(1.0);
     panel.setIgnoresMouseEvents(false);
     panel.makeKeyAndOrderFront(None);
