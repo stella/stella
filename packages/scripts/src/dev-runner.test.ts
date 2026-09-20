@@ -11,17 +11,22 @@ import {
   createDesktopEnv,
   createWebEnv,
   describeFailedProbes,
+  dockerComposeDownCommand,
+  dockerProjectBelongsToWorktree,
+  dockerProjectName,
   ensureWorktreeEnvLinks,
+  expandEnvMap,
   findFirstAvailableOffset,
   getSharedDockerServicesWaitFailure,
+  hasConflictingDockerOwner,
   hasLegacyObjectStoreService,
   infraPortsForOffset,
   isWorktreeCheckout,
-  MAX_HASH_OFFSET,
-  parseDockerComposePsJson,
   loadEnvFile,
+  MAX_HASH_OFFSET,
   migrateLegacyS3DevCredentials,
-  expandEnvMap,
+  projectsForDeletedWorktrees,
+  parseDockerComposePsJson,
   parseForeignPortOwners,
   portsForOffset,
   requiredPortsForMode,
@@ -268,6 +273,52 @@ describe("resolveOffset", () => {
   });
 });
 
+describe("Docker project ownership", () => {
+  const alpha = "/Users/dev/stella/.worktrees/alpha";
+  const beta = "/Users/dev/stella/.worktrees/beta";
+
+  test("keeps the main checkout's existing project names", () => {
+    expect(
+      dockerProjectName({
+        infraOffset: 0,
+        isWorktree: false,
+        worktreePath: "/Users/dev/stella",
+      }),
+    ).toBe("stella-dev");
+    expect(
+      dockerProjectName({
+        infraOffset: 120,
+        isWorktree: false,
+        worktreePath: "/Users/dev/stella",
+      }),
+    ).toBe("stella-dev-120");
+  });
+
+  test("separates worktrees when offsets collide", () => {
+    const projectFor = (worktreePath: string) =>
+      dockerProjectName({
+        infraOffset: 44_000,
+        isWorktree: true,
+        worktreePath,
+      });
+
+    expect(projectFor(alpha)).not.toBe(projectFor(beta));
+    expect(projectFor(alpha)).toMatch(/^stella-dev-44000-[a-f0-9]{12}$/u);
+  });
+
+  test("builds cleanup against the durable main compose file without deleting volumes", () => {
+    const command = dockerComposeDownCommand({
+      composeFile: "/Users/dev/stella/docker-compose.yml",
+      dockerProject: "stella-dev-44000-cafef00dbeef",
+    });
+
+    expect(command).toContain("/Users/dev/stella/docker-compose.yml");
+    expect(command).toContain("stella-dev-44000-cafef00dbeef");
+    expect(command.slice(-2)).toEqual(["down", "--remove-orphans"]);
+    expect(command).not.toContain("--volumes");
+  });
+});
+
 describe("portsForOffset", () => {
   test("keeps the API, web, and desktop ports in sync", () => {
     expect(portsForOffset(0)).toEqual({
@@ -452,6 +503,104 @@ describe("describeFailedProbes", () => {
         { service: "valkey", status: "ok" },
       ]),
     ).toEqual([]);
+  });
+});
+
+describe("deleted worktree project discovery", () => {
+  const output = [
+    "stella-dev-1000\t/worktrees/deleted-a",
+    "stella-dev-1000\t/worktrees/deleted-a",
+    "stella-dev-2000-aaaaaaaaaaaa\t/worktrees/live-b",
+    "stella-dev-3000-bbbbbbbbbbbb\t/worktrees/deleted-c",
+    "stella-dev-3000-bbbbbbbbbbbb\t/worktrees/live-c",
+    "stella-dev-4000-cccccccccccc\t/worktrees/deleted-d",
+    "stella-dev-4000-cccccccccccc\t",
+    "stella-dev-preview\t/worktrees/deleted-preview",
+    "stella-device-preview\t/worktrees/deleted-device",
+    "unrelated-project\t/worktrees/deleted-unrelated",
+  ].join("\n");
+
+  test("removes only projects whose every recorded worktree is gone", () => {
+    const existing = new Set(["/worktrees/live-b", "/worktrees/live-c"]);
+
+    expect(
+      projectsForDeletedWorktrees({
+        output,
+        pathExists: (candidate) => existing.has(candidate),
+      }),
+    ).toEqual(["stella-dev-1000"]);
+  });
+
+  test("does not infer ownership when Compose recorded no worktree", () => {
+    expect(
+      projectsForDeletedWorktrees({
+        output: "stella-dev-legacy\t",
+        pathExists: () => false,
+      }),
+    ).toEqual([]);
+  });
+
+  test("identifies an exclusively owned legacy project", () => {
+    const legacyProject = "stella-dev-44000";
+    const canonicalPath = "/private/worktrees/current";
+    const invokedPath = "/worktrees/current";
+
+    expect(
+      dockerProjectBelongsToWorktree({
+        dockerProject: legacyProject,
+        output: `${legacyProject}\t${invokedPath}`,
+        worktreePaths: [canonicalPath, invokedPath],
+      }),
+    ).toBe(true);
+    expect(
+      dockerProjectBelongsToWorktree({
+        dockerProject: legacyProject,
+        output: [
+          `${legacyProject}\t${invokedPath}`,
+          `${legacyProject}\t/worktrees/other`,
+        ].join("\n"),
+        worktreePaths: [canonicalPath, invokedPath],
+      }),
+    ).toBe(false);
+    expect(
+      dockerProjectBelongsToWorktree({
+        dockerProject: legacyProject,
+        output: [`${legacyProject}\t${invokedPath}`, `${legacyProject}\t`].join(
+          "\n",
+        ),
+        worktreePaths: [canonicalPath, invokedPath],
+      }),
+    ).toBe(false);
+  });
+
+  test("rejects a second Docker owner in the same worktree", () => {
+    const dockerProject = "stella-dev-44000-aaaaaaaaaaaa";
+    const projectOutput = `${dockerProject}\t/worktrees/current`;
+
+    expect(
+      hasConflictingDockerOwner({
+        dockerProject,
+        initialOffset: 100,
+        output: projectOutput,
+        resolvedOffset: 101,
+      }),
+    ).toBe(true);
+    expect(
+      hasConflictingDockerOwner({
+        dockerProject,
+        initialOffset: 100,
+        output: projectOutput,
+        resolvedOffset: 100,
+      }),
+    ).toBe(false);
+    expect(
+      hasConflictingDockerOwner({
+        dockerProject: "stella-dev-44000-bbbbbbbbbbbb",
+        initialOffset: 100,
+        output: projectOutput,
+        resolvedOffset: 101,
+      }),
+    ).toBe(false);
   });
 });
 
