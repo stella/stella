@@ -114,6 +114,33 @@ export const paragraphText = (p: slimdom.Element): string => {
   return text;
 };
 
+/**
+ * A paragraph's runs in reading order, whatever wraps them: a hyperlink, a
+ * revision, a content control. Reading only direct `w:r` children would miss
+ * the text of a paragraph whose runs sit inside a wrapper, which is a
+ * paragraph most drafters produce without noticing.
+ */
+export const paragraphRuns = (p: slimdom.Element): slimdom.Element[] => {
+  const found: slimdom.Element[] = [];
+  const walk = (node: slimdom.Node): void => {
+    for (const child of node.childNodes) {
+      if (!isElement(child) || child.namespaceURI !== W_NS) {
+        continue;
+      }
+      if (child.localName === "pPr") {
+        continue;
+      }
+      if (child.localName === "r") {
+        found.push(child);
+        continue;
+      }
+      walk(child);
+    }
+  };
+  walk(p);
+  return found;
+};
+
 // ── ID helpers ────────────────────────────────────────────
 
 export const createIdGenerator = (existingIds: Set<number>): (() => number) => {

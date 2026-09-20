@@ -18,11 +18,10 @@
 import { panic } from "better-result";
 import * as slimdom from "slimdom";
 
-import { paragraphText, W_NS } from "@/api/lib/docx/ooxml";
+import { paragraphRuns, paragraphText, W_NS } from "@/api/lib/docx/ooxml";
 import {
   attr,
   childElement,
-  childElements,
   isElement,
   numberingDeclaration,
   resolveNumbering,
@@ -150,11 +149,13 @@ const truncate = (text: string, max: number): string => {
   return points.length <= max ? text : `${points.slice(0, max - 1).join("")}…`;
 };
 
-/** Runs that carry text; a bookmark or a field marker says nothing about weight. */
+/**
+ * Runs that carry text; a bookmark or a field marker says nothing about
+ * weight. The runs come from the traversal the rewrite writes with, so the
+ * emphasis the decision model is shown is the emphasis the paragraph has.
+ */
 const textRuns = (paragraph: slimdom.Element): slimdom.Element[] =>
-  childElements(paragraph, "r").filter(
-    (run) => childElement(run, "t") !== null,
-  );
+  paragraphRuns(paragraph).filter((run) => childElement(run, "t") !== null);
 
 const runToggle = (
   paragraph: slimdom.Element,

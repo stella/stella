@@ -172,7 +172,7 @@ export const childElement = (
   return null;
 };
 
-export const childElements = (
+const childElements = (
   parent: slimdom.Element,
   localName: string,
 ): slimdom.Element[] => {

@@ -17,7 +17,7 @@
 import { panic } from "better-result";
 import * as slimdom from "slimdom";
 
-import { W_NS } from "@/api/lib/docx/ooxml";
+import { paragraphRuns, W_NS } from "@/api/lib/docx/ooxml";
 import { attr, childElement, isElement } from "@/api/lib/house-style/catalogue";
 import {
   bodyParagraphs,
@@ -41,28 +41,6 @@ const textElements = (paragraph: slimdom.Element): slimdom.Element[] => {
         continue;
       }
       if (child.localName === "t") {
-        found.push(child);
-        continue;
-      }
-      walk(child);
-    }
-  };
-  walk(paragraph);
-  return found;
-};
-
-/** Runs in reading order, whatever wraps them: a hyperlink, a revision, a control. */
-const paragraphRuns = (paragraph: slimdom.Element): slimdom.Element[] => {
-  const found: slimdom.Element[] = [];
-  const walk = (node: slimdom.Node): void => {
-    for (const child of node.childNodes) {
-      if (!isElement(child) || child.namespaceURI !== W_NS) {
-        continue;
-      }
-      if (child.localName === "pPr") {
-        continue;
-      }
-      if (child.localName === "r") {
         found.push(child);
         continue;
       }

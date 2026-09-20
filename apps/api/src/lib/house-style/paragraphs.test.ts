@@ -45,6 +45,20 @@ describe("the paragraphs a conversion decides", () => {
     expect(source.at(2)?.bold).toBe(false);
   });
 
+  // The rewrite writes the runs a hyperlink or a revision wraps; reading only
+  // direct children would show the model a paragraph with no formatting at all
+  // and decide it on its style instead.
+  test("read the formatting of a run a wrapper holds", () => {
+    const wrapped = featuresOf(
+      `<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>
+        <w:p><w:hyperlink><w:r><w:rPr><w:b/><w:caps/></w:rPr><w:t>Schedule 1</w:t></w:r></w:hyperlink></w:p>
+        <w:p><w:ins><w:r><w:rPr><w:b/></w:rPr><w:t>Inserted heading</w:t></w:r></w:ins><w:r><w:t xml:space="preserve"> and more</w:t></w:r></w:p>
+      </w:body></w:document>`,
+    );
+    expect(wrapped.at(0)).toMatchObject({ bold: true, allCaps: true });
+    expect(wrapped.at(1)).toMatchObject({ bold: false });
+  });
+
   test("read centring from the paragraph's own properties", () => {
     expect(source.at(4)?.centred).toBe(true);
     expect(source.at(0)?.centred).toBe(false);
