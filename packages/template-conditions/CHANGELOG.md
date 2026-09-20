@@ -1,5 +1,11 @@
 # @stll/template-conditions
 
+## 0.6.0
+
+### Minor Changes
+
+- [#3567](https://github.com/stella/stella/pull/3567) [`1d05bb6`](https://github.com/stella/stella/commit/1d05bb60cb70b31c97dcf77fe09c3a608d22d14b) Thanks [@jan-kubica](https://github.com/jan-kubica)! - A condition tag may carry the chain of the boolean it names, so a label or AI instructions survive on a field that has no value marker.
+
 ## 0.5.4
 
 ### Patch Changes

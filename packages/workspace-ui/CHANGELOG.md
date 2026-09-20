@@ -1,5 +1,13 @@
 # @stll/workspace-ui
 
+## 0.11.7
+
+### Patch Changes
+
+- [#3593](https://github.com/stella/stella/pull/3593) [`2c53e9f`](https://github.com/stella/stella/commit/2c53e9fba0b5607f3d90c0c4456db5d0ee5a5d21) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Expose stable semantic metadata for selectable inspector, toolbar, and workspace-view controls.
+- Updated dependencies [[`528c647`](https://github.com/stella/stella/commit/528c647d8822c7b701e6ecb4f5ed637cd83f48ff), [`49b0423`](https://github.com/stella/stella/commit/49b04238ec5fd6e369b037edd732f56e0d12de62), [`2c53e9f`](https://github.com/stella/stella/commit/2c53e9fba0b5607f3d90c0c4456db5d0ee5a5d21)]:
+  - @stll/ui@0.34.0
+
 ## 0.11.6
 
 ### Patch Changes
