@@ -21,6 +21,8 @@
     "allow-clipboard-get-image-preview",
     "allow-clipboard-complete-welcome",
     "allow-clipboard-set-capture-status",
+    "allow-clipboard-exclude-item-source-app",
+    "allow-clipboard-remove-source-app-exclusion",
     "allow-clipboard-set-retention",
     "allow-clipboard-set-screen-capture",
     "allow-clipboard-delete-item",

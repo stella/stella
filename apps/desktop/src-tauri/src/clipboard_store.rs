@@ -510,7 +510,7 @@ mod tests {
   use super::*;
   use crate::clipboard::{
     ClipboardCaptureStatus, ClipboardItem, ClipboardItemRetentionClass,
-    ClipboardRetention,
+    ClipboardRetention, ClipboardSourceAppExclusion,
   };
   use chrono::Utc;
 
@@ -540,14 +540,21 @@ mod tests {
       }],
       pending_image_blob_ids: Default::default(),
       retention: ClipboardRetention::Month,
+      source_app_exclusions: vec![ClipboardSourceAppExclusion {
+        identifier: "com.example.private".to_string(),
+        name: "Private App".to_string(),
+      }],
       source_app_visuals: Vec::new(),
     };
 
     store.persist(&state).unwrap();
     let raw = fs::read_to_string(&path).unwrap();
     assert!(!raw.contains("privileged draft text"));
+    assert!(!raw.contains("com.example.private"));
+    assert!(!raw.contains("Private App"));
     let loaded = store.load().unwrap().unwrap();
     assert_eq!(loaded.items, state.items);
+    assert_eq!(loaded.source_app_exclusions, state.source_app_exclusions);
 
     fs::remove_file(path).unwrap();
   }
@@ -564,6 +571,7 @@ mod tests {
     .unwrap();
 
     assert!(state.pending_image_blob_ids.is_empty());
+    assert!(state.source_app_exclusions.is_empty());
   }
 
   #[test]
@@ -577,6 +585,7 @@ mod tests {
         items: Vec::new(),
         pending_image_blob_ids: Default::default(),
         retention: ClipboardRetention::Month,
+        source_app_exclusions: Vec::new(),
         source_app_visuals: Vec::new(),
       })
       .unwrap();

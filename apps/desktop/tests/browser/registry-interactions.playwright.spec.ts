@@ -85,6 +85,8 @@ const SNAPSHOT = {
   persistence: { imageCleanup: "idle", status: "encrypted" },
   retention: "month",
   screenCapture: "hidden",
+  sourceAppExclusionLimit: 128,
+  sourceAppExclusions: [],
   sourceAppVisuals: [],
   welcomeStatus: "completed",
 } satisfies ClipboardSnapshot;

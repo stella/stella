@@ -8,9 +8,9 @@ use tauri::{AppHandle, Emitter, State, WebviewWindow};
 
 use crate::{
   clipboard::{
-    ClipboardAppState, ClipboardCaptureStatus, ClipboardGroup, ClipboardGroupColor,
-    ClipboardGroupDeletionMode, ClipboardItem, ClipboardRetention, ClipboardSnapshot,
-    ClipboardSourceAppVisual,
+    ClipboardAppState, ClipboardCaptureStatus, ClipboardCopyFormat, ClipboardGroup,
+    ClipboardGroupColor, ClipboardGroupDeletionMode, ClipboardItem, ClipboardRetention,
+    ClipboardSnapshot, ClipboardSourceAppVisual,
   },
   clipboard_screen_capture::ClipboardScreenCapture,
   clipboard_window::{self, ClipboardStartupTrace},
@@ -92,6 +92,36 @@ pub fn clipboard_set_capture_status(
   let snapshot = {
     let mut manager = state.lock().map_err(|_| lock_error())?;
     manager.set_capture_status(status)?;
+    manager.snapshot()
+  };
+  let _ = window.emit(HISTORY_EVENT, ());
+  Ok(snapshot)
+}
+
+#[tauri::command]
+pub fn clipboard_exclude_item_source_app(
+  id: String,
+  state: State<'_, ClipboardAppState>,
+  window: WebviewWindow,
+) -> Result<ClipboardSnapshot, String> {
+  let snapshot = {
+    let mut manager = state.lock().map_err(|_| lock_error())?;
+    manager.exclude_source_app(&id)?;
+    manager.snapshot()
+  };
+  let _ = window.emit(HISTORY_EVENT, ());
+  Ok(snapshot)
+}
+
+#[tauri::command]
+pub fn clipboard_remove_source_app_exclusion(
+  identifier: String,
+  state: State<'_, ClipboardAppState>,
+  window: WebviewWindow,
+) -> Result<ClipboardSnapshot, String> {
+  let snapshot = {
+    let mut manager = state.lock().map_err(|_| lock_error())?;
+    manager.remove_source_app_exclusion(&identifier)?;
     manager.snapshot()
   };
   let _ = window.emit(HISTORY_EVENT, ());
@@ -399,6 +429,7 @@ pub enum ClipboardCopyError {
 fn write_history_item(
   state: &ClipboardAppState,
   id: &str,
+  format: ClipboardCopyFormat,
 ) -> Result<(), ClipboardCopyError> {
   let copy_error = |message: String| ClipboardCopyError::Copy { message };
   let (image, item) = {
@@ -418,7 +449,7 @@ fn write_history_item(
     .map_err(copy_error)?;
   // Serialize clipboard publication and export lifetime with watcher cleanup.
   let mut manager = state.lock().map_err(|_| copy_error(lock_error()))?;
-  if let Err(error) = manager.write_item(&item, image.as_deref()) {
+  if let Err(error) = manager.write_item(&item, image.as_deref(), format) {
     manager.clear_suppression();
     return Err(copy_error(error));
   }
@@ -430,11 +461,12 @@ fn write_history_item(
 
 #[tauri::command]
 pub fn clipboard_copy_item(
+  format: ClipboardCopyFormat,
   id: String,
   state: State<'_, ClipboardAppState>,
   window: WebviewWindow,
 ) -> Result<(), ClipboardCopyError> {
-  let history = match write_history_item(state.inner(), &id) {
+  let history = match write_history_item(state.inner(), &id, format) {
     Err(error @ ClipboardCopyError::Copy { .. }) => return Err(error),
     outcome => outcome,
   };

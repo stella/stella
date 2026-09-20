@@ -89,6 +89,7 @@ const RETENTION_SWEEP_INTERVAL: std::time::Duration =
   std::time::Duration::from_secs(60 * 60);
 const MAX_GROUPS: usize = 24;
 const MAX_GROUP_NAME_CHARACTERS: usize = 64;
+const MAX_CAPTURE_EXCLUSIONS: usize = 128;
 const MAX_SOURCE_APP_NAME_BYTES: usize = 128;
 const MAX_SOURCE_APP_IDENTIFIER_BYTES: usize = 255;
 const MAX_SOURCE_APP_ICON_DATA_URL_BYTES: usize = 48 * 1024;
@@ -134,6 +135,13 @@ const IGNORED_FORMATS: &[&str] = &[
 pub enum ClipboardCaptureStatus {
   Active,
   Paused,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ClipboardCopyFormat {
+  Original,
+  PlainText,
 }
 
 macro_rules! define_clipboard_retention {
@@ -210,6 +218,50 @@ pub struct ClipboardSourceAppVisual {
   pub color: Option<String>,
   pub icon_data_url: Option<String>,
   pub key: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ClipboardSourceAppExclusion {
+  pub identifier: String,
+  pub name: String,
+}
+
+impl ClipboardSourceAppExclusion {
+  fn from_source(source: &ClipboardSourceApp) -> Option<Self> {
+    let identifier = source.identifier.as_deref()?.trim();
+    if identifier.is_empty()
+      || identifier.len() > MAX_SOURCE_APP_IDENTIFIER_BYTES
+      || identifier.chars().any(char::is_control)
+    {
+      return None;
+    }
+    let exclusion = Self {
+      identifier: identifier.to_lowercase(),
+      name: source.name.trim().to_string(),
+    };
+    exclusion.is_valid().then_some(exclusion)
+  }
+
+  fn is_valid(&self) -> bool {
+    !self.identifier.is_empty()
+      && self.identifier.len() <= MAX_SOURCE_APP_IDENTIFIER_BYTES
+      && self.identifier.trim() == self.identifier
+      && !self.identifier.chars().any(char::is_control)
+      && !self.name.trim().is_empty()
+      && self.name.len() <= MAX_SOURCE_APP_NAME_BYTES
+  }
+
+  fn matches_identifier(&self, identifier: &str) -> bool {
+    self.identifier == identifier.trim().to_lowercase()
+  }
+
+  fn matches(&self, source: &ClipboardSourceApp) -> bool {
+    source
+      .identifier
+      .as_deref()
+      .is_some_and(|identifier| self.matches_identifier(identifier))
+  }
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -868,6 +920,8 @@ pub struct ClipboardSnapshot {
   pub persistence: ClipboardPersistenceStatus,
   pub retention: ClipboardRetention,
   pub screen_capture: ClipboardScreenCapture,
+  pub source_app_exclusion_limit: usize,
+  pub source_app_exclusions: Vec<ClipboardSourceAppExclusion>,
   pub source_app_visuals: Vec<ClipboardSourceAppVisual>,
   pub welcome_status: ClipboardWelcomeStatus,
 }
@@ -893,6 +947,8 @@ pub struct PersistedClipboardState {
   #[serde(default)]
   pub retention: ClipboardRetention,
   #[serde(default)]
+  pub source_app_exclusions: Vec<ClipboardSourceAppExclusion>,
+  #[serde(default)]
   pub source_app_visuals: Vec<ClipboardSourceAppVisual>,
 }
 
@@ -909,6 +965,7 @@ pub struct ClipboardManager {
   /// Kept out of the persisted state and the checkpoint: the marker file
   /// behind it holds even when history cannot be persisted.
   screen_capture: ClipboardScreenCapturePreference,
+  source_app_exclusions: Vec<ClipboardSourceAppExclusion>,
   source_app_visuals: HashMap<String, ClipboardSourceAppVisual>,
   suppressed_content: Option<ClipboardSuppression>,
   welcome: ClipboardWelcome,
@@ -931,6 +988,23 @@ pub(crate) enum ClipboardImageRead {
     blob_id: String,
     store: ClipboardStore,
   },
+}
+
+fn normalize_source_app_exclusions(
+  exclusions: &mut Vec<ClipboardSourceAppExclusion>,
+) -> bool {
+  let original = exclusions.clone();
+  let mut identifiers = HashSet::new();
+  exclusions.retain_mut(|exclusion| {
+    if !exclusion.is_valid() {
+      return false;
+    }
+    exclusion.identifier = exclusion.identifier.to_lowercase();
+    identifiers.insert(exclusion.identifier.clone())
+  });
+  exclusions.sort_by(|left, right| left.identifier.cmp(&right.identifier));
+  exclusions.truncate(MAX_CAPTURE_EXCLUSIONS);
+  *exclusions != original
 }
 
 impl ClipboardImageRead {
@@ -968,6 +1042,7 @@ struct ClipboardManagerCheckpoint {
   items: Vec<ClipboardItem>,
   pending_image_blob_ids: BTreeSet<String>,
   retention: ClipboardRetention,
+  source_app_exclusions: Vec<ClipboardSourceAppExclusion>,
   source_app_visuals: HashMap<String, ClipboardSourceAppVisual>,
   suppressed_content: Option<ClipboardSuppression>,
 }
@@ -1056,6 +1131,8 @@ pub fn load_persisted() -> (ClipboardLoad, ClipboardInitTimings) {
       let changed = prune_items(&mut state.items, state.retention, Utc::now());
       let images_changed = prune_image_history(&mut state.items);
       let invalid_images_changed = retain_valid_images(&mut state.items, &store);
+      let exclusions_changed =
+        normalize_source_app_exclusions(&mut state.source_app_exclusions);
       let live_blob_ids = image_blob_ids(&state.items);
       state
         .pending_image_blob_ids
@@ -1079,7 +1156,11 @@ pub fn load_persisted() -> (ClipboardLoad, ClipboardInitTimings) {
       };
       let pending_changed =
         state.pending_image_blob_ids != previous_pending_image_blob_ids;
-      if (changed || images_changed || invalid_images_changed || pending_changed)
+      if (changed
+        || images_changed
+        || invalid_images_changed
+        || exclusions_changed
+        || pending_changed)
         && let Err(error) = store.persist(&state)
       {
         tracing::warn!(error = %error, "recovered clipboard history could not be persisted");
@@ -1145,6 +1226,7 @@ pub fn load_persisted() -> (ClipboardLoad, ClipboardInitTimings) {
         items: Vec::new(),
         pending_image_blob_ids,
         retention: ClipboardRetention::default(),
+        source_app_exclusions: Vec::new(),
         source_app_visuals: Vec::new(),
       };
       if let Err(error) = store.persist(&state) {
@@ -1234,6 +1316,23 @@ struct ClipboardTextCapture {
   source_app_visual: Option<ClipboardSourceAppVisual>,
 }
 
+fn text_clipboard_contents(
+  item: &ClipboardItem,
+  format: ClipboardCopyFormat,
+) -> Option<Vec<ClipboardContent>> {
+  let plain_text = item.plain_text()?;
+  let mut contents = vec![ClipboardContent::Text(plain_text.to_string())];
+  if format == ClipboardCopyFormat::Original {
+    if let Some(html) = item.html() {
+      contents.push(ClipboardContent::Html(html.to_string()));
+    }
+    if let Some(rtf) = item.rtf() {
+      contents.push(ClipboardContent::Rtf(rtf.to_string()));
+    }
+  }
+  Some(contents)
+}
+
 impl ClipboardManager {
   pub fn new() -> Self {
     Self {
@@ -1247,6 +1346,7 @@ impl ClipboardManager {
       persistence: ClipboardPersistence::Initializing,
       retention: ClipboardRetention::default(),
       screen_capture: ClipboardScreenCapturePreference::new(),
+      source_app_exclusions: Vec::new(),
       source_app_visuals: HashMap::new(),
       suppressed_content: None,
       welcome: ClipboardWelcome::new(),
@@ -1277,6 +1377,7 @@ impl ClipboardManager {
           self.capture_status = state.capture_status;
           self.groups = state.groups;
           self.retention = state.retention;
+          self.source_app_exclusions = state.source_app_exclusions;
           // Retention pruning during load can leave the persisted visuals
           // stale; only those still backing an item may occupy the capped
           // map, or they would block icons for new source apps.
@@ -1328,6 +1429,8 @@ impl ClipboardManager {
       ),
       retention: self.retention,
       screen_capture: self.screen_capture.capture(),
+      source_app_exclusion_limit: MAX_CAPTURE_EXCLUSIONS,
+      source_app_exclusions: self.source_app_exclusions.clone(),
       source_app_visuals,
       welcome_status: self.welcome.status(),
     }
@@ -1355,6 +1458,67 @@ impl ClipboardManager {
     let checkpoint = self.checkpoint();
     self.capture_status = status;
     self.persist_or_restore(checkpoint)
+  }
+
+  pub fn exclude_source_app(&mut self, item_id: &str) -> Result<bool, String> {
+    let exclusion = self
+      .items
+      .iter()
+      .find(|item| item.id() == item_id)
+      .and_then(ClipboardItem::source_app)
+      .and_then(ClipboardSourceAppExclusion::from_source)
+      .ok_or_else(|| {
+        "clipboard item has no identifiable source application".to_string()
+      })?;
+    if self
+      .source_app_exclusions
+      .iter()
+      .any(|existing| existing.matches_identifier(&exclusion.identifier))
+    {
+      return Ok(false);
+    }
+    if self.source_app_exclusions.len() >= MAX_CAPTURE_EXCLUSIONS {
+      return Err("clipboard source application exclusion limit reached".to_string());
+    }
+    let checkpoint = self.checkpoint();
+    self.source_app_exclusions.push(exclusion);
+    self
+      .source_app_exclusions
+      .sort_by(|left, right| left.identifier.cmp(&right.identifier));
+    self.persist_or_restore(checkpoint)?;
+    Ok(true)
+  }
+
+  pub fn remove_source_app_exclusion(
+    &mut self,
+    identifier: &str,
+  ) -> Result<bool, String> {
+    let identifier = identifier.trim();
+    if identifier.is_empty()
+      || identifier.len() > MAX_SOURCE_APP_IDENTIFIER_BYTES
+      || identifier.chars().any(char::is_control)
+    {
+      return Err("clipboard source application identifier is invalid".to_string());
+    }
+    let checkpoint = self.checkpoint();
+    let original_len = self.source_app_exclusions.len();
+    self
+      .source_app_exclusions
+      .retain(|exclusion| !exclusion.matches_identifier(identifier));
+    if self.source_app_exclusions.len() == original_len {
+      return Ok(false);
+    }
+    self.persist_or_restore(checkpoint)?;
+    Ok(true)
+  }
+
+  pub fn is_source_app_excluded(&self, source: Option<&ClipboardSourceApp>) -> bool {
+    source.is_some_and(|source| {
+      self
+        .source_app_exclusions
+        .iter()
+        .any(|exclusion| exclusion.matches(source))
+    })
   }
 
   pub fn set_retention(&mut self, retention: ClipboardRetention) -> Result<(), String> {
@@ -1718,15 +1882,14 @@ impl ClipboardManager {
     })
   }
 
-  pub fn suppress_next(&mut self, item: &ClipboardItem, plain_text_only: bool) {
+  pub fn suppress_next(&mut self, item: &ClipboardItem, format: ClipboardCopyFormat) {
     self.suppressed_content = match item {
       ClipboardItem::Text { plain_text, .. }
       | ClipboardItem::FormattedText { plain_text, .. } => {
         Some(ClipboardSuppression::Text {
-          html: if plain_text_only {
-            None
-          } else {
-            item.html().map(str::to_string)
+          html: match format {
+            ClipboardCopyFormat::Original => item.html().map(str::to_string),
+            ClipboardCopyFormat::PlainText => None,
           },
           plain_text: plain_text.clone(),
         })
@@ -1746,6 +1909,13 @@ impl ClipboardManager {
     capture: ClipboardCapture,
   ) -> Result<ClipboardCaptureOutcome, String> {
     if self.capture_status == ClipboardCaptureStatus::Paused {
+      return Ok(ClipboardCaptureOutcome::Ignored);
+    }
+    let source_app = match &capture {
+      ClipboardCapture::Image(capture) => capture.source_app.as_ref(),
+      ClipboardCapture::Text(capture) => capture.source_app.as_ref(),
+    };
+    if self.is_source_app_excluded(source_app) {
       return Ok(ClipboardCaptureOutcome::Ignored);
     }
     match capture {
@@ -1955,6 +2125,7 @@ impl ClipboardManager {
       items: self.items.clone(),
       pending_image_blob_ids: self.pending_image_blob_ids.clone(),
       retention: self.retention,
+      source_app_exclusions: self.source_app_exclusions.clone(),
       source_app_visuals: self.source_app_visuals.clone(),
       suppressed_content: self.suppressed_content.clone(),
     }
@@ -1967,6 +2138,7 @@ impl ClipboardManager {
     self.items = checkpoint.items;
     self.pending_image_blob_ids = checkpoint.pending_image_blob_ids;
     self.retention = checkpoint.retention;
+    self.source_app_exclusions = checkpoint.source_app_exclusions;
     self.source_app_visuals = checkpoint.source_app_visuals;
     self.suppressed_content = checkpoint.suppressed_content;
   }
@@ -2093,6 +2265,7 @@ impl ClipboardManager {
       items: self.items.clone(),
       pending_image_blob_ids: self.pending_image_blob_ids.clone(),
       retention: self.retention,
+      source_app_exclusions: self.source_app_exclusions.clone(),
       source_app_visuals,
     };
     if let Err(error) = store.persist(&state) {
@@ -3112,8 +3285,22 @@ impl ClipboardHandler for HistoryClipboardHandler {
     if !windows_clipboard_history_allows_capture(&self.clipboard, &formats) {
       return;
     }
+    let source_capture = frontmost_source_app(&self.app);
+    if let Some(source) = &source_capture {
+      let Ok(manager) = self.manager.lock() else {
+        self.telemetry.capture(DesktopErrorReport {
+          window: DesktopTelemetryWindow::Clipboard,
+          operation: DesktopTelemetryOperation::ClipboardWatcherRead,
+          code: DesktopTelemetryErrorCode::LockPoisoned,
+        });
+        return;
+      };
+      if manager.is_source_app_excluded(Some(&source.app)) {
+        return;
+      }
+    }
     let source_page = clipboard_source_page(&self.clipboard, &formats);
-    let (source_app, source_app_visual) = frontmost_source_app(&self.app)
+    let (source_app, source_app_visual) = source_capture
       .map(|source| {
         let app = ClipboardSourceApp {
           page: source_page,
@@ -3716,16 +3903,19 @@ impl ClipboardManager {
     &mut self,
     item: &ClipboardItem,
     image_bytes: Option<&[u8]>,
+    format: ClipboardCopyFormat,
   ) -> Result<(), String> {
     let clipboard = ClipboardContext::new()
       .map_err(|error| format!("clipboard is unavailable: {error}"))?;
-    self.suppress_next(item, false);
-    let mut contents = match item {
-      ClipboardItem::Text { plain_text, .. }
-      | ClipboardItem::FormattedText { plain_text, .. } => {
-        vec![ClipboardContent::Text(plain_text.clone())]
-      }
-      ClipboardItem::Image { .. } => {
+    if matches!(item, ClipboardItem::Image { .. })
+      && format == ClipboardCopyFormat::PlainText
+    {
+      return Err("clipboard image has no plain-text representation".to_string());
+    }
+    self.suppress_next(item, format);
+    let contents = match text_clipboard_contents(item, format) {
+      Some(contents) => contents,
+      None => {
         let image =
           image_bytes.ok_or_else(|| "clipboard image is unavailable".to_string())?;
         let image = RustImageData::from_bytes(image)
@@ -3754,12 +3944,6 @@ impl ClipboardManager {
         vec![ClipboardContent::Image(image)]
       }
     };
-    if let Some(html) = item.html() {
-      contents.push(ClipboardContent::Html(html.to_string()));
-    }
-    if let Some(rtf) = item.rtf() {
-      contents.push(ClipboardContent::Rtf(rtf.to_string()));
-    }
     set_clipboard_contents(&clipboard, contents, ClipboardWriteOrigin::History)?;
     #[cfg(target_os = "macos")]
     if let Err(error) = self.reconcile_image_exports() {
@@ -3876,6 +4060,30 @@ mod tests {
       retention_class: ClipboardItemRetentionClass::History,
       source_app: None,
     }
+  }
+
+  fn source_app(identifier: Option<&str>, name: &str) -> ClipboardSourceApp {
+    ClipboardSourceApp {
+      identifier: identifier.map(str::to_string),
+      name: name.to_string(),
+      page: None,
+      visual_key: None,
+    }
+  }
+
+  fn source_text_capture(
+    identifier: Option<&str>,
+    name: &str,
+    plain_text: &str,
+  ) -> ClipboardCapture {
+    ClipboardCapture::Text(ClipboardTextCapture {
+      copied_at: Utc::now(),
+      html: None,
+      plain_text: plain_text.to_string(),
+      rtf: None,
+      source_app: Some(source_app(identifier, name)),
+      source_app_visual: None,
+    })
   }
 
   fn image_item(
@@ -4251,6 +4459,129 @@ mod tests {
 
     assert!(bounded.len() <= MAX_SOURCE_APP_NAME_BYTES);
     assert!(bounded.chars().all(|character| character == 'ž'));
+  }
+
+  #[test]
+  fn source_app_exclusions_match_identifiers_and_survive_history_clear() {
+    let mut manager = ready_manager();
+    let mut item = text_item(Utc::now(), "existing");
+    let ClipboardItem::Text {
+      source_app: item_source_app,
+      ..
+    } = &mut item
+    else {
+      panic!("text fixture must remain text");
+    };
+    *item_source_app = Some(source_app(Some("com.example.Editor"), "Example Editor"));
+    let item_id = item.id().to_string();
+    manager.items.push(item);
+
+    assert!(manager.exclude_source_app(&item_id).unwrap());
+    assert!(!manager.exclude_source_app(&item_id).unwrap());
+    assert_eq!(manager.snapshot().source_app_exclusions.len(), 1);
+    assert_eq!(
+      manager
+        .capture(source_text_capture(
+          Some("COM.EXAMPLE.EDITOR"),
+          "Renamed Editor",
+          "blocked",
+        ))
+        .unwrap(),
+      ClipboardCaptureOutcome::Ignored
+    );
+    assert_eq!(
+      manager
+        .capture(source_text_capture(
+          Some("com.example.other"),
+          "Example Editor",
+          "allowed",
+        ))
+        .unwrap(),
+      ClipboardCaptureOutcome::Captured
+    );
+
+    manager.clear().unwrap();
+    assert_eq!(manager.snapshot().source_app_exclusions.len(), 1);
+    assert!(
+      manager
+        .remove_source_app_exclusion("COM.EXAMPLE.EDITOR")
+        .unwrap()
+    );
+    assert!(
+      !manager
+        .remove_source_app_exclusion("com.example.editor")
+        .unwrap()
+    );
+  }
+
+  #[test]
+  fn source_app_exclusion_requires_a_stable_identifier() {
+    let mut manager = ready_manager();
+    let mut item = text_item(Utc::now(), "existing");
+    let ClipboardItem::Text {
+      source_app: item_source_app,
+      ..
+    } = &mut item
+    else {
+      panic!("text fixture must remain text");
+    };
+    *item_source_app = Some(source_app(None, "Unidentified app"));
+    let item_id = item.id().to_string();
+    manager.items.push(item);
+
+    assert!(manager.exclude_source_app(&item_id).is_err());
+    assert!(manager.source_app_exclusions.is_empty());
+  }
+
+  #[test]
+  fn copy_format_controls_rich_text_suppression() {
+    let item = ClipboardItem::FormattedText {
+      copied_at: Utc::now(),
+      group_id: None,
+      grouped_at: None,
+      html: "<strong>Clause</strong>".to_string(),
+      id: "formatted".to_string(),
+      name: None,
+      plain_text: "Clause".to_string(),
+      retention_class: ClipboardItemRetentionClass::History,
+      rtf: Some("{\\rtf1 Clause}".to_string()),
+      source_app: None,
+    };
+    let mut manager = ready_manager();
+
+    manager.suppress_next(&item, ClipboardCopyFormat::Original);
+    assert!(matches!(
+      manager.suppressed_content,
+      Some(ClipboardSuppression::Text {
+        html: Some(ref html),
+        ref plain_text,
+      }) if html == "<strong>Clause</strong>" && plain_text == "Clause"
+    ));
+
+    manager.suppress_next(&item, ClipboardCopyFormat::PlainText);
+    assert!(matches!(
+      manager.suppressed_content,
+      Some(ClipboardSuppression::Text {
+        html: None,
+        ref plain_text,
+      }) if plain_text == "Clause"
+    ));
+
+    let original =
+      text_clipboard_contents(&item, ClipboardCopyFormat::Original).unwrap();
+    assert_eq!(original.len(), 3);
+    assert!(original
+      .iter()
+      .any(|content| matches!(content, ClipboardContent::Html(html) if html == "<strong>Clause</strong>")));
+    assert!(original
+      .iter()
+      .any(|content| matches!(content, ClipboardContent::Rtf(rtf) if rtf == "{\\rtf1 Clause}")));
+    let plain_text =
+      text_clipboard_contents(&item, ClipboardCopyFormat::PlainText).unwrap();
+    assert!(matches!(
+      plain_text.as_slice(),
+      [ClipboardContent::Text(text)] if text == "Clause"
+    ));
   }
 
   #[test]
@@ -5477,6 +5808,44 @@ mod tests {
   }
 
   #[test]
+  fn persistence_failure_rolls_back_source_app_exclusion_changes() {
+    let store_path = unique_store_path();
+    std::fs::create_dir_all(&store_path).unwrap();
+    let mut manager = ready_manager();
+    manager.persistence =
+      ClipboardPersistence::Encrypted(ClipboardStore::new([7; 32], store_path.clone()));
+    let mut item = text_item(Utc::now(), "existing");
+    let ClipboardItem::Text {
+      source_app: item_source_app,
+      ..
+    } = &mut item
+    else {
+      panic!("text fixture must remain text");
+    };
+    *item_source_app = Some(source_app(Some("com.example.editor"), "Editor"));
+    let item_id = item.id().to_string();
+    manager.items.push(item);
+
+    assert!(manager.exclude_source_app(&item_id).is_err());
+    assert!(manager.source_app_exclusions.is_empty());
+
+    manager
+      .source_app_exclusions
+      .push(ClipboardSourceAppExclusion {
+        identifier: "com.example.editor".to_string(),
+        name: "Editor".to_string(),
+      });
+    assert!(
+      manager
+        .remove_source_app_exclusion("com.example.editor")
+        .is_err()
+    );
+    assert_eq!(manager.source_app_exclusions.len(), 1);
+
+    std::fs::remove_dir(store_path).unwrap();
+  }
+
+  #[test]
   fn deletion_only_clear_removes_unreadable_encrypted_history() {
     let store_path = unique_store_path();
     std::fs::write(&store_path, b"encrypted history").unwrap();
@@ -5519,6 +5888,7 @@ mod tests {
       ],
       pending_image_blob_ids: BTreeSet::new(),
       retention: ClipboardRetention::Month,
+      source_app_exclusions: Vec::new(),
       source_app_visuals: Vec::new(),
     };
     store.persist(&state).unwrap();
@@ -5633,6 +6003,7 @@ mod tests {
         items: Vec::new(),
         pending_image_blob_ids: BTreeSet::new(),
         retention: ClipboardRetention::Month,
+        source_app_exclusions: Vec::new(),
         source_app_visuals: vec![ClipboardSourceAppVisual {
           color: None,
           icon_data_url: Some("data:image/png;base64,QUJD".to_string()),
@@ -6137,6 +6508,7 @@ mod tests {
       items: manager.items.clone(),
       pending_image_blob_ids: manager.pending_image_blob_ids.clone(),
       retention: manager.retention,
+      source_app_exclusions: manager.source_app_exclusions.clone(),
       source_app_visuals: Vec::new(),
     };
     let persisted_json = serde_json::to_value(persisted).unwrap();
