@@ -16,17 +16,29 @@ repository first (step 3) and query it explicitly; in a fork checkout, `gh`
 defaults to the fork and would miss an upstream PR:
 
 ```bash
-git branch --show-current
+HEAD_BRANCH="$(git symbolic-ref --quiet --short HEAD)" || {
+  echo "detached HEAD; cannot identify a pull request branch" >&2
+  exit 1
+}
+HEAD_SHA="$(git rev-parse --verify HEAD)"
 git status --short
-gh pr list --repo "$BASE_REPO" --head "$(git branch --show-current)" \
-  --state all \
-  --json number,state,isDraft,headRefName,headRepositoryOwner,baseRefName,url
+: "${BASE_REPO:?set BASE_REPO to the resolved owner/name base repository}"
+: "${HEAD_REPO:?set HEAD_REPO to the resolved owner/name head repository}"
+PR_CANDIDATES="$(gh pr list --repo "$BASE_REPO" --head "$HEAD_BRANCH" \
+  --state open \
+  --json number,state,isDraft,headRefName,headRefOid,headRepository,baseRefName,url)"
 ```
 
-An empty PR list means no PR exists. `--head` filters by branch name alone, so
-in a fork workflow the list can hold another contributor's PR from a branch of
-the same name: treat a result as this checkout's PR only when its
-`headRepositoryOwner` is the owner your head remote pushes to.
+Resolve `BASE_REPO` before the query and resolve `HEAD_REPO` from the branch's
+configured push remote. Do not guess either identity from an account name. Filter
+`PR_CANDIDATES` to entries whose `headRepository.nameWithOwner` equals `HEAD_REPO`
+and whose `headRefOid` equals `HEAD_SHA`, then accept exactly one match. An empty
+candidate list means no open PR exists. A missing repository identity or head SHA,
+more than one exact match, or a detached or otherwise ambiguous local branch must
+stop the workflow before any candidate's base is used. A non-empty list with no
+exact match belongs to another head and is not this checkout's PR. `--head` filters
+by branch name alone, so matching only the owner is insufficient: an organization
+can own multiple repositories in one fork network.
 
 Authentication, network, or repository errors must remain visible and stop the
 workflow before history changes or publication.

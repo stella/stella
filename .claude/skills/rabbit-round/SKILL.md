@@ -19,12 +19,14 @@ Fetch paginated review threads through GitHub GraphQL so unresolved state and
 thread replies are preserved. Fetch top-level issue comments separately. Record
 every participant and reply author in a thread, which comments apply to the
 current head, and which are stale. Classify participants from a fresh fetch.
-Record a receipt for every workflow reply with its returned reply-node ID and
-exact content, and retain those receipts across resume or handoff. On later
-fetches, exclude only replies matched to an exact receipt; never infer an
-exclusion from the requester account or an attribution footer. All remaining
-participants must be confirmed allowed bots; a human, mixed, or uncertain thread
-follows the human-thread rules.
+Record a receipt for every workflow reply and retain those receipts across resume
+or handoff. A review-thread reply receipt contains the returned review-comment
+node ID and exact content; a top-level reply receipt contains the returned
+issue-comment node ID and exact content. On later fetches, exclude a reply only
+when its surface, node ID, and content exactly match the corresponding receipt;
+never infer an exclusion from the requester account or an attribution footer. All
+remaining participants must be confirmed allowed bots; a human, mixed, or
+uncertain thread follows the human-thread rules.
 
 Do not rely only on the REST review-comments list: it does not represent thread
 resolution or the complete conversation reliably.
@@ -58,9 +60,9 @@ CI-equivalent verification before publication when practical.
 
 Commit and push the implementation before saying it is fixed. Push a new branch
 normally; use `--force-with-lease` only after intentionally rebasing a published
-branch. Capture the resulting head SHA. If this round pushes a new head, its
-final status is `pending_bots` even when GitHub has not registered checks or
-reviewers yet; a newly published head cannot be clean in the same pass.
+branch. Capture the resulting head SHA. A newly published head cannot be `clean`
+in the same pass, even when GitHub has not registered checks or reviewers yet;
+classify it using the Section 5 precedence.
 
 ## 4. Reply With Verifiable Evidence
 
@@ -87,18 +89,22 @@ there. Do not minimize bot summaries by default.
 
 ## 5. Recheck the Current Head
 
-Refresh the PR after the push and report one status:
+Refresh the PR after the push and report one status. Apply this precedence:
+`failing_ci` > `needs_changes` > `pending_bots` > `clean`.
 
+- `failing_ci`: a current-head required check is known to have failed, regardless
+  of pending reviewers, actionable feedback, or a push in this round
+- `needs_changes`: no required check is known to have failed, but actionable
+  automated feedback remains
+- `pending_bots`: no required check is known to have failed and no actionable
+  automated feedback remains, but this round pushed the current head or a
+  current-head automated review or required check is still running
 - `clean`: all current-head automated reviewers are terminal, required checks
   are green, and no actionable automated finding remains in a review thread or
   top-level comment. A top-level finding answered with a defer reply carrying the
   follow-up PR's URL is no longer actionable on later rounds, unless it names a
   verified release-blocking defect: no defer makes one of those non-actionable,
   and the status stays `needs_changes` until it is fixed on the current head
-- `pending_bots`: this round pushed the current head, or a current-head
-  automated review or required check is still running
-- `needs_changes`: actionable automated feedback remains
-- `failing_ci`: a current-head required check failed
 
 Preserve the PR's explicit draft state. This skill performs one pass; it does not
 schedule polling, merge, deploy, or bypass protections.
