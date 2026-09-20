@@ -31,6 +31,7 @@ const updatePlaybookDefinition = createSafeRootHandler(
     body,
     recordAuditEvent,
     orgAIConfig,
+    orgAIConfigStatus,
     promptCachingEnabled,
   }) {
     return yield* updatePlaybookDefinitionHandler({
@@ -38,6 +39,7 @@ const updatePlaybookDefinition = createSafeRootHandler(
       organizationId: session.activeOrganizationId,
       playbookId: params.playbookId,
       orgAIConfig,
+      orgAIConfigStatus,
       promptCachingEnabled,
       recordAuditEvent,
       body,

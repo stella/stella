@@ -84,6 +84,7 @@ const createPlaybookFromRun = createSafeRootHandler(
     body: { name, runId, workspaceId },
     getWorkspaceAccess,
     orgAIConfig,
+    orgAIConfigStatus,
     promptCachingEnabled,
     recordAuditEvent,
     safeDb,
@@ -168,6 +169,7 @@ const createPlaybookFromRun = createSafeRootHandler(
       safeDb,
       organizationId,
       orgAIConfig,
+      orgAIConfigStatus,
       promptCachingEnabled,
       recordAuditEvent,
       body: {

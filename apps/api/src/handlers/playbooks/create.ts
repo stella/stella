@@ -23,12 +23,14 @@ const createPlaybookDefinition = createSafeRootHandler(
     body,
     recordAuditEvent,
     orgAIConfig,
+    orgAIConfigStatus,
     promptCachingEnabled,
   }) {
     return yield* createPlaybookDefinitionHandler({
       safeDb,
       organizationId: session.activeOrganizationId,
       orgAIConfig,
+      orgAIConfigStatus,
       promptCachingEnabled,
       recordAuditEvent,
       body,
