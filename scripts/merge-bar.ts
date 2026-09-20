@@ -175,7 +175,6 @@ type CheckRunSnapshot = {
   name: string;
   status: string;
   conclusion: string | null;
-  startedAt: string;
 };
 
 type ReviewThreadSnapshot = { id: string; isResolved: boolean };
@@ -286,11 +285,7 @@ const evaluateRequiredCheck = ({
   const latestByName = new Map<string, CheckRunSnapshot>();
   for (const run of checkRuns) {
     const current = latestByName.get(run.name);
-    if (
-      current === undefined ||
-      run.startedAt > current.startedAt ||
-      (run.startedAt === current.startedAt && run.id > current.id)
-    ) {
+    if (current === undefined || run.id > current.id) {
       latestByName.set(run.name, run);
     }
   }
@@ -679,21 +674,19 @@ const createGhGateway = ({
         "--paginate",
         `repos/${repo}/commits/${headSha}/check-runs`,
         "--jq",
-        '.check_runs[] | [.id, .name, .status, (.conclusion // ""), .started_at] | @tsv',
+        '.check_runs[] | [.id, .name, .status, (.conclusion // "")] | @tsv',
       ])
         .split("\n")
         .filter(Boolean);
 
       const runs: CheckRunSnapshot[] = [];
       for (const line of lines) {
-        const [rawId, runName, status, conclusion, startedAt] =
-          line.split("\t");
+        const [rawId, runName, status, conclusion] = line.split("\t");
         const id = Number(rawId);
         if (
           !Number.isSafeInteger(id) ||
           runName === undefined ||
-          status === undefined ||
-          startedAt === undefined
+          status === undefined
         ) {
           panic(`Malformed check-run row from gh: ${line}`);
         }
@@ -703,7 +696,6 @@ const createGhGateway = ({
           status,
           conclusion:
             conclusion === undefined || conclusion === "" ? null : conclusion,
-          startedAt,
         });
       }
       return runs;

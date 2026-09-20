@@ -13,14 +13,13 @@ import {
 
 const HEAD_SHA = "1f0c3a7d9e5b4c2a8d6f0e1b3c5a7d9e5b4c2a8d";
 const OTHER_SHA = "9e5b4c2a8d6f0e1b3c5a7d9e5b4c2a8d6f0e1b3c";
-const CHECK_STARTED_AT = "2026-09-20T12:00:00Z";
 
 const checkRun = (
   name: string,
   status: string,
   conclusion: string | null,
-  { id = 1, startedAt = CHECK_STARTED_AT } = {},
-) => ({ id, name, status, conclusion, startedAt });
+  { id = 1 } = {},
+) => ({ id, name, status, conclusion });
 
 /** Any repository this one does not enumerate, which the bar treats alike. */
 const PRIVATE_REPO = "stella/private";
@@ -58,7 +57,7 @@ fi
 case "$*" in
   *reviewThreads*) printf '%s\\n' '{"nodes":[],"pageInfo":{"hasNextPage":false}}';;
   *rules/branches/main*) printf '%s\\n' '[{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"Overlay check"}]}}]';;
-  *check-runs*) printf '1\\tOverlay check\\tcompleted\\tsuccess\\t2026-09-20T12:00:00Z\\n';;
+  *check-runs*) printf '1\\tOverlay check\\tcompleted\\tsuccess\\n';;
   *headRefOid*)
     if [ "$1" = api ]; then printf '%s\\n' '${response}';
     else printf '%s\\n' '{"headRefOid":"${HEAD_SHA}"}'; fi;;
@@ -468,11 +467,8 @@ describe("merge bar", () => {
           checkRuns: [
             checkRun("ci-result", "completed", "success", {
               id: 2,
-              startedAt: "2026-09-20T12:01:00Z",
             }),
-            checkRun("ci-result", "completed", "cancelled", {
-              startedAt: "2026-09-20T12:00:00Z",
-            }),
+            checkRun("ci-result", "completed", "cancelled"),
           ],
         }),
       ).decision,
@@ -486,17 +482,30 @@ describe("merge bar", () => {
           checkRuns: [
             checkRun("ci-result", "completed", "failure", {
               id: 2,
-              startedAt: "2026-09-20T12:01:00Z",
             }),
-            checkRun("ci-result", "completed", "success", {
-              startedAt: "2026-09-20T12:00:00Z",
-            }),
+            checkRun("ci-result", "completed", "success"),
           ],
         }),
       ),
     ).toEqual({
       decision: "abort",
       reasons: ["REQUIRED_CHECK_NOT_SUCCESSFUL"],
+    });
+  });
+
+  test("a latest queued rerun cannot inherit an older success", () => {
+    expect(
+      failedGate(
+        passingSnapshot({
+          checkRuns: [
+            checkRun("ci-result", "queued", null, { id: 2 }),
+            checkRun("ci-result", "completed", "success"),
+          ],
+        }),
+      ),
+    ).toEqual({
+      decision: "abort",
+      reasons: ["REQUIRED_CHECK_INCOMPLETE"],
     });
   });
 
