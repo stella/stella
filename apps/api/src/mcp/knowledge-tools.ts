@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
+import { AGENT_INPUT_NORMALIZATION_KIND } from "@stll/agent-input";
 import { BLOCK_DIRECTIVE_KINDS } from "@stll/template-conditions";
 
 import { listCategoriesHandler } from "@/api/handlers/clauses/categories";
@@ -12,10 +13,13 @@ import {
   listClausesHandler,
 } from "@/api/handlers/clauses/read";
 import { updateClauseHandler } from "@/api/handlers/clauses/update";
+import { createPlaybookDefinitionHandler } from "@/api/handlers/playbooks/create-shared";
 import {
   getPlaybookDefinitionHandler,
   listPlaybookDefinitionsHandler,
 } from "@/api/handlers/playbooks/read";
+import { updatePlaybookDefinitionHandler } from "@/api/handlers/playbooks/update-shared";
+import { loadOrgSettingsForAuth } from "@/api/lib/ai-config-loader";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -30,6 +34,7 @@ import {
   LIST_PLAYBOOKS_PROJECTION,
   RUN_PLAYBOOK_PROJECTION,
   SAVE_CLAUSE_PROJECTION,
+  SAVE_PLAYBOOK_PROJECTION,
 } from "@/api/lib/chat/projections";
 import {
   CLAUSE_LIST_KINDS,
@@ -44,6 +49,7 @@ import {
   PLAYBOOK_RUN_START_OUTCOME,
   playbookRunStartOutcome,
 } from "@/api/lib/document-review/playbook-run-start";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import {
   brandPersistedClauseCategoryId,
@@ -52,7 +58,9 @@ import {
   brandPersistedPlaybookDefinitionId,
 } from "@/api/lib/safe-id-boundaries";
 import { startWorkflow } from "@/api/lib/workflow-queue";
+import { POSITION_LIMITS } from "@/api/lib/workflow/playbook-positions";
 import type {
+  PlaybookScope,
   Position,
   PositionStandard,
   Tiers,
@@ -60,6 +68,15 @@ import type {
 import { PLAYBOOK_RUN_PROJECTION } from "@/api/lib/workflow/playbook-run-projection";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
+import {
+  mergePlaybookPositions,
+  playbookPositionInputSchema,
+} from "@/api/mcp/playbook-position-input";
+import type {
+  PlaybookMergeIssue,
+  PlaybookMergeIssueCode,
+  PlaybookPositionInput,
+} from "@/api/mcp/playbook-position-input";
 import {
   defineTextFieldSpec,
   deriveTextFieldPaths,
@@ -95,6 +112,7 @@ type KnowledgeToolName =
   | "save_clause"
   | "delete_clause"
   | "list_playbooks"
+  | "save_playbook"
   | "run_playbook";
 
 // --- Text-field specs (plan 049, Option B) --------------------------------
@@ -1414,6 +1432,383 @@ const handleListPlaybooksTool: TypedMcpToolHandler<
   return { egress: "structured", payload, textFields };
 };
 
+// --- save_playbook ------------------------------------------------------
+
+const PLAYBOOK_PERSPECTIVES = ["buyer", "seller", "neutral"] as const;
+
+const savePlaybookArgsSchema = nullAsAbsent(
+  v.pipe(
+    v.strictObject({
+      playbook_id: v.optional(
+        uuidInputSchema("Playbook id to update; omit to create"),
+      ),
+      expected_updated_at: v.optional(
+        v.pipe(
+          v.string(),
+          v.description(
+            "The playbook's updatedAt, copied from the last list_playbooks " +
+              "read or save_playbook result; required when updating",
+          ),
+        ),
+      ),
+      name: v.optional(
+        v.pipe(
+          v.string(),
+          v.minLength(1),
+          v.maxLength(256),
+          v.description("Playbook name; required when creating"),
+        ),
+      ),
+      description: v.optional(
+        v.pipe(
+          v.string(),
+          v.maxLength(2000),
+          v.description("What the playbook reviews and for whom"),
+        ),
+      ),
+      scope: v.optional(
+        v.pipe(
+          v.strictObject({
+            document_type_key: v.optional(
+              v.pipe(
+                v.string(),
+                v.minLength(1),
+                v.maxLength(128),
+                v.description(
+                  "Key of the organization document type the playbook reviews",
+                ),
+              ),
+            ),
+            perspective: v.optional(
+              v.pipe(
+                v.picklist(PLAYBOOK_PERSPECTIVES),
+                v.description("Side the review takes"),
+              ),
+            ),
+          }),
+          v.description(
+            "What the playbook targets; a field left out keeps its stored value",
+          ),
+        ),
+      ),
+      positions: v.optional(
+        v.pipe(
+          v.array(playbookPositionInputSchema),
+          v.maxLength(POSITION_LIMITS.positionsMaxItems),
+          v.description(
+            "Only the positions to add or change. One with source_id " +
+              "replaces that stored position whole; one without is added. " +
+              "Stored positions not listed are untouched.",
+          ),
+        ),
+      ),
+      remove_source_ids: v.optional(
+        v.pipe(
+          v.array(uuidInputSchema("sourceId of a stored position")),
+          v.maxLength(POSITION_LIMITS.positionsMaxItems),
+          v.description("Stored positions to delete; update only"),
+        ),
+      ),
+    }),
+    // Creating (no playbook_id) requires a name.
+    v.forward(
+      v.partialCheck(
+        [["playbook_id"], ["name"]],
+        ({ playbook_id, name }) =>
+          playbook_id !== undefined || name !== undefined,
+        "name is required to create a playbook",
+      ),
+      ["name"],
+    ),
+    // The merge reads the stored playbook outside the row lock, so the token
+    // is what keeps an update from overwriting an edit made since the read.
+    v.forward(
+      v.partialCheck(
+        [["playbook_id"], ["expected_updated_at"]],
+        ({ playbook_id, expected_updated_at }) =>
+          playbook_id === undefined || expected_updated_at !== undefined,
+        "expected_updated_at is required to update a playbook; read it with " +
+          "list_playbooks and playbook_id",
+      ),
+      ["expected_updated_at"],
+    ),
+    // A new playbook has no stored positions to remove.
+    v.forward(
+      v.partialCheck(
+        [["playbook_id"], ["remove_source_ids"]],
+        ({ playbook_id, remove_source_ids }) =>
+          playbook_id !== undefined || remove_source_ids === undefined,
+        "remove_source_ids only applies when updating a playbook",
+      ),
+      ["remove_source_ids"],
+    ),
+    // An update must request at least one change.
+    v.partialCheck(
+      [
+        ["playbook_id"],
+        ["name"],
+        ["description"],
+        ["scope"],
+        ["positions"],
+        ["remove_source_ids"],
+      ],
+      (i) =>
+        i.playbook_id === undefined ||
+        i.name !== undefined ||
+        i.description !== undefined ||
+        i.scope !== undefined ||
+        i.positions !== undefined ||
+        i.remove_source_ids !== undefined,
+      "Provide at least one field to change",
+    ),
+  ),
+);
+
+type SavePlaybookScopeInput = NonNullable<
+  v.InferOutput<typeof savePlaybookArgsSchema>["scope"]
+>;
+
+/**
+ * A scope field the call names is written; one it omits keeps its stored
+ * value. `trigger` turns on automatic routing, so it stays an editor decision
+ * and is only ever carried over.
+ */
+const toPlaybookScope = ({
+  stored,
+  input,
+}: {
+  stored: PlaybookScope | null;
+  input: SavePlaybookScopeInput | undefined;
+}): PlaybookScope | null => {
+  if (input === undefined) {
+    return stored;
+  }
+  const documentTypeKey = input.document_type_key ?? stored?.documentTypeKey;
+  const perspective = input.perspective ?? stored?.perspective;
+  return {
+    ...(documentTypeKey === undefined ? {} : { documentTypeKey }),
+    ...(perspective === undefined ? {} : { perspective }),
+    ...(stored?.trigger === undefined ? {} : { trigger: stored.trigger }),
+  };
+};
+
+const NO_POSITION_INPUTS: readonly PlaybookPositionInput[] = [];
+const NO_SOURCE_IDS: readonly string[] = [];
+
+const SAVE_PLAYBOOK_REREAD_HINT =
+  "Call list_playbooks with playbook_id to read the current positions and " +
+  "updatedAt, then call save_playbook again with that updatedAt as " +
+  "expected_updated_at and only the positions you are changing.";
+
+/** Total: a new refusal cannot land without the next step it tells a model. */
+const PLAYBOOK_MERGE_ISSUE_HINTS = {
+  unknown_source_id:
+    "Read the playbook with list_playbooks and playbook_id, and copy the " +
+    "position's sourceId; omit source_id to add a new position.",
+  duplicate_source_id:
+    "Send each stored position at most once per call, with all of its changes.",
+  duplicate_issue:
+    "To change that position, resend this entry with its sourceId as " +
+    "source_id; to add a separate position, give it a different issue.",
+  reference_standard:
+    "Tell the user to edit this position in the playbook editor.",
+  mode_change:
+    "A stored position keeps its mode. Remove it with remove_source_ids and " +
+    "add the new one without source_id.",
+  too_many_positions:
+    "Remove positions with remove_source_ids before adding more.",
+} as const satisfies Record<PlaybookMergeIssueCode, string>;
+
+const toSavePlaybookIssues = (issues: readonly PlaybookMergeIssue[]) =>
+  issues.map(({ code, path, message }) => ({
+    code,
+    path,
+    message,
+    hint: PLAYBOOK_MERGE_ISSUE_HINTS[code],
+  }));
+
+/** Every entry was refused and nothing else changed: there is nothing to save. */
+const savePlaybookRefusedResult = (issues: readonly PlaybookMergeIssue[]) =>
+  structuredErrorResult({
+    code: "validation_error",
+    message: "No position in this call could be saved",
+    issues: issues.map(({ path, message }) => ({ path, message })),
+    hint: [
+      ...new Set(issues.map(({ code }) => PLAYBOOK_MERGE_ISSUE_HINTS[code])),
+    ].join(" "),
+  });
+
+const handleSavePlaybookTool: TypedMcpToolHandler<
+  v.InferInput<typeof SAVE_PLAYBOOK_PROJECTION>
+> = async ({ args, context }) => {
+  const parsed = v.safeParse(savePlaybookArgsSchema, args);
+  if (!parsed.success) {
+    return validationErrorResult(parsed.issues);
+  }
+  const input = parsed.output;
+  const organizationId = context.organizationId;
+  const mintId = () => Bun.randomUUIDv7();
+  // A call that only renames, rescopes, or removes names no positions.
+  const positions = input.positions ?? NO_POSITION_INPUTS;
+  const loadOrgSettings = async () =>
+    await (
+      context.testDependencies?.loadOrgSettingsForAuth ?? loadOrgSettingsForAuth
+    )(organizationId);
+
+  // Create branch.
+  if (input.playbook_id === undefined) {
+    if (!hasEffectiveAuthority(context, { playbook: ["create"] })) {
+      return errorResult("Forbidden");
+    }
+    // The schema guarantees a name on create; bind it in the narrowed scope.
+    const { name } = input;
+    if (name === undefined) {
+      return structuredErrorResult({
+        code: "validation_error",
+        message: "name is required to create a playbook",
+        issues: [
+          { path: "name", message: "name is required to create a playbook" },
+        ],
+        hint: "Provide 'name' when playbook_id is omitted (create mode).",
+      });
+    }
+    const merged = mergePlaybookPositions({
+      stored: [],
+      positions,
+      removeSourceIds: NO_SOURCE_IDS,
+      mintId,
+    });
+    if (merged.issues.length > 0 && merged.written.length === 0) {
+      return savePlaybookRefusedResult(merged.issues);
+    }
+    const { orgAIConfig, orgAIConfigStatus, promptCachingEnabled } =
+      await loadOrgSettings();
+    const scope = toPlaybookScope({ stored: null, input: input.scope });
+    const created = await Result.gen(() =>
+      createPlaybookDefinitionHandler({
+        safeDb: context.safeDb,
+        organizationId,
+        orgAIConfig,
+        orgAIConfigStatus,
+        promptCachingEnabled,
+        recordAuditEvent: context.recordAuditEvent,
+        body: {
+          name,
+          ...(input.description === undefined
+            ? {}
+            : { description: input.description }),
+          ...(scope === null ? {} : { scope }),
+          positions: { version: 3, items: merged.items },
+        },
+        origin: { type: "authored" },
+      }),
+    );
+    if (Result.isError(created)) {
+      return internalFailureResult(created.error);
+    }
+    // The next save's token: create returns an id only, and minting a second
+    // timestamp here would not be the stored one.
+    const stored = await Result.gen(() =>
+      getPlaybookDefinitionHandler({
+        safeDb: context.safeDb,
+        organizationId,
+        playbookId: created.value.id,
+      }),
+    );
+    if (Result.isError(stored)) {
+      return internalFailureResult(stored.error);
+    }
+    return toolDataResult({
+      playbookId: created.value.id,
+      updatedAt: stored.value.updatedAt,
+      positionCount: merged.items.length,
+      positions: merged.written,
+      removed: [],
+      issues: toSavePlaybookIssues(merged.issues),
+    } satisfies v.InferInput<typeof SAVE_PLAYBOOK_PROJECTION>);
+  }
+
+  // Update branch: read, merge, then replace through the shared update path.
+  if (!hasEffectiveAuthority(context, { playbook: ["update"] })) {
+    return errorResult("Forbidden");
+  }
+  const playbookId = brandPersistedPlaybookDefinitionId(input.playbook_id);
+  const stored = await Result.gen(() =>
+    getPlaybookDefinitionHandler({
+      safeDb: context.safeDb,
+      organizationId,
+      playbookId,
+    }),
+  );
+  if (Result.isError(stored)) {
+    return internalFailureResult(stored.error);
+  }
+  const merged = mergePlaybookPositions({
+    stored: stored.value.positions.items,
+    positions,
+    removeSourceIds: input.remove_source_ids ?? NO_SOURCE_IDS,
+    mintId,
+  });
+  const changesDefinition =
+    input.name !== undefined ||
+    input.description !== undefined ||
+    input.scope !== undefined;
+  if (
+    merged.issues.length > 0 &&
+    merged.written.length === 0 &&
+    merged.removedSourceIds.length === 0 &&
+    !changesDefinition
+  ) {
+    return savePlaybookRefusedResult(merged.issues);
+  }
+
+  const { orgAIConfig, orgAIConfigStatus, promptCachingEnabled } =
+    await loadOrgSettings();
+  const description = input.description ?? stored.value.description;
+  const scope = toPlaybookScope({
+    stored: stored.value.scope,
+    input: input.scope,
+  });
+  const updated = await Result.gen(() =>
+    updatePlaybookDefinitionHandler({
+      safeDb: context.safeDb,
+      organizationId,
+      playbookId,
+      orgAIConfig,
+      orgAIConfigStatus,
+      promptCachingEnabled,
+      recordAuditEvent: context.recordAuditEvent,
+      body: {
+        name: input.name ?? stored.value.name,
+        ...(description === null ? {} : { description }),
+        ...(scope === null ? {} : { scope }),
+        positions: { version: 3, items: merged.items },
+        ...(input.expected_updated_at === undefined
+          ? {}
+          : { expectedUpdatedAt: input.expected_updated_at }),
+      },
+    }),
+  );
+  if (Result.isError(updated)) {
+    if (HandlerError.is(updated.error) && updated.error.status === 409) {
+      return structuredErrorResult({
+        code: "conflict",
+        message: "The playbook changed since it was read, so nothing was saved",
+        hint: SAVE_PLAYBOOK_REREAD_HINT,
+      });
+    }
+    return internalFailureResult(updated.error);
+  }
+  return toolDataResult({
+    playbookId,
+    updatedAt: updated.value.updatedAt,
+    positionCount: merged.items.length,
+    positions: merged.written,
+    removed: merged.removedSourceIds.map((sourceId) => ({ sourceId })),
+    issues: toSavePlaybookIssues(merged.issues),
+  } satisfies v.InferInput<typeof SAVE_PLAYBOOK_PROJECTION>);
+};
+
 // --- run_playbook -------------------------------------------------------
 
 const runPlaybookArgsSchema = nullAsAbsent(
@@ -1660,6 +2055,44 @@ export const KNOWLEDGE_TOOL_DEFINITIONS = [
   }),
   defineValibotMcpTool({
     description:
+      "Create a review playbook, or add, change, and remove positions in one. " +
+      "Omit playbook_id to create (name required); pass playbook_id and " +
+      "expected_updated_at to update. positions lists only what is added or " +
+      "changed, never the whole playbook: an entry with source_id replaces " +
+      "that stored position whole, an entry without one is added. Entries are " +
+      "checked one by one; a refused entry comes back in issues with the fix " +
+      "and the rest are saved. A saved playbook is a draft that a person " +
+      "approves in the editor before it can run. Returns the playbook id, the " +
+      "updatedAt to pass as the next expected_updated_at, and each written " +
+      "position's sourceId.",
+    inputSchema: savePlaybookArgsSchema,
+    inputNormalization: {
+      "scope.perspective": { kind: AGENT_INPUT_NORMALIZATION_KIND.enum },
+      "positions[].severity": { kind: AGENT_INPUT_NORMALIZATION_KIND.enum },
+      "positions[].ask.answer_type": {
+        kind: AGENT_INPUT_NORMALIZATION_KIND.enum,
+      },
+    },
+    jsonSchemaProjectionWaiver: {
+      ignoreActions: ["partial_check"],
+      reason:
+        "The CLI trust boundary does not interpret the create/update " +
+        "cross-field dependencies; they remain authoritative in the runtime schema.",
+    },
+    annotations: {
+      title: "Save playbook",
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+      readOnlyHint: false,
+    },
+    access: "write",
+    anonymized: { exposure: "excluded", reason: "write" },
+    name: "save_playbook",
+    scope: "stella:knowledge_write",
+  }),
+  defineValibotMcpTool({
+    description:
       "Run a review playbook over a matter's documents. Materializes the " +
       "playbook's extraction and verdict columns onto the matter's table " +
       "and starts the AI review; findings populate asynchronously. Pass " +
@@ -1685,6 +2118,7 @@ export const KNOWLEDGE_TOOL_HANDLERS = {
   list_playbooks: handleListPlaybooksTool,
   run_playbook: handleRunPlaybookTool,
   save_clause: handleSaveClauseTool,
+  save_playbook: handleSavePlaybookTool,
 } satisfies Record<KnowledgeToolName, McpToolHandler>;
 
 export const KNOWLEDGE_TOOL_SET = defineMcpToolSet(
@@ -1698,5 +2132,6 @@ export const KNOWLEDGE_TOOL_SET = defineMcpToolSet(
     ),
     run_playbook: defineChatProjectionMcpToolOutput(RUN_PLAYBOOK_PROJECTION),
     save_clause: defineChatProjectionMcpToolOutput(SAVE_CLAUSE_PROJECTION),
+    save_playbook: defineChatProjectionMcpToolOutput(SAVE_PLAYBOOK_PROJECTION),
   },
 );

@@ -2246,6 +2246,34 @@ export const SAVE_CLAUSE_PROJECTION = v.strictObject({
   clauseId: passthroughId(),
 });
 
+/**
+ * save_playbook, both branches. `updatedAt` is the next save's concurrency
+ * token. Each written position's `sourceId` is the handle a later call passes
+ * as `source_id`, so it survives like the read's. `issues` carries the entries
+ * the merge refused while the rest of the call was saved.
+ */
+export const SAVE_PLAYBOOK_PROJECTION = v.strictObject({
+  playbookId: passthroughId(),
+  updatedAt: v.string(),
+  positionCount: v.number(),
+  positions: v.array(
+    v.strictObject({
+      sourceId: passthroughId(),
+      issue: v.string(),
+      change: v.picklist(["added", "changed"]),
+    }),
+  ),
+  removed: v.array(v.strictObject({ sourceId: passthroughId() })),
+  issues: v.array(
+    v.strictObject({
+      code: v.string(),
+      path: v.string(),
+      message: v.string(),
+      hint: v.string(),
+    }),
+  ),
+});
+
 /** run_playbook returns `{ runPropertyCount }`: an integer, no id. */
 export const RUN_PLAYBOOK_PROJECTION = v.strictObject({
   runPropertyCount: v.number(),

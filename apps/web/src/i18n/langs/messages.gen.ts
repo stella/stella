@@ -1179,6 +1179,7 @@ type Messages = {
       "save_contact": "Save contact";
       "save_document": "Save document";
       "save_matter": "Save matter";
+      "save_playbook": "Save playbook";
       "save_task": "Save task";
       "save_template": "Save template";
       "save_time_entry": "Save time entry";

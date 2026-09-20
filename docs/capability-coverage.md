@@ -300,7 +300,7 @@ here as its CLI form). Projected from the same handler enumeration that builds
 | --------------------------- | ------------------ | ---------------------- | ------- | -------------------------------------------------------------- |
 | `playbooks.approve`         | write              | stella:knowledge_write | —       | generic invoke → `stella capability playbooks approve`         |
 | `playbooks.auto-run`        | write              | stella:knowledge_write | —       | generic invoke → `stella capability playbooks auto-run`        |
-| `playbooks.create`          | write              | stella:knowledge_write | —       | generic invoke → `stella capability playbooks create`          |
+| `playbooks.create`          | write              | stella:knowledge_write | —       | curated tool `save_playbook`                                   |
 | `playbooks.delete`          | write, destructive | stella:knowledge_write | —       | generic invoke → `stella capability playbooks delete`          |
 | `playbooks.from-run`        | write              | stella:knowledge_write | —       | generic invoke → `stella capability playbooks from-run`        |
 | `playbooks.from-starter`    | write              | stella:knowledge_write | —       | generic invoke → `stella capability playbooks from-starter`    |
@@ -311,7 +311,7 @@ here as its CLI form). Projected from the same handler enumeration that builds
 | `playbooks.recent.list`     | read               | stella:read            | —       | generic invoke → `stella capability playbooks recent-list`     |
 | `playbooks.restore-version` | write              | stella:knowledge_write | —       | generic invoke → `stella capability playbooks restore-version` |
 | `playbooks.run`             | write              | stella:knowledge_write | —       | curated tool `run_playbook`                                    |
-| `playbooks.update`          | write              | stella:knowledge_write | —       | generic invoke → `stella capability playbooks update`          |
+| `playbooks.update`          | write              | stella:knowledge_write | —       | covered by `save_playbook`                                     |
 
 ## properties
 

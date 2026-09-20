@@ -600,6 +600,18 @@
         "destructive_justification": "Does not delete, revoke access, overwrite irreversibly, or perform another destructive action."
       }
     },
+    "save_playbook": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates, updates, or starts work inside the user’s private stella workspace.",
+        "open_world_justification": "Operates within stella’s private workspace and does not change public internet or third-party state.",
+        "destructive_justification": "Does not delete, revoke access, overwrite irreversibly, or perform another destructive action."
+      }
+    },
     "run_playbook": {
       "annotations": {
         "readOnlyHint": false,

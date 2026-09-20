@@ -131,6 +131,7 @@ requires (request it at `stella auth login --scopes`).
 | organization | `stella organization update-settings`      | admin_write                 |                                         |
 | playbook     | `stella playbook list`                     | read                        | paginated                               |
 | playbook     | `stella playbook run`                      | knowledge_write             |                                         |
+| playbook     | `stella playbook save`                     | knowledge_write             |                                         |
 | rate         | `stella rate resolve`                      | read                        |                                         |
 | search       | `stella search matters`                    | search                      | paginated                               |
 | task         | `stella task delete`                       | matters_write               | destructive (needs `--yes` off a TTY)   |
@@ -255,6 +256,8 @@ are omitted here.
 - `stella playbook run`
   - `--matter-id` — Matter ID to run the playbook over. (string)
   - `--playbook-id` — Playbook id to run (string)
+- `stella playbook save`
+  - optional: --playbook-id, --expected-updated-at, --name, --description, --scope.document-type-key, --scope.perspective (buyer|seller|neutral), --remove-source-ids
 - `stella rate resolve`
   - `--matter-id` — Matter ID to resolve the rate in. (string)
   - `--user-id` — User ID to resolve the rate for (string)

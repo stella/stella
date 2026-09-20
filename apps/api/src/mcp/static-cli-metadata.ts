@@ -111,6 +111,7 @@ export const DEFAULT_MCP_CLI_ANNOTATIONS = defineMcpCliToolAnnotations(
       itemsKey: "items",
       singleReadWhen: "playbook_id",
     },
+    save_playbook: { command: ["playbook", "save"], scope: "knowledge_write" },
     run_playbook: { command: ["playbook", "run"], scope: "knowledge_write" },
 
     search_across_matters: {

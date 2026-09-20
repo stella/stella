@@ -17,7 +17,7 @@ const config = {
     "you read it is a conflict, and the new updatedAt comes back for the " +
     "next save.",
   permissions: { playbook: ["update"] },
-  mcp: { type: "capability", reason: "knowledge_library_admin" },
+  mcp: { type: "covered", by: "save_playbook" },
   params: playbookDefinitionParamsSchema,
   body: updatePlaybookDefinitionBodySchema,
 } satisfies HandlerConfig;
