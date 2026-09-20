@@ -393,7 +393,7 @@ const readOutputCeilingStopAsLength = async function* (
  * Text only: a truncated structured response is unusable however the caller
  * grades completeness, so structured-output methods remain untouched.
  */
-const normalizeAnthropicTextStops = (
+const normalizeOutputCeilingTextStops = (
   adapter: AnyTextAdapter,
 ): AnyTextAdapter => ({
   ...adapter,
@@ -403,17 +403,22 @@ const normalizeAnthropicTextStops = (
 
 /**
  * The adapter a text run must be dispatched through for its finish to be
- * readable: on Anthropic an output-ceiling stop arrives as a `RUN_ERROR`, so
- * a caller reading the run's finish off the raw adapter would grade a
- * truncated answer as a failure on one provider and as a whole answer on the
- * next. Every caller that grades a finish goes through here.
+ * readable: an output-ceiling stop arrives as a `RUN_ERROR` rather than a
+ * `RUN_FINISHED` on more than one adapter, so a caller reading the run's
+ * finish off the raw adapter would grade a truncated answer as a failure on
+ * one provider and as a whole answer on the next. Every caller that grades a
+ * finish goes through here.
+ *
+ * Every adapter is normalized rather than a named few: the pass keys on the
+ * event a run reports, not on who reported it, so an adapter that already
+ * ends a ceiling stop with `RUN_FINISHED` passes through untouched and an
+ * adapter that adopts the `RUN_ERROR` shape needs no edit here. A ceiling
+ * stop read as `length` still fails `require-complete`, so a caller that
+ * demands a whole answer rejects it either way.
  */
 export const textAdapterWithNormalizedStops = (
   model: ResolvedTanStackTextModel,
-): AnyTextAdapter =>
-  model.provider === "anthropic"
-    ? normalizeAnthropicTextStops(model.adapter)
-    : model.adapter;
+): AnyTextAdapter => normalizeOutputCeilingTextStops(model.adapter);
 
 /** Text collected from one chat run, plus the finish the run reported. */
 export type TanStackTextRun = {
