@@ -422,8 +422,14 @@ export const createTanStackAIAnalyticsCallbacks = ({
     // Classified kinds (quota, billing, retired model, provider outage) are
     // expected operational states of an upstream account, and a sub-500
     // `HandlerError` is a configuration state this service raised itself, so
-    // both log at WARN; an unanticipated shape is the only one logged at
-    // ERROR. Same split as `reportStreamFailure` in the chat stream handler.
+    // both log at WARN and stay out of the exception sink; an unanticipated
+    // shape is the only one logged at ERROR and reported as a defect. The
+    // request layer draws the same line in `safeErrorTelemetryDisposition`:
+    // an answered outcome the caller can act on is not a fault, and routing
+    // it to `$exception` buries real ones. The `aiGeneration` events below
+    // still record every failure, so the rate of an operational state stays
+    // visible. Same split as `reportStreamFailure` in the chat stream
+    // handler.
     // The status is what names an anticipated failure once `ai.error_kind`
     // cannot, and a number carries no request content. `providerStatusFields`
     // carries the provider's own status for the same reason, and separates a
@@ -454,12 +460,12 @@ export const createTanStackAIAnalyticsCallbacks = ({
       logger.warn("tanstack_ai.generation.failed", attributes);
     } else {
       logger.error("tanstack_ai.generation.failed", attributes);
+      captureTelemetryError(error, {
+        feature: config.feature,
+        organization_id: analyticsOrganizationId ?? "",
+        trace_id: config.traceId,
+      });
     }
-    captureTelemetryError(error, {
-      feature: config.feature,
-      organization_id: analyticsOrganizationId ?? "",
-      trace_id: config.traceId,
-    });
 
     // Standard-schema failure record for LLM observability: the error class
     // name only, never the message. See the completion-side capture for the

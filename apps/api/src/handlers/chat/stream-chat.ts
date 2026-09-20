@@ -1438,17 +1438,18 @@ const classifyRunErrorChunk = (chunk: RunErrorChunk): AIErrorKind => {
 // Classified kinds (quota, billing, retired model, provider outage) are
 // expected operational states, and so is a sub-500 `HandlerError` this
 // service raised for a configuration state the caller can act on; only an
-// unanticipated shape is logged at ERROR severity.
+// unanticipated shape is logged at ERROR severity and reported as a defect.
 // Fingerprint only — provider error messages can echo request content.
 const reportStreamFailure = (error: unknown, kind: AIErrorKind): void => {
-  captureError(error, { kind });
-  if (!isAnticipatedAIFailure(error, kind)) {
-    logger.error("chat.stream_failed", {
-      kind,
-      ...errorFingerprint(error),
-      ...providerStatusFields(error),
-    });
+  if (isAnticipatedAIFailure(error, kind)) {
+    return;
   }
+  captureError(error, { kind });
+  logger.error("chat.stream_failed", {
+    kind,
+    ...errorFingerprint(error),
+    ...providerStatusFields(error),
+  });
 };
 
 const normalizeRunErrorChunk = (chunk: RunErrorChunk): RunErrorChunk => {

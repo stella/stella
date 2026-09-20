@@ -1261,6 +1261,56 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
     }
   });
 
+  test("reports only an unanticipated shape to the exception sink", async () => {
+    const { createTanStackAIAnalyticsCallbacks } =
+      await loadTanStackAIAnalytics();
+    const { HandlerError } = await import("@/api/lib/errors/tagged-errors");
+    const { installRecordingAnalytics } =
+      await import("@/api/tests/helpers/recording-telemetry");
+    const silentAnalytics = {
+      capture: () => undefined,
+      flush: async () => await Promise.resolve(),
+      identifyOrganizationGroup: () => undefined,
+    };
+    // A role with no key configured is a configuration state the caller can
+    // act on, and a provider 503 is an upstream account state. Both are
+    // answered outcomes the AI stack models, so neither is a defect.
+    const anticipated = [
+      new HandlerError({
+        status: 403,
+        message: 'AI is not available for the "fast" role on this deployment.',
+      }),
+      { status: 503 },
+    ];
+    const recording = installRecordingAnalytics();
+
+    try {
+      for (const error of anticipated) {
+        createTanStackAIAnalyticsCallbacks({
+          analytics: silentAnalytics,
+          feature: "templates.suggestFields",
+          traceId: "trace_anticipated",
+        }).captureError(error);
+      }
+
+      expect(recording.exceptions()).toEqual([]);
+
+      createTanStackAIAnalyticsCallbacks({
+        analytics: silentAnalytics,
+        feature: "templates.suggestFields",
+        traceId: "trace_defect",
+      }).captureError(new Error("boom"));
+
+      expect(
+        recording.exceptions().map((event) => event.properties),
+      ).toMatchObject([
+        { "error.class": "Error", feature: "templates.suggestFields" },
+      ]);
+    } finally {
+      recording.restore();
+    }
+  });
+
   test("carries the provider status of an unmapped failure", async () => {
     const { createTanStackAIAnalyticsCallbacks } =
       await loadTanStackAIAnalytics();
