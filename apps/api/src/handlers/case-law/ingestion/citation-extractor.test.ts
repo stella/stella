@@ -1152,6 +1152,24 @@ describe("extractCitations", () => {
     expect(citations[0]?.citationText).toBe("ECLI:EU:C:2020:123");
   });
 
+  test("extracts an ECLI whose court code carries a court number", () => {
+    // Verbatim from a prod Slovak decision header, minus the judge field.
+    // Slovak cities with several courts of one kind number them, and the
+    // number belongs to the ECLI court code ("OSKE3" is Okresný súd
+    // Košice-okolie), so a letters-only code class matches no numbered
+    // court at all. The pipeline drops this one as a self-citation, which
+    // is the point: the same spelling is what other decisions cite it by.
+    const text =
+      "Súd: Okresný súd Košice okolie Spisová značka: 17C/111/2013 " +
+      "Identifikačné číslo súdneho spisu: 7513207505 Dátum vydania " +
+      "rozhodnutia: 11. 08. 2014 ECLI: ECLI:SK:OSKE3:2014:7513207505.1 " +
+      "ROZSUDOK V MENE SLOVENSKEJ REPUBLIKY";
+    const texts = extractCitations([{ index: 0, text }]).map(
+      (c) => c.citationText,
+    );
+    expect(texts).toContain("ECLI:SK:OSKE3:2014:7513207505.1");
+  });
+
   test("extracts a pre-1989 bare CJEU case number anchored by its ECLI", () => {
     // Verbatim, Hungarian: pre-1989 CJEU numbers carry no C-/T- prefix
     // (the Court introduced it in 1989), so "14/83" is only safe to
