@@ -1,6 +1,7 @@
 import { Temporal } from "@stll/time";
 
 import { DEPLOYED_NODE_ENVS } from "@/api/env-base-schema";
+import type * as RedisClientModule from "@/api/lib/redis-client";
 import { withTimeout } from "@/api/lib/with-timeout";
 
 const PUBLISHER_GATE_COMMAND_TIMEOUT_MS = 5000;
@@ -99,8 +100,14 @@ export const connectedGateClient = (
   };
 };
 
+let redisClientModulePromise: Promise<typeof RedisClientModule> | undefined;
+const loadRedisClient = async () => {
+  redisClientModulePromise ??= import("@/api/lib/redis-client");
+  return await redisClientModulePromise;
+};
+
 const deployedGateClient = connectedGateClient(async () => {
-  const { createRedisClient } = await import("@/api/lib/redis-client");
+  const { createRedisClient } = await loadRedisClient();
   return createRedisClient({ enableOfflineQueue: false });
 });
 
