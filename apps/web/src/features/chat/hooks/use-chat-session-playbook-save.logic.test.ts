@@ -31,11 +31,12 @@ const saveMessages = ({
   },
 ];
 
-const PLAYBOOK_QUERY_KEYS = [
+const LIST_QUERY_KEYS = [
   knowledgeKeys.playbooks.list(ORGANIZATION_ID, { limit: 50 }),
   knowledgeKeys.playbooks.recent(ORGANIZATION_ID, { limit: 5 }),
-  knowledgeKeys.playbooks.detail(ORGANIZATION_ID, PLAYBOOK_ID),
 ];
+const DETAIL_KEY = knowledgeKeys.playbooks.detail(ORGANIZATION_ID, PLAYBOOK_ID);
+const PLAYBOOK_QUERY_KEYS = [...LIST_QUERY_KEYS, DETAIL_KEY];
 const OTHER_ORGANIZATION_KEY = knowledgeKeys.playbooks.detail(
   "org-2",
   PLAYBOOK_ID,
@@ -53,6 +54,11 @@ const isInvalidated = (
   queryClient: QueryClient,
   queryKey: readonly unknown[],
 ) => queryClient.getQueryState(queryKey)?.isInvalidated ?? false;
+
+const cachedData = (
+  queryClient: QueryClient,
+  queryKey: readonly unknown[],
+): unknown => queryClient.getQueryData(queryKey);
 
 const reconcile = async ({
   handledToolCallIds = new Set<string>(),
@@ -73,7 +79,7 @@ const reconcile = async ({
 };
 
 describe("playbook save cache reconciliation", () => {
-  test("a completed save invalidates this organization's list, recent, and detail queries", async () => {
+  test("a completed save invalidates this organization's lists and drops its unwatched details", async () => {
     const queryClient = seededQueryClient();
 
     await reconcile({
@@ -81,27 +87,28 @@ describe("playbook save cache reconciliation", () => {
       queryClient,
     });
 
-    for (const queryKey of PLAYBOOK_QUERY_KEYS) {
+    for (const queryKey of LIST_QUERY_KEYS) {
       expect(isInvalidated(queryClient, queryKey)).toBe(true);
     }
+    // Dropped, not invalidated: an invalidated detail would still seed the
+    // editor's form with the positions from before the save.
+    expect(cachedData(queryClient, DETAIL_KEY)).toBeUndefined();
+    expect(cachedData(queryClient, OTHER_ORGANIZATION_KEY)).toEqual({
+      seeded: true,
+    });
     expect(isInvalidated(queryClient, OTHER_ORGANIZATION_KEY)).toBe(false);
   });
 
-  test("a detail an open editor is watching is left alone, so its save still meets the conflict", async () => {
+  test("a detail the editor or the inspector is watching is refetched", async () => {
     const queryClient = seededQueryClient();
-    const detailKey = knowledgeKeys.playbooks.detail(
-      ORGANIZATION_ID,
-      PLAYBOOK_ID,
-    );
     // Invalidating a watched query refetches it at once, which clears its
-    // invalidated flag again, so the flag cannot tell the two cases apart.
-    // What the editor would see is the refetch itself.
+    // invalidated flag again, so the refetch itself is what is observable.
     let refetches = 0;
     const unsubscribe = new QueryObserver(queryClient, {
-      queryKey: detailKey,
+      queryKey: DETAIL_KEY,
       queryFn: () => {
         refetches += 1;
-        return { seeded: true };
+        return { refetched: true };
       },
       staleTime: Infinity,
     }).subscribe(() => undefined);
@@ -112,13 +119,8 @@ describe("playbook save cache reconciliation", () => {
     });
     unsubscribe();
 
-    expect(refetches).toBe(0);
-    expect(
-      isInvalidated(
-        queryClient,
-        knowledgeKeys.playbooks.list(ORGANIZATION_ID, { limit: 50 }),
-      ),
-    ).toBe(true);
+    expect(refetches).toBe(1);
+    expect(cachedData(queryClient, DETAIL_KEY)).toEqual({ refetched: true });
   });
 
   test("a refused or unfinished save invalidates nothing", async () => {
