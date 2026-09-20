@@ -16,7 +16,7 @@
  *
  * Each rule also states the Postgres pattern that finds decisions already
  * stored with that residue; the sweep in
- * `handlers/case-law/CLAUDE.md` is built from these, and a test holds the
+ * `handlers/case-law/AGENTS.md` is built from these, and a test holds the
  * two to exact agreement so the documented query cannot drift from the
  * check.
  */

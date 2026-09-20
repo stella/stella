@@ -743,7 +743,7 @@ export default defineConfig({
     "no-useless-assignment": "error",
 
     // Keep `import/no-cycle`: current web profiling puts it below 1% of rule
-    // time. The Module Side Effects section in CLAUDE.md documents the TDZ class
+    // time. The Module Side Effects section in AGENTS.md documents the TDZ class
     // of bugs that circular imports cause with module-level singletons.
     // The rule has 0 current hits, but its job is regression protection.
     "import/no-cycle": "error",
@@ -1853,7 +1853,7 @@ export default defineConfig({
     },
     {
       // Browser surfaces only: `document` does not exist in apps/api's
-      // Bun runtime. CLAUDE.md: "No direct document.cookie assignment."
+      // Bun runtime. AGENTS.md: "No direct document.cookie assignment."
       files: [
         ...browserSurfaceFiles,
         ".oxlint-plugins/__fixtures__/no-document-cookie.fixture.ts",
@@ -3743,7 +3743,7 @@ export default defineConfig({
       },
     },
     {
-      // Module Side Effects (CLAUDE.md): known side-effecting singleton
+      // Module Side Effects (AGENTS.md): known side-effecting singleton
       // constructors (DB pools, auth, Redis/queue connections, S3 clients)
       // must not run at module top level. Scoped to the backend and shared
       // packages, where these constructors are actually imported.

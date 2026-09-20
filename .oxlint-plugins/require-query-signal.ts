@@ -236,7 +236,7 @@ const rootIdentifier = (node) => {
 const HTTP_VERBS = new Set(["get", "post", "put", "patch", "delete", "head"]);
 
 // The Eden client is always imported as `api` from `@/lib/api` (see
-// CLAUDE.md). A call chain rooted at that identifier and ending in an HTTP
+// AGENTS.md). A call chain rooted at that identifier and ending in an HTTP
 // verb hits the network.
 const isEdenApiCallee = (callee, isEdenApiRoot) => {
   const unwrapped = unwrapTS(callee);

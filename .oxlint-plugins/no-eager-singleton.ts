@@ -2,7 +2,7 @@
 // (DB connections, auth clients, Redis/queue connections, S3 clients) at
 // module top level (Program scope), including top-level `const x = ...`.
 //
-// CLAUDE.md "Module Side Effects": defer eager initialization with lazy
+// AGENTS.md "Module Side Effects": defer eager initialization with lazy
 // singletons. When a module-level call depends on another module's export,
 // wrap it in a `getX()` getter so it runs at first use, not at import
 // time — this prevents TDZ errors from non-deterministic module

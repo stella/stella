@@ -2,7 +2,7 @@
  * Cursor conformance: what every case-law adapter must do once its source
  * has nothing left to give.
  *
- * `handlers/case-law/CLAUDE.md` states the rule in prose — 13: an exhausted
+ * `handlers/case-law/AGENTS.md` states the rule in prose — 13: an exhausted
  * cursor parks so it only re-scans a bounded recent window; 16: a
  * forward-only cursor cannot repair history — and nothing enforced it. A
  * test written next to an adapter cannot enforce it either: it certifies

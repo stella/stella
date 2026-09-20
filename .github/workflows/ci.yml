@@ -896,7 +896,7 @@ jobs:
 
       - name: Instruction references
         if: needs.ci-plan.outputs.package_checks_required == 'true'
-        # AGENTS.md, CLAUDE.md and .claude/skills/*/SKILL.md name repository
+        # AGENTS.md and .claude/skills/*/SKILL.md name repository
         # paths, package scripts, module exports and oxlint rule ids that
         # nothing compiles, so a rename leaves the instruction quietly wrong and
         # every agent reading it is misled. This guard resolves each named

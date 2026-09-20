@@ -1,7 +1,7 @@
 // Require an AbortSignal on every fetch() call so upstream hangs don't
 // hang the request/worker indefinitely.
 //
-// CLAUDE.md mandates `fetch(url, { signal: AbortSignal.timeout(...) })`
+// AGENTS.md mandates `fetch(url, { signal: AbortSignal.timeout(...) })`
 // (or a propagated controller/upstream signal). Without a signal, a
 // slow third-party endpoint stalls the entire handler — invisible in
 // dev, paging on-call in prod.

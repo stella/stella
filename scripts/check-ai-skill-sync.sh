@@ -18,7 +18,7 @@ instruction_paths=(
   .ai .agents/skills .claude/skills .claude/commands
   .gitmodules .coderabbit.yaml
   scripts/check-ai-skill-sync.sh scripts/check-ai-skill-sources.sh
-  ':(glob)**/AGENTS.md' ':(glob)**/CLAUDE.md' ':(glob)**/GEMINI.md'
+  ':(glob)**/AGENTS.md' ':(glob)**/GEMINI.md'
 )
 
 # Inspect branch, index, and working-tree changes separately: an unstaged revert

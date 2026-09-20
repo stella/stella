@@ -1,7 +1,7 @@
 // Require an explicit bound on Drizzle list reads so a query cannot
 // silently return an unbounded result set as a table grows.
 //
-// CLAUDE.md / conventions-db + conventions-scale mandate: "Every list
+// AGENTS.md / conventions-db + conventions-scale mandate: "Every list
 // query MUST take a limit; never an unbounded findMany/select." An
 // unbounded read is invisible in dev (small tables) and turns into a
 // memory / latency cliff at Magic Circle scale.
