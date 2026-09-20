@@ -67,43 +67,65 @@ export type RepositoryPolicy = {
   landing: Landing;
 };
 
-/**
- * What the bar requires of a repository this one does not enumerate.
- *
- * Such a repository is private, so its workflow names are not readable from
- * here and the bar cannot enumerate them. The entry is deliberately
- * fail-closed on both axes it can decide: the named check has to be present
- * and green, so a repository that publishes a different one is refused rather
- * than merged on an empty check list, and landing is a plain merge, because a
- * merge queue is a fact about a repository the bar would have to observe.
- */
-const PRIVATE_REPOSITORY_POLICY: RepositoryPolicy = {
-  requiredCheckRuns: ["Overlay check"],
-  migrationDirectory: null,
-  landing: "merge",
-};
+const repositoryMigrationDirectory = (repo: string): string | null =>
+  repo.toLowerCase() === "stella/stella" ? "apps/api/drizzle" : null;
 
-export const mergeBarRepositoryPolicy = (repo: string): RepositoryPolicy => {
-  switch (repo.toLowerCase()) {
-    case "stella/stella":
-      return {
-        requiredCheckRuns: ["ci-result"],
-        migrationDirectory: "apps/api/drizzle",
-        landing: "merge-when-ready",
-      };
-    case "stella/stella-infra":
-      return {
-        requiredCheckRuns: [
-          "Lint & Validate",
-          "Plan (production)",
-          "Plan (staging)",
-        ],
-        migrationDirectory: null,
-        landing: "merge",
-      };
-    default:
-      return PRIVATE_REPOSITORY_POLICY;
+/**
+ * Derive the landing contract from GitHub's active rules for the target
+ * branch. Required checks and merge-queue state change independently of this
+ * repository, so a local mirror silently drifts and eventually blocks a valid
+ * merge or admits one under the wrong policy.
+ */
+export const mergeBarRepositoryPolicy = (
+  repo: string,
+  rawRules: unknown,
+): RepositoryPolicy => {
+  if (!Array.isArray(rawRules)) {
+    panic("Expected an array of active branch rules from gh");
   }
+
+  const requiredCheckRuns: string[] = [];
+  let landing: Landing = "merge";
+
+  for (const rawRule of rawRules) {
+    const rule = readRecord(rawRule, "branch rule");
+    const type = readString(rule, "type");
+    if (type === "merge_queue") {
+      landing = "merge-when-ready";
+      continue;
+    }
+    if (type !== "required_status_checks") {
+      continue;
+    }
+
+    const parameters = readRecord(
+      rule["parameters"],
+      "required_status_checks parameters",
+    );
+    const checks = parameters["required_status_checks"];
+    if (!Array.isArray(checks)) {
+      panic("Expected an array for required_status_checks");
+    }
+    for (const rawCheck of checks) {
+      const context = readString(
+        readRecord(rawCheck, "required status check"),
+        "context",
+      );
+      if (!requiredCheckRuns.includes(context)) {
+        requiredCheckRuns.push(context);
+      }
+    }
+  }
+
+  if (requiredCheckRuns.length === 0) {
+    panic(`No required status checks are active for ${repo}`);
+  }
+
+  return {
+    requiredCheckRuns,
+    migrationDirectory: repositoryMigrationDirectory(repo),
+    landing,
+  };
 };
 
 // --- Gate model -------------------------------------------------------------
@@ -140,6 +162,7 @@ const MERGEABLE_STATES = ["MERGEABLE", "CONFLICTING", "UNKNOWN"] as const;
 
 type PullRequestSnapshot = {
   number: number;
+  baseRefName: string;
   state: (typeof PULL_REQUEST_STATES)[number];
   isDraft: boolean;
   mergeable: (typeof MERGEABLE_STATES)[number];
@@ -531,6 +554,18 @@ const runGh = (
 
 const runGhJson = (args: readonly string[]): unknown => JSON.parse(runGh(args));
 
+const readLiveRepositoryPolicy = (
+  repo: string,
+  baseRefName: string,
+): RepositoryPolicy =>
+  mergeBarRepositoryPolicy(
+    repo,
+    runGhJson([
+      "api",
+      `repos/${repo}/rules/branches/${encodeURIComponent(baseRefName)}`,
+    ]),
+  );
+
 const REVIEW_THREADS_QUERY = `
 query($owner: String!, $name: String!, $number: Int!, $cursor: String) {
   repository(owner: $owner, name: $name) {
@@ -577,7 +612,7 @@ const createGhGateway = ({
           `query=query($owner:String!, $name:String!, $number:Int!) {
             repository(owner:$owner, name:$name) {
               pullRequest(number:$number) {
-                number state isDraft mergeable headRefOid
+                number state isDraft mergeable headRefOid baseRefName
                 autoMergeRequest { enabledAt }
                 mergeQueueEntry { id }
               }
@@ -605,6 +640,7 @@ const createGhGateway = ({
       }
       return {
         number,
+        baseRefName: readString(raw, "baseRefName"),
         state: readMember(
           PULL_REQUEST_STATES,
           readString(raw, "state"),
@@ -898,14 +934,17 @@ const readSettledPullRequest = (
 
 if (import.meta.main) {
   const options = parseOptions(Bun.argv.slice(2));
-  const policy = mergeBarRepositoryPolicy(options.repo);
   const gateway = createGhGateway({
     repo: options.repo,
     pullNumber: options.pullNumber,
-    migrationDirectory: policy.migrationDirectory,
+    migrationDirectory: repositoryMigrationDirectory(options.repo),
   });
 
   const pullRequest = readSettledPullRequest(gateway);
+  const policy = readLiveRepositoryPolicy(
+    options.repo,
+    pullRequest.baseRefName,
+  );
   if (
     policy.landing === "merge-when-ready" &&
     pullRequest.handoff.status === "queued"
