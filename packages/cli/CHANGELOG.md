@@ -1,5 +1,15 @@
 # @stll/cli
 
+## 1.14.0
+
+### Minor Changes
+
+- [#3572](https://github.com/stella/stella/pull/3572) [`0c68aa8`](https://github.com/stella/stella/commit/0c68aa803e92647e9ed87c462bac4708deeb9f15) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `template fill` reports what each AI-decided condition was settled on and by whom; `template list --template-id` lists every `{% if %}` block with its governing field path and kind; the new `template preview-conditions` asks what a set of values would decide, at decision-model cost only.
+
+### Patch Changes
+
+- [#3591](https://github.com/stella/stella/pull/3591) [`02a482b`](https://github.com/stella/stella/commit/02a482b7f49a84d2e610a81b78aee70b244afd08) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Regenerate the MCP registry snapshot: `search_boe_legislation` no longer declares a five-character ceiling on `cursor`; the server reads a value no page boundary could be as no cursor.
+
 ## 1.13.0
 
 ### Minor Changes

@@ -1,5 +1,17 @@
 # @stll/ui
 
+## 0.34.0
+
+### Minor Changes
+
+- [#3559](https://github.com/stella/stella/pull/3559) [`49b0423`](https://github.com/stella/stella/commit/49b04238ec5fd6e369b037edd732f56e0d12de62) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `openFilePicker` (`@stll/ui/file-picker`) opens the browser file chooser from any handler without an `<input type="file">` in the tree, so surfaces no longer carry a hidden input, a ref, or the value reset that lets the same file be picked twice. `FileInput` now uses it and renders no native input; `onFileChange` receives a `File` and is not called when the chooser is dismissed.
+
+### Patch Changes
+
+- [#3561](https://github.com/stella/stella/pull/3561) [`528c647`](https://github.com/stella/stella/commit/528c647d8822c7b701e6ecb4f5ed637cd83f48ff) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Restrict component transitions to compositable properties while preserving deliberate box-size motion.
+
+- [#3593](https://github.com/stella/stella/pull/3593) [`2c53e9f`](https://github.com/stella/stella/commit/2c53e9fba0b5607f3d90c0c4456db5d0ee5a5d21) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Expose stable semantic metadata for selectable inspector, toolbar, and workspace-view controls.
+
 ## 0.33.1
 
 ### Patch Changes
