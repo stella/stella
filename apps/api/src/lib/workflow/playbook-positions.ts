@@ -34,12 +34,33 @@ export type ResolvedTiers = Static<typeof resolvedTiersSchema>;
 
 const version3 = t.Literal(3);
 
+// Named so the snake_case `save_playbook` input (`mcp/playbook-position-input.ts`)
+// advertises the bounds this schema enforces instead of a copy of them.
+export const POSITION_LIMITS = {
+  issueMaxLength: 256,
+  tierRuleTextMaxLength: 500,
+  tierRulesMaxItems: 50,
+  fallbackEntriesMaxItems: 10,
+  fallbackLabelMaxLength: 256,
+  languageTextMaxLength: 10_000,
+  askQuestionMaxLength: 1000,
+  guidanceMaxLength: 2000,
+  rationaleMaxLength: 2000,
+  talkingPointMaxLength: 500,
+  talkingPointsMaxItems: 20,
+  escalationMaxLength: 500,
+  positionsMaxItems: 200,
+} as const;
+
 // ── Tier lines: identified plain-language rules and fallback entries ──
 // `id` is client-generated so reorder/DnD and finding citations reference a
 // stable identity, not the array index. Rank stays implicit in array order.
 export const tierRuleSchema = t.Object({
   id: t.String({ format: "uuid" }),
-  text: t.String({ minLength: 1, maxLength: 500 }),
+  text: t.String({
+    minLength: 1,
+    maxLength: POSITION_LIMITS.tierRuleTextMaxLength,
+  }),
 });
 export type TierRule = Static<typeof tierRuleSchema>;
 
@@ -48,8 +69,13 @@ export type TierRule = Static<typeof tierRuleSchema>;
 // like a one-line rule.
 export const fallbackEntrySchema = t.Object({
   id: t.String({ format: "uuid" }),
-  text: t.String({ minLength: 1, maxLength: 10_000 }),
-  label: t.Optional(t.String({ maxLength: 256 })),
+  text: t.String({
+    minLength: 1,
+    maxLength: POSITION_LIMITS.languageTextMaxLength,
+  }),
+  label: t.Optional(
+    t.String({ maxLength: POSITION_LIMITS.fallbackLabelMaxLength }),
+  ),
 });
 export type FallbackEntry = Static<typeof fallbackEntrySchema>;
 
@@ -65,7 +91,7 @@ export const idealLanguageSchema = t.Union([
   }),
   t.Object({
     source: t.Literal("inline"),
-    text: t.String({ maxLength: 10_000 }),
+    text: t.String({ maxLength: POSITION_LIMITS.languageTextMaxLength }),
   }),
 ]);
 export type IdealLanguage = Static<typeof idealLanguageSchema>;
@@ -73,16 +99,22 @@ export type IdealLanguage = Static<typeof idealLanguageSchema>;
 // ── Tiers: the Acceptable / Fallback / Not acceptable ladder ──
 export const tiersSchema = t.Object({
   acceptable: t.Object({
-    rules: t.Array(tierRuleSchema, { maxItems: 50 }),
+    rules: t.Array(tierRuleSchema, {
+      maxItems: POSITION_LIMITS.tierRulesMaxItems,
+    }),
     ideal: t.Optional(idealLanguageSchema),
   }),
   fallback: t.Object({
     // Ranked by array order.
-    entries: t.Array(fallbackEntrySchema, { maxItems: 10 }),
+    entries: t.Array(fallbackEntrySchema, {
+      maxItems: POSITION_LIMITS.fallbackEntriesMaxItems,
+    }),
   }),
   notAcceptable: t.Object({
     // Red lines.
-    rules: t.Array(tierRuleSchema, { maxItems: 50 }),
+    rules: t.Array(tierRuleSchema, {
+      maxItems: POSITION_LIMITS.tierRulesMaxItems,
+    }),
   }),
 });
 export type Tiers = Static<typeof tiersSchema>;
@@ -143,7 +175,9 @@ export type DeterministicCheck = Static<typeof deterministicCheckSchema>;
 
 // ── ASK: what to read from each document ──────────────
 // An empty `question` means manual input (no AI extraction), mirroring v1.
-const askQuestionSchema = t.String({ maxLength: 1000 });
+const askQuestionSchema = t.String({
+  maxLength: POSITION_LIMITS.askQuestionMaxLength,
+});
 
 export const askManualSchema = t.Object({
   question: askQuestionSchema,
@@ -183,9 +217,14 @@ const extractPositionSchema = t.Object({
   // Captures a value, no grading. Severity is meaningless here, so it is absent.
   mode: t.Literal("extract"),
   sourceId: t.String({ format: "uuid" }),
-  issue: t.String({ minLength: 1, maxLength: 256 }),
+  issue: t.String({
+    minLength: 1,
+    maxLength: POSITION_LIMITS.issueMaxLength,
+  }),
   ask: askManualSchema,
-  guidance: t.Optional(t.String({ maxLength: 2000 })),
+  guidance: t.Optional(
+    t.String({ maxLength: POSITION_LIMITS.guidanceMaxLength }),
+  ),
   enabled: t.Boolean(),
 });
 
@@ -195,11 +234,21 @@ const extractPositionSchema = t.Object({
 // an extract position never grades, so it never surfaces a verdict to
 // negotiate against.
 export const negotiationSchema = t.Object({
-  rationale: t.Optional(t.String({ maxLength: 2000 })),
-  talkingPoints: t.Optional(
-    t.Array(t.String({ minLength: 1, maxLength: 500 }), { maxItems: 20 }),
+  rationale: t.Optional(
+    t.String({ maxLength: POSITION_LIMITS.rationaleMaxLength }),
   ),
-  escalation: t.Optional(t.String({ maxLength: 500 })),
+  talkingPoints: t.Optional(
+    t.Array(
+      t.String({
+        minLength: 1,
+        maxLength: POSITION_LIMITS.talkingPointMaxLength,
+      }),
+      { maxItems: POSITION_LIMITS.talkingPointsMaxItems },
+    ),
+  ),
+  escalation: t.Optional(
+    t.String({ maxLength: POSITION_LIMITS.escalationMaxLength }),
+  ),
 });
 export type Negotiation = Static<typeof negotiationSchema>;
 
@@ -222,13 +271,18 @@ export const POSITION_PURPOSE_MAX_LENGTH = 240;
 const gradedPositionSchema = t.Object({
   mode: t.Literal("graded"),
   sourceId: t.String({ format: "uuid" }),
-  issue: t.String({ minLength: 1, maxLength: 256 }),
+  issue: t.String({
+    minLength: 1,
+    maxLength: POSITION_LIMITS.issueMaxLength,
+  }),
   severity: positionSeveritySchema,
   standard: positionStandardSchema,
   check: t.Optional(deterministicCheckSchema),
   ask: askConfigSchema,
   purpose: t.Optional(t.String({ maxLength: POSITION_PURPOSE_MAX_LENGTH })),
-  guidance: t.Optional(t.String({ maxLength: 2000 })),
+  guidance: t.Optional(
+    t.String({ maxLength: POSITION_LIMITS.guidanceMaxLength }),
+  ),
   negotiation: t.Optional(negotiationSchema),
   enabled: t.Boolean(),
 });
@@ -244,7 +298,9 @@ export type Position = Static<typeof positionSchema>;
 // by a migration and no runtime read path for an older one survives.
 export const playbookPositionsSchema = t.Object({
   version: version3,
-  items: t.Array(positionSchema, { maxItems: 200 }),
+  items: t.Array(positionSchema, {
+    maxItems: POSITION_LIMITS.positionsMaxItems,
+  }),
 });
 export type PlaybookPositions = Static<typeof playbookPositionsSchema>;
 

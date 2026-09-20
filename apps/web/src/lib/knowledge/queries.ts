@@ -49,6 +49,8 @@ type ClausesListKey = {
 
 const FILL_DISCOVER_SEGMENT = "fill-discover";
 
+const PLAYBOOK_DETAIL_KEY_SEGMENT = "detail";
+
 export const knowledgeKeys = {
   skills: {
     root: agentSkillsQueryRoot(),
@@ -218,8 +220,11 @@ export const knowledgeKeys = {
     detail: (organizationId: string, playbookId: string) => [
       ...knowledgeKeys.playbooks.all(organizationId),
       playbookId,
-      "detail",
+      PLAYBOOK_DETAIL_KEY_SEGMENT,
     ],
+    /** Whether a key under `all` is one playbook's detail, not a list. */
+    isDetail: (queryKey: readonly unknown[]) =>
+      queryKey.at(-1) === PLAYBOOK_DETAIL_KEY_SEGMENT,
     versions: (organizationId: string, playbookId: string) => [
       ...knowledgeKeys.playbooks.all(organizationId),
       playbookId,

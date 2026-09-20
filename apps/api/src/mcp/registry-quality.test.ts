@@ -112,8 +112,14 @@ type SurfaceMode = (typeof SURFACES)[number]["mode"];
 // on which argument is present. It also runs only the decision model, which is
 // a different cost and a different failure set from a fill. law does not carry
 // templates.
+// default 57 -> 58 for save_playbook. Argued for, not absorbed: playbooks were
+// readable and runnable from the curated list but writable only through
+// invoke_capability, which in-app chat does not project, so no chat could
+// author one. It cannot be a mode of save_clause (a different object with a
+// different permission) or of run_playbook (a write to the definition versus a
+// review over a matter). Write-only, so the anonymized ceiling is unchanged.
 const TOOL_COUNT_CEILING: Record<SurfaceMode, number> = {
-  default: 57,
+  default: 58,
   anonymized: 28,
   law: 10,
 };
@@ -246,8 +252,17 @@ const TOOL_COUNT_CEILING: Record<SurfaceMode, number> = {
 // template's paragraphs cannot tell a block excluded by a decision from one the
 // document never carried, so what was decided has to be said rather than
 // inferred. Law is unchanged; it carries no template tool.
+// save_playbook then measures 145_426 default, up 7_308 from 138_118: its
+// entry is 7_307 chars, of which the input schema is 5_559. The stored
+// `positionSchema` serializes to 32_190, so the tool advertises its own
+// snake_case position input instead: no rule or entry ids, no derived ask, no
+// deterministic check and no reference standard (all server-owned or
+// editor-only), a flat ladder (which also keeps the schema under the CLI's
+// depth cap), one-line field descriptions, and the authoring grammar left to
+// the skill rather than repeated per field. Pinned exactly. Anonymized and law
+// do not carry the tool.
 const TOOLS_LIST_PAYLOAD_CHAR_CEILING: Record<SurfaceMode, number> = {
-  default: 138_300,
+  default: 145_426,
   anonymized: 73_300,
   law: 28_250,
 };
@@ -300,8 +315,12 @@ const TOOLS_LIST_PAYLOAD_CHAR_CEILING: Record<SurfaceMode, number> = {
 // default and 32_831 anonymized after merging the structurally identical user
 // and generative branches; without it, an agent cannot tell an override from a
 // model answer.
+// save_playbook's output then measures 48_916 default, up 883: the `updatedAt`
+// the next save passes back, each written position's `sourceId` with whether
+// it was added or changed, and the per-entry `issues[]` that lets one refused
+// position come back with its fix while the rest of the call is saved.
 const OUTPUT_SCHEMA_TOTAL_CHAR_CEILING: Record<SurfaceMode, number> = {
-  default: 48_050,
+  default: 48_916,
   anonymized: 32_850,
   law: 10_050,
 };

@@ -17,6 +17,7 @@ import { deriveAutoAsks } from "@/api/handlers/playbooks/derive-ask";
 import createPlaybookFromStarter from "@/api/handlers/playbooks/from-starter";
 import { instantiateStarterPositions } from "@/api/handlers/playbooks/instantiate-starter";
 import { STARTER_PLAYBOOKS } from "@/api/handlers/playbooks/starters";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -229,6 +230,7 @@ describe("starter playbook content", () => {
       await deriveAutoAsks(instantiateStarterPositions(starter.positions), {
         organizationId: ids.orgA,
         orgAIConfig: null,
+        orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
         promptCachingEnabled: false,
         generate,
       });

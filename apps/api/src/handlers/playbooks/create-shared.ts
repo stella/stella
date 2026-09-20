@@ -3,9 +3,11 @@ import { eq, isNotNull } from "drizzle-orm";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { playbookDefinitions } from "@/api/db/schema";
+import { assertPlaybookDocumentType } from "@/api/handlers/playbooks/assert-document-type";
 import { deriveAutoAsks } from "@/api/handlers/playbooks/derive-ask";
 import type { StarterPlaybookId } from "@/api/handlers/playbooks/starters";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
+import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
 import type { SafeHandlerGenerator } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -45,6 +47,7 @@ type CreatePlaybookDefinitionArgs = {
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
+  orgAIConfigStatus: OrgAIConfigStatus;
   promptCachingEnabled: boolean;
   recordAuditEvent: AuditRecorder;
   body: CreatePlaybookDefinitionBody;
@@ -55,6 +58,7 @@ export const createPlaybookDefinitionHandler = async function* ({
   safeDb,
   organizationId,
   orgAIConfig,
+  orgAIConfigStatus,
   promptCachingEnabled,
   recordAuditEvent,
   body,
@@ -91,32 +95,13 @@ export const createPlaybookDefinitionHandler = async function* ({
   const positions = await deriveAutoAsks(body.positions, {
     organizationId,
     orgAIConfig,
+    orgAIConfigStatus,
     promptCachingEnabled,
   });
 
-  const documentTypeKey = body.scope?.documentTypeKey;
-  if (documentTypeKey !== undefined) {
-    const documentType = yield* Result.await(
-      safeDb((tx) =>
-        tx.query.documentTypes.findFirst({
-          where: {
-            organizationId: { eq: organizationId },
-            key: { eq: documentTypeKey },
-          },
-          columns: { id: true },
-        }),
-      ),
-    );
-
-    if (!documentType) {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message: "Document type not found in this organization",
-        }),
-      );
-    }
-  }
+  yield* Result.await(
+    assertPlaybookDocumentType({ safeDb, organizationId, scope: body.scope }),
+  );
 
   const existingCount = yield* Result.await(
     safeDb((tx) =>

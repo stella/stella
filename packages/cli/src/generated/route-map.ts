@@ -4933,6 +4933,376 @@ export const generatedRouteMap: RouteNode = {
             },
           },
         },
+        save: {
+          kind: "leaf",
+          spec: {
+            commandPath: ["playbook", "save"],
+            toolName: "save_playbook",
+            description:
+              "Create a review playbook, or add, change, and remove positions in one.",
+            flags: [
+              {
+                flag: "--playbook-id",
+                prop: "playbook_id",
+                kind: "string",
+                repeatable: false,
+                description: "Playbook id to update; omit to create",
+                required: false,
+              },
+              {
+                flag: "--expected-updated-at",
+                prop: "expected_updated_at",
+                kind: "string",
+                repeatable: false,
+                description:
+                  "The playbook's updatedAt, copied from the last list_playbooks read or save_playbook result; required when updating",
+                required: false,
+              },
+              {
+                flag: "--name",
+                prop: "name",
+                kind: "string",
+                repeatable: false,
+                description: "Playbook name; required when creating",
+                required: false,
+              },
+              {
+                flag: "--description",
+                prop: "description",
+                kind: "string",
+                repeatable: false,
+                description: "What the playbook reviews and for whom",
+                required: false,
+              },
+              {
+                flag: "--scope.document-type-key",
+                prop: "scope.document_type_key",
+                kind: "string",
+                repeatable: false,
+                description:
+                  "Key read from the document-types.list capability; omit it otherwise, a guessed key is refused",
+                required: false,
+              },
+              {
+                flag: "--scope.perspective",
+                prop: "scope.perspective",
+                kind: "enum",
+                enum: ["buyer", "seller", "neutral"],
+                repeatable: false,
+                description:
+                  "Side the review takes. Use an advertised value; case and surrounding whitespace are normalized.",
+                required: false,
+              },
+              {
+                flag: "--remove-source-ids",
+                prop: "remove_source_ids",
+                kind: "string-array",
+                repeatable: true,
+                description: "Stored positions to delete; update only",
+                required: false,
+              },
+            ],
+            inputOnly: ["positions"],
+            paginated: false,
+            followable: true,
+            windowedText: false,
+            destructive: false,
+            scope: "knowledge_write",
+            inputSchema: {
+              type: "object",
+              required: [],
+              additionalProperties: false,
+              properties: {
+                playbook_id: {
+                  type: "string",
+                  format: "uuid",
+                  description: "Playbook id to update; omit to create",
+                },
+                expected_updated_at: {
+                  type: "string",
+                  description:
+                    "The playbook's updatedAt, copied from the last list_playbooks read or save_playbook result; required when updating",
+                },
+                name: {
+                  type: "string",
+                  minLength: 1,
+                  maxLength: 256,
+                  description: "Playbook name; required when creating",
+                },
+                description: {
+                  type: "string",
+                  maxLength: 2000,
+                  description: "What the playbook reviews and for whom",
+                },
+                scope: {
+                  type: "object",
+                  properties: {
+                    document_type_key: {
+                      type: "string",
+                      minLength: 1,
+                      maxLength: 128,
+                      description:
+                        "Key read from the document-types.list capability; omit it otherwise, a guessed key is refused",
+                    },
+                    perspective: {
+                      enum: ["buyer", "seller", "neutral"],
+                      type: "string",
+                      description:
+                        "Side the review takes. Use an advertised value; case and surrounding whitespace are normalized.",
+                      "x-stella-agent-input": {
+                        kind: "enum",
+                      },
+                    },
+                  },
+                  required: [],
+                  additionalProperties: false,
+                  description:
+                    "What the playbook targets; a field left out keeps its stored value",
+                },
+                positions: {
+                  type: "array",
+                  items: {
+                    anyOf: [
+                      {
+                        type: "object",
+                        properties: {
+                          mode: {
+                            enum: ["extract"],
+                            description:
+                              "Captures a value from each document; no grading",
+                            type: "string",
+                          },
+                          source_id: {
+                            type: "string",
+                            format: "uuid",
+                            description:
+                              "sourceId of the stored position to replace; omit to add a position",
+                          },
+                          issue: {
+                            type: "string",
+                            minLength: 1,
+                            maxLength: 256,
+                            description:
+                              "Short name of the term under review; unique within the playbook",
+                          },
+                          guidance: {
+                            type: "string",
+                            maxLength: 2000,
+                            description:
+                              "What a reviewer examines in the clause",
+                          },
+                          enabled: {
+                            type: "boolean",
+                            description:
+                              "false skips the position in runs. Defaults to true; omit on a replace to keep the stored value",
+                          },
+                          ask: {
+                            type: "object",
+                            properties: {
+                              question: {
+                                type: "string",
+                                minLength: 1,
+                                maxLength: 1000,
+                                description:
+                                  "Question answered from each document",
+                              },
+                              answer_type: {
+                                enum: ["text", "date", "int"],
+                                type: "string",
+                                description:
+                                  "Defaults to text; omit on a replace to keep the stored type. Use an advertised value; case and surrounding whitespace are normalized.",
+                                "x-stella-agent-input": {
+                                  kind: "enum",
+                                },
+                              },
+                            },
+                            required: ["question"],
+                            additionalProperties: false,
+                          },
+                        },
+                        required: ["mode", "issue", "ask"],
+                        additionalProperties: false,
+                      },
+                      {
+                        type: "object",
+                        properties: {
+                          mode: {
+                            enum: ["graded"],
+                            description:
+                              "Grades each document's clause against tiers. Its question is derived from them, so it takes no ask",
+                            type: "string",
+                          },
+                          source_id: {
+                            type: "string",
+                            format: "uuid",
+                            description:
+                              "sourceId of the stored position to replace; omit to add a position",
+                          },
+                          issue: {
+                            type: "string",
+                            minLength: 1,
+                            maxLength: 256,
+                            description:
+                              "Short name of the term under review; unique within the playbook",
+                          },
+                          guidance: {
+                            type: "string",
+                            maxLength: 2000,
+                            description:
+                              "What a reviewer examines in the clause",
+                          },
+                          enabled: {
+                            type: "boolean",
+                            description:
+                              "false skips the position in runs. Defaults to true; omit on a replace to keep the stored value",
+                          },
+                          severity: {
+                            enum: ["blocker", "high", "medium", "low"],
+                            type: "string",
+                            description:
+                              "Weight of a deviation; blocker is a walk-away term. Use an advertised value; case and surrounding whitespace are normalized.",
+                            "x-stella-agent-input": {
+                              kind: "enum",
+                            },
+                          },
+                          purpose: {
+                            type: "string",
+                            maxLength: 240,
+                            description:
+                              "One sentence on what the term is for, from the reviewing side",
+                          },
+                          tiers: {
+                            type: "object",
+                            properties: {
+                              acceptable: {
+                                type: "array",
+                                items: {
+                                  type: "object",
+                                  properties: {
+                                    text: {
+                                      type: "string",
+                                      minLength: 1,
+                                      maxLength: 500,
+                                      description: "One rule",
+                                    },
+                                  },
+                                  required: ["text"],
+                                  additionalProperties: false,
+                                },
+                                maxItems: 50,
+                                description:
+                                  "What an acceptable clause provides",
+                              },
+                              ideal: {
+                                type: "string",
+                                maxLength: 10000,
+                                description:
+                                  "Preferred wording, inserted when a document deviates",
+                              },
+                              fallback: {
+                                type: "array",
+                                items: {
+                                  type: "object",
+                                  properties: {
+                                    text: {
+                                      type: "string",
+                                      minLength: 1,
+                                      maxLength: 10000,
+                                      description:
+                                        "Accepted alternative wording",
+                                    },
+                                    label: {
+                                      type: "string",
+                                      maxLength: 256,
+                                      description:
+                                        "Short name for the alternative",
+                                    },
+                                  },
+                                  required: ["text"],
+                                  additionalProperties: false,
+                                },
+                                maxItems: 10,
+                                description:
+                                  "Accepted alternatives, best first",
+                              },
+                              not_acceptable: {
+                                type: "array",
+                                items: {
+                                  type: "object",
+                                  properties: {
+                                    text: {
+                                      type: "string",
+                                      minLength: 1,
+                                      maxLength: 500,
+                                      description: "One rule",
+                                    },
+                                  },
+                                  required: ["text"],
+                                  additionalProperties: false,
+                                },
+                                maxItems: 50,
+                                description: "Red lines",
+                              },
+                            },
+                            required: [],
+                            additionalProperties: false,
+                            description:
+                              "The grading ladder; a tier left out is empty, and at least one rule, fallback entry, or ideal is required",
+                          },
+                          negotiation: {
+                            type: "object",
+                            properties: {
+                              rationale: {
+                                type: "string",
+                                maxLength: 2000,
+                                description:
+                                  "Why the organization holds this position",
+                              },
+                              talking_points: {
+                                type: "array",
+                                items: {
+                                  type: "string",
+                                  minLength: 1,
+                                  maxLength: 500,
+                                  description: "One point",
+                                },
+                                maxItems: 20,
+                                description: "What to say to the counterparty",
+                              },
+                              escalation: {
+                                type: "string",
+                                maxLength: 500,
+                                description:
+                                  "Who decides a deviation, and when to route it to them",
+                              },
+                            },
+                            required: [],
+                            additionalProperties: false,
+                          },
+                        },
+                        required: ["mode", "issue", "severity", "tiers"],
+                        additionalProperties: false,
+                      },
+                    ],
+                  },
+                  maxItems: 200,
+                  description:
+                    "Only the positions to add or change. One with source_id replaces that stored position whole; one without is added. Stored positions not listed are untouched.",
+                },
+                remove_source_ids: {
+                  type: "array",
+                  items: {
+                    type: "string",
+                    format: "uuid",
+                    description: "sourceId of a stored position",
+                  },
+                  maxItems: 200,
+                  description: "Stored positions to delete; update only",
+                },
+              },
+            },
+          },
+        },
         run: {
           kind: "leaf",
           spec: {

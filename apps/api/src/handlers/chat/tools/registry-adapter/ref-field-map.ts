@@ -32,6 +32,7 @@ import {
   READ_DOCUMENT_PROJECTION,
   RUN_PLAYBOOK_PROJECTION,
   SAVE_CLAUSE_PROJECTION,
+  SAVE_PLAYBOOK_PROJECTION,
   SAVE_CONTACT_PROJECTION,
   SAVE_DOCUMENT_PROJECTION,
   SAVE_MATTER_PROJECTION,
@@ -466,6 +467,13 @@ export const WRITE_TOOL_REF_FIELD_MAP = {
     // refs: they pass through as-is.
     inputRefs: [],
     projection: SAVE_CLAUSE_PROJECTION,
+  },
+  save_playbook: {
+    chatProjectable: true,
+    // `playbook_id` and each position's `source_id` are org-scoped handles,
+    // not chat refs: they pass through as-is.
+    inputRefs: [],
+    projection: SAVE_PLAYBOOK_PROJECTION,
   },
   delete_clause: {
     chatProjectable: true,

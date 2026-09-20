@@ -35,7 +35,7 @@ export const findDuplicatePositionSourceId = (
 // reference standard carries at least one passage by schema. Without either,
 // LLM tier-match needs at least one authored signal — a rule in any tier, a
 // fallback entry, or ideal language — otherwise there is nothing to compare.
-const gradedPositionHasContent = (position: GradedPosition): boolean => {
+export const gradedPositionHasContent = (position: GradedPosition): boolean => {
   if (
     position.check !== undefined ||
     position.standard.source === "reference"
@@ -54,7 +54,9 @@ const gradedPositionHasContent = (position: GradedPosition): boolean => {
 // Rule and fallback-entry ids must be unique within a position: findings and DnD
 // reorder cite these ids as stable identity, so a collision would make two lines
 // indistinguishable. Returns the first colliding id, or null when all are unique.
-const findDuplicateTierId = (position: TierStandardPosition): string | null => {
+export const findDuplicateTierId = (
+  position: TierStandardPosition,
+): string | null => {
   const { tiers } = position.standard;
   const seen = new Set<string>();
   const ids = [

@@ -75,11 +75,77 @@ const admitsNull = (schema: unknown): boolean => {
   return CONSTRAINING_KEYWORDS.every((keyword) => !(keyword in schema));
 };
 
+const UNION_KEYWORDS = ["anyOf", "oneOf"] as const;
+
+/**
+ * Whether a union branch could be the one `value` was written for: no `const`
+ * property of the branch (a discriminator) disagrees with the value. A branch
+ * with no discriminator always could.
+ */
+const branchCouldMatch = (
+  branch: Record<string, unknown>,
+  value: Record<string, unknown>,
+): boolean => {
+  const properties = branch["properties"];
+  if (!isRecord(properties)) {
+    return true;
+  }
+  return Object.entries(properties).every(
+    ([name, property]) =>
+      !isRecord(property) ||
+      !("const" in property) ||
+      !(name in value) ||
+      property["const"] === value[name],
+  );
+};
+
+/**
+ * A union node declares nothing itself: its members do. Without reading them,
+ * an optional null inside a discriminated member (an array of `mode` variants)
+ * reached validation and was refused.
+ */
+const matchingUnionBranches = (
+  schema: Record<string, unknown>,
+  value: Record<string, unknown>,
+): Record<string, unknown>[] => {
+  const matching: Record<string, unknown>[] = [];
+  for (const keyword of UNION_KEYWORDS) {
+    const branches = schema[keyword];
+    if (!isUnknownArray(branches)) {
+      continue;
+    }
+    for (const branch of branches) {
+      if (isRecord(branch) && branchCouldMatch(branch, value)) {
+        matching.push(branch);
+      }
+    }
+  }
+  return matching;
+};
+
+const requiredNamesOf = (
+  schema: Record<string, unknown>,
+  value: Record<string, unknown>,
+): Set<unknown> => {
+  const required = schema["required"];
+  const names = new Set(isUnknownArray(required) ? required : []);
+  for (const branch of matchingUnionBranches(schema, value)) {
+    for (const name of requiredNamesOf(branch, value)) {
+      names.add(name);
+    }
+  }
+  return names;
+};
+
 const objectChildSchemas = (
   schema: Record<string, unknown>,
   key: string,
+  value: Record<string, unknown>,
 ): unknown[] => {
   const children: unknown[] = [];
+  for (const branch of matchingUnionBranches(schema, value)) {
+    children.push(...objectChildSchemas(branch, key, value));
+  }
   const properties = schema["properties"];
   if (isRecord(properties) && key in properties) {
     children.push(properties[key]);
@@ -119,11 +185,10 @@ export const withNullOptionalsOmitted = (
   if (!isRecord(value)) {
     return value;
   }
-  const required = schema["required"];
-  const requiredNames = new Set(isUnknownArray(required) ? required : []);
+  const requiredNames = requiredNamesOf(schema, value);
   const present: Record<string, unknown> = {};
   for (const [key, entry] of Object.entries(value)) {
-    const childSchemas = objectChildSchemas(schema, key);
+    const childSchemas = objectChildSchemas(schema, key, value);
     if (childSchemas.length === 0) {
       present[key] = entry;
       continue;

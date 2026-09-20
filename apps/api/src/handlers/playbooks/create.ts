@@ -11,7 +11,7 @@ const config = {
     "derived from their tier rules before storage. It starts as a draft: " +
     "approve it with playbooks.approve before runs will use it.",
   permissions: { playbook: ["create"] },
-  mcp: { type: "capability", reason: "knowledge_library_admin" },
+  mcp: { type: "tool", name: "save_playbook" },
   body: playbookDefinitionBodySchema,
 } satisfies HandlerConfig;
 
@@ -23,12 +23,14 @@ const createPlaybookDefinition = createSafeRootHandler(
     body,
     recordAuditEvent,
     orgAIConfig,
+    orgAIConfigStatus,
     promptCachingEnabled,
   }) {
     return yield* createPlaybookDefinitionHandler({
       safeDb,
       organizationId: session.activeOrganizationId,
       orgAIConfig,
+      orgAIConfigStatus,
       promptCachingEnabled,
       recordAuditEvent,
       body,

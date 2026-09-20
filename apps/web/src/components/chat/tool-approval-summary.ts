@@ -158,9 +158,73 @@ export const buildRegistryWriteSummaryRows = ({
   if (toolName === "fill_template") {
     return buildFillTemplateRows({ emptyLabel, input });
   }
+  if (toolName === "save_playbook") {
+    return buildSavePlaybookRows({ emptyLabel, input });
+  }
 
   const rows: ReadableInputRow[] = [];
   for (const [key, value] of Object.entries(input)) {
+    rows.push({
+      key,
+      label: humanizeIdentifier(key),
+      value: formatReadableInputValue({ emptyLabel, value }),
+    });
+  }
+  return rows;
+};
+
+/**
+ * `save_playbook` upserts: `positions` holds only what the call adds or
+ * changes, each a full tier ladder. The approver needs to know which
+ * positions the call touches and how, not to read the ladders as one blob, so
+ * the entries are named by issue and split by whether they carry a
+ * `source_id` (a change to a stored position) or not (a new one). The card
+ * reads the raw call, where the server reads a `null` as absent, so it does too.
+ */
+const buildSavePlaybookRows = ({
+  emptyLabel,
+  input,
+}: {
+  emptyLabel: string;
+  input: Record<string, unknown>;
+}): ReadableInputRow[] => {
+  const rows: ReadableInputRow[] = [];
+  for (const key of ["name", "description", "scope"]) {
+    if (input[key] === undefined || input[key] === null) {
+      continue;
+    }
+    rows.push({
+      key,
+      label: humanizeIdentifier(key),
+      value: formatReadableInputValue({ emptyLabel, value: input[key] }),
+    });
+  }
+
+  const added: string[] = [];
+  const changed: string[] = [];
+  const positions = input["positions"];
+  for (const position of Array.isArray(positions) ? positions : []) {
+    if (!isRecord(position) || typeof position["issue"] !== "string") {
+      continue;
+    }
+    (typeof position["source_id"] === "string" ? changed : added).push(
+      position["issue"],
+    );
+  }
+  const removed = input["remove_source_ids"];
+  const changes = [
+    { key: "positions_added", value: added.join("; ") },
+    { key: "positions_changed", value: changed.join("; ") },
+    {
+      key: "positions_removed",
+      value:
+        Array.isArray(removed) && removed.length > 0 ? `${removed.length}` : "",
+    },
+  ];
+  for (const { key, value } of changes) {
+    if (value.length === 0) {
+      continue;
+    }
     rows.push({
       key,
       label: humanizeIdentifier(key),

@@ -4,6 +4,8 @@ import * as v from "valibot";
 import type { PropertyContent } from "@/api/db/schema-validators";
 import { resolveCaching } from "@/api/lib/ai-config";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import { logger } from "@/api/lib/observability/logger";
@@ -147,6 +149,7 @@ const defaultDeriveAskGenerate: DeriveAskGenerate = async (input) => {
 export type DeriveAutoAsksDeps = {
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
+  orgAIConfigStatus: OrgAIConfigStatus;
   promptCachingEnabled: boolean;
   // Test seam; defaults to the real structured-output call.
   generate?: DeriveAskGenerate;
@@ -236,6 +239,23 @@ export const deriveAutoAsks = async (
   }
 
   const items = [...positions.items];
+
+  // A stored config that did not decrypt reads as `orgAIConfig: null`, which
+  // would resolve to the instance provider: the org's derivations would run on
+  // the shared key and be metered there. Make no call instead, and persist as
+  // a failed derivation does (`derived` absent, dropping any stale value), so
+  // the save is kept and the next one derives once the config reads again.
+  if (deps.orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
+    logger.warn("Playbook auto-ASK derivation skipped: AI config unreadable", {
+      organization_id: deps.organizationId,
+      feature: "playbook.derive-ask",
+    });
+    for (const { index, position } of pending) {
+      items[index] = { ...position, ask: { mode: "auto" } };
+    }
+    return { version: 3, items };
+  }
+
   for (
     let cursor = 0;
     cursor < pending.length;

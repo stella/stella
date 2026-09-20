@@ -55,6 +55,7 @@ const BUILT_IN_CHAT_TOOL_ACTIVITY_CATEGORIES = {
   resolve_comment: "mutation",
   run_playbook: "mutation",
   save_clause: "mutation",
+  save_playbook: "mutation",
   save_contact: "mutation",
   save_document: "mutation",
   save_matter: "mutation",

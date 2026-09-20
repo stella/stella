@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { McpRequestContext } from "@/api/mcp/context";
@@ -119,6 +120,101 @@ const createClauseWriteScopedDb = () => {
     }),
   );
   return { insertedBodies, scopedDb };
+};
+
+const STORED_UPDATED_AT = new Date("2026-09-20T10:00:00.000Z");
+const STORED_EXTRACT_POSITION = {
+  mode: "extract",
+  sourceId: "00000000-0000-4000-8000-0000000000a1",
+  issue: "Governing law",
+  ask: {
+    question: "Which law governs the agreement?",
+    content: { version: 1, type: "text" },
+  },
+  enabled: true,
+} as const;
+const STORED_PLAYBOOK = {
+  id: PLAYBOOK_ID,
+  name: "NDA playbook",
+  description: "Inbound NDAs",
+  scope: { perspective: "buyer", trigger: "onClassified" },
+  positions: { version: 3, items: [STORED_EXTRACT_POSITION] },
+  status: "approved",
+  approvedAt: null,
+  createdAt: STORED_UPDATED_AT,
+  updatedAt: STORED_UPDATED_AT,
+} as const;
+
+/**
+ * A scopedDb standing in for the playbook write paths: the detail read, the
+ * locked `updatedAt` read, and the insert/update, capturing what each write
+ * was handed. Extract-only positions keep `deriveAutoAsks` off the model.
+ */
+const createPlaybookWriteScopedDb = ({
+  lockedUpdatedAt = STORED_UPDATED_AT,
+}: { lockedUpdatedAt?: Date } = {}) => {
+  const writes: Record<string, unknown>[] = [];
+  const savedAt = new Date("2026-09-20T10:05:00.000Z");
+  const scopedDb = asTestRaw<
+    McpRequestContext["scopedDb"] & ReturnType<typeof mock>
+  >(
+    mock(async (run: (tx: unknown) => unknown) => {
+      const tx = {
+        $count: async () => 0,
+        query: {
+          documentTypes: { findFirst: async () => undefined },
+          playbookDefinitions: {
+            findFirst: async () => ({
+              ...STORED_PLAYBOOK,
+              ...(writes.length === 0 ? {} : { updatedAt: savedAt }),
+            }),
+          },
+        },
+        select: () => ({
+          from: () => ({
+            where: () => ({
+              for: async () => [{ updatedAt: lockedUpdatedAt }],
+            }),
+          }),
+        }),
+        insert: () => ({
+          values: (row: Record<string, unknown>) => {
+            writes.push(row);
+            return { returning: async () => [{ id: PLAYBOOK_ID }] };
+          },
+        }),
+        update: () => ({
+          set: (row: Record<string, unknown>) => {
+            writes.push(row);
+            return {
+              where: () => ({
+                returning: async () => [{ updatedAt: savedAt }],
+              }),
+            };
+          },
+        }),
+      };
+      return await run(tx);
+    }),
+  );
+  return { savedAt, scopedDb, writes };
+};
+
+const createPlaybookWriteContext = (
+  scopedDb: McpRequestContext["scopedDb"],
+): McpRequestContext => {
+  const context = createContext({ scopedDb });
+  return {
+    ...context,
+    testDependencies: {
+      ...context.testDependencies,
+      loadOrgSettingsForAuth: async () => ({
+        orgAIConfig: null,
+        orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
+        promptCachingEnabled: false,
+      }),
+    },
+  };
 };
 
 /** A scopedDb whose clauses.findFirst resolves to `clause` (detail mode). */
@@ -342,6 +438,293 @@ describe("MCP knowledge tools", () => {
     expect(message?.type === "text" ? message.text : "").toContain(
       "Provide at least one field to change",
     );
+  });
+
+  test("save_playbook creates from a name and returns the next save's token", async () => {
+    const { savedAt, scopedDb, writes } = createPlaybookWriteScopedDb();
+
+    const result = await handleMcpToolCall({
+      args: {
+        name: "MSA playbook",
+        positions: [
+          {
+            mode: "extract",
+            issue: "Term",
+            // A model's way of saying "nothing here", inside a union member.
+            guidance: null,
+            ask: { question: "How long is the term?", answer_type: "INT " },
+          },
+        ],
+      },
+      context: createPlaybookWriteContext(scopedDb),
+      toolName: "save_playbook",
+    });
+
+    expect(result.isError).toBeFalsy();
+    const [inserted] = writes;
+    expect(inserted?.["name"]).toBe("MSA playbook");
+    expect(inserted?.["positions"]).toMatchObject({
+      version: 3,
+      items: [
+        {
+          mode: "extract",
+          issue: "Term",
+          ask: { content: { version: 1, type: "int" } },
+          enabled: true,
+        },
+      ],
+    });
+    expect(parseToolPayload(result)).toMatchObject({
+      playbookId: PLAYBOOK_ID,
+      updatedAt: savedAt.toISOString(),
+      positionCount: 1,
+      positions: [{ issue: "Term", change: "added" }],
+      issues: [],
+    });
+  });
+
+  test("save_playbook stores an empty scope as unscoped", async () => {
+    const { scopedDb, writes } = createPlaybookWriteScopedDb();
+
+    const result = await handleMcpToolCall({
+      args: { name: "NDA playbook", scope: {} },
+      context: createPlaybookWriteContext(scopedDb),
+      toolName: "save_playbook",
+    });
+
+    expect(result.isError).toBeFalsy();
+    expect(writes[0]?.["scope"]).toBeNull();
+  });
+
+  test("save_playbook keeps the stored name, description, scope, and unnamed positions on an update", async () => {
+    const { scopedDb, writes } = createPlaybookWriteScopedDb();
+
+    const result = await handleMcpToolCall({
+      args: {
+        playbook_id: PLAYBOOK_ID,
+        expected_updated_at: STORED_UPDATED_AT.toISOString(),
+        scope: { perspective: "seller" },
+        positions: [
+          {
+            mode: "extract",
+            issue: "Term",
+            ask: { question: "How long is the term?" },
+          },
+        ],
+      },
+      context: createPlaybookWriteContext(scopedDb),
+      toolName: "save_playbook",
+    });
+
+    expect(result.isError).toBeFalsy();
+    const [updated] = writes;
+    expect(updated?.["name"]).toBe(STORED_PLAYBOOK.name);
+    expect(updated?.["description"]).toBe(STORED_PLAYBOOK.description);
+    expect(updated?.["scope"]).toEqual({
+      perspective: "seller",
+      trigger: "onClassified",
+    });
+    expect(updated?.["status"]).toBe("draft");
+    expect(updated?.["positions"]).toMatchObject({
+      items: [STORED_EXTRACT_POSITION, { issue: "Term" }],
+    });
+  });
+
+  test.each([
+    ["no positions", { positions: [] }],
+    ["no removals", { remove_source_ids: [] }],
+    [
+      "the stored definition fields",
+      {
+        name: STORED_PLAYBOOK.name,
+        description: STORED_PLAYBOOK.description,
+        scope: { perspective: STORED_PLAYBOOK.scope.perspective },
+      },
+    ],
+    [
+      "a position as it is stored",
+      {
+        positions: [
+          {
+            mode: "extract",
+            source_id: STORED_EXTRACT_POSITION.sourceId,
+            issue: STORED_EXTRACT_POSITION.issue,
+            ask: { question: STORED_EXTRACT_POSITION.ask.question },
+          },
+        ],
+      },
+    ],
+  ])(
+    "save_playbook leaves an approved playbook alone when the call sends %s",
+    async (_label, change) => {
+      const { scopedDb, writes } = createPlaybookWriteScopedDb();
+
+      const result = await handleMcpToolCall({
+        args: {
+          playbook_id: PLAYBOOK_ID,
+          expected_updated_at: STORED_UPDATED_AT.toISOString(),
+          ...change,
+        },
+        context: createPlaybookWriteContext(scopedDb),
+        toolName: "save_playbook",
+      });
+
+      expect(result.isError).toBeFalsy();
+      expect(writes).toEqual([]);
+      expect(parseToolPayload(result)).toMatchObject({
+        updatedAt: STORED_UPDATED_AT.toISOString(),
+        positions: [],
+        removed: [],
+      });
+    },
+  );
+
+  test("save_playbook answers a stale token with the calls that recover from it", async () => {
+    const { scopedDb, writes } = createPlaybookWriteScopedDb({
+      lockedUpdatedAt: new Date("2026-09-20T10:03:00.000Z"),
+    });
+
+    const result = await handleMcpToolCall({
+      args: {
+        playbook_id: PLAYBOOK_ID,
+        expected_updated_at: STORED_UPDATED_AT.toISOString(),
+        name: "Renamed",
+      },
+      context: createPlaybookWriteContext(scopedDb),
+      toolName: "save_playbook",
+    });
+
+    expect(result.isError).toBe(true);
+    expect(writes).toEqual([]);
+    expect(parseToolPayload(result)).toMatchObject({
+      error: {
+        code: "conflict",
+        hint: expect.stringContaining("list_playbooks with playbook_id"),
+      },
+    });
+  });
+
+  test("save_playbook writes nothing when every entry is refused, and says how to fix each", async () => {
+    const { scopedDb, writes } = createPlaybookWriteScopedDb();
+
+    const result = await handleMcpToolCall({
+      args: {
+        playbook_id: PLAYBOOK_ID,
+        expected_updated_at: STORED_UPDATED_AT.toISOString(),
+        positions: [
+          {
+            mode: "extract",
+            issue: "governing law",
+            ask: { question: "Which law governs?" },
+          },
+        ],
+      },
+      context: createPlaybookWriteContext(scopedDb),
+      toolName: "save_playbook",
+    });
+
+    expect(result.isError).toBe(true);
+    expect(writes).toEqual([]);
+    expect(parseToolPayload(result)).toMatchObject({
+      error: {
+        code: "validation_error",
+        issues: [
+          {
+            path: "positions.0.issue",
+            message: expect.stringContaining(STORED_EXTRACT_POSITION.sourceId),
+          },
+        ],
+        hint: expect.stringContaining("source_id"),
+      },
+    });
+  });
+
+  test("save_playbook refuses a graded entry with nothing to grade against and saves the entries beside it", async () => {
+    const { scopedDb, writes } = createPlaybookWriteScopedDb();
+
+    const result = await handleMcpToolCall({
+      args: {
+        playbook_id: PLAYBOOK_ID,
+        expected_updated_at: STORED_UPDATED_AT.toISOString(),
+        positions: [
+          {
+            mode: "extract",
+            issue: "Term",
+            ask: { question: "How long is the term?" },
+          },
+          {
+            mode: "graded",
+            issue: "Liability cap",
+            severity: "high",
+            tiers: { ideal: "" },
+          },
+        ],
+      },
+      context: createPlaybookWriteContext(scopedDb),
+      toolName: "save_playbook",
+    });
+
+    expect(result.isError).toBeFalsy();
+    expect(writes).toHaveLength(1);
+    expect(writes[0]?.["positions"]).toMatchObject({
+      items: [STORED_EXTRACT_POSITION, { issue: "Term" }],
+    });
+    expect(parseToolPayload(result)).toMatchObject({
+      positions: [{ issue: "Term", change: "added" }],
+      issues: [
+        {
+          code: "empty_tiers",
+          path: "positions.1.tiers",
+          hint: expect.stringContaining("mode extract"),
+        },
+      ],
+    });
+  });
+
+  test("save_playbook answers a guessed document type key with the way out", async () => {
+    const { scopedDb, writes } = createPlaybookWriteScopedDb();
+
+    const result = await handleMcpToolCall({
+      args: { name: "Inbound NDA", scope: { document_type_key: "nda" } },
+      context: createPlaybookWriteContext(scopedDb),
+      toolName: "save_playbook",
+    });
+
+    expect(writes).toEqual([]);
+    expect(parseToolPayload(result)).toMatchObject({
+      error: {
+        code: "validation_error",
+        issues: [{ path: "scope.document_type_key" }],
+        hint: expect.stringContaining("Leave scope.document_type_key out"),
+      },
+    });
+  });
+
+  test("save_playbook requires a name to create and a token to update", async () => {
+    const { scopedDb, writes } = createPlaybookWriteScopedDb();
+    const context = createPlaybookWriteContext(scopedDb);
+
+    const noName = await handleMcpToolCall({
+      args: { description: "No name" },
+      context,
+      toolName: "save_playbook",
+    });
+    const noToken = await handleMcpToolCall({
+      args: { playbook_id: PLAYBOOK_ID, name: "Renamed" },
+      context,
+      toolName: "save_playbook",
+    });
+
+    expect(writes).toEqual([]);
+    expect(parseToolPayload(noName)).toMatchObject({
+      error: { code: "validation_error", issues: [{ path: "name" }] },
+    });
+    expect(parseToolPayload(noToken)).toMatchObject({
+      error: {
+        code: "validation_error",
+        issues: [{ path: "expected_updated_at" }],
+      },
+    });
   });
 
   test("run_playbook reviews the approved snapshot, opens its runs, and queues the workflow", async () => {

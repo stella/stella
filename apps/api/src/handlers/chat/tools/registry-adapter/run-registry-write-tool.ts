@@ -61,6 +61,7 @@ const REGISTRY_WRITE_TOOL_HANDLERS = {
   save_time_entry: BILLING_TOOL_HANDLERS.save_time_entry,
   delete_time_entry: BILLING_TOOL_HANDLERS.delete_time_entry,
   save_clause: KNOWLEDGE_TOOL_HANDLERS.save_clause,
+  save_playbook: KNOWLEDGE_TOOL_HANDLERS.save_playbook,
   delete_clause: KNOWLEDGE_TOOL_HANDLERS.delete_clause,
   run_playbook: KNOWLEDGE_TOOL_HANDLERS.run_playbook,
   manage_organization: RESEARCH_ADMIN_TOOL_HANDLERS.manage_organization,

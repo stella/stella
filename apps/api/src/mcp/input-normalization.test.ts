@@ -76,6 +76,49 @@ describe("agent input dispatch normalization", () => {
     }
   });
 
+  test("omits optional nulls inside the matching member of a discriminated union", () => {
+    const member = (mode: string, extra: Record<string, unknown>) => ({
+      type: "object",
+      properties: {
+        mode: { const: mode },
+        note: { type: "string" },
+        ...extra,
+      },
+      required: ["mode", ...Object.keys(extra)],
+    });
+    const result = normalizeInputAtBoundary({
+      schema: {
+        type: "object",
+        properties: {
+          entries: {
+            type: "array",
+            items: {
+              anyOf: [
+                member("plain", {}),
+                member("graded", { severity: { type: "string" } }),
+              ],
+            },
+          },
+        },
+      },
+      value: {
+        entries: [
+          { mode: "plain", note: null },
+          { mode: "graded", note: null, severity: null },
+        ],
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      // An optional null is an omission; a null in a field the matching member
+      // requires is kept, so validation still reports it against that field.
+      expect(result.value).toEqual({
+        entries: [{ mode: "plain" }, { mode: "graded", severity: null }],
+      });
+    }
+  });
+
   test("maps ambiguity to structured field issues and accepted formats", () => {
     expect(
       normalizeInputAtBoundary({

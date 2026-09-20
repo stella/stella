@@ -180,6 +180,9 @@ const FOLIO_AGENT_DOC_TOOL_NAMES = {
 
 /** The one DOCX mutation tool: queued for review in manual mode, applied and saved by the API in auto mode. */
 export const SUGGEST_CHANGES_TOOL_NAME = FOLIO_AGENT_TOOL_NAMES.suggestChanges;
+// Bound to the backend's tool names, so a rename there fails here instead of
+// leaving the playbook queries silently stale after a chat save.
+const SAVE_PLAYBOOK_TOOL_NAME = "save_playbook" satisfies BuiltInChatToolName;
 
 type SuggestChangesOutput =
   ChatUITools[typeof SUGGEST_CHANGES_TOOL_NAME]["output"];
@@ -244,6 +247,7 @@ const CHAT_TOOL_TITLE_KEYS = {
   manage_organization: "chat.tool.manage_organization",
   run_playbook: "chat.tool.run_playbook",
   save_clause: "chat.tool.save_clause",
+  save_playbook: "chat.tool.save_playbook",
   save_contact: "chat.tool.save_contact",
   save_document: "chat.tool.save_document",
   save_matter: "chat.tool.save_matter",
@@ -480,6 +484,7 @@ const REGISTRY_WRITE_SUMMARY_TOOL_NAMES = {
   resolve_comment: false,
   run_playbook: true,
   save_clause: true,
+  save_playbook: true,
   save_contact: true,
   save_document: true,
   save_matter: true,
@@ -1117,6 +1122,48 @@ export const consumeDocumentDeletionToolCalls = ({
   }
 
   return { hasVersionDeletion, hasWholeDocumentDeletion };
+};
+
+export type PlaybookSaveMessage = DocumentDeletionMessage;
+
+/**
+ * Consume the successful `save_playbook` calls this session has not handled.
+ * A refused save returns an error envelope with no `playbookId`, and wrote
+ * nothing, so it is not a reason to refetch.
+ */
+export const consumePlaybookSaveToolCalls = ({
+  handledToolCallIds,
+  messages,
+}: {
+  handledToolCallIds: Set<string>;
+  messages: readonly PlaybookSaveMessage[];
+}): boolean => {
+  let hasSave = false;
+
+  for (const message of messages) {
+    if (message.role !== "assistant") {
+      continue;
+    }
+    for (const part of message.parts) {
+      if (
+        !isJsonObject(part) ||
+        part["type"] !== "tool-call" ||
+        part["name"] !== SAVE_PLAYBOOK_TOOL_NAME ||
+        part["state"] !== "complete" ||
+        typeof part["id"] !== "string" ||
+        !isJsonObject(part["output"]) ||
+        typeof part["output"]["playbookId"] !== "string" ||
+        handledToolCallIds.has(part["id"])
+      ) {
+        continue;
+      }
+
+      handledToolCallIds.add(part["id"]);
+      hasSave = true;
+    }
+  }
+
+  return hasSave;
 };
 
 export const getUserMessageHtmlHistory = (

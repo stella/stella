@@ -140,7 +140,7 @@ export const PlaybookEditor = ({
         onSaved={onSaved}
         organizationId={organizationId}
         playbookId={null}
-        updatedAt={null}
+        initialUpdatedAt={null}
       />
     );
   }
@@ -215,10 +215,7 @@ const PlaybookEditorLoader = ({
       onSaved={onSaved}
       organizationId={organizationId}
       playbookId={playbookId}
-      // Live, unlike the `initial*` seeds: this is the optimistic-concurrency
-      // token, so it has to track the cache (a save, an approve, or a
-      // post-conflict refetch all move it) rather than freeze at mount.
-      updatedAt={detail.updatedAt}
+      initialUpdatedAt={detail.updatedAt}
     />
   );
 };
@@ -243,8 +240,8 @@ type PlaybookEditorFormProps = {
   /** What the org's reviewers did with each position, by `sourceId`; empty
    *  for a playbook that has never been run. */
   positionDecisions?: ReadonlyMap<string, PositionDecisionSummary> | undefined;
-  /** Concurrency token; tracks the cached detail, null for a new playbook. */
-  updatedAt: string | null;
+  /** Concurrency token the seeds were read with; null for a new playbook. */
+  initialUpdatedAt: string | null;
   onBack: () => void;
   onSaved: () => void;
   // Only supplied when editing an existing playbook (see
@@ -265,7 +262,7 @@ const PlaybookEditorForm = ({
   initialStatus,
   initialApprovedAt,
   positionDecisions,
-  updatedAt,
+  initialUpdatedAt,
   onBack,
   onSaved,
   onReload,
@@ -281,6 +278,12 @@ const PlaybookEditorForm = ({
   const scrollRef = useRef<HTMLDivElement>(null);
   const navigationLeaveRequestedRef = useRef(false);
 
+  // The token stays with the draft it was read with and moves only on this
+  // form's own writes. Were it to follow the cache, a refetch under the form
+  // (a chat save, another editor, a window refocus) would pair a fresh token
+  // with a stale draft, and the next save, a full replace, would silently
+  // drop the change that moved it instead of meeting the version conflict.
+  const [updatedAt, setUpdatedAt] = useState(initialUpdatedAt);
   const [name, setName] = useState(initialName);
   const [description, setDescription] = useState(initialDescription);
   const [status, setStatus] = useState<PlaybookApprovalStatus>(initialStatus);
@@ -504,12 +507,12 @@ const PlaybookEditorForm = ({
   };
 
   /**
-   * Write a freshly-returned `updatedAt` straight into the cached detail, so
-   * the concurrency token this form reads is current before the invalidation
-   * round-trip lands. Without it a second save inside that window would be
-   * rejected as stale against a value the client already knows is superseded.
+   * Move the token to a freshly-returned `updatedAt`, and write it into the
+   * cached detail so a remount before the invalidation round-trip lands does
+   * not seed a token the client already knows is superseded.
    */
   const syncUpdatedAt = (id: string, next: string) => {
+    setUpdatedAt(next);
     queryClient.setQueryData(
       playbookDetailOptions(organizationId, id).queryKey,
       (previous) =>
@@ -519,19 +522,28 @@ const PlaybookEditorForm = ({
     );
   };
 
+  const takeFreshToken = async (id: string) => {
+    const fresh = await queryClient.query({
+      ...playbookDetailOptions(organizationId, id),
+      staleTime: 0,
+    });
+    if ("updatedAt" in fresh) {
+      setUpdatedAt(fresh.updatedAt);
+    }
+  };
+
   /**
-   * A 409 means someone else moved the definition. Refetch so the token
-   * catches up — the user's next save is then a deliberate overwrite rather
-   * than the same rejection again — and offer a reload that swaps in the
-   * server's copy instead of leaving a toast the user can only re-trigger.
+   * A 409 means someone else moved the definition. Refetch and take the fresh
+   * token (the one place it moves without a write of this form's own): the
+   * user has now been told, so their next save is a deliberate overwrite
+   * rather than the same rejection again. Also offer a reload that swaps in
+   * the server's copy instead of leaving a toast the user can only re-trigger.
    */
   const reportVersionConflict = (failure: ToastFailure) => {
     if (playbookId !== null) {
       detached(
-        queryClient.invalidateQueries({
-          queryKey: knowledgeKeys.playbooks.detail(organizationId, playbookId),
-        }),
-        "playbook-editor.invalidate",
+        takeFreshToken(playbookId),
+        "playbook-editor.refetch-after-conflict",
       );
     }
     stellaToast.add({
