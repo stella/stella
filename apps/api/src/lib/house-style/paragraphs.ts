@@ -9,9 +9,10 @@
  * bold line in a document whose every paragraph is Normal is not a heading
  * because it is bold. The decision model is given all of it.
  *
- * The traversal is shared with the rewrite: both walk the body in the same
- * order through `bodyParagraphs`, so a decision cannot land on a different
- * paragraph than the one it was taken for.
+ * The traversal is shared with the rewrite: both reach the same paragraphs in
+ * the same order through `paragraphsWithin`, so a decision cannot land on a
+ * different paragraph than the one it was taken for, and a paragraph cannot
+ * be decided and then left out of the converted document.
  */
 
 import { panic } from "better-result";
@@ -43,24 +44,23 @@ export type BodyParagraph = {
   inTable: boolean;
 };
 
+type ParagraphSite = { element: slimdom.Element; inTable: boolean };
+
 /**
- * The body's paragraphs in reading order, cell paragraphs included. Text
- * boxes are walked too: their paragraphs are part of the document a reader
- * sees, and leaving them unstyled would be a silent hole.
+ * Every paragraph under a node, in reading order, whatever wraps it: a table
+ * cell, a content control, a custom-XML block. The walk stops at a paragraph
+ * rather than descending into it, so a text box hanging off one of its runs
+ * is outside what the conversion carries.
  */
-export const bodyParagraphs = (body: slimdom.Element): BodyParagraph[] => {
-  const found: BodyParagraph[] = [];
+const paragraphSites = (root: slimdom.Element): ParagraphSite[] => {
+  const found: ParagraphSite[] = [];
   const walk = (node: slimdom.Node, inTable: boolean): void => {
     for (const child of node.childNodes) {
       if (!isElement(child) || child.namespaceURI !== W_NS) {
         continue;
       }
       if (child.localName === "p") {
-        found.push({
-          element: child,
-          text: paragraphText(child).trim(),
-          inTable,
-        });
+        found.push({ element: child, inTable });
         continue;
       }
       if (child.localName === "sectPr") {
@@ -69,9 +69,27 @@ export const bodyParagraphs = (body: slimdom.Element): BodyParagraph[] => {
       walk(child, inTable || child.localName === "tbl");
     }
   };
-  walk(body, false);
+  walk(root, false);
   return found;
 };
+
+/** The body's paragraphs in reading order, cell paragraphs included. */
+export const bodyParagraphs = (body: slimdom.Element): BodyParagraph[] =>
+  paragraphSites(body).map(({ element, inTable }) => ({
+    element,
+    text: paragraphText(element).trim(),
+    inTable,
+  }));
+
+/**
+ * The paragraphs under one node, found by the traversal `bodyParagraphs`
+ * uses. The rewrite walks the source subtree and the copy it imported with
+ * this, which is what makes the paragraphs it writes the paragraphs that were
+ * decided rather than a second reading of the body that can drift from the
+ * first.
+ */
+export const paragraphsWithin = (root: slimdom.Element): slimdom.Element[] =>
+  paragraphSites(root).map(({ element }) => element);
 
 /** The body's paragraphs read straight off a serialized `document.xml`. */
 export const readBodyParagraphs = (documentXml: string): BodyParagraph[] => {

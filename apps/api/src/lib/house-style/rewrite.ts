@@ -14,12 +14,14 @@
  * where the target style carries automatic numbering.
  */
 
+import { panic } from "better-result";
 import * as slimdom from "slimdom";
 
 import { W_NS } from "@/api/lib/docx/ooxml";
 import { attr, childElement, isElement } from "@/api/lib/house-style/catalogue";
 import {
   bodyParagraphs,
+  paragraphsWithin,
   stripManualMarker,
 } from "@/api/lib/house-style/paragraphs";
 
@@ -240,6 +242,10 @@ export const buildConvertedBody = ({
     });
   };
 
+  // A body child is a paragraph the rewrite rebuilds, a container whose
+  // paragraphs it rebuilds in place, or something carrying no paragraph at
+  // all, which it drops. A container it failed to recurse into would be a
+  // paragraph decided and charged for and then missing from the document.
   const converted: slimdom.Node[] = [];
   for (const child of sourceBody.childNodes) {
     if (!isElement(child) || child.namespaceURI !== W_NS) {
@@ -252,7 +258,8 @@ export const buildConvertedBody = ({
       }
       continue;
     }
-    if (child.localName !== "tbl") {
+    const sources = paragraphsWithin(child);
+    if (sources.length === 0) {
       continue;
     }
     const imported = houseDoc.importNode(child, true);
@@ -260,24 +267,18 @@ export const buildConvertedBody = ({
       continue;
     }
     dropUnknownTableStyles(imported, knownStyleIds);
-    const sourceCells = child.getElementsByTagNameNS(W_NS, "p");
-    const importedCells = imported.getElementsByTagNameNS(W_NS, "p");
-    for (const [position, cell] of importedCells.entries()) {
-      const origin = sourceCells.at(position);
-      if (origin === undefined) {
-        continue;
+    const targets = paragraphsWithin(imported);
+    for (const [position, origin] of sources.entries()) {
+      const target = targets.at(position);
+      if (target === undefined) {
+        return panic("An imported container lost a paragraph the source held");
       }
       const replacement = convert(origin);
-      cell.parentNode?.replaceChild(
-        replacement ??
-          convertParagraph({
-            source: origin,
-            target: houseDoc,
-            styleId: fallbackStyleId,
-            consume: 0,
-          }),
-        cell,
-      );
+      if (replacement === null) {
+        target.remove();
+        continue;
+      }
+      target.parentNode?.replaceChild(replacement, target);
     }
     converted.push(imported);
   }

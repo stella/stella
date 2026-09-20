@@ -4,13 +4,17 @@ import * as slimdom from "slimdom";
 import { W_NS } from "@/api/lib/docx/ooxml";
 import {
   COMMENTS_XML,
+  CONTAINER_DOCUMENT_XML,
   CORE_PROPERTIES_XML,
   HOUSE_DOCUMENT_XML,
   HOUSE_STYLES_XML,
   SOURCE_DOCUMENT_XML,
 } from "@/api/lib/house-style/__fixtures__/synthetic-style-set";
 import { attr, childElement } from "@/api/lib/house-style/catalogue";
-import { stripManualMarker } from "@/api/lib/house-style/paragraphs";
+import {
+  readBodyParagraphs,
+  stripManualMarker,
+} from "@/api/lib/house-style/paragraphs";
 import {
   buildConvertedBody,
   collectDefinedStyleIds,
@@ -153,6 +157,66 @@ describe("the converted body", () => {
       "Normal",
       "Normal",
     ]);
+  });
+});
+
+describe("a document whose paragraphs sit in containers", () => {
+  const decided = readBodyParagraphs(CONTAINER_DOCUMENT_XML).filter(
+    ({ text }) => text.length > 0,
+  );
+  const converted = buildConvertedBody({
+    houseDocumentXml: HOUSE_DOCUMENT_XML,
+    sourceDocumentXml: CONTAINER_DOCUMENT_XML,
+    styleByIndex: new Map(
+      decided.map((_paragraph, index) => [index, "Bodytext1Firm"]),
+    ),
+    fallbackStyleId: "Normal",
+    numberedStyleIds: new Set(),
+    knownStyleIds: KNOWN,
+  });
+  const styleReferences = slimdom
+    .parseXmlDocument(converted.xml)
+    .getElementsByTagNameNS(W_NS, "pStyle");
+
+  // The decision a paragraph was charged for is only worth what the rewrite
+  // writes: one style reference per decided paragraph, whatever wraps it.
+  test("writes one style for every paragraph it decided", () => {
+    expect(decided).toHaveLength(5);
+    expect(styleReferences).toHaveLength(decided.length);
+  });
+
+  test("keeps the text a container holds", () => {
+    const text = paragraphsOf(converted.xml).map(textOf);
+    expect(text).toEqual([
+      "The parties have agreed as follows.",
+      "A. The Borrower wishes to borrow.",
+      "Party",
+      "Registered office",
+      "This paragraph carries a text box.",
+    ]);
+  });
+
+  test("keeps the containers themselves", () => {
+    expect(converted.xml).toContain("w:sdt");
+    expect(
+      slimdom
+        .parseXmlDocument(converted.xml)
+        .getElementsByTagNameNS(W_NS, "tbl"),
+    ).toHaveLength(2);
+  });
+
+  test("drops an empty paragraph inside a container", () => {
+    expect(converted.droppedEmptyParagraphs).toBe(1);
+  });
+
+  // A text box hangs off a run under VML, which a rebuilt paragraph does not
+  // carry. Neither side of the conversion reaches it, so it is absent from
+  // both the decisions and the output rather than paid for and then lost.
+  test("neither decides nor writes a paragraph drawn in a text box", () => {
+    expect(decided.map(({ text }) => text)).not.toContain(
+      "Drawn in a text box",
+    );
+    expect(converted.xml).not.toContain("Drawn in a text box");
   });
 });
 

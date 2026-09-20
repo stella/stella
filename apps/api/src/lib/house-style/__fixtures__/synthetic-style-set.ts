@@ -124,6 +124,38 @@ export const SOURCE_DOCUMENT_XML = `<?xml version="1.0" encoding="UTF-8"?>
 export const EMPTY_DOCUMENT_XML = `<?xml version="1.0" encoding="UTF-8"?>
 <w:document ${W_ATTRIBUTE}><w:body/></w:document>`;
 
+const V_ATTRIBUTE = 'xmlns:v="urn:schemas-microsoft-com:vml"';
+
+/**
+ * A document that wraps its paragraphs: a content control, a table inside a
+ * table cell, and a text box. A body child the rewrite cannot rebuild is a
+ * paragraph the conversion silently loses, so every container a legal
+ * template reaches for is here.
+ *
+ * The text box is the boundary rather than a fourth container: it hangs off a
+ * run inside a paragraph, under VML the conversion does not carry, so neither
+ * the features nor the rewrite reach the paragraph inside it.
+ */
+export const CONTAINER_DOCUMENT_XML = `<?xml version="1.0" encoding="UTF-8"?>
+<w:document ${W_ATTRIBUTE} ${V_ATTRIBUTE}><w:body>
+  ${paragraph({ style: null, text: "The parties have agreed as follows." })}
+  <w:sdt>
+    <w:sdtPr><w:alias w:val="Recitals"/></w:sdtPr>
+    <w:sdtContent>
+      ${paragraph({ style: null, text: "A. The Borrower wishes to borrow." })}
+      <w:p><w:r><w:t xml:space="preserve"></w:t></w:r></w:p>
+    </w:sdtContent>
+  </w:sdt>
+  <w:tbl>
+    <w:tr><w:tc>
+      ${paragraph({ style: null, text: "Party" })}
+      <w:tbl><w:tr><w:tc>${paragraph({ style: null, text: "Registered office" })}</w:tc></w:tr></w:tbl>
+    </w:tc></w:tr>
+  </w:tbl>
+  <w:p><w:r><w:pict><v:shape><v:textbox><w:txbxContent>${paragraph({ style: null, text: "Drawn in a text box" })}</w:txbxContent></v:textbox></v:shape></w:pict></w:r><w:r><w:t xml:space="preserve">This paragraph carries a text box.</w:t></w:r></w:p>
+  <w:sectPr><w:pgSz w:w="12240" w:h="15840"/></w:sectPr>
+</w:body></w:document>`;
+
 /**
  * A style set whose two deepest styles switch numbering off with the reserved
  * `w:numId` 0, which `w:basedOn` would otherwise hand them from their parent.
