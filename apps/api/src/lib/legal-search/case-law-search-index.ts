@@ -42,6 +42,7 @@ const sectionsToPlainText = (
 export const indexDecision = async (
   decisionId: SafeId<"caseLawDecision">,
   scopedDb: ScopedDb,
+  resolveConfig: typeof resolveFtsConfig = resolveFtsConfig,
 ): Promise<void> => {
   const [decision] = await scopedDb((tx) =>
     tx
@@ -102,7 +103,7 @@ export const indexDecision = async (
     .filter(Boolean)
     .join(" ");
 
-  const fts = await resolveFtsConfig(decision.language);
+  const fts = await resolveConfig(decision.language);
 
   const previewGeneration = Bun.randomUUIDv7();
   const previewPassages = buildSearchPreviewPassages(title, searchableText);
