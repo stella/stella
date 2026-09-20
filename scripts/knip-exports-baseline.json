@@ -1,6 +1,6 @@
 {
   "apps/api": {
-    "count": 740,
+    "count": 737,
     "files": {
       "apps/api/scripts/lib/capability-catalog.ts": 9,
       "apps/api/scripts/lib/case-law-fixture-analyses.ts": 1,
@@ -104,7 +104,6 @@
       "apps/api/src/handlers/saved-searches/schema.ts": 1,
       "apps/api/src/handlers/sharepoint/graph-oauth.ts": 1,
       "apps/api/src/handlers/sharepoint/oauth-callback.ts": 1,
-      "apps/api/src/handlers/signals/read.ts": 1,
       "apps/api/src/handlers/signals/schema.ts": 1,
       "apps/api/src/handlers/skills/ai-resource-path.ts": 1,
       "apps/api/src/handlers/skills/import-urls.logic.ts": 1,
@@ -318,7 +317,6 @@
       "apps/api/src/mcp/resource-policy-contract.ts": 1,
       "apps/api/src/mcp/resources.ts": 1,
       "apps/api/src/mcp/stella-tools.ts": 1,
-      "apps/api/src/mcp/template-tools.ts": 2,
       "apps/api/src/mcp/tool-types.ts": 9,
       "apps/api/src/mcp/tool-utils.ts": 7,
       "apps/api/src/mcp/upload-purpose-gate.ts": 1,
