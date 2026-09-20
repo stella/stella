@@ -5,8 +5,9 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import type { SourceTotalOrigin } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
-import { errorTag } from "@/api/lib/errors/utils";
+import { errorSystemFields } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
+import { pgErrorFields } from "@/api/lib/pg-error";
 
 /**
  * Both halves of a source's coverage figure, and the only writer of either.
@@ -224,7 +225,8 @@ export const refreshSourceStoredTotal = async ({
     // how old the number is rather than showing a wrong one.
     logger.warn("case_law.source_stored_total.unavailable", {
       sourceId,
-      "error.type": errorTag(attempt.error),
+      ...errorSystemFields(attempt.error),
+      ...pgErrorFields(attempt.error),
     });
     return "unavailable";
   }

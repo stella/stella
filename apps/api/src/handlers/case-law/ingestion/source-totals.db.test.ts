@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, expect, test } from "bun:test";
+import { afterAll, beforeAll, expect, spyOn, test } from "bun:test";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
@@ -19,6 +19,7 @@ import {
   SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS,
 } from "@/api/handlers/case-law/ingestion/source-totals";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
+import { logger } from "@/api/lib/observability/logger";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 // The trio is nullable in the schema and only this module keeps it whole, so
@@ -411,14 +412,32 @@ test("a count that cannot finish leaves the previous figure standing", async () 
           }),
         }),
         execute: async () => {
-          throw new Error("canceling statement due to statement timeout");
+          throw Object.assign(
+            new Error("canceling statement due to statement timeout"),
+            { code: "57014" },
+          );
         },
       }),
     );
 
-  expect(
-    await refreshSourceStoredTotal({ scopedDb: failing, sourceId, now: past }),
-  ).toBe("unavailable");
+  const warn = spyOn(logger, "warn");
+  try {
+    expect(
+      await refreshSourceStoredTotal({
+        scopedDb: failing,
+        sourceId,
+        now: past,
+      }),
+    ).toBe("unavailable");
+    // The warning is the only trace the failure leaves, so it has to say
+    // what went wrong: the SQLSTATE, not just that something was thrown.
+    expect(warn).toHaveBeenCalledWith(
+      "case_law.source_stored_total.unavailable",
+      expect.objectContaining({ sourceId, "error.cause.pg_code": "57014" }),
+    );
+  } finally {
+    warn.mockRestore();
+  }
   expect(await readStoredPair(sourceId)).toEqual({
     storedTotal: 2,
     storedTotalAsOf: NOW,
