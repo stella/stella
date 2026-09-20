@@ -110,6 +110,24 @@ describe("buildRegistryWriteSummaryRows", () => {
     expect(values).not.toContain("token=secret");
   });
 
+  test("save_playbook names the positions a call adds, changes, and removes", () => {
+    const rows = build("save_playbook", {
+      playbook_id: "playbook-1",
+      expected_updated_at: "2026-09-20T10:00:00.000Z",
+      positions: [
+        { mode: "graded", issue: "Liability cap", standard: { tiers: {} } },
+        { mode: "graded", issue: "Governing law", source_id: "position-1" },
+      ],
+      remove_source_ids: ["position-2", "position-3"],
+    });
+
+    expect(rows.map(({ label, value }) => [label, value])).toEqual([
+      ["Positions added", "Liability cap"],
+      ["Positions changed", "Governing law"],
+      ["Positions removed", "2"],
+    ]);
+  });
+
   test("fill_template summarizes the template handle and per-field values", () => {
     const rows = build("fill_template", {
       templateId: "tmpl-abc",

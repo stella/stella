@@ -98,6 +98,7 @@ import {
   setCreateDocumentDraftInspectorTabStatus,
 } from "@/features/chat/hooks/use-chat-session-created-document.logic";
 import { reconcileDocumentDeletionToolCalls } from "@/features/chat/hooks/use-chat-session-document-deletion.logic";
+import { reconcilePlaybookSaveToolCalls } from "@/features/chat/hooks/use-chat-session-playbook-save.logic";
 import {
   createInitialSendQueueState,
   describeQueuedMessage,
@@ -128,7 +129,7 @@ import {
 import { ClientOperationError } from "@/lib/errors/client";
 import { fileOptions } from "@/lib/files/queries";
 import { sha256Hex } from "@/lib/files/sha256";
-import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
+import { knowledgeKeys, mcpConnectorsOptions } from "@/lib/knowledge/queries";
 import { toSafeId } from "@/lib/safe-id";
 import { readStoredJson, writeStoredJson } from "@/lib/stored-json";
 import { downloadFile } from "@/lib/utils";
@@ -957,6 +958,7 @@ export const useChatSession = ({
   const queryClient = useQueryClient();
   const handledDocumentDeletionToolCallIdsRef = useRef(new Set<string>());
   const handledDocxReplacementToolCallIdsRef = useRef(new Set<string>());
+  const handledPlaybookSaveToolCallIdsRef = useRef(new Set<string>());
 
   // Chat registry writes run outside the workspace route's HTTP mutation, so
   // they cannot directly name the deleted entity in this browser: tool inputs
@@ -981,6 +983,21 @@ export const useChatSession = ({
       "use-chat-session.reconcile-document-deletion-tool-calls",
     );
   }, [getContextMatterIds, messages, queryClient, workspaceId]);
+
+  // A chat `save_playbook` writes an org-level playbook from any surface, so
+  // an open playbooks list or editor refetches once per completed save.
+  useExternalSyncEffect(() => {
+    detached(
+      reconcilePlaybookSaveToolCalls({
+        handledToolCallIds: handledPlaybookSaveToolCallIdsRef.current,
+        messages,
+        organizationId,
+        playbookKeys: knowledgeKeys.playbooks,
+        queryClient,
+      }),
+      "use-chat-session.reconcile-playbook-save-tool-calls",
+    );
+  }, [messages, organizationId, queryClient]);
 
   // Server-side automatic DOCX edits (the apply variant of `suggest_changes`)
   // replace the entity's file field. Follow that replacement immediately in
