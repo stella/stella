@@ -75,6 +75,8 @@ export type RenameRule = { from: string; to: string };
 export const MAX_EXAMPLES = 3;
 export const EXAMPLE_MAX_CHARS = 240;
 const HALF_POINTS_PER_POINT = 2;
+/** The style Word falls back to when no `w:style` declares `w:default`. */
+const DEFAULT_STYLE_ID = "Normal";
 
 /** Elements whose `w:val` names a style, so a rename reaches every reference. */
 const STYLE_REFERENCE_ELEMENTS = new Set([
@@ -490,6 +492,9 @@ export type ExtractStyleCatalogueOptions = {
 
 type StyleUsage = { count: number; examples: string[] };
 
+/** What a style the document never uses reads as. */
+const UNUSED_STYLE: StyleUsage = { count: 0, examples: [] };
+
 type DocumentUsage = {
   byStyle: Map<string, StyleUsage>;
   defaultStyleId: string;
@@ -573,18 +578,18 @@ export const readStyleDefinitions = ({
   numberingXml,
   rename = [],
 }: ReadStyleDefinitionsOptions): StyleDefinitions => {
-  const stylesDoc =
-    stylesXml === null ? null : slimdom.parseXmlDocument(stylesXml);
-  if (stylesDoc !== null) {
-    renameStylesInDocument(stylesDoc, rename);
-  }
   const numbering = readNumbering(
     numberingXml === null ? null : renameStyleReferences(numberingXml, rename),
   );
+  if (stylesXml === null) {
+    return { defaultStyleId: DEFAULT_STYLE_ID, byId: new Map(), numbering };
+  }
+  const stylesDoc = slimdom.parseXmlDocument(stylesXml);
+  renameStylesInDocument(stylesDoc, rename);
 
   const raw = new Map<string, RawStyle>();
-  let defaultStyleId = "Normal";
-  for (const style of stylesDoc?.getElementsByTagNameNS(W_NS, "style") ?? []) {
+  let defaultStyleId = DEFAULT_STYLE_ID;
+  for (const style of stylesDoc.getElementsByTagNameNS(W_NS, "style")) {
     const id = attr(style, "styleId");
     if (id === null || attr(style, "type") !== "paragraph") {
       continue;
@@ -602,7 +607,7 @@ export const readStyleDefinitions = ({
   }
 
   const docDefaults = stylesDoc
-    ?.getElementsByTagNameNS(W_NS, "docDefaults")
+    .getElementsByTagNameNS(W_NS, "docDefaults")
     .at(0);
   const runDefaults =
     docDefaults === undefined ? null : childElement(docDefaults, "rPrDefault");
@@ -664,14 +669,14 @@ export const extractStyleCatalogue = ({
     }
     // A stored style set is content-free, so usage cannot decide membership:
     // the catalogue is what the set defines, and the guide picks what to use.
-    const seen = usage.byStyle.get(id);
+    const seen = usage.byStyle.get(id) ?? UNUSED_STYLE;
     styles.push({
       id,
       name,
       basedOn,
-      usageCount: seen?.count ?? 0,
+      usageCount: seen.count,
       formatting,
-      examples: seen?.examples ?? [],
+      examples: seen.examples,
     });
   }
   styles.sort(
