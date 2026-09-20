@@ -207,8 +207,8 @@ const toSnakeCase = (value: unknown): unknown => {
 
 /**
  * What a model does with a position it read: respell the keys in snake_case
- * flatten the ladder (rules and ideal wording as plain strings, `tiers` lifted
- * out of `standard`), and drop what `save_playbook` does not take
+ * flatten the ladder (each tier a plain list, the ideal wording a string,
+ * `tiers` lifted out of `standard`), and drop what `save_playbook` does not take
  * (the server-owned `ask` of a graded position and `check`, an extract
  * position's `content`, a clause-linked `ideal`). Anything else it left behind would fail the strict input parse, so
  * the parse below is what proves the read shape is a save shape.
@@ -258,10 +258,10 @@ const readBackToInput = (projected: unknown): PlaybookPositionInput => {
   return v.parse(playbookPositionInputSchema, {
     ...graded,
     tiers: {
-      acceptable: read.acceptable.rules.map(({ text: rule }) => rule),
+      acceptable: read.acceptable.rules,
       ...(ideal?.source === "inline" ? { ideal: ideal.text } : {}),
       fallback: read.fallback.entries,
-      not_acceptable: read.not_acceptable.rules.map(({ text: rule }) => rule),
+      not_acceptable: read.not_acceptable.rules,
     },
   });
 };
@@ -310,9 +310,9 @@ const gradedInput = (
   issue: "Liability cap",
   severity: "high",
   tiers: {
-    acceptable: ["Cap at 12 months of fees"],
+    acceptable: [{ text: "Cap at 12 months of fees" }],
     fallback: [],
-    not_acceptable: ["Uncapped liability"],
+    not_acceptable: [{ text: "Uncapped liability" }],
   },
   ...overrides,
 });
@@ -388,9 +388,9 @@ describe("save_playbook position merge", () => {
         gradedInput({
           source_id: stored.sourceId,
           tiers: {
-            acceptable: ["Cap at 12 months of fees"],
+            acceptable: [{ text: "Cap at 12 months of fees" }],
             fallback: [],
-            not_acceptable: ["Liability above 24 months of fees"],
+            not_acceptable: [{ text: "Liability above 24 months of fees" }],
           },
         }),
       ],
@@ -446,6 +446,34 @@ describe("save_playbook position merge", () => {
     expect(
       idealAfterReplace(withIdeal({ source: "inline", text: "Old wording" })),
     ).toBeUndefined();
+  });
+
+  test("a tier left out of the ladder is empty, and an empty optional text is absent", () => {
+    const parsed = v.parse(playbookPositionInputSchema, {
+      mode: "graded",
+      issue: "Residuals clause",
+      severity: "low",
+      guidance: "",
+      tiers: {
+        acceptable: [{ text: "The agreement has no residuals clause" }],
+      },
+    });
+
+    const [added] = merge({ stored: [], positions: [parsed] }).items;
+
+    expect(Value.Check(positionSchema, added)).toBe(true);
+    expect(added).not.toHaveProperty("guidance");
+    expect(
+      added?.mode === "graded" && added.standard.source === "tiers"
+        ? added.standard.tiers
+        : null,
+    ).toMatchObject({
+      acceptable: {
+        rules: [{ text: "The agreement has no residuals clause" }],
+      },
+      fallback: { entries: [] },
+      notAcceptable: { rules: [] },
+    });
   });
 
   test("remove_source_ids deletes and reports the position", () => {

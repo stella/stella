@@ -4980,7 +4980,7 @@ export const generatedRouteMap: RouteNode = {
                 kind: "string",
                 repeatable: false,
                 description:
-                  "Key of the organization document type the playbook reviews",
+                  "Key read from the document-types.list capability; omit it otherwise, a guessed key is refused",
                 required: false,
               },
               {
@@ -5042,7 +5042,7 @@ export const generatedRouteMap: RouteNode = {
                       minLength: 1,
                       maxLength: 128,
                       description:
-                        "Key of the organization document type the playbook reviews",
+                        "Key read from the document-types.list capability; omit it otherwise, a guessed key is refused",
                     },
                     perspective: {
                       enum: ["buyer", "seller", "neutral"],
@@ -5087,7 +5087,6 @@ export const generatedRouteMap: RouteNode = {
                           },
                           guidance: {
                             type: "string",
-                            minLength: 1,
                             maxLength: 2000,
                             description:
                               "What a reviewer examines in the clause",
@@ -5130,7 +5129,7 @@ export const generatedRouteMap: RouteNode = {
                           mode: {
                             enum: ["graded"],
                             description:
-                              "Grades each document's clause against the tiers",
+                              "Grades each document's clause against tiers. Its question is derived from them, so it takes no ask",
                             type: "string",
                           },
                           source_id: {
@@ -5148,7 +5147,6 @@ export const generatedRouteMap: RouteNode = {
                           },
                           guidance: {
                             type: "string",
-                            minLength: 1,
                             maxLength: 2000,
                             description:
                               "What a reviewer examines in the clause",
@@ -5169,7 +5167,6 @@ export const generatedRouteMap: RouteNode = {
                           },
                           purpose: {
                             type: "string",
-                            minLength: 1,
                             maxLength: 240,
                             description:
                               "One sentence on what the term is for, from the reviewing side",
@@ -5180,10 +5177,17 @@ export const generatedRouteMap: RouteNode = {
                               acceptable: {
                                 type: "array",
                                 items: {
-                                  type: "string",
-                                  minLength: 1,
-                                  maxLength: 500,
-                                  description: "One rule",
+                                  type: "object",
+                                  properties: {
+                                    text: {
+                                      type: "string",
+                                      minLength: 1,
+                                      maxLength: 500,
+                                      description: "One rule",
+                                    },
+                                  },
+                                  required: ["text"],
+                                  additionalProperties: false,
                                 },
                                 maxItems: 50,
                                 description:
@@ -5191,7 +5195,6 @@ export const generatedRouteMap: RouteNode = {
                               },
                               ideal: {
                                 type: "string",
-                                minLength: 1,
                                 maxLength: 10000,
                                 description:
                                   "Preferred wording, inserted when a document deviates",
@@ -5210,7 +5213,6 @@ export const generatedRouteMap: RouteNode = {
                                     },
                                     label: {
                                       type: "string",
-                                      minLength: 1,
                                       maxLength: 256,
                                       description:
                                         "Short name for the alternative",
@@ -5226,30 +5228,32 @@ export const generatedRouteMap: RouteNode = {
                               not_acceptable: {
                                 type: "array",
                                 items: {
-                                  type: "string",
-                                  minLength: 1,
-                                  maxLength: 500,
-                                  description: "One rule",
+                                  type: "object",
+                                  properties: {
+                                    text: {
+                                      type: "string",
+                                      minLength: 1,
+                                      maxLength: 500,
+                                      description: "One rule",
+                                    },
+                                  },
+                                  required: ["text"],
+                                  additionalProperties: false,
                                 },
                                 maxItems: 50,
                                 description: "Red lines",
                               },
                             },
-                            required: [
-                              "acceptable",
-                              "fallback",
-                              "not_acceptable",
-                            ],
+                            required: [],
                             additionalProperties: false,
                             description:
-                              "The grading ladder; at least one rule, fallback entry, or ideal is required",
+                              "The grading ladder; a tier left out is empty, and at least one rule, fallback entry, or ideal is required",
                           },
                           negotiation: {
                             type: "object",
                             properties: {
                               rationale: {
                                 type: "string",
-                                minLength: 1,
                                 maxLength: 2000,
                                 description:
                                   "Why the organization holds this position",
@@ -5267,7 +5271,6 @@ export const generatedRouteMap: RouteNode = {
                               },
                               escalation: {
                                 type: "string",
-                                minLength: 1,
                                 maxLength: 500,
                                 description:
                                   "Who decides a deviation, and when to route it to them",

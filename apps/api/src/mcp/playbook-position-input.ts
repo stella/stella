@@ -4,7 +4,7 @@
  *
  * The input carries what `list_playbooks` returns, minus everything the server
  * owns (tier rule and fallback entry ids, the derived ask, the deterministic
- * `check`), and flatter: the ladder is `tiers` with rules as plain strings. The
+ * `check`), and flatter: the ladder is `tiers`, lifted out of `standard`. The
  * CLI refuses a tool list whose schema nests deeper than `MAX_SCHEMA_DEPTH`
  * (`packages/cli/src/registry-trust.ts`), and installed CLIs cannot be told to
  * accept more, so the stored `standard.tiers.acceptable.rules[].text` nesting
@@ -44,9 +44,25 @@ const boundedText = (maxLength: number, description: string) =>
     v.description(description),
   );
 
+// An optional text a model has nothing to say in arrives as "" as often as it
+// is left out. Both mean absent, so neither is refused.
+const optionalText = (maxLength: number, description: string) =>
+  v.optional(
+    v.pipe(v.string(), v.maxLength(maxLength), v.description(description)),
+  );
+
+const presentText = (text: string | undefined): string | undefined =>
+  text === undefined || text.trim().length === 0 ? undefined : text;
+
+// Every tier is a list of `{ text }`, the shape a read returns. With rules as
+// bare strings beside fallback objects, a small model put each in the other.
 const tierRulesInput = (description: string) =>
   v.pipe(
-    v.array(boundedText(POSITION_LIMITS.tierRuleTextMaxLength, "One rule")),
+    v.array(
+      v.strictObject({
+        text: boundedText(POSITION_LIMITS.tierRuleTextMaxLength, "One rule"),
+      }),
+    ),
     v.maxLength(POSITION_LIMITS.tierRulesMaxItems),
     v.description(description),
   );
@@ -61,11 +77,9 @@ const positionCommonInput = {
     POSITION_LIMITS.issueMaxLength,
     "Short name of the term under review; unique within the playbook",
   ),
-  guidance: v.optional(
-    boundedText(
-      POSITION_LIMITS.guidanceMaxLength,
-      "What a reviewer examines in the clause",
-    ),
+  guidance: optionalText(
+    POSITION_LIMITS.guidanceMaxLength,
+    "What a reviewer examines in the clause",
   ),
   enabled: v.optional(
     v.pipe(
@@ -100,59 +114,58 @@ const extractPositionInput = v.strictObject({
 const gradedPositionInput = v.strictObject({
   mode: v.pipe(
     v.literal("graded"),
-    v.description("Grades each document's clause against the tiers"),
+    v.description(
+      "Grades each document's clause against tiers. Its question is derived " +
+        "from them, so it takes no ask",
+    ),
   ),
   ...positionCommonInput,
   severity: v.pipe(
     v.picklist(POSITION_SEVERITIES),
     v.description("Weight of a deviation; blocker is a walk-away term"),
   ),
-  purpose: v.optional(
-    boundedText(
-      POSITION_PURPOSE_MAX_LENGTH,
-      "One sentence on what the term is for, from the reviewing side",
-    ),
+  purpose: optionalText(
+    POSITION_PURPOSE_MAX_LENGTH,
+    "One sentence on what the term is for, from the reviewing side",
   ),
   tiers: v.pipe(
     v.strictObject({
-      acceptable: tierRulesInput("What an acceptable clause provides"),
-      ideal: v.optional(
-        boundedText(
-          POSITION_LIMITS.languageTextMaxLength,
-          "Preferred wording, inserted when a document deviates",
-        ),
+      acceptable: v.optional(
+        tierRulesInput("What an acceptable clause provides"),
       ),
-      fallback: v.pipe(
-        v.array(
-          v.strictObject({
-            text: boundedText(
-              POSITION_LIMITS.languageTextMaxLength,
-              "Accepted alternative wording",
-            ),
-            label: v.optional(
-              boundedText(
+      ideal: optionalText(
+        POSITION_LIMITS.languageTextMaxLength,
+        "Preferred wording, inserted when a document deviates",
+      ),
+      fallback: v.optional(
+        v.pipe(
+          v.array(
+            v.strictObject({
+              text: boundedText(
+                POSITION_LIMITS.languageTextMaxLength,
+                "Accepted alternative wording",
+              ),
+              label: optionalText(
                 POSITION_LIMITS.fallbackLabelMaxLength,
                 "Short name for the alternative",
               ),
-            ),
-          }),
+            }),
+          ),
+          v.maxLength(POSITION_LIMITS.fallbackEntriesMaxItems),
+          v.description("Accepted alternatives, best first"),
         ),
-        v.maxLength(POSITION_LIMITS.fallbackEntriesMaxItems),
-        v.description("Accepted alternatives, best first"),
       ),
-      not_acceptable: tierRulesInput("Red lines"),
+      not_acceptable: v.optional(tierRulesInput("Red lines")),
     }),
     v.description(
-      "The grading ladder; at least one rule, fallback entry, or ideal is required",
+      "The grading ladder; a tier left out is empty, and at least one rule, fallback entry, or ideal is required",
     ),
   ),
   negotiation: v.optional(
     v.strictObject({
-      rationale: v.optional(
-        boundedText(
-          POSITION_LIMITS.rationaleMaxLength,
-          "Why the organization holds this position",
-        ),
+      rationale: optionalText(
+        POSITION_LIMITS.rationaleMaxLength,
+        "Why the organization holds this position",
       ),
       talking_points: v.optional(
         v.pipe(
@@ -163,11 +176,9 @@ const gradedPositionInput = v.strictObject({
           v.description("What to say to the counterparty"),
         ),
       ),
-      escalation: v.optional(
-        boundedText(
-          POSITION_LIMITS.escalationMaxLength,
-          "Who decides a deviation, and when to route it to them",
-        ),
+      escalation: optionalText(
+        POSITION_LIMITS.escalationMaxLength,
+        "Who decides a deviation, and when to route it to them",
       ),
     }),
   ),
@@ -267,20 +278,39 @@ const toExtractPosition = ({
   input: Extract<PlaybookPositionInput, { mode: "extract" }>;
   sourceId: string;
   stored: ExtractPosition | undefined;
-}): ExtractPosition => ({
-  mode: "extract",
-  sourceId,
-  issue: input.issue,
-  ask: {
-    question: input.ask.question,
-    content:
-      input.ask.answer_type === undefined
-        ? (stored?.ask.content ?? contentForAnswerType("text"))
-        : contentForAnswerType(input.ask.answer_type),
-  },
-  ...(input.guidance === undefined ? {} : { guidance: input.guidance }),
-  enabled: input.enabled ?? true,
-});
+}): ExtractPosition => {
+  const guidance = presentText(input.guidance);
+  return {
+    mode: "extract",
+    sourceId,
+    issue: input.issue,
+    ask: {
+      question: input.ask.question,
+      content:
+        input.ask.answer_type === undefined
+          ? (stored?.ask.content ?? contentForAnswerType("text"))
+          : contentForAnswerType(input.ask.answer_type),
+    },
+    ...(guidance === undefined ? {} : { guidance }),
+    enabled: input.enabled ?? true,
+  };
+};
+
+// Two models in the authoring eval left an empty tier out instead of sending
+// `[]`. Absence has one meaning here, so it is read, not refused.
+const ruleLines = (
+  rules: readonly { text: string }[] | undefined,
+): { text: string }[] => (rules === undefined ? [] : [...rules]);
+
+const fallbackLines = (
+  entries: readonly { text: string; label?: string | undefined }[] | undefined,
+): { text: string; label?: string }[] =>
+  entries === undefined
+    ? []
+    : entries.map((entry) => {
+        const label = presentText(entry.label);
+        return { text: entry.text, ...(label === undefined ? {} : { label }) };
+      });
 
 /**
  * The input writes inline ideal language only. A stored clause link is a
@@ -315,8 +345,15 @@ const toGradedPosition = ({
   const storedTiers =
     stored?.standard.source === "tiers" ? stored.standard.tiers : undefined;
   const { tiers } = input;
-  const ideal = resolveIdeal({ input: tiers.ideal, storedTiers });
+  const ideal = resolveIdeal({
+    input: presentText(tiers.ideal),
+    storedTiers,
+  });
   const { negotiation } = input;
+  const purpose = presentText(input.purpose);
+  const guidance = presentText(input.guidance);
+  const rationale = presentText(negotiation?.rationale);
+  const escalation = presentText(negotiation?.escalation);
 
   return {
     mode: "graded",
@@ -328,7 +365,7 @@ const toGradedPosition = ({
       tiers: {
         acceptable: {
           rules: withStableIds<{ text: string }>({
-            lines: tiers.acceptable.map((text) => ({ text })),
+            lines: ruleLines(tiers.acceptable),
             storedLines: storedTiers?.acceptable.rules,
             mintId,
           }) satisfies TierRule[],
@@ -336,17 +373,14 @@ const toGradedPosition = ({
         },
         fallback: {
           entries: withStableIds<{ text: string; label?: string }>({
-            lines: tiers.fallback.map(({ text, label }) => ({
-              text,
-              ...(label === undefined ? {} : { label }),
-            })),
+            lines: fallbackLines(tiers.fallback),
             storedLines: storedTiers?.fallback.entries,
             mintId,
           }) satisfies FallbackEntry[],
         },
         notAcceptable: {
           rules: withStableIds<{ text: string }>({
-            lines: tiers.not_acceptable.map((text) => ({ text })),
+            lines: ruleLines(tiers.not_acceptable),
             storedLines: storedTiers?.notAcceptable.rules,
             mintId,
           }) satisfies TierRule[],
@@ -358,21 +392,17 @@ const toGradedPosition = ({
     // reuses while the rules hash still matches.
     ...(stored?.check === undefined ? {} : { check: stored.check }),
     ask: stored?.ask ?? { mode: "auto" },
-    ...(input.purpose === undefined ? {} : { purpose: input.purpose }),
-    ...(input.guidance === undefined ? {} : { guidance: input.guidance }),
+    ...(purpose === undefined ? {} : { purpose }),
+    ...(guidance === undefined ? {} : { guidance }),
     ...(negotiation === undefined
       ? {}
       : {
           negotiation: {
-            ...(negotiation.rationale === undefined
-              ? {}
-              : { rationale: negotiation.rationale }),
+            ...(rationale === undefined ? {} : { rationale }),
             ...(negotiation.talking_points === undefined
               ? {}
               : { talkingPoints: negotiation.talking_points }),
-            ...(negotiation.escalation === undefined
-              ? {}
-              : { escalation: negotiation.escalation }),
+            ...(escalation === undefined ? {} : { escalation }),
           },
         }),
     enabled: input.enabled ?? true,

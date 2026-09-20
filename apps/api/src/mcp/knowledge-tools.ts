@@ -13,6 +13,7 @@ import {
   listClausesHandler,
 } from "@/api/handlers/clauses/read";
 import { updateClauseHandler } from "@/api/handlers/clauses/update";
+import { DOCUMENT_TYPE_NOT_FOUND_MESSAGE } from "@/api/handlers/playbooks/assert-document-type";
 import { createPlaybookDefinitionHandler } from "@/api/handlers/playbooks/create-shared";
 import {
   getPlaybookDefinitionHandler,
@@ -1475,7 +1476,8 @@ const savePlaybookArgsSchema = nullAsAbsent(
                 v.minLength(1),
                 v.maxLength(128),
                 v.description(
-                  "Key of the organization document type the playbook reviews",
+                  "Key read from the document-types.list capability; omit it " +
+                    "otherwise, a guessed key is refused",
                 ),
               ),
             ),
@@ -1638,6 +1640,34 @@ const savePlaybookRefusedResult = (issues: readonly PlaybookMergeIssue[]) =>
     ].join(" "),
   });
 
+/**
+ * The two refusals of the shared create and update paths an agent can act on,
+ * given the step that acts on them; anything else takes the common sink.
+ */
+const savePlaybookFailureResult = (error: unknown) => {
+  if (HandlerError.is(error) && error.status === 409) {
+    return structuredErrorResult({
+      code: "conflict",
+      message: "The playbook changed since it was read, so nothing was saved",
+      hint: SAVE_PLAYBOOK_REREAD_HINT,
+    });
+  }
+  if (
+    HandlerError.is(error) &&
+    error.message === DOCUMENT_TYPE_NOT_FOUND_MESSAGE
+  ) {
+    return structuredErrorResult({
+      code: "validation_error",
+      message: error.message,
+      issues: [{ path: "scope.document_type_key", message: error.message }],
+      hint:
+        "Leave scope.document_type_key out and save again. Valid keys come " +
+        "from the document-types.list capability.",
+    });
+  }
+  return internalFailureResult(error);
+};
+
 const handleSavePlaybookTool: TypedMcpToolHandler<
   v.InferInput<typeof SAVE_PLAYBOOK_PROJECTION>
 > = async ({ args, context }) => {
@@ -1704,7 +1734,7 @@ const handleSavePlaybookTool: TypedMcpToolHandler<
       }),
     );
     if (Result.isError(created)) {
-      return internalFailureResult(created.error);
+      return savePlaybookFailureResult(created.error);
     }
     // The next save's token: create returns an id only, and minting a second
     // timestamp here would not be the stored one.
@@ -1790,14 +1820,7 @@ const handleSavePlaybookTool: TypedMcpToolHandler<
     }),
   );
   if (Result.isError(updated)) {
-    if (HandlerError.is(updated.error) && updated.error.status === 409) {
-      return structuredErrorResult({
-        code: "conflict",
-        message: "The playbook changed since it was read, so nothing was saved",
-        hint: SAVE_PLAYBOOK_REREAD_HINT,
-      });
-    }
-    return internalFailureResult(updated.error);
+    return savePlaybookFailureResult(updated.error);
   }
   return toolDataResult({
     playbookId,

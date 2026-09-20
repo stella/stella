@@ -34,6 +34,7 @@
     "eval:suggest-changes": "NODE_ENV=development bun --env-file=.env evals/suggest-changes-precision.ts",
     "eval:template-fill": "NODE_ENV=development bun --env-file=.env evals/template-fill.ts",
     "eval:template-authoring": "NODE_ENV=development bun --env-file=.env evals/template-authoring.ts",
+    "eval:playbook-authoring": "NODE_ENV=development bun --env-file=.env evals/playbook-authoring.ts",
     "eval:extraction": "NODE_ENV=development bun --env-file=.env evals/extraction.ts",
     "eval:agent-orientation": "NODE_ENV=development bun --env-file=.env evals/agent-orientation.ts",
     "db:migrate": "bun run --env-file=.env src/db/migrate.ts",

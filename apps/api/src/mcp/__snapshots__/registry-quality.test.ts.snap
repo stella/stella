@@ -3160,7 +3160,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
               "type": "string",
               "minLength": 1,
               "maxLength": 128,
-              "description": "Key of the organization document type the playbook reviews"
+              "description": "Key read from the document-types.list capability; omit it otherwise, a guessed key is refused"
             },
             "perspective": {
               "enum": [
@@ -3206,7 +3206,6 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
                   },
                   "guidance": {
                     "type": "string",
-                    "minLength": 1,
                     "maxLength": 2000,
                     "description": "What a reviewer examines in the clause"
                   },
@@ -3256,7 +3255,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
                     "enum": [
                       "graded"
                     ],
-                    "description": "Grades each document's clause against the tiers",
+                    "description": "Grades each document's clause against tiers. Its question is derived from them, so it takes no ask",
                     "type": "string"
                   },
                   "source_id": {
@@ -3272,7 +3271,6 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
                   },
                   "guidance": {
                     "type": "string",
-                    "minLength": 1,
                     "maxLength": 2000,
                     "description": "What a reviewer examines in the clause"
                   },
@@ -3295,7 +3293,6 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
                   },
                   "purpose": {
                     "type": "string",
-                    "minLength": 1,
                     "maxLength": 240,
                     "description": "One sentence on what the term is for, from the reviewing side"
                   },
@@ -3305,17 +3302,25 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
                       "acceptable": {
                         "type": "array",
                         "items": {
-                          "type": "string",
-                          "minLength": 1,
-                          "maxLength": 500,
-                          "description": "One rule"
+                          "type": "object",
+                          "properties": {
+                            "text": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 500,
+                              "description": "One rule"
+                            }
+                          },
+                          "required": [
+                            "text"
+                          ],
+                          "additionalProperties": false
                         },
                         "maxItems": 50,
                         "description": "What an acceptable clause provides"
                       },
                       "ideal": {
                         "type": "string",
-                        "minLength": 1,
                         "maxLength": 10000,
                         "description": "Preferred wording, inserted when a document deviates"
                       },
@@ -3332,7 +3337,6 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
                             },
                             "label": {
                               "type": "string",
-                              "minLength": 1,
                               "maxLength": 256,
                               "description": "Short name for the alternative"
                             }
@@ -3348,29 +3352,33 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
                       "not_acceptable": {
                         "type": "array",
                         "items": {
-                          "type": "string",
-                          "minLength": 1,
-                          "maxLength": 500,
-                          "description": "One rule"
+                          "type": "object",
+                          "properties": {
+                            "text": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 500,
+                              "description": "One rule"
+                            }
+                          },
+                          "required": [
+                            "text"
+                          ],
+                          "additionalProperties": false
                         },
                         "maxItems": 50,
                         "description": "Red lines"
                       }
                     },
-                    "required": [
-                      "acceptable",
-                      "fallback",
-                      "not_acceptable"
-                    ],
+                    "required": [],
                     "additionalProperties": false,
-                    "description": "The grading ladder; at least one rule, fallback entry, or ideal is required"
+                    "description": "The grading ladder; a tier left out is empty, and at least one rule, fallback entry, or ideal is required"
                   },
                   "negotiation": {
                     "type": "object",
                     "properties": {
                       "rationale": {
                         "type": "string",
-                        "minLength": 1,
                         "maxLength": 2000,
                         "description": "Why the organization holds this position"
                       },
@@ -3387,7 +3395,6 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
                       },
                       "escalation": {
                         "type": "string",
-                        "minLength": 1,
                         "maxLength": 500,
                         "description": "Who decides a deviation, and when to route it to them"
                       }

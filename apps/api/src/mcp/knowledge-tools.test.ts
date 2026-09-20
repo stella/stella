@@ -162,6 +162,7 @@ const createPlaybookWriteScopedDb = ({
       const tx = {
         $count: async () => 0,
         query: {
+          documentTypes: { findFirst: async () => undefined },
           playbookDefinitions: {
             findFirst: async () => ({
               ...STORED_PLAYBOOK,
@@ -449,6 +450,8 @@ describe("MCP knowledge tools", () => {
           {
             mode: "extract",
             issue: "Term",
+            // A model's way of saying "nothing here", inside a union member.
+            guidance: null,
             ask: { question: "How long is the term?", answer_type: "INT " },
           },
         ],
@@ -570,6 +573,25 @@ describe("MCP knowledge tools", () => {
           },
         ],
         hint: expect.stringContaining("source_id"),
+      },
+    });
+  });
+
+  test("save_playbook answers a guessed document type key with the way out", async () => {
+    const { scopedDb, writes } = createPlaybookWriteScopedDb();
+
+    const result = await handleMcpToolCall({
+      args: { name: "Inbound NDA", scope: { document_type_key: "nda" } },
+      context: createPlaybookWriteContext(scopedDb),
+      toolName: "save_playbook",
+    });
+
+    expect(writes).toEqual([]);
+    expect(parseToolPayload(result)).toMatchObject({
+      error: {
+        code: "validation_error",
+        issues: [{ path: "scope.document_type_key" }],
+        hint: expect.stringContaining("Leave scope.document_type_key out"),
       },
     });
   });

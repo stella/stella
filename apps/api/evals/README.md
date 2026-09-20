@@ -47,6 +47,12 @@ the default provider chain (see `getTanStackTextModelById`).
   paragraphs, one configuration entry per field, and no grammar trap
   (unprefixed item paths, `this.`, bracket indexing, per-language path
   variants, inline block markers)? Scores the four steps separately.
+- `playbook-authoring.ts`: can a model drive `save_playbook` from its schema
+  and description alone: the tier ladder, `extract` versus `graded`, severity
+  values, `source_id` to change a position and its absence to add one, sending
+  only what changed, and recovering from a duplicate-issue refusal and a stale
+  `expected_updated_at`? Calls run through the production tool pipeline over an
+  in-memory store. Run a small model beside a large one.
 - `extraction.ts`: does the structured-extraction path (`generateWorkflowData`)
   match ground truth across text, date, int, and select fields, and does it
   answer a question the source never states?

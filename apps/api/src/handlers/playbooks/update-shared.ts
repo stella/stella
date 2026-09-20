@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { playbookDefinitions } from "@/api/db/schema";
+import { assertPlaybookDocumentType } from "@/api/handlers/playbooks/assert-document-type";
 import { deriveAutoAsks } from "@/api/handlers/playbooks/derive-ask";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
@@ -71,29 +72,9 @@ export const updatePlaybookDefinitionHandler = async function* ({
     promptCachingEnabled,
   });
 
-  const documentTypeKey = body.scope?.documentTypeKey;
-  if (documentTypeKey !== undefined) {
-    const documentType = yield* Result.await(
-      safeDb((tx) =>
-        tx.query.documentTypes.findFirst({
-          where: {
-            organizationId: { eq: organizationId },
-            key: { eq: documentTypeKey },
-          },
-          columns: { id: true },
-        }),
-      ),
-    );
-
-    if (!documentType) {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message: "Document type not found in this organization",
-        }),
-      );
-    }
-  }
+  yield* Result.await(
+    assertPlaybookDocumentType({ safeDb, organizationId, scope: body.scope }),
+  );
 
   const updated = yield* Result.await(
     safeDb(async (tx) => {

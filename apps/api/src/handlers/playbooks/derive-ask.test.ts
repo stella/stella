@@ -106,16 +106,14 @@ describe("deriveAutoAsks — save resilience", () => {
       return { question: "Derived on the wrong key", contentType: "text" };
     };
     const stale = graded();
-    if (stale.mode === "graded") {
-      stale.ask = {
-        mode: "auto",
-        derived: {
-          question: "A question derived from older rules",
-          content: { version: 1, type: "text" },
-          rulesHash: "stale",
-        },
-      };
-    }
+    stale.ask = {
+      mode: "auto",
+      derived: {
+        question: "A question derived from older rules",
+        content: { version: 1, type: "text" },
+        rulesHash: "stale",
+      },
+    };
 
     const result = await deriveAutoAsks(container(stale), {
       ...deps,
