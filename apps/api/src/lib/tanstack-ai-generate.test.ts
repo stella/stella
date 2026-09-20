@@ -55,7 +55,13 @@ type ProviderRun =
       /** Cancels the caller's signal once the provider stream is exhausted. */
       abortAfter?: AbortController | undefined;
     }
-  | { type: "run-error"; code?: string | undefined; message: string }
+  | {
+      type: "run-error";
+      code?: string | undefined;
+      /** Text the run emitted before the error, as a ceiling stop does. */
+      deltas?: string[] | undefined;
+      message: string;
+    }
   | { type: "throw"; error: unknown }
   | { type: "abort-then-throw"; controller: AbortController }
   | { type: "object"; object: unknown; raw: string };
@@ -118,13 +124,16 @@ const abortRejectedRun = (controller: AbortController): ProviderRun => ({
 // body; leave it out to model the ones that stringify the body into the message.
 const runErrorRun = ({
   code,
+  deltas,
   message,
 }: {
   code?: string | undefined;
+  deltas?: string[] | undefined;
   message: string;
 }): ProviderRun => ({
   type: "run-error",
   ...(code === undefined ? {} : { code }),
+  ...(deltas === undefined ? {} : { deltas }),
   message,
 });
 
@@ -227,6 +236,24 @@ const providerAdapter: AnyTextAdapter = {
           runId: PROVIDER_RUN_ID,
           threadId: PROVIDER_THREAD_ID,
         } satisfies StreamChunk;
+        if (run.deltas) {
+          yield {
+            type: EventType.TEXT_MESSAGE_START,
+            messageId: PROVIDER_MESSAGE_ID,
+            role: "assistant",
+          } satisfies StreamChunk;
+          for (const delta of run.deltas) {
+            yield {
+              type: EventType.TEXT_MESSAGE_CONTENT,
+              messageId: PROVIDER_MESSAGE_ID,
+              delta,
+            } satisfies StreamChunk;
+          }
+          yield {
+            type: EventType.TEXT_MESSAGE_END,
+            messageId: PROVIDER_MESSAGE_ID,
+          } satisfies StreamChunk;
+        }
         yield {
           type: EventType.RUN_ERROR,
           ...(run.code === undefined ? {} : { code: run.code }),
@@ -1135,6 +1162,87 @@ describe("TanStack AI text generation", () => {
     );
 
     expect(caught).toMatchObject({ status: 502 });
+  });
+
+  // The output-ceiling stop reaches the engine as a `RUN_ERROR` on more than
+  // one adapter, and `testModel` is not the provider that shape was first seen
+  // on: normalizing only the adapters named for it leaves the same truncated
+  // answer returned on one provider and raised as a failure on the next.
+  test("returns the text a ceiling stop produced whichever adapter reports it", async () => {
+    queueRun(
+      runErrorRun({
+        code: "max_tokens",
+        deltas: ["as far as it got"],
+        message: "The response hit the output ceiling.",
+      }),
+    );
+
+    expect(
+      await generateTextForTestModel({
+        caching: noCaching,
+        finishPolicy: "allow-incomplete",
+        organizationId: null,
+        orgAIConfig: null,
+        prompt: "Recap it.",
+        role: "chat",
+        serviceTier: "standard",
+        tenantWorkspaceIds: [],
+      }),
+    ).toBe("as far as it got");
+  });
+
+  test("accepts a ceiling stop as the length finish an output-ceiling caller allows", async () => {
+    queueRun(
+      runErrorRun({
+        code: "max_tokens",
+        deltas: ["as far as it got"],
+        message: "The response hit the output ceiling.",
+      }),
+    );
+
+    expect(
+      await generateTextForTestModel({
+        caching: noCaching,
+        finishPolicy: "allow-output-ceiling",
+        organizationId: null,
+        orgAIConfig: null,
+        prompt: "Recap it.",
+        role: "chat",
+        serviceTier: "standard",
+        tenantWorkspaceIds: [],
+      }),
+    ).toBe("as far as it got");
+  });
+
+  // Reading the stop as a finish must not promote a truncated answer into a
+  // whole one: the run is graded, not excused.
+  test("still rejects a ceiling stop when a whole answer is required", async () => {
+    queueRun(
+      runErrorRun({
+        code: "max_tokens",
+        deltas: ["as far as it got"],
+        message: "The response hit the output ceiling.",
+      }),
+    );
+
+    const caught = await generateTextForTestModel({
+      caching: noCaching,
+      finishPolicy: "require-complete",
+      organizationId: null,
+      orgAIConfig: null,
+      prompt: "Recap it.",
+      role: "chat",
+      serviceTier: "standard",
+      tenantWorkspaceIds: [],
+    }).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+
+    expect(caught).toMatchObject({
+      message: "AI generation did not complete",
+      status: 502,
+    });
   });
 
   test("rejects a cancelled run instead of returning its truncated text", async () => {
