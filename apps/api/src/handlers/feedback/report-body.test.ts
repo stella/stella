@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   composeGithubIssueBody,
   neutralizeGithubReferences,
-} from "@/api/lib/feedback/report-body";
+} from "@/api/handlers/feedback/report-body";
 
 const TRACKER_MENTION = /@[A-Za-z0-9]/u;
 const TRACKER_ISSUE_REFERENCE = /#[0-9]/u;

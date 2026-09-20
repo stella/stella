@@ -164,11 +164,14 @@ describe("prepare_feedback and submit_feedback agree on one shape", () => {
       throw new TypeError("submit_feedback is missing from the registry");
     }
 
+    const { report } = payload;
+    if (typeof report !== "object" || report === null) {
+      throw new TypeError("Expected the prepared report to be an object");
+    }
+
     expect(
-      v.safeParse(submitTool.inputSchemaSource, {
-        ...payload.report,
-        confirm: true,
-      }).success,
+      v.safeParse(submitTool.inputSchemaSource, { ...report, confirm: true })
+        .success,
     ).toBe(true);
   });
 });

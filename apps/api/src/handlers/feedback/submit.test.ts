@@ -3,6 +3,8 @@ import { describe, expect, mock, test } from "bun:test";
 
 import type { FeedbackReportInput } from "@stll/api-contract/feedback";
 
+import { GithubDeliveryError } from "@/api/handlers/feedback/github-delivery";
+import type { GithubIssueCreator } from "@/api/handlers/feedback/github-delivery";
 import {
   NO_DELIVERY_CHANNEL_WARNING,
   generateFeedbackReceipt,
@@ -14,18 +16,17 @@ import type {
   SubmitFeedbackDependencies,
 } from "@/api/handlers/feedback/submit";
 import { toSafeId } from "@/api/lib/branded-types";
-import { GithubDeliveryError } from "@/api/lib/feedback/github-delivery";
-import type { GithubIssueCreator } from "@/api/lib/feedback/github-delivery";
 import type {
   FeedbackReportRow,
   FeedbackReportStore,
-} from "@/api/lib/feedback/report-store";
+} from "@/api/lib/db/feedback-report-store";
 
-const MCP_REPORTER: FeedbackReporter = {
-  via: "mcp",
+const MCP_REPORTER_IDS = {
   userId: toSafeId<"user">("user_1"),
   organizationId: toSafeId<"organization">("org_1"),
 };
+
+const MCP_REPORTER: FeedbackReporter = { via: "mcp", ...MCP_REPORTER_IDS };
 
 const REPORT: FeedbackReportInput = {
   kind: "bug",
@@ -311,8 +312,8 @@ describe("submitFeedbackReport", () => {
 
     expect(events).toHaveLength(1);
     expect(events.at(0)).toEqual({
-      distinctId: "user_1",
-      organizationId: "org_1",
+      distinctId: MCP_REPORTER_IDS.userId,
+      organizationId: MCP_REPORTER_IDS.organizationId,
       properties: {
         kind: "bug",
         area: "documents",

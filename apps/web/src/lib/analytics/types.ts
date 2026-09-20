@@ -32,7 +32,7 @@ export type Analytics = {
     properties: FeedbackDialogOpenedProperties,
   ) => void;
   captureFeedbackReportSubmitted: (
-    properties: FeedbackReportSubmittedProperties,
+    properties: FeedbackDialogSubmittedProperties,
   ) => void;
   captureRouteErrorLifecycle: (
     properties: RouteErrorLifecycleProperties,
@@ -69,7 +69,7 @@ export type FeedbackDialogOpenedProperties = {
 };
 
 // Classification only: the report's own text never reaches analytics.
-export type FeedbackReportSubmittedProperties = {
+export type FeedbackDialogSubmittedProperties = {
   area: FeedbackArea;
   kind: FeedbackKind;
   source: FeedbackReportSource;

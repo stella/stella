@@ -11,6 +11,7 @@ import {
 } from "@/api/handlers/feedback/intake";
 import { createFeedbackIntakeGuards } from "@/api/handlers/feedback/intake-guards";
 import { feedbackPublicRoute } from "@/api/handlers/feedback/routes";
+import { FeedbackStoreError } from "@/api/handlers/feedback/submit";
 import type { submitFeedbackReport } from "@/api/handlers/feedback/submit";
 
 const SUBMIT_RESPONSE: FeedbackSubmitResponse = {
@@ -128,11 +129,7 @@ describe("public feedback intake", () => {
 
   test("answers 503 when the report could not be stored", async () => {
     const failing = mock<typeof submitFeedbackReport>(async () =>
-      Result.err(
-        new (class extends Error {
-          override readonly name = "FeedbackStoreError";
-        })("nope"),
-      ),
+      Result.err(new FeedbackStoreError({ message: "nope" })),
     );
 
     const response = await receiveForTest({

@@ -4267,8 +4267,8 @@
             },
             "request_id": {
               "type": "string",
-              "pattern": "^[A-Za-z0-9._-]{1,64}$",
-              "description": "The requestId a failing tool returned in its error envelope. Kept verbatim (it is the only field that is not redacted) because it is how a maintainer finds the failing call in the server logs."
+              "maxLength": 64,
+              "description": "The requestId a failing tool returned in its error envelope. Kept verbatim (it is the only field that is not redacted) because it is how a maintainer finds the failing call in the server logs. A value that is not letters, digits, dot, underscore or hyphen is dropped."
             },
             "route": {
               "type": "string",
@@ -4373,8 +4373,8 @@
             },
             "request_id": {
               "type": "string",
-              "pattern": "^[A-Za-z0-9._-]{1,64}$",
-              "description": "The requestId a failing tool returned in its error envelope. Kept verbatim (it is the only field that is not redacted) because it is how a maintainer finds the failing call in the server logs."
+              "maxLength": 64,
+              "description": "The requestId a failing tool returned in its error envelope. Kept verbatim (it is the only field that is not redacted) because it is how a maintainer finds the failing call in the server logs. A value that is not letters, digits, dot, underscore or hyphen is dropped."
             },
             "route": {
               "type": "string",

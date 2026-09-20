@@ -558,7 +558,6 @@ const api = new Elysia()
   )
   .use(aiAutocompleteRoute)
   .use(feedbackPublicRoute)
-  .use(feedbackRoute)
   .use(memoriesRoute)
   .use(notificationsRoute)
   .use(devPublicRoute)
@@ -683,7 +682,11 @@ const api = new Elysia()
       .use(meRoute)
       .use(devRoute)
       .use(verifyAuthRoute),
-  );
+  )
+  // Mounted after the versioned group on purpose: a route added before it
+  // deepens the type the group callback infers, which is already at
+  // TypeScript's instantiation limit for the browser's Eden client.
+  .use(feedbackRoute);
 
 export default api;
 

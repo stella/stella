@@ -41,7 +41,7 @@ const FEEDBACK_VIA_SQL_VALUES = FEEDBACK_VIAS.map((via) => sql.raw(`'${via}'`));
  * This is a system table, not tenant data: it has no read surface, no
  * workspace column, and no policy admitting the request role. RLS is enabled
  * with no policy and the migration revokes every privilege from `stella`, so
- * only the owner connection behind `lib/feedback/report-store.ts` can reach
+ * only the owner connection behind `lib/db/feedback-report-store.ts` can reach
  * it. `userId` / `organizationId` record who filed a report for the
  * maintainer's private view and drop to NULL when the account or firm is
  * deleted, which is why neither is a cascade.

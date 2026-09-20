@@ -21,11 +21,10 @@ import { sanitizeFeedbackText } from "@/api/mcp/feedback-sanitize";
 
 /**
  * Request ids are opaque tokens; anything outside this class is not one. The
- * same expression is advertised as the MCP input's `pattern` and as the
- * Elysia route's, so it is built flagless on purpose.
+ * reader decides here rather than the input schemas, so a spelling a client
+ * pads or wraps is normalized instead of rejected at the boundary.
  */
-// oxlint-disable-next-line require-unicode-regexp -- @valibot/to-json-schema rejects every regex flag, and the advertised `pattern` has to be the expression this reader runs
-export const FEEDBACK_REQUEST_ID_PATTERN = /^[A-Za-z0-9._-]{1,64}$/;
+export const FEEDBACK_REQUEST_ID_PATTERN = /^[A-Za-z0-9._-]{1,64}$/u;
 
 const TEXT_FIELDS = [
   "title",
@@ -132,11 +131,9 @@ const sanitizeContext = (
   if (context.client !== undefined) {
     sanitized.client = context.client;
   }
-  if (
-    context.requestId !== undefined &&
-    FEEDBACK_REQUEST_ID_PATTERN.test(context.requestId)
-  ) {
-    sanitized.requestId = context.requestId;
+  const requestId = context.requestId?.trim();
+  if (requestId !== undefined && FEEDBACK_REQUEST_ID_PATTERN.test(requestId)) {
+    sanitized.requestId = requestId;
   }
   for (const field of CONTEXT_TEXT_FIELDS) {
     const value = context[field];

@@ -233,7 +233,7 @@ delivers nothing), stores the row, then delivers outside the transaction.
 Storage is `feedback_reports`, a system table: RLS is enabled with no policy and
 the migration revokes every privilege from `stella`, so the request role can
 neither read a report nor file one under another reporter's identity. All access
-goes through `lib/feedback/report-store.ts`, which writes the row and its audit
+goes through `lib/db/feedback-report-store.ts`, which writes the row and its audit
 event in one transaction.
 
 Delivery is per configured channel. Email goes to `FEEDBACK_EMAIL_TO` when the

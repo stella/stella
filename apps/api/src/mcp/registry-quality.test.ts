@@ -968,16 +968,18 @@ describe("destructive write-tool behavior", () => {
     // The two facts are independent and must not be conflated: `outbound`
     // gates the confirmation prompt, `destructiveHint` tells a client to
     // render the call as a deletion. A send destroys nothing.
-    const offenders = DEFAULT_MCP_TOOL_DEFINITIONS.filter(
-      (tool) =>
-        tool.destructiveBehavior?.type === "outbound" &&
-        tool.annotations.destructiveHint,
-    ).map((tool) => tool.name);
+    const offenders = defaultTools
+      .filter(
+        (tool) =>
+          tool.destructiveBehavior?.type === "outbound" &&
+          tool.annotations.destructiveHint,
+      )
+      .map((tool) => tool.name);
     expect(offenders).toEqual([]);
   });
 
   test("an outbound tool states what it sends, and advertises confirm", () => {
-    const outbound = DEFAULT_MCP_TOOL_DEFINITIONS.filter(
+    const outbound = defaultTools.filter(
       (tool) => tool.destructiveBehavior?.type === "outbound",
     );
     expect(outbound.length).toBeGreaterThan(0);

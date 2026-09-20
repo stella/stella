@@ -4449,8 +4449,8 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
             },
             "request_id": {
               "type": "string",
-              "pattern": "^[A-Za-z0-9._-]{1,64}$",
-              "description": "The requestId a failing tool returned in its error envelope. Kept verbatim (it is the only field that is not redacted) because it is how a maintainer finds the failing call in the server logs."
+              "maxLength": 64,
+              "description": "The requestId from a failing tool's error envelope. Kept verbatim, never redacted: it is how a maintainer finds the call. Letters, digits, dot, underscore and hyphen only; anything else is dropped."
             },
             "route": {
               "type": "string",
@@ -4569,8 +4569,8 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
             },
             "request_id": {
               "type": "string",
-              "pattern": "^[A-Za-z0-9._-]{1,64}$",
-              "description": "The requestId a failing tool returned in its error envelope. Kept verbatim (it is the only field that is not redacted) because it is how a maintainer finds the failing call in the server logs."
+              "maxLength": 64,
+              "description": "The requestId from a failing tool's error envelope. Kept verbatim, never redacted: it is how a maintainer finds the call. Letters, digits, dot, underscore and hyphen only; anything else is dropped."
             },
             "route": {
               "type": "string",

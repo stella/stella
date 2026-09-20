@@ -156,7 +156,7 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   // Filed feedback reports: no tenant read surface, and the request role must
   // be able neither to read one nor to file one under another reporter's
   // identity. Written only through the owner connection in
-  // lib/feedback/report-store.ts.
+  // lib/db/feedback-report-store.ts.
   "feedback_reports",
 ]);
 

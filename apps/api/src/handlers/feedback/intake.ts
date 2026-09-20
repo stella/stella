@@ -37,9 +37,9 @@ import {
   type FeedbackIntakeGuards,
   feedbackIntakeGuards,
 } from "@/api/handlers/feedback/intake-guards";
+import { FEEDBACK_REQUEST_ID_PATTERN } from "@/api/handlers/feedback/sanitize-report";
 import { submitFeedbackReport } from "@/api/handlers/feedback/submit";
 import type { SubmitFeedbackDependencies } from "@/api/handlers/feedback/submit";
-import { FEEDBACK_REQUEST_ID_PATTERN } from "@/api/lib/feedback/sanitize-report";
 import type { McpErrorCode } from "@/api/mcp/error-codes";
 
 // Coarse raw-body string cap enforced at the route before JSON parsing: bounds

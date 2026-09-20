@@ -1,11 +1,9 @@
-import { useState } from "react";
-
 import { useForm } from "@tanstack/react-form";
 import { useMutation } from "@tanstack/react-query";
 import { useLocation } from "@tanstack/react-router";
 import { useSelector } from "@tanstack/react-store";
 import { Result } from "better-result";
-import { CopyIcon, MegaphoneIcon } from "lucide-react";
+import { CopyIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
@@ -52,7 +50,6 @@ import {
   FEEDBACK_KIND_LABEL_KEYS,
   resolveFeedbackArea,
 } from "@/components/feedback-dialog.logic";
-import { SidebarMenuButton, SidebarMenuItem } from "@/components/sidebar";
 import type { ErrorReference } from "@/lib/analytics/error-reference";
 import { useAnalytics } from "@/lib/analytics/provider";
 import type { FeedbackReportSource } from "@/lib/analytics/types";
@@ -78,55 +75,26 @@ type FeedbackDialogProps = {
  * Collects a structured report and posts it to `/v1/feedback`. The popup
  * unmounts on close, so each opening starts from a clean form and a clean
  * mutation; nothing typed here survives a dismissal.
+ *
+ * The opener records `feedback_dialog_opened`: a controlled dialog never
+ * reports an open its parent caused, so the capture belongs with the trigger.
  */
 export const FeedbackDialog = ({
   errorReference,
   onOpenChange,
   open,
   source,
-}: FeedbackDialogProps) => {
-  const analytics = useAnalytics();
-
-  return (
-    <Dialog
-      onOpenChange={(nextOpen) => {
-        if (nextOpen) {
-          analytics.captureFeedbackDialogOpened({ source });
-        }
-        onOpenChange(nextOpen);
-      }}
-      open={open}
-    >
-      <DialogPopup className="max-w-xl">
-        <FeedbackReport
-          errorReference={errorReference}
-          onClose={() => onOpenChange(false)}
-          source={source}
-        />
-      </DialogPopup>
-    </Dialog>
-  );
-};
-
-/** Sidebar entry point. Owns its own dialog so the shell stays a layout. */
-export const FeedbackSidebarItem = () => {
-  const t = useTranslations();
-  const [open, setOpen] = useState(false);
-
-  return (
-    <SidebarMenuItem>
-      <SidebarMenuButton
-        onClick={() => setOpen(true)}
-        size="sm"
-        tooltip={t("feedback.trigger")}
-      >
-        <MegaphoneIcon className="size-4" />
-        <span>{t("feedback.trigger")}</span>
-      </SidebarMenuButton>
-      <FeedbackDialog onOpenChange={setOpen} open={open} source="sidebar" />
-    </SidebarMenuItem>
-  );
-};
+}: FeedbackDialogProps) => (
+  <Dialog onOpenChange={onOpenChange} open={open}>
+    <DialogPopup className="max-w-xl">
+      <FeedbackReport
+        errorReference={errorReference}
+        onClose={() => onOpenChange(false)}
+        source={source}
+      />
+    </DialogPopup>
+  </Dialog>
+);
 
 type FeedbackReportProps = {
   errorReference: ErrorReference | undefined;
@@ -245,7 +213,11 @@ const FeedbackReport = ({
               <Field name={field.name}>
                 <FieldLabel>{t("common.kind")}</FieldLabel>
                 <Select
-                  onValueChange={(value) => field.handleChange(value)}
+                  onValueChange={(value) => {
+                    if (value !== null) {
+                      field.handleChange(value);
+                    }
+                  }}
                   value={field.state.value}
                 >
                   <SelectTrigger>
@@ -269,7 +241,11 @@ const FeedbackReport = ({
               <Field name={field.name}>
                 <FieldLabel>{t("feedback.area")}</FieldLabel>
                 <Select
-                  onValueChange={(value) => field.handleChange(value)}
+                  onValueChange={(value) => {
+                    if (value !== null) {
+                      field.handleChange(value);
+                    }
+                  }}
                   value={field.state.value}
                 >
                   <SelectTrigger>

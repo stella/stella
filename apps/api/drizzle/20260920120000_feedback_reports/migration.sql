@@ -64,5 +64,5 @@ CREATE INDEX "feedback_reports_fingerprint_created_idx"
 ALTER TABLE "feedback_reports" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 -- No policy and no grant: the request role must be able neither to read a
 -- report nor to file one under another reporter's identity. Every access goes
--- through the owner connection in lib/feedback/report-store.ts.
+-- through the owner connection in lib/db/feedback-report-store.ts.
 REVOKE ALL PRIVILEGES ON TABLE "feedback_reports" FROM stella;

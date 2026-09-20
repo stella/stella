@@ -28,6 +28,19 @@ import type {
 import { DAY_IN_MS } from "@stll/time";
 
 import { env } from "@/api/env";
+import { createGithubFeedbackIssue } from "@/api/handlers/feedback/github-delivery";
+import type {
+  GithubDeliveryConfig,
+  GithubIssueCreator,
+} from "@/api/handlers/feedback/github-delivery";
+import {
+  composeGithubIssueBody,
+  neutralizeGithubReferences,
+} from "@/api/handlers/feedback/report-body";
+import {
+  feedbackFingerprint,
+  sanitizeFeedbackReport,
+} from "@/api/handlers/feedback/sanitize-report";
 import { captureError } from "@/api/lib/analytics/capture";
 import { getAnalytics } from "@/api/lib/analytics/client";
 import type {
@@ -36,25 +49,12 @@ import type {
 } from "@/api/lib/analytics/types";
 import { SERVER_ANALYTICS_EVENTS } from "@/api/lib/analytics/types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { feedbackReportStore } from "@/api/lib/db/feedback-report-store";
+import type { FeedbackReportStore } from "@/api/lib/db/feedback-report-store";
 import {
   isTransactionalEmailConfigured,
   sendFeedbackEmail,
 } from "@/api/lib/email/email";
-import { createGithubFeedbackIssue } from "@/api/lib/feedback/github-delivery";
-import type {
-  GithubDeliveryConfig,
-  GithubIssueCreator,
-} from "@/api/lib/feedback/github-delivery";
-import {
-  composeGithubIssueBody,
-  neutralizeGithubReferences,
-} from "@/api/lib/feedback/report-body";
-import { feedbackReportStore } from "@/api/lib/feedback/report-store";
-import type { FeedbackReportStore } from "@/api/lib/feedback/report-store";
-import {
-  feedbackFingerprint,
-  sanitizeFeedbackReport,
-} from "@/api/lib/feedback/sanitize-report";
 import { APP_VERSION } from "@/api/lib/version";
 
 /** Identical content inside this window is a resend, not new signal. */

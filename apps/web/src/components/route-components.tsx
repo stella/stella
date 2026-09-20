@@ -1,4 +1,4 @@
-import { useState, useTransition } from "react";
+import { lazy, Suspense, useState, useTransition } from "react";
 
 import { CancelledError, useQueryClient } from "@tanstack/react-query";
 import { Link, Navigate } from "@tanstack/react-router";
@@ -13,7 +13,6 @@ import { Loader } from "@stll/ui/loader";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
-import { FeedbackDialog } from "@/components/feedback-dialog";
 import { MattersNavIcon } from "@/components/matter-icon";
 import {
   isNetworkError,
@@ -33,6 +32,12 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { useRouteErrorLifecycle } from "@/lib/analytics/route-error-lifecycle-context";
 import { detached } from "@/lib/detached";
 import { isMemberError, isUnauthorizedError } from "@/lib/errors/auth";
+
+// Lazy so the form stack is fetched only when someone reports the error.
+const FeedbackDialog = lazy(async () => {
+  const module = await import("@/components/feedback-dialog");
+  return { default: module.FeedbackDialog };
+});
 
 type DefaultErrorComponentProps = ErrorComponentProps & {
   className?: string;
@@ -233,6 +238,9 @@ const UnexpectedRouteError = ({
     null,
   );
   const [reportOpen, setReportOpen] = useState(false);
+  // Mounted on first use so the form chunk is never fetched for an error
+  // nobody reports, then kept for the exit transition.
+  const [reportMounted, setReportMounted] = useState(false);
   const authStatus = useClientAuthStatus();
   const visibleErrorReference = errorReference ?? PENDING_ERROR_REFERENCE;
   const recovery = resolveRouteErrorRecovery(routeError);
@@ -351,15 +359,28 @@ const UnexpectedRouteError = ({
           </Button>
           {support.type === "report" && errorReference !== null && (
             <>
-              <Button onClick={() => setReportOpen(true)} variant="ghost">
+              <Button
+                onClick={() => {
+                  analytics.captureFeedbackDialogOpened({
+                    source: "route_error",
+                  });
+                  setReportOpen(true);
+                  setReportMounted(true);
+                }}
+                variant="ghost"
+              >
                 <MegaphoneIcon /> {t("routeError.reportProblem")}
               </Button>
-              <FeedbackDialog
-                errorReference={errorReference}
-                onOpenChange={setReportOpen}
-                open={reportOpen}
-                source="route_error"
-              />
+              {reportMounted && (
+                <Suspense fallback={null}>
+                  <FeedbackDialog
+                    errorReference={errorReference}
+                    onOpenChange={setReportOpen}
+                    open={reportOpen}
+                    source="route_error"
+                  />
+                </Suspense>
+              )}
             </>
           )}
         </div>

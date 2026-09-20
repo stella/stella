@@ -25,12 +25,9 @@ import type {
 } from "@stll/api-contract/feedback";
 
 import { feedbackIntakeGuards } from "@/api/handlers/feedback/intake-guards";
+import { sanitizeFeedbackReport } from "@/api/handlers/feedback/sanitize-report";
+import type { SanitizableFeedbackField } from "@/api/handlers/feedback/sanitize-report";
 import { submitFeedbackReport } from "@/api/handlers/feedback/submit";
-import {
-  FEEDBACK_REQUEST_ID_PATTERN,
-  sanitizeFeedbackReport,
-} from "@/api/lib/feedback/sanitize-report";
-import type { SanitizableFeedbackField } from "@/api/lib/feedback/sanitize-report";
 import type { McpToolDefinition, McpToolHandler } from "@/api/mcp/tool-types";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
@@ -50,6 +47,8 @@ export const SUBMIT_RATE_LIMIT_MAX_PER_ORG = 20;
 const SUBMIT_RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;
 const SUBMIT_RATE_LIMIT_BUCKET = "feedback:org";
 
+const FEEDBACK_REQUEST_ID_MAX_CHARS = 64;
+
 const capped = (description: string, max: number) =>
   v.pipe(v.string(), v.maxLength(max), v.description(description));
 
@@ -64,17 +63,11 @@ const contextArgsSchema = v.strictObject({
     capped("Version string of that client.", FEEDBACK_LIMITS.contextField),
   ),
   request_id: v.optional(
-    v.pipe(
-      v.string(),
-      v.regex(
-        FEEDBACK_REQUEST_ID_PATTERN,
-        "request_id may contain letters, digits, dot, underscore and hyphen only",
-      ),
-      v.description(
-        "The requestId a failing tool returned in its error envelope. Kept " +
-          "verbatim (it is the only field that is not redacted) because it is " +
-          "how a maintainer finds the failing call in the server logs.",
-      ),
+    capped(
+      "The requestId from a failing tool's error envelope. Kept verbatim, " +
+        "never redacted: it is how a maintainer finds the call. Letters, " +
+        "digits, dot, underscore and hyphen only; anything else is dropped.",
+      FEEDBACK_REQUEST_ID_MAX_CHARS,
     ),
   ),
   route: v.optional(
