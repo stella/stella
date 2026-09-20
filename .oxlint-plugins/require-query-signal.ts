@@ -368,7 +368,7 @@ export default eslintCompatPlugin({
             return false;
           }
           const variable = resolveVariable(node);
-          if (variable === null || variable.defs.length !== 1) {
+          if (variable?.defs.length !== 1) {
             return false;
           }
           const definition = variable.defs.at(0);
@@ -402,8 +402,7 @@ export default eslintCompatPlugin({
         ): AstNode | null => {
           const variable = resolveVariable(identifier);
           if (
-            variable === null ||
-            variable.defs.length !== 1 ||
+            variable?.defs.length !== 1 ||
             visited.has(variable) ||
             hasReassignment(variable)
           ) {
