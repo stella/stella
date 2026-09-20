@@ -128,6 +128,22 @@ describe("buildRegistryWriteSummaryRows", () => {
     ]);
   });
 
+  test("save_playbook reads a null as absent, as the server does", () => {
+    const rows = build("save_playbook", {
+      playbook_id: "playbook-1",
+      expected_updated_at: "2026-09-20T10:00:00.000Z",
+      name: null,
+      description: null,
+      scope: null,
+      positions: [{ mode: "graded", issue: "Liability cap", source_id: null }],
+      remove_source_ids: null,
+    });
+
+    expect(rows.map(({ label, value }) => [label, value])).toEqual([
+      ["Positions added", "Liability cap"],
+    ]);
+  });
+
   test("fill_template summarizes the template handle and per-field values", () => {
     const rows = build("fill_template", {
       templateId: "tmpl-abc",

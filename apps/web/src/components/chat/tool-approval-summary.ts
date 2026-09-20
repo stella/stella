@@ -178,7 +178,8 @@ export const buildRegistryWriteSummaryRows = ({
  * changes, each a full tier ladder. The approver needs to know which
  * positions the call touches and how, not to read the ladders as one blob, so
  * the entries are named by issue and split by whether they carry a
- * `source_id` (a change to a stored position) or not (a new one).
+ * `source_id` (a change to a stored position) or not (a new one). The card
+ * reads the raw call, where the server reads a `null` as absent, so it does too.
  */
 const buildSavePlaybookRows = ({
   emptyLabel,
@@ -189,7 +190,7 @@ const buildSavePlaybookRows = ({
 }): ReadableInputRow[] => {
   const rows: ReadableInputRow[] = [];
   for (const key of ["name", "description", "scope"]) {
-    if (input[key] === undefined) {
+    if (input[key] === undefined || input[key] === null) {
       continue;
     }
     rows.push({
@@ -206,7 +207,7 @@ const buildSavePlaybookRows = ({
     if (!isRecord(position) || typeof position["issue"] !== "string") {
       continue;
     }
-    (position["source_id"] === undefined ? added : changed).push(
+    (typeof position["source_id"] === "string" ? changed : added).push(
       position["issue"],
     );
   }
