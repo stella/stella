@@ -2662,7 +2662,9 @@ fn sanitized_style(element: &str, style: &str) -> Option<String> {
     let property = property.trim().to_ascii_lowercase();
     let value = value.trim().to_ascii_lowercase();
     let kept = match property.as_str() {
-      "text-align" => matches!(
+      // Inline elements ignore text-align; browsers still copy it onto the
+      // span wrapping a selection.
+      "text-align" if is_block_element(element) => matches!(
         value.as_str(),
         "left" | "right" | "center" | "justify" | "start" | "end"
       )
@@ -2692,6 +2694,13 @@ fn sanitized_style(element: &str, style: &str) -> Option<String> {
     }
   }
   (!declarations.is_empty()).then(|| declarations.join("; "))
+}
+
+fn is_block_element(element: &str) -> bool {
+  matches!(
+    element,
+    "blockquote" | "div" | "li" | "p" | "pre" | "td" | "th" | "tr"
+  )
 }
 
 /// A visible rule: its width in points (capped) and its line style.
@@ -2755,7 +2764,13 @@ fn format_points(value: f32) -> String {
   text.trim_end_matches('0').trim_end_matches('.').to_string()
 }
 
-/// Ignore neutral page backgrounds regardless of their CSS spelling. The exact
+/// Marker highlights are saturated; page canvases are near-grey. Browsers copy
+/// the page background onto every selection (GitHub dark `#0d1117` has chroma
+/// 0.04), while the palest marker colour in common use (Google Docs' light
+/// yellow, `#fff2cc`) has chroma 0.2.
+const MIN_HIGHLIGHT_CHROMA: f32 = 0.125;
+
+/// Ignore page backgrounds regardless of their CSS spelling. The exact
 /// generated token remains valid when stored HTML is sanitized again.
 fn is_highlight_color(value: &str) -> bool {
   if value == HIGHLIGHT_BACKGROUND {
@@ -2763,7 +2778,8 @@ fn is_highlight_color(value: &str) -> bool {
   }
   csscolorparser::parse(value).is_ok_and(|color| {
     let [red, green, blue, alpha] = color.clamp().to_array();
-    alpha > 0.0 && (red != green || green != blue)
+    let chroma = red.max(green).max(blue) - red.min(green).min(blue);
+    alpha > 0.0 && chroma >= MIN_HIGHLIGHT_CHROMA
   })
 }
 
@@ -4391,7 +4407,8 @@ mod tests {
       "rgb(100% 100% 0% / 50%)",
       "hsl(60 100% 50%)",
       "rgba(255, 0, 0, 0.001)",
-      "rgb(10.1 10 10)",
+      "#fff2cc",
+      "#000080",
     ] {
       let html = format!("<strong style='background: {color}'>text</strong>");
       let sanitized = sanitized_html(&html).unwrap();
@@ -4406,6 +4423,38 @@ mod tests {
         "{html}"
       );
     }
+  }
+
+  #[test]
+  fn sanitizer_ignores_near_grey_page_canvas_backgrounds() {
+    for color in [
+      "rgb(10.1 10 10)",
+      "#0d1117",
+      "#22272e",
+      "#f6f8fa",
+      "rgb(13, 17, 23)",
+      "rgb(246, 248, 250)",
+      "#1f2328",
+      "#fafbfc",
+    ] {
+      let html = format!("<strong style='background-color: {color}'>text</strong>");
+      assert_eq!(
+        sanitized_html(&html).as_deref(),
+        Some("<strong>text</strong>"),
+        "{html}"
+      );
+    }
+  }
+
+  /// Chrome wraps a copied selection in a span carrying the block's computed
+  /// style, including the page background and alignment; none of it is
+  /// formatting, so the clip stays plain text.
+  #[test]
+  fn sanitizer_does_not_highlight_a_browser_selection_wrapper() {
+    let html = sanitized_html(
+      r#"<span style="color: rgb(230, 237, 243); font-family: -apple-system, sans-serif; font-size: 14px; font-weight: 400; text-align: start; white-space: normal; background-color: rgb(13, 17, 23); display: inline !important; float: none;">3503</span>"#,
+    );
+    assert_eq!(html.as_deref(), None);
   }
 
   #[test]
