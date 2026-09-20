@@ -22,6 +22,8 @@ import {
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { CHAT_TOOL_SET_PURPOSE } from "@/api/lib/chat/chat-tool-types";
+import type { ChatToolSetPurpose } from "@/api/lib/chat/chat-tool-types";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { toTanStackValibotSchema as toTanStackToolSchema } from "@/api/lib/tanstack-ai-schema";
@@ -35,6 +37,13 @@ type AvailableSkillMetadata = SkillMetadata & {
 type CreateSkillToolsProps = {
   activeSkillContext?: ActiveChatSkillContext | null | undefined;
   organizationId: SafeId<"organization">;
+  /**
+   * A `validation` set registers the catalog tools whatever `skills` holds and
+   * accepts any skill name: the catalog that produced a persisted call may have
+   * changed since (a skill uninstalled, disabled, or renamed), and availability
+   * is decided when the tool runs, never by the schema.
+   */
+  purpose?: ChatToolSetPurpose | undefined;
   recordAuditEvent?: AuditRecorder | undefined;
   safeDb: SafeDb;
   skills: readonly AvailableSkillMetadata[];
@@ -44,6 +53,7 @@ type CreateSkillToolsProps = {
 export const createSkillTools = ({
   activeSkillContext,
   organizationId,
+  purpose = CHAT_TOOL_SET_PURPOSE.run,
   recordAuditEvent,
   safeDb,
   skills,
@@ -63,7 +73,8 @@ export const createSkillTools = ({
         })
       : {};
 
-  if (skills.length === 0) {
+  const forValidation = purpose === CHAT_TOOL_SET_PURPOSE.validation;
+  if (skills.length === 0 && !forValidation) {
     return {
       "load-skill": undefined,
       "read-skill-resource": undefined,
@@ -71,7 +82,9 @@ export const createSkillTools = ({
     };
   }
 
-  const skillNameSchema = createSkillNameSchema(skills);
+  const skillNameSchema = forValidation
+    ? anySkillNameSchema
+    : createSkillNameSchema(skills);
 
   return {
     "load-skill": toolDefinition({
@@ -188,6 +201,11 @@ export const createSkillTools = ({
 const SKILL_NAME_DESCRIPTION =
   "Skill name exactly as listed in the chat skill catalog.";
 
+const anySkillNameSchema = v.pipe(
+  v.string(),
+  v.description(SKILL_NAME_DESCRIPTION),
+);
+
 const createSkillNameSchema = (skills: readonly AvailableSkillMetadata[]) => {
   // Installed names are user-controlled and can contain privileged matter
   // context. They stay out of provider-visible JSON Schema; the runtime
@@ -195,13 +213,13 @@ const createSkillNameSchema = (skills: readonly AvailableSkillMetadata[]) => {
   // containing only built-in public names can make invalid calls impossible
   // at the provider boundary with an exact enum.
   if (skills.some((skill) => skill.source === "installed")) {
-    return v.pipe(v.string(), v.description(SKILL_NAME_DESCRIPTION));
+    return anySkillNameSchema;
   }
 
   const skillNames = skills.map((skill) => skill.name);
   const firstSkillName = skillNames.at(0);
   if (firstSkillName === undefined) {
-    return v.pipe(v.string(), v.description(SKILL_NAME_DESCRIPTION));
+    return anySkillNameSchema;
   }
 
   return v.pipe(
