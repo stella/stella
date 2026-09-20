@@ -76,6 +76,23 @@ OAuth protected-resource discovery is served from:
 - `/.well-known/oauth-protected-resource/mcp-documents`
 - `/.well-known/oauth-protected-resource/mcp-law`
 
+## Comparing files stella does not store
+
+`compare_documents` redlines stored document versions. For two `.docx` files
+that are not in stella, `prepare_file_comparison` reserves a slot for each:
+it returns a presigned PUT url with the exact headers to send, and the
+`compare_documents` call to make next, spelled out. The client uploads the
+bytes; the comparison then verifies each object's size and checksum against
+what was declared, scans it the way a document upload is scanned, runs the same
+comparison the stored-version path runs, and returns the redline as a temporary
+download link.
+
+None of it becomes a document, a version, or matter content. The rows live in
+`file_comparison_uploads`, which is scoped to one member in one organization
+and carries no matter reference. Each input is deleted once it has been read,
+the redline expires with its download link, and a scheduled sweep clears
+whatever a client abandoned: object first, then the row that names it.
+
 ## Single registry, derived anonymized projection
 
 There is one curated tool registry (`DEFAULT_MCP_TOOL_DEFINITIONS` in

@@ -78,6 +78,7 @@ export type SafeIdType =
   | "expense"
   | "extractionRun"
   | "field"
+  | "fileComparisonUpload"
   | "flowDefinition"
   | "flowRun"
   | "flowRunStep"

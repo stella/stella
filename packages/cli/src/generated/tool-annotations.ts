@@ -184,6 +184,17 @@ export const generatedToolAnnotations: Readonly<
     excluded: true,
     scope: "documents_write",
   },
+  compare_documents: {
+    command: ["document", "compare"],
+    requestTimeoutMs: 600000,
+    scope: "documents_write",
+    itemsKey: "results",
+    paginationless: true,
+  },
+  prepare_file_comparison: {
+    command: ["document", "comparison", "prepare"],
+    scope: "documents_write",
+  },
   delete_document: {
     command: ["document", "delete"],
     scope: "documents_write",

@@ -18,6 +18,7 @@ import {
   folioCollabRooms,
   pendingUploads,
   properties,
+  fileComparisonUploads,
   styleSets,
   templateVersions,
   templates,
@@ -82,6 +83,7 @@ type Fixture = {
   foreignOrganizationWriterErrorTag: string | null;
   globalChatAttachmentKey: string;
   ocrKey: string;
+  fileComparisonKeys: string[];
   organizationId: SafeId<"organization">;
   organizationWriterIntentId: SafeId<"pendingUpload">;
   organizationWriterKey: string;
@@ -406,6 +408,33 @@ beforeAll(async () => {
     createdBy: userId,
   });
 
+  // Comparison staging: one input the caller never compared, and the redline
+  // of a comparison whose download link has not expired yet.
+  const comparisonInputId = toSafeId<"fileComparisonUpload">(uuid());
+  const comparisonRedlineId = toSafeId<"fileComparisonUpload">(uuid());
+  await testDb.insert(fileComparisonUploads).values([
+    {
+      id: comparisonInputId,
+      organizationId,
+      userId,
+      kind: "input",
+      declaredName: "draft.docx",
+      declaredSize: 1024,
+      declaredSha256: "a".repeat(64),
+      expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+    },
+    {
+      id: comparisonRedlineId,
+      organizationId,
+      userId,
+      kind: "redline",
+      declaredName: "draft redline.docx",
+      declaredSize: 2048,
+      status: "ready",
+      expiresAt: new Date(Date.now() + 15 * 60 * 1000),
+    },
+  ]);
+
   // The other organization holds a template and a chat attachment of its own.
   const otherTemplateId = toSafeId<"template">(uuid());
   const otherTemplateKey = `${otherOrganizationId}/templates/${otherTemplateId}.docx`;
@@ -521,6 +550,10 @@ beforeAll(async () => {
       organizationWriterIntent.value.at(0) ??
       panic("Organization writer reservation returned no intent"),
     organizationWriterKey,
+    fileComparisonKeys: [
+      `${organizationId}/tmp/comparisons/${comparisonInputId}`,
+      `${organizationId}/tmp/comparisons/${comparisonRedlineId}`,
+    ],
     otherChatAttachmentKey: otherAttachment.s3Key,
     otherOrganizationId,
     otherTemplateKey,
@@ -597,6 +630,7 @@ const pageKeysMatchScope = ({
     workspaceId === null
       ? key.startsWith(`${fixture.organizationId}/templates/`) ||
         key.startsWith(`${fixture.organizationId}/style-sets/`) ||
+        key.startsWith(`${fixture.organizationId}/tmp/comparisons/`) ||
         key.startsWith(`${fixture.userId}/`)
       : key.startsWith(`${fixture.organizationId}/${workspaceId}/`) ||
         key.startsWith("tmp/"),
@@ -627,6 +661,7 @@ describe("organization deletion storage teardown", () => {
         fixture.checkpointKey,
         fixture.collabDocxKey,
         fixture.collabSnapshotKey,
+        ...fixture.fileComparisonKeys,
         fixture.globalChatAttachmentKey,
         fixture.ocrKey,
         fixture.pdfKey,

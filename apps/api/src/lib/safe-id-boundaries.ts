@@ -67,6 +67,11 @@ export const brandPersistedPendingUploadId = (
   pendingUploadId: string,
 ): SafeId<"pendingUpload"> => toSafeId<"pendingUpload">(pendingUploadId);
 
+export const brandPersistedFileComparisonUploadId = (
+  fileComparisonUploadId: string,
+): SafeId<"fileComparisonUpload"> =>
+  toSafeId<"fileComparisonUpload">(fileComparisonUploadId);
+
 export const brandPersistedEntityVersionId = (
   entityVersionId: string,
 ): SafeId<"entityVersion"> => toSafeId<"entityVersion">(entityVersionId);

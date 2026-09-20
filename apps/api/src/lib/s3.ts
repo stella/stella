@@ -497,6 +497,15 @@ const S3_WRITE_TIMEOUT_MS = 15_000;
 const S3_WRITE_MAX_ATTEMPTS = 3;
 const S3_WRITE_RETRY_BASE_DELAY_MS = 100;
 
+const TEMP_UPLOAD_TAG_KEY = "stella-upload-stage";
+const TEMP_UPLOAD_TAG_VALUE = "tmp";
+/**
+ * The tag the documents bucket's lifecycle expires on. Owned here rather than
+ * in the presign module because both a presigned client PUT and a server-side
+ * write have to stamp the same value for the backstop to cover both.
+ */
+export const TEMP_UPLOAD_TAGGING = `${TEMP_UPLOAD_TAG_KEY}=${TEMP_UPLOAD_TAG_VALUE}`;
+
 /**
  * Write failures the service decided on: it received the request, applied a
  * rule, and rejected it. Replaying the same bytes reproduces the same
@@ -749,6 +758,33 @@ export const putS3ObjectWithSignal = async (
           Bucket: envBase.S3_BUCKET,
           ContentType: mimeType,
           Key: key,
+        }),
+        { abortSignal: signal },
+      ),
+  );
+};
+
+/**
+ * The same publish, tagged so the bucket's lifecycle expires the object even
+ * if the row that names it is never swept. Presigned client uploads carry the
+ * tag through `tagAsTemporaryUpload`; a server-written object that is equally
+ * short-lived has to carry it too, or the backstop covers only half the pair.
+ */
+export const putTemporaryS3ObjectWithSignal = async (
+  key: string,
+  bytes: Uint8Array,
+  mimeType: string,
+  signal: AbortSignal,
+): Promise<void> => {
+  await documentsCredentials.run(
+    async () =>
+      await getAbortableS3().send(
+        new PutObjectCommand({
+          Body: bytes,
+          Bucket: envBase.S3_BUCKET,
+          ContentType: mimeType,
+          Key: key,
+          Tagging: TEMP_UPLOAD_TAGGING,
         }),
         { abortSignal: signal },
       ),

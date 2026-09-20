@@ -250,6 +250,7 @@ const AUDIT_ACTIVITY_CATEGORY_BY_RESOURCE_TYPE = {
   contact: "other",
   contact_directory: "other",
   document_type: "other",
+  file_comparison: "documents",
   usage_allocation: "other",
   usage_entitlement: "other",
   usage_event: "other",

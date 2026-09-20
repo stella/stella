@@ -289,7 +289,10 @@ export const CompareVersionsPanel = ({
         setRequestState({ status: "idle" });
         setOutcome({ type: "previewed", result });
         return;
+      // The inspector asks for a preview here; a saved version or a temporary
+      // link back means the request was not the one this panel made.
       case "created":
+      case "downloadable":
         setRequestState({
           status: "error",
           message: t("fileDetail.compareRequestFailed"),
@@ -332,7 +335,9 @@ export const CompareVersionsPanel = ({
       setOutcome({ type: "failed", result });
       return;
     }
-    if (result.status === "previewed") {
+    // Saving asks for output version, so anything but a created version means
+    // the response does not answer the request this panel made.
+    if (result.status !== "created") {
       setRequestState({
         status: "error",
         message: t("fileDetail.compareRequestFailed"),

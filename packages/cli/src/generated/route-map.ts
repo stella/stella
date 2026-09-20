@@ -1193,6 +1193,362 @@ export const generatedRouteMap: RouteNode = {
             },
           },
         },
+        compare: {
+          kind: "leaf",
+          spec: {
+            commandPath: ["document", "compare"],
+            toolName: "compare_documents",
+            description: "Create a tracked-changes DOCX redline.",
+            flags: [
+              {
+                flag: "--base-tracked-changes",
+                prop: "base_tracked_changes",
+                kind: "enum",
+                enum: ["keep", "accept", "reject"],
+                repeatable: false,
+                description:
+                  "Tracked changes the base version already carries: accept compares its final text, keep leaves them in place, reject compares its original text.",
+                required: true,
+              },
+              {
+                flag: "--target-tracked-changes",
+                prop: "target_tracked_changes",
+                kind: "enum",
+                enum: ["keep", "accept", "reject"],
+                repeatable: false,
+                description:
+                  "Tracked changes the target version already carries: accept compares its final text, keep leaves them in place, reject compares its original text.",
+                required: true,
+              },
+              {
+                flag: "--mode",
+                prop: "mode",
+                kind: "enum",
+                enum: ["strict", "best-effort"],
+                repeatable: false,
+                description:
+                  "strict (default) refuses a redline it cannot verify; best-effort returns it with the failed checks.",
+                required: false,
+              },
+              {
+                flag: "--granularity",
+                prop: "granularity",
+                kind: "enum",
+                enum: ["word", "character"],
+                repeatable: false,
+                description:
+                  "Token size a change is marked at: word (default) or character.",
+                required: false,
+              },
+              {
+                flag: "--output-mode",
+                prop: "output_mode",
+                kind: "enum",
+                enum: ["preview", "download", "version"],
+                repeatable: false,
+                description:
+                  "preview compares without writing. download returns each redline as a temporary link and saves nothing to the document. version saves each redline as a derived version and needs a stored-version source.",
+                required: true,
+              },
+            ],
+            inputOnly: ["source"],
+            paginated: false,
+            followable: true,
+            windowedText: false,
+            itemsKey: "results",
+            destructive: false,
+            requestTimeoutMs: 600000,
+            scope: "documents_write",
+            inputSchema: {
+              type: "object",
+              required: [
+                "source",
+                "base_tracked_changes",
+                "target_tracked_changes",
+                "output_mode",
+              ],
+              additionalProperties: false,
+              properties: {
+                source: {
+                  description: "Which two files to compare.",
+                  anyOf: [
+                    {
+                      type: "object",
+                      properties: {
+                        type: {
+                          enum: ["versions"],
+                          description:
+                            "Compare one explicit base version with later targets.",
+                          type: "string",
+                        },
+                        document_id: {
+                          type: "string",
+                          format: "uuid",
+                          description:
+                            "Document entity ID both versions belong to",
+                        },
+                        base_version_id: {
+                          type: "string",
+                          format: "uuid",
+                          description: "Version ID the redline compares from",
+                        },
+                        target_version_ids: {
+                          type: "array",
+                          items: {
+                            type: "string",
+                            format: "uuid",
+                            description: "Version ID the redline compares to",
+                          },
+                          minItems: 1,
+                          maxItems: 8,
+                          description:
+                            "Version IDs to compare against the base, 1 to 8; each is compared separately.",
+                        },
+                        file_property_id: {
+                          type: "string",
+                          format: "uuid",
+                          description:
+                            "DOCX file property (column) to compare. Omit it: the server resolves it, and names the candidates when the document holds several.",
+                        },
+                      },
+                      required: [
+                        "type",
+                        "document_id",
+                        "base_version_id",
+                        "target_version_ids",
+                      ],
+                      additionalProperties: false,
+                    },
+                    {
+                      type: "object",
+                      properties: {
+                        type: {
+                          enum: ["previous"],
+                          description:
+                            "Compare one target version with its immediate predecessor.",
+                          type: "string",
+                        },
+                        document_id: {
+                          type: "string",
+                          format: "uuid",
+                          description:
+                            "Document entity ID the version belongs to",
+                        },
+                        target_version_id: {
+                          type: "string",
+                          format: "uuid",
+                          description: "Version ID the redline compares to",
+                        },
+                        file_property_id: {
+                          type: "string",
+                          format: "uuid",
+                          description:
+                            "DOCX file property (column) to compare. Omit it: the server resolves it, and names the candidates when the document holds several.",
+                        },
+                      },
+                      required: ["type", "document_id", "target_version_id"],
+                      additionalProperties: false,
+                    },
+                    {
+                      type: "object",
+                      properties: {
+                        type: {
+                          enum: ["uploads"],
+                          description:
+                            "Compare two .docx files staged by prepare_file_comparison, which echoes this whole source back.",
+                          type: "string",
+                        },
+                        base_upload_id: {
+                          type: "string",
+                          format: "uuid",
+                          description: "Upload ID the redline compares from",
+                        },
+                        target_upload_id: {
+                          type: "string",
+                          format: "uuid",
+                          description: "Upload ID the redline compares to",
+                        },
+                      },
+                      required: ["type", "base_upload_id", "target_upload_id"],
+                      additionalProperties: false,
+                    },
+                  ],
+                },
+                base_tracked_changes: {
+                  enum: ["keep", "accept", "reject"],
+                  type: "string",
+                  description:
+                    "Tracked changes the base version already carries: accept compares its final text, keep leaves them in place, reject compares its original text.",
+                },
+                target_tracked_changes: {
+                  enum: ["keep", "accept", "reject"],
+                  type: "string",
+                  description:
+                    "Tracked changes the target version already carries: accept compares its final text, keep leaves them in place, reject compares its original text.",
+                },
+                mode: {
+                  enum: ["strict", "best-effort"],
+                  type: "string",
+                  description:
+                    "strict (default) refuses a redline it cannot verify; best-effort returns it with the failed checks.",
+                },
+                granularity: {
+                  enum: ["word", "character"],
+                  type: "string",
+                  description:
+                    "Token size a change is marked at: word (default) or character.",
+                },
+                output_mode: {
+                  enum: ["preview", "download", "version"],
+                  type: "string",
+                  description:
+                    "preview compares without writing. download returns each redline as a temporary link and saves nothing to the document. version saves each redline as a derived version and needs a stored-version source.",
+                },
+              },
+            },
+          },
+        },
+        comparison: {
+          kind: "route",
+          children: {
+            prepare: {
+              kind: "leaf",
+              spec: {
+                commandPath: ["document", "comparison", "prepare"],
+                toolName: "prepare_file_comparison",
+                description:
+                  "Reserve upload slots for redlining two .docx files that are not stored in stella.",
+                flags: [
+                  {
+                    flag: "--base.name",
+                    prop: "base.name",
+                    kind: "string",
+                    repeatable: false,
+                    description:
+                      "File name to show the user, including the .docx suffix.",
+                    required: false,
+                  },
+                  {
+                    flag: "--base.size",
+                    prop: "base.size",
+                    kind: "int",
+                    min: 1,
+                    max: 52428800,
+                    repeatable: false,
+                    description:
+                      "Exact byte length of the file, at most 50 MB.",
+                    required: false,
+                  },
+                  {
+                    flag: "--base.sha256-hex",
+                    prop: "base.sha256_hex",
+                    kind: "string",
+                    repeatable: false,
+                    description:
+                      "SHA-256 of the exact bytes you will PUT, as 64 hexadecimal characters.",
+                    required: false,
+                  },
+                  {
+                    flag: "--target.name",
+                    prop: "target.name",
+                    kind: "string",
+                    repeatable: false,
+                    description:
+                      "File name to show the user, including the .docx suffix.",
+                    required: false,
+                  },
+                  {
+                    flag: "--target.size",
+                    prop: "target.size",
+                    kind: "int",
+                    min: 1,
+                    max: 52428800,
+                    repeatable: false,
+                    description:
+                      "Exact byte length of the file, at most 50 MB.",
+                    required: false,
+                  },
+                  {
+                    flag: "--target.sha256-hex",
+                    prop: "target.sha256_hex",
+                    kind: "string",
+                    repeatable: false,
+                    description:
+                      "SHA-256 of the exact bytes you will PUT, as 64 hexadecimal characters.",
+                    required: false,
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                followable: true,
+                windowedText: false,
+                destructive: false,
+                scope: "documents_write",
+                inputSchema: {
+                  type: "object",
+                  required: ["base", "target"],
+                  additionalProperties: false,
+                  properties: {
+                    base: {
+                      type: "object",
+                      properties: {
+                        name: {
+                          type: "string",
+                          minLength: 1,
+                          maxLength: 255,
+                          description:
+                            "File name to show the user, including the .docx suffix.",
+                        },
+                        size: {
+                          type: "integer",
+                          minimum: 1,
+                          maximum: 52428800,
+                          description:
+                            "Exact byte length of the file, at most 50 MB.",
+                        },
+                        sha256_hex: {
+                          type: "string",
+                          description:
+                            "SHA-256 of the exact bytes you will PUT, as 64 hexadecimal characters.",
+                        },
+                      },
+                      required: ["name", "size", "sha256_hex"],
+                      additionalProperties: false,
+                      description: "The file the redline compares from.",
+                    },
+                    target: {
+                      type: "object",
+                      properties: {
+                        name: {
+                          type: "string",
+                          minLength: 1,
+                          maxLength: 255,
+                          description:
+                            "File name to show the user, including the .docx suffix.",
+                        },
+                        size: {
+                          type: "integer",
+                          minimum: 1,
+                          maximum: 52428800,
+                          description:
+                            "Exact byte length of the file, at most 50 MB.",
+                        },
+                        sha256_hex: {
+                          type: "string",
+                          description:
+                            "SHA-256 of the exact bytes you will PUT, as 64 hexadecimal characters.",
+                        },
+                      },
+                      required: ["name", "size", "sha256_hex"],
+                      additionalProperties: false,
+                      description: "The file the redline compares to.",
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
         delete: {
           kind: "leaf",
           spec: {
@@ -12200,7 +12556,7 @@ export const generatedRouteMap: RouteNode = {
                 capabilityId: "documents.compare",
                 requestTimeoutMs: 600000,
                 description:
-                  "Create tracked-changes DOCX redlines between stored versions of one document in a matter. Select an explicit base and up to 8 targets, or compare one target with its immediate predecessor. Strict mode refuses an unverified redline; best-effort returns it with explicit verification failures. Output preview compares without writing; output version explicitly saves each successful redline as a derived document version without replacing the current version. The operation may partially succeed across multiple targets, so inspect every result status. Saving the same comparison inputs again returns the same derived version; retrying a lost response does not create a duplicate. Folio-exact review preserves both document endpoints; compatibility reports when pending history requires Folio and may be discarded by Word on save. Created results include an openUrl and a temporary DOCX download URL. Show these links to the user; if download delivery is unavailable, the redline is already saved: open it in stella instead of creating it again.",
+                  "Create tracked-changes DOCX redlines between stored versions of one document in a matter. Select an explicit base and up to 8 targets, or compare one target with its immediate predecessor. Strict mode refuses an unverified redline; best-effort returns it with explicit verification failures. Output preview compares without writing; output download writes each redline to temporary storage and returns an expiring link without saving it to the document; output version explicitly saves each successful redline as a derived document version without replacing the current version. The operation may partially succeed across multiple targets, so inspect every result status. Saving the same comparison inputs again returns the same derived version; retrying a lost response does not create a duplicate. Folio-exact review preserves both document endpoints; compatibility reports when pending history requires Folio and may be discarded by Word on save. Created results include an openUrl and a temporary DOCX download URL; downloadable results carry the temporary link alone. Show these links to the user; if download delivery is unavailable, the redline is already saved: open it in stella instead of creating it again.",
                 access: "write",
                 flags: [
                   {
@@ -12387,6 +12743,17 @@ export const generatedRouteMap: RouteNode = {
                               properties: {
                                 type: {
                                   const: "preview",
+                                  type: "string",
+                                },
+                              },
+                            },
+                            {
+                              additionalProperties: false,
+                              type: "object",
+                              required: ["type"],
+                              properties: {
+                                type: {
+                                  const: "download",
                                   type: "string",
                                 },
                               },

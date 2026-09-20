@@ -222,6 +222,7 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
     resourceType: RESOURCE_TYPE.ORGANIZATION,
   },
   organizationSettings: { type: "non_resource", reason: "singleton" },
+  fileComparisonUpload: { type: "non_resource", reason: "workflow" },
   pendingUpload: { type: "non_resource", reason: "workflow" },
   playbook: { type: "alias", resourceType: RESOURCE_TYPE.PLAYBOOK },
   playbookDefinition: {

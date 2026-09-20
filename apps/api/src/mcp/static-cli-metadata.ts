@@ -1,3 +1,4 @@
+import { DOCUMENT_COMPARE_REQUEST_TIMEOUT_MS } from "@/api/handlers/documents/compare";
 import { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
 import { defineMcpCliToolAnnotations } from "@/api/mcp/tool-types";
 
@@ -92,6 +93,19 @@ export const DEFAULT_MCP_CLI_ANNOTATIONS = defineMcpCliToolAnnotations(
     set_field_value: {
       command: ["document", "field", "set"],
       scope: "documents_write",
+    },
+    prepare_file_comparison: {
+      command: ["document", "comparison", "prepare"],
+      scope: "documents_write",
+    },
+    compare_documents: {
+      command: ["document", "compare"],
+      scope: "documents_write",
+      itemsKey: "results",
+      // One result per target, all in the one response: there is no page to
+      // follow, so the leaf takes no cursor.
+      paginationless: true,
+      requestTimeoutMs: DOCUMENT_COMPARE_REQUEST_TIMEOUT_MS,
     },
 
     list_clauses: {

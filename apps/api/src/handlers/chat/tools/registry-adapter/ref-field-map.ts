@@ -421,6 +421,13 @@ export const WRITE_TOOL_REF_FIELD_MAP = {
   // registry write take a compile-time projection decision.
   upload_document_version: { chatProjectable: false },
   open_document_version_upload: { chatProjectable: false },
+  // In-app comparison is the document inspector's compare panel, which owns
+  // the version pickers and renders the redline in place; projecting the tool
+  // would answer the same request with a second, link-only surface.
+  compare_documents: { chatProjectable: false },
+  // Chat carries its own attachments and its own file pipeline, so a chat
+  // turn never needs the staged-upload detour this tool exists for.
+  prepare_file_comparison: { chatProjectable: false },
   delete_document: {
     chatProjectable: true,
     // `version_id` is an entity-version handle: passes through.
