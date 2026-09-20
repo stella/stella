@@ -109,6 +109,18 @@ describe("the paragraphs a conversion decides", () => {
     });
   });
 
+  // An outline level the paragraph declares but does not fill in must fall
+  // through to its style. Read as NaN it would satisfy every fallback and
+  // then match no heading level at all.
+  test("read an outline level with no value as silence, not as a level", () => {
+    const empty = featuresOf(
+      `<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>
+        <w:p><w:pPr><w:pStyle w:val="Heading1Firm"/><w:outlineLvl/></w:pPr><w:r><w:t>A heading</w:t></w:r></w:p>
+      </w:body></w:document>`,
+    );
+    expect(empty.at(0)?.outlineLevel).toBe(0);
+  });
+
   test("prefer a paragraph's own numbering over the style's", () => {
     const numbered = featuresOf(
       `<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>

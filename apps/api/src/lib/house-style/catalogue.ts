@@ -189,7 +189,8 @@ const childElements = (
   return found;
 };
 
-const intAttr = (
+/** A `w:val` read as a number; anything that is not one reads as absent. */
+export const intAttr = (
   element: slimdom.Element | null,
   name: string,
 ): number | null => {

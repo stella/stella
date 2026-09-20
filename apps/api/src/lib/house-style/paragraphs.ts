@@ -22,6 +22,7 @@ import { paragraphRuns, paragraphText, W_NS } from "@/api/lib/docx/ooxml";
 import {
   attr,
   childElement,
+  intAttr,
   isElement,
   numberingDeclaration,
   resolveNumbering,
@@ -243,8 +244,11 @@ export const extractParagraphFeatures = ({
       styleId,
       inherited: definition?.formatting.numbering ?? null,
     });
+    // A `w:outlineLvl` whose `w:val` is missing or not a number is silence,
+    // not a level: read as NaN it would pass every `??` below and then miss
+    // every heading lookup the level drives.
     const outlineFromParagraph =
-      pPr === null ? null : childElement(pPr, "outlineLvl");
+      pPr === null ? null : intAttr(childElement(pPr, "outlineLvl"), "val");
     const alignment = pPr === null ? null : childElement(pPr, "jc");
     const neighbour = (offset: number): ParagraphNeighbour | null => {
       const other = filled.at(index + offset);
@@ -267,11 +271,7 @@ export const extractParagraphFeatures = ({
       originalStyleId: styleId,
       originalStyleName: definition?.name ?? styleId,
       outlineLevel:
-        (outlineFromParagraph === null
-          ? null
-          : Number.parseInt(attr(outlineFromParagraph, "val") ?? "", 10)) ??
-        definition?.formatting.outlineLevel ??
-        null,
+        outlineFromParagraph ?? definition?.formatting.outlineLevel ?? null,
       typedMarker: (() => {
         const { marker } = stripManualMarker(text);
         return marker.length === 0 ? null : marker.trim();
