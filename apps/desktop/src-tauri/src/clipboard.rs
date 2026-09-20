@@ -3913,36 +3913,37 @@ impl ClipboardManager {
       return Err("clipboard image has no plain-text representation".to_string());
     }
     self.suppress_next(item, format);
-    let contents = match text_clipboard_contents(item, format) {
-      Some(contents) => contents,
-      None => {
-        let image =
-          image_bytes.ok_or_else(|| "clipboard image is unavailable".to_string())?;
-        let image = RustImageData::from_bytes(image)
-          .map_err(|error| format!("clipboard image is invalid: {error}"))?;
-        #[cfg(target_os = "macos")]
-        {
-          self.reconcile_image_exports()?;
-          let png = encode_png_bounded(&image, MAX_ITEM_IMAGE_BYTES)?;
-          return self.image_exports.publish(&png, |url| {
-            // Both representations belong to one pasteboard item. Publishing
-            // Files separately would make some receivers paste two objects.
-            set_clipboard_contents(
-              &clipboard,
-              vec![
-                ClipboardContent::Other(MACOS_PNG_FORMAT.to_string(), png.clone()),
-                ClipboardContent::Other(
-                  MACOS_FILE_URL_FORMAT.to_string(),
-                  url.as_str().as_bytes().to_vec(),
-                ),
-              ],
-              ClipboardWriteOrigin::History,
-            )
-          });
-        }
-        #[cfg(not(target_os = "macos"))]
-        vec![ClipboardContent::Image(image)]
+    let Some(contents) = text_clipboard_contents(item, format) else {
+      let image =
+        image_bytes.ok_or_else(|| "clipboard image is unavailable".to_string())?;
+      let image = RustImageData::from_bytes(image)
+        .map_err(|error| format!("clipboard image is invalid: {error}"))?;
+      #[cfg(target_os = "macos")]
+      {
+        self.reconcile_image_exports()?;
+        let png = encode_png_bounded(&image, MAX_ITEM_IMAGE_BYTES)?;
+        return self.image_exports.publish(&png, |url| {
+          // Both representations belong to one pasteboard item. Publishing
+          // Files separately would make some receivers paste two objects.
+          set_clipboard_contents(
+            &clipboard,
+            vec![
+              ClipboardContent::Other(MACOS_PNG_FORMAT.to_string(), png.clone()),
+              ClipboardContent::Other(
+                MACOS_FILE_URL_FORMAT.to_string(),
+                url.as_str().as_bytes().to_vec(),
+              ),
+            ],
+            ClipboardWriteOrigin::History,
+          )
+        });
       }
+      #[cfg(not(target_os = "macos"))]
+      return set_clipboard_contents(
+        &clipboard,
+        vec![ClipboardContent::Image(image)],
+        ClipboardWriteOrigin::History,
+      );
     };
     set_clipboard_contents(&clipboard, contents, ClipboardWriteOrigin::History)?;
     #[cfg(target_os = "macos")]
