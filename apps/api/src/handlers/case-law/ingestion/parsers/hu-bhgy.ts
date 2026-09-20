@@ -93,6 +93,10 @@ const runContentText = (item: FolioRunContent): string => {
   switch (item.type) {
     case "text":
       return item.text;
+    // Markup folio keeps verbatim still shows the reader something: `w:ruby`
+    // puts its base text on the page, so dropping it would lose a word.
+    case "preservedXml":
+      return item.text;
     case "tab":
       return "\t";
     case "break":
@@ -200,6 +204,10 @@ const itemsOf = (content: readonly BlockContent[]): DocItem[] =>
       case "blockSdt":
         // A content control is a wrapper; its children are the document's.
         return itemsOf(block.content);
+      case "preservedBlock":
+        // Opaque markup folio replays on save. It holds no text, so it
+        // contributes no line to the decision.
+        return [];
       default:
         block satisfies never;
         return panic(`Unhandled folio block: ${JSON.stringify(block)}`);
