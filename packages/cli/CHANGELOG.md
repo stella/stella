@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 1.15.0
+
+### Minor Changes
+
+- [#3557](https://github.com/stella/stella/pull/3557) [`df130cb`](https://github.com/stella/stella/commit/df130cb9baa7c4f0c6986fc20861c2fedb657263) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `stella capability entity-views rows-list` accepts `inboxView` in its input to return the caller's Inbox signals for that view in the same window as tasks, ordered by the same sorts under one cursor, and `--as-of` for the calendar day task risk is measured against.
+
 ## 1.14.0
 
 ### Minor Changes
