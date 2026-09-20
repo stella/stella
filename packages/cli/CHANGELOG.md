@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 1.16.0
+
+### Minor Changes
+
+- [#3614](https://github.com/stella/stella/pull/3614) [`67a71a6`](https://github.com/stella/stella/commit/67a71a6b38e4a077012736da52ea45b84f1f4548) Thanks [@shanehobson](https://github.com/shanehobson)! - The new `playbook save` creates a review playbook, or adds, changes, and removes positions in one: `positions` lists only what a call adds or changes (an entry with `source_id` replaces that stored position, one without is added), `remove_source_ids` deletes, and an update passes the playbook's `updatedAt` as `expected_updated_at`. `playbooks create` and `playbooks update` are now reached through it.
+
 ## 1.15.0
 
 ### Minor Changes
