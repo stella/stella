@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 import { Result, panic } from "better-result";
+import { createHash } from "node:crypto";
 import {
   copyFileSync,
   existsSync,
@@ -45,6 +46,9 @@ const SHARED_DOCKER_HEALTHY_SERVICES = [
   "gotenberg",
 ] as const;
 const SHARED_DOCKER_COMPLETED_SERVICES = ["rustfs-setup"] as const;
+const DOCKER_PROJECT_WORKTREE_HASH_LENGTH = 12;
+const STELLA_DOCKER_PROJECT_PATTERN =
+  /^stella-dev(?:-\d+(?:-[a-f0-9]{12})?)?$/u;
 const LEGACY_OBJECT_STORE_SERVICE = "minio";
 const RUSTFS_S3_DEV_ACCESS_KEY = "stella-rustfs-dev";
 const RUSTFS_S3_DEV_SECRET_KEY = "stella-rustfs-dev-secret";
@@ -228,10 +232,30 @@ export const infraPortsForOffset = (offset: number): InfraPorts => ({
   valkey: DEFAULT_INFRA_PORTS.valkey + offset,
 });
 
-const dockerProjectName = (infraOffset: number) =>
+const legacyDockerProjectName = (infraOffset: number) =>
   infraOffset === 0
     ? SHARED_DOCKER_PROJECT_BASE
     : `${SHARED_DOCKER_PROJECT_BASE}-${String(infraOffset)}`;
+
+export const dockerProjectName = ({
+  infraOffset,
+  isWorktree,
+  worktreePath,
+}: {
+  infraOffset: number;
+  isWorktree: boolean;
+  worktreePath: string;
+}) => {
+  if (!isWorktree) {
+    return legacyDockerProjectName(infraOffset);
+  }
+
+  const worktreeHash = createHash("sha256")
+    .update(worktreePath)
+    .digest("hex")
+    .slice(0, DOCKER_PROJECT_WORKTREE_HASH_LENGTH);
+  return `${SHARED_DOCKER_PROJECT_BASE}-${String(infraOffset)}-${worktreeHash}`;
+};
 
 export const portsForOffset = (offset: number): DevPorts => ({
   api: DEFAULT_PORTS.api + offset,
@@ -497,16 +521,16 @@ export const parseForeignPortOwners = ({
 };
 
 const findForeignContainersOnSharedPorts = ({
-  infraOffset,
+  dockerProject,
   infraPorts,
   rootDir,
 }: {
-  infraOffset: number;
+  dockerProject: string;
   infraPorts: InfraPorts;
   rootDir: string;
 }) =>
   parseForeignPortOwners({
-    expectedProject: dockerProjectName(infraOffset),
+    expectedProject: dockerProject,
     output: runCommandText({
       cmd: [
         resolveCommandPath("docker"),
@@ -649,44 +673,198 @@ export const getSharedDockerServicesWaitFailure = (
   return undefined;
 };
 
-const dockerComposeCommand = (infraOffset: number, args: readonly string[]) => [
+type DockerComposeCommandOptions = {
+  args: readonly string[];
+  composeFile?: string;
+  dockerProject: string;
+};
+
+const dockerComposeCommand = ({
+  args,
+  composeFile,
+  dockerProject,
+}: DockerComposeCommandOptions) => [
   resolveCommandPath("docker"),
   "compose",
   "--project-name",
-  dockerProjectName(infraOffset),
+  dockerProject,
+  ...(composeFile ? ["--file", composeFile] : []),
   "--profile",
   "dev",
   ...args,
 ];
 
+export const projectsForDeletedWorktrees = ({
+  output,
+  pathExists = existsSync,
+}: {
+  output: string;
+  pathExists?: (candidate: string) => boolean;
+}) => {
+  const ownershipByProject = parseDockerProjectOwnership(output);
+
+  return [...ownershipByProject]
+    .filter(
+      ([, { complete, worktreePaths }]) =>
+        complete &&
+        worktreePaths.size > 0 &&
+        [...worktreePaths].every((worktreePath) => !pathExists(worktreePath)),
+    )
+    .map(([name]) => name)
+    .sort();
+};
+
+type DockerProjectOwnership = {
+  complete: boolean;
+  worktreePaths: Set<string>;
+};
+
+const parseDockerProjectOwnership = (output: string) => {
+  const ownershipByProject = new Map<string, DockerProjectOwnership>();
+
+  for (const line of output.split("\n")) {
+    const [name, worktreePath] = line.split("\t");
+    if (!name || !STELLA_DOCKER_PROJECT_PATTERN.test(name)) {
+      continue;
+    }
+
+    const ownership = ownershipByProject.get(name) ?? {
+      complete: true,
+      worktreePaths: new Set<string>(),
+    };
+    if (worktreePath) {
+      ownership.worktreePaths.add(worktreePath);
+    } else {
+      ownership.complete = false;
+    }
+    ownershipByProject.set(name, ownership);
+  }
+
+  return ownershipByProject;
+};
+
+export const dockerProjectBelongsToWorktree = ({
+  dockerProject,
+  output,
+  worktreePaths,
+}: {
+  dockerProject: string;
+  output: string;
+  worktreePaths: readonly string[];
+}) => {
+  const ownership = parseDockerProjectOwnership(output).get(dockerProject);
+  return (
+    ownership?.complete === true &&
+    ownership.worktreePaths.size === 1 &&
+    worktreePaths.some((worktreePath) =>
+      ownership.worktreePaths.has(worktreePath),
+    )
+  );
+};
+
+export const hasConflictingDockerOwner = ({
+  dockerProject,
+  initialOffset,
+  output,
+  resolvedOffset,
+}: {
+  dockerProject: string;
+  initialOffset: number;
+  output: string;
+  resolvedOffset: number;
+}) =>
+  resolvedOffset !== initialOffset &&
+  parseDockerProjectOwnership(output).has(dockerProject);
+
+export const dockerComposeDownCommand = ({
+  composeFile,
+  dockerProject,
+}: {
+  composeFile: string;
+  dockerProject: string;
+}) =>
+  dockerComposeCommand({
+    args: ["down", "--remove-orphans"],
+    composeFile,
+    dockerProject,
+  });
+
+const readDockerComposeProjectOwnershipOutput = (rootDir: string) =>
+  runCommandText({
+    cmd: [
+      resolveCommandPath("docker"),
+      "ps",
+      "--all",
+      "--format",
+      '{{.Label "com.docker.compose.project"}}\t{{.Label "com.docker.compose.project.working_dir"}}',
+    ],
+    cwd: rootDir,
+  });
+
+const stopDockerProject = ({
+  composeFile,
+  dockerProject,
+  rootDir,
+}: {
+  composeFile: string;
+  dockerProject: string;
+  rootDir: string;
+}) => {
+  runStep({
+    cmd: dockerComposeDownCommand({ composeFile, dockerProject }),
+    cwd: rootDir,
+    label: `Stopping Docker project ${dockerProject}`,
+  });
+};
+
+const removeProjectsForDeletedWorktrees = ({
+  composeFile,
+  ownershipOutput,
+  rootDir,
+}: {
+  composeFile: string;
+  ownershipOutput: string;
+  rootDir: string;
+}) => {
+  const deletedWorktreeProjects = projectsForDeletedWorktrees({
+    output: ownershipOutput,
+  });
+
+  for (const dockerProject of deletedWorktreeProjects) {
+    stopDockerProject({
+      composeFile,
+      dockerProject,
+      rootDir,
+    });
+  }
+};
+
 const readSharedDockerServiceStatuses = ({
-  infraOffset,
+  dockerProject,
   infraPorts,
   rootDir,
 }: {
-  infraOffset: number;
+  dockerProject: string;
   infraPorts: InfraPorts;
   rootDir: string;
 }) =>
   parseDockerComposePsJson(
     runCommandText({
-      cmd: dockerComposeCommand(infraOffset, [
-        "ps",
-        "--all",
-        "--format",
-        "json",
-      ]),
+      cmd: dockerComposeCommand({
+        args: ["ps", "--all", "--format", "json"],
+        dockerProject,
+      }),
       cwd: rootDir,
       env: dockerComposeEnv(infraPorts),
     }),
   );
 
 const waitForSharedDockerServices = async ({
-  infraOffset,
+  dockerProject,
   infraPorts,
   rootDir,
 }: {
-  infraOffset: number;
+  dockerProject: string;
   infraPorts: InfraPorts;
   rootDir: string;
 }) => {
@@ -698,7 +876,7 @@ const waitForSharedDockerServices = async ({
     DOCKER_SERVICES_READY_TIMEOUT_MS
   ) {
     const statuses = readSharedDockerServiceStatuses({
-      infraOffset,
+      dockerProject,
       infraPorts,
       rootDir,
     });
@@ -716,21 +894,30 @@ const waitForSharedDockerServices = async ({
 };
 
 const ensureDockerServices = async ({
-  infraOffset,
+  dockerProject,
   infraPorts,
+  markStarted,
   rootDir,
 }: {
-  infraOffset: number;
+  dockerProject: string;
   infraPorts: InfraPorts;
+  markStarted: () => void;
   rootDir: string;
 }) => {
   if (
     hasLegacyObjectStoreService(
-      readSharedDockerServiceStatuses({ infraOffset, infraPorts, rootDir }),
+      readSharedDockerServiceStatuses({
+        dockerProject,
+        infraPorts,
+        rootDir,
+      }),
     )
   ) {
     runStep({
-      cmd: dockerComposeCommand(infraOffset, ["down", "--remove-orphans"]),
+      cmd: dockerComposeCommand({
+        args: ["down", "--remove-orphans"],
+        dockerProject,
+      }),
       cwd: rootDir,
       env: dockerComposeEnv(infraPorts),
       label: "Replacing the legacy object-store service",
@@ -738,7 +925,7 @@ const ensureDockerServices = async ({
   }
 
   const foreignOwners = findForeignContainersOnSharedPorts({
-    infraOffset,
+    dockerProject,
     infraPorts,
     rootDir,
   });
@@ -761,7 +948,7 @@ const ensureDockerServices = async ({
   if (failedProbes.length === 0) {
     const currentFailure = getSharedDockerServicesWaitFailure(
       readSharedDockerServiceStatuses({
-        infraOffset,
+        dockerProject,
         infraPorts,
         rootDir,
       }),
@@ -785,8 +972,9 @@ const ensureDockerServices = async ({
   // bucket. Compose's `--wait` treats that exit as a failure even on success,
   // so we run detached and poll the four core services ourselves. The
   // one-shot setup container is polled separately and must exit successfully.
+  markStarted();
   runStep({
-    cmd: dockerComposeCommand(infraOffset, ["up", "-d"]),
+    cmd: dockerComposeCommand({ args: ["up", "-d"], dockerProject }),
     cwd: rootDir,
     env: dockerComposeEnv(infraPorts),
     label: "Starting Docker services",
@@ -794,7 +982,7 @@ const ensureDockerServices = async ({
 
   console.log("==> Waiting for shared Docker services to become ready...");
   await waitForSharedDockerServices({
-    infraOffset,
+    dockerProject,
     infraPorts,
     rootDir,
   });
@@ -1759,18 +1947,71 @@ const main = async () => {
 
   const { devInstance, infraOffset, mode, portOffset } = parsedArgs;
   const infraPorts = infraPortsForOffset(infraOffset);
+  const dockerProject = dockerProjectName({
+    infraOffset,
+    isWorktree: gitContext.isWorktree,
+    worktreePath: gitContext.canonicalRoot,
+  });
+  const composeFile = path.resolve(gitContext.mainRoot, "docker-compose.yml");
+  const managesDocker = !parsedArgs.dryRun && modeIncludesApi(mode);
+  const children: RunningStep[] = [];
+  let cleanupPromise: Promise<boolean> | undefined;
+  let ownsDockerProject = false;
 
-  if (!parsedArgs.dryRun && modeIncludesApi(mode)) {
-    console.log("==> Checking Docker engine...");
-    runStep({
-      cmd: [resolveCommandPath("docker"), "ps"],
-      cwd: gitContext.currentRoot,
-      label: "Verifying Docker engine health",
-    });
-    await ensureDockerServices({
-      infraOffset,
-      infraPorts,
-      rootDir: gitContext.currentRoot,
+  const cleanup = async () => {
+    if (cleanupPromise) {
+      return cleanupPromise;
+    }
+
+    isShuttingDown = true;
+    cleanupPromise = (async () => {
+      for (const runningStep of children) {
+        runningStep.child.kill();
+      }
+
+      await Promise.all(
+        // Every child was just killed, so a non-zero settlement is the
+        // expected outcome of the shutdown, not a fault to report.
+        // oxlint-disable-next-line no-swallowed-rejection/no-swallowed-rejection, no-swallowed-rejection/require-rejection-parameter
+        children.map(async ({ child }) => await child.exited.catch(() => 1)),
+      );
+
+      if (!ownsDockerProject) {
+        return true;
+      }
+
+      const stopped = Result.try({
+        try: () =>
+          stopDockerProject({
+            composeFile,
+            dockerProject,
+            rootDir: gitContext.mainRoot,
+          }),
+        catch: (cause) =>
+          cause instanceof Error ? cause.message : String(cause),
+      });
+      if (stopped.isErr()) {
+        console.error(
+          `Docker cleanup failed for ${dockerProject}: ${stopped.error}`,
+        );
+      }
+      return stopped.isOk();
+    })();
+
+    return cleanupPromise;
+  };
+
+  const shutdown = async (exitCode: number) => {
+    const cleanupSucceeded = await cleanup();
+    process.exit(cleanupSucceeded ? exitCode : 1);
+  };
+
+  for (const signal of ["SIGINT", "SIGTERM"] as const) {
+    process.on(signal, () => {
+      // `shutdown` ends in `process.exit`, so this promise never settles for
+      // a handler to observe.
+      // eslint-disable-next-line no-detached-void/no-detached-void
+      void shutdown(0);
     });
   }
 
@@ -1831,58 +2072,12 @@ const main = async () => {
     return;
   }
 
-  for (const step of preparationSteps) {
-    try {
-      runStep(step);
-    } catch (error) {
-      if (step.cmd.at(1) === "ci") {
-        console.error(
-          "ERROR: bun ci failed; the lockfile is out of sync. Run `bun install` intentionally, review the diff, then commit bun.lock.",
-        );
-      }
-      throw error;
-    }
-  }
-
-  const children: RunningStep[] = [];
-
-  const stopChildren = async () => {
-    if (isShuttingDown) {
-      return;
-    }
-    isShuttingDown = true;
-
-    for (const runningStep of children) {
-      runningStep.child.kill();
-    }
-
-    await Promise.all(
-      // Every child was just killed, so a non-zero settlement is the
-      // expected outcome of the shutdown, not a fault to report.
-      // oxlint-disable-next-line no-swallowed-rejection/no-swallowed-rejection, no-swallowed-rejection/require-rejection-parameter
-      children.map(async ({ child }) => await child.exited.catch(() => 1)),
-    );
-  };
-
-  const shutdown = async (exitCode: number) => {
-    await stopChildren();
-    process.exit(exitCode);
-  };
-
   const startSteps = (steps: readonly Step[]): RunningStep[] => {
-    // A shutdown can land between two startup steps (e.g. right after the
-    // primary readiness checks resolve, before the secondary steps spawn),
-    // outside of any readiness wait. Refuse to start more children once
-    // shutdown has begun instead of racing stopChildren().
     if (isShuttingDown) {
       throw new DevRunnerShutdownSignalError();
     }
 
-    // Push each child into `children` as soon as it spawns, not after the
-    // whole batch finishes: if a later step's spawn throws mid-map, the
-    // already-started children must already be tracked so stopChildren()
-    // (called from the outer catch) can still clean them up instead of
-    // leaving them orphaned.
+    // Register each child immediately so cleanup covers partial startup.
     return steps.map((step) => {
       const runningStep = spawnPersistentStep(step);
       children.push(runningStep);
@@ -1890,16 +2085,74 @@ const main = async () => {
     });
   };
 
-  for (const signal of ["SIGINT", "SIGTERM"] as const) {
-    process.on(signal, () => {
-      // `shutdown` ends in `process.exit`, so this promise never settles for
-      // a handler to observe.
-      // eslint-disable-next-line no-detached-void/no-detached-void
-      void shutdown(0);
-    });
-  }
-
   try {
+    if (managesDocker) {
+      console.log("==> Checking Docker engine...");
+      runStep({
+        cmd: [resolveCommandPath("docker"), "ps"],
+        cwd: gitContext.currentRoot,
+        label: "Verifying Docker engine health",
+      });
+      const ownershipOutput = readDockerComposeProjectOwnershipOutput(
+        gitContext.mainRoot,
+      );
+      if (
+        hasConflictingDockerOwner({
+          dockerProject,
+          initialOffset: initialOffset.offset,
+          output: ownershipOutput,
+          resolvedOffset,
+        })
+      ) {
+        panic(
+          `Docker project ${dockerProject} already belongs to another dev runner in this worktree. Stop that runner before starting another API process.`,
+        );
+      }
+      ownsDockerProject =
+        parseDockerProjectOwnership(ownershipOutput).has(dockerProject);
+      removeProjectsForDeletedWorktrees({
+        composeFile,
+        ownershipOutput,
+        rootDir: gitContext.mainRoot,
+      });
+      const legacyDockerProject = legacyDockerProjectName(infraOffset);
+      if (
+        legacyDockerProject !== dockerProject &&
+        dockerProjectBelongsToWorktree({
+          dockerProject: legacyDockerProject,
+          output: ownershipOutput,
+          worktreePaths: [gitContext.currentRoot, gitContext.canonicalRoot],
+        })
+      ) {
+        stopDockerProject({
+          composeFile,
+          dockerProject: legacyDockerProject,
+          rootDir: gitContext.mainRoot,
+        });
+      }
+      await ensureDockerServices({
+        dockerProject,
+        infraPorts,
+        markStarted: () => {
+          ownsDockerProject = true;
+        },
+        rootDir: gitContext.currentRoot,
+      });
+    }
+
+    for (const step of preparationSteps) {
+      try {
+        runStep(step);
+      } catch (error) {
+        if (step.cmd.at(1) === "ci") {
+          console.error(
+            "ERROR: bun ci failed; the lockfile is out of sync. Run `bun install` intentionally, review the diff, then commit bun.lock.",
+          );
+        }
+        throw error;
+      }
+    }
+
     const primaryChildren = startSteps(persistentSteps.primary);
     await waitForReadinessChecks(primaryChildren, readinessChecks.primary);
 
@@ -1935,18 +2188,11 @@ const main = async () => {
     );
     await shutdown(firstExit.exitCode);
   } catch (error) {
-    // A shutdown that interrupted startup already has its own shutdown(0)
-    // call in flight from the signal handler (stopChildren + process.exit).
-    // Returning here instead of rethrowing lets that call own the exit;
-    // rethrowing would reach the top-level catch below and misreport a
-    // clean shutdown as a crash (wrong message, wrong exit code, and a race
-    // against the signal handler's own process.exit). stopChildren() is a
-    // no-op once isShuttingDown is set (which it already is on this path),
-    // so it's skipped here rather than awaited for nothing.
+    // The signal handler owns cleanup and the exit code for interrupted startup.
     if (isDevRunnerShutdownSignal(error)) {
       return;
     }
-    await stopChildren();
+    await cleanup();
     throw error;
   }
 };
