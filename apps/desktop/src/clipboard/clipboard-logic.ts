@@ -615,11 +615,16 @@ export type ClipboardPointerPosition = {
 };
 
 /**
- * Browsers replay a pointer move at the unchanged screen position after a
+ * Browsers replay a pointer move at the unchanged viewport position after a
  * scroll so hover state follows the content; only a pointer that actually
  * moved may change the selection, or arrow-key scrolling would hand it back to
  * the card that slid under the cursor. The first event after (re)opening only
  * seeds the position: a pointer resting over the rail has not moved either.
+ *
+ * Positions come from the event's client coordinates. Screen coordinates would
+ * read the same under a scroll, but a window server that does not tell a client
+ * where it sits on screen (Wayland, and headless WebKit) reports them as a
+ * constant, which would freeze the selection instead.
  */
 export const clipboardPointerMoved = (
   previous: ClipboardPointerPosition | null,

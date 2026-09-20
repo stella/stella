@@ -2009,7 +2009,7 @@ const ClipboardApp = () => {
     if (event.pointerType !== "mouse") {
       return;
     }
-    const position = { x: event.screenX, y: event.screenY };
+    const position = { x: event.clientX, y: event.clientY };
     const moved = clipboardPointerMoved(railPointerRef.current, position);
     railPointerRef.current = position;
     if (!moved || !(event.target instanceof Element)) {
