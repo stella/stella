@@ -2300,22 +2300,26 @@ const ClipboardApp = () => {
     requestHide();
   });
 
+  // Claims only the keys this capture listener owns. Overlays (Base UI menus
+  // and dialogs) take the first claim on Escape from their own `document`
+  // listener, and the window handler below hides the window only when nothing
+  // claimed it; stopping Escape here would swallow it whenever focus still
+  // sits on an overlay trigger inside the footer.
   const handleKeyDownCapture = useEffectEvent((event: KeyboardEvent) => {
     if (
-      dialog.type === "closed" &&
-      !welcomeOpen &&
-      !event.isComposing &&
-      event.target instanceof HTMLElement &&
-      !(event.target instanceof HTMLInputElement) &&
-      controlsRef.current?.contains(event.target) &&
-      clipboardControlsKeyAction({ direction: railDirection, key: event.key })
+      dialog.type !== "closed" ||
+      welcomeOpen ||
+      event.isComposing ||
+      !(event.target instanceof HTMLElement) ||
+      event.target instanceof HTMLInputElement ||
+      !controlsRef.current?.contains(event.target) ||
+      !clipboardControlsKeyAction({ direction: railDirection, key: event.key })
     ) {
-      // Keep arrows in the two-row navigation; Enter/Space open the menu.
-      event.stopPropagation();
-      handleControlsKeyDown(event, event.target);
       return;
     }
-    handleEscape(event);
+    // Keep arrows in the two-row navigation; Enter/Space open the menu.
+    event.stopPropagation();
+    handleControlsKeyDown(event, event.target);
   });
 
   useEffect(() => {

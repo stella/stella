@@ -308,6 +308,25 @@ const lastInvocationArgs = async (page: Page, command: string) =>
     return invocation.args;
   }, command);
 
+/**
+ * Resolves once a tooltip popup is on screen, or once the open delay has
+ * passed without one. Tooltips open on a timer, so a missing popup is only
+ * conclusive after that window.
+ */
+const waitForTooltip = async (page: Page) =>
+  page.evaluate(async () => {
+    const deadline = performance.now() + 800;
+    while (performance.now() < deadline) {
+      if (document.querySelector('[data-slot="tooltip-popup"]')) {
+        return true;
+      }
+      await new Promise((resolve) => {
+        setTimeout(resolve, 25);
+      });
+    }
+    return false;
+  });
+
 const DIRECTIONS = [
   {
     groupKey: "ArrowRight",
@@ -1053,19 +1072,23 @@ test("Escape closes the active overlay before hiding the clipboard", async ({
   await moreOptions.click();
   const menuSetting = page.getByRole("menuitemcheckbox");
   await expect(menuSetting).toBeVisible();
-  // The popup takes focus a beat after it opens; Escape must reach the menu,
-  // not the trigger, to exercise overlay-before-clipboard dismissal.
-  await expect
-    .poll(
-      async () =>
-        await page.evaluate(
-          () => document.activeElement?.closest('[role="menu"]') !== null,
-        ),
-    )
-    .toBe(true);
   await page.keyboard.press("Escape");
   await expect(menuSetting).toBeHidden();
   expect(await invocationCount(page, "clipboard_hide")).toBe(1);
+  // Closing the menu returns focus to its trigger. Browsers that count that
+  // focus as visible open the trigger's tooltip, which becomes the next
+  // overlay in the chain and owns the next Escape; browsers that do not open
+  // it go straight to hiding. Either way the window waits for an empty chain,
+  // so wait out the tooltip's open delay before deciding which case this is.
+  const triggerTooltip = page.locator('[data-slot="tooltip-popup"]');
+  const tooltipOpened = await waitForTooltip(page);
+  if (tooltipOpened) {
+    await expect(triggerTooltip).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(triggerTooltip).toBeHidden();
+    expect(await invocationCount(page, "clipboard_hide")).toBe(1);
+  }
+  await expect(triggerTooltip).toBeHidden();
   await page.keyboard.press("Escape");
   await expect
     .poll(async () => await invocationCount(page, "clipboard_hide"))
@@ -1091,6 +1114,31 @@ test("Escape closes the active overlay before hiding the clipboard", async ({
   await expect
     .poll(async () => await invocationCount(page, "clipboard_hide"))
     .toBe(4);
+});
+
+test("Escape closes a footer overlay whose trigger still holds focus", async ({
+  page,
+}) => {
+  await openClipboard(page, "en");
+
+  const triggers = page.locator(".clipboard-controls [aria-haspopup]");
+  const triggerCount = await triggers.count();
+  expect(triggerCount).toBeGreaterThan(0);
+
+  const popup = page.getByRole("menu");
+  for (let index = 0; index < triggerCount; index += 1) {
+    const trigger = triggers.nth(index);
+    await trigger.click();
+    await expect(popup).toBeVisible();
+    // Popups take focus a beat after they open, so Escape often arrives while
+    // the trigger still holds it. The overlay owns Escape either way.
+    await trigger.focus();
+    await expect(trigger).toBeFocused();
+    await expect(popup).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(popup).toBeHidden();
+    expect(await invocationCount(page, "clipboard_hide")).toBe(0);
+  }
 });
 
 test("creates a group from a clip with inline preset and custom colors", async ({
