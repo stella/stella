@@ -49,7 +49,7 @@ type ResultRow = {
  * this page offered, the way the court's WebForms event validation does.
  */
 const offeredPageSizes = (form: string): string[] =>
-  [...form.matchAll(/<option value="(?<size>\d+)"/gu)].map(
+  [...form.matchAll(/<option\b[^>]*\bvalue="(?<size>\d+)"/gu)].map(
     ({ groups }) => groups?.["size"] ?? "",
   );
 
@@ -500,6 +500,15 @@ describe("czUsAdapter.fetchPage", () => {
     // at all is what proves the size was one the form offers.
     const page = unwrap(await czUsAdapter.fetchPage(null, {}));
 
+    // Every rendered option, so a size the court offers cannot go missing from
+    // the set the submit above is judged against — `selected` precedes `value`
+    // on one of them, which a laxer read of the form drops.
+    expect(offeredPageSizes(makeSearchForm())).toEqual([
+      "10",
+      "20",
+      "40",
+      "80",
+    ]);
     expect(offeredPageSizes(makeSearchForm())).toContain(
       submitted?.get("ctl00$MainContent$resultsPageSize") ?? "",
     );
