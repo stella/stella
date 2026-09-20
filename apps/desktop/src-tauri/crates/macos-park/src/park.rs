@@ -1,4 +1,4 @@
-use objc2::runtime::{AnyObject, NSObjectProtocol};
+use objc2::runtime::{AnyClass, AnyObject, Bool, NSObjectProtocol};
 use objc2::{ClassType, MainThreadMarker, MainThreadOnly, define_class, msg_send, sel};
 use objc2_app_kit::{
   NSApplication, NSPanel, NSWindow, NSWindowCollectionBehavior, NSWindowStyleMask,
@@ -11,10 +11,12 @@ define_class!(
   /// the user was working in stays frontmost, keeps its menu bar, and regains
   /// its caret the moment the panel gives key status back.
   // SAFETY: NSPanel has no subclassing requirements beyond NSWindow's, and the
-  // struct does not implement Drop.
+  // mirrored Bool matches TaoWindow's only ivar. The runtime layout check
+  // rejects the conversion if Tao's class changes.
   #[unsafe(super(NSPanel))]
   #[thread_kind = MainThreadOnly]
   #[name = "StellaClipboardPanel"]
+  #[ivars = Bool]
   struct ClipboardPanel;
 
   impl ClipboardPanel {
@@ -43,7 +45,6 @@ define_class!(
       }
       set_panel_parked(self);
     }
-
   }
 );
 
@@ -65,15 +66,22 @@ fn ns_window<R: Runtime>(
   Some((main_thread, unsafe { &*ns_window.cast::<NSWindow>() }))
 }
 
-fn make_nonactivating_panel(ns_window: &NSWindow) {
+fn class_layouts_match(source: &AnyClass, target: &AnyClass) -> bool {
+  source.instance_size() == target.instance_size()
+}
+
+fn make_nonactivating_panel(ns_window: &NSWindow) -> bool {
   let panel_class = ClipboardPanel::class();
   if ns_window.class() == panel_class {
-    return;
+    return true;
   }
-  // SAFETY: NSPanel adds no instance variables to NSWindow, so the window's
-  // existing allocation covers the new class. tao's `focusable` ivar becomes
-  // unreachable; its only reader is `set_focusable`, which nothing calls on
-  // this window.
+  if !class_layouts_match(ns_window.class(), panel_class) {
+    return false;
+  }
+  // SAFETY: the layout check proves the existing allocation covers the new
+  // class. Its mirrored Bool occupies TaoWindow's `focusable` storage; the
+  // clipboard window lives for the process lifetime, so it is not deallocated
+  // through the replacement class.
   unsafe { AnyObject::set_class(ns_window, panel_class) };
   ns_window.setStyleMask(ns_window.styleMask() | NSWindowStyleMask::NonactivatingPanel);
   // A full-screen app owns its own Space, and only a window marked
@@ -101,6 +109,7 @@ fn make_nonactivating_panel(ns_window: &NSWindow) {
   // Panels hide when their app deactivates by default, which would defeat
   // parking every time key status moves back to the previous app.
   ns_window.setHidesOnDeactivate(false);
+  true
 }
 
 fn configure_transient_overlay(ns_window: &NSWindow) {
@@ -137,7 +146,9 @@ pub fn present_key_panel<R: Runtime>(window: &WebviewWindow<R>) -> bool {
   let Some((main_thread, ns_window)) = ns_window(window) else {
     return false;
   };
-  make_nonactivating_panel(ns_window);
+  if !make_nonactivating_panel(ns_window) {
+    return false;
+  }
   // Cmd-H from an activating window (settings) hides the whole app, and
   // ordering a window front does not clear that.
   let app = NSApplication::sharedApplication(main_thread);
