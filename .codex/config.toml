@@ -1,7 +1,23 @@
+# Give optional local servers time to join the initial tool catalog.
+mcp_optional_startup_grace_ms = 5000
+
 [mcp_servers.stella-docs]
 # Codex launches MCP servers with the active thread cwd, which may be apps/*.
 args = ["-c", "repo=$(git rev-parse --show-toplevel) || exit 1; cd \"$repo\" || exit 1; exec bun run .claude/mcp/stella-docs.ts"]
 command = "sh"
+startup_timeout_sec = 30
+
+[mcp_servers.stella-docs.tools.fetch_doc_chunks]
+approval_mode = "approve"
+
+[mcp_servers.stella-docs.tools.fetch_docs]
+approval_mode = "approve"
+
+[mcp_servers.stella-docs.tools.list_doc_sources]
+approval_mode = "approve"
+
+[mcp_servers.stella-docs.tools.search_docs]
+approval_mode = "approve"
 
 [shell_environment_policy]
 inherit = "core"
