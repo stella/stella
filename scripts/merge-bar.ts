@@ -171,6 +171,7 @@ type PullRequestSnapshot = {
 };
 
 type CheckRunSnapshot = {
+  id: number;
   name: string;
   status: string;
   conclusion: string | null;
@@ -281,9 +282,17 @@ const evaluateRequiredCheck = ({
     };
   }
 
-  const required = checkRuns.filter((run) =>
-    requiredCheckRuns.includes(run.name),
-  );
+  const latestByName = new Map<string, CheckRunSnapshot>();
+  for (const run of checkRuns) {
+    const current = latestByName.get(run.name);
+    if (current === undefined || run.id > current.id) {
+      latestByName.set(run.name, run);
+    }
+  }
+  const required = requiredCheckRuns.flatMap((name) => {
+    const run = latestByName.get(name);
+    return run === undefined ? [] : [run];
+  });
   const observedNames = new Set(required.map(({ name }) => name));
   const missingNames = requiredCheckRuns.filter(
     (name) => !observedNames.has(name),
@@ -665,18 +674,24 @@ const createGhGateway = ({
         "--paginate",
         `repos/${repo}/commits/${headSha}/check-runs`,
         "--jq",
-        '.check_runs[] | [.name, .status, (.conclusion // "")] | @tsv',
+        '.check_runs[] | [.id, .name, .status, (.conclusion // "")] | @tsv',
       ])
         .split("\n")
         .filter(Boolean);
 
       const runs: CheckRunSnapshot[] = [];
       for (const line of lines) {
-        const [runName, status, conclusion] = line.split("\t");
-        if (runName === undefined || status === undefined) {
+        const [rawId, runName, status, conclusion] = line.split("\t");
+        const id = Number(rawId);
+        if (
+          !Number.isSafeInteger(id) ||
+          runName === undefined ||
+          status === undefined
+        ) {
           panic(`Malformed check-run row from gh: ${line}`);
         }
         runs.push({
+          id,
           name: runName,
           status,
           conclusion:
