@@ -231,7 +231,7 @@ run_mcp_app_bundle() {
   # silently exercise different app code.
   (cd apps/api && bun run build:mcp-apps) || return 1
   git diff --exit-code -- \
-    apps/api/src/mcp/apps/document-upload/generated/app.html.txt
+    "apps/api/src/mcp/apps/*/generated/app.html.txt"
 }
 
 run_capability_catalog() {

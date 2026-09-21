@@ -132,8 +132,13 @@ type SurfaceMode = (typeof SURFACES)[number]["mode"];
 // client PUTs between the two, and folding it into compare_documents would make
 // that tool's meaning depend on whether files were attached. The anonymized
 // count is unchanged; a write never appears there.
+// open_file_comparison and prepare_file_comparison_from_links are separate
+// tools, not modes of prepare_file_comparison: a chat host gives the model no
+// way to PUT bytes, so the panel moves them from the user's browser and the
+// links tool moves them server-side, each with its own failure set. Writes,
+// so the anonymized count is unchanged.
 const TOOL_COUNT_CEILING: Record<SurfaceMode, number> = {
-  default: 60,
+  default: 62,
   anonymized: 28,
   law: 10,
 };
@@ -286,8 +291,12 @@ const TOOL_COUNT_CEILING: Record<SurfaceMode, number> = {
 // source variant and the third output_mode its description distinguishes.
 // Measured 154_051 default. Anonymized and law are unchanged: both tools are
 // writes, so neither surface carries them.
+// open_file_comparison (no input, a short description) and
+// prepare_file_comparison_from_links (two link descriptors) sit under the
+// default ceiling with the usual headroom; writes, so the other surfaces are
+// unchanged.
 const TOOLS_LIST_PAYLOAD_CHAR_CEILING: Record<SurfaceMode, number> = {
-  default: 154_100,
+  default: 157_700,
   anonymized: 73_300,
   law: 28_250,
 };
@@ -353,8 +362,11 @@ const TOOLS_LIST_PAYLOAD_CHAR_CEILING: Record<SurfaceMode, number> = {
 // that cannot resolve, plus prepare_file_comparison's own output, which is two
 // signed PUTs and the next call spelled out. Measured 51_274 default.
 // Anonymized and law are unchanged.
+// prepare_file_comparison_from_links echoes the same next call plus the two
+// derived names and sizes; open_file_comparison returns nothing. Writes, so
+// the other surfaces are unchanged.
 const OUTPUT_SCHEMA_TOTAL_CHAR_CEILING: Record<SurfaceMode, number> = {
-  default: 51_300,
+  default: 52_300,
   anonymized: 32_850,
   law: 10_050,
 };

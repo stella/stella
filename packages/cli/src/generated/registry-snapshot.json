@@ -1934,7 +1934,7 @@
       "requestTimeoutMs": 600000
     },
     "name": "compare_documents",
-    "description": "Create a tracked-changes DOCX redline. source versions compares an explicit stored base with up to 8 targets; source previous compares one stored version with its predecessor; source uploads compares two .docx files staged by prepare_file_comparison, which is how to redline files stella does not hold. base_tracked_changes and target_tracked_changes say what to do with tracked changes each side already carries: accept compares the final text of each side, which is the usual choice. output_mode preview compares without writing; download returns each redline as an expiring link, not a version; version saves each redline as a derived version and needs a stored source. Results are independent, so read every status. Show the user each redline's openUrl or download link.",
+    "description": "Create a tracked-changes DOCX redline. source versions compares an explicit stored base with up to 8 targets; source previous compares one stored version with its predecessor; source uploads compares two .docx files stella does not hold, staged by open_file_comparison, prepare_file_comparison_from_links or prepare_file_comparison. base_tracked_changes and target_tracked_changes handle tracked changes each side already carries: accept (the usual choice) compares its final text. output_mode preview compares without writing; download returns each redline as an expiring link, not a version; version saves each redline as a derived version and needs a stored source. Results are independent, so read every status. Show the user each redline's openUrl or download link.",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -2083,7 +2083,7 @@
       "scope": "documents_write"
     },
     "name": "prepare_file_comparison",
-    "description": "Reserve upload slots for redlining two .docx files that are not stored in stella. Both files must be .docx and at most 50 MB. PUT each file's bytes to its url with the returned headers sent verbatim: the URL is signed against that exact size and checksum, so any deviation is refused. Then call compare_documents with the echoed next.source, within the hour. The staged files and the redline are temporary: they never become a document, a version, or matter content, and both are deleted once the comparison has run.",
+    "description": "Reserve upload slots for redlining two .docx files that are not stored in stella, for a client that can PUT the bytes itself (the CLI, a script). In a chat, prefer open_file_comparison, whose panel uploads from the user's browser, or prepare_file_comparison_from_links when the files are reachable by HTTPS link. Both files must be .docx and at most 50 MB. PUT each file's bytes to its url with the returned headers sent verbatim: the URL is signed against that exact size and checksum. Then call compare_documents with the echoed next.source, within the hour. The staged files and the redline are temporary and never become a document, a version, or matter content.",
     "inputSchema": {
       "type": "object",
       "required": ["base", "target"],
@@ -2143,6 +2143,86 @@
       "title": "Prepare file comparison",
       "destructiveHint": false,
       "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    }
+  },
+  {
+    "cli": {
+      "command": ["document", "comparison", "prepare-from-links"],
+      "scope": "documents_write"
+    },
+    "name": "prepare_file_comparison_from_links",
+    "description": "Stage two .docx files for redlining from HTTPS links the server can download, so no bytes pass through the client. Each file is at most 50 MB and must be a .docx. Then call compare_documents with the echoed next.source, within the hour. The staged files and the redline are temporary and never become a document, a version, or matter content.",
+    "inputSchema": {
+      "type": "object",
+      "required": ["base", "target"],
+      "additionalProperties": false,
+      "properties": {
+        "base": {
+          "type": "object",
+          "properties": {
+            "url": {
+              "type": "string",
+              "description": "HTTPS link the server downloads the .docx from. A share link that opens a web page is not the file; use the direct-download form."
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255,
+              "description": "File name to show the user, including the .docx suffix; defaults to the last path segment of the link."
+            }
+          },
+          "required": ["url"],
+          "additionalProperties": false,
+          "description": "The file the redline compares from."
+        },
+        "target": {
+          "type": "object",
+          "properties": {
+            "url": {
+              "type": "string",
+              "description": "HTTPS link the server downloads the .docx from. A share link that opens a web page is not the file; use the direct-download form."
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255,
+              "description": "File name to show the user, including the .docx suffix; defaults to the last path segment of the link."
+            }
+          },
+          "required": ["url"],
+          "additionalProperties": false,
+          "description": "The file the redline compares to."
+        }
+      }
+    },
+    "annotations": {
+      "title": "Prepare file comparison from links",
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
+    }
+  },
+  {
+    "cli": {
+      "command": ["document", "comparison", "open"],
+      "excluded": true,
+      "scope": "documents_write"
+    },
+    "name": "open_file_comparison",
+    "description": "Open a panel where the user picks two .docx files that are not stored in stella; the panel uploads them from the user's browser and reports the staged ids for compare_documents. Use this whenever the user wants files redlined that are not in a matter and has no HTTPS link to them; you cannot upload attached files yourself. Takes no input.",
+    "inputSchema": {
+      "type": "object",
+      "required": [],
+      "additionalProperties": false,
+      "properties": {}
+    },
+    "annotations": {
+      "title": "Open file comparison",
+      "destructiveHint": false,
+      "idempotentHint": true,
       "openWorldHint": false,
       "readOnlyHint": false
     }

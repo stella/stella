@@ -98,6 +98,17 @@ export const DEFAULT_MCP_CLI_ANNOTATIONS = defineMcpCliToolAnnotations(
       command: ["document", "comparison", "prepare"],
       scope: "documents_write",
     },
+    prepare_file_comparison_from_links: {
+      command: ["document", "comparison", "prepare-from-links"],
+      scope: "documents_write",
+    },
+    open_file_comparison: {
+      command: ["document", "comparison", "open"],
+      // Interactive MCP App launcher; the CLI reads local files itself and
+      // stages them through the prepare command.
+      excluded: true,
+      scope: "documents_write",
+    },
     compare_documents: {
       command: ["document", "compare"],
       scope: "documents_write",

@@ -262,6 +262,7 @@ export type {
   DocumentVersionUploadReservationInput,
   UploadLifecycleInput,
 } from "./document-version-upload";
+export { FILE_COMPARISON_TRANSPORT } from "./file-comparison";
 export {
   FLOW_RUN_STATUSES,
   FLOW_RUN_STEP_STATUSES,

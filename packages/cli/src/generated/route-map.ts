@@ -1417,7 +1417,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["document", "comparison", "prepare"],
                 toolName: "prepare_file_comparison",
                 description:
-                  "Reserve upload slots for redlining two .docx files that are not stored in stella.",
+                  "Reserve upload slots for redlining two .docx files that are not stored in stella, for a client that can PUT the bytes itself (the CLI, a script).",
                 flags: [
                   {
                     flag: "--base.name",
@@ -1540,6 +1540,106 @@ export const generatedRouteMap: RouteNode = {
                         },
                       },
                       required: ["name", "size", "sha256_hex"],
+                      additionalProperties: false,
+                      description: "The file the redline compares to.",
+                    },
+                  },
+                },
+              },
+            },
+            "prepare-from-links": {
+              kind: "leaf",
+              spec: {
+                commandPath: ["document", "comparison", "prepare-from-links"],
+                toolName: "prepare_file_comparison_from_links",
+                description:
+                  "Stage two .docx files for redlining from HTTPS links the server can download, so no bytes pass through the client.",
+                flags: [
+                  {
+                    flag: "--base.url",
+                    prop: "base.url",
+                    kind: "string",
+                    repeatable: false,
+                    description:
+                      "HTTPS link the server downloads the .docx from. A share link that opens a web page is not the file; use the direct-download form.",
+                    required: false,
+                  },
+                  {
+                    flag: "--base.name",
+                    prop: "base.name",
+                    kind: "string",
+                    repeatable: false,
+                    description:
+                      "File name to show the user, including the .docx suffix; defaults to the last path segment of the link.",
+                    required: false,
+                  },
+                  {
+                    flag: "--target.url",
+                    prop: "target.url",
+                    kind: "string",
+                    repeatable: false,
+                    description:
+                      "HTTPS link the server downloads the .docx from. A share link that opens a web page is not the file; use the direct-download form.",
+                    required: false,
+                  },
+                  {
+                    flag: "--target.name",
+                    prop: "target.name",
+                    kind: "string",
+                    repeatable: false,
+                    description:
+                      "File name to show the user, including the .docx suffix; defaults to the last path segment of the link.",
+                    required: false,
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                followable: true,
+                windowedText: false,
+                destructive: false,
+                scope: "documents_write",
+                inputSchema: {
+                  type: "object",
+                  required: ["base", "target"],
+                  additionalProperties: false,
+                  properties: {
+                    base: {
+                      type: "object",
+                      properties: {
+                        url: {
+                          type: "string",
+                          description:
+                            "HTTPS link the server downloads the .docx from. A share link that opens a web page is not the file; use the direct-download form.",
+                        },
+                        name: {
+                          type: "string",
+                          minLength: 1,
+                          maxLength: 255,
+                          description:
+                            "File name to show the user, including the .docx suffix; defaults to the last path segment of the link.",
+                        },
+                      },
+                      required: ["url"],
+                      additionalProperties: false,
+                      description: "The file the redline compares from.",
+                    },
+                    target: {
+                      type: "object",
+                      properties: {
+                        url: {
+                          type: "string",
+                          description:
+                            "HTTPS link the server downloads the .docx from. A share link that opens a web page is not the file; use the direct-download form.",
+                        },
+                        name: {
+                          type: "string",
+                          minLength: 1,
+                          maxLength: 255,
+                          description:
+                            "File name to show the user, including the .docx suffix; defaults to the last path segment of the link.",
+                        },
+                      },
+                      required: ["url"],
                       additionalProperties: false,
                       description: "The file the redline compares to.",
                     },

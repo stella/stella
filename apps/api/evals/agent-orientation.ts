@@ -1210,6 +1210,57 @@ const TASKS: readonly Task[] = [
     },
   },
   {
+    id: "open-file-comparison",
+    // A chat host gives the model no way to move bytes: the right call is the
+    // panel, not prepare_file_comparison with sizes and checksums it cannot
+    // know, and not a claim that it uploaded the attachments itself.
+    request:
+      "I've attached two Word files, the original NDA and the counterparty's " +
+      "markup. They are not in stella. Redline them for me.",
+    mcp: {
+      toolName: "open_file_comparison",
+      exampleArgs: {},
+      checkArgs: () => [],
+    },
+    // The CLI reads local files itself and stages them through the prepare
+    // command; the panel is a host view it has no channel for.
+    cli: { kind: "declined" },
+  },
+  {
+    id: "prepare-file-comparison-from-links",
+    request:
+      "Redline these two contracts for me; they are not in stella. Original: " +
+      "https://files.example.com/nda/original.docx, revised: " +
+      "https://files.example.com/nda/revised.docx.",
+    mcp: {
+      toolName: "prepare_file_comparison_from_links",
+      exampleArgs: {
+        base: { url: "https://files.example.com/nda/original.docx" },
+        target: { url: "https://files.example.com/nda/revised.docx" },
+      },
+      checkArgs: (args) => [
+        ...nestedField(
+          args,
+          ["base", "url"],
+          "https://files.example.com/nda/original.docx",
+        ),
+        ...nestedField(
+          args,
+          ["target", "url"],
+          "https://files.example.com/nda/revised.docx",
+        ),
+      ],
+    },
+    cli: {
+      kind: "command",
+      path: ["document", "comparison", "prepare-from-links"],
+      flags: {
+        input:
+          '{"base":{"url":"https://files.example.com/nda/original.docx"},"target":{"url":"https://files.example.com/nda/revised.docx"}}',
+      },
+    },
+  },
+  {
     id: "compare-staged-uploads",
     // The second half of the same workflow: the model is handed the `next`
     // payload prepare_file_comparison returned and has to copy it back rather

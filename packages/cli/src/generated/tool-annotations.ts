@@ -195,6 +195,15 @@ export const generatedToolAnnotations: Readonly<
     command: ["document", "comparison", "prepare"],
     scope: "documents_write",
   },
+  prepare_file_comparison_from_links: {
+    command: ["document", "comparison", "prepare-from-links"],
+    scope: "documents_write",
+  },
+  open_file_comparison: {
+    command: ["document", "comparison", "open"],
+    excluded: true,
+    scope: "documents_write",
+  },
   delete_document: {
     command: ["document", "delete"],
     scope: "documents_write",

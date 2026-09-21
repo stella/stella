@@ -420,6 +420,30 @@
         "destructive_justification": "Does not delete, revoke access, overwrite irreversibly, or perform another destructive action."
       }
     },
+    "prepare_file_comparison_from_links": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates, updates, or starts work inside the user’s private stella workspace.",
+        "open_world_justification": "May contact an external public-data provider or a selected external capability, while keeping resulting workspace changes private.",
+        "destructive_justification": "Does not delete, revoke access, overwrite irreversibly, or perform another destructive action."
+      }
+    },
+    "open_file_comparison": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates, updates, or starts work inside the user’s private stella workspace.",
+        "open_world_justification": "Operates within stella’s private workspace and does not change public internet or third-party state.",
+        "destructive_justification": "Does not delete, revoke access, overwrite irreversibly, or perform another destructive action."
+      }
+    },
     "delete_document": {
       "annotations": {
         "readOnlyHint": false,

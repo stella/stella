@@ -123,6 +123,10 @@ const TOOLS_WITHOUT_ENUMERABLE_ENDPOINT: Record<string, string> = {
     "no dedicated endpoint: compat alias, MCP handler reads extractedContent directly (apps/api/src/mcp/compat-tools.ts)",
   prepare_file_comparison:
     "no dedicated endpoint: MCP-only tool reserving short-lived comparison staging outside matter storage (apps/api/src/mcp/file-comparison-prepare-tool.ts)",
+  prepare_file_comparison_from_links:
+    "no dedicated endpoint: MCP-only tool downloading two files from HTTPS links into the same comparison staging (apps/api/src/mcp/file-comparison-links-tool.ts)",
+  open_file_comparison:
+    "no dedicated endpoint: MCP-only launcher for the portable two-file comparison App, which stages through prepare_file_comparison (apps/api/src/mcp/file-comparison-picker-tool.ts)",
   prepare_feedback:
     "no dedicated endpoint: MCP-only tool, prepares a sanitized GitHub issue URL and gh command (apps/api/src/mcp/feedback-tools.ts)",
   list_capabilities:

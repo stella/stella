@@ -884,7 +884,7 @@ jobs:
         # production resource cannot silently exercise different app code.
         run: |
           (cd apps/api && bun run build:mcp-apps)
-          git diff --exit-code -- apps/api/src/mcp/apps/document-upload/generated/app.html.txt
+          git diff --exit-code -- "apps/api/src/mcp/apps/*/generated/app.html.txt"
 
       - name: Documentation source policy rule
         if: needs.ci-plan.outputs.package_checks_required == 'true'

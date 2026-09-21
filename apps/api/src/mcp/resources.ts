@@ -4,10 +4,14 @@ import type {
   Resource,
 } from "@modelcontextprotocol/server";
 
-import { MCP_APP_RESOURCE_MIME_TYPE } from "@stll/api-contract";
+import {
+  FILE_COMPARISON_TRANSPORT,
+  MCP_APP_RESOURCE_MIME_TYPE,
+} from "@stll/api-contract";
 
 import { envBase } from "@/api/env-base";
 import documentUploadAppHtml from "@/api/mcp/apps/document-upload/generated/app.html.txt" with { type: "text" };
+import fileComparisonAppHtml from "@/api/mcp/apps/file-comparison/generated/app.html.txt" with { type: "text" };
 import type { McpMode } from "@/api/mcp/constants";
 import { DOCUMENT_UPLOAD_APP_RESOURCE_URI } from "@/api/mcp/document-file-upload";
 import {
@@ -165,7 +169,18 @@ const STATIC_RESOURCES: readonly StaticResource[] = [
     // binary. Reading from the source tree at runtime would work in dev but
     // fail in the production image, which ships only the compiled server.
     read: () => documentUploadAppHtml,
-    resourceMeta: () => documentUploadResourceMeta(),
+    resourceMeta: () => uploadAppResourceMeta(),
+  },
+  {
+    uri: FILE_COMPARISON_TRANSPORT.resourceUri,
+    name: "file-comparison",
+    title: "Compare two files",
+    description:
+      "Portable MCP App picker that uploads two .docx files from the user's browser for compare_documents to redline.",
+    mimeType: MCP_APP_RESOURCE_MIME_TYPE,
+    listed: false,
+    read: () => fileComparisonAppHtml,
+    resourceMeta: () => uploadAppResourceMeta(),
   },
 ];
 
@@ -181,7 +196,7 @@ const uploadStorageOrigins = (): string[] => {
   return [endpoint.origin];
 };
 
-const documentUploadResourceMeta = (): Record<string, unknown> => {
+const uploadAppResourceMeta = (): Record<string, unknown> => {
   const connectDomains = uploadStorageOrigins();
   return {
     ui: {
