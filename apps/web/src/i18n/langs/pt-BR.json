@@ -672,7 +672,6 @@
       "reportedByOperator": "Informado manualmente",
       "reportedByPublisher": "Contagem do próprio órgão",
       "searchable": "Pesquisáveis",
-      "searchableHint": "Decisões que a pesquisa encontra.",
       "title": "Cobertura da jurisprudência",
       "totalFrom": "Total em {date}",
       "unavailable": "Os dados de cobertura estão indisponíveis no momento."

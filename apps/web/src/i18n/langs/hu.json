@@ -672,7 +672,6 @@
       "reportedByOperator": "Kézzel rögzítve",
       "reportedByPublisher": "A közzétevő saját adata",
       "searchable": "Kereshető",
-      "searchableHint": "Határozatok, amelyeket a keresés megtalál.",
       "title": "Az ítélkezési gyakorlat lefedettsége",
       "totalFrom": "Összesítés {date} szerint",
       "unavailable": "A lefedettségi adatok jelenleg nem érhetők el."

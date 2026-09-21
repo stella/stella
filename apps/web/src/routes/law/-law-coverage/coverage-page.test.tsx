@@ -136,7 +136,6 @@ describe("the coverage page states what it counts", () => {
     const markup = render(<CaseLawCoveragePage coverage={COVERAGE} />);
 
     expect(markup).toContain("4,200,000");
-    expect(markup).toContain(messages.caseLaw.coverage.searchableHint);
     // What is held but not searchable is a source's own figure, in its
     // completeness column; neither it nor a sum of the two heads the page.
     expect(markup).not.toContain("4,500,000");
@@ -277,7 +276,7 @@ describe("the coverage page states what it counts", () => {
 
     expect(markup).toContain(messages.caseLaw.coverage.unavailable);
     // Degrading to zeros would publish a corpus nobody measured.
-    expect(markup).not.toContain(messages.caseLaw.coverage.searchableHint);
+    expect(markup).not.toContain("4,200,000");
     expect(markup).not.toContain("<table");
   });
 });

@@ -672,7 +672,6 @@
       "reportedByOperator": "Zadáno ručně",
       "reportedByPublisher": "Vlastní údaj vydavatele",
       "searchable": "Dostupné k vyhledání",
-      "searchableHint": "Rozhodnutí, která najde vyhledávání.",
       "title": "Pokrytí judikatury",
       "totalFrom": "Celkem k {date}",
       "unavailable": "Údaje o pokrytí nejsou momentálně k dispozici."

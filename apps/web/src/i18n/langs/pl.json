@@ -672,7 +672,6 @@
       "reportedByOperator": "Wpisane ręcznie",
       "reportedByPublisher": "Własne dane wydawcy",
       "searchable": "Wyszukiwalne",
-      "searchableHint": "Orzeczenia, które znajdzie wyszukiwarka.",
       "title": "Zakres orzecznictwa",
       "totalFrom": "Suma z {date}",
       "unavailable": "Dane o zakresie są chwilowo niedostępne."

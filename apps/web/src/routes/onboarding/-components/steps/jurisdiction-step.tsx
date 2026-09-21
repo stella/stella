@@ -114,6 +114,7 @@ export const JurisdictionGlobePreview = ({
         focusLongitude={focusPoint?.lon ?? null}
         label={t("onboarding.jurisdictionGlobeLabel")}
         markers={markers}
+        scale={1}
         size={GLOBE_PIXEL_SIZE}
       />
 

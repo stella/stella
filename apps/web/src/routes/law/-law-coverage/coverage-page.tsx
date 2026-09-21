@@ -133,9 +133,9 @@ export const CaseLawCoveragePage = ({
         </p>
       </CoverageHeading>
 
-      <div className="flex flex-wrap items-center justify-between gap-x-12 gap-y-4">
-        <Headline>{format.number(coverage.totals.searchable)}</Headline>
+      <div className="flex flex-wrap items-center gap-x-10 gap-y-4">
         <CoverageGlobe countries={coverage.countries} />
+        <Headline>{format.number(coverage.totals.searchable)}</Headline>
       </div>
 
       {countries.map((country) => (
@@ -159,14 +159,14 @@ export const CaseLawCoveragePending = () => {
         <Skeleton className="h-3 w-48" />
       </CoverageHeading>
 
-      <div className="flex flex-wrap items-center justify-between gap-x-12 gap-y-4">
+      <div className="flex flex-wrap items-center gap-x-10 gap-y-4">
+        <Skeleton
+          className="rounded-full"
+          style={{ width: GLOBE_SIZE, height: GLOBE_SIZE }}
+        />
         <Headline>
           <Skeleton className="h-10 w-48" />
         </Headline>
-        <Skeleton
-          className="mx-auto rounded-full"
-          style={{ width: GLOBE_SIZE, height: GLOBE_SIZE }}
-        />
       </div>
 
       {PENDING_SECTION_KEYS.map((section) => (
@@ -236,20 +236,24 @@ const CoverageHeading = ({ children }: PropsWithChildren) => {
   );
 };
 
-/** The globe's side, sized to sit beside the headline without dwarfing it. */
-const GLOBE_SIZE = 280;
+/** The globe's side, sized to lead the page beside the headline. */
+const GLOBE_SIZE = 320;
 
-/** The smallest marker, for a country the corpus holds but cannot search yet. */
-const MARKER_MIN = 0.03;
+/** Cropped past the rim, so the sphere reads as near rather than as a bead. */
+const GLOBE_SCALE = 1.35;
 
-/** How much the largest searchable corpus adds to its marker on top of the minimum. */
-const MARKER_RANGE = 0.12;
+/** The smallest blot, for a country the corpus holds but cannot search yet. */
+const MARKER_MIN = 0.05;
+
+/** How much the largest searchable corpus adds to its blot on top of the minimum. */
+const MARKER_RANGE = 0.15;
 
 /**
- * Where the corpus holds case law, as markers on the shared globe: each
+ * Where the corpus holds case law, as blue blots on the shared globe: each
  * searchable country sized by the square root of its share of the largest,
  * so a corpus a tenth the size still reads, and each country in preparation
- * as a pin. The sphere turns to the largest corpus and holds there.
+ * as the smallest blot. The sphere keeps turning; the reader sees every
+ * country come round.
  *
  * The EU sits at the Court of Justice's seat: the corpus is one court's,
  * not a continent's.
@@ -277,19 +281,13 @@ const CoverageGlobe = ({
         : 0;
     return [{ location: point, size: MARKER_MIN + MARKER_RANGE * share }];
   });
-  let focus: GlobeMarker | null = null;
-  for (const marker of markers) {
-    if (focus === null || marker.size > focus.size) {
-      focus = marker;
-    }
-  }
 
   return (
     <Globe
-      className="mx-auto"
-      focusLongitude={focus === null ? null : focus.location[1]}
+      focusLongitude={null}
       label={t("caseLaw.coverage.globeLabel")}
       markers={markers}
+      scale={GLOBE_SCALE}
       size={GLOBE_SIZE}
     />
   );
@@ -312,23 +310,15 @@ const caseLawCountryPoint = (country: string): [number, number] | null => {
 };
 
 /**
- * The one number the page is about, with the one line that says what it
- * counts. What is held but not yet searchable stays with the source it
- * belongs to, in the completeness column; summed here it would compete with
- * this figure and overlap it.
+ * The one number the page is about: decisions a search can find. The title
+ * says what the page covers, so the number carries no caption. What is held
+ * but not yet searchable stays with the source it belongs to, in the
+ * completeness column; summed here it would compete with this figure and
+ * overlap it.
  */
-const Headline = ({ children }: PropsWithChildren) => {
-  const t = useTranslations();
-
-  return (
-    <div className="flex flex-col gap-1">
-      <p className="text-4xl font-semibold tabular-nums">{children}</p>
-      <p className="text-muted-foreground text-sm">
-        {t("caseLaw.coverage.searchableHint")}
-      </p>
-    </div>
-  );
-};
+const Headline = ({ children }: PropsWithChildren) => (
+  <p className="text-5xl font-semibold tabular-nums">{children}</p>
+);
 
 /**
  * A week's arrivals. A quiet week is a fact and stays on the row, receding

@@ -672,7 +672,6 @@
       "reportedByOperator": "Introducido manualmente",
       "reportedByPublisher": "Recuento del organismo publicador",
       "searchable": "Consultables",
-      "searchableHint": "Resoluciones que la búsqueda puede encontrar.",
       "title": "Cobertura de jurisprudencia",
       "totalFrom": "Total a {date}",
       "unavailable": "Los datos de cobertura no están disponibles ahora mismo."

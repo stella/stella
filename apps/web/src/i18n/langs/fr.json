@@ -672,7 +672,6 @@
       "reportedByOperator": "Saisi manuellement",
       "reportedByPublisher": "Décompte du diffuseur",
       "searchable": "Interrogeables",
-      "searchableHint": "Décisions que la recherche peut trouver.",
       "title": "Couverture de la jurisprudence",
       "totalFrom": "Total au {date}",
       "unavailable": "Les chiffres de couverture sont indisponibles pour le moment."

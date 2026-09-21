@@ -22,6 +22,8 @@ type GlobeProps = {
   focusLongitude: number | null;
   /** The canvas's side in CSS pixels. */
   size: number;
+  /** How much of the canvas the sphere fills: 1 fits it, above 1 crops the rim. */
+  scale: number;
   /** What the picture shows, for readers who cannot see it. */
   label: string;
   className?: string;
@@ -111,6 +113,7 @@ export const Globe = ({
   focusLongitude,
   label,
   markers,
+  scale,
   size,
 }: GlobeProps) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -161,6 +164,7 @@ export const Globe = ({
         markerColor: initialTheme.markerColor,
         glowColor: initialTheme.glowColor,
         opacity: 0.9,
+        scale,
         markers: markersRef.current,
       });
 

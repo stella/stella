@@ -675,7 +675,6 @@ type Messages = {
       "reportedByOperator": "Recorded by hand";
       "reportedByPublisher": "Publisher's own count";
       "searchable": "Searchable";
-      "searchableHint": "Decisions a search can find.";
       "title": "Case-law coverage";
       "totalFrom": "Total from {date}";
       "unavailable": "Coverage figures are unavailable right now.";

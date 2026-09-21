@@ -672,7 +672,6 @@
       "reportedByOperator": "Ievadīts manuāli",
       "reportedByPublisher": "Paša publicētāja skaits",
       "searchable": "Meklējami",
-      "searchableHint": "Nolēmumi, kurus atrod meklēšana.",
       "title": "Tiesu prakses aptvērums",
       "totalFrom": "Kopskaits uz {date}",
       "unavailable": "Aptvēruma dati pašlaik nav pieejami."

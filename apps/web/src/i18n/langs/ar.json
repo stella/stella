@@ -672,7 +672,6 @@
       "reportedByOperator": "مُدخَل يدويًا",
       "reportedByPublisher": "إحصاء الجهة الناشرة نفسها",
       "searchable": "قابلة للبحث",
-      "searchableHint": "أحكام يمكن للبحث العثور عليها.",
       "title": "تغطية الاجتهاد القضائي",
       "totalFrom": "الإجمالي بتاريخ {date}",
       "unavailable": "أرقام التغطية غير متاحة حاليًا."
