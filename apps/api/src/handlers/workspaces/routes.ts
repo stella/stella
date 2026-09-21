@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import Elysia, { t } from "elysia";
+import Elysia from "elysia";
 
 import { RESOURCE_TYPE } from "@stll/api-contract";
 
@@ -44,7 +44,7 @@ import removeWorkspaceMember from "@/api/handlers/workspaces/workspace-members-r
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { workspaceParams } from "@/api/lib/custom-schema";
 import {
   organizationResourceSetUpdates,
   resourceRealtime,
@@ -179,7 +179,7 @@ export const workspacesRoute = new Elysia({ prefix: "/workspaces" })
   .group(
     "/:workspaceId",
     {
-      params: t.Object({ workspaceId: tSafeId("workspace") }),
+      params: workspaceParams({}),
       validateWorkspaceAccess: true,
     },
     (app) =>

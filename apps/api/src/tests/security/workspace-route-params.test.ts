@@ -2,8 +2,15 @@
  * Every route mounted under a `:workspaceId` prefix receives `workspaceId` in
  * its params object. A route-level `params` schema that omits it fails
  * validation for every request, before authentication, with a bare
- * "Invalid request". `workspaceParams()` exists so handlers cannot get this
- * wrong; this census makes the helper mandatory rather than conventional.
+ * "Invalid request".
+ *
+ * `WorkspaceHandlerConfig["params"]` closes the class at compile time for
+ * anything `createSafeHandler` mounts. This census is the runtime backstop for
+ * what that type cannot see: params declared inline on a route or a `.group()`
+ * guard, params reaching a route through a macro or a handler the factory does
+ * not produce, and any future factory that skips the config type. It asserts
+ * the invariant (the schema declares `workspaceId`), not the spelling, so a
+ * hand-written schema is reported only when it actually drops the property.
  */
 import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync, statSync } from "node:fs";

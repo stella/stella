@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { status, t } from "elysia";
+import { status } from "elysia";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawMatterLinks } from "@/api/db/schema";
@@ -9,7 +9,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 
 type DeleteMatterLinkProps = {
   scopedDb: ScopedDb;
@@ -61,8 +61,7 @@ const config = {
     "can be linked again.",
   permissions: { entity: ["delete"] },
   mcp: { type: "capability", reason: "legal_corpus_admin" },
-  params: t.Object({
-    workspaceId: tSafeId("workspace"),
+  params: workspaceParams({
     linkId: tSafeId("caseLawMatterLink"),
   }),
 } satisfies HandlerConfig;

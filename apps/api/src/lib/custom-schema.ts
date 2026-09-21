@@ -114,5 +114,23 @@ export const tPaginationCursor = ({
 }: PaginationCursorOptions = {}) =>
   t.String({ maxLength: maxChars, description });
 
+/**
+ * The params shape a route mounted under a `:workspaceId` prefix must declare.
+ *
+ * Elysia validates the route-level params schema before the auth macros run and
+ * does not merge it with the workspace macro's own `workspaceId` property, so a
+ * schema that omits `workspaceId` rejects every request with a bare 422 --
+ * before authentication, for a perfectly valid caller.
+ * `WorkspaceHandlerConfig["params"]` requires this shape, which leaves a bare
+ * `t.Object({ ... })` unassignable there.
+ *
+ * The constraint reads `properties` instead of naming `TObject<...>`: `TObject`
+ * carries a `required` tuple that a wider property set cannot satisfy, so the
+ * nominal form would reject every schema that adds a param of its own.
+ */
+export type WorkspaceParamsSchema = TSchema & {
+  properties: { workspaceId: TSchema };
+};
+
 export const workspaceParams = <T extends TProperties>(extra: T) =>
   t.Object({ workspaceId: tSafeId("workspace"), ...extra });

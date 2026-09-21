@@ -8,7 +8,7 @@ import type {
   SafeHandlerGenerator,
 } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import {
   isEmailAttachmentPreviewable,
   resolveEmailAttachmentMimeType,
@@ -35,8 +35,7 @@ const config = {
   query: t.Object({
     disposition: t.String({ pattern: EMAIL_ATTACHMENT_DISPOSITION_PATTERN }),
   }),
-  params: t.Object({
-    workspaceId: tSafeId("workspace"),
+  params: workspaceParams({
     fieldId: tSafeId("field"),
     attachmentId: t.String(),
   }),

@@ -12,7 +12,6 @@
  */
 import { Result } from "better-result";
 import { and, eq, inArray } from "drizzle-orm";
-import { t } from "elysia";
 
 import { pendingUploads } from "@/api/db/schema";
 import {
@@ -22,13 +21,12 @@ import {
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getS3 } from "@/api/lib/s3";
 import { tmpUploadKeys } from "@/api/lib/uploads/runtime";
 
-const abortParamsSchema = t.Object({
-  workspaceId: tSafeId("workspace"),
+const abortParamsSchema = workspaceParams({
   uploadId: tSafeId("pendingUpload"),
 });
 

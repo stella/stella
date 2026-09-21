@@ -1,12 +1,11 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
 
 import { anonymizationAllowlistEntries } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 
 const config = {
   description:
@@ -16,8 +15,7 @@ const config = {
     "and output already anonymized is not revisited.",
   permissions: { workspace: ["update"] },
   mcp: { type: "capability", reason: "anonymization_admin" },
-  params: t.Object({
-    workspaceId: tSafeId("workspace"),
+  params: workspaceParams({
     entryId: tSafeId("anonymizationAllowlistEntry"),
   }),
 } satisfies HandlerConfig;

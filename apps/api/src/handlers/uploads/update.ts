@@ -20,7 +20,6 @@
 import { Result, panic } from "better-result";
 import type { Err } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
-import { t } from "elysia";
 
 import { API_FILE_SECURITY_REJECTED_ERROR_CODE } from "@stll/api-contract";
 import type { ApiFileSecurityRejectionDetails } from "@stll/api-contract";
@@ -39,7 +38,7 @@ import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { fileSecurityRejection } from "@/api/lib/file-scan/rejection";
 import { scanFile } from "@/api/lib/file-scan/scan";
@@ -57,8 +56,7 @@ import {
   UploadFinalizeError,
 } from "@/api/lib/uploads/runtime";
 
-const finalizeParamsSchema = t.Object({
-  workspaceId: tSafeId("workspace"),
+const finalizeParamsSchema = workspaceParams({
   uploadId: tSafeId("pendingUpload"),
 });
 
