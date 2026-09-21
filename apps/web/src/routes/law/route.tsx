@@ -5,6 +5,7 @@ import { Skeleton } from "@stll/ui/skeleton";
 import "@/features/case-law/case-decision-details-inspector-registration";
 import "@/features/case-law/case-decision-inspector-registration";
 import "@/features/statutes/provision-inspector-registration";
+import "@/features/statutes/statute-inspector-registration";
 import { isPublicLawRouteEnabled } from "@/lib/public-law-launch";
 import { PublicLawShell } from "@/routes/law/-components/public-law-shell";
 

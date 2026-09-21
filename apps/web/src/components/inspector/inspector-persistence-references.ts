@@ -13,6 +13,10 @@ import {
   isProvisionViewPayload,
   PROVISION_VIEW,
 } from "@/features/statutes/provision-inspector.logic";
+import {
+  isStatuteViewPayload,
+  STATUTE_VIEW,
+} from "@/features/statutes/statute-inspector.logic";
 
 registerInspectorPersistenceReference({
   type: INBOX_SIGNAL_VIEW,
@@ -80,5 +84,28 @@ registerInspectorPersistenceReference({
     versionCount,
     versionValidFrom,
     ...(highlightAnchorId === undefined ? {} : { highlightAnchorId }),
+  }),
+});
+
+// An act tab carries only its address and its name: the wording itself is
+// read again, so a reload comes back on the consolidation the citation
+// resolved to rather than on whatever is latest.
+registerInspectorPersistenceReference({
+  type: STATUTE_VIEW,
+  validate: isStatuteViewPayload,
+  project: ({
+    country,
+    documentId,
+    eli,
+    slug,
+    statuteTitle,
+    versionValidFrom,
+  }) => ({
+    country,
+    documentId,
+    eli,
+    slug,
+    statuteTitle,
+    versionValidFrom,
   }),
 });
