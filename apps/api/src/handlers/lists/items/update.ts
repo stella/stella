@@ -4,7 +4,7 @@ import { t } from "elysia";
 
 import { legalListItems } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -27,7 +27,7 @@ const config = {
   permissions: { entity: ["update"] },
   mcp: { type: "capability", reason: "workspace_schema" },
   body: bodySchema,
-} satisfies HandlerConfig;
+} satisfies WorkspaceHandlerConfig;
 
 const updateItem = createSafeHandler(
   config,

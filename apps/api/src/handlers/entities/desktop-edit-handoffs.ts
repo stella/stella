@@ -8,14 +8,14 @@ import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 import { desktopEditHandoffs } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
   createAuditRecorder,
 } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import {
   consumeDesktopEditHandoff,
   createDesktopEditHandoffSafeDb,
@@ -66,7 +66,7 @@ export const createDesktopEditHandoffBodySchema = t.Object({
   propertyId: tSafeId("property"),
 });
 
-export const desktopEditHandoffStatusParamsSchema = t.Object({
+export const desktopEditHandoffStatusParamsSchema = workspaceParams({
   handoffId: tSafeId("desktopEditHandoff"),
 });
 
@@ -117,7 +117,7 @@ const createConfig = {
   body: createDesktopEditHandoffBodySchema,
   permissions: { entity: ["update"] },
   mcp: { type: "internal", reason: "session_token_exchange" },
-} satisfies HandlerConfig;
+} satisfies WorkspaceHandlerConfig;
 
 export const createDesktopEditHandoff = createSafeHandler(
   createConfig,
@@ -183,7 +183,7 @@ const statusConfig = {
   params: desktopEditHandoffStatusParamsSchema,
   permissions: { entity: ["update"] },
   mcp: { type: "internal", reason: "session_token_exchange" },
-} satisfies HandlerConfig;
+} satisfies WorkspaceHandlerConfig;
 
 export const readDesktopEditHandoffStatus = createSafeHandler<
   typeof statusConfig,

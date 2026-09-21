@@ -316,6 +316,9 @@ const fixtureRuleOverrides = [
     "require-safe-route-handlers/no-direct-handler-config",
     "require-safe-route-handlers/require-safe-route-handlers",
   ]),
+  fixtureRuleOverride("require-workspace-handler-config.fixture.ts", [
+    "require-workspace-handler-config/require-workspace-handler-config",
+  ]),
   fixtureRuleOverride("require-safe-outbound-target.fixture.ts", [
     "require-safe-outbound-target/require-safe-outbound-target",
   ]),
@@ -1098,6 +1101,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-optional-mutation-command.ts",
     "./.oxlint-plugins/no-beforeload-redirect.ts",
     "./.oxlint-plugins/require-safe-route-handlers.ts",
+    "./.oxlint-plugins/require-workspace-handler-config.ts",
     "./.oxlint-plugins/no-inline-endpoint-in-routes.ts",
     "./.oxlint-plugins/security-guards.ts",
     "./.oxlint-plugins/no-unbranded-ownership-id-param.ts",
@@ -3933,6 +3937,18 @@ export default defineConfig({
       files: ["apps/api/src/handlers/**/*.ts"],
       rules: {
         "require-file-transport-disposition/require-file-transport-disposition":
+          "error",
+      },
+    },
+    {
+      // A workspace-scoped config must name the type that requires its params
+      // schema to declare workspaceId. `satisfies` does not widen, so
+      // `satisfies HandlerConfig` on one still typechecks and defers the error
+      // to the `createSafeHandler(...)` call; scoped to the handler tree,
+      // where every such config is written.
+      files: ["apps/api/src/handlers/**/*.ts"],
+      rules: {
+        "require-workspace-handler-config/require-workspace-handler-config":
           "error",
       },
     },

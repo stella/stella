@@ -31,7 +31,7 @@ import {
   fields,
 } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import {
   tPaginationCursor,
   tSafeId,
@@ -113,7 +113,7 @@ const config = {
     // even when it asks.
     includeLatest: t.Optional(t.Boolean()),
   }),
-} satisfies HandlerConfig;
+} satisfies WorkspaceHandlerConfig;
 
 const listDocumentReviewRuns = createSafeHandler(
   config,

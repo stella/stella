@@ -17,7 +17,7 @@ import {
 import { createBilingualRunBodySchema } from "@/api/handlers/bilingual-translations/schemas";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import {
   BILINGUAL_ROW_DISPOSITION,
@@ -40,7 +40,7 @@ const config = {
   params: workspaceParams({}),
   body: createBilingualRunBodySchema,
   requiresUsage: { actionType: "doc_review", modelRole: "chat" },
-} satisfies HandlerConfig;
+} satisfies WorkspaceHandlerConfig;
 
 const createBilingualRun = createSafeHandler(
   config,

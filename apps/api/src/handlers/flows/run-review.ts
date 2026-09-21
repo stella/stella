@@ -5,7 +5,7 @@ import {
   reviewFlowRunBodySchema,
 } from "@/api/handlers/flows/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { resolveFlowReviewGate } from "@/api/lib/flows/flow-executor";
 
 const config = {
@@ -18,7 +18,7 @@ const config = {
   mcp: { type: "capability", reason: "workflow_orchestration" },
   params: flowRunParamsSchema,
   body: reviewFlowRunBodySchema,
-} satisfies HandlerConfig;
+} satisfies WorkspaceHandlerConfig;
 
 const reviewFlowRun = createSafeHandler(
   config,

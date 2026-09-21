@@ -7,9 +7,13 @@ import {
   legalListGenerationCandidateSources,
 } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tPaginationCursor, tSafeId } from "@/api/lib/custom-schema";
+import {
+  tPaginationCursor,
+  tSafeId,
+  workspaceParams,
+} from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -20,7 +24,7 @@ import {
 } from "@/api/lib/pagination";
 import { brandPersistedLegalListGenerationCandidateId } from "@/api/lib/safe-id-boundaries";
 
-const paramsSchema = t.Object({
+const paramsSchema = workspaceParams({
   listId: tSafeId("legalList"),
   runId: tSafeId("legalListGenerationRun"),
 });
@@ -44,7 +48,7 @@ const config = {
   mcp: { type: "capability", reason: "workflow_orchestration" },
   params: paramsSchema,
   query: querySchema,
-} satisfies HandlerConfig;
+} satisfies WorkspaceHandlerConfig;
 
 type CandidateCursor = {
   position: number;

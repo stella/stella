@@ -12,7 +12,7 @@ import { readBilingualDocx } from "@stll/folio-core/server";
 import { prepareBilingualTranslationBodySchema } from "@/api/handlers/bilingual-translations/schemas";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { decideDispositions, proposeGlossary } from "@/api/lib/bilingual/ai";
 import type { BilingualAIDocumentContext } from "@/api/lib/bilingual/ai";
 import { BILINGUAL_LIMITS } from "@/api/lib/bilingual/contract";
@@ -35,7 +35,7 @@ const config = {
   params: workspaceParams({}),
   body: prepareBilingualTranslationBodySchema,
   requiresUsage: { actionType: "doc_review", modelRole: "chat" },
-} satisfies HandlerConfig;
+} satisfies WorkspaceHandlerConfig;
 
 const prepareBilingualTranslation = createSafeHandler(
   config,

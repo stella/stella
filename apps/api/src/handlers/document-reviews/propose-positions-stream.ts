@@ -20,7 +20,7 @@ import { prepareReferenceProposal } from "@/api/handlers/document-reviews/prepar
 import { streamReferenceProposal } from "@/api/handlers/document-reviews/reference-positions";
 import { proposeReviewPositionsBodySchema } from "@/api/handlers/document-reviews/schemas";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { pinProposedPositions } from "@/api/lib/document-review/reference-passages";
 import { sseResponse } from "@/api/lib/sse";
 
@@ -31,7 +31,7 @@ const config = {
   access: "read",
   mcp: { type: "internal", reason: "realtime_stream" },
   body: proposeReviewPositionsBodySchema,
-} satisfies HandlerConfig;
+} satisfies WorkspaceHandlerConfig;
 
 /**
  * Why a stream stopped short. Everything a caller can be refused for — a

@@ -8,7 +8,7 @@ import {
   ALLOWLIST_READ_INVARIANT,
 } from "@/api/lib/anonymization-allowlist";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { boundedAll } from "@/api/lib/db/bounded-all";
 
@@ -45,7 +45,7 @@ const config = {
   query: t.Object({
     entityId: t.Optional(tSafeId("entity")),
   }),
-} satisfies HandlerConfig;
+} satisfies WorkspaceHandlerConfig;
 
 const readWorkspaceAnonymizationAllowlist = createSafeHandler(
   config,

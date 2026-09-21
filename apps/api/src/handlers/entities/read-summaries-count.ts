@@ -4,7 +4,7 @@ import { t } from "elysia";
 
 import { entities } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 
 const config = {
   description:
@@ -15,7 +15,7 @@ const config = {
   mcp: { type: "covered", by: "list_documents" },
   access: "read",
   query: t.Object({}),
-} satisfies HandlerConfig;
+} satisfies WorkspaceHandlerConfig;
 
 /** Total entity count for the workspace; companion to `entities.read-summaries`. */
 const readEntitySummariesCount = createSafeHandler(

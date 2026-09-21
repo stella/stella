@@ -14,7 +14,7 @@ import {
   folioCollabRooms,
 } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -130,7 +130,7 @@ const publishFolioCollabVersion = createSafeHandler(
     body: publishFolioCollabVersionBodySchema,
     permissions: { entity: ["update"] },
     mcp: { type: "internal", reason: "session_token_exchange" },
-  } satisfies HandlerConfig,
+  } satisfies WorkspaceHandlerConfig,
   async function* ({
     body: {
       description,

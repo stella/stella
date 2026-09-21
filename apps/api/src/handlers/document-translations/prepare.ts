@@ -3,7 +3,7 @@ import { Result } from "better-result";
 import { prepareDocumentTranslationBodySchema } from "@/api/handlers/document-translations/schemas";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { workspaceParams } from "@/api/lib/custom-schema";
 import { inspectDocxComments } from "@/api/lib/document-translation/docx-review";
@@ -18,7 +18,7 @@ const config = {
   mcp: { type: "capability", reason: "document_processing" },
   params: workspaceParams({}),
   body: prepareDocumentTranslationBodySchema,
-} satisfies HandlerConfig;
+} satisfies WorkspaceHandlerConfig;
 
 type PrepareDocumentTranslationResult = {
   entityVersionId: SafeId<"entityVersion">;

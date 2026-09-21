@@ -24,6 +24,7 @@ import type { AuditExecutionContext, AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CapabilityTransport } from "@/api/lib/capability-transport";
+import type { WorkspaceParamsSchema } from "@/api/lib/custom-schema";
 import {
   DatabaseError,
   DatabaseRlsError,
@@ -337,6 +338,17 @@ export type HandlerConfig = InputSchema &
     requiresUsage?: UsageMeteringConfig;
     mcp: McpExposure;
   };
+
+/**
+ * Config for a workspace-scoped route, i.e. one `createSafeHandler` mounts
+ * under a `:workspaceId` prefix. Its `params` slot narrows `HandlerConfig`'s to
+ * schemas that declare `workspaceId` (see `WorkspaceParamsSchema`), so the
+ * route-level schema cannot shadow the segment the workspace macro resolves the
+ * tenant from. `workspaceParams()` produces the shape.
+ */
+export type WorkspaceHandlerConfig = Omit<HandlerConfig, "params"> & {
+  params?: WorkspaceParamsSchema;
+};
 
 export type SessionHandlerConfig = InputSchema &
   CapabilityDescription &
@@ -1216,7 +1228,7 @@ export const createSafeRootHandler = <
   createSafeScopedHandler(config, handler);
 
 export const createSafeHandler = <
-  TConfig extends HandlerConfig,
+  TConfig extends WorkspaceHandlerConfig,
   TResult extends SafeHandlerPayload,
 >(
   config: TConfig,

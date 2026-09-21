@@ -6,7 +6,7 @@ import { Temporal } from "@stll/time";
 
 import { entities, fields } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
 import { tConditionNode } from "@/api/lib/conditions/contract";
 import {
@@ -49,7 +49,7 @@ const config = {
   mcp: { type: "covered", by: "list_tasks" },
   access: "read",
   body: calendarTasksBodySchema,
-} satisfies HandlerConfig;
+} satisfies WorkspaceHandlerConfig;
 
 type CalendarTaskField = {
   id: string;

@@ -4,7 +4,7 @@ import { and, desc, eq } from "drizzle-orm";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { extractionRuns } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isWorkflowRunning } from "@/api/lib/workflow-queue";
 
@@ -60,7 +60,7 @@ const config = {
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "workflow_orchestration" },
   access: "read",
-} satisfies HandlerConfig;
+} satisfies WorkspaceHandlerConfig;
 
 const readWorkflow = createSafeHandler(
   config,

@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { mapInfoSoudResult } from "@/api/lib/infosoud/result";
 
 import {
@@ -15,7 +15,7 @@ const config = {
   permissions: { workspace: ["read"] },
   mcp: { type: "internal", reason: "native_tool_ui" },
   access: "read",
-} satisfies HandlerConfig;
+} satisfies WorkspaceHandlerConfig;
 
 const infosoudLookup = createSafeHandler(
   config,

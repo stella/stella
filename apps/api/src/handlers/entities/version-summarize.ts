@@ -4,7 +4,7 @@ import { loadEntityVersionDiffSources } from "@/api/handlers/entities/version-di
 import { summarizeVersionDiff } from "@/api/lib/ai-change-summary";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { buildLineDiffSegments, diffSegmentsToText } from "@/api/lib/text-diff";
@@ -23,7 +23,7 @@ const config = {
     versionId: tSafeId("entityVersion"),
   }),
   requiresUsage: { actionType: "chat", modelRole: "fast" },
-} satisfies HandlerConfig;
+} satisfies WorkspaceHandlerConfig;
 
 /**
  * AI summary of what changed in an entity version's DOCX compared

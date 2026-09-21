@@ -7,7 +7,7 @@ import {
   assertUsageAvailableForHandler,
   createSafeHandler,
 } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { clauseBodySchema } from "@/api/lib/clauses/body-schema";
 import { tJsonObject, tSafeId, workspaceParams } from "@/api/lib/custom-schema";
@@ -68,7 +68,7 @@ const config = {
   mcp: { type: "covered", by: "save_filled_template" },
   params: fillToWorkspaceParamsSchema,
   body: fillToWorkspaceBodySchema,
-} satisfies HandlerConfig;
+} satisfies WorkspaceHandlerConfig;
 
 /**
  * Fill a stored template and persist the result as a DOCX document entity in

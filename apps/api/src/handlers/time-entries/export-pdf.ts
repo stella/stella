@@ -12,7 +12,7 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import { timeEntries } from "@/api/db/schema";
 import { exportAmountText } from "@/api/handlers/time-entries/export-amount";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
@@ -304,7 +304,7 @@ const config = {
     },
   },
   query: exportPdfQuerySchema,
-} satisfies HandlerConfig;
+} satisfies WorkspaceHandlerConfig;
 
 const exportPdf = createSafeHandler(
   config,

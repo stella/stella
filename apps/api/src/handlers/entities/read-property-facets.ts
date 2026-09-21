@@ -4,7 +4,7 @@ import { t } from "elysia";
 
 import { entities, fields } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
 import { tConditionNode } from "@/api/lib/conditions/contract";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -26,7 +26,7 @@ const config = {
       t.Array(tConditionNode, { maxItems: LIMITS.viewFiltersCount }),
     ),
   }),
-} satisfies HandlerConfig;
+} satisfies WorkspaceHandlerConfig;
 
 type FacetValueRow = {
   value: string;

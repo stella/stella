@@ -27,7 +27,7 @@ import {
 } from "@/api/handlers/entities/upload-origin";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -1294,7 +1294,7 @@ const config = {
     },
   },
   body: uploadEntityBodySchema,
-} satisfies HandlerConfig;
+} satisfies WorkspaceHandlerConfig;
 
 const uploadEntity = createSafeHandler(
   config,
@@ -1321,7 +1321,7 @@ const generatedDocumentConfig = {
   permissions: { entity: ["create"] },
   mcp: { type: "internal", reason: "assistant_chat" },
   body: uploadGeneratedDocumentBodySchema,
-} satisfies HandlerConfig;
+} satisfies WorkspaceHandlerConfig;
 
 export const uploadGeneratedDocument = createSafeHandler(
   generatedDocumentConfig,

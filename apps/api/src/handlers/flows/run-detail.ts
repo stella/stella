@@ -1,7 +1,7 @@
 import { getFlowRunHandler } from "@/api/handlers/flows/run-read";
 import { flowRunParamsSchema } from "@/api/handlers/flows/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 
 const config = {
   description:
@@ -10,7 +10,7 @@ const config = {
   mcp: { type: "capability", reason: "workflow_orchestration" },
   access: "read",
   params: flowRunParamsSchema,
-} satisfies HandlerConfig;
+} satisfies WorkspaceHandlerConfig;
 
 const getFlowRun = createSafeHandler(
   config,

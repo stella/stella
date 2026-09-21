@@ -15,7 +15,7 @@ import { and, eq } from "drizzle-orm";
 
 import { reportExports } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getS3 } from "@/api/lib/s3";
@@ -44,7 +44,7 @@ const config = {
   mcp: { type: "capability", reason: "reporting_export" },
   access: "write",
   params: workspaceParams({ exportId: tSafeId("reportExport") }),
-} satisfies HandlerConfig;
+} satisfies WorkspaceHandlerConfig;
 
 const readReportExport = createSafeHandler(
   config,

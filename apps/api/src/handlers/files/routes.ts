@@ -20,7 +20,7 @@ import officeCitationEndpoint from "@/api/handlers/files/office-citation";
 import { readScrubbedDownload } from "@/api/handlers/files/scrubbed-download";
 import { updateDocumentProperties } from "@/api/handlers/files/update-document-properties";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { readFileHandler } from "@/api/lib/files/read-file";
@@ -34,7 +34,7 @@ const readFileEndpoint = createSafeHandler(
       purpose: t.UnionEnum(["download", "display", "native-display"]),
     }),
     params: workspaceParams({ fieldId: tSafeId("field") }),
-  } satisfies HandlerConfig,
+  } satisfies WorkspaceHandlerConfig,
   async function* ({
     params: { fieldId },
     query: { purpose },
@@ -66,7 +66,7 @@ const readEmailHtmlPreviewEndpoint = createSafeHandler(
     permissions: { workspace: ["read"] },
     mcp: { type: "internal", reason: "upload_mechanics" },
     params: workspaceParams({ fieldId: tSafeId("field") }),
-  } satisfies HandlerConfig,
+  } satisfies WorkspaceHandlerConfig,
   async function* ({ params: { fieldId }, scopedDb, session, workspaceId }) {
     const response = yield* Result.await(
       Result.tryPromise(
@@ -89,7 +89,7 @@ const printPdfEndpoint = createSafeHandler(
     permissions: { workspace: ["read"] },
     mcp: { type: "internal", reason: "upload_mechanics" },
     params: workspaceParams({ fieldId: tSafeId("field") }),
-  } satisfies HandlerConfig,
+  } satisfies WorkspaceHandlerConfig,
   async function* ({
     params: { fieldId },
     scopedDb,
@@ -120,7 +120,7 @@ const stampedDownloadEndpoint = createSafeHandler(
     mcp: { type: "internal", reason: "upload_mechanics" },
     params: workspaceParams({ fieldId: tSafeId("field") }),
     query: t.Object({ metadata: t.UnionEnum(STAMPED_DOWNLOAD_METADATA) }),
-  } satisfies HandlerConfig,
+  } satisfies WorkspaceHandlerConfig,
   async function* ({
     params: { fieldId },
     query: { metadata },
@@ -153,7 +153,7 @@ export const readDocumentPropertiesEndpoint = createSafeHandler(
     mcp: { type: "internal", reason: "upload_mechanics" },
     access: "read",
     params: workspaceParams({ fieldId: tSafeId("field") }),
-  } satisfies HandlerConfig,
+  } satisfies WorkspaceHandlerConfig,
   async function* ({
     memberRole,
     params: { fieldId },
@@ -221,7 +221,7 @@ export const updateDocumentPropertiesEndpoint = createSafeHandler(
     body: t.Object({
       ...AUTHORED_PROPERTY_BODY,
     }),
-  } satisfies HandlerConfig,
+  } satisfies WorkspaceHandlerConfig,
   async function* ({
     body,
     params: { fieldId },
@@ -258,7 +258,7 @@ export const scrubbedDownloadEndpoint = createSafeHandler(
     mcp: { type: "internal", reason: "upload_mechanics" },
     access: "read",
     params: workspaceParams({ fieldId: tSafeId("field") }),
-  } satisfies HandlerConfig,
+  } satisfies WorkspaceHandlerConfig,
   async function* ({
     params: { fieldId },
     scopedDb,
@@ -291,7 +291,7 @@ export const ocrExportEndpoint = createSafeHandler(
     query: t.Object({ format: t.UnionEnum(OCR_EXPORT_FORMATS) }),
     params: workspaceParams({ fieldId: tSafeId("field") }),
     response: t.Unknown(),
-  } satisfies HandlerConfig,
+  } satisfies WorkspaceHandlerConfig,
   async function* ({
     params: { fieldId },
     query: { format },

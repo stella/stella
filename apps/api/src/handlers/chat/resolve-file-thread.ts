@@ -13,7 +13,7 @@ import {
   loadWebSearchAvailable,
 } from "@/api/handlers/chat/file-thread-shared";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -37,7 +37,7 @@ const config = {
   permissions: { chat: ["create"] },
   mcp: { type: "internal", reason: "assistant_chat" },
   body: resolveFileThreadBodySchema,
-} satisfies HandlerConfig;
+} satisfies WorkspaceHandlerConfig;
 
 const resolveFileThread = createSafeHandler(
   config,

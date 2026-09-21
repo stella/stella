@@ -19,7 +19,7 @@ import { and, eq } from "drizzle-orm";
 import { documentReviewFindings } from "@/api/db/schema";
 import { decideReviewFindingBodySchema } from "@/api/handlers/document-reviews/schemas";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { FieldDiffs } from "@/api/lib/audit-log";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
@@ -44,7 +44,7 @@ const config = {
   mcp: { type: "internal", reason: "document_processing" },
   params: workspaceParams({ findingId: tSafeId("documentReviewFinding") }),
   body: decideReviewFindingBodySchema,
-} satisfies HandlerConfig;
+} satisfies WorkspaceHandlerConfig;
 
 /** Flags are a set: stored deduplicated and in one order, so two spellings of
  *  the same triage compare equal and read back the same. */

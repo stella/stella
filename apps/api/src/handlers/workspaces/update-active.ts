@@ -3,7 +3,7 @@ import { and, eq } from "drizzle-orm";
 
 import { member } from "@/api/db/auth-schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { detached } from "@/api/lib/detached";
 import { prewarmScopedDownloadSigning } from "@/api/lib/s3-presign";
 
@@ -15,7 +15,7 @@ const config = {
   permissions: { workspace: ["read"] },
   mcp: { type: "internal", reason: "ui_navigation_state" },
   access: "write",
-} satisfies HandlerConfig;
+} satisfies WorkspaceHandlerConfig;
 
 const updateActiveWorkspace = createSafeHandler(
   config,

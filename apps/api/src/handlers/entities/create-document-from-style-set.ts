@@ -3,7 +3,7 @@ import { t } from "elysia";
 
 import { createBlankDocument } from "@/api/handlers/entities/create-blank-document-service";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { readStyleSetBuffer } from "@/api/lib/style-sets";
 
@@ -17,7 +17,7 @@ const config = {
   permissions: { entity: ["create"], styleSet: ["use"] },
   mcp: { type: "internal", reason: "compound_consent" },
   body: bodySchema,
-} satisfies HandlerConfig;
+} satisfies WorkspaceHandlerConfig;
 
 export default createSafeHandler(
   config,

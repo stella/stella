@@ -4,15 +4,19 @@ import { t } from "elysia";
 
 import { legalListGenerationRuns } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tPaginationCursor, tSafeId } from "@/api/lib/custom-schema";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
+import {
+  tPaginationCursor,
+  tSafeId,
+  workspaceParams,
+} from "@/api/lib/custom-schema";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
 import { brandPersistedLegalListGenerationRunId } from "@/api/lib/safe-id-boundaries";
 
-const paramsSchema = t.Object({ listId: tSafeId("legalList") });
+const paramsSchema = workspaceParams({ listId: tSafeId("legalList") });
 const querySchema = t.Object({
   limit: t.Optional(
     t.Integer({
@@ -32,7 +36,7 @@ const config = {
   mcp: { type: "capability", reason: "workflow_orchestration" },
   params: paramsSchema,
   query: querySchema,
-} satisfies HandlerConfig;
+} satisfies WorkspaceHandlerConfig;
 
 const generationCursor = createTimestampIdCursorCodec({
   column: legalListGenerationRuns.createdAt,

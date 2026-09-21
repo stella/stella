@@ -4,11 +4,11 @@ import { t } from "elysia";
 import { env } from "@/api/env";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type {
-  HandlerConfig,
   SafeHandlerGenerator,
+  WorkspaceHandlerConfig,
 } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import {
   isEmailAttachmentPreviewable,
   resolveEmailAttachmentMimeType,
@@ -35,12 +35,11 @@ const config = {
   query: t.Object({
     disposition: t.String({ pattern: EMAIL_ATTACHMENT_DISPOSITION_PATTERN }),
   }),
-  params: t.Object({
-    workspaceId: tSafeId("workspace"),
+  params: workspaceParams({
     fieldId: tSafeId("field"),
     attachmentId: t.String(),
   }),
-} satisfies HandlerConfig;
+} satisfies WorkspaceHandlerConfig;
 
 const attachmentNotFound = () => new Response(null, { status: 404 });
 const attachmentNotPreviewable = () => new Response(null, { status: 415 });

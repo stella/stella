@@ -2,7 +2,7 @@ import { Result } from "better-result";
 
 import { loadEntityVersionDiffSources } from "@/api/handlers/entities/version-diff-sources";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { buildLineDiffSegments } from "@/api/lib/text-diff";
 
@@ -21,7 +21,7 @@ const config = {
     entityId: tSafeId("entity"),
     versionId: tSafeId("entityVersion"),
   }),
-} satisfies HandlerConfig;
+} satisfies WorkspaceHandlerConfig;
 
 /**
  * Plain-text line diff of an entity version's DOCX against its

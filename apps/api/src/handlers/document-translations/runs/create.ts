@@ -9,7 +9,7 @@ import {
   assertUsageAvailableForHandler,
   createSafeHandler,
 } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -36,7 +36,7 @@ const config = {
   mcp: { type: "capability", reason: "document_processing" },
   params: workspaceParams({}),
   body: createDocumentTranslationRunBodySchema,
-} satisfies HandlerConfig;
+} satisfies WorkspaceHandlerConfig;
 
 type CreateDocumentTranslationRunResult =
   | { type: "commentPolicyRequired" }

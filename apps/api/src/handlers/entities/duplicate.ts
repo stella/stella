@@ -21,7 +21,7 @@ import {
 } from "@/api/handlers/entities/copy-utils";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -299,7 +299,7 @@ const config = {
   permissions: { entity: ["create"] },
   mcp: { type: "capability", reason: "document_processing" },
   body: duplicateEntityBodySchema,
-} satisfies HandlerConfig;
+} satisfies WorkspaceHandlerConfig;
 
 export const createDuplicateEntity = (
   dependencies: DuplicateEntityDependencies = defaultDuplicateEntityDependencies,

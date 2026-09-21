@@ -7,7 +7,7 @@ import type { SafeDb } from "@/api/db/safe-db";
 import { entities, fields } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -154,7 +154,7 @@ const config = {
   permissions: { entity: ["update"] },
   mcp: { type: "covered", by: "save_document" },
   body: renameEntityBodySchema,
-} satisfies HandlerConfig;
+} satisfies WorkspaceHandlerConfig;
 
 const renameEntity = createSafeHandler(
   config,

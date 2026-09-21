@@ -10,7 +10,7 @@ import type { SafeDb } from "@/api/db/safe-db";
 import { entities, properties } from "@/api/db/schema";
 import type { EntityKind } from "@/api/db/schema-validators";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
 import { tConditionNode } from "@/api/lib/conditions/contract";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -62,7 +62,7 @@ const config = {
   mcp: { type: "internal", reason: "document_processing" },
   access: "read",
   body: readGroupCountsBodySchema,
-} satisfies HandlerConfig;
+} satisfies WorkspaceHandlerConfig;
 
 type GroupCount = { value: string | null; count: number };
 
