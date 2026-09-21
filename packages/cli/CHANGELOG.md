@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 1.19.1
+
+### Patch Changes
+
+- [#3675](https://github.com/stella/stella/pull/3675) [`92193be`](https://github.com/stella/stella/commit/92193bea3ea839677b85ec5a8ade314a6d50aea9) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Capability inputs for list reads, view-template deletion and desktop-edit handoff status now declare matterId.
+
 ## 1.19.0
 
 ### Minor Changes
