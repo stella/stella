@@ -11,6 +11,7 @@ import { and, asc, count, eq, isNull, or, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import {
+  CHAT_DECISION_HREF_TEMPLATE,
   CHAT_DECISION_PASSAGE_HREF_PREFIX,
   CHAT_THREAD_PLACEHOLDER_TITLE,
   toChatDecisionPassageHref,
@@ -329,8 +330,9 @@ const buildCoreRuleSections = ({
       ]
     : []),
   `DOCX REVIEW TAGS: DOCX text from read tools may contain insertion/deletion/comment tags (${DOCX_REVIEW_MARKUP_EXAMPLES.insertion}, ${DOCX_REVIEW_MARKUP_EXAMPLES.deletion}, ${DOCX_REVIEW_MARKUP_EXAMPLES.comment}) with optional author/initials/date/status/thread attributes. For current wording, use inserted text and ignore deletions/comments unless asked; for change history or comments, use the tags. Never show tag syntax unless explicitly asked.`,
-  "CITATIONS: When a tool returns a stable URL, cite each individual claim inline with its OWN Markdown link — one citation per sentence (or per discrete fact) rather than a single trailing 'Sources:' block. Anchor text should be short (source domain, citation, or `[1]`-style footnote), and each link must point to the specific URL that supports THAT claim. The stella inspector opens these links in-app on click, so prefer them over plain text. Never invent URLs.",
+  "CITATIONS: When a tool returns a stable URL (a stella decision is cited by DECISION CITATIONS instead), cite each individual claim inline with its OWN Markdown link — one citation per sentence (or per discrete fact) rather than a single trailing 'Sources:' block. Anchor text should be short (source domain, citation, or `[1]`-style footnote), and each link must point to the specific URL that supports THAT claim. The stella inspector opens these links in-app on click, so prefer them over plain text. Never invent URLs.",
   "MATTER MENTIONS: When you name a matter, document, task, or contact from tool results, link it with the ref the tool returned: [Human name](#stella-entity-ref=ent_N) for entities, [Matter name](#stella-workspace-ref=mat_N) for matters, copying the ref verbatim from the tool output (entityRef, matterRef, or list item ids). Never invent a ref — a citation with an unknown ref renders as plain text and is flagged. If you cannot cite a ref for an item, you did not read it from a tool this turn, so do not present it as existing (see FRESH DATA).",
+  `DECISION CITATIONS: When you name a case-law decision that a stella case-law tool returned this turn, link it with the decisionId the tool gave: [court and docket](${CHAT_DECISION_HREF_TEMPLATE}), copying decisionId verbatim. Never link a stella decision by its appUrl or sourceUrl: the decisionId link opens the decision beside the chat, a URL opens as an external page. A statement about what courts hold, require, or usually do is a claim about decisions: cite at least one returned decision that supports it, or say that the corpus returned none and present the statement as unsupported.`,
   "LEGAL REFERENCE RESOLUTION: Citation resolvers are exact-match. On a no-match, retry with a broader search tool using citation variants before declaring it unavailable.",
   CORPUS_ONLY_CASE_LAW_SECTION,
   "USER-FACING LANGUAGE: Speak in legal-work terms; never expose internal names, tool names, or schema identifiers — refer to documents, matters, and folders by their human names. Reply in the user's UI language (see user context); switch only if the user themselves writes a natural-language message in another language. Copy `mention` strings from tool outputs verbatim instead of rewriting refs.",

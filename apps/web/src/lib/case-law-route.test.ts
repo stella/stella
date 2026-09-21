@@ -15,6 +15,7 @@ import {
   isCaseLawDecisionId,
   normalizeCaseLawLanguageSegment,
   normalizeCaseLawStoredSlug,
+  parseCaseLawDecisionPath,
   pickCaseLawDecisionHit,
   resolveCaseLawRouteCountry,
   resolveCaseLawDecisionRouteIdentity,
@@ -326,5 +327,50 @@ describe("case-law decision routes", () => {
     ]);
 
     expect(hit?.decisionId).toBe(DECISION_ID);
+  });
+
+  describe("parseCaseLawDecisionPath", () => {
+    const routes = [
+      { country: "cze", court: "nejvyssi-soud", slug: "26-cdo-4249-2016" },
+      {
+        country: "cze",
+        court: "nejvyssi-soud",
+        slug: createCaseLawDecisionRouteParam({
+          caseNumber: "26 Cdo 4249/2016",
+          decisionId: DECISION_ID,
+        }),
+      },
+      { country: "eu", court: "cjeu", language: "fr", slug: "c-123-20" },
+      { country: "eu", court: "cjeu", language: "pt-br", slug: "c-123-20" },
+    ];
+
+    test("reads back every path createCaseLawDecisionPath writes", () => {
+      for (const params of routes) {
+        expect(
+          parseCaseLawDecisionPath(createCaseLawDecisionPath(params)),
+        ).toEqual(params);
+      }
+    });
+
+    test("decodes encoded segments", () => {
+      expect(
+        parseCaseLawDecisionPath("/law/cze/cases/nejvyssi-soud/26%20cdo/"),
+      ).toEqual({ country: "cze", court: "nejvyssi-soud", slug: "26 cdo" });
+    });
+
+    test("rejects every other path", () => {
+      for (const pathname of [
+        "/law/cze/statutes/89-2012",
+        "/law/cze/cases/nejvyssi-soud",
+        "/law/cze/cases/nejvyssi-soud/a/b/c",
+        "/law/cze/cases/nejvyssi-soud/Not-A-Language/slug",
+        "/law/cze/cases/nejvyssi-soud/1234567890/slug",
+        "/workspaces/abc",
+        "/law/cze/cases/nejvyssi-soud/%E0%A4%A",
+        "/",
+      ]) {
+        expect(parseCaseLawDecisionPath(pathname)).toBeNull();
+      }
+    });
   });
 });

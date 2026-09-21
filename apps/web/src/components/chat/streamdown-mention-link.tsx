@@ -26,7 +26,10 @@ import { isFolioBlockId } from "@stll/folio-react";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
-import { openCaseLawDecision } from "@/components/chat/case-law-open";
+import {
+  type CaseLawDecisionLocator,
+  openCaseLawDecision,
+} from "@/components/chat/case-law-open";
 import {
   parseStellaMentionHref,
   resolveMentionWorkspaceId,
@@ -47,8 +50,11 @@ import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-sto
 import { MatterIcon } from "@/components/matter-icon";
 import { EntityIcon } from "@/components/workspaces/entity-kind-icon";
 import { PDF_MIME_TYPE } from "@/consts";
+import { env } from "@/env";
+import { useOpenDecisionTab } from "@/features/case-law/open-decision-tab";
 import { useVerifiedEmailCitationTarget } from "@/hooks/use-verified-email-citation-target";
 import { useVerifiedOfficeCitationTarget } from "@/hooks/use-verified-office-citation-target";
+import { parseCaseLawDecisionPath } from "@/lib/case-law-route";
 import { DOCX_MIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import {
@@ -155,6 +161,15 @@ const getHttpUrl = (href: string): URL | null => {
   }
 };
 
+/**
+ * Whether a URL points at this app: the page's own origin, or the
+ * deployment's public app URL, which is not the page origin inside the
+ * desktop shell.
+ */
+const isAppUrl = (url: URL): boolean =>
+  (typeof window !== "undefined" && url.origin === window.location.origin) ||
+  url.origin === new URL(env.VITE_PUBLIC_APP_URL).origin;
+
 const getDocumentMimeFromLabel = (label: string): string | null => {
   const extension = ENTITY_EXTENSION_RE.exec(label.trim())?.groups?.["ext"];
   if (!extension) {
@@ -200,15 +215,15 @@ type MentionChipProps = {
 };
 
 const DecisionChip = ({
-  decisionRef,
+  locator,
   label,
   interactive,
 }: {
-  decisionRef: string;
+  locator: CaseLawDecisionLocator;
   label: React.ReactNode;
   interactive: boolean;
 }) => {
-  const navigate = useNavigate();
+  const { open } = useOpenDecisionTab();
   return (
     <InlinePill
       leadingIcon={<LandmarkIcon className="size-3 shrink-0" />}
@@ -216,7 +231,7 @@ const DecisionChip = ({
         interactive
           ? () =>
               detached(
-                openCaseLawDecision(decisionRef, navigate),
+                openCaseLawDecision(locator, open),
                 "streamdown-mention-link.open-case-law-decision",
               )
           : undefined
@@ -230,10 +245,10 @@ const DecisionChip = ({
 
 /**
  * Click-to-open chip for an inline decision-passage citation, which the AI
- * emits in an answer about the decision the reader has open. Opening the
- * decision at the anchor is one navigation: the route reads the fragment back
- * as the block to land on, and the reader marks it — so a chat docked beside
- * the decision it cites scrolls in place, and one anywhere else opens it.
+ * emits in an answer about the decision the reader has open. The tab carries
+ * the anchor as the block to land on, and the reader marks it — so a chat
+ * docked beside the decision it cites scrolls in place, and one anywhere else
+ * opens the decision at that passage.
  */
 const DecisionPassageChip = ({
   children,
@@ -244,7 +259,7 @@ const DecisionPassageChip = ({
   interactive: boolean;
   target: ChatDecisionPassageTarget;
 }) => {
-  const navigate = useNavigate();
+  const { open } = useOpenDecisionTab();
   // A model occasionally emits a degenerate citation whose text is the bare
   // href or is empty. The anchor is the decision's own paragraph marker, so it
   // reads as a locator rather than as the internal scheme.
@@ -261,7 +276,9 @@ const DecisionPassageChip = ({
         interactive
           ? () =>
               detached(
-                openCaseLawDecision(decisionId, navigate, { anchorId }),
+                openCaseLawDecision({ type: "ref", ref: decisionId }, open, {
+                  anchorId,
+                }),
                 "streamdown-mention-link.open-decision-passage",
               )
           : undefined
@@ -531,9 +548,9 @@ const MentionChip = ({
   if (resourceTarget?.resource.type === RESOURCE_TYPE.CASE_LAW_DECISION) {
     return (
       <DecisionChip
-        decisionRef={resourceTarget.resource.id}
         interactive={interactive}
         label={label}
+        locator={{ type: "ref", ref: resourceTarget.resource.id }}
       />
     );
   }
@@ -694,6 +711,21 @@ export const StreamdownMentionLink = ({
 
   const httpUrl = getHttpUrl(href);
   if (httpUrl) {
+    // A link to one of this app's decision pages is the decision, not a web
+    // page to preview: a tool hands the model that URL, and a user pastes it.
+    const decisionRoute = isAppUrl(httpUrl)
+      ? parseCaseLawDecisionPath(httpUrl.pathname)
+      : null;
+    if (decisionRoute) {
+      return (
+        <DecisionChip
+          interactive
+          label={children}
+          locator={{ type: "route", params: decisionRoute }}
+        />
+      );
+    }
+
     return (
       <FaviconCitationChip
         children={children}

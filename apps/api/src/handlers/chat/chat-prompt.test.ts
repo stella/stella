@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import {
+  CHAT_DECISION_HREF_TEMPLATE,
   CHAT_DECISION_PASSAGE_HREF_PREFIX,
   toChatDecisionPassageHref,
 } from "@stll/api-contract";
@@ -1320,6 +1321,20 @@ describe("system prompt tool-reference guard", () => {
       expect(prompt).toContain(
         "never present a decision, docket number, or ECLI as verified",
       );
+    }
+  });
+
+  // The case-law tools hand the model a page URL beside the decisionId. A
+  // URL renders as an external page to preview; only the decisionId link
+  // opens the decision beside the chat, so every prompt has to say which.
+  test("every assembled prompt cites corpus decisions by decisionId, never by URL", () => {
+    for (const prompt of buildAssembledPrompts(FULL_TOOL_AVAILABILITY)) {
+      expect(prompt).toContain("DECISION CITATIONS");
+      expect(prompt).toContain(`(${CHAT_DECISION_HREF_TEMPLATE})`);
+      expect(prompt).toContain(
+        "Never link a stella decision by its appUrl or sourceUrl",
+      );
+      expect(prompt).toContain("say that the corpus returned none");
     }
   });
 
