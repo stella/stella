@@ -4,7 +4,7 @@ import { t } from "elysia";
 import { PLAYBOOK_RUN_PROJECTIONS } from "@stll/api-contract";
 
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { loadLatestApprovedVersion } from "@/api/lib/document-review/approved-playbook-versions";
@@ -48,7 +48,7 @@ const config = {
     }),
   }),
   body: runPlaybookBodySchema,
-} satisfies HandlerConfig;
+} satisfies WorkspaceHandlerConfig;
 
 type RunFailure = { ok: false; status: 400 | 404; message: string };
 

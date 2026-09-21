@@ -3,7 +3,7 @@ import { and, desc, eq } from "drizzle-orm";
 
 import { workspaceViewTemplates } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { LIMITS } from "@/api/lib/limits";
 import { parseStoredViewLayout } from "@/api/lib/views-schema";
 
@@ -15,7 +15,7 @@ const config = {
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "workspace_schema" },
   access: "read",
-} satisfies HandlerConfig;
+} satisfies WorkspaceHandlerConfig;
 
 const toResponse = (template: typeof workspaceViewTemplates.$inferSelect) => {
   const layout = parseStoredViewLayout(template.layout);

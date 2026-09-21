@@ -20,7 +20,7 @@ import {
 } from "@/api/handlers/uploads/permissions";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getS3 } from "@/api/lib/s3";
@@ -45,7 +45,7 @@ const config = {
   access: "write",
   mcp: { type: "capability", reason: "file_transport" },
   params: abortParamsSchema,
-} satisfies HandlerConfig;
+} satisfies WorkspaceHandlerConfig;
 
 const abortUpload = createSafeHandler(
   config,

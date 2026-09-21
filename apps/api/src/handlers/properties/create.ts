@@ -4,7 +4,7 @@ import { eq } from "drizzle-orm";
 import { abortableTx } from "@/api/db/safe-db";
 import { properties, propertyDependencies } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -28,7 +28,7 @@ const config = {
   permissions: { property: ["create"] },
   mcp: { type: "capability", reason: "workspace_schema" },
   body: createPropertyBodySchema,
-} satisfies HandlerConfig;
+} satisfies WorkspaceHandlerConfig;
 
 const createProperty = createSafeHandler(
   config,

@@ -22,7 +22,7 @@ import { reportExports } from "@/api/db/schema";
 import { isReportRowCountOverCap } from "@/api/handlers/reports/build-report-data";
 import { getBuiltinReportTemplate } from "@/api/handlers/reports/builtin-templates";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { queryEntities } from "@/api/lib/entities/query-entities";
@@ -62,7 +62,7 @@ const config = {
     // sections are removed, so the export is fast and deterministic.
     aiNarrative: t.Optional(t.Boolean()),
   }),
-} satisfies HandlerConfig;
+} satisfies WorkspaceHandlerConfig;
 
 const exportViewReport = createSafeHandler(
   config,

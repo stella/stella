@@ -9,7 +9,7 @@ import {
 } from "@/api/lib/ai-config-loader";
 import { aiHandlerError } from "@/api/lib/ai-error";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
 import { createSafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -66,7 +66,7 @@ const config = {
   mcp: { type: "capability", reason: "workspace_schema" },
   body: previewBodySchema,
   requiresUsage: { actionType: "chat", modelRole: "fast" },
-} satisfies HandlerConfig;
+} satisfies WorkspaceHandlerConfig;
 
 const PREVIEW_TIMEOUT_MS = 60_000;
 

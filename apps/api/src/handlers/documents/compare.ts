@@ -16,8 +16,8 @@ import type { FieldContent } from "@/api/db/schema-validators";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type {
-  HandlerConfig,
   SafeHandlerGenerator,
+  WorkspaceHandlerConfig,
 } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -140,7 +140,7 @@ const config = {
     },
     { additionalProperties: false },
   ),
-} satisfies HandlerConfig;
+} satisfies WorkspaceHandlerConfig;
 
 export type CompareFailureCode =
   | "apply_failed"

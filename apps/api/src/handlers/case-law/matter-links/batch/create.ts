@@ -3,7 +3,7 @@ import { t } from "elysia";
 
 import { linkDecisionsToMatter } from "@/api/handlers/case-law/matter-links/link-writes";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 
@@ -39,7 +39,7 @@ const config = {
   permissions: { entity: ["create"] },
   mcp: { type: "capability", reason: "legal_corpus_admin" },
   body: createMatterLinksBatchBodySchema,
-} satisfies HandlerConfig;
+} satisfies WorkspaceHandlerConfig;
 
 const createMatterLinksBatch = createSafeHandler(
   config,

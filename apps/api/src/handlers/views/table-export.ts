@@ -4,7 +4,7 @@ import { t } from "elysia";
 import type { JustificationContent } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 // eslint-disable-next-line no-restricted-imports -- export boundary: brands field ids returned by queryEntities (server-validated, workspace-scoped) to re-hydrate their justifications from Postgres
 import { toSafeId } from "@/api/lib/branded-types";
@@ -63,7 +63,7 @@ const config = {
   query: t.Object({
     format: t.Union([t.Literal("csv"), t.Literal("xlsx"), t.Literal("docx")]),
   }),
-} satisfies HandlerConfig;
+} satisfies WorkspaceHandlerConfig;
 
 const exportTableView = createSafeHandler(
   config,

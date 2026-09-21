@@ -2,7 +2,7 @@ import { Result } from "better-result";
 
 import { readSearchPreviewHandler } from "@/api/handlers/workspaces/read-search-preview.query";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 
 const config = {
   description:
@@ -10,7 +10,7 @@ const config = {
   permissions: { workspace: ["read"] },
   mcp: { type: "covered", by: "list_matters" },
   access: "read",
-} satisfies HandlerConfig;
+} satisfies WorkspaceHandlerConfig;
 
 const readSearchPreview = createSafeHandler(
   config,

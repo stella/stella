@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { workspaceParams } from "@/api/lib/custom-schema";
 import { loadLatestApprovedVersions } from "@/api/lib/document-review/approved-playbook-versions";
@@ -30,7 +30,7 @@ const config = {
   access: "write",
   mcp: { type: "capability", reason: "knowledge_library_admin" },
   params: workspaceParams({}),
-} satisfies HandlerConfig;
+} satisfies WorkspaceHandlerConfig;
 
 // Auto-run materializes every APPLICABLE org playbook over the current files
 // table in one pass, so the user runs the whole matter's review with one click

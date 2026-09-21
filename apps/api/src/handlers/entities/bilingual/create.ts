@@ -16,7 +16,7 @@ import { createBilingualDocx } from "@stll/folio-core/server";
 
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { BILINGUAL_TABLE_LAYOUT } from "@/api/lib/bilingual/contract";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { buildBilingualFileName } from "@/api/lib/document-translation/output";
@@ -53,7 +53,7 @@ const config = {
   permissions: { entity: ["create"] },
   mcp: { type: "capability", reason: "document_processing" },
   body: createBilingualBody,
-} satisfies HandlerConfig;
+} satisfies WorkspaceHandlerConfig;
 
 type BilingualDependencies = {
   createEntityFromBuffer: typeof createEntityFromBuffer;

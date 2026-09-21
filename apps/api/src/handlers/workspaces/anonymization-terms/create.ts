@@ -5,7 +5,7 @@ import { anonymizationBlacklistEntries } from "@/api/db/schema";
 import { normalizeAnonymizationBlacklistEntries } from "@/api/lib/anonymization-blacklist";
 import { loadWorkspaceAnonymizationTermsForWrite } from "@/api/lib/anonymization-write-cap";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -34,7 +34,7 @@ const config = {
   body: t.Object({
     entries: t.Array(termSchema, { minItems: 1, maxItems: 100 }),
   }),
-} satisfies HandlerConfig;
+} satisfies WorkspaceHandlerConfig;
 
 /**
  * Create one or more workspace-scoped anonymization terms.

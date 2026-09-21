@@ -4,8 +4,8 @@ import { t } from "elysia";
 import { env } from "@/api/env";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type {
-  HandlerConfig,
   SafeHandlerGenerator,
+  WorkspaceHandlerConfig,
 } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
@@ -39,7 +39,7 @@ const config = {
     fieldId: tSafeId("field"),
     attachmentId: t.String(),
   }),
-} satisfies HandlerConfig;
+} satisfies WorkspaceHandlerConfig;
 
 const attachmentNotFound = () => new Response(null, { status: 404 });
 const attachmentNotPreviewable = () => new Response(null, { status: 415 });

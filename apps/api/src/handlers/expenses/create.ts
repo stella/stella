@@ -7,7 +7,7 @@ import { Temporal } from "@stll/time";
 import { expenseCategorySchema } from "@/api/db/billing-validators";
 import { expenses } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import {
   tCurrencyCode,
@@ -43,7 +43,7 @@ const config = {
   permissions: { expense: ["create"] },
   mcp: { type: "capability", reason: "billing_admin" },
   body: createExpenseBodySchema,
-} satisfies HandlerConfig;
+} satisfies WorkspaceHandlerConfig;
 
 const createExpense = createSafeHandler(
   config,

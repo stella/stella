@@ -4,7 +4,7 @@ import { t } from "elysia";
 
 import { billingCodes } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -28,7 +28,7 @@ const config = {
   permissions: { billingCode: ["create"] },
   mcp: { type: "capability", reason: "billing_admin" },
   body: createBillingCodeBodySchema,
-} satisfies HandlerConfig;
+} satisfies WorkspaceHandlerConfig;
 
 const createBillingCode = createSafeHandler(
   config,

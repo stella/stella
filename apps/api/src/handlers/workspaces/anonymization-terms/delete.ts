@@ -3,7 +3,7 @@ import { and, eq } from "drizzle-orm";
 
 import { anonymizationBlacklistEntries } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 
@@ -18,7 +18,7 @@ const config = {
   params: workspaceParams({
     entryId: tSafeId("anonymizationBlacklistEntry"),
   }),
-} satisfies HandlerConfig;
+} satisfies WorkspaceHandlerConfig;
 
 /**
  * Delete a single workspace-scoped term. The WHERE clause

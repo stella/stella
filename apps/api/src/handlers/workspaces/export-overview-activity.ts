@@ -5,7 +5,7 @@ import type { MatterActivityFilters } from "@stll/api-contract/matter-activity";
 import { Temporal } from "@stll/time";
 
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { escapeCSV } from "@/api/lib/csv";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -46,7 +46,7 @@ const config = {
     ...matterActivityFilterQueryProperties,
     format: t.UnionEnum([...MATTER_ACTIVITY_EXPORT_FORMATS]),
   }),
-} satisfies HandlerConfig;
+} satisfies WorkspaceHandlerConfig;
 
 const matterActivityCsv = (items: readonly MatterActivityItem[]): string => {
   const rows = [

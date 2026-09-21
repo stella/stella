@@ -12,7 +12,7 @@ import { Result } from "better-result";
 
 import { listBuiltinReportTemplates } from "@/api/handlers/reports/builtin-templates";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { workspaceParams } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 
@@ -23,7 +23,7 @@ const config = {
   mcp: { type: "capability", reason: "reporting_export" },
   access: "read",
   params: workspaceParams({}),
-} satisfies HandlerConfig;
+} satisfies WorkspaceHandlerConfig;
 
 const listReportTemplates = createSafeHandler(
   config,

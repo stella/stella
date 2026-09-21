@@ -4,7 +4,7 @@ import { t } from "elysia";
 
 import { cellMetadata } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { isWorkflowRunning, startWorkflow } from "@/api/lib/workflow-queue";
@@ -21,7 +21,7 @@ const config = {
     entityId: tSafeId("entity"),
     propertyId: tSafeId("property"),
   }),
-} satisfies HandlerConfig;
+} satisfies WorkspaceHandlerConfig;
 
 const cellRetry = createSafeHandler(
   config,

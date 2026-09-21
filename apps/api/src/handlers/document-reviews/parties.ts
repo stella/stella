@@ -25,7 +25,7 @@ import {
   assertUsageAvailableForHandler,
   createSafeHandler,
 } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
   detectReviewParties,
@@ -48,7 +48,7 @@ const config = {
   access: "read",
   mcp: { type: "internal", reason: "document_processing" },
   body: documentReviewPartiesBodySchema,
-} satisfies HandlerConfig;
+} satisfies WorkspaceHandlerConfig;
 
 export const createReviewParties = ({
   detectParties = detectReviewParties,

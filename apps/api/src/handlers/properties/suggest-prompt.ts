@@ -4,7 +4,7 @@ import type { Static } from "elysia";
 import type { CaseLawResearchAnswerType } from "@stll/api-contract";
 
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { tDefaultVarchar } from "@/api/lib/custom-schema";
 import { suggestColumnPrompt } from "@/api/lib/properties/column-prompt-suggestion";
 
@@ -51,7 +51,7 @@ const config = {
   mcp: { type: "capability", reason: "workspace_schema" },
   body: suggestPromptBodySchema,
   requiresUsage: { actionType: "chat", modelRole: "fast" },
-} satisfies HandlerConfig;
+} satisfies WorkspaceHandlerConfig;
 
 const suggestPrompt = createSafeHandler(
   config,

@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 import { validateEntityCreateCapacity } from "@/api/lib/uploads/entity-create";
@@ -20,7 +20,7 @@ const config = {
   mcp: { type: "internal", reason: "upload_mechanics" },
   access: "read",
   body: bodySchema,
-} satisfies HandlerConfig;
+} satisfies WorkspaceHandlerConfig;
 
 const preflightEntityCreate = createSafeHandler(
   config,

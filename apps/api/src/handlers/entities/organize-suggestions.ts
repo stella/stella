@@ -19,7 +19,7 @@ import { aiHandlerError } from "@/api/lib/ai-error";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -1085,7 +1085,7 @@ const config = {
     serviceTier: "flex",
     modelRole: "fast",
   },
-} satisfies HandlerConfig;
+} satisfies WorkspaceHandlerConfig;
 
 const organizeSuggestions = createSafeHandler(
   config,

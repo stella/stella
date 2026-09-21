@@ -3,7 +3,7 @@ import { and, asc, eq } from "drizzle-orm";
 
 import { legalListColumns, legalListItems, properties } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -19,7 +19,7 @@ const config = {
   access: "read",
   mcp: { type: "capability", reason: "workspace_schema" },
   params: paramsSchema,
-} satisfies HandlerConfig;
+} satisfies WorkspaceHandlerConfig;
 
 const readListById = createSafeHandler(
   config,

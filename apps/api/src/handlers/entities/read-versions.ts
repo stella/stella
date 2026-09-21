@@ -9,7 +9,7 @@ import {
   encodeVersionCursor,
 } from "@/api/handlers/entities/version-cursor";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -334,7 +334,7 @@ const config = {
   access: "read",
   params: readVersionsParamsSchema,
   query: readVersionsQuerySchema,
-} satisfies HandlerConfig;
+} satisfies WorkspaceHandlerConfig;
 
 const readVersions = createSafeHandler(
   config,

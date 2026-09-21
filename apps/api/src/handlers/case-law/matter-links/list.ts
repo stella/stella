@@ -8,7 +8,7 @@ import {
   caseLawSources,
 } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
@@ -133,7 +133,7 @@ const config = {
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "legal_corpus_admin" },
   access: "read",
-} satisfies HandlerConfig;
+} satisfies WorkspaceHandlerConfig;
 
 const listMatterLinks = createSafeHandler(
   config,

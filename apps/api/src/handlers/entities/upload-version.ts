@@ -2,7 +2,7 @@ import { panic, Result } from "better-result";
 
 import { uploadVersionBodySchema } from "@/api/handlers/entities/upload-version-schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { UPLOAD_DOCUMENT_SOURCE } from "@/api/lib/document-source";
 import { createEntityVersionFromBuffer } from "@/api/lib/entity-versions/create-entity-version-from-buffer";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -30,7 +30,7 @@ const config = {
     },
   },
   body: uploadVersionBodySchema,
-} satisfies HandlerConfig;
+} satisfies WorkspaceHandlerConfig;
 
 /**
  * Legacy multipart transport for creating an entity version. The canonical

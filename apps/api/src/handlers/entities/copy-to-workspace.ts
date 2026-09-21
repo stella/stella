@@ -26,7 +26,7 @@ import {
   snapshotOfCurrentVersion,
 } from "@/api/handlers/entities/copy-utils";
 import { captureError } from "@/api/lib/analytics/capture";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -672,7 +672,7 @@ const config = {
   permissions: { entity: ["create", "delete"] },
   mcp: { type: "capability", reason: "document_processing" },
   body: copyToWorkspaceBodySchema,
-} satisfies HandlerConfig;
+} satisfies WorkspaceHandlerConfig;
 
 export const createCopyToWorkspace = (
   dependencies: CopyToWorkspaceDependencies = defaultCopyToWorkspaceDependencies,

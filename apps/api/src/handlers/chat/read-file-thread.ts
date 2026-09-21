@@ -13,7 +13,7 @@ import {
 } from "@/api/handlers/chat/file-thread-shared";
 import type { FileThreadMessagePage } from "@/api/handlers/chat/file-thread-shared";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 
@@ -46,7 +46,7 @@ const config = {
   permissions: { chat: ["create"] },
   mcp: { type: "internal", reason: "assistant_chat" },
   query: readFileThreadQuerySchema,
-} satisfies HandlerConfig;
+} satisfies WorkspaceHandlerConfig;
 
 type ReadFileThreadResult = FileThreadMessagePage & {
   threadId: SafeId<"chatThread"> | null;

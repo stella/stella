@@ -6,7 +6,7 @@ import type { Static } from "elysia";
 import type { SafeDb } from "@/api/db/safe-db";
 import { workspaceMembers, workspaces } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -28,7 +28,7 @@ const config = {
   permissions: { workspace: ["update"] },
   mcp: { type: "tool", name: "manage_organization" },
   body: addWorkspaceMemberBodySchema,
-} satisfies HandlerConfig;
+} satisfies WorkspaceHandlerConfig;
 
 export type AddWorkspaceMemberProps = {
   safeDb: SafeDb;

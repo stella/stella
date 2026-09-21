@@ -4,7 +4,7 @@ import { and, eq } from "drizzle-orm";
 import type { SafeDb } from "@/api/db/safe-db";
 import { workspaces } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -16,7 +16,7 @@ const config = {
     "left exactly as it is.",
   permissions: { workspace: ["update"] },
   mcp: { type: "covered", by: "save_matter" },
-} satisfies HandlerConfig;
+} satisfies WorkspaceHandlerConfig;
 
 export type UnarchiveWorkspaceHandlerProps = {
   safeDb: SafeDb;

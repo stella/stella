@@ -3,7 +3,7 @@ import { asc, eq } from "drizzle-orm";
 
 import { anonymizationBlacklistEntries } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { boundedAll } from "@/api/lib/db/bounded-all";
 import { LIMITS } from "@/api/lib/limits";
 
@@ -15,7 +15,7 @@ const config = {
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "anonymization_admin" },
   access: "read",
-} satisfies HandlerConfig;
+} satisfies WorkspaceHandlerConfig;
 
 /**
  * Read workspace-scoped anonymization terms only. Org-wide

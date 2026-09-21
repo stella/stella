@@ -24,7 +24,7 @@ import {
   isCloneableBuiltin,
 } from "@/api/handlers/reports/builtin-templates";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createStoredTemplate } from "@/api/lib/templates/create-template";
@@ -40,7 +40,7 @@ const config = {
   mcp: { type: "capability", reason: "reporting_export" },
   params: workspaceParams({}),
   body: t.Object({ key: t.String({ minLength: 1 }) }),
-} satisfies HandlerConfig;
+} satisfies WorkspaceHandlerConfig;
 
 export type CloneBuiltinReportTemplateDependencies = {
   createStoredTemplate: typeof createStoredTemplate;

@@ -7,7 +7,7 @@ import { proposeReferencePositions } from "@/api/handlers/document-reviews/refer
 import { proposeReviewPositionsBodySchema } from "@/api/handlers/document-reviews/schemas";
 import { aiHandlerError } from "@/api/lib/ai-error";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { pinProposedPositions } from "@/api/lib/document-review/reference-passages";
 
 const TIMEOUT_MS = 120_000;
@@ -19,7 +19,7 @@ const config = {
   access: "read",
   mcp: { type: "internal", reason: "document_processing" },
   body: proposeReviewPositionsBodySchema,
-} satisfies HandlerConfig;
+} satisfies WorkspaceHandlerConfig;
 
 export const createProposePositions = ({
   prepareProposal = prepareReferenceProposal,

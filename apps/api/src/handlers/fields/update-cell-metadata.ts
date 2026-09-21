@@ -8,7 +8,7 @@ import type { ReviewFlag } from "@stll/api-contract";
 import { cellMetadata, entities, properties } from "@/api/db/schema";
 import type { CellMetadata } from "@/api/db/schema-validators";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { FieldDiffs } from "@/api/lib/audit-log";
@@ -42,7 +42,7 @@ const config = {
     manualFlags: manualFlagsSchema,
     locked: t.Optional(t.Boolean()),
   }),
-} satisfies HandlerConfig;
+} satisfies WorkspaceHandlerConfig;
 
 type UpdateCellMetadataResult =
   | { status: "ok" }

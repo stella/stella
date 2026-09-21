@@ -9,7 +9,7 @@ import {
 } from "@/api/db/billing-validators";
 import { expenses } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tPaginationCursor, tSafeId, tUserId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -48,7 +48,7 @@ const config = {
   mcp: { type: "capability", reason: "billing_admin" },
   access: "read",
   query: readExpensesQuerySchema,
-} satisfies HandlerConfig;
+} satisfies WorkspaceHandlerConfig;
 
 type ExpenseCursor = {
   dateIncurred: string;

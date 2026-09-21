@@ -1,7 +1,7 @@
 import { panic, Result } from "better-result";
 
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
 import { queryEntities } from "@/api/lib/entities/query-entities";
 import { entityQueryWindowBodySchema } from "@/api/lib/entities/query-window-schema";
@@ -23,7 +23,7 @@ const config = {
   mcp: { type: "covered", by: "read_content_across_matters" },
   access: "read",
   body: entityQueryWindowBodySchema,
-} satisfies HandlerConfig;
+} satisfies WorkspaceHandlerConfig;
 
 const readEntitiesWindow = createSafeHandler(
   config,

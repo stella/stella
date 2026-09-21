@@ -4,7 +4,7 @@ import { t } from "elysia";
 
 import { legalListGenerationRuns } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import {
   tPaginationCursor,
   tSafeId,
@@ -36,7 +36,7 @@ const config = {
   mcp: { type: "capability", reason: "workflow_orchestration" },
   params: paramsSchema,
   query: querySchema,
-} satisfies HandlerConfig;
+} satisfies WorkspaceHandlerConfig;
 
 const generationCursor = createTimestampIdCursorCodec({
   column: legalListGenerationRuns.createdAt,

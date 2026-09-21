@@ -8,7 +8,7 @@
 import { Result } from "better-result";
 
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { readDocumentReviewRunDetail } from "@/api/lib/document-review/read-run-detail";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -20,7 +20,7 @@ const config = {
   access: "read",
   mcp: { type: "internal", reason: "document_processing" },
   params: workspaceParams({ runId: tSafeId("documentReviewRun") }),
-} satisfies HandlerConfig;
+} satisfies WorkspaceHandlerConfig;
 
 const readDocumentReviewRun = createSafeHandler(
   config,

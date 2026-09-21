@@ -10,7 +10,7 @@ import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { aiHandlerError } from "@/api/lib/ai-error";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
 import { requireTanStackAIAvailableForRole } from "@/api/lib/tanstack-ai-models";
@@ -51,7 +51,7 @@ const config = {
   mcp: { type: "internal", reason: "billing_ui" },
   body: polishNarrativeBodySchema,
   requiresUsage: { actionType: "chat", modelRole: "fast" },
-} satisfies HandlerConfig;
+} satisfies WorkspaceHandlerConfig;
 
 const polishTimeEntryNarrative = createSafeHandler(
   config,

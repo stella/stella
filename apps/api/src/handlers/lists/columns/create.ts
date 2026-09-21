@@ -4,7 +4,7 @@ import { t } from "elysia";
 
 import { legalListColumns } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -29,7 +29,7 @@ const config = {
   permissions: { view: ["update"] },
   mcp: { type: "capability", reason: "workspace_schema" },
   body: bodySchema,
-} satisfies HandlerConfig;
+} satisfies WorkspaceHandlerConfig;
 
 const createColumn = createSafeHandler(
   config,

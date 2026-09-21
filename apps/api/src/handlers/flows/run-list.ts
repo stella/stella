@@ -4,7 +4,7 @@ import {
   listFlowRunsQuerySchema,
 } from "@/api/handlers/flows/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 
 const config = {
   description:
@@ -14,7 +14,7 @@ const config = {
   access: "read",
   params: flowRunsWorkspaceParamsSchema,
   query: listFlowRunsQuerySchema,
-} satisfies HandlerConfig;
+} satisfies WorkspaceHandlerConfig;
 
 const listFlowRuns = createSafeHandler(
   config,

@@ -20,7 +20,7 @@ import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { cellMetadata, entities, properties } from "@/api/db/schema";
 import type { EntityKind } from "@/api/db/schema-validators";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { acquireCellLock } from "@/api/lib/cell-lock";
@@ -85,7 +85,7 @@ const config = {
     // in stale-valued cells the same way the grouped table renders them.
     optionValues: t.Optional(t.Array(t.String({ maxLength: 1000 }))),
   }),
-} satisfies HandlerConfig;
+} satisfies WorkspaceHandlerConfig;
 
 type MarkColumnFlagBatchResult =
   | {

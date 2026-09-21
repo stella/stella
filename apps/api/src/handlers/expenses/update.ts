@@ -7,7 +7,7 @@ import { toMajorUnits, tryToMinorUnits } from "@stll/money";
 import { expenseCategorySchema } from "@/api/db/billing-validators";
 import { BILLING_STATUS, expenses } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import {
   tCurrencyCode,
@@ -47,7 +47,7 @@ const config = {
   permissions: { expense: ["update"] },
   mcp: { type: "capability", reason: "billing_admin" },
   body: updateExpenseBodySchema,
-} satisfies HandlerConfig;
+} satisfies WorkspaceHandlerConfig;
 
 const updateExpense = createSafeHandler(
   config,

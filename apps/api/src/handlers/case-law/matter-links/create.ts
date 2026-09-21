@@ -5,7 +5,7 @@ import type { Static } from "elysia";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { linkDecisionsToMatter } from "@/api/handlers/case-law/matter-links/link-writes";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -74,7 +74,7 @@ const config = {
   permissions: { entity: ["create"] },
   mcp: { type: "capability", reason: "legal_corpus_admin" },
   body: createMatterLinkBodySchema,
-} satisfies HandlerConfig;
+} satisfies WorkspaceHandlerConfig;
 
 const createMatterLink = createSafeHandler(
   config,

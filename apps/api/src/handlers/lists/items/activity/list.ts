@@ -5,7 +5,7 @@ import { t } from "elysia";
 import { member, user } from "@/api/db/auth-schema";
 import { auditLogs } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import {
   tPaginationCursor,
@@ -39,7 +39,7 @@ const config = {
   mcp: { type: "capability", reason: "workspace_schema" },
   params: paramsSchema,
   query: querySchema,
-} satisfies HandlerConfig;
+} satisfies WorkspaceHandlerConfig;
 
 const activityCursor = createTimestampIdCursorCodec({
   column: auditLogs.createdAt,

@@ -5,7 +5,10 @@ import { RESOURCE_TYPE } from "@stll/api-contract";
 
 import { env } from "@/api/env";
 import { captureError } from "@/api/lib/analytics/capture";
-import { createSafeHandler, type HandlerConfig } from "@/api/lib/api-handlers";
+import {
+  createSafeHandler,
+  type WorkspaceHandlerConfig,
+} from "@/api/lib/api-handlers";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { HandlerError, unreachable } from "@/api/lib/errors/tagged-errors";
@@ -34,7 +37,7 @@ const config = {
     destinationWorkspaceId: tSafeId("workspace"),
     parentId: t.Nullable(tSafeId("entity")),
   }),
-} satisfies HandlerConfig;
+} satisfies WorkspaceHandlerConfig;
 
 export default createSafeHandler(
   config,

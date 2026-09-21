@@ -35,7 +35,7 @@ import {
 } from "@/api/handlers/uploads/permissions";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
@@ -78,7 +78,7 @@ const config = {
   access: "write",
   mcp: { type: "capability", reason: "file_transport" },
   params: finalizeParamsSchema,
-} satisfies HandlerConfig;
+} satisfies WorkspaceHandlerConfig;
 
 type ClaimedRow = typeof pendingUploads.$inferSelect;
 

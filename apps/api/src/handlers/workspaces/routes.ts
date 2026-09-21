@@ -42,7 +42,7 @@ import addWorkspaceMember from "@/api/handlers/workspaces/workspace-members-add"
 import { readWorkspaceMembersHandler } from "@/api/handlers/workspaces/workspace-members-read";
 import removeWorkspaceMember from "@/api/handlers/workspaces/workspace-members-remove";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 import { workspaceParams } from "@/api/lib/custom-schema";
 import {
@@ -68,7 +68,7 @@ const readWorkspace = createSafeHandler(
   {
     permissions: { workspace: ["read"] },
     mcp: { type: "covered", by: "list_matters" },
-  } satisfies HandlerConfig,
+  } satisfies WorkspaceHandlerConfig,
   async function* ({ scopedDb, session, workspaceId }) {
     const response = yield* Result.await(
       Result.tryPromise(
@@ -89,7 +89,7 @@ const readOverview = createSafeHandler(
   {
     permissions: { workspace: ["read"] },
     mcp: { type: "covered", by: "list_matters" },
-  } satisfies HandlerConfig,
+  } satisfies WorkspaceHandlerConfig,
   async function* ({ scopedDb, workspaceId }) {
     const response = yield* Result.await(
       Result.tryPromise(
@@ -109,7 +109,7 @@ const readWorkspaceContacts = createSafeHandler(
   {
     permissions: { workspace: ["read"] },
     mcp: { type: "covered", by: "list_matters" },
-  } satisfies HandlerConfig,
+  } satisfies WorkspaceHandlerConfig,
   async function* ({ scopedDb, workspaceId }) {
     const response = yield* Result.await(
       Result.tryPromise(
@@ -129,7 +129,7 @@ const readWorkspaceMembers = createSafeHandler(
   {
     permissions: { workspace: ["read"] },
     mcp: { type: "covered", by: "list_matters" },
-  } satisfies HandlerConfig,
+  } satisfies WorkspaceHandlerConfig,
   async function* ({ scopedDb, workspaceId }) {
     const response = yield* Result.await(
       Result.tryPromise(
