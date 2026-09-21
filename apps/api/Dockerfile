@@ -147,6 +147,15 @@ RUN bun build \
     --target bun \
     --outfile /app/repair-cz-ns-court.js \
     apps/api/src/scripts/repair-cz-ns-court.ts
+# Citation polarity pass. `--recheck` re-reads a language's labelled citations
+# against the rule tier and tightens a label only towards a more severe
+# reading, which is the pass to run after new negative rules are seeded. Needs
+# the API env (database) and runs inside the API task:
+#   ["bun", "/app/classify-citations.js", "--recheck", "--language", "cs"]
+RUN bun build \
+    --target bun \
+    --outfile /app/classify-citations.js \
+    apps/api/scripts/classify-citations.ts
 # Read-only snippet comparison over the serving corpus index. Reads its query
 # set from a JSON file, so the committed sample ships next to the bundle:
 #   ["bun", "/app/corpus-snippet-compare.js",
