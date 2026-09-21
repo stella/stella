@@ -412,64 +412,98 @@ describe("executeRegistryLookup — canonical-id guard", () => {
 //
 // The table is keyed by `BusinessRegistrySlug`, so a newly added register
 // fails to type-check until its upstream failures are covered here.
-const UPSTREAM_FAILURES: Record<BusinessRegistrySlug, readonly Error[]> = {
-  ares: [
-    new AresAPIError({ message: "ARES 503", httpStatus: 503 }),
-    new AresRequestError("https://ares.example.invalid", "request failed"),
-  ],
-  brreg: [
-    new BrregAPIError({ message: "Brreg 503", httpStatus: 503 }),
-    new BrregRequestError("https://brreg.example.invalid", "request failed"),
-  ],
-  "companies-house": [
-    new CompaniesHouseAPIError({ message: "CH 503", httpStatus: 503 }),
-    new CompaniesHouseRequestError(
+const UPSTREAM_FAILURES = {
+  ares: {
+    api: new AresAPIError({ message: "ARES 503", httpStatus: 503 }),
+    request: new AresRequestError(
+      "https://ares.example.invalid",
+      "request failed",
+    ),
+  },
+  brreg: {
+    api: new BrregAPIError({ message: "Brreg 503", httpStatus: 503 }),
+    request: new BrregRequestError(
+      "https://brreg.example.invalid",
+      "request failed",
+    ),
+  },
+  "companies-house": {
+    api: new CompaniesHouseAPIError({ message: "CH 503", httpStatus: 503 }),
+    request: new CompaniesHouseRequestError(
       "https://companies-house.example.invalid",
       "request failed",
     ),
-  ],
-  denue: [
-    new DenueAPIError({ message: "DENUE 503", httpStatus: 503 }),
-    new DenueRequestError("https://denue.example.invalid", "request failed"),
-  ],
-  edgar: [
-    new EdgarAPIError({ message: "EDGAR 503", httpStatus: 503 }),
-    new EdgarRequestError("https://edgar.example.invalid", "request failed"),
-  ],
-  gcis: [
-    new GcisAPIError({ message: "GCIS 503", httpStatus: 503 }),
-    new GcisRequestError("https://gcis.example.invalid", "request failed"),
-  ],
-  krs: [
-    new KrsAPIError({ message: "KRS 503", httpStatus: 503 }),
-    new KrsRequestError("https://krs.example.invalid", "request failed"),
-  ],
-  orsr: [
-    new OrsrAPIError({ message: "ORSR 503", httpStatus: 503 }),
-    new OrsrRequestError("https://orsr.example.invalid", "request failed"),
-  ],
-  prh: [
-    new PrhAPIError({ message: "PRH 503", httpStatus: 503 }),
-    new PrhRequestError("https://prh.example.invalid", "request failed"),
-  ],
-  "recherche-entreprises": [
-    new RechercheEntreprisesAPIError({ message: "RNE 503", httpStatus: 503 }),
-    new RechercheEntreprisesRequestError(
+  },
+  denue: {
+    api: new DenueAPIError({ message: "DENUE 503", httpStatus: 503 }),
+    request: new DenueRequestError(
+      "https://denue.example.invalid",
+      "request failed",
+    ),
+  },
+  edgar: {
+    api: new EdgarAPIError({ message: "EDGAR 503", httpStatus: 503 }),
+    request: new EdgarRequestError(
+      "https://edgar.example.invalid",
+      "request failed",
+    ),
+  },
+  gcis: {
+    api: new GcisAPIError({ message: "GCIS 503", httpStatus: 503 }),
+    request: new GcisRequestError(
+      "https://gcis.example.invalid",
+      "request failed",
+    ),
+  },
+  krs: {
+    api: new KrsAPIError({ message: "KRS 503", httpStatus: 503 }),
+    request: new KrsRequestError(
+      "https://krs.example.invalid",
+      "request failed",
+    ),
+  },
+  orsr: {
+    api: new OrsrAPIError({ message: "ORSR 503", httpStatus: 503 }),
+    request: new OrsrRequestError(
+      "https://orsr.example.invalid",
+      "request failed",
+    ),
+  },
+  prh: {
+    api: new PrhAPIError({ message: "PRH 503", httpStatus: 503 }),
+    request: new PrhRequestError(
+      "https://prh.example.invalid",
+      "request failed",
+    ),
+  },
+  "recherche-entreprises": {
+    api: new RechercheEntreprisesAPIError({
+      message: "RNE 503",
+      httpStatus: 503,
+    }),
+    request: new RechercheEntreprisesRequestError(
       "https://recherche-entreprises.example.invalid",
       "request failed",
     ),
-  ],
-  vies: [
-    new ViesAPIError({ message: "VIES 503", httpStatus: 503 }),
-    new ViesRequestError("https://vies.example.invalid", "request failed"),
-  ],
-};
+  },
+  vies: {
+    api: new ViesAPIError({ message: "VIES 503", httpStatus: 503 }),
+    request: new ViesRequestError(
+      "https://vies.example.invalid",
+      "request failed",
+    ),
+  },
+} as const satisfies Record<
+  BusinessRegistrySlug,
+  { api: Error; request: Error }
+>;
 
 describe("mapError — upstream failures", () => {
   for (const slug of BUSINESS_REGISTRY_SLUGS) {
     test(`${slug} tags an unreachable register as a retryable upstream outage`, () => {
       const { mapError } = BUSINESS_REGISTRY_DISPATCH[slug];
-      for (const failure of UPSTREAM_FAILURES[slug]) {
+      const { api, request } = UPSTREAM_FAILURES[slug];
+      for (const failure of [api, request]) {
         const mapped = mapError(failure);
         if (!(mapped instanceof HandlerError)) {
           throw new TypeError(
