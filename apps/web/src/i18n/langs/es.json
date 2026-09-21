@@ -659,6 +659,7 @@
       "description": "Cuánta jurisprudencia contiene el corpus, por país y por tribunal, y cuán actualizada está cada fuente.",
       "exceedsReportedTotal": "Contiene más que el último total indicado por el organismo el {date}",
       "generatedAt": "Datos a {date}",
+      "globeLabel": "Países cuya jurisprudencia contiene el corpus, en un globo terráqueo",
       "healthCurrent": "Actualizado",
       "healthDelayed": "Con retraso",
       "healthDisabled": "Desactivado",

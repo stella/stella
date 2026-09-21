@@ -659,6 +659,7 @@
       "description": "Kui palju kohtupraktikat korpuses on, riikide ja kohtute kaupa, ning kui värske on iga allikas.",
       "exceedsReportedTotal": "Sisaldab rohkem, kui avaldaja viimati {date} seisuga teatas",
       "generatedAt": "Andmed seisuga {date}",
+      "globeLabel": "Riigid, mille kohtupraktikat korpus sisaldab, gloobusel",
       "healthCurrent": "Ajakohane",
       "healthDelayed": "Hilineb",
       "healthDisabled": "Välja lülitatud",
