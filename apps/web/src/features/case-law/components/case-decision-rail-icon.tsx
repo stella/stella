@@ -5,6 +5,7 @@ import { cn } from "@stll/ui/utils";
 
 import type { CaseDecisionViewPayload } from "@/components/inspector/case-decision-view";
 import type { InspectorRailIconProps } from "@/components/inspector/view-registry";
+import { railCourtAbbreviation } from "@/features/case-law/components/case-decision-rail-icon.logic";
 import { CourtTierBadge } from "@/features/case-law/components/court-name";
 import { isCourtTier } from "@/features/case-law/decision-filter-facets.logic";
 import { decisionOptions } from "@/features/case-law/queries/decisions";
@@ -14,15 +15,15 @@ import { decisionOptions } from "@/features/case-law/queries/decisions";
  * the results table: a reader with three decisions open tells them apart by
  * court, not by a document glyph they all share. The chip comes from the
  * decision record the view reads (the same cache entry), so a court nothing
- * abbreviates, or a record not in yet, falls back to the glyph.
+ * abbreviates to a chip, or a record not in yet, falls back to the glyph.
  */
 export const CaseDecisionRailIcon = ({
   active,
   tab,
 }: InspectorRailIconProps<CaseDecisionViewPayload>) => {
   const { data: decision } = useQuery(decisionOptions(tab.payload.decisionId));
-  const abbreviation = decision?.courtAbbreviation;
-  if (decision === undefined || !abbreviation) {
+  const abbreviation = railCourtAbbreviation(decision?.courtAbbreviation);
+  if (decision === undefined || abbreviation === null) {
     return <FileTextIcon className={cn("size-3.5", !active && "opacity-70")} />;
   }
   // Never faded, unlike the fallback glyph above: two capitals at chip size
