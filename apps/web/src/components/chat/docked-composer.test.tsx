@@ -1,5 +1,6 @@
-import { expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
+
+import { expect, test } from "bun:test";
 
 import { DOCKED_COMPOSER_INSET_START_CLASS } from "@/components/ai-suggestions/composer-geometry";
 import { DockedComposer } from "@/components/chat/docked-composer";
