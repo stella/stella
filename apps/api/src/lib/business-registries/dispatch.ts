@@ -281,7 +281,23 @@ export type RegistryHandler = {
     | null;
   /** Deployment-level gate for adapters that require server config. */
   isDeployAvailable: (credential?: string) => boolean;
-  /** Translate per-registry tagged errors into HandlerError. */
+  /**
+   * Translate per-registry tagged errors into HandlerError.
+   *
+   * A failure of the upstream register itself (its API answering
+   * non-2xx, or the request never completing) must carry
+   * `code: "upstream_unavailable"` alongside its 502. Consumers branch
+   * on the code, not the status: the MCP envelope maps the code to a
+   * retryable `upstream_unavailable` error and anything else with a 5xx
+   * status to a generic, non-retryable `internal_error`, and the chat
+   * boundary reads the same code as `transient` rather than
+   * `server-defect`. A bare 502 therefore reports an unreachable
+   * register as a fault in this codebase and tells the caller not to
+   * retry something that is worth retrying.
+   *
+   * An operator-configuration failure (a missing or rejected API
+   * credential) is deliberately not tagged: retrying cannot fix it.
+   */
   mapError: (error: unknown) => HandlerError | null;
 };
 
@@ -477,12 +493,14 @@ const mapBrregError = (error: unknown): HandlerError | null => {
   }
   if (error instanceof BrregAPIError) {
     return new HandlerError({
+      code: "upstream_unavailable",
       status: 502,
       message: `Brreg API error: ${error.message}`,
     });
   }
   if (error instanceof BrregRequestError) {
     return new HandlerError({
+      code: "upstream_unavailable",
       status: 502,
       message: `Brreg request failed: ${error.message}`,
     });
@@ -592,12 +610,14 @@ const mapCompaniesHouseError = (error: unknown): HandlerError | null => {
   }
   if (error instanceof CompaniesHouseAPIError) {
     return new HandlerError({
+      code: "upstream_unavailable",
       status: 502,
       message: `UK Companies House API error: ${error.message}`,
     });
   }
   if (error instanceof CompaniesHouseRequestError) {
     return new HandlerError({
+      code: "upstream_unavailable",
       status: 502,
       message: `UK Companies House request failed: ${error.message}`,
     });
@@ -727,12 +747,14 @@ const mapDenueError = (error: unknown): HandlerError | null => {
   }
   if (error instanceof DenueAPIError) {
     return new HandlerError({
+      code: "upstream_unavailable",
       status: 502,
       message: `INEGI DENUE API error: ${error.message}`,
     });
   }
   if (error instanceof DenueRequestError) {
     return new HandlerError({
+      code: "upstream_unavailable",
       status: 502,
       message: `INEGI DENUE request failed: ${error.message}`,
     });
@@ -834,12 +856,14 @@ const mapEdgarError = (error: unknown): HandlerError | null => {
   }
   if (error instanceof EdgarAPIError) {
     return new HandlerError({
+      code: "upstream_unavailable",
       status: 502,
       message: `SEC EDGAR API error: ${error.message}`,
     });
   }
   if (error instanceof EdgarRequestError) {
     return new HandlerError({
+      code: "upstream_unavailable",
       status: 502,
       message: `SEC EDGAR request failed: ${error.message}`,
     });
@@ -959,12 +983,14 @@ const mapGcisError = (error: unknown): HandlerError | null => {
   }
   if (error instanceof GcisAPIError) {
     return new HandlerError({
+      code: "upstream_unavailable",
       status: 502,
       message: `GCIS API error: ${error.message}`,
     });
   }
   if (error instanceof GcisRequestError) {
     return new HandlerError({
+      code: "upstream_unavailable",
       status: 502,
       message: `GCIS request failed: ${error.message}`,
     });
@@ -1059,12 +1085,14 @@ const mapOrsrError = (error: unknown): HandlerError | null => {
   }
   if (error instanceof OrsrAPIError) {
     return new HandlerError({
+      code: "upstream_unavailable",
       status: 502,
       message: `ORSR API error: ${error.message}`,
     });
   }
   if (error instanceof OrsrRequestError) {
     return new HandlerError({
+      code: "upstream_unavailable",
       status: 502,
       message: `ORSR request failed: ${error.message}`,
     });
@@ -1132,12 +1160,14 @@ const mapKrsError = (error: unknown): HandlerError | null => {
   }
   if (error instanceof KrsAPIError) {
     return new HandlerError({
+      code: "upstream_unavailable",
       status: 502,
       message: `KRS API error: ${error.message}`,
     });
   }
   if (error instanceof KrsRequestError) {
     return new HandlerError({
+      code: "upstream_unavailable",
       status: 502,
       message: `KRS request failed: ${error.message}`,
     });
@@ -1235,12 +1265,14 @@ const mapPrhError = (error: unknown): HandlerError | null => {
   }
   if (error instanceof PrhAPIError) {
     return new HandlerError({
+      code: "upstream_unavailable",
       status: 502,
       message: `PRH API error: ${error.message}`,
     });
   }
   if (error instanceof PrhRequestError) {
     return new HandlerError({
+      code: "upstream_unavailable",
       status: 502,
       message: `PRH request failed: ${error.message}`,
     });
@@ -1301,12 +1333,14 @@ const mapViesError = (error: unknown): HandlerError | null => {
   }
   if (error instanceof ViesAPIError) {
     return new HandlerError({
+      code: "upstream_unavailable",
       status: 502,
       message: `VIES API error: ${error.message}`,
     });
   }
   if (error instanceof ViesRequestError) {
     return new HandlerError({
+      code: "upstream_unavailable",
       status: 502,
       message: `VIES request failed: ${error.message}`,
     });
@@ -1437,12 +1471,14 @@ const mapRechercheEntreprisesError = (error: unknown): HandlerError | null => {
   }
   if (error instanceof RechercheEntreprisesAPIError) {
     return new HandlerError({
+      code: "upstream_unavailable",
       status: 502,
       message: `recherche-entreprises API error: ${error.message}`,
     });
   }
   if (error instanceof RechercheEntreprisesRequestError) {
     return new HandlerError({
+      code: "upstream_unavailable",
       status: 502,
       message: `recherche-entreprises request failed: ${error.message}`,
     });
