@@ -631,10 +631,12 @@ const SourcesTable = ({
 }: {
   sources: readonly CaseLawCoverageSource[];
 }) => {
+  const t = useTranslations();
   const relativeTime = useRelativeTime();
 
   return (
-    <Table className={TABLE_CLASS}>
+    // No heading above it, so the table names itself for a screen reader.
+    <Table aria-label={t("common.source")} className={TABLE_CLASS}>
       <TableColumns columns={SOURCE_COLUMNS} />
       <SourcesTableHead />
       <TableBody>

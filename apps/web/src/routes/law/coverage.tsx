@@ -60,11 +60,14 @@ export const Route = createFileRoute("/law/coverage")({
 function CaseLawCoverage() {
   const { data, isError } = useQuery(caseLawCoverageOptions());
 
+  // Figures already on hand outrank a failed refetch: the query keeps its
+  // data when a background read fails, and a page that had the numbers must
+  // not swap them for "unavailable" because a later read did not answer.
+  if (data !== undefined) {
+    return <CaseLawCoveragePage coverage={data} />;
+  }
   if (isError) {
     return <CaseLawCoveragePage coverage={UNAVAILABLE} />;
   }
-  if (data === undefined) {
-    return <CaseLawCoveragePending />;
-  }
-  return <CaseLawCoveragePage coverage={data} />;
+  return <CaseLawCoveragePending />;
 }
