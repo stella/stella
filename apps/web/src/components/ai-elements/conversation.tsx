@@ -132,7 +132,7 @@ type ConversationScrollButtonProps = ConversationScrollButtonBaseProps &
     | {
         placement: "inline";
         reserveWhenHidden?: boolean;
-        surface: Extract<SuggestedActionSurfaceName, "plain" | "overlay">;
+        surface: SuggestedActionSurfaceName;
       }
   );
 
