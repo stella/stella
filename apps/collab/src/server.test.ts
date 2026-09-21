@@ -107,10 +107,7 @@ const SECOND_TEST_ROOM_ID = "00000000-0000-4000-8000-000000000002";
 const SECOND_TEST_ROOM_NAME = `{${SECOND_TEST_ROOM_ID}}`;
 const TEST_SERVICE_TOKEN = "test_collaboration_service_token_32_chars";
 const DOCKER_OPERATION_TIMEOUT_MS = 10_000;
-// The suite models an outage, so Redis gets one second to exit before docker
-// sends SIGKILL. Docker's default grace period equals the operation timeout
-// above, and a slow shutdown would then fail the test instead of the stop.
-const DOCKER_STOP_GRACE_SECONDS = 1;
+const DOCKER_CLEANUP_TIMEOUT_MS = 250;
 
 const createFakeStellaApi = ({
   additionalRoomIds = [],
@@ -349,44 +346,138 @@ const requireRedisTestUrl = () => {
   return redisTestUrl;
 };
 
-const runDocker = async (action: "start" | "stop", containerId: string) => {
-  const args =
-    action === "stop"
-      ? [
-          "docker",
-          "stop",
-          "--time",
-          String(DOCKER_STOP_GRACE_SECONDS),
-          containerId,
-        ]
-      : ["docker", "start", containerId];
-  const dockerProcess = Bun.spawn(args, {
+type DockerCommandProcess = {
+  readonly exitCode: number | null;
+  exited: Promise<number>;
+  kill: (signal?: number) => void;
+  stderr: ReadableStream<Uint8Array>;
+};
+
+type RunDockerOptions = {
+  action: "kill" | "start";
+  cleanupTimeoutMs?: number;
+  containerId: string;
+  observed?: Promise<void>;
+  spawn?: (args: string[]) => DockerCommandProcess;
+  timeoutMs?: number;
+};
+
+const spawnDockerCommand = (args: string[]): DockerCommandProcess =>
+  Bun.spawn(args, {
     stderr: "pipe",
-    stdout: "pipe",
+    stdout: "ignore",
   });
+
+const runDocker = async ({
+  action,
+  cleanupTimeoutMs = DOCKER_CLEANUP_TIMEOUT_MS,
+  containerId,
+  observed,
+  spawn = spawnDockerCommand,
+  timeoutMs = DOCKER_OPERATION_TIMEOUT_MS,
+}: RunDockerOptions) => {
+  // This test models an abrupt outage. Docker can leave its CLI pending after
+  // Redis exits, so callers may prove the outage through the service boundary.
+  const args =
+    action === "kill"
+      ? ["docker", "kill", "--signal", "KILL", containerId]
+      : ["docker", "start", containerId];
+  const dockerProcess = spawn(args);
   let timeout: ReturnType<typeof setTimeout> | undefined;
-  const exitCode = await Promise.race([
-    dockerProcess.exited,
-    new Promise<never>((_resolve, reject) => {
-      timeout = setTimeout(() => {
-        dockerProcess.kill();
-        reject(
-          new Error(
-            `docker ${action} exceeded ${DOCKER_OPERATION_TIMEOUT_MS} ms`,
-          ),
-        );
-      }, DOCKER_OPERATION_TIMEOUT_MS);
-    }),
-  ]).finally(() => {
+  const commandCompleted = dockerProcess.exited.then(async (exitCode) => {
+    const stderr = await new Response(dockerProcess.stderr).text();
+    if (exitCode !== 0) {
+      throw new Error(`docker ${action} failed: ${stderr}`);
+    }
+    return exitCode;
+  });
+
+  try {
+    await Promise.race([
+      commandCompleted,
+      ...(observed === undefined ? [] : [observed]),
+      new Promise<never>((_resolve, reject) => {
+        timeout = setTimeout(() => {
+          reject(
+            new Error(`docker ${action} exceeded ${String(timeoutMs)} ms`),
+          );
+        }, timeoutMs);
+      }),
+    ]);
+  } finally {
     if (timeout !== undefined) {
       clearTimeout(timeout);
     }
-  });
-  const stderr = await new Response(dockerProcess.stderr).text();
-  if (exitCode !== 0) {
-    throw new Error(`docker ${action} failed: ${stderr}`);
+    if (dockerProcess.exitCode === null) {
+      dockerProcess.kill(9);
+      await Promise.race([dockerProcess.exited, Bun.sleep(cleanupTimeoutMs)]);
+    } else {
+      await commandCompleted;
+    }
   }
 };
+
+describe("Docker test operations", () => {
+  test("continues after observing an outage when the Docker CLI hangs", async () => {
+    const processExit = Promise.withResolvers<number>();
+    const outageObserved = Promise.withResolvers<undefined>();
+    const exitCode = null;
+    let killSignal: number | undefined;
+
+    const operation = runDocker({
+      action: "kill",
+      cleanupTimeoutMs: 1,
+      containerId: "redis-test-container",
+      observed: outageObserved.promise,
+      spawn: () => ({
+        get exitCode() {
+          return exitCode;
+        },
+        exited: processExit.promise,
+        kill: (signal) => {
+          killSignal = signal;
+        },
+        stderr: new Blob([]).stream(),
+      }),
+      timeoutMs: 50,
+    });
+
+    outageObserved.resolve(undefined);
+    await operation;
+
+    expect(killSignal).toBe(9);
+  });
+
+  test("surfaces a Docker failure after outage observation wins", async () => {
+    const stderrReadStarted = Promise.withResolvers<undefined>();
+    const stderrRelease = Promise.withResolvers<undefined>();
+    const stderr = new ReadableStream<Uint8Array>({
+      pull: async (controller) => {
+        stderrReadStarted.resolve(undefined);
+        await stderrRelease.promise;
+        controller.enqueue(new TextEncoder().encode("daemon unavailable"));
+        controller.close();
+      },
+    });
+    const operation = runDocker({
+      action: "kill",
+      containerId: "redis-test-container",
+      observed: Promise.resolve(undefined),
+      spawn: () => ({
+        exitCode: 1,
+        exited: Promise.resolve(1),
+        kill: () => {},
+        stderr,
+      }),
+      timeoutMs: 50,
+    });
+
+    await stderrReadStarted.promise;
+    stderrRelease.resolve(undefined);
+
+    expect(operation).rejects.toThrow("docker kill failed: daemon unavailable");
+  });
+});
 
 const spawnRedisBackedCollabProcess = async ({
   apiUrl,
@@ -1397,15 +1488,20 @@ describe.skipIf(redisTestUrl === undefined)(
           return;
         }
 
-        await runDocker("stop", redisContainerId);
         redisWasStopped = true;
-        await waitFor(
+        const redisUnavailable = waitFor(
           async () =>
             (await readinessStatus(firstServer)) === 503 &&
             (await readinessStatus(secondServer)) === 503,
           "Replicas remained ready after Redis stopped.",
           10_000,
         );
+        await runDocker({
+          action: "kill",
+          containerId: redisContainerId,
+          observed: redisUnavailable,
+        });
+        await redisUnavailable;
         expect((await fetch(`${firstServer.httpUrl}/readyz`)).status).toBe(503);
         expect((await fetch(`${secondServer.httpUrl}/readyz`)).status).toBe(
           503,
@@ -1421,7 +1517,7 @@ describe.skipIf(redisTestUrl === undefined)(
         firstDoc.getText("body").insert(0, "offline-first-");
         secondDoc.getText("body").insert(0, "offline-second-");
 
-        await runDocker("start", redisContainerId);
+        await runDocker({ action: "start", containerId: redisContainerId });
         redisWasStopped = false;
         await waitFor(
           async () =>
@@ -1441,7 +1537,7 @@ describe.skipIf(redisTestUrl === undefined)(
         );
       } finally {
         if (redisWasStopped && redisContainerId !== undefined) {
-          await runDocker("start", redisContainerId);
+          await runDocker({ action: "start", containerId: redisContainerId });
         }
         lateProvider?.destroy();
         firstProvider.destroy();
