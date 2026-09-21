@@ -31,6 +31,17 @@ enum DeepLinkAction {
     api_base_url: String,
     handoff_token: String,
   },
+  OpenPdfSigning {
+    api_base_url: String,
+    handoff_token: String,
+  },
+}
+
+/// The deep links that carry a handoff token. They differ only in what the
+/// token is redeemed for, so they share one set of guards.
+enum HandoffTarget {
+  DesktopEdit,
+  PdfSigning,
 }
 
 fn is_safe_handoff_token(value: &str) -> bool {
@@ -98,9 +109,11 @@ fn parse_deep_link(raw_url: &str) -> Option<DeepLinkAction> {
     });
   }
 
-  if url.host_str() != Some("desktop-edit") || url.path() != "/open" {
-    return None;
-  }
+  let target = match (url.host_str(), url.path()) {
+    (Some("desktop-edit"), "/open") => HandoffTarget::DesktopEdit,
+    (Some("pdf-sign"), "/open") => HandoffTarget::PdfSigning,
+    _ => return None,
+  };
 
   let mut handoff_token = None;
   let mut api_base_url = None;
@@ -120,10 +133,32 @@ fn parse_deep_link(raw_url: &str) -> Option<DeepLinkAction> {
 
   let api_base_url = normalize_and_validate_api_base_url(&api_base_url?).ok()?;
 
-  Some(DeepLinkAction::OpenDesktopEdit {
-    api_base_url,
-    handoff_token,
+  Some(match target {
+    HandoffTarget::DesktopEdit => DeepLinkAction::OpenDesktopEdit {
+      api_base_url,
+      handoff_token,
+    },
+    HandoffTarget::PdfSigning => DeepLinkAction::OpenPdfSigning {
+      api_base_url,
+      handoff_token,
+    },
   })
+}
+
+/// The deep link's origin only counts if the user already trusts it: the
+/// production API, a local development API, or a self-host connection they
+/// approved.
+async fn is_trusted_api_base_url(
+  manager: &Mutex<SessionManager>,
+  api_base_url: &str,
+) -> bool {
+  if config::resolve_trusted_api_base_urls().contains(api_base_url) {
+    return true;
+  }
+  manager
+    .lock()
+    .await
+    .is_trusted_self_host_api_base_url(api_base_url)
 }
 
 pub fn handle_url(
@@ -184,12 +219,7 @@ pub fn handle_url(
     }) => {
       tracing::info!("desktop edit handoff deep link received");
       tauri::async_runtime::spawn(async move {
-        let trusted = {
-          let mgr = manager.lock().await;
-          config::resolve_trusted_api_base_urls().contains(&api_base_url)
-            || mgr.is_trusted_self_host_api_base_url(&api_base_url)
-        };
-        if !trusted {
+        if !is_trusted_api_base_url(&manager, &api_base_url).await {
           tracing::warn!(
             api_base_url = %api_base_url,
             "desktop edit handoff rejected because API URL is not trusted"
@@ -201,6 +231,32 @@ pub fn handle_url(
           redeem_and_open_desktop_edit(manager, api_base_url, handoff_token).await
         {
           tracing::error!(error = %error, "desktop edit handoff failed");
+        }
+      });
+    }
+    Some(DeepLinkAction::OpenPdfSigning {
+      api_base_url,
+      handoff_token,
+    }) => {
+      tracing::info!("PDF signing handoff deep link received");
+      tauri::async_runtime::spawn(async move {
+        if !is_trusted_api_base_url(&manager, &api_base_url).await {
+          tracing::warn!(
+            api_base_url = %api_base_url,
+            "PDF signing handoff rejected because API URL is not trusted"
+          );
+          return;
+        }
+
+        if let Err(error) = crate::pdf_signing::redeem_and_sign(
+          manager,
+          app_handle,
+          api_base_url,
+          handoff_token,
+        )
+        .await
+        {
+          tracing::error!(error = %error, "PDF signing handoff failed");
         }
       });
     }
@@ -569,6 +625,50 @@ mod tests {
   fn rejects_malformed_handoff_token() {
     let action = parse_deep_link(
       "stella://desktop-edit/open?handoff=../bad&apiBaseUrl=https%3A%2F%2Fapi.stll.app",
+    );
+
+    assert_eq!(action, None);
+  }
+
+  #[test]
+  fn parses_pdf_signing_handoff_link() {
+    let action = parse_deep_link(
+      "stella://pdf-sign/open?handoff=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef&apiBaseUrl=https%3A%2F%2Fmy.stll.app",
+    );
+
+    assert_eq!(
+      action,
+      Some(DeepLinkAction::OpenPdfSigning {
+        api_base_url: "https://api.stll.app".to_string(),
+        handoff_token: TOKEN.to_string(),
+      })
+    );
+  }
+
+  #[test]
+  fn rejects_a_pdf_signing_link_with_a_malformed_token() {
+    let action = parse_deep_link(
+      "stella://pdf-sign/open?handoff=../bad&apiBaseUrl=https%3A%2F%2Fapi.stll.app",
+    );
+
+    assert_eq!(action, None);
+  }
+
+  #[test]
+  fn rejects_a_pdf_signing_link_with_a_plain_http_api_url() {
+    let action = parse_deep_link(
+      "stella://pdf-sign/open?handoff=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef&apiBaseUrl=http%3A%2F%2Fexample.com",
+    );
+
+    assert_eq!(action, None);
+  }
+
+  #[test]
+  fn rejects_a_pdf_signing_host_on_another_path() {
+    // The host is matched with its path, so a neighbouring route cannot
+    // inherit the handoff guards.
+    let action = parse_deep_link(
+      "stella://pdf-sign/redeem?handoff=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef&apiBaseUrl=https%3A%2F%2Fapi.stll.app",
     );
 
     assert_eq!(action, None);
