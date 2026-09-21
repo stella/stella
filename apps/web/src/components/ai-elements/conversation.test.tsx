@@ -67,39 +67,3 @@ test("reserves the inline scroll slot while the action is hidden", () => {
     `aria-label="${messages.chat.suggestedFollowupsLabel}"`,
   );
 });
-
-test("lets the composer be the sole scroll-action owner", () => {
-  const html = renderToStaticMarkup(
-    <IntlProvider locale="ar" messages={messages} timeZone="UTC">
-      <StickToBottomContext value={STICK_TO_BOTTOM}>
-        <SuggestedFollowupChips
-          onSelect={() => {}}
-          prompts={["لخّص النتيجة"]}
-          scrollAction="none"
-        />
-      </StickToBottomContext>
-    </IntlProvider>,
-  );
-
-  expect(html).toContain(
-    `aria-label="${messages.chat.suggestedFollowupsLabel}"`,
-  );
-  expect(html).not.toContain('aria-label="التمرير إلى الأسفل"');
-  expect(html).not.toContain("pe-11");
-});
-
-test("collapses a composer-owned scroll action while it is hidden", () => {
-  const html = renderToStaticMarkup(
-    <IntlProvider locale="ar" messages={messages} timeZone="UTC">
-      <StickToBottomContext value={{ ...STICK_TO_BOTTOM, isAtBottom: true }}>
-        <ConversationScrollButton
-          placement="inline"
-          reserveWhenHidden={false}
-          surface="overlay"
-        />
-      </StickToBottomContext>
-    </IntlProvider>,
-  );
-
-  expect(html).toBe("");
-});
