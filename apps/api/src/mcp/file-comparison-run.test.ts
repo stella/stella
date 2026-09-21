@@ -72,6 +72,7 @@ const scanResult = (verdict: ScanVerdict): ScanResult =>
 type HarnessOptions = {
   bytesByKey?: Record<string, Uint8Array>;
   deleteFails?: boolean;
+  putFails?: boolean;
   headChecksum?: "match" | "absent" | "mismatch";
   headSizes?: Record<string, number>;
   rows?: Row[];
@@ -81,6 +82,7 @@ type HarnessOptions = {
 const createHarness = ({
   bytesByKey,
   deleteFails = false,
+  putFails = false,
   headChecksum = "match",
   headSizes,
   rows = [
@@ -182,6 +184,9 @@ const createHarness = ({
     presignDownloadUrl: async (key) =>
       await Promise.resolve(`https://s3.example/${key}?signed`),
     putObject: async (key) => {
+      if (putFails) {
+        throw new Error("s3 put failed");
+      }
       putKeys.push(key);
       await Promise.resolve();
     },
@@ -286,6 +291,20 @@ describe("compare_documents uploads source", () => {
     expect(harness.insertedRows).toHaveLength(0);
     // The inputs are still consumed: the caller asked for them to be read.
     expect(harness.deletedRows.count).toBe(2);
+  });
+
+  test("leaves both inputs staged when the redline cannot be stored", async () => {
+    const harness = createHarness({ putFails: true });
+
+    const error = errorOf(await harness.run());
+
+    expect(error.code).toBe("internal_error");
+    expect(error.hint).toBe("Retry the comparison.");
+    // The retry the hint promises has to find the inputs where it left them.
+    expect(harness.deletedKeys).toHaveLength(0);
+    expect(harness.updates).toHaveLength(0);
+    expect(harness.deletedRows.count).toBe(0);
+    expect(harness.audited).toHaveLength(1);
   });
 
   test("refuses an upload id that is not the caller's live input", async () => {

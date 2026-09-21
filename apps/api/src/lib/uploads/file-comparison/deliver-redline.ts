@@ -39,7 +39,10 @@ const TEMPORARY_REDLINE_FAILURE_STEPS = ["store", "link"] as const;
 export type TemporaryRedlineFailureStep =
   (typeof TEMPORARY_REDLINE_FAILURE_STEPS)[number];
 
-export type TemporaryRedlineFailure = { step: TemporaryRedlineFailureStep };
+export type TemporaryRedlineFailure = {
+  cause: unknown;
+  step: TemporaryRedlineFailureStep;
+};
 
 export const TEMPORARY_REDLINE_FAILURE_MESSAGE = {
   store: "The redline could not be stored",
@@ -104,7 +107,7 @@ export const deliverTemporaryRedline = async (
       }),
   );
   if (Result.isError(reserved)) {
-    return Result.err({ step: "store" });
+    return Result.err({ cause: reserved.error, step: "store" });
   }
 
   const written = await Result.tryPromise(
@@ -125,7 +128,7 @@ export const deliverTemporaryRedline = async (
       ),
   );
   if (Result.isError(written)) {
-    return Result.err({ step: "store" });
+    return Result.err({ cause: written.error, step: "store" });
   }
 
   const downloadUrl = await Result.tryPromise(
@@ -138,7 +141,7 @@ export const deliverTemporaryRedline = async (
       }),
   );
   if (Result.isError(downloadUrl)) {
-    return Result.err({ step: "link" });
+    return Result.err({ cause: downloadUrl.error, step: "link" });
   }
 
   return Result.ok({

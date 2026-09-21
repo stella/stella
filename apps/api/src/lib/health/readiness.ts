@@ -4,7 +4,10 @@ import { HealthCheckError } from "@/api/lib/errors/tagged-errors";
 import { probeDatabase } from "@/api/lib/health/probe-database";
 import { probeDocumentConverter } from "@/api/lib/health/probe-document-converter";
 import { createRedisClient } from "@/api/lib/redis-client";
-import { getS3ObjectWithSignal, putS3ObjectWithSignal } from "@/api/lib/s3";
+import {
+  getS3ObjectWithSignal,
+  putTemporaryS3ObjectWithSignal,
+} from "@/api/lib/s3";
 import { withTimeout } from "@/api/lib/with-timeout";
 
 export const READINESS_DEPENDENCY = {
@@ -27,7 +30,11 @@ export type ReadinessOutcome =
   | { status: "not-ready"; failed: ReadinessDependency[] };
 
 const PROBE_TIMEOUT_MS = 5000;
-const S3_READINESS_KEY = "system/readiness/v1";
+// Written with the temporary-upload tag, so readiness also proves the task may
+// tag objects, which every server-side temporary write depends on. The marker
+// expires with the bucket lifecycle and is rewritten; the key version moved
+// with the tag so the first deploy writes instead of finding the old marker.
+const S3_READINESS_KEY = "system/readiness/v2";
 const S3_READINESS_CONTENT_TYPE = "application/octet-stream";
 const S3_READINESS_BYTES = new Uint8Array();
 let scheduledJobsReady = false;
@@ -93,7 +100,7 @@ const objectStorageReadinessProbe = {
     await getS3ObjectWithSignal(S3_READINESS_KEY, signal);
   },
   write: async (signal: AbortSignal) => {
-    await putS3ObjectWithSignal(
+    await putTemporaryS3ObjectWithSignal(
       S3_READINESS_KEY,
       S3_READINESS_BYTES,
       S3_READINESS_CONTENT_TYPE,

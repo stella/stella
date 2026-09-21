@@ -398,6 +398,10 @@ const deliver = async ({
     dependencies,
   );
   if (Result.isError(delivered)) {
+    captureError(delivered.error.cause, {
+      stage: "file-comparison.deliver",
+      step: delivered.error.step,
+    });
     return {
       status: "error",
       response: structuredErrorResult({
@@ -653,7 +657,6 @@ export const runFileComparison = async (
     signal,
     targetName: target.declaredName,
   });
-  await consumeInputs();
   await recordComparisonAudit({
     base,
     changeCount: compared.value.changes.length,
@@ -661,8 +664,11 @@ export const runFileComparison = async (
     target,
   });
   if (delivered.status === "error") {
+    // The inputs stay staged: the error tells the caller to retry, and the
+    // retry has to find them. Their own deadline still expires them.
     return delivered;
   }
+  await consumeInputs();
 
   const scanWarnings = [
     loadedBase.loaded.warnings,
