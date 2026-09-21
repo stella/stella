@@ -1,4 +1,4 @@
-import type { Edge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge";
+import type { Edge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/types";
 
 export type WorkspaceViewDirection = "ltr" | "rtl";
 export type WorkspaceViewDropPosition = "before" | "after";

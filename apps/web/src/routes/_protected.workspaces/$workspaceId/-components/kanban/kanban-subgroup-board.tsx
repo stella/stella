@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 
-import type { Edge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge";
+import type { Edge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/types";
 import { GripVerticalIcon, Rows3Icon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
