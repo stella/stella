@@ -22,12 +22,15 @@ import {
   type CourtTier,
 } from "@/features/case-law/decision-filter-facets.logic";
 import { caseLawCorpusStatusOptions } from "@/features/case-law/queries/decisions";
-import { useFormatter } from "@/i18n/formatting-context";
-import {
-  formatFullTimestamp,
-  formatRelativeTime,
-  isWithinLast,
-} from "@/lib/relative-time";
+import { useFormatter, useRelativeTime } from "@/i18n/formatting-context";
+import { parseDeterministicDate } from "@/lib/deterministic-date";
+import { isWithinLast } from "@/lib/relative-time";
+
+/** The instant the corpus last changed, to the second. */
+const UPDATED_AT_FORMAT = {
+  dateStyle: "full",
+  timeStyle: "medium",
+} as const satisfies Intl.DateTimeFormatOptions;
 
 /**
  * How recent the newest change may be for the corpus to count as current:
@@ -57,6 +60,7 @@ type CourtRow = CorpusStatus["courts"][number];
 export const LawDatabaseStatus = ({ country }: { country: string }) => {
   const t = useTranslations();
   const format = useFormatter();
+  const relativeTime = useRelativeTime();
   const { data: status } = useQuery(caseLawCorpusStatusOptions(country));
 
   const updatedAt = status?.updatedAt ?? null;
@@ -64,6 +68,7 @@ export const LawDatabaseStatus = ({ country }: { country: string }) => {
     return null;
   }
   const upToDate = isWithinLast(updatedAt, UP_TO_DATE_WINDOW_SECONDS);
+  const updatedAtDate = parseDeterministicDate(updatedAt);
 
   return (
     <Popover>
@@ -85,7 +90,7 @@ export const LawDatabaseStatus = ({ country }: { country: string }) => {
         {upToDate
           ? t("caseLaw.coverage.healthCurrent")
           : t("caseLaw.research.updated", {
-              date: formatRelativeTime(updatedAt),
+              date: relativeTime(updatedAt),
             })}
       </PopoverTrigger>
       <PopoverPanel
@@ -103,9 +108,10 @@ export const LawDatabaseStatus = ({ country }: { country: string }) => {
           </dd>
           <dt className="text-muted-foreground">{t("common.lastUpdated")}</dt>
           <dd className="text-end">
-            {formatFullTimestamp(updatedAt)}
+            {updatedAtDate !== null &&
+              format.dateTime(updatedAtDate, UPDATED_AT_FORMAT)}
             <span className="text-muted-foreground block">
-              {formatRelativeTime(updatedAt)}
+              {relativeTime(updatedAt)}
             </span>
           </dd>
         </dl>
@@ -181,6 +187,7 @@ const CourtBreakdown = ({ courts }: { courts: readonly CourtRow[] }) => {
 const CourtRowCells = ({ row, tier }: { row: CourtRow; tier: CourtTier }) => {
   const t = useTranslations();
   const format = useFormatter();
+  const relativeTime = useRelativeTime();
 
   return (
     <tr>
@@ -220,7 +227,7 @@ const CourtRowCells = ({ row, tier }: { row: CourtRow; tier: CourtTier }) => {
         )}
       </td>
       <td className="text-muted-foreground px-1 py-0.5 text-end whitespace-nowrap">
-        {row.updatedAt === null ? "—" : formatRelativeTime(row.updatedAt)}
+        {row.updatedAt === null ? "—" : relativeTime(row.updatedAt)}
       </td>
     </tr>
   );

@@ -114,8 +114,20 @@ export const getRelativeTimeFormatter = (
  * Format a date as a relative time string using
  * `Intl.RelativeTimeFormat`. Returns short forms like
  * "2h ago", "yesterday", "3d ago".
+ *
+ * Reads the locale from the store, outside React. Inside a component, use
+ * `useRelativeTime` from the formatting context instead: the compiler takes
+ * this call for a pure function of its argument and caches its result, so a
+ * row rendered under one language keeps its string after the reader switches
+ * to another.
  */
 export const formatRelativeTime = (
+  date: Date | string | Temporal.Instant,
+): string => formatRelativeTimeIn(getFormattingLocale(), date);
+
+/** `formatRelativeTime` for an explicit locale. */
+export const formatRelativeTimeIn = (
+  locale: string,
   date: Date | string | Temporal.Instant,
 ): string => {
   const now = Temporal.Now.instant().epochMilliseconds;
@@ -126,7 +138,7 @@ export const formatRelativeTime = (
   const diff = Math.round((then - now) / 1000);
   const absDiff = Math.abs(diff);
 
-  const rtf = getRelativeTimeFormatter(getFormattingLocale());
+  const rtf = getRelativeTimeFormatter(locale);
 
   if (absDiff < MINUTE) {
     // "just now" / "1 min. ago" — sub-minute precision is noise

@@ -617,6 +617,7 @@ type Messages = {
       "decisionCount": "{count, plural, =0 {No decisions} one {# decision} other {# decisions}}";
       "lastNegative": "last negative treatment in {year}";
       "negativeCount": "{count, plural, one {# negative} other {# negative}}";
+      "none": "No citations recorded yet.";
       "openAtCitation": "Open at the citation";
       "openDecision": "Open decision";
       "passageNotFound": "The citing passage was not located in the text";
@@ -654,6 +655,8 @@ type Messages = {
     "coverage": {
       "completeness": "Completeness";
       "countedOn": "Counted {date}";
+      "courtsHeading": "By court";
+      "courtsUnavailable": "The per-court breakdown is unavailable right now.";
       "decisionYears": "Decision years";
       "description": "How much case law the corpus holds, per country and per court, and how fresh each source is.";
       "exceedsReportedTotal": "Holds more than the publisher's last stated total of {date}";
@@ -1388,6 +1391,7 @@ type Messages = {
     "categoryName": "Category name";
     "changeColor": "Change color";
     "chooseFile": "Choose file";
+    "citations": "Citations";
     "clauses": "Clauses";
     "clearDate": "Clear date";
     "close": "Close";
