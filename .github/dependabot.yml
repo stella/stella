@@ -236,6 +236,11 @@ updates:
       - dependency-name: "elysia-rate-limit"
         update-types:
           - "version-update:semver-major"
+      # Expo SDK 57 requires react-native-screens ~4.26.0. Remove this guard
+      # when Expo's supported range advances to 4.27 or newer.
+      - dependency-name: "react-native-screens"
+        update-types:
+          - "version-update:semver-minor"
     commit-message:
       prefix: "chore"
     reviewers:

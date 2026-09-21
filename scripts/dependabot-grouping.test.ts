@@ -53,6 +53,20 @@ const parseElysiaGroup = (source: string) => {
   };
 };
 
+const parseBunIgnores = (source: string) => {
+  const dependabot: unknown = Bun.YAML.parse(source);
+  if (!isRecord(dependabot) || !Array.isArray(dependabot["updates"])) {
+    throw new TypeError("Dependabot config must contain an updates array");
+  }
+  const bunUpdate = dependabot["updates"].find(
+    (update) => isRecord(update) && update["package-ecosystem"] === "bun",
+  );
+  if (!isRecord(bunUpdate) || !Array.isArray(bunUpdate["ignore"])) {
+    throw new TypeError("Dependabot Bun config must contain ignore rules");
+  }
+  return bunUpdate["ignore"];
+};
+
 const readElysiaGroup = async () =>
   parseElysiaGroup(
     await Bun.file(
@@ -77,6 +91,22 @@ const isDependencyInGroup = (
   );
 
 describe("Dependabot dependency groups", () => {
+  test("keeps Expo-native screens on the SDK-supported minor", async () => {
+    const source = await Bun.file(
+      new URL("../.github/dependabot.yml", import.meta.url),
+    ).text();
+    const ignores = parseBunIgnores(source);
+    const reactNativeScreens = ignores.find(
+      (entry) =>
+        isRecord(entry) && entry["dependency-name"] === "react-native-screens",
+    );
+
+    expect(reactNativeScreens).toEqual({
+      "dependency-name": "react-native-screens",
+      "update-types": ["version-update:semver-minor"],
+    });
+  });
+
   test("keeps every installed Elysia package in one update group", async () => {
     const manifestPaths = [
       "package.json",
