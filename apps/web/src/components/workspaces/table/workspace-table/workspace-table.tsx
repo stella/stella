@@ -75,6 +75,11 @@ import type { TableContentMode } from "@/lib/workspaces/table-store";
 
 type WorkspaceTableProps<TRow extends TableRowData> = {
   table: WorkspaceTableType<TRow>;
+  /**
+   * The number the first row carries. A paged list hands in the first
+   * ordinal of its page, so page three does not count from one again.
+   */
+  firstRowNumber?: number;
   /** Everything that depends on what a row is; see `TableRowHost`. */
   rowHost: TableRowHost<TRow>;
   contentMode: TableContentMode;
@@ -121,6 +126,7 @@ export const WorkspaceTable = <TRow extends TableRowData = TableTreeNode>({
   skeletonRowCount = 0,
   stickyColumnHeader = true,
   fillHeight = true,
+  firstRowNumber = 1,
   outerScrollRef,
 }: WorkspaceTableProps<TRow>) => {
   const inlineFlow = outerScrollRef !== undefined;
@@ -245,7 +251,7 @@ export const WorkspaceTable = <TRow extends TableRowData = TableTreeNode>({
     // hides. Each visible row gets a 1-based number; a collapsed row standing
     // for others shows a range.
     const labels: string[] = [];
-    let logicalPos = 1;
+    let logicalPos = firstRowNumber;
     for (const row of rowModel.rows) {
       const hiddenCount = row.getIsExpanded()
         ? 0
@@ -260,7 +266,7 @@ export const WorkspaceTable = <TRow extends TableRowData = TableTreeNode>({
       }
     }
     return labels;
-  }, [collapsedRowSpan, rowModel]);
+  }, [collapsedRowSpan, firstRowNumber, rowModel]);
   const getVirtualRowKey = useCallback(
     (index: number) => rowModel.rows.at(index)?.id ?? `table-row-${index}`,
     [rowModel.rows],

@@ -60,6 +60,8 @@ const withHeadnoteToggled = (
 
 type DecisionTableProps = {
   decisions: readonly Decision[];
+  /** The ordinal of the first row: a page's first position in the whole list. */
+  firstRowNumber: number;
   /**
    * What stands where the rows would be when there are none, for a screen
    * that can say why. The plain "no results" line otherwise.
@@ -100,6 +102,7 @@ export const DecisionTable = ({
   expectedRowCount,
   extraColumns,
   findHighlight = null,
+  firstRowNumber,
   isLoading,
   isRefreshing = false,
   layout,
@@ -227,6 +230,7 @@ export const DecisionTable = ({
               // nothing to fill here and nothing to add at the end of, so it
               // would draw as one empty bordered row under the last decision.
               fillHeight={false}
+              firstRowNumber={firstRowNumber}
               rowHost={rowHost}
               skeletonRowCount={
                 isLoading ? tableSkeletonRowCount(expectedRowCount) : 0
