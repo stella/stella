@@ -339,7 +339,7 @@ const CountryLink = ({
   }
   return (
     <Link
-      className="underline-offset-2 hover:underline"
+      className="decoration-border underline underline-offset-2 hover:decoration-current"
       search={{ country: toCaseLawCountryParam(country.country) }}
       to="/law/cases"
     >
@@ -641,7 +641,7 @@ const SourcesTable = ({
               scope="row"
             >
               <a
-                className="underline-offset-2 hover:underline"
+                className="decoration-border underline underline-offset-2 hover:decoration-current"
                 href={sanitizeHref(source.publicHomeUrl)}
                 rel="noreferrer"
               >
@@ -893,7 +893,7 @@ const CourtRowCells = ({
       >
         {row.type === "court" ? (
           <Link
-            className="underline-offset-2 hover:underline"
+            className="decoration-border underline underline-offset-2 hover:decoration-current"
             search={{
               country: toCaseLawCountryParam(country),
               court: row.court,
