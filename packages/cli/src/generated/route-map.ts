@@ -1426,7 +1426,7 @@ export const generatedRouteMap: RouteNode = {
                     repeatable: false,
                     description:
                       "File name to show the user, including the .docx suffix.",
-                    required: false,
+                    required: true,
                   },
                   {
                     flag: "--base.size",
@@ -1437,7 +1437,7 @@ export const generatedRouteMap: RouteNode = {
                     repeatable: false,
                     description:
                       "Exact byte length of the file, at most 50 MB.",
-                    required: false,
+                    required: true,
                   },
                   {
                     flag: "--base.sha256-hex",
@@ -1446,7 +1446,7 @@ export const generatedRouteMap: RouteNode = {
                     repeatable: false,
                     description:
                       "SHA-256 of the exact bytes you will PUT, as 64 hexadecimal characters.",
-                    required: false,
+                    required: true,
                   },
                   {
                     flag: "--target.name",
@@ -1455,7 +1455,7 @@ export const generatedRouteMap: RouteNode = {
                     repeatable: false,
                     description:
                       "File name to show the user, including the .docx suffix.",
-                    required: false,
+                    required: true,
                   },
                   {
                     flag: "--target.size",
@@ -1466,7 +1466,7 @@ export const generatedRouteMap: RouteNode = {
                     repeatable: false,
                     description:
                       "Exact byte length of the file, at most 50 MB.",
-                    required: false,
+                    required: true,
                   },
                   {
                     flag: "--target.sha256-hex",
@@ -1475,7 +1475,7 @@ export const generatedRouteMap: RouteNode = {
                     repeatable: false,
                     description:
                       "SHA-256 of the exact bytes you will PUT, as 64 hexadecimal characters.",
-                    required: false,
+                    required: true,
                   },
                 ],
                 inputOnly: [],
@@ -1562,7 +1562,7 @@ export const generatedRouteMap: RouteNode = {
                     repeatable: false,
                     description:
                       "HTTPS link the server downloads the .docx from. A share link that opens a web page is not the file; use the direct-download form.",
-                    required: false,
+                    required: true,
                   },
                   {
                     flag: "--base.name",
@@ -1580,7 +1580,7 @@ export const generatedRouteMap: RouteNode = {
                     repeatable: false,
                     description:
                       "HTTPS link the server downloads the .docx from. A share link that opens a web page is not the file; use the direct-download form.",
-                    required: false,
+                    required: true,
                   },
                   {
                     flag: "--target.name",

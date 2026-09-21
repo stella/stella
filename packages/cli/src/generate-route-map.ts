@@ -220,12 +220,14 @@ const boundFields = (schema: PropSchema): { min?: number; max?: number } => {
 };
 
 /** Result of classifying one prop's schema into a CLI surface (spec S3). */
+/** A dot-path child, with whether its own object lists it as required. */
+type DotPathChild = Omit<FlagSpec, "required"> & {
+  requiredInObject: boolean;
+};
+
 export type PropClassification =
   | { kind: "flag"; spec: Omit<FlagSpec, "required"> }
-  | {
-      kind: "dot-path";
-      children: readonly Omit<FlagSpec, "required">[];
-    }
+  | { kind: "dot-path"; children: readonly DotPathChild[] }
   | { kind: "input-only" };
 
 const scalarFlagKind = (
@@ -305,7 +307,12 @@ const classifyObject = (
   // Dot-path flags only for a depth-2 object all of whose children are scalars
   // (spec S3). Any non-scalar child (nested object/array/untyped) pushes the
   // whole subtree to --input rather than emitting half-generated flags.
-  const children: Omit<FlagSpec, "required">[] = [];
+  const requiredChildren = new Set(
+    Array.isArray(schema["required"])
+      ? schema["required"].filter((r): r is string => typeof r === "string")
+      : [],
+  );
+  const children: DotPathChild[] = [];
   for (const [childName, childSchema] of Object.entries(schema["properties"])) {
     if (!isRecord(childSchema)) {
       return { kind: "input-only" };
@@ -320,6 +327,7 @@ const classifyObject = (
         kind: "enum",
         enum: childEnum,
         repeatable: false,
+        requiredInObject: requiredChildren.has(childName),
         ...descriptionField(child),
       });
       continue;
@@ -334,6 +342,7 @@ const classifyObject = (
       kind: scalar,
       ...(scalar === "int" || scalar === "number" ? boundFields(child) : {}),
       repeatable: false,
+      requiredInObject: requiredChildren.has(childName),
       ...descriptionField(child),
     });
   }
@@ -517,10 +526,16 @@ const buildFlags = ({
       continue;
     }
     const isRequired = required.has(prop);
-    const candidates =
-      classification.kind === "flag"
-        ? [classification.spec]
-        : classification.children;
+    // A dot-path leaf is required only when the object prop is required and
+    // the child is required inside it; either side optional makes it optional.
+    const candidates: FlagSpec[] = [];
+    if (classification.kind === "flag") {
+      candidates.push({ ...classification.spec, required: isRequired });
+    } else {
+      for (const { requiredInObject, ...spec } of classification.children) {
+        candidates.push({ ...spec, required: isRequired && requiredInObject });
+      }
+    }
     for (const candidate of candidates) {
       if (RESERVED_FLAGS.has(candidate.flag)) {
         throw new RouteGenerationError(
@@ -534,13 +549,7 @@ const buildFlags = ({
         );
       }
       seenFlagKeys.add(parserKey);
-      // A dot-path leaf is required only if the whole object prop is required
-      // AND the child schema itself is required; the CLI keeps this simple by
-      // treating dot-path leaves as optional (the server enforces sub-requiredness).
-      flags.push({
-        ...candidate,
-        required: classification.kind === "flag" ? isRequired : false,
-      });
+      flags.push(candidate);
     }
   }
 
