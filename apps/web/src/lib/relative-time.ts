@@ -44,6 +44,12 @@ export const FULL_DATE_LONG_TIME_FORMAT = {
   timeStyle: "long",
 } as const satisfies Intl.DateTimeFormatOptions;
 
+/** "Monday, 21 September 2026 at 16:43:54" — an instant to the second. */
+export const FULL_DATE_MEDIUM_TIME_FORMAT = {
+  dateStyle: "full",
+  timeStyle: "medium",
+} as const satisfies Intl.DateTimeFormatOptions;
+
 /** "5 Mar" — a day whose year the surrounding view already establishes. */
 export const DAY_AND_MONTH_FORMAT = {
   month: "short",
@@ -168,10 +174,10 @@ export const formatFullTimestamp = (date: Date | string): string => {
     return "";
   }
 
-  return getFormatter().dateTime(resolvedDate.epochMilliseconds, {
-    dateStyle: "full",
-    timeStyle: "medium",
-  });
+  return getFormatter().dateTime(
+    resolvedDate.epochMilliseconds,
+    FULL_DATE_MEDIUM_TIME_FORMAT,
+  );
 };
 
 type FormatContextualTimestampOptions = {

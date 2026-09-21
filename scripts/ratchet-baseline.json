@@ -568,7 +568,7 @@
     }
   },
   "try-catch-outside-boundary": {
-    "count": 419,
+    "count": 416,
     "files": {
       "apps/api/src/handlers/ai-autocomplete/stream.ts": 1,
       "apps/api/src/handlers/api-keys/mint.ts": 1,
@@ -611,7 +611,7 @@
       "apps/api/src/handlers/entities/duplicate.ts": 1,
       "apps/api/src/handlers/entities/finalize-desktop-edit-session.ts": 1,
       "apps/api/src/handlers/external-preview/preview.ts": 2,
-      "apps/api/src/handlers/feedback/intake-guards.ts": 4,
+      "apps/api/src/handlers/feedback/intake-guards.ts": 1,
       "apps/api/src/handlers/hosted-usage-webhook/receive.ts": 3,
       "apps/api/src/handlers/legislation/ingestion.ts": 1,
       "apps/api/src/handlers/mcp-connectors/oauth-callback.ts": 1,

@@ -17,13 +17,10 @@ import { courtTierRowKey } from "@/features/case-law/court-tier-rows.logic";
 import { caseLawCorpusStatusOptions } from "@/features/case-law/queries/decisions";
 import { useFormatter, useRelativeTime } from "@/i18n/formatting-context";
 import { parseDeterministicDate } from "@/lib/deterministic-date";
-import { isWithinLast } from "@/lib/relative-time";
-
-/** The instant the corpus last changed, to the second. */
-const UPDATED_AT_FORMAT = {
-  dateStyle: "full",
-  timeStyle: "medium",
-} as const satisfies Intl.DateTimeFormatOptions;
+import {
+  FULL_DATE_MEDIUM_TIME_FORMAT,
+  isWithinLast,
+} from "@/lib/relative-time";
 
 /**
  * How recent the newest change may be for the corpus to count as current:
@@ -102,7 +99,7 @@ export const LawDatabaseStatus = ({ country }: { country: string }) => {
           <dt className="text-muted-foreground">{t("common.lastUpdated")}</dt>
           <dd className="text-end">
             {updatedAtDate !== null &&
-              format.dateTime(updatedAtDate, UPDATED_AT_FORMAT)}
+              format.dateTime(updatedAtDate, FULL_DATE_MEDIUM_TIME_FORMAT)}
             <span className="text-muted-foreground block">
               {relativeTime(updatedAt)}
             </span>
