@@ -1,10 +1,18 @@
 import { describe, expect, test } from "bun:test";
+import { createStore } from "zustand";
+import { immer } from "zustand/middleware/immer";
 
+import { INSPECTOR_PANE_INTENT } from "@/components/inspector/inspector-store-types";
 import type {
   InspectorTab,
+  InspectorTabsStore,
   TaskTab,
 } from "@/components/inspector/inspector-store-types";
-import { closeTabsForDeletedEntities } from "@/components/inspector/inspector-tabs-slice";
+import {
+  closeTabsForDeletedEntities,
+  createInspectorTabsSlice,
+} from "@/components/inspector/inspector-tabs-slice";
+import { toChatThreadId } from "@/lib/chat-thread-ref";
 
 const makeTaskTab = (id: string): TaskTab => ({
   type: "task",
@@ -86,5 +94,69 @@ describe("closing deleted inspector entities", () => {
       ).toBe(true);
       expect(state.tabs).toBe(tabs);
     }
+  });
+});
+
+const createMinimizedStore = () => {
+  const store = createStore<InspectorTabsStore>()(
+    immer((set) => createInspectorTabsSlice(set)),
+  );
+  store.setState({ minimized: true });
+  return store;
+};
+
+const chatTabId = toChatThreadId("chat-1");
+
+const detailsTabArgs = {
+  type: "case-law-decision-details",
+  id: "case-law-decision-details:decision-1",
+  label: "Decision 1",
+  payload: { decisionId: "decision-1" },
+};
+
+describe("opening a tab without taking the pane", () => {
+  test("openView with pane keep adds and activates the tab, pane stays collapsed", () => {
+    const store = createMinimizedStore();
+
+    store.getState().openView({
+      ...detailsTabArgs,
+      pane: INSPECTOR_PANE_INTENT.keep,
+    });
+
+    const state = store.getState();
+    expect(state.minimized).toBe(true);
+    expect(state.activeId).toBe(detailsTabArgs.id);
+    expect(state.tabs.map((tab) => tab.id)).toEqual([detailsTabArgs.id]);
+  });
+
+  test("openView expands the pane by default", () => {
+    const store = createMinimizedStore();
+
+    store.getState().openView(detailsTabArgs);
+
+    expect(store.getState().minimized).toBe(false);
+  });
+
+  test("openChat with pane keep adds and activates the tab, pane stays collapsed", () => {
+    const store = createMinimizedStore();
+
+    store.getState().openChat({
+      id: chatTabId,
+      label: "Decision chat",
+      pane: INSPECTOR_PANE_INTENT.keep,
+    });
+
+    const state = store.getState();
+    expect(state.minimized).toBe(true);
+    expect(state.activeId).toBe(chatTabId);
+    expect(state.tabs.map((tab) => tab.id)).toEqual([chatTabId]);
+  });
+
+  test("openChat expands the pane by default", () => {
+    const store = createMinimizedStore();
+
+    store.getState().openChat({ id: chatTabId });
+
+    expect(store.getState().minimized).toBe(false);
   });
 });

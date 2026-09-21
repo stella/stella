@@ -13,6 +13,7 @@ import {
   isCaseDecisionGenericTab,
   navigateToCaseDecisionMain,
 } from "@/components/inspector/case-decision-view";
+import { INSPECTOR_PANE_INTENT } from "@/components/inspector/inspector-store-types";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { useInspectorView } from "@/components/inspector/use-inspector-view";
 import { OpenOriginalButton } from "@/components/legal-reader/open-original-button";
@@ -219,6 +220,10 @@ const GuestDecisionWorkspace = ({
  * the page: leaving takes the text away, and the tab keeps offering to bring
  * it back. It never takes the focus away from a decision the reader had open
  * on the side, so a swap lands on the decision, not on its facts.
+ *
+ * It also owns the pane state for the whole decision mount: this effect runs
+ * before the chat tab's, and both seed with `pane: "keep"`, so the pane is
+ * decided once here and never twice.
  */
 const DecisionDetailsTab = ({
   decision,
@@ -232,8 +237,13 @@ const DecisionDetailsTab = ({
       activeTab !== undefined && isCaseDecisionGenericTab(activeTab)
         ? activeTab.id
         : null;
-    store.openView(
-      createCaseDecisionDetailsTab({
+    // An inspector that held nothing before the seed belongs to a reader who
+    // did not open it: the decision's tabs land on the rail collapsed. Any
+    // other inspector already carries the reader's own expand or collapse,
+    // which persists across pages, so the seed leaves it alone.
+    const seedsIntoEmptyInspector = store.tabs.length === 0;
+    store.openView({
+      ...createCaseDecisionDetailsTab({
         caseNumber: decision.caseNumber,
         country: decision.country,
         court: decision.court,
@@ -242,9 +252,13 @@ const DecisionDetailsTab = ({
         languageAlternates: decision.languageAlternates,
         slug: decision.slug,
       }),
-    );
+      pane: INSPECTOR_PANE_INTENT.keep,
+    });
     if (keepActive !== null) {
       store.setActive(keepActive);
+    }
+    if (seedsIntoEmptyInspector) {
+      store.setMinimized(true);
     }
   });
   return null;
