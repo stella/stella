@@ -15,7 +15,7 @@ import {
   createAuditRecorder,
 } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import {
   consumeDesktopEditHandoff,
   createDesktopEditHandoffSafeDb,
@@ -66,7 +66,7 @@ export const createDesktopEditHandoffBodySchema = t.Object({
   propertyId: tSafeId("property"),
 });
 
-export const desktopEditHandoffStatusParamsSchema = t.Object({
+export const desktopEditHandoffStatusParamsSchema = workspaceParams({
   handoffId: tSafeId("desktopEditHandoff"),
 });
 

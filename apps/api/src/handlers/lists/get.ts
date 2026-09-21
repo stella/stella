@@ -1,15 +1,14 @@
 import { Result } from "better-result";
 import { and, asc, eq } from "drizzle-orm";
-import { t } from "elysia";
 
 import { legalListColumns, legalListItems, properties } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
-const paramsSchema = t.Object({ listId: tSafeId("legalList") });
+const paramsSchema = workspaceParams({ listId: tSafeId("legalList") });
 
 const config = {
   description:

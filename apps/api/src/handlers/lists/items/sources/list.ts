@@ -5,7 +5,11 @@ import { t } from "elysia";
 import { legalListItemSources } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tPaginationCursor, tSafeId } from "@/api/lib/custom-schema";
+import {
+  tPaginationCursor,
+  tSafeId,
+  workspaceParams,
+} from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -16,7 +20,7 @@ import {
 } from "@/api/lib/pagination";
 import { brandPersistedLegalListItemSourceId } from "@/api/lib/safe-id-boundaries";
 
-const paramsSchema = t.Object({
+const paramsSchema = workspaceParams({
   listId: tSafeId("legalList"),
   itemEntityId: tSafeId("entity"),
 });
