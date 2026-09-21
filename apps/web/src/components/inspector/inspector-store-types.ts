@@ -244,7 +244,7 @@ export const INSPECTOR_PANE_INTENT = {
   keep: "keep",
 } as const;
 
-export type InspectorPaneIntent =
+type InspectorPaneIntent =
   (typeof INSPECTOR_PANE_INTENT)[keyof typeof INSPECTOR_PANE_INTENT];
 
 export type InspectorTabsActions = {
