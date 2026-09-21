@@ -46,7 +46,8 @@
     "install": {
       "exclude": [
         "react",
-        "react-dom"
+        "react-dom",
+        "react-native-safe-area-context"
       ]
     }
   }
