@@ -119,7 +119,7 @@ zbus-secret-service-keyring-store = { version = "1", features = [
 
 [target.'cfg(target_os = "macos")'.dependencies]
 apple-native-keyring-store = { version = "1", features = ["keychain"] }
-icns = { version = "0.4", default-features = false, features = ["pngio"] }
+icns = { version = "0.5", default-features = false, features = ["pngio"] }
 objc2 = "0.6"
 objc2-app-kit = { version = "0.3", default-features = false, features = [
   "NSApplication",
