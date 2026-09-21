@@ -641,7 +641,8 @@
     "corpusStatus": {
       "courtCount": "{count, plural, one {# bíróság} other {# bíróság}}",
       "newLast24Hours": "{count} az elmúlt 24 órában",
-      "newLast7Days": "Új az elmúlt 7 napban"
+      "newLast7Days": "Új az elmúlt 7 napban",
+      "unlistedCourts": "{count, plural, one {A legnagyobbon kívüli bíróságok} other {A # legnagyobbon kívüli bíróságok}}"
     },
     "courtTiers": {
       "constitutional": "Alkotmánybíróságok",

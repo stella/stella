@@ -641,7 +641,8 @@
     "corpusStatus": {
       "courtCount": "{count, plural, one {# kohus} other {# kohut}}",
       "newLast24Hours": "{count} viimase 24 h jooksul",
-      "newLast7Days": "Uued viimase 7 päeva jooksul"
+      "newLast7Days": "Uued viimase 7 päeva jooksul",
+      "unlistedCourts": "{count, plural, one {Kohtud väljaspool suurimat} other {Kohtud väljaspool # suurimat}}"
     },
     "courtTiers": {
       "constitutional": "Põhiseaduslikkuse järelevalve kohtud",

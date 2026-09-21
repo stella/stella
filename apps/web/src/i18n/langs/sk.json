@@ -641,7 +641,8 @@
     "corpusStatus": {
       "courtCount": "{count, plural, one {# súd} few {# súdy} many {# súdu} other {# súdov}}",
       "newLast24Hours": "{count} za posledných 24 h",
-      "newLast7Days": "Nové za posledných 7 dní"
+      "newLast7Days": "Nové za posledných 7 dní",
+      "unlistedCourts": "{count, plural, one {Súdy mimo najväčšieho súdu} few {Súdy mimo # najväčších} other {Súdy mimo # najväčších}}"
     },
     "courtTiers": {
       "constitutional": "Ústavné súdy",
@@ -672,12 +673,12 @@
       "publisherTotal": "Celkom podľa vydavateľa",
       "reportedByOperator": "Zadané ručne",
       "reportedByPublisher": "Vlastný údaj vydavateľa",
-      "searchable": "Vyhľadateľné",
+      "searchable": "Dostupné na vyhľadanie",
       "searchableHint": "Rozhodnutia, ktoré nájde vyhľadávanie.",
       "sourcesHeading": "Odkiaľ rozhodnutia pochádzajú",
       "staleSources": "{count, plural, one {# neaktuálny údaj} few {# neaktuálne údaje} other {# neaktuálnych údajov}}",
       "stored": "Uložené",
-      "storedHint": "Rozhodnutia v korpuse, zatiaľ nevyhľadateľné.",
+      "storedHint": "Rozhodnutia v korpuse, zatiaľ nedostupné na vyhľadanie.",
       "title": "Pokrytie judikatúry",
       "totalFrom": "Celkom k {date}",
       "unavailable": "Údaje o pokrytí momentálne nie sú k dispozícii."

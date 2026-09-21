@@ -134,7 +134,11 @@ type CorpusStatusLoad = CorpusUpdatedAtRead & {
    * window like any other answer.
    */
   readCourts: (
-    read: CorpusUpdatedAtRead & { buckets: readonly FacetBucket[] },
+    read: CorpusUpdatedAtRead & {
+      buckets: readonly FacetBucket[];
+      /** The jurisdiction's searchable count, which the rows sum to. */
+      total: number;
+    },
   ) => Promise<readonly CaseLawCourtStatusRow[]>;
 };
 
@@ -189,7 +193,12 @@ export const loadCaseLawCorpusStatus = async ({
   // the empty corpus, not a missed lookup.
   const bucket = browseFacets.country.find(({ value }) => value === country);
   const courts = await Result.tryPromise({
-    try: async () => await readCourts({ ...read, buckets: browseFacets.court }),
+    try: async () =>
+      await readCourts({
+        ...read,
+        buckets: browseFacets.court,
+        total: bucket?.count ?? 0,
+      }),
     catch: corpusStatusError("reading the per-court breakdown failed"),
   });
   if (Result.isError(courts)) {
@@ -262,7 +271,7 @@ export const readCaseLawCorpusStatusHandler = async (
       await caseLawDb(
         async (tx) => await readCaseLawCorpusStatusQuery(tx, read),
       ),
-    readCourts: async ({ buckets, ...read }) => {
+    readCourts: async ({ buckets, total, ...read }) => {
       // The facet limit again, defensively: the statement's cost is one pair
       // of index probes per court, and the provider decides how many buckets
       // it returns.
@@ -283,6 +292,7 @@ export const readCaseLawCorpusStatusHandler = async (
         buckets: named,
         country: read.country,
         courtWeights,
+        total,
       });
     },
   });

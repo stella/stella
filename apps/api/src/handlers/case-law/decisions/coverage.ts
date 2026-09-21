@@ -284,6 +284,8 @@ type CoverageLoad = {
   readCourts: (options: {
     country: string;
     buckets: LegalBrowseFacets["court"];
+    /** The country's searchable count, which the rows are made to sum to. */
+    total: number;
   }) => Promise<readonly CaseLawCourtStatusRow[]>;
 };
 
@@ -450,6 +452,7 @@ export const loadCaseLawCoverage = async ({
         await readCourts({
           country,
           buckets: facets.value.court.slice(0, LIMITS.caseLawFacetLimit),
+          total: searchable,
         }),
       catch: coverageError("reading the per-court breakdown failed"),
     });
@@ -531,7 +534,7 @@ export const readCaseLawCoverageHandler = async (
         country,
         excludedSourceIds: excludedSourceIds.value,
       }),
-    readCourts: async ({ buckets, country }) => {
+    readCourts: async ({ buckets, country, total }) => {
       const [courtWeights, activity] = await Promise.all([
         loadCourtWeights(),
         caseLawDb(
@@ -549,6 +552,7 @@ export const readCaseLawCoverageHandler = async (
         buckets,
         country,
         courtWeights,
+        total,
       });
     },
   });

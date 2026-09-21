@@ -258,6 +258,30 @@ describe("the coverage page states what it counts", () => {
     expect(markup).not.toContain(">0<");
   });
 
+  test("the courts beyond the listed ones close the breakdown as one row", () => {
+    const markup = render(
+      <CaseLawCoveragePage
+        coverage={{
+          ...COVERAGE,
+          countries: [
+            {
+              ...CZECHIA,
+              courts: [
+                ...(CZECHIA.courts ?? []),
+                { type: "unlisted", tier: "other", listed: 2, decisions: 480 },
+              ],
+            },
+          ],
+        }}
+      />,
+    );
+
+    // The row names how many courts were listed, carries the rest of the
+    // count, and states no activity, because none was read for it.
+    expect(markup).toContain("Courts beyond the 2 largest");
+    expect(markup).toContain("480");
+  });
+
   test("a court breakdown the endpoint could not read says so", () => {
     const markup = render(
       <CaseLawCoveragePage

@@ -641,7 +641,8 @@
     "corpusStatus": {
       "courtCount": "{count, plural, one {# soud} few {# soudy} many {# soudu} other {# soudů}}",
       "newLast24Hours": "{count} za posledních 24 h",
-      "newLast7Days": "Nové za posledních 7 dní"
+      "newLast7Days": "Nové za posledních 7 dní",
+      "unlistedCourts": "{count, plural, one {Soudy mimo největší soud} few {Soudy mimo # největší} other {Soudy mimo # největších}}"
     },
     "courtTiers": {
       "constitutional": "Ústavní soudy",
@@ -672,12 +673,12 @@
       "publisherTotal": "Celkem podle vydavatele",
       "reportedByOperator": "Zadáno ručně",
       "reportedByPublisher": "Vlastní údaj vydavatele",
-      "searchable": "Vyhledatelné",
+      "searchable": "Dostupné k vyhledání",
       "searchableHint": "Rozhodnutí, která najde vyhledávání.",
       "sourcesHeading": "Odkud rozhodnutí pocházejí",
       "staleSources": "{count, plural, one {# neaktuální údaj} few {# neaktuální údaje} other {# neaktuálních údajů}}",
       "stored": "Uložené",
-      "storedHint": "Rozhodnutí v korpusu, zatím nevyhledatelná.",
+      "storedHint": "Rozhodnutí v korpusu, zatím nedostupná k vyhledání.",
       "title": "Pokrytí judikatury",
       "totalFrom": "Celkem k {date}",
       "unavailable": "Údaje o pokrytí nejsou momentálně k dispozici."

@@ -641,7 +641,8 @@
     "corpusStatus": {
       "courtCount": "{count, plural, zero {لا محاكم} one {محكمة واحدة} two {محكمتان} few {# محاكم} many {# محكمة} other {# محكمة}}",
       "newLast24Hours": "{count} خلال آخر 24 ساعة",
-      "newLast7Days": "الجديد خلال آخر 7 أيام"
+      "newLast7Days": "الجديد خلال آخر 7 أيام",
+      "unlistedCourts": "{count, plural, zero {المحاكم غير المدرجة} one {المحاكم خارج أكبر محكمة} two {المحاكم خارج أكبر محكمتين} few {المحاكم خارج أكبر # محاكم} many {المحاكم خارج أكبر # محكمة} other {المحاكم خارج أكبر # محكمة}}"
     },
     "courtTiers": {
       "constitutional": "المحاكم الدستورية",

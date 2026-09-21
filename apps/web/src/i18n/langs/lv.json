@@ -641,7 +641,8 @@
     "corpusStatus": {
       "courtCount": "{count, plural, zero {# tiesu} one {# tiesa} other {# tiesas}}",
       "newLast24Hours": "{count} pēdējās 24 h",
-      "newLast7Days": "Jaunie pēdējās 7 dienās"
+      "newLast7Days": "Jaunie pēdējās 7 dienās",
+      "unlistedCourts": "{count, plural, zero {Tiesas ārpus # lielākajām} one {Tiesas ārpus lielākās} other {Tiesas ārpus # lielākajām}}"
     },
     "courtTiers": {
       "constitutional": "Konstitucionālās tiesas",

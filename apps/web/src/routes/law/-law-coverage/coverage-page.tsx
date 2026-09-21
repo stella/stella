@@ -18,7 +18,7 @@ import {
 import { cn } from "@stll/ui/utils";
 
 import { caseLawCountryName } from "@/features/case-law/components/case-law-search";
-import { CourtName } from "@/features/case-law/components/court-name";
+import { CourtRowLabel } from "@/features/case-law/components/court-row-label";
 import {
   courtTierRowKey,
   groupCourtRowsByTier,
@@ -856,36 +856,30 @@ const CourtsTable = ({ courts }: { courts: SearchableCountry["courts"] }) => {
 };
 
 const CourtRowCells = ({ row, tier }: { row: CourtRow; tier: CourtTier }) => {
-  const t = useTranslations();
   const format = useFormatter();
   const relativeTime = useRelativeTime();
+  // The row for the courts beyond the listed ones carries no activity: none
+  // was read for courts the facets do not name.
+  const activity = row.type === "unlisted" ? null : row;
 
   return (
     <TableRow>
       <TableHead
-        className={"text-foreground h-auto max-w-56 font-normal"}
+        className="text-foreground h-auto max-w-56 font-normal"
         scope="row"
       >
-        {row.type === "court" ? (
-          <CourtName
-            abbreviation={row.courtAbbreviation}
-            court={row.court}
-            tier={tier}
-          />
-        ) : (
-          <span className="text-muted-foreground">
-            {t("caseLaw.corpusStatus.courtCount", { count: row.courts })}
-          </span>
-        )}
+        <CourtRowLabel row={row} tier={tier} />
       </TableHead>
-      <TableCell className={"text-end tabular-nums"}>
+      <TableCell className="text-end tabular-nums">
         {format.number(row.decisions)}
       </TableCell>
-      <TableCell className={"text-end"}>
-        <Delta value={row.addedLastWeek} />
+      <TableCell className="text-end">
+        <Delta value={activity === null ? null : activity.addedLastWeek} />
       </TableCell>
-      <TableCell className={"text-muted-foreground text-end"}>
-        {row.updatedAt === null ? NO_VALUE : relativeTime(row.updatedAt)}
+      <TableCell className="text-muted-foreground text-end">
+        {activity === null || activity.updatedAt === null
+          ? NO_VALUE
+          : relativeTime(activity.updatedAt)}
       </TableCell>
     </TableRow>
   );

@@ -645,6 +645,7 @@ type Messages = {
       "courtCount": "{count, plural, one {# court} other {# courts}}";
       "newLast24Hours": "{count} in the last 24 h";
       "newLast7Days": "New in the last 7 days";
+      "unlistedCourts": "{count, plural, one {Courts beyond the largest one} other {Courts beyond the # largest}}";
     };
     "courtTiers": {
       "constitutional": "Constitutional courts";

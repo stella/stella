@@ -641,7 +641,8 @@
     "corpusStatus": {
       "courtCount": "{count, plural, one {# Gericht} other {# Gerichte}}",
       "newLast24Hours": "{count} in den letzten 24 h",
-      "newLast7Days": "Neu in den letzten 7 Tagen"
+      "newLast7Days": "Neu in den letzten 7 Tagen",
+      "unlistedCourts": "{count, plural, one {Gerichte jenseits des größten} other {Gerichte jenseits der # größten}}"
     },
     "courtTiers": {
       "constitutional": "Verfassungsgerichte",

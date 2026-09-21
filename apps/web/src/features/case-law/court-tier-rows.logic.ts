@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import {
   type CourtTier,
   isCourtTier,
@@ -39,7 +41,26 @@ export const groupCourtRowsByTier = <TRow extends { tier: string }>(
   return [...rowsByTier].map(([tier, rows]) => ({ rows, tier }));
 };
 
-/** A row's identity within a breakdown; a tier row stands for its whole tier. */
+/**
+ * A row's identity within a breakdown; a tier row stands for its whole tier,
+ * and the row for the courts beyond the listed ones stands beside that tier.
+ */
 export const courtTierRowKey = (
-  row: { type: "court"; court: string } | { type: "tier"; tier: string },
-): string => (row.type === "court" ? row.court : row.tier);
+  row:
+    | { type: "court"; court: string }
+    | { type: "tier"; tier: string }
+    | { type: "unlisted"; tier: string },
+): string => {
+  switch (row.type) {
+    case "court":
+      return row.court;
+    case "tier":
+      return row.tier;
+    case "unlisted":
+      return `${row.tier}:unlisted`;
+    default: {
+      row satisfies never;
+      return panic("Unhandled case-law court row type");
+    }
+  }
+};

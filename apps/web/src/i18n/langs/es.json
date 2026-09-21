@@ -641,7 +641,8 @@
     "corpusStatus": {
       "courtCount": "{count, plural, one {# tribunal} other {# tribunales}}",
       "newLast24Hours": "{count} en las últimas 24 h",
-      "newLast7Days": "Nuevas en los últimos 7 días"
+      "newLast7Days": "Nuevas en los últimos 7 días",
+      "unlistedCourts": "{count, plural, one {Tribunales fuera del mayor} other {Tribunales fuera de los # mayores}}"
     },
     "courtTiers": {
       "constitutional": "Tribunales constitucionales",

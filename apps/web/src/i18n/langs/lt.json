@@ -641,7 +641,8 @@
     "corpusStatus": {
       "courtCount": "{count, plural, one {# teismas} few {# teismai} many {# teismo} other {# teismų}}",
       "newLast24Hours": "{count} per pastarąsias 24 val.",
-      "newLast7Days": "Nauji per pastarąsias 7 dienas"
+      "newLast7Days": "Nauji per pastarąsias 7 dienas",
+      "unlistedCourts": "{count, plural, one {Teismai už didžiausio ribų} few {Teismai už # didžiausių ribų} other {Teismai už # didžiausių ribų}}"
     },
     "courtTiers": {
       "constitutional": "Konstituciniai teismai",

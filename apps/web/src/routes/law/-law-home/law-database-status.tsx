@@ -12,7 +12,7 @@ import {
 import { cn } from "@stll/ui/utils";
 
 import { caseLawCountryName } from "@/features/case-law/components/case-law-search";
-import { CourtName } from "@/features/case-law/components/court-name";
+import { CourtRowLabel } from "@/features/case-law/components/court-row-label";
 import {
   courtTierRowKey,
   groupCourtRowsByTier,
@@ -189,20 +189,14 @@ const CourtRowCells = ({ row, tier }: { row: CourtRow; tier: CourtTier }) => {
   const format = useFormatter();
   const relativeTime = useRelativeTime();
 
+  // The row for the courts beyond the listed ones carries no activity: none
+  // was read for courts the facets do not name.
+  const activity = row.type === "unlisted" ? null : row;
+
   return (
     <tr>
       <th className="max-w-56 px-1 py-0.5 text-start font-normal" scope="row">
-        {row.type === "court" ? (
-          <CourtName
-            abbreviation={row.courtAbbreviation}
-            court={row.court}
-            tier={tier}
-          />
-        ) : (
-          <span className="text-muted-foreground">
-            {t("caseLaw.corpusStatus.courtCount", { count: row.courts })}
-          </span>
-        )}
+        <CourtRowLabel row={row} tier={tier} />
       </th>
       <td className="px-1 py-0.5 text-end tabular-nums">
         {format.number(row.decisions)}
@@ -212,22 +206,29 @@ const CourtRowCells = ({ row, tier }: { row: CourtRow; tier: CourtTier }) => {
           "px-1 py-0.5 text-end tabular-nums",
           // A quiet week is a fact, not an absence, so the zero stays on the
           // row; it recedes instead of competing with the courts that moved.
-          row.addedLastWeek === 0 && "text-muted-foreground",
+          (activity === null || activity.addedLastWeek === 0) &&
+            "text-muted-foreground",
         )}
       >
         {/* Signed, so the column reads as a delta rather than a second
             total; a quiet week shows a plain 0 rather than "+0". */}
-        {format.number(row.addedLastWeek, { signDisplay: "exceptZero" })}
-        {row.addedLastDay > 0 && (
+        {activity === null
+          ? "—"
+          : format.number(activity.addedLastWeek, {
+              signDisplay: "exceptZero",
+            })}
+        {activity !== null && activity.addedLastDay > 0 && (
           <span className="text-muted-foreground block">
             {t("caseLaw.corpusStatus.newLast24Hours", {
-              count: format.number(row.addedLastDay),
+              count: format.number(activity.addedLastDay),
             })}
           </span>
         )}
       </td>
       <td className="text-muted-foreground px-1 py-0.5 text-end whitespace-nowrap">
-        {row.updatedAt === null ? "—" : relativeTime(row.updatedAt)}
+        {activity === null || activity.updatedAt === null
+          ? "—"
+          : relativeTime(activity.updatedAt)}
       </td>
     </tr>
   );
