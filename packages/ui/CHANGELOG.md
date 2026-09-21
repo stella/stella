@@ -1,5 +1,11 @@
 # @stll/ui
 
+## 0.34.1
+
+### Patch Changes
+
+- [#3629](https://github.com/stella/stella/pull/3629) [`fb26894`](https://github.com/stella/stella/commit/fb26894adbb0596be16e30c17b293f41058fe518) Thanks [@dependabot](https://github.com/apps/dependabot)! - Raise the `@tanstack/react-virtual` peer dependency floor used by `@stll/ui`.
+
 ## 0.34.0
 
 ### Minor Changes
