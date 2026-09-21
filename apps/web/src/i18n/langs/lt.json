@@ -659,7 +659,6 @@
       "description": "Kiek teismų praktikos yra korpuse pagal valstybes ir teismus ir kiek atnaujintas kiekvienas šaltinis.",
       "exceedsReportedTotal": "Turi daugiau, nei paskutinis skelbėjo nurodytas skaičius {date}",
       "generatedAt": "Duomenys {date}",
-      "globeLabel": "Valstybės, kurių teismų praktiką turi korpusas, gaublyje",
       "healthCurrent": "Atnaujinta",
       "healthDelayed": "Vėluoja",
       "healthDisabled": "Išjungta",

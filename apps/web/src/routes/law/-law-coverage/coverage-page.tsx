@@ -3,7 +3,6 @@ import { type PropsWithChildren, type ReactNode, useId } from "react";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
-import { isCountryCode } from "@stll/country-codes";
 import { ReviewStatusDot } from "@stll/ui/review-severity-dot";
 import { ReviewStatusBadge } from "@stll/ui/review-status-badge";
 import { ScrollArea } from "@stll/ui/scroll-area";
@@ -18,8 +17,6 @@ import {
 } from "@stll/ui/table";
 import { cn } from "@stll/ui/utils";
 
-import { Globe, type GlobeMarker } from "@/components/globe";
-import { caseLawCountryRegion } from "@/features/case-law/case-law-jurisdiction";
 import { caseLawCountryName } from "@/features/case-law/components/case-law-search";
 import { CourtRowLabel } from "@/features/case-law/components/court-row-label";
 import { courtTierRowKey } from "@/features/case-law/court-tier-rows.logic";
@@ -32,7 +29,6 @@ import {
   useLocale,
   useRelativeTime,
 } from "@/i18n/formatting-context";
-import { COUNTRY_CENTROIDS } from "@/lib/country-centroids";
 import { parseDeterministicDate } from "@/lib/deterministic-date";
 import {
   CALENDAR_DATE_FORMAT,
@@ -133,10 +129,7 @@ export const CaseLawCoveragePage = ({
         </p>
       </CoverageHeading>
 
-      <div className="flex flex-wrap items-center gap-x-10 gap-y-4">
-        <CoverageGlobe countries={coverage.countries} />
-        <Headline>{format.number(coverage.totals.searchable)}</Headline>
-      </div>
+      <Headline>{format.number(coverage.totals.searchable)}</Headline>
 
       {countries.map((country) => (
         <CountrySection country={country} key={country.country} />
@@ -159,15 +152,9 @@ export const CaseLawCoveragePending = () => {
         <Skeleton className="h-3 w-48" />
       </CoverageHeading>
 
-      <div className="flex flex-wrap items-center gap-x-10 gap-y-4">
-        <Skeleton
-          className="rounded-full"
-          style={{ width: GLOBE_SIZE, height: GLOBE_SIZE }}
-        />
-        <Headline>
-          <Skeleton className="h-10 w-48" />
-        </Headline>
-      </div>
+      <Headline>
+        <Skeleton className="h-12 w-56" />
+      </Headline>
 
       {PENDING_SECTION_KEYS.map((section) => (
         <CountryCard
@@ -234,79 +221,6 @@ const CoverageHeading = ({ children }: PropsWithChildren) => {
       {children}
     </header>
   );
-};
-
-/** The globe's side, sized to lead the page beside the headline. */
-const GLOBE_SIZE = 320;
-
-/** Cropped past the rim, so the sphere reads as near rather than as a bead. */
-const GLOBE_SCALE = 1.35;
-
-/** The smallest blot, for a country the corpus holds but cannot search yet. */
-const MARKER_MIN = 0.05;
-
-/** How much the largest searchable corpus adds to its blot on top of the minimum. */
-const MARKER_RANGE = 0.15;
-
-/**
- * Where the corpus holds case law, as blue blots on the shared globe: each
- * searchable country sized by the square root of its share of the largest,
- * so a corpus a tenth the size still reads, and each country in preparation
- * as the smallest blot. The sphere keeps turning; the reader sees every
- * country come round.
- *
- * The EU sits at the Court of Justice's seat: the corpus is one court's,
- * not a continent's.
- */
-const CoverageGlobe = ({
-  countries,
-}: {
-  countries: readonly CaseLawCoverageCountry[];
-}) => {
-  const t = useTranslations();
-  const largest = Math.max(
-    0,
-    ...countries.map((country) =>
-      country.availability === "searchable" ? country.searchable : 0,
-    ),
-  );
-  const markers = countries.flatMap<GlobeMarker>((country) => {
-    const point = caseLawCountryPoint(country.country);
-    if (point === null) {
-      return [];
-    }
-    const share =
-      country.availability === "searchable" && largest > 0
-        ? Math.sqrt(country.searchable / largest)
-        : 0;
-    return [{ location: point, size: MARKER_MIN + MARKER_RANGE * share }];
-  });
-
-  return (
-    <Globe
-      focusLongitude={null}
-      label={t("caseLaw.coverage.globeLabel")}
-      markers={markers}
-      scale={GLOBE_SCALE}
-      size={GLOBE_SIZE}
-    />
-  );
-};
-
-/** The seat of the Court of Justice of the European Union. */
-const CJEU_SEAT: [number, number] = [49.62, 6.13];
-
-/** A case-law jurisdiction's place on the globe, or null for one with none. */
-const caseLawCountryPoint = (country: string): [number, number] | null => {
-  if (country === "EU") {
-    return CJEU_SEAT;
-  }
-  const region = caseLawCountryRegion(country);
-  if (region === null || !isCountryCode(region)) {
-    return null;
-  }
-  const [lat, lon] = COUNTRY_CENTROIDS[region];
-  return [lat, lon];
 };
 
 /**

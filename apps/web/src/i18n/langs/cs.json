@@ -659,7 +659,6 @@
       "description": "Kolik judikatury korpus obsahuje podle států a soudů a jak aktuální je každý zdroj.",
       "exceedsReportedTotal": "Obsahuje víc, než vydavatel naposledy uvedl k {date}",
       "generatedAt": "Údaje k {date}",
-      "globeLabel": "Státy, jejichž judikaturu korpus obsahuje, na glóbu",
       "healthCurrent": "Aktuální",
       "healthDelayed": "Se zpožděním",
       "healthDisabled": "Vypnuto",

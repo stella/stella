@@ -659,7 +659,6 @@
       "description": "How much case law the corpus holds, per country and per court, and how fresh each source is.",
       "exceedsReportedTotal": "Holds more than the publisher's last stated total of {date}",
       "generatedAt": "Figures from {date}",
-      "globeLabel": "Countries whose case law the corpus holds, on a globe",
       "healthCurrent": "Up to date",
       "healthDelayed": "Delayed",
       "healthDisabled": "Switched off",
