@@ -333,7 +333,11 @@ const COLOR_BY_JURISDICTION = {
 const CountryLink = ({
   children,
   country,
-}: PropsWithChildren<{ country: CaseLawCoverageCountry }>) => {
+}: {
+  /** The name alone: a string, so returning it as is returns no promise. */
+  children: string;
+  country: CaseLawCoverageCountry;
+}) => {
   if (country.availability !== "searchable") {
     return children;
   }
