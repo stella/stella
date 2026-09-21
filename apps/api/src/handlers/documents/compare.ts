@@ -849,6 +849,13 @@ export const createDocumentCompareGenerator = (
         signal: comparisonSignal,
         userId: user.id,
       });
+      if (Result.isError(delivered)) {
+        captureError(delivered.error.cause, {
+          documentId,
+          stage: "document-compare.deliver",
+          step: delivered.error.step,
+        });
+      }
       await recordDownloadAudit({ changeCount: compared.changes.length, pair });
       return delivered;
     };
