@@ -311,6 +311,23 @@ describe("generateRouteMap: flag mapping (S3)", () => {
     expect(save?.flags.every((f) => !f.required)).toBe(true);
   });
 
+  test("a dot-path leaf is required only when both schema levels require it", () => {
+    // prepare_file_comparison requires `base` and every field inside it.
+    const prepare = findLeaf(tree, ["document", "comparison", "prepare"]);
+    expect(flagFor(prepare ?? errorSpec(), "--base.name")?.required).toBe(true);
+    expect(
+      flagFor(prepare ?? errorSpec(), "--target.sha256-hex")?.required,
+    ).toBe(true);
+    // prepare_file_comparison_from_links requires `base.url` but not `base.name`.
+    const links = findLeaf(tree, [
+      "document",
+      "comparison",
+      "prepare-from-links",
+    ]);
+    expect(flagFor(links ?? errorSpec(), "--base.url")?.required).toBe(true);
+    expect(flagFor(links ?? errorSpec(), "--base.name")?.required).toBe(false);
+  });
+
   test("required[] props become required flags", () => {
     const del = findLeaf(tree, ["matter", "delete"]);
     expect(flagFor(del ?? errorSpec(), "--matter-id")?.required).toBe(true);

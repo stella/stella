@@ -305,18 +305,31 @@ const candidatesForPart = ({
       }
       continue;
     }
-    const specs =
-      classification.kind === "flag"
-        ? [classification.spec]
-        : classification.children;
-    for (const spec of specs) {
-      const { flag, prop: partPath, ...base } = spec;
+    if (classification.kind === "flag") {
+      const { flag, prop: partPath, ...base } = classification.spec;
       candidates.push({
         part,
         partPath,
         baseFlag: flag,
         base,
-        required: classification.kind === "flag" ? required.has(prop) : false,
+        required: required.has(prop),
+      });
+      continue;
+    }
+    // A dot-path leaf is required only when the object prop is required and
+    // the child is required inside it; either side optional makes it optional.
+    for (const {
+      flag,
+      prop: partPath,
+      requiredInObject,
+      ...base
+    } of classification.children) {
+      candidates.push({
+        part,
+        partPath,
+        baseFlag: flag,
+        base,
+        required: required.has(prop) && requiredInObject,
       });
     }
   }

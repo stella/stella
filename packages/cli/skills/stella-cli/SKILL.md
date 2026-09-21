@@ -203,9 +203,16 @@ are omitted here.
   - `--output-mode` — preview compares without writing. download returns each redline as a temporary link and saves nothing to the document. version saves each redline as a derived version and needs a stored-version source. (enum: preview, download, version)
   - optional: --mode (strict|best-effort), --granularity (word|character)
 - `stella document comparison prepare`
-  - optional: --base.name, --base.size, --base.sha256-hex, --target.name, --target.size, --target.sha256-hex
+  - `--base.name` — File name to show the user, including the .docx suffix. (string)
+  - `--base.size` — Exact byte length of the file, at most 50 MB. (int 1..52428800)
+  - `--base.sha256-hex` — SHA-256 of the exact bytes you will PUT, as 64 hexadecimal characters. (string)
+  - `--target.name` — File name to show the user, including the .docx suffix. (string)
+  - `--target.size` — Exact byte length of the file, at most 50 MB. (int 1..52428800)
+  - `--target.sha256-hex` — SHA-256 of the exact bytes you will PUT, as 64 hexadecimal characters. (string)
 - `stella document comparison prepare-from-links`
-  - optional: --base.url, --base.name, --target.url, --target.name
+  - `--base.url` — HTTPS link the server downloads the .docx from. A share link that opens a web page is not the file; use the direct-download form. (string)
+  - `--target.url` — HTTPS link the server downloads the .docx from. A share link that opens a web page is not the file; use the direct-download form. (string)
+  - optional: --base.name, --target.name
 - `stella document content`
   - `--entity-id` — Entity ID (string)
 - `stella document delete`
