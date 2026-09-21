@@ -91,6 +91,37 @@ const isDependencyInGroup = (
   );
 
 describe("Dependabot dependency groups", () => {
+  test("keeps Expo packages on one SDK major", async () => {
+    const source = await Bun.file(
+      new URL("../.github/dependabot.yml", import.meta.url),
+    ).text();
+    const ignores = parseBunIgnores(source);
+    const expoMajorIgnores = ignores.filter(
+      (entry) =>
+        isRecord(entry) &&
+        ["expo", "expo-*", "@expo/*"].includes(
+          typeof entry["dependency-name"] === "string"
+            ? entry["dependency-name"]
+            : "",
+        ),
+    );
+
+    expect(expoMajorIgnores).toEqual([
+      {
+        "dependency-name": "expo",
+        "update-types": ["version-update:semver-major"],
+      },
+      {
+        "dependency-name": "expo-*",
+        "update-types": ["version-update:semver-major"],
+      },
+      {
+        "dependency-name": "@expo/*",
+        "update-types": ["version-update:semver-major"],
+      },
+    ]);
+  });
+
   test("keeps Expo-native screens on the SDK-supported minor", async () => {
     const source = await Bun.file(
       new URL("../.github/dependabot.yml", import.meta.url),

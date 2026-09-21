@@ -236,6 +236,17 @@ updates:
       - dependency-name: "elysia-rate-limit"
         update-types:
           - "version-update:semver-major"
+      # Expo packages ship as one SDK-coordinated major. Upgrade the complete
+      # SDK intentionally instead of mixing majors through partial PRs.
+      - dependency-name: "expo"
+        update-types:
+          - "version-update:semver-major"
+      - dependency-name: "expo-*"
+        update-types:
+          - "version-update:semver-major"
+      - dependency-name: "@expo/*"
+        update-types:
+          - "version-update:semver-major"
       # Expo SDK 57 requires react-native-screens ~4.26.0. Remove this guard
       # when Expo's supported range advances to 4.27 or newer.
       - dependency-name: "react-native-screens"
