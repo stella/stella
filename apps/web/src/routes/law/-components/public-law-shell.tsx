@@ -57,7 +57,7 @@ const readStringField = (value: unknown, field: string): string | null => {
 };
 
 /** Which corpus a route belongs to, read from its id; the home belongs to neither. */
-type LawSection = "decisions" | "statutes";
+type LawSection = "coverage" | "decisions" | "statutes";
 
 const sectionOfRoute = (routeId: string | undefined): LawSection | null => {
   if (routeId === undefined) {
@@ -68,6 +68,9 @@ const sectionOfRoute = (routeId: string | undefined): LawSection | null => {
   }
   if (routeId.includes("/cases")) {
     return "decisions";
+  }
+  if (routeId.includes("/coverage")) {
+    return "coverage";
   }
   return null;
 };
@@ -210,6 +213,16 @@ function PublicLawTopBar() {
                 >
                   {t("statutes.title")}
                 </Link>
+              </BreadcrumbItem>
+            </>
+          )}
+          {section === "coverage" && (
+            <>
+              <BreadcrumbSeparator />
+              <BreadcrumbItem>
+                <BreadcrumbPage className="font-medium">
+                  {t("caseLaw.coverage.title")}
+                </BreadcrumbPage>
               </BreadcrumbItem>
             </>
           )}

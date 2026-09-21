@@ -1,8 +1,10 @@
 import { type PropsWithChildren, type ReactNode, useId } from "react";
 
+import { Link } from "@tanstack/react-router";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import type { CaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
 import { ReviewStatusDot } from "@stll/ui/review-severity-dot";
 import { ReviewStatusBadge } from "@stll/ui/review-status-badge";
 import { ScrollArea } from "@stll/ui/scroll-area";
@@ -17,6 +19,8 @@ import {
 } from "@stll/ui/table";
 import { cn } from "@stll/ui/utils";
 
+import { Globe, type GlobeMarker } from "@/components/globe";
+import { toCaseLawCountryParam } from "@/features/case-law/case-law-jurisdiction";
 import { caseLawCountryName } from "@/features/case-law/components/case-law-search";
 import { CourtRowLabel } from "@/features/case-law/components/court-row-label";
 import { courtTierRowKey } from "@/features/case-law/court-tier-rows.logic";
@@ -73,11 +77,44 @@ const DELTA_FORMAT = {
 /** Column headers on a tight row, one line each. */
 const HEAD_CLASS = "h-8 text-xs";
 
-/** Source, status, last sync, new in seven days, completeness. */
-const SOURCE_COLUMN_COUNT = 5;
+/**
+ * Source, status, last sync, new in seven days, completeness. Fixed widths,
+ * shared by every country's table: sized to their own content, the same
+ * column would sit at a different place under each country and the eye
+ * would have to find it again.
+ */
+const SOURCE_COLUMNS = [
+  { key: "source", width: "40%" },
+  { key: "status", width: "14%" },
+  { key: "lastSync", width: "16%" },
+  { key: "newLastWeek", width: "14%" },
+  { key: "completeness", width: "16%" },
+] as const satisfies readonly TableColumn[];
 
 /** Court, decisions, new in seven days, last updated. */
-const COURT_COLUMN_COUNT = 4;
+const COURT_COLUMNS = [
+  { key: "court", width: "46%" },
+  { key: "decisions", width: "18%" },
+  { key: "newLastWeek", width: "18%" },
+  { key: "lastUpdated", width: "18%" },
+] as const satisfies readonly TableColumn[];
+
+const SOURCE_COLUMN_COUNT = SOURCE_COLUMNS.length;
+const COURT_COLUMN_COUNT = COURT_COLUMNS.length;
+
+/** The fixed column layout every table on the page shares. */
+const TABLE_CLASS = "table-fixed";
+
+type TableColumn = { key: string; width: string };
+
+/** The columns' widths, declared once for the real table and its pending twin. */
+const TableColumns = ({ columns }: { columns: readonly TableColumn[] }) => (
+  <colgroup>
+    {columns.map(({ key, width }) => (
+      <col key={key} style={{ width }} />
+    ))}
+  </colgroup>
+);
 
 /** Stable keys so the rows held open while the figures load never key by index. */
 const PENDING_ROW_KEYS = ["a", "b", "c", "d"] as const;
@@ -129,7 +166,13 @@ export const CaseLawCoveragePage = ({
         </p>
       </CoverageHeading>
 
-      <Headline>{format.number(coverage.totals.searchable)}</Headline>
+      <Hero>
+        <Headline>{format.number(coverage.totals.searchable)}</Headline>
+        <CoverageGlobe
+          countries={coverage.countries}
+          total={coverage.totals.searchable}
+        />
+      </Hero>
 
       {countries.map((country) => (
         <CountrySection country={country} key={country.country} />
@@ -152,9 +195,20 @@ export const CaseLawCoveragePending = () => {
         <Skeleton className="h-3 w-48" />
       </CoverageHeading>
 
-      <Headline>
-        <Skeleton className="h-12 w-56" />
-      </Headline>
+      <Hero>
+        <Headline>
+          <Skeleton className="h-16 w-80" />
+        </Headline>
+        <Skeleton
+          className="rounded-full"
+          style={{ width: GLOBE_SIZE, height: GLOBE_SIZE }}
+        />
+        <div className="flex flex-col gap-2">
+          {PENDING_ROW_KEYS.map((row) => (
+            <Skeleton className="h-4 w-44" key={row} />
+          ))}
+        </div>
+      </Hero>
 
       {PENDING_SECTION_KEYS.map((section) => (
         <CountryCard
@@ -166,7 +220,8 @@ export const CaseLawCoveragePending = () => {
           }
           key={section}
         >
-          <Table>
+          <Table className={TABLE_CLASS}>
+            <TableColumns columns={SOURCE_COLUMNS} />
             <SourcesTableHead />
             <TableBody>
               {PENDING_ROW_KEYS.map((row) => (
@@ -179,6 +234,7 @@ export const CaseLawCoveragePending = () => {
             </TableBody>
           </Table>
           <TableBlock title={t("caseLaw.coverage.courtsHeading")}>
+            <TableColumns columns={COURT_COLUMNS} />
             <CourtsTableHead />
             <TableBody>
               {PENDING_ROW_KEYS.map((row) => (
@@ -214,12 +270,158 @@ const CoverageHeading = ({ children }: PropsWithChildren) => {
   const t = useTranslations();
 
   return (
-    <header className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
-      <h1 className="text-lg font-semibold text-balance">
-        {t("caseLaw.coverage.title")}
-      </h1>
+    // The breadcrumb names the page, so the heading is for the document
+    // outline and a screen reader; what shows is when the figures were taken.
+    <header className="flex justify-end">
+      <h1 className="sr-only">{t("caseLaw.coverage.title")}</h1>
       {children}
     </header>
+  );
+};
+
+/** The disc's side, beside the legend and the number. */
+const GLOBE_SIZE = 280;
+
+/** Zoomed on Central Europe; the disc clip hides the cropped rim. */
+const GLOBE_SCALE = 1.6;
+
+/** The longitude the sphere holds, so every capital faces the reader. */
+const EUROPE_LONGITUDE = 17;
+
+/** Leaned so Central Europe sits at the centre of the disc. */
+const EUROPE_TILT = 0.85;
+
+/** One pin per capital; the legend beside the globe carries the figures. */
+const CAPITAL_MARKER_SIZE = 0.05;
+
+/**
+ * Each case-law jurisdiction's capital, or the seat of its court, on the
+ * globe. Total over the jurisdictions, so a new one has to be placed here
+ * before this compiles and cannot arrive unpinned.
+ */
+const CAPITAL_BY_JURISDICTION = {
+  AUT: [48.21, 16.37],
+  CZE: [50.08, 14.44],
+  EU: [49.62, 6.13],
+  HUN: [47.5, 19.04],
+  POL: [52.23, 21.01],
+  SVK: [48.15, 17.11],
+} as const satisfies Record<CaseLawJurisdiction, readonly [number, number]>;
+
+/**
+ * Each jurisdiction's colour, on the pin and in the legend, taken from its
+ * flag: the EU's blue, the Czech red, the Slovak blue, the Hungarian green,
+ * the Polish and Austrian reds. Flags in this region are red, white and blue,
+ * so the reds cannot be told apart by colour alone; the legend's names and
+ * the capitals' places on the sphere carry the identity where the hue does
+ * not. Fixed per jurisdiction, so a country keeps its colour when another
+ * arrives.
+ */
+const COLOR_BY_JURISDICTION = {
+  AUT: "#ed2939",
+  CZE: "#d7141a",
+  EU: "#003399",
+  HUN: "#477050",
+  POL: "#dc143c",
+  SVK: "#0b4ea2",
+} as const satisfies Record<CaseLawJurisdiction, string>;
+
+/**
+ * A country's name as the way into its case list, where a search can reach
+ * it; a country in preparation has no list to open, so its name stays text.
+ */
+const CountryLink = ({
+  children,
+  country,
+}: PropsWithChildren<{ country: CaseLawCoverageCountry }>) => {
+  if (country.availability !== "searchable") {
+    return children;
+  }
+  return (
+    <Link
+      className="underline-offset-2 hover:underline"
+      search={{ country: toCaseLawCountryParam(country.country) }}
+      to="/law/cases"
+    >
+      {children}
+    </Link>
+  );
+};
+
+/** The number, the globe and its legend in one row; nothing wraps under the globe. */
+const Hero = ({ children }: PropsWithChildren) => (
+  <div className="grid grid-cols-[auto_auto_minmax(0,1fr)] items-center gap-x-10 gap-y-4">
+    {children}
+  </div>
+);
+
+/**
+ * Where the corpus holds case law: a pin on each capital, and beside the
+ * globe a legend naming each country with, where a search can find it, its
+ * count and share of everything searchable. The figures sit in the legend
+ * rather than on the pins: the capitals lie a few hundred kilometres apart,
+ * so labels on the sphere land on top of one another.
+ */
+const CoverageGlobe = ({
+  countries,
+  total,
+}: {
+  countries: readonly CaseLawCoverageCountry[];
+  total: number;
+}) => {
+  const t = useTranslations();
+  const format = useFormatter();
+  const markers = countries.map((country): GlobeMarker => ({
+    color: COLOR_BY_JURISDICTION[country.country],
+    location: [...CAPITAL_BY_JURISDICTION[country.country]],
+    size: CAPITAL_MARKER_SIZE,
+  }));
+
+  return (
+    <>
+      <Globe
+        className="overflow-hidden rounded-full"
+        focusLongitude={EUROPE_LONGITUDE}
+        label={t("caseLaw.coverage.globeLabel")}
+        markers={markers}
+        scale={GLOBE_SCALE}
+        size={GLOBE_SIZE}
+        tilt={EUROPE_TILT}
+      />
+      <ul className="flex flex-col gap-1.5 text-sm">
+        {countries.map((country) => (
+          <li className="flex items-baseline gap-2" key={country.country}>
+            <span
+              aria-hidden="true"
+              className="size-2 shrink-0 self-center rounded-full"
+              style={{
+                backgroundColor: COLOR_BY_JURISDICTION[country.country],
+              }}
+            />
+            <span className="font-medium">
+              <CountryLink country={country}>
+                {caseLawCountryName(format, country.country)}
+              </CountryLink>
+            </span>
+            {country.availability === "searchable" ? (
+              <span className="text-muted-foreground tabular-nums">
+                {format.number(country.searchable)}
+                {total > 0 && (
+                  <>
+                    {" · "}
+                    {format.number(country.searchable / total, PERCENT_FORMAT)}
+                  </>
+                )}
+              </span>
+            ) : (
+              <span className="text-muted-foreground">
+                {t("caseLaw.coverage.inPreparation")}
+              </span>
+            )}
+          </li>
+        ))}
+      </ul>
+    </>
   );
 };
 
@@ -231,7 +433,9 @@ const CoverageHeading = ({ children }: PropsWithChildren) => {
  * overlap it.
  */
 const Headline = ({ children }: PropsWithChildren) => (
-  <p className="text-5xl font-semibold tabular-nums">{children}</p>
+  <p className="text-7xl font-semibold tracking-tight tabular-nums">
+    {children}
+  </p>
 );
 
 /**
@@ -279,7 +483,9 @@ const TableBlock = ({ children, title }: TableBlockProps) => {
       <h3 className="text-sm font-medium" id={headingId}>
         {title}
       </h3>
-      <Table aria-labelledby={headingId}>{children}</Table>
+      <Table aria-labelledby={headingId} className={TABLE_CLASS}>
+        {children}
+      </Table>
     </div>
   );
 };
@@ -316,7 +522,9 @@ const CountrySection = ({ country }: { country: CaseLawCoverageCountry }) => {
       header={
         <>
           <h2 className="text-base font-semibold" id={headingId}>
-            {caseLawCountryName(format, country.country)}
+            <CountryLink country={country}>
+              {caseLawCountryName(format, country.country)}
+            </CountryLink>
           </h2>
           <ReviewStatusBadge
             tone={CASE_LAW_COVERAGE_AVAILABILITY_TONES[country.availability]}
@@ -348,7 +556,7 @@ const CountrySection = ({ country }: { country: CaseLawCoverageCountry }) => {
     >
       <SourcesTable sources={country.sources} />
       {country.availability === "searchable" && (
-        <CourtsTable courts={country.courts} />
+        <CourtsTable country={country.country} courts={country.courts} />
       )}
     </CountryCard>
   );
@@ -422,7 +630,8 @@ const SourcesTable = ({
   const relativeTime = useRelativeTime();
 
   return (
-    <Table>
+    <Table className={TABLE_CLASS}>
+      <TableColumns columns={SOURCE_COLUMNS} />
       <SourcesTableHead />
       <TableBody>
         {sources.map((source) => (
@@ -625,7 +834,13 @@ const CourtsTableHead = () => {
  * A breakdown the endpoint could not read says so in the table's place. An
  * empty table would claim the index names no court.
  */
-const CourtsTable = ({ courts }: { courts: SearchableCountry["courts"] }) => {
+const CourtsTable = ({
+  country,
+  courts,
+}: {
+  country: CaseLawJurisdiction;
+  courts: SearchableCountry["courts"];
+}) => {
   const t = useTranslations();
 
   if (courts === null) {
@@ -642,17 +857,28 @@ const CourtsTable = ({ courts }: { courts: SearchableCountry["courts"] }) => {
   }
   return (
     <TableBlock title={t("caseLaw.coverage.courtsHeading")}>
+      <TableColumns columns={COURT_COLUMNS} />
       <CourtsTableHead />
       <TableBody>
         {courts.map((row) => (
-          <CourtRowCells key={courtTierRowKey(row)} row={row} />
+          <CourtRowCells
+            country={country}
+            key={courtTierRowKey(row)}
+            row={row}
+          />
         ))}
       </TableBody>
     </TableBlock>
   );
 };
 
-const CourtRowCells = ({ row }: { row: CourtRow }) => {
+const CourtRowCells = ({
+  country,
+  row,
+}: {
+  country: CaseLawJurisdiction;
+  row: CourtRow;
+}) => {
   const format = useFormatter();
   const relativeTime = useRelativeTime();
   // The row for the courts beyond the listed ones carries no activity: none
@@ -665,7 +891,20 @@ const CourtRowCells = ({ row }: { row: CourtRow }) => {
         className="text-foreground h-auto max-w-56 font-normal"
         scope="row"
       >
-        <CourtRowLabel row={row} />
+        {row.type === "court" ? (
+          <Link
+            className="underline-offset-2 hover:underline"
+            search={{
+              country: toCaseLawCountryParam(country),
+              court: row.court,
+            }}
+            to="/law/cases"
+          >
+            <CourtRowLabel row={row} />
+          </Link>
+        ) : (
+          <CourtRowLabel row={row} />
+        )}
       </TableHead>
       <TableCell className="text-end tabular-nums">
         {format.number(row.decisions)}

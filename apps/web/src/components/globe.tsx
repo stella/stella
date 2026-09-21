@@ -11,7 +11,28 @@ export type GlobeMarker = {
   location: [number, number];
   /** cobe's marker radius, a fraction of the sphere; 0.03 is a pin, 0.15 a blot. */
   size: number;
+  /** A six-digit hex colour of its own; without one, the marker is brand blue. */
+  color?: string;
 };
+
+/** A six-digit hex colour as cobe takes it: three channels in [0, 1]. */
+const hexToRgb = (hex: string): RGB => {
+  const digits = hex.replace("#", "");
+  const channel = (offset: number): number =>
+    Number.parseInt(digits.slice(offset, offset + 2), 16) / 255;
+  return [channel(0), channel(2), channel(4)];
+};
+
+type CobeMarker = {
+  location: [number, number];
+  size: number;
+  color?: [number, number, number];
+};
+
+const toCobeMarker = ({ color, location, size }: GlobeMarker): CobeMarker =>
+  color === undefined
+    ? { location, size }
+    : { location, size, color: hexToRgb(color) };
 
 type GlobeProps = {
   markers: readonly GlobeMarker[];
@@ -20,9 +41,18 @@ type GlobeProps = {
    * Changing it eases the sphere round rather than jumping.
    */
   focusLongitude: number | null;
+  /**
+   * How far the sphere leans toward the reader, in radians: 0 faces the
+   * equator, about 0.85 puts fifty degrees north at the centre.
+   */
+  tilt: number;
   /** The canvas's side in CSS pixels. */
   size: number;
-  /** How much of the canvas the sphere fills: 1 fits it, above 1 crops the rim. */
+  /**
+   * How much of the canvas the sphere fills: 1 fits it, above 1 crops the
+   * rim. A cropped sphere wants a round clip on `className`, or it ends at
+   * the canvas's square edge.
+   */
   scale: number;
   /** What the picture shows, for readers who cannot see it. */
   label: string;
@@ -77,8 +107,8 @@ type GlobeTheme = {
 // direction (dark dots on light themes, light dots on dark themes).
 const SPHERE_MID_GRAY: RGB = [0.5, 0.5, 0.5];
 
-// Stella brand blue from the favicon (#59a1d4). Not yet a design token;
-// inline here until we formalise --brand-blue in the design-system theme.
+// Stella brand blue from the favicon. Not yet a design token; inline here
+// until we formalise --brand-blue in the design-system theme.
 const STELLA_BRAND_BLUE: RGB = [0x59 / 255, 0xa1 / 255, 0xd4 / 255];
 
 const readGlobeTheme = (): GlobeTheme => {
@@ -115,9 +145,10 @@ export const Globe = ({
   markers,
   scale,
   size,
+  tilt,
 }: GlobeProps) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const markersRef = useRef<GlobeMarker[]>([]);
+  const markersRef = useRef<CobeMarker[]>([]);
   const targetPhiRef = useRef<number | null>(null);
   const themeRef = useRef<GlobeTheme | null>(null);
   const [themeVersion, setThemeVersion] = useState(0);
@@ -132,7 +163,7 @@ export const Globe = ({
   });
 
   useExternalSyncEffect(() => {
-    markersRef.current = [...markers];
+    markersRef.current = markers.map(toCobeMarker);
     targetPhiRef.current =
       focusLongitude === null ? null : longitudeToTargetPhi(focusLongitude);
   }, [focusLongitude, markers]);
@@ -155,7 +186,7 @@ export const Globe = ({
         width: size * pixelRatio,
         height: size * pixelRatio,
         phi: 0,
-        theta: 0.25,
+        theta: tilt,
         dark: initialTheme.dark,
         diffuse: 1.2,
         mapSamples: 16_000,
@@ -211,12 +242,17 @@ export const Globe = ({
   }, [themeVersion]);
 
   return (
-    <canvas
-      aria-label={label}
-      className={cn("block transition-opacity duration-700", className)}
-      ref={canvasRef}
-      role="img"
+    <div
+      className={cn("relative", className)}
       style={{ width: size, height: size }}
-    />
+    >
+      <canvas
+        aria-label={label}
+        className="block transition-opacity duration-700"
+        ref={canvasRef}
+        role="img"
+        style={{ width: size, height: size }}
+      />
+    </div>
   );
 };

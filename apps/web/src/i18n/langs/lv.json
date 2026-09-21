@@ -659,6 +659,7 @@
       "description": "Cik daudz tiesu prakses ir korpusā pa valstīm un tiesām un cik aktuāls ir katrs avots.",
       "exceedsReportedTotal": "Satur vairāk nekā publicētāja pēdējais norādītais kopskaits {date}",
       "generatedAt": "Dati uz {date}",
+      "globeLabel": "Valstis, kuru judikatūru satur korpuss, uz globusa",
       "healthCurrent": "Aktuāls",
       "healthDelayed": "Aizkavējas",
       "healthDisabled": "Izslēgts",

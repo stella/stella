@@ -659,6 +659,7 @@
       "description": "Wie viel Rechtsprechung der Bestand enthält, nach Land und Gericht, und wie aktuell jede Quelle ist.",
       "exceedsReportedTotal": "Enthält mehr als die zuletzt vom Herausgeber genannte Gesamtzahl vom {date}",
       "generatedAt": "Zahlen vom {date}",
+      "globeLabel": "Länder, deren Rechtsprechung der Korpus enthält, auf einem Globus",
       "healthCurrent": "Aktuell",
       "healthDelayed": "Verzögert",
       "healthDisabled": "Deaktiviert",

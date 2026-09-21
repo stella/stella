@@ -659,6 +659,7 @@
       "description": "Ile orzecznictwa zawiera korpus w podziale na kraje i sądy oraz jak aktualne jest każde źródło.",
       "exceedsReportedTotal": "Zawiera więcej, niż wydawca podał ostatnio na {date}",
       "generatedAt": "Dane na {date}",
+      "globeLabel": "Państwa, których orzecznictwo zawiera korpus, na globusie",
       "healthCurrent": "Aktualne",
       "healthDelayed": "Opóźnione",
       "healthDisabled": "Wyłączone",

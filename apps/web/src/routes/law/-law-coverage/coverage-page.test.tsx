@@ -1,6 +1,13 @@
 import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
+import {
+  createMemoryHistory,
+  createRootRoute,
+  createRoute,
+  createRouter,
+  RouterContextProvider,
+} from "@tanstack/react-router";
 import { describe, expect, test } from "bun:test";
 import { IntlProvider } from "use-intl";
 
@@ -13,13 +20,30 @@ import type {
   CaseLawCoverageSource,
 } from "@/routes/law/-law-coverage/coverage.logic";
 
+const rootRoute = createRootRoute();
+
+/**
+ * A router for a static render: the page links every country and court to
+ * the case list, so a `Link` needs a route to resolve its href against.
+ * Nothing here matches or loads, which keeps the render synchronous.
+ */
+const testRouter = () =>
+  createRouter({
+    history: createMemoryHistory({ initialEntries: ["/law/coverage"] }),
+    routeTree: rootRoute.addChildren([
+      createRoute({ getParentRoute: () => rootRoute, path: "/law/cases" }),
+    ]),
+  });
+
 const render = (node: ReactNode, locale = "en"): string =>
   renderToStaticMarkup(
-    <IntlProvider locale="en" messages={messages} timeZone="UTC">
-      <FormattingProvider locale={locale} timeZone="UTC">
-        {node}
-      </FormattingProvider>
-    </IntlProvider>,
+    <RouterContextProvider router={testRouter()}>
+      <IntlProvider locale="en" messages={messages} timeZone="UTC">
+        <FormattingProvider locale={locale} timeZone="UTC">
+          {node}
+        </FormattingProvider>
+      </IntlProvider>
+    </RouterContextProvider>,
   );
 
 /** When the publisher's own total was read. */
@@ -196,8 +220,9 @@ describe("the coverage page states what it counts", () => {
 
     expect(markup).toContain(messages.caseLaw.coverage.inPreparation);
     // No measurable ratio, and no zero standing in for one: the source says
-    // it was never measured.
-    expect(markup).not.toContain("0%");
+    // it was never measured. Matched as a figure, not a substring: a column
+    // width like "40%" is not a ratio.
+    expect(markup).not.toMatch(/[^\d]0%/u);
     expect(markup).toContain(messages.caseLaw.coverage.notMeasuredYet);
     // No index to break down by court.
     expect(markup).not.toContain(messages.caseLaw.coverage.courtsHeading);

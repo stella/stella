@@ -116,6 +116,7 @@ export const JurisdictionGlobePreview = ({
         markers={markers}
         scale={1}
         size={GLOBE_PIXEL_SIZE}
+        tilt={0.25}
       />
 
       <div className="flex h-24 w-full max-w-[480px] flex-wrap content-start justify-center gap-2">

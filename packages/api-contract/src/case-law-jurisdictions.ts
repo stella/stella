@@ -41,3 +41,18 @@ export const isCaseLawJurisdiction = (
   value: string,
 ): value is CaseLawJurisdiction =>
   CASE_LAW_JURISDICTIONS.some((jurisdiction) => jurisdiction === value);
+
+/**
+ * Each jurisdiction as CLDR names it: ISO 3166-1 alpha-2, and `EU`, which
+ * CLDR knows as a region. Total, so a jurisdiction the corpus reports on
+ * (a coverage page lists them all, admitted or not) cannot reach a reader
+ * as its bare code.
+ */
+export const CASE_LAW_REGION_BY_JURISDICTION = {
+  AUT: "AT",
+  CZE: "CZ",
+  EU: "EU",
+  HUN: "HU",
+  POL: "PL",
+  SVK: "SK",
+} as const satisfies Record<CaseLawJurisdiction, string>;
