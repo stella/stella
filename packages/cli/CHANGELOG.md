@@ -1,5 +1,13 @@
 # @stll/cli
 
+## 1.17.0
+
+### Minor Changes
+
+- [#3621](https://github.com/stella/stella/pull/3621) [`4a0b87f`](https://github.com/stella/stella/commit/4a0b87fe1b7fb248273abac0ca7d586267f45009) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `document compare` creates a tracked-changes DOCX redline between stored versions of a document, either against an explicit base or against a version's predecessor, previewing it or saving it as a derived version.
+
+- [#3621](https://github.com/stella/stella/pull/3621) [`4a0b87f`](https://github.com/stella/stella/commit/4a0b87fe1b7fb248273abac0ca7d586267f45009) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `document comparison prepare` reserves short-lived upload slots for two .docx files that are not stored in stella, and `document compare` gains an `uploads` source that redlines them and returns the result as a temporary download link.
+
 ## 1.16.0
 
 ### Minor Changes
