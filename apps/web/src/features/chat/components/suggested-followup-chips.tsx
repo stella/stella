@@ -6,7 +6,10 @@ import {
   ConversationScrollButton,
   isScrollActionVisible,
 } from "@/components/ai-elements/conversation";
-import { SuggestedActions } from "@/components/suggested-actions";
+import {
+  SuggestedActions,
+  type SuggestedActionSurfaceName,
+} from "@/components/suggested-actions";
 import { useMaybeStickToBottomContext } from "@/hooks/use-stick-to-bottom";
 
 type SuggestedFollowupChipsProps = {
@@ -19,31 +22,32 @@ type SuggestedFollowupChipsProps = {
   onSelect: (prompt: string) => void;
   /** Prompts already gated by `resolveSuggestedPromptsAvailability`. */
   prompts: string[];
-  scrollAction?: "inline-end" | "none";
   /**
    * Chip backdrop. `overlay` (default) suits chips floating over document
-   * text; `plain` suits chips rendered on a solid surface such as inside the
-   * thread card, where the card already separates them from the document.
+   * text that a composer veil already softens behind them; `floating` is
+   * opaque, for chips floating over unveiled transcript text; `plain` suits
+   * chips rendered on a solid surface such as inside the thread card, where
+   * the card already separates them from the document.
    */
-  surface?: "plain" | "overlay";
+  surface?: SuggestedActionSurfaceName;
 };
 
 /**
  * Suggested follow-up prompts, shown as a single horizontally scrolling row
  * after the shared availability policy supplies prompts. Placement is the
  * caller's choice: `surface="overlay"` (default) for a row floating above the
- * composer, or `surface="plain"` when rendered inside the thread card so the
- * chips sit within the chat window.
+ * composer on a veiled docked column, `surface="floating"` where no veil sits
+ * behind the row, or `surface="plain"` when rendered inside the thread card so
+ * the chips sit within the chat window.
  *
- * When this component owns the scroll action, it overlays the row's trailing
- * end (over the chips' fade-out) rather than taking a leading slot. A parent
- * composer can instead own the action and set `scrollAction="none"`.
+ * The scroll action overlays the row's trailing end (over the chips'
+ * fade-out) rather than taking a leading slot, and shows only where a
+ * stick-to-bottom context surrounds the row.
  */
 export const SuggestedFollowupChips = ({
   className,
   onSelect,
   prompts,
-  scrollAction = "inline-end",
   surface,
 }: SuggestedFollowupChipsProps) => {
   const t = useTranslations();
@@ -58,9 +62,7 @@ export const SuggestedFollowupChips = ({
   // footprint so the last chip can scroll clear of it. `pe-11` covers the
   // action's 44px coarse-pointer hit area, not only its 28px circle.
   const reserveScrollAction =
-    scrollAction === "inline-end" &&
-    stickToBottom !== null &&
-    isScrollActionVisible(stickToBottom);
+    stickToBottom !== null && isScrollActionVisible(stickToBottom);
 
   return (
     <div className={cn("relative max-w-full pb-2", className)}>
@@ -72,7 +74,7 @@ export const SuggestedFollowupChips = ({
         orientation="horizontal"
         surface={resolvedSurface}
       />
-      {scrollAction === "inline-end" && stickToBottom !== null && (
+      {stickToBottom !== null && (
         <ConversationScrollButton
           className="absolute end-0 top-0"
           placement="inline"

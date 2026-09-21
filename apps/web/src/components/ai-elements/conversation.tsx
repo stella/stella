@@ -126,13 +126,11 @@ type ConversationScrollButtonProps = ConversationScrollButtonBaseProps &
   (
     | {
         placement?: "floating";
-        reserveWhenHidden?: never;
         surface?: never;
       }
     | {
         placement: "inline";
-        reserveWhenHidden?: boolean;
-        surface: Extract<SuggestedActionSurfaceName, "plain" | "overlay">;
+        surface: SuggestedActionSurfaceName;
       }
   );
 
@@ -151,7 +149,6 @@ export const isScrollActionVisible = ({
 export const ConversationScrollButton = ({
   className,
   placement = "floating",
-  reserveWhenHidden = true,
   surface = "plain",
   ...props
 }: ConversationScrollButtonProps) => {
@@ -160,7 +157,7 @@ export const ConversationScrollButton = ({
     useStickToBottomContext();
   const isVisible = isScrollActionVisible({ isAtBottom, isScrollable });
 
-  if (!isVisible && (placement === "floating" || !reserveWhenHidden)) {
+  if (!isVisible && placement === "floating") {
     return null;
   }
 
