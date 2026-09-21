@@ -463,130 +463,141 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
             reader, bound to the same decision and so to the same conversation.
             The annotation toolbar stays outside it: it belongs to the marks on
             the text, not to the chat. */}
-        <LegalReaderAIChat
-          activeLegal={activeLegalFromReaderTarget(annotationTarget)}
-          className="h-full"
+        {/* The composer centres on the text column, not on the pane: at `lg`
+            the analysis column stands beside the text, so the docked
+            composer's start inset is that column's width; below `lg` the
+            grid is one column and the inset is zero. */}
+        <div
+          className="h-full [--docked-composer-inset-start:0px] lg:[--docked-composer-inset-start:var(--reader-aside-width)]"
+          style={{ "--reader-aside-width": `${panelWidth}px` }}
         >
-          <div className="reader-scroll h-full overflow-y-auto" ref={mainRef}>
-            <div
-              className="grid max-lg:!grid-cols-[1fr]"
-              style={{ gridTemplateColumns: `${panelWidth}px minmax(0, 1fr)` }}
-            >
-              <aside className="relative flex flex-col max-lg:hidden">
-                {completeAnalysis !== null && showAiNotes && (
-                  <AnalysisLayers analysis={completeAnalysis} />
-                )}
-                {hasAnalysis &&
-                  showAiNotes &&
-                  flatAnalysisHeadings.length > 0 && (
-                    <CurrentSection
-                      anchorById={analysisOutline.anchorById}
-                      headings={flatAnalysisHeadings}
-                      scrollContainerRef={mainRef}
-                    />
+          <LegalReaderAIChat
+            activeLegal={activeLegalFromReaderTarget(annotationTarget)}
+            className="h-full"
+          >
+            <div className="reader-scroll h-full overflow-y-auto" ref={mainRef}>
+              <div
+                className="grid max-lg:!grid-cols-[1fr]"
+                style={{
+                  gridTemplateColumns: `${panelWidth}px minmax(0, 1fr)`,
+                }}
+              >
+                <aside className="relative flex flex-col max-lg:hidden">
+                  {completeAnalysis !== null && showAiNotes && (
+                    <AnalysisLayers analysis={completeAnalysis} />
                   )}
-                {showAiNotes && isAnalyzing && (
-                  <div className="px-2 pt-8">
-                    <AnalysisLoader />
-                  </div>
-                )}
-                {showAiNotes &&
-                  props.aiMode === "gated" &&
-                  analysisState.status === "idle" && (
-                    <GatedAnalysisInvitation
-                      onRequest={props.onRequestAnalysis}
-                    />
+                  {hasAnalysis &&
+                    showAiNotes &&
+                    flatAnalysisHeadings.length > 0 && (
+                      <CurrentSection
+                        anchorById={analysisOutline.anchorById}
+                        headings={flatAnalysisHeadings}
+                        scrollContainerRef={mainRef}
+                      />
+                    )}
+                  {showAiNotes && isAnalyzing && (
+                    <div className="px-2 pt-8">
+                      <AnalysisLoader />
+                    </div>
                   )}
-                {showAiNotes && analysisState.status === "error" && (
-                  <div
-                    className="bg-background/75 supports-[backdrop-filter]:bg-background/55 mx-2 mt-8 flex flex-col items-center gap-2 rounded-lg border px-3 py-4 text-center shadow-sm backdrop-blur-xl"
-                    role="alert"
-                  >
-                    <p className="text-muted-foreground text-xs leading-snug">
-                      {t("errors.api.server")}
-                    </p>
-                    <Button
-                      onClick={() => {
-                        detached(generate(), "decision-workspace.generate");
-                      }}
-                      size="sm"
-                      variant="muted"
+                  {showAiNotes &&
+                    props.aiMode === "gated" &&
+                    analysisState.status === "idle" && (
+                      <GatedAnalysisInvitation
+                        onRequest={props.onRequestAnalysis}
+                      />
+                    )}
+                  {showAiNotes && analysisState.status === "error" && (
+                    <div
+                      className="bg-background/75 supports-[backdrop-filter]:bg-background/55 mx-2 mt-8 flex flex-col items-center gap-2 rounded-lg border px-3 py-4 text-center shadow-sm backdrop-blur-xl"
+                      role="alert"
                     >
-                      <SparklesIcon className="size-3" />
-                      {t("common.retry")}
-                    </Button>
-                  </div>
-                )}
+                      <p className="text-muted-foreground text-xs leading-snug">
+                        {t("errors.api.server")}
+                      </p>
+                      <Button
+                        onClick={() => {
+                          detached(generate(), "decision-workspace.generate");
+                        }}
+                        size="sm"
+                        variant="muted"
+                      >
+                        <SparklesIcon className="size-3" />
+                        {t("common.retry")}
+                      </Button>
+                    </div>
+                  )}
 
-                {/* The notes are painted absolutely inside this region, so they
+                  {/* The notes are painted absolutely inside this region, so they
                     are measured against the space the layers above them leave
                     free instead of against the whole column. */}
-                <div className="relative flex-1">
-                  {visibleMarginItems.length > 0 && (
-                    <MarginNotes
-                      items={visibleMarginItems}
-                      placement="gutter"
-                      scrollContainerRef={mainRef}
-                    />
-                  )}
-                </div>
-
-                <div
-                  className="group hover:bg-border/50 active:bg-border absolute inset-y-0 -end-px z-10 flex w-2 cursor-col-resize items-center justify-center"
-                  onPointerDown={(event) => {
-                    event.preventDefault();
-                    isDragging.current = true;
-                    event.currentTarget.setPointerCapture(event.pointerId);
-                  }}
-                  onPointerMove={(event) => {
-                    if (!isDragging.current) {
-                      return;
-                    }
-
-                    const aside = event.currentTarget.parentElement;
-                    if (!aside) {
-                      return;
-                    }
-
-                    const newWidth =
-                      event.clientX - aside.getBoundingClientRect().left;
-                    setPanelWidth(Math.min(400, Math.max(120, newWidth)));
-                  }}
-                  onPointerUp={() => {
-                    isDragging.current = false;
-                  }}
-                >
-                  <div className="flex flex-col gap-[3px] opacity-0 transition-opacity group-hover:opacity-40">
-                    <div className="bg-foreground h-[3px] w-[3px] rounded-full" />
-                    <div className="bg-foreground h-[3px] w-[3px] rounded-full" />
-                    <div className="bg-foreground h-[3px] w-[3px] rounded-full" />
+                  <div className="relative flex-1">
+                    {visibleMarginItems.length > 0 && (
+                      <MarginNotes
+                        items={visibleMarginItems}
+                        placement="gutter"
+                        scrollContainerRef={mainRef}
+                      />
+                    )}
                   </div>
-                </div>
-              </aside>
 
-              <main
-                className="reader-paper min-w-0 py-8"
-                data-slot="reader-document-column"
-              >
-                <DecisionText
-                  activeMatchIndex={activeMatchIndex}
-                  aiHeadnotes={aiHeadnotes}
-                  annotationAnchors={annotations.anchors}
-                  citationAnchors={citationAnchors}
-                  decision={decision}
-                  decisionId={decisionId}
-                  landingAnchorId={landingAnchorId}
-                  onAnnotationActivate={annotations.setActiveAnnotationId}
-                  onMatchCountChange={setMatchCount}
-                  provisionAnchors={provisionAnchors}
-                  searchQuery={searchOpen ? searchQuery : ""}
-                  sectionMap={showAiNotes ? sectionMap : undefined}
-                  statuteCitationAnchors={statuteCitationAnchors}
-                />
-              </main>
+                  <div
+                    className="group hover:bg-border/50 active:bg-border absolute inset-y-0 -end-px z-10 flex w-2 cursor-col-resize items-center justify-center"
+                    onPointerDown={(event) => {
+                      event.preventDefault();
+                      isDragging.current = true;
+                      event.currentTarget.setPointerCapture(event.pointerId);
+                    }}
+                    onPointerMove={(event) => {
+                      if (!isDragging.current) {
+                        return;
+                      }
+
+                      const aside = event.currentTarget.parentElement;
+                      if (!aside) {
+                        return;
+                      }
+
+                      const newWidth =
+                        event.clientX - aside.getBoundingClientRect().left;
+                      setPanelWidth(Math.min(400, Math.max(120, newWidth)));
+                    }}
+                    onPointerUp={() => {
+                      isDragging.current = false;
+                    }}
+                  >
+                    <div className="flex flex-col gap-[3px] opacity-0 transition-opacity group-hover:opacity-40">
+                      <div className="bg-foreground h-[3px] w-[3px] rounded-full" />
+                      <div className="bg-foreground h-[3px] w-[3px] rounded-full" />
+                      <div className="bg-foreground h-[3px] w-[3px] rounded-full" />
+                    </div>
+                  </div>
+                </aside>
+
+                <main
+                  className="reader-paper min-w-0 py-8"
+                  data-slot="reader-document-column"
+                >
+                  <DecisionText
+                    activeMatchIndex={activeMatchIndex}
+                    aiHeadnotes={aiHeadnotes}
+                    annotationAnchors={annotations.anchors}
+                    citationAnchors={citationAnchors}
+                    decision={decision}
+                    decisionId={decisionId}
+                    landingAnchorId={landingAnchorId}
+                    onAnnotationActivate={annotations.setActiveAnnotationId}
+                    onMatchCountChange={setMatchCount}
+                    provisionAnchors={provisionAnchors}
+                    searchQuery={searchOpen ? searchQuery : ""}
+                    sectionMap={showAiNotes ? sectionMap : undefined}
+                    statuteCitationAnchors={statuteCitationAnchors}
+                  />
+                </main>
+              </div>
             </div>
-          </div>
-        </LegalReaderAIChat>
+          </LegalReaderAIChat>
+        </div>
         <AnnotationToolbar
           activeAnnotation={annotations.activeAnnotation}
           activeSpans={annotations.activeSpans}

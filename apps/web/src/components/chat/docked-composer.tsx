@@ -16,6 +16,7 @@ import { OVERLAY_LAYER_CLASS_NAMES } from "@stll/ui/overlay-layer";
 import { cn } from "@stll/ui/utils";
 
 import {
+  DOCKED_COMPOSER_INSET_START_CLASS,
   DOCKED_COMPOSER_VEIL_WIDTH_CLASS,
   DOCKED_COMPOSER_WIDTH_CLASS,
 } from "@/components/ai-suggestions/composer-geometry";
@@ -192,6 +193,7 @@ export const DockedComposer = ({ chips, bar, dock }: DockedComposerProps) => (
   <div
     className={cn(
       "pointer-events-none absolute inset-x-0 bottom-3.5 flex flex-col items-center",
+      DOCKED_COMPOSER_INSET_START_CLASS,
       OVERLAY_LAYER_CLASS_NAMES.chrome,
     )}
   >
