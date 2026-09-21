@@ -14,6 +14,7 @@ import { openEntityInInspector } from "@/components/chat/entity-open";
 import { navigateToWorkspaceFolder } from "@/components/chat/folder-navigation";
 import { MatterIcon } from "@/components/matter-icon";
 import { EntityIcon } from "@/components/workspaces/entity-kind-icon";
+import { useOpenDecisionTab } from "@/features/case-law/open-decision-tab";
 import { detached } from "@/lib/detached";
 import { sanitizeHref } from "@/lib/sanitize-href";
 
@@ -42,6 +43,7 @@ export const EntityLink = ({
   workspaceId?: string | undefined;
 }) => {
   const navigate = useNavigate();
+  const { open: openDecision } = useOpenDecisionTab();
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
   });
@@ -68,7 +70,10 @@ export const EntityLink = ({
         )}
         onClick={() =>
           detached(
-            openCaseLawDecision(resourceTarget.resource.id, navigate),
+            openCaseLawDecision(
+              { type: "ref", ref: resourceTarget.resource.id },
+              openDecision,
+            ),
             "entity-link.open-case-law-decision",
           )
         }

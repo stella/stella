@@ -15,6 +15,12 @@ export const CHAT_RESOURCE_HREF_PREFIX = {
   [RESOURCE_TYPE.WORKSPACE]: "#stella-workspace=",
 } as const;
 
+/**
+ * The decision link as a prompt shows it: the placeholder stands where the
+ * model puts the decisionId a tool returned.
+ */
+export const CHAT_DECISION_HREF_TEMPLATE = `${CHAT_RESOURCE_HREF_PREFIX.case_law_decision}<decisionId>`;
+
 type ChatResourceLinkDisposition =
   | {
       type: "supported";

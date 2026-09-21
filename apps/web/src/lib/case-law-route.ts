@@ -316,6 +316,44 @@ export const createCaseLawDecisionPath = ({
   return `/law/${country}/cases/${court}/${slug}`;
 };
 
+const decodePathSegment = (segment: string): string | null =>
+  Result.try(() => decodeURIComponent(segment)).unwrapOr(null);
+
+/**
+ * The inverse of `createCaseLawDecisionPath`: the route params a decision
+ * page's path carries, null for any other path. A five-segment path is the
+ * bare form; six segments carry a language between the court and the slug,
+ * and only when that segment is one the route would have produced.
+ */
+export const parseCaseLawDecisionPath = (
+  pathname: string,
+): CaseLawDecisionRouteParams | null => {
+  const [law, country, cases, court, fourth, fifth, ...rest] = pathname
+    .split("/")
+    .filter((segment) => segment.length > 0)
+    .map(decodePathSegment);
+  if (
+    law !== "law" ||
+    cases !== "cases" ||
+    !country ||
+    !court ||
+    !fourth ||
+    rest.length > 0
+  ) {
+    return null;
+  }
+
+  if (fifth === undefined) {
+    return { country, court, slug: fourth };
+  }
+
+  if (!fifth || normalizeCaseLawLanguageSegment(fourth) !== fourth) {
+    return null;
+  }
+
+  return { country, court, language: fourth, slug: fifth };
+};
+
 export const decodeCaseLawDecisionRef = (value: string): string => {
   try {
     return decodeURIComponent(value).trim();

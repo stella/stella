@@ -425,6 +425,7 @@ export {
 } from "./resource-ref";
 export type { ResourceName, ResourceRef, ResourceType } from "./resource-ref";
 export {
+  CHAT_DECISION_HREF_TEMPLATE,
   CHAT_RESOURCE_HREF_PREFIX,
   CHAT_RESOURCE_LINK_DISPOSITION,
   findCanonicalChatResourceHrefs,
