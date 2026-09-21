@@ -428,6 +428,9 @@ export const WRITE_TOOL_REF_FIELD_MAP = {
   // Chat carries its own attachments and its own file pipeline, so a chat
   // turn never needs the staged-upload detour this tool exists for.
   prepare_file_comparison: { chatProjectable: false },
+  prepare_file_comparison_from_links: { chatProjectable: false },
+  // The comparison panel is a host transport adapter like the upload picker.
+  open_file_comparison: { chatProjectable: false },
   delete_document: {
     chatProjectable: true,
     // `version_id` is an entity-version handle: passes through.

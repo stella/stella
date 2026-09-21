@@ -3,7 +3,10 @@ import { RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
 import { ProtocolError } from "@modelcontextprotocol/server";
 import { describe, expect, test } from "bun:test";
 
-import { MCP_APP_RESOURCE_MIME_TYPE } from "@stll/api-contract";
+import {
+  FILE_COMPARISON_TRANSPORT,
+  MCP_APP_RESOURCE_MIME_TYPE,
+} from "@stll/api-contract";
 
 import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
@@ -33,6 +36,24 @@ const WORKFLOW_REFERENCE_URI = "stella://reference/template-workflow";
 const LEGISLATION_WORKFLOW_REFERENCE_URI =
   "stella://reference/legislation-workflow";
 const PRODUCT_IDENTITY_URI = "stella://about";
+
+/** The storage-only CSP every bundled upload panel is served with. */
+const expectedUploadAppMeta = (): Record<string, unknown> => {
+  const storageEndpoint = new URL(envBase.S3_ENDPOINT);
+  if (
+    storageEndpoint.hostname.includes("s3") &&
+    storageEndpoint.hostname.endsWith(".amazonaws.com") &&
+    envBase.S3_BUCKET.length > 0
+  ) {
+    storageEndpoint.hostname = `${envBase.S3_BUCKET}.${storageEndpoint.hostname}`;
+  }
+  return {
+    ui: {
+      csp: { connectDomains: [storageEndpoint.origin], resourceDomains: [] },
+      prefersBorder: true,
+    },
+  };
+};
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
@@ -109,6 +130,7 @@ describe("MCP resources", () => {
       FIELD_REFERENCE_URI,
       WORKFLOW_REFERENCE_URI,
       DOCUMENT_UPLOAD_APP_RESOURCE_URI,
+      FILE_COMPARISON_TRANSPORT.resourceUri,
     ]) {
       let caught: unknown;
       try {
@@ -415,23 +437,29 @@ describe("MCP resources", () => {
     expect(
       McpUiResourceMetaSchema.safeParse(content._meta?.["ui"]).success,
     ).toBe(true);
-    const storageEndpoint = new URL(envBase.S3_ENDPOINT);
-    if (
-      storageEndpoint.hostname.includes("s3") &&
-      storageEndpoint.hostname.endsWith(".amazonaws.com") &&
-      envBase.S3_BUCKET.length > 0
-    ) {
-      storageEndpoint.hostname = `${envBase.S3_BUCKET}.${storageEndpoint.hostname}`;
+    expect(content._meta).toEqual(expectedUploadAppMeta());
+  });
+
+  test("serves the bundled file comparison MCP App with storage-only CSP", async () => {
+    expect(listMcpResources("default")).not.toContainEqual(
+      expect.objectContaining({ uri: FILE_COMPARISON_TRANSPORT.resourceUri }),
+    );
+
+    const result = await readMcpResource(
+      FILE_COMPARISON_TRANSPORT.resourceUri,
+      "default",
+    );
+    const content = result.contents.at(0);
+    if (!content || !("text" in content)) {
+      throw new Error("Expected file comparison app HTML");
     }
-    expect(content._meta).toEqual({
-      ui: {
-        csp: {
-          connectDomains: [storageEndpoint.origin],
-          resourceDomains: [],
-        },
-        prefersBorder: true,
-      },
-    });
+    expect(content.mimeType).toBe("text/html;profile=mcp-app");
+    expect(content.text).toContain("Compare two files");
+    expect(content.text).toContain("ui/initialize");
+    expect(
+      McpUiResourceMetaSchema.safeParse(content._meta?.["ui"]).success,
+    ).toBe(true);
+    expect(content._meta).toEqual(expectedUploadAppMeta());
   });
 
   test("lists and reads the legislation workflow only behind its own gate", async () => {

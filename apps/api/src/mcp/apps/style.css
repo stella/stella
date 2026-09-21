@@ -24,10 +24,16 @@ h1 {
   font-size: 1rem;
 }
 
-#target {
-  overflow: hidden;
+/* Both apps share this sheet, and the comparison picker's second file input
+   also answers to #target, so the upload app's caption is matched by tag. */
+.note,
+p#target {
   color: var(--color-text-secondary, GrayText);
   font-size: 0.8rem;
+}
+
+p#target {
+  overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }

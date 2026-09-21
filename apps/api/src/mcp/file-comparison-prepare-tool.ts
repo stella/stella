@@ -2,11 +2,14 @@
  * `prepare_file_comparison`: reserve short-lived storage for two DOCX files
  * stella does not hold, so `compare_documents` can redline them. It owns no
  * comparison logic and writes nothing durable: two rows, two presigned PUTs,
- * and the next call spelled out.
+ * and the next call spelled out. The reservation itself is shared with the
+ * staging tools that move the bytes server-side.
  */
 
 import { Result } from "better-result";
 import * as v from "valibot";
+
+import { FILE_COMPARISON_TRANSPORT } from "@stll/api-contract";
 
 import { fileComparisonUploads } from "@/api/db/schema";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -25,6 +28,7 @@ import { PRESIGN_URL_EXPIRY_SECONDS } from "@/api/lib/uploads/runtime";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
 import type {
+  InternalToolErrorResult,
   TypedMcpToolHandler,
   TypedMcpToolResponse,
 } from "@/api/mcp/tool-types";
@@ -41,8 +45,11 @@ import {
 } from "@/api/mcp/valibot-tool-definition";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
-const MAX_FILE_BYTES = FILE_SIZE_LIMIT_BYTES.document;
-const MAX_FILE_MEGABYTES = String(Math.floor(MAX_FILE_BYTES / (1024 * 1024)));
+/** The enforced ceiling, and the number every staging description renders. */
+export const FILE_COMPARISON_MAX_BYTES = FILE_SIZE_LIMIT_BYTES.document;
+export const FILE_COMPARISON_MAX_MEGABYTES = String(
+  Math.floor(FILE_COMPARISON_MAX_BYTES / (1024 * 1024)),
+);
 
 const SHA256_HEX = /^[0-9a-f]{64}$/u;
 
@@ -65,7 +72,12 @@ const sha256HexSchema = v.pipe(
   ),
 );
 
-const comparisonFileSchema = (side: "base" | "target") =>
+export const fileComparisonSideDescription = (side: ComparisonSide): string =>
+  side === "base"
+    ? "The file the redline compares from."
+    : "The file the redline compares to.";
+
+const comparisonFileSchema = (side: ComparisonSide) =>
   v.pipe(
     v.strictObject({
       name: v.pipe(
@@ -81,18 +93,14 @@ const comparisonFileSchema = (side: "base" | "target") =>
         v.number(),
         v.integer(),
         v.minValue(1),
-        v.maxValue(MAX_FILE_BYTES),
+        v.maxValue(FILE_COMPARISON_MAX_BYTES),
         v.description(
-          `Exact byte length of the file, at most ${MAX_FILE_MEGABYTES} MB.`,
+          `Exact byte length of the file, at most ${FILE_COMPARISON_MAX_MEGABYTES} MB.`,
         ),
       ),
       sha256_hex: sha256HexSchema,
     }),
-    v.description(
-      side === "base"
-        ? "The file the redline compares from."
-        : "The file the redline compares to.",
-    ),
+    v.description(fileComparisonSideDescription(side)),
   );
 
 const PREPARE_FILE_COMPARISON_INPUT_SCHEMA = nullAsAbsent(
@@ -113,7 +121,7 @@ const PREPARE_FILE_COMPARISON_OUTPUT_SCHEMA = v.strictObject({
   base: preparedUploadSchema,
   target: preparedUploadSchema,
   next: v.strictObject({
-    tool: v.literal("compare_documents"),
+    tool: v.literal(FILE_COMPARISON_TRANSPORT.compareToolName),
     source: v.strictObject({
       type: v.literal("uploads"),
       base_upload_id: v.string(),
@@ -136,14 +144,17 @@ export const PREPARE_FILE_COMPARISON_TOOL_DEFINITION = defineValibotMcpTool({
   },
   description:
     "Reserve upload slots for redlining two .docx files that are not stored " +
-    "in stella. Both files must be .docx and at most " +
-    `${MAX_FILE_MEGABYTES} MB. PUT each file's bytes to its url with the ` +
-    "returned headers sent verbatim: the URL is signed against that exact " +
-    "size and checksum, so any deviation is refused. Then call " +
-    "compare_documents with the echoed next.source, within the hour. The " +
-    "staged files and the redline are temporary: they never become a " +
-    "document, a version, or matter content, and both are deleted once the " +
-    "comparison has run.",
+    "in stella, for a client that can PUT the bytes itself (the CLI, a " +
+    `script). In a chat, prefer ${FILE_COMPARISON_TRANSPORT.pickerToolName}, ` +
+    "whose panel uploads from the user's browser, or " +
+    `${FILE_COMPARISON_TRANSPORT.linksToolName} when the files are reachable ` +
+    "by HTTPS link. Both files must be .docx and at most " +
+    `${FILE_COMPARISON_MAX_MEGABYTES} MB. PUT each file's bytes to its url ` +
+    "with the returned headers sent verbatim: the URL is signed against that " +
+    "exact size and checksum. Then call " +
+    `${FILE_COMPARISON_TRANSPORT.compareToolName} with the echoed ` +
+    "next.source, within the hour. The staged files and the redline are " +
+    "temporary and never become a document, a version, or matter content.",
   inputSchema: PREPARE_FILE_COMPARISON_INPUT_SCHEMA,
   jsonSchemaProjectionWaiver: {
     ignoreActions: ["check", "to_lower_case", "trim"],
@@ -152,7 +163,7 @@ export const PREPARE_FILE_COMPARISON_TOOL_DEFINITION = defineValibotMcpTool({
   },
   access: "write",
   anonymized: { exposure: "excluded", reason: "write" },
-  name: "prepare_file_comparison",
+  name: FILE_COMPARISON_TRANSPORT.prepareToolName,
   scope: "stella:documents_write",
 });
 
@@ -164,7 +175,16 @@ type PrepareToolInput = v.InferOutput<
   typeof PREPARE_FILE_COMPARISON_INPUT_SCHEMA
 >;
 
-type ReservedUpload = {
+export type ComparisonSide = "base" | "target";
+
+/** One side of a comparison, however the caller's bytes were obtained. */
+export type FileComparisonInputFile = {
+  name: string;
+  sha256Hex: string;
+  size: number;
+};
+
+export type ReservedUpload = {
   declaredName: string;
   declaredSha256: string;
   declaredSize: number;
@@ -186,7 +206,7 @@ const presignInput = async ({
   organizationId,
 }: {
   dependencies: PrepareFileComparisonDependencies;
-  file: PrepareToolInput["base"];
+  file: FileComparisonInputFile;
   organizationId: SafeId<"organization">;
 }): Promise<Result<ReservedUpload, unknown>> => {
   const id = createSafeId<"fileComparisonUpload">();
@@ -195,7 +215,7 @@ const presignInput = async ({
     expiresIn: PRESIGN_URL_EXPIRY_SECONDS,
     contentType: DOCX_MIME_TYPE,
     contentLength: file.size,
-    sha256Base64: Buffer.from(file.sha256_hex, "hex").toString("base64"),
+    sha256Base64: Buffer.from(file.sha256Hex, "hex").toString("base64"),
     scope: { organizationId, workspaceId: null },
     tagAsTemporaryUpload: true,
   });
@@ -204,7 +224,7 @@ const presignInput = async ({
   }
   return Result.ok({
     declaredName: sanitizeFilename(file.name),
-    declaredSha256: file.sha256_hex,
+    declaredSha256: file.sha256Hex,
     declaredSize: file.size,
     headers: presigned.value.headers,
     id,
@@ -212,51 +232,42 @@ const presignInput = async ({
   });
 };
 
-export const handlePrepareFileComparisonTool = async (
-  {
-    args,
-    context,
-  }: { args: Record<string, unknown>; context: McpRequestContext },
-  dependencies: PrepareFileComparisonDependencies = DEFAULT_PREPARE_FILE_COMPARISON_DEPENDENCIES,
-): Promise<TypedMcpToolResponse<PrepareFileComparisonOutput>> => {
-  const parsed = v.safeParse(PREPARE_FILE_COMPARISON_INPUT_SCHEMA, args);
-  if (!parsed.success) {
-    return validationErrorResult(parsed.issues);
-  }
-  const input = parsed.output;
+type ReservedFileComparisonInputs = {
+  base: ReservedUpload;
+  target: ReservedUpload;
+  urlExpiresAt: string;
+};
 
-  if (!hasEffectiveAuthority(context, { entity: ["update"] })) {
-    return structuredErrorResult({
-      code: "permission_denied",
-      message: "Your role cannot create document comparisons",
-      hint: "Ask an organization admin for a role that may update documents.",
-    });
-  }
-
+/**
+ * The staging every entry point shares: two presigned slots, two pending rows,
+ * one audit event. A failure comes back as the envelope the tool returns, so a
+ * caller adds no error vocabulary of its own.
+ */
+export const reserveFileComparisonInputs = async ({
+  base,
+  context,
+  dependencies,
+  target,
+}: {
+  base: FileComparisonInputFile;
+  context: McpRequestContext;
+  dependencies: PrepareFileComparisonDependencies;
+  target: FileComparisonInputFile;
+}): Promise<Result<ReservedFileComparisonInputs, InternalToolErrorResult>> => {
   const { organizationId, userId } = context;
-  const reserved = await Promise.all([
-    presignInput({ dependencies, file: input.base, organizationId }),
-    presignInput({ dependencies, file: input.target, organizationId }),
+  const [reservedBase, reservedTarget] = await Promise.all([
+    presignInput({ dependencies, file: base, organizationId }),
+    presignInput({ dependencies, file: target, organizationId }),
   ]);
-  const base = reserved.at(0);
-  const target = reserved.at(1);
-  if (base === undefined || target === undefined) {
-    return internalFailureResult(new Error("Comparison presign lost a side"));
+  if (Result.isError(reservedBase)) {
+    return Result.err(internalFailureResult(reservedBase.error));
   }
-  if (Result.isError(base)) {
-    return internalFailureResult(base.error);
-  }
-  if (Result.isError(target)) {
-    return internalFailureResult(target.error);
+  if (Result.isError(reservedTarget)) {
+    return Result.err(internalFailureResult(reservedTarget.error));
   }
 
   const expiresAt = fileComparisonExpiry(FILE_COMPARISON_INPUT_TTL_SECONDS);
-  // Two deadlines, and the output carries the earlier one because it is the
-  // one the client acts on: the signed PUT dies well before the row does.
-  const urlExpiresAt = fileComparisonExpiry(
-    PRESIGN_URL_EXPIRY_SECONDS,
-  ).toISOString();
-  const rows = [base.value, target.value].map((upload) => ({
+  const rows = [reservedBase.value, reservedTarget.value].map((upload) => ({
     declaredName: upload.declaredName,
     declaredSha256: upload.declaredSha256,
     declaredSize: upload.declaredSize,
@@ -277,40 +288,96 @@ export const handlePrepareFileComparisonTool = async (
         await context.recordAuditEvent(tx, {
           action: AUDIT_ACTION.CREATE,
           resourceType: AUDIT_RESOURCE_TYPE.FILE_COMPARISON,
-          resourceId: base.value.id,
+          resourceId: reservedBase.value.id,
           metadata: {
-            baseUploadId: base.value.id,
-            targetUploadId: target.value.id,
-            baseSizeBytes: base.value.declaredSize,
-            targetSizeBytes: target.value.declaredSize,
+            baseUploadId: reservedBase.value.id,
+            targetUploadId: reservedTarget.value.id,
+            baseSizeBytes: reservedBase.value.declaredSize,
+            targetSizeBytes: reservedTarget.value.declaredSize,
           },
           workspaceId: null,
         });
       }),
   );
   if (Result.isError(inserted)) {
-    return internalFailureResult(inserted.error);
+    return Result.err(internalFailureResult(inserted.error));
   }
+
+  return Result.ok({
+    base: reservedBase.value,
+    target: reservedTarget.value,
+    // Two deadlines, and the output carries the earlier one because it is the
+    // one the client acts on: the signed PUT dies well before the row does.
+    urlExpiresAt: fileComparisonExpiry(
+      PRESIGN_URL_EXPIRY_SECONDS,
+    ).toISOString(),
+  });
+};
+
+export const fileComparisonPermissionDenied = (): InternalToolErrorResult =>
+  structuredErrorResult({
+    code: "permission_denied",
+    message: "Your role cannot create document comparisons",
+    hint: "Ask an organization admin for a role that may update documents.",
+  });
+
+const toInputFile = ({
+  name,
+  sha256_hex: sha256Hex,
+  size,
+}: PrepareToolInput["base"]): FileComparisonInputFile => ({
+  name,
+  sha256Hex,
+  size,
+});
+
+export const handlePrepareFileComparisonTool = async (
+  {
+    args,
+    context,
+  }: { args: Record<string, unknown>; context: McpRequestContext },
+  dependencies: PrepareFileComparisonDependencies = DEFAULT_PREPARE_FILE_COMPARISON_DEPENDENCIES,
+): Promise<TypedMcpToolResponse<PrepareFileComparisonOutput>> => {
+  const parsed = v.safeParse(PREPARE_FILE_COMPARISON_INPUT_SCHEMA, args);
+  if (!parsed.success) {
+    return validationErrorResult(parsed.issues);
+  }
+  const input = parsed.output;
+
+  if (!hasEffectiveAuthority(context, { entity: ["update"] })) {
+    return fileComparisonPermissionDenied();
+  }
+
+  const reserved = await reserveFileComparisonInputs({
+    base: toInputFile(input.base),
+    context,
+    dependencies,
+    target: toInputFile(input.target),
+  });
+  if (Result.isError(reserved)) {
+    return reserved.error;
+  }
+  const { base, target, urlExpiresAt } = reserved.value;
 
   return toolDataResult({
     base: {
-      uploadId: base.value.id,
-      url: base.value.url,
-      headers: base.value.headers,
+      uploadId: base.id,
+      url: base.url,
+      headers: base.headers,
       expiresAt: urlExpiresAt,
     },
     target: {
-      uploadId: target.value.id,
-      url: target.value.url,
-      headers: target.value.headers,
+      uploadId: target.id,
+      url: target.url,
+      headers: target.headers,
       expiresAt: urlExpiresAt,
     },
     next: {
-      tool: "compare_documents",
+      tool: FILE_COMPARISON_TRANSPORT.compareToolName,
       source: {
         type: "uploads",
-        base_upload_id: base.value.id,
-        target_upload_id: target.value.id,
+        base_upload_id: base.id,
+        target_upload_id: target.id,
       },
     },
   });

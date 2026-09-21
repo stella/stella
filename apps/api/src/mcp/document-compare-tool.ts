@@ -308,11 +308,11 @@ export const COMPARE_DOCUMENTS_TOOL_DEFINITION = defineValibotMcpTool({
     "Create a tracked-changes DOCX redline. source versions compares an " +
     `explicit stored base with up to ${TARGET_LIMIT_TEXT} targets; source ` +
     "previous compares one stored version with its predecessor; source " +
-    "uploads compares two .docx files staged by prepare_file_comparison, " +
-    "which is how to redline files stella does not hold. " +
-    "base_tracked_changes and target_tracked_changes say what to do with " +
-    "tracked changes each side already carries: accept compares the final " +
-    "text of each side, which is the usual choice. output_mode preview " +
+    "uploads compares two .docx files stella does not hold, staged by " +
+    "open_file_comparison, prepare_file_comparison_from_links or " +
+    "prepare_file_comparison. base_tracked_changes and target_tracked_changes " +
+    "handle tracked changes each side already carries: accept (the usual " +
+    "choice) compares its final text. output_mode preview " +
     "compares without writing; download returns each redline as an expiring " +
     "link, not a version; version saves each redline as a derived version and " +
     "needs a stored source. Results are independent, so read every status. " +

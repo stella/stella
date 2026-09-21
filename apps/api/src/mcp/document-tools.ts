@@ -88,6 +88,16 @@ import {
 } from "@/api/mcp/document-file-upload";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
 import {
+  handlePrepareFileComparisonFromLinksTool,
+  PREPARE_FILE_COMPARISON_FROM_LINKS_OUTPUT_CONTRACT,
+  PREPARE_FILE_COMPARISON_FROM_LINKS_TOOL_DEFINITION,
+} from "@/api/mcp/file-comparison-links-tool";
+import {
+  handleOpenFileComparisonTool,
+  OPEN_FILE_COMPARISON_OUTPUT_CONTRACT,
+  OPEN_FILE_COMPARISON_TOOL_DEFINITION,
+} from "@/api/mcp/file-comparison-picker-tool";
+import {
   handlePrepareFileComparisonTool,
   PREPARE_FILE_COMPARISON_OUTPUT_CONTRACT,
   PREPARE_FILE_COMPARISON_TOOL_DEFINITION,
@@ -132,6 +142,8 @@ import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 type DocumentToolName =
   | "compare_documents"
   | "prepare_file_comparison"
+  | "prepare_file_comparison_from_links"
+  | "open_file_comparison"
   | "list_documents"
   | "read_document"
   | "save_document"
@@ -2486,6 +2498,8 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
   OPEN_DOCUMENT_VERSION_UPLOAD_TOOL_DEFINITION,
   COMPARE_DOCUMENTS_TOOL_DEFINITION,
   PREPARE_FILE_COMPARISON_TOOL_DEFINITION,
+  PREPARE_FILE_COMPARISON_FROM_LINKS_TOOL_DEFINITION,
+  OPEN_FILE_COMPARISON_TOOL_DEFINITION,
   defineValibotMcpTool({
     annotations: {
       title: "Delete document",
@@ -2559,6 +2573,8 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
 export const DOCUMENT_TOOL_HANDLERS = {
   compare_documents: handleCompareDocumentsTool,
   prepare_file_comparison: handlePrepareFileComparisonTool,
+  prepare_file_comparison_from_links: handlePrepareFileComparisonFromLinksTool,
+  open_file_comparison: handleOpenFileComparisonTool,
   delete_document: handleDeleteDocumentTool,
   list_documents: handleListDocumentsTool,
   list_properties: handleListPropertiesTool,
@@ -2576,6 +2592,9 @@ export const DOCUMENT_TOOL_SET = defineMcpToolSet(
   {
     compare_documents: COMPARE_DOCUMENTS_OUTPUT_CONTRACT,
     prepare_file_comparison: PREPARE_FILE_COMPARISON_OUTPUT_CONTRACT,
+    prepare_file_comparison_from_links:
+      PREPARE_FILE_COMPARISON_FROM_LINKS_OUTPUT_CONTRACT,
+    open_file_comparison: OPEN_FILE_COMPARISON_OUTPUT_CONTRACT,
     delete_document: defineChatProjectionMcpToolOutput(DELETED_TRUE_PROJECTION),
     list_documents: defineChatProjectionMcpToolOutput(
       LIST_DOCUMENTS_PROJECTION,

@@ -13,7 +13,7 @@ import {
 } from "@stll/api-contract";
 import { fetchWithTimeout } from "@stll/fetch";
 
-import "./style.css";
+import "../style.css";
 import { createUploadTargetController } from "./upload-target";
 
 const UPLOAD_TIMEOUT_MS = 1_800_000;
