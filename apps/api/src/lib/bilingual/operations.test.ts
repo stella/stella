@@ -517,9 +517,11 @@ describe("buildOperations applied to a bilingual document", () => {
     expect(targetClauseSignature).toContain("<w:highlight");
     expect(targetClauseSignature).toContain("<w:tab");
     expect(targetClauseSignature).toContain("<w:br");
-    // Folio canonicalizes carriage returns to breaks and hyphen controls to
-    // their OOXML text equivalents during the later structural edit pass.
-    expect(wordElementCount(targetClauseSignature, "br")).toBe(2);
+    // Folio canonicalizes hyphen controls to their OOXML text equivalents
+    // during the later structural edit pass. `w:cr` is a break kind of its
+    // own, so it survives the pass as itself rather than as a `w:br`.
+    expect(wordElementCount(targetClauseSignature, "br")).toBe(1);
+    expect(wordElementCount(targetClauseSignature, "cr")).toBe(1);
     expect(targetClauseSignature).toContain("‑­");
     expect(targetClauseSignature).toContain("<w:sym");
     expect(targetClauseSignature).toContain("<w:fldChar");
@@ -545,16 +547,11 @@ describe("buildOperations applied to a bilingual document", () => {
         wordElementCount(inlineSignature, localName),
       ).toBeGreaterThanOrEqual(2);
     }
-    for (const localName of ["tab", "sym", "fldChar"]) {
+    for (const localName of ["br", "cr", "tab", "sym", "fldChar"]) {
       expect(wordElementCount(inlineSignature, localName)).toBe(
         wordElementCount(sourceInlineSignature, localName) * 2,
       );
     }
-    expect(wordElementCount(inlineSignature, "br")).toBe(
-      (wordElementCount(sourceInlineSignature, "br") +
-        wordElementCount(sourceInlineSignature, "cr")) *
-        2,
-    );
     expect(inlineSignature.match(/‑­/gu)).toHaveLength(2);
     const tableInlineSignature = await paragraphSignature(
       applied.buffer,
@@ -565,16 +562,11 @@ describe("buildOperations applied to a bilingual document", () => {
         wordElementCount(tableInlineSignature, localName),
       ).toBeGreaterThanOrEqual(2);
     }
-    for (const localName of ["tab", "sym", "fldChar"]) {
+    for (const localName of ["br", "cr", "tab", "sym", "fldChar"]) {
       expect(wordElementCount(tableInlineSignature, localName)).toBe(
         wordElementCount(sourceTableSignature, localName) * 2,
       );
     }
-    expect(wordElementCount(tableInlineSignature, "br")).toBe(
-      (wordElementCount(sourceTableSignature, "br") +
-        wordElementCount(sourceTableSignature, "cr")) *
-        2,
-    );
     expect(tableInlineSignature.match(/‑­/gu)).toHaveLength(2);
   });
 

@@ -1,6 +1,6 @@
 import type { Document } from "@stll/folio-core";
 import { getAllParagraphs } from "@stll/folio-core/docx/documentParser";
-import { getParagraphPlainText } from "@stll/folio-core/docx/serializer/paragraphSerializer";
+import { getParagraphText } from "@stll/folio-core/docx/paragraphParser";
 import {
   createDefaultFindOptions,
   findInParagraph,
@@ -151,7 +151,7 @@ const findDocumentCandidateMatches = ({
       nativeMatchesByText.set(text, nativeMatches);
       return nativeMatches;
     };
-    const paragraphText = getParagraphPlainText(paragraph);
+    const paragraphText = getParagraphText(paragraph);
     for (const candidate of candidates) {
       const candidateMatches = new Map<string, FindMatch>();
       for (const match of getNativeMatches(candidate).values()) {

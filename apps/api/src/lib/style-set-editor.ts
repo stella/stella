@@ -1,4 +1,10 @@
 import {
+  headingLevelOf,
+  paragraphNumberingReference,
+  paragraphNumberingReferenceId,
+} from "@stll/docx-core/model";
+import type { OutlineLevel } from "@stll/docx-core/model";
+import {
   createEmptyDocument,
   createStellaStyleDocumentPreset,
   extractDocumentStyleSet,
@@ -297,15 +303,16 @@ const findOrCreateRoleStyle = (
 
   const outlineLevels = {
     title: null,
-    level1: 0,
-    level2: 1,
-    level3: 2,
-  } as const satisfies Record<Role, number | null>;
+    level1: { kind: "heading", level: 0 },
+    level2: { kind: "heading", level: 1 },
+    level3: { kind: "heading", level: 2 },
+  } as const satisfies Record<Role, OutlineLevel | null>;
   const outlineLevel = outlineLevels[role];
   if (outlineLevel !== null) {
     const outlined = styles.find(
       (style) =>
-        style.type === "paragraph" && style.pPr?.outlineLevel === outlineLevel,
+        style.type === "paragraph" &&
+        headingLevelOf(style.pPr?.outlineLevel) === outlineLevel.level,
     );
     if (outlined) {
       return outlined;
@@ -319,6 +326,10 @@ const findOrCreateRoleStyle = (
     level3: 3,
   } as const;
   const name = role === "title" ? "Title" : `Heading ${headingNumbers[role]}`;
+  const pPr: ParagraphFormatting =
+    outlineLevel === null
+      ? { keepNext: true }
+      : { keepNext: true, outlineLevel };
   const style = {
     styleId,
     type: "paragraph",
@@ -326,10 +337,7 @@ const findOrCreateRoleStyle = (
     basedOn: bodyStyleId,
     next: bodyStyleId,
     qFormat: true,
-    pPr:
-      outlineLevel === null
-        ? { keepNext: true }
-        : { keepNext: true, outlineLevel },
+    pPr,
   } satisfies StyleDefinition;
   styles.push(style);
   return style;
@@ -517,7 +525,7 @@ const findNumberingLevels = (
   roles: RoleStyles,
 ): NumberingLevels => {
   const definitions = styleSet.numbering;
-  const level1NumId = roles.level1.pPr?.numPr?.numId;
+  const level1NumId = paragraphNumberingReferenceId(roles.level1.pPr?.numPr);
   if (!definitions) {
     return { enabled: false };
   }
@@ -664,7 +672,7 @@ const applyNumberingSettings = (
 
   styleSet.numbering ??= { abstractNums: [], nums: [] };
   const existing = findNumberingLevels(styleSet, roles);
-  const currentNumId = roles.level1.pPr?.numPr?.numId;
+  const currentNumId = paragraphNumberingReferenceId(roles.level1.pPr?.numPr);
   const currentInstance = styleSet.numbering.nums.find(
     (num) => num.numId === currentNumId,
   );
@@ -724,7 +732,7 @@ const applyNumberingSettings = (
   ].entries()) {
     style.pPr = {
       ...style.pPr,
-      numPr: { numId: activeNumId, ilvl: index },
+      numPr: paragraphNumberingReference({ numId: activeNumId, ilvl: index }),
     };
   }
 };
@@ -737,7 +745,7 @@ const preserveEditorNumberingDefinition = (
   roles: RoleStyles,
 ) => {
   const numbering = styleSet.numbering;
-  const currentNumId = roles.level1.pPr?.numPr?.numId;
+  const currentNumId = paragraphNumberingReferenceId(roles.level1.pPr?.numPr);
   if (!numbering || currentNumId === undefined) {
     return;
   }
@@ -779,7 +787,10 @@ const ensureEditorNumberingMarkerStyle = (
       style.name === EDITOR_NUMBERING_STYLE_NAME && style.hidden === true,
   );
   if (existing) {
-    existing.pPr = { ...existing.pPr, numPr: { numId, ilvl: 0 } };
+    existing.pPr = {
+      ...existing.pPr,
+      numPr: paragraphNumberingReference({ numId, ilvl: 0 }),
+    };
     return;
   }
   let styleId = EDITOR_NUMBERING_STYLE_ID;
@@ -794,7 +805,7 @@ const ensureEditorNumberingMarkerStyle = (
     name: EDITOR_NUMBERING_STYLE_NAME,
     hidden: true,
     semiHidden: true,
-    pPr: { numPr: { numId, ilvl: 0 } },
+    pPr: { numPr: paragraphNumberingReference({ numId, ilvl: 0 }) },
   });
 };
 

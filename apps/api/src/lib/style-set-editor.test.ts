@@ -1,6 +1,7 @@
 import { Value } from "@sinclair/typebox/value";
 import { describe, expect, test } from "bun:test";
 
+import { paragraphNumberingReferenceId } from "@stll/docx-core/model";
 import {
   createDocx,
   createEmptyDocument,
@@ -363,7 +364,7 @@ describe("style set visual editing", () => {
     const level1Style = enabled.styleSet.styles.styles.find(
       (style) => style.styleId === "ClauseHeading1",
     );
-    const activeNumId = level1Style?.pPr?.numPr?.numId;
+    const activeNumId = paragraphNumberingReferenceId(level1Style?.pPr?.numPr);
     const activeInstance = enabled.styleSet.numbering?.nums.find(
       (instance) => instance.numId === activeNumId,
     );

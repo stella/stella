@@ -418,6 +418,12 @@ const collectParagraphs = (
         );
       case "blockSdt":
         return collectParagraphs(block.content, tableHeader);
+      // Hold no paragraph: opaque preserved markup and bookmark markers carry
+      // no runs, so this scorer has nothing to read in them.
+      case "preservedBlock":
+      case "bookmarkStart":
+      case "bookmarkEnd":
+        return [];
       default:
         block satisfies never;
         return panic(`Unhandled block: ${String(block)}`);

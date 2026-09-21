@@ -44,6 +44,11 @@ const runContentText = (item: RunContent): string => {
       return "\t";
     case "break":
       return "\n";
+    // Verbatim-preserved markup folio does not model. Its `text` is what the
+    // markup puts on the line (a `w:ruby` base is visible text), so this
+    // reads it rather than dropping the characters.
+    case "preservedXml":
+      return item.text;
     // Carry no characters of their own: a symbol, a note mark, a field's own
     // instruction text, a hyphen the layout inserted, a drawing or a shape all
     // reach the text through the runs around them.

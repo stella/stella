@@ -25,6 +25,7 @@ export const TRACKED_CHANGE_TAGS_BY_KIND = {
   paragraphPropertiesChanged: ["pPrChange"],
   sectionPropertiesChanged: ["sectPrChange"],
   tablePropertiesChanged: ["tblPrChange"],
+  tablePropertyExceptionsChanged: ["tblPrExChange"],
   rowPropertiesChanged: ["trPrChange"],
   cellPropertiesChanged: ["tcPrChange"],
 } as const satisfies Record<FolioReviewChangeKind, readonly string[]>;
