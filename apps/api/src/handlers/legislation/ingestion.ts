@@ -1,11 +1,12 @@
 import { panic, Result } from "better-result";
-import { and, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, lt, sql } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { legislationDocuments } from "@/api/db/schema";
 import { corpusStorageMode } from "@/api/env-base";
 import { restrictLegislationDocumentUrls } from "@/api/handlers/legislation/ingestion/outbound-urls";
 import { createStatuteSlug } from "@/api/handlers/legislation/slug";
+import { windowJunction } from "@/api/handlers/legislation/version-windows";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -254,6 +255,102 @@ const legislationSourceHash = (input: LegislationDocumentInput): string => {
   return hasher.digest("hex");
 };
 
+/**
+ * Report a version whose window does not meet its neighbours' edge to edge.
+ *
+ * Every connector's rows pass through here, so this is where the class of
+ * defect that leaves a day uncovered (a publisher's inclusive end date stored
+ * as the exclusive bound) or doubly covered (overlapping windows) is caught,
+ * on the first crawl that writes two adjacent versions, rather than at a
+ * point-in-time read months later. Telemetry, not a refusal: the row is
+ * still the best text the corpus has for its window, and the fix is in the
+ * connector. A wider gap is a version not yet ingested and is not reported;
+ * the coverage census owns it.
+ */
+type ReportWindowJunctionsArgs = {
+  input: Pick<
+    LegislationDocumentInput,
+    "sourceId" | "eli" | "language" | "versionValidFrom" | "versionValidTo"
+  >;
+  documentId: SafeId<"legislationDocument">;
+  scopedDb: ScopedDb;
+};
+
+const reportWindowJunctions = async ({
+  input,
+  documentId,
+  scopedDb,
+}: ReportWindowJunctionsArgs): Promise<void> => {
+  const validFrom = input.versionValidFrom ?? null;
+  if (validFrom === null) {
+    return;
+  }
+  const work = and(
+    eq(legislationDocuments.sourceId, input.sourceId),
+    eq(legislationDocuments.eli, input.eli),
+    eq(legislationDocuments.language, input.language),
+  );
+  const neighbour = async (
+    where: SQL,
+    order: SQL,
+  ): Promise<{ validFrom: string | null; validTo: string | null }[]> =>
+    await scopedDb((tx) =>
+      tx
+        .select({
+          validFrom: legislationDocuments.versionValidFrom,
+          validTo: legislationDocuments.versionValidTo,
+        })
+        .from(legislationDocuments)
+        .where(and(work, where))
+        .orderBy(order)
+        .limit(1),
+    );
+  const [[earlier], [later]] = await Promise.all([
+    neighbour(
+      lt(legislationDocuments.versionValidFrom, validFrom),
+      desc(legislationDocuments.versionValidFrom),
+    ),
+    neighbour(
+      gt(legislationDocuments.versionValidFrom, validFrom),
+      asc(legislationDocuments.versionValidFrom),
+    ),
+  ]);
+
+  const junctions = [
+    earlier?.validFrom
+      ? {
+          earlier: { validFrom: earlier.validFrom, validTo: earlier.validTo },
+          later: { validFrom },
+        }
+      : null,
+    later?.validFrom
+      ? {
+          earlier: { validFrom, validTo: input.versionValidTo ?? null },
+          later: { validFrom: later.validFrom },
+        }
+      : null,
+  ];
+  for (const pair of junctions) {
+    if (pair === null) {
+      continue;
+    }
+    const junction = windowJunction(pair.earlier, pair.later);
+    if (junction.type !== "inclusive-end" && junction.type !== "overlap") {
+      continue;
+    }
+    logger.error("legislation.ingestion.version_window_discontiguous", {
+      documentId,
+      sourceId: input.sourceId,
+      eli: input.eli,
+      language: input.language,
+      earlierValidFrom: pair.earlier.validFrom,
+      earlierValidTo: pair.earlier.validTo,
+      laterValidFrom: pair.later.validFrom,
+      junction,
+    });
+  }
+};
+
 /** The raw-payload pointers a row carries, and what a run may write to them. */
 type StoredSourceRaw = {
   sourceRawS3Key: string | null;
@@ -477,6 +574,8 @@ export const processLegislationDocument = async (
     }
     return row.id;
   });
+
+  await reportWindowJunctions({ input, documentId: id, scopedDb });
 
   let corpusWriteFailed = false;
   // Legislation mirrors the payload whenever corpus storage is on and never
