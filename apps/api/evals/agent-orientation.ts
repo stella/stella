@@ -1204,8 +1204,14 @@ const TASKS: readonly Task[] = [
       kind: "command",
       path: ["document", "comparison", "prepare"],
       flags: {
-        input:
-          '{"base":{"name":"Draft.docx","size":18342,"sha256_hex":"3f1a2b4c5d6e7f809a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f6071"},"target":{"name":"Revised.docx","size":19004,"sha256_hex":"9f8e7d6c5b4a39281706f5e4d3c2b1a09f8e7d6c5b4a39281706f5e4d3c2b1a0"}}',
+        "base.name": "Draft.docx",
+        "base.size": "18342",
+        "base.sha256-hex":
+          "3f1a2b4c5d6e7f809a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f6071",
+        "target.name": "Revised.docx",
+        "target.size": "19004",
+        "target.sha256-hex":
+          "9f8e7d6c5b4a39281706f5e4d3c2b1a09f8e7d6c5b4a39281706f5e4d3c2b1a0",
       },
     },
   },
@@ -1254,9 +1260,11 @@ const TASKS: readonly Task[] = [
     cli: {
       kind: "command",
       path: ["document", "comparison", "prepare-from-links"],
+      // The route map spells the nested sides as dotted flags; the resolver
+      // also reads them from an `--input` payload at the same path.
       flags: {
-        input:
-          '{"base":{"url":"https://files.example.com/nda/original.docx"},"target":{"url":"https://files.example.com/nda/revised.docx"}}',
+        "base.url": "https://files.example.com/nda/original.docx",
+        "target.url": "https://files.example.com/nda/revised.docx",
       },
     },
   },
@@ -1865,18 +1873,35 @@ const resolveFlagValue = (
     return undefined;
   }
   const flat = flattenInputPayload(parseJsonOrNull(inputText));
+  // A dotted flag (`--base.url`) is the route map's spelling of a nested
+  // object property, so it is read at the same path inside the payload.
+  const [head, ...rest] = flagName.split(".");
   const candidateKeys = [
-    kebabToSnake(flagName),
-    kebabToCamel(flagName),
-    ...(FLAG_INPUT_KEY_ALIASES[flagName] ?? []),
+    kebabToSnake(head ?? flagName),
+    kebabToCamel(head ?? flagName),
+    ...(FLAG_INPUT_KEY_ALIASES[head ?? flagName] ?? []),
   ];
   for (const key of candidateKeys) {
-    const value = flat[key];
+    const value = readNestedPath(flat[key], rest);
     if (value !== undefined) {
       return typeof value === "string" ? value : JSON.stringify(value);
     }
   }
   return undefined;
+};
+
+const readNestedPath = (
+  value: unknown,
+  segments: readonly string[],
+): unknown => {
+  let current = value;
+  for (const segment of segments) {
+    if (!isRecord(current)) {
+      return undefined;
+    }
+    current = current[kebabToSnake(segment)] ?? current[kebabToCamel(segment)];
+  }
+  return current;
 };
 
 /**
