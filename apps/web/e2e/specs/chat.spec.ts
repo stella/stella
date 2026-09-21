@@ -101,8 +101,7 @@ test("chat composer sends a message and renders the assistant reply", async ({
     "Hello from the stella e2e chat spec. This deliberately long prompt wraps across several lines so the sticky user header has a different natural and compact height. ".repeat(
       4,
     );
-  await composer.click();
-  await composer.pressSequentially(messageText);
+  await composer.fill(messageText);
 
   await page.getByRole("button", { name: "Send message" }).click();
 
