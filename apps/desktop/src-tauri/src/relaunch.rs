@@ -64,13 +64,29 @@ fi
     relaunch_command(
       std::process::id(),
       &bundle,
-      env.args_os.iter().skip(1).cloned(),
+      relaunch_arguments(env.args_os.iter().skip(1).cloned()),
     )
     .spawn()
     .map_err(|err| format!("relaunch helper could not be spawned: {err}"))?;
 
     handle.exit(0);
     Ok(())
+  }
+
+  // An update relaunch is never a user-initiated foreground launch: the
+  // clipboard window must stay hidden even when the original launch (Dock,
+  // Spotlight) carried no background flag. Deep-link and other arguments
+  // are preserved behind the flag.
+  fn relaunch_arguments(original: impl IntoIterator<Item = OsString>) -> Vec<OsString> {
+    let mut args = vec![OsString::from(
+      crate::app_lifecycle::BACKGROUND_LAUNCH_ARGUMENT,
+    )];
+    args.extend(
+      original
+        .into_iter()
+        .filter(|arg| arg != crate::app_lifecycle::BACKGROUND_LAUNCH_ARGUMENT),
+    );
+    args
   }
 
   fn relaunch_command(
@@ -127,6 +143,25 @@ fi
           "/tmp/stella desktop/Contents/MacOS/stella-desktop"
         )),
         None
+      );
+    }
+
+    #[test]
+    fn relaunch_arguments_always_lead_with_the_background_flag() {
+      assert_eq!(
+        relaunch_arguments([]),
+        [OsString::from("--stella-background-launch")]
+      );
+      assert_eq!(
+        relaunch_arguments([OsString::from("--stella-background-launch")]),
+        [OsString::from("--stella-background-launch")]
+      );
+      assert_eq!(
+        relaunch_arguments([OsString::from("stella://ping")]),
+        [
+          OsString::from("--stella-background-launch"),
+          OsString::from("stella://ping"),
+        ]
       );
     }
 
