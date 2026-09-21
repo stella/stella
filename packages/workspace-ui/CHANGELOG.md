@@ -1,5 +1,12 @@
 # @stll/workspace-ui
 
+## 0.11.8
+
+### Patch Changes
+
+- [#3633](https://github.com/stella/stella/pull/3633) [`e5e9466`](https://github.com/stella/stella/commit/e5e946637a54cf09eba1beb4c4a5cc3f0bbb2e06) Thanks [@dependabot](https://github.com/apps/dependabot)! - Require `@atlaskit/pragmatic-drag-and-drop-hitbox` 2.2.2 or newer and use its
+  supported `Edge` type entry point.
+
 ## 0.11.7
 
 ### Patch Changes

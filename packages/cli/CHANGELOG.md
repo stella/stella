@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 1.19.0
+
+### Minor Changes
+
+- [#3615](https://github.com/stella/stella/pull/3615) [`3d707ee`](https://github.com/stella/stella/commit/3d707ee62711467446bca97c01610f7ad186f4c4) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `stella feedback prepare` now takes a structured report (`--kind`, `--area`, `--title`, `--what-happened`, optional `--expected`, `--steps`, `--evidence`, and `--context.*`) and returns the sanitized report without sending anything. The new `stella feedback submit` files the approved report with the maintainers and prints a receipt (`FB-XXXX-XXXX`); it asks for confirmation, and `--yes` skips the prompt. The prefilled issue URL and `gh` command are gone.
+
 ## 1.18.1
 
 ### Patch Changes
