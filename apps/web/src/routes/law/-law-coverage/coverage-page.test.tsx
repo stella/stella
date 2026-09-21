@@ -132,15 +132,15 @@ const IN_PREPARATION: CaseLawCoverageCountry = {
 };
 
 describe("the coverage page states what it counts", () => {
-  test("searchable and stored are two figures, never one sum", () => {
+  test("the page leads with what a search can find, and only that", () => {
     const markup = render(<CaseLawCoveragePage coverage={COVERAGE} />);
 
     expect(markup).toContain("4,200,000");
-    expect(markup).toContain("4,500,000");
-    // 8,700,000 would be the sum of two populations that overlap.
-    expect(markup).not.toContain("8,700,000");
     expect(markup).toContain(messages.caseLaw.coverage.searchableHint);
-    expect(markup).toContain(messages.caseLaw.coverage.storedHint);
+    // What is held but not searchable is a source's own figure, in its
+    // completeness column; neither it nor a sum of the two heads the page.
+    expect(markup).not.toContain("4,500,000");
+    expect(markup).not.toContain("8,700,000");
   });
 
   test("a stored figure states when it was counted", () => {
@@ -149,26 +149,6 @@ describe("the coverage page states what it counts", () => {
     // The count is taken on the ingestion side, so the figure is only as
     // current as its last sweep, and the page says which day that was.
     expect(markup).toContain("Counted Sep 17, 2026");
-  });
-
-  test("a stored figure nobody has counted is withheld, not printed as zero", () => {
-    const markup = render(
-      <CaseLawCoveragePage
-        coverage={{
-          ...COVERAGE,
-          totals: {
-            searchable: 4_200_000,
-            stored: { decisions: 0, asOf: null },
-          },
-          countries: [IN_PREPARATION],
-        }}
-      />,
-    );
-
-    // The sum is zero by construction when no source has been counted; the
-    // page says so in words rather than publishing a corpus that holds nothing.
-    expect(markup).toContain(messages.caseLaw.coverage.notCountedYet);
-    expect(markup).not.toMatch(/tabular-nums">0</u);
   });
 
   test("a corpus 99.6 % of the way there prints 99, never 100", () => {
@@ -217,10 +197,9 @@ describe("the coverage page states what it counts", () => {
 
     expect(markup).toContain(messages.caseLaw.coverage.inPreparation);
     // No measurable ratio, and no zero standing in for one: the source says
-    // it was never measured, and the stored figure says it was never counted.
+    // it was never measured.
     expect(markup).not.toContain("0%");
     expect(markup).toContain(messages.caseLaw.coverage.notMeasuredYet);
-    expect(markup).toContain(messages.caseLaw.coverage.notCountedYet);
     // No index to break down by court.
     expect(markup).not.toContain(messages.caseLaw.coverage.courtsHeading);
   });

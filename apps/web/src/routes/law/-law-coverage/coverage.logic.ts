@@ -18,8 +18,6 @@ export type CaseLawCoverageCountry = CaseLawCoverage["countries"][number];
 export type CaseLawCoverageSource = CaseLawCoverageCountry["sources"][number];
 export type CaseLawCoverageHealth = CaseLawCoverageCountry["health"];
 type CaseLawCoverageAvailability = CaseLawCoverageCountry["availability"];
-/** A count and the instant it was taken, never a bare number. */
-export type CaseLawStoredCount = CaseLawCoverageCountry["stored"];
 export type CaseLawSourceCompleteness = CaseLawCoverageSource["completeness"];
 /** The two arms that carry both numbers, and so can carry a ratio. */
 export type CaseLawMeasuredCompleteness = Extract<

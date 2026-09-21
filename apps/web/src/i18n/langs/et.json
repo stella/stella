@@ -672,8 +672,6 @@
       "reportedByPublisher": "Avaldaja enda loend",
       "searchable": "Otsitavad",
       "searchableHint": "Lahendid, mille otsing leiab.",
-      "stored": "Salvestatud",
-      "storedHint": "Salvestatud lahendid, veel mitte otsitavad.",
       "title": "Kohtupraktika kaetus",
       "totalFrom": "Koguarv seisuga {date}",
       "unavailable": "Kaetuse andmed ei ole praegu saadaval."

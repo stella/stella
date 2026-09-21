@@ -672,8 +672,6 @@
       "reportedByPublisher": "Paša publicētāja skaits",
       "searchable": "Meklējami",
       "searchableHint": "Nolēmumi, kurus atrod meklēšana.",
-      "stored": "Saglabāti",
-      "storedHint": "Saglabāti nolēmumi, vēl nav meklējami.",
       "title": "Tiesu prakses aptvērums",
       "totalFrom": "Kopskaits uz {date}",
       "unavailable": "Aptvēruma dati pašlaik nav pieejami."

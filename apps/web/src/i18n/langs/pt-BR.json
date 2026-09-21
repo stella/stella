@@ -672,8 +672,6 @@
       "reportedByPublisher": "Contagem do próprio órgão",
       "searchable": "Pesquisáveis",
       "searchableHint": "Decisões que a pesquisa encontra.",
-      "stored": "Armazenadas",
-      "storedHint": "Decisões armazenadas, ainda não pesquisáveis.",
       "title": "Cobertura da jurisprudência",
       "totalFrom": "Total em {date}",
       "unavailable": "Os dados de cobertura estão indisponíveis no momento."

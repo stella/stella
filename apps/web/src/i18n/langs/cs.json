@@ -672,8 +672,6 @@
       "reportedByPublisher": "Vlastní údaj vydavatele",
       "searchable": "Dostupné k vyhledání",
       "searchableHint": "Rozhodnutí, která najde vyhledávání.",
-      "stored": "Uložené",
-      "storedHint": "Rozhodnutí v korpusu, zatím nedostupná k vyhledání.",
       "title": "Pokrytí judikatury",
       "totalFrom": "Celkem k {date}",
       "unavailable": "Údaje o pokrytí nejsou momentálně k dispozici."

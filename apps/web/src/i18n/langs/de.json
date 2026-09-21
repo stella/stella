@@ -672,8 +672,6 @@
       "reportedByPublisher": "Eigene Zählung des Herausgebers",
       "searchable": "Durchsuchbar",
       "searchableHint": "Entscheidungen, die die Suche findet.",
-      "stored": "Gespeichert",
-      "storedHint": "Vorhandene Entscheidungen, noch nicht durchsuchbar.",
       "title": "Abdeckung der Rechtsprechung",
       "totalFrom": "Gesamtzahl vom {date}",
       "unavailable": "Die Abdeckungszahlen sind derzeit nicht verfügbar."

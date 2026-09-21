@@ -47,7 +47,6 @@ import {
   type CaseLawCoverageSource,
   type CaseLawMeasuredCompleteness,
   type CaseLawSourceCompleteness,
-  type CaseLawStoredCount,
   orderCoverageCountriesByName,
 } from "@/routes/law/-law-coverage/coverage.logic";
 
@@ -130,20 +129,7 @@ export const CaseLawCoveragePage = ({
         </p>
       </CoverageHeading>
 
-      <dl className="grid max-w-md grid-cols-2 gap-3">
-        <Total
-          hint={t("caseLaw.coverage.searchableHint")}
-          label={t("caseLaw.coverage.searchable")}
-        >
-          {format.number(coverage.totals.searchable)}
-        </Total>
-        <Total
-          hint={t("caseLaw.coverage.storedHint")}
-          label={t("caseLaw.coverage.stored")}
-        >
-          <StoredDecisions stored={coverage.totals.stored} />
-        </Total>
-      </dl>
+      <Headline>{format.number(coverage.totals.searchable)}</Headline>
 
       {countries.map((country) => (
         <CountrySection country={country} key={country.country} />
@@ -166,20 +152,9 @@ export const CaseLawCoveragePending = () => {
         <Skeleton className="h-3 w-48" />
       </CoverageHeading>
 
-      <dl className="grid max-w-md grid-cols-2 gap-3">
-        <Total
-          hint={t("caseLaw.coverage.searchableHint")}
-          label={t("caseLaw.coverage.searchable")}
-        >
-          <Skeleton className="h-7 w-28" />
-        </Total>
-        <Total
-          hint={t("caseLaw.coverage.storedHint")}
-          label={t("caseLaw.coverage.stored")}
-        >
-          <Skeleton className="h-7 w-28" />
-        </Total>
-      </dl>
+      <Headline>
+        <Skeleton className="h-10 w-48" />
+      </Headline>
 
       {PENDING_SECTION_KEYS.map((section) => (
         <CountryCard
@@ -239,59 +214,31 @@ const CoverageHeading = ({ children }: PropsWithChildren) => {
   const t = useTranslations();
 
   return (
-    <header className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
-      <div className="flex flex-col gap-1">
-        <h1 className="text-lg font-semibold text-balance">
-          {t("caseLaw.coverage.title")}
-        </h1>
-        <p className="text-muted-foreground max-w-prose text-sm text-pretty">
-          {t("caseLaw.coverage.description")}
-        </p>
-      </div>
+    <header className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
+      <h1 className="text-lg font-semibold text-balance">
+        {t("caseLaw.coverage.title")}
+      </h1>
       {children}
     </header>
   );
 };
 
-/** One of the two populations, with the one line that says what it counts. */
-const Total = ({
-  children,
-  hint,
-  label,
-}: PropsWithChildren<{ hint: string; label: string }>) => (
-  <div className="bg-background flex flex-col gap-1 rounded-xl border px-4 py-3 shadow-xs/5">
-    <dt className="text-muted-foreground text-xs">{label}</dt>
-    <dd className="flex flex-col gap-0.5">
-      <span className="text-2xl font-semibold tabular-nums">{children}</span>
-      <span className="text-muted-foreground text-xs">{hint}</span>
-    </dd>
-  </div>
-);
-
 /**
- * A stored count with the instant it was taken. The count is made on the
- * ingestion side, so the figure on the page is as old as its last sweep; a
- * number printed without that date invites the reader to take it for live.
- *
- * With no sweep on record the count is zero by construction, not by
- * observation, and a zero there would read as a corpus holding nothing.
+ * The one number the page is about, with the one line that says what it
+ * counts. What is held but not yet searchable stays with the source it
+ * belongs to, in the completeness column; summed here it would compete with
+ * this figure and overlap it.
  */
-const StoredDecisions = ({ stored }: { stored: CaseLawStoredCount }) => {
+const Headline = ({ children }: PropsWithChildren) => {
   const t = useTranslations();
-  const format = useFormatter();
 
-  if (stored.asOf === null) {
-    return (
-      <span className="text-muted-foreground text-sm font-normal">
-        {t("caseLaw.coverage.notCountedYet")}
-      </span>
-    );
-  }
   return (
-    <>
-      {format.number(stored.decisions)}
-      <CountedOn asOf={stored.asOf} />
-    </>
+    <div className="flex flex-col gap-1">
+      <p className="text-4xl font-semibold tabular-nums">{children}</p>
+      <p className="text-muted-foreground text-sm">
+        {t("caseLaw.coverage.searchableHint")}
+      </p>
+    </div>
   );
 };
 
@@ -401,9 +348,6 @@ const CountrySection = ({ country }: { country: CaseLawCoverageCountry }) => {
             )}
             <Figure label={t("caseLaw.corpusStatus.newLast7Days")}>
               <Delta value={country.addedLastWeek} />
-            </Figure>
-            <Figure label={t("caseLaw.coverage.stored")}>
-              <StoredDecisions stored={country.stored} />
             </Figure>
           </dl>
         </>
