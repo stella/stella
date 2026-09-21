@@ -1,6 +1,5 @@
 import { useCallback, useId, useRef, useState } from "react";
 
-import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
@@ -27,14 +26,9 @@ import {
   STATUTE_OUTLINE_COLLAPSE_LEVEL,
   statuteOutlineFromHeadings,
 } from "@/components/legal-reader/reader-outline";
-import { SourceLinkPolicyProvider } from "@/components/legal-reader/source-link-policy";
-import { AnnotatedStatuteText } from "@/features/statutes/components/annotated-statute-text";
+import { StatuteReaderBody } from "@/features/statutes/components/statute-reader-body";
 import { StatuteVersionMenu } from "@/features/statutes/components/statute-version-menu";
-import { statuteCitationCountsOptions } from "@/features/statutes/queries/citing-decisions";
-import {
-  prepareStatuteReader,
-  provisionCitationCountByBlockAnchor,
-} from "@/features/statutes/statute-reader-blocks";
+import { prepareStatuteReader } from "@/features/statutes/statute-reader-blocks";
 import { useMountEffect } from "@/hooks/use-effect";
 import { ChromeHeaderActions } from "@/lib/chrome-header-actions";
 import { detached } from "@/lib/detached";
@@ -215,26 +209,6 @@ export const PublicStatuteViewer = ({
     jumpToAnchor(resolved.anchorId, container);
   });
 
-  // The keys a provision's incoming citations are filed under. Both come off
-  // the document itself: nothing about the work is inferred here.
-  const eli = statute?.eli.trim() ?? "";
-  const jurisdiction = statute?.country.trim().toUpperCase() ?? "";
-  const citationWork =
-    eli === "" || jurisdiction === "" ? null : { eli, jurisdiction };
-  const citationCounts = useQuery({
-    ...statuteCitationCountsOptions(
-      citationWork ?? { eli: "", jurisdiction: "" },
-    ),
-    enabled:
-      citationWork !== null && typeof statute?.citationCaseCount === "number",
-  });
-  const provisionCitationCounts = provisionCitationCountByBlockAnchor(
-    blocks,
-    citationCounts.data?.status === "ready"
-      ? citationCounts.data.provisions
-      : [],
-  );
-
   const sourceHref = statute
     ? (statute.documentUrl ?? statute.sourceUrl)
     : null;
@@ -259,28 +233,13 @@ export const PublicStatuteViewer = ({
             {t("statutes.noVersionInForce")}
           </p>
         ) : (
-          // The act's own publisher is the only host its markup may link to;
-          // a consolidation typeset with links into a commercial database
-          // renders those references as text, or as our own statute link.
-          <SourceLinkPolicyProvider
-            urls={[statute.documentUrl, statute.sourceUrl]}
-          >
-            <AnnotatedStatuteText
-              blocks={blocks}
-              citationWork={citationWork}
-              country={statute.country}
-              documentId={statute.id}
-              eli={statute.eli}
-              fulltext={statute.fulltext}
-              language={statute.language}
-              masthead={preparedReader.masthead}
-              provisionCitationCounts={provisionCitationCounts}
-              scrollContainerRef={readerRef}
-              statuteTitle={statute.title}
-              versionCount={versions.length}
-              versionValidFrom={statute.versionValidFrom}
-            />
-          </SourceLinkPolicyProvider>
+          <StatuteReaderBody
+            blocks={blocks}
+            masthead={preparedReader.masthead}
+            scrollContainerRef={readerRef}
+            statute={statute}
+            versionCount={versions.length}
+          />
         )}
       </div>
     </div>

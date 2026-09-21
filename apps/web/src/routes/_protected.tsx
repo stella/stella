@@ -47,6 +47,7 @@ import "@/features/case-law/case-decision-details-inspector-registration";
 import "@/features/case-law/case-decision-inspector-registration";
 import "@/features/inbox/signal-inspector-registration";
 import "@/features/statutes/provision-inspector-registration";
+import "@/features/statutes/statute-inspector-registration";
 import { ApiVersionMismatchBanner } from "@/components/api-version-mismatch-banner";
 import { AppSidebar } from "@/components/app-sidebar";
 import { resolveSidebarWorkspaceId } from "@/components/app-sidebar.logic";
