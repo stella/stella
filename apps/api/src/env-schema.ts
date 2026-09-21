@@ -199,6 +199,12 @@ export const envApiServerSchema = {
   GOTENBERG_USERNAME: v.string(),
   GOTENBERG_PASSWORD: v.string(),
   EXTENSION_ORIGIN: v.optional(v.pipe(v.string(), v.url())),
+  /**
+   * RFC 3161 timestamp authority for PDF signing. Unset signs at PAdES B-B
+   * (no trusted time, no revocation data); set raises every signature to
+   * B-LT.
+   */
+  PDF_SIGNING_TSA_URL: v.optional(v.pipe(v.string(), v.url())),
 
   /**
    * Self-host escape hatch for deployments without SMTP/OAuth. When enabled,

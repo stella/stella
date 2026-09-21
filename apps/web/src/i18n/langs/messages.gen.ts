@@ -5095,6 +5095,31 @@ type Messages = {
       "ocrAlreadyProcessed": "Text recognition has already completed";
       "ocrQueueFailed": "Couldn't queue text recognition";
       "ocrQueued": "Text recognition queued for the next OCR batch";
+      "pdfSigning": {
+        "action": "Sign with desktop app";
+        "cancelledBaseVersionDescription": "The document changed while it was being signed. Open the newest version and sign again.";
+        "cancelledCertificateDescription": "The selected certificate cannot be used for signing. Choose one that allows digital signatures.";
+        "cancelledDescription": "Signing did not finish.";
+        "cancelledDigestDescription": "The signature did not match the prepared document. Try signing again.";
+        "cancelledPlatformDescription": "Signing with a certificate from the system keychain works on macOS for now.";
+        "cancelledTitle": "Signing cancelled";
+        "cancelledUserDescription": "Signing was cancelled in stella desktop.";
+        "encryptedDescription": "This PDF is password-protected. Remove the protection before signing.";
+        "expiredDescription": "stella desktop did not finish signing in time. Start it and try again.";
+        "expiredTitle": "Signing timed out";
+        "noFileDescription": "This document has no file to sign.";
+        "notAPdfDescription": "Only PDF files can be signed.";
+        "readOnlyDescription": "This document is read-only.";
+        "signedDescription": "The signature was saved as version {versionNumber, number}.";
+        "signedDescriptionNoVersion": "The signature was saved as a new version.";
+        "signedTitle": "PDF signed";
+        "startFailedTitle": "Cannot sign this file";
+        "statusUnavailableDescription": "Check the version history to see whether the signature was saved.";
+        "statusUnavailableTitle": "Signing status unavailable";
+        "tooLargeDescription": "This PDF is too large to sign.";
+        "waitingDescription": "Choose a signing certificate in stella desktop to sign this PDF.";
+        "waitingTitle": "Waiting for stella desktop";
+      };
       "rateLimited": "Rate limited; resuming in {seconds, number}s";
       "referencedUpload": {
         "choiceLabel": "What to do with {fileName}";

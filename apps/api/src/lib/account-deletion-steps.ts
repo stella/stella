@@ -39,6 +39,7 @@ import {
   folioCollabRooms,
   mcpOAuthState,
   mcpUserConnections,
+  pdfSigningSessions,
   pendingUploads,
   PENDING_UPLOAD_RECOVERABLE_STATUSES,
   rateEntries,
@@ -893,6 +894,27 @@ export const deleteDesktopEditSessionsAndHandoffs = async ({
     .where(eq(desktopEditSessions.createdBy, currentUserId));
 };
 
+const DELETE_PDF_SIGNING_SESSIONS_TABLES = [
+  pdfSigningSessions,
+] as const satisfies readonly PgTable[];
+
+/**
+ * 7. PDF signing exchanges (cascade on createdBy → user.id, which never
+ * fires because the user row is soft-deleted).
+ *
+ * These rows hold the signer's certificate, so they are personal data rather
+ * than a workflow trace: they are deleted outright instead of anonymized.
+ * Nothing of theirs lives in object storage.
+ */
+export const deletePdfSigningSessions = async (
+  tx: Transaction,
+  currentUserId: string,
+): Promise<void> => {
+  await tx
+    .delete(pdfSigningSessions)
+    .where(eq(pdfSigningSessions.createdBy, currentUserId));
+};
+
 export type DeletePendingUploadsParams = {
   tx: Transaction;
   currentUserId: string;
@@ -1183,6 +1205,7 @@ export const ACCOUNT_DELETION_MANUAL_TABLES = [
   ...REASSIGN_ACTIVE_TASKS_TABLES,
   ...RESET_FOLIO_COLLAB_USER_STATE_TABLES,
   ...DELETE_DESKTOP_EDIT_SESSIONS_TABLES,
+  ...DELETE_PDF_SIGNING_SESSIONS_TABLES,
   ...DELETE_PENDING_UPLOADS_TABLES,
   ...DELETE_FILE_COMPARISON_UPLOADS_TABLES,
   ...DELETE_USER_FILES_TABLES,

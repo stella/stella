@@ -11,10 +11,8 @@ import {
 } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
 import type { SafeId } from "@/api/lib/branded-types";
-import {
-  canUseDesktopEditSession,
-  hashDesktopEditHandoffToken,
-} from "@/api/lib/desktop-edit-sessions";
+import { hashDesktopEditHandoffToken } from "@/api/lib/desktop-edit-sessions";
+import { canWriteWorkspaceEntities } from "@/api/lib/workspace-entity-write-access";
 
 export type ConsumedDesktopEditHandoff = {
   apiBaseUrl: string;
@@ -132,7 +130,7 @@ export const readDesktopEditHandoffAccess = async ({
   }
 
   return {
-    canUseDesktopEditSession: canUseDesktopEditSession({
+    canWriteWorkspaceEntities: canWriteWorkspaceEntities({
       organizationRole: access.organizationRole,
       workspaceMemberId: access.workspaceMemberId,
     }),

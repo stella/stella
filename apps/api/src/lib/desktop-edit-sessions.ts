@@ -1,6 +1,5 @@
 import { and, eq } from "drizzle-orm";
 
-import { roles } from "@stll/permissions";
 import { Temporal, DAY_IN_MS } from "@stll/time";
 
 import { member, user } from "@/api/db/auth-schema";
@@ -15,10 +14,10 @@ import {
 import type { SafeId } from "@/api/lib/branded-types";
 import type { DesktopEditFileType } from "@/api/lib/desktop-edit-file-types";
 import { liveDesktopEditSessionPredicates } from "@/api/lib/desktop-edit-session-predicates";
-import { isMemberRole } from "@/api/lib/member-roles";
-import type { MemberRole } from "@/api/lib/member-roles";
+import { createOpaqueToken, hashOpaqueToken } from "@/api/lib/opaque-tokens";
 import { createRootScopedDb } from "@/api/lib/root-scoped-db";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
+import { canWriteWorkspaceEntities } from "@/api/lib/workspace-entity-write-access";
 
 type AuthorizedDesktopEditSession = {
   entityId: SafeId<"entity">;
@@ -61,14 +60,9 @@ export const SESSION_TOKEN_TTL_MS = DAY_IN_MS;
 export const computeTokenExpiresAt = () =>
   new Date(Temporal.Now.instant().epochMilliseconds + SESSION_TOKEN_TTL_MS);
 
-const SESSION_TOKEN_PART_LENGTH = 32;
+export const createDesktopEditSessionToken = createOpaqueToken;
 
-export const createDesktopEditSessionToken = () =>
-  Bun.randomUUIDv7().replaceAll("-", "").slice(0, SESSION_TOKEN_PART_LENGTH) +
-  Bun.randomUUIDv7().replaceAll("-", "").slice(0, SESSION_TOKEN_PART_LENGTH);
-
-export const hashDesktopEditSessionToken = (sessionToken: string) =>
-  new Bun.CryptoHasher("sha256").update(sessionToken).digest("hex");
+export const hashDesktopEditSessionToken = hashOpaqueToken;
 
 export const DESKTOP_EDIT_SESSION_LIVENESS_REFRESH_INTERVAL_MS =
   SESSION_TOKEN_TTL_MS / 4;
@@ -125,38 +119,6 @@ export const DESKTOP_EDIT_SESSION_TAKEN_OVER_CODE =
   "desktop_edit_session_taken_over";
 export const DESKTOP_EDIT_SESSION_TAKEN_OVER_MESSAGE =
   "Desktop editing moved to another device. This local copy is preserved.";
-
-const DESKTOP_EDIT_WORKSPACE_ACCESS = {
-  owner: "organization-wide",
-  admin: "organization-wide",
-  external: "workspace-membership-required",
-  member: "workspace-membership-required",
-  intern: "workspace-membership-required",
-} as const satisfies Record<
-  MemberRole,
-  "organization-wide" | "workspace-membership-required"
->;
-
-export const canUseDesktopEditSession = ({
-  organizationRole,
-  workspaceMemberId,
-}: {
-  organizationRole: string | null;
-  workspaceMemberId: string | null;
-}) => {
-  if (!organizationRole || !isMemberRole(organizationRole)) {
-    return false;
-  }
-
-  const hasEntityUpdate = roles[organizationRole].authorize({
-    entity: ["update"],
-  }).success;
-  const hasWorkspaceAccess =
-    DESKTOP_EDIT_WORKSPACE_ACCESS[organizationRole] === "organization-wide" ||
-    workspaceMemberId !== null;
-
-  return hasEntityUpdate && hasWorkspaceAccess;
-};
 
 export const authorizeDesktopEditSession = async ({
   sessionId,
@@ -220,7 +182,7 @@ export const authorizeDesktopEditSession = async ({
   }
 
   if (
-    !canUseDesktopEditSession({
+    !canWriteWorkspaceEntities({
       organizationRole: session.organizationRole,
       workspaceMemberId: session.workspaceMemberId,
     })
@@ -295,7 +257,7 @@ export const readDesktopEditSessionEventState = async (
   const session = sessions.at(0);
   if (
     !session ||
-    !canUseDesktopEditSession({
+    !canWriteWorkspaceEntities({
       organizationRole: session.organizationRole,
       workspaceMemberId: session.workspaceMemberId,
     })

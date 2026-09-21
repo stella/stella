@@ -1,0 +1,6 @@
+{
+  "identifier": "pdf-sign-dialog",
+  "description": "Minimal capabilities for the PDF signing prompt; it only invokes the pdf_sign_respond command",
+  "windows": ["pdf-sign-dialog"],
+  "permissions": ["allow-pdf-sign-respond"]
+}
