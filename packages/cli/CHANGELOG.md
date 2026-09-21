@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 1.18.1
+
+### Patch Changes
+
+- [#3648](https://github.com/stella/stella/pull/3648) [`d26c4dc`](https://github.com/stella/stella/commit/d26c4dc8850b2803b10a0f0917011513dd027093) Thanks [@jan-kubica](https://github.com/jan-kubica)! - A nested object flag such as `--base.url` is documented and checked as required when the tool requires it; `--input` still satisfies it.
+
 ## 1.18.0
 
 ### Minor Changes
