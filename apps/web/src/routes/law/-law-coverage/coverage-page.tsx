@@ -191,7 +191,7 @@ export const CaseLawCoveragePending = () => {
           }
           key={section}
         >
-          <TableBlock title={t("caseLaw.coverage.sourcesHeading")}>
+          <Table>
             <SourcesTableHead />
             <TableBody>
               {PENDING_ROW_KEYS.map((row) => (
@@ -202,7 +202,7 @@ export const CaseLawCoveragePending = () => {
                 </TableRow>
               ))}
             </TableBody>
-          </TableBlock>
+          </Table>
           <TableBlock title={t("caseLaw.coverage.courtsHeading")}>
             <CourtsTableHead />
             <TableBody>
@@ -483,11 +483,10 @@ const SourcesTable = ({
 }: {
   sources: readonly CaseLawCoverageSource[];
 }) => {
-  const t = useTranslations();
   const relativeTime = useRelativeTime();
 
   return (
-    <TableBlock title={t("caseLaw.coverage.sourcesHeading")}>
+    <Table>
       <SourcesTableHead />
       <TableBody>
         {sources.map((source) => (
@@ -521,7 +520,7 @@ const SourcesTable = ({
           </TableRow>
         ))}
       </TableBody>
-    </TableBlock>
+    </Table>
   );
 };
 

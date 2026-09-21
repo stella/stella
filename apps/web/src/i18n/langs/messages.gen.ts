@@ -675,7 +675,6 @@ type Messages = {
       "reportedByPublisher": "Publisher's own count";
       "searchable": "Searchable";
       "searchableHint": "Decisions a search can find.";
-      "sourcesHeading": "Where these decisions come from";
       "stored": "Stored";
       "storedHint": "Decisions held, not searchable yet.";
       "title": "Case-law coverage";
