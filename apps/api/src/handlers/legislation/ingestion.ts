@@ -1,11 +1,17 @@
 import { panic, Result } from "better-result";
-import { and, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, lt, sql } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { legislationDocuments } from "@/api/db/schema";
 import { corpusStorageMode } from "@/api/env-base";
 import { restrictLegislationDocumentUrls } from "@/api/handlers/legislation/ingestion/outbound-urls";
 import { createStatuteSlug } from "@/api/handlers/legislation/slug";
+import {
+  defectiveJunctions,
+  storedWindow,
+} from "@/api/handlers/legislation/version-windows";
+import type { StoredWindow } from "@/api/handlers/legislation/version-windows";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -228,7 +234,10 @@ const settleLegislationCorpusProjection = async ({
  * fingerprint that change hashes identically and the row can never be
  * refreshed once a later parser learns to read it.
  */
-const legislationSourceHash = (input: LegislationDocumentInput): string => {
+const legislationSourceHash = (
+  input: LegislationDocumentInput,
+  window: StoredWindow,
+): string => {
   const hasher = new Bun.CryptoHasher("sha256");
   hasher.update(
     JSON.stringify([
@@ -239,8 +248,11 @@ const legislationSourceHash = (input: LegislationDocumentInput): string => {
       input.documentType ?? null,
       input.status ?? "current",
       input.effectiveDate ?? null,
-      input.versionValidFrom ?? null,
-      input.versionValidTo ?? null,
+      // The stored bounds, not the declaration: a connector that starts
+      // declaring the same publisher date differently has changed what the
+      // row says, and the hash has to move with the column.
+      window.versionValidFrom,
+      window.versionValidTo,
       input.fulltext ?? null,
       input.sections ?? null,
       input.ast ?? null,
@@ -252,6 +264,91 @@ const legislationSourceHash = (input: LegislationDocumentInput): string => {
     ]),
   );
   return hasher.digest("hex");
+};
+
+/**
+ * Report a version whose window does not meet its neighbours' edge to edge.
+ *
+ * Every connector's rows pass through here, so this is where the class of
+ * defect that leaves a day uncovered (a publisher's inclusive end date stored
+ * as the exclusive bound) or doubly covered (overlapping windows) is caught,
+ * on the first crawl that writes two adjacent versions, rather than at a
+ * point-in-time read months later. Telemetry, not a refusal: the row is
+ * still the best text the corpus has for its window, and the fix is in the
+ * connector. A wider gap is a version not yet ingested and is not reported;
+ * the coverage census owns it.
+ */
+type ReportWindowJunctionsArgs = {
+  input: Pick<LegislationDocumentInput, "sourceId" | "eli" | "language">;
+  window: StoredWindow;
+  documentId: SafeId<"legislationDocument">;
+  scopedDb: ScopedDb;
+};
+
+const reportWindowJunctions = async ({
+  input,
+  window,
+  documentId,
+  scopedDb,
+}: ReportWindowJunctionsArgs): Promise<void> => {
+  const validFrom = window.versionValidFrom;
+  if (validFrom === null) {
+    return;
+  }
+  const work = and(
+    eq(legislationDocuments.sourceId, input.sourceId),
+    eq(legislationDocuments.eli, input.eli),
+    eq(legislationDocuments.language, input.language),
+  );
+  const neighbour = async (
+    where: SQL,
+    order: SQL,
+  ): Promise<{ validFrom: string | null; validTo: string | null }[]> =>
+    await scopedDb((tx) =>
+      tx
+        .select({
+          validFrom: legislationDocuments.versionValidFrom,
+          validTo: legislationDocuments.versionValidTo,
+        })
+        .from(legislationDocuments)
+        .where(and(work, where))
+        .orderBy(order)
+        .limit(1),
+    );
+  const [[earlier], [later]] = await Promise.all([
+    neighbour(
+      lt(legislationDocuments.versionValidFrom, validFrom),
+      desc(legislationDocuments.versionValidFrom),
+    ),
+    neighbour(
+      gt(legislationDocuments.versionValidFrom, validFrom),
+      asc(legislationDocuments.versionValidFrom),
+    ),
+  ]);
+
+  const run = [
+    ...(earlier?.validFrom
+      ? [{ validFrom: earlier.validFrom, validTo: earlier.validTo }]
+      : []),
+    { validFrom, validTo: window.versionValidTo },
+    ...(later?.validFrom
+      ? [{ validFrom: later.validFrom, validTo: later.validTo }]
+      : []),
+  ];
+  for (const defect of defectiveJunctions(run)) {
+    logger.error("legislation.ingestion.version_window_discontiguous", {
+      documentId,
+      sourceId: input.sourceId,
+      eli: input.eli,
+      language: input.language,
+      earlierValidFrom: defect.earlier.validFrom,
+      earlierValidTo: defect.earlier.validTo ?? "open",
+      laterValidFrom: defect.later.validFrom,
+      junction: defect.junction.type,
+      overlapDays:
+        defect.junction.type === "overlap" ? defect.junction.days : 0,
+    });
+  }
 };
 
 /** The raw-payload pointers a row carries, and what a run may write to them. */
@@ -354,10 +451,11 @@ export const processLegislationDocument = async (
   const text = input.fulltext ?? null;
   const sections = input.sections ?? null;
   const ast = input.ast ?? null;
-  const sourceHash = legislationSourceHash(input);
+  const window = storedWindow(input.version);
+  const sourceHash = legislationSourceHash(input, window);
   const expectedContentHash = corpusContentHash({ text, sections, ast });
 
-  const versionMatch = sql`${legislationDocuments.versionValidFrom} IS NOT DISTINCT FROM ${input.versionValidFrom ?? null}`;
+  const versionMatch = sql`${legislationDocuments.versionValidFrom} IS NOT DISTINCT FROM ${window.versionValidFrom}`;
 
   const [existing] = await scopedDb((tx) =>
     tx
@@ -439,8 +537,7 @@ export const processLegislationDocument = async (
     documentType: input.documentType ?? null,
     status: input.status ?? "current",
     effectiveDate: input.effectiveDate ?? null,
-    versionValidFrom: input.versionValidFrom ?? null,
-    versionValidTo: input.versionValidTo ?? null,
+    ...window,
     fulltext: text,
     sections,
     documentAst: ast,
@@ -477,6 +574,8 @@ export const processLegislationDocument = async (
     }
     return row.id;
   });
+
+  await reportWindowJunctions({ input, window, documentId: id, scopedDb });
 
   let corpusWriteFailed = false;
   // Legislation mirrors the payload whenever corpus storage is on and never

@@ -165,7 +165,7 @@ describe("classifyCitation with the System One tier", () => {
   test("a confident reading is the label, attributed to the tier, with no rule id", async () => {
     const { client } = fakeClient("negative", 0.92);
     const result = await classifyCitation({
-      context,
+      contexts: [context],
       citationText: "sp. zn. 21 Cdo 1234/2020",
       language: "cs",
       observedAt: new Date("2026-09-17T00:00:00Z"),

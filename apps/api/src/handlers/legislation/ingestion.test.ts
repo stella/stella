@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { afterAll, beforeAll, expect, test } from "bun:test";
+import { afterAll, beforeAll, expect, spyOn, test } from "bun:test";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
@@ -18,6 +18,7 @@ import type {
   LegislationSyncPage,
 } from "@/api/lib/legal-search/legislation-ingestion-types";
 import type { WriteRawSourcePayload } from "@/api/lib/legal-search/raw-source-storage";
+import { logger } from "@/api/lib/observability/logger";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 // Validates the legislation ingestion entry: store + upsert + source-hash
@@ -86,6 +87,7 @@ const docInput = (fulltext: string) => ({
   documentType: "act",
   status: "current" as const,
   effectiveDate: "2020-01-01",
+  version: { type: "unversioned" } as const,
   fulltext,
   rawHash: Bun.SHA256.hash(fulltext, "hex"),
 });
@@ -181,7 +183,6 @@ test("metadata-only change updates the row (same text, new status)", async () =>
       {
         ...docInput("text that does not change"),
         status: "repealed",
-        versionValidTo: "2026-01-01",
       },
       scopedDb,
     ),
@@ -191,14 +192,100 @@ test("metadata-only change updates the row (same text, new status)", async () =>
   expect(updated.inserted).toBe(false);
 
   const [row] = await db
+    .select({ status: legislationDocuments.status })
+    .from(legislationDocuments)
+    .where(eq(legislationDocuments.id, first.id));
+  expect(row?.status).toBe("repealed");
+});
+
+test("a publisher's last day in force is stored as the corpus's exclusive close", async () => {
+  // eSbírka closes the pre-flexinovela zákoník práce consolidation on
+  // 2025-05-31, its last day in force. The row has to close on 2025-06-01,
+  // or a point-in-time read of 2025-05-31 finds no version; the conversion
+  // happens here, once, and never in a connector.
+  const consolidation = (end: "2025-05-31" | "2025-06-01") => ({
+    ...docInput("pre-flexinovela wording"),
+    eli: "eli/cz/sb/2006/262",
+    version: {
+      type: "consolidation" as const,
+      validFrom: "2025-01-01",
+      end: { type: "last-day-in-force" as const, on: end },
+    },
+  });
+  const first = stored(
+    await processLegislationDocument(consolidation("2025-05-31"), scopedDb),
+  );
+  const [row] = await db
     .select({
-      status: legislationDocuments.status,
+      versionValidFrom: legislationDocuments.versionValidFrom,
       versionValidTo: legislationDocuments.versionValidTo,
     })
     .from(legislationDocuments)
     .where(eq(legislationDocuments.id, first.id));
-  expect(row?.status).toBe("repealed");
-  expect(row?.versionValidTo).toBe("2026-01-01");
+  expect(row).toEqual({
+    versionValidFrom: "2025-01-01",
+    versionValidTo: "2025-06-01",
+  });
+
+  // The stored close is in the dedup hash: a publisher that moves the last
+  // day refreshes the row rather than dedup-skipping on the same text.
+  const moved = stored(
+    await processLegislationDocument(consolidation("2025-06-01"), scopedDb),
+  );
+  expect(moved.id).toBe(first.id);
+  expect(moved.skipped).toBe(false);
+});
+
+test("a version whose window does not meet its neighbour's is reported at ingest", async () => {
+  const consolidation = (
+    validFrom: string,
+    end: { type: "exclusive"; on: string } | { type: "open" },
+  ) => ({
+    ...docInput(`wording from ${validFrom}`),
+    eli: "eli/cz/sb/2000/1",
+    version: { type: "consolidation" as const, validFrom, end },
+  });
+  const reported = spyOn(logger, "error");
+  try {
+    // Two windows that meet edge to edge: nothing to report, in either order
+    // of arrival.
+    stored(
+      await processLegislationDocument(
+        consolidation("2020-01-01", { type: "exclusive", on: "2021-01-01" }),
+        scopedDb,
+      ),
+    );
+    stored(
+      await processLegislationDocument(
+        consolidation("2021-01-01", { type: "exclusive", on: "2022-01-01" }),
+        scopedDb,
+      ),
+    );
+    expect(reported).not.toHaveBeenCalled();
+
+    // A third that opens the day after the second closes: the shape of an
+    // inclusive end date passed through as the exclusive bound. Declaring it
+    // `exclusive` is the connector's mistake, and this is where it surfaces.
+    stored(
+      await processLegislationDocument(
+        consolidation("2022-01-02", { type: "open" }),
+        scopedDb,
+      ),
+    );
+    expect(reported).toHaveBeenCalledTimes(1);
+    expect(reported.mock.calls[0]?.[0]).toBe(
+      "legislation.ingestion.version_window_discontiguous",
+    );
+    expect(reported.mock.calls[0]?.[1]).toMatchObject({
+      eli: "eli/cz/sb/2000/1",
+      earlierValidFrom: "2021-01-01",
+      earlierValidTo: "2022-01-01",
+      laterValidFrom: "2022-01-02",
+      junction: "inclusive-end",
+    });
+  } finally {
+    reported.mockRestore();
+  }
 });
 
 test("a changed observation fingerprint alone refreshes the row", async () => {
@@ -313,6 +400,7 @@ const runnerDocument = (
   title: "An act",
   country: "SVK",
   language: "sk",
+  version: { type: "unversioned" },
   fulltext: "the wording",
   documentUrl,
   rawHash: Bun.SHA256.hash(eli, "hex"),

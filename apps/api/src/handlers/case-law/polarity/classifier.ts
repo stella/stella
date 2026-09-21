@@ -23,6 +23,7 @@ import {
   RULE_SOURCE,
 } from "@/api/handlers/case-law/polarity/consts";
 import type { Polarity } from "@/api/handlers/case-law/polarity/consts";
+import type { CitationContexts } from "@/api/handlers/case-law/polarity/context";
 import { classifyWithLLM } from "@/api/handlers/case-law/polarity/llm-classifier";
 import {
   incrementMatchCount,
@@ -34,7 +35,25 @@ import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { SystemOneClient } from "@/api/lib/workflow/decisions/system-one";
 
-export { extractContext } from "@/api/handlers/case-law/polarity/context";
+export { extractContexts } from "@/api/handlers/case-law/polarity/context";
+
+/** How many of a citation's windows the model tiers read. */
+const EXCERPT_WINDOWS = 5;
+
+/**
+ * What the model tiers read: the citation's windows in reading order, with
+ * the cuts marked. A model is asked about the court's stance towards the
+ * case, and the stance may be stated at any mention, so it sees several. A
+ * case named forty times is bounded to the first two mentions and the last
+ * three: the first is where a party's reliance is reported, the last is
+ * where the court settles it.
+ */
+export const excerptOf = (contexts: CitationContexts): string => {
+  if (contexts.length <= EXCERPT_WINDOWS) {
+    return contexts.join("\n[…]\n");
+  }
+  return [...contexts.slice(0, 2), ...contexts.slice(-3)].join("\n[…]\n");
+};
 
 type ClassifyResult = {
   polarity: Polarity;
@@ -59,7 +78,8 @@ type ClassifyResult = {
  * 3. Track the LLM's key phrase for future rule generation
  */
 type ClassifyCitationArgs = {
-  context: string;
+  /** The citation's mentions in the citing decision (`extractContexts`). */
+  contexts: CitationContexts;
   citationText: string;
   language: string;
   observedAt: Date;
@@ -77,7 +97,7 @@ type ClassifyCitationArgs = {
 };
 
 export const classifyCitation = async ({
-  context,
+  contexts,
   citationText,
   language,
   observedAt,
@@ -86,7 +106,7 @@ export const classifyCitation = async ({
 }: ClassifyCitationArgs): Promise<ClassifyResult> => {
   // Tier 1: regex rules
   const ruleMatch = await matchRule(
-    context,
+    contexts,
     language,
     scopedDb,
     options?.ruleCache,
@@ -115,6 +135,7 @@ export const classifyCitation = async ({
   // through, including a transport failure and a deployment with no decision
   // model, rather than becoming an `unknown` polarity: the generative tier
   // still reads.
+  const context = excerptOf(contexts);
   const reading = await classifyWithSystemOne({
     client: options?.decisionModel,
     context,
