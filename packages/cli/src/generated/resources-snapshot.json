@@ -33,5 +33,12 @@
     "title": "Legislation workflow",
     "description": "The order to read the stella legislation corpus in: find an act, read the consolidation in force on a date, read named provisions in bulk, follow one provision across amendments. Read this before the first search_legislation call.",
     "mimeType": "text/markdown"
+  },
+  {
+    "uri": "stella://reference/feedback-workflow",
+    "name": "feedback-workflow",
+    "title": "Feedback workflow",
+    "description": "How to report a stella bug or gap: when it is worth filing, what a report must never contain, the field-by-field schema, and the two calls with a human approval between them. Read this before the first prepare_feedback call.",
+    "mimeType": "text/markdown"
   }
 ]

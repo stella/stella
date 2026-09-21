@@ -219,13 +219,22 @@ describe("user-supplied strings are HTML-escaped in the rendered output", () => 
     expect(html).toContain("&lt;script&gt;");
   });
 
-  test("product-feedback escapes the reporter-supplied title and body", async () => {
+  test("product-feedback escapes every reporter-supplied field", async () => {
     const html = await render(
       <ProductFeedback.Email
-        body={INJECTION}
-        kind="bug"
+        receipt="FB-7K2M-9QXZ"
+        report={{
+          kind: "bug",
+          area: "documents",
+          title: INJECTION,
+          whatHappened: INJECTION,
+          expected: INJECTION,
+          steps: INJECTION,
+          evidence: INJECTION,
+          context: { client: "mcp", route: INJECTION },
+        }}
         reporter={{ via: "mcp", userId: "user_1", organizationId: "org_1" }}
-        title={INJECTION}
+        serverVersion="1.2.3"
       />,
     );
     expect(html).not.toContain(INJECTION);

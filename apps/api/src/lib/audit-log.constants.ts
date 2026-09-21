@@ -42,6 +42,7 @@ export const AUDIT_RESOURCE_TYPE = {
   ENTITY: "entity",
   ENTITY_VERSION: "entity_version",
   EXPENSE: "expense",
+  FEEDBACK_REPORT: "feedback_report",
   FIELD: "field",
   FILE_COMPARISON: "file_comparison",
   FLOW_DEFINITION: "flow_definition",

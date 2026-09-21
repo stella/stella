@@ -42,7 +42,10 @@ import { entitiesRoute } from "@/api/handlers/entities/routes";
 import { entityViewsRoute } from "@/api/handlers/entity-views/routes";
 import { expensesRoute } from "@/api/handlers/expenses/routes";
 import { externalPreviewRoute } from "@/api/handlers/external-preview/routes";
-import { feedbackPublicRoute } from "@/api/handlers/feedback/routes";
+import {
+  feedbackPublicRoute,
+  feedbackRoute,
+} from "@/api/handlers/feedback/routes";
 import { fieldsRoute } from "@/api/handlers/fields/routes";
 import { filesRoute } from "@/api/handlers/files/routes";
 import { flowsRoute } from "@/api/handlers/flows/routes";
@@ -679,7 +682,11 @@ const api = new Elysia()
       .use(meRoute)
       .use(devRoute)
       .use(verifyAuthRoute),
-  );
+  )
+  // Mounted after the versioned group on purpose: a route added before it
+  // deepens the type the group callback infers, which is already at
+  // TypeScript's instantiation limit for the browser's Eden client.
+  .use(feedbackRoute);
 
 export default api;
 

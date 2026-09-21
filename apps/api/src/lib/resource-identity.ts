@@ -283,4 +283,7 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
   signal: { type: "non_resource", reason: "workflow" },
   signalEvent: { type: "non_resource", reason: "event" },
   scoutRun: { type: "non_resource", reason: "workflow" },
+  // A filed report is maintainer-facing, not a tenant resource: it has no read
+  // surface and is addressed by its receipt, never by this id.
+  feedbackReport: { type: "non_resource", reason: "workflow" },
 } as const satisfies Record<SafeIdType, IdentityDisposition>;

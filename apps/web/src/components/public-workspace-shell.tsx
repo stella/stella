@@ -16,7 +16,7 @@ import { Button } from "@stll/ui/button";
 import { cn } from "@stll/ui/utils";
 import { WorkspaceShell } from "@stll/ui/workspace-shell";
 
-import { FeedbackDialog } from "@/components/feedback-dialog";
+import { FeedbackSidebarItem } from "@/components/feedback-sidebar-item";
 import { PublicInspectorRail } from "@/components/public-inspector-rail";
 import { PublicSignInRequestContext } from "@/components/public-sign-in-request";
 import {
@@ -341,11 +341,7 @@ const PublicSidebar = ({
       </SidebarContent>
       <SidebarFooter>
         <SidebarMenu>
-          <FeedbackDialog
-            userEmail={
-              authStatus.isAuthenticated ? authStatus.user.email : undefined
-            }
-          />
+          {authStatus.isAuthenticated && <FeedbackSidebarItem />}
           {authStatus.status === "anonymous" && (
             <SidebarMenuItem>
               <SidebarMenuButton

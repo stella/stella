@@ -8,6 +8,7 @@ import { CAPABILITY_TOOL_HANDLERS } from "@/api/mcp/capability-tools";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { DOCUMENT_TOOL_HANDLERS } from "@/api/mcp/document-tools";
 import { finalizeToolEgress } from "@/api/mcp/egress";
+import { FEEDBACK_TOOL_HANDLERS } from "@/api/mcp/feedback-tools";
 import { isMcpToolFeatureEnabled } from "@/api/mcp/gateway/list-tools";
 import {
   agentInputValidationError,
@@ -79,6 +80,9 @@ const REGISTRY_WRITE_TOOL_HANDLERS = {
   // arbitrary catalog capability over MCP/CLI, never from chat; the orchestrator
   // refuses it before dispatch. Wired only to keep this map exhaustive.
   invoke_capability: CAPABILITY_TOOL_HANDLERS.invoke_capability,
+  // Non-projectable (`chatProjectable: false`): chat files feedback through
+  // its own UI. Wired only to keep this map exhaustive.
+  submit_feedback: FEEDBACK_TOOL_HANDLERS.submit_feedback,
 } satisfies Record<RegistryWriteToolName, McpToolHandler>;
 
 type ProjectableRegistryWriteToolName = ChatProjectableToolName<

@@ -122,8 +122,9 @@ confirm? }`). Static tool count goes 41 → 44, inside the 45 hard ceiling.
   version plus the `x-stella-cli-latest` nudge suffice. Revisit on real
   external adoption.
 - **Idempotency keys and signed plan/apply tokens as blanket requirements.**
-  Deferred; the HMAC confirmation-token pattern (`feedback-token.ts`) is
-  available when a bulk-destructive capability warrants it.
+  Deferred; the transport confirmation gate in `tools.ts` (`confirm: true`,
+  driven by a tool's declared behavior) is available when a bulk-destructive
+  capability warrants it.
 - **Model-in-the-loop eval harness.** Standing decision: deterministic CI
   guards only.
 

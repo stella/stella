@@ -1,10 +1,10 @@
-import { useState, useTransition } from "react";
+import { lazy, Suspense, useState, useTransition } from "react";
 
 import { CancelledError, useQueryClient } from "@tanstack/react-query";
 import { Link, Navigate } from "@tanstack/react-router";
 import type { ErrorComponentProps } from "@tanstack/react-router";
 import { panic, Result } from "better-result";
-import { CopyIcon, MailIcon, RefreshCcwIcon } from "lucide-react";
+import { CopyIcon, MegaphoneIcon, RefreshCcwIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { copyToClipboard } from "@stll/clipboard";
@@ -15,7 +15,6 @@ import { cn } from "@stll/ui/utils";
 
 import { MattersNavIcon } from "@/components/matter-icon";
 import {
-  buildErrorReportMailto,
   isNetworkError,
   recoverRouteError,
   resolveRouteErrorRecovery,
@@ -23,6 +22,7 @@ import {
 } from "@/components/route-components.logic";
 import { StellaMark } from "@/components/stella-mark";
 import { env } from "@/env";
+import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useSignOut } from "@/hooks/use-sign-out";
@@ -32,7 +32,12 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { useRouteErrorLifecycle } from "@/lib/analytics/route-error-lifecycle-context";
 import { detached } from "@/lib/detached";
 import { isMemberError, isUnauthorizedError } from "@/lib/errors/auth";
-import { sanitizeHref } from "@/lib/sanitize-href";
+
+// Lazy so the form stack is fetched only when someone reports the error.
+const FeedbackDialog = lazy(async () => {
+  const module = await import("@/components/feedback-dialog");
+  return { default: module.FeedbackDialog };
+});
 
 type DefaultErrorComponentProps = ErrorComponentProps & {
   className?: string;
@@ -232,11 +237,16 @@ const UnexpectedRouteError = ({
   const [errorReference, setErrorReference] = useState<ErrorReference | null>(
     null,
   );
+  const [reportOpen, setReportOpen] = useState(false);
+  // Mounted on first use so the form chunk is never fetched for an error
+  // nobody reports, then kept for the exit transition.
+  const [reportMounted, setReportMounted] = useState(false);
+  const authStatus = useClientAuthStatus();
   const visibleErrorReference = errorReference ?? PENDING_ERROR_REFERENCE;
   const recovery = resolveRouteErrorRecovery(routeError);
   const support = resolveRouteErrorSupport({
     deployment: env.VITE_SELFHOST ? "selfHosted" : "hosted",
-    feedbackRecipient: env.VITE_FEEDBACK_EMAIL_TO,
+    session: authStatus.status,
   });
   let description: string;
   switch (support.type) {
@@ -282,19 +292,6 @@ const UnexpectedRouteError = ({
     }
     stellaToast.add({ title: t("common.copied"), type: "success" });
   };
-
-  const reportHref =
-    support.type === "report" && errorReference !== null
-      ? buildErrorReportMailto({
-          recipient: support.recipient,
-          subject: t("routeError.reportSubject", {
-            reference: errorReference,
-          }),
-          body: t("routeError.reportBody", {
-            reference: errorReference,
-          }),
-        })
-      : null;
 
   const handleRecovery = () => {
     if (errorReference === null) {
@@ -360,19 +357,32 @@ const UnexpectedRouteError = ({
           <Button render={<Link from="/" to="/workspaces" />} variant="outline">
             <MattersNavIcon /> {t("routeError.backToMatters")}
           </Button>
-          {reportHref ? (
-            <Button
-              render={
-                <a
-                  aria-label={t("routeError.reportProblem")}
-                  href={sanitizeHref(reportHref)}
-                />
-              }
-              variant="ghost"
-            >
-              <MailIcon /> {t("routeError.reportProblem")}
-            </Button>
-          ) : null}
+          {support.type === "report" && errorReference !== null && (
+            <>
+              <Button
+                onClick={() => {
+                  analytics.captureFeedbackDialogOpened({
+                    source: "route_error",
+                  });
+                  setReportOpen(true);
+                  setReportMounted(true);
+                }}
+                variant="ghost"
+              >
+                <MegaphoneIcon /> {t("routeError.reportProblem")}
+              </Button>
+              {reportMounted && (
+                <Suspense fallback={null}>
+                  <FeedbackDialog
+                    errorReference={errorReference}
+                    onOpenChange={setReportOpen}
+                    open={reportOpen}
+                    source="route_error"
+                  />
+                </Suspense>
+              )}
+            </>
+          )}
         </div>
 
         <div className="border-border bg-muted/40 flex items-center justify-between gap-3 rounded-xl border p-3">

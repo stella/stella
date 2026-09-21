@@ -1,16 +1,19 @@
-import type { ProductFeedbackKind } from "./product-feedback";
+import type { FeedbackKind } from "@stll/api-contract/feedback";
 
-export const KIND_LABELS: Record<ProductFeedbackKind, string> = {
+export const KIND_LABELS = {
   bug: "Bug",
-  feature_request: "Feature request",
+  idea: "Idea",
+  missing_capability: "Missing capability",
   docs: "Documentation",
-  other: "Other",
-};
+} as const satisfies Record<FeedbackKind, string>;
 
 export const subject = ({
   kind,
+  receipt,
   title,
 }: {
-  kind: ProductFeedbackKind;
+  kind: FeedbackKind;
+  receipt: string;
   title: string;
-}): string => `[stella feedback] ${KIND_LABELS[kind]}: ${title}`.slice(0, 160);
+}): string =>
+  `[stella feedback ${receipt}] ${KIND_LABELS[kind]}: ${title}`.slice(0, 160);

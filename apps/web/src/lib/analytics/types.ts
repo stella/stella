@@ -1,3 +1,5 @@
+import type { FeedbackArea, FeedbackKind } from "@stll/api-contract/feedback";
+
 import type { ErrorReference } from "@/lib/analytics/error-reference";
 
 export const WEB_ANALYTICS_EVENTS = {
@@ -15,6 +17,8 @@ export const WEB_ANALYTICS_EVENTS = {
   webVitals: "$web_vitals",
   guideStepSkipped: "guide_step_skipped",
   routeErrorRecovery: "route_error_recovery",
+  feedbackDialogOpened: "feedback_dialog_opened",
+  feedbackReportSubmitted: "feedback_report_submitted",
 } as const;
 
 export type WebAnalyticsEvent =
@@ -24,6 +28,12 @@ export type Analytics = {
   captureError: (error: unknown, context?: ErrorCaptureContext) => void;
   capturePageViewed: (properties: PageViewedProperties) => void;
   captureGuideStepSkipped: (properties: GuideStepSkippedProperties) => void;
+  captureFeedbackDialogOpened: (
+    properties: FeedbackDialogOpenedProperties,
+  ) => void;
+  captureFeedbackReportSubmitted: (
+    properties: FeedbackDialogSubmittedProperties,
+  ) => void;
   captureRouteErrorLifecycle: (
     properties: RouteErrorLifecycleProperties,
   ) => Promise<void>;
@@ -48,6 +58,22 @@ export type GuideStepSkippedProperties =
       anchorId: string;
     }
   | { reason: "tour-empty"; tourId: string };
+
+/** Which surface opened the feedback dialog. Reports arriving from the route
+ *  error screen carry a reference the sidebar ones never have, so the two are
+ *  distinguished at the source rather than inferred from the payload. */
+export type FeedbackReportSource = "sidebar" | "route_error";
+
+type FeedbackDialogOpenedProperties = {
+  source: FeedbackReportSource;
+};
+
+// Classification only: the report's own text never reaches analytics.
+type FeedbackDialogSubmittedProperties = {
+  area: FeedbackArea;
+  kind: FeedbackKind;
+  source: FeedbackReportSource;
+};
 
 export type ErrorCaptureContext =
   | { type: "detached"; operation: string }

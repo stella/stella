@@ -2015,7 +2015,39 @@
     "uploadFailed": "Przesyłanie nie powiodło się"
   },
   "feedback": {
-    "trigger": "Opinia"
+    "area": "Obszar",
+    "areas": {
+      "desktop": "Aplikacja desktopowa",
+      "legislation": "Legislacja",
+      "mcpCli": "MCP i CLI",
+      "other": "Coś innego",
+      "webApp": "Aplikacja webowa"
+    },
+    "copyReceipt": "Kopiuj numer zgłoszenia",
+    "description": "Napisz, co nie działa albo czego brakuje. Jedno zgłoszenie na jeden problem.",
+    "errorTitle": "Błąd {reference}",
+    "included": "Dołączono: <bdi>{route}</bdi>, wersja <bdi>{version}</bdi>",
+    "kinds": {
+      "bug": "Błąd",
+      "idea": "Pomysł",
+      "missingCapability": "Brakująca funkcja"
+    },
+    "privacyNote": "Serwer usuwa adresy e-mail, identyfikatory, odnośniki i dane poufne. Nie wklejaj nazw spraw ani klientów, ani treści dokumentów.",
+    "rateLimited": "Zbyt wiele zgłoszeń w ciągu ostatniej godziny. Spróbuj później.",
+    "receiptDeduplicated": "To już znamy. Twoje zgłoszenie zostało do niego dołączone.",
+    "receiptDescription": "Zachowaj numer zgłoszenia, jeśli chcesz o nie dopytać.",
+    "receiptLabel": "Numer zgłoszenia",
+    "receiptTitle": "Zgłoszenie przyjęte",
+    "send": "Wyślij zgłoszenie",
+    "steps": "Kroki do odtworzenia",
+    "stepsHint": "Opcjonalne.",
+    "stepsPlaceholder": "1. Otwórz… 2. Wybierz… 3. …",
+    "subject": "Krótkie podsumowanie",
+    "subjectPlaceholder": "Jedno zdanie: co nie działa lub czego brakuje",
+    "title": "Wyślij opinię",
+    "trigger": "Opinia",
+    "whatHappened": "Co się stało",
+    "whatHappenedPlaceholder": "Co zostało zrobione i co pojawiło się zamiast tego"
   },
   "fileDetail": {
     "base": "Bazowa",
@@ -3873,9 +3905,7 @@
     "descriptionNone": "Spróbuj ponownie. Jeśli problem będzie się powtarzał, wróć do swoich spraw.",
     "descriptionReport": "Spróbuj ponownie. Jeśli problem będzie się powtarzał, wróć do swoich spraw lub zgłoś go, podając poniższy identyfikator.",
     "reference": "Identyfikator błędu",
-    "reportBody": "Identyfikator błędu: {reference}\n\nCo się stało?\n",
     "reportProblem": "Zgłoś problem",
-    "reportSubject": "Błąd stella: {reference}",
     "title": "Nie udało się otworzyć tej strony"
   },
   "search": {

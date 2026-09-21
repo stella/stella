@@ -2015,7 +2015,39 @@
     "uploadFailed": "Augšupielāde neizdevās"
   },
   "feedback": {
-    "trigger": "Atsauksmes"
+    "area": "Joma",
+    "areas": {
+      "desktop": "Darbvirsmas lietotne",
+      "legislation": "Normatīvie akti",
+      "mcpCli": "MCP un CLI",
+      "other": "Kaut kas cits",
+      "webApp": "Tīmekļa lietotne"
+    },
+    "copyReceipt": "Kopēt ziņojuma numuru",
+    "description": "Uzrakstiet, kas nedarbojas vai kā trūkst. Viens ziņojums par vienu problēmu.",
+    "errorTitle": "Kļūda {reference}",
+    "included": "Pievienots: <bdi>{route}</bdi>, versija <bdi>{version}</bdi>",
+    "kinds": {
+      "bug": "Kļūda",
+      "idea": "Ideja",
+      "missingCapability": "Trūkstoša funkcija"
+    },
+    "privacyNote": "Serveris noņem e-pasta adreses, identifikatorus, saites un slepenus datus. Neielīmējiet lietu vai klientu nosaukumus, ne arī dokumentu tekstu.",
+    "rateLimited": "Pēdējās stundas laikā nosūtīts pārāk daudz ziņojumu. Mēģiniet vēlāk.",
+    "receiptDeduplicated": "Šo mēs jau zinām. Jūsu ziņojums tika pievienots esošajam.",
+    "receiptDescription": "Saglabājiet numuru, ja vēlēsieties pajautāt vēlāk.",
+    "receiptLabel": "Ziņojuma numurs",
+    "receiptTitle": "Ziņojums saņemts",
+    "send": "Nosūtīt ziņojumu",
+    "steps": "Soļi atkārtošanai",
+    "stepsHint": "Neobligāti.",
+    "stepsPlaceholder": "1. Atvērt… 2. Atlasīt… 3. …",
+    "subject": "Īss kopsavilkums",
+    "subjectPlaceholder": "Viena rinda: kas nav kārtībā vai kā trūkst",
+    "title": "Sūtīt atsauksmi",
+    "trigger": "Atsauksmes",
+    "whatHappened": "Kas notika",
+    "whatHappenedPlaceholder": "Ko darījāt un ko ieraudzījāt tā vietā"
   },
   "fileDetail": {
     "base": "Bāze",
@@ -3873,9 +3905,7 @@
     "descriptionNone": "Mēģiniet vēlreiz. Ja problēma turpinās, atgriezieties pie savām lietām.",
     "descriptionReport": "Mēģiniet vēlreiz. Ja problēma turpinās, atgriezieties pie savām lietām vai ziņojiet par to, izmantojot tālāk norādīto atsauci.",
     "reference": "Kļūdas atsauce",
-    "reportBody": "Kļūdas atsauce: {reference}\n\nKas notika?\n",
     "reportProblem": "Ziņot par problēmu",
-    "reportSubject": "stella kļūda: {reference}",
     "title": "Šo lapu neizdevās atvērt"
   },
   "search": {

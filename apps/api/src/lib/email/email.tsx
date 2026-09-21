@@ -1,6 +1,7 @@
 import { render } from "@react-email/render";
 import { panic } from "better-result";
 
+import type { FeedbackReportInput } from "@stll/api-contract/feedback";
 import * as BetterAuthOTP from "@stll/transactional/emails/better-auth-otp";
 import { subject as betterAuthOTPSubject } from "@stll/transactional/emails/better-auth-otp-subject";
 import * as NewDeviceLogin from "@stll/transactional/emails/new-device-login";
@@ -8,7 +9,6 @@ import { subject as newDeviceLoginSubject } from "@stll/transactional/emails/new
 import * as OrganizationInvitation from "@stll/transactional/emails/organization-invitation";
 import { subject as organizationInvitationSubject } from "@stll/transactional/emails/organization-invitation-subject";
 import * as ProductFeedback from "@stll/transactional/emails/product-feedback";
-import type { ProductFeedbackKind } from "@stll/transactional/emails/product-feedback";
 import { subject as productFeedbackSubject } from "@stll/transactional/emails/product-feedback-subject";
 import * as ReportExportStatus from "@stll/transactional/emails/report-export-status";
 import type { ReportExportEmailStatus } from "@stll/transactional/emails/report-export-status";
@@ -206,25 +206,25 @@ export const sendOrganizationInvitation = async ({
 
 type SendFeedbackEmailOptions = {
   to: string;
-  kind: ProductFeedbackKind;
-  title: string;
-  body: string;
+  receipt: string;
+  report: FeedbackReportInput;
   reporter: ProductFeedback.FeedbackReporter;
+  serverVersion: string;
 };
 
 export const sendFeedbackEmail = async ({
-  body,
-  kind,
+  receipt,
+  report,
   reporter,
-  title,
+  serverVersion,
   to,
 }: SendFeedbackEmailOptions) => {
   const node = (
     <ProductFeedback.Email
-      body={body}
-      kind={kind}
+      receipt={receipt}
+      report={report}
       reporter={reporter}
-      title={title}
+      serverVersion={serverVersion}
     />
   );
   const [html, text] = await Promise.all([
@@ -235,7 +235,11 @@ export const sendFeedbackEmail = async ({
   await getTransport().send({
     from: getTransactionalEmailFrom(),
     to,
-    subject: productFeedbackSubject({ kind, title }),
+    subject: productFeedbackSubject({
+      kind: report.kind,
+      receipt,
+      title: report.title,
+    }),
     html,
     text,
   });

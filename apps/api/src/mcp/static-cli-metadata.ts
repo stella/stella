@@ -181,6 +181,7 @@ export const DEFAULT_MCP_CLI_ANNOTATIONS = defineMcpCliToolAnnotations(
     },
 
     prepare_feedback: { command: ["feedback", "prepare"], scope: "feedback" },
+    submit_feedback: { command: ["feedback", "submit"], scope: "feedback" },
 
     set_practice_jurisdictions: {
       command: ["organization", "set-jurisdictions"],

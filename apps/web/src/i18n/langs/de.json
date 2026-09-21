@@ -2015,7 +2015,39 @@
     "uploadFailed": "Upload fehlgeschlagen"
   },
   "feedback": {
-    "trigger": "Feedback"
+    "area": "Bereich",
+    "areas": {
+      "desktop": "Desktop-App",
+      "legislation": "Gesetzgebung",
+      "mcpCli": "MCP und CLI",
+      "other": "Etwas anderes",
+      "webApp": "Web-App"
+    },
+    "copyReceipt": "Belegnummer kopieren",
+    "description": "Schreiben Sie uns, was nicht funktioniert oder fehlt. Ein Problem pro Meldung.",
+    "errorTitle": "Fehler {reference}",
+    "included": "Mitgesendet: <bdi>{route}</bdi>, Version <bdi>{version}</bdi>",
+    "kinds": {
+      "bug": "Fehler",
+      "idea": "Idee",
+      "missingCapability": "Fehlende Funktion"
+    },
+    "privacyNote": "E-Mail-Adressen, Kennungen, Links und Geheimnisse entfernt der Server. Fügen Sie keine Akten- oder Mandantennamen und keinen Dokumenttext ein.",
+    "rateLimited": "Zu viele Meldungen in der letzten Stunde. Versuchen Sie es später erneut.",
+    "receiptDeduplicated": "Das kennen wir bereits. Ihre Meldung wurde ergänzt.",
+    "receiptDescription": "Bewahren Sie die Belegnummer auf, falls Sie nachfragen möchten.",
+    "receiptLabel": "Belegnummer",
+    "receiptTitle": "Meldung eingegangen",
+    "send": "Meldung senden",
+    "steps": "Schritte zum Nachstellen",
+    "stepsHint": "Nicht erforderlich.",
+    "stepsPlaceholder": "1. Öffnen… 2. Auswählen… 3. …",
+    "subject": "Kurze Zusammenfassung",
+    "subjectPlaceholder": "Eine Zeile: was falsch ist oder fehlt",
+    "title": "Feedback senden",
+    "trigger": "Feedback",
+    "whatHappened": "Was ist passiert",
+    "whatHappenedPlaceholder": "Was Sie getan haben und was stattdessen geschah"
   },
   "fileDetail": {
     "base": "Basis",
@@ -3873,9 +3905,7 @@
     "descriptionNone": "Versuchen Sie es erneut. Wenn das Problem weiterhin besteht, kehren Sie zu Ihren Akten zurück.",
     "descriptionReport": "Versuchen Sie es erneut. Wenn das Problem weiterhin besteht, kehren Sie zu Ihren Akten zurück oder melden Sie es mit der unten stehenden Referenz.",
     "reference": "Fehlerreferenz",
-    "reportBody": "Fehlerreferenz: {reference}\n\nWas ist passiert?\n",
     "reportProblem": "Problem melden",
-    "reportSubject": "stella-Fehler {reference}",
     "title": "Diese Seite konnte nicht geöffnet werden"
   },
   "search": {

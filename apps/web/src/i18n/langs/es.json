@@ -2015,7 +2015,39 @@
     "uploadFailed": "Error al subir"
   },
   "feedback": {
-    "trigger": "Comentarios"
+    "area": "Área",
+    "areas": {
+      "desktop": "Aplicación de escritorio",
+      "legislation": "Legislación",
+      "mcpCli": "MCP y CLI",
+      "other": "Otra cosa",
+      "webApp": "Aplicación web"
+    },
+    "copyReceipt": "Copiar el número de informe",
+    "description": "Cuéntanos qué falla o qué falta. Un problema por informe.",
+    "errorTitle": "Incidencia {reference}",
+    "included": "Se incluye: <bdi>{route}</bdi>, versión <bdi>{version}</bdi>",
+    "kinds": {
+      "bug": "Error",
+      "idea": "Sugerencia",
+      "missingCapability": "Función que falta"
+    },
+    "privacyNote": "El servidor elimina correos, identificadores, enlaces y datos secretos. No pegues nombres de asuntos o clientes ni texto de documentos.",
+    "rateLimited": "Demasiados informes en la última hora. Inténtalo más tarde.",
+    "receiptDeduplicated": "Ya lo teníamos. Tu informe se ha sumado al existente.",
+    "receiptDescription": "Guarda este número por si quieres hacer un seguimiento.",
+    "receiptLabel": "Número de informe",
+    "receiptTitle": "Informe recibido",
+    "send": "Enviar informe",
+    "steps": "Pasos para reproducirlo",
+    "stepsHint": "Opcional.",
+    "stepsPlaceholder": "1. Abrir… 2. Seleccionar… 3. …",
+    "subject": "Resumen breve",
+    "subjectPlaceholder": "Una línea: qué falla o qué falta",
+    "title": "Enviar comentarios",
+    "trigger": "Comentarios",
+    "whatHappened": "Qué ha pasado",
+    "whatHappenedPlaceholder": "Qué hiciste y qué viste en su lugar"
   },
   "fileDetail": {
     "base": "Base",
@@ -3873,9 +3905,7 @@
     "descriptionNone": "Inténtalo de nuevo. Si el problema continúa, vuelve a tus asuntos.",
     "descriptionReport": "Inténtalo de nuevo. Si el problema continúa, vuelve a tus asuntos o repórtalo con la referencia de abajo.",
     "reference": "Referencia del error",
-    "reportBody": "Referencia del error: {reference}\n\n¿Qué ocurrió?\n",
     "reportProblem": "Reportar problema",
-    "reportSubject": "Error de stella {reference}",
     "title": "No se pudo abrir esta página"
   },
   "search": {

@@ -46,12 +46,14 @@ const TOOL = {
   readProvisionHistory: "read_provision_history",
   searchBoeLegislation: "search_boe_legislation",
   prepareFeedback: "prepare_feedback",
+  submitFeedback: "submit_feedback",
 } as const satisfies Record<string, McpToolName>;
 
 export const LEGISLATION_WORKFLOW_TOOL_NAMES = Object.values(TOOL);
 
 const {
   prepareFeedback: PREPARE_FEEDBACK,
+  submitFeedback: SUBMIT_FEEDBACK,
   readProvisionHistory: READ_PROVISION_HISTORY,
   readStatute: READ_STATUTE,
   readStatuteProvisions: READ_STATUTE_PROVISIONS,
@@ -260,7 +262,7 @@ export const buildLegislationWorkflowReference = (
     ...(listedToolNames.has(PREPARE_FEEDBACK)
       ? [
           "",
-          `Something missing or wrong here? Prepare a report with ${PREPARE_FEEDBACK}.`,
+          `Something missing or wrong here? Draft a report with ${PREPARE_FEEDBACK}, then send it with ${SUBMIT_FEEDBACK} once the human approves.`,
         ]
       : []),
   ].join("\n");

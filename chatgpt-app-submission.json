@@ -787,9 +787,21 @@
         "destructiveHint": false
       },
       "justifications": {
-        "read_only_justification": "Sanitizes user-provided feedback and returns draft submission links without publishing or changing any record.",
-        "open_world_justification": "Only prepares a GitHub issue URL and command; it does not submit or publish them.",
+        "read_only_justification": "Sanitizes user-provided feedback and returns it for human review without storing, sending, or changing any record.",
+        "open_world_justification": "Only sanitizes the draft and returns it; it contacts nothing.",
         "destructive_justification": "Does not delete, revoke access, overwrite irreversibly, or perform another destructive action."
+      }
+    },
+    "submit_feedback": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Stores the human-approved feedback report and delivers it to the maintainers configured by the deployment.",
+        "open_world_justification": "Sends the approved report to the maintainer channels the deployment configures, which may include a public issue tracker.",
+        "destructive_justification": "Deletes nothing, but sends content out of the private workspace and therefore requires explicit confirmation."
       }
     },
     "list_capabilities": {

@@ -575,7 +575,7 @@ mechanics, and similar), not gaps in coverage.
 | health_infra           | 1     |
 | hosted_billing         | 6     |
 | mcp_transport          | 11    |
-| native_tool_ui         | 8     |
+| native_tool_ui         | 9     |
 | provider_secret        | 24    |
 | public_indexing        | 7     |
 | reader_annotations     | 4     |
@@ -586,4 +586,4 @@ mechanics, and similar), not gaps in coverage.
 | upload_mechanics       | 14    |
 | url_preview            | 2     |
 
-Total: 172
+Total: 173

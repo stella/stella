@@ -41,6 +41,7 @@ const TOOL = {
   previewTemplateConditions: "preview_template_conditions",
   saveFilledTemplate: "save_filled_template",
   prepareFeedback: "prepare_feedback",
+  submitFeedback: "submit_feedback",
   uploadDocumentVersion: "upload_document_version",
 } as const satisfies Record<string, McpToolName>;
 
@@ -54,6 +55,7 @@ const {
   previewTemplateConditions: PREVIEW_TEMPLATE_CONDITIONS,
   saveFilledTemplate: SAVE_FILLED_TEMPLATE,
   prepareFeedback: PREPARE_FEEDBACK,
+  submitFeedback: SUBMIT_FEEDBACK,
   setPracticeJurisdictions: SET_PRACTICE_JURISDICTIONS,
   uploadDocumentVersion: UPLOAD_DOCUMENT_VERSION,
 } = TOOL;
@@ -304,6 +306,6 @@ export const buildWorkflowReference = (): string => {
       "(`values.tenant.name`, `fields.0.path`) and a `message`. Read `hint`: " +
       "it states the next call.",
     "",
-    `Something missing or wrong here? Prepare a report with ${PREPARE_FEEDBACK}.`,
+    `Something missing or wrong here? Draft a report with ${PREPARE_FEEDBACK}, then send it with ${SUBMIT_FEEDBACK} once the human approves.`,
   ].join("\n");
 };

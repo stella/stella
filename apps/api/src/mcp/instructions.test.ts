@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { env } from "@/api/env";
+import { FEEDBACK_WORKFLOW_REFERENCE_URI } from "@/api/mcp/feedback-workflow-reference";
 import {
   getMcpInstructions,
   MCP_INSTRUCTIONS,
@@ -132,6 +133,7 @@ describe("MCP server instructions", () => {
       "no matter, document, contact or billing data is reachable here",
     );
     expect(MCP_INSTRUCTIONS.law).not.toContain("prepare_feedback");
+    expect(MCP_INSTRUCTIONS.law).not.toContain("submit_feedback");
     expect(MCP_INSTRUCTIONS.law).not.toContain("invoke_capability");
   });
 
@@ -160,8 +162,19 @@ describe("MCP server instructions", () => {
     });
   });
 
-  test("the anonymized surface omits the feedback preparation tool", () => {
+  test("only the default surface points at the feedback flow", () => {
+    // Both steps are named: a pointer that stops at the draft leaves the
+    // report sitting in the model's context, unsent.
     expect(MCP_INSTRUCTIONS.default).toContain("prepare_feedback");
-    expect(MCP_INSTRUCTIONS.anonymized).not.toContain("prepare_feedback");
+    expect(MCP_INSTRUCTIONS.default).toContain("submit_feedback");
+    expect(MCP_INSTRUCTIONS.default).toContain(FEEDBACK_WORKFLOW_REFERENCE_URI);
+    for (const surface of [
+      MCP_INSTRUCTIONS.anonymized,
+      MCP_INSTRUCTIONS.documents,
+      MCP_INSTRUCTIONS.law,
+    ]) {
+      expect(surface).not.toContain("prepare_feedback");
+      expect(surface).not.toContain("submit_feedback");
+    }
   });
 });

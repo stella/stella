@@ -254,10 +254,17 @@ describe("rate limiting during a Valkey outage", () => {
     // Valkey is down.
     expect(exhausted.status === "ok" ? exhausted.value : null).toBe(false);
 
-    const claim = await settle(
-      guards.claimDedup({ key: "digest-1", ttlMs: 60_000 }),
+    // A different bucket keeps its own window, so one exhausted subject cannot
+    // lock out another during an outage.
+    const other = await settle(
+      guards.consumeCounter({
+        bucket: "feedback:org",
+        key: "203.0.113.2",
+        max: 1,
+        windowMs: 60_000,
+      }),
     );
-    expect(claim.status === "ok" ? claim.value : null).toBe(true);
+    expect(other.status === "ok" ? other.value : null).toBe(true);
   });
 });
 

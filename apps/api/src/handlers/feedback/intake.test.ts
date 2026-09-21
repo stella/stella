@@ -1,5 +1,9 @@
+import { Result } from "better-result";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 import Elysia from "elysia";
+
+import { FEEDBACK_LIMITS } from "@stll/api-contract/feedback";
+import type { FeedbackSubmitResponse } from "@stll/api-contract/feedback";
 
 import {
   MAX_RAW_FEEDBACK_BODY_CHARS,
@@ -7,35 +11,32 @@ import {
 } from "@/api/handlers/feedback/intake";
 import { createFeedbackIntakeGuards } from "@/api/handlers/feedback/intake-guards";
 import { feedbackPublicRoute } from "@/api/handlers/feedback/routes";
+import { FeedbackStoreError } from "@/api/handlers/feedback/submit";
+import type { submitFeedbackReport } from "@/api/handlers/feedback/submit";
 
-const sendFeedbackEmailMock = mock(
-  async (_args: {
-    to: string;
-    kind: string;
-    title: string;
-    body: string;
-    reporter: { via: string; instance?: string; version?: string };
-  }): Promise<undefined> => undefined,
+const SUBMIT_RESPONSE: FeedbackSubmitResponse = {
+  receipt: "FB-7K2M-9QXZ",
+  redactions: 0,
+  deduplicated: false,
+  deliveries: [{ channel: "email", status: "delivered" }],
+  stored: true,
+};
+
+const submitMock = mock<typeof submitFeedbackReport>(async () =>
+  Result.ok(SUBMIT_RESPONSE),
 );
-let transactionalEmailConfigured = true;
 
-const receivePublicFeedbackForTest = async ({
+const receiveForTest = async ({
   deps,
   ...input
 }: Parameters<typeof receivePublicFeedback>[0]) =>
   await receivePublicFeedback({
     ...input,
-    deps: {
-      ...deps,
-      email: {
-        isConfigured: () => transactionalEmailConfigured,
-        send: sendFeedbackEmailMock,
-      },
-    },
+    deps: { submit: submitMock, ...deps },
   });
 
 // In-memory-only guards: force the Redis path to throw so every call falls back
-// to the deterministic in-process counters/dedup.
+// to the deterministic in-process counters.
 const memoryGuards = () =>
   createFeedbackIntakeGuards({
     createRedis: () => ({
@@ -49,270 +50,149 @@ const memoryGuards = () =>
 const raw = (overrides?: Record<string, unknown>): string =>
   JSON.stringify({
     kind: "bug",
+    area: "documents",
     title: "read_document returns empty",
-    body: "Steps: call read_document on a large PDF. Body is empty.",
+    whatHappened: "Called read_document on a large PDF; the body was empty.",
     ...overrides,
   });
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
-const getErrorCode = (payload: unknown): string | undefined => {
-  if (!isRecord(payload)) {
-    return undefined;
-  }
-  const error = payload["error"];
-  if (!isRecord(error)) {
-    return undefined;
-  }
-  const code = error["code"];
-  return typeof code === "string" ? code : undefined;
-};
-
-const readError = async (
+const readErrorCode = async (
   response: Response,
-): Promise<{ code: string } | undefined> => {
-  const code = getErrorCode(await response.json());
-  if (!code) {
+): Promise<string | undefined> => {
+  const payload: unknown = await response.json();
+  if (!isRecord(payload) || !isRecord(payload["error"])) {
     return undefined;
   }
-  return { code };
+  const code = payload["error"]["code"];
+  return typeof code === "string" ? code : undefined;
 };
 
 describe("public feedback intake", () => {
   beforeEach(() => {
-    sendFeedbackEmailMock.mockReset();
-    transactionalEmailConfigured = true;
+    submitMock.mockClear();
   });
 
-  test("delivers via email when FEEDBACK_EMAIL_TO is set, re-sanitizing content", async () => {
-    const response = await receivePublicFeedbackForTest({
-      rawBody: raw({
-        title: "empty for jane@example.com",
-        body: "Reported by jane@example.com on a matter.",
-        source: { instance: "self-hosted", version: "1.2.3" },
-      }),
+  test("answers with the submit response and passes an intake reporter", async () => {
+    const response = await receiveForTest({
+      rawBody: raw({ instance: "self-hosted" }),
       clientIp: "203.0.113.5",
-      deps: {
-        guards: memoryGuards(),
-        emailTo: "maintainer@example.com",
-      },
+      deps: { guards: memoryGuards() },
     });
 
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ delivered: "email" });
-
-    expect(sendFeedbackEmailMock).toHaveBeenCalledTimes(1);
-    const emailArgs = sendFeedbackEmailMock.mock.calls.at(0)?.[0];
-    // The caller's email is redacted server-side, and the intake footer is added.
-    expect(emailArgs?.title).toBe("empty for [redacted-email]");
-    expect(emailArgs?.body).toContain("[redacted-email]");
-    expect(emailArgs?.body).not.toContain("jane@example.com");
-    expect(emailArgs?.body).toContain(
-      "Received via the stella feedback intake",
-    );
-  });
-
-  test("delivers via email with an intake reporter block", async () => {
-    const response = await receivePublicFeedbackForTest({
-      rawBody: raw({ source: { instance: "hosted", version: "9.9.9" } }),
-      clientIp: "203.0.113.6",
-      deps: {
-        guards: memoryGuards(),
-        emailTo: "maintainer@example.com",
-      },
-    });
-
-    expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ delivered: "email" });
-    expect(sendFeedbackEmailMock).toHaveBeenCalledTimes(1);
-    expect(sendFeedbackEmailMock.mock.calls.at(0)?.[0]).toMatchObject({
-      to: "maintainer@example.com",
-      kind: "bug",
-      reporter: { via: "intake", instance: "hosted", version: "9.9.9" },
+    expect(await response.json()).toEqual(SUBMIT_RESPONSE);
+    expect(submitMock).toHaveBeenCalledTimes(1);
+    expect(submitMock.mock.calls.at(0)?.[0]).toMatchObject({
+      reporter: { via: "intake" },
+      instance: "self-hosted",
     });
   });
 
-  test("sanitizes source metadata before email delivery", async () => {
-    const response = await receivePublicFeedbackForTest({
-      rawBody: raw({
-        source: {
-          instance: "jane@example.com",
-          version: "https://private.example/internal",
-        },
-      }),
-      clientIp: "203.0.113.13",
-      deps: {
-        guards: memoryGuards(),
-        emailTo: "maintainer@example.com",
-      },
+  test("keeps `instance` out of the report the service stores", async () => {
+    await receiveForTest({
+      rawBody: raw({ instance: "self-hosted" }),
+      clientIp: "203.0.113.16",
+      deps: { guards: memoryGuards() },
     });
 
-    expect(response.status).toBe(200);
-    expect(sendFeedbackEmailMock).toHaveBeenCalledTimes(1);
-    const emailArgs = sendFeedbackEmailMock.mock.calls.at(0)?.[0];
-    expect(emailArgs?.body).toContain("instance=[redacted-email]");
-    expect(emailArgs?.body).toContain("version=[redacted-url]");
-    expect(emailArgs?.body).not.toContain("jane@example.com");
-    expect(emailArgs?.body).not.toContain("private.example");
-    expect(emailArgs?.reporter).toEqual({
-      via: "intake",
-      instance: "[redacted-email]",
-      version: "[redacted-url]",
-    });
-  });
-
-  test("refuses with feature_disabled when no email is configured", async () => {
-    const response = await receivePublicFeedbackForTest({
-      rawBody: raw(),
-      clientIp: "203.0.113.7",
-      deps: {
-        guards: memoryGuards(),
-        emailTo: undefined,
-      },
-    });
-    expect(response.status).toBe(503);
-    expect((await readError(response))?.code).toBe("feature_disabled");
-  });
-
-  test("refuses with feature_disabled when email transport is not configured", async () => {
-    transactionalEmailConfigured = false;
-
-    const response = await receivePublicFeedbackForTest({
-      rawBody: raw(),
-      clientIp: "203.0.113.17",
-      deps: {
-        guards: memoryGuards(),
-        emailTo: "maintainer@example.com",
-      },
-    });
-
-    expect(response.status).toBe(503);
-    expect((await readError(response))?.code).toBe("feature_disabled");
-    expect(sendFeedbackEmailMock).not.toHaveBeenCalled();
+    const input = submitMock.mock.calls.at(0)?.[0].input;
+    expect(input).not.toHaveProperty("instance");
   });
 
   test("rate-limits after 5 submissions from one IP", async () => {
-    const guards = memoryGuards();
-    const deps = {
-      guards,
-      emailTo: "maintainer@example.com",
-    };
+    const deps = { guards: memoryGuards() };
     const ip = "203.0.113.8";
 
-    for (let i = 0; i < 5; i += 1) {
-      const ok = await receivePublicFeedbackForTest({
-        // Unique content each time so dedup never fires before the rate limit.
-        rawBody: raw({ title: `report ${i}`, body: `distinct body ${i}` }),
+    for (let index = 0; index < 5; index += 1) {
+      const ok = await receiveForTest({
+        rawBody: raw({ title: `report ${index}` }),
         clientIp: ip,
         deps,
       });
       expect(ok.status).toBe(200);
     }
 
-    const blocked = await receivePublicFeedbackForTest({
-      rawBody: raw({ title: "report 6", body: "distinct body 6" }),
+    const blocked = await receiveForTest({
+      rawBody: raw({ title: "report 6" }),
       clientIp: ip,
       deps,
     });
+
     expect(blocked.status).toBe(429);
-    expect((await readError(blocked))?.code).toBe("rate_limited");
+    expect(await readErrorCode(blocked)).toBe("rate_limited");
+    // The refusal happens before the service is reached.
+    expect(submitMock).toHaveBeenCalledTimes(5);
   });
 
-  test("dedups identical content within the window (409)", async () => {
-    const guards = memoryGuards();
-    const deps = {
-      guards,
-      emailTo: "maintainer@example.com",
-    };
+  test("answers 503 when the report could not be stored", async () => {
+    const failing = mock<typeof submitFeedbackReport>(async () =>
+      Result.err(new FeedbackStoreError({ message: "nope" })),
+    );
 
-    const first = await receivePublicFeedbackForTest({
+    const response = await receiveForTest({
       rawBody: raw(),
-      clientIp: "203.0.113.9",
-      deps,
+      clientIp: "203.0.113.14",
+      deps: { guards: memoryGuards(), submit: failing },
     });
-    expect(first.status).toBe(200);
 
-    const duplicate = await receivePublicFeedbackForTest({
-      rawBody: raw(),
-      clientIp: "203.0.113.9",
-      deps,
-    });
-    expect(duplicate.status).toBe(409);
-    expect((await readError(duplicate))?.code).toBe("validation_error");
-    // Only the first submission was delivered.
-    expect(sendFeedbackEmailMock).toHaveBeenCalledTimes(1);
+    expect(response.status).toBe(503);
+    expect(await readErrorCode(response)).toBe("internal_error");
   });
 
-  test("dedup treats title and body as bounded fields", async () => {
-    const guards = memoryGuards();
-    const deps = {
-      guards,
-      emailTo: "maintainer@example.com",
-    };
-
-    const first = await receivePublicFeedbackForTest({
-      rawBody: raw({ title: "A", body: "B\nC" }),
-      clientIp: "203.0.113.15",
-      deps,
-    });
-    const second = await receivePublicFeedbackForTest({
-      rawBody: raw({ title: "A\nB", body: "C" }),
-      clientIp: "203.0.113.15",
-      deps,
-    });
-
-    expect(first.status).toBe(200);
-    expect(second.status).toBe(200);
-    expect(sendFeedbackEmailMock).toHaveBeenCalledTimes(2);
-  });
-
-  test("schema rejects an oversized body (422)", async () => {
-    const response = await receivePublicFeedbackForTest({
-      rawBody: raw({ body: "x".repeat(8001) }),
+  test("schema rejects an oversized whatHappened (422)", async () => {
+    const response = await receiveForTest({
+      rawBody: raw({ whatHappened: "x".repeat(4001) }),
       clientIp: "203.0.113.10",
-      deps: { guards: memoryGuards(), emailTo: "maintainer@example.com" },
+      deps: { guards: memoryGuards() },
     });
+
     expect(response.status).toBe(422);
-    expect((await readError(response))?.code).toBe("validation_error");
+    expect(await readErrorCode(response)).toBe("validation_error");
+    expect(submitMock).not.toHaveBeenCalled();
   });
 
   test("schema rejects unknown keys (422)", async () => {
-    const response = await receivePublicFeedbackForTest({
+    const response = await receiveForTest({
       rawBody: raw({ severity: "high" }),
       clientIp: "203.0.113.11",
-      deps: { guards: memoryGuards(), emailTo: "maintainer@example.com" },
+      deps: { guards: memoryGuards() },
     });
+
     expect(response.status).toBe(422);
-    expect((await readError(response))?.code).toBe("validation_error");
+    expect(await readErrorCode(response)).toBe("validation_error");
+  });
+
+  test("schema rejects an unknown key inside context (422)", async () => {
+    const response = await receiveForTest({
+      rawBody: raw({ context: { client: "web", tenant: "acme" } }),
+      clientIp: "203.0.113.18",
+      deps: { guards: memoryGuards() },
+    });
+
+    expect(response.status).toBe(422);
+    expect(await readErrorCode(response)).toBe("validation_error");
   });
 
   test("rejects a malformed JSON body (400)", async () => {
-    const response = await receivePublicFeedbackForTest({
+    const response = await receiveForTest({
       rawBody: "{not json",
       clientIp: "203.0.113.12",
-      deps: { guards: memoryGuards(), emailTo: "maintainer@example.com" },
+      deps: { guards: memoryGuards() },
     });
+
     expect(response.status).toBe(400);
-    expect((await readError(response))?.code).toBe("validation_error");
+    expect(await readErrorCode(response)).toBe("validation_error");
   });
 
   // End-to-end through Elysia routing + parse:"text", to prove the route wires
   // to the handler and the strict contract survives the framework layer. The
-  // well-formed body proves routing reached the handler (not a 404); the
-  // delivery status depends on ambient env config, so it is not asserted here.
-  // The unknown-key rejection (422) is deterministic — it is refused before
-  // delivery — and proves the strict Valibot contract runs on the raw payload.
+  // unknown-key rejection (422) is deterministic and proves the strict Valibot
+  // contract runs on the raw payload rather than on Elysia's normalized object.
   test("route wiring: POST /public/feedback reaches the handler", async () => {
     const app = new Elysia().use(feedbackPublicRoute);
-    const wellFormed = await app.handle(
-      new Request("http://api.test/public/feedback", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: raw(),
-      }),
-    );
-    expect(wellFormed.status).not.toBe(404);
 
     const unknownKey = await app.handle(
       new Request("http://api.test/public/feedback", {
@@ -321,29 +201,33 @@ describe("public feedback intake", () => {
         body: raw({ junk: 1 }),
       }),
     );
+
     expect(unknownKey.status).toBe(422);
   });
 
-  test("route accepts valid max-length fields after JSON escaping", async () => {
-    const app = new Elysia().use(feedbackPublicRoute);
-    const escapedRaw = raw({
-      title: '"'.repeat(200),
-      body: "\u0000".repeat(8000),
-      source: {
-        instance: "\u0000".repeat(40),
-        version: "\u0000".repeat(40),
+  test("the raw cap admits the worst-case report the schema accepts", () => {
+    // Every cap filled with the character JSON escapes most expensively, so
+    // the route's coarse byte bound can never refuse a payload the field caps
+    // admit. Built from FEEDBACK_LIMITS, so raising a cap re-measures this.
+    const worst = (max: number) => "\u0000".repeat(max);
+    const escapedRaw = JSON.stringify({
+      kind: "bug",
+      area: "documents",
+      title: worst(FEEDBACK_LIMITS.title),
+      whatHappened: worst(FEEDBACK_LIMITS.whatHappened),
+      expected: worst(FEEDBACK_LIMITS.expected),
+      steps: worst(FEEDBACK_LIMITS.steps),
+      evidence: worst(FEEDBACK_LIMITS.evidence),
+      instance: worst(FEEDBACK_LIMITS.contextField),
+      context: {
+        client: "web",
+        clientVersion: worst(FEEDBACK_LIMITS.contextField),
+        requestId: "r".repeat(64),
+        route: worst(FEEDBACK_LIMITS.contextField),
+        errorReference: worst(FEEDBACK_LIMITS.contextField),
       },
     });
 
     expect(escapedRaw.length).toBeLessThanOrEqual(MAX_RAW_FEEDBACK_BODY_CHARS);
-    const response = await app.handle(
-      new Request("http://api.test/public/feedback", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: escapedRaw,
-      }),
-    );
-
-    expect(response.status).not.toBe(422);
   });
 });

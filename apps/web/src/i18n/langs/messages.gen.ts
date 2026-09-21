@@ -2018,7 +2018,39 @@ type Messages = {
     "uploadFailed": "Upload failed";
   };
   "feedback": {
+    "area": "Area";
+    "areas": {
+      "desktop": "Desktop app";
+      "legislation": "Legislation";
+      "mcpCli": "MCP and CLI";
+      "other": "Something else";
+      "webApp": "Web app";
+    };
+    "copyReceipt": "Copy receipt";
+    "description": "Tell us what broke or what is missing. One problem per report.";
+    "errorTitle": "Error {reference}";
+    "included": "Included: <bdi>{route}</bdi>, version <bdi>{version}</bdi>";
+    "kinds": {
+      "bug": "Bug";
+      "idea": "Idea";
+      "missingCapability": "Missing capability";
+    };
+    "privacyNote": "Emails, identifiers, links and secrets are removed on the server. Do not paste matter or client names, or text from a document.";
+    "rateLimited": "Too many reports in the last hour. Try again later.";
+    "receiptDeduplicated": "We already had this one. Your report was added to it.";
+    "receiptDescription": "Keep this receipt if you want to follow up.";
+    "receiptLabel": "Receipt";
+    "receiptTitle": "Report received";
+    "send": "Send report";
+    "steps": "Steps to reproduce";
+    "stepsHint": "Optional.";
+    "stepsPlaceholder": "1. Open… 2. Select… 3. …";
+    "subject": "Short summary";
+    "subjectPlaceholder": "One line: what is wrong or missing";
+    "title": "Send feedback";
     "trigger": "Feedback";
+    "whatHappened": "What happened";
+    "whatHappenedPlaceholder": "What you did, and what you saw instead";
   };
   "fileDetail": {
     "base": "Base";
@@ -3876,9 +3908,7 @@ type Messages = {
     "descriptionNone": "Try again. If the problem continues, return to your matters.";
     "descriptionReport": "Try again. If the problem continues, return to your matters or report it with the reference below.";
     "reference": "Error reference";
-    "reportBody": "Error reference: {reference}\n\nWhat happened?\n";
     "reportProblem": "Report problem";
-    "reportSubject": "stella error {reference}";
     "title": "This page couldn’t be opened";
   };
   "search": {

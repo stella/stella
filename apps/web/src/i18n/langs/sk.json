@@ -2015,7 +2015,39 @@
     "uploadFailed": "Nahrávanie zlyhalo"
   },
   "feedback": {
-    "trigger": "Spätná väzba"
+    "area": "Oblasť",
+    "areas": {
+      "desktop": "Desktopová aplikácia",
+      "legislation": "Legislatíva",
+      "mcpCli": "MCP a CLI",
+      "other": "Niečo iné",
+      "webApp": "Webová aplikácia"
+    },
+    "copyReceipt": "Kopírovať číslo hlásenia",
+    "description": "Napíšte nám, čo nefunguje alebo čo chýba. Jeden problém na jedno hlásenie.",
+    "errorTitle": "Chyba {reference}",
+    "included": "Priložené: <bdi>{route}</bdi>, verzia <bdi>{version}</bdi>",
+    "kinds": {
+      "bug": "Chyba",
+      "idea": "Nápad",
+      "missingCapability": "Chýbajúca funkcia"
+    },
+    "privacyNote": "E-maily, identifikátory, odkazy a tajné údaje server odstráni. Nevkladajte názvy spisov ani mená klientov a text dokumentov.",
+    "rateLimited": "Za poslednú hodinu ste poslali príliš veľa hlásení. Skúste to neskôr.",
+    "receiptDeduplicated": "Toto už poznáme. Vaše hlásenie sme k tomu pripojili.",
+    "receiptDescription": "Uschovajte si číslo hlásenia, ak sa budete chcieť spýtať.",
+    "receiptLabel": "Číslo hlásenia",
+    "receiptTitle": "Hlásenie prijaté",
+    "send": "Odoslať hlásenie",
+    "steps": "Postup na zopakovanie",
+    "stepsHint": "Nepovinné.",
+    "stepsPlaceholder": "1. Otvoriť… 2. Vybrať… 3. …",
+    "subject": "Krátke zhrnutie",
+    "subjectPlaceholder": "Jedna veta: čo nefunguje alebo chýba",
+    "title": "Odoslať spätnú väzbu",
+    "trigger": "Spätná väzba",
+    "whatHappened": "Čo sa stalo",
+    "whatHappenedPlaceholder": "Čo ste urobili a čo sa namiesto toho stalo"
   },
   "fileDetail": {
     "base": "Základ",
@@ -3873,9 +3905,7 @@
     "descriptionNone": "Skúste to znova. Ak problém pretrváva, vráťte sa k svojim spisom.",
     "descriptionReport": "Skúste to znova. Ak problém pretrváva, vráťte sa k svojim spisom alebo ho nahláste s nižšie uvedenou referenciou.",
     "reference": "Referencia chyby",
-    "reportBody": "Referencia chyby: {reference}\n\nČo sa stalo?\n",
     "reportProblem": "Nahlásiť problém",
-    "reportSubject": "Chyba stella {reference}",
     "title": "Túto stránku sa nepodarilo otvoriť"
   },
   "search": {

@@ -1642,44 +1642,68 @@ describe("destructive confirm injection (S4)", () => {
   });
 });
 
-describe("feedback submission (S4)", () => {
-  test("returns the manual submission details", async () => {
+describe("feedback (S4)", () => {
+  const report = {
+    kind: "bug",
+    area: "templates",
+    title: "Fill drops a repeated row",
+    what_happened: "The second row of a repeated table is blank.",
+  };
+  const reportArgs = [
+    "--kind",
+    report.kind,
+    "--area",
+    report.area,
+    "--title",
+    report.title,
+    "--what-happened",
+    report.what_happened,
+  ];
+
+  test("prepare returns the sanitized report and sends nothing", async () => {
     const server = startMockServer(() => ({
       toolPayload: {
-        channel: "github",
-        sanitized_title: "Bug: crash",
-        sanitized_body: "Steps ...",
+        report,
         redactions: 0,
-        issue_url: "https://github.com/stella/stella/issues/new",
-        next_step: "Open the URL and submit.",
+        redacted_fields: [],
+        next_step: "Show the report to the human, then call submit_feedback.",
       },
     }));
     const result = await runCli({
-      args: [
-        "feedback",
-        "prepare",
-        "--kind",
-        "bug",
-        "--title",
-        "Bug: crash",
-        "--body",
-        "Steps ...",
-      ],
+      args: ["feedback", "prepare", ...reportArgs],
       url: server.url,
       token: makeToken(["feedback"]),
     });
     server.stop();
     expect(result.exitCode).toBe(0);
     expect(server.requests.at(0)?.params.name).toBe("prepare_feedback");
-    const payload = JSON.parse(result.stdout);
-    expect(payload.issue_url).toBe(
-      "https://github.com/stella/stella/issues/new",
-    );
-    expect(server.requests.at(0)?.params.arguments).toEqual({
-      kind: "bug",
-      title: "Bug: crash",
-      body: "Steps ...",
+    expect(server.requests.at(0)?.params.arguments).toEqual(report);
+    expect(JSON.parse(result.stdout).report).toEqual(report);
+  });
+
+  test("submit --yes sends the approved report and prints the receipt", async () => {
+    const server = startMockServer(() => ({
+      toolPayload: {
+        receipt: "FB-7K2M-9QXA",
+        redactions: 0,
+        deduplicated: false,
+        deliveries: [{ channel: "email", status: "delivered" }],
+        stored: true,
+      },
+    }));
+    const result = await runCli({
+      args: ["feedback", "submit", ...reportArgs, "--yes"],
+      url: server.url,
+      token: makeToken(["feedback"]),
     });
+    server.stop();
+    expect(result.exitCode).toBe(0);
+    expect(server.requests.at(0)?.params.name).toBe("submit_feedback");
+    expect(server.requests.at(0)?.params.arguments).toEqual({
+      ...report,
+      confirm: true,
+    });
+    expect(JSON.parse(result.stdout).receipt).toBe("FB-7K2M-9QXA");
   });
 });
 

@@ -1260,6 +1260,7 @@ describe("OpenAI-compatible MCP tools", () => {
       "create_document",
       "search_boe_legislation",
       "prepare_feedback",
+      "submit_feedback",
     ]) {
       expect(
         await getMcpToolDefinition(toolName, createContext(), "law"),
@@ -4809,7 +4810,7 @@ describe("OpenAI-compatible MCP tools", () => {
     expectErrorEnvelope(result, {
       code: "internal_error",
       message: "Tool execution failed",
-      hint: "If this looks like a stella bug, prepare a report with the prepare_feedback tool.",
+      hint: "If this looks like a stella bug, draft a report with prepare_feedback, then send it with submit_feedback once the human approves.",
     });
     // The message stays out of the event by design; the class, tool, and
     // source are what identify the failure.

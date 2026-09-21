@@ -2015,7 +2015,39 @@
     "uploadFailed": "Feltöltés sikertelen"
   },
   "feedback": {
-    "trigger": "Visszajelzés"
+    "area": "Terület",
+    "areas": {
+      "desktop": "Asztali alkalmazás",
+      "legislation": "Jogszabályok",
+      "mcpCli": "MCP és CLI",
+      "other": "Valami más",
+      "webApp": "Webalkalmazás"
+    },
+    "copyReceipt": "Azonosító másolása",
+    "description": "Írja meg, mi hibásodott meg vagy mi hiányzik. Egy bejelentés egy problémáról.",
+    "errorTitle": "Hiba: {reference}",
+    "included": "Mellékelve: <bdi>{route}</bdi>, verzió: <bdi>{version}</bdi>",
+    "kinds": {
+      "bug": "Hiba",
+      "idea": "Ötlet",
+      "missingCapability": "Hiányzó funkció"
+    },
+    "privacyNote": "Az e-mail-címeket, azonosítókat, hivatkozásokat és titkokat a kiszolgáló eltávolítja. Ne illesszen be ügy- vagy ügyfélneveket, sem dokumentumszöveget.",
+    "rateLimited": "Túl sok bejelentés érkezett az elmúlt órában. Próbálja meg később.",
+    "receiptDeduplicated": "Ezt már ismerjük. A bejelentését hozzáfűztük.",
+    "receiptDescription": "Őrizze meg az azonosítót, ha később rá szeretne kérdezni.",
+    "receiptLabel": "Bejelentés azonosítója",
+    "receiptTitle": "Bejelentés megérkezett",
+    "send": "Bejelentés küldése",
+    "steps": "Lépések a megismétléshez",
+    "stepsHint": "Nem kötelező.",
+    "stepsPlaceholder": "1. Megnyitás… 2. Kiválasztás… 3. …",
+    "subject": "Rövid összefoglaló",
+    "subjectPlaceholder": "Egy sor: mi hibás vagy mi hiányzik",
+    "title": "Visszajelzés küldése",
+    "trigger": "Visszajelzés",
+    "whatHappened": "Mi történt",
+    "whatHappenedPlaceholder": "Mit tett, és mit látott helyette"
   },
   "fileDetail": {
     "base": "Alap",
@@ -3873,9 +3905,7 @@
     "descriptionNone": "Próbálja újra. Ha a probléma továbbra is fennáll, térjen vissza az ügyeihez.",
     "descriptionReport": "Próbálja újra. Ha a probléma továbbra is fennáll, térjen vissza az ügyeihez, vagy jelentse a problémát az alábbi hivatkozással.",
     "reference": "Hibahivatkozás",
-    "reportBody": "Hibahivatkozás: {reference}\n\nMi történt?\n",
     "reportProblem": "Probléma jelentése",
-    "reportSubject": "stella hiba: {reference}",
     "title": "Ezt az oldalt nem sikerült megnyitni"
   },
   "search": {

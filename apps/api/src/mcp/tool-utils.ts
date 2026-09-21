@@ -547,13 +547,13 @@ export const errorResult = (message: string): InternalToolErrorResult => ({
 });
 
 /**
- * Hint pointing an agent at the feedback tool after an unexpected server-side
+ * Hint pointing an agent at the feedback flow after an unexpected server-side
  * failure. Kept as a shared constant so the internal-error envelope reads the
- * same wherever it is produced. `prepare_feedback` lands in a follow-up commit on
- * this branch; the hint is stable regardless.
+ * same wherever it is produced. It names both steps: a hint that stops at the
+ * draft leaves the report sitting in the model's context, unsent.
  */
 export const MCP_INTERNAL_ERROR_HINT =
-  "If this looks like a stella bug, prepare a report with the prepare_feedback tool.";
+  "If this looks like a stella bug, draft a report with prepare_feedback, then send it with submit_feedback once the human approves.";
 
 /**
  * Preserve the caller's current grants while adding every scope required by an
@@ -734,7 +734,7 @@ export const internalFailureResult = (
       return structuredErrorResult({
         code: "upstream_unavailable",
         message: error.message,
-        hint: "Retry the same request. If the service remains unavailable, prepare a report with the request ID using prepare_feedback.",
+        hint: "Retry the same request. If the service remains unavailable, draft a report with prepare_feedback (put the request ID in context.request_id) and send it with submit_feedback once the human approves.",
         retryable: true,
       });
     }

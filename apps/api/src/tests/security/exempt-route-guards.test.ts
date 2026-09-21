@@ -87,10 +87,13 @@ const REVIEWED_UNGUARDED: Record<string, string[]> = {
     "POST /desktop-edit-sessions/:sessionId/finalize",
     "POST /desktop-edit-sessions/:sessionId/respond-takeover",
   ],
-  // Deliberately public intake (no Stella account required); protected by
-  // per-IP rate limiting and content dedup inside receivePublicFeedback,
-  // not identity.
-  "feedback/routes.ts": ["POST /feedback"],
+  // `POST /feedback` is the deliberately public intake (no Stella account
+  // required), protected by per-IP rate limiting and fingerprint dedup inside
+  // receivePublicFeedback rather than by identity. `POST /` is the
+  // authenticated `/v1/feedback` route, which does declare permissions through
+  // its createSafeRootHandler config; it sits in this file only because the
+  // public intake does.
+  "feedback/routes.ts": ["POST /feedback", "POST /"],
   // Exempt only for the raw SSE stream route; every mutation below mounts a
   // createSafeRootHandler endpoint whose HandlerConfig declares permissions.
   "notifications/routes.ts": [

@@ -4195,34 +4195,95 @@
       "scope": "feedback"
     },
     "name": "prepare_feedback",
-    "description": "Prepare a bug, feature request, or docs issue for the stella maintainers. The tool never publishes anything. It returns a prefilled new-issue URL and a gh command the human opens and submits under their own GitHub account. All content is sanitized server-side (emails, ids, secrets, URLs, IPs are redacted). Never include tenant data, client or matter names, ids, or secrets; describe the problem, reproduction steps, and expected vs actual result.",
+    "description": "Draft a bug, idea, missing-capability or docs report for the stella maintainers and get it back sanitized. Sends nothing: emails, UUIDs and ULIDs, secret-looking tokens, non-allowlisted URLs and IP addresses are redacted server-side, and the result is the report for you to show the human verbatim. Once they approve it, call submit_feedback with that same report and confirm: true. Describe the problem, then what you expected against what happened, then the steps. Refer to people by role, never by name. Never paste document text, matter or client names, or ids. Put the requestId of a failed call in context.request_id. The reporter's identity is stored privately and is never published.",
     "inputSchema": {
       "type": "object",
-      "required": ["kind", "title", "body"],
+      "required": ["kind", "area", "title", "what_happened"],
       "additionalProperties": false,
       "properties": {
         "kind": {
-          "enum": ["bug", "feature_request", "docs", "other"],
+          "enum": ["bug", "idea", "missing_capability", "docs"],
           "type": "string",
-          "description": "Feedback category: bug, feature_request, docs, or other"
+          "description": "bug (it behaved wrongly), idea (it could be better), missing_capability (there is no way to do this), docs (the reference or description is wrong or missing)."
+        },
+        "area": {
+          "enum": [
+            "matters",
+            "documents",
+            "templates",
+            "case_law",
+            "legislation",
+            "contacts",
+            "tasks",
+            "billing",
+            "chat",
+            "mcp_cli",
+            "web_app",
+            "desktop",
+            "other"
+          ],
+          "type": "string",
+          "description": "Which part of stella the report is about."
         },
         "title": {
           "type": "string",
           "minLength": 1,
           "maxLength": 200,
-          "description": "Short one-line summary of the issue; no tenant data, ids, or secrets"
+          "description": "One line naming the problem, not the symptom's location."
         },
-        "body": {
+        "what_happened": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 8000,
-          "description": "Markdown details: reproduction steps, expected vs actual behavior, environment. Never include tenant data, client or matter names, ids, or secrets; they are redacted server-side."
+          "maxLength": 4000,
+          "description": "What stella actually did."
         },
-        "channel": {
-          "enum": ["github"],
+        "expected": {
           "type": "string",
-          "description": "Delivery channel. github returns a prefilled issue URL the human submits under their own GitHub account.",
-          "default": "github"
+          "maxLength": 2000,
+          "description": "What you expected instead."
+        },
+        "steps": {
+          "type": "string",
+          "maxLength": 4000,
+          "description": "Numbered steps that reproduce it, in terms of tool calls."
+        },
+        "evidence": {
+          "type": "string",
+          "maxLength": 4000,
+          "description": "The error envelope, the refused input, or the wrong output, verbatim but without tenant content."
+        },
+        "context": {
+          "type": "object",
+          "properties": {
+            "client": {
+              "enum": ["mcp", "cli", "web", "desktop", "other"],
+              "type": "string",
+              "description": "Which client you are driving stella from."
+            },
+            "client_version": {
+              "type": "string",
+              "maxLength": 120,
+              "description": "Version string of that client."
+            },
+            "request_id": {
+              "type": "string",
+              "maxLength": 64,
+              "description": "The requestId from a failing tool's error envelope. Kept verbatim, never redacted: it is how a maintainer finds the call. Letters, digits, dot, underscore and hyphen only; anything else is dropped."
+            },
+            "route": {
+              "type": "string",
+              "maxLength": 120,
+              "description": "Tool name, CLI command or page the problem appeared on."
+            },
+            "error_reference": {
+              "type": "string",
+              "maxLength": 120,
+              "description": "Error code from the envelope, if the call returned one."
+            }
+          },
+          "required": [],
+          "additionalProperties": false,
+          "description": "Where the problem appeared, so a maintainer can find the call."
         }
       }
     },
@@ -4231,6 +4292,117 @@
       "destructiveHint": false,
       "openWorldHint": false,
       "readOnlyHint": true
+    }
+  },
+  {
+    "cli": {
+      "command": ["feedback", "submit"],
+      "scope": "feedback",
+      "confirmPassthrough": true
+    },
+    "name": "submit_feedback",
+    "description": "File the report prepared by prepare_feedback with the stella maintainers. This sends the content out of the workspace: it is stored, emailed to the maintainers, and may be posted as a public issue, so it is refused without confirm: true. emails, UUIDs and ULIDs, secret-looking tokens, non-allowlisted URLs and IP addresses are redacted server-side again here, and the reporter's identity is stored privately and never published. Returns a receipt to give the human. Re-sending identical content within a day returns the original receipt and sends nothing.",
+    "inputSchema": {
+      "type": "object",
+      "required": ["kind", "area", "title", "what_happened"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": ["bug", "idea", "missing_capability", "docs"],
+          "type": "string",
+          "description": "bug (it behaved wrongly), idea (it could be better), missing_capability (there is no way to do this), docs (the reference or description is wrong or missing)."
+        },
+        "area": {
+          "enum": [
+            "matters",
+            "documents",
+            "templates",
+            "case_law",
+            "legislation",
+            "contacts",
+            "tasks",
+            "billing",
+            "chat",
+            "mcp_cli",
+            "web_app",
+            "desktop",
+            "other"
+          ],
+          "type": "string",
+          "description": "Which part of stella the report is about."
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "description": "One line naming the problem, not the symptom's location."
+        },
+        "what_happened": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000,
+          "description": "What stella actually did."
+        },
+        "expected": {
+          "type": "string",
+          "maxLength": 2000,
+          "description": "What you expected instead."
+        },
+        "steps": {
+          "type": "string",
+          "maxLength": 4000,
+          "description": "Numbered steps that reproduce it, in terms of tool calls."
+        },
+        "evidence": {
+          "type": "string",
+          "maxLength": 4000,
+          "description": "The error envelope, the refused input, or the wrong output, verbatim but without tenant content."
+        },
+        "context": {
+          "type": "object",
+          "properties": {
+            "client": {
+              "enum": ["mcp", "cli", "web", "desktop", "other"],
+              "type": "string",
+              "description": "Which client you are driving stella from."
+            },
+            "client_version": {
+              "type": "string",
+              "maxLength": 120,
+              "description": "Version string of that client."
+            },
+            "request_id": {
+              "type": "string",
+              "maxLength": 64,
+              "description": "The requestId from a failing tool's error envelope. Kept verbatim, never redacted: it is how a maintainer finds the call. Letters, digits, dot, underscore and hyphen only; anything else is dropped."
+            },
+            "route": {
+              "type": "string",
+              "maxLength": 120,
+              "description": "Tool name, CLI command or page the problem appeared on."
+            },
+            "error_reference": {
+              "type": "string",
+              "maxLength": 120,
+              "description": "Error code from the envelope, if the call returned one."
+            }
+          },
+          "required": [],
+          "additionalProperties": false,
+          "description": "Where the problem appeared, so a maintainer can find the call."
+        },
+        "confirm": {
+          "type": "boolean",
+          "description": "Must be true to send the report. Set it only after a human user has read the prepared report and approved sending it."
+        }
+      }
+    },
+    "annotations": {
+      "title": "Submit feedback",
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {

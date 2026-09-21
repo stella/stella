@@ -184,6 +184,7 @@ const EXAMPLE_VALUES: Record<string, string> = {
   EDGAR_USER_AGENT: "stella admin@example.com",
   INGESTION_USER_AGENT: "acme-ingestion/1.0 (+https://example.com/contact)",
   FEEDBACK_EMAIL_TO: "maintainer@example.com",
+  FEEDBACK_GITHUB_REPO: "owner/repo",
   FRONTEND_URL: "http://localhost:3000",
   GOOGLE_GENERATIVE_AI_API_KEY: "key-test",
   GOTENBERG_PASSWORD: "gotenberg",
@@ -216,7 +217,6 @@ const EXAMPLE_VALUES: Record<string, string> = {
   VITE_API_URL: "http://localhost:3001",
   VITE_BROWSER_API_URL: "http://localhost:3000/api",
   VITE_COLLAB_URL: "ws://localhost:3002",
-  VITE_FEEDBACK_EMAIL_TO: "ops@example.com",
   VITE_POSTHOG_KEY: "phc_",
   VITE_POSTHOG_HOST: "https://eu.i.posthog.com",
   VITE_POSTHOG_UI_HOST: "https://eu.posthog.com",
@@ -299,7 +299,11 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
   FEATURE_TEMPLATE_PACKS:
     "Offer the bundled template-pack catalogue. Off until a deployment opts in; its routes do not exist while off.",
   FEEDBACK_EMAIL_TO:
-    "Destination for public-intake feedback email. Unset disables local email delivery.",
+    "Destination for maintainer feedback email. Unset disables email delivery.",
+  FEEDBACK_GITHUB_REPO:
+    "owner/repo that filed feedback is posted to as an issue. Requires FEEDBACK_GITHUB_TOKEN; unset disables GitHub delivery.",
+  FEEDBACK_GITHUB_TOKEN:
+    "Token used to file feedback issues in FEEDBACK_GITHUB_REPO. Needs issue-write scope only; unset disables GitHub delivery.",
   FRONTEND_URL:
     "Web app origin used for absolute transactional-email links, document verification links, and trusted redirects.",
   GOOGLE_AUTH_CLIENT_ID:
@@ -402,8 +406,6 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Show Microsoft login only when the API has matching OAuth credentials.",
   VITE_COLLAB_URL:
     "WebSocket URL for collaborative editing. Unset keeps the single-user editing path.",
-  VITE_FEEDBACK_EMAIL_TO:
-    "Recipient for the in-app feedback button. Unset hides the button.",
   VITE_BETA_FEATURES_ENABLED:
     "Expose Settings → Beta features without enabling any preview by default.",
   VITE_FEATURE_AI_MEMORY: "Show tenant-scoped AI memory settings.",
@@ -682,7 +684,6 @@ export const DEPLOYMENT_ENV_KEYS = new Set([
   "PUBLIC_API_URL",
   "PUBLIC_APP_URL",
   "PUBLIC_BROWSER_API_URL",
-  "PUBLIC_FEEDBACK_EMAIL_TO",
   "PUBLIC_GOOGLE_LOGIN_ENABLED",
   "PUBLIC_LAW_ENABLED",
   "PUBLIC_LAW_INDEXING_ENABLED",

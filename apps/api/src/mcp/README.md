@@ -191,48 +191,82 @@ before any DB access, and returns `confirmation_required`. This stops an agent
 from deleting tenant data without an explicit, human-approved confirmation; the
 handlers themselves tolerate and ignore the extra `confirm` arg.
 
-## Feedback channel
+## Feedback pipeline
 
-`prepare_feedback` (`feedback-tools.ts`, scope `stella:feedback`) lets an agent
-prepare a sanitized bug, feature request, or docs issue for the public repo. It
-is read-only because it publishes nothing; it is excluded from the anonymized
-surface and has no backing REST endpoint, so it is waived in the coverage
-guard's `TOOLS_WITHOUT_ENUMERABLE_ENDPOINT`.
+Two tools, one service. `prepare_feedback` (read-only) sanitizes a draft report
+and returns it; `submit_feedback` (write) files the same object once a human has
+approved it. The split exists because the human approval is the real control on
+what leaves the workspace: `prepare_feedback` returns the report in exactly the
+shape `submit_feedback` accepts, so the approved bytes and the sent bytes are the
+same bytes (`feedback-tools.test.ts` pins that round trip). Both carry scope
+`stella:feedback`, are excluded from the anonymized surface, and are not
+projected into the in-app chat, which has its own feedback UI.
 
-Title and body are always sanitized server-side by `feedback-sanitize.ts`: a
-deterministic set of regex passes redacts emails, ids/UUIDs, JWT/secret blobs,
-non-allowlisted URLs (only queryless, fragmentless `github.com/stella/stella`,
-`stella.legal`, and `api.stll.app/public/feedback` URLs survive), and IP
-literals. Tenant-entity-name anonymization is deliberately not run here: it is
-workspace-bound and heavy, and feedback is org-scoped free text. The tool
-returns a prefilled `issues/new` URL (label
-`agent-feedback`) and an equivalent `gh issue create` command. Nothing is
-published until the human opens the URL (or runs the command) and submits
-under their own GitHub account, so approval is intrinsic and no server-side
-token is needed. An oversized body is truncated in the URL with a
-paste-the-rest marker; the full sanitized body is always returned separately.
+`submit_feedback` declares `destructiveBehavior: { type: "outbound" }`. It
+deletes nothing, so `destructiveHint` stays false, but the transport gate in
+`tools.ts` refuses it without `confirm: true` exactly as it refuses a delete, and
+the refusal says what is about to be sent. The generated CLI leaf gets the same
+`--yes` pre-approval a destructive leaf gets.
 
-## Public feedback intake
+`stella://reference/feedback-workflow` (`feedback-workflow-reference.ts`) is the
+agent-facing procedure: when a report is worth filing, what it must never
+contain, the field-by-field schema rendered from `FEEDBACK_LIMITS`, and the three
+steps. It is served on the default and documents surfaces only.
 
-The separate public, unauthenticated `POST /public/feedback` endpoint
-(`handlers/feedback/`) is not a backing endpoint for `prepare_feedback`. It carries
-no `mcp` disposition and is mounted outside the auth macro alongside the other
-public routes in `index.ts`.
+Every field is sanitized by `feedback-sanitize.ts`: a deterministic set of regex
+passes redacts emails, UUIDs and ULIDs, JWT/secret blobs, non-allowlisted URLs
+(only queryless, fragmentless `github.com/stella/stella`, `stella.legal`, and
+`api.stll.app/public/feedback` URLs survive), and IP literals. `context.requestId`
+is the one field that is not sanitized: it is validated against
+`[A-Za-z0-9._-]{1,64}` and stored verbatim, because it is the key a maintainer
+correlates with server logs and the secret passes would otherwise eat it.
+Tenant-entity-name anonymization is deliberately not run here: it is
+workspace-bound and heavy, and feedback is org-scoped free text.
 
-The body is a strict Elysia schema (`kind`, `title` 1..200, `body` 1..8000, an
-optional `source` `{ instance?, version? }`; unknown keys and oversize are
-rejected). Title and body are re-sanitized here — the caller's pass is never
-trusted. Delivery is email-only: the sanitized report is emailed to
-`FEEDBACK_EMAIL_TO` when set (`200 { delivered: "email" }`), otherwise the
-endpoint refuses with `503 feature_disabled`. Public issues are filed
-through `prepare_feedback`, where the human
-submits under their own GitHub account, so the intake never holds a GitHub
-token. Because it is an unauthenticated public write, it is abuse-bounded in
-`intake-guards.ts` (Redis with an in-memory fallback): a per-IP rate limit
-(5/hour) and 24h content dedup (a duplicate is rejected `409`, and a claim is
-released if delivery fails so a genuine retry is not blocked). All error bodies
-reuse the `{ error: { code, message, hint } }` envelope so the forwarding tool
-can branch on HTTP status.
+## Where a report goes
+
+`handlers/feedback/submit.ts` is the one service behind every entry point. It
+sanitizes, fingerprints the sanitized content, looks that fingerprint up among
+reports filed in the last day (a match answers with the original receipt and
+delivers nothing), stores the row, then delivers outside the transaction.
+
+Storage is `feedback_reports`, a system table: RLS is enabled with no policy and
+the migration revokes every privilege from `stella`, so the request role can
+neither read a report nor file one under another reporter's identity. All access
+goes through `lib/db/feedback-report-store.ts`, which writes the row and its audit
+event in one transaction.
+
+Delivery is per configured channel. Email goes to `FEEDBACK_EMAIL_TO` when the
+transactional transport is configured. A GitHub issue is filed when
+`FEEDBACK_GITHUB_TOKEN` and `FEEDBACK_GITHUB_REPO` are both set; that issue body
+carries the sanitized report, the receipt, the context and the server version,
+and never any reporter identity. A failed channel is captured and recorded as
+`failed` on the row; the reporter still gets their receipt. With no channel
+configured the report is stored and the response carries a warning naming the two
+settings, so a self-host degrades to a local record instead of refusing.
+
+Every submission emits one `feedback_report_submitted` analytics event carrying
+kind, area, entry point, redaction count and per-channel outcome. No content.
+
+## HTTP entry points
+
+`POST /v1/feedback` is the authenticated route the web and desktop apps use
+(`handlers/feedback/create.ts`), rate-limited to 10 reports per user per hour. It
+is mounted at the root like `/v1/notifications` for the Eden type-complexity
+reason documented there.
+
+`POST /public/feedback` is the public, unauthenticated intake
+(`handlers/feedback/intake.ts`), for a caller with no Stella account. Its body is
+the same report plus an optional `instance`, parsed from the raw string by a
+Valibot `strictObject` (Elysia's normalizer would strip unknown keys before a
+typed schema could reject them). Identity is not its protection: a per-IP rate
+limit of 5 per hour in `intake-guards.ts` is, plus the service's own
+sanitization and fingerprint dedup. All error bodies reuse the
+`{ error: { code, message, hint } }` envelope so a forwarding tool can branch on
+HTTP status.
+
+`submit_feedback` is additionally bounded per organization at 20 reports an hour,
+on the same counter primitive.
 
 ## Server instructions
 
@@ -241,8 +275,8 @@ connect time, per mode. It states the conventions an agent cannot read off the
 tool list: pagination (`limit`/`cursor` in, `nextCursor` out), long-text
 windowing, the error envelope shape, the confirm guardrail, and where static
 resources live. Terse and factual, under hard character budgets asserted in
-`instructions.test.ts` (the anonymized variant drops the write-only feedback
-tool).
+`instructions.test.ts` (the anonymized and law variants drop the feedback
+pointer, because neither surface carries the tools).
 
 ## Code map
 

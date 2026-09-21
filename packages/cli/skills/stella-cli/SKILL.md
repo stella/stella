@@ -118,6 +118,7 @@ requires (request it at `stella auth login --scopes`).
 | document     | `stella document read`                          | read                        |                                         |
 | document     | `stella document save`                          | documents_write             |                                         |
 | feedback     | `stella feedback prepare`                       | feedback                    |                                         |
+| feedback     | `stella feedback submit`                        | feedback                    |                                         |
 | invoice      | `stella invoice list`                           | read                        | paginated                               |
 | legislation  | `stella legislation boe-search`                 | read                        | paginated                               |
 | legislation  | `stella legislation history`                    | read                        | paginated                               |
@@ -232,10 +233,17 @@ are omitted here.
 - `stella document save`
   - optional: --entity-id, --matter-id, --name, --parent-id, --kind (document|folder), --move-to-root, --version-id, --label, --description
 - `stella feedback prepare`
-  - `--kind` — Feedback category: bug, feature_request, docs, or other (enum: bug, feature_request, docs, other)
-  - `--title` — Short one-line summary of the issue; no tenant data, ids, or secrets (string)
-  - `--body` — Markdown details: reproduction steps, expected vs actual behavior, environment. Never include tenant data, client or matter names, ids, or secrets; they are redacted server-side. (string)
-  - optional: --channel (github)
+  - `--kind` — bug (it behaved wrongly), idea (it could be better), missing_capability (there is no way to do this), docs (the reference or description is wrong or missing). (enum: bug, idea, missing_capability, docs)
+  - `--area` — Which part of stella the report is about. (enum: matters, documents, templates, case_law, legislation, contacts, tasks, billing, chat, mcp_cli, web_app, desktop, other)
+  - `--title` — One line naming the problem, not the symptom's location. (string)
+  - `--what-happened` — What stella actually did. (string)
+  - optional: --expected, --steps, --evidence, --context.client (mcp|cli|web|desktop|other), --context.client-version, --context.request-id, --context.route, --context.error-reference
+- `stella feedback submit`
+  - `--kind` — bug (it behaved wrongly), idea (it could be better), missing_capability (there is no way to do this), docs (the reference or description is wrong or missing). (enum: bug, idea, missing_capability, docs)
+  - `--area` — Which part of stella the report is about. (enum: matters, documents, templates, case_law, legislation, contacts, tasks, billing, chat, mcp_cli, web_app, desktop, other)
+  - `--title` — One line naming the problem, not the symptom's location. (string)
+  - `--what-happened` — What stella actually did. (string)
+  - optional: --expected, --steps, --evidence, --context.client (mcp|cli|web|desktop|other), --context.client-version, --context.request-id, --context.route, --context.error-reference
 - `stella invoice list`
   - optional: --matter-id, --invoice-id
 - `stella legislation boe-search`
@@ -377,14 +385,20 @@ generic capability path. Current domains: `audit-logs`, `billing-codes`, `case-l
   `matterId`). Run `stella <command> --help` or `stella capability describe
 <id>` and copy the field paths it prints.
 
-## Preparing feedback
+## Sending feedback
 
-`stella feedback prepare` drafts a bug, feature request, or docs issue for the
-maintainers. Content is sanitized server-side (emails, ids, secrets, URLs, and
-IPs are redacted); never include tenant data, client or matter names, ids, or
-secrets: describe the problem, reproduction steps, and expected vs actual
-result. Pass `--kind`, `--title`, and `--body`.
+Two steps, so a human reads the report before it leaves the workspace.
+`stella feedback prepare` sanitizes a draft and sends nothing: emails, UUIDs
+and ULIDs, secret-looking tokens, non-allowlisted URLs, and IP addresses are
+redacted server-side, and the sanitized report comes back in the shape the
+next step accepts. Show it to the human. After they approve,
+`stella feedback submit` stores the report, delivers it to the maintainers,
+and returns a receipt (`FB-XXXX-XXXX`) to pass on. `submit` asks for
+confirmation; `--yes` skips the prompt once the human has approved.
 
-- **github** (preferred): returns a prefilled new-issue URL and a `gh` command
-  the human opens and submits under their own GitHub account. The CLI never
-  publishes anything itself.
+Describe the problem, the steps, and expected versus actual behaviour. Put
+the request id of a failed call in the context rather than in free text,
+where it would be redacted. Refer to people by role, never by name. Never
+include document text, client or matter names, ids, or secrets. The reporter
+identity is stored privately and never published. Resubmitting identical
+content within one day returns the same receipt.
