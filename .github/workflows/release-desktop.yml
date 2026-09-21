@@ -328,7 +328,7 @@ jobs:
       # short-circuit the ~5 min source compile.
       - name: Install trusted-signing-cli (Windows only)
         if: matrix.os == 'windows'
-        uses: baptiste0928/cargo-install@f204293d9709061b7bc1756fec3ec4e2cd57dec0 # v3.4.0
+        uses: baptiste0928/cargo-install@8195d4f734a149db85385bb4102b42efcd373759 # v3.5.0
         with:
           crate: trusted-signing-cli
           version: "0.10.0"
@@ -716,7 +716,7 @@ jobs:
       # finds the new release. Binaries themselves stay on the
       # GitHub Release; the manifest references them by URL there.
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN_DEPLOY }}
           aws-region: ${{ vars.AWS_REGION }}
