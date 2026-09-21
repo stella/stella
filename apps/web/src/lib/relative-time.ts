@@ -44,6 +44,12 @@ export const FULL_DATE_LONG_TIME_FORMAT = {
   timeStyle: "long",
 } as const satisfies Intl.DateTimeFormatOptions;
 
+/** "Monday, 21 September 2026 at 16:43:54" — an instant to the second. */
+export const FULL_DATE_MEDIUM_TIME_FORMAT = {
+  dateStyle: "full",
+  timeStyle: "medium",
+} as const satisfies Intl.DateTimeFormatOptions;
+
 /** "5 Mar" — a day whose year the surrounding view already establishes. */
 export const DAY_AND_MONTH_FORMAT = {
   month: "short",
@@ -114,8 +120,20 @@ export const getRelativeTimeFormatter = (
  * Format a date as a relative time string using
  * `Intl.RelativeTimeFormat`. Returns short forms like
  * "2h ago", "yesterday", "3d ago".
+ *
+ * Reads the locale from the store, outside React. Inside a component, use
+ * `useRelativeTime` from the formatting context instead: the compiler takes
+ * this call for a pure function of its argument and caches its result, so a
+ * row rendered under one language keeps its string after the reader switches
+ * to another.
  */
 export const formatRelativeTime = (
+  date: Date | string | Temporal.Instant,
+): string => formatRelativeTimeIn(getFormattingLocale(), date);
+
+/** `formatRelativeTime` for an explicit locale. */
+export const formatRelativeTimeIn = (
+  locale: string,
   date: Date | string | Temporal.Instant,
 ): string => {
   const now = Temporal.Now.instant().epochMilliseconds;
@@ -126,7 +144,7 @@ export const formatRelativeTime = (
   const diff = Math.round((then - now) / 1000);
   const absDiff = Math.abs(diff);
 
-  const rtf = getRelativeTimeFormatter(getFormattingLocale());
+  const rtf = getRelativeTimeFormatter(locale);
 
   if (absDiff < MINUTE) {
     // "just now" / "1 min. ago" — sub-minute precision is noise
@@ -156,10 +174,10 @@ export const formatFullTimestamp = (date: Date | string): string => {
     return "";
   }
 
-  return getFormatter().dateTime(resolvedDate.epochMilliseconds, {
-    dateStyle: "full",
-    timeStyle: "medium",
-  });
+  return getFormatter().dateTime(
+    resolvedDate.epochMilliseconds,
+    FULL_DATE_MEDIUM_TIME_FORMAT,
+  );
 };
 
 type FormatContextualTimestampOptions = {

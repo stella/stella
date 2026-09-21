@@ -1,15 +1,16 @@
-import { useSuspenseQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 
 import { caseLawCoverageOptions } from "@/features/case-law/queries/decisions";
 import { getTranslator } from "@/i18n/i18n-store";
+import { detached } from "@/lib/detached";
 import { pageTitle } from "@/lib/page-title";
 import {
   createLegalCollectionJsonLd,
   createPublicLawCanonicalUrl,
   createPublicLawHead,
 } from "@/lib/public-law-seo";
-import { ensureRouteQueryData } from "@/lib/react-query";
+import { fetchRouteQuery } from "@/lib/react-query";
 import {
   CaseLawCoveragePage,
   CaseLawCoveragePending,
@@ -17,16 +18,25 @@ import {
 
 const COVERAGE_PATH = "/law/coverage";
 
+/** What the page shows when the figures cannot be read at all. */
+const UNAVAILABLE = { message: "Coverage is unavailable" } as const;
+
 export const Route = createFileRoute("/law/coverage")({
-  loader: async ({ context: { queryClient } }) => {
-    await ensureRouteQueryData(queryClient, caseLawCoverageOptions());
+  loader: ({ context: { queryClient } }) => {
+    // Started, not awaited: the figures are read across the whole corpus and
+    // can take longer than a route may block for. The page has its own
+    // pending shape and fills in when they arrive; a route that failed on
+    // their timeout would show an error page for a slow read.
+    detached(
+      fetchRouteQuery(queryClient, caseLawCoverageOptions()),
+      "case-law.coverage-prefetch",
+    );
   },
   head: () => {
     const t = getTranslator();
     const title = pageTitle("caseLaw.coverage.title");
-    // The page body already renders this sentence from the catalogue; a
-    // second English copy here would serve a French reader an English
-    // description and drift from the one the page shows.
+    // The head carries the sentence the catalogue holds for the page, so a
+    // French reader's description is French and cannot drift from the copy.
     const description = t("caseLaw.coverage.description");
 
     return createPublicLawHead({
@@ -48,7 +58,16 @@ export const Route = createFileRoute("/law/coverage")({
 });
 
 function CaseLawCoverage() {
-  const { data } = useSuspenseQuery(caseLawCoverageOptions());
+  const { data, isError } = useQuery(caseLawCoverageOptions());
 
-  return <CaseLawCoveragePage coverage={data} />;
+  // Figures already on hand outrank a failed refetch: the query keeps its
+  // data when a background read fails, and a page that had the numbers must
+  // not swap them for "unavailable" because a later read did not answer.
+  if (data !== undefined) {
+    return <CaseLawCoveragePage coverage={data} />;
+  }
+  if (isError) {
+    return <CaseLawCoveragePage coverage={UNAVAILABLE} />;
+  }
+  return <CaseLawCoveragePending />;
 }

@@ -85,7 +85,7 @@ type CaseLawCoverageSource = {
    * It identifies the feed without exposing the source row's own id.
    */
   adapterKey: string;
-  /** The publisher's name for the corpus. */
+  /** The publisher as it names itself, in its own language; never translated. */
   name: string;
   /** Where the publisher offers it, for attribution. */
   publicHomeUrl: string;
@@ -93,8 +93,12 @@ type CaseLawCoverageSource = {
   /** ISO 8601; null before the first run. */
   lastSyncAt: string | null;
   completeness: CaseLawSourceCompleteness;
-  /** Decisions published for this source in the last seven days. */
-  addedLastWeek: number;
+  /**
+   * Decisions published for this source in the last seven days; null when
+   * the week's read did not answer. A zero there would be a claim the corpus
+   * never made.
+   */
+  addedLastWeek: number | null;
 };
 
 type CaseLawCoverageCountryBase = {
@@ -107,7 +111,8 @@ type CaseLawCoverageCountryBase = {
    * oldest of those counts: the sum is only as current as its stalest part.
    */
   stored: { decisions: number; asOf: string | null };
-  addedLastWeek: number;
+  /** The sources' week summed; null as soon as one of them is unknown. */
+  addedLastWeek: number | null;
   completeness: CaseLawCountryCompleteness;
   sources: readonly CaseLawCoverageSource[];
 };
@@ -120,8 +125,12 @@ type CaseLawCoverageCountry =
       /** Earliest and latest decision year the index holds; null when empty. */
       decisionYearFrom: number | null;
       decisionYearTo: number | null;
-      /** The country's courts, apex tiers named and the rest grouped. */
-      courts: readonly CaseLawCourtStatusRow[];
+      /**
+       * The country's courts, apex tiers named and the rest grouped; null
+       * when the breakdown could not be read. An empty list means the index
+       * names no court, which is a different fact.
+       */
+      courts: readonly CaseLawCourtStatusRow[] | null;
     })
   | (CaseLawCoverageCountryBase & {
       availability: typeof CASE_LAW_COVERAGE_AVAILABILITY.IN_PREPARATION;
@@ -240,21 +249,43 @@ const decisionYearBounds = (
   return { from, to };
 };
 
-const NO_ARRIVALS: CaseLawSourceArrivals = { addedLastWeek: 0 };
+/** A source the week's read did not answer for: unknown, never zero. */
+const UNKNOWN_ARRIVALS = {
+  addedLastWeek: null,
+} as const satisfies Pick<CaseLawCoverageSource, "addedLastWeek">;
+
+/**
+ * A sum that is unknown as soon as one term is: adding the known terms and
+ * printing the result would understate the week by exactly the sources that
+ * did not answer, with nothing on the page to say so.
+ */
+const sumOfKnown = (terms: readonly (number | null)[]): number | null => {
+  let total = 0;
+  for (const term of terms) {
+    if (term === null) {
+      return null;
+    }
+    total += term;
+  }
+  return total;
+};
 
 type CoverageLoad = {
   excludedSourceIds: readonly SafeId<"caseLawSource">[];
   now: Date;
   readSources: () => Promise<CaseLawCoverageSourceRow[]>;
+  /** Null when the read failed as a whole, so no source gets a number. */
   readArrivals: (
     sourceIds: readonly SafeId<"caseLawSource">[],
-  ) => Promise<ReadonlyMap<string, CaseLawSourceArrivals>>;
+  ) => Promise<ReadonlyMap<string, CaseLawSourceArrivals> | null>;
   readFacets: (
     country: string,
   ) => Promise<Result<LegalBrowseFacets, { message: string }>>;
   readCourts: (options: {
     country: string;
     buckets: LegalBrowseFacets["court"];
+    /** The country's searchable count, which the rows are made to sum to. */
+    total: number;
   }) => Promise<readonly CaseLawCourtStatusRow[]>;
 };
 
@@ -317,7 +348,7 @@ export const loadCaseLawCoverage = async ({
       reportUnrecognizedSource(source.adapterKey);
       continue;
     }
-    const sourceArrivals = arrivals.get(String(source.id)) ?? NO_ARRIVALS;
+    const sourceArrivals = arrivals?.get(String(source.id)) ?? UNKNOWN_ARRIVALS;
     const entry = byCountry.get(manifest.country) ?? {
       sources: [],
       stored: 0,
@@ -325,7 +356,7 @@ export const loadCaseLawCoverage = async ({
     };
     entry.sources.push({
       adapterKey: source.adapterKey,
-      name: manifest.name,
+      name: manifest.publisher,
       publicHomeUrl: manifest.publicHomeUrl,
       health: caseLawSourceHealth({
         enabled: source.enabled,
@@ -373,9 +404,8 @@ export const loadCaseLawCoverage = async ({
       country,
       health: caseLawCountryHealth(entry.sources.map(({ health }) => health)),
       stored: { decisions: entry.stored, asOf: entry.storedAsOf },
-      addedLastWeek: entry.sources.reduce(
-        (total, { addedLastWeek }) => total + addedLastWeek,
-        0,
+      addedLastWeek: sumOfKnown(
+        entry.sources.map(({ addedLastWeek }) => addedLastWeek),
       ),
       completeness: caseLawCountryCompleteness(
         entry.sources.map(({ completeness }) => completeness),
@@ -422,6 +452,7 @@ export const loadCaseLawCoverage = async ({
         await readCourts({
           country,
           buckets: facets.value.court.slice(0, LIMITS.caseLawFacetLimit),
+          total: searchable,
         }),
       catch: coverageError("reading the per-court breakdown failed"),
     });
@@ -437,7 +468,7 @@ export const loadCaseLawCoverage = async ({
       searchable,
       decisionYearFrom: from,
       decisionYearTo: to,
-      courts: Result.isError(courts) ? [] : courts.value,
+      courts: Result.isError(courts) ? null : courts.value,
     });
   }
 
@@ -479,9 +510,9 @@ export const readCaseLawCoverageHandler = async (
     readSources: async () => await caseLawDb(readCaseLawCoverageSourcesQuery),
     readArrivals: async (sourceIds) => {
       // Bounded by one week of one source's arrivals, so unlike the corpus
-      // count it belongs on the request path. A failure leaves the window at
-      // zero rather than failing the page: how much arrived this week is the
-      // smallest claim here, and the totals beside it still answer.
+      // count it belongs on the request path. A failure leaves the window
+      // unknown rather than failing the page: how much arrived this week is
+      // the smallest claim here, and the totals beside it still answer.
       const arrivals = await Result.tryPromise({
         try: async () =>
           await caseLawDb(
@@ -494,7 +525,7 @@ export const readCaseLawCoverageHandler = async (
         logger.warn("case_law.coverage.arrivals_unavailable", {
           "error.type": errorTag(arrivals.error),
         });
-        return new Map();
+        return null;
       }
       return arrivals.value;
     },
@@ -503,7 +534,7 @@ export const readCaseLawCoverageHandler = async (
         country,
         excludedSourceIds: excludedSourceIds.value,
       }),
-    readCourts: async ({ buckets, country }) => {
+    readCourts: async ({ buckets, country, total }) => {
       const [courtWeights, activity] = await Promise.all([
         loadCourtWeights(),
         caseLawDb(
@@ -521,6 +552,7 @@ export const readCaseLawCoverageHandler = async (
         buckets,
         country,
         courtWeights,
+        total,
       });
     },
   });

@@ -427,6 +427,51 @@ test(
 );
 
 test(
+  "a week the arrivals read did not answer for is unknown, never zero",
+  async () => {
+    const coverage = await loadCoverage({ readArrivals: async () => null });
+    expect(Result.isOk(coverage)).toBe(true);
+    if (Result.isError(coverage)) {
+      return;
+    }
+    const cze = coverage.value.countries.find(
+      ({ country }) => country === "CZE",
+    );
+    // A zero here would claim a quiet week the corpus never observed; the
+    // sum over the country is as unknown as its sources.
+    expect(cze?.sources.map(({ addedLastWeek }) => addedLastWeek)).toEqual([
+      null,
+      null,
+    ]);
+    expect(cze?.addedLastWeek).toBeNull();
+  },
+  DB_TEST_TIMEOUT_MS,
+);
+
+test(
+  "a court breakdown that cannot be read is unknown, not an empty list",
+  async () => {
+    const coverage = await loadCoverage({
+      readCourts: async () => {
+        throw new Error("activity read timed out");
+      },
+    });
+    expect(Result.isOk(coverage)).toBe(true);
+    if (Result.isError(coverage)) {
+      return;
+    }
+    const cze = coverage.value.countries.find(
+      ({ country }) => country === "CZE",
+    );
+    // An empty list would say the index names no court, which is a
+    // different fact from the read having failed.
+    expect(cze?.availability).toBe(CASE_LAW_COVERAGE_AVAILABILITY.SEARCHABLE);
+    expect(cze && "courts" in cze ? cze.courts : undefined).toBeNull();
+  },
+  DB_TEST_TIMEOUT_MS,
+);
+
+test(
   "a source the ingestion side has never counted says so rather than reporting zero",
   async () => {
     const coverage = await loadCoverage({

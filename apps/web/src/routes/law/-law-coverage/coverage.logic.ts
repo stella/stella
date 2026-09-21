@@ -18,8 +18,6 @@ export type CaseLawCoverageCountry = CaseLawCoverage["countries"][number];
 export type CaseLawCoverageSource = CaseLawCoverageCountry["sources"][number];
 export type CaseLawCoverageHealth = CaseLawCoverageCountry["health"];
 type CaseLawCoverageAvailability = CaseLawCoverageCountry["availability"];
-/** A count and the instant it was taken, never a bare number. */
-export type CaseLawStoredCount = CaseLawCoverageCountry["stored"];
 export type CaseLawSourceCompleteness = CaseLawCoverageSource["completeness"];
 /** The two arms that carry both numbers, and so can carry a ratio. */
 export type CaseLawMeasuredCompleteness = Extract<
@@ -93,57 +91,4 @@ export const orderCoverageCountriesByName = <TCountry>({
   return countries.toSorted((left, right) =>
     compare(nameOf(left), nameOf(right)),
   );
-};
-
-/** Why a source sits outside the percentage rather than inside it. */
-export const CASE_LAW_COMPLETENESS_NOTE_KIND = {
-  /** A total is recorded, but it is older than the freshness window. */
-  STALE: "stale",
-  /** A total is recorded, but the corpus has never been counted for it. */
-  NOT_COUNTED: "not-counted",
-  /** No total has ever been recorded. */
-  NOT_MEASURED: "not-measured",
-} as const;
-
-export type CaseLawCompletenessNoteKind =
-  (typeof CASE_LAW_COMPLETENESS_NOTE_KIND)[keyof typeof CASE_LAW_COMPLETENESS_NOTE_KIND];
-
-/** A count of sources the percentage beside it deliberately leaves out. */
-export type CaseLawCoverageCompletenessNote = {
-  kind: CaseLawCompletenessNoteKind;
-  count: number;
-};
-
-type CompletenessNoteCounts = {
-  staleSources: number;
-  notCountedSources: number;
-  notMeasuredSources: number;
-};
-
-/**
- * What a country's percentage does not cover, stated beside it.
- *
- * A source nobody has measured, one whose total is out of date, and one the
- * corpus has never been counted for are all missing from the ratio. Left
- * unsaid, the ratio would read as the whole country; each one is therefore its
- * own count, and a state with no sources in it says nothing rather than
- * printing a zero.
- */
-export const caseLawCoverageCompletenessNotes = ({
-  notCountedSources,
-  notMeasuredSources,
-  staleSources,
-}: CompletenessNoteCounts): readonly CaseLawCoverageCompletenessNote[] => {
-  const notes = [
-    {
-      kind: CASE_LAW_COMPLETENESS_NOTE_KIND.NOT_MEASURED,
-      count: notMeasuredSources,
-    },
-    { kind: CASE_LAW_COMPLETENESS_NOTE_KIND.STALE, count: staleSources },
-    {
-      kind: CASE_LAW_COMPLETENESS_NOTE_KIND.NOT_COUNTED,
-      count: notCountedSources,
-    },
-  ] as const satisfies readonly CaseLawCoverageCompletenessNote[];
-  return notes.filter(({ count }) => count > 0);
 };

@@ -1,8 +1,10 @@
-import { type PropsWithChildren, useId } from "react";
+import { type PropsWithChildren, type ReactNode, useId } from "react";
 
+import { Link } from "@tanstack/react-router";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import type { CaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
 import { ReviewStatusDot } from "@stll/ui/review-severity-dot";
 import { ReviewStatusBadge } from "@stll/ui/review-status-badge";
 import { ScrollArea } from "@stll/ui/scroll-area";
@@ -10,51 +12,45 @@ import { Skeleton } from "@stll/ui/skeleton";
 import {
   Table,
   TableBody,
-  TableCaption,
   TableCell,
   TableHead,
   TableHeader,
   TableRow,
 } from "@stll/ui/table";
+import { cn } from "@stll/ui/utils";
 
+import { Globe, type GlobeMarker } from "@/components/globe";
+import { toCaseLawCountryParam } from "@/features/case-law/case-law-jurisdiction";
 import { caseLawCountryName } from "@/features/case-law/components/case-law-search";
-import { CourtName } from "@/features/case-law/components/court-name";
-import {
-  courtTierRowKey,
-  groupCourtRowsByTier,
-} from "@/features/case-law/court-tier-rows.logic";
+import { CourtRowLabel } from "@/features/case-law/components/court-row-label";
+import { courtTierRowKey } from "@/features/case-law/court-tier-rows.logic";
 import {
   caseLawCompletenessExceedsReported,
   caseLawCompletenessPercent,
 } from "@/features/case-law/coverage-completeness";
 import {
-  COURT_TIER_LABEL_KEYS,
-  type CourtTier,
-} from "@/features/case-law/decision-filter-facets.logic";
-import { useFormatter, useLocale } from "@/i18n/formatting-context";
+  useFormatter,
+  useLocale,
+  useRelativeTime,
+} from "@/i18n/formatting-context";
 import { parseDeterministicDate } from "@/lib/deterministic-date";
 import {
   CALENDAR_DATE_FORMAT,
-  formatFullTimestamp,
-  formatRelativeTime,
+  MEDIUM_DATE_SHORT_TIME_FORMAT,
 } from "@/lib/relative-time";
 import { sanitizeHref } from "@/lib/sanitize-href";
 import {
-  CASE_LAW_COMPLETENESS_NOTE_KIND,
   CASE_LAW_COVERAGE_AVAILABILITY_LABEL_KEYS,
   CASE_LAW_COVERAGE_AVAILABILITY_TONES,
   CASE_LAW_COVERAGE_HEALTH_LABEL_KEYS,
   CASE_LAW_COVERAGE_HEALTH_TONES,
   CASE_LAW_TOTAL_REPORTER_LABEL_KEYS,
-  type CaseLawCompletenessNoteKind,
   type CaseLawCoverageCountry,
   type CaseLawCoverageHealth,
   type CaseLawCoverageResponse,
   type CaseLawCoverageSource,
   type CaseLawMeasuredCompleteness,
   type CaseLawSourceCompleteness,
-  type CaseLawStoredCount,
-  caseLawCoverageCompletenessNotes,
   orderCoverageCountriesByName,
 } from "@/routes/law/-law-coverage/coverage.logic";
 
@@ -78,11 +74,47 @@ const DELTA_FORMAT = {
   signDisplay: "exceptZero",
 } as const satisfies Intl.NumberFormatOptions;
 
-/** The caption is the table's heading, so it sits above it rather than under. */
-const CAPTION_CLASS = "caption-top mt-0 mb-2 text-start";
+/** Column headers on a tight row, one line each. */
+const HEAD_CLASS = "h-8 text-xs";
 
-/** Source, status, last sync, new in seven days, completeness. */
-const SOURCE_COLUMN_COUNT = 5;
+/**
+ * Source, status, last sync, new in seven days, completeness. Fixed widths,
+ * shared by every country's table: sized to their own content, the same
+ * column would sit at a different place under each country and the eye
+ * would have to find it again.
+ */
+const SOURCE_COLUMNS = [
+  { key: "source", width: "40%" },
+  { key: "status", width: "14%" },
+  { key: "lastSync", width: "16%" },
+  { key: "newLastWeek", width: "14%" },
+  { key: "completeness", width: "16%" },
+] as const satisfies readonly TableColumn[];
+
+/** Court, decisions, new in seven days, last updated. */
+const COURT_COLUMNS = [
+  { key: "court", width: "46%" },
+  { key: "decisions", width: "18%" },
+  { key: "newLastWeek", width: "18%" },
+  { key: "lastUpdated", width: "18%" },
+] as const satisfies readonly TableColumn[];
+
+const SOURCE_COLUMN_COUNT = SOURCE_COLUMNS.length;
+const COURT_COLUMN_COUNT = COURT_COLUMNS.length;
+
+/** The fixed column layout every table on the page shares. */
+const TABLE_CLASS = "table-fixed";
+
+type TableColumn = { key: string; width: string };
+
+/** The columns' widths, declared once for the real table and its pending twin. */
+const TableColumns = ({ columns }: { columns: readonly TableColumn[] }) => (
+  <colgroup>
+    {columns.map(({ key, width }) => (
+      <col key={key} style={{ width }} />
+    ))}
+  </colgroup>
+);
 
 /** Stable keys so the rows held open while the figures load never key by index. */
 const PENDING_ROW_KEYS = ["a", "b", "c", "d"] as const;
@@ -129,25 +161,18 @@ export const CaseLawCoveragePage = ({
       <CoverageHeading>
         <p className="text-muted-foreground text-xs">
           {t("caseLaw.coverage.generatedAt", {
-            date: formatFullTimestamp(coverage.generatedAt),
+            date: observedInstant(coverage.generatedAt, format),
           })}
         </p>
       </CoverageHeading>
 
-      <dl className="flex flex-wrap gap-x-12 gap-y-4">
-        <Total
-          hint={t("caseLaw.coverage.searchableHint")}
-          label={t("caseLaw.coverage.searchable")}
-        >
-          {format.number(coverage.totals.searchable)}
-        </Total>
-        <Total
-          hint={t("caseLaw.coverage.storedHint")}
-          label={t("caseLaw.coverage.stored")}
-        >
-          <StoredDecisions stored={coverage.totals.stored} />
-        </Total>
-      </dl>
+      <Hero>
+        <Headline>{format.number(coverage.totals.searchable)}</Headline>
+        <CoverageGlobe
+          countries={coverage.countries}
+          total={coverage.totals.searchable}
+        />
+      </Hero>
 
       {countries.map((country) => (
         <CountrySection country={country} key={country.country} />
@@ -170,28 +195,33 @@ export const CaseLawCoveragePending = () => {
         <Skeleton className="h-3 w-48" />
       </CoverageHeading>
 
-      <dl className="flex flex-wrap gap-x-12 gap-y-4">
-        <Total
-          hint={t("caseLaw.coverage.searchableHint")}
-          label={t("caseLaw.coverage.searchable")}
-        >
-          <Skeleton className="h-6 w-24" />
-        </Total>
-        <Total
-          hint={t("caseLaw.coverage.storedHint")}
-          label={t("caseLaw.coverage.stored")}
-        >
-          <Skeleton className="h-6 w-24" />
-        </Total>
-      </dl>
+      <Hero>
+        <Headline>
+          <Skeleton className="h-16 w-80" />
+        </Headline>
+        <Skeleton
+          className="rounded-full"
+          style={{ width: GLOBE_SIZE, height: GLOBE_SIZE }}
+        />
+        <div className="flex flex-col gap-2">
+          {PENDING_ROW_KEYS.map((row) => (
+            <Skeleton className="h-4 w-44" key={row} />
+          ))}
+        </div>
+      </Hero>
 
       {PENDING_SECTION_KEYS.map((section) => (
-        <section className="flex flex-col gap-4" key={section}>
-          <Skeleton className="h-5 w-40" />
-          <Table>
-            <TableCaption className={CAPTION_CLASS}>
-              {t("caseLaw.coverage.sourcesHeading")}
-            </TableCaption>
+        <CountryCard
+          header={
+            <>
+              <Skeleton className="h-5 w-32" />
+              <Skeleton className="h-5 w-20 rounded-full" />
+            </>
+          }
+          key={section}
+        >
+          <Table className={TABLE_CLASS}>
+            <TableColumns columns={SOURCE_COLUMNS} />
             <SourcesTableHead />
             <TableBody>
               {PENDING_ROW_KEYS.map((row) => (
@@ -203,7 +233,20 @@ export const CaseLawCoveragePending = () => {
               ))}
             </TableBody>
           </Table>
-        </section>
+          <TableBlock title={t("caseLaw.coverage.courtsHeading")}>
+            <TableColumns columns={COURT_COLUMNS} />
+            <CourtsTableHead />
+            <TableBody>
+              {PENDING_ROW_KEYS.map((row) => (
+                <TableRow key={row}>
+                  <TableCell colSpan={COURT_COLUMN_COUNT}>
+                    <Skeleton className="h-4 w-full" />
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </TableBlock>
+        </CountryCard>
       ))}
     </CoverageLayout>
   );
@@ -216,7 +259,9 @@ export const CaseLawCoveragePending = () => {
 const CoverageLayout = ({ children }: PropsWithChildren) => (
   <main className="flex min-h-0 flex-1 flex-col">
     <ScrollArea className="min-h-0 flex-1">
-      <div className="flex w-full max-w-4xl flex-col gap-8 p-4">{children}</div>
+      <div className="flex w-full max-w-7xl flex-col gap-6 p-4 sm:p-6">
+        {children}
+      </div>
     </ScrollArea>
   </main>
 );
@@ -225,46 +270,195 @@ const CoverageHeading = ({ children }: PropsWithChildren) => {
   const t = useTranslations();
 
   return (
-    <header className="flex flex-col gap-2">
-      <h1 className="text-lg font-semibold text-balance">
-        {t("caseLaw.coverage.title")}
-      </h1>
-      <p className="text-muted-foreground max-w-prose text-sm text-pretty">
-        {t("caseLaw.coverage.description")}
-      </p>
+    // The breadcrumb names the page, so the heading is for the document
+    // outline and a screen reader; what shows is when the figures were taken.
+    <header className="flex justify-end">
+      <h1 className="sr-only">{t("caseLaw.coverage.title")}</h1>
       {children}
     </header>
   );
 };
 
-/** One of the two populations, with the one line that says what it counts. */
-const Total = ({
+/** The disc's side, beside the legend and the number. */
+const GLOBE_SIZE = 280;
+
+/** Zoomed on Central Europe; the disc clip hides the cropped rim. */
+const GLOBE_SCALE = 1.6;
+
+/** The longitude the sphere holds, so every capital faces the reader. */
+const EUROPE_LONGITUDE = 17;
+
+/** Leaned so Central Europe sits at the centre of the disc. */
+const EUROPE_TILT = 0.85;
+
+/** One pin per capital; the legend beside the globe carries the figures. */
+const CAPITAL_MARKER_SIZE = 0.05;
+
+/**
+ * Each case-law jurisdiction's capital, or the seat of its court, on the
+ * globe. Total over the jurisdictions, so a new one has to be placed here
+ * before this compiles and cannot arrive unpinned.
+ */
+const CAPITAL_BY_JURISDICTION = {
+  AUT: [48.21, 16.37],
+  CZE: [50.08, 14.44],
+  EU: [49.62, 6.13],
+  HUN: [47.5, 19.04],
+  POL: [52.23, 21.01],
+  SVK: [48.15, 17.11],
+} as const satisfies Record<CaseLawJurisdiction, readonly [number, number]>;
+
+/**
+ * Each jurisdiction's colour, on the pin and in the legend, taken from its
+ * flag: the EU's blue, the Czech red, the Slovak blue, the Hungarian green,
+ * the Polish and Austrian reds. Flags in this region are red, white and blue,
+ * so the reds cannot be told apart by colour alone; the legend's names and
+ * the capitals' places on the sphere carry the identity where the hue does
+ * not. Fixed per jurisdiction, so a country keeps its colour when another
+ * arrives.
+ */
+const COLOR_BY_JURISDICTION = {
+  AUT: "#ed2939",
+  CZE: "#d7141a",
+  EU: "#003399",
+  HUN: "#477050",
+  POL: "#dc143c",
+  SVK: "#0b4ea2",
+} as const satisfies Record<CaseLawJurisdiction, string>;
+
+/**
+ * A country's name as the way into its case list, where a search can reach
+ * it; a country in preparation has no list to open, so its name stays text.
+ */
+const CountryLink = ({
   children,
-  hint,
-  label,
-}: PropsWithChildren<{ hint: string; label: string }>) => (
-  <div className="flex flex-col gap-1">
-    <dt className="text-muted-foreground text-xs">{label}</dt>
-    <dd className="flex flex-col gap-0.5">
-      <span className="text-xl font-semibold tabular-nums">{children}</span>
-      <span className="text-muted-foreground text-xs">{hint}</span>
-    </dd>
+  country,
+}: {
+  /** The name alone: a string, so returning it as is returns no promise. */
+  children: string;
+  country: CaseLawCoverageCountry;
+}) => {
+  if (country.availability !== "searchable") {
+    return children;
+  }
+  return (
+    <Link
+      className="decoration-border underline underline-offset-2 hover:decoration-current"
+      search={{ country: toCaseLawCountryParam(country.country) }}
+      to="/law/cases"
+    >
+      {children}
+    </Link>
+  );
+};
+
+/** The number, the globe and its legend in one row; nothing wraps under the globe. */
+const Hero = ({ children }: PropsWithChildren) => (
+  <div className="grid grid-cols-[auto_auto_minmax(0,1fr)] items-center gap-x-10 gap-y-4">
+    {children}
   </div>
 );
 
 /**
- * A stored count with the instant it was taken. The count is made on the
- * ingestion side, so the figure on the page is as old as its last sweep; a
- * number printed without that date invites the reader to take it for live.
+ * Where the corpus holds case law: a pin on each capital, and beside the
+ * globe a legend naming each country with, where a search can find it, its
+ * count and share of everything searchable. The figures sit in the legend
+ * rather than on the pins: the capitals lie a few hundred kilometres apart,
+ * so labels on the sphere land on top of one another.
  */
-const StoredDecisions = ({ stored }: { stored: CaseLawStoredCount }) => {
+const CoverageGlobe = ({
+  countries,
+  total,
+}: {
+  countries: readonly CaseLawCoverageCountry[];
+  total: number;
+}) => {
+  const t = useTranslations();
   const format = useFormatter();
+  const markers = countries.map((country): GlobeMarker => ({
+    color: COLOR_BY_JURISDICTION[country.country],
+    location: [...CAPITAL_BY_JURISDICTION[country.country]],
+    size: CAPITAL_MARKER_SIZE,
+  }));
 
   return (
     <>
-      {format.number(stored.decisions)}
-      {stored.asOf !== null && <CountedOn asOf={stored.asOf} />}
+      <Globe
+        className="overflow-hidden rounded-full"
+        focusLongitude={EUROPE_LONGITUDE}
+        label={t("caseLaw.coverage.globeLabel")}
+        markers={markers}
+        scale={GLOBE_SCALE}
+        size={GLOBE_SIZE}
+        tilt={EUROPE_TILT}
+      />
+      <ul className="flex flex-col gap-1.5 text-sm">
+        {countries.map((country) => (
+          <li className="flex items-baseline gap-2" key={country.country}>
+            <span
+              aria-hidden="true"
+              className="size-2 shrink-0 self-center rounded-full"
+              style={{
+                backgroundColor: COLOR_BY_JURISDICTION[country.country],
+              }}
+            />
+            <span className="font-medium">
+              <CountryLink country={country}>
+                {caseLawCountryName(format, country.country)}
+              </CountryLink>
+            </span>
+            {country.availability === "searchable" ? (
+              <span className="text-muted-foreground tabular-nums">
+                {format.number(country.searchable)}
+                {total > 0 && (
+                  <>
+                    {" · "}
+                    {format.number(country.searchable / total, PERCENT_FORMAT)}
+                  </>
+                )}
+              </span>
+            ) : (
+              <span className="text-muted-foreground">
+                {t("caseLaw.coverage.inPreparation")}
+              </span>
+            )}
+          </li>
+        ))}
+      </ul>
     </>
+  );
+};
+
+/**
+ * The one number the page is about: decisions a search can find. The title
+ * says what the page covers, so the number carries no caption. What is held
+ * but not yet searchable stays with the source it belongs to, in the
+ * completeness column; summed here it would compete with this figure and
+ * overlap it.
+ */
+const Headline = ({ children }: PropsWithChildren) => (
+  <p className="text-7xl font-semibold tracking-tight tabular-nums">
+    {children}
+  </p>
+);
+
+/**
+ * A week's arrivals. A quiet week is a fact and stays on the row, receding
+ * rather than competing with the rows that moved; a week the read did not
+ * answer for is not a fact, and prints as none.
+ */
+const Delta = ({ value }: { value: number | null }) => {
+  const format = useFormatter();
+
+  if (value === null) {
+    return <span className="text-muted-foreground">{NO_VALUE}</span>;
+  }
+  return (
+    <span
+      className={cn("tabular-nums", value === 0 && "text-muted-foreground")}
+    >
+      {format.number(value, DELTA_FORMAT)}
+    </span>
   );
 };
 
@@ -280,66 +474,102 @@ const HealthSignal = ({ health }: { health: CaseLawCoverageHealth }) => {
   );
 };
 
+type TableBlockProps = PropsWithChildren<{
+  title: string;
+}>;
+
+/** A table under its own heading, outside the caption the primitive owns. */
+const TableBlock = ({ children, title }: TableBlockProps) => {
+  const headingId = useId();
+
+  return (
+    <div className="flex flex-col gap-2">
+      <h3 className="text-sm font-medium" id={headingId}>
+        {title}
+      </h3>
+      <Table aria-labelledby={headingId} className={TABLE_CLASS}>
+        {children}
+      </Table>
+    </div>
+  );
+};
+
+type CountryCardProps = PropsWithChildren<{
+  header: ReactNode;
+  headingId?: string;
+}>;
+
+/**
+ * One country: its name and state on the rim, its tables inside, one under
+ * the other. Side by side, a source's name wraps to three lines and the
+ * newest court's date is cut off before the width they would need.
+ */
+const CountryCard = ({ children, header, headingId }: CountryCardProps) => (
+  <section
+    aria-labelledby={headingId}
+    className="bg-background flex flex-col rounded-xl border shadow-xs/5"
+  >
+    <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b px-4 py-3">
+      {header}
+    </header>
+    <div className="flex flex-col gap-6 px-4 py-4">{children}</div>
+  </section>
+);
+
 const CountrySection = ({ country }: { country: CaseLawCoverageCountry }) => {
   const t = useTranslations();
   const format = useFormatter();
   const headingId = useId();
 
   return (
-    <section aria-labelledby={headingId} className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-        <h2 className="text-base font-medium" id={headingId}>
-          {caseLawCountryName(format, country.country)}
-        </h2>
-        <ReviewStatusBadge
-          tone={CASE_LAW_COVERAGE_AVAILABILITY_TONES[country.availability]}
-        >
-          {t(CASE_LAW_COVERAGE_AVAILABILITY_LABEL_KEYS[country.availability])}
-        </ReviewStatusBadge>
-        <HealthSignal health={country.health} />
-      </div>
-
-      <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-4">
-        {country.availability === "searchable" && (
-          <Figure label={t("caseLaw.coverage.searchable")}>
-            <span className="tabular-nums">
-              {format.number(country.searchable)}
-            </span>
-          </Figure>
-        )}
-        <Figure label={t("caseLaw.coverage.stored")}>
-          <span className="tabular-nums">
-            <StoredDecisions stored={country.stored} />
-          </span>
-        </Figure>
-        {country.availability === "searchable" && (
-          <DecisionYearsFigure
-            from={country.decisionYearFrom}
-            to={country.decisionYearTo}
-          />
-        )}
-        <Figure label={t("caseLaw.corpusStatus.newLast7Days")}>
-          <span className="tabular-nums">
-            {format.number(country.addedLastWeek, DELTA_FORMAT)}
-          </span>
-        </Figure>
-      </dl>
-
-      <CountryCompleteness completeness={country.completeness} />
-
+    <CountryCard
+      header={
+        <>
+          <h2 className="text-base font-semibold" id={headingId}>
+            <CountryLink country={country}>
+              {caseLawCountryName(format, country.country)}
+            </CountryLink>
+          </h2>
+          <ReviewStatusBadge
+            tone={CASE_LAW_COVERAGE_AVAILABILITY_TONES[country.availability]}
+          >
+            {t(CASE_LAW_COVERAGE_AVAILABILITY_LABEL_KEYS[country.availability])}
+          </ReviewStatusBadge>
+          <HealthSignal health={country.health} />
+          <dl className="ms-auto flex flex-wrap items-baseline gap-x-6 gap-y-1 text-sm">
+            {country.availability === "searchable" && (
+              <Figure label={t("caseLaw.coverage.searchable")}>
+                <span className="font-medium tabular-nums">
+                  {format.number(country.searchable)}
+                </span>
+              </Figure>
+            )}
+            {country.availability === "searchable" && (
+              <DecisionYearsFigure
+                from={country.decisionYearFrom}
+                to={country.decisionYearTo}
+              />
+            )}
+            <Figure label={t("caseLaw.corpusStatus.newLast7Days")}>
+              <Delta value={country.addedLastWeek} />
+            </Figure>
+          </dl>
+        </>
+      }
+      headingId={headingId}
+    >
       <SourcesTable sources={country.sources} />
-
-      {country.availability === "searchable" && country.courts.length > 0 && (
-        <CourtsTable courts={country.courts} />
+      {country.availability === "searchable" && (
+        <CourtsTable country={country.country} courts={country.courts} />
       )}
-    </section>
+    </CountryCard>
   );
 };
 
 const Figure = ({ children, label }: PropsWithChildren<{ label: string }>) => (
-  <div className="flex flex-col gap-0.5">
+  <div className="flex items-baseline gap-1.5">
     <dt className="text-muted-foreground text-xs">{label}</dt>
-    <dd className="text-sm">{children}</dd>
+    <dd>{children}</dd>
   </div>
 );
 
@@ -362,111 +592,11 @@ const DecisionYearsFigure = ({
 
   return (
     <Figure label={t("caseLaw.coverage.decisionYears")}>
-      <bdi className="tabular-nums">
+      <bdi className="font-medium tabular-nums">
         {from === to ? fromYear : `${fromYear}–${toYear}`}
       </bdi>
     </Figure>
   );
-};
-
-/**
- * A country's completeness: the ratio, the two numbers it was computed from,
- * and a count of every source it could not be computed over.
- *
- * The counts sit beside the ratio rather than inside it. Folding an unmeasured
- * source into the percentage would make a corpus nobody has checked read
- * exactly like one that has been.
- */
-const CountryCompleteness = ({
-  completeness,
-}: {
-  completeness: CaseLawCoverageCountry["completeness"];
-}) => {
-  const t = useTranslations();
-  const format = useFormatter();
-  const counts = {
-    reported: completeness.reported,
-    stored: completeness.stored,
-  };
-  const percent = caseLawCompletenessPercent(counts);
-  const notes = caseLawCoverageCompletenessNotes(completeness);
-
-  return (
-    <div className="border-border flex flex-col gap-1.5 border-s ps-3">
-      <div className="flex flex-wrap items-baseline gap-x-3">
-        <span className="text-muted-foreground text-xs">
-          {t("caseLaw.coverage.completeness")}
-        </span>
-        <span className="text-sm font-medium tabular-nums">
-          {percent === null
-            ? NO_VALUE
-            : format.number(percent / 100, PERCENT_FORMAT)}
-        </span>
-      </div>
-      <dl className="text-muted-foreground flex flex-wrap gap-x-6 gap-y-1 text-xs">
-        <div className="flex gap-1.5">
-          <dt>{t("caseLaw.coverage.stored")}</dt>
-          <dd className="text-foreground tabular-nums">
-            {/* Both figures are sums over the measured sources alone, so with
-                none measured they are zero by construction rather than by
-                observation. The ratio already withholds itself there; these
-                have to withhold themselves too, or the row reads as a
-                publisher stating it holds nothing. */}
-            {completeness.measuredSources === 0 ? (
-              NO_VALUE
-            ) : (
-              <StoredDecisions
-                stored={{
-                  decisions: completeness.stored,
-                  asOf: completeness.storedAsOf,
-                }}
-              />
-            )}
-          </dd>
-        </div>
-        <div className="flex gap-1.5">
-          <dt>{t("caseLaw.coverage.publisherTotal")}</dt>
-          <dd className="text-foreground tabular-nums">
-            {completeness.measuredSources === 0
-              ? NO_VALUE
-              : format.number(completeness.reported)}
-          </dd>
-        </div>
-      </dl>
-      {notes.length > 0 && (
-        <ul className="text-muted-foreground flex flex-wrap gap-x-4 gap-y-1 text-xs">
-          {notes.map(({ count, kind }) => (
-            <li key={kind}>
-              <CompletenessNote count={count} kind={kind} />
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-};
-
-const CompletenessNote = ({
-  count,
-  kind,
-}: {
-  count: number;
-  kind: CaseLawCompletenessNoteKind;
-}) => {
-  const t = useTranslations();
-
-  switch (kind) {
-    case CASE_LAW_COMPLETENESS_NOTE_KIND.NOT_MEASURED:
-      return <>{t("caseLaw.coverage.notMeasuredSources", { count })}</>;
-    case CASE_LAW_COMPLETENESS_NOTE_KIND.STALE:
-      return <>{t("caseLaw.coverage.staleSources", { count })}</>;
-    case CASE_LAW_COMPLETENESS_NOTE_KIND.NOT_COUNTED:
-      return <>{t("caseLaw.coverage.notCountedSources", { count })}</>;
-    default: {
-      kind satisfies never;
-      return panic("Unhandled case-law completeness note kind");
-    }
-  }
 };
 
 /** Shared by the real table and its pending twin, so a column cannot drift. */
@@ -476,15 +606,21 @@ const SourcesTableHead = () => {
   return (
     <TableHeader>
       <TableRow>
-        <TableHead scope="col">{t("common.source")}</TableHead>
-        <TableHead scope="col">{t("common.status")}</TableHead>
-        <TableHead className="text-end" scope="col">
+        <TableHead className={HEAD_CLASS} scope="col">
+          {t("common.source")}
+        </TableHead>
+        <TableHead className={HEAD_CLASS} scope="col">
+          {t("common.status")}
+        </TableHead>
+        <TableHead className={cn(HEAD_CLASS, "text-end")} scope="col">
           {t("caseLaw.coverage.lastSync")}
         </TableHead>
-        <TableHead className="text-end" scope="col">
+        <TableHead className={cn(HEAD_CLASS, "text-end")} scope="col">
           {t("caseLaw.corpusStatus.newLast7Days")}
         </TableHead>
-        <TableHead scope="col">{t("caseLaw.coverage.completeness")}</TableHead>
+        <TableHead className={HEAD_CLASS} scope="col">
+          {t("caseLaw.coverage.completeness")}
+        </TableHead>
       </TableRow>
     </TableHeader>
   );
@@ -496,23 +632,22 @@ const SourcesTable = ({
   sources: readonly CaseLawCoverageSource[];
 }) => {
   const t = useTranslations();
-  const format = useFormatter();
+  const relativeTime = useRelativeTime();
 
   return (
-    <Table>
-      <TableCaption className={CAPTION_CLASS}>
-        {t("caseLaw.coverage.sourcesHeading")}
-      </TableCaption>
+    // No heading above it, so the table names itself for a screen reader.
+    <Table aria-label={t("common.source")} className={TABLE_CLASS}>
+      <TableColumns columns={SOURCE_COLUMNS} />
       <SourcesTableHead />
       <TableBody>
         {sources.map((source) => (
           <TableRow key={source.adapterKey}>
             <TableHead
-              className="text-foreground h-auto font-normal whitespace-normal"
+              className={"text-foreground h-auto font-normal whitespace-normal"}
               scope="row"
             >
               <a
-                className="underline underline-offset-2"
+                className="decoration-border underline underline-offset-2 hover:decoration-current"
                 href={sanitizeHref(source.publicHomeUrl)}
                 rel="noreferrer"
               >
@@ -522,15 +657,15 @@ const SourcesTable = ({
             <TableCell>
               <HealthSignal health={source.health} />
             </TableCell>
-            <TableCell className="text-muted-foreground text-end">
+            <TableCell className={"text-muted-foreground text-end"}>
               {source.lastSyncAt === null
                 ? NO_VALUE
-                : formatRelativeTime(source.lastSyncAt)}
+                : relativeTime(source.lastSyncAt)}
             </TableCell>
-            <TableCell className="text-end tabular-nums">
-              {format.number(source.addedLastWeek, DELTA_FORMAT)}
+            <TableCell className={"text-end"}>
+              <Delta value={source.addedLastWeek} />
             </TableCell>
-            <TableCell className="whitespace-normal">
+            <TableCell className={"whitespace-normal"}>
               <SourceCompleteness completeness={source.completeness} />
             </TableCell>
           </TableRow>
@@ -594,7 +729,7 @@ const MeasuredCompleteness = ({
   const percent = caseLawCompletenessPercent(counts);
 
   return (
-    <div className="flex flex-col gap-0.5">
+    <div className="flex flex-col gap-0.5 leading-tight">
       <span className="tabular-nums">
         {percent === null
           ? NO_VALUE
@@ -655,66 +790,106 @@ const observedDate = (
   return date === null ? value : format.dateTime(date, CALENDAR_DATE_FORMAT);
 };
 
-type CourtRow = Extract<
+/** An instant with its time of day: when this page's figures were taken. */
+const observedInstant = (
+  value: string,
+  format: ReturnType<typeof useFormatter>,
+): string => {
+  const date = parseDeterministicDate(value);
+  return date === null
+    ? value
+    : format.dateTime(date, MEDIUM_DATE_SHORT_TIME_FORMAT);
+};
+
+type SearchableCountry = Extract<
   CaseLawCoverageCountry,
   { availability: "searchable" }
->["courts"][number];
+>;
+type CourtRow = NonNullable<SearchableCountry["courts"]>[number];
 
-/**
- * The searchable index by court, under the tier headings the facet rail uses.
- * Apex courts arrive by name; the wide tiers arrive as one row each, because a
- * jurisdiction has dozens of regional courts and a list of them is not what a
- * reader came to this page for.
- */
-const CourtsTable = ({ courts }: { courts: readonly CourtRow[] }) => {
+/** Shared by the real table and its pending twin, so a column cannot drift. */
+const CourtsTableHead = () => {
   const t = useTranslations();
-  const byTier = groupCourtRowsByTier(courts);
 
   return (
-    <Table>
-      <TableCaption className={CAPTION_CLASS}>
-        {t("common.decisions")}
-      </TableCaption>
-      <TableHeader>
-        <TableRow>
-          <TableHead scope="col">{t("common.court")}</TableHead>
-          <TableHead className="text-end" scope="col">
-            {t("common.decisions")}
-          </TableHead>
-          <TableHead className="text-end" scope="col">
-            {t("caseLaw.corpusStatus.newLast7Days")}
-          </TableHead>
-          <TableHead className="text-end" scope="col">
-            {t("common.lastUpdated")}
-          </TableHead>
-        </TableRow>
-      </TableHeader>
-      {byTier.map(({ rows, tier }) => (
-        <TableBody key={tier}>
-          <TableRow>
-            {/* `rowgroup`, not `colgroup`: the heading labels the court rows
-                of its own `<tbody>`, and the table declares no column groups
-                for a `colgroup` header to name. */}
-            <TableHead
-              className="text-muted-foreground h-auto"
-              colSpan={4}
-              scope="rowgroup"
-            >
-              {t(COURT_TIER_LABEL_KEYS[tier])}
-            </TableHead>
-          </TableRow>
-          {rows.map((row) => (
-            <CourtRowCells key={courtTierRowKey(row)} row={row} tier={tier} />
-          ))}
-        </TableBody>
-      ))}
-    </Table>
+    <TableHeader>
+      <TableRow>
+        <TableHead className={HEAD_CLASS} scope="col">
+          {t("common.court")}
+        </TableHead>
+        <TableHead className={cn(HEAD_CLASS, "text-end")} scope="col">
+          {t("common.decisions")}
+        </TableHead>
+        <TableHead className={cn(HEAD_CLASS, "text-end")} scope="col">
+          {t("caseLaw.corpusStatus.newLast7Days")}
+        </TableHead>
+        <TableHead className={cn(HEAD_CLASS, "text-end")} scope="col">
+          {t("common.lastUpdated")}
+        </TableHead>
+      </TableRow>
+    </TableHeader>
   );
 };
 
-const CourtRowCells = ({ row, tier }: { row: CourtRow; tier: CourtTier }) => {
+/**
+ * The searchable index by court, in the order the API ranks them: apex courts
+ * by name, the wide tiers as one row each naming their tier, and the courts
+ * beyond the listed ones as the closing row. No heading rows between them: a
+ * dozen rows read better as one list than as four lists of three.
+ *
+ * A breakdown the endpoint could not read says so in the table's place. An
+ * empty table would claim the index names no court.
+ */
+const CourtsTable = ({
+  country,
+  courts,
+}: {
+  country: CaseLawJurisdiction;
+  courts: SearchableCountry["courts"];
+}) => {
   const t = useTranslations();
+
+  if (courts === null) {
+    return (
+      <div className="flex flex-col gap-2">
+        <h3 className="text-sm font-medium">
+          {t("caseLaw.coverage.courtsHeading")}
+        </h3>
+        <p className="text-muted-foreground text-xs">
+          {t("caseLaw.coverage.courtsUnavailable")}
+        </p>
+      </div>
+    );
+  }
+  return (
+    <TableBlock title={t("caseLaw.coverage.courtsHeading")}>
+      <TableColumns columns={COURT_COLUMNS} />
+      <CourtsTableHead />
+      <TableBody>
+        {courts.map((row) => (
+          <CourtRowCells
+            country={country}
+            key={courtTierRowKey(row)}
+            row={row}
+          />
+        ))}
+      </TableBody>
+    </TableBlock>
+  );
+};
+
+const CourtRowCells = ({
+  country,
+  row,
+}: {
+  country: CaseLawJurisdiction;
+  row: CourtRow;
+}) => {
   const format = useFormatter();
+  const relativeTime = useRelativeTime();
+  // The row for the courts beyond the listed ones carries no activity: none
+  // was read for courts the facets do not name.
+  const activity = row.type === "unlisted" ? null : row;
 
   return (
     <TableRow>
@@ -723,25 +898,30 @@ const CourtRowCells = ({ row, tier }: { row: CourtRow; tier: CourtTier }) => {
         scope="row"
       >
         {row.type === "court" ? (
-          <CourtName
-            abbreviation={row.courtAbbreviation}
-            court={row.court}
-            tier={tier}
-          />
+          <Link
+            className="decoration-border underline underline-offset-2 hover:decoration-current"
+            search={{
+              country: toCaseLawCountryParam(country),
+              court: row.court,
+            }}
+            to="/law/cases"
+          >
+            <CourtRowLabel row={row} />
+          </Link>
         ) : (
-          <span className="text-muted-foreground">
-            {t("caseLaw.corpusStatus.courtCount", { count: row.courts })}
-          </span>
+          <CourtRowLabel row={row} />
         )}
       </TableHead>
       <TableCell className="text-end tabular-nums">
         {format.number(row.decisions)}
       </TableCell>
-      <TableCell className="text-end tabular-nums">
-        {format.number(row.addedLastWeek, DELTA_FORMAT)}
+      <TableCell className="text-end">
+        <Delta value={activity === null ? null : activity.addedLastWeek} />
       </TableCell>
       <TableCell className="text-muted-foreground text-end">
-        {row.updatedAt === null ? NO_VALUE : formatRelativeTime(row.updatedAt)}
+        {activity === null || activity.updatedAt === null
+          ? NO_VALUE
+          : relativeTime(activity.updatedAt)}
       </TableCell>
     </TableRow>
   );

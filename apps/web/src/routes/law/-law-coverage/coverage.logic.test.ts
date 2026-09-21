@@ -1,9 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import {
-  caseLawCoverageCompletenessNotes,
-  orderCoverageCountriesByName,
-} from "@/routes/law/-law-coverage/coverage.logic";
+import { orderCoverageCountriesByName } from "@/routes/law/-law-coverage/coverage.logic";
 
 describe("countries are ordered by the name the reader sees", () => {
   test("the reader's collation decides, not the ISO code", () => {
@@ -50,51 +47,5 @@ describe("countries are ordered by the name the reader sees", () => {
     });
 
     expect(countries.map(({ country }) => country)).toEqual(["POL", "AUT"]);
-  });
-});
-
-describe("what a percentage leaves out is stated, never folded in", () => {
-  test("each state gets its own count, the unmeasured ones first", () => {
-    expect(
-      caseLawCoverageCompletenessNotes({
-        staleSources: 2,
-        notCountedSources: 3,
-        notMeasuredSources: 1,
-      }),
-    ).toEqual([
-      { kind: "not-measured", count: 1 },
-      { kind: "stale", count: 2 },
-      { kind: "not-counted", count: 3 },
-    ]);
-  });
-
-  test("a state with no sources in it says nothing", () => {
-    expect(
-      caseLawCoverageCompletenessNotes({
-        staleSources: 0,
-        notCountedSources: 0,
-        notMeasuredSources: 4,
-      }),
-    ).toEqual([{ kind: "not-measured", count: 4 }]);
-  });
-
-  test("a source with a total but no count is stated, never folded in", () => {
-    expect(
-      caseLawCoverageCompletenessNotes({
-        staleSources: 0,
-        notCountedSources: 2,
-        notMeasuredSources: 0,
-      }),
-    ).toEqual([{ kind: "not-counted", count: 2 }]);
-  });
-
-  test("a country whose every source is measured carries no note", () => {
-    expect(
-      caseLawCoverageCompletenessNotes({
-        staleSources: 0,
-        notCountedSources: 0,
-        notMeasuredSources: 0,
-      }),
-    ).toEqual([]);
   });
 });

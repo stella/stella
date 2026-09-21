@@ -125,6 +125,20 @@ export type CaseLawCourtStatusRow =
       addedLastDay: number;
       addedLastWeek: number;
       updatedAt: string | null;
+    }
+  | {
+      /**
+       * Everything the facet buckets leave out: the jurisdiction's total
+       * less the courts listed. The buckets are the largest courts up to a
+       * limit, and a breakdown that stopped at the limit would sum to less
+       * than the total beside it with nothing to say where the rest went.
+       * How many courts these are is not known, so the row names how many
+       * are listed instead; it carries no activity, because none was read.
+       */
+      type: "unlisted";
+      tier: "other";
+      listed: number;
+      decisions: number;
     };
 
 /** What one court's rows say about recent ingestion and the last change. */
@@ -305,6 +319,8 @@ type CourtStatusRowsOptions = {
   courtWeights: CourtWeightMap;
   /** Per-court activity; a court the read did not answer for reports none. */
   activity: ReadonlyMap<string, CourtActivity>;
+  /** The jurisdiction's whole searchable count, which the rows must sum to. */
+  total: number;
 };
 
 const NO_ACTIVITY: CourtActivity = {
@@ -325,7 +341,33 @@ export const caseLawCourtStatusRows = ({
   buckets,
   country,
   courtWeights,
+  total,
 }: CourtStatusRowsOptions): CaseLawCourtStatusRow[] => {
+  const rows = courtRowsByTier({ activity, buckets, country, courtWeights });
+  const listed = buckets.reduce((sum, { count }) => sum + count, 0);
+  // Never negative: the buckets and the total come from the same projection,
+  // and a bucket sum above it would be the projection contradicting itself.
+  // Clamped rather than asserted, because the two are read separately and a
+  // reindex may land between the reads.
+  const unlisted = Math.max(0, total - listed);
+  if (unlisted === 0) {
+    return rows;
+  }
+  rows.push({
+    type: "unlisted",
+    tier: "other",
+    listed: buckets.length,
+    decisions: unlisted,
+  });
+  return rows;
+};
+
+const courtRowsByTier = ({
+  activity,
+  buckets,
+  country,
+  courtWeights,
+}: Omit<CourtStatusRowsOptions, "total">): CaseLawCourtStatusRow[] => {
   // A list per tier up front, so every tier has one to collect into and there
   // is no absent case to stand in for. A tier added to the union has to be
   // given one here before this compiles. Annotated, not inferred: empty

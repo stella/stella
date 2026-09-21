@@ -50,7 +50,15 @@ type AdapterJurisdictionDeclaration = {
 
 type AdapterManifest<TKey extends AdapterKey> = {
   readonly key: TKey;
+  /** The feed's English label, for operators and logs. */
   readonly name: string;
+  /**
+   * The publisher as it names itself, in its own language: what a public
+   * page prints. A court's name is not translated for the reader any more
+   * than a party's is, and an English rendering of "Nejvyšší správní soud"
+   * is not a name anyone can look up.
+   */
+  readonly publisher: string;
   /**
    * Where the publisher offers this corpus to the public, for the attribution
    * line every rendered decision ends with.
@@ -131,6 +139,7 @@ export const ADAPTER_MANIFESTS = {
   [ADAPTER_KEYS.CZ_REGIONAL]: {
     key: ADAPTER_KEYS.CZ_REGIONAL,
     name: "Czech Regional Courts",
+    publisher: "Okresní, krajské a vrchní soudy",
     publicHomeUrl: "https://rozhodnuti.justice.cz",
     ...ADAPTER_JURISDICTIONS.CZE,
     ecliCourtCodes: CZ_ECLI_COURTS,
@@ -144,6 +153,7 @@ export const ADAPTER_MANIFESTS = {
   [ADAPTER_KEYS.CZ_NS]: {
     key: ADAPTER_KEYS.CZ_NS,
     name: "Czech Supreme Court",
+    publisher: "Nejvyšší soud",
     publicHomeUrl: "https://rozhodnuti.nsoud.cz",
     ...ADAPTER_JURISDICTIONS.CZE,
     ecliCourtCodes: CZ_ECLI_COURTS,
@@ -157,6 +167,7 @@ export const ADAPTER_MANIFESTS = {
   [ADAPTER_KEYS.CZ_NSS]: {
     key: ADAPTER_KEYS.CZ_NSS,
     name: "Czech Supreme Administrative Court",
+    publisher: "Nejvyšší správní soud",
     publicHomeUrl: "https://vyhledavac.nssoud.cz",
     ...ADAPTER_JURISDICTIONS.CZE,
     ecliCourtCodes: CZ_ECLI_COURTS,
@@ -170,6 +181,7 @@ export const ADAPTER_MANIFESTS = {
   [ADAPTER_KEYS.CZ_US]: {
     key: ADAPTER_KEYS.CZ_US,
     name: "Czech Constitutional Court",
+    publisher: "Ústavní soud",
     publicHomeUrl: "https://nalus.usoud.cz",
     ...ADAPTER_JURISDICTIONS.CZE,
     ecliCourtCodes: CZ_ECLI_COURTS,
@@ -186,6 +198,7 @@ export const ADAPTER_MANIFESTS = {
   [ADAPTER_KEYS.SK_COURTS]: {
     key: ADAPTER_KEYS.SK_COURTS,
     name: "Slovak Courts",
+    publisher: "Súdy Slovenskej republiky",
     publicHomeUrl: "https://obcan.justice.sk",
     ...ADAPTER_JURISDICTIONS.SVK,
     ecliCourtCodes: SK_ECLI_COURTS,
@@ -199,6 +212,7 @@ export const ADAPTER_MANIFESTS = {
   [ADAPTER_KEYS.SK_US]: {
     key: ADAPTER_KEYS.SK_US,
     name: "Slovak Constitutional Court",
+    publisher: "Ústavný súd Slovenskej republiky",
     publicHomeUrl: "https://www.ustavnysud.sk",
     ...ADAPTER_JURISDICTIONS.SVK,
     ecliCourtCodes: SK_ECLI_COURTS,
@@ -212,6 +226,7 @@ export const ADAPTER_MANIFESTS = {
   [ADAPTER_KEYS.PL_COURTS]: {
     key: ADAPTER_KEYS.PL_COURTS,
     name: "Polish Courts (SAOS)",
+    publisher: "Sądy powszechne (SAOS)",
     publicHomeUrl: "https://www.saos.org.pl",
     ...ADAPTER_JURISDICTIONS.POL,
     ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
@@ -225,6 +240,7 @@ export const ADAPTER_MANIFESTS = {
   [ADAPTER_KEYS.PL_SN]: {
     key: ADAPTER_KEYS.PL_SN,
     name: "Polish Supreme Court (Sąd Najwyższy)",
+    publisher: "Sąd Najwyższy",
     publicHomeUrl: "https://sn.pl/pl/wyszukiwarka-orzeczen",
     ...ADAPTER_JURISDICTIONS.POL,
     // Poland issues no ECLI, so there is no court code to resolve one against.
@@ -245,6 +261,7 @@ export const ADAPTER_MANIFESTS = {
   [ADAPTER_KEYS.AT_COURTS]: {
     key: ADAPTER_KEYS.AT_COURTS,
     name: "Austrian Courts (RIS Justiz)",
+    publisher: "Gerichte (RIS Justiz)",
     publicHomeUrl: "https://www.ris.bka.gv.at",
     ...ADAPTER_JURISDICTIONS.AUT,
     ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
@@ -258,6 +275,7 @@ export const ADAPTER_MANIFESTS = {
   [ADAPTER_KEYS.AT_VFGH]: {
     key: ADAPTER_KEYS.AT_VFGH,
     name: "Austrian Constitutional Court (RIS VfGH)",
+    publisher: "Verfassungsgerichtshof",
     publicHomeUrl: "https://www.ris.bka.gv.at",
     ...ADAPTER_JURISDICTIONS.AUT,
     ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
@@ -271,6 +289,7 @@ export const ADAPTER_MANIFESTS = {
   [ADAPTER_KEYS.AT_VWGH]: {
     key: ADAPTER_KEYS.AT_VWGH,
     name: "Austrian Administrative Court (RIS VwGH)",
+    publisher: "Verwaltungsgerichtshof",
     publicHomeUrl: "https://www.ris.bka.gv.at",
     ...ADAPTER_JURISDICTIONS.AUT,
     ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
@@ -284,6 +303,7 @@ export const ADAPTER_MANIFESTS = {
   [ADAPTER_KEYS.AT_BVWG]: {
     key: ADAPTER_KEYS.AT_BVWG,
     name: "Austrian Federal Administrative Court (RIS BVwG)",
+    publisher: "Bundesverwaltungsgericht",
     publicHomeUrl: "https://www.ris.bka.gv.at",
     ...ADAPTER_JURISDICTIONS.AUT,
     ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
@@ -297,6 +317,7 @@ export const ADAPTER_MANIFESTS = {
   [ADAPTER_KEYS.AT_LVWG]: {
     key: ADAPTER_KEYS.AT_LVWG,
     name: "Austrian State Administrative Courts (RIS LVwG)",
+    publisher: "Landesverwaltungsgerichte",
     publicHomeUrl: "https://www.ris.bka.gv.at",
     ...ADAPTER_JURISDICTIONS.AUT,
     ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
@@ -310,6 +331,7 @@ export const ADAPTER_MANIFESTS = {
   [ADAPTER_KEYS.AT_ASYLGH]: {
     key: ADAPTER_KEYS.AT_ASYLGH,
     name: "Austrian Asylum Court (RIS AsylGH)",
+    publisher: "Asylgerichtshof",
     publicHomeUrl: "https://www.ris.bka.gv.at",
     ...ADAPTER_JURISDICTIONS.AUT,
     ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
@@ -323,6 +345,7 @@ export const ADAPTER_MANIFESTS = {
   [ADAPTER_KEYS.AT_UBAS]: {
     key: ADAPTER_KEYS.AT_UBAS,
     name: "Austrian Federal Asylum Senate (RIS UBAS)",
+    publisher: "Unabhängiger Bundesasylsenat",
     publicHomeUrl: "https://www.ris.bka.gv.at",
     ...ADAPTER_JURISDICTIONS.AUT,
     ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
@@ -336,6 +359,7 @@ export const ADAPTER_MANIFESTS = {
   [ADAPTER_KEYS.AT_UVS]: {
     key: ADAPTER_KEYS.AT_UVS,
     name: "Austrian Independent Administrative Senates (RIS UVS)",
+    publisher: "Unabhängige Verwaltungssenate",
     publicHomeUrl: "https://www.ris.bka.gv.at",
     ...ADAPTER_JURISDICTIONS.AUT,
     ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
@@ -349,6 +373,7 @@ export const ADAPTER_MANIFESTS = {
   [ADAPTER_KEYS.AT_VERG]: {
     key: ADAPTER_KEYS.AT_VERG,
     name: "Austrian Procurement Review Bodies (RIS Verg)",
+    publisher: "Vergabekontrollbehörden",
     publicHomeUrl: "https://www.ris.bka.gv.at",
     ...ADAPTER_JURISDICTIONS.AUT,
     ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
@@ -362,6 +387,7 @@ export const ADAPTER_MANIFESTS = {
   [ADAPTER_KEYS.AT_UMSE]: {
     key: ADAPTER_KEYS.AT_UMSE,
     name: "Austrian Environmental Senate (RIS Umweltsenat)",
+    publisher: "Umweltsenat",
     publicHomeUrl: "https://www.ris.bka.gv.at",
     ...ADAPTER_JURISDICTIONS.AUT,
     ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
@@ -375,6 +401,7 @@ export const ADAPTER_MANIFESTS = {
   [ADAPTER_KEYS.AT_BKS]: {
     key: ADAPTER_KEYS.AT_BKS,
     name: "Austrian Federal Communications Senate (RIS BKS)",
+    publisher: "Bundeskommunikationssenat",
     publicHomeUrl: "https://www.ris.bka.gv.at",
     ...ADAPTER_JURISDICTIONS.AUT,
     ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
@@ -388,6 +415,7 @@ export const ADAPTER_MANIFESTS = {
   [ADAPTER_KEYS.AT_FINDOK]: {
     key: ADAPTER_KEYS.AT_FINDOK,
     name: "Austrian Fiscal Courts (Findok BFG and UFS)",
+    publisher: "Bundesfinanzgericht und UFS (Findok)",
     publicHomeUrl: "https://findok.bmf.gv.at",
     ...ADAPTER_JURISDICTIONS.AUT,
     ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
@@ -401,6 +429,7 @@ export const ADAPTER_MANIFESTS = {
   [ADAPTER_KEYS.HU_BHGY]: {
     key: ADAPTER_KEYS.HU_BHGY,
     name: "Hungarian Courts (Bírósági Határozatok Gyűjteménye)",
+    publisher: "Bírósági Határozatok Gyűjteménye",
     publicHomeUrl: "https://eakta.birosag.hu/anonimizalt-hatarozatok",
     ...ADAPTER_JURISDICTIONS.HUN,
     // Hungary issues no ECLI, so there is no court code to resolve one against.
@@ -420,6 +449,7 @@ export const ADAPTER_MANIFESTS = {
   [ADAPTER_KEYS.EU_ECJ]: {
     key: ADAPTER_KEYS.EU_ECJ,
     name: "Court of Justice of the EU (CJEU)",
+    publisher: "Court of Justice of the European Union",
     publicHomeUrl: "https://eur-lex.europa.eu",
     ...ADAPTER_JURISDICTIONS.EU,
     ecliCourtCodes: EU_ECLI_COURTS,

@@ -1,3 +1,4 @@
+import { CASE_LAW_REGION_BY_JURISDICTION } from "@stll/api-contract/case-law-jurisdictions";
 import {
   CASE_LAW_REGION_BY_COUNTRY,
   isPublicCaseLawCountry as isSharedPublicCaseLawCountry,
@@ -14,7 +15,11 @@ import type {
  */
 export const REGION_BY_COUNTRY = CASE_LAW_REGION_BY_COUNTRY;
 
-const REGIONS: Readonly<Record<string, string>> = REGION_BY_COUNTRY;
+// Names come from the map over every jurisdiction, not the browser's: the
+// coverage page reports a jurisdiction before the public search admits it,
+// and its name must not arrive as a bare code.
+const REGIONS: Readonly<Record<string, string>> =
+  CASE_LAW_REGION_BY_JURISDICTION;
 
 export const caseLawCountryRegion = (country: string): string | null =>
   REGIONS[country.toUpperCase()] ?? null;

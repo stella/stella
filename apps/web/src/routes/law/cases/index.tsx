@@ -1029,13 +1029,26 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
           questions={questions.surface}
           sort={sort}
           summary={
-            <ListHeading
-              exactCount={exact.length}
-              intent={intent}
-              isRefreshing={isRefreshing}
-              page={pager.currentPage}
-              total={searchTotal}
-            />
+            // The widened-search note sits on the count's line, not on a
+            // line of its own: it qualifies the count, and a row between the
+            // toolbar and the table pushed every result down for one clause.
+            <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-0.5">
+              <ListHeading
+                exactCount={exact.length}
+                intent={intent}
+                isRefreshing={isRefreshing}
+                page={pager.currentPage}
+                total={searchTotal}
+              />
+              {warnings.resultsLine === null || isSearchUnavailable ? null : (
+                <SearchWidenedLine
+                  line={warnings.resultsLine}
+                  onSearchEveryWord={
+                    rowsAnswerRequestedSearch(rows) ? searchEveryWord : null
+                  }
+                />
+              )}
+            </div>
           }
         />
 
@@ -1062,14 +1075,6 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
           />
         ) : (
           <>
-            {warnings.resultsLine === null ? null : (
-              <SearchWidenedLine
-                line={warnings.resultsLine}
-                onSearchEveryWord={
-                  rowsAnswerRequestedSearch(rows) ? searchEveryWord : null
-                }
-              />
-            )}
             <DecisionTable
               decisions={find.decisions}
               emptyState={
@@ -1079,6 +1084,7 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
               }
               expectedRowCount={pageSize}
               findHighlight={find.highlight}
+              firstRowNumber={(pager.currentPage - 1) * pageSize + 1}
               isLoading={rows === "skeleton"}
               isRefreshing={isRefreshing}
               layout={layout}

@@ -617,6 +617,7 @@ type Messages = {
       "decisionCount": "{count, plural, =0 {No decisions} one {# decision} other {# decisions}}";
       "lastNegative": "last negative treatment in {year}";
       "negativeCount": "{count, plural, one {# negative} other {# negative}}";
+      "none": "No citations recorded yet.";
       "openAtCitation": "Open at the citation";
       "openDecision": "Open decision";
       "passageNotFound": "The citing passage was not located in the text";
@@ -644,6 +645,7 @@ type Messages = {
       "courtCount": "{count, plural, one {# court} other {# courts}}";
       "newLast24Hours": "{count} in the last 24 h";
       "newLast7Days": "New in the last 7 days";
+      "unlistedCourts": "{count, plural, one {Courts beyond the largest one} other {Courts beyond the # largest}}";
     };
     "courtTiers": {
       "constitutional": "Constitutional courts";
@@ -654,10 +656,13 @@ type Messages = {
     "coverage": {
       "completeness": "Completeness";
       "countedOn": "Counted {date}";
+      "courtsHeading": "By court";
+      "courtsUnavailable": "The per-court breakdown is unavailable right now.";
       "decisionYears": "Decision years";
       "description": "How much case law the corpus holds, per country and per court, and how fresh each source is.";
       "exceedsReportedTotal": "Holds more than the publisher's last stated total of {date}";
       "generatedAt": "Figures from {date}";
+      "globeLabel": "Countries whose case law the corpus holds, on a globe";
       "healthCurrent": "Up to date";
       "healthDelayed": "Delayed";
       "healthDisabled": "Switched off";
@@ -665,19 +670,11 @@ type Messages = {
       "healthUnknown": "Never run";
       "inPreparation": "In preparation";
       "lastSync": "Last sync";
-      "notCountedSources": "{count, plural, one {# source not counted} other {# sources not counted}}";
       "notCountedYet": "Not counted yet";
-      "notMeasuredSources": "{count, plural, one {# source not measured} other {# sources not measured}}";
       "notMeasuredYet": "Not measured yet";
-      "publisherTotal": "Publisher's total";
       "reportedByOperator": "Recorded by hand";
       "reportedByPublisher": "Publisher's own count";
       "searchable": "Searchable";
-      "searchableHint": "Decisions a search can find.";
-      "sourcesHeading": "Where these decisions come from";
-      "staleSources": "{count, plural, one {# total out of date} other {# totals out of date}}";
-      "stored": "Stored";
-      "storedHint": "Decisions held, not searchable yet.";
       "title": "Case-law coverage";
       "totalFrom": "Total from {date}";
       "unavailable": "Coverage figures are unavailable right now.";
@@ -1388,6 +1385,7 @@ type Messages = {
     "categoryName": "Category name";
     "changeColor": "Change color";
     "chooseFile": "Choose file";
+    "citations": "Citations";
     "clauses": "Clauses";
     "clearDate": "Clear date";
     "close": "Close";

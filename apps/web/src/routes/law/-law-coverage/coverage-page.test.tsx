@@ -1,6 +1,13 @@
 import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
+import {
+  createMemoryHistory,
+  createRootRoute,
+  createRoute,
+  createRouter,
+  RouterContextProvider,
+} from "@tanstack/react-router";
 import { describe, expect, test } from "bun:test";
 import { IntlProvider } from "use-intl";
 
@@ -9,16 +16,34 @@ import messages from "@/i18n/langs/en.json";
 import { CaseLawCoveragePage } from "@/routes/law/-law-coverage/coverage-page";
 import type {
   CaseLawCoverage,
+  CaseLawCoverageCountry,
   CaseLawCoverageSource,
 } from "@/routes/law/-law-coverage/coverage.logic";
 
-const render = (node: ReactNode): string =>
+const rootRoute = createRootRoute();
+
+/**
+ * A router for a static render: the page links every country and court to
+ * the case list, so a `Link` needs a route to resolve its href against.
+ * Nothing here matches or loads, which keeps the render synchronous.
+ */
+const testRouter = () =>
+  createRouter({
+    history: createMemoryHistory({ initialEntries: ["/law/coverage"] }),
+    routeTree: rootRoute.addChildren([
+      createRoute({ getParentRoute: () => rootRoute, path: "/law/cases" }),
+    ]),
+  });
+
+const render = (node: ReactNode, locale = "en"): string =>
   renderToStaticMarkup(
-    <IntlProvider locale="en" messages={messages} timeZone="UTC">
-      <FormattingProvider locale="en" timeZone="UTC">
-        {node}
-      </FormattingProvider>
-    </IntlProvider>,
+    <RouterContextProvider router={testRouter()}>
+      <IntlProvider locale="en" messages={messages} timeZone="UTC">
+        <FormattingProvider locale={locale} timeZone="UTC">
+          {node}
+        </FormattingProvider>
+      </IntlProvider>
+    </RouterContextProvider>,
   );
 
 /** When the publisher's own total was read. */
@@ -69,58 +94,76 @@ const NEVER_COUNTED: CaseLawCoverageSource = {
   completeness: { state: "not-counted-yet" },
 };
 
+const CZECHIA: CaseLawCoverageCountry = {
+  availability: "searchable",
+  country: "CZE",
+  health: "delayed",
+  stored: { decisions: 1996, asOf: COUNTED_AT },
+  addedLastWeek: 12,
+  searchable: 1900,
+  decisionYearFrom: 1993,
+  decisionYearTo: 2026,
+  courts: [
+    {
+      type: "court",
+      court: "Nejvyšší soud",
+      courtAbbreviation: "NS",
+      tier: "supreme",
+      decisions: 1900,
+      addedLastDay: 2,
+      addedLastWeek: 12,
+      updatedAt: OBSERVED_AT,
+    },
+  ],
+  completeness: {
+    measuredSources: 1,
+    stored: 996,
+    reported: 1000,
+    storedAsOf: COUNTED_AT,
+    staleSources: 0,
+    notMeasuredSources: 1,
+    notCountedSources: 1,
+  },
+  sources: [NEARLY_COMPLETE, NEVER_MEASURED, NEVER_COUNTED],
+};
+
 const COVERAGE: CaseLawCoverage = {
   generatedAt: "2026-09-19T08:00:00.000Z",
   totals: {
     searchable: 4_200_000,
     stored: { decisions: 4_500_000, asOf: COUNTED_AT },
   },
-  countries: [
-    {
-      availability: "searchable",
-      country: "CZE",
-      health: "delayed",
-      stored: { decisions: 1996, asOf: COUNTED_AT },
-      addedLastWeek: 12,
-      searchable: 1900,
-      decisionYearFrom: 1993,
-      decisionYearTo: 2026,
-      courts: [
-        {
-          type: "court",
-          court: "Nejvyšší soud",
-          courtAbbreviation: "NS",
-          tier: "supreme",
-          decisions: 1900,
-          addedLastDay: 2,
-          addedLastWeek: 12,
-          updatedAt: OBSERVED_AT,
-        },
-      ],
-      completeness: {
-        measuredSources: 1,
-        stored: 996,
-        reported: 1000,
-        storedAsOf: COUNTED_AT,
-        staleSources: 0,
-        notMeasuredSources: 1,
-        notCountedSources: 1,
-      },
-      sources: [NEARLY_COMPLETE, NEVER_MEASURED, NEVER_COUNTED],
-    },
-  ],
+  countries: [CZECHIA],
+};
+
+/** A country the public search cannot reach yet, with nothing counted. */
+const IN_PREPARATION: CaseLawCoverageCountry = {
+  availability: "in-preparation",
+  country: "SVK",
+  health: "current",
+  stored: { decisions: 0, asOf: null },
+  addedLastWeek: 0,
+  completeness: {
+    measuredSources: 0,
+    stored: 0,
+    reported: 0,
+    storedAsOf: null,
+    staleSources: 0,
+    notMeasuredSources: 1,
+    notCountedSources: 0,
+  },
+  sources: [{ ...NEVER_MEASURED, adapterKey: "sk-us", health: "current" }],
 };
 
 describe("the coverage page states what it counts", () => {
-  test("searchable and stored are two figures, never one sum", () => {
+  test("the page leads with what a search can find, and only that", () => {
     const markup = render(<CaseLawCoveragePage coverage={COVERAGE} />);
 
     expect(markup).toContain("4,200,000");
-    expect(markup).toContain("4,500,000");
-    // 8,700,000 would be the sum of two populations that overlap.
+    // What is held but not searchable is a source's own figure, in its
+    // completeness column; neither it nor a sum of the two heads the page.
+    expect(markup).not.toContain("4,500,000");
     expect(markup).not.toContain("8,700,000");
-    expect(markup).toContain(messages.caseLaw.coverage.searchableHint);
-    expect(markup).toContain(messages.caseLaw.coverage.storedHint);
   });
 
   test("a stored figure states when it was counted", () => {
@@ -142,14 +185,12 @@ describe("the coverage page states what it counts", () => {
     const markup = render(<CaseLawCoveragePage coverage={COVERAGE} />);
 
     expect(markup).toContain(messages.caseLaw.coverage.notMeasuredYet);
-    expect(markup).toContain("1 source not measured");
   });
 
   test("a source nobody has counted is stated, and adds no zero to the ratio", () => {
     const markup = render(<CaseLawCoveragePage coverage={COVERAGE} />);
 
     expect(markup).toContain(messages.caseLaw.coverage.notCountedYet);
-    expect(markup).toContain("1 source not counted");
     // The ratio is still the one measured source's 996/1000; a source with no
     // count of its own would drag it to 50 % if it were folded in as a zero.
     expect(markup).toContain("99%");
@@ -173,47 +214,84 @@ describe("the coverage page states what it counts", () => {
   test("a country still in preparation is reported, not hidden", () => {
     const markup = render(
       <CaseLawCoveragePage
+        coverage={{ ...COVERAGE, countries: [IN_PREPARATION] }}
+      />,
+    );
+
+    expect(markup).toContain(messages.caseLaw.coverage.inPreparation);
+    // No measurable ratio, and no zero standing in for one: the source says
+    // it was never measured. Matched as a figure, not a substring: a column
+    // width like "40%" is not a ratio.
+    expect(markup).not.toMatch(/[^\d]0%/u);
+    expect(markup).toContain(messages.caseLaw.coverage.notMeasuredYet);
+    // No index to break down by court.
+    expect(markup).not.toContain(messages.caseLaw.coverage.courtsHeading);
+  });
+
+  test("a week the endpoint could not read prints as none, never as zero", () => {
+    const markup = render(
+      <CaseLawCoveragePage
         coverage={{
           ...COVERAGE,
           countries: [
             {
-              availability: "in-preparation",
-              country: "HUN",
-              health: "unknown",
-              stored: { decisions: 40, asOf: null },
-              addedLastWeek: 0,
-              completeness: {
-                measuredSources: 0,
-                stored: 0,
-                reported: 0,
-                storedAsOf: null,
-                staleSources: 0,
-                notMeasuredSources: 1,
-                notCountedSources: 0,
-              },
-              sources: [NEVER_MEASURED],
+              ...CZECHIA,
+              addedLastWeek: null,
+              sources: [{ ...NEARLY_COMPLETE, addedLastWeek: null }],
             },
           ],
         }}
       />,
     );
 
-    expect(markup).toContain(messages.caseLaw.coverage.inPreparation);
-    // No measurable ratio, and no zero standing in for one.
-    expect(markup).not.toContain("0%");
-    // Both sums are over the measured sources alone, so with none measured
-    // they are zero by construction. Printing that zero beside the withheld
-    // ratio would read as a publisher stating it holds nothing, so the
-    // stored and publisher-total cells withhold themselves too.
-    // Anchored on the completeness heading, which appears only in the
-    // country block; "Stored" also labels the page's totals tile above it.
-    const completeness = markup.indexOf(messages.caseLaw.coverage.completeness);
-    expect(completeness).toBeGreaterThan(-1);
-    const completenessCells = markup.slice(completeness, completeness + 700);
-    expect(completenessCells).toContain(messages.caseLaw.coverage.stored);
-    expect(completenessCells).not.toContain(">0<");
-    // Three withheld figures: the ratio, the stored sum and the total.
-    expect(completenessCells.split("—").length - 1).toBe(3);
+    // The court row still states its own week; only the source's is unknown.
+    expect(markup).toContain("+12");
+    expect(markup).not.toContain(">0<");
+  });
+
+  test("the courts beyond the listed ones close the breakdown as one row", () => {
+    const markup = render(
+      <CaseLawCoveragePage
+        coverage={{
+          ...COVERAGE,
+          countries: [
+            {
+              ...CZECHIA,
+              courts: [
+                ...(CZECHIA.courts ?? []),
+                { type: "unlisted", tier: "other", listed: 2, decisions: 480 },
+              ],
+            },
+          ],
+        }}
+      />,
+    );
+
+    // The row names how many courts were listed, carries the rest of the
+    // count, and states no activity, because none was read for it.
+    expect(markup).toContain("Courts beyond the 2 largest");
+    expect(markup).toContain("480");
+  });
+
+  test("a court breakdown the endpoint could not read says so", () => {
+    const markup = render(
+      <CaseLawCoveragePage
+        coverage={{ ...COVERAGE, countries: [{ ...CZECHIA, courts: null }] }}
+      />,
+    );
+
+    expect(markup).toContain(messages.caseLaw.coverage.courtsUnavailable);
+    expect(markup).not.toContain(messages.caseLaw.courtTiers.supreme);
+  });
+
+  test("relative times follow the formatting locale, not the message language", () => {
+    const english = render(<CaseLawCoveragePage coverage={COVERAGE} />);
+    const czech = render(<CaseLawCoveragePage coverage={COVERAGE} />, "cs");
+
+    // The same sync instant, formatted twice: once per locale. Were the string
+    // read from the store instead of the context, both renders would agree.
+    expect(english).toContain("ago");
+    expect(czech).not.toContain("ago");
   });
 
   test("figures the endpoint cannot state read as an empty page, not as zeros", () => {
@@ -223,7 +301,7 @@ describe("the coverage page states what it counts", () => {
 
     expect(markup).toContain(messages.caseLaw.coverage.unavailable);
     // Degrading to zeros would publish a corpus nobody measured.
-    expect(markup).not.toContain(messages.caseLaw.coverage.searchableHint);
+    expect(markup).not.toContain("4,200,000");
     expect(markup).not.toContain("<table");
   });
 });

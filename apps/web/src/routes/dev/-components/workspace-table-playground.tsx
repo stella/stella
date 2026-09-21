@@ -122,6 +122,7 @@ export const WorkspaceTablePlayground = () => {
       </div>
       <DecisionTable
         decisions={decisions}
+        firstRowNumber={1}
         isLoading={false}
         layout={layout}
         onLayoutChange={setLayout}

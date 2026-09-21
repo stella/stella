@@ -4,6 +4,10 @@ import type { PropsWithChildren } from "react";
 import { panic } from "better-result";
 import { createFormatter } from "use-intl/core";
 
+import type { Temporal } from "@stll/time";
+
+import { formatRelativeTimeIn } from "@/lib/relative-time";
+
 type Formatter = ReturnType<typeof createFormatter>;
 
 const FormattingLocaleContext = createContext<string | undefined>(undefined);
@@ -48,4 +52,21 @@ export const useLocale = (): string => {
     panic("useLocale must be used within FormattingProvider");
   }
   return locale;
+};
+
+type RelativeTimeFormat = (date: Date | string | Temporal.Instant) => string;
+
+/**
+ * Relative time ("12 hr ago", "yesterday") in the context's locale.
+ *
+ * A component must not call `formatRelativeTime` from `@/lib/relative-time`
+ * directly: it reads the locale from the store, outside React, so the
+ * compiler takes it for a pure function of its argument and caches its
+ * string. A row rendered under one language then keeps that string after the
+ * reader switches to another. The function this returns changes with the
+ * locale, so the cache follows it.
+ */
+export const useRelativeTime = (): RelativeTimeFormat => {
+  const locale = useLocale();
+  return (date) => formatRelativeTimeIn(locale, date);
 };
