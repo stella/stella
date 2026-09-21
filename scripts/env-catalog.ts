@@ -133,6 +133,7 @@ const INTERNAL_SERVER_KEYS = new Set([
   "PORT",
   "POSTHOG_HOST",
   "POSTHOG_KEY",
+  "PDF_SIGNING_TSA_URL",
   "POSTHOG_LOCAL_DEBUG",
   "PUBLIC_URL",
   "QUERY_EXPANSION_MODE",
@@ -339,6 +340,8 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     'PostHog project key. The placeholder "phc_" disables capture for local development.',
   POSTHOG_LOCAL_DEBUG:
     "Allow PostHog capture from localhost when using a real project key.",
+  PDF_SIGNING_TSA_URL:
+    "RFC 3161 timestamp authority for PDF signing. Unset signs at PAdES B-B; set raises signatures to B-LT.",
   PUBLIC_URL:
     "Public API origin for OAuth callbacks. Defaults to BETTER_AUTH_URL.",
   QUERY_EXPANSION_MODE:

@@ -124,6 +124,32 @@ pub async fn self_host_connect_dialog_respond(
   Ok(())
 }
 
+/// The PDF signing dialog's Sign and Cancel. Sign keeps the call open until
+/// the flow behind it finishes, so the dialog can render the outcome; a
+/// response with no flow waiting for it (a second click, an expired dialog)
+/// only closes the window.
+#[tauri::command]
+pub async fn pdf_sign_respond(
+  response: crate::pdf_signing::PdfSignDialogResponse,
+  window: tauri::WebviewWindow,
+) -> Result<crate::pdf_signing::PdfSignResult, String> {
+  use crate::pdf_signing::{DialogChoice, PdfSignDialogResponse, PdfSignResult};
+
+  let choice = match response {
+    PdfSignDialogResponse::Sign { identity_id } => DialogChoice::Sign { identity_id },
+    PdfSignDialogResponse::Cancel => DialogChoice::Cancel,
+  };
+  let waiting = crate::pdf_signing::submit_dialog_choice(choice);
+
+  match waiting {
+    Some(outcome) => Ok(outcome.await.unwrap_or(PdfSignResult::Cancelled)),
+    None => {
+      let _ = window.close();
+      Ok(PdfSignResult::Cancelled)
+    }
+  }
+}
+
 #[tauri::command]
 pub async fn respond_to_takeover(
   session_id: String,

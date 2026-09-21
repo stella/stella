@@ -9,6 +9,9 @@
  *   - "collaboration": the version was published from a browser collaboration room.
  *   - "comparison": the version is a tracked-changes redline generated from
  *     two stored versions of the same document.
+ *   - "signature": the version is the base version's PDF with a PAdES
+ *     signature appended. The payload pins what was signed and with which
+ *     certificate, so provenance survives without re-parsing the bytes.
  *   - "sharepoint": the version was copied (one-way, read-only) from a
  *     Microsoft Graph drive item the user had permission to read. The
  *     payload pins the exact item and its ETag at copy time so a later
@@ -31,6 +34,13 @@ export const documentSourceSchema = v.variant("kind", [
     granularity: v.picklist(["word", "character"]),
     baseTrackedChanges: v.picklist(["keep", "accept", "reject"]),
     targetTrackedChanges: v.picklist(["keep", "accept", "reject"]),
+  }),
+  v.strictObject({
+    kind: v.literal("signature"),
+    baseVersionId: v.pipe(v.string(), v.uuid()),
+    certificateSha256Hex: v.pipe(v.string(), v.regex(/^[0-9a-f]{64}$/u)),
+    signingTime: v.pipe(v.string(), v.isoTimestamp()),
+    level: v.picklist(["B-B", "B-T", "B-LT"]),
   }),
   v.strictObject({
     kind: v.literal("sharepoint"),

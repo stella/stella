@@ -227,6 +227,7 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
   },
   organizationSettings: { type: "non_resource", reason: "singleton" },
   fileComparisonUpload: { type: "non_resource", reason: "workflow" },
+  pdfSigningSession: { type: "non_resource", reason: "session" },
   pendingUpload: { type: "non_resource", reason: "workflow" },
   playbook: { type: "alias", resourceType: RESOURCE_TYPE.PLAYBOOK },
   playbookDefinition: {

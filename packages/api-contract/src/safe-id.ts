@@ -120,6 +120,7 @@ export type SafeIdType =
   | "notification"
   | "organization"
   | "organizationSettings"
+  | "pdfSigningSession"
   | "pendingUpload"
   | "playbook"
   | "playbookDefinition"

@@ -65,6 +65,7 @@ describe("workspace deletion coverage", () => {
     expect(directChildren.size).toBe(56);
     expect(directChildren.has("chat_threads")).toBe(true);
     expect(directChildren.has("desktop_edit_sessions")).toBe(true);
+    expect(directChildren.has("pdf_signing_sessions")).toBe(true);
     expect(directChildren.has("signals")).toBe(true);
     expect(directChildren.has("notifications")).toBe(true);
   });

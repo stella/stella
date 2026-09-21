@@ -4152,6 +4152,7 @@ export default defineConfig({
         "apps/api/src/handlers/auth/ui-routes.ts",
         "apps/api/src/handlers/dev/routes.ts",
         "apps/api/src/handlers/entities/desktop-edit-sessions-route.ts",
+        "apps/api/src/handlers/entities/pdf-signing-sessions-route.ts",
         "apps/api/src/handlers/feedback/routes.ts",
         "apps/api/src/handlers/folio-collab/routes.ts",
         "apps/api/src/handlers/health/routes.ts",
