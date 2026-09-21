@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
 
-import type { Edge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge";
+import type { Edge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/types";
 import { panic } from "better-result";
 
 import { getInternalColId } from "@/components/workspaces/entity-utils";
