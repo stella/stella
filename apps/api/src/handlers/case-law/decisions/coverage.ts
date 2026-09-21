@@ -85,7 +85,7 @@ type CaseLawCoverageSource = {
    * It identifies the feed without exposing the source row's own id.
    */
   adapterKey: string;
-  /** The publisher's name for the corpus. */
+  /** The publisher as it names itself, in its own language; never translated. */
   name: string;
   /** Where the publisher offers it, for attribution. */
   publicHomeUrl: string;
@@ -354,7 +354,7 @@ export const loadCaseLawCoverage = async ({
     };
     entry.sources.push({
       adapterKey: source.adapterKey,
-      name: manifest.name,
+      name: manifest.publisher,
       publicHomeUrl: manifest.publicHomeUrl,
       health: caseLawSourceHealth({
         enabled: source.enabled,

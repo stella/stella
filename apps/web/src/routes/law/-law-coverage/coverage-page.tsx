@@ -200,7 +200,6 @@ export const CaseLawCoveragePending = () => {
             </>
           }
           key={section}
-          twoColumn
         >
           <TableBlock title={t("caseLaw.coverage.sourcesHeading")}>
             <SourcesTableHead />
@@ -368,17 +367,14 @@ const TableBlock = ({ children, subtitle, title }: TableBlockProps) => {
 type CountryCardProps = PropsWithChildren<{
   header: ReactNode;
   headingId?: string;
-  /** Whether the body lays its two tables side by side where there is room. */
-  twoColumn: boolean;
 }>;
 
-/** One country: its name and state on the rim, its tables inside. */
-const CountryCard = ({
-  children,
-  header,
-  headingId,
-  twoColumn,
-}: CountryCardProps) => (
+/**
+ * One country: its name and state on the rim, its tables inside, one under
+ * the other. Side by side, a source's name wraps to three lines and the
+ * newest court's date is cut off before the width they would need.
+ */
+const CountryCard = ({ children, header, headingId }: CountryCardProps) => (
   <section
     aria-labelledby={headingId}
     className="bg-background flex flex-col rounded-xl border shadow-xs/5"
@@ -386,14 +382,7 @@ const CountryCard = ({
     <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b px-4 py-3">
       {header}
     </header>
-    <div
-      className={cn(
-        "grid gap-x-8 gap-y-6 px-4 py-4",
-        twoColumn && "lg:grid-cols-2",
-      )}
-    >
-      {children}
-    </div>
+    <div className="flex flex-col gap-6 px-4 py-4">{children}</div>
   </section>
 );
 
@@ -401,7 +390,6 @@ const CountrySection = ({ country }: { country: CaseLawCoverageCountry }) => {
   const t = useTranslations();
   const format = useFormatter();
   const headingId = useId();
-  const searchable = country.availability === "searchable";
 
   return (
     <CountryCard
@@ -440,7 +428,6 @@ const CountrySection = ({ country }: { country: CaseLawCoverageCountry }) => {
         </>
       }
       headingId={headingId}
-      twoColumn={searchable}
     >
       <SourcesTable
         completeness={country.completeness}
