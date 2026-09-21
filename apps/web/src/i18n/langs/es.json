@@ -589,6 +589,26 @@
       "treatment": "Tratamiento posterior"
     },
     "analyzing": "Analizando...",
+    "chat": {
+      "prompts": {
+        "facts": {
+          "body": "¿Cuáles son los hechos y qué alegó cada parte?",
+          "name": "Hechos y pretensiones"
+        },
+        "holding": {
+          "body": "¿Qué decidió el tribunal y por qué?",
+          "name": "Fallo y fundamentos"
+        },
+        "precedent": {
+          "body": "¿En qué resoluciones anteriores se apoya y las sigue?",
+          "name": "Resoluciones anteriores"
+        },
+        "provisions": {
+          "body": "¿Qué preceptos aplica el tribunal y cómo los interpreta?",
+          "name": "Preceptos aplicados"
+        }
+      }
+    },
     "citation": {
       "citedSummary": "{count, plural, =0 {Sin citas} one {Citada una vez} other {Citada # veces}}",
       "decisionCount": "{count, plural, =0 {Ninguna resolución} one {# resolución} other {# resoluciones}}",

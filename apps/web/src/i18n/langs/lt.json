@@ -589,6 +589,26 @@
       "treatment": "Vėlesnis vertinimas"
     },
     "analyzing": "Analizuojama...",
+    "chat": {
+      "prompts": {
+        "facts": {
+          "body": "Kokios buvo faktinės aplinkybės ir ką teigė kiekviena šalis?",
+          "name": "Faktinės aplinkybės ir šalių pozicijos"
+        },
+        "holding": {
+          "body": "Ką teismas nusprendė ir kodėl?",
+          "name": "Rezoliucinė dalis ir motyvai"
+        },
+        "precedent": {
+          "body": "Kuriais ankstesniais sprendimais remiamasi ir ar jų laikomasi?",
+          "name": "Ankstesni sprendimai"
+        },
+        "provisions": {
+          "body": "Kurias nuostatas teismas taiko ir kaip jas aiškina?",
+          "name": "Taikytos nuostatos"
+        }
+      }
+    },
     "citation": {
       "citedSummary": "{count, plural, =0 {Necituota} one {Cituota kartą} few {Cituota # kartus} many {Cituota # karto} other {Cituota # kartų}}",
       "decisionCount": "{count, plural, =0 {Sprendimų nėra} one {# sprendimas} few {# sprendimai} many {# sprendimo} other {# sprendimų}}",

@@ -34,3 +34,13 @@ export type ChatPrompt = {
    */
   body: string;
 };
+
+/**
+ * What the empty-state chips need of a prompt. A saved prompt satisfies it;
+ * so does a built-in question, which belongs to no scope and answers to no
+ * slash command.
+ */
+export type PromptSuggestion = Pick<
+  ChatPrompt,
+  "body" | "command" | "id" | "name"
+>;

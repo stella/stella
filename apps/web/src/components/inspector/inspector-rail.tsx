@@ -16,6 +16,7 @@ import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
 import { WorkspaceEndRail } from "@stll/ui/workspace-shell";
 
+import { useMainLegalDocument } from "@/components/ai-suggestions/use-main-legal-document";
 import { DocumentIcon } from "@/components/document-icon";
 import { ExternalSourceLogo } from "@/components/inspector/external-reference-panel";
 import { findMcpConnectorIconHref } from "@/components/inspector/external-source-icon";
@@ -27,6 +28,7 @@ import {
 } from "@/components/inspector/inspector-group-rail";
 import { useInspectorGroupTransfer } from "@/components/inspector/inspector-group-transfer";
 import { planInspectorTabDrop } from "@/components/inspector/inspector-groups.logic";
+import { railChatOpenArgs } from "@/components/inspector/inspector-rail-chat.logic";
 import {
   isGenericInspectorTab,
   useInspectorTabsStore,
@@ -78,6 +80,9 @@ export const InspectorRail = ({
     activeSkillCatalogueData?.entries,
   );
   const railContextMenu = useRailContextMenu({ activeSkill, workspaceId });
+  // The rail stands beside the main view, so a chat started here is about
+  // whatever that view is showing.
+  const legalDocument = useMainLegalDocument();
   const { visibleGroups, ungroupedTabs } = useInspectorGroups();
   const transfer = useInspectorGroupTransfer();
   const dropOnTab = ({ sourceId, targetId }: InspectorTabDropArgs) => {
@@ -106,21 +111,7 @@ export const InspectorRail = ({
   const collapsedGroupIds = useInspectorTabsStore((s) => s.collapsedGroupIds);
 
   const openContextChat = () => {
-    const skillContext =
-      activeSkill === undefined
-        ? {}
-        : { activeSkill, label: activeSkill.skillName };
-
-    if (workspaceId === undefined) {
-      onOpenChat(skillContext);
-      return;
-    }
-
-    onOpenChat({
-      ...skillContext,
-      workspaceId,
-      contextMatterIds: [workspaceId],
-    });
+    onOpenChat(railChatOpenArgs({ activeSkill, legalDocument, workspaceId }));
   };
 
   const toggleLabel = (() => {

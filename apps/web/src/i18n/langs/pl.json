@@ -589,6 +589,26 @@
       "treatment": "Późniejsze orzecznictwo"
     },
     "analyzing": "Analizowanie...",
+    "chat": {
+      "prompts": {
+        "facts": {
+          "body": "Jaki był stan faktyczny i co podnosiła każda ze stron?",
+          "name": "Stan faktyczny i stanowiska stron"
+        },
+        "holding": {
+          "body": "Jak sąd orzekł i dlaczego?",
+          "name": "Sentencja i uzasadnienie"
+        },
+        "precedent": {
+          "body": "Na których wcześniejszych orzeczeniach się opiera i czy je stosuje?",
+          "name": "Wcześniejsze orzeczenia"
+        },
+        "provisions": {
+          "body": "Które przepisy sąd zastosował i jak je wyłożył?",
+          "name": "Zastosowane przepisy"
+        }
+      }
+    },
     "citation": {
       "citedSummary": "{count, plural, =0 {Niecytowane} one {Cytowane raz} few {Cytowane # razy} many {Cytowane # razy} other {Cytowane # razy}}",
       "decisionCount": "{count, plural, =0 {Brak orzeczeń} one {# orzeczenie} few {# orzeczenia} many {# orzeczeń} other {# orzeczenia}}",

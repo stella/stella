@@ -2,11 +2,11 @@ import { useTranslations } from "use-intl";
 
 import { cn } from "@stll/ui/utils";
 
-import type { ChatPrompt } from "@/lib/prompts/types";
+import type { PromptSuggestion } from "@/lib/prompts/types";
 
 type PromptSuggestionsProps = {
-  prompts: ChatPrompt[];
-  onSelect: (prompt: ChatPrompt) => void;
+  prompts: readonly PromptSuggestion[];
+  onSelect: (prompt: PromptSuggestion) => void;
   className?: string;
 };
 
@@ -44,8 +44,11 @@ export const PromptSuggestions = ({
             onClick={() => onSelect(prompt)}
             type="button"
           >
+            {/* The slash marks a prompt the composer also answers to as a
+                command; a built-in question has none, and keeps the column
+                so the names still line up. */}
             <span className="text-foreground-muted group-hover:text-muted-foreground mt-0.5 flex size-4 shrink-0 items-center justify-center font-mono text-[13px] leading-none transition-colors">
-              /
+              {prompt.command === undefined ? "" : "/"}
             </span>
             <span className="min-w-0 flex-1">
               <span className="text-foreground block text-sm leading-5 font-medium">

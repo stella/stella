@@ -589,6 +589,26 @@
       "treatment": "Neskoršia judikatúra"
     },
     "analyzing": "Analyzujem...",
+    "chat": {
+      "prompts": {
+        "facts": {
+          "body": "Aký bol skutkový stav a čo tvrdila každá zo strán?",
+          "name": "Skutkový stav a tvrdenia strán"
+        },
+        "holding": {
+          "body": "Ako súd rozhodol a prečo?",
+          "name": "Výrok a odôvodnenie"
+        },
+        "precedent": {
+          "body": "O ktoré skoršie rozhodnutia sa opiera a nasleduje ich?",
+          "name": "Skoršie rozhodnutia"
+        },
+        "provisions": {
+          "body": "Ktoré ustanovenia súd použil a ako ich vyložil?",
+          "name": "Použité ustanovenia"
+        }
+      }
+    },
     "citation": {
       "citedSummary": "{count, plural, =0 {Necitované} one {Citované raz} few {Citované #-krát} other {Citované #-krát}}",
       "decisionCount": "{count, plural, =0 {Žiadne rozhodnutia} one {# rozhodnutie} few {# rozhodnutia} other {# rozhodnutí}}",
