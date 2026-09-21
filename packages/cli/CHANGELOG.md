@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 1.18.0
+
+### Minor Changes
+
+- [#3642](https://github.com/stella/stella/pull/3642) [`7a4eb64`](https://github.com/stella/stella/commit/7a4eb647bd86097052c962031d4541bb65128272) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `document comparison prepare-from-links` stages two .docx files for `document compare` from HTTPS links the server downloads.
+
 ## 1.17.0
 
 ### Minor Changes
