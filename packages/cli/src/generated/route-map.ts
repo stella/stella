@@ -25279,11 +25279,11 @@ export const generatedRouteMap: RouteNode = {
                 access: "read",
                 flags: [
                   {
+                    kind: "string",
+                    repeatable: false,
                     flag: "--matter-id",
                     prop: "matterId",
-                    kind: "string",
                     required: true,
-                    repeatable: false,
                     part: "params",
                     partPath: "matterId",
                   },
@@ -25318,8 +25318,15 @@ export const generatedRouteMap: RouteNode = {
                   properties: {
                     params: {
                       type: "object",
-                      required: ["listId", "runId", "matterId"],
+                      required: ["matterId", "listId", "runId"],
                       properties: {
+                        matterId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
                         listId: {
                           minLength: 36,
                           maxLength: 36,
@@ -25332,9 +25339,6 @@ export const generatedRouteMap: RouteNode = {
                           maxLength: 36,
                           pattern:
                             "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                          type: "string",
-                        },
-                        matterId: {
                           type: "string",
                         },
                       },
@@ -25568,11 +25572,11 @@ export const generatedRouteMap: RouteNode = {
                 access: "read",
                 flags: [
                   {
+                    kind: "string",
+                    repeatable: false,
                     flag: "--matter-id",
                     prop: "matterId",
-                    kind: "string",
                     required: true,
-                    repeatable: false,
                     part: "params",
                     partPath: "matterId",
                   },
@@ -25598,16 +25602,20 @@ export const generatedRouteMap: RouteNode = {
                   properties: {
                     params: {
                       type: "object",
-                      required: ["listId", "matterId"],
+                      required: ["matterId", "listId"],
                       properties: {
-                        listId: {
+                        matterId: {
                           minLength: 36,
                           maxLength: 36,
                           pattern:
                             "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
                           type: "string",
                         },
-                        matterId: {
+                        listId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
                           type: "string",
                         },
                       },
@@ -25642,11 +25650,11 @@ export const generatedRouteMap: RouteNode = {
                 access: "read",
                 flags: [
                   {
+                    kind: "string",
+                    repeatable: false,
                     flag: "--matter-id",
                     prop: "matterId",
-                    kind: "string",
                     required: true,
-                    repeatable: false,
                     part: "params",
                     partPath: "matterId",
                   },
@@ -25670,16 +25678,20 @@ export const generatedRouteMap: RouteNode = {
                   properties: {
                     params: {
                       type: "object",
-                      required: ["listId", "matterId"],
+                      required: ["matterId", "listId"],
                       properties: {
-                        listId: {
+                        matterId: {
                           minLength: 36,
                           maxLength: 36,
                           pattern:
                             "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
                           type: "string",
                         },
-                        matterId: {
+                        listId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
                           type: "string",
                         },
                       },
@@ -25698,11 +25710,11 @@ export const generatedRouteMap: RouteNode = {
                 access: "read",
                 flags: [
                   {
+                    kind: "string",
+                    repeatable: false,
                     flag: "--matter-id",
                     prop: "matterId",
-                    kind: "string",
                     required: true,
-                    repeatable: false,
                     part: "params",
                     partPath: "matterId",
                   },
@@ -25737,8 +25749,15 @@ export const generatedRouteMap: RouteNode = {
                   properties: {
                     params: {
                       type: "object",
-                      required: ["listId", "itemEntityId", "matterId"],
+                      required: ["matterId", "listId", "itemEntityId"],
                       properties: {
+                        matterId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
                         listId: {
                           minLength: 36,
                           maxLength: 36,
@@ -25751,9 +25770,6 @@ export const generatedRouteMap: RouteNode = {
                           maxLength: 36,
                           pattern:
                             "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                          type: "string",
-                        },
-                        matterId: {
                           type: "string",
                         },
                       },
@@ -25880,11 +25896,11 @@ export const generatedRouteMap: RouteNode = {
                 access: "read",
                 flags: [
                   {
+                    kind: "string",
+                    repeatable: false,
                     flag: "--matter-id",
                     prop: "matterId",
-                    kind: "string",
                     required: true,
-                    repeatable: false,
                     part: "params",
                     partPath: "matterId",
                   },
@@ -25910,16 +25926,20 @@ export const generatedRouteMap: RouteNode = {
                   properties: {
                     params: {
                       type: "object",
-                      required: ["listId", "matterId"],
+                      required: ["matterId", "listId"],
                       properties: {
-                        listId: {
+                        matterId: {
                           minLength: 36,
                           maxLength: 36,
                           pattern:
                             "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
                           type: "string",
                         },
-                        matterId: {
+                        listId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
                           type: "string",
                         },
                       },
@@ -26247,11 +26267,11 @@ export const generatedRouteMap: RouteNode = {
                 access: "read",
                 flags: [
                   {
+                    kind: "string",
+                    repeatable: false,
                     flag: "--matter-id",
                     prop: "matterId",
-                    kind: "string",
                     required: true,
-                    repeatable: false,
                     part: "params",
                     partPath: "matterId",
                   },
@@ -26286,8 +26306,15 @@ export const generatedRouteMap: RouteNode = {
                   properties: {
                     params: {
                       type: "object",
-                      required: ["listId", "itemEntityId", "matterId"],
+                      required: ["matterId", "listId", "itemEntityId"],
                       properties: {
+                        matterId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
                         listId: {
                           minLength: 36,
                           maxLength: 36,
@@ -26300,9 +26327,6 @@ export const generatedRouteMap: RouteNode = {
                           maxLength: 36,
                           pattern:
                             "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                          type: "string",
-                        },
-                        matterId: {
                           type: "string",
                         },
                       },
@@ -47408,11 +47432,11 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
+                    kind: "string",
+                    repeatable: false,
                     flag: "--matter-id",
                     prop: "matterId",
-                    kind: "string",
                     required: true,
-                    repeatable: false,
                     part: "params",
                     partPath: "matterId",
                   },
@@ -47436,16 +47460,20 @@ export const generatedRouteMap: RouteNode = {
                   properties: {
                     params: {
                       type: "object",
-                      required: ["templateId", "matterId"],
+                      required: ["matterId", "templateId"],
                       properties: {
-                        templateId: {
+                        matterId: {
                           minLength: 36,
                           maxLength: 36,
                           pattern:
                             "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
                           type: "string",
                         },
-                        matterId: {
+                        templateId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
                           type: "string",
                         },
                       },
