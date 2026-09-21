@@ -220,9 +220,7 @@ function PublicLawTopBar() {
             <>
               <BreadcrumbSeparator />
               <BreadcrumbItem>
-                <BreadcrumbPage className="font-medium">
-                  {t("caseLaw.coverage.title")}
-                </BreadcrumbPage>
+                <BreadcrumbPage>{t("caseLaw.coverage.title")}</BreadcrumbPage>
               </BreadcrumbItem>
             </>
           )}
