@@ -116,7 +116,7 @@ class InvalidParentError extends TaggedError("InvalidParentError")<{
   message: string;
 }> {}
 
-type CreateEntityFromBufferValue = {
+export type CreateEntityFromBufferValue = {
   entityId: SafeId<"entity">;
   entityVersionId: SafeId<"entityVersion">;
   fieldId: SafeId<"field">;

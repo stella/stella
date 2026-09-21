@@ -4318,6 +4318,12 @@
     "validity": "Spēkā no {from} līdz {to}"
   },
   "styleSets": {
+    "convertConfirm": "Pārveidot",
+    "convertDescription": "Pārveido šo dokumentu vienā no jūsu stilu kopām. Teksts paliek nemainīgs; katra rindkopa saņem stilu no kopas. Sākotnējais dokuments tiek saglabāts.",
+    "convertPending": "Notiek pārveidošana…",
+    "convertSuccess": "Izveidots {fileName}",
+    "convertTitle": "Pārveidot uzņēmuma stilā",
+    "convertToHouseStyle": "Pārveidot uzņēmuma stilā…",
     "create": "Izveidot",
     "defaultBadge": "Noklusējums",
     "deleteConfirmation": "Lai apstiprinātu, ievadiet stilu kopas nosaukumu.",
@@ -4390,6 +4396,7 @@
     "importTitle": "Importēt stilu kopu",
     "loadFailed": "Neizdevās ielādēt stilu kopas",
     "newDocument": "Jauns dokuments",
+    "noStyleGuide": "Stila rokasgrāmatas vēl nav",
     "pickerDescription": "Izvēlieties jaunā faila formatēšanas sistēmu.",
     "renameTitle": "Pārdēvēt stilu kopu",
     "replace": "Aizstāt avotu",

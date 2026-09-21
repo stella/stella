@@ -38762,7 +38762,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "style-sets", "list"],
                 capabilityId: "style-sets.list",
                 description:
-                  "List the organization's style sets, most recently updated first, with cursor pagination; deleted ones are left out. Each item carries the name, file name, size in bytes, and timestamps, and the response also reports the maximum number of style sets the organization may hold.",
+                  "List the organization's style sets, most recently updated first, with cursor pagination; deleted ones are left out. Each item carries the name, file name, size in bytes, timestamps, and whether a style guide has been written for it, and the response also reports the maximum number of style sets the organization may hold.",
                 access: "read",
                 flags: [],
                 inputOnly: [],
@@ -38856,6 +38856,172 @@ export const generatedRouteMap: RouteNode = {
                   type: "object",
                   additionalProperties: false,
                   properties: {},
+                },
+              },
+            },
+            "style-catalogue-get": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: [
+                  "capability",
+                  "style-sets",
+                  "style-catalogue-get",
+                ],
+                capabilityId: "style-sets.style-catalogue.get",
+                description:
+                  "Read the paragraph styles one style set actually uses, each with the formatting it resolves to, the number its level prints, how often the stored package uses it and up to three examples. This is what a style guide is written against: pass its style ids to style-sets.style-guide.update, which refuses an id this catalogue does not carry.",
+                access: "read",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--style-set-id",
+                    prop: "styleSetId",
+                    required: true,
+                    part: "params",
+                    partPath: "styleSetId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "templates",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    params: {
+                      type: "object",
+                      required: ["styleSetId"],
+                      properties: {
+                        styleSetId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "style-guide-update": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "style-sets", "style-guide-update"],
+                capabilityId: "style-sets.style-guide.update",
+                description:
+                  "Write the style guide of one style set: per style, what it is for, when to use it and when not, where it sits in the hierarchy and how it looks. Conversion into this style set reads the guide, so a style set without one cannot be converted into. Every id must appear in style-sets.style-catalogue.get; the guide is stamped with that catalogue, so replacing the package marks it stale.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--style-set-id",
+                    prop: "styleSetId",
+                    required: true,
+                    part: "params",
+                    partPath: "styleSetId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--catalogue-hash",
+                    prop: "catalogueHash",
+                    required: false,
+                    part: "body",
+                    partPath: "catalogueHash",
+                  },
+                ],
+                inputOnly: ["body.styles"],
+                paginated: false,
+                destructive: false,
+                scope: "templates",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["styles"],
+                      properties: {
+                        catalogueHash: {
+                          minLength: 1,
+                          maxLength: 128,
+                          type: "string",
+                        },
+                        styles: {
+                          minItems: 1,
+                          maxItems: 200,
+                          type: "array",
+                          items: {
+                            type: "object",
+                            required: [
+                              "id",
+                              "name",
+                              "purpose",
+                              "use_when",
+                              "do_not_use_when",
+                              "hierarchy",
+                              "looks_like",
+                            ],
+                            properties: {
+                              id: {
+                                minLength: 1,
+                                maxLength: 256,
+                                type: "string",
+                              },
+                              name: {
+                                minLength: 1,
+                                maxLength: 256,
+                                type: "string",
+                              },
+                              purpose: {
+                                minLength: 1,
+                                maxLength: 2000,
+                                type: "string",
+                              },
+                              use_when: {
+                                minLength: 1,
+                                maxLength: 2000,
+                                type: "string",
+                              },
+                              do_not_use_when: {
+                                minLength: 1,
+                                maxLength: 2000,
+                                type: "string",
+                              },
+                              hierarchy: {
+                                minLength: 1,
+                                maxLength: 2000,
+                                type: "string",
+                              },
+                              looks_like: {
+                                minLength: 1,
+                                maxLength: 2000,
+                                type: "string",
+                              },
+                            },
+                          },
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      required: ["styleSetId"],
+                      properties: {
+                        styleSetId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
                 },
               },
             },

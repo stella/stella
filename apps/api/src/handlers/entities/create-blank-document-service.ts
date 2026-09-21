@@ -1,9 +1,11 @@
 import { Result } from "better-result";
 
+import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
+import type { CreateEntityFromBufferValue } from "@/api/lib/entities/create-from-buffer";
 import { validateParentId } from "@/api/lib/entities/validate-parent-id";
 import { HandlerError, unreachable } from "@/api/lib/errors/tagged-errors";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
@@ -17,6 +19,10 @@ type CreateBlankDocumentOptions = {
   buffer: Uint8Array | ArrayBuffer;
   name: string;
   parentId: SafeId<"entity"> | null;
+  /** Runs in the transaction that creates the document, for what must commit with it. */
+  afterCreate?:
+    | ((tx: Transaction, created: CreateEntityFromBufferValue) => Promise<void>)
+    | undefined;
 };
 
 export const createBlankDocument = async ({
@@ -28,6 +34,7 @@ export const createBlankDocument = async ({
   buffer,
   name,
   parentId,
+  afterCreate,
 }: CreateBlankDocumentOptions) => {
   if (parentId) {
     const parentError = await scopedDb(
@@ -50,6 +57,7 @@ export const createBlankDocument = async ({
     fileName: `${name}.docx`,
     mimeType: DOCX_MIME_TYPE,
     parentId,
+    afterCreate,
   }).then((result) => Result.mapError(result, toHandlerError));
 };
 

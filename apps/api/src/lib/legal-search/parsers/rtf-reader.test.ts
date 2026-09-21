@@ -40,6 +40,10 @@ const runContentText = (item: RunContent): string => {
   switch (item.type) {
     case "text":
       return item.text;
+    // Markup folio keeps verbatim still shows the reader something: `w:ruby`
+    // puts its base text on the page, so dropping it would lose a word.
+    case "preservedXml":
+      return item.text;
     case "tab":
       return "\t";
     case "break":

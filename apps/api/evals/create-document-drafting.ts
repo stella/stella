@@ -418,6 +418,9 @@ const collectParagraphs = (
         );
       case "blockSdt":
         return collectParagraphs(block.content, tableHeader);
+      case "preservedBlock":
+        // Opaque markup folio replays on save: it holds no paragraphs.
+        return [];
       default:
         block satisfies never;
         return panic(`Unhandled block: ${String(block)}`);

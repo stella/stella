@@ -852,6 +852,14 @@ export const CAPABILITY_DISPATCH = {
   "style-sets.replace": {
     load: async () => await import("@/api/handlers/style-sets/replace"),
   },
+  "style-sets.style-catalogue.get": {
+    load: async () =>
+      await import("@/api/handlers/style-sets/style-catalogue/get"),
+  },
+  "style-sets.style-guide.update": {
+    load: async () =>
+      await import("@/api/handlers/style-sets/style-guide/update"),
+  },
   "style-sets.update": {
     load: async () => await import("@/api/handlers/style-sets/update"),
   },

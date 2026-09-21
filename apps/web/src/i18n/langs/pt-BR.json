@@ -4318,6 +4318,12 @@
     "validity": "Vigente de {from} a {to}"
   },
   "styleSets": {
+    "convertConfirm": "Converter",
+    "convertDescription": "Reconstrói este documento em um dos seus conjuntos de estilos. O texto permanece igual; cada parágrafo recebe um estilo do conjunto. O documento original é mantido.",
+    "convertPending": "Convertendo…",
+    "convertSuccess": "{fileName} criado",
+    "convertTitle": "Converter para o estilo da casa",
+    "convertToHouseStyle": "Converter para o estilo da casa…",
     "create": "Criar",
     "defaultBadge": "Padrão",
     "deleteConfirmation": "Digite o nome do conjunto de estilos para confirmar.",
@@ -4390,6 +4396,7 @@
     "importTitle": "Importar conjunto de estilos",
     "loadFailed": "Não foi possível carregar os conjuntos de estilos",
     "newDocument": "Novo documento",
+    "noStyleGuide": "Ainda sem guia de estilos",
     "pickerDescription": "Escolha o sistema de formatação do novo arquivo.",
     "renameTitle": "Renomear conjunto de estilos",
     "replace": "Substituir origem",

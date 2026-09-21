@@ -4318,6 +4318,12 @@
     "validity": "نافذ من {from} إلى {to}"
   },
   "styleSets": {
+    "convertConfirm": "تحويل",
+    "convertDescription": "يعيد بناء هذا المستند داخل إحدى مجموعات الأنماط لديك. تبقى الصياغة كما هي، ويُسنَد إلى كل فقرة نمط من المجموعة. ويُحتفظ بالمستند الأصلي.",
+    "convertPending": "جارٍ التحويل…",
+    "convertSuccess": "تم إنشاء {fileName}",
+    "convertTitle": "التحويل إلى النمط المؤسسي",
+    "convertToHouseStyle": "التحويل إلى النمط المؤسسي…",
     "create": "إنشاء",
     "defaultBadge": "افتراضي",
     "deleteConfirmation": "اكتب اسم مجموعة الأنماط للتأكيد.",
@@ -4390,6 +4396,7 @@
     "importTitle": "استيراد مجموعة أنماط",
     "loadFailed": "تعذر تحميل مجموعات الأنماط",
     "newDocument": "مستند جديد",
+    "noStyleGuide": "لا يوجد دليل أنماط بعد",
     "pickerDescription": "اختر نظام التنسيق للملف الجديد.",
     "renameTitle": "إعادة تسمية مجموعة الأنماط",
     "replace": "استبدال المصدر",

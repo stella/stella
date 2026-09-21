@@ -1,6 +1,9 @@
 import { sql } from "drizzle-orm";
 
+import type { StyleGuide } from "@/api/lib/house-style/guide";
+
 import {
+  jsonb,
   organization,
   orgPolicies,
   p,
@@ -22,6 +25,7 @@ export const styleSets = p.pgTable(
     s3Key: p.varchar("s3_key", { length: 512 }).notNull(),
     cleanupS3Key: p.varchar("cleanup_s3_key", { length: 512 }),
     sizeBytes: p.integer("size_bytes").notNull(),
+    styleGuide: jsonb("style_guide").$type<StyleGuide>(),
     createdBy: p
       .text("created_by")
       .notNull()
@@ -31,6 +35,14 @@ export const styleSets = p.pgTable(
     deletedAt: timestamptz("deleted_at"),
   },
   (table) => [
+    // A guide is one object (StyleGuide in lib/house-style/guide.ts). Drizzle's
+    // `$type` is compile-time only and the value arrives from the wire, so the
+    // column states the rule itself. NULL satisfies it: a set exists from the
+    // moment its package lands, before a guide has been extracted from it.
+    p.check(
+      "style_sets_style_guide_shape_check",
+      sql`jsonb_typeof(${table.styleGuide}) = 'object'`,
+    ),
     p.index("style_sets_organization_id_idx").on(table.organizationId),
     p
       .index("style_sets_organization_id_updated_at_idx")

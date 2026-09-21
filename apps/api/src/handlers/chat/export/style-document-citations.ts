@@ -316,6 +316,10 @@ const transformTable = (
             return transformParagraph(block, context);
           case "table":
             return transformTable(block, context);
+          // Opaque markup folio replays on save: it carries no citation, and a
+          // walker that rebuilds block content must write it back untouched.
+          case "preservedBlock":
+            return block;
           default:
             return unreachable(
               `Unhandled table-cell block: ${JSON.stringify(block)}`,
@@ -340,6 +344,10 @@ const transformBlock = (
         ...block,
         content: block.content.map((child) => transformBlock(child, context)),
       };
+    // Opaque markup folio replays on save: it carries no citation, and a
+    // walker that rebuilds block content must write it back untouched.
+    case "preservedBlock":
+      return block;
     default:
       return unreachable(`Unhandled document block: ${JSON.stringify(block)}`);
   }
@@ -464,6 +472,9 @@ export const styleDocumentCitationsWithCounts = (
           for (const child of block.content) {
             countInlineCitations(child);
           }
+          return;
+        // Opaque markup folio replays on save: it holds no hyperlink.
+        case "preservedBlock":
           return;
         default:
           return unreachable(

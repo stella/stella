@@ -29,6 +29,9 @@ const collectParagraphContent = (
       case "blockSdt":
         content.push(...collectParagraphContent(block.content));
         break;
+      // Opaque markup folio replays on save: it holds no paragraph content.
+      case "preservedBlock":
+        break;
     }
   }
   return content;

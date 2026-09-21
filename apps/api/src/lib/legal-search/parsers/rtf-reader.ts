@@ -531,7 +531,7 @@ const readRtfInto = (
         lastContent.text += text;
         return;
       }
-      last.content.push({ type: "text", text, preserveSpace: true });
+      last.content.push({ type: "text", text });
       return;
     }
     const run: Run = {
@@ -539,7 +539,7 @@ const readRtfInto = (
       ...(pendingFormatting === undefined
         ? {}
         : { formatting: pendingFormatting }),
-      content: [{ type: "text", text, preserveSpace: true }],
+      content: [{ type: "text", text }],
     };
     paragraph.content.push(run);
     hasPendingRun = true;

@@ -4318,6 +4318,12 @@
     "validity": "Gültig von {from} bis {to}"
   },
   "styleSets": {
+    "convertConfirm": "Konvertieren",
+    "convertDescription": "Baut dieses Dokument in einem Ihrer Stilsets neu auf. Der Wortlaut bleibt unverändert; jeder Absatz erhält einen Stil aus dem Set. Das ursprüngliche Dokument bleibt erhalten.",
+    "convertPending": "Wird konvertiert…",
+    "convertSuccess": "{fileName} erstellt",
+    "convertTitle": "In den Hausstil konvertieren",
+    "convertToHouseStyle": "In den Hausstil konvertieren…",
     "create": "Erstellen",
     "defaultBadge": "Standard",
     "deleteConfirmation": "Geben Sie zur Bestätigung den Namen des Stilsets ein.",
@@ -4390,6 +4396,7 @@
     "importTitle": "Stilset importieren",
     "loadFailed": "Stilsets konnten nicht geladen werden",
     "newDocument": "Neues Dokument",
+    "noStyleGuide": "Noch kein Styleguide",
     "pickerDescription": "Wählen Sie das Formatierungssystem für die neue Datei.",
     "renameTitle": "Stilset umbenennen",
     "replace": "Quelle ersetzen",

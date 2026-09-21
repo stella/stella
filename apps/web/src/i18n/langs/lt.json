@@ -4318,6 +4318,12 @@
     "validity": "Galioja nuo {from} iki {to}"
   },
   "styleSets": {
+    "convertConfirm": "Konvertuoti",
+    "convertDescription": "Atkuria šį dokumentą viename iš jūsų stilių rinkinių. Tekstas nesikeičia; kiekvienai pastraipai priskiriamas rinkinio stilius. Pradinis dokumentas išsaugomas.",
+    "convertPending": "Konvertuojama…",
+    "convertSuccess": "Sukurta {fileName}",
+    "convertTitle": "Konvertuoti į įmonės stilių",
+    "convertToHouseStyle": "Konvertuoti į įmonės stilių…",
     "create": "Kurti",
     "defaultBadge": "Numatytasis",
     "deleteConfirmation": "Patvirtinkite įvesdami stilių rinkinio pavadinimą.",
@@ -4390,6 +4396,7 @@
     "importTitle": "Importuoti stilių rinkinį",
     "loadFailed": "Nepavyko įkelti stilių rinkinių",
     "newDocument": "Naujas dokumentas",
+    "noStyleGuide": "Stiliaus vadovo dar nėra",
     "pickerDescription": "Pasirinkite naujo failo formatavimo sistemą.",
     "renameTitle": "Pervadinti stilių rinkinį",
     "replace": "Pakeisti šaltinį",
