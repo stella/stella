@@ -1,12 +1,17 @@
 import { panic, Result } from "better-result";
 import { and, asc, desc, eq, gt, lt, sql } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { legislationDocuments } from "@/api/db/schema";
 import { corpusStorageMode } from "@/api/env-base";
 import { restrictLegislationDocumentUrls } from "@/api/handlers/legislation/ingestion/outbound-urls";
 import { createStatuteSlug } from "@/api/handlers/legislation/slug";
-import { windowJunction } from "@/api/handlers/legislation/version-windows";
+import {
+  defectiveJunctions,
+  storedWindow,
+} from "@/api/handlers/legislation/version-windows";
+import type { StoredWindow } from "@/api/handlers/legislation/version-windows";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -229,7 +234,10 @@ const settleLegislationCorpusProjection = async ({
  * fingerprint that change hashes identically and the row can never be
  * refreshed once a later parser learns to read it.
  */
-const legislationSourceHash = (input: LegislationDocumentInput): string => {
+const legislationSourceHash = (
+  input: LegislationDocumentInput,
+  window: StoredWindow,
+): string => {
   const hasher = new Bun.CryptoHasher("sha256");
   hasher.update(
     JSON.stringify([
@@ -240,8 +248,11 @@ const legislationSourceHash = (input: LegislationDocumentInput): string => {
       input.documentType ?? null,
       input.status ?? "current",
       input.effectiveDate ?? null,
-      input.versionValidFrom ?? null,
-      input.versionValidTo ?? null,
+      // The stored bounds, not the declaration: a connector that starts
+      // declaring the same publisher date differently has changed what the
+      // row says, and the hash has to move with the column.
+      window.versionValidFrom,
+      window.versionValidTo,
       input.fulltext ?? null,
       input.sections ?? null,
       input.ast ?? null,
@@ -268,20 +279,19 @@ const legislationSourceHash = (input: LegislationDocumentInput): string => {
  * the coverage census owns it.
  */
 type ReportWindowJunctionsArgs = {
-  input: Pick<
-    LegislationDocumentInput,
-    "sourceId" | "eli" | "language" | "versionValidFrom" | "versionValidTo"
-  >;
+  input: Pick<LegislationDocumentInput, "sourceId" | "eli" | "language">;
+  window: StoredWindow;
   documentId: SafeId<"legislationDocument">;
   scopedDb: ScopedDb;
 };
 
 const reportWindowJunctions = async ({
   input,
+  window,
   documentId,
   scopedDb,
 }: ReportWindowJunctionsArgs): Promise<void> => {
-  const validFrom = input.versionValidFrom ?? null;
+  const validFrom = window.versionValidFrom;
   if (validFrom === null) {
     return;
   }
@@ -316,37 +326,27 @@ const reportWindowJunctions = async ({
     ),
   ]);
 
-  const junctions = [
-    earlier?.validFrom
-      ? {
-          earlier: { validFrom: earlier.validFrom, validTo: earlier.validTo },
-          later: { validFrom },
-        }
-      : null,
-    later?.validFrom
-      ? {
-          earlier: { validFrom, validTo: input.versionValidTo ?? null },
-          later: { validFrom: later.validFrom },
-        }
-      : null,
+  const run = [
+    ...(earlier?.validFrom
+      ? [{ validFrom: earlier.validFrom, validTo: earlier.validTo }]
+      : []),
+    { validFrom, validTo: window.versionValidTo },
+    ...(later?.validFrom
+      ? [{ validFrom: later.validFrom, validTo: later.validTo }]
+      : []),
   ];
-  for (const pair of junctions) {
-    if (pair === null) {
-      continue;
-    }
-    const junction = windowJunction(pair.earlier, pair.later);
-    if (junction.type !== "inclusive-end" && junction.type !== "overlap") {
-      continue;
-    }
+  for (const defect of defectiveJunctions(run)) {
     logger.error("legislation.ingestion.version_window_discontiguous", {
       documentId,
       sourceId: input.sourceId,
       eli: input.eli,
       language: input.language,
-      earlierValidFrom: pair.earlier.validFrom,
-      earlierValidTo: pair.earlier.validTo,
-      laterValidFrom: pair.later.validFrom,
-      junction,
+      earlierValidFrom: defect.earlier.validFrom,
+      earlierValidTo: defect.earlier.validTo ?? "open",
+      laterValidFrom: defect.later.validFrom,
+      junction: defect.junction.type,
+      overlapDays:
+        defect.junction.type === "overlap" ? defect.junction.days : 0,
     });
   }
 };
@@ -451,10 +451,11 @@ export const processLegislationDocument = async (
   const text = input.fulltext ?? null;
   const sections = input.sections ?? null;
   const ast = input.ast ?? null;
-  const sourceHash = legislationSourceHash(input);
+  const window = storedWindow(input.version);
+  const sourceHash = legislationSourceHash(input, window);
   const expectedContentHash = corpusContentHash({ text, sections, ast });
 
-  const versionMatch = sql`${legislationDocuments.versionValidFrom} IS NOT DISTINCT FROM ${input.versionValidFrom ?? null}`;
+  const versionMatch = sql`${legislationDocuments.versionValidFrom} IS NOT DISTINCT FROM ${window.versionValidFrom}`;
 
   const [existing] = await scopedDb((tx) =>
     tx
@@ -536,8 +537,7 @@ export const processLegislationDocument = async (
     documentType: input.documentType ?? null,
     status: input.status ?? "current",
     effectiveDate: input.effectiveDate ?? null,
-    versionValidFrom: input.versionValidFrom ?? null,
-    versionValidTo: input.versionValidTo ?? null,
+    ...window,
     fulltext: text,
     sections,
     documentAst: ast,
@@ -575,7 +575,7 @@ export const processLegislationDocument = async (
     return row.id;
   });
 
-  await reportWindowJunctions({ input, documentId: id, scopedDb });
+  await reportWindowJunctions({ input, window, documentId: id, scopedDb });
 
   let corpusWriteFailed = false;
   // Legislation mirrors the payload whenever corpus storage is on and never

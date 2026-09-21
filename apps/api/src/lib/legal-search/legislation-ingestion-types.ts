@@ -34,6 +34,33 @@ import type { OutboundHostPolicy } from "@/api/lib/restrict-outbound-url";
 /** Lifecycle of a legislative text at a given point in time. */
 export type LegislationStatus = "current" | "historical" | "repealed" | "draft";
 
+/**
+ * How the publisher states the close of a consolidation window.
+ *
+ * The corpus stores every window half-open, `[valid_from, valid_to)`, and
+ * publishers do not agree on what their closing date means: eSbírka and
+ * Slov-Lex give the last day the text was in force, others give the day the
+ * next text opens. A connector declares which one it read and passes the
+ * publisher's date through untouched; the pipeline converts once
+ * (`storedWindow`). A bare date with an undeclared meaning cannot be
+ * expressed, which is what keeps an inclusive end from ever reaching the
+ * column as if it were the exclusive bound and leaving the last day of every
+ * window covered by nothing.
+ */
+export type VersionWindowEnd =
+  /** Still in force; the publisher states no close. */
+  | { type: "open" }
+  /** The day the next text opens: already the corpus's own bound. */
+  | { type: "exclusive"; on: string }
+  /** The last day this text applied; the corpus bound is the day after. */
+  | { type: "last-day-in-force"; on: string };
+
+/** The consolidation a row holds, as the publisher states it. */
+export type VersionWindow =
+  /** A work kept as one text with no consolidation history. */
+  | { type: "unversioned" }
+  | { type: "consolidation"; validFrom: string; end: VersionWindowEnd };
+
 /** Normalized legislation document — what every source produces. */
 export type LegislationDocumentInput = {
   /**
@@ -50,9 +77,12 @@ export type LegislationDocumentInput = {
   documentType?: string | null;
   status?: LegislationStatus;
   effectiveDate?: string | null;
-  /** Point-in-time consolidation window; null versionValidTo = current. */
-  versionValidFrom?: string | null;
-  versionValidTo?: string | null;
+  /**
+   * The consolidation this row holds. Required: a connector that reads no
+   * version history says so with `unversioned`, and one that does says how
+   * its publisher closes a window (see `VersionWindowEnd`).
+   */
+  version: VersionWindow;
   fulltext?: string | null;
   sections?: DecisionSection[] | null;
   ast?: DocumentAst | EmptyAst | null;

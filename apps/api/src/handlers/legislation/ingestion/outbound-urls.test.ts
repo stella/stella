@@ -28,6 +28,7 @@ const document = (
   title: "An act",
   country: "SVK",
   language: "sk",
+  version: { type: "unversioned" },
   rawHash: "f".repeat(64),
   ...urls,
 });

@@ -61,6 +61,7 @@ const input = (
   documentType: "act",
   status,
   effectiveDate: "2014-01-01",
+  version: { type: "unversioned" },
   fulltext: "§ 1 Soukromé právo chrání důstojnost a svobodu člověka.",
   rawHash: `publisher-${status}`,
 });
