@@ -129,7 +129,7 @@
     "fast-check": "catalog:",
     "i18n-unused": "^0.20.0",
     "knip": "^6.36.0",
-    "lefthook": "^2.1.12",
+    "lefthook": "^2.1.14",
     "oxc-transform-react": "catalog:",
     "oxfmt": "catalog:",
     "oxlint": "catalog:",
