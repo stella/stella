@@ -1,12 +1,40 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  AresAPIError,
   AresRequestError,
   type AresCompany,
 } from "@stll/business-registries/ares";
+import {
+  BrregAPIError,
+  BrregRequestError,
+} from "@stll/business-registries/brreg";
+import {
+  CompaniesHouseAPIError,
+  CompaniesHouseRequestError,
+} from "@stll/business-registries/companies-house";
+import {
+  DenueAPIError,
+  DenueRequestError,
+} from "@stll/business-registries/denue";
+import {
+  EdgarAPIError,
+  EdgarRequestError,
+} from "@stll/business-registries/edgar";
+import { GcisAPIError, GcisRequestError } from "@stll/business-registries/gcis";
+import { KrsAPIError, KrsRequestError } from "@stll/business-registries/krs";
+import { OrsrAPIError, OrsrRequestError } from "@stll/business-registries/orsr";
+import { PrhAPIError, PrhRequestError } from "@stll/business-registries/prh";
+import {
+  RechercheEntreprisesAPIError,
+  RechercheEntreprisesRequestError,
+} from "@stll/business-registries/recherche-entreprises";
+import { ViesAPIError, ViesRequestError } from "@stll/business-registries/vies";
 
 import {
   BUSINESS_REGISTRY_DISPATCH,
+  BUSINESS_REGISTRY_SLUGS,
+  type BusinessRegistrySlug,
   executeRegistryLookup,
   getRegistryHandlerByCountry,
   isBusinessRegistryNativeToolDeployAvailable,
@@ -372,4 +400,121 @@ describe("executeRegistryLookup — canonical-id guard", () => {
     }
     expect(result.status).toBe(500);
   });
+});
+
+// Every adapter reaches a remote register, so every adapter has the same two
+// upstream failure modes: the register answers non-2xx (`*APIError`) or the
+// request never completes (`*RequestError`). Both must carry
+// `code: "upstream_unavailable"`, because consumers branch on the code rather
+// than the 502: an untagged 502 reaches an MCP caller as a non-retryable
+// `internal_error` and the chat boundary reads it as a defect in this
+// codebase rather than as a transient outage.
+//
+// The table is keyed by `BusinessRegistrySlug`, so a newly added register
+// fails to type-check until its upstream failures are covered here.
+const UPSTREAM_FAILURES = {
+  ares: {
+    api: new AresAPIError({ message: "ARES 503", httpStatus: 503 }),
+    request: new AresRequestError(
+      "https://ares.example.invalid",
+      "request failed",
+    ),
+  },
+  brreg: {
+    api: new BrregAPIError({ message: "Brreg 503", httpStatus: 503 }),
+    request: new BrregRequestError(
+      "https://brreg.example.invalid",
+      "request failed",
+    ),
+  },
+  "companies-house": {
+    api: new CompaniesHouseAPIError({ message: "CH 503", httpStatus: 503 }),
+    request: new CompaniesHouseRequestError(
+      "https://companies-house.example.invalid",
+      "request failed",
+    ),
+  },
+  denue: {
+    api: new DenueAPIError({ message: "DENUE 503", httpStatus: 503 }),
+    request: new DenueRequestError(
+      "https://denue.example.invalid",
+      "request failed",
+    ),
+  },
+  edgar: {
+    api: new EdgarAPIError({ message: "EDGAR 503", httpStatus: 503 }),
+    request: new EdgarRequestError(
+      "https://edgar.example.invalid",
+      "request failed",
+    ),
+  },
+  gcis: {
+    api: new GcisAPIError({ message: "GCIS 503", httpStatus: 503 }),
+    request: new GcisRequestError(
+      "https://gcis.example.invalid",
+      "request failed",
+    ),
+  },
+  krs: {
+    api: new KrsAPIError({ message: "KRS 503", httpStatus: 503 }),
+    request: new KrsRequestError(
+      "https://krs.example.invalid",
+      "request failed",
+    ),
+  },
+  orsr: {
+    api: new OrsrAPIError({ message: "ORSR 503", httpStatus: 503 }),
+    request: new OrsrRequestError(
+      "https://orsr.example.invalid",
+      "request failed",
+    ),
+  },
+  prh: {
+    api: new PrhAPIError({ message: "PRH 503", httpStatus: 503 }),
+    request: new PrhRequestError(
+      "https://prh.example.invalid",
+      "request failed",
+    ),
+  },
+  "recherche-entreprises": {
+    api: new RechercheEntreprisesAPIError({
+      message: "RNE 503",
+      httpStatus: 503,
+    }),
+    request: new RechercheEntreprisesRequestError(
+      "https://recherche-entreprises.example.invalid",
+      "request failed",
+    ),
+  },
+  vies: {
+    api: new ViesAPIError({ message: "VIES 503", httpStatus: 503 }),
+    request: new ViesRequestError(
+      "https://vies.example.invalid",
+      "request failed",
+    ),
+  },
+} as const satisfies Record<
+  BusinessRegistrySlug,
+  { api: Error; request: Error }
+>;
+
+describe("mapError — upstream failures", () => {
+  for (const slug of BUSINESS_REGISTRY_SLUGS) {
+    test(`${slug} tags an unreachable register as a retryable upstream outage`, () => {
+      const { mapError } = BUSINESS_REGISTRY_DISPATCH[slug];
+      const { api, request } = UPSTREAM_FAILURES[slug];
+      for (const failure of [api, request]) {
+        const mapped = mapError(failure);
+        if (!(mapped instanceof HandlerError)) {
+          throw new TypeError(
+            `${slug} left ${failure.name} unmapped; expected a handler error`,
+          );
+        }
+        expect({ code: mapped.code, status: mapped.status }).toEqual({
+          code: "upstream_unavailable",
+          status: 502,
+        });
+      }
+    });
+  }
 });
