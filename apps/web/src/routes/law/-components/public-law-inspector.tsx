@@ -10,7 +10,9 @@ import { InspectorRailIconButton, InspectorRailTab } from "@stll/ui/inspector";
 import { WorkspaceEndRail } from "@stll/ui/workspace-shell";
 import type { WorkspaceEndRailChatAction } from "@stll/ui/workspace-shell";
 
+import { useMainLegalDocument } from "@/components/ai-suggestions/use-main-legal-document";
 import { useRequireAccount } from "@/components/auth/use-require-account";
+import { railChatOpenArgs } from "@/components/inspector/inspector-rail-chat.logic";
 import {
   isGenericInspectorTab,
   useInspectorTabsStore,
@@ -143,13 +145,16 @@ const SessionRailPlaceholder = () => {
   const minimized = useInspectorTabsStore((state) => state.minimized);
   const setMinimized = useInspectorTabsStore((state) => state.setMinimized);
   const openChat = useInspectorTabsStore((state) => state.openChat);
+  const legalDocument = useMainLegalDocument();
 
   return (
     <div className="bg-background flex h-full shadow-lg">
       <PublicLawRail
         chatAction={{
           label: t("chat.newChat"),
-          onActivate: () => openChat(),
+          onActivate: () => {
+            openChat(railChatOpenArgs({ legalDocument }));
+          },
           status: "enabled",
         }}
         minimized={minimized}

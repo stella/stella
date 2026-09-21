@@ -589,6 +589,26 @@
       "treatment": "Spätere Rezeption"
     },
     "analyzing": "Analyse läuft...",
+    "chat": {
+      "prompts": {
+        "facts": {
+          "body": "Wie lag der Sachverhalt, und was hat jede Partei vorgetragen?",
+          "name": "Sachverhalt und Vorbringen"
+        },
+        "holding": {
+          "body": "Wie hat das Gericht entschieden, und warum?",
+          "name": "Tenor und Begründung"
+        },
+        "precedent": {
+          "body": "Auf welche früheren Entscheidungen stützt es sich, und folgt es ihnen?",
+          "name": "Frühere Entscheidungen"
+        },
+        "provisions": {
+          "body": "Welche Vorschriften wendet das Gericht an, und wie legt es sie aus?",
+          "name": "Angewandte Vorschriften"
+        }
+      }
+    },
     "citation": {
       "citedSummary": "{count, plural, =0 {Nicht zitiert} one {Einmal zitiert} other {#-mal zitiert}}",
       "decisionCount": "{count, plural, =0 {Keine Entscheidungen} one {# Entscheidung} other {# Entscheidungen}}",

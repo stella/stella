@@ -589,6 +589,26 @@
       "treatment": "Hilisem käsitlus"
     },
     "analyzing": "Analüüsin...",
+    "chat": {
+      "prompts": {
+        "facts": {
+          "body": "Millised olid asjaolud ja mida väitis kumbki pool?",
+          "name": "Asjaolud ja poolte seisukohad"
+        },
+        "holding": {
+          "body": "Kuidas kohus otsustas ja miks?",
+          "name": "Resolutsioon ja põhjendused"
+        },
+        "precedent": {
+          "body": "Millistele varasematele lahenditele see tugineb ja kas järgib neid?",
+          "name": "Varasemad lahendid"
+        },
+        "provisions": {
+          "body": "Milliseid sätteid kohus kohaldab ja kuidas neid tõlgendab?",
+          "name": "Kohaldatud sätted"
+        }
+      }
+    },
     "citation": {
       "citedSummary": "{count, plural, =0 {Viitamata} one {Viidatud üks kord} other {Viidatud # korda}}",
       "decisionCount": "{count, plural, =0 {Lahendeid pole} one {# lahend} other {# lahendit}}",

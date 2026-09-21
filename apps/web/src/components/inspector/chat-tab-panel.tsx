@@ -40,6 +40,7 @@ import {
   ConversationScrollProvider,
 } from "@/components/ai-elements/conversation";
 import { PromptBar } from "@/components/ai-suggestions/host";
+import { useMainLegalDocument } from "@/components/ai-suggestions/use-main-legal-document";
 import {
   ChatSubmitPreservedError,
   useChatEditor,
@@ -63,6 +64,12 @@ import {
   PromptBarPlaceholderContent,
 } from "@/components/chat/docked-composer";
 import { PromptSuggestions } from "@/components/chat/prompt-suggestions";
+import {
+  boundLegalDocumentLabel,
+  chatContextLabel,
+  chatTabHeaderLabel,
+} from "@/components/inspector/chat-context-label.logic";
+import { useDecisionChatPrompts } from "@/components/inspector/decision-chat-prompts";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import { InspectorTabHeader } from "@/components/inspector/inspector-tab-header";
 import type { ChatTab } from "@/components/inspector/inspector-tabs-store";
@@ -108,9 +115,8 @@ import {
   getChatThreadKey,
   type ChatThreadRef,
 } from "@/lib/chat-thread-ref";
-import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
 import { detached } from "@/lib/detached";
-import type { ChatPrompt } from "@/lib/prompts/types";
+import type { PromptSuggestion } from "@/lib/prompts/types";
 import { useSavedPrompts } from "@/lib/prompts/use-saved-prompts";
 import { runReservedChatCommand } from "@/lib/reserved-chat-commands";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
@@ -194,7 +200,7 @@ export const ChatTabPanel = ({
   const [composerFocused, setComposerFocused] = useState(false);
   const getSendMode = useLatestCallback(() => getChatSendMode(threadRef));
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
-  const chatContextLabel = useChatContextLabel(tab, activeOrganizationId);
+  const contextLabel = useChatContextLabel(tab, activeOrganizationId);
 
   const { openChat, resetChatTabId, setChatContext, updateLabel } =
     useInspectorTabsStore(
@@ -361,7 +367,7 @@ export const ChatTabPanel = ({
       : [];
   const suggestedFollowupPrompt = suggestedPrompts.at(0) ?? undefined;
   const editorController = useChatEditor({
-    placeholder: t("chat.contextPlaceholder", { context: chatContextLabel }),
+    placeholder: t("chat.contextPlaceholder", { context: contextLabel }),
     suggestedFollowupPrompt,
     threadRef,
   });
@@ -386,7 +392,12 @@ export const ChatTabPanel = ({
   }, [focusComposer, isGenerating, messages.length, tab.id]);
 
   const savedPrompts = useSavedPrompts();
-  const handleSelectPrompt = (prompt: ChatPrompt) => {
+  // A chat about a decision opens on the questions a judgment answers. The
+  // saved prompts are the reader's own drafting and review skills, which are
+  // about a document they are writing, not one a court handed down.
+  const decisionPrompts = useDecisionChatPrompts(tabLegalKey);
+  const emptyStatePrompts = decisionPrompts ?? savedPrompts;
+  const handleSelectPrompt = (prompt: PromptSuggestion) => {
     editorController.setContent(composerStoredMarkdown(prompt.body));
     editorController.focus();
   };
@@ -639,7 +650,7 @@ export const ChatTabPanel = ({
               {messages.length === 0 && !isGenerating && !error ? (
                 <ChatEmptyState
                   onSelectPrompt={handleSelectPrompt}
-                  prompts={savedPrompts}
+                  prompts={emptyStatePrompts}
                 />
               ) : (
                 <ChatThreadMessages
@@ -691,7 +702,7 @@ export const ChatTabPanel = ({
             editorController={editorController}
             emptyPlaceholder={
               <PromptBarPlaceholderContent>
-                {t("chat.contextPlaceholder", { context: chatContextLabel })}
+                {t("chat.contextPlaceholder", { context: contextLabel })}
               </PromptBarPlaceholderContent>
             }
             followupChips={
@@ -745,43 +756,36 @@ export const ChatTabPanel = ({
   );
 };
 
+/** The bound document's name, while the reader is looking at that document. */
+const useBoundLegalDocumentLabel = (tab: ChatTab): string | undefined => {
+  const mainDocument = useMainLegalDocument();
+  return boundLegalDocumentLabel({
+    activeLegalKey: tab.activeLegalKey,
+    mainDocument,
+  });
+};
+
 const useChatContextLabel = (tab: ChatTab, activeOrganizationId: string) => {
   const t = useTranslations();
   const { data } = useQuery(workspacesNavigationOptions(activeOrganizationId));
-  const resolvedLabel = isPlaceholderThreadTitle(tab.label)
-    ? t("chat.newChat")
-    : tab.label;
-  const fallbackLabel =
-    resolvedLabel.trim().length > 0 ? resolvedLabel : "chat";
-
-  if (tab.activeSkill) {
-    return tab.activeSkill.skillName;
-  }
-
-  const workspaces = data?.workspaces;
-  if (workspaces === undefined || tab.contextMatterIds.length === 0) {
-    return fallbackLabel;
-  }
-
-  const selectedNames = tab.contextMatterIds
+  const boundDocumentLabel = useBoundLegalDocumentLabel(tab);
+  const workspaces = data?.workspaces ?? [];
+  const matterNames = tab.contextMatterIds
     .map((id) => workspaces.find((workspace) => workspace.id === id)?.name)
     .filter((name): name is string => name !== undefined);
 
-  const firstName = selectedNames.at(0);
-  if (firstName === undefined) {
-    return fallbackLabel;
-  }
-
-  if (selectedNames.length === 1) {
-    return firstName;
-  }
-
-  return `${firstName} +${String(selectedNames.length - 1)}`;
+  return chatContextLabel({
+    activeSkillName: tab.activeSkill?.skillName,
+    boundDocumentLabel,
+    matterNames,
+    newChatLabel: t("chat.newChat"),
+    tabLabel: tab.label,
+  });
 };
 
 type ChatEmptyStateProps = {
-  prompts: ChatPrompt[];
-  onSelectPrompt: (prompt: ChatPrompt) => void;
+  prompts: readonly PromptSuggestion[];
+  onSelectPrompt: (prompt: PromptSuggestion) => void;
 };
 
 const ChatEmptyState = ({ prompts, onSelectPrompt }: ChatEmptyStateProps) => (
@@ -832,6 +836,7 @@ const ChatTabPanelChrome = ({
   children,
 }: ChatTabPanelChromeProps) => {
   const t = useTranslations();
+  const boundDocumentLabel = useBoundLegalDocumentLabel(tab);
   // New-chat is not a header action: it lives in the composer's status
   // row (`ChatComposerDock`), uniform with every other chat surface.
   const actions = onMoveToMain && (
@@ -852,9 +857,11 @@ const ChatTabPanelChrome = ({
     >
       <InspectorTabHeader
         actions={actions}
-        label={
-          isPlaceholderThreadTitle(tab.label) ? t("chat.newChat") : tab.label
-        }
+        label={chatTabHeaderLabel({
+          boundDocumentLabel,
+          newChatLabel: t("chat.newChat"),
+          tabLabel: tab.label,
+        })}
         onClose={onClose}
         onLabelContextMenu={onLabelContextMenu}
         onStartRename={onStartRename}
@@ -890,10 +897,10 @@ const ChatTabPanelChrome = ({
 const PromptBarPlaceholder = ({ tab }: { tab: ChatTab }) => {
   const t = useTranslations();
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
-  const chatContextLabel = useChatContextLabel(tab, activeOrganizationId);
+  const contextLabel = useChatContextLabel(tab, activeOrganizationId);
   return (
     <PromptBarPending>
-      {t("chat.contextPlaceholder", { context: chatContextLabel })}
+      {t("chat.contextPlaceholder", { context: contextLabel })}
     </PromptBarPending>
   );
 };
@@ -908,6 +915,7 @@ const PromptBarPlaceholder = ({ tab }: { tab: ChatTab }) => {
  */
 export const ChatTabPanelShell = ({ tab }: { tab: ChatTab }) => {
   const savedPrompts = useSavedPrompts();
+  const decisionPrompts = useDecisionChatPrompts(tab.activeLegalKey);
   const threadRef = chatTabThreadRef(tab);
   return (
     <ChatTabPanelChrome
@@ -926,7 +934,10 @@ export const ChatTabPanelShell = ({ tab }: { tab: ChatTab }) => {
     >
       <Conversation className="min-h-0 flex-1">
         <ConversationContent className="gap-3 pb-32">
-          <ChatEmptyState onSelectPrompt={noop} prompts={savedPrompts} />
+          <ChatEmptyState
+            onSelectPrompt={noop}
+            prompts={decisionPrompts ?? savedPrompts}
+          />
         </ConversationContent>
       </Conversation>
 

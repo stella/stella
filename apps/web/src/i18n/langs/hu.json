@@ -589,6 +589,26 @@
       "treatment": "Későbbi megítélés"
     },
     "analyzing": "Elemzés folyamatban...",
+    "chat": {
+      "prompts": {
+        "facts": {
+          "body": "Milyen volt a tényállás, és mit adott elő mindegyik fél?",
+          "name": "Tényállás és a felek előadásai"
+        },
+        "holding": {
+          "body": "Mit döntött a bíróság, és miért?",
+          "name": "Rendelkező rész és indokolás"
+        },
+        "precedent": {
+          "body": "Mely korábbi döntésekre támaszkodik, és követi-e azokat?",
+          "name": "Korábbi döntések"
+        },
+        "provisions": {
+          "body": "Mely rendelkezéseket alkalmazza a bíróság, és hogyan értelmezi őket?",
+          "name": "Alkalmazott rendelkezések"
+        }
+      }
+    },
     "citation": {
       "citedSummary": "{count, plural, =0 {Nem hivatkozták} one {Egyszer hivatkozták} other {#-szor hivatkozták}}",
       "decisionCount": "{count, plural, =0 {Nincs határozat} one {# határozat} other {# határozat}}",

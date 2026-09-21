@@ -589,6 +589,26 @@
       "treatment": "Vēlākā judikatūra"
     },
     "analyzing": "Analizē...",
+    "chat": {
+      "prompts": {
+        "facts": {
+          "body": "Kādi bija fakti un ko apgalvoja katra puse?",
+          "name": "Fakti un pušu argumenti"
+        },
+        "holding": {
+          "body": "Ko tiesa nosprieda un kāpēc?",
+          "name": "Rezolutīvā daļa un motīvi"
+        },
+        "precedent": {
+          "body": "Uz kuriem agrākiem nolēmumiem tā balstās un vai tiem seko?",
+          "name": "Agrākie nolēmumi"
+        },
+        "provisions": {
+          "body": "Kuras normas tiesa piemēro un kā tās iztulko?",
+          "name": "Piemērotās normas"
+        }
+      }
+    },
     "citation": {
       "citedSummary": "{count, plural, =0 {Nav citēts} zero {Citēts # reižu} one {Citēts vienu reizi} other {Citēts # reizes}}",
       "decisionCount": "{count, plural, =0 {Nav nolēmumu} zero {# nolēmumu} one {# nolēmums} other {# nolēmumi}}",

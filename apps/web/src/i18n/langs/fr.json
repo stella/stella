@@ -589,6 +589,26 @@
       "treatment": "Traitement ultérieur"
     },
     "analyzing": "Analyse en cours...",
+    "chat": {
+      "prompts": {
+        "facts": {
+          "body": "Quels sont les faits, et qu'a soutenu chaque partie ?",
+          "name": "Faits et prétentions"
+        },
+        "holding": {
+          "body": "Qu'a décidé la juridiction, et pourquoi ?",
+          "name": "Dispositif et motifs"
+        },
+        "precedent": {
+          "body": "Sur quelles décisions antérieures s'appuie-t-elle, et les suit-elle ?",
+          "name": "Décisions antérieures"
+        },
+        "provisions": {
+          "body": "Quelles dispositions la juridiction applique-t-elle, et comment les interprète-t-elle ?",
+          "name": "Dispositions appliquées"
+        }
+      }
+    },
     "citation": {
       "citedSummary": "{count, plural, =0 {Non citée} one {Citée une fois} other {Citée # fois}}",
       "decisionCount": "{count, plural, =0 {Aucune décision} one {# décision} other {# décisions}}",

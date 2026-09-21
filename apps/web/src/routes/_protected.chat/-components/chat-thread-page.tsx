@@ -91,7 +91,7 @@ import { ChromeHeaderActions } from "@/lib/chrome-header-actions";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { managementRoles } from "@/lib/organization/consts";
-import type { ChatPrompt } from "@/lib/prompts/types";
+import type { PromptSuggestion } from "@/lib/prompts/types";
 import { useSavedPrompts } from "@/lib/prompts/use-saved-prompts";
 import { runReservedChatCommand } from "@/lib/reserved-chat-commands";
 import { toSafeId } from "@/lib/safe-id";
@@ -423,7 +423,7 @@ export const ChatThreadPage = ({
     detached(navigate({ to: "/chat" }), "chat-thread-page.navigate");
   };
 
-  const selectPrompt = (prompt: ChatPrompt) => {
+  const selectPrompt = (prompt: PromptSuggestion) => {
     controller.setContent(composerStoredMarkdown(prompt.body));
     controller.focus();
   };

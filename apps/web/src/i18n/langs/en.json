@@ -589,6 +589,26 @@
       "treatment": "Later treatment"
     },
     "analyzing": "Analyzing...",
+    "chat": {
+      "prompts": {
+        "facts": {
+          "body": "What are the facts, and what did each party argue?",
+          "name": "Facts and positions"
+        },
+        "holding": {
+          "body": "What did the court decide, and why?",
+          "name": "Holding and reasons"
+        },
+        "precedent": {
+          "body": "Which earlier decisions does it rely on, and does it follow them?",
+          "name": "Earlier decisions"
+        },
+        "provisions": {
+          "body": "Which provisions does the court apply, and how does it read them?",
+          "name": "Provisions applied"
+        }
+      }
+    },
     "citation": {
       "citedSummary": "{count, plural, =0 {Not cited} one {Cited once} other {Cited # times}}",
       "decisionCount": "{count, plural, =0 {No decisions} one {# decision} other {# decisions}}",
