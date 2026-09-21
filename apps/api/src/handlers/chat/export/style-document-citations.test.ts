@@ -29,6 +29,12 @@ const collectParagraphContent = (
       case "blockSdt":
         content.push(...collectParagraphContent(block.content));
         break;
+      // Hold no paragraph content: a bookmark marker is a position and a
+      // preserved block is opaque markup.
+      case "preservedBlock":
+      case "bookmarkStart":
+      case "bookmarkEnd":
+        break;
     }
   }
   return content;
