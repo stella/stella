@@ -13,14 +13,7 @@ import { cn } from "@stll/ui/utils";
 
 import { caseLawCountryName } from "@/features/case-law/components/case-law-search";
 import { CourtRowLabel } from "@/features/case-law/components/court-row-label";
-import {
-  courtTierRowKey,
-  groupCourtRowsByTier,
-} from "@/features/case-law/court-tier-rows.logic";
-import {
-  COURT_TIER_LABEL_KEYS,
-  type CourtTier,
-} from "@/features/case-law/decision-filter-facets.logic";
+import { courtTierRowKey } from "@/features/case-law/court-tier-rows.logic";
 import { caseLawCorpusStatusOptions } from "@/features/case-law/queries/decisions";
 import { useFormatter, useRelativeTime } from "@/i18n/formatting-context";
 import { parseDeterministicDate } from "@/lib/deterministic-date";
@@ -139,7 +132,6 @@ export const LawDatabaseStatus = ({ country }: { country: string }) => {
  */
 const CourtBreakdown = ({ courts }: { courts: readonly CourtRow[] }) => {
   const t = useTranslations();
-  const byTier = groupCourtRowsByTier(courts);
 
   return (
     <div className="-mx-1 mt-3 overflow-x-auto">
@@ -160,31 +152,17 @@ const CourtBreakdown = ({ courts }: { courts: readonly CourtRow[] }) => {
             </th>
           </tr>
         </thead>
-        {byTier.map(({ rows, tier }) => (
-          <tbody key={tier}>
-            <tr>
-              {/* `rowgroup`, not `colgroup`: the heading labels the court rows
-                  of its own `<tbody>`, and the table declares no column
-                  groups for a `colgroup` header to name. */}
-              <th
-                className="text-muted-foreground border-border border-t px-1 pt-2 pb-1 text-start font-medium"
-                colSpan={4}
-                scope="rowgroup"
-              >
-                {t(COURT_TIER_LABEL_KEYS[tier])}
-              </th>
-            </tr>
-            {rows.map((row) => (
-              <CourtRowCells key={courtTierRowKey(row)} row={row} tier={tier} />
-            ))}
-          </tbody>
-        ))}
+        <tbody>
+          {courts.map((row) => (
+            <CourtRowCells key={courtTierRowKey(row)} row={row} />
+          ))}
+        </tbody>
       </table>
     </div>
   );
 };
 
-const CourtRowCells = ({ row, tier }: { row: CourtRow; tier: CourtTier }) => {
+const CourtRowCells = ({ row }: { row: CourtRow }) => {
   const t = useTranslations();
   const format = useFormatter();
   const relativeTime = useRelativeTime();
@@ -196,7 +174,7 @@ const CourtRowCells = ({ row, tier }: { row: CourtRow; tier: CourtTier }) => {
   return (
     <tr>
       <th className="max-w-56 px-1 py-0.5 text-start font-normal" scope="row">
-        <CourtRowLabel row={row} tier={tier} />
+        <CourtRowLabel row={row} />
       </th>
       <td className="px-1 py-0.5 text-end tabular-nums">
         {format.number(row.decisions)}

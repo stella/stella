@@ -19,18 +19,11 @@ import { cn } from "@stll/ui/utils";
 
 import { caseLawCountryName } from "@/features/case-law/components/case-law-search";
 import { CourtRowLabel } from "@/features/case-law/components/court-row-label";
-import {
-  courtTierRowKey,
-  groupCourtRowsByTier,
-} from "@/features/case-law/court-tier-rows.logic";
+import { courtTierRowKey } from "@/features/case-law/court-tier-rows.logic";
 import {
   caseLawCompletenessExceedsReported,
   caseLawCompletenessPercent,
 } from "@/features/case-law/coverage-completeness";
-import {
-  COURT_TIER_LABEL_KEYS,
-  type CourtTier,
-} from "@/features/case-law/decision-filter-facets.logic";
 import {
   useFormatter,
   useLocale,
@@ -43,13 +36,11 @@ import {
 } from "@/lib/relative-time";
 import { sanitizeHref } from "@/lib/sanitize-href";
 import {
-  CASE_LAW_COMPLETENESS_NOTE_KIND,
   CASE_LAW_COVERAGE_AVAILABILITY_LABEL_KEYS,
   CASE_LAW_COVERAGE_AVAILABILITY_TONES,
   CASE_LAW_COVERAGE_HEALTH_LABEL_KEYS,
   CASE_LAW_COVERAGE_HEALTH_TONES,
   CASE_LAW_TOTAL_REPORTER_LABEL_KEYS,
-  type CaseLawCompletenessNoteKind,
   type CaseLawCoverageCountry,
   type CaseLawCoverageHealth,
   type CaseLawCoverageResponse,
@@ -57,7 +48,6 @@ import {
   type CaseLawMeasuredCompleteness,
   type CaseLawSourceCompleteness,
   type CaseLawStoredCount,
-  caseLawCoverageCompletenessNotes,
   orderCoverageCountriesByName,
 } from "@/routes/law/-law-coverage/coverage.logic";
 
@@ -338,27 +328,18 @@ const HealthSignal = ({ health }: { health: CaseLawCoverageHealth }) => {
 };
 
 type TableBlockProps = PropsWithChildren<{
-  /** One line under the title: what the table's figures rest on. */
-  subtitle?: ReactNode;
   title: string;
 }>;
 
-/**
- * A table under its own heading. The heading is outside the table rather
- * than a caption, so it can carry a second line without restyling the
- * caption the table primitive owns.
- */
-const TableBlock = ({ children, subtitle, title }: TableBlockProps) => {
+/** A table under its own heading, outside the caption the primitive owns. */
+const TableBlock = ({ children, title }: TableBlockProps) => {
   const headingId = useId();
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex flex-col gap-0.5">
-        <h3 className="text-sm font-medium" id={headingId}>
-          {title}
-        </h3>
-        {subtitle}
-      </div>
+      <h3 className="text-sm font-medium" id={headingId}>
+        {title}
+      </h3>
       <Table aria-labelledby={headingId}>{children}</Table>
     </div>
   );
@@ -429,10 +410,7 @@ const CountrySection = ({ country }: { country: CaseLawCoverageCountry }) => {
       }
       headingId={headingId}
     >
-      <SourcesTable
-        completeness={country.completeness}
-        sources={country.sources}
-      />
+      <SourcesTable sources={country.sources} />
       {country.availability === "searchable" && (
         <CourtsTable courts={country.courts} />
       )}
@@ -473,101 +451,6 @@ const DecisionYearsFigure = ({
   );
 };
 
-/**
- * A country's completeness on one line under the sources heading: the ratio,
- * the two numbers it was computed from, and a count of every source it could
- * not be computed over.
- *
- * The counts sit beside the ratio rather than inside it. Folding an unmeasured
- * source into the percentage would make a corpus nobody has checked read
- * exactly like one that has been. With no source measured, both sums are zero
- * by construction rather than by observation, so only the withheld ratio and
- * the reasons print; a labelled zero would read as a publisher stating it
- * holds nothing.
- */
-const CountryCompleteness = ({
-  completeness,
-}: {
-  completeness: CaseLawCoverageCountry["completeness"];
-}) => {
-  const t = useTranslations();
-  const format = useFormatter();
-  const counts = {
-    reported: completeness.reported,
-    stored: completeness.stored,
-  };
-  const percent = caseLawCompletenessPercent(counts);
-  const notes = caseLawCoverageCompletenessNotes(completeness);
-  const measured = completeness.measuredSources > 0;
-
-  return (
-    <dl className="text-muted-foreground flex flex-wrap gap-x-4 gap-y-0.5 text-xs font-normal">
-      <div className="flex gap-1.5">
-        <dt>{t("caseLaw.coverage.completeness")}</dt>
-        <dd className="text-foreground tabular-nums">
-          {percent === null
-            ? NO_VALUE
-            : format.number(percent / 100, PERCENT_FORMAT)}
-        </dd>
-      </div>
-      {measured && (
-        <div className="flex gap-1.5">
-          <dt>{t("caseLaw.coverage.stored")}</dt>
-          <dd className="text-foreground tabular-nums">
-            {format.number(completeness.stored)}
-            {completeness.storedAsOf !== null && (
-              <span className="text-muted-foreground">
-                {" "}
-                (
-                {t("caseLaw.coverage.countedOn", {
-                  date: observedDate(completeness.storedAsOf, format),
-                })}
-                )
-              </span>
-            )}
-          </dd>
-        </div>
-      )}
-      {measured && (
-        <div className="flex gap-1.5">
-          <dt>{t("caseLaw.coverage.publisherTotal")}</dt>
-          <dd className="text-foreground tabular-nums">
-            {format.number(completeness.reported)}
-          </dd>
-        </div>
-      )}
-      {notes.map(({ count, kind }) => (
-        <div key={kind}>
-          <CompletenessNote count={count} kind={kind} />
-        </div>
-      ))}
-    </dl>
-  );
-};
-
-const CompletenessNote = ({
-  count,
-  kind,
-}: {
-  count: number;
-  kind: CaseLawCompletenessNoteKind;
-}) => {
-  const t = useTranslations();
-
-  switch (kind) {
-    case CASE_LAW_COMPLETENESS_NOTE_KIND.NOT_MEASURED:
-      return <>{t("caseLaw.coverage.notMeasuredSources", { count })}</>;
-    case CASE_LAW_COMPLETENESS_NOTE_KIND.STALE:
-      return <>{t("caseLaw.coverage.staleSources", { count })}</>;
-    case CASE_LAW_COMPLETENESS_NOTE_KIND.NOT_COUNTED:
-      return <>{t("caseLaw.coverage.notCountedSources", { count })}</>;
-    default: {
-      kind satisfies never;
-      return panic("Unhandled case-law completeness note kind");
-    }
-  }
-};
-
 /** Shared by the real table and its pending twin, so a column cannot drift. */
 const SourcesTableHead = () => {
   const t = useTranslations();
@@ -596,20 +479,15 @@ const SourcesTableHead = () => {
 };
 
 const SourcesTable = ({
-  completeness,
   sources,
 }: {
-  completeness: CaseLawCoverageCountry["completeness"];
   sources: readonly CaseLawCoverageSource[];
 }) => {
   const t = useTranslations();
   const relativeTime = useRelativeTime();
 
   return (
-    <TableBlock
-      subtitle={<CountryCompleteness completeness={completeness} />}
-      title={t("caseLaw.coverage.sourcesHeading")}
-    >
+    <TableBlock title={t("caseLaw.coverage.sourcesHeading")}>
       <SourcesTableHead />
       <TableBody>
         {sources.map((source) => (
@@ -804,10 +682,10 @@ const CourtsTableHead = () => {
 };
 
 /**
- * The searchable index by court, under the tier headings the facet rail uses.
- * Apex courts arrive by name; the wide tiers arrive as one row each, because a
- * jurisdiction has dozens of regional courts and a list of them is not what a
- * reader came to this page for.
+ * The searchable index by court, in the order the API ranks them: apex courts
+ * by name, the wide tiers as one row each naming their tier, and the courts
+ * beyond the listed ones as the closing row. No heading rows between them: a
+ * dozen rows read better as one list than as four lists of three.
  *
  * A breakdown the endpoint could not read says so in the table's place. An
  * empty table would claim the index names no court.
@@ -827,35 +705,19 @@ const CourtsTable = ({ courts }: { courts: SearchableCountry["courts"] }) => {
       </div>
     );
   }
-  const byTier = groupCourtRowsByTier(courts);
-
   return (
     <TableBlock title={t("caseLaw.coverage.courtsHeading")}>
       <CourtsTableHead />
-      {byTier.map(({ rows, tier }) => (
-        <TableBody key={tier}>
-          <TableRow>
-            {/* `rowgroup`, not `colgroup`: the heading labels the court rows
-                of its own `<tbody>`, and the table declares no column groups
-                for a `colgroup` header to name. */}
-            <TableHead
-              className="text-muted-foreground text-2xs h-7 font-medium tracking-wide uppercase"
-              colSpan={COURT_COLUMN_COUNT}
-              scope="rowgroup"
-            >
-              {t(COURT_TIER_LABEL_KEYS[tier])}
-            </TableHead>
-          </TableRow>
-          {rows.map((row) => (
-            <CourtRowCells key={courtTierRowKey(row)} row={row} tier={tier} />
-          ))}
-        </TableBody>
-      ))}
+      <TableBody>
+        {courts.map((row) => (
+          <CourtRowCells key={courtTierRowKey(row)} row={row} />
+        ))}
+      </TableBody>
     </TableBlock>
   );
 };
 
-const CourtRowCells = ({ row, tier }: { row: CourtRow; tier: CourtTier }) => {
+const CourtRowCells = ({ row }: { row: CourtRow }) => {
   const format = useFormatter();
   const relativeTime = useRelativeTime();
   // The row for the courts beyond the listed ones carries no activity: none
@@ -868,7 +730,7 @@ const CourtRowCells = ({ row, tier }: { row: CourtRow; tier: CourtTier }) => {
         className="text-foreground h-auto max-w-56 font-normal"
         scope="row"
       >
-        <CourtRowLabel row={row} tier={tier} />
+        <CourtRowLabel row={row} />
       </TableHead>
       <TableCell className="text-end tabular-nums">
         {format.number(row.decisions)}

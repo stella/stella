@@ -182,14 +182,12 @@ describe("the coverage page states what it counts", () => {
     const markup = render(<CaseLawCoveragePage coverage={COVERAGE} />);
 
     expect(markup).toContain(messages.caseLaw.coverage.notMeasuredYet);
-    expect(markup).toContain("1 source not measured");
   });
 
   test("a source nobody has counted is stated, and adds no zero to the ratio", () => {
     const markup = render(<CaseLawCoveragePage coverage={COVERAGE} />);
 
     expect(markup).toContain(messages.caseLaw.coverage.notCountedYet);
-    expect(markup).toContain("1 source not counted");
     // The ratio is still the one measured source's 996/1000; a source with no
     // count of its own would drag it to 50 % if it were folded in as a zero.
     expect(markup).toContain("99%");
@@ -218,21 +216,11 @@ describe("the coverage page states what it counts", () => {
     );
 
     expect(markup).toContain(messages.caseLaw.coverage.inPreparation);
-    // No measurable ratio, and no zero standing in for one.
+    // No measurable ratio, and no zero standing in for one: the source says
+    // it was never measured, and the stored figure says it was never counted.
     expect(markup).not.toContain("0%");
-    // Both completeness sums are over the measured sources alone, so with
-    // none measured they are zero by construction. Only the withheld ratio
-    // and the reason print; a labelled zero would read as a publisher
-    // stating it holds nothing.
-    const completeness = markup.indexOf(messages.caseLaw.coverage.completeness);
-    expect(completeness).toBeGreaterThan(-1);
-    const completenessCells = markup.slice(completeness, completeness + 400);
-    expect(completenessCells).toContain("—");
-    expect(completenessCells).toContain("1 source not measured");
-    expect(completenessCells).not.toContain(
-      messages.caseLaw.coverage.publisherTotal,
-    );
-    expect(completenessCells).not.toContain(">0<");
+    expect(markup).toContain(messages.caseLaw.coverage.notMeasuredYet);
+    expect(markup).toContain(messages.caseLaw.coverage.notCountedYet);
     // No index to break down by court.
     expect(markup).not.toContain(messages.caseLaw.coverage.courtsHeading);
   });
