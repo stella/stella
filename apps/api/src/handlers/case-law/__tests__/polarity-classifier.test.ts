@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { caseLawPolarityRules } from "@/api/db/schema";
 import {
   CLASSIFIABLE_POLARITIES,
   isValidPolarity,
@@ -9,7 +10,7 @@ import {
   POLARITY_PRECEDENCE,
 } from "@/api/handlers/case-law/polarity/consts";
 import type { Polarity } from "@/api/handlers/case-law/polarity/consts";
-import { extractContext } from "@/api/handlers/case-law/polarity/context";
+import { extractContexts } from "@/api/handlers/case-law/polarity/context";
 import {
   compileRules,
   selectRuleMatch,
@@ -20,7 +21,7 @@ import {
 } from "@/api/handlers/case-law/polarity/seed-rules";
 import { createSafeId } from "@/api/lib/branded-types";
 
-describe("extractContext", () => {
+describe("extractContexts", () => {
   const sections = [
     { text: "Header text about the case." },
     {
@@ -33,18 +34,18 @@ describe("extractContext", () => {
   ];
 
   test("extracts context around citation in specific section", () => {
-    const ctx = extractContext(sections, "sp. zn. 21 Cdo 1234/2020", 1);
-    expect(ctx).toContain("sp. zn. 21 Cdo 1234/2020");
-    expect(ctx).toContain("in accordance with");
+    const ctx = extractContexts(sections, "sp. zn. 21 Cdo 1234/2020", 1);
+    expect(ctx?.[0]).toContain("sp. zn. 21 Cdo 1234/2020");
+    expect(ctx?.[0]).toContain("in accordance with");
   });
 
   test("searches all sections when sectionIndex is null", () => {
-    const ctx = extractContext(sections, "sp. zn. 21 Cdo 1234/2020", null);
-    expect(ctx).toContain("sp. zn. 21 Cdo 1234/2020");
+    const ctx = extractContexts(sections, "sp. zn. 21 Cdo 1234/2020", null);
+    expect(ctx?.[0]).toContain("sp. zn. 21 Cdo 1234/2020");
   });
 
   test("returns null when citation not found", () => {
-    const ctx = extractContext(sections, "nonexistent citation", 0);
+    const ctx = extractContexts(sections, "nonexistent citation", 0);
     expect(ctx).toBeNull();
   });
 });
@@ -90,6 +91,32 @@ describe("seed rules", () => {
     }
   });
 
+  test("every rule fits the rule column", () => {
+    // Seeding is an INSERT; a pattern longer than the column fails the whole
+    // statement at boot, which is a poor place to learn a regex grew.
+    const length = caseLawPolarityRules.pattern.length ?? 0;
+    expect(length).toBeGreaterThan(0);
+    for (const rule of SEED_RULES) {
+      expect({
+        pattern: rule.pattern,
+        fits: rule.pattern.length <= length,
+      }).toEqual({ pattern: rule.pattern, fits: true });
+    }
+  });
+
+  test("rules inflect with \\p{L}, not \\w", () => {
+    // With the `u` flag `\w` is still ASCII, so `\w*` after a Czech stem stops
+    // at the first accented ending ("závěrů", "usnesení") and the cue does
+    // not fire. A stem followed by `\w` is a rule that reads only unaccented
+    // forms.
+    for (const rule of SEED_RULES) {
+      expect({
+        pattern: rule.pattern,
+        asciiInflection: /\\w[*+]/u.test(rule.pattern),
+      }).toEqual({ pattern: rule.pattern, asciiInflection: false });
+    }
+  });
+
   test("Czech positive rules match expected phrases", () => {
     const positiveRules = SEED_RULES.filter(
       (r) => r.language === "cs" && r.polarity === "positive",
@@ -130,6 +157,113 @@ describe("seed rules", () => {
       );
       expect(matched).toBe(true);
     }
+  });
+
+  /**
+   * How a unifying body says it overrules, with the reflexive where Czech
+   * puts it: second in the clause, not after the verb. The first three are
+   * the shapes 31 Cdo 2273/2022 and 33 Cdo 565/2023 use of 23 Cdo 5068/2014,
+   * which a verb-first cue read as nothing and a nearby "srov." then read as
+   * support.
+   */
+  test("Czech negative rules read a unifying body's departure", () => {
+    const negativeRules = SEED_RULES.filter(
+      (r) => r.language === "cs" && r.polarity === "negative",
+    );
+
+    const windows = [
+      "Velký senát se od těchto závěrů odchyluje.",
+      "Od závěru vysloveného v rozsudku sp. zn. 23 Cdo 5068/2014 se velký senát odchyluje.",
+      "Dosavadní soudní praxe (srov. rozsudek ze dne 24. 1. 2017, sp. zn. 23 Cdo 5068/2014) byla změněna rozsudkem ze dne 11. 1. 2023, sp. zn. 31 Cdo 2273/2022.",
+      "Velký senát překonává závěry rozsudku sp. zn. 23 Cdo 5068/2014.",
+      "Velký senát nesdílí názor vyslovený ve výše citovaných rozhodnutích.",
+      "Rozšířený senát se odklonil od závěrů rozsudku.",
+      "Tříčlenný senát dospěl k závěru odlišnému od dosavadní rozhodovací praxe.",
+      "Ze závěrů usnesení nelze nadále vycházet.",
+      "Závěry citovaného rozsudku nadále neobstojí.",
+      "Plénum opustilo závěry nálezu sp. zn. Pl. ÚS 1/10.",
+    ];
+
+    for (const text of windows) {
+      const fired = negativeRules.filter((r) =>
+        new RegExp(r.pattern, "iu").test(text),
+      );
+      expect({ text, fired: fired.length > 0 }).toEqual({ text, fired: true });
+    }
+  });
+
+  /**
+   * The same verbs said of the court below, of a party, or of a judgment
+   * under review. "Odvolací soud se odchýlil od ustálené rozhodovací praxe"
+   * is the § 237 o. s. ř. formula and sits beside the authorities the citing
+   * court is upholding; a departure cue that fires on it labels them all
+   * overruled.
+   */
+  test("Czech departure cues stay silent when it is not a unifying body departing", () => {
+    const negativeRules = SEED_RULES.filter(
+      (r) => r.language === "cs" && r.polarity === "negative",
+    );
+
+    const windows = [
+      "při jejímž řešení se odvolací soud odchýlil od ustálené rozhodovací praxe dovolacího soudu (srov. rozsudek Nejvyššího soudu sp. zn. 21 Cdo 1234/2020)",
+      "Odvolací soud se odchýlil od závěrů rozsudku Nejvyššího soudu sp. zn. 21 Cdo 1234/2020.",
+      "Rozsudek soudu prvního stupně byl změněn tak, že žaloba se zamítá.",
+      "tříčlenný senát postoupil věc velkému senátu občanskoprávního a obchodního kolegia",
+      "Velký senát se ztotožnil se závěry rozsudku sp. zn. 21 Cdo 1234/2020.",
+      "Dovolatel nesdílí názor odvolacího soudu.",
+      // The fate of the judgment under review, by an appellate court.
+      "Rozsudek odvolacího soudu byl změněn rozsudkem ze dne 1. 1. 2020.",
+      "Napadené usnesení bylo změněno usnesením ze dne 3. 3. 2021, č. j. 12 Co 45/2020-88.",
+      // The ruling the body departed IN: the citation that follows is the
+      // overruling authority, and the cue must not label it negative.
+      "Od uvedených závěrů se velký senát odchýlil v rozsudku ze dne 11. 1. 2023, sp. zn. 31 Cdo 2273/2022.",
+      // The verb's optional ending must not be given up to slip past the
+      // guard: "odchýlil|o v nálezu" is still the body's own ruling.
+      "Od těchto závěrů se plénum odchýlilo v nálezu ze dne 1. 2. 2024, sp. zn. Pl. ÚS 5/23.",
+    ];
+
+    for (const text of windows) {
+      const fired = negativeRules.filter((r) =>
+        new RegExp(r.pattern, "iu").test(text),
+      );
+      expect({ text, fired: fired.map((r) => r.pattern) }).toEqual({
+        text,
+        fired: [],
+      });
+    }
+  });
+
+  /**
+   * A case recited with "srov." and rejected a page later: the rule tier
+   * reads both windows and the rejection outranks the recital. Reading the
+   * first window alone is what filed the overruled case as supported.
+   */
+  test("the most severe reading across a citation's mentions wins", () => {
+    const rules = compileRules(
+      SEED_RULES.filter((r) => r.language === "cs").map((r) => ({
+        id: createSafeId<"caseLawPolarityRule">(),
+        pattern: r.pattern,
+        polarity: r.polarity,
+        confidence: 1,
+      })),
+    );
+    const recital =
+      "Rozhodovací praxe se ustálila v názoru, že ke skutečnostem, které nastaly po sjednání smluvní pokuty, nelze přihlížet (srov. rozsudek ze dne 24. 1. 2017, sp. zn. 23 Cdo 5068/2014).";
+    const rejection =
+      "Od závěrů rozsudku sp. zn. 23 Cdo 5068/2014 se velký senát odchyluje.";
+    const windows = extractContexts(
+      [{ text: `${recital}${" Další odůvodnění.".repeat(40)}${rejection}` }],
+      "sp. zn. 23 Cdo 5068/2014",
+      0,
+    );
+
+    expect(windows).toHaveLength(2);
+    expect(selectRuleMatch(rules, windows?.[0] ?? "")?.polarity).toBe(
+      POLARITY.SUPPORTIVE,
+    );
+    expect(selectRuleMatch(rules, windows ?? [])?.polarity).toBe(
+      POLARITY.NEGATIVE,
+    );
   });
 
   /**

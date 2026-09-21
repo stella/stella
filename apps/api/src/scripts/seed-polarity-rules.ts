@@ -109,6 +109,12 @@ if (RETIRED_SEED_RULES.length > 0) {
 console.log(
   `Done. ${SEED_RULES.length} rules upserted, ${RETIRED_SEED_RULES.length} retired, ${resetIds.length} citations returned to the unclassified pool.`,
 );
+// A rule added to the seed labels nothing that is already labelled: every
+// pass but the recheck selects on NULL. The recheck is what carries a new
+// negative cue to the rows it should have read.
+console.log(
+  "New rules reach labelled rows only through: bun apps/api/scripts/classify-citations.ts --recheck --language <cs|sk> --limit <n>.",
+);
 if (resetIds.length > 0) {
   // The classifier walks the newest unclassified rows first and stops at a
   // limit; the reset rows are old and would wait behind the backlog. Their

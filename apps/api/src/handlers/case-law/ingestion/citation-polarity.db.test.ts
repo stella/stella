@@ -250,6 +250,60 @@ test("a refreshed decision's citations keep the polarity the rules give", async 
   expect(await readRule()).toMatchObject({ matchCount: 2 });
 });
 
+/**
+ * The shape of an overruling: the case is recited with "srov." as part of
+ * the line it belongs to, and rejected a page later. One row is published
+ * for it, and the row carries the rejection, because the rule tier reads
+ * every mention and the most severe reading wins. Reading the first mention
+ * alone is what filed 23 Cdo 5068/2014 as supported by the velký senát
+ * judgment that overruled it.
+ */
+test("a case recited and then overruled in one section is published as negative", async () => {
+  const recital =
+    "Rozhodovací praxe se ustálila v názoru, že ke skutečnostem, které " +
+    "nastaly po sjednání smluvní pokuty, nelze přihlížet (srov. rozsudek " +
+    "ze dne 24. 1. 2017, sp. zn. 23 Cdo 5068/2014).";
+  const rejection =
+    "Od závěrů rozsudku sp. zn. 23 Cdo 5068/2014 se velký senát odchyluje.";
+  const section = `${recital}${" Další odůvodnění.".repeat(40)}${rejection}`;
+  const ingested = await processDecision({
+    input: {
+      caseNumber: "31 Cdo 5555/2026",
+      court: "Nejvyšší soud",
+      country: "CZE",
+      language: "cs",
+      decisionType: "rozsudek",
+      metadata: {},
+      textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+      rawHash: "hash-overruling",
+      fulltext: section,
+      sections: [
+        { index: 0, type: "argumentation", title: null, text: section },
+      ],
+      documentAst: EMPTY_AST,
+    },
+    sourceId,
+    scopedDb,
+    observedAt: new Date("2026-09-21T08:00:00.000Z"),
+    observationOrder: 3n,
+    corpus,
+  });
+  expect(ingested.status).toBe(PROCESS_DECISION_STATUS.COMPLETE);
+
+  const [row] = await db
+    .select({
+      polarity: caseLawCitations.polarity,
+      rulePolarity: caseLawPolarityRules.polarity,
+    })
+    .from(caseLawCitations)
+    .innerJoin(
+      caseLawPolarityRules,
+      eq(caseLawPolarityRules.id, caseLawCitations.polarityRuleId),
+    )
+    .where(eq(caseLawCitations.citationText, "sp. zn. 23 Cdo 5068/2014"));
+  expect(row).toEqual({ polarity: "negative", rulePolarity: "negative" });
+});
+
 test("a verdict from a rule retired mid-cycle is not published", async () => {
   // The rules a crawl compiled at the start of its cycle, held for the rest
   // of it. This is the cache `runIngestionPipeline` owns.

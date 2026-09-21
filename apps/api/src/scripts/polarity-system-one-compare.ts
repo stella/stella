@@ -8,7 +8,8 @@ import { caseLawCitations, caseLawDecisions } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
 import { CITATION_KIND } from "@/api/handlers/case-law/citation-kind";
-import { extractContext } from "@/api/handlers/case-law/polarity/context";
+import { excerptOf } from "@/api/handlers/case-law/polarity/classifier";
+import { extractContexts } from "@/api/handlers/case-law/polarity/context";
 import { classifyWithLLM } from "@/api/handlers/case-law/polarity/llm-classifier";
 import {
   POLARITY_QUESTION,
@@ -292,16 +293,16 @@ for (const citation of citations) {
     skipped.push("sections-missing");
     continue;
   }
-  const context = extractContext(
+  const contexts = extractContexts(
     sections,
     citation.citationText,
     decision.sections === null ? null : citation.sectionIndex,
   );
-  if (context === null) {
+  if (contexts === null) {
     skipped.push("context-not-found");
     continue;
   }
-  items.push({ citation, decision, context });
+  items.push({ citation, decision, context: excerptOf(contexts) });
 }
 
 /**

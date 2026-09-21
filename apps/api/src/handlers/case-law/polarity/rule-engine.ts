@@ -218,17 +218,22 @@ export const compileRules = (
 };
 
 /**
- * The highest-precedence rule matching a context, or null.
+ * The highest-precedence rule matching any of a citation's windows, or null.
  *
  * `rules` must be in `compileRules` order, which is what makes the first
- * match the winning one.
+ * match the winning one. The windows are the citation's mentions in the
+ * citing decision (`extractContexts`); the rule order is walked once across
+ * all of them, so a negative cue at the third mention outranks a supportive
+ * one at the first, and the label is the most severe thing the court said
+ * about the case anywhere, not what it said where it first named it.
  */
 export const selectRuleMatch = (
   rules: readonly CompiledRule[],
-  context: string,
+  contexts: string | readonly string[],
 ): RuleMatch | null => {
+  const windows = typeof contexts === "string" ? [contexts] : contexts;
   for (const rule of rules) {
-    if (rule.regex.test(context)) {
+    if (windows.some((window) => rule.regex.test(window))) {
       return {
         ruleId: rule.id,
         polarity: rule.polarity,
@@ -295,12 +300,12 @@ export const loadRules = async (
  * first. Returns null when nothing matches.
  */
 export const matchRule = async (
-  context: string,
+  contexts: string | readonly string[],
   language: string,
   scopedDb: ScopedDb,
   cache?: RuleCache,
 ): Promise<RuleMatch | null> =>
-  selectRuleMatch(await loadRules(language, scopedDb, cache), context);
+  selectRuleMatch(await loadRules(language, scopedDb, cache), contexts);
 
 /**
  * Record that a rule fired.

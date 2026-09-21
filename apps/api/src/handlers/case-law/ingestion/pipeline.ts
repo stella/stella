@@ -61,7 +61,7 @@ import { shouldSkipRefresh } from "@/api/handlers/case-law/ingestion/refresh-pol
 import { segmentDecision } from "@/api/handlers/case-law/ingestion/segmenter";
 import { refreshSourceStoredTotal } from "@/api/handlers/case-law/ingestion/source-totals";
 import { replaceDecisionJudges } from "@/api/handlers/case-law/judges/decision-judges";
-import { extractContext } from "@/api/handlers/case-law/polarity/context";
+import { extractContexts } from "@/api/handlers/case-law/polarity/context";
 import {
   ACTIVE_RULE_SOURCES,
   loadRules,
@@ -603,7 +603,7 @@ const buildCitationRows = async ({
   const rules = await loadRules(language, scopedDb, polarityRules);
   return citations.map((citation) => {
     const citationKey = citationKeyOf(citation.citationText);
-    const context = extractContext(
+    const contexts = extractContexts(
       sections,
       citation.citationText,
       citation.sectionIndex,
@@ -612,11 +612,11 @@ const buildCitationRows = async ({
       citationText: citation.citationText,
       citationKey,
       proceduralKeys,
-      context,
+      context: contexts?.[0] ?? null,
     });
     const match =
-      kind === CITATION_KIND.PRECEDENT && context !== null
-        ? selectRuleMatch(rules, context)
+      kind === CITATION_KIND.PRECEDENT && contexts !== null
+        ? selectRuleMatch(rules, contexts)
         : null;
     return {
       citingDecisionId,
