@@ -145,7 +145,7 @@
     "elysia": "catalog:",
     "entities": "^8.1.0",
     "franc": "catalog:",
-    "ip-address": "^10.7.0",
+    "ip-address": "^10.7.2",
     "jose": "^6.2.12",
     "jszip": "catalog:",
     "nodemailer": "^10.0.9",
