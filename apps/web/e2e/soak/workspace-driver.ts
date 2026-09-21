@@ -310,6 +310,24 @@ const fixtureFileButton = ({ document, page }: WorkspaceDriverContext) =>
     .locator('[data-slot="workspace-grid-cell"]')
     .getByRole("button", { exact: true, name: document.fileName });
 
+/**
+ * Whether the fixture document already has an inspector tab, named after the
+ * file the same way the grid chip is. Opening it a second time reuses that tab
+ * with the facet it was last left on, so the preview surface the open asserts
+ * is only on screen while the document is not open yet. Counted rather than
+ * probed for visibility: the tab sits in the rail, which stays mounted while
+ * the pane is collapsed, and the expanded pane may label a control of its own
+ * after the file.
+ */
+const fixtureDocumentHasTab = async ({
+  document,
+  page,
+}: WorkspaceDriverContext) =>
+  (await page
+    .locator('[data-slot="inspector-dock"]')
+    .getByRole("button", { exact: true, name: document.fileName })
+    .count()) > 0;
+
 const addCandidate = (
   candidates: WeightedWorkspaceAction[],
   action: WorkspaceAction,
@@ -342,7 +360,11 @@ export const availableWorkspaceActions = async (
   }
 
   const fileButton = fixtureFileButton(context);
-  if ((await visible(fileButton)) && !documentIsLoaded(context)) {
+  if (
+    (await visible(fileButton)) &&
+    !documentIsLoaded(context) &&
+    !(await fixtureDocumentHasTab(context))
+  ) {
     addCandidate(candidates, {
       type: WORKSPACE_ACTION_TYPE.openFixtureDocument,
       documentKey: "primary",
@@ -464,6 +486,8 @@ export const executeWorkspaceAction = async (
     case WORKSPACE_ACTION_TYPE.openFixtureDocument: {
       const previousUrl = page.url();
       await fixtureFileButton(context).click();
+      // A first open lands on the preview facet; the action is only offered
+      // while the document has no tab to be reopened into.
       await expect(
         page.getByRole("toolbar", { name: "AI message composer" }),
       ).toBeVisible({ timeout: 45_000 });
