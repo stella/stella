@@ -10639,6 +10639,30 @@
         ],
         "occurrences": [
           {
+            "location": "apps/api/evals/playbook-authoring.ts#20"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/research/column-content.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/research/columns-update.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/properties/preview.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/case-law/research-answers.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/permissive-route-schema.ts#3"
+          },
+          {
+            "location": "apps/api/src/lib/properties/create-schema.ts#1"
+          },
+          {
+            "location": "apps/api/src/mcp/capability-tools.ts#3"
+          },
+          {
             "location": "apps/api/scripts/exact-mirror-guard.ts#34"
           },
           {
@@ -10684,6 +10708,9 @@
             "location": "apps/api/src/lib/search/total-schema.ts#2"
           },
           {
+            "location": "apps/api/src/lib/signals/view-schema.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/views-schema.ts#1"
           },
           {
@@ -10691,27 +10718,6 @@
           },
           {
             "location": "apps/api/src/mcp/capability-tools.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/research/column-content.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/research/columns-update.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/properties/preview.ts#1"
-          },
-          {
-            "location": "apps/api/src/lib/case-law/research-answers.ts#1"
-          },
-          {
-            "location": "apps/api/src/lib/permissive-route-schema.ts#3"
-          },
-          {
-            "location": "apps/api/src/lib/properties/create-schema.ts#1"
-          },
-          {
-            "location": "apps/api/src/mcp/capability-tools.ts#3"
           },
           {
             "location": "apps/api/src/mcp/capability-tools.ts#2"
@@ -12168,6 +12174,12 @@
             "location": "apps/api/evals/lib/model-turn.ts#10"
           },
           {
+            "location": "apps/api/evals/playbook-authoring.ts#21"
+          },
+          {
+            "location": "apps/api/evals/playbook-authoring.ts#22"
+          },
+          {
             "location": "apps/api/evals/suggest-changes-precision.ts#32"
           },
           {
@@ -12961,6 +12973,9 @@
           },
           {
             "location": "apps/web/src/features/chat/hooks/use-chat-session-document-deletion.logic.ts#1"
+          },
+          {
+            "location": "apps/web/src/features/chat/hooks/use-chat-session-playbook-save.logic.ts#1"
           },
           {
             "location": "apps/web/src/features/chat/hooks/use-chat-session.ts#11"
@@ -14616,7 +14631,7 @@
             "location": "apps/web/src/router.tsx#2"
           },
           {
-            "location": "apps/web/src/routes/__root.tsx#11"
+            "location": "apps/web/src/routes/__root.tsx#12"
           },
           {
             "location": "apps/web/src/routes/_protected.chat/$threadId.tsx#1"
@@ -15100,7 +15115,7 @@
             "location": "apps/web/src/lib/public-tools-github-content.ts#1"
           },
           {
-            "location": "apps/web/src/routeTree.gen.ts#2197"
+            "location": "apps/web/src/routeTree.gen.ts#2196"
           },
           {
             "location": "apps/web/src/lib/beta-features.ts#2"
@@ -19740,6 +19755,9 @@
             "location": "apps/api/evals/lib/cli-flag-score.ts#1"
           },
           {
+            "location": "apps/api/evals/playbook-authoring.ts#23"
+          },
+          {
             "location": "apps/api/evals/suggest-changes-precision.ts#34"
           },
           {
@@ -20763,6 +20781,9 @@
             "location": "apps/api/src/handlers/entity-views/reorder.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/entity-views/rows/inbox-view.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/entity-views/rows/list.ts#1"
           },
           {
@@ -21168,6 +21189,9 @@
             "location": "apps/api/src/handlers/playbooks/approve.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/playbooks/assert-document-type.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/playbooks/auto-run.ts#1"
           },
           {
@@ -21210,7 +21234,7 @@
             "location": "apps/api/src/handlers/playbooks/run.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/playbooks/update.ts#1"
+            "location": "apps/api/src/handlers/playbooks/update-shared.ts#1"
           },
           {
             "location": "apps/api/src/handlers/properties/create-batch.ts#1"
@@ -21354,6 +21378,9 @@
             "location": "apps/api/src/handlers/signals/assignments/create.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/signals/count.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/signals/dismissals/create.ts#1"
           },
           {
@@ -21361,9 +21388,6 @@
           },
           {
             "location": "apps/api/src/handlers/signals/list.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/signals/read.ts#1"
           },
           {
             "location": "apps/api/src/handlers/signals/requests/create.ts#1"
@@ -22455,6 +22479,9 @@
             "location": "apps/api/src/lib/legal-search/case-law-index-groups.ts#17"
           },
           {
+            "location": "apps/api/src/lib/legal-search/case-law-search-index.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/legal-search/corpus-generation-contract.ts#1"
           },
           {
@@ -22591,6 +22618,9 @@
           },
           {
             "location": "apps/api/src/lib/legal-search/sk-document-backfill.ts#24"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/tsvector-bounds.ts#1"
           },
           {
             "location": "apps/api/src/lib/legal-search/types.ts#1"
@@ -22737,6 +22767,9 @@
             "location": "apps/api/src/lib/scheduler/tasks/document-review-run-reconcile.ts#1"
           },
           {
+            "location": "apps/api/src/lib/scheduler/tasks/file-comparison-sweep.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/scheduler/tasks/file-derivative-repair.ts#1"
           },
           {
@@ -22818,6 +22851,9 @@
             "location": "apps/api/src/lib/security-canary.ts#1"
           },
           {
+            "location": "apps/api/src/lib/signals/read.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/signals/scout.ts#1"
           },
           {
@@ -22855,6 +22891,9 @@
           },
           {
             "location": "apps/api/src/lib/tanstack-ai-schema.ts#7"
+          },
+          {
+            "location": "apps/api/src/lib/tasks/assigned.ts#1"
           },
           {
             "location": "apps/api/src/lib/tasks/create-task-entity.ts#1"
@@ -22923,6 +22962,12 @@
             "location": "apps/api/src/lib/uploads/entity-create.ts#21"
           },
           {
+            "location": "apps/api/src/lib/uploads/file-comparison/deliver-redline.ts#12"
+          },
+          {
+            "location": "apps/api/src/lib/uploads/file-comparison/sweep.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/uploads/runtime.ts#10"
           },
           {
@@ -22942,6 +22987,9 @@
           },
           {
             "location": "apps/api/src/lib/web-search/types.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/work-obligations/at-risk.ts#1"
           },
           {
             "location": "apps/api/src/lib/work-obligations/transitions.ts#1"
@@ -23049,6 +23097,9 @@
             "location": "apps/api/src/mcp/context.ts#1"
           },
           {
+            "location": "apps/api/src/mcp/document-compare-tool.ts#8"
+          },
+          {
             "location": "apps/api/src/mcp/document-file-upload.ts#1"
           },
           {
@@ -23062,6 +23113,12 @@
           },
           {
             "location": "apps/api/src/mcp/field-markers.ts#1"
+          },
+          {
+            "location": "apps/api/src/mcp/file-comparison-prepare-tool.ts#8"
+          },
+          {
+            "location": "apps/api/src/mcp/file-comparison-run.ts#10"
           },
           {
             "location": "apps/api/src/mcp/gateway/external-tools.ts#2"
@@ -23793,6 +23850,9 @@
             "location": "apps/web/src/lib/workspaces/queries/docx-suggestions.ts#2"
           },
           {
+            "location": "apps/web/src/lib/workspaces/queries/entity-views.ts#2"
+          },
+          {
             "location": "apps/web/src/lib/workspaces/queries/time-entries.ts#2"
           },
           {
@@ -24439,6 +24499,9 @@
           },
           {
             "location": "apps/web/src/components/entity-views/table.tsx#6"
+          },
+          {
+            "location": "apps/web/src/components/entity-views/work-risk-badge.tsx#1"
           },
           {
             "location": "apps/web/src/components/inbox/signal-card.tsx#4"
@@ -26611,6 +26674,12 @@
             "location": "apps/api/src/handlers/entity-views/reorder.ts#2"
           },
           {
+            "location": "apps/api/src/handlers/entity-views/rows/inbox-view.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/entity-views/rows/inbox-view.ts#3"
+          },
+          {
             "location": "apps/api/src/handlers/entity-views/shared.ts#2"
           },
           {
@@ -26947,7 +27016,7 @@
             "location": "apps/api/src/handlers/playbooks/restore-version.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/playbooks/update.ts#2"
+            "location": "apps/api/src/handlers/playbooks/update-shared.ts#2"
           },
           {
             "location": "apps/api/src/handlers/properties/create-batch.ts#2"
@@ -27037,10 +27106,7 @@
             "location": "apps/api/src/handlers/sharepoint/status.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/signals/read.ts#2"
-          },
-          {
-            "location": "apps/api/src/handlers/signals/read.ts#3"
+            "location": "apps/api/src/handlers/signals/count.ts#2"
           },
           {
             "location": "apps/api/src/handlers/signals/transition.ts#2"
@@ -27706,6 +27772,12 @@
             "location": "apps/api/src/lib/entities/query-scope.ts#3"
           },
           {
+            "location": "apps/api/src/lib/entities/signal-window-rows.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/entities/signal-window-rows.ts#2"
+          },
+          {
             "location": "apps/api/src/lib/entities/validate-parent-id.ts#1"
           },
           {
@@ -27829,7 +27901,7 @@
             "location": "apps/api/src/lib/legal-search/case-law-index-groups.ts#19"
           },
           {
-            "location": "apps/api/src/lib/legal-search/case-law-search-index.ts#1"
+            "location": "apps/api/src/lib/legal-search/case-law-search-index.ts#2"
           },
           {
             "location": "apps/api/src/lib/legal-search/case-law-source-ingestion-lease.ts#1"
@@ -28132,6 +28204,12 @@
             "location": "apps/api/src/lib/sharepoint-disable-purge.ts#21"
           },
           {
+            "location": "apps/api/src/lib/signals/read.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/signals/read.ts#3"
+          },
+          {
             "location": "apps/api/src/lib/signals/scout.ts#2"
           },
           {
@@ -28145,6 +28223,12 @@
           },
           {
             "location": "apps/api/src/lib/style-sets.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/tasks/assigned.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/tasks/assigned.ts#3"
           },
           {
             "location": "apps/api/src/lib/tasks/create-task-entity.ts#2"
@@ -28189,6 +28273,9 @@
             "location": "apps/api/src/lib/uploads/entity-create.ts#22"
           },
           {
+            "location": "apps/api/src/lib/uploads/file-comparison/sweep.ts#2"
+          },
+          {
             "location": "apps/api/src/lib/usage/assignment-capacity.ts#13"
           },
           {
@@ -28208,6 +28295,12 @@
           },
           {
             "location": "apps/api/src/lib/views/template-properties.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/work-obligations/at-risk.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/work-obligations/at-risk.ts#3"
           },
           {
             "location": "apps/api/src/lib/work-obligations/eligibility.ts#1"
@@ -28258,7 +28351,13 @@
             "location": "apps/api/src/mcp/context.ts#2"
           },
           {
+            "location": "apps/api/src/mcp/document-compare-tool.ts#9"
+          },
+          {
             "location": "apps/api/src/mcp/document-tools.ts#2"
+          },
+          {
+            "location": "apps/api/src/mcp/file-comparison-run.ts#11"
           },
           {
             "location": "apps/api/src/mcp/gateway/external-tools.ts#3"
@@ -29790,6 +29889,9 @@
             "location": "apps/api/src/handlers/sharepoint/set-enablement.ts#2"
           },
           {
+            "location": "apps/api/src/handlers/signals/count.ts#3"
+          },
+          {
             "location": "apps/api/src/handlers/signals/routes.ts#1"
           },
           {
@@ -30442,6 +30544,9 @@
           },
           {
             "location": "apps/api/src/lib/security-headers.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/signals/view-schema.ts#2"
           },
           {
             "location": "apps/api/src/lib/style-set-editor-contract.ts#1"
@@ -38564,6 +38669,9 @@
             "location": "apps/web/src/components/entity-views/table.tsx#16"
           },
           {
+            "location": "apps/web/src/components/entity-views/work-risk-badge.tsx#2"
+          },
+          {
             "location": "apps/web/src/components/feedback-dialog.tsx#3"
           },
           {
@@ -40422,6 +40530,9 @@
             "location": "apps/api/src/mcp/compat-tools.ts#3"
           },
           {
+            "location": "apps/api/src/mcp/document-compare-tool.ts#10"
+          },
+          {
             "location": "apps/api/src/mcp/document-file-upload.ts#2"
           },
           {
@@ -40431,16 +40542,22 @@
             "location": "apps/api/src/mcp/feedback-tools.ts#1"
           },
           {
+            "location": "apps/api/src/mcp/file-comparison-prepare-tool.ts#9"
+          },
+          {
             "location": "apps/api/src/mcp/gateway/dynamic-tool-policy.ts#1"
           },
           {
-            "location": "apps/api/src/mcp/knowledge-tools.ts#2"
+            "location": "apps/api/src/mcp/knowledge-tools.ts#3"
           },
           {
             "location": "apps/api/src/mcp/legislation-tools.ts#2"
           },
           {
             "location": "apps/api/src/mcp/matter-tools.ts#2"
+          },
+          {
+            "location": "apps/api/src/mcp/playbook-position-input.ts#15"
           },
           {
             "location": "apps/api/src/mcp/research-admin-tools.ts#2"
