@@ -639,6 +639,17 @@ export const caseLawDecisions = p.pgTable(
     p
       .index("case_law_decisions_source_generation_cursor_idx")
       .on(t.sourceId, t.createdAt, t.id),
+    // The coverage page's week of one source's arrivals, answered from the
+    // index alone. The cursor index above finds the same range and then
+    // fetches every row in it to evaluate the publication gate, which reads
+    // `metadata`: a week of one busy source is over a hundred thousand rows
+    // and as many random reads. Partial on the gate, as
+    // `case_law_decisions_search_candidate_idx` is, the count needs no heap.
+    // The cursor index stays: ingestion walks listing-only rows too.
+    p
+      .index("case_law_decisions_source_arrivals_idx")
+      .on(t.sourceId, t.createdAt)
+      .where(storedObservationHasDetail(t.metadata)),
     p
       .index("case_law_decisions_updated_id_idx")
       .on(t.updatedAt.desc(), t.id.desc()),
@@ -655,6 +666,14 @@ export const caseLawDecisions = p.pgTable(
     p
       .index("case_law_decisions_country_court_updated_idx")
       .on(t.country, t.court, t.updatedAt.desc(), t.createdAt),
+    // The same two reads under the publication gate, which every public read
+    // carries: the gate reads `metadata`, so on the index above every row in
+    // the window is fetched to test it and a court with a busy week overruns
+    // the read's budget. Partial on the gate, the counts are index-only again.
+    p
+      .index("case_law_decisions_court_activity_idx")
+      .on(t.country, t.court, t.updatedAt.desc(), t.createdAt)
+      .where(storedObservationHasDetail(t.metadata)),
     p
       .index("case_law_decisions_citation_authority_idx")
       .on(t.citationAuthority),
