@@ -19,13 +19,13 @@ const GITHUB_API_VERSION = "2022-11-28";
 const GITHUB_REQUEST_TIMEOUT_MS = 10_000;
 
 /** Applied to every filed issue so the maintainers can triage the stream. */
-export const GITHUB_FEEDBACK_LABEL = "agent-feedback";
+const GITHUB_FEEDBACK_LABEL = "agent-feedback";
 
 /**
  * The tracker label each kind maps to. Total over `FeedbackKind`: a new kind
  * is a labelling decision, not a silent fall-through to the bug label.
  */
-export const GITHUB_LABEL_BY_KIND = {
+const GITHUB_LABEL_BY_KIND = {
   bug: "🐞 bug",
   idea: "enhancement",
   missing_capability: "enhancement",
@@ -39,7 +39,7 @@ export class GithubDeliveryError extends TaggedError("GithubDeliveryError")<{
 
 export type GithubDeliveryConfig = { repo: string; token: string };
 
-export type GithubIssueRequest = {
+type GithubIssueRequest = {
   title: string;
   body: string;
   kind: FeedbackKind;

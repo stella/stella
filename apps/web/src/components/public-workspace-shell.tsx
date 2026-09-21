@@ -341,7 +341,7 @@ const PublicSidebar = ({
       </SidebarContent>
       <SidebarFooter>
         <SidebarMenu>
-          <FeedbackSidebarItem />
+          {authStatus.isAuthenticated && <FeedbackSidebarItem />}
           {authStatus.status === "anonymous" && (
             <SidebarMenuItem>
               <SidebarMenuButton

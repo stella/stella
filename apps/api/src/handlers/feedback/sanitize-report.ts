@@ -2,7 +2,8 @@
  * Report-level sanitization: the one place every entry point runs a feedback
  * report through the redaction passes, so `prepare_feedback` shows the human
  * exactly the text `submit_feedback`, the web route and the public intake
- * store and deliver.
+ * store and deliver. The public intake's separate deployment name uses the
+ * same text pass through `sanitizeFeedbackInstance`.
  *
  * `context.requestId` is deliberately not sanitized. It is the key a
  * maintainer correlates a report with server logs, and the secret passes would
@@ -54,6 +55,11 @@ export type SanitizedFeedbackReport = {
   redactedFields: SanitizableFeedbackField[];
 };
 
+export type SanitizedFeedbackInstance = {
+  instance: string;
+  redactions: number;
+};
+
 const CAP_BY_TEXT_FIELD = {
   title: FEEDBACK_LIMITS.title,
   whatHappened: FEEDBACK_LIMITS.whatHappened,
@@ -69,6 +75,17 @@ const CAP_BY_TEXT_FIELD = {
  */
 const capped = (value: string, max: number): string =>
   Array.from(value).slice(0, max).join("");
+
+/** Sanitize the public intake's separate deployment name before persistence. */
+export const sanitizeFeedbackInstance = (
+  instance: string,
+): SanitizedFeedbackInstance => {
+  const pass = sanitizeFeedbackText(instance);
+  return {
+    instance: capped(pass.text, FEEDBACK_LIMITS.contextField),
+    redactions: pass.redactions,
+  };
+};
 
 export const sanitizeFeedbackReport = (
   input: FeedbackReportInput,
@@ -154,17 +171,10 @@ const sanitizeContext = (
 };
 
 /** SHA-256 over the sanitized content: the dedupe identity of a report. */
-export const feedbackFingerprint = (report: FeedbackReportInput): string =>
+export const feedbackFingerprint = (
+  report: FeedbackReportInput,
+  instance: string | undefined,
+): string =>
   new Bun.CryptoHasher("sha256")
-    .update(
-      JSON.stringify([
-        report.kind,
-        report.area,
-        report.title,
-        report.whatHappened,
-        report.expected ?? "",
-        report.steps ?? "",
-        report.evidence ?? "",
-      ]),
-    )
+    .update(JSON.stringify([report, instance ?? null]))
     .digest("hex");

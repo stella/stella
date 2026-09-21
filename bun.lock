@@ -975,6 +975,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@react-email/components": "^1.0.12",
+        "@stll/api-contract": "workspace:*",
         "@stll/locales": "workspace:*",
         "react": "catalog:react19",
         "use-intl": "catalog:",

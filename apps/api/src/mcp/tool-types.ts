@@ -182,10 +182,10 @@ export type McpToolDestructiveBehavior =
  * `confirm: true`; `reason` is what the refusal tells the model it is about to
  * do.
  */
-export type McpToolOutboundBehavior = { type: "outbound"; reason: string };
+type McpToolOutboundBehavior = { type: "outbound"; reason: string };
 
 /** Every behavior the transport confirmation gate reads. */
-export type McpToolConfirmationBehavior =
+type McpToolConfirmationBehavior =
   | McpToolDestructiveBehavior
   | McpToolOutboundBehavior;
 
@@ -196,7 +196,10 @@ type McpToolDestructiveBranch =
     }
   | {
       annotations: McpToolAnnotations & { destructiveHint: false };
-      destructiveBehavior: McpToolOutboundBehavior;
+      destructiveBehavior: Extract<
+        McpToolConfirmationBehavior,
+        { type: "outbound" }
+      >;
     }
   | {
       annotations: McpToolAnnotations & { destructiveHint: true };

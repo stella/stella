@@ -25,28 +25,6 @@ import { KIND_LABELS } from "./product-feedback-subject";
  * one part of the report that is never published to the issue tracker.
  */
 
-/**
- * Who filed the report. A mutually exclusive union, never a bag of optional
- * fields: an authenticated report carries the tenant identity the server
- * validated, while `intake` (the public receiver) has no user identity at all
- * and carries only the self-reported deployment.
- */
-export type FeedbackReporter =
-  | {
-      via: "mcp" | "web";
-      userId: string;
-      organizationId: string;
-      reporterEmail?: string;
-    }
-  | { via: "intake"; instance?: string };
-
-type Props = {
-  receipt: string;
-  report: FeedbackReportInput;
-  reporter: FeedbackReporter;
-  serverVersion: string;
-};
-
 export const Email = ({ receipt, report, reporter, serverVersion }: Props) => (
   <Html lang="en" dir="ltr">
     <Head />
@@ -79,6 +57,28 @@ export const Email = ({ receipt, report, reporter, serverVersion }: Props) => (
     </Body>
   </Html>
 );
+
+/**
+ * Who filed the report. A mutually exclusive union, never a bag of optional
+ * fields: an authenticated report carries the tenant identity the server
+ * validated, while `intake` (the public receiver) has no user identity at all
+ * and carries only the self-reported deployment.
+ */
+export type FeedbackReporter =
+  | {
+      via: "mcp" | "web";
+      userId: string;
+      organizationId: string;
+      reporterEmail?: string;
+    }
+  | { via: "intake"; instance?: string };
+
+type Props = {
+  receipt: string;
+  report: FeedbackReportInput;
+  reporter: FeedbackReporter;
+  serverVersion: string;
+};
 
 const ReportBlock = ({
   body,

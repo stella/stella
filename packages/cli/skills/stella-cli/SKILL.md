@@ -393,5 +393,5 @@ Describe the problem, the steps, and expected versus actual behaviour. Put
 the request id of a failed call in the context rather than in free text,
 where it would be redacted. Refer to people by role, never by name. Never
 include document text, client or matter names, ids, or secrets. The reporter
-identity is stored privately and never published. Resending an identical
-report returns the same receipt.
+identity is stored privately and never published. Resubmitting identical
+content within one day returns the same receipt.

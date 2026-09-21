@@ -301,12 +301,12 @@ const TOOL_COUNT_CEILING: Record<SurfaceMode, number> = {
 // prepare_file_comparison_from_links (two link descriptors) sit under the
 // default ceiling with the usual headroom; writes, so the other surfaces are
 // unchanged.
-// submit_feedback adds the send step for the already-advertised feedback
-// report: its schema repeats the sanitized fixed-point payload and adds the
-// explicit human confirmation gate. The exact combined measurement is pinned
-// after regeneration below.
+// submit_feedback then measures 163_346 default. Its schema repeats the
+// sanitized fixed-point payload and adds the explicit human confirmation
+// gate. The anonymized and law surfaces carry no feedback tools and are
+// unchanged.
 const TOOLS_LIST_PAYLOAD_CHAR_CEILING: Record<SurfaceMode, number> = {
-  default: 164_000,
+  default: 163_350,
   anonymized: 73_300,
   law: 28_250,
 };
@@ -376,10 +376,10 @@ const TOOLS_LIST_PAYLOAD_CHAR_CEILING: Record<SurfaceMode, number> = {
 // derived names and sizes; open_file_comparison returns nothing. Writes, so
 // the other surfaces are unchanged.
 // submit_feedback adds the receipt, per-channel delivery outcomes and the
-// no-channel warning. The exact combined measurement is pinned after
-// regeneration below.
+// no-channel warning: measured 53_449 default. The anonymized and law surfaces
+// are unchanged.
 const OUTPUT_SCHEMA_TOTAL_CHAR_CEILING: Record<SurfaceMode, number> = {
-  default: 54_000,
+  default: 53_450,
   anonymized: 32_850,
   law: 10_050,
 };

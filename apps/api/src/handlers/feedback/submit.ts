@@ -6,8 +6,8 @@
  * Order matters and is load-bearing:
  *   1. sanitize every field the reporter wrote, and count what was removed;
  *   2. fingerprint the sanitized content;
- *   3. look the fingerprint up in the last day — a match is an idempotent
- *      resend and answers with the original receipt, delivering nothing;
+ *   3. atomically find-or-insert the fingerprint in the last day — a match is
+ *      an idempotent resend and answers with the original receipt;
  *   4. store the row, so a receipt always addresses something;
  *   5. deliver to every configured channel, outside the transaction, and
  *      record each outcome on the row.
@@ -39,6 +39,7 @@ import {
 } from "@/api/handlers/feedback/report-body";
 import {
   feedbackFingerprint,
+  sanitizeFeedbackInstance,
   sanitizeFeedbackReport,
 } from "@/api/handlers/feedback/sanitize-report";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -185,44 +186,12 @@ export const submitFeedbackReport = async ({
     create: createGithubFeedbackIssue,
   };
 
-  const { redactions, report } = sanitizeFeedbackReport(input);
-  const fingerprint = feedbackFingerprint(report);
-
-  const existing = await Result.tryPromise({
-    try: async () =>
-      await store.findRecentByFingerprint({
-        fingerprint,
-        since: new Date(now().getTime() - DEDUPE_WINDOW_MS),
-      }),
-    catch: (cause) =>
-      new FeedbackStoreError({
-        message: "Could not check for a duplicate feedback report",
-        cause,
-      }),
-  });
-  if (Result.isError(existing)) {
-    return existing;
-  }
-  if (existing.value !== undefined) {
-    // An idempotent resend: the original row already carries the deliveries,
-    // and sending again would file the same issue twice.
-    recordAnalytics({
-      analytics: deps?.analytics,
-      deduplicated: true,
-      email: "skipped_duplicate",
-      github: "skipped_duplicate",
-      redactions,
-      report,
-      reporter,
-    });
-    return Result.ok({
-      receipt: existing.value,
-      redactions,
-      deduplicated: true,
-      deliveries: [],
-      stored: true,
-    });
-  }
+  const { redactions: reportRedactions, report } =
+    sanitizeFeedbackReport(input);
+  const sanitizedInstance =
+    instance === undefined ? undefined : sanitizeFeedbackInstance(instance);
+  const redactions = reportRedactions + (sanitizedInstance?.redactions ?? 0);
+  const fingerprint = feedbackFingerprint(report, sanitizedInstance?.instance);
 
   const receipt = newReceipt();
   const identity =
@@ -232,22 +201,25 @@ export const submitFeedbackReport = async ({
 
   const stored = await Result.tryPromise({
     try: async () =>
-      await store.insert({
-        kind: report.kind,
-        area: report.area,
-        receipt,
-        title: report.title,
-        whatHappened: report.whatHappened,
-        expected: report.expected ?? null,
-        steps: report.steps ?? null,
-        evidence: report.evidence ?? null,
-        context: report.context ?? null,
-        serverVersion,
-        instance: instance ?? null,
-        via: reporter.via,
-        ...identity,
-        redactions,
-        fingerprint,
+      await store.insertIfAbsent({
+        since: new Date(now().getTime() - DEDUPE_WINDOW_MS),
+        row: {
+          kind: report.kind,
+          area: report.area,
+          receipt,
+          title: report.title,
+          whatHappened: report.whatHappened,
+          expected: report.expected ?? null,
+          steps: report.steps ?? null,
+          evidence: report.evidence ?? null,
+          context: report.context ?? null,
+          serverVersion,
+          instance: sanitizedInstance?.instance ?? null,
+          via: reporter.via,
+          ...identity,
+          redactions,
+          fingerprint,
+        },
       }),
     catch: (cause) =>
       new FeedbackStoreError({
@@ -258,12 +230,30 @@ export const submitFeedbackReport = async ({
   if (Result.isError(stored)) {
     return stored;
   }
+  if (!stored.value.inserted) {
+    recordAnalytics({
+      analytics: deps?.analytics,
+      deduplicated: true,
+      email: "skipped_duplicate",
+      github: "skipped_duplicate",
+      redactions,
+      report,
+      reporter,
+    });
+    return Result.ok({
+      receipt: stored.value.receipt,
+      redactions,
+      deduplicated: true,
+      deliveries: [],
+      stored: true,
+    });
+  }
 
   const deliveries = await deliver({
     capture,
     email,
     github,
-    instance,
+    instance: sanitizedInstance?.instance,
     receipt,
     report,
     reporter,

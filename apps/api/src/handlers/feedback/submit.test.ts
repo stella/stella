@@ -16,6 +16,7 @@ import type {
   SubmitFeedbackDependencies,
 } from "@/api/handlers/feedback/submit";
 import { toSafeId } from "@/api/lib/branded-types";
+import type { SafeId } from "@/api/lib/branded-types";
 import type {
   FeedbackReportRow,
   FeedbackReportStore,
@@ -37,20 +38,29 @@ const REPORT: FeedbackReportInput = {
 
 /** In-memory store: the service's dedupe and bookkeeping without a database. */
 const createStore = () => {
-  const rows: (FeedbackReportRow & { id: string })[] = [];
+  const rows: (FeedbackReportRow & {
+    id: SafeId<"feedbackReport">;
+    createdAt: Date;
+  })[] = [];
   const deliveriesById = new Map<string, unknown>();
   let nextId = 0;
 
   const store: FeedbackReportStore = {
-    findRecentByFingerprint: async ({ fingerprint }) =>
-      rows.find((row) => row.fingerprint === fingerprint)?.receipt,
-    insert: async (row) => {
+    insertIfAbsent: async ({ row, since }) => {
+      const existing = rows.find(
+        (candidate) =>
+          candidate.fingerprint === row.fingerprint &&
+          candidate.createdAt.getTime() >= since.getTime(),
+      );
+      if (existing !== undefined) {
+        return { id: existing.id, receipt: existing.receipt, inserted: false };
+      }
       nextId += 1;
       const id = toSafeId<"feedbackReport">(
         `0000000${nextId}-0000-7000-8000-000000000000`,
       );
-      rows.push({ ...row, id });
-      return { id };
+      rows.push({ ...row, id, createdAt: new Date() });
+      return { id, receipt: row.receipt, inserted: true };
     },
     recordDeliveries: async ({ deliveries, id }) => {
       deliveriesById.set(id, deliveries);
@@ -90,6 +100,40 @@ const unwrap = <T>(result: Result<T, unknown>): T => {
 };
 
 describe("submitFeedbackReport", () => {
+  test("sanitizes the public deployment name before storing and delivering it", async () => {
+    const { rows, store } = createStore();
+    let deliveredInstance: string | undefined;
+    const send = mock(
+      async (
+        input: Parameters<SubmitFeedbackDependencies["email"]["send"]>[0],
+      ): Promise<undefined> => {
+        if (input.reporter.via === "intake") {
+          deliveredInstance = input.reporter.instance;
+        }
+      },
+    );
+
+    const response = unwrap(
+      await submitFeedbackReport({
+        input: REPORT,
+        reporter: { via: "intake" },
+        instance: "self-hosted at https://private.example/deployment",
+        deps: baseDeps({
+          store,
+          email: {
+            isConfigured: () => true,
+            send,
+            to: "maintainer@example.com",
+          },
+        }),
+      }),
+    );
+
+    expect(response.redactions).toBe(1);
+    expect(rows.at(0)?.instance).toBe("self-hosted at [redacted-url]");
+    expect(deliveredInstance).toBe("self-hosted at [redacted-url]");
+  });
+
   test("stores sanitized text and counts what the passes removed", async () => {
     const { rows, store } = createStore();
 
@@ -189,6 +233,78 @@ describe("submitFeedbackReport", () => {
       deliveries: [],
     });
     expect(email.send).toHaveBeenCalledTimes(1);
+  });
+
+  test("concurrent identical submissions converge on one receipt and delivery", async () => {
+    const { rows, store } = createStore();
+    const email = emailDeps("maintainer@example.com");
+    const deps = baseDeps({ store, email: email.deps });
+
+    const responses = await Promise.all([
+      submitFeedbackReport({ input: REPORT, reporter: MCP_REPORTER, deps }),
+      submitFeedbackReport({ input: REPORT, reporter: MCP_REPORTER, deps }),
+    ]);
+
+    expect(rows).toHaveLength(1);
+    expect(responses.map((response) => unwrap(response).receipt)).toEqual([
+      "FB-7K2M-9QXZ",
+      "FB-7K2M-9QXZ",
+    ]);
+    expect(email.send).toHaveBeenCalledTimes(1);
+  });
+
+  test("context and deployment identity participate in dedupe", async () => {
+    const { rows, store } = createStore();
+    const deps = baseDeps({ store });
+
+    const first = unwrap(
+      await submitFeedbackReport({
+        input: { ...REPORT, context: { route: "one" } },
+        reporter: { via: "intake" },
+        instance: "deployment-one",
+        deps,
+      }),
+    );
+    const second = unwrap(
+      await submitFeedbackReport({
+        input: { ...REPORT, context: { route: "two" } },
+        reporter: { via: "intake" },
+        instance: "deployment-two",
+        deps,
+      }),
+    );
+
+    expect(first.deduplicated).toBe(false);
+    expect(second.deduplicated).toBe(false);
+    expect(rows).toHaveLength(2);
+  });
+
+  test("reports outside the 24-hour window do not deduplicate", async () => {
+    const { rows, store } = createStore();
+    const deps = baseDeps({ store });
+
+    unwrap(
+      await submitFeedbackReport({
+        input: REPORT,
+        reporter: MCP_REPORTER,
+        deps,
+      }),
+    );
+    const stored = rows.at(0);
+    if (stored === undefined) {
+      throw new Error("expected a stored report");
+    }
+    stored.createdAt = new Date(Date.now() - 24 * 60 * 60 * 1000 - 1);
+
+    const second = unwrap(
+      await submitFeedbackReport({
+        input: REPORT,
+        reporter: MCP_REPORTER,
+        deps,
+      }),
+    );
+    expect(second.deduplicated).toBe(false);
+    expect(rows).toHaveLength(2);
   });
 
   test("a failed channel is recorded as failed and the receipt still comes back", async () => {
@@ -340,7 +456,7 @@ describe("submitFeedbackReport", () => {
     const { store } = createStore();
     const failing: FeedbackReportStore = {
       ...store,
-      insert: async () => {
+      insertIfAbsent: async () => {
         throw new Error("connection refused");
       },
     };

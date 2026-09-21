@@ -14,7 +14,7 @@
  */
 
 import { panic } from "better-result";
-import { and, desc, eq, gte, sql } from "drizzle-orm";
+import { and, eq, gte, sql } from "drizzle-orm";
 
 import type {
   FeedbackDelivery,
@@ -52,7 +52,11 @@ export type FeedbackReportRow = {
   fingerprint: string;
 };
 
-export type StoredFeedbackReport = { id: SafeId<"feedbackReport"> };
+type StoredFeedbackReport = { id: SafeId<"feedbackReport"> };
+type FeedbackInsertResult = StoredFeedbackReport & {
+  receipt: string;
+  inserted: boolean;
+};
 
 /**
  * The persistence seam the submit service drives. A test passes an in-memory
@@ -60,13 +64,11 @@ export type StoredFeedbackReport = { id: SafeId<"feedbackReport"> };
  * service's dedupe and delivery behaviour testable without a database.
  */
 export type FeedbackReportStore = {
-  /** The receipt of an identical report filed at or after `since`, if any. */
-  findRecentByFingerprint: (input: {
-    fingerprint: string;
+  /** Find or insert atomically so concurrent identical submissions converge. */
+  insertIfAbsent: (input: {
+    row: FeedbackReportRow;
     since: Date;
-  }) => Promise<string | undefined>;
-  /** Insert the report and its audit row in one transaction. */
-  insert: (row: FeedbackReportRow) => Promise<StoredFeedbackReport>;
+  }) => Promise<FeedbackInsertResult>;
   recordDeliveries: (input: {
     id: SafeId<"feedbackReport">;
     deliveries: readonly FeedbackDelivery[];
@@ -74,31 +76,38 @@ export type FeedbackReportStore = {
 };
 
 export const feedbackReportStore: FeedbackReportStore = {
-  findRecentByFingerprint: async ({ fingerprint, since }) => {
-    const [existing] = await rootDb
-      .select({ receipt: feedbackReports.receipt })
-      .from(feedbackReports)
-      .where(
-        and(
-          eq(feedbackReports.fingerprint, fingerprint),
-          // Cast so the cutoff is compared at the column's own precision.
-          gte(
-            feedbackReports.createdAt,
-            sql`${since.toISOString()}::timestamptz`,
-          ),
-        ),
-      )
-      .orderBy(desc(feedbackReports.createdAt))
-      .limit(1);
-    return existing?.receipt;
-  },
-
-  insert: async (row) =>
+  insertIfAbsent: async ({ row, since }) =>
     await rootDb.transaction(async (tx) => {
+      // A time-window uniqueness constraint cannot be expressed as a partial
+      // index because `now()` is not immutable. Serialize one fingerprint at
+      // a time instead, while keeping unrelated reports fully concurrent.
+      await tx.execute(
+        sql`select pg_advisory_xact_lock(hashtextextended(${row.fingerprint}, 0))`,
+      );
+      const [existing] = await tx
+        .select({ id: feedbackReports.id, receipt: feedbackReports.receipt })
+        .from(feedbackReports)
+        .where(
+          and(
+            eq(feedbackReports.fingerprint, row.fingerprint),
+            gte(
+              feedbackReports.createdAt,
+              sql`${since.toISOString()}::timestamptz`,
+            ),
+          ),
+        )
+        .limit(1);
+      if (existing !== undefined) {
+        return { ...existing, inserted: false };
+      }
+
       const [inserted] = await tx
         .insert(feedbackReports)
         .values(row)
-        .returning({ id: feedbackReports.id });
+        .returning({
+          id: feedbackReports.id,
+          receipt: feedbackReports.receipt,
+        });
       if (!inserted) {
         panic("feedback report insert returned no row");
       }
@@ -130,7 +139,7 @@ export const feedbackReportStore: FeedbackReportStore = {
         });
       }
 
-      return inserted;
+      return { ...inserted, inserted: true };
     }),
 
   recordDeliveries: async ({ deliveries, id }) => {

@@ -1,7 +1,7 @@
 SET lock_timeout = '1s';--> statement-breakpoint
 SET statement_timeout = '5s';--> statement-breakpoint
 
--- Filed feedback reports. A system table, not tenant data: there is no read
+-- Filed feedback reports: a system table, not tenant data. There is no read
 -- surface, no workspace column, and no policy admitting the request role. The
 -- row is written before any delivery is attempted, so the receipt a reporter
 -- is given always addresses something even when the deployment has no channel

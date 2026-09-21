@@ -64,12 +64,12 @@ export type GuideStepSkippedProperties =
  *  distinguished at the source rather than inferred from the payload. */
 export type FeedbackReportSource = "sidebar" | "route_error";
 
-export type FeedbackDialogOpenedProperties = {
+type FeedbackDialogOpenedProperties = {
   source: FeedbackReportSource;
 };
 
 // Classification only: the report's own text never reaches analytics.
-export type FeedbackDialogSubmittedProperties = {
+type FeedbackDialogSubmittedProperties = {
   area: FeedbackArea;
   kind: FeedbackKind;
   source: FeedbackReportSource;
