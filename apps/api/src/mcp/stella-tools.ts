@@ -1014,23 +1014,25 @@ export const STELLA_TOOL_DEFINITIONS = [
       readOnlyHint: true,
       openWorldHint: false,
     },
+    // Against a per-tool character ceiling, so each clause earns its place:
+    // what the tool answers, what a direction does not imply, the closed
+    // polarity vocabulary and the two readings a model would otherwise guess
+    // at, the passage's bounds, and the next call spelled out.
     description:
-      "How the decisions citing one stood to it, or what it cited. One page " +
-      "of citations, each with a polarity and an excerpt of the paragraph " +
-      "the citation sits in. `cited_by` returns the decisions that cite " +
-      "this one, `cites` the ones it cites; neither means agreement. " +
+      "How the decisions citing one stood to it, or what it cited. One page, " +
+      "each citation with a polarity and an excerpt of its paragraph. " +
+      "`cited_by` returns the decisions that cite this one, `cites` the ones " +
+      "it cites; neither means agreement. " +
       `\`polarity\` is one of ${CITATION_TREATMENTS.join(", ")}: a stance, ` +
       "not a doctrinal act, so it never says followed, distinguished or " +
-      "overruled. 'unclassified' means none was read; 'mixed' means the " +
-      "citing decision departed from the cited one where it named it once " +
-      "and relied on it where it named it again. " +
-      "`passage.text` is at most " +
+      "overruled. 'unclassified' means none was read, 'mixed' that mentions " +
+      "disagreed. `passage.text` is at most " +
       `${LIMITS.caseLawCitationPassageChars} characters centred on the citation, cut when ` +
       "`passage.truncated`; `passage.mention` is 'sole', " +
-      "'classified_section' (the mention the polarity was read from), or " +
+      "'classified_section' (the mention the polarity came from), or " +
       "'latest_of_several' (it may not be). Example: { decision_id: " +
       "'<uuid>', direction: " +
-      "'cited_by', limit: 20 }. Pass the returned nextCursor back as cursor.",
+      "'cited_by', limit: 20 }. Pass nextCursor back as cursor.",
     inputSchema: readCaseLawCitationsArgsSchema,
     access: "read",
     anonymized: { exposure: "passthrough" },

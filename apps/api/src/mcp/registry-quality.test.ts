@@ -305,8 +305,13 @@ const TOOL_COUNT_CEILING: Record<SurfaceMode, number> = {
 // sanitized fixed-point payload and adds the explicit human confirmation
 // gate. The anonymized and law surfaces carry no feedback tools and are
 // unchanged.
+// The `mixed` citation treatment then measures 163_352 default, up 6: the
+// closed polarity vocabulary gains a member in read_case_law_citations'
+// output schema, and its description was shortened to pay for most of it.
+// A value the column can hold has to be a value the schema admits, so this
+// is not compressible; the anonymized and law surfaces keep their headroom.
 const TOOLS_LIST_PAYLOAD_CHAR_CEILING: Record<SurfaceMode, number> = {
-  default: 163_350,
+  default: 163_400,
   anonymized: 73_300,
   law: 28_250,
 };
@@ -378,8 +383,13 @@ const TOOLS_LIST_PAYLOAD_CHAR_CEILING: Record<SurfaceMode, number> = {
 // submit_feedback adds the receipt, per-channel delivery outcomes and the
 // no-channel warning: measured 53_449 default. The anonymized and law surfaces
 // are unchanged.
+// The `mixed` citation treatment adds 8 to read_case_law_citations' polarity
+// enum: measured 53_457 default. A closed vocabulary that omits a value the
+// column holds would have the tool answer outside its own schema, so the
+// member is not optional and the ceiling moves rather than the enum. The
+// anonymized and law surfaces carry the same schema inside their headroom.
 const OUTPUT_SCHEMA_TOTAL_CHAR_CEILING: Record<SurfaceMode, number> = {
-  default: 53_450,
+  default: 53_500,
   anonymized: 32_850,
   law: 10_050,
 };
