@@ -40,6 +40,34 @@ scope configuration before authorizing it. You can disconnect from stella's
 For exact menu labels and account requirements, follow your assistant's remote
 MCP setup instructions.
 
+## Connect Claude
+
+Custom connectors work in Claude on the web, Claude Desktop, and Cowork, on
+every plan (Free accounts are limited to one custom connector).
+
+1. **Add the connector.** On an individual plan, open **Customize →
+   Connectors**, select **+**, then **Add custom connector**. Enter the name
+   **stella** and the server address, then select **Add**. On Team and
+   Enterprise plans, an owner adds it once under **Organization settings →
+   Connectors** (**Add → Custom → Web**); members then find it under
+   **Customize → Connectors**.
+2. **Connect.** Select **Connect** next to stella. A stella sign-in opens in
+   your browser.
+3. **Authorize access in stella.** Sign in, check the organization and the
+   listed permissions, then select **Allow**. Until you allow it, Claude sees
+   no stella tools.
+4. **Enable it in the conversation.** In a chat, select **+**, open
+   **Connectors**, and switch stella on. The switch applies per conversation.
+5. **Approve tool calls.** The first time Claude uses a stella tool, it asks
+   for approval. Approve each call, or choose **Allow always** for tools you
+   trust.
+
+If stella tools you expect are missing, disconnect and connect again under
+**Customize → Connectors**; Claude reads the tool list and permissions when
+the connection is made. Claude's
+[custom connector guide](https://support.claude.com/en/articles/11175166-getting-started-with-custom-connectors-using-remote-mcp)
+has current menu labels.
+
 ## Check the connection
 
 Start a conversation and make sure stella's tools are available. Some clients
