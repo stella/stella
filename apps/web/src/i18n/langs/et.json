@@ -368,7 +368,7 @@
     },
     "origins": {
       "default": "Hindamata",
-      "model": "TI"
+      "model": "AI"
     },
     "review": {
       "droppedRows": "{count, plural, one {# rida jäeti vahele} other {# rida jäeti vahele}}: need ei sisalda tõlgitavat teksti.",
@@ -851,7 +851,7 @@
       "tooltip": "Mudelile saadeti kujul {placeholder}."
     },
     "applyMode": {
-      "description": "Word stores who made each change. We will remember your choice.",
+      "description": "Word salvestab, kes iga muudatuse tegi. Jätame sinu valiku meelde.",
       "direct": "Ei, rakenda otse",
       "title": "Kas rakendada muudatused jälgituna?",
       "tracked": "Jah, jälgituna"
@@ -1151,7 +1151,7 @@
       "load-skill": "Juhiste lugemine",
       "manage_organization": "Halda organisatsiooni",
       "read-contact": "Kontakti lugemine",
-      "read-content-across-matters": "Sisu lugemine kõigist asjadest",
+      "read-content-across-matters": "Sisu lugemine kõigist toimikutest",
       "read-skill-resource": "Juhiste lugemine",
       "read_changes": "Jälitatud muudatuste lugemine",
       "read_comments": "Kommentaaride lugemine",
@@ -1172,7 +1172,7 @@
       "save_task": "Salvesta ülesanne",
       "save_template": "Salvesta mall",
       "save_time_entry": "Salvesta ajakirje",
-      "search-across-matters": "Otsing kõigis asjades",
+      "search-across-matters": "Otsing kõigis toimikutes",
       "search-chat-history": "Vestlusajaloo otsimine",
       "set_field_value": "Määra välja väärtus",
       "set_practice_jurisdictions": "Määra praktikajurisdiktsioonid",
@@ -1208,7 +1208,7 @@
     "usageFallbackNotice": "Päevane AI-maht on täis — vastused jätkuvad tavamudeliga.",
     "videoContent": "Loodud video",
     "webSearch": {
-      "answer": "Summary from sources",
+      "answer": "Veebiotsingu kokkuvõte",
       "answerDisclaimer": "Koostatud allpool toodud avalike veebitulemuste põhjal. Kontrollige seotud allikatega.",
       "fetchedFrom": "allikast {source}",
       "openSource": "Ava {source} uuel vahekaardil",
@@ -1700,7 +1700,7 @@
       "personal": "Isiklik",
       "work": "Töö"
     },
-    "emptyDescription": "Looge kontaktid üks kord ja kasutage neid seejärel asjades, osapooltes ja arveldusandmetes.",
+    "emptyDescription": "Looge kontaktid üks kord ja kasutage neid seejärel toimikutes, osapooltes ja arveldusandmetes.",
     "emptyTitle": "Looge esimene kontakt",
     "emptyVideoLabel": "Kontaktide ülevaade",
     "exportFailed": "Kontaktide eksportimine ebaõnnestus.",
@@ -1948,7 +1948,7 @@
       "forbidden": "Teil pole selleks toiminguks õigust.",
       "internalServerError": "Midagi läks valesti. Proovige uuesti.",
       "legalSourceEntityLimitReached": "See toimik on jõudnud üksuste piirini, mistõttu dokumenti ei saanud luua.",
-      "legalSourceFilePropertyMissing": "Sellel asjal puudub faili atribuut, mistõttu dokumenti ei saanud luua.",
+      "legalSourceFilePropertyMissing": "Sellel toimikul puudub faili atribuut, mistõttu dokumenti ei saanud luua.",
       "notOrganizationMember": "Te ei ole selle organisatsiooni liige.",
       "providerKeyRejected": "Teenusepakkuja lükkas API-võtme tagasi.",
       "providerRateLimited": "Teenusepakkuja päringulimiit on täis. Proovige varsti uuesti.",
@@ -2176,7 +2176,7 @@
       "blankAction": "Alusta tühjalt lehelt",
       "description": "Käivitage see toimiku vahekaardilt „Töövood“, ajakava järgi või automaatselt failide üleslaadimisel. Miski pole lõplik, enne kui keegi selle kinnitab, ja tulemuse saate salvestada toimikusse dokumendina.",
       "examplesTitle": "Alusta näitest",
-      "title": "Salvestage sammud korra ja käivitage need mis tahes toimiku dokumentidel. Töö teeb TI, teie meeskond kontrollib, ja iga käivitus annab sama tulemuse."
+      "title": "Salvestage sammud korra ja käivitage need mis tahes toimiku dokumentidel. Töö teeb AI, teie meeskond kontrollib, ja iga käivitus annab sama tulemuse."
     },
     "enableFlow": "Luba töövoog",
     "enabledDescription": "Keelatud töövoogusid ei saa käivitada ega vallandada.",
@@ -2288,10 +2288,10 @@
       "includeDocuments": "Kaasa sisenddokumendid",
       "instructions": "Juhised",
       "instructionsPlaceholder": "Mida ülevaataja peaks kontrollima",
-      "namePlaceholder": "Sammu nimi",
+      "namePlaceholder": "nt Vaata konfidentsiaalsusleping üle",
       "nameRequired": "Sisesta igale sammule nimi.",
       "prompt": "Viip",
-      "promptPlaceholder": "Juhised AI sammu jaoks",
+      "promptPlaceholder": "nt Vaata lisatud konfidentsiaalsusleping turul tavapäraste tingimuste alusel üle ja märgi ebatavalised klauslid",
       "promptRequired": "Sisesta AI sammu jaoks viip.",
       "required": "Lisa vähemalt üks samm.",
       "reviewGate": "Ülevaatuse värav",
@@ -2826,9 +2826,9 @@
     "review": {
       "actionNeeded": "Vajab tegutsemist",
       "addComment": "Lisa kommentaarina",
-      "addNote": "Lisa märkus vastaspoolele",
+      "addNote": "Lisa kommentaar vastaspoolele",
       "addNotePlaceholder": "Mida vastaspool peaks nägema",
-      "addNoteSubmit": "Lisa märkus",
+      "addNoteSubmit": "Lisa kommentaar",
       "addReference": "Lisa {name} võrdlusena",
       "addTopic": "Lisa teema",
       "allDecided": "Kõik siinsed leiud on otsustatud.",
@@ -2891,7 +2891,7 @@
       },
       "impact": {
         "favourable": "Soodne",
-        "neutral": "Neutral",
+        "neutral": "Mõjuta",
         "notJudged": "Hindamata",
         "unfavourable": "Ebasoodne"
       },
@@ -2919,12 +2919,12 @@
       "noReferencesFound": "Sobivaid DOCX-dokumente ei leitud.",
       "notCompared": "Võrdlemata",
       "notComparedCount": "Võrdlemata: {count, number}",
-      "noteAdded": "Vastaspoolele lisati märkus",
-      "noteBlockedChecking": "stella kontrollib veel, kas seda dokumenti saab ohutult muuta. Sinu märkus on alles; proovi hetke pärast uuesti.",
-      "noteBlockedCollaboration": "Jagatud muutmisseanss on veel avanemas. Sinu märkus on alles; proovi hetke pärast uuesti.",
-      "noteBlockedOpening": "Dokument on veel avanemas. Sinu märkus on alles; proovi hetke pärast uuesti.",
-      "noteBlockedReadOnly": "See jagatud dokument on avatud ainult lugemiseks. Sinu märkus on alles; proovi uuesti, kui saad seda muuta.",
-      "noteNotAdded": "Märkust ei lisatud",
+      "noteAdded": "Vastaspoolele lisati kommentaar",
+      "noteBlockedChecking": "stella kontrollib veel, kas seda dokumenti saab ohutult muuta. Sinu kommentaar on alles; proovi hetke pärast uuesti.",
+      "noteBlockedCollaboration": "Jagatud muutmisseanss on veel avanemas. Sinu kommentaar on alles; proovi hetke pärast uuesti.",
+      "noteBlockedOpening": "Dokument on veel avanemas. Sinu kommentaar on alles; proovi hetke pärast uuesti.",
+      "noteBlockedReadOnly": "See jagatud dokument on avatud ainult lugemiseks. Sinu kommentaar on alles; proovi uuesti, kui saad seda muuta.",
+      "noteNotAdded": "Kommentaari ei lisatud",
       "openPlaybooks": "Ava playbookid",
       "pane": {
         "document": "Paneel: leiud dokumendi kõrval",
@@ -3296,7 +3296,7 @@
       "switchToManual": "Kohanda küsimust ja vastuse vormingut",
       "termKind": {
         "enumeration": "Loend",
-        "language": "Language",
+        "language": "Sõnastus",
         "parameter": "Parameeter",
         "presence": "Olemasolu"
       },
@@ -3814,7 +3814,7 @@
       "contractReviewBody": "Võrdle kaubanduslepingute iga klauslit läbirääkimisjuhendiga; kõrvalekalded ja soovitatud muudatused tuuakse selgelt esile.",
       "editorsPick": "Toimetaja valikud",
       "exampleReview": "Näidisülevaade",
-      "featuredTitle": "A better place to start",
+      "featuredTitle": "Alusta töövooga",
       "fromCommunity": "Kogukonnast",
       "groups": {
         "dataSources": "Andmeallikad ja integratsioonid",
@@ -3823,14 +3823,14 @@
         "includedBody": "Põhivõimalused, mis on kasutamiseks valmis ilma eraldi oskusi või kontot lisamata.",
         "skillsBody": "Korduvkasutatavad juriidilised töövood koos juhistega, mida saate enne lisamist kontrollida."
       },
-      "heroBody": "Skills are reusable legal workflows. Add one to review agreements, research authorities, or prepare documents with the same method every time.",
-      "heroTitle": "Make stella fit the legal work in front of you",
+      "heroBody": "Otsi ülesande, jurisdiktsiooni või allika järgi. Iga tööriista saad enne tööruumi lisamist üle vaadata.",
+      "heroTitle": "Millega sa tegeled?",
       "howBody": "Oskus esitab õigusmeetodi kontrollitavate juhistena. Lisa see üks kord ja kasuta sama lähenemist alati, kui ülesanne kordub.",
       "howTitle": "Mis on oskus?",
       "includedBadge": "Kaasas",
       "jurisRankBody": "Hinnake Argentina ülemkohtu pretsedentide autoriteeti tsiteerimise mõju ja õpetusliku arengu kaudu.",
       "noResults": "Sellele otsingule ei vasta veel ükski tööriist.",
-      "openSkill": "Explore skill",
+      "openSkill": "Vaata, kuidas see töötab",
       "review": {
         "aligned": "Kooskõlas",
         "governingLaw": "Kohaldatav õigus",
@@ -3847,7 +3847,7 @@
         "reviewAgreements": "Vaata lepingud üle",
         "verifyOrganizations": "Kontrolli organisatsiooni"
       },
-      "tasksTitle": "Start with a legal task"
+      "tasksTitle": "Või vali ülesanne"
     },
     "documentation": "Dokumentatsioon",
     "downloadUpstream": "Laadi alla lähtearhiiv",
@@ -3909,7 +3909,7 @@
     "deleteSearchDescription": "See kustutab \"<bdi>{name}</bdi>\" jäädavalt.",
     "deleteSearchTitle": "Kustuta salvestatud otsing",
     "editedBy": "Muutja",
-    "emptyState": "Alustage tippimist, et otsida kõigist asjadest.",
+    "emptyState": "Alustage tippimist, et otsida kõigist toimikutest.",
     "estimatedResultCount": "{count, plural, one {Ligikaudu # tulemus} other {Ligikaudu # tulemust}}",
     "hintAskAI": "<kbd>Tab</kbd> küsi AI-lt",
     "hintClear": "<kbd>Esc</kbd> tühjenda",
@@ -3930,7 +3930,7 @@
     "noResults": "Päringule „{query}\" tulemusi ei leitud.",
     "noUpcomingDeadlines": "Eelseisvaid tähtaegu pole",
     "openMatter": "Ava toimik <bdi>{name}</bdi>",
-    "placeholder": "Otsi kõigist asjadest...",
+    "placeholder": "Otsi kõigist toimikutest...",
     "previewUnavailable": "Eelvaade pole saadaval",
     "recentDocuments": "Hiljutised dokumendid",
     "recentSearches": "Hiljutised otsingud",
@@ -4163,7 +4163,7 @@
       },
       "matterNumbering": "Toimikute nummerdamine",
       "matterNumberingDescription": "Seadistage, kuidas uute toimikute viitenumbreid genereeritakse",
-      "membersDescription": "Manage who has access to this organization",
+      "membersDescription": "Halda, kellel on juurdepääs sellele organisatsioonile, ja ootel kutseid",
       "memoryExtraction": {
         "description": "Kui see on sisse lülitatud, vaatab stella taustal kokkuvõtlikke vestlusi ja pakub mälukirjeid, mille inimene peab kinnitama, enne kui need assistenti mõjutavad. See kasutab teie meeskonna enda AI-teenusepakkuja võtit, seega jätke see välja, kui te ei soovi, et see taustal toimuv AI-kasutus arvestataks teie võtmele.",
         "title": "Mälu ekstraktimine",
@@ -4684,7 +4684,7 @@
     "structureWarningParagraph": "Lõik {paragraph, number}",
     "structureWarnings": "{count, plural, one {# struktuurihoiatus} other {# struktuurihoiatust}}",
     "studio": {
-      "aiAdaptInstructionPlaceholder": "Valikuline: kuidas TI peaks sõnastust kohandama (nt vastama ümbritsevale grammatikale)",
+      "aiAdaptInstructionPlaceholder": "Valikuline: kuidas AI peaks sõnastust kohandama (nt vastama ümbritsevale grammatikale)",
       "aiDrafted": "AI koostatud",
       "aiNoFields": "AI ei pakkunud ühtegi välja",
       "aiPresetPrompt": "Paku malli täidetavaid välju",
@@ -4802,7 +4802,7 @@
       "sourceEnable": "Täida toimikust",
       "sourceHint": "Väärtus täidetakse dokumendi loomisel toimikust (selle klient, osapool, toimik ise, advokaat või büroo).",
       "sourcePickSource": "Andmeallikas",
-      "textPlusAi": "Isik + TI",
+      "textPlusAi": "Isik + AI",
       "useExisting": "Kasuta olemasolevat välja {name}",
       "whoFills": "Kes selle välja hiljem täidab?"
     },
@@ -4910,10 +4910,10 @@
   },
   "webSearch": {
     "settings": {
-      "description": "Bring your own web-search API keys so chat can search the web and read pages with your own provider account. Without them, chat uses the platform's shared keys when available.",
-      "fetchTitle": "Page reader key",
+      "description": "Kasutage oma veebiotsingu API-võtmeid, et vestlus saaks teie teenusepakkuja kontoga veebist otsida ja lehti lugeda. Ilma nendeta kasutab vestlus võimaluse korral platvormi jagatud võtmeid. Lehtede lugemine töötab ka ilma võtmeta; päringupiirangute tõstmiseks lisage võti.",
+      "fetchTitle": "Lehelugeja võti (Jina)",
       "platformFallback": "Kasutusel on platvormi jagatud võti. Oma teenusepakkuja konto ja kvoodi kasutamiseks lisage isiklik võti.",
-      "searchTitle": "Search provider key",
+      "searchTitle": "Otsingupakkuja võti (Tavily)",
       "title": "Veebiotsingu võtmed"
     }
   },
@@ -5166,7 +5166,7 @@
       "generateAi": "Loo AI soovitused",
       "generating": "AI soovituste loomine...",
       "instructionsEmpty": "Kohandatud juhiseid pole",
-      "instructionsHelp": "Salvestatakse asjakohase juhtumi tasemel. Kasutatakse lisaks süsteemiviipale.",
+      "instructionsHelp": "Salvestatakse toimikupõhiselt. Kasutatakse lisaks süsteemiviipale.",
       "instructionsPlaceholder": "nt kasuta eestikeelseid kaustanimesid, rühmita vastaspoole järgi, alusta kuupäeva aastaga.",
       "instructionsTitle": "AI juhised",
       "moveTo": "Teisalda fail kausta",
@@ -5461,10 +5461,10 @@
         "createMany": "Loo {count} veergu",
         "createdMany": "Loodi {count} veergu",
         "createdOne": "Veerg loodud",
-        "promptPlaceholder": "What should this column extract?",
+        "promptPlaceholder": "Mida see veerg peaks välja võtma? / ja @ kasutamiseks täpsusta seda veeru dialoogis.",
         "title": "Lisa veerud"
       },
-      "chipManual": "Manual",
+      "chipManual": "AI-ta",
       "chipMulti": "Sildid",
       "chipNumber": "Arv",
       "chipSingle": "Silt",
@@ -5531,11 +5531,11 @@
       "previewSkipped": "Sellel dokumendil pole sobivat sisendit.",
       "previewSubject": "Proovi näidisel",
       "previewUnsupported": "Eelvaade pole selle dokumenditüübi jaoks toetatud.",
-      "readingFrom": "Reading from",
+      "readingFrom": "AI loeb:",
       "referencesItself": "Omadus viitab iseendale teiste omaduste kaudu",
       "rerunColumn": "Käivita veerg uuesti",
       "resultType": "Tulemuse tüüp",
-      "returnsLabel": "Returns",
+      "returnsLabel": "Vorming",
       "scopeFile": "Praegune fail",
       "scopeFileDescription": "Kasutage välja {property} ja käivitage see fail nüüd.",
       "scopeFileUnavailable": "Selles vaates pole failiallikat saadaval.",

@@ -851,7 +851,7 @@
       "tooltip": "Enviado al modelo como {placeholder}."
     },
     "applyMode": {
-      "description": "Word stores who made each change. We will remember your choice.",
+      "description": "Word registra quién hizo cada cambio. Recordaremos tu elección.",
       "direct": "No, aplicar directamente",
       "title": "¿Aplicar las ediciones con control de cambios?",
       "tracked": "Sí, con control de cambios"
@@ -918,7 +918,7 @@
       "tools": "Herramientas",
       "triggerLabel": "Contexto de la conversación: {percent}% lleno"
     },
-    "contextPlaceholder": "Chat sobre {context}, / para skills, @ para añadir contexto",
+    "contextPlaceholder": "Chat sobre {context}, / para habilidades, @ para añadir contexto",
     "createDocument": {
       "continue": "Crear documento",
       "created": "Documento creado",
@@ -1005,7 +1005,7 @@
       "title": "Seleccionar modelo de chat",
       "viaProvider": "mediante {provider}"
     },
-    "newChat": "Nueva conversación",
+    "newChat": "Nuevo chat",
     "noPromptPresetOnly": "Sin mensaje, solo preajuste",
     "noThreads": "Aún no hay conversaciones",
     "officeCitationUnavailable": "Esta cita ya no está disponible.",
@@ -1017,7 +1017,7 @@
       "fromClipboard": "Pegado: {count, plural, one {# carácter} other {# caracteres}}",
       "fromPromptFallback": "Habilidad"
     },
-    "placeholder": "Escriba su pregunta aquí, / para skills, @ para añadir contexto",
+    "placeholder": "Escriba su pregunta aquí, / para habilidades, @ para añadir contexto",
     "promptImprovementStrategies": {
       "decompose": {
         "description": "Convierte el trabajo complejo en subtareas ordenadas.",
@@ -1067,8 +1067,8 @@
     "sendWithoutAnonymization": "Enviar sin anonimización",
     "skills": {
       "scope": {
-        "private": "Tus habilidades de IA",
-        "team": "Habilidades de IA del equipo"
+        "private": "Tus habilidades",
+        "team": "Habilidades del equipo"
       }
     },
     "sourcePlaceholder": "Chat sobre {title}",
@@ -1208,7 +1208,7 @@
     "usageFallbackNotice": "Se agotó la asignación diaria de IA: las respuestas continúan con el modelo estándar.",
     "videoContent": "Vídeo generado",
     "webSearch": {
-      "answer": "Summary from sources",
+      "answer": "Resumen de la búsqueda web",
       "answerDisclaimer": "Síntesis de los resultados web públicos que aparecen abajo. Contrástela con las fuentes enlazadas.",
       "fetchedFrom": "de {source}",
       "openSource": "Abrir {source} en una pestaña nueva",
@@ -2288,10 +2288,10 @@
       "includeDocuments": "Incluir documentos de entrada",
       "instructions": "Instrucciones",
       "instructionsPlaceholder": "Qué debe comprobar el revisor",
-      "namePlaceholder": "Nombre del paso",
+      "namePlaceholder": "p. ej. Revisar el acuerdo de confidencialidad",
       "nameRequired": "Introduce un nombre para cada paso.",
       "prompt": "Instrucción",
-      "promptPlaceholder": "Instrucciones para el paso de IA",
+      "promptPlaceholder": "p. ej. Revisa el acuerdo de confidencialidad adjunto frente a las condiciones habituales del mercado y señala las cláusulas inusuales",
       "promptRequired": "Introduce un prompt para el paso de IA.",
       "required": "Añade al menos un paso.",
       "reviewGate": "Punto de revisión",
@@ -2826,9 +2826,9 @@
     "review": {
       "actionNeeded": "Requiere acción",
       "addComment": "Añadir como comentario",
-      "addNote": "Añadir nota para la contraparte",
+      "addNote": "Añadir comentario para la contraparte",
       "addNotePlaceholder": "Lo que la contraparte debe ver",
-      "addNoteSubmit": "Añadir nota",
+      "addNoteSubmit": "Añadir comentario",
       "addReference": "Añadir {name} como referencia",
       "addTopic": "Añadir tema",
       "allDecided": "Todos los hallazgos aquí están decididos.",
@@ -2891,7 +2891,7 @@
       },
       "impact": {
         "favourable": "Favorable",
-        "neutral": "Neutral",
+        "neutral": "Sin efecto",
         "notJudged": "No evaluado",
         "unfavourable": "Desfavorable"
       },
@@ -2919,12 +2919,12 @@
       "noReferencesFound": "No hay documentos DOCX coincidentes.",
       "notCompared": "No comparado",
       "notComparedCount": "No comparado: {count, number}",
-      "noteAdded": "Nota añadida para la contraparte",
-      "noteBlockedChecking": "stella todavía está comprobando si este documento se puede editar de forma segura. Tu nota se conserva; inténtalo de nuevo en un momento.",
-      "noteBlockedCollaboration": "La sesión de edición compartida aún se está abriendo. Tu nota se conserva; inténtalo de nuevo en un momento.",
-      "noteBlockedOpening": "El documento aún se está abriendo. Tu nota se conserva; inténtalo de nuevo en un momento.",
-      "noteBlockedReadOnly": "Este documento compartido está abierto solo para lectura. Tu nota se conserva; inténtalo de nuevo cuando puedas editarlo.",
-      "noteNotAdded": "Nota no añadida",
+      "noteAdded": "Comentario añadido para la contraparte",
+      "noteBlockedChecking": "stella todavía está comprobando si este documento se puede editar de forma segura. Tu comentario se conserva; inténtalo de nuevo en un momento.",
+      "noteBlockedCollaboration": "La sesión de edición compartida aún se está abriendo. Tu comentario se conserva; inténtalo de nuevo en un momento.",
+      "noteBlockedOpening": "El documento aún se está abriendo. Tu comentario se conserva; inténtalo de nuevo en un momento.",
+      "noteBlockedReadOnly": "Este documento compartido está abierto solo para lectura. Tu comentario se conserva; inténtalo de nuevo cuando puedas editarlo.",
+      "noteNotAdded": "Comentario no añadido",
       "openPlaybooks": "Abrir playbooks",
       "pane": {
         "document": "Panel: hallazgos junto al documento",
@@ -3296,7 +3296,7 @@
       "switchToManual": "Personalizar la pregunta y el formato de respuesta",
       "termKind": {
         "enumeration": "Enumeración",
-        "language": "Language",
+        "language": "Redacción",
         "parameter": "Parámetro",
         "presence": "Presencia"
       },
@@ -3566,7 +3566,7 @@
     "cataloguePreviewEmpty": "Elija del paquete recomendado o descubra más herramientas abajo.",
     "cataloguePreviewYourStack": "Su selección",
     "catalogueProposeTool": "Proponer una herramienta nueva",
-    "catalogueSearchPlaceholder": "Buscar skills y herramientas",
+    "catalogueSearchPlaceholder": "Buscar habilidades y herramientas",
     "catalogueSubtitle": "stella puede usar estas herramientas al responder. Seleccione las que se ajustan a su práctica; podrá cambiarlo en cualquier momento en los ajustes.",
     "catalogueThirdPartyConfirm": "Añadir de todos modos",
     "catalogueThirdPartyDisclaimer": "Este código lo proporciona {author}, no stella. stella no lo revisa ni lo mantiene. Antes de añadirlo, compruebe que sea adecuado para su trabajo.",
@@ -3814,7 +3814,7 @@
       "contractReviewBody": "Revisa contratos mercantiles cláusula por cláusula conforme a un playbook de negociación, con las desviaciones y propuestas de modificación claramente señaladas.",
       "editorsPick": "Selección de los editores",
       "exampleReview": "Revisión de ejemplo",
-      "featuredTitle": "A better place to start",
+      "featuredTitle": "Empieza con un flujo de trabajo",
       "fromCommunity": "De la comunidad",
       "groups": {
         "dataSources": "Fuentes de datos e integraciones",
@@ -3823,14 +3823,14 @@
         "includedBody": "Funciones esenciales listas para usar sin añadir otra habilidad ni otra cuenta.",
         "skillsBody": "Flujos de trabajo jurídicos reutilizables con instrucciones que puedes revisar antes de añadirlos."
       },
-      "heroBody": "Skills are reusable legal workflows. Add one to review agreements, research authorities, or prepare documents with the same method every time.",
-      "heroTitle": "Make stella fit the legal work in front of you",
+      "heroBody": "Busca por tarea, jurisdicción o fuente. Puedes revisar cada herramienta antes de añadirla a tu espacio de trabajo.",
+      "heroTitle": "¿En qué estás trabajando?",
       "howBody": "Una habilidad reúne un método jurídico en instrucciones que puedes consultar. Añádela una vez y reutiliza el mismo enfoque cada vez que surja la tarea.",
       "howTitle": "¿Qué es una habilidad?",
       "includedBadge": "Incluido",
       "jurisRankBody": "Evalúa la autoridad de los precedentes de la Corte Suprema argentina a través de su influencia en las citas y la evolución doctrinal.",
       "noResults": "Todavía no hay herramientas que coincidan con esta búsqueda.",
-      "openSkill": "Explore skill",
+      "openSkill": "Ver cómo funciona",
       "review": {
         "aligned": "Conforme",
         "governingLaw": "Ley aplicable",
@@ -3847,7 +3847,7 @@
         "reviewAgreements": "Revisar contratos",
         "verifyOrganizations": "Verificar una organización"
       },
-      "tasksTitle": "Start with a legal task"
+      "tasksTitle": "O elige una tarea"
     },
     "documentation": "Documentación",
     "downloadUpstream": "Descargar el archivo de origen",
@@ -4163,7 +4163,7 @@
       },
       "matterNumbering": "Numeración de asuntos",
       "matterNumberingDescription": "Configura cómo se generan los números de referencia de los asuntos nuevos",
-      "membersDescription": "Manage who has access to this organization",
+      "membersDescription": "Gestiona quién tiene acceso a esta organización y las invitaciones pendientes",
       "memoryExtraction": {
         "description": "Cuando está activado, stella revisa en segundo plano los hilos de chat resumidos y propone memorias que una persona debe confirmar antes de que influyan en el asistente. Esto se ejecuta con la propia clave del proveedor de IA de su equipo, así que déjelo desactivado a menos que quiera que ese uso de IA en segundo plano se facture a su clave.",
         "title": "Extracción de memoria",
@@ -4910,10 +4910,10 @@
   },
   "webSearch": {
     "settings": {
-      "description": "Bring your own web-search API keys so chat can search the web and read pages with your own provider account. Without them, chat uses the platform's shared keys when available.",
-      "fetchTitle": "Page reader key",
+      "description": "Usa tus propias claves de API de búsqueda web para que el chat pueda buscar en la web y leer páginas con tu propia cuenta del proveedor. Sin ellas, el chat usa las claves compartidas de la plataforma cuando están disponibles. La lectura de páginas funciona sin clave; añade una para aumentar los límites de uso.",
+      "fetchTitle": "Clave del lector de páginas (Jina)",
       "platformFallback": "Se está usando la clave compartida de la plataforma. Añade la tuya para usar tu propia cuenta y cuota del proveedor.",
-      "searchTitle": "Search provider key",
+      "searchTitle": "Clave del proveedor de búsqueda (Tavily)",
       "title": "Claves de búsqueda web"
     }
   },
@@ -5461,10 +5461,10 @@
         "createMany": "Crear {count} columnas",
         "createdMany": "Se crearon {count} columnas",
         "createdOne": "Columna creada",
-        "promptPlaceholder": "What should this column extract?",
+        "promptPlaceholder": "¿Qué debe extraer esta columna? Para usar / y @, ajústala en el cuadro de diálogo de la columna.",
         "title": "Añadir columnas"
       },
-      "chipManual": "Manual",
+      "chipManual": "Sin IA",
       "chipMulti": "Etiquetas",
       "chipNumber": "Número",
       "chipSingle": "Etiqueta",
@@ -5531,11 +5531,11 @@
       "previewSkipped": "No hay entrada aplicable en este documento.",
       "previewSubject": "Pruébalo en una muestra",
       "previewUnsupported": "Vista previa no compatible con este tipo de documento.",
-      "readingFrom": "Reading from",
+      "readingFrom": "La IA lee de",
       "referencesItself": "La propiedad se referencia a sí misma a través de otras propiedades",
       "rerunColumn": "Reejecutar columna",
       "resultType": "Tipo de resultado",
-      "returnsLabel": "Returns",
+      "returnsLabel": "Formato",
       "scopeFile": "Archivo actual",
       "scopeFileDescription": "Use {property} y ejecute este archivo ahora.",
       "scopeFileUnavailable": "No hay una fuente de archivo disponible para esta vista.",

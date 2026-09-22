@@ -1208,7 +1208,7 @@
     "usageFallbackNotice": "Denný prídel AI je vyčerpaný — odpovede pokračujú na štandardnom modeli.",
     "videoContent": "Vygenerované video",
     "webSearch": {
-      "answer": "Summary from sources",
+      "answer": "Súhrn webového vyhľadávania",
       "answerDisclaimer": "Zostavené z verejných výsledkov z webu uvedených nižšie. Overte si to oproti prepojeným zdrojom.",
       "fetchedFrom": "z {source}",
       "openSource": "Otvoriť {source} na novej karte",
@@ -2288,10 +2288,10 @@
       "includeDocuments": "Zahrnúť vstupné dokumenty",
       "instructions": "Pokyny",
       "instructionsPlaceholder": "Čo má kontrolór skontrolovať",
-      "namePlaceholder": "Názov kroku",
+      "namePlaceholder": "napr. Skontrolujte NDA",
       "nameRequired": "Zadajte názov pre každý krok.",
       "prompt": "Prompt",
-      "promptPlaceholder": "Pokyny pre krok AI",
+      "promptPlaceholder": "napr. Skontrolujte priloženú NDA podľa trhových štandardov a označte neobvyklé ustanovenia",
       "promptRequired": "Zadajte prompt pre krok AI.",
       "required": "Pridajte aspoň jeden krok.",
       "reviewGate": "Kontrolný bod",
@@ -2555,7 +2555,7 @@
           "upload": {
             "body": "Možnosť Nahrať otvorí výber súborov; súbory môžete tiež presunúť myšou do spisu. Každý súbor sa stane dokumentom v tomto spise, takže ho váš tím môže nájsť a stella ho môže použiť pri revízii.",
             "title": "Zaradiť dokument do spisu",
-            "when": "Súbor nahrajte sem, keď patrí do spisu a má zostať k dispozícii. Priamo v čete ho priložte iba vtedy, keď slúži ako dočasný kontext pre jednu konverzáciu."
+            "when": "Súbor nahrajte sem, keď patrí do spisu a má zostať k dispozícii. Priamo v chate ho priložte iba vtedy, keď slúži ako dočasný kontext pre jednu konverzáciu."
           }
         },
         "title": "Práca s dokumentmi"
@@ -2826,9 +2826,9 @@
     "review": {
       "actionNeeded": "Na riešenie",
       "addComment": "Pridať ako komentár",
-      "addNote": "Pridať poznámku pre protistranu",
+      "addNote": "Pridať komentár pre protistranu",
       "addNotePlaceholder": "Čo má vidieť protistrana",
-      "addNoteSubmit": "Pridať poznámku",
+      "addNoteSubmit": "Pridať komentár",
       "addReference": "Pridať {name} ako referenciu",
       "addTopic": "Pridať tému",
       "allDecided": "Všetky zistenia sú rozhodnuté.",
@@ -2891,7 +2891,7 @@
       },
       "impact": {
         "favourable": "Výhodné",
-        "neutral": "Neutral",
+        "neutral": "Bez dopadu",
         "notJudged": "Neposúdené",
         "unfavourable": "Nevýhodné"
       },
@@ -2919,12 +2919,12 @@
       "noReferencesFound": "Nenašli sa žiadne zodpovedajúce dokumenty DOCX.",
       "notCompared": "Neporovnané",
       "notComparedCount": "Neporovnané: {count, number}",
-      "noteAdded": "Poznámka pre protistranu bola pridaná",
-      "noteBlockedChecking": "stella ešte overuje, či sa dokument dá bezpečne upravovať. Poznámka zostáva zachovaná; skúste to o chvíľu znova.",
-      "noteBlockedCollaboration": "Zdieľaná úprava sa ešte otvára. Poznámka zostáva zachovaná; skúste to o chvíľu znova.",
-      "noteBlockedOpening": "Dokument sa ešte otvára. Poznámka zostáva zachovaná; skúste to o chvíľu znova.",
-      "noteBlockedReadOnly": "Tento zdieľaný dokument je otvorený len na čítanie. Poznámka zostáva zachovaná; skúste to znova, keď budete môcť dokument upravovať.",
-      "noteNotAdded": "Poznámka nebola pridaná",
+      "noteAdded": "Komentár pre protistranu bol pridaný",
+      "noteBlockedChecking": "stella ešte overuje, či sa dokument dá bezpečne upravovať. Komentár zostáva zachovaný; skúste to o chvíľu znova.",
+      "noteBlockedCollaboration": "Zdieľaná úprava sa ešte otvára. Komentár zostáva zachovaný; skúste to o chvíľu znova.",
+      "noteBlockedOpening": "Dokument sa ešte otvára. Komentár zostáva zachovaný; skúste to o chvíľu znova.",
+      "noteBlockedReadOnly": "Tento zdieľaný dokument je otvorený len na čítanie. Komentár zostáva zachovaný; skúste to znova, keď budete môcť dokument upravovať.",
+      "noteNotAdded": "Komentár nebol pridaný",
       "openPlaybooks": "Otvoriť playbooky",
       "pane": {
         "document": "Panel: zistenia vedľa dokumentu",
@@ -3296,7 +3296,7 @@
       "switchToManual": "Upraviť otázku a formát odpovede",
       "termKind": {
         "enumeration": "Výčet",
-        "language": "Language",
+        "language": "Znenie",
         "parameter": "Premenná",
         "presence": "Prítomnosť"
       },
@@ -3814,7 +3814,7 @@
       "contractReviewBody": "Kontrolujte obchodné zmluvy ustanovenie po ustanovení podľa rokovacích usmernení s jasne vyznačenými odchýlkami a navrhovanými úpravami.",
       "editorsPick": "Výber redakcie",
       "exampleReview": "Ukážka kontroly",
-      "featuredTitle": "A better place to start",
+      "featuredTitle": "Začnite pracovným postupom",
       "fromCommunity": "Od komunity",
       "groups": {
         "dataSources": "Zdroje údajov a integrácie",
@@ -3823,14 +3823,14 @@
         "includedBody": "Základné funkcie pripravené na použitie bez pridania samostatnej zručnosti alebo účtu.",
         "skillsBody": "Opakovane použiteľné právne pracovné postupy s pokynmi, ktoré si môžete pred pridaním skontrolovať."
       },
-      "heroBody": "Skills are reusable legal workflows. Add one to review agreements, research authorities, or prepare documents with the same method every time.",
-      "heroTitle": "Make stella fit the legal work in front of you",
+      "heroBody": "Vyhľadávajte podľa úlohy, jurisdikcie alebo zdroja. Každý nástroj si môžete pozrieť skôr, ako ho pridáte do svojho pracovného priestoru.",
+      "heroTitle": "Na čom pracujete?",
       "howBody": "Zručnosť spracúva právnu metódu do podoby pokynov, ktoré si môžete prezrieť. Pridajte ju raz a rovnaký postup opakovane použite vždy, keď sa daná úloha objaví.",
       "howTitle": "Čo je zručnosť?",
       "includedBadge": "Zahrnuté",
       "jurisRankBody": "Posúďte autoritu precedensov argentínskeho Najvyššieho súdu podľa vplyvu citácií a vývoja právnej doktríny.",
       "noResults": "Tomuto vyhľadávaniu zatiaľ nezodpovedá žiadny nástroj.",
-      "openSkill": "Explore skill",
+      "openSkill": "Ako to funguje",
       "review": {
         "aligned": "V súlade",
         "governingLaw": "Rozhodné právo",
@@ -3847,7 +3847,7 @@
         "reviewAgreements": "Skontrolovať zmluvy",
         "verifyOrganizations": "Overiť organizáciu"
       },
-      "tasksTitle": "Start with a legal task"
+      "tasksTitle": "Alebo si vyberte úlohu"
     },
     "documentation": "Dokumentácia",
     "downloadUpstream": "Stiahnuť zdrojový archív",
@@ -3859,7 +3859,7 @@
     },
     "mcpConfigHint": "Údaje o pripojení nezávislé od klienta. Vložte ich do ľubovoľného klienta kompatibilného s MCP a pridajte vlastné prihlasovacie údaje.",
     "metaDescription": "Prehliadajte otvorený katalóg zručností, integrácií a vstavaných nástrojov na právnu prácu.",
-    "nativeToolInfo": "Toto je vstavaná funkcia stella. Ak ju chcete používať v čete, povoľte ju vo svojom pracovnom priestore.",
+    "nativeToolInfo": "Toto je vstavaná funkcia stella. Ak ju chcete používať v chate, povoľte ju vo svojom pracovnom priestore.",
     "notFound": "Nástroj sa nenašiel.",
     "practiceArea": "Právna oblasť",
     "practiceAreas": {
@@ -4910,10 +4910,10 @@
   },
   "webSearch": {
     "settings": {
-      "description": "Bring your own web-search API keys so chat can search the web and read pages with your own provider account. Without them, chat uses the platform's shared keys when available.",
-      "fetchTitle": "Page reader key",
+      "description": "Použite vlastné API kľúče na webové vyhľadávanie, aby chat mohol vyhľadávať na webe a čítať stránky cez váš účet u poskytovateľa. Bez nich chat používa zdieľané kľúče platformy, ak sú k dispozícii. Čítanie stránok funguje aj bez kľúča; pridaním kľúča zvýšite limity požiadaviek.",
+      "fetchTitle": "Kľúč na čítanie stránok (Jina)",
       "platformFallback": "Používa sa zdieľaný kľúč platformy. Ak chcete používať vlastný účet a kvótu u poskytovateľa, pridajte svoj kľúč.",
-      "searchTitle": "Search provider key",
+      "searchTitle": "Kľúč poskytovateľa vyhľadávania (Tavily)",
       "title": "Kľúče na vyhľadávanie na webe"
     }
   },
@@ -5461,10 +5461,10 @@
         "createMany": "Vytvoriť {count, plural, one {# stĺpec} few {# stĺpce} other {# stĺpcov}}",
         "createdMany": "Vytvorené {count, plural, one {# stĺpec} few {# stĺpce} other {# stĺpcov}}",
         "createdOne": "Stĺpec vytvorený",
-        "promptPlaceholder": "What should this column extract?",
+        "promptPlaceholder": "Čo má tento stĺpec extrahovať? Ak chcete použiť / a @, upresnite ho v dialógovom okne stĺpca.",
         "title": "Pridať stĺpce"
       },
-      "chipManual": "Manual",
+      "chipManual": "Bez AI",
       "chipMulti": "Štítky",
       "chipNumber": "Číslo",
       "chipSingle": "Štítok",
@@ -5531,11 +5531,11 @@
       "previewSkipped": "Na tomto dokumente nie je žiadny použiteľný vstup.",
       "previewSubject": "Vyskúšaj na vzorke",
       "previewUnsupported": "Náhľad nie je pre tento typ dokumentu podporovaný.",
-      "readingFrom": "Číta z",
+      "readingFrom": "AI číta z",
       "referencesItself": "Vlastnosť odkazuje sama na seba cez iné vlastnosti",
       "rerunColumn": "Spustiť stĺpec znovu",
       "resultType": "Typ výsledku",
-      "returnsLabel": "Vracia",
+      "returnsLabel": "Formát",
       "scopeFile": "Aktuálny súbor",
       "scopeFileDescription": "Použiť {property} a spustiť tento súbor teraz.",
       "scopeFileUnavailable": "V tomto zobrazení nie je dostupný zdrojový súbor.",

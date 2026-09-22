@@ -415,8 +415,8 @@
             "body": "Pievienojiet serveri un pierakstieties:"
           }
         },
-        "heading": "Pievienojiet MI aģentu",
-        "intro": "Norādiet jebkuram ar MCP saderīgam klientam zemāk redzamo adresi vai sava servera /mcp ceļu, ja izvietojat lietotni stella savā infrastruktūrā. Pirmais savienojums atver pierakstīšanos pārlūkā, un MI aģents saņem tikai tās atļaujas, kuras apstiprināt.",
+        "heading": "Pievienojiet AI aģentu",
+        "intro": "Norādiet jebkuram ar MCP saderīgam klientam zemāk redzamo adresi vai sava servera /mcp ceļu, ja izvietojat lietotni stella savā infrastruktūrā. Pirmais savienojums atver pierakstīšanos pārlūkā, un AI aģents saņem tikai tās atļaujas, kuras apstiprināt.",
         "outro": "Tāpat pieslēdzas jebkurš klients, kas atbalsta Streamable HTTP ar OAuth 2.1. Ērtāk terminālī? Instalējiet CLI un pierakstieties:"
       }
     },

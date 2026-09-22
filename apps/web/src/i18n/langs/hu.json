@@ -20,7 +20,7 @@
     "codePlaceholder": "XXXX-XXXX",
     "connectedDescription": "Visszatérhet az ügynökéhez.",
     "connectedTitle": "Az ügynök csatlakoztatva",
-    "description": "Egy MI-ügynök az Ön nevében hozzáférést kér a stella munkaterületéhez. Csak akkor hagyja jóvá, ha Ön kezdeményezte.",
+    "description": "Egy AI-ügynök az Ön nevében hozzáférést kér a stella munkaterületéhez. Csak akkor hagyja jóvá, ha Ön kezdeményezte.",
     "error": "Valami hiba történt. Kérjük, próbálja újra.",
     "errorExpired": "Ez a kérés lejárt. Indítsa újra a csatlakozást az ügynökéből.",
     "errorInvalid": "Ez a kód nem tűnik helyesnek. Ellenőrizze, és próbálja újra.",
@@ -32,7 +32,7 @@
     "editWithAI": "Szerkesztés AI-val",
     "keyRequired": {
       "cta": "AI-beállítások megnyitása",
-      "description": "Adj hozzá szolgáltatói hitelesítési adatokat az AI-funkciók használatához.",
+      "description": "Adjon hozzá szolgáltatói hitelesítési adatokat az AI-funkciók használatához.",
       "title": "AI-szolgáltató csatlakoztatása"
     },
     "refinePlaceholder": "Hogyan igazítsa az AI a megfogalmazást?",
@@ -102,7 +102,7 @@
     "lastUsed": "Legutóbb használt",
     "oneTimeCodeExpired": "Az egyszer használatos kód lejárt. Kérjen új kódot.",
     "openInProvider": "{provider} megnyitása",
-    "orSignInWithEmail": "vagy jelentkezz be e-maillel",
+    "orSignInWithEmail": "vagy jelentkezzen be e-maillel",
     "organizationNamePlaceholder": "Szervezetem",
     "password": "Jelszó",
     "rateLimitExceeded": "Túl sok próbálkozás. Kérjük, próbálja újra később.",
@@ -110,7 +110,7 @@
       "askAboutDocument": "Hozzon létre ingyenes fiókot, hogy kérdezhessen erről a dokumentumról",
       "askInChat": "Hozzon létre ingyenes fiókot, hogy ezt megkérdezhesse a csevegésben",
       "description": "Amint elkészül a fiókja, visszatér erre az oldalra.",
-      "generateHeadnotes": "Hozzon létre ingyenes fiókot az MI jogi tételek elkészítéséhez",
+      "generateHeadnotes": "Hozzon létre ingyenes fiókot az AI jogi tételek elkészítéséhez",
       "writeResearchQuestion": "Hozzon létre ingyenes fiókot, hogy kérdést tegyen fel ezeknek a találatoknak"
     },
     "resendCode": "Kód újraküldése erre: <email>{emailAddress}</email>",
@@ -333,7 +333,7 @@
       "startTitle": "A fordítás indítása nem sikerült"
     },
     "errorCodes": {
-      "aiUnavailable": "Nem érhető el MI-modell a fordításhoz.",
+      "aiUnavailable": "Nem érhető el AI-modell a fordításhoz.",
       "applyFailed": "A fordításokat nem sikerült visszaírni a dokumentumba.",
       "documentChanged": "A dokumentum megváltozott a fordítás közben. Készítse elő újra.",
       "documentUnresolved": "A dokumentum vagy a fájlja már nem érhető el.",
@@ -368,7 +368,7 @@
     },
     "origins": {
       "default": "Nem értékelt",
-      "model": "MI"
+      "model": "AI"
     },
     "review": {
       "droppedRows": "{count, plural, one {# sor kimaradt} other {# sor kimaradt}}: nem tartalmaznak lefordítható szöveget.",
@@ -549,7 +549,7 @@
   "caseLaw": {
     "analysis": {
       "abstract": "Összefoglaló",
-      "aiLayer": "MI – {layer}",
+      "aiLayer": "AI – {layer}",
       "backToSection": "Vissza a szakasz elejére",
       "categories": {
         "facts": "Tényállás",
@@ -557,7 +557,7 @@
         "procedural-history": "Eljárási előzmények",
         "reasoning": "Érvelés"
       },
-      "generate": "MI jogi tételek elkészítése",
+      "generate": "AI jogi tételek elkészítése",
       "holdingAnchor": "Ugrás a bekezdésre",
       "topics": "Témák",
       "treatment": "Későbbi megítélés"
@@ -678,7 +678,7 @@
     },
     "newestDecisions": "Legújabb határozatok",
     "notesFilter": {
-      "ai": "MI",
+      "ai": "AI",
       "human": "Emberi"
     },
     "pagination": {
@@ -789,7 +789,7 @@
   "catalogue": {
     "addCustom": "Egyéni hozzáadása",
     "addCustomMcp": "MCP-szerver hozzáadása",
-    "addCustomSkill": "Skill hozzáadása",
+    "addCustomSkill": "Készség hozzáadása",
     "by": "Készítette: {author}",
     "configuration": "Konfiguráció",
     "cost": {
@@ -801,7 +801,7 @@
     "filter": {
       "mcps": "MCP-szerverek",
       "nativeTools": "Beépített eszközök",
-      "skills": "Skillek"
+      "skills": "Készségek"
     },
     "filterHint": "Szűrve: {codes}",
     "firstParty": "stella",
@@ -838,7 +838,7 @@
   "chat": {
     "acceptAllCount": "Összes elfogadása ({count})",
     "actionExpand": {
-      "toastDescription": "A teljes oldalas csevegés megjelenik, mentett beszélgetésekkel.",
+      "toastDescription": "A teljes oldalas csevegés a csevegések mentésével együtt érkezik.",
       "toastTitle": "A teljes nézet még nem érhető el"
     },
     "aiPrompt": "AI-üzenetmező",
@@ -851,7 +851,7 @@
       "tooltip": "A modellnek elküldve mint {placeholder}."
     },
     "applyMode": {
-      "description": "Word stores who made each change. We will remember your choice.",
+      "description": "A Word rögzíti, ki végezte az egyes módosításokat. Megjegyezzük a választását.",
       "direct": "Nem, közvetlen alkalmazás",
       "title": "Alkalmazza a módosításokat követett változásokként?",
       "tracked": "Igen, követett változásként"
@@ -881,8 +881,8 @@
     "attachment": "Melléklet",
     "audioContent": "Generált hang",
     "cancelQueuedMessage": "Sorba állított üzenet visszavonása",
-    "caseLawGreeting": "Kérdezz erről a határozatról — a teljes szöveg itt elérhető.",
-    "chatAbout": "Beszúrás az AI chatbe",
+    "caseLawGreeting": "Kérdezzen erről a határozatról — a teljes szöveg itt elérhető.",
+    "chatAbout": "Beszúrás az AI-csevegésbe",
     "choosePromptImprovementStrategy": "Promptjavítási lehetőségek",
     "composerMenu": {
       "context": "Kontextus",
@@ -892,15 +892,15 @@
       "noFiles": "Nincs fájl ebben az ügyben",
       "noMatters": "Nincs elérhető ügy",
       "noMcpServers": "Nincs elérhető MCP-kiszolgáló",
-      "noSkills": "Nincs elérhető skill",
+      "noSkills": "Nincs elérhető készség",
       "open": "Mellékletek és eszközök menüjének megnyitása",
       "openMcpSettings": "MCP-beállítások megnyitása",
-      "openSkills": "Skillek megnyitása",
+      "openSkills": "Készségek megnyitása",
       "referenceMatter": "Hivatkozás erre az ügyre",
       "searchFiles": "Fájlok keresése",
       "searchMatters": "Ügyek keresése",
       "searchMcpServers": "MCP-kiszolgálók keresése...",
-      "searchSkills": "Skillek keresése"
+      "searchSkills": "Készségek keresése"
     },
     "contextMeter": {
       "attachments": "Csatolt dokumentumok",
@@ -918,7 +918,7 @@
       "tools": "Eszközök",
       "triggerLabel": "Beszélgetés kontextusa: {percent}% megtelt"
     },
-    "contextPlaceholder": "Chat erről: {context}, / a skillekhez, @ kontextus hozzáadásához",
+    "contextPlaceholder": "Csevegés erről: {context}, / a készségekhez, @ kontextus hozzáadásához",
     "createDocument": {
       "continue": "Dokumentum létrehozása",
       "created": "Dokumentum létrehozva",
@@ -946,7 +946,7 @@
     "emptyThreadDescription": "Kérdezzen erről az ügyről, fogalmazzon szöveget, vagy kérjen rövid kutatási jegyzetet.",
     "emptyThreadTitle": "Beszélgetés indítása",
     "extractingContent": "Tartalom kinyerése...",
-    "fileThreadRebound": "A fájlhoz tartozó csevegés már elindult egy másik munkamenetben. Az üzenete megmaradt; küldje el újra.",
+    "fileThreadRebound": "A fájlhoz tartozó csevegés már elindult egy másik munkamenetben. Az üzenete megmaradt; küldje el újra, hogy ott folytassa.",
     "fileTooLarge": "A fájl meghaladja a {maxSize} korlátot",
     "focusSuggestion": "Javaslat fókuszálása: {topic}",
     "folioCitationFallback": "o. {n}",
@@ -968,11 +968,11 @@
     "landing": {
       "lastAccessedMatters": "Legutóbb megnyitott ügyek",
       "noMatters": "Még nincsenek ügyek",
-      "noPrompts": "Még nincsenek skillek",
-      "noRecentChats": "Nincsenek legutóbbi chatek",
+      "noPrompts": "Még nincsenek készségek",
+      "noRecentChats": "Nincsenek legutóbbi csevegések",
       "pinnedMatters": "Kitűzött ügyek",
-      "prompts": "Skillek",
-      "recentChats": "Legutóbbi chatek"
+      "prompts": "Készségek",
+      "recentChats": "Legutóbbi csevegések"
     },
     "loadEarlierMessages": "Korábbi üzenetek betöltése",
     "loadEarlierMessagesError": "A korábbi üzenetek betöltése sikertelen",
@@ -1017,7 +1017,7 @@
       "fromClipboard": "Beillesztve: {count, plural, one {# karakter} other {# karakter}}",
       "fromPromptFallback": "Készség"
     },
-    "placeholder": "Írja ide a kérdését, / a skillekhez, @ kontextus hozzáadásához",
+    "placeholder": "Írja ide a kérdését, / a készségekhez, @ kontextus hozzáadásához",
     "promptImprovementStrategies": {
       "decompose": {
         "description": "Az összetett feladatot sorrendbe rendezett részfeladatokra bontja.",
@@ -1037,9 +1037,9 @@
       }
     },
     "prompts": {
-      "noResults": "Nincs egyező skill",
+      "noResults": "Nincs egyező készség",
       "noShortcuts": "Még nincsenek készségek. Adjon hozzá a Tudás → Készségek részen.",
-      "tryOne": "Próbáld ki valamelyiket"
+      "tryOne": "Kezdésként próbálja ki valamelyiket"
     },
     "queuedAttachmentCount": "{count, plural, one {# melléklet} other {# melléklet}}",
     "queuedNotice": "Sorba állítva – a jelenlegi válasz befejeztével küldjük el",
@@ -1054,21 +1054,21 @@
     "richContentLoading": "Interaktív tartalom betöltése…",
     "richContentTitle": "Interaktív tartalom",
     "richContentUnavailable": "Ez a tartalom nem jeleníthető meg biztonságosan.",
-    "sendError": "Probléma történt az üzenet elküldésekor. Ha a hiba továbbra is fennáll, vedd fel a kapcsolatot a támogatással.",
-    "sendErrorAnonymizationBlocked": "A stella nem tudta anonimizálni az egyik mellékletet, ezért semmi sem lett elküldve. Távolítsd el a fájlt, vagy küldd el az üzenetet anonimizálás nélkül.",
-    "sendErrorEmptyCompletion": "Az AI üres választ adott. Próbáld újra, vagy fogalmazd át az üzenetet.",
-    "sendErrorLoopDetected": "Az AI-válasz túl sokszor ismétlődött. Próbáld újra szűkebb kéréssel.",
-    "sendErrorModelUnavailable": "A beállított AI-modell már nem érhető el. Kérd a munkaterület adminisztrátorát, hogy frissítse a modellt a szervezet beállításaiban.",
-    "sendErrorProviderBilling": "Az AI-szolgáltató számlázási problémát jelzett. Fordulj a munkaterület adminisztrátorához.",
-    "sendErrorProviderCredentialsRejected": "Az AI-szolgáltató elutasította a beállított hitelesítő adatokat. Kérd a munkaterület adminisztrátorát, hogy ellenőrizze az API-kulcsot a szervezet beállításaiban.",
-    "sendErrorProviderUnavailable": "Az AI-szolgáltató átmenetileg nem elérhető. Próbáld újra egy pillanat múlva.",
-    "sendErrorQuotaExhausted": "Az AI-szolgáltató kvótája kimerült. Próbáld újra egy perc múlva, vagy fordulj a munkaterület adminisztrátorához.",
+    "sendError": "Probléma történt az üzenet elküldésekor. Ha a hiba továbbra is fennáll, lépjen kapcsolatba az ügyfélszolgálattal.",
+    "sendErrorAnonymizationBlocked": "A stella nem tudta anonimizálni az egyik mellékletet, ezért semmi sem lett elküldve. Távolítsa el a fájlt, vagy küldje el az üzenetet anonimizálás nélkül.",
+    "sendErrorEmptyCompletion": "Az AI üres választ adott. Próbálja újra, vagy fogalmazza át az üzenetet.",
+    "sendErrorLoopDetected": "Az AI-válasz túl sokszor ismétlődött. Próbálja újra szűkebb kéréssel.",
+    "sendErrorModelUnavailable": "A beállított AI-modell már nem érhető el. Kérje meg a munkaterület adminisztrátorát, hogy frissítse a modellt a szervezet beállításaiban.",
+    "sendErrorProviderBilling": "Az AI-szolgáltató számlázási problémát jelzett. Forduljon a munkaterület adminisztrátorához.",
+    "sendErrorProviderCredentialsRejected": "Az AI-szolgáltató elutasította a beállított hitelesítő adatokat. Kérje meg a munkaterület adminisztrátorát, hogy ellenőrizze az API-kulcsot a szervezet beállításaiban.",
+    "sendErrorProviderUnavailable": "Az AI-szolgáltató átmenetileg nem elérhető. Próbálja újra egy pillanat múlva.",
+    "sendErrorQuotaExhausted": "Az AI-szolgáltató kvótája kimerült. Próbálja újra egy perc múlva, vagy forduljon a munkaterület adminisztrátorához.",
     "sendPrompt": "Üzenet küldése",
     "sendWithoutAnonymization": "Küldés anonimizálás nélkül",
     "skills": {
       "scope": {
-        "private": "Saját AI skillek",
-        "team": "Csapat AI skillek"
+        "private": "Saját készségek",
+        "team": "A csapat készségei"
       }
     },
     "sourcePlaceholder": "Csevegés erről: {title}",
@@ -1173,7 +1173,7 @@
       "save_template": "Sablon mentése",
       "save_time_entry": "Időbejegyzés mentése",
       "search-across-matters": "Keresés az ügyek között",
-      "search-chat-history": "Csevegési előzmények keresése",
+      "search-chat-history": "Keresés a csevegési előzményekben",
       "set_field_value": "Mezőérték beállítása",
       "set_practice_jurisdictions": "Joghatóságok beállítása",
       "show_in_document": "Megjelenítés a dokumentumban",
@@ -1208,7 +1208,7 @@
     "usageFallbackNotice": "A napi AI-keret elfogyott — a válaszok a normál modellen folytatódnak.",
     "videoContent": "Generált videó",
     "webSearch": {
-      "answer": "Summary from sources",
+      "answer": "Webes keresés összefoglalója",
       "answerDisclaimer": "Az alábbi nyilvános webes találatokból összeállítva. Ellenőrizze a hivatkozott források alapján.",
       "fetchedFrom": "{source} forrásból",
       "openSource": "{source} megnyitása új lapon",
@@ -1347,7 +1347,7 @@
     "archive": "Archiválás",
     "ask": "Kérdezés",
     "askAI": "AI megkérdezése",
-    "askInChat": "Kérdezze meg a chatben",
+    "askInChat": "Kérdezze meg a csevegésben",
     "assignee": "Felelős",
     "author": "Szerző",
     "back": "Vissza",
@@ -1615,7 +1615,7 @@
     "scopeAdminRead": "A szervezet auditnaplójának olvasása",
     "scopeAdminWrite": "A szervezet tagjainak és beállításainak kezelése",
     "scopeBillingWrite": "Időbejegyzések létrehozása, szerkesztése és törlése",
-    "scopeChat": "Chatek és üzenetek olvasása és kezelése",
+    "scopeChat": "Csevegések és üzenetek olvasása és kezelése",
     "scopeContactsWrite": "Kapcsolatok létrehozása, szerkesztése és törlése a teljes szervezetben",
     "scopeDocumentsWrite": "Dokumentumok létrehozása, szerkesztése és törlése",
     "scopeExternalMcps": "A csatlakoztatott külső eszközök használata",
@@ -2071,7 +2071,7 @@
     "compareChangeSummary": "Változások típus szerint",
     "compareCreated": "A nyomon követett változtatások dokumentuma létrehozva",
     "compareFailed": "Az összehasonlítás nem sikerült",
-    "compareNeedsTwoVersions": "Tölts fel egy másik DOCX-verziót az összehasonlításhoz.",
+    "compareNeedsTwoVersions": "Töltsön fel egy másik DOCX-verziót az összehasonlításhoz.",
     "compareNoChanges": "Nem találtunk támogatott eltéréseket.",
     "comparePreviewDescription": "Tekintse át a módosítások összefoglalóját. Mentéskor egy származtatott összehasonlítás kerül a verzióelőzményekbe, a jelenlegi verzió módosítása nélkül.",
     "comparePreviewReady": "Az összehasonlítás elkészült",
@@ -2176,7 +2176,7 @@
       "blankAction": "Kezdés üresen",
       "description": "Indítsa az ügy Munkafolyamatok lapjáról, ütemezetten, vagy fájlfeltöltéskor automatikusan. Semmi sem végleges, amíg valaki jóvá nem hagyja, az eredményt pedig dokumentumként mentheti az ügyhöz.",
       "examplesTitle": "Kezdés példából",
-      "title": "Mentse el a lépéseket egyszer, majd futtassa őket bármelyik ügy dokumentumain. A munkát az MI végzi, a csapat ellenőrzi, és minden futtatás ugyanazt adja."
+      "title": "Mentse el a lépéseket egyszer, majd futtassa őket bármelyik ügy dokumentumain. A munkát az AI végzi, a csapat ellenőrzi, és minden futtatás ugyanazt adja."
     },
     "enableFlow": "Munkafolyamat engedélyezése",
     "enabledDescription": "A letiltott munkafolyamatokat nem lehet futtatni vagy elindítani.",
@@ -2281,17 +2281,17 @@
       "ai": "AI-lépés",
       "aiHelp": "Az utasításai alapján szöveget ír, és el tudja olvasni a kiválasztott bemeneti dokumentumokat.",
       "createDocument": "Dokumentum létrehozása",
-      "createDocumentHelp": "A legutóbbi MI-kimenetet dokumentumként menti abba az ügybe, amelyből a futás indult.",
+      "createDocumentHelp": "A legutóbbi AI-kimenetet dokumentumként menti abba az ügybe, amelyből a futás indult.",
       "documentTitlePlaceholder": "pl. Összefoglaló feljegyzés",
       "documentTitleRequired": "Adja meg a dokumentum címét.",
       "empty": "Adjon hozzá legalább egy lépést.",
       "includeDocuments": "Bemeneti dokumentumok belefoglalása",
       "instructions": "Utasítások",
       "instructionsPlaceholder": "Mit ellenőrizzen az ellenőr",
-      "namePlaceholder": "Lépés neve",
+      "namePlaceholder": "pl. A titoktartási megállapodás átvizsgálása",
       "nameRequired": "Adjon nevet minden lépésnek.",
       "prompt": "Utasítás",
-      "promptPlaceholder": "Utasítások az AI-lépéshez",
+      "promptPlaceholder": "pl. Vizsgálja át a csatolt titoktartási megállapodást a piacon szokásos feltételek alapján, és jelölje meg a szokatlan kikötéseket",
       "promptRequired": "Adjon meg egy promptot az AI-lépéshez.",
       "required": "Adjon hozzá legalább egy lépést.",
       "reviewGate": "Ellenőrzési pont",
@@ -2511,7 +2511,7 @@
           "plusMenu": {
             "body": "A + gombbal fájlt csatolhat vagy ügyre hivatkozhat.",
             "title": "Adjon hozzá anyagokat a + gombbal",
-            "when": "Ha a szükséges anyagok még nincsenek a chatben."
+            "when": "Ha a szükséges anyagok még nincsenek a csevegésben."
           },
           "send": {
             "body": "Elküldi az üzenetet mindazzal, amit fent csatolt, meghivatkozott vagy bekapcsolt. A szerkesztő a helyén marad, így egy követő kérdéssel pótolhatja azt, ami az első válaszból hiányzott.",
@@ -2519,10 +2519,10 @@
             "when": "Az első válasz megmutatja, mi hiányzik még."
           }
         },
-        "title": "Kezdje a chattel"
+        "title": "Kezdje a csevegéssel"
       },
       "chatPower": {
-        "description": "Használjon skilleket, vagy csatlakoztasson további hasznos eszközöket",
+        "description": "Használjon készségeket, vagy csatlakoztasson további hasznos eszközöket",
         "steps": {
           "mcp": {
             "body": "Be- és kikapcsolja egy csatlakoztatott kiszolgáló eszközeit a csevegéseiben: cégnyilvántartások, belső rendszerek, bármi, amit a csapata csatlakoztatott.",
@@ -2538,12 +2538,12 @@
             "title": "További lehetőségek a + gomb mögött"
           },
           "skills": {
-            "body": "Beilleszt egy mentett promptot vagy a csapata által írt skillt: átnézett utasításkészletet, amely ugyanazt a feladatot mindig ugyanúgy oldja meg.",
-            "title": "Skillek és mentett promptok",
+            "body": "Beilleszt egy mentett promptot vagy a csapata által írt készséget: átnézett utasításkészletet, amely ugyanazt a feladatot mindig ugyanúgy oldja meg.",
+            "title": "Készségek és mentett promptok",
             "when": "Akkor használja, ha a feladat ismétlődik és számít a megfogalmazás, például szokásos szerződés-átnézésnél vagy ügyfélfelvételi összefoglalónál. A / az üres szerkesztőben közvetlenül megnyitja ezt a listát."
           }
         },
-        "title": "Hozzon ki többet a chatből"
+        "title": "Hozzon ki többet a csevegésből"
       },
       "documents": {
         "description": "Iktasson egy dokumentumot, majd találja meg később",
@@ -2555,7 +2555,7 @@
           "upload": {
             "body": "A Feltöltés megnyitja a fájlválasztót; a fájlokat rá is húzhatja az ügyre. Minden fájlból dokumentum lesz ebben az ügyben, így a csapata megtalálhatja, stella pedig felhasználhatja a felülvizsgálat során.",
             "title": "Dokumentum iktatása az ügybe",
-            "when": "Akkor töltsön fel ide egy fájlt, ha az ügyhöz tartozik, és később is elérhetőnek kell maradnia. Közvetlenül a csevegéshez csak akkor csatolja, ha egyetlen beszélgetés ideiglenes kontextusául szolgál."
+            "when": "Akkor töltsön fel ide egy fájlt, ha az ügyhöz tartozik, és később is elérhetőnek kell maradnia. Közvetlenül a csevegéshez csak akkor csatolja, ha csak az adott csevegés ideiglenes kontextusául szolgál."
           }
         },
         "title": "Munka dokumentumokkal"
@@ -2665,7 +2665,7 @@
     "openMatter": "Ügy megnyitása",
     "origin": {
       "manual": "Kolléga",
-      "model": "MI",
+      "model": "AI",
       "source": "Külső forrás"
     },
     "proposalView": "Javaslatok: {view}",
@@ -2736,7 +2736,7 @@
       "workspaceTermsHeading": "Munkaterületi kifejezések ({count})"
     },
     "external": {
-      "confirmDescription": "Külső webhelyet készülsz megnyitni.",
+      "confirmDescription": "Külső webhelyet készül megnyitni.",
       "confirmTitle": "Külső hivatkozás megnyitása?",
       "openLink": "Hivatkozás megnyitása",
       "openOriginal": "Eredeti megnyitása",
@@ -2769,7 +2769,7 @@
     "hidePane": "Panel elrejtése",
     "matterPicker": {
       "allMatters": "Összes ügy",
-      "description": "Válassza ki, mely ügyekre támaszkodhat ez a chat.",
+      "description": "Válassza ki, mely ügyekre támaszkodhat ez a csevegés.",
       "empty": "Nincs elérhető ügy.",
       "noMatter": "Nincs ügy",
       "noResults": "Egyetlen ügy sem egyezik a következővel: „{query}”.",
@@ -2777,7 +2777,7 @@
       "title": "Ügykontextus"
     },
     "metadata": {
-      "aiExtractedHeading": "MI által kinyerve",
+      "aiExtractedHeading": "AI által kinyerve",
       "documentProperties": {
         "empty": "Ez a fájl nem tartalmaz saját tulajdonságokat",
         "heading": "Fájl tulajdonságai",
@@ -2820,7 +2820,7 @@
     },
     "moveToMain": "Áthelyezés a fő nézetbe",
     "moveToSide": "Áthelyezés az oldalsó panelbe",
-    "openChat": "Chat megnyitása",
+    "openChat": "Csevegés megnyitása",
     "reopenTab": "{name} újranyitása",
     "resizePane": "Panel átméretezése",
     "review": {
@@ -2882,7 +2882,7 @@
       "filterDeviations": "Eltérések",
       "flag": "Megjelölés",
       "flaggedPositions": "{total, plural, one {{flagged, number} megjelölve # álláspontból} other {{flagged, number} megjelölve # álláspontból}}",
-      "fromChat": "Chatből",
+      "fromChat": "Csevegésből",
       "fromThisMatter": "Ebből az ügyből",
       "history": {
         "backToLatest": "Vissza a legutóbbihoz",
@@ -2891,7 +2891,7 @@
       },
       "impact": {
         "favourable": "Kedvező",
-        "neutral": "Neutral",
+        "neutral": "Nincs hatás",
         "notJudged": "Nem értékelt",
         "unfavourable": "Kedvezőtlen"
       },
@@ -2920,11 +2920,11 @@
       "notCompared": "Nem összevetve",
       "notComparedCount": "Nem összevetve: {count, number}",
       "noteAdded": "Megjegyzés hozzáadva az ellenfélnek",
-      "noteBlockedChecking": "A stella még ellenőrzi, hogy a dokumentum biztonságosan szerkeszthető-e. A jegyzete megmarad; próbálja meg újra egy pillanat múlva.",
-      "noteBlockedCollaboration": "A közös szerkesztési munkamenet még betöltődik. A jegyzete megmarad; próbálja meg újra egy pillanat múlva.",
-      "noteBlockedOpening": "A dokumentum még betöltődik. A jegyzete megmarad; próbálja meg újra egy pillanat múlva.",
-      "noteBlockedReadOnly": "Ez a megosztott dokumentum csak olvasásra van megnyitva. A jegyzete megmarad; próbálja meg újra, amint szerkesztheti.",
-      "noteNotAdded": "A jegyzet nem lett hozzáadva",
+      "noteBlockedChecking": "A stella még ellenőrzi, hogy a dokumentum biztonságosan szerkeszthető-e. A megjegyzése megmarad; próbálja meg újra egy pillanat múlva.",
+      "noteBlockedCollaboration": "A közös szerkesztési munkamenet még betöltődik. A megjegyzése megmarad; próbálja meg újra egy pillanat múlva.",
+      "noteBlockedOpening": "A dokumentum még betöltődik. A megjegyzése megmarad; próbálja meg újra egy pillanat múlva.",
+      "noteBlockedReadOnly": "Ez a megosztott dokumentum csak olvasásra van megnyitva. A megjegyzése megmarad; próbálja meg újra, amint szerkesztheti.",
+      "noteNotAdded": "A megjegyzés nem lett hozzáadva",
       "openPlaybooks": "Playbookok megnyitása",
       "pane": {
         "document": "Panel: megállapítások a dokumentum mellett",
@@ -3016,30 +3016,30 @@
   "knowledge": {
     "agentSkills": {
       "aiRewrite": "Átírás AI-val",
-      "aiRewritePlaceholder": "Tömörítsd a megfogalmazást; adj hozzá egy lépést a források hivatkozásához…",
-      "aiRewritePrompt": "Írd le, hogyan írjuk át ezt a fájlt",
+      "aiRewritePlaceholder": "A megfogalmazás tömörítése; lépés hozzáadása a források hivatkozásához…",
+      "aiRewritePrompt": "Írja le, hogyan írjuk át ezt a fájlt",
       "aiRewriteRunning": "Átírás…",
-      "binaryPreviewUnsupported": "A bináris előnézet nem támogatott. Szerkeszd ezt a fájlt a készségcsomag újbóli feltöltésével.",
+      "binaryPreviewUnsupported": "A bináris előnézet nem támogatott. A fájlt a készségcsomag újbóli feltöltésével szerkesztheti.",
       "builtInBadge": "Beépített",
       "builtInSection": "Beépített készségek",
-      "chooseFile": "Válassz fájlt, vagy húzd ide",
+      "chooseFile": "Válasszon fájlt, vagy húzza ide",
       "coaching": {
         "publish": "Készség közzététele"
       },
       "deleteConfirmDescription": "A(z) „{name}” eltávolításra kerül ebből a munkaterületből.",
       "deleteFile": "Fájl törlése",
-      "deleteFileConfirm": "Törlöd a fájlt? Ez nem vonható vissza.",
-      "description": "Telepíts SKILL.md-csomagokat, amelyek speciális módszereket és csak olvasható erőforrásokat adnak a chathez.",
+      "deleteFileConfirm": "Törli a fájlt? Ez nem vonható vissza.",
+      "description": "Telepítsen SKILL.md-csomagokat, amelyek speciális módszereket és csak olvasható erőforrásokat adnak a csevegéshez.",
       "disableSkill": "Készség kikapcsolása",
       "disabled": "Kikapcsolva",
       "discoverSkills": "Készségek keresése",
       "discoveredSkills": "{count, plural, one {# készség található} other {# készség található}}",
       "discoveryEmpty": "Ebben a tárolóban vagy mappában nem található készség.",
       "discoverySkippedInvalid": "{count, plural, one {# érvénytelen készség kihagyva} other {# érvénytelen készség kihagyva}}",
-      "dropFile": "Húzd ide a SKILL.md vagy .zip fájlt",
+      "dropFile": "Húzza ide a SKILL.md vagy .zip fájlt",
       "editSkill": "Készség szerkesztése",
-      "emptyDescription": "Tölts fel egy SKILL.md fájlt, egy tömörített készségmappát, vagy importálj egy nyilvános GitHub-készség URL-t.",
-      "emptyTitle": "Telepítsd az első készségedet",
+      "emptyDescription": "Töltsön fel egy SKILL.md fájlt, egy tömörített készségmappát, vagy importáljon egy nyilvános GitHub-készség URL-jét.",
+      "emptyTitle": "Telepítse az első készségét",
       "enableSkill": "Készség bekapcsolása",
       "enabled": "Bekapcsolva",
       "fileExists": "Ezen az útvonalon már létezik fájl",
@@ -3051,10 +3051,10 @@
       "generateAddResource": "Fájl hozzáadása",
       "generateDraft": "Készségvázlat",
       "generateExamplesLabel": "Példa kiváltó okok vagy forgatókönyvek (nem kötelező)",
-      "generateExamplesPlaceholder": "Amikor a felhasználó ezt kérdezi… Amikor olyan szerződést vizsgálsz, amely… ",
+      "generateExamplesPlaceholder": "Amikor a felhasználó ezt kérdezi… Olyan szerződés vizsgálatakor, amely… ",
       "generateFeedbackLabel": "Módosítások (nem kötelező)",
-      "generateFeedbackPlaceholder": "Szigorítsd a kiváltó feltételeket; adj hozzá egy lépést a források hivatkozásáról.",
-      "generateHelp": "Írd le, milyen készséget szeretnél. A modell elkészít egy SKILL.md vázlatot, amelyet a telepítés előtt átnézhetsz és szerkeszthetsz.",
+      "generateFeedbackPlaceholder": "A kiváltó feltételek szigorítása; lépés hozzáadása a források hivatkozásáról.",
+      "generateHelp": "Írja le, milyen készséget szeretne. A modell elkészít egy SKILL.md vázlatot, amelyet a telepítés előtt átnézhet és szerkeszthet.",
       "generateIntentLabel": "Mit csináljon ez a készség?",
       "generateIntentPlaceholder": "Egy készség, amely a bírósági határozatokat rövid összefoglalóvá sűríti a rendelkező résszel, az indokolással és a hivatkozással.",
       "generateResourceContentPlaceholder": "A fájl Markdown-tartalma…",
@@ -3067,10 +3067,10 @@
       "generating": "Generálás…",
       "howItRuns": "Működés",
       "importFailureFetch": "A készség forrását nem sikerült betölteni.",
-      "importFailureIntegrity": "A készség forrása a felderítés után megváltozott. Ellenőrizd újra.",
-      "importFailureLimit": "Elérted a készségek maximális számát.",
+      "importFailureIntegrity": "A készség forrása a felderítés után megváltozott. Ellenőrizze újra.",
+      "importFailureLimit": "Elérte a készségek maximális számát.",
       "importFailureNameConflict": "Már létezik ilyen nevű készség.",
-      "importHelp": "Illeszd be egy nyilvános GitHub-tároló, mappa vagy SKILL.md fájl URL-jét. Telepítés előtt ellenőrizd a megtalált készségeket.",
+      "importHelp": "Illessze be egy nyilvános GitHub-tároló, mappa vagy SKILL.md fájl URL-jét. Telepítés előtt ellenőrizze a megtalált készségeket.",
       "importPartial": "{installedCount, plural, one {{installed} importálva} other {{installed} importálva}}; {failedCount, plural, one {{failed} sikertelen} other {{failed} sikertelen}}.",
       "importSelected": "Kijelöltek importálása ({count})",
       "importSkill": "Importálás URL-ből",
@@ -3082,19 +3082,19 @@
       "newFileFilenamePlaceholder": "notes.md",
       "newFilePathPlaceholder": "folder/notes.md",
       "newFolder": "Új mappa",
-      "pdfPreviewSoon": "A PDF-előnézet a bináris skillerőforrások támogatásával válik elérhetővé.",
+      "pdfPreviewSoon": "A PDF-előnézet a bináris készségerőforrások támogatásával válik elérhetővé.",
       "renameFile": "Átnevezés",
       "resources": "{count, plural, one {# erőforrás} other {# erőforrás}}",
       "scopePrivate": "Csak én",
       "scopeTeam": "Mindenki a csapatban",
       "selectFileHint": "Válasszon ki egy fájlt a listából, hogy megnyissa a jobb oldali szerkesztőpanelen.",
       "selectedFile": "Kiválasztva: {name}",
-      "selectionLimit": "Egyszerre legfeljebb {count} készséget válassz ki.",
+      "selectionLimit": "Egyszerre legfeljebb {count} készséget válasszon ki.",
       "sourceUpload": "Feltöltve",
       "sourceUrl": "Nyilvános URL",
       "unsavedChanges": "Nem mentett módosítások – elveti?",
       "uploadFile": "Fájl feltöltése",
-      "uploadHelp": "Használj SKILL.md fájlt vagy olyan .zip mappát, amely SKILL.md fájlt és opcionális csak olvasható erőforrásokat tartalmaz.",
+      "uploadHelp": "Használjon SKILL.md fájlt vagy olyan .zip mappát, amely SKILL.md fájlt és opcionális csak olvasható erőforrásokat tartalmaz.",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/utvonal/keszseghez",
       "version": "Verzió: {version}"
     },
@@ -3110,7 +3110,7 @@
       "bearerTokenDescription": "Ez a szerver Bearer tokent használ. A csatlakozás befejezéséhez illessze be a szolgáltatótól kapott tokent.",
       "connectedToast": "MCP csatlakoztatva",
       "connectedWithLastUsed": "Csatlakoztatva · legutóbbi használat: {time}",
-      "description": "Kezelje azokat az integrációkat, amelyek eszközöket adhatnak a chathez. A tokeneket felhasználónként tároljuk.",
+      "description": "Kezelje azokat az integrációkat, amelyek eszközöket adhatnak a csevegéshez. A tokeneket felhasználónként tároljuk.",
       "detected": "Felismerve: {authType}",
       "disable": "Kikapcsolás",
       "disabled": "Csatlakoztatva · kikapcsolva",
@@ -3119,7 +3119,7 @@
       "enable": "Bekapcsolás",
       "errorDescription": "Az integrációt nem sikerült frissíteni.",
       "errorTitle": "MCP sikertelen",
-      "mcpExplainer": "Az integrációk külső szolgáltatásokat kapcsolnak a chathez, amelyekkel az MI dolgozhat.",
+      "mcpExplainer": "Az integrációk külső szolgáltatásokat kapcsolnak a csevegéshez, amelyekkel az AI dolgozhat.",
       "needsReauth": "Újracsatlakozás szükséges",
       "off": "Ki",
       "on": "Be",
@@ -3133,7 +3133,7 @@
       "tokenPlaceholder": "Token beillesztése",
       "urlLabel": "MCP-szerver URL-je",
       "urlPlaceholder": "https://example.com/mcp",
-      "useInChat": "Használat a chatben",
+      "useInChat": "Használat a csevegésben",
       "whatIsAnMcpServer": "Mi az az MCP-szerver?"
     },
     "playbooks": {
@@ -3296,7 +3296,7 @@
       "switchToManual": "A kérdés és a válaszformátum testreszabása",
       "termKind": {
         "enumeration": "Felsorolás",
-        "language": "Language",
+        "language": "Megfogalmazás",
         "parameter": "Paraméter",
         "presence": "Jelenlét"
       },
@@ -3339,7 +3339,7 @@
         "description": "Értékelt ellenőrzőlisták, amelyek a dokumentumokat az Ön standardjaihoz mérik"
       },
       "prompts": {
-        "description": "A chatben / paranccsal elérhető, újrahasználható készségek",
+        "description": "A csevegésben / paranccsal elérhető, újrahasználható készségek",
         "title": "Készségek"
       },
       "templates": {
@@ -3347,7 +3347,7 @@
         "title": "Sablonok"
       },
       "tools": {
-        "description": "Kapcsolja össze stella-t nyilvános nyilvántartásokkal és más forrásokkal",
+        "description": "Készségek, integrációk és mindig elérhető eszközök, amelyeket az AI a csevegésben használhat",
         "title": "Eszközök"
       },
       "workflows": {
@@ -3403,7 +3403,7 @@
         "descriptionPlaceholder": "A választóban megjelenő rövid leírás",
         "name": "Név",
         "namePlaceholder": "pl. Dokumentum összefoglalása",
-        "promptPlaceholder": "A chat szerkesztőjébe beszúrt utasítások a készség használatakor",
+        "promptPlaceholder": "A csevegés szerkesztőjébe beszúrt utasítások a készség használatakor",
         "scope": "Láthatóság",
         "scopePrivate": "Csak én",
         "scopeTeam": "A csapat minden tagja"
@@ -3432,7 +3432,7 @@
       "colorSky": "Kék",
       "colorViolet": "Lila",
       "colorYellow": "Sárga",
-      "commentPlaceholder": "Írj megjegyzést…",
+      "commentPlaceholder": "Írjon megjegyzést…",
       "guestAuthor": "Ön",
       "guestLimitReached": "Ez a lap legfeljebb {count} kiemelést és jegyzetet tud tárolni. Továbbiak mentéséhez hozzon létre fiókot.",
       "guestMigrationComplete": "A kiemelések és jegyzetek mentve.",
@@ -3475,7 +3475,7 @@
     "matterPicker": {
       "empty": "Válasszon ügyet a memóriájának megtekintéséhez."
     },
-    "pageDescription": "Megjegyzések és kontextus, amelyeket az asszisztens a beszélgetéseken át megjegyez.",
+    "pageDescription": "Megjegyzések és kontextus, amelyekre az asszisztens a csevegések között is emlékszik.",
     "pageTitle": "Memória",
     "provenance": "{source} · {date}",
     "restoredToast": "Emlék visszaállítva",
@@ -3544,10 +3544,10 @@
     "unreadLabel": "{count, plural, one {# olvasatlan értesítés} other {# olvasatlan értesítés}}"
   },
   "onboarding": {
-    "aiConfigFailed": "Az MI-konfigurációt nem sikerült menteni. A beállításokban befejezheti.",
+    "aiConfigFailed": "Az AI-konfigurációt nem sikerült menteni. A beállításokban befejezheti.",
     "aiSubtitle": "Adja meg saját API-kulcsát. A modelleket később, a beállításokban választhatja ki.",
-    "aiTitle": "Kapcsolja össze MI-szolgáltatóját",
-    "appsSubtitle": "A stella a böngészőn kívül is működik: az asztali gépén és az MI-asszisztensében. Ehhez a beállításhoz később bármikor visszatérhet.",
+    "aiTitle": "Kapcsolja össze AI-szolgáltatóját",
+    "appsSubtitle": "A stella a böngészőn kívül is működik: az asztali gépén és az AI-asszisztensében. Ehhez a beállításhoz később bármikor visszatérhet.",
     "appsTitle": "Szerezze meg a stellát mindenhol",
     "assistantDocsLink": "Így csatlakoztathatja az asszisztensét",
     "catalogueAlwaysOn": "Mindig aktív",
@@ -3566,7 +3566,7 @@
     "cataloguePreviewEmpty": "Válasszon az ajánlott csomagból, vagy fedezzen fel további eszközöket lent.",
     "cataloguePreviewYourStack": "Az Ön csomagja",
     "catalogueProposeTool": "Új eszköz javaslata",
-    "catalogueSearchPlaceholder": "Skillek és eszközök keresése",
+    "catalogueSearchPlaceholder": "Készségek és eszközök keresése",
     "catalogueSubtitle": "A stella ezeket az eszközöket felhasználhatja a válaszadáshoz. Válassza ki azokat, amelyek illenek a praxisához; bármikor módosíthatja a beállításokban.",
     "catalogueThirdPartyConfirm": "Hozzáadás így is",
     "catalogueThirdPartyDisclaimer": "Ezt a kódot {author}, nem pedig a stella biztosítja. A stella nem vizsgálja át és nem tartja karban. Hozzáadás előtt győződjön meg arról, hogy megfelel a munkájának.",
@@ -3597,7 +3597,7 @@
     "orgTitle": "Nevezze el csapatát",
     "skipStep": "Kihagyás",
     "someInvitesFailed": "{count, plural, one {# meghívó sikertelen} other {# meghívó sikertelen}}",
-    "stepAi": "MI",
+    "stepAi": "AI",
     "stepApps": "Alkalmazások és eszközök",
     "stepCatalogue": "Katalógus",
     "stepJurisdiction": "Joghatóság",
@@ -3608,9 +3608,9 @@
   "organization": {
     "aiConfig": {
       "addProvider": "Szolgáltató hozzáadása",
-      "addProviderFirst": "Először adj hozzá szolgáltatót",
+      "addProviderFirst": "Először adjon hozzá szolgáltatót",
       "apiKey": "API-kulcs",
-      "apiKeyConfiguredPlaceholder": "Beállítva: {key}. Új kulccsal lecserélheted.",
+      "apiKeyConfiguredPlaceholder": "Beállítva: {key}. Új kulccsal lecserélheti.",
       "apiKeyPlaceholder": "Adja meg az API-kulcsát",
       "apiKeySaved": "Mentett kulcs {key}",
       "apiKeyUpdatePlaceholder": "A frissítéshez adjon meg új kulcsot",
@@ -3621,15 +3621,15 @@
       "credentialsPanel": "Kulcs",
       "customModelBadge": "Egyedi · {provider}",
       "customModelDescription": "Ez a modellazonosító nincs a stella katalógusában. A kiválasztott szolgáltatónak pontosan így lesz továbbítva.",
-      "customModelHint": "Nincs katalógustalálat. Írj be bármilyen modellazonosítót; az egyedi azonosítók változatlanul mentésre kerülnek.",
+      "customModelHint": "Nincs katalógustalálat. Írjon be bármilyen modellazonosítót; az egyedi azonosítók változatlanul mentésre kerülnek.",
       "dataRegion": "Adatrégió",
       "dataRegionDescription": "Az adatszuverenitás érdekében a kiválasztott régión keresztül irányítja az AI-hívásokat.",
       "dataRegionUnsupported": "A regionális útválasztás csak a Google AI (Vertex AI) esetén érhető el.",
       "decision": {
         "add": "Döntési modell hozzáadása",
         "description": "A rögzített válaszú kérdések, például a dokumentumkategóriák vagy a hivatkozások polaritása, ehhez a modellhez kerülnek; enélkül a generatív modell válaszol rájuk.",
-        "incomplete": "Adj meg API-kulcsot és modellt a döntési modellhez, vagy távolítsd el.",
-        "instanceProvided": "stella már biztosít döntési modellt; sajátot csak akkor adj hozzá, ha másikat szeretnél használni.",
+        "incomplete": "Adjon meg API-kulcsot és modellt a döntési modellhez, vagy távolítsa el.",
+        "instanceProvided": "stella már biztosít döntési modellt; sajátot csak akkor adjon hozzá, ha másikat szeretne használni.",
         "label": "Döntési modell",
         "modelId": "Modellazonosító"
       },
@@ -3639,17 +3639,17 @@
       "description": "Használja saját API-kulcsát, vagy állítsa be az adatszuverenitási régiót.",
       "editProviders": "Szolgáltatók szerkesztése",
       "endpoint": "Végpont",
-      "endpointDescription": "Használd az Azure OpenAI vagy Azure Foundry /openai/v1 végpontot. A stella a normalizált végpontot menti.",
+      "endpointDescription": "Használja az Azure OpenAI vagy Azure Foundry /openai/v1 végpontot. A stella a normalizált végpontot menti.",
       "keepSavedKey": "Mentett kulcs megtartása",
       "modelForRole": "{role} modellje",
       "modelIdPlaceholder": "Modellek keresése",
-      "modelsDescription": "Válassz szolgáltatót és egy felkínált multimodális modellt minden AI-kategóriához.",
+      "modelsDescription": "Válasszon szolgáltatót és egy felkínált multimodális modellt minden AI-kategóriához.",
       "modelsPanel": "Módok",
       "newApiKey": "Új API-kulcs",
       "newApiKeyDescription": "Mentéskor lecseréli a mentett kulcsot.",
       "noModelResults": "Nincs egyező felkínált modell",
       "overrideRoles": "Szerepkörök felülírása",
-      "overrideRolesDescription": "Válaszd ki, mely szerepkörök használják ezt a kulcsot, majd válassz modellt minden szerepkörhöz. A ki nem választott szerepkörök a platform alapértelmezését használják.",
+      "overrideRolesDescription": "Válassza ki, mely szerepkörök használják ezt a kulcsot, majd válasszon modellt minden szerepkörhöz. A ki nem választott szerepkörök a platform alapértelmezését használják.",
       "prices": {
         "azureManaged": "Az üzembe helyezés árazása az Azure-ban kezelhető.",
         "empty": "Adjon hozzá szolgáltatót a modellárak megtekintéséhez",
@@ -3667,7 +3667,7 @@
       "providerForRole": "{role} szolgáltatója",
       "providerKeyInvalid": "A {provider} elutasította a kulcsot. Kérjük, ellenőrizze.",
       "providerKeyInvalidShort": "Érvénytelen",
-      "providersDescription": "Add meg azoknak a szolgáltatóknak a hitelesítő adatait, amelyeket stella használjon.",
+      "providersDescription": "Adja meg azoknak a szolgáltatóknak a hitelesítő adatait, amelyeket stella használ.",
       "providersPanel": "Szolgáltatók",
       "regions": {
         "ch": "Svájc (europe-west6)",
@@ -3682,8 +3682,8 @@
         "pdf": "PDF",
         "reasoning": "Érvelés"
       },
-      "selectAtLeastOneRole": "Válassz legalább egy szerepkört ehhez a kulcshoz.",
-      "selectModelForEachRole": "Adj hozzá szolgáltatót, és válassz modellt minden kategóriához.",
+      "selectAtLeastOneRole": "Válasszon legalább egy szerepkört ehhez a kulcshoz.",
+      "selectModelForEachRole": "Adjon hozzá szolgáltatót, és válasszon modellt minden kategóriához.",
       "selectedProvider": "{provider}",
       "title": "AI-konfiguráció"
     },
@@ -3903,7 +3903,7 @@
   },
   "search": {
     "aiRefine": "Keresés javítása AI-val",
-    "continueInChat": "Folytatás chatben",
+    "continueInChat": "Folytatás a csevegésben",
     "dateFrom": "Mettől",
     "dateTo": "Meddig",
     "deleteSearchDescription": "Ezzel véglegesen törli ezt: \"<bdi>{name}</bdi>\".",
@@ -4156,44 +4156,44 @@
       "documentTypes": {
         "addPlaceholder": "Dokumentumtípus hozzáadása (pl. munkaszerződés)",
         "deleteFailed": "Nem sikerült törölni a dokumentumtípust",
-        "description": "Határozza meg a szervezet által felülvizsgált dokumentumtípusokat. A playbookok ezekre vonatkoznak, az MI-osztályozó pedig ezekbe sorolja a dokumentumokat.",
+        "description": "Határozza meg a szervezet által felülvizsgált dokumentumtípusokat. A playbookok ezekre vonatkoznak, az AI-osztályozó pedig ezekbe sorolja a dokumentumokat.",
         "labelAria": "Dokumentumtípus neve",
         "reorder": "Dokumentumtípus átrendezése",
         "title": "Dokumentumtípusok"
       },
       "matterNumbering": "Ügyszámozás",
       "matterNumberingDescription": "Beállíthatja, hogyan generálódjanak az új ügyek hivatkozási számai",
-      "membersDescription": "Manage who has access to this organization",
+      "membersDescription": "Kezelje, kik férhetnek hozzá ehhez a szervezethez, és a függőben lévő meghívókat",
       "memoryExtraction": {
-        "description": "Ha be van kapcsolva, a stella a háttérben áttekinti az összefoglalt beszélgetéseket, és memóriabejegyzéseket javasol, amelyeket egy embernek meg kell erősítenie, mielőtt befolyásolnák az asszisztenst. Ez a csapata saját AI-szolgáltatói kulcsával fut, ezért hagyja kikapcsolva, hacsak nem szeretné, hogy ezt a háttérben zajló AI-használatot az Ön kulcsára számlázzák.",
+        "description": "Ha be van kapcsolva, a stella a háttérben áttekinti az összefoglalt csevegéseket, és memóriabejegyzéseket javasol, amelyeket egy embernek meg kell erősítenie, mielőtt befolyásolnák az asszisztenst. Ez a csapata saját AI-szolgáltatói kulcsával fut, ezért hagyja kikapcsolva, hacsak nem szeretné, hogy ezt a háttérben zajló AI-használatot az Ön kulcsára számlázzák.",
         "title": "Memóriakinyerés",
-        "toggleLabel": "Memóriabejegyzések javaslása a beszélgetési előzményekből a háttérben"
+        "toggleLabel": "Memóriabejegyzések javaslata a csevegési előzmények alapján, a háttérben"
       },
       "pendingInvitations": "Függőben lévő meghívók",
       "practiceJurisdictions": "Joghatóságok",
       "practiceJurisdictionsDescription": "Válassza ki az Önre vonatkozó joghatóságokat.",
       "promptCaching": {
-        "description": "Bekapcsolva a stella gyorsítótár-jelzőket ad hozzá, így az ugyanazon dokumentumra vagy szálra vonatkozó ismételt MI-kérések ~10× kevesebbe kerülnek és gyorsabban befejeződnek. A gyorsítótárazott promptok legfeljebb 5 percig maradnak az MI-szolgáltatónál, a szervezetére korlátozva. Kikapcsolás esetén a stella nem küld többé gyorsítótár-jelzőket, de a szolgáltatók továbbra is opportunista módon gyorsítótárazhatnak — csak az MI-szolgáltatóval kötött Zero Data Retention szerződés tiltja le teljesen a szerveroldali gyorsítótárazást.",
+        "description": "Bekapcsolva a stella gyorsítótár-jelzőket ad hozzá, így az ugyanazon dokumentumra vagy szálra vonatkozó ismételt AI-kérések ~10× kevesebbe kerülnek és gyorsabban befejeződnek. A gyorsítótárazott promptok legfeljebb 5 percig maradnak az AI-szolgáltatónál, a szervezetére korlátozva. Kikapcsolás esetén a stella nem küld többé gyorsítótár-jelzőket, de a szolgáltatók továbbra is opportunista módon gyorsítótárazhatnak — csak az AI-szolgáltatóval kötött Zero Data Retention szerződés tiltja le teljesen a szerveroldali gyorsítótárazást.",
         "title": "Prompt gyorsítótárazás",
-        "toggleLabel": "Prompt gyorsítótárazás engedélyezése az MI-szolgáltatóknál"
+        "toggleLabel": "Prompt gyorsítótárazás engedélyezése az AI-szolgáltatóknál"
       },
       "renameDescription": "A tagok azonnal látni fogják az új nevet.",
       "renameTitle": "Szervezet átnevezése",
-      "renameTypeToConfirm": "A megerősítéshez írd be az új nevet: {name}",
+      "renameTypeToConfirm": "A megerősítéshez írja be az új nevet: {name}",
       "usage": "Használat",
       "usageDescription": "Használati korlátok és jogosultsági állapot ehhez a szervezethez",
       "usageEmptyDescription": "Állíts be használati jogosultságot, hogy a szervezet használhassa a mért AI-funkciókat.",
       "usageEmptyTitle": "Nincs használati jogosultság",
       "usageEndsOnTemplate": "Lejárat: {date}",
       "usageLimitAvailable": "Elérhető",
-      "usageLimitDescriptionEntitlementInactive": "A szervezet használati jogosultsága szünetel vagy inaktív. Ellenőrizd a hosztolt használat kezelését, vagy fordulj egy üzemeltetőhöz.",
+      "usageLimitDescriptionEntitlementInactive": "A szervezet használati jogosultsága szünetel vagy inaktív. Ellenőrizze a hosztolt használat kezelését, vagy forduljon egy üzemeltetőhöz.",
       "usageLimitDescriptionNoEntitlement": "Az AI-funkciókhoz aktív használati jogosultság szükséges ennél a szervezetnél.",
       "usageLimitDescriptionUsageLimitExceeded": "Ez a művelet nem futtatható a szervezet jelenlegi használati állapotával.",
       "usageLimitNeeded": "Szükséges",
       "usageLimitNotNow": "Most nem",
       "usageLimitTitleEntitlementInactive": "A használati jogosultság nem aktív",
       "usageLimitTitleNoEntitlement": "Használati jogosultság szükséges",
-      "usageLimitTitleUsageLimitExceeded": "Elérted az AI-használati korlátot",
+      "usageLimitTitleUsageLimitExceeded": "Elérte az AI-használati korlátot",
       "usageManage": "Hosztolt használat kezelése",
       "usageManageError": "Nem sikerült megnyitni a hosztolt használat kezelését",
       "usageManuallyManaged": "Kézzel kezelt",
@@ -4207,7 +4207,7 @@
       "usagePlanPriceSeatYearTemplate": "{price} / hely / év",
       "usagePlanPriceYearTemplate": "{price} / év",
       "usagePlanSeats": "Helyek",
-      "usagePlansDescription": "Válassz díjcsomagot a szervezetednek.",
+      "usagePlansDescription": "Válasszon díjcsomagot a szervezetének.",
       "usagePlansTitle": "Díjcsomagok",
       "usageSeats": "{count, plural, one {# hely} other {# hely}}",
       "usageStatusCancelled": "Lemondva",
@@ -4492,9 +4492,9 @@
     "addItem": "Elem hozzáadása",
     "addPart": "Rész hozzáadása",
     "addTag": "Címke hozzáadása",
-    "aiAdaptHint": "Az MI a megfogalmazást a dokumentum minden előfordulási helyéhez igazítja.",
-    "aiDecidedConditions": "Az MI dönti el",
-    "aiFieldsNotDrafted": "Az MI nem tudta megfogalmazni ezeket a mezőket: {list}",
+    "aiAdaptHint": "Az AI a megfogalmazást a dokumentum minden előfordulási helyéhez igazítja.",
+    "aiDecidedConditions": "Az AI dönti el",
+    "aiFieldsNotDrafted": "Az AI nem tudta megfogalmazni ezeket a mezőket: {list}",
     "allTemplates": "Összes sablon",
     "backToList": "Vissza a sablonokhoz",
     "binding": {
@@ -4556,7 +4556,7 @@
     "conditionOpOnOrBefore": "napon vagy előtt",
     "conditionOperator": "Operátor",
     "conditionOr": "Vagy",
-    "conditionOverrideHint": "Kattintson, hogy Ön adja meg az értéket; kattintson újra, hogy visszaadja az MI-nek",
+    "conditionOverrideHint": "Kattintson, hogy Ön adja meg az értéket; kattintson újra, hogy visszaadja az AI-nak",
     "conditionUseFieldInstead": "Használjon inkább mezőt",
     "conditionUseFormula": "ƒ Számított érték…",
     "conditionValue": "Érték",
@@ -4684,27 +4684,27 @@
     "structureWarningParagraph": "Bekezdés {paragraph, number}",
     "structureWarnings": "{count, plural, one {# struktúra figyelmeztetés} other {# struktúra figyelmeztetés}}",
     "studio": {
-      "aiAdaptInstructionPlaceholder": "Választható: hogyan igazítsa az MI a megfogalmazást (pl. a környező nyelvtanhoz)",
-      "aiDrafted": "MI által megfogalmazva",
-      "aiNoFields": "Az MI nem javasolt egyetlen mezőt sem",
+      "aiAdaptInstructionPlaceholder": "Választható: hogyan igazítsa az AI a megfogalmazást (pl. a környező nyelvtanhoz)",
+      "aiDrafted": "AI által megfogalmazva",
+      "aiNoFields": "Az AI nem javasolt egyetlen mezőt sem",
       "aiPresetPrompt": "Javasolj kitölthető sablonmezőket",
-      "aiPromptContextHint": "Írjon @ jelet egy másik mezőre való hivatkozáshoz; a MI a többi mező értékeit használhatja.",
-      "aiPromptPlaceholder": "Írja le, mit fogalmazzon meg a MI ehhez a mezőhöz, pl. a meghatalmazás terjedelmét.",
+      "aiPromptContextHint": "Írjon @ jelet egy másik mezőre való hivatkozáshoz; az AI a többi mező értékeit használhatja.",
+      "aiPromptPlaceholder": "Írja le, mit fogalmazzon meg az AI ehhez a mezőhöz, pl. a meghatalmazás terjedelmét.",
       "aiScopeDocument": "Teljes dokumentum",
       "aiScopeQuestion": "Mezők javaslata itt:",
       "aiScopeSelection": "Kijelölt rész",
       "aiScopeSelectionPrompt": "Csak a dokumentum kijelölt részében javasolj mezőket:",
-      "aiSeesDocument": "Engedje, hogy a MI olvassa a dokumentumot",
+      "aiSeesDocument": "Engedje, hogy az AI olvassa a dokumentumot",
       "aiSuggest": "Mezők javaslása",
       "clauseSlotHelp": "A csatolt kikötés a sablon kitöltésekor kerül ide. Csatolja vagy módosítsa ezen a panelen vagy a beszúrás menüből.",
       "conceptClause": "Újrafelhasználható záradékot illeszt be a könyvtárából.",
       "conceptCondition": "Ezt a szöveget csak akkor jeleníti meg, ha egy feltétel teljesül.",
       "conceptField": "Egy érték, amelyet a használatkor tölt ki.",
       "conceptLoop": "Megismétli ezt a szöveget a lista minden eleméhez.",
-      "conditionAiInstructionsHelp": "Mondja meg a MI-nek, hogyan döntse el, hogy ez a blokk érvényes-e. A dokumentum szövegét és a többi mező értékét olvassa.",
-      "conditionAiInstructionsLabel": "Utasítások a MI számára",
+      "conditionAiInstructionsHelp": "Mondja meg az AI-nak, hogyan döntse el, hogy ez a blokk érvényes-e. A dokumentum szövegét és a többi mező értékét olvassa.",
+      "conditionAiInstructionsLabel": "Utasítások az AI számára",
       "conditionAiPlaceholder": "Írja le, mikor igaz, pl. a szerződésre a cseh jog az irányadó",
-      "conditionAskQuestion": "Tegyél fel egy igen/nem kérdést",
+      "conditionAskQuestion": "Tegyen fel egy igen/nem kérdést",
       "conditionAskQuestionHelp": "A sablont kitöltő személy Igen vagy Nem választ ad. Ez a blokk akkor jelenik meg, ha Igen a válasz.",
       "conditionAskQuestionPlaceholder": "Van képviselő?",
       "conditionBuildRule": "Szabály létrehozása",
@@ -4717,7 +4717,7 @@
       "conditionReusePick": "Válasszon meglévő feltételt…",
       "conditionRuleFallbackLabel": "Számított feltétel",
       "conditionSource": "Hogyan dől el",
-      "conditionSourceAi": "Az MI dönt",
+      "conditionSourceAi": "Az AI dönt",
       "conditionSourceAsked": "Megkérdezett",
       "conditionSourceRule": "Szabály",
       "conditionsSectionHelp": "Jelöljön ki szöveget a dokumentumban → jobb kattintás → Csak akkor jelenjen meg, ha…",
@@ -4769,7 +4769,7 @@
       "noNestedMarkers": "A jelölők nem ágyazhatók másik jelölőbe",
       "otherwise": "Egyébként",
       "otherwiseIf": "Egyébként ha {condition}",
-      "prepareWithAi": "Előkészítés MI-vel",
+      "prepareWithAi": "Előkészítés AI-val",
       "previewHint": "Vigye az egeret egy lehetőség fölé az előnézethez.",
       "questions": "Kérdések",
       "recipeSaveFailed": "Nem sikerült menteni a receptet",
@@ -4802,7 +4802,7 @@
       "sourceEnable": "Kitöltés az ügyből",
       "sourceHint": "Az érték a dokumentum létrehozásakor az ügyből (annak ügyfeléből, egy félből, magából az ügyből, egy ügyvédből vagy egy ügyvédi irodából) kerül kitöltésre.",
       "sourcePickSource": "Adatforrás",
-      "textPlusAi": "Személy + MI",
+      "textPlusAi": "Személy + AI",
       "useExisting": "A meglévő {name} mező használata",
       "whoFills": "Ki tölti ki később ezt a mezőt?"
     },
@@ -4910,10 +4910,10 @@
   },
   "webSearch": {
     "settings": {
-      "description": "Bring your own web-search API keys so chat can search the web and read pages with your own provider account. Without them, chat uses the platform's shared keys when available.",
-      "fetchTitle": "Page reader key",
+      "description": "Használja saját webes keresési API-kulcsait, hogy a csevegés az Ön szolgáltatói fiókján keresztül kereshessen a weben és olvashasson oldalakat. Ezek nélkül a csevegés a platform megosztott kulcsait használja, ha elérhetők. Az oldalak olvasása kulcs nélkül is működik; kulcs hozzáadásával magasabb kéréskorlátot kaphat.",
+      "fetchTitle": "Oldalolvasó kulcsa (Jina)",
       "platformFallback": "A platform megosztott kulcsa van használatban. Saját szolgáltatói fiókja és kvótája használatához adja hozzá a saját kulcsát.",
-      "searchTitle": "Search provider key",
+      "searchTitle": "Keresőszolgáltató kulcsa (Tavily)",
       "title": "Webes keresési kulcsok"
     }
   },
@@ -5021,7 +5021,7 @@
       "defaultPropertyName": "Dokumentumok",
       "desktopEdit": {
         "action": "Szerkesztés az asztali alkalmazásban",
-        "authRequiredDescription": "Frissítsd a stella felületét, és jelentkezz be újra, mielőtt az asztali szerkesztést használod.",
+        "authRequiredDescription": "Frissítse a stella felületét, és jelentkezzen be újra, mielőtt az asztali szerkesztést használja.",
         "authRequiredTitle": "A munkamenet lejárt",
         "editLocallyPrompt": "Szerkessze a fájlt helyben, és szinkronizálja a módosításokat a stellával.",
         "forceRelease": "Kényszerített feloldás",
@@ -5037,7 +5037,7 @@
         "takeoverNoResponseDescription": "A zárolás tulajdonosa nem válaszolt. Kényszerítheti a feloldást.",
         "takeoverWaiting": "Válaszra várás",
         "takeoverWaitingDescription": "{name} felkérése a zárolás feloldására...",
-        "unavailableDescription": "Az asztali szerkesztés használata előtt indítsd el a stella desktop alkalmazást, és hagyd futni.",
+        "unavailableDescription": "Az asztali szerkesztés használata előtt indítsa el a stella desktop alkalmazást, és hagyja futni.",
         "unavailableTitle": "A stella desktop nem érhető el.",
         "updateRequiredDescription": "A stella desktop frissítést igényel. Automatikusan frissül, amikor az aktív asztali szerkesztések befejeződtek; próbálja újra az újraindítás után.",
         "updateRequiredTitle": "stella desktop frissítése"
@@ -5394,7 +5394,7 @@
         "applyCrop": "Vágás alkalmazása",
         "crop": "Vágás",
         "cropBottom": "Alul",
-        "cropDescription": "{count, plural, one {Állítsd be a kijelölt oldal vágási margóit.} other {Állítsd be a(z) # kijelölt oldal vágási margóit.}}",
+        "cropDescription": "{count, plural, one {Állítsa be a kijelölt oldal vágási margóit.} other {Állítsa be a(z) # kijelölt oldal vágási margóit.}}",
         "cropLeft": "Balra",
         "cropRight": "Jobbra",
         "cropTitle": "Oldalak vágása",
@@ -5403,7 +5403,7 @@
         "deselectAll": "Összes kijelölésének megszüntetése",
         "discard": "Elvetés",
         "discardDescription": "Az oldalak módosításai elvesznek.",
-        "discardTitle": "Elveted a módosításokat?",
+        "discardTitle": "Elveti a módosításokat?",
         "documentLimit": "A rendező legfeljebb {maxSources} PDF-fájlt vagy {maxPages} oldalt támogat.",
         "downloadCopy": "Másolat letöltése",
         "downloadSelectedPages": "Kijelölt oldalak letöltése",
@@ -5461,10 +5461,10 @@
         "createMany": "{count} oszlop létrehozása",
         "createdMany": "{count} oszlop létrehozva",
         "createdOne": "Oszlop létrehozva",
-        "promptPlaceholder": "What should this column extract?",
+        "promptPlaceholder": "Mit nyerjen ki ez az oszlop? A / és a @ használatához pontosítsa az oszlop párbeszédpaneljén.",
         "title": "Oszlopok hozzáadása"
       },
-      "chipManual": "Manual",
+      "chipManual": "AI nélkül",
       "chipMulti": "Címkék",
       "chipNumber": "Szám",
       "chipSingle": "Címke",
@@ -5503,7 +5503,7 @@
       "flowNoInputs": "nincs bemenet",
       "ifNoMatchFound": "Ha nincs találat",
       "inputs": "Bemenetek",
-      "inputsHelp": "Válaszd ki, mely oszlopokat olvassa az AI. Kattints hozzáadáshoz/eltávolításhoz.",
+      "inputsHelp": "Válassza ki, mely oszlopokat olvassa az AI. Kattintással hozzáadhatja vagy eltávolíthatja őket.",
       "int": "Egész szám",
       "keepEmpty": "Hagyja üresen",
       "manualColumn": "Kézi oszlop",
@@ -5522,20 +5522,20 @@
       "noConditionFields": "Nincs szűrésre használható mező.",
       "noFirstDocument": "Még nincsenek dokumentumok az előnézethez.",
       "noPropertiesFound": "Nincsenek tulajdonságok",
-      "optionsHelp": "Add meg az értékeket, amelyek közül az AI választhat.",
+      "optionsHelp": "Adja meg az értékeket, amelyek közül az AI választhat.",
       "optionsLabel": "Lehetőségek",
       "person": "Person",
       "previewEmpty": "Az AI nem adott vissza értéket.",
       "previewMockNotice": "Mock előnézet — a háttér még nincs bekötve.",
       "previewOnFirst": "Előnézet: {document}",
       "previewSkipped": "Ezen a dokumentumon nincs alkalmazható bemenet.",
-      "previewSubject": "Próbáld ki egy mintán",
+      "previewSubject": "Próbálja ki egy mintán",
       "previewUnsupported": "Az előnézet ehhez a dokumentumtípushoz nem támogatott.",
-      "readingFrom": "Reading from",
+      "readingFrom": "Az AI innen olvas:",
       "referencesItself": "A tulajdonság más tulajdonságokon keresztül hivatkozik önmagára",
       "rerunColumn": "Oszlop újrafuttatása",
       "resultType": "Eredmény típusa",
-      "returnsLabel": "Returns",
+      "returnsLabel": "Formátum",
       "scopeFile": "Aktuális fájl",
       "scopeFileDescription": "Használja ezt: {property}, és futtassa most ezt a fájlt.",
       "scopeFileUnavailable": "Ehhez a nézethez nem érhető el fájlforrás.",
@@ -5612,7 +5612,7 @@
       "addFields": "Mezők hozzáadása",
       "advancedFilter": "Speciális",
       "advancedFilterCount": "{count, plural, =0 {bármelyik} one {# szabály} other {# szabály}}",
-      "aiGenerated": "MI által generált",
+      "aiGenerated": "AI által generált",
       "calendar": {
         "addDates": "+ Dátumok",
         "additionalDates": "+{count} dátum",
@@ -5674,7 +5674,7 @@
         "aiSummaries": "AI-összefoglalók belefoglalása",
         "completed": "A jelentés elkészült",
         "customize": "Testreszabás",
-        "customized": "Másolva a sablonjaidba",
+        "customized": "Másolva a sablonjaiba",
         "deliveryLabel": "Kézbesítés",
         "description": "Készítsen jelentésdokumentumot ebből a nézetből jelentéssablon segítségével.",
         "failed": "A jelentés exportálása sikertelen",

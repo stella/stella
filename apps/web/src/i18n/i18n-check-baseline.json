@@ -399,12 +399,24 @@
     "catalogue.configuration": [
       "fr"
     ],
+    "catalogue.filter.skills": [
+      "de"
+    ],
+    "chat.contextMeter.conversation": [
+      "fr"
+    ],
     "chat.contextMeter.tools": [
       "de"
     ],
     "chat.folioCitationFallback": [
       "es",
       "fr"
+    ],
+    "chat.landing.prompts": [
+      "de"
+    ],
+    "chat.pastedText.fromPromptFallback": [
+      "de"
     ],
     "chat.suggestionSeverity.style": [
       "fr"
@@ -773,6 +785,7 @@
       "de",
       "es",
       "fr",
+      "pt-BR",
       "sk"
     ],
     "navigation.contacts": [
@@ -817,6 +830,7 @@
       "de",
       "es",
       "fr",
+      "pt-BR",
       "sk"
     ],
     "organization.invitations.emailAddressPlaceholder": [
@@ -864,6 +878,7 @@
       "de",
       "es",
       "fr",
+      "pt-BR",
       "sk"
     ],
     "search.kinds.contact": [
@@ -1368,6 +1383,11 @@
       "pl",
       "pt-BR",
       "sk"
+    ],
+    "workspaces.properties.returnsLabel": [
+      "de",
+      "fr",
+      "pl"
     ],
     "workspaces.properties.text": [
       "cs",

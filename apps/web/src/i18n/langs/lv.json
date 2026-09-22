@@ -110,7 +110,7 @@
       "askAboutDocument": "Izveidojiet bezmaksas kontu, lai jautātu par šo dokumentu",
       "askInChat": "Izveidojiet bezmaksas kontu, lai jautātu to tērzēšanā",
       "description": "Kad konts būs gatavs, atgriezīsieties šajā lapā.",
-      "generateHeadnotes": "Izveidojiet bezmaksas kontu, lai MI sagatavotu kopsavilkumus",
+      "generateHeadnotes": "Izveidojiet bezmaksas kontu, lai AI sagatavotu kopsavilkumus",
       "writeResearchQuestion": "Izveidojiet bezmaksas kontu, lai uzdotu jautājumu šiem rezultātiem"
     },
     "resendCode": "Nosūtīt kodu vēlreiz uz <email>{emailAddress}</email>",
@@ -333,7 +333,7 @@
       "startTitle": "Neizdevās sākt tulkošanu"
     },
     "errorCodes": {
-      "aiUnavailable": "Tulkošanai nav pieejams neviens MI modelis.",
+      "aiUnavailable": "Tulkošanai nav pieejams neviens AI modelis.",
       "applyFailed": "Tulkojumus neizdevās ierakstīt atpakaļ dokumentā.",
       "documentChanged": "Dokuments tulkošanas laikā mainījās. Sagatavojiet to vēlreiz.",
       "documentUnresolved": "Dokuments vai tā fails vairs nav pieejams.",
@@ -368,7 +368,7 @@
     },
     "origins": {
       "default": "Nav novērtēts",
-      "model": "MI"
+      "model": "AI"
     },
     "review": {
       "droppedRows": "{count, plural, zero {Izlaistas # rindu} one {Izlaista # rinda} other {Izlaistas # rindas}}: tajās nav tulkojama teksta.",
@@ -549,7 +549,7 @@
   "caseLaw": {
     "analysis": {
       "abstract": "Kopsavilkums",
-      "aiLayer": "{layer} (MI)",
+      "aiLayer": "{layer} (AI)",
       "backToSection": "Atgriezties šīs sadaļas sākumā",
       "categories": {
         "facts": "Fakti",
@@ -557,7 +557,7 @@
         "procedural-history": "Procesa gaita",
         "reasoning": "Argumentācija"
       },
-      "generate": "Sagatavot MI kopsavilkumus",
+      "generate": "Sagatavot AI kopsavilkumus",
       "holdingAnchor": "Pāriet uz rindkopu",
       "topics": "Tēmas",
       "treatment": "Vēlākā judikatūra"
@@ -678,7 +678,7 @@
     },
     "newestDecisions": "Jaunākie nolēmumi",
     "notesFilter": {
-      "ai": "MI",
+      "ai": "AI",
       "human": "Cilvēku"
     },
     "pagination": {
@@ -841,8 +841,8 @@
       "toastDescription": "Pilnas lapas tērzēšana ar saglabātām sarunām drīz būs pieejama.",
       "toastTitle": "Pilnais skats vēl nav pieejams"
     },
-    "aiPrompt": "MI ziņojuma lauks",
-    "aiThread": "MI saruna",
+    "aiPrompt": "AI ziņojuma lauks",
+    "aiThread": "AI saruna",
     "analyzingSources": "Avotu analīze",
     "anonymizedMode": "Anonimizēts AI režīms",
     "anonymizedModeDisabled": "Anonimizēts AI režīms ir izslēgts",
@@ -851,7 +851,7 @@
       "tooltip": "Modelim nosūtīts kā {placeholder}."
     },
     "applyMode": {
-      "description": "Word stores who made each change. We will remember your choice.",
+      "description": "Word saglabā, kurš veica katru izmaiņu. Mēs atcerēsimies jūsu izvēli.",
       "direct": "Nē, lietot tieši",
       "title": "Vai lietot labojumus ar izmaiņu izsekošanu?",
       "tracked": "Jā, ar izsekošanu"
@@ -881,8 +881,8 @@
     "attachment": "Pielikums",
     "audioContent": "Ģenerēts audio",
     "cancelQueuedMessage": "Atcelt rindā gaidošo ziņojumu",
-    "caseLawGreeting": "Uzdod jautājumus par šo lēmumu — pilns teksts ir pieejams šeit.",
-    "chatAbout": "Ievietot AI čatā",
+    "caseLawGreeting": "Uzdodiet jautājumus par šo lēmumu — pilns teksts ir pieejams šeit.",
+    "chatAbout": "Ievietot AI tērzēšanā",
     "choosePromptImprovementStrategy": "Uzvednes uzlabošanas iespējas",
     "composerMenu": {
       "context": "Konteksts",
@@ -934,11 +934,11 @@
     "deleteThread": "Dzēst sarunu",
     "editMode": {
       "autoDirect": "Automātiski · pārrakstīt",
-      "autoDirectDescription": "MI labojumi tiek lietoti uzreiz, tieši pārrakstot dokumentu (bez izmaiņu izsekošanas).",
+      "autoDirectDescription": "AI labojumi tiek lietoti uzreiz, tieši pārrakstot dokumentu (bez izmaiņu izsekošanas).",
       "autoTrackedChanges": "Automātiski · izsekot izmaiņas",
-      "autoTrackedChangesDescription": "MI labojumi tiek lietoti uzreiz kā jums piedēvētas izsekotas izmaiņas.",
+      "autoTrackedChangesDescription": "AI labojumi tiek lietoti uzreiz kā jums piedēvētas izsekotas izmaiņas.",
       "manual": "Manuāla pārskatīšana",
-      "manualDescription": "MI labojumi tiek ievietoti rindā, lai jūs tos varētu pārskatīt un lietot pa vienam."
+      "manualDescription": "AI labojumi tiek ievietoti rindā, lai jūs tos varētu pārskatīt un lietot pa vienam."
     },
     "editableFilePlaceholder": "Tērzēt par {title} vai rediģēt",
     "editableFilePlaceholderAction": "Tērzēt vai rediģēt",
@@ -950,11 +950,11 @@
     "fileTooLarge": "Fails pārsniedz {maxSize} ierobežojumu",
     "focusSuggestion": "Fokusēt ieteikumu: {topic}",
     "folioCitationFallback": "lpp. {n}",
-    "forkFromHere": "Sākt jaunu sarunu no šejienes",
+    "forkFromHere": "Sākt jaunu tērzēšanu no šejienes",
     "forkedFrom": "Izveidota no <bdi>{title}</bdi>",
-    "forkedFromUnavailable": "Izveidota no sarunas, kas vairs nav pieejama",
-    "forkedThread": "No citas sarunas",
-    "forkingThread": "Tiek veidota jauna saruna…",
+    "forkedFromUnavailable": "Izveidota no tērzēšanas, kas vairs nav pieejama",
+    "forkedThread": "No citas tērzēšanas",
+    "forkingThread": "Tiek veidota jauna tērzēšana…",
     "greeting": "Pie kā vēlaties strādāt?",
     "greetingSubtitle": "Sāciet ar lietu, dokumentu vai vienkāršu jautājumu.",
     "hideThread": "Paslēpt sarunu",
@@ -969,10 +969,10 @@
       "lastAccessedMatters": "Pēdējās atvērtās lietas",
       "noMatters": "Lietu vēl nav",
       "noPrompts": "Prasmju vēl nav",
-      "noRecentChats": "Nav nesenu čatu",
+      "noRecentChats": "Nav nesenu tērzēšanu",
       "pinnedMatters": "Piespraustās lietas",
       "prompts": "Prasmes",
-      "recentChats": "Nesenie čati"
+      "recentChats": "Nesenās tērzēšanas"
     },
     "loadEarlierMessages": "Ielādēt vecākus ziņojumus",
     "loadEarlierMessagesError": "Neizdevās ielādēt vecākus ziņojumus",
@@ -1005,7 +1005,7 @@
       "title": "Atlasīt tērzēšanas modeli",
       "viaProvider": "izmantojot {provider}"
     },
-    "newChat": "Jauna saruna",
+    "newChat": "Jauna tērzēšana",
     "noPromptPresetOnly": "Nav ziņojuma, tikai sākotnējais iestatījums",
     "noThreads": "Sarunu vēl nav",
     "officeCitationUnavailable": "Šī atsauce vairs nav pieejama.",
@@ -1067,8 +1067,8 @@
     "sendWithoutAnonymization": "Sūtīt bez anonimizācijas",
     "skills": {
       "scope": {
-        "private": "Jūsu MI prasmes",
-        "team": "Komandas MI prasmes"
+        "private": "Jūsu prasmes",
+        "team": "Komandas prasmes"
       }
     },
     "sourcePlaceholder": "Tērzēt par {title}",
@@ -1208,7 +1208,7 @@
     "usageFallbackNotice": "Dienas AI apjoms izlietots — atbildes turpinās ar standarta modeli.",
     "videoContent": "Ģenerēts video",
     "webSearch": {
-      "answer": "Summary from sources",
+      "answer": "Tīmekļa meklēšanas kopsavilkums",
       "answerDisclaimer": "Apkopots no zemāk redzamajiem publiskās tīmekļa meklēšanas rezultātiem. Pārbaudiet pēc norādītajiem avotiem.",
       "fetchedFrom": "no {source}",
       "openSource": "Atvērt {source} jaunā cilnē",
@@ -1615,7 +1615,7 @@
     "scopeAdminRead": "Lasīt jūsu organizācijas audita žurnālu",
     "scopeAdminWrite": "Pārvaldīt organizācijas dalībniekus un iestatījumus",
     "scopeBillingWrite": "Izveidot, rediģēt un dzēst jūsu laika ierakstus",
-    "scopeChat": "Lasīt un pārvaldīt jūsu čatus un ziņas",
+    "scopeChat": "Lasīt un pārvaldīt jūsu tērzēšanas un ziņas",
     "scopeContactsWrite": "Izveidot, rediģēt un dzēst kontaktpersonas visā jūsu organizācijā",
     "scopeDocumentsWrite": "Izveidot, rediģēt un dzēst jūsu dokumentus",
     "scopeExternalMcps": "Izmantot jūsu pievienotos ārējos rīkus",
@@ -1939,9 +1939,9 @@
       "accountDeletionTaskReassignmentLimitExceeded": "Jāpārdala pārāk daudz aktīvu uzdevumu. Pirms konta dzēšanas pabeidziet vai pārdaliet dažus uzdevumus.",
       "aiConfigDecisionInvalid": "Lēmumu modeļa konfigurācija nav derīga. Pārbaudiet pakalpojuma sniedzēju un modeli.",
       "aiConfigDecisionValidationFailed": "Lēmumu modelis noraidīja konfigurāciju. Pārbaudiet API atslēgu un modeli.",
-      "aiConfigModelInvalid": "MI modeļa konfigurācija nav derīga. Pārbaudiet atlasītos modeļus.",
-      "aiConfigProviderInvalid": "MI pakalpojuma sniedzēja konfigurācija nav derīga. Pārbaudiet pakalpojuma sniedzēja iestatījumus.",
-      "aiConfigProviderValidationFailed": "MI pakalpojuma sniedzējs noraidīja konfigurāciju. Pārbaudiet API atslēgu un modeli.",
+      "aiConfigModelInvalid": "AI modeļa konfigurācija nav derīga. Pārbaudiet atlasītos modeļus.",
+      "aiConfigProviderInvalid": "AI pakalpojuma sniedzēja konfigurācija nav derīga. Pārbaudiet pakalpojuma sniedzēja iestatījumus.",
+      "aiConfigProviderValidationFailed": "AI pakalpojuma sniedzējs noraidīja konfigurāciju. Pārbaudiet API atslēgu un modeli.",
       "deeplKeyRejected": "Saglabātā DeepL atslēga tika noraidīta. Aizstājiet to organizācijas iestatījumos.",
       "deeplQuotaExceeded": "Šīs organizācijas DeepL rakstzīmju kvota ir iztērēta.",
       "disposableEmailNotAllowed": "Pagaidu e-pasta adreses nav atļautas. Izmantojiet pastāvīgu e-pasta adresi.",
@@ -2176,7 +2176,7 @@
       "blankAction": "Sākt ar tukšu darbplūsmu",
       "description": "Palaidiet to no lietas cilnes “Darbplūsmas”, pēc grafika vai automātiski, kad tiek augšupielādēti faili. Nekas nav galīgs, kamēr kāds to neapstiprina, un rezultātu varat saglabāt lietā kā dokumentu.",
       "examplesTitle": "Sākt ar piemēru",
-      "title": "Saglabājiet soļus vienreiz un izpildiet tos jebkuras lietas dokumentiem. Darbu paveic MI, komanda to pārbauda, un katra izpilde iznāk vienāda."
+      "title": "Saglabājiet soļus vienreiz un izpildiet tos jebkuras lietas dokumentiem. Darbu paveic AI, komanda to pārbauda, un katra izpilde iznāk vienāda."
     },
     "enableFlow": "Iespējot darbplūsmu",
     "enabledDescription": "Atspējotas darbplūsmas nevar palaist vai aktivizēt.",
@@ -2281,17 +2281,17 @@
       "ai": "AI solis",
       "aiHelp": "Raksta tekstu atbilstoši jūsu norādījumiem un var lasīt atlasītos ievades dokumentus.",
       "createDocument": "Izveidot dokumentu",
-      "createDocumentHelp": "Saglabā jaunāko MI rezultātu kā dokumentu lietā, kurā tika sākta izpilde.",
+      "createDocumentHelp": "Saglabā jaunāko AI rezultātu kā dokumentu lietā, kurā tika sākta izpilde.",
       "documentTitlePlaceholder": "piem., Kopsavilkuma memorands",
       "documentTitleRequired": "Ievadiet dokumenta nosaukumu.",
       "empty": "Pievienojiet vismaz vienu soli.",
       "includeDocuments": "Iekļaut ievades dokumentus",
       "instructions": "Norādījumi",
       "instructionsPlaceholder": "Kas pārbaudītājam jāpārbauda",
-      "namePlaceholder": "Soļa nosaukums",
+      "namePlaceholder": "piem., Pārbaudīt konfidencialitātes līgumu",
       "nameRequired": "Ievadiet nosaukumu katram solim.",
       "prompt": "Uzvedne",
-      "promptPlaceholder": "Norādījumi AI solim",
+      "promptPlaceholder": "piem., Pārbaudiet pievienoto konfidencialitātes līgumu, salīdzinot ar tirgū ierastajiem noteikumiem, un atzīmējiet neparastas klauzulas",
       "promptRequired": "Ievadiet uzvedni AI solim.",
       "required": "Pievienojiet vismaz vienu soli.",
       "reviewGate": "Pārbaudes kontrolpunkts",
@@ -2525,7 +2525,7 @@
         "description": "Izmantojiet prasmes vai pievienojiet citus noderīgus rīkus",
         "steps": {
           "mcp": {
-            "body": "Ieslēdz vai izslēdz pievienota servera rīkus jūsu sarunās: uzņēmumu reģistrus, iekšējās sistēmas, visu, ko jūsu komanda ir pievienojusi.",
+            "body": "Ieslēdziet vai izslēdziet pievienota servera rīkus jūsu tērzēšanās: uzņēmumu reģistrus, iekšējās sistēmas, visu, ko jūsu komanda ir pievienojusi.",
             "title": "Pievienotie rīku serveri",
             "when": "Ieslēdziet, kad atbildei vajadzīgi aktuāli dati no ārpuses. Pārējos atstājiet izslēgtus: jo mazāk rīku spēlē, jo šaurāka un paredzamāka atbilde."
           },
@@ -2665,7 +2665,7 @@
     "openMatter": "Atvērt lietu",
     "origin": {
       "manual": "Kolēģis",
-      "model": "MI",
+      "model": "AI",
       "source": "Ārējs avots"
     },
     "proposalView": "Ieteikumi: {view}",
@@ -2777,7 +2777,7 @@
       "title": "Lietas konteksts"
     },
     "metadata": {
-      "aiExtractedHeading": "Iegūts ar MI",
+      "aiExtractedHeading": "Iegūts ar AI",
       "documentProperties": {
         "empty": "Šajā failā nav paša faila rekvizītu",
         "heading": "Faila rekvizīti",
@@ -2826,9 +2826,9 @@
     "review": {
       "actionNeeded": "Nepieciešama rīcība",
       "addComment": "Pievienot kā komentāru",
-      "addNote": "Pievienot piezīmi pretpusei",
+      "addNote": "Pievienot komentāru pretpusei",
       "addNotePlaceholder": "Ko pretpusei vajadzētu redzēt",
-      "addNoteSubmit": "Pievienot piezīmi",
+      "addNoteSubmit": "Pievienot komentāru",
       "addReference": "Pievienot {name} kā atsauci",
       "addTopic": "Pievienot tēmu",
       "allDecided": "Par visiem šeit redzamajiem secinājumiem ir pieņemts lēmums.",
@@ -2891,7 +2891,7 @@
       },
       "impact": {
         "favourable": "Labvēlīgs",
-        "neutral": "Neutral",
+        "neutral": "Bez ietekmes",
         "notJudged": "Nav vērtēts",
         "unfavourable": "Nelabvēlīgs"
       },
@@ -2919,12 +2919,12 @@
       "noReferencesFound": "Nav atrasti atbilstoši DOCX dokumenti.",
       "notCompared": "Nav salīdzināts",
       "notComparedCount": "Nav salīdzināts: {count, number}",
-      "noteAdded": "Pretpusei pievienota piezīme",
-      "noteBlockedChecking": "stella vēl pārbauda, vai šo dokumentu var droši rediģēt. Jūsu piezīme ir saglabāta; mēģiniet vēlreiz pēc brīža.",
-      "noteBlockedCollaboration": "Koplietotā rediģēšanas sesija vēl tiek atvērta. Jūsu piezīme ir saglabāta; mēģiniet vēlreiz pēc brīža.",
-      "noteBlockedOpening": "Dokuments vēl tiek atvērts. Jūsu piezīme ir saglabāta; mēģiniet vēlreiz pēc brīža.",
-      "noteBlockedReadOnly": "Šis koplietotais dokuments ir atvērts tikai lasīšanai. Jūsu piezīme ir saglabāta; mēģiniet vēlreiz, kad varēsiet to rediģēt.",
-      "noteNotAdded": "Piezīme nav pievienota",
+      "noteAdded": "Pretpusei pievienots komentārs",
+      "noteBlockedChecking": "stella vēl pārbauda, vai šo dokumentu var droši rediģēt. Jūsu komentārs ir saglabāts; mēģiniet vēlreiz pēc brīža.",
+      "noteBlockedCollaboration": "Koplietotā rediģēšanas sesija vēl tiek atvērta. Jūsu komentārs ir saglabāts; mēģiniet vēlreiz pēc brīža.",
+      "noteBlockedOpening": "Dokuments vēl tiek atvērts. Jūsu komentārs ir saglabāts; mēģiniet vēlreiz pēc brīža.",
+      "noteBlockedReadOnly": "Šis koplietotais dokuments ir atvērts tikai lasīšanai. Jūsu komentārs ir saglabāts; mēģiniet vēlreiz, kad varēsiet to rediģēt.",
+      "noteNotAdded": "Komentārs nav pievienots",
       "openPlaybooks": "Atvērt pārbaudes ceļvežus",
       "pane": {
         "document": "Panelis: secinājumi blakus dokumentam",
@@ -3110,7 +3110,7 @@
       "bearerTokenDescription": "Šis serveris izmanto Bearer tokenu. Ielīmējiet pakalpojuma sniedzēja tokenu, lai pabeigtu savienošanu.",
       "connectedToast": "MCP pievienots",
       "connectedWithLastUsed": "Pievienots · pēdoreiz izmantots {time}",
-      "description": "Pārvaldiet integrācijas, kas var pievienot rīkus čatam. Tokeni tiek glabāti katram lietotājam atsevišķi.",
+      "description": "Pārvaldiet integrācijas, kas var pievienot rīkus tērzēšanai. Tokeni tiek glabāti katram lietotājam atsevišķi.",
       "detected": "Noteikts: {authType}",
       "disable": "Izslēgt",
       "disabled": "Pievienots · izslēgts",
@@ -3119,7 +3119,7 @@
       "enable": "Ieslēgt",
       "errorDescription": "Integrāciju neizdevās atjaunināt.",
       "errorTitle": "MCP neizdevās",
-      "mcpExplainer": "Integrācijas pievieno čatam ārējus pakalpojumus, ar kuriem var strādāt MI.",
+      "mcpExplainer": "Integrācijas pievieno tērzēšanai ārējus pakalpojumus, ar kuriem var strādāt AI.",
       "needsReauth": "Nepieciešama atkārtota pievienošana",
       "off": "Izslēgts",
       "on": "Ieslēgts",
@@ -3133,7 +3133,7 @@
       "tokenPlaceholder": "Ielīmējiet tokenu",
       "urlLabel": "MCP servera URL",
       "urlPlaceholder": "https://example.com/mcp",
-      "useInChat": "Izmantot čatā",
+      "useInChat": "Izmantot tērzēšanā",
       "whatIsAnMcpServer": "Kas ir MCP serveris?"
     },
     "playbooks": {
@@ -3159,7 +3159,7 @@
       "askContentLabel": "Atbildes tips",
       "askQuestionLabel": "Jautājums",
       "askQuestionPlaceholder": "Kas mums jānolasa no katra dokumenta? Atstājiet tukšu manuālai ievadei.",
-      "check": "Izmantot precīzu noteikumu MI vietā",
+      "check": "Izmantot precīzu noteikumu AI vietā",
       "checkHint": "Izmērāmiem nosacījumiem, piemēram: maksājuma termiņš ≤ 30 dienas.",
       "checkKind": {
         "constraint": "Pārbaudīt atbildi pēc nosacījuma",
@@ -3296,7 +3296,7 @@
       "switchToManual": "Pielāgot jautājumu un atbildes formātu",
       "termKind": {
         "enumeration": "Uzskaitījums",
-        "language": "Language",
+        "language": "Formulējums",
         "parameter": "Parametrs",
         "presence": "Klātbūtne"
       },
@@ -3339,7 +3339,7 @@
         "description": "Novērtēti kontrolsaraksti, kas pārbauda dokumentus atbilstoši jūsu standartiem"
       },
       "prompts": {
-        "description": "Atkārtoti izmantojamas prasmes, kas čatā pieejamas ar /",
+        "description": "Atkārtoti izmantojamas prasmes, kas tērzēšanā pieejamas ar /",
         "title": "Prasmes"
       },
       "templates": {
@@ -3403,7 +3403,7 @@
         "descriptionPlaceholder": "Īss apraksts, kas redzams atlasītājā",
         "name": "Nosaukums",
         "namePlaceholder": "piem., Apkopot dokumentu",
-        "promptPlaceholder": "Instrukcijas, kas tiek ievietotas čata rakstīšanas laukā, izmantojot šo prasmi",
+        "promptPlaceholder": "Instrukcijas, kas tiek ievietotas tērzēšanas rakstīšanas laukā, izmantojot šo prasmi",
         "scope": "Redzamība",
         "scopePrivate": "Tikai es",
         "scopeTeam": "Visi komandā"
@@ -3475,7 +3475,7 @@
     "matterPicker": {
       "empty": "Izvēlieties lietu, lai skatītu tās atmiņu."
     },
-    "pageDescription": "Piezīmes un konteksts, ko asistents atceras visās sarunās.",
+    "pageDescription": "Piezīmes un konteksts, ko asistents atceras visās tērzēšanās.",
     "pageTitle": "Atmiņa",
     "provenance": "{source} · {date}",
     "restoredToast": "Atmiņa atjaunota",
@@ -3524,7 +3524,7 @@
     "sidebar": "Sānjosla",
     "sidebarDescription": "Parāda mobilo sānjoslu.",
     "templates": "Veidnes",
-    "toggleChat": "Pārslēgt sarunu",
+    "toggleChat": "Pārslēgt tērzēšanu",
     "toggleSidebar": "Pārslēgt sānjoslu"
   },
   "notifications": {
@@ -3546,8 +3546,8 @@
   "onboarding": {
     "aiConfigFailed": "Neizdevās saglabāt mākslīgā intelekta konfigurāciju. To var pabeigt iestatījumos.",
     "aiSubtitle": "Pievienojiet savu API atslēgu. Modeļus varēsiet izvēlēties vēlāk iestatījumos.",
-    "aiTitle": "Pievienojiet savu MI pakalpojumu sniedzēju",
-    "appsSubtitle": "stella darbojas arī ārpus pārlūkprogrammas: jūsu datorā un jūsu MI asistentā. Pie šīs iestatīšanas varat atgriezties jebkurā laikā.",
+    "aiTitle": "Pievienojiet savu AI pakalpojumu sniedzēju",
+    "appsSubtitle": "stella darbojas arī ārpus pārlūkprogrammas: jūsu datorā un jūsu AI asistentā. Pie šīs iestatīšanas varat atgriezties jebkurā laikā.",
     "appsTitle": "Iegūstiet stella visur",
     "assistantDocsLink": "Kā pievienot savu asistentu",
     "catalogueAlwaysOn": "Vienmēr ieslēgts",
@@ -3570,7 +3570,7 @@
     "catalogueSubtitle": "stella var izmantot šos rīkus, atbildot uz jautājumiem. Izvēlieties tos, kas atbilst jūsu praksei; to vienmēr varat mainīt iestatījumos.",
     "catalogueThirdPartyConfirm": "Tomēr pievienot",
     "catalogueThirdPartyDisclaimer": "Šo kodu nodrošina {author}, nevis stella. stella to nepārbauda un neuztur. Pirms pievienošanas pārliecinieties, ka tas ir piemērots jūsu darbam.",
-    "catalogueTitle": "Pielāgojiet savu MI",
+    "catalogueTitle": "Pielāgojiet savu AI",
     "cliDocsLink": "Dodat priekšroku terminālim? Iestatiet stella komandrindu",
     "continue": "Turpināt",
     "enterTeamName": "Ievadiet augstāk komandas nosaukumu",
@@ -3587,7 +3587,7 @@
     "jurisdictionSaveFailed": "Neizdevās saglabāt jurisdikcijas. Varat to pabeigt iestatījumos.",
     "jurisdictionSearchLabel": "Meklēt valstis",
     "jurisdictionSearchPlaceholder": "Meklēt valstis",
-    "jurisdictionSubtitle": "Izvēlieties valstis, kurās praktizējat. stella atbilstoši pielāgos MI atbildes un piedāvās pieejamos avotus: tiesu praksi, tiesību aktus un uzņēmumu reģistrus.",
+    "jurisdictionSubtitle": "Izvēlieties valstis, kurās praktizējat. stella atbilstoši pielāgos AI atbildes un piedāvās pieejamos avotus: tiesu praksi, tiesību aktus un uzņēmumu reģistrus.",
     "jurisdictionTitle": "Izvēlieties savas prakses jurisdikcijas",
     "mcpCardDescription": "Pievienojiet stella kā spraudni, un jūsu asistents varēs meklēt jūsu lietās un strādāt ar jūsu dokumentiem. Iestatīšana aizņem aptuveni minūti.",
     "mcpCardTitle": "Izmantojiet stella no Claude vai ChatGPT",
@@ -3597,7 +3597,7 @@
     "orgTitle": "Nosauciet savu komandu",
     "skipStep": "Izlaist",
     "someInvitesFailed": "{count, plural, zero {Neizdevās nosūtīt # uzaicinājumu} one {Neizdevās nosūtīt # uzaicinājumu} other {Neizdevās nosūtīt # uzaicinājumus}}",
-    "stepAi": "MI",
+    "stepAi": "AI",
     "stepApps": "Lietotnes un rīki",
     "stepCatalogue": "Katalogs",
     "stepJurisdiction": "Jurisdikcija",
@@ -3814,23 +3814,23 @@
       "contractReviewBody": "Pārbaudiet komerclīgumus klauzulu pa klauzulai atbilstoši sarunu vadlīnijām, skaidri izceļot novirzes un ieteiktos labojumus.",
       "editorsPick": "Redaktora izvēle",
       "exampleReview": "Pārbaudes piemērs",
-      "featuredTitle": "A better place to start",
+      "featuredTitle": "Sāciet ar darbplūsmu",
       "fromCommunity": "No kopienas",
       "groups": {
         "dataSources": "Datu avoti un integrācijas",
         "dataSourcesBody": "Pievienojiet autoritatīvus reģistrus un specializētus pakalpojumus, kad lietai vajadzīga ārēja informācija.",
         "included": "Iekļauts stella",
         "includedBody": "Pamatiespējas, kas ir gatavas lietošanai bez atsevišķas prasmes vai konta pievienošanas.",
-        "skillsBody": "Atkārtoti izmantojamas juridiskā darba plūsmas ar norādījumiem, kurus varat pārskatīt pirms pievienošanas."
+        "skillsBody": "Atkārtoti izmantojamas juridiskās darbplūsmas ar norādījumiem, kurus varat pārskatīt pirms pievienošanas."
       },
-      "heroBody": "Skills are reusable legal workflows. Add one to review agreements, research authorities, or prepare documents with the same method every time.",
-      "heroTitle": "Make stella fit the legal work in front of you",
+      "heroBody": "Meklējiet pēc uzdevuma, jurisdikcijas vai avota. Katru rīku varat pārskatīt, pirms pievienojat to savai darbvietai.",
+      "heroTitle": "Pie kā jūs strādājat?",
       "howBody": "Prasme pārvērš juridisku metodi pārskatāmos norādījumos. Pievienojiet to vienreiz un izmantojiet to pašu pieeju ikreiz, kad rodas attiecīgais uzdevums.",
       "howTitle": "Kas ir prasme?",
       "includedBadge": "Iekļauts",
       "jurisRankBody": "Novērtējiet Argentīnas Augstākās tiesas precedentu autoritāti pēc citēšanas ietekmes un doktrīnas attīstības.",
       "noResults": "Šim meklējumam pagaidām neatbilst neviens rīks.",
-      "openSkill": "Explore skill",
+      "openSkill": "Skatīt, kā tas darbojas",
       "review": {
         "aligned": "Atbilst",
         "governingLaw": "Piemērojamās tiesības",
@@ -3847,7 +3847,7 @@
         "reviewAgreements": "Pārbaudīt līgumus",
         "verifyOrganizations": "Pārbaudīt organizāciju"
       },
-      "tasksTitle": "Start with a legal task"
+      "tasksTitle": "Vai izvēlieties uzdevumu"
     },
     "documentation": "Dokumentācija",
     "downloadUpstream": "Lejupielādēt avota arhīvu",
@@ -4156,16 +4156,16 @@
       "documentTypes": {
         "addPlaceholder": "Pievienojiet dokumenta tipu (piem., darba līgums)",
         "deleteFailed": "Neizdevās izdzēst dokumenta tipu",
-        "description": "Definējiet dokumentu tipus, ko jūsu organizācija pārbauda. Pārbaudes ceļveži attiecas uz šiem tipiem, un MI klasifikators sašķiro dokumentus atbilstoši tiem.",
+        "description": "Definējiet dokumentu tipus, ko jūsu organizācija pārbauda. Pārbaudes ceļveži attiecas uz šiem tipiem, un AI klasifikators sašķiro dokumentus atbilstoši tiem.",
         "labelAria": "Dokumenta tipa nosaukums",
         "reorder": "Pārkārtot dokumenta tipu",
         "title": "Dokumentu tipi"
       },
       "matterNumbering": "Lietu numerācija",
       "matterNumberingDescription": "Konfigurējiet, kā tiek ģenerēti jauno lietu atsauces numuri",
-      "membersDescription": "Manage who has access to this organization",
+      "membersDescription": "Pārvaldiet, kam ir piekļuve šai organizācijai, un gaidošos uzaicinājumus",
       "memoryExtraction": {
-        "description": "Kad ieslēgts, stella fonā pārskata apkopotos sarunu pavedienus un ierosina atmiņas ierakstus, kas cilvēkam jāapstiprina, pirms tie ietekmē asistentu. Tas darbojas ar jūsu komandas paša AI pakalpojumu sniedzēja atslēgu, tāpēc atstājiet to izslēgtu, ja vien nevēlaties, lai šis fonā notiekošais AI lietojums tiktu attiecināts uz jūsu atslēgu.",
+        "description": "Kad ieslēgts, stella fonā pārskata apkopotos tērzēšanas pavedienus un ierosina atmiņas ierakstus, kas cilvēkam jāapstiprina, pirms tie ietekmē asistentu. Tas darbojas ar jūsu organizācijas paša AI pakalpojumu sniedzēja atslēgu, tāpēc atstājiet to izslēgtu, ja vien nevēlaties, lai šis fonā notiekošais AI lietojums tiktu attiecināts uz jūsu atslēgu.",
         "title": "Atmiņas iegūšana",
         "toggleLabel": "Fonā ieteikt atmiņas ierakstus no tērzēšanas vēstures"
       },
@@ -4173,9 +4173,9 @@
       "practiceJurisdictions": "Jurisdikcijas",
       "practiceJurisdictionsDescription": "Atlasiet jums atbilstošās jurisdikcijas.",
       "promptCaching": {
-        "description": "Ja ieslēgts, stella pievieno kešatmiņas iezīmes, lai atkārtoti MI pieprasījumi par to pašu dokumentu vai sarunu izmaksātu ~10× lētāk un beigtos ātrāk. Kešotie pieprasījumi paliek pie MI pakalpojumu sniedzēja līdz 5 minūtēm un ir ierobežoti uz jūsu organizāciju. Izslēdzot stella vairs nesūta kešatmiņas iezīmes, taču pakalpojumu sniedzēji joprojām var kešot oportūnistiski — tikai Zero Data Retention līgums ar pakalpojumu sniedzēju pilnībā izslēdz servera puses kešošanu.",
+        "description": "Ja ieslēgts, stella pievieno kešatmiņas iezīmes, lai atkārtoti AI pieprasījumi par to pašu dokumentu vai sarunu izmaksātu ~10× lētāk un beigtos ātrāk. Kešotie pieprasījumi paliek pie AI pakalpojumu sniedzēja līdz 5 minūtēm un ir ierobežoti uz jūsu organizāciju. Izslēdzot stella vairs nesūta kešatmiņas iezīmes, taču pakalpojumu sniedzēji joprojām var kešot oportūnistiski — tikai Zero Data Retention līgums ar pakalpojumu sniedzēju pilnībā izslēdz servera puses kešošanu.",
         "title": "Uzvedņu kešošana",
-        "toggleLabel": "Atļaut uzvedņu kešošanu pie MI pakalpojumu sniedzējiem"
+        "toggleLabel": "Atļaut uzvedņu kešošanu pie AI pakalpojumu sniedzējiem"
       },
       "renameDescription": "Dalībnieki jauno nosaukumu redzēs uzreiz.",
       "renameTitle": "Pārdēvēt organizāciju",
@@ -4492,9 +4492,9 @@
     "addItem": "Pievienot vienību",
     "addPart": "Pievienot daļu",
     "addTag": "Pievienot birku",
-    "aiAdaptHint": "MI pielāgos šo formulējumu katrai dokumenta vietai, kur tas parādās.",
-    "aiDecidedConditions": "Izlemj MI",
-    "aiFieldsNotDrafted": "MI neizdevās sagatavot šos laukus: {list}",
+    "aiAdaptHint": "AI pielāgos šo formulējumu katrai dokumenta vietai, kur tas parādās.",
+    "aiDecidedConditions": "Izlemj AI",
+    "aiFieldsNotDrafted": "AI neizdevās sagatavot šos laukus: {list}",
     "allTemplates": "Visas veidnes",
     "backToList": "Atpakaļ pie veidnēm",
     "binding": {
@@ -4556,7 +4556,7 @@
     "conditionOpOnOrBefore": "datumā vai pirms",
     "conditionOperator": "Operators",
     "conditionOr": "Vai",
-    "conditionOverrideHint": "Noklikšķiniet, lai vērtību iestatītu pats; noklikšķiniet vēlreiz, lai atdotu to MI",
+    "conditionOverrideHint": "Noklikšķiniet, lai vērtību iestatītu pats; noklikšķiniet vēlreiz, lai atdotu to AI",
     "conditionUseFieldInstead": "Tā vietā izmantot lauku",
     "conditionUseFormula": "ƒ Aprēķināta vērtība…",
     "conditionValue": "Vērtība",
@@ -4684,25 +4684,25 @@
     "structureWarningParagraph": "Rindkopa {paragraph, number}",
     "structureWarnings": "{count, plural, zero {# struktūras brīdinājumu} one {# struktūras brīdinājums} other {# struktūras brīdinājumi}}",
     "studio": {
-      "aiAdaptInstructionPlaceholder": "Neobligāti: kā MI jāpielāgo formulējums (piem., atbilstoši apkārtējai gramatikai)",
-      "aiDrafted": "MI sagatavots",
-      "aiNoFields": "MI neieteica nevienu lauku",
+      "aiAdaptInstructionPlaceholder": "Neobligāti: kā AI jāpielāgo formulējums (piem., atbilstoši apkārtējai gramatikai)",
+      "aiDrafted": "AI sagatavots",
+      "aiNoFields": "AI neieteica nevienu lauku",
       "aiPresetPrompt": "Ieteikt aizpildāmus veidnes laukus",
-      "aiPromptContextHint": "Ierakstiet @, lai atsauktos uz citu lauku; MI var izmantot citu lauku vērtības.",
-      "aiPromptPlaceholder": "Aprakstiet, kas MI jāsagatavo šim laukam, piem., šīs pilnvaras apjomu.",
+      "aiPromptContextHint": "Ierakstiet @, lai atsauktos uz citu lauku; AI var izmantot citu lauku vērtības.",
+      "aiPromptPlaceholder": "Aprakstiet, kas AI jāsagatavo šim laukam, piem., šīs pilnvaras apjomu.",
       "aiScopeDocument": "Viss dokuments",
       "aiScopeQuestion": "Ieteikt laukus:",
       "aiScopeSelection": "Atlasītā daļa",
       "aiScopeSelectionPrompt": "Iesaki laukus tikai šajā atlasītajā dokumenta daļā:",
-      "aiSeesDocument": "Ļaut MI lasīt dokumentu",
+      "aiSeesDocument": "Ļaut AI lasīt dokumentu",
       "aiSuggest": "Ieteikt laukus",
       "clauseSlotHelp": "Saistītā klauzula tiek ievietota šeit, aizpildot veidni. Saistiet vai mainiet to šajā panelī vai no ievietošanas izvēlnes.",
       "conceptClause": "Ievieto atkārtoti izmantojamu klauzulu no jūsu bibliotēkas.",
       "conceptCondition": "Rāda šo tekstu tikai tad, kad ir izpildīts nosacījums.",
       "conceptField": "Vērtība, ko aizpildāt lietošanas brīdī.",
       "conceptLoop": "Atkārto šo tekstu katram saraksta elementam.",
-      "conditionAiInstructionsHelp": "Norādiet MI, kā izlemt, vai šis bloks ir piemērojams. Tas lasa dokumenta tekstu un citu lauku vērtības.",
-      "conditionAiInstructionsLabel": "Norādījumi MI",
+      "conditionAiInstructionsHelp": "Norādiet AI, kā izlemt, vai šis bloks ir piemērojams. Tas lasa dokumenta tekstu un citu lauku vērtības.",
+      "conditionAiInstructionsLabel": "Norādījumi AI",
       "conditionAiPlaceholder": "Aprakstiet, kad tas ir patiess, piem., līgumam piemēro Čehijas tiesības",
       "conditionAskQuestion": "Uzdod jā/nē jautājumu",
       "conditionAskQuestionHelp": "Veidni aizpildošā persona atbild Jā vai Nē. Šis bloks parādās, kad tā atbild Jā.",
@@ -4717,7 +4717,7 @@
       "conditionReusePick": "Izvēlieties esošu nosacījumu…",
       "conditionRuleFallbackLabel": "Aprēķināts nosacījums",
       "conditionSource": "Kā tas tiek noteikts",
-      "conditionSourceAi": "Izlemj MI",
+      "conditionSourceAi": "Izlemj AI",
       "conditionSourceAsked": "Jautāts",
       "conditionSourceRule": "Noteikums",
       "conditionsSectionHelp": "Atlasiet tekstu dokumentā → labais klikšķis → Rādīt tikai tad, ja…",
@@ -4769,7 +4769,7 @@
       "noNestedMarkers": "Marķierus nevar ievietot citā marķierī",
       "otherwise": "Citādi",
       "otherwiseIf": "Citādi, ja {condition}",
-      "prepareWithAi": "Sagatavot ar MI",
+      "prepareWithAi": "Sagatavot ar AI",
       "previewHint": "Novietojiet kursoru virs opcijas, lai redzētu priekšskatījumu.",
       "questions": "Jautājumi",
       "recipeSaveFailed": "Neizdevās saglabāt recepti",
@@ -4802,7 +4802,7 @@
       "sourceEnable": "Aizpildīt no lietas",
       "sourceHint": "Vērtība tiek aizpildīta no lietas (tās klienta, puses, pašas lietas, advokāta vai biroja) dokumenta ģenerēšanas brīdī.",
       "sourcePickSource": "Datu avots",
-      "textPlusAi": "Persona + MI",
+      "textPlusAi": "Persona + AI",
       "useExisting": "Izmantot esošo lauku {name}",
       "whoFills": "Kas vēlāk aizpildīs šo lauku?"
     },
@@ -4910,10 +4910,10 @@
   },
   "webSearch": {
     "settings": {
-      "description": "Bring your own web-search API keys so chat can search the web and read pages with your own provider account. Without them, chat uses the platform's shared keys when available.",
-      "fetchTitle": "Page reader key",
+      "description": "Izmantojiet savas tīmekļa meklēšanas API atslēgas, lai tērzēšana varētu meklēt tīmeklī un lasīt lapas ar jūsu pakalpojumu sniedzēja kontu. Bez tām tērzēšana izmanto platformas koplietotās atslēgas, ja tās ir pieejamas. Lapu lasīšana darbojas arī bez atslēgas; pievienojiet atslēgu, lai paaugstinātu pieprasījumu limitus.",
+      "fetchTitle": "Lapu lasītāja atslēga (Jina)",
       "platformFallback": "Tiek izmantota platformas koplietotā atslēga. Pievienojiet savu atslēgu, lai izmantotu savu pakalpojumu sniedzēja kontu un kvotu.",
-      "searchTitle": "Search provider key",
+      "searchTitle": "Meklēšanas pakalpojumu sniedzēja atslēga (Tavily)",
       "title": "Meklēšanas tīmeklī atslēgas"
     }
   },
@@ -5153,7 +5153,7 @@
     "importOrganizer": {
       "action": "Sakārtot failus",
       "actionSelected": "Sakārtot atlasītos ({count, number})",
-      "aiUnavailable": "Neizdevās ģenerēt MI ieteikumus. Pārbaudiet MI konfigurāciju un mēģiniet vēlreiz.",
+      "aiUnavailable": "Neizdevās ģenerēt AI ieteikumus. Pārbaudiet AI konfigurāciju un mēģiniet vēlreiz.",
       "apply": "Lietot izmaiņas",
       "applying": "Failu sakārtošana…",
       "collapseFolder": "Sakļaut mapi",
@@ -5163,17 +5163,17 @@
       "expandFolder": "Izvērst mapi",
       "failed": "Sakārtošana neizdevās",
       "folderPlaceholder": "piem., Compliance/2025",
-      "generateAi": "Ģenerēt MI ieteikumus",
-      "generating": "Ģenerē MI ieteikumus...",
+      "generateAi": "Ģenerēt AI ieteikumus",
+      "generating": "Ģenerē AI ieteikumus...",
       "instructionsEmpty": "Nav pielāgotu norādījumu",
       "instructionsHelp": "Saglabājas lietas līmenī. Tiek izmantots papildus sistēmas uzvednei.",
       "instructionsPlaceholder": "piem., izmanto latviešu mapju nosaukumus, grupē pēc pretpuses, datumus sāc ar gadu.",
-      "instructionsTitle": "MI norādījumi",
+      "instructionsTitle": "AI norādījumi",
       "moveTo": "Pārvietot failu uz mapi",
       "moveToHint": "Ievadiet ceļu vai izvēlieties esošu mapi.",
       "moveToTitle": "Pārvietot uz mapi",
       "organized": "Faili sakārtoti",
-      "reset": "Atjaunot MI ieteikumus",
+      "reset": "Atjaunot AI ieteikumus",
       "selectedOfTotal": "{selected, number} / {total, number}",
       "summaryToMove": "pārvietot",
       "summaryToRename": "pārdēvēt",
@@ -5461,10 +5461,10 @@
         "createMany": "{count, plural, zero {Izveidot # kolonnu} one {Izveidot # kolonnu} other {Izveidot # kolonnas}}",
         "createdMany": "{count, plural, zero {Izveidotas # kolonnas} one {Izveidota # kolonna} other {Izveidotas # kolonnas}}",
         "createdOne": "Kolonna izveidota",
-        "promptPlaceholder": "What should this column extract?",
+        "promptPlaceholder": "Ko šai kolonnai jāizgūst? Lai izmantotu / un @, precizējiet to kolonnas dialoglodziņā.",
         "title": "Pievienot kolonnas"
       },
-      "chipManual": "Manual",
+      "chipManual": "Bez AI",
       "chipMulti": "Birkas",
       "chipNumber": "Skaitlis",
       "chipSingle": "Birka",
@@ -5503,7 +5503,7 @@
       "flowNoInputs": "nav ievades",
       "ifNoMatchFound": "Ja atbilstība nav atrasta",
       "inputs": "Ievades",
-      "inputsHelp": "Izvēlies kolonnas, ko AI lasīt. Klikšķini, lai pievienotu vai noņemtu.",
+      "inputsHelp": "Izvēlieties kolonnas, kas AI jālasa. Noklikšķiniet, lai pievienotu vai noņemtu.",
       "int": "Vesels skaitlis",
       "keepEmpty": "Atstāt tukšu",
       "manualColumn": "Manuāla kolonna",
@@ -5522,7 +5522,7 @@
       "noConditionFields": "Nav lauku, pēc kuriem filtrēt.",
       "noFirstDocument": "Vēl nav dokumentu priekšskatījumam.",
       "noPropertiesFound": "Rekvizīti nav atrasti",
-      "optionsHelp": "Definē vērtības, no kurām AI var izvēlēties.",
+      "optionsHelp": "Definējiet vērtības, no kurām AI var izvēlēties.",
       "optionsLabel": "Iespējas",
       "person": "Person",
       "previewEmpty": "AI nav atgriezis vērtību.",
@@ -5531,11 +5531,11 @@
       "previewSkipped": "Šajā dokumentā nav piemērotas ievades.",
       "previewSubject": "Izmēģini paraugā",
       "previewUnsupported": "Priekšskatījums šim dokumenta tipam nav atbalstīts.",
-      "readingFrom": "Reading from",
+      "readingFrom": "AI lasa no",
       "referencesItself": "Rekvizīts atsaucas pats uz sevi caur citiem rekvizītiem",
       "rerunColumn": "Palaist kolonnu vēlreiz",
       "resultType": "Rezultāta tips",
-      "returnsLabel": "Returns",
+      "returnsLabel": "Formāts",
       "scopeFile": "Pašreizējais fails",
       "scopeFileDescription": "Izmantojiet {property} un palaidiet šo failu tagad.",
       "scopeFileUnavailable": "Šim skatam nav pieejams faila avots.",
@@ -5724,9 +5724,9 @@
       "allManualInputsTitle": "Visi rekvizīti ir manuālās ievades",
       "generate": "Ģenerēt",
       "largeRunPrompt": {
-        "description": "Tiks ieplānota MI izgūšana {count} dokumentiem. Sāciet to tikai tad, ja tagad vēlaties apstrādāt tik daudz failu.",
+        "description": "Tiks ieplānota AI izgūšana {count} dokumentiem. Sāciet to tikai tad, ja tagad vēlaties apstrādāt tik daudz failu.",
         "start": "Sākt izgūšanu",
-        "title": "Sākt MI izgūšanu?"
+        "title": "Sākt AI izgūšanu?"
       },
       "noFieldsToProcess": "Nav lauku apstrādei",
       "serviceTierPrompt": {
