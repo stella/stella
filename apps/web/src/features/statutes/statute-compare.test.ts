@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import type { WordDiffSegment } from "@stll/folio-core/ai-edits";
+import type { Block } from "@stll/legal-ast/document-ast";
 
 import {
   compareStatuteBlocks,
@@ -11,28 +12,37 @@ import {
   splitDiffSides,
   visibleCompareGroups,
 } from "@/features/statutes/statute-compare";
-import type {
-  StatuteCompareBlock,
-  StatuteCompareRow,
-} from "@/features/statutes/statute-compare";
+import type { StatuteCompareRow } from "@/features/statutes/statute-compare";
 import { STATUTE_COMPARE_SHOW } from "@/features/statutes/statute-compare-search";
+import type { StatuteCompareSide } from "@/features/statutes/statute-diff-marks";
 
-const textOf = (segments: readonly WordDiffSegment[] | null): string | null =>
-  segments === null ? null : segments.map((segment) => segment.text).join("");
+const textOf = (side: StatuteCompareSide | null): string | null =>
+  side === null ? null : side.segments.map((segment) => segment.text).join("");
 
-const heading = (text: string): StatuteCompareBlock => ({
+const segmentTypes = (
+  side: StatuteCompareSide | null | undefined,
+): WordDiffSegment["type"][] =>
+  side?.segments.map((segment) => segment.type) ?? [];
+
+const heading = (value: string): Block => ({
   type: "heading",
+  id: `h:${value}`,
+  anchorId: `h:${value}`,
   level: 4,
-  text,
+  inlines: [{ type: "text", text: value }],
+  plainText: value,
 });
-const text = (value: string): StatuteCompareBlock => ({
-  type: "text",
-  text: value,
+const text = (value: string): Block => ({
+  type: "paragraph",
+  id: `p:${value}`,
+  anchorId: `p:${value}`,
+  inlines: [{ type: "text", text: value }],
+  plainText: value,
 });
 
 const rowsOf = (
-  older: readonly StatuteCompareBlock[],
-  newer: readonly StatuteCompareBlock[],
+  older: readonly Block[],
+  newer: readonly Block[],
 ): StatuteCompareRow[] => {
   const result = compareStatuteBlocks({ newer, older });
 
@@ -112,6 +122,31 @@ describe("compareStatuteBlocks", () => {
     expect(textOf(rows[1]?.after ?? null)).toBe(
       "(1) The buyer pays the agreed price.",
     );
+  });
+
+  test("carries each side's own AST blocks, for the reader to render", () => {
+    const older = [heading("§ 1"), text("(1) The buyer pays the price.")];
+    const newer = [
+      heading("§ 1"),
+      text("(1) The buyer pays the agreed price."),
+    ];
+    const rows = rowsOf(older, newer);
+
+    expect(rows.flatMap((row) => row.before?.blocks ?? [])).toEqual(older);
+    expect(rows.flatMap((row) => row.after?.blocks ?? [])).toEqual(newer);
+    expect(rows[1]?.before?.blocks[0]).toBe(older[1]);
+  });
+
+  test("does not list a row whose versions differ only in whitespace", () => {
+    const rows = rowsOf(
+      [text("(1) The buyer pays the price.")],
+      [text("(1) The buyer  pays the price.")],
+    );
+
+    expect(textOf(rows[0]?.before ?? null)).not.toBe(
+      textOf(rows[0]?.after ?? null),
+    );
+    expect(rows.map((row) => row.status)).toEqual(["unchanged"]);
   });
 
   test("leaves the missing side empty for an added or dropped paragraph", () => {
@@ -225,10 +260,8 @@ describe("moved paragraphs", () => {
   test("keeps each end's own wording, with the rewording it carried", () => {
     expect(textOf(source?.before ?? null)).toBe(moving);
     expect(textOf(target?.after ?? null)).toBe(reworded);
-    expect(source?.before?.some((segment) => segment.type === "del")).toBe(
-      true,
-    );
-    expect(target?.after?.some((segment) => segment.type === "ins")).toBe(true);
+    expect(segmentTypes(source?.before)).toContain("del");
+    expect(segmentTypes(target?.after)).toContain("ins");
   });
 
   test("names the provision at each end", () => {

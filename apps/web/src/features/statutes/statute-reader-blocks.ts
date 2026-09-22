@@ -375,6 +375,30 @@ const withStatuteListDepth = (blocks: readonly Block[]): Block[] =>
     return listDepth === null ? block : { ...block, listDepth };
   });
 
+export type PreviewBlock = { anchorId: string; id: string; text: string };
+
+/**
+ * A provision read's block as a paragraph the reader can render. The read
+ * carries text without kinds or inline formatting; its anchor still states
+ * the list nesting, so the letters and points indent as the reader sets them.
+ */
+export const paragraphFromPreview = ({
+  anchorId,
+  id,
+  text,
+}: PreviewBlock): ParagraphBlock => {
+  const listDepth = listDepthFromAnchor(anchorId);
+
+  return {
+    anchorId,
+    id,
+    inlines: [{ text, type: "text" }],
+    plainText: text,
+    type: "paragraph",
+    ...(listDepth === null ? {} : { listDepth }),
+  };
+};
+
 type PrepareStatuteReaderOptions = {
   blocks: readonly Block[];
   statuteTitle: string;

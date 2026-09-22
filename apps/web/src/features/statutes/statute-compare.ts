@@ -12,24 +12,24 @@ import type { Block } from "@stll/legal-ast/document-ast";
 
 import { STATUTE_COMPARE_SHOW } from "@/features/statutes/statute-compare-search";
 import type { StatuteCompareShow } from "@/features/statutes/statute-compare-search";
+import {
+  compareText,
+  hasVisibleChange,
+  isWhitespaceReplacement,
+} from "@/features/statutes/statute-diff-marks";
+import type { StatuteCompareSide } from "@/features/statutes/statute-diff-marks";
 
-/** One block of a consolidation, as much of it as the comparison reads. */
-export type StatuteCompareBlock =
-  | { type: "heading"; level: number; text: string }
-  | { type: "text"; text: string };
-
-/** An AST block as the comparison reads it: headings keep their depth. */
-export const compareBlockFromAst = (block: Block): StatuteCompareBlock =>
-  block.type === "heading"
-    ? { type: "heading", level: block.level, text: block.plainText }
-    : { type: "text", text: block.plainText };
+/** What the comparison pairs blocks by: a heading only pairs a heading. */
+type CompareBlockKind = "heading" | "text";
 
 type ComparedBlock = {
   id: string;
-  kind: StatuteCompareBlock["type"];
+  kind: CompareBlockKind;
   text: string;
   idStability: "positional";
   headingLevel?: number;
+  /** The block the reader renders; the comparison itself reads `text`. */
+  block: Block;
 };
 
 /**
@@ -38,24 +38,32 @@ type ComparedBlock = {
  * `par_34-odst_1`), and pairing by text reads that as the rewording it is
  * rather than as a deletion plus an insertion.
  */
-const toComparedBlock = (
-  block: StatuteCompareBlock,
-  index: number,
-): ComparedBlock =>
+const toComparedBlock = (block: Block, index: number): ComparedBlock =>
   block.type === "heading"
     ? {
         id: `b${index}`,
         kind: "heading",
-        text: block.text,
+        text: compareText([block]),
         idStability: "positional",
         headingLevel: block.level,
+        block,
       }
     : {
         id: `b${index}`,
         kind: "text",
-        text: block.text,
+        text: compareText([block]),
         idStability: "positional",
+        block,
       };
+
+const astBlocks = (blocks: readonly ComparedBlock[]): Block[] =>
+  blocks.map((compared) => compared.block);
+
+/** A side whose wording both versions share, unmarked. */
+const unmarkedSide = (blocks: readonly ComparedBlock[]): StatuteCompareSide => {
+  const ast = astBlocks(blocks);
+  return { blocks: ast, segments: [{ type: "equal", text: compareText(ast) }] };
+};
 
 type CompareRowStatus = "unchanged" | "changed";
 
@@ -76,11 +84,11 @@ export type StatuteCompareMove = {
  */
 export type StatuteCompareRow = {
   key: string;
-  type: StatuteCompareBlock["type"];
+  type: CompareBlockKind;
   status: CompareRowStatus;
   move: StatuteCompareMove | null;
-  before: readonly WordDiffSegment[] | null;
-  after: readonly WordDiffSegment[] | null;
+  before: StatuteCompareSide | null;
+  after: StatuteCompareSide | null;
 };
 
 type DiffSides = {
@@ -93,6 +101,10 @@ type DiffSides = {
  * the insertions, the newer everything but the deletions. Both sides come
  * from the same diff, so what is struck on the left is exactly what the
  * right no longer says.
+ *
+ * The diff carries a word's leading whitespace with it, so a doubled or
+ * non-breaking space reads as the word replaced by itself. Such a
+ * replacement is equal on each side: nothing a reader can see changed.
  */
 export const splitDiffSides = (
   segments: readonly WordDiffSegment[],
@@ -100,7 +112,24 @@ export const splitDiffSides = (
   const before: WordDiffSegment[] = [];
   const after: WordDiffSegment[] = [];
 
-  for (const segment of segments) {
+  let pairedWithPrevious = false;
+
+  for (const [index, segment] of segments.entries()) {
+    if (pairedWithPrevious) {
+      pairedWithPrevious = false;
+      continue;
+    }
+    const next = segments.at(index + 1);
+
+    if (next !== undefined && isWhitespaceReplacement(segment, next)) {
+      const [removed, added] =
+        segment.type === "del" ? [segment, next] : [next, segment];
+      before.push({ type: "equal", text: removed.text });
+      after.push({ type: "equal", text: added.text });
+      pairedWithPrevious = true;
+      continue;
+    }
+
     switch (segment.type) {
       case "equal":
         before.push(segment);
@@ -121,45 +150,52 @@ export const splitDiffSides = (
   return { before, after };
 };
 
-const hasChange = (segments: readonly WordDiffSegment[]): boolean =>
-  segments.some((segment) => segment.type !== "equal");
-
 type RowFromSegmentsOptions = {
   key: string;
   segments: readonly WordDiffSegment[];
-  type: StatuteCompareBlock["type"];
+  base: readonly ComparedBlock[];
+  revised: readonly [ComparedBlock, ...ComparedBlock[]];
 };
 
+/**
+ * A paired row. Whitespace alone does not make it changed: the renderer
+ * marks nothing for it, and a row listed as changed with nothing marked
+ * reads as a fault.
+ */
 const rowFromSegments = ({
+  base,
   key,
+  revised,
   segments,
-  type,
 }: RowFromSegmentsOptions): StatuteCompareRow => {
   const { after, before } = splitDiffSides(segments);
 
   return {
     key,
-    type,
-    status: hasChange(segments) ? "changed" : "unchanged",
+    type: revised[0].kind,
+    status:
+      hasVisibleChange(before) || hasVisibleChange(after)
+        ? "changed"
+        : "unchanged",
     move: null,
-    before,
-    after,
+    before: { blocks: astBlocks(base), segments: before },
+    after: { blocks: astBlocks(revised), segments: after },
   };
 };
-
-const joinedText = (blocks: readonly ComparedBlock[]): string =>
-  blocks.map((block) => block.text).join("\n");
 
 const rowKey = (index: number): string => `r${index}`;
 
 type ComparisonEvent = FolioContentComparisonEvent<ComparedBlock>;
 
-/** Both ends of one move, and the rewording it carried, if any. */
+/** Both ends of one move, each with its own side of the rewording it carried. */
 type MoveEnds = {
   sourceKey: string;
   targetKey: string;
-  segments: readonly WordDiffSegment[];
+  before: StatuteCompareSide;
+  after: StatuteCompareSide;
 };
+
+type MoveSource = { key: string; block: ComparedBlock };
 
 /**
  * Folio reports a move as two events, one where the paragraph left and one
@@ -169,35 +205,59 @@ type MoveEnds = {
 const indexMoves = (
   events: readonly ComparisonEvent[],
 ): ReadonlyMap<number, MoveEnds> => {
-  const sources = new Map<number, string>();
+  const sources = new Map<number, MoveSource>();
   const targets = new Map<
     number,
-    { key: string; segments: readonly WordDiffSegment[] }
+    {
+      key: string;
+      block: ComparedBlock;
+      segments: readonly WordDiffSegment[] | undefined;
+    }
   >();
 
   for (const [index, event] of events.entries()) {
     if (event.type === "movedFrom") {
-      sources.set(event.moveId, rowKey(index));
+      sources.set(event.moveId, {
+        key: rowKey(index),
+        block: event.baseBlocks[0],
+      });
     }
     if (event.type === "movedTo") {
       targets.set(event.moveId, {
         key: rowKey(index),
-        segments: event.segments ?? [
-          { type: "equal", text: event.revisedBlocks[0].text },
-        ],
+        block: event.revisedBlocks[0],
+        segments: event.segments,
       });
     }
   }
 
   const moves = new Map<number, MoveEnds>();
-  for (const [moveId, sourceKey] of sources) {
+  for (const [moveId, source] of sources) {
     const target = targets.get(moveId);
     if (target === undefined) {
       return panic("Folio reported a move without its destination");
     }
+    // A move that carried no rewording states no segments; each end then
+    // reads as its own wording, unmarked.
+    const sides =
+      target.segments === undefined
+        ? {
+            before: unmarkedSide([source.block]),
+            after: unmarkedSide([target.block]),
+          }
+        : {
+            before: {
+              blocks: astBlocks([source.block]),
+              segments: splitDiffSides(target.segments).before,
+            },
+            after: {
+              blocks: astBlocks([target.block]),
+              segments: splitDiffSides(target.segments).after,
+            },
+          };
     moves.set(moveId, {
-      segments: target.segments,
-      sourceKey,
+      ...sides,
+      sourceKey: source.key,
       targetKey: target.key,
     });
   }
@@ -212,6 +272,15 @@ const moveEnds = (
   moves: ReadonlyMap<number, MoveEnds>,
   moveId: number,
 ): MoveEnds => moves.get(moveId) ?? panic("Unpaired content move");
+
+/** A side only one version has, marked whole. */
+const wholeSide = (
+  blocks: readonly ComparedBlock[],
+  type: "del" | "ins",
+): StatuteCompareSide => {
+  const ast = astBlocks(blocks);
+  return { blocks: ast, segments: [{ type, text: compareText(ast) }] };
+};
 
 /**
  * The row one comparison event is drawn as. A moved paragraph gets a row at
@@ -233,14 +302,15 @@ const rowFromEvent = (
         type: event.revisedBlocks[0].kind,
         status: "unchanged",
         move: null,
-        before: [{ type: "equal", text: event.baseBlocks[0].text }],
-        after: [{ type: "equal", text: event.revisedBlocks[0].text }],
+        before: unmarkedSide(event.baseBlocks),
+        after: unmarkedSide(event.revisedBlocks),
       };
     case "modified":
       return rowFromSegments({
         key,
         segments: event.segments,
-        type: event.revisedBlocks[0].kind,
+        base: event.baseBlocks,
+        revised: event.revisedBlocks,
       });
     case "inserted":
       return {
@@ -249,7 +319,7 @@ const rowFromEvent = (
         status: "changed",
         move: null,
         before: null,
-        after: [{ type: "ins", text: event.revisedBlocks[0].text }],
+        after: wholeSide(event.revisedBlocks, "ins"),
       };
     case "deleted":
       return {
@@ -257,7 +327,7 @@ const rowFromEvent = (
         type: event.baseBlocks[0].kind,
         status: "changed",
         move: null,
-        before: [{ type: "del", text: event.baseBlocks[0].text }],
+        before: wholeSide(event.baseBlocks, "del"),
         after: null,
       };
     case "movedFrom": {
@@ -267,7 +337,7 @@ const rowFromEvent = (
         type: event.baseBlocks[0].kind,
         status: "changed",
         move: { end: "source", counterpartKey: ends.targetKey },
-        before: splitDiffSides(ends.segments).before,
+        before: ends.before,
         after: null,
       };
     }
@@ -279,7 +349,7 @@ const rowFromEvent = (
         status: "changed",
         move: { end: "target", counterpartKey: ends.sourceKey },
         before: null,
-        after: splitDiffSides(ends.segments).after,
+        after: ends.after,
       };
     }
     case "split":
@@ -287,10 +357,11 @@ const rowFromEvent = (
       return rowFromSegments({
         key,
         segments: diffWordSegments(
-          joinedText(event.baseBlocks),
-          joinedText(event.revisedBlocks),
+          compareText(astBlocks(event.baseBlocks)),
+          compareText(astBlocks(event.revisedBlocks)),
         ),
-        type: event.revisedBlocks[0].kind,
+        base: event.baseBlocks,
+        revised: event.revisedBlocks,
       });
     default:
       event satisfies never;
@@ -299,13 +370,13 @@ const rowFromEvent = (
 };
 
 type CompareStatuteBlocksOptions = {
-  older: readonly StatuteCompareBlock[];
-  newer: readonly StatuteCompareBlock[];
+  older: readonly Block[];
+  newer: readonly Block[];
 };
 
 /**
  * Two consolidations' blocks aligned row by row with Folio's content
- * comparison, each changed row carrying its word diff.
+ * comparison, each row carrying the blocks it shows and its word diff.
  */
 export const compareStatuteBlocks = ({
   newer,
@@ -360,7 +431,8 @@ export const groupCompareRows = (
 };
 
 const rowText = (row: StatuteCompareRow): string =>
-  (row.after ?? row.before ?? []).map((segment) => segment.text).join("");
+  (row.after ?? row.before)?.segments.map((segment) => segment.text).join("") ??
+  "";
 
 /** Where a row sits in the listed groups, and the provision it belongs to. */
 export type CompareRowLocation = {
@@ -414,17 +486,17 @@ export const visibleCompareGroups = (
 export type CompareSideState =
   | { type: "loading" }
   | { type: "absent" }
-  | { type: "ready"; blocks: readonly StatuteCompareBlock[] };
+  | { type: "ready"; blocks: readonly Block[] };
 
 export type PairedCompareSides =
   | { type: "loading" }
   | {
       type: "both";
-      older: readonly StatuteCompareBlock[];
-      newer: readonly StatuteCompareBlock[];
+      older: readonly Block[];
+      newer: readonly Block[];
     }
-  | { type: "olderOnly"; blocks: readonly StatuteCompareBlock[] }
-  | { type: "newerOnly"; blocks: readonly StatuteCompareBlock[] }
+  | { type: "olderOnly"; blocks: readonly Block[] }
+  | { type: "newerOnly"; blocks: readonly Block[] }
   | { type: "neither" };
 
 /**

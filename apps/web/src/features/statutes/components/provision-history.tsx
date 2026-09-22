@@ -14,13 +14,14 @@ import { Button } from "@stll/ui/button";
 import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
 
-import { WordDiffText } from "@/features/statutes/components/word-diff-text";
+import { HighlightedText } from "@/components/legal-reader/document-ast-text";
 import {
   resolveSelectedVersion,
   selectChangedVersions,
 } from "@/features/statutes/provision-diff";
 import { provisionHistoryOptions } from "@/features/statutes/queries/provision-history";
 import { statuteOptions } from "@/features/statutes/queries/statutes";
+import { diffMarkRanges } from "@/features/statutes/statute-diff-marks";
 import {
   EM_DASH,
   formatValidityDate,
@@ -28,6 +29,9 @@ import {
 import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
 import { createStatuteLinkTarget } from "@/lib/statute-route";
+
+// The history marks its diff only; it carries no find.
+const NO_ACTIVE_MATCH = -1;
 
 type ProvisionHistoryProps = {
   /** The provision heading's anchor, the id the history is filed under. */
@@ -211,9 +215,18 @@ const ProvisionDiff = ({ after, before }: ProvisionDiffProps) => {
     return <p className="text-sm leading-6 whitespace-pre-wrap">{after}</p>;
   }
 
+  const segments = diffWordSegments(before, after);
+
+  // Deletions and insertions inline in one wording, marked the way the
+  // comparison and the reader mark them.
   return (
     <p className="text-sm leading-6 whitespace-pre-wrap">
-      <WordDiffText segments={diffWordSegments(before, after)} />
+      <HighlightedText
+        activeMatchIndex={NO_ACTIVE_MATCH}
+        pieceId="provision-diff"
+        ranges={diffMarkRanges(segments)}
+        text={segments.map((segment) => segment.text).join("")}
+      />
     </p>
   );
 };

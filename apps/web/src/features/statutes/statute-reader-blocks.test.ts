@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import type { Block, HeadingBlock } from "@stll/legal-ast/document-ast";
 
 import {
+  paragraphFromPreview,
   prepareStatuteReader,
   provisionCitationCountByBlockAnchor,
 } from "@/features/statutes/statute-reader-blocks";
@@ -188,6 +189,38 @@ describe("statute reader blocks", () => {
         block.type === "paragraph" ? block.listDepth : undefined,
       ),
     ).toEqual([undefined, 1, 2]);
+  });
+
+  test("a provision read's block indents as the reader indents it", () => {
+    const blocks = [
+      "par_2-odst_1",
+      "par_2-odst_1-pism_a",
+      "par_2-odst_1-pism_a-bod_1",
+    ].map((anchorId): Block => ({
+      anchorId,
+      id: anchorId,
+      inlines: inlineText("wording"),
+      plainText: "wording",
+      type: "paragraph",
+    }));
+    const reader = prepareStatuteReader({
+      blocks,
+      statuteTitle: "67/2013 Sb., zákon o službách",
+    }).blocks;
+    const previews = blocks.map((block) =>
+      paragraphFromPreview({
+        anchorId: block.anchorId,
+        id: block.id,
+        text: block.plainText,
+      }),
+    );
+    const depths = (list: readonly Block[]) =>
+      list.map((block) =>
+        block.type === "paragraph" ? block.listDepth : undefined,
+      );
+
+    expect(depths(previews)).toEqual(depths(reader));
+    expect(depths(previews)).toEqual([undefined, 1, 2]);
   });
 
   test("citation counts follow namespaced publisher anchors", () => {
