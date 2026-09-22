@@ -2525,7 +2525,7 @@
         "description": "Izmantojiet prasmes vai pievienojiet citus noderīgus rīkus",
         "steps": {
           "mcp": {
-            "body": "Ieslēdz vai izslēdz pievienota servera rīkus jūsu tērzēšanās: uzņēmumu reģistrus, iekšējās sistēmas, visu, ko jūsu komanda ir pievienojusi.",
+            "body": "Ieslēdziet vai izslēdziet pievienota servera rīkus jūsu tērzēšanās: uzņēmumu reģistrus, iekšējās sistēmas, visu, ko jūsu komanda ir pievienojusi.",
             "title": "Pievienotie rīku serveri",
             "when": "Ieslēdziet, kad atbildei vajadzīgi aktuāli dati no ārpuses. Pārējos atstājiet izslēgtus: jo mazāk rīku spēlē, jo šaurāka un paredzamāka atbilde."
           },
