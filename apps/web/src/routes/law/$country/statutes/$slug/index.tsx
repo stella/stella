@@ -9,12 +9,14 @@ import {
 
 /**
  * A statute at its canonical address: the readable segment alone, which
- * always names the latest consolidation. The same route answers the legacy
+ * names the version in force today (the latest one when none is). The same route answers the legacy
  * document-id form and redirects it here.
  */
 export const Route = createFileRoute("/law/$country/statutes/$slug/")({
   validateSearch: publicStatuteSearchSchema,
-  loaderDeps: ({ search: { asOf, jump } }) => ({ asOf, jump }),
+  // The whole search, not a pick: a canonical redirect re-issues it, and a
+  // parameter left out here would be dropped on the way.
+  loaderDeps: ({ search }) => search,
   loader: async ({ context: { queryClient }, deps, location, params }) =>
     await loadPublicStatuteRoute({
       hash: location.hash,
