@@ -97,6 +97,11 @@ const runContentText = (item: FolioRunContent): string => {
       return "\t";
     case "break":
       return "\n";
+    // Verbatim-preserved markup folio does not model. Its `text` is what the
+    // markup puts on the line (a `w:ruby` base is a word of the decision), so
+    // the extraction takes it rather than dropping the characters.
+    case "preservedXml":
+      return item.text;
     // Carry no characters of their own: a symbol, a note mark, a field's own
     // instruction text, a hyphen the layout inserted, a drawing or a shape all
     // reach the text through the runs around them.
@@ -200,6 +205,14 @@ const itemsOf = (content: readonly BlockContent[]): DocItem[] =>
       case "blockSdt":
         // A content control is a wrapper; its children are the document's.
         return itemsOf(block.content);
+      // No line of the decision: a preserved block is opaque markup folio does
+      // not model and holds no text, and a bookmark marker is a position. This
+      // parser reads text, so it skips all three rather than round-tripping
+      // them.
+      case "preservedBlock":
+      case "bookmarkStart":
+      case "bookmarkEnd":
+        return [];
       default:
         block satisfies never;
         return panic(`Unhandled folio block: ${JSON.stringify(block)}`);
