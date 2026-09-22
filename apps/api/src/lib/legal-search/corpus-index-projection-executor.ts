@@ -8,6 +8,7 @@ import type { Transaction } from "@/api/db/root";
 import { PayloadBudgetError } from "@/api/lib/compression";
 import { ChunkBudgetError } from "@/api/lib/corpus-index/chunking";
 import { settleBoth } from "@/api/lib/corpus-index/core";
+import { errorFingerprint } from "@/api/lib/errors/utils";
 import type { CorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
 import { buildCorpusProjectionDocuments } from "@/api/lib/legal-search/corpus-index-projection-builder";
 import {
@@ -45,6 +46,7 @@ import {
 } from "@/api/lib/legal-search/corpus-reads";
 import { readCorpusAtAuthoritativePointer } from "@/api/lib/legal-search/corpus-storage";
 import { LIMITS } from "@/api/lib/limits";
+import { logger } from "@/api/lib/observability/logger";
 import type { IngestionTransactionRunner } from "@/api/lib/replay-safe-ingestion";
 import { S3ObjectBudgetError } from "@/api/lib/s3";
 
@@ -670,6 +672,13 @@ const processPreparedRequests = async ({
     },
   );
   if (appended.isErr()) {
+    // The outcome is recorded on each intent, but the cycle summary only says
+    // "unknown"; without this line the engine's answer never reaches a log.
+    logger.warn("corpus_projection.append_unknown", {
+      indexId: request.indexId,
+      documents: started.length,
+      ...errorFingerprint(appended.error),
+    });
     const abandoned = await runInTransaction(async (tx) => {
       const outcomes = await mapSequentially(
         started,
