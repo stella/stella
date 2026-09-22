@@ -13,7 +13,6 @@ import { combine } from "@atlaskit/pragmatic-drag-and-drop/utils/combine";
 import { preserveOffsetOnSource } from "@atlaskit/pragmatic-drag-and-drop/utils/preserve-offset-on-source";
 import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/utils/set-custom-native-drag-preview";
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
-import { useBlocker } from "@tanstack/react-router";
 import { panic, Result } from "better-result";
 import {
   CopyIcon,
@@ -66,6 +65,7 @@ import {
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useHydrationSafeHotkeyPlatform } from "@/hooks/use-hydration-safe-hotkey-platform";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
+import { useUnsavedWork } from "@/hooks/use-unsaved-work";
 import { useFormatter } from "@/i18n/formatting-context";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -754,10 +754,11 @@ const LoadedPDFPageOrganizer = ({
   const selectedIds = new Set(state.ui.selectedPageIds);
   const isDirty = isPageOrganizerDirty(state);
   const isBusy = operation.type !== "idle" || isAddingPDF;
-  const navigationBlocker = useBlocker({
-    shouldBlockFn: () => !savedRef.current && (isDirty || isBusy),
-    enableBeforeUnload: isDirty || isBusy,
-    withResolver: true,
+  const navigationBlocker = useUnsavedWork({
+    surface: "pdf-page-organizer",
+    guard: "confirm-navigation",
+    isDirty: isDirty || isBusy,
+    shouldBlockNavigation: () => !savedRef.current,
   });
   const documentLimitMessage = tPageEditor("documentLimit", {
     maxPages: format.number(MAX_PAGE_EDITOR_PAGES),

@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useBlocker } from "@tanstack/react-router";
+import { Link } from "@tanstack/react-router";
 import {
   ArrowLeftIcon,
   ChevronDownIcon,
@@ -50,6 +50,7 @@ import {
 import { GUIDE_ANCHORS } from "@/features/guides/guide-anchors";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { usePermissions } from "@/hooks/use-permissions";
+import { useUnsavedWork } from "@/hooks/use-unsaved-work";
 import { useFormatter } from "@/i18n/formatting-context";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
@@ -347,10 +348,10 @@ const PlaybookEditorForm = ({
   };
   const isDirty = hasPlaybookDraftChanges({ baseline, current: draft });
 
-  const navigationBlocker = useBlocker({
-    shouldBlockFn: () => isDirty,
-    enableBeforeUnload: isDirty,
-    withResolver: true,
+  const navigationBlocker = useUnsavedWork({
+    surface: "playbook-editor",
+    guard: "confirm-navigation",
+    isDirty,
   });
 
   const requestBack = useCallback(() => {

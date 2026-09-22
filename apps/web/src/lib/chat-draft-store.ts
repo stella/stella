@@ -229,3 +229,10 @@ export const useIsChatDraftEmpty = (threadRef: ChatThreadRef): boolean => {
     isDraftEmpty(state.draftsByThreadKey[threadKey] ?? null),
   );
 };
+
+export const useHasUnsentChatDraft = (): boolean =>
+  useChatDraftStore((state) =>
+    Object.values(state.draftsByThreadKey).some(
+      (draft) => !isDraftEmpty(draft),
+    ),
+  );

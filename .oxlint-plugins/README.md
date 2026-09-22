@@ -126,6 +126,7 @@ runtime validation, or integration tests.
 - [`no-raw-route-query-client`](./no-raw-route-query-client.ts) (`no-raw-route-query-client`): requires route freshness wrappers in loaders and synchronous cache reads in pending components.
 - [`no-raw-router-invalidation`](./no-raw-router-invalidation.ts) (`no-raw-router-invalidation`): confines navigation-grade `router.invalidate()` calls to the owned session, locale, and exhaustively classified route-metadata boundaries.
 - [`no-raw-stored-json`](./no-raw-stored-json.ts) (`no-raw-stored-json`): requires persisted browser JSON to be parsed and schema-validated through `readStoredJson()`.
+- [`no-direct-unsaved-work-guard`](./no-direct-unsaved-work-guard.ts) (`no-direct-unsaved-work-guard`): confines TanStack route blockers and `beforeunload` handlers in `apps/web/src` to `useUnsavedWork`, which also registers the work so the stale-client refresh does not reload over it.
 - [`no-raw-use-effect`](./no-raw-use-effect.ts) (`no-raw-use-effect`): bans direct React `useEffect`; use the sanctioned lifecycle wrappers or a more precise primitive.
 - [`no-ref-mirror`](./no-ref-mirror.ts) (`no-ref-mirror`): rejects mirroring render values into refs during render, a stale-value and React Compiler hazard.
 - [`no-shared-suspense-query`](./no-shared-suspense-query.ts) (`no-shared-suspense-query`): prevents suspense queries in shared UI components that lack route-owned prefetching.
