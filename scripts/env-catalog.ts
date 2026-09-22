@@ -93,6 +93,7 @@ const INTERNAL_SERVER_KEYS = new Set([
   "DB_SSLMODE",
   "DB_USER",
   "DEBUG_UNREDACTED_ERRORS",
+  "DEV_PUBLIC_LAW_CONNECT_COMMAND",
   "DOCUMENT_OCR_BATCH_INTERVAL_MINUTES",
   "DOCUMENT_OCR_MODEL_DIR",
   "DOCUMENT_PROCESSING_IDLE_EXIT_MINUTES",
@@ -276,6 +277,8 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "TLS mode for component database settings: require, verify-ca, or verify-full.",
   DB_USER:
     "Postgres user used with the component settings when DATABASE_URL is unset.",
+  DEV_PUBLIC_LAW_CONNECT_COMMAND:
+    "Local-development-only executable the Dev menu runs to reach the corpus that PUBLIC_LAW_DATABASE_URL and CORPUS_INDEX_Q09_SEARCH_ENDPOINT name, for example by opening local tunnels. Unset disables the action.",
   DOCUMENT_OCR_BATCH_INTERVAL_MINUTES:
     "Interval for releasing queued OCR requests, in minutes.",
   DOCUMENT_OCR_MODEL_DIR:

@@ -129,6 +129,21 @@ describe("API environment", () => {
     );
   });
 
+  test("rejects the dev public-law connect command outside development", () => {
+    const result = bootApiEnvironment({
+      ...baseEnv,
+      CONTENT_ENCRYPTION_KEY: "a".repeat(64),
+      DEV_PUBLIC_LAW_CONNECT_COMMAND: "/usr/local/bin/connect",
+      NODE_ENV: "production",
+      USE_MOCK_AI: "false",
+    });
+
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stderr.toString()).toContain(
+      "DEV_PUBLIC_LAW_CONNECT_COMMAND is dev-only and requires NODE_ENV=development.",
+    );
+  });
+
   test("accepts Railway private-network service URLs in production", () => {
     const result = bootApiEnvironment({
       ...baseEnv,

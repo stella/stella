@@ -277,14 +277,35 @@ const mutationBaseUrl = (cluster: QuickwitCluster): string => {
   return value.replace(/(?<!\/)\/+$/u, "");
 };
 
-const searchBaseUrl = (cluster: QuickwitCluster): string => {
+/** The configured search endpoint, or null when neither env names one. */
+export const readCorpusIndexSearchBaseUrl = (
+  cluster: QuickwitCluster,
+): string | null => {
   const { mutationEnv, searchEnv } = CORPUS_INDEX_CLUSTER_CONFIG[cluster];
   const value = envBase[searchEnv] ?? envBase[mutationEnv];
   if (value === undefined || value.length === 0) {
-    panic(`${searchEnv} or ${mutationEnv} is required for ${cluster} search`);
+    return null;
   }
   return value.replace(/(?<!\/)\/+$/u, "");
 };
+
+const searchBaseUrl = (cluster: QuickwitCluster): string => {
+  const value = readCorpusIndexSearchBaseUrl(cluster);
+  if (value === null) {
+    const { mutationEnv, searchEnv } = CORPUS_INDEX_CLUSTER_CONFIG[cluster];
+    panic(`${searchEnv} or ${mutationEnv} is required for ${cluster} search`);
+  }
+  return value;
+};
+
+/** Liveness of the cluster's search endpoint; resolves with the raw response. */
+export const probeCorpusIndexSearchLiveness = async (
+  cluster: QuickwitCluster,
+  timeoutMs: number,
+): Promise<Response> =>
+  await fetchWithTimeout(`${searchBaseUrl(cluster)}/health/livez`, {
+    timeoutMs,
+  });
 
 const toCorpusIndexError = (error: unknown): CorpusIndexError =>
   error instanceof CorpusIndexError

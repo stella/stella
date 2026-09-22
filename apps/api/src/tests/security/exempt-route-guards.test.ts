@@ -77,6 +77,7 @@ const REVIEWED_UNGUARDED: Record<string, string[]> = {
     "POST /clean",
     "POST /rebuild-search",
     "POST /clear-cache",
+    "POST /public-law-connection",
   ],
   // Desktop-edit handoff/session endpoints authenticate via a handoff or
   // session token carried in the request, not an org-role permission.
