@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "recordedAt": "2026-09-14T14:46:40.687Z",
+  "recordedAt": "2026-09-22T20:02:49.112Z",
   "entries": [
     {
       "request": {
@@ -9,12 +9,12 @@
         "headers": {
           "content-type": "application/json"
         },
-        "bodySha256": "c2468cf323edf3bbea5ea3ccf7228db5e5dac26943cd63ff8735f56a6e4b62cd"
+        "bodySha256": "68eff2251c70adba75fb460d372c6ee4b37537e456de666b9c4d3b6c7b00ef33"
       },
       "response": {
         "status": 200,
         "contentType": "text/event-stream",
-        "body": "data: {\"id\":\"[completion-id]\",\"object\":\"chat.completion.chunk\",\"created\":1789397199,\"model\":\"openai/gpt-5.6-luna\",\"provider\":\"OpenAI\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"OK\",\"role\":\"assistant\"},\"finish_reason\":null,\"native_finish_reason\":null}]}\n\ndata: {\"id\":\"[completion-id]\",\"object\":\"chat.completion.chunk\",\"created\":1789397199,\"model\":\"openai/gpt-5.6-luna\",\"provider\":\"OpenAI\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"\",\"role\":\"assistant\"},\"finish_reason\":\"stop\",\"native_finish_reason\":\"completed\"}]}\n\ndata: {\"id\":\"[completion-id]\",\"object\":\"chat.completion.chunk\",\"created\":1789397199,\"model\":\"openai/gpt-5.6-luna\",\"provider\":\"OpenAI\",\"service_tier\":\"default\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"\",\"role\":\"assistant\"},\"finish_reason\":\"stop\",\"native_finish_reason\":\"completed\"}],\"usage\":{\"prompt_tokens\":11,\"completion_tokens\":5,\"total_tokens\":16,\"is_byok\":false,\"prompt_tokens_details\":{\"cached_tokens\":0,\"cache_write_tokens\":0,\"audio_tokens\":0,\"video_tokens\":0},\"completion_tokens_details\":{\"reasoning_tokens\":0,\"image_tokens\":0,\"audio_tokens\":0}}}\n\ndata: [DONE]\n\n"
+        "body": "data: {\"id\":\"[completion-id]\",\"object\":\"chat.completion.chunk\",\"created\":1790107367,\"model\":\"openai/gpt-6-luna\",\"provider\":\"OpenAI\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"OK\",\"role\":\"assistant\"},\"finish_reason\":null,\"native_finish_reason\":null}]}\n\ndata: {\"id\":\"[completion-id]\",\"object\":\"chat.completion.chunk\",\"created\":1790107367,\"model\":\"openai/gpt-6-luna\",\"provider\":\"OpenAI\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"\",\"role\":\"assistant\"},\"finish_reason\":\"stop\",\"native_finish_reason\":\"completed\"}]}\n\ndata: {\"id\":\"[completion-id]\",\"object\":\"chat.completion.chunk\",\"created\":1790107367,\"model\":\"openai/gpt-6-luna\",\"provider\":\"OpenAI\",\"service_tier\":\"default\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"\",\"role\":\"assistant\"},\"finish_reason\":\"stop\",\"native_finish_reason\":\"completed\"}],\"usage\":{\"prompt_tokens\":11,\"completion_tokens\":5,\"total_tokens\":16,\"is_byok\":false,\"prompt_tokens_details\":{\"cached_tokens\":0,\"cache_write_tokens\":0,\"audio_tokens\":0,\"video_tokens\":0},\"completion_tokens_details\":{\"reasoning_tokens\":0,\"image_tokens\":0,\"audio_tokens\":0}}}\n\ndata: [DONE]\n\n"
       }
     }
   ]

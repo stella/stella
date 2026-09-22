@@ -32,28 +32,28 @@ import type {
 describe("BYOK provider and model configuration", () => {
   test("creates role defaults from the first configured provider", () => {
     expect(createDefaultRoleModels(["anthropic", "openai"])).toEqual({
-      chat: { provider: "anthropic", modelId: "claude-opus-4-8" },
-      fast: { provider: "anthropic", modelId: "claude-opus-5" },
-      reasoning: { provider: "anthropic", modelId: "claude-opus-5" },
-      pdf: { provider: "anthropic", modelId: "claude-opus-4-8" },
+      chat: { provider: "anthropic", modelId: "claude-opus-5-5" },
+      fast: { provider: "anthropic", modelId: "claude-opus-5-5" },
+      reasoning: { provider: "anthropic", modelId: "claude-opus-5-5" },
+      pdf: { provider: "anthropic", modelId: "claude-opus-5-5" },
     });
   });
 
   test("uses the provider-specific recommendations for Google and OpenRouter", () => {
     expect(createDefaultRoleModels(["google"])).toEqual({
-      chat: { provider: "google", modelId: "gemini-3.7-flash" },
-      fast: { provider: "google", modelId: "gemini-3.7-flash" },
-      reasoning: { provider: "google", modelId: "gemini-3.7-flash" },
-      pdf: { provider: "google", modelId: "gemini-3.7-flash" },
+      chat: { provider: "google", modelId: "gemini-3.8-flash" },
+      fast: { provider: "google", modelId: "gemini-3.8-flash" },
+      reasoning: { provider: "google", modelId: "gemini-3.8-flash" },
+      pdf: { provider: "google", modelId: "gemini-3.8-flash" },
     });
     expect(createDefaultRoleModels(["openrouter"])).toEqual({
-      chat: { provider: "openrouter", modelId: "openai/gpt-5.6-terra" },
-      fast: { provider: "openrouter", modelId: "openai/gpt-5.6-luna" },
+      chat: { provider: "openrouter", modelId: "openai/gpt-6-sol" },
+      fast: { provider: "openrouter", modelId: "openai/gpt-6-luna" },
       reasoning: {
         provider: "openrouter",
-        modelId: "openai/gpt-5.6-terra",
+        modelId: "openai/gpt-6-sol",
       },
-      pdf: { provider: "openrouter", modelId: "openai/gpt-5.6-terra" },
+      pdf: { provider: "openrouter", modelId: "openai/gpt-6-sol" },
     });
   });
 
@@ -65,7 +65,7 @@ describe("BYOK provider and model configuration", () => {
         provider: "mistral",
         modelId: "mistral-medium-latest",
       },
-      pdf: { provider: "openai", modelId: "gpt-5.4" },
+      pdf: { provider: "openai", modelId: "gpt-6-sol" },
     });
 
     expect(createDefaultRoleModels(["mistral"]).pdf).toBeNull();
@@ -193,10 +193,10 @@ describe("BYOK provider and model configuration", () => {
         roleModels,
       }),
     ).toEqual({
-      chat: { provider: "anthropic", modelId: "claude-opus-4-8" },
+      chat: { provider: "anthropic", modelId: "claude-opus-5-5" },
       fast: { provider: "openai", modelId: "gpt-5.4-nano" },
-      reasoning: { provider: "anthropic", modelId: "claude-opus-5" },
-      pdf: { provider: "anthropic", modelId: "claude-opus-4-8" },
+      reasoning: { provider: "anthropic", modelId: "claude-opus-5-5" },
+      pdf: { provider: "anthropic", modelId: "claude-opus-5-5" },
     });
   });
 
@@ -244,10 +244,10 @@ describe("BYOK provider and model configuration", () => {
         roleModels: createDefaultRoleModels(["openai"]),
       }),
     ).toEqual({
-      chat: { provider: "openai", modelId: "gpt-5.4-mini" },
-      fast: { provider: "openai", modelId: "gpt-5.4-nano" },
-      reasoning: { provider: "openai", modelId: "gpt-5.4" },
-      pdf: { provider: "openai", modelId: "gpt-5.4" },
+      chat: { provider: "openai", modelId: "gpt-6-sol" },
+      fast: { provider: "openai", modelId: "gpt-6-luna" },
+      reasoning: { provider: "openai", modelId: "gpt-6-sol" },
+      pdf: { provider: "openai", modelId: "gpt-6-sol" },
     });
   });
 
@@ -261,10 +261,10 @@ describe("BYOK provider and model configuration", () => {
         },
       }),
     ).toEqual({
-      chat: { provider: "openai", modelId: "gpt-5.4-mini" },
+      chat: { provider: "openai", modelId: "gpt-6-sol" },
       fast: { provider: "openai", modelId: "gpt-5.4-nano" },
-      reasoning: { provider: "openai", modelId: "gpt-5.4" },
-      pdf: { provider: "openai", modelId: "gpt-5.4" },
+      reasoning: { provider: "openai", modelId: "gpt-6-sol" },
+      pdf: { provider: "openai", modelId: "gpt-6-sol" },
     });
   });
 
@@ -280,8 +280,8 @@ describe("BYOK provider and model configuration", () => {
     ).toEqual({
       chat: { provider: "anthropic", modelId: "claude-opus-4-5" },
       fast: { provider: "openai", modelId: "gpt-5.4-nano" },
-      reasoning: { provider: "anthropic", modelId: "claude-opus-5" },
-      pdf: { provider: "anthropic", modelId: "claude-opus-4-8" },
+      reasoning: { provider: "anthropic", modelId: "claude-opus-5-5" },
+      pdf: { provider: "anthropic", modelId: "claude-opus-5-5" },
     });
   });
 
@@ -400,7 +400,7 @@ describe("BYOK provider and model configuration", () => {
     ]);
     expect(rows.at(0)?.selection).toEqual({
       provider: "anthropic",
-      modelId: "claude-opus-4-8",
+      modelId: "claude-opus-5-5",
     });
     expect(rows.at(1)?.value).toBe("openai::gpt-5.4-nano");
     expect(rows.at(0)?.modelOptions).toContainEqual({
@@ -431,7 +431,7 @@ describe("BYOK provider and model configuration", () => {
     });
     expect(pdfRow?.selection).toEqual({
       provider: "openai",
-      modelId: "gpt-5.4",
+      modelId: "gpt-6-sol",
     });
     expect(pdfRow?.modelOptions).not.toContainEqual({
       provider: "mistral",

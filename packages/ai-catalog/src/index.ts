@@ -159,6 +159,22 @@ export const FIRST_PARTY_MODEL_PROVIDERS: Exclude<
   : never = FIRST_PARTY_MODEL_PROVIDER_VALUES;
 
 /**
+ * Provider IDs for the GPT-6 family. Like GPT-5.6 below, one row feeds both
+ * the OpenAI and the OpenRouter picker.
+ */
+const GPT_6_MODEL_IDS = {
+  astra: { openai: "gpt-6-astra", openrouter: "openai/gpt-6-astra" },
+  sol: { openai: "gpt-6-sol", openrouter: "openai/gpt-6-sol" },
+  luna: { openai: "gpt-6-luna", openrouter: "openai/gpt-6-luna" },
+} as const;
+const GPT_6_OPENAI_MODEL_IDS = Object.values(GPT_6_MODEL_IDS).map(
+  ({ openai }) => openai,
+);
+const GPT_6_OPENROUTER_MODEL_IDS = Object.values(GPT_6_MODEL_IDS).map(
+  ({ openrouter }) => openrouter,
+);
+
+/**
  * Provider IDs for the GPT-5.6 family. OpenAI exposes Sol through the
  * `gpt-5.6` alias while OpenRouter uses the explicit `gpt-5.6-sol` ID. Keep
  * both routes in one row so adding a family member cannot update one picker
@@ -183,28 +199,28 @@ const GPT_56_OPENROUTER_MODEL_IDS = Object.values(GPT_56_MODEL_IDS).map(
  */
 export const BYOK_DEFAULT_MODELS = {
   google: {
-    fast: "gemini-3.7-flash",
-    chat: "gemini-3.7-flash",
-    reasoning: "gemini-3.7-flash",
-    pdf: "gemini-3.7-flash",
+    fast: "gemini-3.8-flash",
+    chat: "gemini-3.8-flash",
+    reasoning: "gemini-3.8-flash",
+    pdf: "gemini-3.8-flash",
   },
   openrouter: {
-    fast: GPT_56_MODEL_IDS.luna.openrouter,
-    chat: GPT_56_MODEL_IDS.terra.openrouter,
-    reasoning: GPT_56_MODEL_IDS.terra.openrouter,
-    pdf: GPT_56_MODEL_IDS.terra.openrouter,
+    fast: GPT_6_MODEL_IDS.luna.openrouter,
+    chat: GPT_6_MODEL_IDS.sol.openrouter,
+    reasoning: GPT_6_MODEL_IDS.sol.openrouter,
+    pdf: GPT_6_MODEL_IDS.sol.openrouter,
   },
   openai: {
-    fast: "gpt-5.4-nano",
-    chat: "gpt-5.4-mini",
-    reasoning: "gpt-5.4",
-    pdf: "gpt-5.4",
+    fast: GPT_6_MODEL_IDS.luna.openai,
+    chat: GPT_6_MODEL_IDS.sol.openai,
+    reasoning: GPT_6_MODEL_IDS.sol.openai,
+    pdf: GPT_6_MODEL_IDS.sol.openai,
   },
   anthropic: {
-    fast: "claude-opus-5",
-    chat: "claude-opus-4-8",
-    reasoning: "claude-opus-5",
-    pdf: "claude-opus-4-8",
+    fast: "claude-opus-5-5",
+    chat: "claude-opus-5-5",
+    reasoning: "claude-opus-5-5",
+    pdf: "claude-opus-5-5",
   },
   bedrock: {
     fast: "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
@@ -227,11 +243,12 @@ export const BYOK_DEFAULT_MODELS = {
  */
 export const DEFAULT_MODELS = {
   ...BYOK_DEFAULT_MODELS,
+  // Azure AI Foundry does not list GPT-6 Sol or Luna yet.
   azure_foundry: {
-    fast: "gpt-5.4-nano",
-    chat: "gpt-5.4-mini",
-    reasoning: "gpt-5.4",
-    pdf: "gpt-5.4",
+    fast: GPT_56_MODEL_IDS.luna.openai,
+    chat: GPT_56_MODEL_IDS.terra.openai,
+    reasoning: GPT_56_MODEL_IDS.terra.openai,
+    pdf: GPT_56_MODEL_IDS.terra.openai,
   },
   openai_compatible: {
     fast: "default",
@@ -271,6 +288,7 @@ export const BYOK_MODEL_OPTIONS = {
     "claude-sonnet-5",
     "claude-fable-5-1",
     "claude-fable-5",
+    "claude-opus-5-5",
     "claude-opus-5",
     "claude-opus-4-8",
     "claude-opus-4-7",
@@ -279,7 +297,7 @@ export const BYOK_MODEL_OPTIONS = {
     "claude-haiku-4-5-20251001",
   ],
   openai: [
-    "gpt-6-astra",
+    ...GPT_6_OPENAI_MODEL_IDS,
     ...GPT_56_OPENAI_MODEL_IDS,
     "gpt-5.5",
     "gpt-5.4",
@@ -288,7 +306,7 @@ export const BYOK_MODEL_OPTIONS = {
     "gpt-5.2",
   ],
   openrouter: [
-    "openai/gpt-6-astra",
+    ...GPT_6_OPENROUTER_MODEL_IDS,
     ...GPT_56_OPENROUTER_MODEL_IDS,
     "google/gemini-3.8-flash",
     "google/gemini-3.7-flash",
@@ -390,6 +408,10 @@ export const MODEL_DISPLAY_METADATA = {
     displayName: "Claude Fable 5",
     iconProvider: "anthropic",
   },
+  "claude-opus-5-5": {
+    displayName: "Claude Opus 5.5",
+    iconProvider: "anthropic",
+  },
   "claude-opus-5": {
     displayName: "Claude Opus 5",
     iconProvider: "anthropic",
@@ -414,7 +436,18 @@ export const MODEL_DISPLAY_METADATA = {
     displayName: "Claude Haiku 4.5",
     iconProvider: "anthropic",
   },
-  "gpt-6-astra": { displayName: "GPT-6 Astra", iconProvider: "openai" },
+  [GPT_6_MODEL_IDS.astra.openai]: {
+    displayName: "GPT-6 Astra",
+    iconProvider: "openai",
+  },
+  [GPT_6_MODEL_IDS.sol.openai]: {
+    displayName: "GPT-6 Sol",
+    iconProvider: "openai",
+  },
+  [GPT_6_MODEL_IDS.luna.openai]: {
+    displayName: "GPT-6 Luna",
+    iconProvider: "openai",
+  },
   // `gpt-5.6` is OpenAI's alias for the Sol model. Keep the API alias as the
   // canonical ID while exposing the family member's product name in pickers.
   [GPT_56_MODEL_IDS.sol.openai]: {
@@ -440,8 +473,16 @@ export const MODEL_DISPLAY_METADATA = {
     iconProvider: "openai",
   },
   "gpt-5.2": { displayName: "GPT-5.2", iconProvider: "openai" },
-  "openai/gpt-6-astra": {
+  [GPT_6_MODEL_IDS.astra.openrouter]: {
     displayName: "GPT-6 Astra",
+    iconProvider: "openai",
+  },
+  [GPT_6_MODEL_IDS.sol.openrouter]: {
+    displayName: "GPT-6 Sol",
+    iconProvider: "openai",
+  },
+  [GPT_6_MODEL_IDS.luna.openrouter]: {
+    displayName: "GPT-6 Luna",
     iconProvider: "openai",
   },
   [GPT_56_MODEL_IDS.sol.openrouter]: {
@@ -696,6 +737,7 @@ export const ANTHROPIC_ADAPTIVE_THINKING_MODELS = [
   "claude-opus-4-8",
   "claude-fable-5",
   "claude-fable-5-1",
+  "claude-opus-5-5",
 ] as const;
 
 /**
@@ -804,8 +846,8 @@ type RequiredModelRateId =
  */
 export const FALLBACK_CHAT_MODEL_BY_PROVIDER = {
   google: DEFAULT_MODELS.google.fast,
-  openrouter: "openai/gpt-5.6-luna",
-  openai: "gpt-5.6-luna",
+  openrouter: DEFAULT_MODELS.openrouter.fast,
+  openai: DEFAULT_MODELS.openai.fast,
   anthropic: DEFAULT_MODELS.anthropic.fast,
   bedrock: DEFAULT_MODELS.bedrock.fast,
   mistral: DEFAULT_MODELS.mistral.fast,
@@ -869,6 +911,8 @@ export const MODEL_STREAMING_TOOL_USE = {
   "gemini-3.5-flash": "supported",
   "gemini-3.1-flash-lite": "supported",
   "openai/gpt-6-astra": "supported",
+  "openai/gpt-6-sol": "supported",
+  "openai/gpt-6-luna": "supported",
   "openai/gpt-5.6-sol": "supported",
   "openai/gpt-5.6-terra": "supported",
   "openai/gpt-5.6-luna": "supported",
@@ -886,6 +930,8 @@ export const MODEL_STREAMING_TOOL_USE = {
   "openai/gpt-5.5": "supported",
   "openai/gpt-5.4-mini": "supported",
   "gpt-6-astra": "supported",
+  "gpt-6-sol": "supported",
+  "gpt-6-luna": "supported",
   "gpt-5.6": "supported",
   "gpt-5.6-terra": "supported",
   "gpt-5.6-luna": "supported",
@@ -897,6 +943,7 @@ export const MODEL_STREAMING_TOOL_USE = {
   "claude-sonnet-5": "supported",
   "claude-fable-5-1": "supported",
   "claude-fable-5": "supported",
+  "claude-opus-5-5": "supported",
   "claude-opus-5": "supported",
   "claude-opus-4-8": "supported",
   "claude-opus-4-7": "supported",
@@ -1081,11 +1128,13 @@ export const CONTEXT_WINDOW_TOKENS = {
   "gpt-5.4": 400_000,
   "gpt-5.5": 400_000,
   "gpt-6-astra": 922_000,
+  "gpt-6-sol": 922_000,
+  "gpt-6-luna": 922_000,
   "gpt-5.6": 922_000,
   "gpt-5.6-luna": 922_000,
   "gpt-5.6-terra": 922_000,
-  // Anthropic Claude: 200K through Claude 4; Sonnet 5, Opus 5, and Fable 5.1
-  // expose 1M.
+  // Anthropic Claude: 200K through Claude 4; Sonnet 5, Opus 5, Opus 5.5, and
+  // Fable 5.1 expose 1M.
   "claude-haiku-4-5-20251001": 200_000,
   "claude-sonnet-4-6": 200_000,
   "claude-sonnet-5": 1_000_000,
@@ -1093,6 +1142,7 @@ export const CONTEXT_WINDOW_TOKENS = {
   "claude-opus-4-7": 200_000,
   "claude-opus-4-8": 200_000,
   "claude-opus-5": 1_000_000,
+  "claude-opus-5-5": 1_000_000,
   "claude-fable-5": 200_000,
   "claude-fable-5-1": 1_000_000,
   // Mistral: 128K across the offered text/vision models.
@@ -1114,6 +1164,8 @@ export const CONTEXT_WINDOW_TOKENS = {
   "anthropic/claude-opus-4.8": 200_000,
   "anthropic/claude-sonnet-4.6": 200_000,
   "openai/gpt-6-astra": 922_000,
+  "openai/gpt-6-sol": 922_000,
+  "openai/gpt-6-luna": 922_000,
   "openai/gpt-5.6-sol": 922_000,
   "openai/gpt-5.6-luna": 922_000,
   "openai/gpt-5.6-terra": 922_000,
