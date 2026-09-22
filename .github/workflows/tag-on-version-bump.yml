@@ -70,19 +70,15 @@ jobs:
           echo "tag=v$version" >> "$GITHUB_OUTPUT"
           echo "value=$version" >> "$GITHUB_OUTPUT"
 
-      - name: Require release changelog file
-        env:
-          VERSION: ${{ steps.version.outputs.value }}
-        run: bash scripts/check-release-changelog.sh --version "$VERSION"
-
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version-file: "package.json"
 
-      # Ahead of the freshness gate: with the tag already pushed this run has
-      # nothing left to create, and failing it on recordings that went stale
-      # after the tag would turn an intended no-op into a red workflow.
+      # Ahead of the changelog and freshness gates: with the tag already
+      # pushed this run has nothing left to create, and failing it on a note
+      # or recordings the tag predates would turn an intended no-op into a red
+      # workflow.
       - name: Skip if tag already exists
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
@@ -96,6 +92,12 @@ jobs:
             echo "Tag $TAG already exists; nothing to do."
             echo "skip=true" >> "$GITHUB_ENV"
           fi
+
+      - name: Require release changelog file
+        if: env.skip != 'true'
+        env:
+          VERSION: ${{ steps.version.outputs.value }}
+        run: bash scripts/check-release-changelog.sh --version "$VERSION"
 
       # The API deploys from this tag; the CLI publishes from the same commit
       # only after production serves it. A stable tag is refused while a

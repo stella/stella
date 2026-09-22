@@ -100,7 +100,12 @@ if [[ "$first_line" == "$maintenance_heading" ]]; then
   exit 0
 fi
 
-media_pattern='^[[:space:]]*(!\[[^]]*\]\(https://[^)[:space:]]+\)|<video[^>]*[[:space:]]controls[^>]*[[:space:]]src="https://[^"]+"[^>]*></video>|<video[^>]*[[:space:]]src="https://[^"]+"[^>]*[[:space:]]controls[^>]*></video>)[[:space:]]*$'
+# Mirrors the renderer's patterns: a whole-line image, or a whole-line video
+# with a single- or double-quoted src (validate_changelog_media above already
+# requires `controls` on every video).
+image_pattern='^[[:space:]]*!\[[^]]*\]\(https://[^)[:space:]]+\)[[:space:]]*$'
+video_pattern="^[[:space:]]*<video[[:space:]][^>]*src=[\"']https://[^\"']+[\"'][^>]*></video>[[:space:]]*$"
+media_pattern="$image_pattern|$video_pattern"
 if ! grep -Eq "$media_pattern" "$changelog_file"; then
   cat >&2 <<EOF
 ::error file=$changelog_file::$version is not a maintenance release, so $changelog_file must embed a screenshot (![alt](https://...)) or a video (<video controls src="https://..."></video>). A release without user-facing change is cut with \`bun run release:maintenance\`.

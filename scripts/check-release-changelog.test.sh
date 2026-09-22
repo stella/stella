@@ -46,6 +46,10 @@ run_case "feature release with an image" "1.2.3" \
   $'# Table improvements\n\nFaster sorting.\n\n'"$IMAGE"$'\n' 0
 run_case "feature release with a video" "1.2.3" \
   $'# Table improvements\n\n'"$VIDEO"$'\n' 0
+run_case "feature release with a single-quoted video" "1.2.3" \
+  $'# Table improvements\n\n<video controls src=\'https://example.com/demo.mp4\'></video>\n' 0
+run_case "video without controls" "1.2.3" \
+  $'# Table improvements\n\n<video src="https://example.com/demo.mp4"></video>\n' 1
 run_case "feature release without media" "1.2.3" \
   $'# Table improvements\n\nFaster sorting.\n' 1
 run_case "blank changelog" "1.2.3" $'\n' 1
