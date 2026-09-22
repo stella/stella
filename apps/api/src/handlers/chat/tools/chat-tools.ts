@@ -820,6 +820,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
   const historyTools = createChatHistoryTools({
     excludedMessageIds: excludedChatHistoryMessageIds,
     organizationId,
+    pastChatScope,
     refRegistry,
     safeDb,
     threadId,

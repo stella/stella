@@ -85,6 +85,7 @@ let sameMatter: Awaited<ReturnType<typeof seedThread>>;
 let otherMatter: Awaited<ReturnType<typeof seedThread>>;
 let globalAboutMatter: Awaited<ReturnType<typeof seedThread>>;
 let globalPlain: Awaited<ReturnType<typeof seedThread>>;
+let mixedMatter: Awaited<ReturnType<typeof seedThread>>;
 let otherUser: Awaited<ReturnType<typeof seedThread>>;
 
 beforeAll(async () => {
@@ -131,6 +132,12 @@ beforeAll(async () => {
     dataWorkspaceIds: [ids.wsA1],
   });
   globalPlain = await seedThread({ userId: ids.userA1, workspaceId: null });
+  // Bound to the scoped matter but carrying another matter's data.
+  mixedMatter = await seedThread({
+    userId: ids.userA1,
+    workspaceId: ids.wsA1,
+    dataWorkspaceIds: [ids.wsA1, ids.wsA2],
+  });
   otherUser = await seedThread({ userId: ids.userA2, workspaceId: ids.wsA2 });
 });
 
@@ -166,25 +173,53 @@ const runSearch = async (tool: PastChatTools[keyof PastChatTools]) => {
   return new Set(output?.results.map((result) => result.threadId));
 };
 
+const MATTER_A1_SCOPE = (): PastChatScope => ({
+  type: PAST_CHAT_SCOPE_TYPE.matters,
+  workspaceIds: [ids.wsA1],
+});
+const ALL_CHATS_SCOPE: PastChatScope = { type: PAST_CHAT_SCOPE_TYPE.allChats };
+
+const expandFor = async ({
+  messageId,
+  scope,
+}: {
+  messageId: SafeId<"chatMessage">;
+  scope: PastChatScope;
+}) => {
+  const refRegistry = createChatRefRegistry();
+  const expandTool = createChatHistoryTools({
+    organizationId: ids.orgA,
+    pastChatScope: scope,
+    refRegistry,
+    safeDb,
+    threadId: current.threadId,
+    userId: ids.userA1,
+  })["expand-chat-history"];
+  const output = await expandTool.execute?.(
+    { messageId, before: 2, after: 2 },
+    asTestRaw<Parameters<NonNullable<typeof expandTool.execute>>[1]>({}),
+  );
+  return {
+    messageIds: output?.messages.map((message) => message.messageId),
+    registered: refRegistry.getRegisteredWorkspaceIds(),
+  };
+};
+
 describe("past-chat search", () => {
   test("a matter-scoped search reads only chats about that matter", async () => {
-    const { tools } = toolsFor({
-      type: PAST_CHAT_SCOPE_TYPE.matters,
-      workspaceIds: [ids.wsA1],
-    });
+    const { tools } = toolsFor(MATTER_A1_SCOPE());
 
     const found = await runSearch(tools[SEARCH_PAST_CHATS_TOOL_NAME]);
 
+    // The mixed chat also carries another matter's data, so only the
+    // approval-gated widening may return it.
     expect(found).toEqual(
       new Set([sameMatter.threadId, globalAboutMatter.threadId]),
     );
   });
 
   test("the widened search reads every own chat except the current one", async () => {
-    const { refRegistry, tools } = toolsFor({
-      type: PAST_CHAT_SCOPE_TYPE.matters,
-      workspaceIds: [ids.wsA1],
-    });
+    const { refRegistry, tools } = toolsFor(MATTER_A1_SCOPE());
 
     const found = await runSearch(tools[SEARCH_ALL_PAST_CHATS_TOOL_NAME]);
 
@@ -194,6 +229,7 @@ describe("past-chat search", () => {
         otherMatter.threadId,
         globalAboutMatter.threadId,
         globalPlain.threadId,
+        mixedMatter.threadId,
       ]),
     );
     expect(found.has(otherUser.threadId)).toBe(false);
@@ -202,41 +238,42 @@ describe("past-chat search", () => {
     expect(refRegistry.getRegisteredWorkspaceIds()).toContain(ids.wsA2);
   });
 
-  test("expanding another chat's message reads its thread and registers its matter", async () => {
-    const refRegistry = createChatRefRegistry();
-    const expandTool = createChatHistoryTools({
-      organizationId: ids.orgA,
-      refRegistry,
-      safeDb,
-      threadId: current.threadId,
-      userId: ids.userA1,
-    })["expand-chat-history"];
+  test("expanding a chat inside the scope reads its thread and registers its matter", async () => {
+    const expanded = await expandFor({
+      messageId: otherMatter.messageId,
+      scope: ALL_CHATS_SCOPE,
+    });
 
-    const output = await expandTool.execute?.(
-      { messageId: otherMatter.messageId, before: 2, after: 2 },
-      asTestRaw<Parameters<NonNullable<typeof expandTool.execute>>[1]>({}),
-    );
+    expect(expanded.messageIds).toEqual([otherMatter.messageId]);
+    expect(expanded.registered).toContain(ids.wsA2);
+  });
 
-    expect(output?.messages.map((message) => message.messageId)).toEqual([
-      otherMatter.messageId,
-    ]);
-    expect(refRegistry.getRegisteredWorkspaceIds()).toContain(ids.wsA2);
+  test("expanding follows the matter scope, mixed chats included", async () => {
+    const inScope = await expandFor({
+      messageId: sameMatter.messageId,
+      scope: MATTER_A1_SCOPE(),
+    });
+    const otherMatterChat = await expandFor({
+      messageId: otherMatter.messageId,
+      scope: MATTER_A1_SCOPE(),
+    });
+    const mixedChat = await expandFor({
+      messageId: mixedMatter.messageId,
+      scope: MATTER_A1_SCOPE(),
+    });
+
+    expect(inScope.messageIds).toEqual([sameMatter.messageId]);
+    expect(otherMatterChat.messageIds).toEqual([]);
+    expect(mixedChat.messageIds).toEqual([]);
+    expect(mixedChat.registered).not.toContain(ids.wsA2);
   });
 
   test("expanding another user's message returns nothing", async () => {
-    const expandTool = createChatHistoryTools({
-      organizationId: ids.orgA,
-      refRegistry: createChatRefRegistry(),
-      safeDb,
-      threadId: current.threadId,
-      userId: ids.userA1,
-    })["expand-chat-history"];
+    const expanded = await expandFor({
+      messageId: otherUser.messageId,
+      scope: ALL_CHATS_SCOPE,
+    });
 
-    const output = await expandTool.execute?.(
-      { messageId: otherUser.messageId, before: 2, after: 2 },
-      asTestRaw<Parameters<NonNullable<typeof expandTool.execute>>[1]>({}),
-    );
-
-    expect(output?.messages).toEqual([]);
+    expect(expanded.messageIds).toEqual([]);
   });
 });

@@ -5,6 +5,7 @@ import { PgDialect } from "drizzle-orm/pg-core";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
+import { PAST_CHAT_SCOPE_TYPE } from "@/api/handlers/chat/tools/past-chat-tools";
 import { toSafeId } from "@/api/lib/branded-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -45,6 +46,7 @@ describe("chat history tools", () => {
       refRegistry: createChatRefRegistry(),
       excludedMessageIds: [hiddenMessageId],
       organizationId,
+      pastChatScope: { type: PAST_CHAT_SCOPE_TYPE.allChats },
       safeDb,
       threadId,
       userId,
@@ -73,6 +75,7 @@ describe("chat history tools", () => {
       refRegistry: createChatRefRegistry(),
       excludedMessageIds: [hiddenMessageId],
       organizationId,
+      pastChatScope: { type: PAST_CHAT_SCOPE_TYPE.allChats },
       safeDb,
       threadId,
       userId,

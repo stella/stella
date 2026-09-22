@@ -7,6 +7,8 @@ import * as v from "valibot";
 import type { SafeDb } from "@/api/db/safe-db";
 import { normalizePersistedChatMessageContent } from "@/api/handlers/chat/chat-message-parts";
 import { renderChatMessagesForCompaction } from "@/api/handlers/chat/compaction";
+import { pastChatScopeSql } from "@/api/handlers/chat/tools/past-chat-tools";
+import type { PastChatScope } from "@/api/handlers/chat/tools/past-chat-tools";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import type {
   ChatMessage,
@@ -102,6 +104,8 @@ const expandChatHistoryOutputSchema = v.strictObject({
 type CreateChatHistoryToolsProps = {
   excludedMessageIds?: readonly SafeId<"chatMessage">[] | undefined;
   organizationId: SafeId<"organization">;
+  /** Another chat's message expands only when that chat is in this scope. */
+  pastChatScope: PastChatScope;
   refRegistry: ChatRefRegistry;
   safeDb: SafeDb;
   threadId: SafeId<"chatThread">;
@@ -127,6 +131,7 @@ type ChatHistoryExpansionRow = {
 export const createChatHistoryTools = ({
   excludedMessageIds = [],
   organizationId,
+  pastChatScope,
   refRegistry,
   safeDb,
   threadId,
@@ -231,6 +236,7 @@ export const createChatHistoryTools = ({
           WHERE m.id = ${persistedMessageId}
             AND t.user_id = ${userId}
             AND t.organization_id = ${organizationId}
+            AND (t.id = ${threadId} OR (TRUE ${pastChatScopeSql(pastChatScope)}))
           LIMIT 1
         ),
         window_rows AS (

@@ -117,17 +117,23 @@ type CreatePastChatToolsProps = {
   userId: SafeId<"user">;
 };
 
-const scopeFilterSql = (scope: PastChatScope): SQL => {
+/**
+ * `AND …` predicate over a `chat_threads` row aliased `t`. A matter scope
+ * admits a chat only when every matter it touches is in scope: its own matter
+ * (if any) and every matter whose data it embedded. A chat that also carries
+ * another matter's data is reachable only through the approval-gated
+ * widening. A global chat with no matter data is about no matter, so it too
+ * waits for the widening.
+ */
+export const pastChatScopeSql = (scope: PastChatScope): SQL => {
   switch (scope.type) {
     case PAST_CHAT_SCOPE_TYPE.allChats:
       return sql``;
     case PAST_CHAT_SCOPE_TYPE.matters: {
       const workspaceIds = typedPgArray(scope.workspaceIds, "uuid");
-      // A global chat that drew on one of these matters is about it too.
-      return sql`AND (
-        t.workspace_id = ANY(${workspaceIds})
-        OR t.data_workspace_ids && ${workspaceIds}
-      )`;
+      return sql`AND (t.workspace_id IS NULL OR t.workspace_id = ANY(${workspaceIds}))
+        AND t.data_workspace_ids <@ ${workspaceIds}
+        AND (t.workspace_id IS NOT NULL OR cardinality(t.data_workspace_ids) > 0)`;
     }
     default:
       scope satisfies never;
@@ -192,7 +198,7 @@ export const createPastChatTools = ({
           AND d.thread_id <> ${threadId}
           AND t.user_id = ${userId}
           AND t.organization_id = ${organizationId}
-          ${scopeFilterSql(searchScope)}
+          ${pastChatScopeSql(searchScope)}
         ORDER BY ts_rank(d.tsv, ${tsQuery}) DESC, d.created_at DESC, d.message_id DESC
         LIMIT ${limit ?? LIMITS.chatHistorySearchPageSizeDefault}
       `),
@@ -241,7 +247,7 @@ export const createPastChatTools = ({
 
   const searchAllTool = toolDefinition({
     name: SEARCH_ALL_PAST_CHATS_TOOL_NAME,
-    description: `Search all the user's earlier chats, including chats about other matters. The user must approve each call. Call it when ${SEARCH_PAST_CHATS_TOOL_NAME} found nothing relevant, or when the user asks to search all chats.`,
+    description: `Search all the user's earlier chats, including chats about other matters. The user is asked to approve it. Call it when ${SEARCH_PAST_CHATS_TOOL_NAME} found nothing relevant, or when the user asks to search all chats. Results from chats outside this chat's matters cannot be expanded; search again with a more specific query instead.`,
     inputSchema: toTanStackToolSchema(searchPastChatsInputSchema),
     outputSchema: toTanStackToolSchema(searchPastChatsOutputSchema),
   }).server(
