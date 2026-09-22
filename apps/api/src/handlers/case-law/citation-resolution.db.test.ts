@@ -28,6 +28,7 @@ import {
 import {
   citationKeyOf,
   extractCitations,
+  normalizeDecisionIdentifier,
   normalizeDecisionIdentifierValue,
 } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -447,6 +448,83 @@ test("a Hungarian docket printed the way the courts print it reaches the listed 
   expect(citation?.citedDecisionId).toBe(targetId);
   expect(citation?.resolutionStatus).toBe(CITATION_RESOLUTION_STATUS.RESOLVED);
 });
+
+// Both sides through the production derivations: the target's keys from its
+// listed case number, the citation's from extracted text.
+test.each([
+  { stored: "EBH.2015.K.38.", text: "lásd EBH 2015.K.38. alatt" },
+  {
+    stored: "1.2007.PJE",
+    text: "az 1/2007. Polgári jogegységi határozat szerint",
+  },
+  { stored: "2.2009.PK", text: "a PK vélemény 2/2009 szerint" },
+])(
+  "a Hungarian series citation reaches the listed row $stored",
+  async ({ stored, text }) => {
+    const hungarian = {
+      ...base,
+      court: "Kúria",
+      language: "hu",
+      country: "HUN",
+    };
+    const targetId = createSafeId<"caseLawDecision">();
+    const citingId = createSafeId<"caseLawDecision">();
+    const citingCaseNumber = `Pfv.${stored.length}0000/2024/1`;
+    await db.insert(caseLawDecisions).values([
+      {
+        ...hungarian,
+        id: targetId,
+        caseNumber: stored,
+        citationKey: citationKeyOf(stored),
+        decisionDate: "2016-01-01",
+      },
+      {
+        ...hungarian,
+        id: citingId,
+        caseNumber: citingCaseNumber,
+        citationKey: citationKeyOf(citingCaseNumber),
+        decisionDate: "2024-06-01",
+      },
+    ]);
+    const identifier = {
+      type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+      value: stored,
+    } as const;
+    await db.insert(caseLawDecisionIdentifiers).values({
+      decisionId: targetId,
+      ...identifier,
+      normalizedValue: normalizeDecisionIdentifier(identifier),
+    });
+    const [extracted] = extractCitations([{ index: 0, text }]);
+    if (extracted === undefined) {
+      throw new Error(`nothing extracted from ${text}`);
+    }
+    const citationId = createSafeId<"caseLawCitation">();
+    await db.insert(caseLawCitations).values({
+      id: citationId,
+      citingDecisionId: citingId,
+      citationText: extracted.citationText,
+      citationKey: citationKeyOf(extracted.citationText),
+      identifierType: extracted.identifierType,
+      normalizedIdentifierValue: normalizeDecisionIdentifierValue(
+        extracted.identifierType,
+        extracted.identifierValue,
+      ),
+    });
+
+    await resolveCitationsForDecision(asTx(), citingId);
+
+    const [citation] = await db
+      .select()
+      .from(caseLawCitations)
+      .where(eq(caseLawCitations.id, citationId))
+      .limit(1);
+    expect(citation?.citedDecisionId).toBe(targetId);
+    expect(citation?.resolutionStatus).toBe(
+      CITATION_RESOLUTION_STATUS.RESOLVED,
+    );
+  },
+);
 
 type CitationRow = {
   cited: string | null;

@@ -14,9 +14,11 @@ import {
   bareCitationKey,
   decisionIdentifiersFromMetadata,
   decisionIdentifiersFromStoredMetadata,
+  citationKeyOf,
   extractCitations,
   hungarianCitationForm,
   isSelfCitation,
+  normalizeDecisionIdentifier,
   normalizeDecisionIdentifierValue,
 } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { storeDecisionIdentifiersInMetadata } from "@/api/lib/legal-search/decision-identifier-metadata";
@@ -2394,19 +2396,40 @@ describe("Hungarian citations", () => {
 
   const extract = (text: string) => extractCitations([{ index: 0, text }]);
 
-  const reporterKey = (text: string): string | undefined => {
+  /**
+   * The keys one cited spelling carries into `case_law_citations`, as the
+   * pipeline derives them: the typed identifier the resolver joins on, and
+   * `citation_key`.
+   */
+  const citedKeys = (text: string) => {
     const citations = extract(text);
     expect(citations).toHaveLength(1);
-    expect(citations[0]?.identifierType).toBe(
-      DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
-    );
-    const value = citations[0]?.identifierValue;
-    return value === undefined
-      ? undefined
-      : normalizeDecisionIdentifierValue(
-          DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
-          value,
-        );
+    const [citation] = citations;
+    if (citation === undefined) {
+      throw new Error(`nothing extracted from ${text}`);
+    }
+    return {
+      type: citation.identifierType,
+      identifier: normalizeDecisionIdentifierValue(
+        citation.identifierType,
+        citation.identifierValue,
+      ),
+      citationKey: citationKeyOf(citation.citationText),
+    };
+  };
+
+  /**
+   * The keys a stored case number carries into `case_law_decisions` and
+   * `case_law_decision_identifiers`, as ingestion and the identifier backfill
+   * derive them.
+   */
+  const storedKeys = (caseNumber: string) => {
+    const [identifier] = decisionIdentifiersFromMetadata({ caseNumber });
+    return {
+      type: identifier.type,
+      identifier: normalizeDecisionIdentifier(identifier),
+      citationKey: citationKeyOf(caseNumber),
+    };
   };
 
   test("reads every docket and reporter entry of real Kúria prose", () => {
@@ -2423,10 +2446,10 @@ describe("Hungarian citations", () => {
       ["Mfv.10043/2022/5", DECISION_IDENTIFIER_TYPES.CASE_NUMBER],
       ["Pfv.V.20.675/2022/2", DECISION_IDENTIFIER_TYPES.CASE_NUMBER],
       ["Pfv.V.21.323/2022/2", DECISION_IDENTIFIER_TYPES.CASE_NUMBER],
-      ["BH2019. 19", DECISION_IDENTIFIER_TYPES.REPORTER_CITATION],
-      ["BH2023. 129", DECISION_IDENTIFIER_TYPES.REPORTER_CITATION],
-      ["BH2022. 332", DECISION_IDENTIFIER_TYPES.REPORTER_CITATION],
-      ["BH2023. 71", DECISION_IDENTIFIER_TYPES.REPORTER_CITATION],
+      ["BH2019. 19", DECISION_IDENTIFIER_TYPES.CASE_NUMBER],
+      ["BH2023. 129", DECISION_IDENTIFIER_TYPES.CASE_NUMBER],
+      ["BH2022. 332", DECISION_IDENTIFIER_TYPES.CASE_NUMBER],
+      ["BH2023. 71", DECISION_IDENTIFIER_TYPES.CASE_NUMBER],
     ]);
   });
 
@@ -2558,45 +2581,184 @@ describe("Hungarian citations", () => {
     }
   });
 
-  test("reporter entries are reporter citations, keyed across spacing", () => {
+  test("a cited uniformity decision or opinion reaches the row the listing stores", () => {
+    // Stored spellings and keys read from the production listing rows.
+    const cases = [
+      {
+        stored: "4.2008.BJE",
+        key: "4.2008.bje",
+        cited: [
+          "4/2008. BJE",
+          "BJE 4/2008",
+          "4/2008. Büntető jogegységi határozat",
+        ],
+      },
+      {
+        stored: "1.2007.PJE",
+        key: "1.2007.pje",
+        cited: [
+          "1/2007. PJE",
+          "PJE 1/2007",
+          "1/2007. Polgári jogegységi határozat",
+          "1/2007. (VI. 28.) PJE",
+        ],
+      },
+      {
+        stored: "2.2004.KJE",
+        key: "2.2004.kje",
+        cited: ["2/2004. KJE", "2/2004. közigazgatási jogegységi határozat"],
+      },
+      {
+        stored: "1.2019.KMPJE",
+        key: "1.2019.kmpje",
+        cited: ["1/2019. KMPJE", "KMPJE 1/2019"],
+      },
+      {
+        stored: "2.2009.PK",
+        key: "2.2009.pk",
+        cited: ["2/2009. PK vélemény", "PK vélemény 2/2009"],
+      },
+      {
+        stored: "3.2008.PK",
+        key: "3.2008.pk",
+        cited: ["3/2008. PK vélemény", "PK vélemény 3/2008"],
+      },
+    ];
+
+    for (const { stored, key, cited } of cases) {
+      const target = storedKeys(stored);
+      expect(target).toEqual({
+        type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+        identifier: key,
+        citationKey: key,
+      });
+      for (const spelling of cited) {
+        expect(citedKeys(`a ${spelling} szerint`)).toEqual(target);
+      }
+    }
+    expect(
+      citedKeys("a 1/2021. Közigazgatási-munkaügyi jogegységi határozat")
+        .identifier,
+    ).toBe("1.2021.kmje");
+  });
+
+  test("a cited reporter entry reaches the row the listing stores, closing dot or not", () => {
+    // Stored spellings read from the production listing rows: the listing
+    // writes the closing dot on some rows and not on others.
+    const cases = [
+      {
+        stored: ["EBH.2018.K.17.", "EBH.2018.K.17"],
+        key: "ebh.2018.k.17",
+        cited: [
+          "EBH 2018.K.17.",
+          "EBH2018. K.17.",
+          "EBH.2018.K.17.",
+          "EBH 2018. K. 17",
+        ],
+      },
+      {
+        stored: ["EBH.2015.K.38", "EBH.2015.K.38."],
+        key: "ebh.2015.k.38",
+        cited: ["EBH 2015.K.38."],
+      },
+      {
+        stored: ["EBD.2012.B.19."],
+        key: "ebd.2012.b.19",
+        cited: ["EBD 2012.B.19.", "EBD2012. B. 19."],
+      },
+      {
+        stored: ["EBH.2016.M.29."],
+        key: "ebh.2016.m.29",
+        cited: ["EBH 2016.M.29"],
+      },
+      {
+        stored: ["EBH..2013.K.32."],
+        key: "ebh.2013.k.32",
+        cited: ["EBH 2013.K.32.", "EBH..2013.K.32."],
+      },
+    ];
+
+    // Two stored rows carry an `EBHH` series this rule does not read; their
+    // key stays the verbatim lowercase one they hold.
+    expect(citationKeyOf("EBHH.2012.K.1.")).toBe("ebhh.2012.k.1.");
+
+    for (const { stored, key, cited } of cases) {
+      for (const spelling of stored) {
+        expect(storedKeys(spelling)).toEqual({
+          type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+          identifier: key,
+          citationKey: key,
+        });
+      }
+      for (const spelling of cited) {
+        expect(citedKeys(`lásd ${spelling} alatt`)).toEqual({
+          type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+          identifier: key,
+          citationKey: key,
+        });
+      }
+    }
+  });
+
+  test("series without stored rows key the same way, and stay apart", () => {
+    // No BH, BDT, KGD or ÍH row is stored today; their citations key in the
+    // same dotted form so a row added later answers without a rewrite.
     const spellings = [
       ["BH 2019.123.", "BH2019. 123."],
+      ["BH 2019.19", "BH2019. 19."],
+      ["BH 2019.1.9", "BH 2019. 1. 9."],
       ["BH 2020.7.201", "BH 2020. 7. 201."],
-      ["EBH 2018.G.3.", "EBH2018. G. 3.", "EBH.2018.G.3.", "EBH..2018.G.3."],
       ["EBH2011. 2345.", "EBH 2011.2345"],
-      ["EBD 2016.M.12.", "EBD2016. M. 12."],
       ["BDT 2019.4012.", "BDT2019. 4012."],
       ["KGD 2020.15.", "KGD2020. 15."],
       ["ÍH 2018.45.", "ÍH2018. 45."],
     ];
     const keys = spellings.map((group) => {
       const groupKeys = new Set(
-        group.map((spelling) => reporterKey(`lásd ${spelling} alatt`)),
+        group.map((spelling) => citedKeys(`lásd ${spelling} alatt`).identifier),
       );
       expect(groupKeys.size).toBe(1);
       return [...groupKeys][0];
     });
 
-    expect(new Set(keys).size).toBe(spellings.length);
+    expect(keys).toEqual([
+      "bh.2019.123",
+      "bh.2019.19",
+      "bh.2019.1.9",
+      "bh.2020.7.201",
+      "ebh.2011.2345",
+      "bdt.2019.4012",
+      "kgd.2020.15",
+      "íh.2018.45",
+    ]);
   });
 
-  test("uniformity decisions, opinions and Constitutional Court decisions key by designation", () => {
+  test("every Hungarian key reads back as itself", () => {
+    // A key is also what a reader types into an exact-identity lookup, which
+    // canonicalizes again: a key that moved under its own canonicalization
+    // would miss the row it names.
+    const texts = [
+      "Pfv.III.20.123/2019/5",
+      "5.Gf.40.014/2023/15",
+      "4/2021. Polgári jogegységi határozat",
+      "PK vélemény 1/2014",
+      "1.2019.KMPJE",
+      "EBH..2013.K.32.",
+      "BH 2020. 7. 201.",
+      "ÍH2018. 45.",
+    ];
+
+    for (const text of texts) {
+      const key = bareCitationKey(text);
+      expect(bareCitationKey(key)).toBe(key);
+    }
+  });
+
+  test("Constitutional Court decisions key by number and year", () => {
     const spellings = [
       [
-        "4/2021. PJE",
-        "4/2021. Polgári jogegységi határozat",
-        "4/2021. polgári jogegységi határozatra",
-      ],
-      ["4/2021. BJE", "4/2021. Büntető jogegységi határozat"],
-      ["2/2020. KMPJE"],
-      ["1/2021. KMJE", "1/2021. Közigazgatási-munkaügyi jogegységi határozat"],
-      ["1/2021. KJE", "1/2021. közigazgatási jogegységi határozat"],
-      ["3/2018. BJE"],
-      ["1/2014. PK vélemény", "PK vélemény 1/2014", "1/2014. PK véleményben"],
-      ["1/2014. GK vélemény"],
-      [
         "3123/2019. (V. 30.) AB határozat",
-        "3123/2019. (V.30.) AB határozatában",
+        "3123/2019. (V.30.) AB határozat",
         "3123/2019. AB határozat",
         "3123/2019. (V. 30.) AB végzés",
       ],
@@ -2604,7 +2766,11 @@ describe("Hungarian citations", () => {
     ];
     const keys = spellings.map((group) => {
       const groupKeys = new Set(
-        group.map((spelling) => reporterKey(`a ${spelling} szerint`)),
+        group.map((spelling) => {
+          const cited = citedKeys(`a ${spelling}ban`);
+          expect(cited.type).toBe(DECISION_IDENTIFIER_TYPES.REPORTER_CITATION);
+          return cited.identifier;
+        }),
       );
       expect(groupKeys.size).toBe(1);
       return [...groupKeys][0];
@@ -2613,20 +2779,14 @@ describe("Hungarian citations", () => {
     expect(new Set(keys).size).toBe(spellings.length);
   });
 
-  test("a docket beside its reporter entry keeps the docket's identity", () => {
+  test("a docket beside its reporter entry stays two citations", () => {
     // A Czech collection number folds into the docket beside it; a Hungarian
-    // docket already names one decision, and the reporter entry resolves to
-    // nothing the Hungarian corpus stores.
+    // docket already names one decision, and so does its reporter entry.
     const citations = extract("Kúria Pfv.20626/2022/4, BH2023. 129");
 
-    expect(
-      citations.map(({ citationText, identifierType }) => [
-        citationText,
-        identifierType,
-      ]),
-    ).toEqual([
-      ["Pfv.20626/2022/4", DECISION_IDENTIFIER_TYPES.CASE_NUMBER],
-      ["BH2023. 129", DECISION_IDENTIFIER_TYPES.REPORTER_CITATION],
+    expect(citations.map(({ citationText }) => citationText)).toEqual([
+      "Pfv.20626/2022/4",
+      "BH2023. 129",
     ]);
   });
 
