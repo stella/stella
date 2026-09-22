@@ -229,7 +229,7 @@ Project: desktop-tauri
 - hyper-util 0.1.20 — MIT
 - iana-time-zone 0.1.65 — Apache-2.0 OR MIT
 - iana-time-zone-haiku 0.1.2 — Apache-2.0 OR MIT
-- icns 0.4.0 — MIT
+- icns 0.5.0 — MIT
 - ico 0.5.0 — MIT
 - icu_collections 2.2.0 — Unicode-3.0
 - icu_locale_core 2.2.0 — Unicode-3.0

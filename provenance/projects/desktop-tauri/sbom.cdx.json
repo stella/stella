@@ -10298,7 +10298,7 @@
       "version": "0.1.2"
     },
     {
-      "bom-ref": "pkg:cargo/icns@0.4.0",
+      "bom-ref": "pkg:cargo/icns@0.5.0",
       "evidence": {
         "identity": [
           {
@@ -10319,7 +10319,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "467efeb2c1e570cebb9863f9173447f8fe92303d66adc97cb89ac824b60e7a0f"
+          "content": "f55019ac1db606ff01afed8a9d18d91b83e6463da421084f767c89026467b619"
         }
       ],
       "licenses": [
@@ -10336,9 +10336,9 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/icns@0.4.0",
+      "purl": "pkg:cargo/icns@0.5.0",
       "type": "library",
-      "version": "0.4.0"
+      "version": "0.5.0"
     },
     {
       "bom-ref": "pkg:cargo/ico@0.5.0",
@@ -33411,7 +33411,7 @@
         "pkg:cargo/byteorder@1.5.0",
         "pkg:cargo/png@0.18.1"
       ],
-      "ref": "pkg:cargo/icns@0.4.0"
+      "ref": "pkg:cargo/icns@0.5.0"
     },
     {
       "dependsOn": [
@@ -35068,7 +35068,7 @@
         "pkg:cargo/dirs@7.0.0",
         "pkg:cargo/futures-util@0.3.34",
         "pkg:cargo/hex@0.4.3",
-        "pkg:cargo/icns@0.4.0",
+        "pkg:cargo/icns@0.5.0",
         "pkg:cargo/image@0.25.10",
         "pkg:cargo/keyring-core@1.0.0",
         "pkg:cargo/notify@8.2.0",

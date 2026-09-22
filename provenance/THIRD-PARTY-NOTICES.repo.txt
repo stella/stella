@@ -9,15 +9,15 @@ Project: root
 - @ag-ui/core 0.1.1-canary.beta.0 — MIT
 - @astrojs/react 6.0.5 — MIT
 - @astrojs/sitemap 3.7.4 — MIT
-- @astrojs/starlight 0.42.0 — MIT
+- @astrojs/starlight 0.42.1 — MIT
 - @atlaskit/pragmatic-drag-and-drop 3.1.0 — Apache-2.0
 - @atlaskit/pragmatic-drag-and-drop-auto-scroll 3.2.0 — Apache-2.0
-- @atlaskit/pragmatic-drag-and-drop-hitbox 2.2.0 — Apache-2.0
+- @atlaskit/pragmatic-drag-and-drop-hitbox 2.2.2 — Apache-2.0
 - @atlaskit/pragmatic-drag-and-drop-live-region 2.1.0 — Apache-2.0
-- @aws-sdk/client-s3 3.1131.0 — Apache-2.0
-- @aws-sdk/client-sesv2 3.1131.0 — Apache-2.0
-- @aws-sdk/client-sts 3.1131.0 — Apache-2.0
-- @aws-sdk/s3-request-presigner 3.1131.0 — Apache-2.0
+- @aws-sdk/client-s3 3.1133.0 — Apache-2.0
+- @aws-sdk/client-sesv2 3.1133.0 — Apache-2.0
+- @aws-sdk/client-sts 3.1133.0 — Apache-2.0
+- @aws-sdk/s3-request-presigner 3.1133.0 — Apache-2.0
 - @base-ui/react 1.8.0 — MIT
 - @better-auth/api-key 1.7.4 — MIT
 - @better-auth/cimd 1.7.4 — MIT
@@ -28,7 +28,7 @@ Project: root
 - @elysia/eden 1.4.10 — MIT
 - @firecrawl/anydoc 0.2.4 — MIT
 - @floating-ui/react-dom 2.1.9 — MIT
-- @formatjs/icu-messageformat-parser 3.5.18 — MIT
+- @formatjs/icu-messageformat-parser 3.5.19 — MIT
 - @google/genai 2.22.0 — Apache-2.0
 - @hocuspocus/extension-redis 4.7.0 — MIT
 - @hocuspocus/provider 4.7.0 — MIT
@@ -45,7 +45,7 @@ Project: root
 - @opentelemetry/exporter-logs-otlp-http 0.222.0 — Apache-2.0
 - @opentelemetry/resources 2.11.0 — Apache-2.0
 - @opentelemetry/sdk-logs 0.222.0 — Apache-2.0
-- @posthog/react 1.10.6 — MIT
+- @posthog/react 1.11.0 — MIT
 - @react-email/components 1.0.12 — MIT
 - @react-email/render 2.1.0 — MIT
 - @resvg/resvg-js 2.6.2 — MPL-2.0
@@ -74,16 +74,16 @@ Project: root
 - @tanstack/react-devtools 0.10.12 — MIT
 - @tanstack/react-form 1.33.5 — MIT
 - @tanstack/react-hotkeys 0.10.0 — MIT
-- @tanstack/react-query 5.102.8 — MIT
-- @tanstack/react-query-devtools 5.102.8 — MIT
-- @tanstack/react-router 1.170.35 — MIT
-- @tanstack/react-router-devtools 1.167.1 — MIT
+- @tanstack/react-query 5.103.1 — MIT
+- @tanstack/react-query-devtools 5.103.1 — MIT
+- @tanstack/react-router 1.170.36 — MIT
+- @tanstack/react-router-devtools 1.167.2 — MIT
 - @tanstack/react-router-ssr-query 1.167.2 — MIT
-- @tanstack/react-start 1.168.52 — MIT
+- @tanstack/react-start 1.168.54 — MIT
 - @tanstack/react-store 0.11.1 — MIT
 - @tanstack/react-table 9.2.4 — MIT
 - @tanstack/react-table-devtools 9.2.0 — MIT
-- @tanstack/react-virtual 3.14.12 — MIT
+- @tanstack/react-virtual 3.14.13 — MIT
 - @tauri-apps/api 2.11.1 — Apache-2.0 OR MIT
 - @tiptap/core 3.31.3 — MIT
 - @tiptap/extension-bold 3.31.3 — MIT
@@ -103,15 +103,15 @@ Project: root
 - @valibot/to-json-schema 1.8.0 — MIT
 - @volar/typescript 2.4.28 — MIT
 - @vscode/diff 0.0.2-0 — MIT
-- @vscode/markdown-editor 0.0.2-96 — MIT
+- @vscode/markdown-editor 0.0.2-97 — MIT
 - @vscode/observables 0.1.1-0 — MIT
 - astro 7.3.2 — MIT
 - better-auth 1.7.4 — MIT
 - better-result 3.0.1 — MIT
-- bullmq 6.3.4 — MIT
+- bullmq 6.3.6 — MIT
 - cheerio 1.2.0 — MIT
 - class-variance-authority 0.7.1 — Apache-2.0
-- client-zip 2.5.0 — MIT
+- client-zip 2.5.1 — MIT
 - clsx 2.1.1 — MIT
 - cobe 2.0.1 — MIT
 - crossws 0.4.12 — MIT
@@ -130,19 +130,19 @@ Project: root
 - immer 11.1.18 — MIT
 - input-otp 1.5.0 — MIT
 - ioredis 6.0.0 — MIT
-- ip-address 10.7.0 — MIT
+- ip-address 10.7.2 — MIT
 - jose 6.2.12 — MIT
 - jszip 3.10.1 — (MIT OR GPL-3.0-or-later)
 - katex 0.18.7 — MIT
 - lucide-react 1.41.0 — ISC
-- nodemailer 10.0.9 — MIT-0
-- onnxruntime-node 1.29.0 — MIT
+- nodemailer 10.0.10 — MIT-0
+- onnxruntime-node 1.30.0 — MIT
 - oxc-transform-react 0.148.0 — MIT
 - oxlint 1.82.0 — MIT
 - pdfjs-dist 6.3.289 — Apache-2.0
 - postal-mime 3.0.0 — MIT-0
-- posthog-js 1.430.3 — (Apache-2.0 AND MIT)
-- posthog-node 5.52.1 — MIT
+- posthog-js 1.433.6 — (Apache-2.0 AND MIT)
+- posthog-node 5.52.4 — MIT
 - prism-react-renderer 2.4.1 — MIT
 - prosemirror-commands 1.7.2 — MIT
 - prosemirror-history 1.5.0 — MIT
@@ -156,7 +156,7 @@ Project: root
 - react 19.2.8 — MIT
 - react-dom 19.2.8 — MIT
 - react-native 0.86.3 — MIT
-- react-native-safe-area-context 5.7.0 — MIT
+- react-native-safe-area-context 5.10.0 — MIT
 - scslre 0.3.0 — MIT
 - slimdom 4.3.5 — MIT
 - ssf 0.11.2 — Apache-2.0
@@ -399,7 +399,7 @@ Project: desktop-tauri
 - hyper-util 0.1.20 — MIT
 - iana-time-zone 0.1.65 — Apache-2.0 OR MIT
 - iana-time-zone-haiku 0.1.2 — Apache-2.0 OR MIT
-- icns 0.4.0 — MIT
+- icns 0.5.0 — MIT
 - ico 0.5.0 — MIT
 - icu_collections 2.2.0 — Unicode-3.0
 - icu_locale_core 2.2.0 — Unicode-3.0
