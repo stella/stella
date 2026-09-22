@@ -1,5 +1,11 @@
 # @stll/ui
 
+## 0.34.2
+
+### Patch Changes
+
+- [#3689](https://github.com/stella/stella/pull/3689) [`d25a637`](https://github.com/stella/stella/commit/d25a6371bde1ab91a28550a84a25fd5188e8a677) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Keep workspace inspector rails flush with the viewport when overlays lock document scrolling.
+
 ## 0.34.1
 
 ### Patch Changes
