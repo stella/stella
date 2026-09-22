@@ -16,6 +16,10 @@ import {
 } from "./chat-history-tools";
 
 const threadId = toSafeId<"chatThread">("11111111-1111-4111-8111-111111111111");
+const organizationId = toSafeId<"organization">(
+  "33333333-3333-4333-8333-333333333333",
+);
+const userId = toSafeId<"user">("44444444-4444-4444-8444-444444444444");
 const hiddenMessageId = toSafeId<"chatMessage">(
   "22222222-2222-4222-8222-222222222222",
 );
@@ -40,8 +44,10 @@ describe("chat history tools", () => {
     const tools = createChatHistoryTools({
       refRegistry: createChatRefRegistry(),
       excludedMessageIds: [hiddenMessageId],
+      organizationId,
       safeDb,
       threadId,
+      userId,
     });
     const searchTool = tools[SEARCH_CHAT_HISTORY_TOOL_NAME];
 
@@ -66,8 +72,10 @@ describe("chat history tools", () => {
     const tools = createChatHistoryTools({
       refRegistry: createChatRefRegistry(),
       excludedMessageIds: [hiddenMessageId],
+      organizationId,
       safeDb,
       threadId,
+      userId,
     });
     const expandTool = tools[EXPAND_CHAT_HISTORY_TOOL_NAME];
 

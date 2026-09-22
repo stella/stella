@@ -865,6 +865,8 @@
       "deny": "Elutasítás",
       "externalMcpDescription": "Csak az ehhez az eszközhíváshoz szükséges információ kerül elküldésre.",
       "externalMcpQuestion": "Elküldheti a stella ezt a kérést a következőnek: {provider}?",
+      "searchAllPastChatsDescription": "Eddig csak az ehhez a chathez tartozó ügyek chatjeiben történt keresés. Most a más ügyekhez tartozó chatjeiben is megtörténik a keresés.",
+      "searchAllPastChatsQuestion": "Keresés az összes chatjében?",
       "uploadedDocumentPlaceholder": "(feltöltött dokumentum)"
     },
     "askAnything": "Kérdezzen bármit",
@@ -1174,7 +1176,9 @@
       "save_template": "Sablon mentése",
       "save_time_entry": "Időbejegyzés mentése",
       "search-across-matters": "Keresés az ügyek között",
+      "search-all-past-chats": "Keresés az összes csevegésben",
       "search-chat-history": "Keresés a csevegési előzményekben",
+      "search-past-chats": "Keresés a korábbi csevegésekben",
       "set_field_value": "Mezőérték beállítása",
       "set_practice_jurisdictions": "Joghatóságok beállítása",
       "show_in_document": "Megjelenítés a dokumentumban",

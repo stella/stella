@@ -865,6 +865,8 @@
       "deny": "رفض",
       "externalMcpDescription": "لن يُرسَل سوى المعلومات اللازمة لاستدعاء هذه الأداة.",
       "externalMcpQuestion": "هل يمكن أن ترسل stella هذا الطلب إلى {provider}؟",
+      "searchAllPastChatsDescription": "اقتصر البحث حتى الآن على المحادثات المتعلقة بالملفات القانونية لهذه المحادثة. سيشمل البحث الآن أيضاً محادثاتك المتعلقة بملفات قانونية أخرى.",
+      "searchAllPastChatsQuestion": "هل تريد البحث في جميع محادثاتك؟",
       "uploadedDocumentPlaceholder": "(مستند مرفوع)"
     },
     "askAnything": "اسأل عن أي شيء",
@@ -1174,7 +1176,9 @@
       "save_template": "حفظ القالب",
       "save_time_entry": "حفظ إدخال الوقت",
       "search-across-matters": "البحث عبر الملفات القانونية",
+      "search-all-past-chats": "البحث في جميع الدردشات",
       "search-chat-history": "البحث في سجلّ الدردشة",
+      "search-past-chats": "البحث في الدردشات السابقة",
       "set_field_value": "تعيين قيمة الحقل",
       "set_practice_jurisdictions": "ضبط الولايات القضائية للممارسة",
       "show_in_document": "العرض في المستند",

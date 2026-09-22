@@ -49,7 +49,9 @@ const expandChatHistoryInputSchema = v.strictObject({
   messageId: v.pipe(
     v.string(),
     v.uuid(),
-    v.description("Message ID returned by search-chat-history."),
+    v.description(
+      "Message ID returned by search-chat-history, search-past-chats, or search-all-past-chats.",
+    ),
   ),
   before: v.optional(
     v.pipe(
@@ -99,9 +101,11 @@ const expandChatHistoryOutputSchema = v.strictObject({
 
 type CreateChatHistoryToolsProps = {
   excludedMessageIds?: readonly SafeId<"chatMessage">[] | undefined;
+  organizationId: SafeId<"organization">;
   refRegistry: ChatRefRegistry;
   safeDb: SafeDb;
   threadId: SafeId<"chatThread">;
+  userId: SafeId<"user">;
 };
 
 type ChatHistorySearchRow = {
@@ -114,15 +118,19 @@ type ChatHistorySearchRow = {
 type ChatHistoryExpansionRow = {
   content: PersistedChatMessageContent;
   createdAt: Date;
+  dataWorkspaceIds: SafeId<"workspace">[];
   id: SafeId<"chatMessage">;
   role: ChatMessageRole;
+  threadWorkspaceId: SafeId<"workspace"> | null;
 };
 
 export const createChatHistoryTools = ({
   excludedMessageIds = [],
+  organizationId,
   refRegistry,
   safeDb,
   threadId,
+  userId,
 }: CreateChatHistoryToolsProps) => {
   const excludedMessageIdSet = new Set<string>(excludedMessageIds);
   const excludedMessageIdValues = excludedMessageIds.map((id) => sql`${id}`);
@@ -197,7 +205,7 @@ export const createChatHistoryTools = ({
     [EXPAND_CHAT_HISTORY_TOOL_NAME]: toolDefinition({
       name: EXPAND_CHAT_HISTORY_TOOL_NAME,
       description:
-        "Expand one persisted chat-history search result into a small transcript window from this same thread. Use only with a messageId returned by search-chat-history.",
+        "Expand one chat-history or past-chat search result into a small transcript window from the chat it belongs to. Use only with a messageId returned by search-chat-history, search-past-chats, or search-all-past-chats.",
       inputSchema: toTanStackToolSchema(expandChatHistoryInputSchema),
       outputSchema: toTanStackToolSchema(expandChatHistoryOutputSchema),
     }).server(async ({ messageId, before, after }) => {
@@ -212,46 +220,54 @@ export const createChatHistoryTools = ({
       const result = await safeDb((tx) =>
         tx.execute<ChatHistoryExpansionRow>(sql`
         WITH target AS (
-          SELECT id, created_at
-          FROM chat_messages
-          WHERE thread_id = ${threadId}
-            AND id = ${persistedMessageId}
+          SELECT
+            m.id,
+            m.thread_id,
+            m.created_at,
+            t.workspace_id AS thread_workspace_id,
+            t.data_workspace_ids
+          FROM chat_messages m
+          JOIN chat_threads t ON t.id = m.thread_id
+          WHERE m.id = ${persistedMessageId}
+            AND t.user_id = ${userId}
+            AND t.organization_id = ${organizationId}
           LIMIT 1
         ),
-        before_rows AS (
+        window_rows AS (
+          (
+            SELECT m.id, m.role, m.content, m.created_at
+            FROM chat_messages m, target t
+            WHERE m.thread_id = t.thread_id
+              ${excludeMessageSql(sql`m.id`)}
+              AND (m.created_at, m.id) < (t.created_at, t.id)
+            ORDER BY m.created_at DESC, m.id DESC
+            LIMIT ${before}
+          )
+          UNION ALL
           SELECT m.id, m.role, m.content, m.created_at
           FROM chat_messages m, target t
-          WHERE m.thread_id = ${threadId}
+          WHERE m.id = t.id
             ${excludeMessageSql(sql`m.id`)}
-            AND (m.created_at, m.id) < (t.created_at, t.id)
-          ORDER BY m.created_at DESC, m.id DESC
-          LIMIT ${before}
-        ),
-        target_row AS (
-          SELECT m.id, m.role, m.content, m.created_at
-          FROM chat_messages m
-          WHERE m.thread_id = ${threadId}
-            AND m.id = ${persistedMessageId}
-            ${excludeMessageSql(sql`m.id`)}
-        ),
-        after_rows AS (
-          SELECT m.id, m.role, m.content, m.created_at
-          FROM chat_messages m, target t
-          WHERE m.thread_id = ${threadId}
-            ${excludeMessageSql(sql`m.id`)}
-            AND (m.created_at, m.id) > (t.created_at, t.id)
-          ORDER BY m.created_at ASC, m.id ASC
-          LIMIT ${after}
+          UNION ALL
+          (
+            SELECT m.id, m.role, m.content, m.created_at
+            FROM chat_messages m, target t
+            WHERE m.thread_id = t.thread_id
+              ${excludeMessageSql(sql`m.id`)}
+              AND (m.created_at, m.id) > (t.created_at, t.id)
+            ORDER BY m.created_at ASC, m.id ASC
+            LIMIT ${after}
+          )
         )
-        SELECT id, role, content, created_at AS "createdAt"
-        FROM (
-          SELECT * FROM before_rows
-          UNION ALL
-          SELECT * FROM target_row
-          UNION ALL
-          SELECT * FROM after_rows
-        ) history_rows
-        ORDER BY created_at ASC, id ASC
+        SELECT
+          w.id,
+          w.role,
+          w.content,
+          w.created_at AS "createdAt",
+          t.thread_workspace_id AS "threadWorkspaceId",
+          t.data_workspace_ids AS "dataWorkspaceIds"
+        FROM window_rows w, target t
+        ORDER BY w.created_at ASC, w.id ASC
       `),
       );
 
@@ -261,6 +277,18 @@ export const createChatHistoryTools = ({
           message: "Failed to expand chat history.",
           cause: result.error,
         });
+      }
+
+      const target = result.value.at(0);
+      if (target !== undefined) {
+        // A past chat's matters fold into this thread's data scope, exactly
+        // as in search-past-chats.
+        if (target.threadWorkspaceId !== null) {
+          refRegistry.toMatterRef(target.threadWorkspaceId);
+        }
+        for (const workspaceId of target.dataWorkspaceIds) {
+          refRegistry.toMatterRef(workspaceId);
+        }
       }
 
       return {

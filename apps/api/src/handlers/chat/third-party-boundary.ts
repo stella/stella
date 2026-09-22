@@ -26,6 +26,7 @@ import {
   CHAT_TOOL_POLICY_KIND,
   getChatToolPolicy,
 } from "@/api/handlers/chat/tools/tool-policy";
+import type { ChatToolPolicyKind } from "@/api/handlers/chat/tools/tool-policy";
 import type {
   ChatAttachmentPart,
   ChatMessage,
@@ -1407,6 +1408,20 @@ const safeStringifyToolArguments = (value: unknown): string => {
   }
 };
 
+// Stella tools that run on real data (DB queries, mutations, scope-widening
+// reads) get the model's placeholders (`[PERSON_1]`) swapped back to the
+// originals before they run; otherwise every lookup misses the anonymized
+// record. External and public tools keep the placeholder so real names never
+// leave Stella. Total over the policy kinds so a new kind must decide.
+const DEANONYMIZE_INPUT_BY_POLICY_KIND = {
+  [CHAT_TOOL_POLICY_KIND.external]: false,
+  [CHAT_TOOL_POLICY_KIND.internal]: true,
+  [CHAT_TOOL_POLICY_KIND.mutation]: true,
+  [CHAT_TOOL_POLICY_KIND.publicOfficial]: false,
+  [CHAT_TOOL_POLICY_KIND.publicUnofficial]: false,
+  [CHAT_TOOL_POLICY_KIND.scopeExpansion]: true,
+} as const satisfies Record<ChatToolPolicyKind, boolean>;
+
 export const prepareToolsForThirdParty = ({
   boundary,
   tools,
@@ -1438,15 +1453,8 @@ export const prepareToolsForThirdParty = ({
 
     const execute = current.execute;
     const policy = getChatToolPolicy(current);
-    // Internal Stella tools (DB queries, mutations) operate on real
-    // data, so when the model passes a placeholder it saw
-    // (`[PERSON_1]`) we swap it back to the original (`Jan Novák`)
-    // *before* the tool runs — otherwise the lookup misses every
-    // anonymized record. External / public tools keep the
-    // placeholder so real names never leave Stella.
     const deanonymizeInputBeforeExecute =
-      policy.kind === CHAT_TOOL_POLICY_KIND.internal ||
-      policy.kind === CHAT_TOOL_POLICY_KIND.mutation;
+      DEANONYMIZE_INPUT_BY_POLICY_KIND[policy.kind];
     wrapped[key] = {
       ...current,
       execute: async (input, context) => {

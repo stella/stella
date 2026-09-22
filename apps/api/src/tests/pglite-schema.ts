@@ -71,7 +71,7 @@ const executableSql = (statement: string): string =>
  * real extension: NFD plus combining-mark removal for everything Unicode can
  * decompose, then the table's rules for the letters it cannot (`ł`, `ß`, `ø`).
  */
-const legislationTitleFoldPgliteSql = (): string => {
+const asciiFoldPgliteExpression = (): string => {
   const entries = Object.entries(ASCII_FOLD_TABLE);
   const singles = entries.filter(([, folded]) => folded.length === 1);
   const multis = entries.filter(([, folded]) => folded.length !== 1);
@@ -82,22 +82,41 @@ const legislationTitleFoldPgliteSql = (): string => {
   for (const [from, to] of multis) {
     expression = `replace(${expression}, ${quote(from)}, ${quote(to)})`;
   }
-  return `CREATE OR REPLACE FUNCTION legislation_title_fold(input text)
+  return expression;
+};
+
+const legislationTitleFoldPgliteSql = (): string =>
+  `CREATE OR REPLACE FUNCTION legislation_title_fold(input text)
 RETURNS text
 LANGUAGE sql
 IMMUTABLE
 STRICT
 PARALLEL SAFE
 AS $body$
-  SELECT lower(${expression})
+  SELECT lower(${asciiFoldPgliteExpression()})
 $body$`;
-};
+
+/**
+ * The same fold stands in for the `unaccent` extension itself, so search
+ * queries (`to_tsquery('simple', unaccent(...))`) run under PGlite.
+ */
+const unaccentPgliteSql = (): string =>
+  `CREATE OR REPLACE FUNCTION unaccent(input text)
+RETURNS text
+LANGUAGE sql
+IMMUTABLE
+STRICT
+PARALLEL SAFE
+AS $body$
+  SELECT ${asciiFoldPgliteExpression()}
+$body$`;
 
 export const installPgliteSchemaPrerequisites = async (
   db: PgliteSchemaDb,
 ): Promise<void> => {
   await db.execute(sql.raw("CREATE EXTENSION IF NOT EXISTS pg_trgm"));
   await db.execute(sql.raw(arabicNormalizeFunctionSql()));
+  await db.execute(sql.raw(unaccentPgliteSql()));
   await db.execute(sql.raw(legislationTitleFoldPgliteSql()));
   await db.execute(sql.raw(fieldFindTextFunctionSql()));
   // Drizzle emits policies that reference this view before its backing tables

@@ -865,6 +865,8 @@
       "deny": "Noraidīt",
       "externalMcpDescription": "Tiks nosūtīta tikai šim rīka izsaukumam nepieciešamā informācija.",
       "externalMcpQuestion": "Vai stella drīkst nosūtīt šo pieprasījumu uz {provider}?",
+      "searchAllPastChatsDescription": "Līdz šim meklēts tikai čatos par šī čata lietām. Tagad tiks meklēts arī jūsu čatos par citām lietām.",
+      "searchAllPastChatsQuestion": "Meklēt visos jūsu čatos?",
       "uploadedDocumentPlaceholder": "(augšupielādēts dokuments)"
     },
     "askAnything": "Jautājiet jebko",
@@ -1174,7 +1176,9 @@
       "save_template": "Saglabāt veidni",
       "save_time_entry": "Saglabāt laika ierakstu",
       "search-across-matters": "Meklēšana vairākās lietās",
+      "search-all-past-chats": "Meklēt visos čatos",
       "search-chat-history": "Meklē tērzēšanas vēsturē",
+      "search-past-chats": "Meklē iepriekšējos čatos",
       "set_field_value": "Iestatīt lauka vērtību",
       "set_practice_jurisdictions": "Iestatīt prakses jurisdikcijas",
       "show_in_document": "Rādīšana dokumentā",

@@ -133,6 +133,10 @@ import type {
   LoadedExternalMcpTools,
 } from "@/api/handlers/chat/tools/external-mcp-tools";
 import {
+  PAST_CHAT_SCOPE_TYPE,
+  resolvePastChatScope,
+} from "@/api/handlers/chat/tools/past-chat-tools";
+import {
   hydrateRegistryToolInputRefs,
   resolveRegistryToolInputRefs,
 } from "@/api/handlers/chat/tools/registry-adapter/input-ref-hydration";
@@ -1024,6 +1028,7 @@ const prepareValidatedIncomingMessage = async ({
       threadId: body.threadId,
       workspaceId,
       userId,
+      pastChatScope: { type: PAST_CHAT_SCOPE_TYPE.allChats },
       // Schema validation runs against the user's full accessible
       // set; per-tool scope checks happen at execute time below.
       toolWorkspaceIds: resolveToolWorkspaceIds({
@@ -1894,6 +1899,10 @@ export const createSendMessage = (
           workspaceId,
           thirdPartyBoundary,
           excludedChatHistoryMessageIds: deleteMessageIdsBeforeLatest,
+          pastChatScope: resolvePastChatScope({
+            threadWorkspaceId: workspaceId,
+            contextMatterIds: effectiveContextMatterIds,
+          }),
           userId: user.id,
           toolWorkspaceIds,
           activeFile: activeFileForTools,

@@ -63,6 +63,12 @@ const CHAT_TOOL_POLICIES = {
       ],
     requiresAnonymization: false,
   },
+  [CHAT_TOOL_POLICY_KIND.scopeExpansion]: {
+    kind: CHAT_TOOL_POLICY_KIND.scopeExpansion,
+    needsApproval:
+      CHAT_TOOL_POLICY_REQUIRES_APPROVAL[CHAT_TOOL_POLICY_KIND.scopeExpansion],
+    requiresAnonymization: false,
+  },
 } as const satisfies Record<ChatToolPolicyKind, ChatToolPolicy>;
 
 const MISSING_CHAT_TOOL_POLICY = Symbol("missing-chat-tool-policy");

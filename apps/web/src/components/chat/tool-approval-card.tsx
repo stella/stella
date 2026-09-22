@@ -626,6 +626,12 @@ const ToolApprovalSummary = ({
       {part.name === "create_matter_document" && part.input !== undefined && (
         <CreateWorkspaceDocumentSummary input={part.input} />
       )}
+      {part.name === "search-all-past-chats" && part.input !== undefined && (
+        <SearchAllPastChatsSummary
+          isAwaitingDecision={part.state === "approval-requested"}
+          query={part.input.query}
+        />
+      )}
       {part.name === "spawn_subagents" && part.input !== undefined && (
         <SpawnSubagentsSubtaskList
           isAwaitingApproval={part.state === "approval-requested"}
@@ -812,6 +818,32 @@ const RegistryWriteSummary = ({
           />
         ))}
       </dl>
+    </div>
+  );
+};
+
+/** Until approved, only chats about this chat's matters were searched. */
+const SearchAllPastChatsSummary = ({
+  isAwaitingDecision,
+  query,
+}: {
+  isAwaitingDecision: boolean;
+  query: string;
+}) => {
+  const t = useTranslations();
+  return (
+    <div className="border-border/50 space-y-1 border-t px-3 py-2">
+      {isAwaitingDecision && (
+        <>
+          <p className="text-sm font-medium">
+            {t("chat.approval.searchAllPastChatsQuestion")}
+          </p>
+          <p className="text-muted-foreground text-xs">
+            {t("chat.approval.searchAllPastChatsDescription")}
+          </p>
+        </>
+      )}
+      <p className="text-xs wrap-break-word">{query}</p>
     </div>
   );
 };

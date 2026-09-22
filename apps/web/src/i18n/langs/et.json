@@ -865,6 +865,8 @@
       "deny": "Keela",
       "externalMcpDescription": "Saadetakse ainult selle tööriistakutse jaoks vajalik teave.",
       "externalMcpQuestion": "Kas stella tohib selle päringu saata teenusepakkujale {provider}?",
+      "searchAllPastChatsDescription": "Seni otsiti ainult selle vestluse toimikutega seotud vestlustest. Nüüd otsitakse ka teie vestlustest, mis puudutavad teisi toimikuid.",
+      "searchAllPastChatsQuestion": "Kas otsida kõigist teie vestlustest?",
       "uploadedDocumentPlaceholder": "(üles laaditud dokument)"
     },
     "askAnything": "Küsi mida tahes",
@@ -1174,7 +1176,9 @@
       "save_template": "Salvesta mall",
       "save_time_entry": "Salvesta ajakirje",
       "search-across-matters": "Otsing kõigis toimikutes",
+      "search-all-past-chats": "Otsi kõigist vestlustest",
       "search-chat-history": "Vestlusajaloo otsimine",
+      "search-past-chats": "Varasemate vestluste otsimine",
       "set_field_value": "Määra välja väärtus",
       "set_practice_jurisdictions": "Määra praktikajurisdiktsioonid",
       "show_in_document": "Dokumendis kuvamine",

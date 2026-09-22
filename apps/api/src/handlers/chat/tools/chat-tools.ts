@@ -42,6 +42,13 @@ import {
 import { createInfosoudTools } from "@/api/handlers/chat/tools/infosoud-tools";
 import { createOrgTools } from "@/api/handlers/chat/tools/org-tools";
 import {
+  createPastChatTools,
+  PAST_CHAT_SCOPE_TYPE,
+  SEARCH_ALL_PAST_CHATS_TOOL_NAME,
+  SEARCH_PAST_CHATS_TOOL_NAME,
+} from "@/api/handlers/chat/tools/past-chat-tools";
+import type { PastChatScope } from "@/api/handlers/chat/tools/past-chat-tools";
+import {
   buildChatWriteTools,
   type ChatRegistryWriteToolMap,
 } from "@/api/handlers/chat/tools/registry-write-tools";
@@ -231,6 +238,7 @@ type CreateWorkspaceDocumentTools = ReturnType<
 >;
 type WebSearchTools = ReturnType<typeof createWebSearchTools>;
 type ChatHistoryTools = ReturnType<typeof createChatHistoryTools>;
+type PastChatTools = ReturnType<typeof createPastChatTools>;
 type CurrentSkillEditToolName =
   | "create-current-skill-resource"
   | "update-current-skill-body"
@@ -261,6 +269,7 @@ type BuiltInChatTools = OrgTools &
   CreateWorkspaceDocumentTools &
   WebSearchTools &
   ChatHistoryTools &
+  PastChatTools &
   TemplateTools &
   TemplateAuthoringTools &
   FolderConsistencyReviewTools &
@@ -314,6 +323,8 @@ type GetChatToolsProps = {
    */
   workspaceId: SafeId<"workspace"> | null;
   excludedChatHistoryMessageIds?: readonly SafeId<"chatMessage">[] | undefined;
+  /** Which earlier chats `search-past-chats` reads; see `resolvePastChatScope`. */
+  pastChatScope: PastChatScope;
   userId: SafeId<"user">;
   // Use `resolveToolWorkspaceIds` to construct this — that helper is
   // the only path that intersects pinned IDs with the currently
@@ -591,6 +602,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     threadId,
     workspaceId,
     excludedChatHistoryMessageIds,
+    pastChatScope,
     userId,
     toolWorkspaceIds,
     activeFile,
@@ -807,10 +819,32 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     : {};
   const historyTools = createChatHistoryTools({
     excludedMessageIds: excludedChatHistoryMessageIds,
+    organizationId,
     refRegistry,
     safeDb,
     threadId,
+    userId,
   });
+  const {
+    [SEARCH_PAST_CHATS_TOOL_NAME]: searchPastChatsTool,
+    [SEARCH_ALL_PAST_CHATS_TOOL_NAME]: searchAllPastChatsTool,
+  } = createPastChatTools({
+    organizationId,
+    refRegistry,
+    safeDb,
+    scope: pastChatScope,
+    threadId,
+    userId,
+  });
+  // The approval-gated widening only exists when the default search is
+  // narrower than all chats. Validation registers it regardless, since a
+  // persisted call may come from a turn with a different scope.
+  const pastChatTools = {
+    [SEARCH_PAST_CHATS_TOOL_NAME]: searchPastChatsTool,
+    ...(pastChatScope.type === PAST_CHAT_SCOPE_TYPE.matters || forValidation
+      ? { [SEARCH_ALL_PAST_CHATS_TOOL_NAME]: searchAllPastChatsTool }
+      : {}),
+  };
   // Memory writes audit like the REST memories handlers, so the tool
   // needs a recorder and explicit provenance; callers without either
   // (schema-only construction) get no remember tool rather than an
@@ -992,6 +1026,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
       ...templateTools,
       ...templateAuthoringTools,
       ...historyTools,
+      ...pastChatTools,
       ...rememberTools,
       ...createDocumentTools,
       ...createWorkspaceDocumentTools,
