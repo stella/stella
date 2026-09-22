@@ -531,6 +531,7 @@ export const executeWorkspaceAction = async (
           name: "Translate document",
         });
         await dialog
+          .locator('[data-slot="dialog-footer"]')
           .getByRole("button", { exact: true, name: "Close" })
           .click();
         await expect(dialog).toBeHidden();
