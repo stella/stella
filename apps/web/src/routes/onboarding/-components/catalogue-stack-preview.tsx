@@ -136,6 +136,12 @@ export const CatalogueStackPreview = ({
             )}
           </Section>
         </div>
+
+        <footer className="border-border border-t px-5 py-4">
+          <p className="text-muted-foreground text-xs leading-relaxed text-pretty">
+            {t("onboarding.catalogueSubtitle")}
+          </p>
+        </footer>
       </div>
     </div>
   );

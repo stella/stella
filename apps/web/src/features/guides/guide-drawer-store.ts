@@ -10,9 +10,19 @@ export const GUIDE_DRAWER_STATES = {
 export type GuideDrawerState =
   (typeof GUIDE_DRAWER_STATES)[keyof typeof GUIDE_DRAWER_STATES];
 
+export const GUIDE_DRAWER_OPEN_SOURCES = {
+  onboarding: "onboarding",
+  user: "user",
+} as const;
+
+type GuideDrawerOpenSource =
+  (typeof GUIDE_DRAWER_OPEN_SOURCES)[keyof typeof GUIDE_DRAWER_OPEN_SOURCES];
+
 type GuideDrawerStore = {
+  attentionSequence: number;
+  openSource: GuideDrawerOpenSource | null;
   state: GuideDrawerState;
-  open: () => void;
+  open: (source?: GuideDrawerOpenSource) => void;
   setOpen: (open: boolean) => void;
 };
 
@@ -24,10 +34,34 @@ type GuideDrawerStore = {
  * the drawer over the chat it lands on.
  */
 export const useGuideDrawerStore = create<GuideDrawerStore>()((set) => ({
+  attentionSequence: 0,
+  openSource: null,
   state: GUIDE_DRAWER_STATES.idle,
-  open: () => set({ state: GUIDE_DRAWER_STATES.open }),
-  setOpen: (open) =>
+  open: (source = GUIDE_DRAWER_OPEN_SOURCES.user) =>
     set({
-      state: open ? GUIDE_DRAWER_STATES.open : GUIDE_DRAWER_STATES.closed,
+      openSource: source,
+      state: GUIDE_DRAWER_STATES.open,
+    }),
+  setOpen: (open) =>
+    set((current) => {
+      if (open) {
+        return {
+          openSource:
+            current.state === GUIDE_DRAWER_STATES.open
+              ? current.openSource
+              : GUIDE_DRAWER_OPEN_SOURCES.user,
+          state: GUIDE_DRAWER_STATES.open,
+        };
+      }
+
+      const shouldPointBackToButton =
+        current.state === GUIDE_DRAWER_STATES.open &&
+        current.openSource === GUIDE_DRAWER_OPEN_SOURCES.onboarding;
+      return {
+        attentionSequence:
+          current.attentionSequence + (shouldPointBackToButton ? 1 : 0),
+        openSource: null,
+        state: GUIDE_DRAWER_STATES.closed,
+      };
     }),
 }));

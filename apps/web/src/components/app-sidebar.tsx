@@ -185,6 +185,9 @@ export const AppSidebar = (props: AppSidebarProps) => {
   const user = useAuthenticatedUser();
 
   const [searchOpen, setSearchOpen] = useState(false);
+  const guideDrawerAttentionSequence = useGuideDrawerStore(
+    (store) => store.attentionSequence,
+  );
   const guideDrawerState = useGuideDrawerStore((store) => store.state);
   const openGuideDrawer = useGuideDrawerStore((store) => store.open);
   const setGuideDrawerOpen = useGuideDrawerStore((store) => store.setOpen);
@@ -761,12 +764,20 @@ export const AppSidebar = (props: AppSidebarProps) => {
             <SidebarMenuButton
               aria-expanded={guideDrawerState === GUIDE_DRAWER_STATES.open}
               aria-haspopup="dialog"
-              onClick={openGuideDrawer}
+              className="relative"
+              onClick={() => openGuideDrawer()}
               size="sm"
               tooltip={t("guides.help.buttonLabel")}
             >
-              <CircleHelpIcon className="size-4" />
-              <span>{t("guides.help.buttonLabel")}</span>
+              {guideDrawerAttentionSequence > 0 && (
+                <span
+                  aria-hidden
+                  className="bg-primary/12 animate-attention-flash-twice pointer-events-none absolute inset-0 opacity-0 motion-reduce:animate-none"
+                  key={guideDrawerAttentionSequence}
+                />
+              )}
+              <CircleHelpIcon className="relative size-4" />
+              <span className="relative">{t("guides.help.buttonLabel")}</span>
             </SidebarMenuButton>
             {guideDrawerState !== GUIDE_DRAWER_STATES.idle && (
               <Suspense fallback={null}>

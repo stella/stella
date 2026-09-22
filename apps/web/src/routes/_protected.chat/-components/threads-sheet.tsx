@@ -12,7 +12,7 @@ import {
   useMatch,
   useNavigate,
 } from "@tanstack/react-router";
-import { MessageSquareIcon, TrashIcon } from "lucide-react";
+import { HistoryIcon, TrashIcon } from "lucide-react";
 import { useDebounce } from "use-debounce";
 import { useTranslations } from "use-intl";
 
@@ -151,7 +151,7 @@ export const ThreadsSheet = ({
             />
           }
         >
-          {icon ?? <MessageSquareIcon className="size-4" />}
+          {icon ?? <HistoryIcon className="size-4" />}
           {triggerLabel}
         </SheetTrigger>
       ) : (
@@ -160,7 +160,7 @@ export const ThreadsSheet = ({
             <Button aria-label={triggerLabel} size="icon-sm" variant="ghost" />
           }
         >
-          <MessageSquareIcon className="size-4" />
+          <HistoryIcon className="size-4" />
         </SheetTrigger>
       )}
       <SheetPopup side="inline-end">

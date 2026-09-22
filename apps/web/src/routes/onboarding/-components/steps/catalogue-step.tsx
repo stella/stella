@@ -242,7 +242,7 @@ export const CatalogueStep = ({
       <h1 className="text-foreground text-3xl font-light tracking-tight">
         {t("onboarding.catalogueTitle")}
       </h1>
-      <p className="text-muted-foreground mt-2 text-sm">
+      <p className="text-muted-foreground mt-2 text-sm md:hidden">
         {t("onboarding.catalogueSubtitle")}
       </p>
 
@@ -454,7 +454,7 @@ export const CatalogueStep = ({
           })}
         </p>
 
-        <div className="mt-auto flex items-center justify-between gap-3 pt-8">
+        <div className="mt-auto flex items-center justify-between gap-3 pt-4 [@media(min-height:700px)]:pt-8">
           <Button onClick={onSkip} type="button" variant="ghost">
             {t("onboarding.skipStep")}
           </Button>

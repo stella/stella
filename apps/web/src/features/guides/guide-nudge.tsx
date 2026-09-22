@@ -26,7 +26,12 @@ export const GuideNudge = () => {
     <div className="text-muted-foreground flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-sm">
       <CompassIcon className="size-4 shrink-0" />
       <span>{t("guides.nudge.body")}</span>
-      <Button onClick={openDrawer} size="sm" type="button" variant="link">
+      <Button
+        onClick={() => openDrawer()}
+        size="sm"
+        type="button"
+        variant="link"
+      >
         {t("guides.nudge.action")}
       </Button>
     </div>
