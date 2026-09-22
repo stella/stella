@@ -18,6 +18,11 @@ import type {
   ParagraphAlignment,
 } from "@stll/docx-core/model";
 import { parseDocx } from "@stll/folio-core/server";
+import {
+  DECISION_IDENTIFIER_MAX_LENGTH,
+  DECISION_IDENTIFIER_TYPES,
+  isDecisionIdentifier,
+} from "@stll/legal-ast/decision-identifier";
 
 import type { Block } from "@/api/handlers/case-law/document-ast";
 import {
@@ -31,6 +36,8 @@ import { readRtf } from "@/api/lib/legal-search/parsers/rtf-reader";
 const FIXTURES_DIR = new URL("__fixtures__/", import.meta.url);
 
 const CENTERED: ParagraphAlignment = "center";
+
+const ZERO_WIDTH_SPACE = String.fromCodePoint(0x20_0b);
 
 type LineSpec = {
   text: string;
@@ -137,11 +144,98 @@ describe("the docket the document prints", () => {
       "Pf.III.20.723/2009/5",
     );
   });
+
+  // A header built with soft breaks instead of separate paragraphs keeps the
+  // rest of the document on the label's own line, because a break renders as
+  // a newline rather than ending the line. Reading the label's line to the
+  // end of the block took the whole body into the docket, which the corpus
+  // then refused as an identifier and parked every such decision.
+  test("stops at the soft break the header paragraph carries", () => {
+    const header = [
+      "Az ügy száma: Kfv.VI.37.123/2025/8.",
+      "A tanács tagjai: Dr. Példa Péter a tanács elnöke",
+      "A felperes: Példa Kft.",
+      "Az ítélet indokolása ".repeat(200),
+    ].join("\n");
+
+    // The fixture has to reach the fault: unsplit, the block is past the
+    // length an identifier may have, which is what the refusal was about.
+    expect(header.length).toBeGreaterThan(DECISION_IDENTIFIER_MAX_LENGTH);
+
+    expect(huDocketFrom([header])).toBe("Kfv.VI.37.123/2025/8");
+  });
+
+  // The docket leaves this parser as a `case-number` identifier and as
+  // metadata, and the corpus refuses an identifier it cannot store by
+  // throwing, before the decision is written. So nothing this returns may be
+  // unstorable, whatever a header prints.
+  test.each([
+    [
+      "a header paragraph joined by soft breaks",
+      `Az ügy száma: ${"x".repeat(400)}\nbody`,
+    ],
+    [
+      "a labelled line of nothing but a long run",
+      `Az ügy száma: ${"A".repeat(300)}`,
+    ],
+    // `trim` leaves a zero-width space, so the docket is non-empty and prints
+    // as nothing. Built from its code point rather than written into the
+    // string: the character is invisible in review either way.
+    [
+      "a labelled line of zero-width characters",
+      `Az ügy száma: ${ZERO_WIDTH_SPACE.repeat(2)}`,
+    ],
+    ["a legacy line with a labelled line after it", "Bhar.31/2009/6. szám"],
+    ["a header with no docket at all", "Rendelkező rész"],
+  ])("states a storable docket or none: %s", (_case, line) => {
+    const docket = huDocketFrom([line]);
+    if (docket === undefined) {
+      return;
+    }
+    expect(
+      isDecisionIdentifier({
+        type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+        value: docket,
+      }),
+    ).toBe(true);
+  });
 });
 
 // ── Structure ────────────────────────────────────────────
 
 describe("reading a document folio handed over", () => {
+  // The same header, as the publisher actually builds it: one paragraph whose
+  // runs carry `break` items, which is what an RTF `\line` reads as.
+  test("a header paragraph built with soft breaks states the docket alone", () => {
+    const softBreakHeader: Paragraph = {
+      type: "paragraph",
+      content: [
+        {
+          type: "run",
+          content: [
+            { type: "text", text: "Az ügy száma: Kfv.VI.37.123/2025/8." },
+            { type: "break" },
+            { type: "text", text: "A tanács tagjai: Dr. Példa Péter" },
+            { type: "break" },
+            { type: "text", text: "Az ítélet indokolása ".repeat(200) },
+          ],
+        },
+      ],
+    };
+
+    const parsed = parseHuBhgyDecision({
+      document: { package: { document: { content: [softBreakHeader] } } },
+      listedCaseNumber: "Kfv.37123/2025/8",
+      court: "Kúria",
+      sourceUrl: "https://eakta.birosag.hu/anonimizalt-hatarozatok?azonosito=x",
+      documentUrl: "https://eakta.birosag.hu/hatarozat-letoltes/?azonosito=x",
+      documentId: "3cca08de",
+      statutes: [],
+    });
+
+    expect(parsed.documentDocket).toBe("Kfv.VI.37.123/2025/8");
+  });
+
   test("the publisher's section headings cut the decision", () => {
     const parsed = parse([
       { text: "A Kúria" },
