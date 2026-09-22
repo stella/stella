@@ -1,5 +1,7 @@
 import type { createFormatter } from "use-intl/core";
 
+import { DAY_IN_MS } from "@stll/time";
+
 import { parseDeterministicDate } from "@/lib/deterministic-date";
 
 type IntlFormatter = ReturnType<typeof createFormatter>;
@@ -61,6 +63,21 @@ export const formatStatuteCitation = ({
     : `${identity} (${versionValidFrom})`;
 };
 
+/**
+ * The last day a version is in force. A stored window is half-open, its end
+ * being the day the next version takes effect; a reader expects the closing
+ * day instead ("1. 1. 2026 – 31. 12. 2026"), the way official gazettes date
+ * a consolidation. The instant is UTC midnight, and UTC has no DST, so a
+ * 24-hour step lands on the previous calendar day.
+ */
+const lastDayInForce = (validTo: Date | string | null): Date | null => {
+  if (validTo === null) {
+    return null;
+  }
+  const end = parseDeterministicDate(validTo);
+  return end === null ? null : new Date(end.getTime() - DAY_IN_MS);
+};
+
 /** Compact temporal-version label for chrome and version pickers. */
 export const formatValidityRange = ({
   format,
@@ -69,5 +86,5 @@ export const formatValidityRange = ({
   validTo,
 }: FormatValidityRangeOptions): string =>
   `${formatValidityDate(validFrom, format) ?? EM_DASH} – ${
-    formatValidityDate(validTo, format) ?? openEnded
+    formatValidityDate(lastDayInForce(validTo), format) ?? openEnded
   }`;
