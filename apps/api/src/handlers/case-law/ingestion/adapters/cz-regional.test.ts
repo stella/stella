@@ -482,6 +482,19 @@ describe("document metadata the publisher sends null or reshaped", () => {
     expect(decision.publisherCitedCases).toBeUndefined();
   });
 
+  test.each([
+    ["a partial docket", { senate: 18 }],
+    ["a string", "18 C 130/2024"],
+  ])(
+    "a relation case number sent as %s is refused as publisher citations",
+    async (_shape, caseNumber) => {
+      await expectRefusedAs(
+        { affectedDocs: [{ caseNumber, courtCode: "OSHK" }] },
+        UNPERSISTABLE_DECISION_FIELDS.PUBLISHER_CITATIONS,
+      );
+    },
+  );
+
   test("a null court code is a court's document", async () => {
     const built = await assembleWith({ courtCode: null });
 
@@ -502,14 +515,21 @@ describe("document metadata the publisher sends null or reshaped", () => {
   );
 });
 
-describe("the crawl drops only the row it refuses", () => {
+describe("the crawl keeps a refused row as its listing", () => {
   const originalFetch = globalThis.fetch;
 
   afterEach(() => {
     globalThis.fetch = originalFetch;
   });
 
-  test("a refused row leaves the rest of the page", async () => {
+  /** Crawl one day page whose district document states `courtCode: 7`. */
+  const crawlWithRefusedDistrict = async ({
+    cursor,
+    withAppellate,
+  }: {
+    cursor: string;
+    withAppellate: boolean;
+  }): Promise<Awaited<ReturnType<typeof czRegionalAdapter.fetchPage>>> => {
     const district = await itemByDocket(LISTING, DISTRICT_DOCKET);
     const appellate = await itemByDocket(LISTING, APPELLATE_DOCKET);
     const bodies = new Map([
@@ -523,7 +543,7 @@ describe("the crawl drops only the row it refuses", () => {
       ],
     ]);
     const listing = JSON.stringify({
-      items: [district, appellate],
+      items: withAppellate ? [district, appellate] : [district],
       totalPages: 1,
       pageNumber: 0,
     });
@@ -535,11 +555,39 @@ describe("the crawl drops only the row it refuses", () => {
           }),
         ),
     );
+    return await czRegionalAdapter.fetchPage(cursor, {});
+  };
 
-    const page = await czRegionalAdapter.fetchPage("2025-06-11:0", {});
+  test("a refused row is stored listing-only beside the rest of the page", async () => {
+    const page = await crawlWithRefusedDistrict({
+      cursor: "2025-06-11:0",
+      withAppellate: true,
+    });
 
-    expect(page.unwrap().decisions.map(({ caseNumber }) => caseNumber)).toEqual(
-      ["26 Co 43/2025"],
-    );
+    const decisions = page.unwrap().decisions;
+    expect(
+      decisions.map(({ caseNumber, isListingOnly }) => ({
+        caseNumber,
+        isListingOnly,
+      })),
+    ).toEqual([
+      { caseNumber: "18 C 130/2024", isListingOnly: true },
+      { caseNumber: "26 Co 43/2025", isListingOnly: undefined },
+    ]);
+    // The raw listing row is what a later replay or reconciliation rebuilds it
+    // from, so the listing-only row carries it and nothing else.
+    expect(
+      Object.keys(decodeSourceRawEnvelope(decisions[0]?.sourceRaw ?? "") ?? {}),
+    ).toEqual(["listing"]);
+  });
+
+  test("a day of refused rows is not an empty day to gap-skip past", async () => {
+    // Thirty empty days in a row would make an empty day skip a week ahead.
+    const page = await crawlWithRefusedDistrict({
+      cursor: "2025-06-11:0:30",
+      withAppellate: false,
+    });
+
+    expect(page.unwrap().nextCursor).toBe("2025-06-12:0");
   });
 });

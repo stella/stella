@@ -591,7 +591,7 @@ const solverNameAsPrinted = (solver: unknown): string => {
     return stripAcademicTitles(solver);
   }
   if (!isRecord(solver)) {
-    throw refusedMetadata("solver");
+    return refuseMetadata("solver");
   }
   return SOLVER_NAME_PARTS.flatMap((key) => {
     const part = solver[key];
@@ -599,7 +599,7 @@ const solverNameAsPrinted = (solver: unknown): string => {
       return [];
     }
     if (typeof part !== "string") {
-      throw refusedMetadata("solver");
+      return refuseMetadata("solver");
     }
     return part.trim().length === 0 ? [] : [part];
   }).join(" ");
@@ -635,30 +635,35 @@ const isCourtDocument = (doc: CzRegionalFinaldoc | null): boolean => {
   }
   // A code that is not a string cannot say whether a court decided the
   // record, so the row is refused rather than stored as a court's.
-  if (typeof courtCode !== "string") {
-    throw refusedMetadata("courtCode");
-  }
-  return courtCode.trim() !== COURT_CODE_NONE;
+  return typeof courtCode === "string"
+    ? courtCode.trim() !== COURT_CODE_NONE
+    : refuseMetadata("courtCode");
 };
 
 /**
  * The publisher's own outgoing edges, spelled as dockets. `null` states no
- * edges; a list holding anything but relation records is refused rather than
- * dereferenced.
+ * edges, and a relation with a `null` case number cites nothing; a list
+ * holding anything but relation records, or a case number that does not spell
+ * a docket, is refused rather than dropped.
  */
 const publisherCitedCasesOf = (affectedDocs: unknown): string[] => {
   if (affectedDocs === undefined || affectedDocs === null) {
     return [];
   }
   if (!isUnknownArray(affectedDocs)) {
-    throw refusedMetadata("affectedDocs");
+    return refuseMetadata("affectedDocs");
   }
   return affectedDocs.flatMap((relation) => {
     if (!isRecord(relation)) {
-      throw refusedMetadata("affectedDocs");
+      return refuseMetadata("affectedDocs");
     }
-    const cited = formatCaseNumberParts(relation["caseNumber"]);
-    return cited === undefined ? [] : [cited];
+    const caseNumber = relation["caseNumber"];
+    if (caseNumber === undefined || caseNumber === null) {
+      return [];
+    }
+    return [
+      formatCaseNumberParts(caseNumber) ?? refuseMetadata("affectedDocs"),
+    ];
   });
 };
 
@@ -669,13 +674,17 @@ const CHECKED_METADATA_FIELDS = {
   affectedDocs: UNPERSISTABLE_DECISION_FIELDS.PUBLISHER_CITATIONS,
 } as const satisfies Record<string, UnpersistableDecisionField>;
 
-const refusedMetadata = (
-  key: keyof typeof CHECKED_METADATA_FIELDS,
-): UnpersistableDecisionFieldError =>
-  new UnpersistableDecisionFieldError({
+/**
+ * Refuse a document metadata key the row is built from. The one throw site
+ * for these refusals: adapters throw the tagged error and the pipeline
+ * classifies it by field.
+ */
+const refuseMetadata = (key: keyof typeof CHECKED_METADATA_FIELDS): never => {
+  throw new UnpersistableDecisionFieldError({
     message: `CZ regional metadata.${key} is not in a shape the publisher states`,
     field: CHECKED_METADATA_FIELDS[key],
   });
+};
 
 /**
  * The publisher's document id, which this source states only as the last
@@ -1919,6 +1928,7 @@ export const czRegionalAdapter = defineSourceAdapter({
         // together: the envelope has to hold both, so the listing row cannot
         // be turned into a decision before its document is in hand.
         const decisions: IngestionResult[] = [];
+        let refused = 0;
         for (let i = 0; i < items.length; i += FINALDOC_CONCURRENCY) {
           const built = await Promise.all(
             items.slice(i, i + FINALDOC_CONCURRENCY).map(async (item) => ({
@@ -1932,14 +1942,23 @@ export const czRegionalAdapter = defineSourceAdapter({
           for (const { item, attempt } of built) {
             if (Result.isError(attempt)) {
               // One row the adapter refuses must not fail the page and pin the
-              // cursor on it; the reconciliation walk parks it instead.
-              // Reported so a build failing on every row is not read as a
-              // page with nothing on it.
+              // cursor on it. The listing is stored as a listing-only row, so
+              // the identity is held and the reconciliation asks for the
+              // document again (and parks the refusal) instead of losing it.
+              refused += 1;
               logger.warn("case_law.ingestion.item_build_failed", {
                 adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
                 ...(item.jednaciCislo ? { caseNumber: item.jednaciCislo } : {}),
                 "error.type": errorTag(attempt.error),
               });
+              const listed = assembleCzRegionalDecision({
+                item,
+                document: null,
+                chain: null,
+              });
+              if (listed.type !== "unkeyable") {
+                decisions.push(listed.decision);
+              }
               continue;
             }
             const outcome = attempt.value;
@@ -1970,8 +1989,9 @@ export const czRegionalAdapter = defineSourceAdapter({
         // a stale or incorrect pageNumber.
         const currentPage = state.page;
 
-        // Found results: reset empty counter
-        const hasResults = decisions.length > 0;
+        // Found results: reset empty counter. A refused row is a listed
+        // decision, so a day of them is not an empty day to gap-skip past.
+        const hasResults = decisions.length > 0 || refused > 0;
 
         // More pages for this day: advance page (0-indexed)
         if (currentPage + 1 < totalPages) {
