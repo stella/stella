@@ -1,5 +1,11 @@
 # @stll/ai-catalog
 
+## 0.2.1
+
+### Patch Changes
+
+- [#3704](https://github.com/stella/stella/pull/3704) [`1cbb3a5`](https://github.com/stella/stella/commit/1cbb3a5ac7b738141607b7c86ba021fabc85c184) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Offer Claude Opus 5.5 on the Anthropic provider and GPT-6 Sol and Luna on OpenAI and OpenRouter, and move the role defaults to the current generation: Claude Opus 5.5, Gemini 3.8 Flash, GPT-6 Sol and Luna on OpenAI and OpenRouter, and the GPT-5.6 family on Azure AI Foundry.
+
 ## 0.2.0
 
 ### Minor Changes

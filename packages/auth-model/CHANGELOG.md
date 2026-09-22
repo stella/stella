@@ -1,5 +1,11 @@
 # @stll/auth-model
 
+## 0.2.4
+
+### Patch Changes
+
+- [#3701](https://github.com/stella/stella/pull/3701) [`3352fca`](https://github.com/stella/stella/commit/3352fca0674fc04408b1594c744f08d036f4422a) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Pin the schema contract to Better Auth 1.7.5.
+
 ## 0.2.3
 
 ### Patch Changes

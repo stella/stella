@@ -493,7 +493,7 @@
     },
     "packages/ai-catalog": {
       "name": "@stll/ai-catalog",
-      "version": "0.2.0",
+      "version": "0.2.1",
       "dependencies": {
         "valibot": "catalog:",
       },
@@ -556,7 +556,7 @@
     },
     "packages/auth-model": {
       "name": "@stll/auth-model",
-      "version": "0.2.3",
+      "version": "0.2.4",
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
         "better-auth": "catalog:",
