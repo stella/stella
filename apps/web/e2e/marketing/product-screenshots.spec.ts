@@ -293,6 +293,13 @@ test("capture landing product screenshots", async ({
         await expect(
           page.getByRole("group", { name: "Outline" }),
         ).toBeVisible();
+        // Decision routes intentionally seed their inspector tabs without
+        // opening the pane. This capture includes the chat, so open it as an
+        // explicit user action and assert the route honored that contract.
+        const inspectorDock = page.locator('[data-slot="inspector-dock"]');
+        await inspectorDock
+          .getByRole("button", { exact: true, name: "Show pane" })
+          .click();
         // The inspector chat loads its saved-skill prompts independently of
         // the decision and analysis queries. The empty state paints the logo
         // first, so waiting only for the reader can record a blank inspector.
