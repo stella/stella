@@ -1,5 +1,5 @@
 /** Better Auth version whose logical schema this contract describes. */
-export const BETTER_AUTH_CONTRACT_VERSION = "1.7.4";
+export const BETTER_AUTH_CONTRACT_VERSION = "1.7.5";
 
 export const ORGANIZATION_ROLE_NAMES = [
   "owner",

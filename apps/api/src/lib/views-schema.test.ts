@@ -462,12 +462,7 @@ describe("viewLayoutSchema — properties", () => {
     );
   });
 
-  // Known divergence: Valibot 1.4.0 fails to reject Object.prototype-named extra
-  // keys because its strictObject check walks the prototype chain. TypeBox is
-  // strict. Practical impact is limited (Elysia rejects at the HTTP boundary via
-  // TypeBox), but parseViewLayout is also called on DB rows. If this starts
-  // failing after a Valibot upgrade, swap the comparison and delete this note.
-  test("Valibot accepts Object.prototype-named extra keys that TypeBox rejects", () => {
+  test("both schemas reject Object.prototype-named extra keys", () => {
     const polluted = {
       type: "kanban" as const,
       version: 1 as const,
@@ -478,7 +473,7 @@ describe("viewLayoutSchema — properties", () => {
       groupByPropertyId: "x",
       valueOf: "junk",
     };
-    expect(v.is(viewLayoutSchema, polluted)).toBe(true);
+    expect(v.is(viewLayoutSchema, polluted)).toBe(false);
     expect(Value.Check(tViewLayoutSchema, polluted)).toBe(false);
   });
 });
