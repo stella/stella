@@ -24,7 +24,10 @@
 import { panic } from "better-result";
 import { sql } from "drizzle-orm";
 
-import { reopenCitationsForKeys } from "@/api/handlers/case-law/citation-resolution";
+import {
+  lockCitationGraph,
+  reopenCitationsForKeys,
+} from "@/api/handlers/case-law/citation-resolution";
 import { CITATION_RESOLUTION_STATUS } from "@/api/handlers/case-law/citation-resolution-status";
 import { citationKeyOf } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane";
@@ -117,11 +120,13 @@ const backfillTable = async (
       );
       // One transaction, because giving a decision a key is the same event the
       // ingestion pipeline announces and it has to be announced the same way.
-      // `reopenCitationsForKeys` takes the citation graph's advisory lock, so
-      // the write and its announcement are serialized against the standing
-      // walk: without that, a resolver batch holding a pre-key snapshot can
-      // commit `unmatched` after this statement has already decided there was
-      // nothing to reopen, and the row stays terminal forever.
+      // The citation graph's advisory lock is taken before any row is written,
+      // the order the resolver takes it in, so the write and its announcement
+      // are serialized against the standing walk: without that, a resolver
+      // batch holding a pre-key snapshot can wait on this statement's row
+      // locks and then commit a target or an `unmatched` read off the old key
+      // over the reset, and the row stays settled forever. The maintenance
+      // lane held above serializes operator passes only, not the resolver.
       //
       // A citation gaining a key was `pending` all along — it was excluded
       // from the walk by having no key, and now it is not. A citation whose
@@ -130,6 +135,7 @@ const backfillTable = async (
       // old and its new key.
       // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- bounded batch per iteration under the graph lock
       await rootDb.transaction(async (tx) => {
+        await lockCitationGraph(tx);
         if (table === "case_law_decisions") {
           await tx.execute(
             sql`WITH v(id, key) AS (VALUES ${values})
