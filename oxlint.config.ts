@@ -3767,6 +3767,33 @@ export default defineConfig({
       },
     },
     {
+      // A consolidation's `document_ast` and `fulltext` hold a whole act
+      // (megabytes for a large code). A statute read projects them only
+      // through `legislation-version-blocks.ts`, which carries them for the
+      // rows object storage does not serve; a direct projection detoasts and
+      // ships the act on every read and then discards it. The indexer reads
+      // the Postgres text by design.
+      files: [
+        "apps/api/src/handlers/legislation/**/*.ts",
+        "apps/api/src/mcp/legislation-tools.ts",
+      ],
+      excludeFiles: [
+        "apps/api/src/**/*.test.ts",
+        "apps/api/src/handlers/legislation/search-index.ts",
+      ],
+      rules: {
+        "no-restricted-properties": [
+          "error",
+          ...["documentAst", "fulltext"].map((property) => ({
+            object: "legislationDocuments",
+            property,
+            message:
+              "Project the whole-act payload through versionAstColumns / versionTextColumns and read it with readVersionAst / readVersionText.",
+          })),
+        ],
+      },
+    },
+    {
       // Module Side Effects (AGENTS.md): known side-effecting singleton
       // constructors (DB pools, auth, Redis/queue connections, S3 clients)
       // must not run at module top level. Scoped to the backend and shared

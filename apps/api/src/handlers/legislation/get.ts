@@ -3,14 +3,12 @@ import { and, eq } from "drizzle-orm";
 import { status, t } from "elysia";
 
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
-import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import {
   caseLawStatuteCitationCountState,
   legislationDocuments,
   legislationSources,
 } from "@/api/db/schema";
-import { corpusStorageMode } from "@/api/env-base";
 import {
   statuteCitationCaseCount,
   statuteCitationCountStateJoin,
@@ -20,18 +18,15 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import {
-  readCorpusAst,
-  readCorpusText,
-} from "@/api/lib/legal-search/corpus-reads";
-import {
-  readCorpusPayloadOrFallback,
-  parsePersistedCorpusAst,
-} from "@/api/lib/legal-search/corpus-storage";
-import type { EmptyAst } from "@/api/lib/legal-search/document-types";
-import {
   derivedAiLegislationSource,
   publishedLegislationDocument,
 } from "@/api/lib/legal-search/legislation-redistribution";
+import {
+  readVersionAst,
+  readVersionText,
+  versionAstColumns,
+  versionTextColumns,
+} from "@/api/lib/legal-search/legislation-version-blocks";
 import {
   legislationPublicReadDb,
   type LegislationReadDb,
@@ -77,7 +72,12 @@ export const readLegislationHandler = async (
     async (tx) =>
       await tx
         .select({
-          id: legislationDocuments.id,
+          // `id` first, as the response has always carried it; the Postgres
+          // payload copies it brings along are only projected for a row
+          // object storage does not serve, since for a large code they are
+          // megabytes the reader would discard.
+          ...versionAstColumns,
+          ...versionTextColumns,
           eli: legislationDocuments.eli,
           slug: legislationDocuments.slug,
           title: legislationDocuments.title,
@@ -93,10 +93,6 @@ export const readLegislationHandler = async (
           documentUrl: legislationDocuments.documentUrl,
           createdAt: legislationDocuments.createdAt,
           updatedAt: legislationDocuments.updatedAt,
-          documentAst: legislationDocuments.documentAst,
-          fulltext: legislationDocuments.fulltext,
-          astS3Key: legislationDocuments.astS3Key,
-          textS3Key: legislationDocuments.textS3Key,
           citationCaseCount: statuteCitationCaseCount.as("citation_case_count"),
           // Whether the publisher permits AI use of this wording, read off
           // the joined source in the same row rather than by a second query.
@@ -138,35 +134,21 @@ export const readLegislationHandler = async (
     ...rest
   } = document;
 
-  const corpus = corpusStorageMode !== "off";
+  const documentAst = await readVersionAst({
+    row: { id: documentId, astS3Key, documentAst: pgAst },
+    legislationDb,
+    step: "readLegislation.corpusAst",
+  });
 
-  const documentAst: DocumentAst | EmptyAst | null =
-    corpus && astS3Key !== null
-      ? await readCorpusPayloadOrFallback({
-          documentId,
-          key: astS3Key,
-          step: "readLegislation.corpusAst",
-          read: async () => await readCorpusAst(astS3Key),
-          fallback: () => parsePersistedCorpusAst(pgAst),
-        })
-      : parsePersistedCorpusAst(pgAst);
-
-  let fulltext: string | null = null;
-  if (
+  const fulltext =
     options.textMode === LEGISLATION_TEXT_MODE.ALWAYS ||
     !hasUsableAst(documentAst)
-  ) {
-    fulltext = pgText;
-    if (corpus && textS3Key !== null) {
-      fulltext = await readCorpusPayloadOrFallback({
-        documentId,
-        key: textS3Key,
-        step: "readLegislation.corpusText",
-        read: async () => await readCorpusText(textS3Key),
-        fallback: () => pgText,
-      });
-    }
-  }
+      ? await readVersionText({
+          row: { id: documentId, textS3Key, fulltext: pgText },
+          legislationDb,
+          step: "readLegislation.corpusText",
+        })
+      : null;
 
   return { ...rest, documentAst, fulltext };
 };

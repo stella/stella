@@ -10,7 +10,8 @@ import { CORPUS_STORAGE_MODES } from "@/api/lib/corpus-storage-mode";
 import {
   readStoredVersionAst,
   versionAstColumnsFor,
-  versionAstFromObjectStorage,
+  versionPayloadFromObjectStorage,
+  versionTextColumnsFor,
 } from "@/api/lib/legal-search/legislation-version-blocks";
 import type {
   LegislationReadDb,
@@ -60,6 +61,8 @@ const DOCUMENT_AST = {
   ],
 } as const satisfies DocumentAst;
 
+const FULLTEXT = "§ 1 Předmět úpravy";
+
 let client: Awaited<ReturnType<typeof createTestPglite>>;
 let db: ReturnType<typeof drizzle>;
 
@@ -85,6 +88,8 @@ beforeAll(async () => {
       contentHash: "a".repeat(64),
       astS3Key: null,
       documentAst: DOCUMENT_AST,
+      textS3Key: null,
+      fulltext: FULLTEXT,
     },
     {
       id: MIRRORED_ID,
@@ -96,6 +101,8 @@ beforeAll(async () => {
       contentHash: "b".repeat(64),
       astS3Key: "legislation/cze/2013/90/ast.zst",
       documentAst: DOCUMENT_AST,
+      textS3Key: "legislation/cze/2013/90/text.zst",
+      fulltext: FULLTEXT,
     },
   ]);
 });
@@ -113,7 +120,7 @@ test.each([...CORPUS_STORAGE_MODES])(
 
     expect(rows).toHaveLength(2);
     for (const row of rows) {
-      const servedFromObjectStorage = versionAstFromObjectStorage(
+      const servedFromObjectStorage = versionPayloadFromObjectStorage(
         mode,
         row.astS3Key,
       );
@@ -123,6 +130,27 @@ test.each([...CORPUS_STORAGE_MODES])(
       expect({ id: row.id, documentAst: row.documentAst }).toEqual({
         id: row.id,
         documentAst: servedFromObjectStorage ? null : DOCUMENT_AST,
+      });
+    }
+  },
+);
+
+test.each([...CORPUS_STORAGE_MODES])(
+  "projects a version's text exactly when the reader takes it from Postgres (%s)",
+  async (mode) => {
+    const rows = await db
+      .select({ id: legislationDocuments.id, ...versionTextColumnsFor(mode) })
+      .from(legislationDocuments);
+
+    expect(rows).toHaveLength(2);
+    for (const row of rows) {
+      const servedFromObjectStorage = versionPayloadFromObjectStorage(
+        mode,
+        row.textS3Key,
+      );
+      expect({ id: row.id, fulltext: row.fulltext }).toEqual({
+        id: row.id,
+        fulltext: servedFromObjectStorage ? null : FULLTEXT,
       });
     }
   },
