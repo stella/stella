@@ -1124,7 +1124,7 @@
     "@expo/cli": "57.0.25",
     "@expo/router-server": "57.0.10",
     "@expo/ui": "57.0.18",
-    "@stll/folio-core": "0.47.2",
+    "@stll/folio-core": "0.47.4",
     "adm-zip": "0.6.1",
     "brace-expansion": "5.0.9",
     "expo-constants": "57.0.18",
@@ -1157,9 +1157,9 @@
     "@stll/anonymize": "3.0.1",
     "@stll/anonymize-data": "0.0.10",
     "@stll/anonymize-wasm": "3.0.1",
-    "@stll/docx-core": "0.25.1",
+    "@stll/docx-core": "0.25.2",
     "@stll/folio-agents": "0.13.7",
-    "@stll/folio-core": "0.47.2",
+    "@stll/folio-core": "0.47.4",
     "@stll/folio-react": "0.21.0",
     "@t3-oss/env-core": "0.13.11",
     "@tailwindcss/postcss": "4.3.3",
@@ -2665,7 +2665,7 @@
 
     "@stll/desktop": ["@stll/desktop@workspace:apps/desktop"],
 
-    "@stll/docx-core": ["@stll/docx-core@0.25.1", "", { "dependencies": { "@stll/docx-utils": "^0.1.0", "better-result": "3.0.1", "fast-xml-parser": "^5.10.1", "jszip": "3.10.1", "marked": "^18.0.5" } }, "sha512-w2LJxtI2F5pvlT6etkfAwspsZVgJlVrUhVQ6aUW8EgvDpwgIXpzl9ZtJ7eLaAGHQBzJhwWDpqg1lRP11IrxOEw=="],
+    "@stll/docx-core": ["@stll/docx-core@0.25.2", "", { "dependencies": { "@stll/docx-utils": "^0.1.0", "better-result": "3.0.1", "fast-xml-parser": "^5.10.1", "jszip": "3.10.1", "marked": "^18.0.5" } }, "sha512-nrPpxFkfpVh6lQ+rttgRkc1tjtnIv0JRnN48zEkLaU3EQWVDDKnCGB5DsYvfmS+IH6LAmmtUdd7QSunkrysP/g=="],
 
     "@stll/docx-utils": ["@stll/docx-utils@workspace:packages/docx-utils"],
 
@@ -2675,7 +2675,7 @@
 
     "@stll/folio-agents": ["@stll/folio-agents@0.13.7", "", { "dependencies": { "@stll/folio-core": "^0.47.0", "better-result": "3.0.1" } }, "sha512-5ZA0wWxHDA9rJ5K4vls6QxZr2t8+1d6OcfuinB6pxkQP6v0QJI5bsNTlrRy/v381Et6Z58jrkETcINYwwmXrsA=="],
 
-    "@stll/folio-core": ["@stll/folio-core@0.47.2", "", { "dependencies": { "@stll/docx-core": "^0.25.1", "@stll/docx-utils": "^0.1.0", "@stll/template-conditions": ">=0.4.0 <1.0.0", "better-result": "3.0.1", "csstype": "^3.1.3", "dompurify": "^3.4.13", "fast-xml-parser": "^5.10.1", "hyphen": "1.14.1", "jszip": "3.10.1", "prosemirror-commands": "^1.7.1", "prosemirror-dropcursor": "^1.8.2", "prosemirror-gapcursor": "^1.4.1", "prosemirror-history": "^1.5.0", "prosemirror-inputrules": "^1.5.0", "prosemirror-keymap": "^1.2.3", "prosemirror-model": "^1.25.9", "prosemirror-state": "^1.4.4", "prosemirror-tables": "^1.8.5", "prosemirror-transform": "^1.12.0", "prosemirror-view": "^1.41.8", "utif2": "^4.1.0", "valibot": "1.4.2", "y-prosemirror": "^1.3.7", "yjs": "^13.6.31" } }, "sha512-RUx4LzdXnJkrWY/L6B7hNrVgGZ5MQhTbCSvUMl/MF0IK1pYMq4HeH3EJZUHLWhcd3ITp8l0NdwKDP2VUI5UeEA=="],
+    "@stll/folio-core": ["@stll/folio-core@0.47.4", "", { "dependencies": { "@stll/docx-core": "^0.25.2", "@stll/docx-utils": "^0.1.0", "@stll/template-conditions": ">=0.4.0 <1.0.0", "better-result": "3.0.1", "csstype": "^3.1.3", "dompurify": "^3.4.13", "fast-xml-parser": "^5.10.1", "hyphen": "1.14.1", "jszip": "3.10.1", "prosemirror-commands": "^1.7.1", "prosemirror-dropcursor": "^1.8.2", "prosemirror-gapcursor": "^1.4.1", "prosemirror-history": "^1.5.0", "prosemirror-inputrules": "^1.5.0", "prosemirror-keymap": "^1.2.3", "prosemirror-model": "^1.25.9", "prosemirror-state": "^1.4.4", "prosemirror-tables": "^1.8.5", "prosemirror-transform": "^1.12.0", "prosemirror-view": "^1.41.8", "utif2": "^4.1.0", "valibot": "1.4.2", "y-prosemirror": "^1.3.7", "yjs": "^13.6.31" } }, "sha512-BNfxm9lGMwxx+VbyCV/6miSki5D2d9rNsLk8i5WPqiUwWtkIkHpDZdJojseq+xqSg5hxWlR1XMpshXP/bwKX6A=="],
 
     "@stll/folio-react": ["@stll/folio-react@0.21.0", "", { "dependencies": { "@base-ui/react": "1.6.0", "@fontsource/arimo": "^5.2.8", "@fontsource/caladea": "^5.2.8", "@fontsource/carlito": "^5.2.8", "@fontsource/cousine": "^5.2.7", "@fontsource/lato": "^5.2.7", "@fontsource/noto-sans-arabic": "^5.2.7", "@fontsource/source-sans-3": "^5.2.9", "@fontsource/tinos": "^5.2.7", "@stll/folio-core": "^0.47.0", "better-result": "3.0.1", "lucide-react": "1.24.0", "prosemirror-history": "^1.5.0", "prosemirror-model": "^1.25.9", "prosemirror-state": "^1.4.4", "prosemirror-tables": "^1.8.5", "prosemirror-view": "^1.41.8", "react-compiler-runtime": "^1.0.0", "yjs": "^13.6.31" }, "peerDependencies": { "react": "^18.0.0 || ^19.0.0", "react-dom": "^18.0.0 || ^19.0.0", "use-intl": ">=4.0.0" } }, "sha512-Kuz9wMMJ0vjBgo4Sa/dumv5dnegIYijJbBLf5geINLjfbWzpTbCgnwiLxuqkySO+qzhjJVwk0m1PpIk6VmDpAA=="],
 
