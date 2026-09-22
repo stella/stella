@@ -158,9 +158,14 @@ const CASE_LAW_CORPUS_TOMBSTONE_REASON_SQL_VALUES =
  * How a source's reported total was obtained. Not a boolean: a third
  * provenance (an operator-approved import, say) must be able to land as a
  * new member rather than as a second flag.
+ *
+ * `listing-census` is the sum of what the publisher lists slice by slice,
+ * counted by `ingestion/listing-census.ts` where the publisher states no
+ * total of its own.
  */
 export const SOURCE_TOTAL_ORIGIN = {
   ADAPTER_POLL: "adapter-poll",
+  LISTING_CENSUS: "listing-census",
   OPERATOR: "operator",
 } as const;
 

@@ -647,6 +647,7 @@ type Messages = {
       "lastSync": "Last sync";
       "notCountedYet": "Not counted yet";
       "notMeasuredYet": "Not measured yet";
+      "reportedByListing": "Counted from the publisher's listing";
       "reportedByOperator": "Recorded by hand";
       "reportedByPublisher": "Publisher's own count";
       "searchable": "Searchable";
