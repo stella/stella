@@ -606,7 +606,7 @@ const buildCitationRows = async ({
   const rules = await loadRules(language, scopedDb, polarityRules);
   return citations.map((citation) => {
     const citationKey = citationKeyOf(citation.citationText);
-    const contexts = extractContexts(
+    const windows = extractContexts(
       sections,
       citation.citationText,
       citation.sectionIndex,
@@ -615,11 +615,11 @@ const buildCitationRows = async ({
       citationText: citation.citationText,
       citationKey,
       proceduralKeys,
-      context: contexts?.[0] ?? null,
+      context: windows?.contexts[0] ?? null,
     });
     const match =
-      kind === CITATION_KIND.PRECEDENT && contexts !== null
-        ? selectCitationPolarity(rules, contexts)
+      kind === CITATION_KIND.PRECEDENT && windows !== null
+        ? selectCitationPolarity(rules, windows.mentions)
         : null;
     return {
       citingDecisionId,

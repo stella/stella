@@ -35,13 +35,13 @@ describe("extractContexts", () => {
 
   test("extracts context around citation in specific section", () => {
     const ctx = extractContexts(sections, "sp. zn. 21 Cdo 1234/2020", 1);
-    expect(ctx?.[0]).toContain("sp. zn. 21 Cdo 1234/2020");
-    expect(ctx?.[0]).toContain("in accordance with");
+    expect(ctx?.mentions[0]).toContain("sp. zn. 21 Cdo 1234/2020");
+    expect(ctx?.mentions[0]).toContain("in accordance with");
   });
 
   test("searches all sections when sectionIndex is null", () => {
     const ctx = extractContexts(sections, "sp. zn. 21 Cdo 1234/2020", null);
-    expect(ctx?.[0]).toContain("sp. zn. 21 Cdo 1234/2020");
+    expect(ctx?.mentions[0]).toContain("sp. zn. 21 Cdo 1234/2020");
   });
 
   test("returns null when citation not found", () => {
@@ -258,16 +258,48 @@ describe("seed rules", () => {
       0,
     );
 
-    expect(windows).toHaveLength(2);
-    expect(selectCitationPolarity(rules, windows?.[0] ?? "")?.polarity).toBe(
-      POLARITY.SUPPORTIVE,
+    expect(windows?.mentions).toHaveLength(2);
+    expect(
+      selectCitationPolarity(rules, windows?.mentions[0] ?? "")?.polarity,
+    ).toBe(POLARITY.SUPPORTIVE);
+    expect(
+      selectCitationPolarity(rules, windows?.mentions[1] ?? "")?.polarity,
+    ).toBe(POLARITY.NEGATIVE);
+    expect(
+      selectCitationPolarity(rules, windows?.mentions ?? [])?.polarity,
+    ).toBe(POLARITY.MIXED);
+  });
+
+  /**
+   * The same disagreement a paragraph closer. The mentions sit within one
+   * window of each other, so the excerpt the model tiers read is a single
+   * merged window carrying both cues; reading the rule tier off that window
+   * returned one match and filed the departure as the whole citation.
+   */
+  test("mentions that disagree are mixed even where their windows merge", () => {
+    const rules = compileRules(
+      SEED_RULES.filter((r) => r.language === "cs").map((r) => ({
+        id: createSafeId<"caseLawPolarityRule">(),
+        pattern: r.pattern,
+        polarity: r.polarity,
+        confidence: 1,
+      })),
     );
-    expect(selectCitationPolarity(rules, windows?.[1] ?? "")?.polarity).toBe(
-      POLARITY.NEGATIVE,
+    const recital =
+      "Rozhodovací praxe se ustálila v názoru, že ke skutečnostem, které nastaly po sjednání smluvní pokuty, nelze přihlížet (srov. rozsudek ze dne 24. 1. 2017, sp. zn. 23 Cdo 5068/2014).";
+    const rejection =
+      "Od závěrů rozsudku sp. zn. 23 Cdo 5068/2014 se velký senát odchyluje.";
+    const windows = extractContexts(
+      [{ text: `${recital}${" Další odůvodnění.".repeat(16)}${rejection}` }],
+      "sp. zn. 23 Cdo 5068/2014",
+      0,
     );
-    expect(selectCitationPolarity(rules, windows ?? [])?.polarity).toBe(
-      POLARITY.MIXED,
-    );
+
+    expect(windows?.contexts).toHaveLength(1);
+    expect(windows?.mentions).toHaveLength(2);
+    expect(
+      selectCitationPolarity(rules, windows?.mentions ?? [])?.polarity,
+    ).toBe(POLARITY.MIXED);
   });
 
   /**

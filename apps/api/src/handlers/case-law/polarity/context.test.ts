@@ -9,9 +9,10 @@ describe("the windows around a citation", () => {
       { text: "Soud odkázal na usnesení sp. zn. 3 Tdo 759/2020 a uzavřel." },
     ];
 
-    expect(extractContexts(sections, "sp. zn. 3 Tdo 759/2020", 1)).toEqual([
-      sections[1]?.text ?? "",
-    ]);
+    expect(extractContexts(sections, "sp. zn. 3 Tdo 759/2020", 1)).toEqual({
+      mentions: [sections[1]?.text ?? ""],
+      contexts: [sections[1]?.text ?? ""],
+    });
   });
 
   test("is null when the section does not carry the citation", () => {
@@ -34,21 +35,50 @@ describe("the windows around a citation", () => {
       0,
     );
 
-    expect(windows).toHaveLength(2);
-    expect(windows?.[0]).toContain("srov.");
-    expect(windows?.[0]).not.toContain("odchyluje");
-    expect(windows?.[1]).toContain("odchyluje");
-    expect(windows?.[1]).not.toContain("srov.");
+    expect(windows?.mentions).toHaveLength(2);
+    expect(windows?.mentions[0]).toContain("srov.");
+    expect(windows?.mentions[0]).not.toContain("odchyluje");
+    expect(windows?.mentions[1]).toContain("odchyluje");
+    expect(windows?.mentions[1]).not.toContain("srov.");
+    // Far enough apart that nothing merges, so both readings are the same.
+    expect(windows?.contexts).toEqual(windows?.mentions);
   });
 
-  test("merges mentions whose windows overlap into one", () => {
+  test("keeps a mention of its own where the merged window covers both", () => {
+    // The two mentions sit closer than the windows are wide, so the merged
+    // reading is one window carrying both cues. That is what the model is
+    // shown; the rule tier reads the mentions, where the recital's cue and
+    // the rejection's cue are still one each, so the two can disagree.
+    const recital =
+      "Dosavadní praxe se ustálila v názoru (srov. rozsudek sp. zn. 23 Cdo 5068/2014).";
+    const filler = "Další odůvodnění. ".repeat(16);
+    const rejection =
+      "Od závěrů rozsudku sp. zn. 23 Cdo 5068/2014 se velký senát odchyluje.";
+    const windows = extractContexts(
+      [{ text: `${recital}${filler}${rejection}` }],
+      "sp. zn. 23 Cdo 5068/2014",
+      0,
+    );
+
+    expect(windows?.contexts).toHaveLength(1);
+    expect(windows?.mentions).toHaveLength(2);
+    expect(windows?.mentions[0]).toContain("srov.");
+    expect(windows?.mentions[0]).not.toContain("odchyluje");
+    expect(windows?.mentions[1]).toContain("odchyluje");
+    expect(windows?.mentions[1]).not.toContain("srov.");
+  });
+
+  test("merges mentions whose windows overlap into one excerpt", () => {
     const text =
       "Rozsudek sp. zn. 21 Cdo 1/20 a na něj navazující usnesení; k tomu " +
       "srov. opět sp. zn. 21 Cdo 1/20 a další.";
 
     const windows = extractContexts([{ text }], "sp. zn. 21 Cdo 1/20", 0);
 
-    expect(windows).toEqual([text]);
+    expect(windows?.contexts).toEqual([text]);
+    // Both mentions are still returned; here each window reaches the whole
+    // sentence, so they read alike.
+    expect(windows?.mentions).toEqual([text, text]);
   });
 
   test("comes back composed, whatever form the publisher served", () => {
@@ -66,6 +96,9 @@ describe("the windows around a citation", () => {
       0,
     );
 
-    expect(windows).toEqual([sentence]);
+    expect(windows).toEqual({
+      mentions: [sentence],
+      contexts: [sentence],
+    });
   });
 });

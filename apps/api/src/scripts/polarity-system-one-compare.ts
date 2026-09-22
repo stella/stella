@@ -293,16 +293,16 @@ for (const citation of citations) {
     skipped.push("sections-missing");
     continue;
   }
-  const contexts = extractContexts(
+  const windows = extractContexts(
     sections,
     citation.citationText,
     decision.sections === null ? null : citation.sectionIndex,
   );
-  if (contexts === null) {
+  if (windows === null) {
     skipped.push("context-not-found");
     continue;
   }
-  items.push({ citation, decision, context: excerptOf(contexts) });
+  items.push({ citation, decision, context: excerptOf(windows.contexts) });
 }
 
 /**

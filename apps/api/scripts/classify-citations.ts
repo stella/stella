@@ -291,16 +291,16 @@ const recheckPage = async ({
   const tightened: Tightened[] = [];
   let noContext = 0;
   for (const citation of page) {
-    const contexts = extractContexts(
+    const windows = extractContexts(
       citation.sections ?? [],
       citation.citationText,
       citation.sectionIndex,
     );
-    if (contexts === null) {
+    if (windows === null) {
       noContext++;
       continue;
     }
-    const match = selectCitationPolarity(rules, contexts);
+    const match = selectCitationPolarity(rules, windows.mentions);
     if (match === null) {
       continue;
     }
@@ -440,13 +440,13 @@ const main = async () => {
   let noContext = 0;
 
   for (const citation of citations) {
-    const contexts = extractContexts(
+    const windows = extractContexts(
       citation.sections ?? [],
       citation.citationText,
       citation.sectionIndex,
     );
 
-    if (contexts === null) {
+    if (windows === null) {
       noContext++;
       continue;
     }
@@ -454,7 +454,7 @@ const main = async () => {
     try {
       // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- rules load once into the caller-owned cache; the model tier is rate-limited
       const result = await classifyCitation({
-        contexts,
+        windows,
         citationText: citation.citationText,
         language: citation.language,
         observedAt: new Date(),
