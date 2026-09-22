@@ -1,5 +1,15 @@
 # @stll/ai-catalog
 
+## 0.2.0
+
+### Minor Changes
+
+- [#3692](https://github.com/stella/stella/pull/3692) [`f07798e`](https://github.com/stella/stella/commit/f07798e9ae6c579f027f62258da40555bb479dc8) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Declare per-model streaming tool-use support. `MODEL_STREAMING_TOOL_USE` is
+  total over the offered catalog and `supportsStreamingToolUse` reads it;
+  `us.deepseek.r1-v1:0` on Bedrock is the first model marked unsupported,
+  because Converse refuses any streaming request that carries a toolConfig for
+  it. Unlisted ids stay tool-capable.
+
 ## 0.1.14
 
 ### Patch Changes
