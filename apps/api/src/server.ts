@@ -1,4 +1,5 @@
 import cors from "@elysia/cors";
+import { panic } from "better-result";
 import { Elysia } from "elysia";
 import type { Context } from "elysia";
 
@@ -837,14 +838,24 @@ const startServer = async (): Promise<void> => {
       stopSse,
       timeout: Bun.sleep(WORKER_SHUTDOWN_TIMEOUT_MS),
     });
-    logger.info("api.shutdown_complete", {
-      signal,
-      "shutdown.outcome": outcome,
-    });
-    if (outcome === API_SHUTDOWN_OUTCOME.timedOut) {
-      logger.warn("api.shutdown_timed_out", { signal });
+    switch (outcome) {
+      case API_SHUTDOWN_OUTCOME.drained:
+        logger.info("api.shutdown_complete", { signal });
+        process.exit(0);
+        break;
+      case API_SHUTDOWN_OUTCOME.failed:
+        logger.error("api.shutdown_failed", { signal });
+        process.exit(1);
+        break;
+      case API_SHUTDOWN_OUTCOME.timedOut:
+        logger.warn("api.shutdown_timed_out", { signal });
+        process.exit(1);
+        break;
+      default: {
+        outcome satisfies never;
+        return panic(`Unhandled API shutdown outcome: ${String(outcome)}`);
+      }
     }
-    process.exit(0);
   };
   process.once("SIGTERM", () => {
     detached(shutdownWorkers("SIGTERM"), "server.shutdown");

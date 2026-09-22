@@ -1,5 +1,6 @@
 export const API_SHUTDOWN_OUTCOME = {
   drained: "drained",
+  failed: "failed",
   timedOut: "timed-out",
 } as const;
 
@@ -25,7 +26,10 @@ export const shutdownApiServices = async ({
   stopSse,
   timeout,
 }: ShutdownApiServicesOptions): Promise<ApiShutdownOutcome> => {
-  const httpStopped = stopHttp().catch(onHttpStopError);
+  const httpStopped = stopHttp().catch((error: unknown) => {
+    onHttpStopError(error);
+    throw error;
+  });
   stopSse();
   stopScheduler();
 
@@ -34,7 +38,11 @@ export const shutdownApiServices = async ({
       httpStopped,
       drainScheduler,
       closeBackgroundWorkers(),
-    ]).then(() => API_SHUTDOWN_OUTCOME.drained),
+    ]).then((results) =>
+      results.some((result) => result.status === "rejected")
+        ? API_SHUTDOWN_OUTCOME.failed
+        : API_SHUTDOWN_OUTCOME.drained,
+    ),
     timeout.then(() => API_SHUTDOWN_OUTCOME.timedOut),
   ]);
 };

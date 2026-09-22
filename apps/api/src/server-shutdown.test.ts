@@ -23,9 +23,9 @@ describe("API service shutdown", () => {
       closeBackgroundWorkers: async () => undefined,
       drainScheduler: Promise.resolve(),
       onHttpStopError: () => undefined,
-      stopHttp: () => {
+      stopHttp: async () => {
         events.push("http-stop-started");
-        return httpStopped.promise;
+        await httpStopped.promise;
       },
       stopScheduler: () => {
         events.push("scheduler-stopped");
@@ -52,10 +52,10 @@ describe("API service shutdown", () => {
 
     const outcome = observeWithinDeadline(
       shutdownApiServices({
-        closeBackgroundWorkers: () => never,
+        closeBackgroundWorkers: async () => await never,
         drainScheduler: never,
         onHttpStopError: () => undefined,
-        stopHttp: () => never,
+        stopHttp: async () => await never,
         stopScheduler: () => undefined,
         stopSse: () => undefined,
         timeout: Promise.resolve(),
@@ -64,4 +64,40 @@ describe("API service shutdown", () => {
 
     expect(await outcome).toBe(API_SHUTDOWN_OUTCOME.timedOut);
   });
+
+  for (const failedService of ["http", "scheduler", "workers"] as const) {
+    test(`reports failed ${failedService} cleanup`, async () => {
+      const failure = new Error(`${failedService} cleanup failed`);
+      const loggedErrors: unknown[] = [];
+      const never = Promise.withResolvers<undefined>().promise;
+
+      const outcome = await observeWithinDeadline(
+        shutdownApiServices({
+          closeBackgroundWorkers: async () => {
+            if (failedService === "workers") {
+              throw failure;
+            }
+          },
+          drainScheduler:
+            failedService === "scheduler"
+              ? Promise.reject(failure)
+              : Promise.resolve(),
+          onHttpStopError: (error) => {
+            loggedErrors.push(error);
+          },
+          stopHttp: async () => {
+            if (failedService === "http") {
+              throw failure;
+            }
+          },
+          stopScheduler: () => undefined,
+          stopSse: () => undefined,
+          timeout: never,
+        }),
+      );
+
+      expect(outcome).toBe(API_SHUTDOWN_OUTCOME.failed);
+      expect(loggedErrors).toEqual(failedService === "http" ? [failure] : []);
+    });
+  }
 });
