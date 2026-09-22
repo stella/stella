@@ -12,7 +12,7 @@ import {
 } from "@tanstack/react-router";
 
 import { AppProviders } from "@/app-providers";
-import { ApiVersionMismatchProvider } from "@/components/api-version-mismatch-banner";
+import { ApiVersionMismatchProvider } from "@/components/api-version-mismatch-refresh";
 import {
   DefaultErrorComponent,
   DefaultPendingComponent,

@@ -3124,7 +3124,7 @@ export default defineConfig({
         "apps/web/src/components/require-ai-key.tsx",
         "apps/web/src/components/chat-mention-providers.tsx",
         "apps/web/src/components/chat-editor-provider.tsx",
-        "apps/web/src/components/api-version-mismatch-banner.tsx",
+        "apps/web/src/components/api-version-mismatch-refresh.tsx",
         "apps/web/src/components/selfhost-update-banner.tsx",
         "apps/web/src/components/workspaces/create-matter-dialog.tsx",
       ],

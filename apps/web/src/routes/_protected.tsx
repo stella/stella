@@ -48,7 +48,7 @@ import "@/features/case-law/case-decision-inspector-registration";
 import "@/features/inbox/signal-inspector-registration";
 import "@/features/statutes/provision-inspector-registration";
 import "@/features/statutes/statute-inspector-registration";
-import { ApiVersionMismatchBanner } from "@/components/api-version-mismatch-banner";
+import { ApiVersionMismatchReporter } from "@/components/api-version-mismatch-refresh";
 import { AppSidebar } from "@/components/app-sidebar";
 import { resolveSidebarWorkspaceId } from "@/components/app-sidebar.logic";
 import { AppBreadcrumbs } from "@/components/breadcrumbs/app-breadcrumbs";
@@ -594,7 +594,7 @@ function ProtectedContent() {
 
   return (
     <>
-      <ApiVersionMismatchBanner />
+      <ApiVersionMismatchReporter />
       <SelfhostUpdateBanner />
       <header className="border-sidebar-border flex h-12 shrink-0 items-center gap-2 overflow-hidden border-b bg-(--matter-sidebar-tint) px-4">
         {isMobile && (
