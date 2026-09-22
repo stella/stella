@@ -259,6 +259,36 @@ export class CorpusPayloadUnavailableError extends TaggedError(
   cause?: unknown;
 }> {}
 
+/** Which field of a publisher's row the corpus refused, and why. */
+export const UNPERSISTABLE_DECISION_FIELDS = {
+  IDENTIFIER: "identifier",
+  IDENTIFIER_COUNT: "identifier-count",
+  SOURCE_DOCUMENT_ID: "source-document-id",
+  SOURCE_DOCUMENT_ID_LENGTH: "source-document-id-length",
+} as const;
+
+export type UnpersistableDecisionField =
+  (typeof UNPERSISTABLE_DECISION_FIELDS)[keyof typeof UNPERSISTABLE_DECISION_FIELDS];
+
+/**
+ * A publisher's row carries a field the corpus cannot store: an identifier
+ * past the stored length or with no visible content, more identifiers than
+ * one decision may hold, a document identity that does not survive
+ * sanitization.
+ *
+ * Tagged, because this is the ingestion boundary's own refusal and callers
+ * act on it. The reconciliation engine parks a failed item under
+ * `errorTag(error)`, and a bare `TypeError` there names the JavaScript
+ * operation rather than the decision: every such park read as "TypeError",
+ * which is indistinguishable from a helper dereferencing undefined.
+ */
+export class UnpersistableDecisionFieldError extends TaggedError(
+  "UnpersistableDecisionFieldError",
+)<{
+  message: string;
+  field: UnpersistableDecisionField;
+}> {}
+
 /**
  * The address named a member of a pack whose payload has been erased. The
  * bytes may still sit inside the pack until it is rewritten; no reader serves

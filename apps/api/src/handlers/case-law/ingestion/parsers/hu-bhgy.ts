@@ -32,6 +32,10 @@ import type {
   Table as FolioTable,
   TextFormatting,
 } from "@stll/docx-core/model";
+import {
+  DECISION_IDENTIFIER_TYPES,
+  isDecisionIdentifier,
+} from "@stll/legal-ast/decision-identifier";
 import { collapseSpacedLetters } from "@stll/text-normalize";
 
 import type {
@@ -685,16 +689,42 @@ const docketAfterLabel = (line: string): string | undefined => {
   return docket.endsWith(".") ? docket.slice(0, -1) : docket;
 };
 
+/**
+ * The docket the corpus can hold as an identifier, or nothing.
+ *
+ * A docket is forwarded as a second `case-number` identifier and stored in
+ * metadata, and both are bounded: `sanitizeResult` refuses an identifier past
+ * `DECISION_IDENTIFIER_MAX_LENGTH` or with no visible content, and refuses it
+ * by throwing, before the decision is written. So the predicate the corpus
+ * applies is applied here, where the value is produced; a header this cannot
+ * read leaves the docket unstated, and the listing's own case number stays
+ * the identity it already was.
+ */
+const persistableDocket = (docket: string): string | undefined =>
+  isDecisionIdentifier({
+    type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+    value: docket,
+  })
+    ? docket
+    : undefined;
+
 export const huDocketFrom = (lines: readonly string[]): string | undefined => {
-  for (const line of lines) {
-    const trimmed = line.trim();
-    const labelled = docketAfterLabel(trimmed);
-    if (labelled !== undefined) {
-      return labelled;
-    }
-    const legacy = LEGACY_DOCKET_LINE.exec(trimmed)?.groups?.["docket"];
-    if (legacy !== undefined) {
-      return legacy;
+  for (const block of lines) {
+    // A soft break renders as a newline inside one line rather than ending
+    // it (`runContentText` maps `break` to "\n"), so a header paragraph built
+    // with `\line` instead of `\par` carries the rest of the document with
+    // it. The docket is stated on its own visual line, so read those: an
+    // unbounded slice of the block took the whole body into the docket.
+    for (const rawLine of block.split("\n")) {
+      const trimmed = rawLine.trim();
+      const labelled = docketAfterLabel(trimmed);
+      if (labelled !== undefined) {
+        return persistableDocket(labelled);
+      }
+      const legacy = LEGACY_DOCKET_LINE.exec(trimmed)?.groups?.["docket"];
+      if (legacy !== undefined) {
+        return persistableDocket(legacy);
+      }
     }
   }
   return undefined;

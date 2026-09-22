@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { TEXT_ABSENCE_REASONS } from "@stll/api-contract/case-law-text-field";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+import type { DecisionIdentifiers } from "@stll/legal-ast/decision-identifier";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -40,7 +41,12 @@ import {
   readDecisionTextMetadata,
 } from "@/api/lib/case-law/decision-text";
 import { canonicalDecisionDate } from "@/api/lib/dates";
-import { TimeoutError } from "@/api/lib/errors/tagged-errors";
+import { errorTag } from "@/api/lib/errors/error-tag";
+import {
+  TimeoutError,
+  UNPERSISTABLE_DECISION_FIELDS,
+  UnpersistableDecisionFieldError,
+} from "@/api/lib/errors/tagged-errors";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { partialObservationFromMetadata } from "@/api/lib/legal-search/ingestion-normalization";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
@@ -314,6 +320,43 @@ describe("sanitizeResult — shared publisher identity limits", () => {
         sourceDocumentId: "publisher:a\u200Bb",
       }),
     ).toThrow("Publisher document identity cannot be sanitized");
+  });
+
+  // The reconciliation engine parks a failed item under `errorTag(error)`, so
+  // the refusal's class is the whole operator-visible record of why a slice
+  // stopped short. A bare `TypeError` there names a JavaScript operation and
+  // is indistinguishable from a helper dereferencing undefined; these say
+  // which field of the publisher's row the corpus would not take.
+  test.each([
+    [
+      UNPERSISTABLE_DECISION_FIELDS.IDENTIFIER,
+      {
+        identifiers: [
+          { type: "case-number", value: "x".repeat(300) },
+        ] as const satisfies DecisionIdentifiers,
+      },
+    ],
+    [
+      UNPERSISTABLE_DECISION_FIELDS.SOURCE_DOCUMENT_ID,
+      { sourceDocumentId: "publisher:a\u200Bb" },
+    ],
+  ])("parks as an unpersistable %s, not a TypeError", (field, overrides) => {
+    const thrown = ((): unknown => {
+      try {
+        sanitizeResult({ ...baseResult(EMPTY_AST), ...overrides });
+        return undefined;
+      } catch (error: unknown) {
+        return error;
+      }
+    })();
+
+    expect(thrown).toBeInstanceOf(UnpersistableDecisionFieldError);
+    expect(errorTag(thrown)).toBe("UnpersistableDecisionFieldError");
+    expect(
+      thrown instanceof UnpersistableDecisionFieldError
+        ? thrown.field
+        : undefined,
+    ).toBe(field);
   });
 });
 

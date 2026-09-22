@@ -24,6 +24,10 @@ import {
 } from "@/api/lib/case-law/document-ast";
 import { canonicalDecisionDate } from "@/api/lib/dates";
 import {
+  UNPERSISTABLE_DECISION_FIELDS,
+  UnpersistableDecisionFieldError,
+} from "@/api/lib/errors/tagged-errors";
+import {
   DANGEROUS_CHARS,
   sanitizeMetadata,
   stripDangerousChars,
@@ -49,7 +53,10 @@ const sanitizeDecisionIdentifier = (
     value: stripDangerousChars(identifier.value).trim(),
   };
   if (!isDecisionIdentifier(sanitized)) {
-    throw new TypeError("Decision identifier is not persistable");
+    throw new UnpersistableDecisionFieldError({
+      message: "Decision identifier is not persistable",
+      field: UNPERSISTABLE_DECISION_FIELDS.IDENTIFIER,
+    });
   }
   return sanitized;
 };
@@ -61,7 +68,10 @@ const sanitizeDecisionIdentifiers = (
     return undefined;
   }
   if (identifiers.length > DECISION_IDENTIFIER_MAX_COUNT) {
-    throw new TypeError("Decision has too many publisher identifiers");
+    throw new UnpersistableDecisionFieldError({
+      message: "Decision has too many publisher identifiers",
+      field: UNPERSISTABLE_DECISION_FIELDS.IDENTIFIER_COUNT,
+    });
   }
   const [first, ...rest] = identifiers;
   return [
@@ -231,13 +241,19 @@ export const sanitizeResult = (result: IngestionResult): IngestionResult => {
     result.sourceDocumentId !== undefined &&
     sourceDocumentId !== result.sourceDocumentId
   ) {
-    throw new TypeError("Publisher document identity cannot be sanitized");
+    throw new UnpersistableDecisionFieldError({
+      message: "Publisher document identity cannot be sanitized",
+      field: UNPERSISTABLE_DECISION_FIELDS.SOURCE_DOCUMENT_ID,
+    });
   }
   if (
     sourceDocumentId !== undefined &&
     !isPersistableSourceDocumentId(sourceDocumentId)
   ) {
-    throw new TypeError("Publisher document identity exceeds storage limits");
+    throw new UnpersistableDecisionFieldError({
+      message: "Publisher document identity exceeds storage limits",
+      field: UNPERSISTABLE_DECISION_FIELDS.SOURCE_DOCUMENT_ID_LENGTH,
+    });
   }
 
   return {
