@@ -841,16 +841,13 @@ const startServer = async (): Promise<void> => {
     switch (outcome) {
       case API_SHUTDOWN_OUTCOME.drained:
         logger.info("api.shutdown_complete", { signal });
-        process.exit(0);
-        break;
+        return process.exit(0);
       case API_SHUTDOWN_OUTCOME.failed:
         logger.error("api.shutdown_failed", { signal });
-        process.exit(1);
-        break;
+        return process.exit(1);
       case API_SHUTDOWN_OUTCOME.timedOut:
         logger.warn("api.shutdown_timed_out", { signal });
-        process.exit(1);
-        break;
+        return process.exit(1);
       default: {
         outcome satisfies never;
         return panic(`Unhandled API shutdown outcome: ${String(outcome)}`);
