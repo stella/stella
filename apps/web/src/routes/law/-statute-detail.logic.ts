@@ -116,13 +116,12 @@ const statuteNotFound = (): never => {
 
 /**
  * The address a consolidation is canonical at: the bare slug path for the
- * Work's latest text, its own `/v/` path for every superseded one.
+ * Work's default text, its own `/v/` path for every other one.
  *
- * Which text is the latest comes from the version listing, whose order the
- * API owns (newest validity window first, id descending) and which `by-slug`
- * resolves through as well. It cannot be read off a single row: a publisher
- * may leave an older consolidation open-ended, so more than one row of a Work
- * can carry a null `versionValidTo`.
+ * Which text is the default is the API's rule (in force today, else the
+ * latest), marked on its row of the version listing by the same query
+ * `by-slug` resolves through. It is never re-derived here: the browser's
+ * today and the database's can differ, and a copy of the rule would drift.
  */
 const canonicalStatuteParams = ({
   statute,
@@ -131,7 +130,7 @@ const canonicalStatuteParams = ({
   statute: PublicStatute;
   versions: readonly PublicStatuteVersion[];
 }): StatuteRouteParams => {
-  const latest = versions.at(0);
+  const defaultVersion = versions.find((version) => version.isDefault);
 
   return createStatuteRouteParams({
     country: statute.country,
@@ -139,7 +138,7 @@ const canonicalStatuteParams = ({
     eli: statute.eli,
     slug: statute.slug,
     version:
-      latest === undefined || latest.id === statute.id
+      defaultVersion === undefined || defaultVersion.id === statute.id
         ? null
         : statute.versionValidFrom,
   });

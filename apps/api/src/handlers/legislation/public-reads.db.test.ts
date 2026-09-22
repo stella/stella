@@ -1046,6 +1046,23 @@ describe("public statute versions", () => {
     ]);
   });
 
+  test("marks the version in force as the default, not the newer future one", async () => {
+    const page = await listStatuteVersionsHandler({
+      documentId: civilCodeFuture,
+      query: {},
+      legislationDb,
+    });
+    if (!("items" in page)) {
+      throw new Error(`expected a page, got ${JSON.stringify(page)}`);
+    }
+
+    // The default is what a bare statute address opens; a published future
+    // consolidation is the newest window but does not apply yet.
+    expect(
+      page.items.filter((item) => item.isDefault).map((item) => item.id),
+    ).toEqual([civilCodeCurrent]);
+  });
+
   test("walks every version exactly once across cursor pages", async () => {
     const seen: string[] = [];
     let cursor: string | null = null;

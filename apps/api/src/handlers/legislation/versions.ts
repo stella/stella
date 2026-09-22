@@ -5,6 +5,7 @@ import type { Static } from "elysia";
 
 import { legislationDocuments } from "@/api/db/schema";
 import {
+  selectDefaultVersionId,
   selectWorkKey,
   workKeyConditions,
 } from "@/api/handlers/legislation/work-key";
@@ -73,7 +74,8 @@ const decodeVersionCursor = (cursor: string): VersionCursor | null => {
 /**
  * Every consolidated version of the work the given document belongs to,
  * newest validity window first. The work key is the source, ELI and
- * language triple the unique indexes are built on.
+ * language triple the unique indexes are built on. `isDefault` marks the one
+ * the Work's bare address shows, so a reader never re-derives that rule.
  */
 export const listStatuteVersionsHandler = async ({
   documentId,
@@ -106,7 +108,8 @@ export const listStatuteVersionsHandler = async ({
       );
     }
 
-    return await tx
+    const defaultId = await selectDefaultVersionId(tx, work);
+    const page = await tx
       .select({
         id: legislationDocuments.id,
         eli: legislationDocuments.eli,
@@ -129,6 +132,10 @@ export const listStatuteVersionsHandler = async ({
         sql`${legislationDocuments.id} desc`,
       )
       .limit(limit + 1);
+
+    return page.map((row) =>
+      Object.assign(row, { isDefault: row.id === defaultId }),
+    );
   });
 
   if (rows === null) {

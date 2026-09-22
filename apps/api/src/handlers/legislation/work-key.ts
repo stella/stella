@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
 import { legislationDocuments, legislationSources } from "@/api/db/schema";
@@ -7,6 +7,10 @@ import {
   publishedLegislationDocument,
   publishedLegislationCountryFor,
 } from "@/api/lib/legal-search/legislation-redistribution";
+import {
+  inForceToday,
+  versionSortKey,
+} from "@/api/lib/legal-search/legislation-validity-window";
 import type { LegislationReadTransaction } from "@/api/lib/legislation-public-read-db";
 
 /**
@@ -59,3 +63,37 @@ export const workKeyConditions = (work: LegislationWorkKey): SQL[] => [
   eq(legislationDocuments.eli, work.eli),
   eq(legislationDocuments.language, work.language),
 ];
+
+/**
+ * The consolidation a Work's bare address shows: the one in force today, and
+ * only when none is (a repealed act, one not yet effective) the latest the
+ * corpus holds. The newest window is the wrong default for a live act, since
+ * a published amendment makes a future consolidation the newest months before
+ * it applies.
+ *
+ * One query both the reader route and the version listing use, so the page a
+ * bare link opens and the version the listing marks as its default cannot
+ * disagree.
+ */
+export const selectDefaultVersionId = async (
+  tx: LegislationReadTransaction,
+  work: LegislationWorkKey,
+): Promise<SafeId<"legislationDocument"> | null> => {
+  const [version] = await tx
+    .select({ id: legislationDocuments.id })
+    .from(legislationDocuments)
+    .where(and(...workKeyConditions(work)))
+    .orderBy(
+      desc(
+        inForceToday(
+          legislationDocuments.versionValidFrom,
+          legislationDocuments.versionValidTo,
+        ),
+      ),
+      desc(versionSortKey(legislationDocuments.versionValidFrom)),
+      desc(legislationDocuments.id),
+    )
+    .limit(1);
+
+  return version?.id ?? null;
+};

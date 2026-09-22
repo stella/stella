@@ -25,6 +25,9 @@ const CURRENT_ID = toSafeId<"legislationDocument">(
 const OPEN_OLDER_ID = toSafeId<"legislationDocument">(
   "00000000-0000-4000-8000-000000000002",
 );
+const FUTURE_ID = toSafeId<"legislationDocument">(
+  "00000000-0000-4000-8000-000000000003",
+);
 
 type StatuteSeed = {
   id: SafeId<"legislationDocument">;
@@ -59,7 +62,10 @@ const statute = ({
   versionValidTo,
 });
 
-const version = (seed: StatuteSeed): PublicStatuteVersion => {
+const version = (
+  seed: StatuteSeed,
+  isDefault: boolean,
+): PublicStatuteVersion => {
   const {
     citationCaseCount: _citationCaseCount,
     documentAst: _documentAst,
@@ -70,7 +76,7 @@ const version = (seed: StatuteSeed): PublicStatuteVersion => {
     ...rest
   } = statute(seed);
 
-  return rest;
+  return { ...rest, isDefault };
 };
 
 /**
@@ -89,8 +95,11 @@ const OPEN_OLDER = {
   versionValidTo: null,
 } satisfies StatuteSeed;
 
-/** Newest validity window first, as the versions endpoint orders them. */
-const WORK_VERSIONS = [version(CURRENT), version(OPEN_OLDER)];
+/**
+ * Newest validity window first, as the versions endpoint orders them, with
+ * the endpoint's mark on the text the bare address shows.
+ */
+const WORK_VERSIONS = [version(CURRENT, true), version(OPEN_OLDER, false)];
 
 const seedWork = (queryClient: QueryClient): void => {
   for (const seed of [CURRENT, OPEN_OLDER]) {
@@ -187,6 +196,52 @@ describe("the address a statute consolidation is canonical at", () => {
     const queryClient = new QueryClient();
     seedWork(queryClient);
     seedDay(queryClient, "2024-01-01", CURRENT);
+
+    expect(
+      await canonicalRedirect(
+        load(queryClient, { slug: SLUG, version: "2024-01-01" }),
+      ),
+    ).toMatchObject({
+      options: {
+        params: { country: COUNTRY_SEGMENT, slug: SLUG },
+        to: "/law/$country/statutes/$slug",
+      },
+    });
+  });
+
+  test("a published future consolidation keeps its /v/ path; the text in force owns the bare slug", async () => {
+    const queryClient = new QueryClient();
+    const future = {
+      id: FUTURE_ID,
+      versionValidFrom: "2099-01-01",
+      versionValidTo: null,
+    } satisfies StatuteSeed;
+    // The future text is the newest window, but the endpoint marks the one in
+    // force as the default: the order alone would send readers to a wording
+    // that does not apply yet.
+    const versions = [
+      version(future, false),
+      version(CURRENT, true),
+      version(OPEN_OLDER, false),
+    ];
+    for (const seed of [future, CURRENT, OPEN_OLDER]) {
+      queryClient.setQueryData(
+        publicStatuteOptions(seed.id).queryKey,
+        statute(seed),
+      );
+      queryClient.setQueryData(
+        statuteVersionsOptions(seed.id).queryKey,
+        versions,
+      );
+    }
+    seedDay(queryClient, "2099-01-01", future);
+    seedDay(queryClient, "2024-01-01", CURRENT);
+
+    const { statute: resolved } = await load(queryClient, {
+      slug: SLUG,
+      version: "2099-01-01",
+    });
+    expect(resolved?.id).toBe(FUTURE_ID);
 
     expect(
       await canonicalRedirect(
