@@ -48,10 +48,7 @@ import {
   useOpenStatuteTab,
 } from "@/features/statutes/open-statute-tab";
 import type { StatuteListItem } from "@/features/statutes/queries/statutes";
-import {
-  statuteActName,
-  statuteActNumber,
-} from "@/features/statutes/statute-act-number";
+import { statuteActLabel } from "@/features/statutes/statute-act-number";
 import {
   STATUTE_COLUMN_IDS,
   STATUTE_COLUMN_LABEL_KEYS,
@@ -283,8 +280,7 @@ const StatuteCell = ({
  */
 const StatuteActCell = ({ statute }: { statute: StatuteListItem }) => {
   const openStatute = useOpenStatuteTab();
-  const number = statuteActNumber(statute.eli);
-  const name = statuteActName(statute.title);
+  const { name, number } = statuteActLabel(statute);
 
   return (
     <Link
@@ -300,17 +296,19 @@ const StatuteActCell = ({ statute }: { statute: StatuteListItem }) => {
           <HighlightedText columnId="act" text={number} />
         </BidiText>
       )}
-      <BidiText
-        as="span"
-        className={cn(
-          "line-clamp-2 wrap-break-word whitespace-normal",
-          number === null
-            ? "text-foreground font-medium group-hover/act:underline"
-            : "text-muted-foreground text-xs",
-        )}
-      >
-        <HighlightedText columnId="act" text={name} />
-      </BidiText>
+      {name !== null && (
+        <BidiText
+          as="span"
+          className={cn(
+            "line-clamp-2 wrap-break-word whitespace-normal",
+            number === null
+              ? "text-foreground font-medium group-hover/act:underline"
+              : "text-muted-foreground text-xs",
+          )}
+        >
+          <HighlightedText columnId="act" text={name} />
+        </BidiText>
+      )}
     </Link>
   );
 };

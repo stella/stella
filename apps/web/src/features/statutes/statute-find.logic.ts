@@ -5,10 +5,7 @@
  */
 
 import type { StatuteListItem } from "@/features/statutes/queries/statutes";
-import {
-  statuteActName,
-  statuteActNumber,
-} from "@/features/statutes/statute-act-number";
+import { statuteActLabel } from "@/features/statutes/statute-act-number";
 import { STATUTE_COLUMN_IDS } from "@/features/statutes/statute-columns.logic";
 import type { StatuteColumnId } from "@/features/statutes/statute-columns.logic";
 
@@ -22,10 +19,10 @@ type StatuteFindText = (statute: StatuteListItem) => string;
  */
 const STATUTE_FIND_TEXT = {
   // Both lines of the cell, each marked on its own.
-  act: (statute) =>
-    [statuteActNumber(statute.eli), statuteActName(statute.title)]
-      .filter((part) => part !== null)
-      .join("\n"),
+  act: (statute) => {
+    const { name, number } = statuteActLabel(statute);
+    return [number, name].filter((part) => part !== null).join("\n");
+  },
   type: (statute) => statute.documentType ?? "",
   validity: null,
   firstVersion: null,

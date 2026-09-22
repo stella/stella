@@ -24,6 +24,7 @@ const COLLECTION_ABBREVIATIONS: Readonly<
   Record<string, (year: number) => string>
 > = {
   sb: () => "Sb.",
+  sbms: () => "Sb. m. s.",
   zz: (year) => (year < SLOVAK_ZZ_FROM_YEAR ? "Zb." : "Z. z."),
 };
 
@@ -31,7 +32,7 @@ const COLLECTION_ABBREVIATIONS: Readonly<
 const TITLE_NUMBER_PREFIX_RE = /^\d+\/\d{4} [^,]*, /u;
 
 /** `89/2012 Sb.`, or null for an ELI that carries no act number. */
-export const statuteActNumber = (eli: string): string | null => {
+const statuteActNumber = (eli: string): string | null => {
   const match = ELI_ACT_TAIL_RE.exec(eli);
   const collection = match?.[1];
   const year = match?.[2];
@@ -46,6 +47,28 @@ export const statuteActNumber = (eli: string): string | null => {
     : `${number} ${abbreviation(Number(year))}`;
 };
 
-/** The act's name: its title without the number a Czech title opens with. */
-export const statuteActName = (title: string): string =>
-  title.replace(TITLE_NUMBER_PREFIX_RE, "");
+/** How a listed act names itself: its number, then its name. */
+export type StatuteActLabel = {
+  /** `89/2012 Sb.`, or null for an ELI that carries no act number. */
+  number: string | null;
+  /**
+   * The title without the number a Czech title opens with; null where the
+   * title is only the number (`89/2012 Sb. m. s.`) and would say it twice.
+   */
+  name: string | null;
+};
+
+export const statuteActLabel = ({
+  eli,
+  title,
+}: {
+  eli: string;
+  title: string;
+}): StatuteActLabel => {
+  const number = statuteActNumber(eli);
+  const name = title.replace(TITLE_NUMBER_PREFIX_RE, "").trim();
+  return {
+    number,
+    name: name.length === 0 || name === number ? null : name,
+  };
+};
