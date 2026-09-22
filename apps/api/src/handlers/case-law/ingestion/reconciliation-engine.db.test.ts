@@ -231,6 +231,27 @@ const drivenFailureStub: SourceReconciliation = {
 };
 
 /**
+ * A build that throws the way a helper does when a value is not the shape the
+ * code assumed: a bare `TypeError`, carrying no code, no cause and no syscall.
+ *
+ * The distinguishing property, and the reason this stub exists beside the
+ * driven one above: every field the fixed vocabulary reports is empty here.
+ * `errorSystemFields` states the tag and stops, and `pgErrorFields` has
+ * nothing to say, so the whole record reduces to `error.type: "TypeError"` —
+ * a class of defect with no site attached.
+ */
+const bareThrowStub: SourceReconciliation = {
+  ...stubReconciliation,
+  buildDecision: async () =>
+    await Promise.reject(
+      // What a helper raises when a value is not the shape the code assumed.
+      // The message names the expression that failed, which is why the guard
+      // below reads every attribute rather than a named key.
+      new TypeError("undefined is not an object (evaluating 'row.shape')"),
+    ),
+};
+
+/**
  * The same publisher, listing dockets instead of document ids: the other half
  * of the identity index, which is answered by its own held query.
  */
@@ -1548,5 +1569,38 @@ test("a failed item build reports the SQLSTATE without logging any message text"
   for (const value of Object.values(failure ?? {})) {
     expect(String(value)).not.toContain("Failed query");
     expect(String(value)).not.toContain("does not exist");
+  }
+});
+
+test("a build that throws without a code reports the frame that threw", async () => {
+  // `errorSystemFields` and `pgErrorFields` both key on fixed vocabulary a
+  // throw has to carry — a driver code, an errno, a SQLSTATE. A helper that
+  // raises a bare `TypeError` carries none of it, so the record reduced to
+  // the tag alone and named no site: every such failure read identically
+  // whichever helper raised it, across every adapter. The top stack frame is
+  // `file:line:col`, which is code identity rather than row data, so it sits
+  // inside the same policy as the codes and closes that gap.
+  const sourceId = await seedSource();
+
+  await runUnit(sourceId, bareThrowStub);
+
+  const failure = logs
+    .at("WARN")
+    .map((record) => record.attributes)
+    .find((attributes) => attributes?.["identityKey"] !== undefined);
+  expect(failure?.["error.type"]).toBe("TypeError");
+  // The assertion that fails without the fix: the tag was always there, the
+  // location never was.
+  expect(failure?.["error.frame"]).toContain(
+    "reconciliation-engine.db.test.ts",
+  );
+  // The frame is a location and nothing else — no function name, no captured
+  // value — so it states where the code was, never what it held.
+  expect(failure?.["error.frame"]).toMatch(/:\d+:\d+$/u);
+  // The same guard the SQLSTATE test applies, over every value rather than a
+  // named key: widening this sink must not widen it to message text.
+  for (const value of Object.values(failure ?? {})) {
+    expect(String(value)).not.toContain("undefined is not an object");
+    expect(String(value)).not.toContain("row.shape");
   }
 });

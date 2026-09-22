@@ -71,7 +71,11 @@ import {
 } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
 import type { SafeId } from "@/api/lib/branded-types";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
-import { errorSystemFields, errorTag } from "@/api/lib/errors/utils";
+import {
+  errorFingerprint,
+  errorSystemFields,
+  errorTag,
+} from "@/api/lib/errors/utils";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import type {
@@ -925,12 +929,21 @@ const ingestListedItem = async ({
       slice,
       identityKey: item.identityKey,
       // The park below keeps only the tag, which cannot separate a publisher
-      // refusing one document from the corpus refusing to store it. These two
+      // refusing one document from the corpus refusing to store it. These
       // carry that distinction as fixed vocabulary (driver and system codes,
       // the SQLSTATE, the schema identifiers Postgres names) rather than as
       // message text, which quotes the statement and can quote the row that
       // failed; the logger's sanitizer is a key denylist, so text this sink
       // emitted would reach telemetry verbatim.
+      //
+      // `errorFingerprint` is first so the two below keep the last word on
+      // every key they state. It adds what the vocabulary above cannot
+      // supply for a throw that carries no code at all — a bare `TypeError`
+      // from a helper reports its tag and nothing else, which names the
+      // class of defect but not the site. `error.frame` is the top stack
+      // frame as `file:line:col`: code identity, not row data, and so inside
+      // the same policy as the codes.
+      ...errorFingerprint(error),
       ...errorSystemFields(error),
       ...pgErrorFields(error),
     });
@@ -1434,6 +1447,9 @@ export const runReconciliationWorkUnit = async ({
               adapterKey,
               slice: unit.slice,
               reason: unit.reason,
+              // Same reason as the item sink above: a walk that throws
+              // without a code is otherwise reported as a bare tag.
+              ...errorFingerprint(error),
               ...errorSystemFields(error),
               ...pgErrorFields(error),
             });
