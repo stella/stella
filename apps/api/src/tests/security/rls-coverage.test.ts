@@ -10,6 +10,7 @@ import {
   stella,
   stellaIngestion,
 } from "@/api/db/rls";
+import { CASE_LAW_SOURCE_INGESTION_UPDATE_COLUMNS } from "@/api/tests/pglite-test-db";
 import {
   getRlsFixture,
   releaseRlsFixture,
@@ -819,13 +820,11 @@ describe("policy coverage", () => {
         .filter((p) => p.table_name === "case_law_sources")
         .map((p) => p.column_name)
         .sort(),
-    ).toEqual([
-      "checkpoint_observation_order",
-      "last_sync_at",
-      "observation_order",
-      "sync_cursor",
-      "updated_at",
-    ]);
+      // Derived, not restated: this list is the one the harness grants from,
+      // which `pglite-role-grants.test.ts` holds equal to the committed
+      // migrations column by column. A third hand-kept copy here would drift
+      // from both, which is what let `stored_total` ship with no writer.
+    ).toEqual([...CASE_LAW_SOURCE_INGESTION_UPDATE_COLUMNS].toSorted());
 
     // Append-only audit trail: ingestion may read and append, never
     // mutate or delete prior rows.
