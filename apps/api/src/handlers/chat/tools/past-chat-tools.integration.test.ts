@@ -107,9 +107,6 @@ beforeAll(async () => {
           await run({
             execute: async (query: SQL) =>
               (await tx.execute(query)).rows.map((row) =>
-                typeof row === "object" &&
-                row !== null &&
-                "createdAt" in row &&
                 typeof row["createdAt"] === "string"
                   ? Object.assign(row, {
                       createdAt: new Date(row["createdAt"]),
