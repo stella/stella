@@ -1,7 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
-import { unwrapPublicLawEden } from "@/lib/public-law-api";
+import { isPublicLawMiss, unwrapPublicLawEden } from "@/lib/public-law-api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -10,6 +10,12 @@ export type ProvisionPreviewKey = {
   anchor: string;
   /** The subdivision the citation named, when it named one. */
   citedAnchor: string | undefined;
+  documentId: string;
+};
+
+/** A whole provision in one consolidation, addressed by its heading anchor. */
+export type ProvisionInVersionKey = {
+  anchor: string;
   documentId: string;
 };
 
@@ -22,6 +28,11 @@ export const provisionPreviewKeys = {
       citedAnchor: key.citedAnchor,
       documentId: key.documentId,
     },
+  ],
+  inVersion: (key: ProvisionInVersionKey) => [
+    ...provisionPreviewKeys.all,
+    "in-version",
+    { anchor: key.anchor, documentId: key.documentId },
   ],
 };
 
@@ -60,5 +71,36 @@ export const provisionPreviewOptions = (key: ProvisionPreviewKey) =>
   queryOptions({
     queryKey: provisionPreviewKeys.byAnchor(key),
     queryFn: async ({ signal }) => await readProvisionPreview(key, signal),
+    staleTime: ROUTE_QUERY_STALE_TIME_MS,
+  });
+
+const PROVISION_IN_VERSION_ACTION = "readPublicProvisionInVersion";
+
+/**
+ * A provision's wording in one consolidation, or null when that
+ * consolidation does not carry it: a provision added later, or repealed and
+ * dropped. A comparison shows that as a one-sided answer, so the miss is a
+ * value here rather than the failure `provisionPreviewOptions` raises.
+ */
+export const provisionInVersionOptions = (key: ProvisionInVersionKey) =>
+  queryOptions({
+    queryKey: provisionPreviewKeys.inVersion(key),
+    queryFn: async ({ signal }) => {
+      const response = await api.law
+        .statutes({
+          documentId: toSafeId<"legislationDocument">(key.documentId),
+        })
+        .provisions({ anchor: key.anchor })
+        .preview.get({ query: {}, fetch: { signal } });
+
+      if (
+        response.error &&
+        isPublicLawMiss(response.error, PROVISION_IN_VERSION_ACTION)
+      ) {
+        return null;
+      }
+
+      return unwrapPublicLawEden(response, PROVISION_IN_VERSION_ACTION);
+    },
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });

@@ -33,9 +33,13 @@ function PublicStatuteRoute() {
   const { statute, versions, work } = Route.useLoaderData();
   const asOf = Route.useSearch({ select: (search) => search.asOf });
   const requestedJump = Route.useSearch({ select: (search) => search.jump });
+  const compare = Route.useSearch({ select: (search) => search.compare });
+  const provision = Route.useSearch({ select: (search) => search.provision });
+  const show = Route.useSearch({ select: (search) => search.show });
 
   return (
     <PublicStatuteViewer
+      comparison={{ compare, provision, show }}
       asOf={asOf}
       requestedJump={requestedJump}
       statute={statute}

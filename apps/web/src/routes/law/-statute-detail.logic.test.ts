@@ -140,7 +140,7 @@ const load = async (
     version: versionSegment,
   }: {
     hash?: string;
-    search?: { asOf?: string; jump?: string };
+    search?: Parameters<typeof loadPublicStatuteRoute>[0]["search"];
     slug: string;
     version?: string;
   },
@@ -281,6 +281,37 @@ describe("the address a statute consolidation is canonical at", () => {
         },
         search: { jump: JUMP },
         to: "/law/$country/statutes/$slug/v/$version",
+      },
+    });
+  });
+
+  test("a comparison travels with the reader to the canonical address", async () => {
+    const queryClient = new QueryClient();
+    seedWork(queryClient);
+    seedDay(queryClient, "2024-01-01", CURRENT);
+
+    // A deep link names the version it was minted on; when that version turns
+    // out to be the latest, the comparison must still open at the bare slug.
+    expect(
+      await canonicalRedirect(
+        load(queryClient, {
+          search: {
+            compare: "2020-01-01",
+            provision: "sec-2079",
+            show: "all",
+          },
+          slug: SLUG,
+          version: "2024-01-01",
+        }),
+      ),
+    ).toMatchObject({
+      options: {
+        search: {
+          compare: "2020-01-01",
+          provision: "sec-2079",
+          show: "all",
+        },
+        to: "/law/$country/statutes/$slug",
       },
     });
   });

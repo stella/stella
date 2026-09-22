@@ -14,6 +14,7 @@ import type {
   PublicStatute,
   PublicStatuteVersion,
 } from "@/features/statutes/queries/statutes";
+import { isStatuteCompareShow } from "@/features/statutes/statute-compare-search";
 import { pageTitleLiteral } from "@/lib/page-title";
 import {
   createPublicLawCanonicalUrl,
@@ -64,6 +65,36 @@ export const publicStatuteSearchSchema = v.object({
       v.trim(),
       v.maxLength(32),
       v.transform((value) => (value.length > 0 ? value : undefined)),
+    ),
+  ),
+  /**
+   * Another consolidation to set beside the one on screen, named by the day
+   * its validity window opened. The reader then shows the two wordings side
+   * by side instead of the text.
+   */
+  compare: v.optional(
+    v.pipe(
+      v.string(),
+      v.trim(),
+      v.transform(
+        (value) => normalizeStatuteVersionSegment(value) ?? undefined,
+      ),
+    ),
+  ),
+  /** The provision heading anchor a comparison is narrowed to. */
+  provision: v.optional(
+    v.pipe(
+      v.string(),
+      v.trim(),
+      v.maxLength(256),
+      v.transform((value) => (value.length > 0 ? value : undefined)),
+    ),
+  ),
+  /** Which provisions a whole-act comparison lists; changed ones by default. */
+  show: v.optional(
+    v.pipe(
+      v.string(),
+      v.transform((value) => (isStatuteCompareShow(value) ? value : undefined)),
     ),
   ),
 });
@@ -165,8 +196,14 @@ const redirectToCanonicalStatutePath = ({
   // `asOf` is dropped: it has done its work by naming the consolidation, and
   // carrying it on would make the canonical address ambiguous again. `jump`
   // is where in the text to open, so it survives — and so does the anchor,
-  // which is the same instruction spelled as a fragment.
-  const redirectSearch = search.jump === undefined ? {} : { jump: search.jump };
+  // which is the same instruction spelled as a fragment. A comparison is
+  // what to show of that text, so it survives too.
+  const redirectSearch = {
+    compare: search.compare,
+    jump: search.jump,
+    provision: search.provision,
+    show: search.show,
+  };
   const redirectHash = hash.startsWith("#") ? hash.slice(1) : hash;
   const anchor = redirectHash === "" ? {} : { hash: redirectHash };
 

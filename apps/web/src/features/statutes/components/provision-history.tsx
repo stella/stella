@@ -1,23 +1,20 @@
 import { useState } from "react";
 
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
-import { panic } from "better-result";
+import { Link } from "@tanstack/react-router";
+import { Columns2Icon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { diffWordSegments } from "@stll/folio-core/ai-edits";
-import type { WordDiffSegment } from "@stll/folio-core/ai-edits";
 import {
   parseDocumentAst,
   resolveDocumentHeadingAnchor,
 } from "@stll/legal-ast/document-ast";
 import { Button } from "@stll/ui/button";
-import {
-  ReviewDiffDeletion,
-  ReviewDiffInsertion,
-} from "@stll/ui/review-diff-text";
 import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
 
+import { WordDiffText } from "@/features/statutes/components/word-diff-text";
 import {
   resolveSelectedVersion,
   selectChangedVersions,
@@ -30,6 +27,7 @@ import {
 } from "@/features/statutes/statute-format";
 import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
+import { createStatuteLinkTarget } from "@/lib/statute-route";
 
 type ProvisionHistoryProps = {
   /** The provision heading's anchor, the id the history is filed under. */
@@ -109,6 +107,17 @@ export const ProvisionHistory = ({
   }
 
   const previous = versions.at(versions.indexOf(selected) + 1);
+  // The comparison sets a past wording beside the consolidation this tab
+  // shows. When the selected wording is that consolidation's own, the past
+  // one is the wording it replaced.
+  const onScreenText = consolidations.find(
+    (version) => version.documentId === documentId,
+  )?.text;
+  const compareWith =
+    selected.documentId === documentId || selected.text === onScreenText
+      ? previous
+      : selected;
+  const compareFrom = compareWith?.versionValidFrom ?? null;
   const label = (validFrom: string | null): string =>
     formatValidityDate(validFrom, format) ?? EM_DASH;
 
@@ -155,6 +164,31 @@ export const ProvisionHistory = ({
       {/* With no older wording loaded there is nothing to diff against, so
           the panel shows the wording itself and says why. */}
       <ProvisionDiff after={selected.text} before={previous?.text ?? null} />
+      {compareFrom !== null && (
+        <Button
+          className="self-start"
+          render={
+            <Link
+              {...createStatuteLinkTarget({
+                country: statute.country,
+                documentId,
+                eli: statute.eli,
+                slug: statute.slug,
+                versionValidFrom: statute.versionValidFrom,
+              })}
+              search={{
+                compare: compareFrom,
+                provision: resolvedAnchor ?? anchorId,
+              }}
+            />
+          }
+          size="sm"
+          variant="outline"
+        >
+          <Columns2Icon className="size-3.5" />
+          {t("statutes.compareSideBySide")}
+        </Button>
+      )}
       {previous === undefined && (
         <p className="text-muted-foreground text-xs">
           {hasNextPage
@@ -179,58 +213,7 @@ const ProvisionDiff = ({ after, before }: ProvisionDiffProps) => {
 
   return (
     <p className="text-sm leading-6 whitespace-pre-wrap">
-      {withOffsets(diffWordSegments(before, after)).map(
-        ({ offset, segment }) => (
-          <ProvisionDiffRun key={offset} segment={segment} />
-        ),
-      )}
+      <WordDiffText segments={diffWordSegments(before, after)} />
     </p>
   );
-};
-
-type OffsetSegment = {
-  offset: number;
-  segment: WordDiffSegment;
-};
-
-/**
- * Segments carry no identity of their own, but their position in the
- * concatenated text is unique and stable for a given pair of wordings.
- */
-const withOffsets = (segments: readonly WordDiffSegment[]): OffsetSegment[] => {
-  const positioned: OffsetSegment[] = [];
-  let offset = 0;
-
-  for (const segment of segments) {
-    positioned.push({ offset, segment });
-    offset += segment.text.length;
-  }
-
-  return positioned;
-};
-
-const ProvisionDiffRun = ({ segment }: { segment: WordDiffSegment }) => {
-  const t = useTranslations();
-
-  switch (segment.type) {
-    case "ins":
-      return (
-        <ReviewDiffInsertion>
-          <span className="sr-only">{t("statutes.diffInserted")}</span>
-          {segment.text}
-        </ReviewDiffInsertion>
-      );
-    case "del":
-      return (
-        <ReviewDiffDeletion>
-          <span className="sr-only">{t("statutes.diffRemoved")}</span>
-          {segment.text}
-        </ReviewDiffDeletion>
-      );
-    case "equal":
-      return <span>{segment.text}</span>;
-    default:
-      segment.type satisfies never;
-      return panic("Unhandled provision diff segment");
-  }
 };

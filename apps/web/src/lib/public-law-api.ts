@@ -105,6 +105,23 @@ export const toPublicLawError = (
   });
 };
 
+const NOT_FOUND_STATUS = 404;
+
+/**
+ * Whether a failed public-law response is a plain miss rather than a
+ * transport, gate, or server failure. Classifying first is what lets a caller
+ * treat the miss as an answer while `unwrapPublicLawEden` still raises
+ * everything else, the disabled-surface marker included.
+ */
+export const isPublicLawMiss = (
+  error: PublicLawErrorInput,
+  action: string,
+): boolean => {
+  const classified = toPublicLawError(error, action);
+
+  return APIError.is(classified) && classified.status === NOT_FOUND_STATUS;
+};
+
 /**
  * Unwraps a public-law Eden response, throwing the classified failure.
  * Taking the whole response is what makes the classification structural: a
