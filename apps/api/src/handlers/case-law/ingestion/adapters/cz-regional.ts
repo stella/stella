@@ -68,7 +68,10 @@ import { addUtcDays } from "@/api/lib/dates";
 import {
   AdapterFetchError,
   FetchBoundaryError,
+  UNPERSISTABLE_DECISION_FIELDS,
+  UnpersistableDecisionFieldError,
 } from "@/api/lib/errors/tagged-errors";
+import type { UnpersistableDecisionField } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { restrictCzRegionalFinaldocUrl } from "@/api/lib/legal-search/cz-regional-finaldoc-url";
@@ -246,17 +249,6 @@ type FinaldocStyle = {
   italic: boolean;
 };
 
-/** Solver can be a flat string or a structured object (API changed). */
-type FinaldocSolver =
-  | string
-  | {
-      titlesBefore?: string;
-      firstName?: string;
-      lastName?: string;
-      titlesAfter?: string;
-      function?: string;
-    };
-
 /**
  * The docket as the publisher decomposes it: the registry letter is the
  * agenda (`C` civil, `T` criminal, `Co` civil appeal, …) and the page number
@@ -300,12 +292,12 @@ type CzRegionalFinaldoc = {
     publishedAt?: string | null;
     decisionAt?: string | null;
     caseNumber?: FinaldocCaseNumber | null;
-    solver?: FinaldocSolver | null;
-    courtCode?: string | null;
+    solver?: unknown;
+    courtCode?: unknown;
     caseResultType?: string | string[] | null;
     caseSubject?: string | null;
     specialType?: string[] | null;
-    affectedDocs?: FinaldocRelation[] | null;
+    affectedDocs?: unknown;
     regulations?: unknown[] | null;
     flags?: string[] | null;
     [key: string]: unknown;
@@ -357,7 +349,10 @@ const isFinaldocStyle = (value: unknown): value is FinaldocStyle =>
  * caseResultType: string -> string[], regulations: string[] ->
  * object[]). Since metadata lands in an untyped JSONB column,
  * we only require it to be a record and check `type` (needed
- * for decision type mapping).
+ * for decision type mapping). The three keys a row is built from
+ * (`solver`, `courtCode`, `affectedDocs`) are `unknown` on the type and read
+ * only through {@link solverJudges}, {@link isCourtDocument} and
+ * {@link publisherCitedCasesOf}.
  */
 const isCzRegionalMetadata = (
   value: unknown,
@@ -548,10 +543,8 @@ export const fetchCzRegionalAffectingDocs = async (
  * sheet number is deliberately left off: it identifies a page of the file,
  * not the decision.
  */
-const formatCaseNumberParts = (
-  parts: FinaldocCaseNumber | null | undefined,
-): string | undefined => {
-  if (!parts) {
+const formatCaseNumberParts = (parts: unknown): string | undefined => {
+  if (!isRecord(parts)) {
     return undefined;
   }
   const { senate, registry, index, year } = parts;
@@ -559,7 +552,8 @@ const formatCaseNumberParts = (
     typeof senate !== "number" ||
     typeof index !== "number" ||
     typeof year !== "number" ||
-    !registry
+    typeof registry !== "string" ||
+    registry.length === 0
   ) {
     return undefined;
   }
@@ -576,21 +570,39 @@ const formatCaseNumberParts = (
  * that a second bench role exists, so it stays on `metadata.solver` with the
  * rest of the verbatim blob rather than becoming a role of its own.
  */
-const solverJudges = (
-  solver: FinaldocSolver | undefined,
-): readonly DecisionJudgeInput[] => {
-  if (solver === undefined) {
-    return [];
-  }
-  const printed =
-    typeof solver === "string"
-      ? stripAcademicTitles(solver)
-      : [solver.firstName, solver.lastName]
-          .filter((part) => part !== undefined && part.trim().length > 0)
-          .join(" ");
+const solverJudges = (solver: unknown): readonly DecisionJudgeInput[] => {
+  const printed = solverNameAsPrinted(solver);
   return printed.length === 0
     ? []
     : [{ role: DECISION_JUDGE_ROLE.RAPPORTEUR, nameAsPrinted: printed }];
+};
+
+/** The name parts of a structured solver that make up the printed name. */
+const SOLVER_NAME_PARTS = ["firstName", "lastName"] as const;
+
+/**
+ * The solver as a flat string (the older shape) or as a record of name parts.
+ * A part the publisher sends as `null` is one it leaves empty; any other
+ * shape is refused as the field it is, rather than left to a `.trim()` that
+ * throws a bare `TypeError`.
+ */
+const solverNameAsPrinted = (solver: unknown): string => {
+  if (typeof solver === "string") {
+    return stripAcademicTitles(solver);
+  }
+  if (!isRecord(solver)) {
+    throw refusedMetadata("solver");
+  }
+  return SOLVER_NAME_PARTS.flatMap((key) => {
+    const part = solver[key];
+    if (part === undefined || part === null) {
+      return [];
+    }
+    if (typeof part !== "string") {
+      throw refusedMetadata("solver");
+    }
+    return part.trim().length === 0 ? [] : [part];
+  }).join(" ");
 };
 
 /** The same judge as the listing row pre-joins them, titles and all. */
@@ -616,8 +628,54 @@ const listingJudges = (
 const isCourtListing = (item: CzRegionalApiItem): boolean =>
   Boolean(item.soud) && item.soud?.trim() !== COURT_NOT_STATED;
 
-const isCourtDocument = (doc: CzRegionalFinaldoc | null): boolean =>
-  doc?.metadata?.courtCode?.trim() !== COURT_CODE_NONE;
+const isCourtDocument = (doc: CzRegionalFinaldoc | null): boolean => {
+  const courtCode = doc?.metadata?.courtCode;
+  if (courtCode === undefined || courtCode === null) {
+    return true;
+  }
+  // A code that is not a string cannot say whether a court decided the
+  // record, so the row is refused rather than stored as a court's.
+  if (typeof courtCode !== "string") {
+    throw refusedMetadata("courtCode");
+  }
+  return courtCode.trim() !== COURT_CODE_NONE;
+};
+
+/**
+ * The publisher's own outgoing edges, spelled as dockets. `null` states no
+ * edges; a list holding anything but relation records is refused rather than
+ * dereferenced.
+ */
+const publisherCitedCasesOf = (affectedDocs: unknown): string[] => {
+  if (affectedDocs === undefined || affectedDocs === null) {
+    return [];
+  }
+  if (!isUnknownArray(affectedDocs)) {
+    throw refusedMetadata("affectedDocs");
+  }
+  return affectedDocs.flatMap((relation) => {
+    if (!isRecord(relation)) {
+      throw refusedMetadata("affectedDocs");
+    }
+    const cited = formatCaseNumberParts(relation["caseNumber"]);
+    return cited === undefined ? [] : [cited];
+  });
+};
+
+/** The field each document metadata key a row is built from is refused as. */
+const CHECKED_METADATA_FIELDS = {
+  solver: UNPERSISTABLE_DECISION_FIELDS.JUDGE_NAME,
+  courtCode: UNPERSISTABLE_DECISION_FIELDS.COURT_CODE,
+  affectedDocs: UNPERSISTABLE_DECISION_FIELDS.PUBLISHER_CITATIONS,
+} as const satisfies Record<string, UnpersistableDecisionField>;
+
+const refusedMetadata = (
+  key: keyof typeof CHECKED_METADATA_FIELDS,
+): UnpersistableDecisionFieldError =>
+  new UnpersistableDecisionFieldError({
+    message: `CZ regional metadata.${key} is not in a shape the publisher states`,
+    field: CHECKED_METADATA_FIELDS[key],
+  });
 
 /**
  * The publisher's document id, which this source states only as the last
@@ -815,15 +873,11 @@ export const assembleCzRegionalDecision = ({
       : solverJudges(solver);
 
   const affectedDocs = docMetadata?.affectedDocs ?? undefined;
-  // The publisher's own outgoing edges, spelled as dockets. The typed
-  // relation (`CANCEL`, `CONFIRM`, …) and the affected court stay on the
-  // metadata entry beside them: `publisherCitedCases` is a list of case
-  // numbers by contract, and dropping the relation would leave the graph
-  // saying only that two decisions are connected.
-  const publisherCitedCases = arrayOrEmpty(affectedDocs).flatMap((relation) => {
-    const cited = formatCaseNumberParts(relation.caseNumber);
-    return cited === undefined ? [] : [cited];
-  });
+  // The typed relation (`CANCEL`, `CONFIRM`, …) and the affected court stay
+  // on the metadata entry beside the dockets: `publisherCitedCases` is a list
+  // of case numbers by contract, and dropping the relation would leave the
+  // graph saying only that two decisions are connected.
+  const publisherCitedCases = publisherCitedCasesOf(affectedDocs);
 
   const text = documentTextOf(parsedDocument);
   const parsed =
@@ -1867,11 +1921,28 @@ export const czRegionalAdapter = defineSourceAdapter({
         const decisions: IngestionResult[] = [];
         for (let i = 0; i < items.length; i += FINALDOC_CONCURRENCY) {
           const built = await Promise.all(
-            items
-              .slice(i, i + FINALDOC_CONCURRENCY)
-              .map(async (item) => await buildCzRegionalDecision(item, signal)),
+            items.slice(i, i + FINALDOC_CONCURRENCY).map(async (item) => ({
+              item,
+              attempt: await Result.tryPromise({
+                try: async () => await buildCzRegionalDecision(item, signal),
+                catch: (cause) => cause,
+              }),
+            })),
           );
-          for (const outcome of built) {
+          for (const { item, attempt } of built) {
+            if (Result.isError(attempt)) {
+              // One row the adapter refuses must not fail the page and pin the
+              // cursor on it; the reconciliation walk parks it instead.
+              // Reported so a build failing on every row is not read as a
+              // page with nothing on it.
+              logger.warn("case_law.ingestion.item_build_failed", {
+                adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
+                ...(item.jednaciCislo ? { caseNumber: item.jednaciCislo } : {}),
+                "error.type": errorTag(attempt.error),
+              });
+              continue;
+            }
+            const outcome = attempt.value;
             // A crawl keeps a listed row whose document did not answer: the
             // observation is durable and `isListingOnly` keeps the document
             // in what a later reconciliation asks for again.
