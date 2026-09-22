@@ -1876,11 +1876,11 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
     description:
       "legacy Tailwind utilities and CSS declarations that transition paint properties instead of transform/opacity; existing per-file debt may only shrink",
     include: [
-      "apps/**/*.css",
+      "apps/*/src/**/*.css",
       "apps/desktop/src/**/*.{ts,tsx}",
       "apps/landing/src/**/*.{ts,tsx}",
       "apps/web/src/**/*.{ts,tsx}",
-      "packages/**/*.css",
+      "packages/*/src/**/*.css",
       "packages/ui/src/**/*.{ts,tsx}",
     ],
     exclude: isExcludedSource,
@@ -3552,6 +3552,14 @@ const inlineClipboardSelfTestFailures = (snapshot: Baseline): string[] => {
   return failures;
 };
 
+const legacyPaintSelfTestFailures = (snapshot: Baseline): string[] => {
+  const metric = requireSnapshot(snapshot, "legacy-paint-transitions");
+  if ("apps/web/dist/generated.css" in metric.files) {
+    return ["legacy-paint-transitions scanned generated build output"];
+  }
+  return [];
+};
+
 // The repo-scope metrics assert on a layout rather than one file's text, so
 // each check names the count it expects plus the files that must and must not
 // appear in its per-file breakdown.
@@ -3738,6 +3746,11 @@ const runSelfTest = (): number => {
     writeFixture(
       root,
       "apps/web/src/legacy-paint-transitions.css",
+      SELF_TEST_LEGACY_PAINT_TRANSITIONS_CSS,
+    );
+    writeFixture(
+      root,
+      "apps/web/dist/generated.css",
       SELF_TEST_LEGACY_PAINT_TRANSITIONS_CSS,
     );
     writeFixture(root, "apps/web/src/nullish.ts", SELF_TEST_NULLISH);
@@ -4162,6 +4175,8 @@ const runSelfTest = (): number => {
         failures.push(`${id} counted ${metric.count}, expected ${expected}`);
       }
     }
+
+    failures.push(...legacyPaintSelfTestFailures(snapshot));
 
     const superLinearMetric = requireSnapshot(snapshot, "super-linear-regexes");
     if (superLinearMetric.count !== EXPECTED_SUPER_LINEAR_REGEXES) {
