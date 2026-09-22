@@ -865,8 +865,8 @@
       "deny": "Elutasítás",
       "externalMcpDescription": "Csak az ehhez az eszközhíváshoz szükséges információ kerül elküldésre.",
       "externalMcpQuestion": "Elküldheti a stella ezt a kérést a következőnek: {provider}?",
-      "searchAllPastChatsDescription": "Eddig csak az ehhez a chathez tartozó ügyek chatjeiben történt keresés. Most a más ügyekhez tartozó chatjeiben is megtörténik a keresés.",
-      "searchAllPastChatsQuestion": "Keresés az összes chatjében?",
+      "searchAllPastChatsDescription": "Eddig csak az ehhez a csevegéshez tartozó ügyek csevegéseiben történt keresés. Most a más ügyekhez tartozó csevegéseiben is megtörténik a keresés.",
+      "searchAllPastChatsQuestion": "Keresés az összes csevegésében?",
       "uploadedDocumentPlaceholder": "(feltöltött dokumentum)"
     },
     "askAnything": "Kérdezzen bármit",
