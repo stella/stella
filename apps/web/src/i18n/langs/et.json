@@ -4248,9 +4248,16 @@
     "summaryPlaceholder": "Mis muutub?"
   },
   "statutes": {
+    "amendedTimes": "{count, plural, =0 {Muutmata} one {Muudetud # kord} other {Muudetud # korda}}",
     "asOf": "Kehtinud tekst kuupäeval",
     "backToList": "Kõik õigusaktid",
     "citingDecisionsFilterPlaceholder": "Filtreeri laaditud lahendeid",
+    "columns": {
+      "act": "Õigusakt",
+      "amendments": "Muudatused",
+      "firstVersion": "Esimene redaktsioon",
+      "lastAmended": "Viimati muudetud"
+    },
     "diffInserted": "Lisatud:",
     "diffRemoved": "Välja jäetud:",
     "emptyDocument": "Sellel redaktsioonil puudub tekst.",
@@ -4275,7 +4282,6 @@
     "provisionHistoryUnavailable": "Selle sätte ajalugu ei õnnestunud laadida.",
     "provisionPromptSubject": "{statute} ({eli}) {provision} redaktsioonis, mis kehtib alates {date}",
     "provisionPromptSubjectUndated": "{statute} ({eli}) {provision}",
-    "recentlyAmended": "Viimati muudetud",
     "resolvedAlias": "Tuvastatud kui {label}",
     "searchAskPrompt": "{query} ({country} õigusaktid)",
     "searchLabel": "Otsi õigusaktidest",
@@ -4284,6 +4290,7 @@
     "status": {
       "current": "Kehtiv",
       "draft": "Eelnõus",
+      "ended": "Enam ei kehti",
       "future": "Tulevane",
       "historical": "Asendatud",
       "repealed": "Kehtetu"

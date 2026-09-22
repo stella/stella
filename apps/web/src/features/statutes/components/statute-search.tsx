@@ -2,17 +2,12 @@ import { useTranslations } from "use-intl";
 
 import { PublicLawSearch } from "@/components/public-law-search";
 import { useFormatter } from "@/i18n/formatting-context";
-import {
-  isStatuteCountry,
-  isPublicStatuteCountry,
-  STATUTE_COUNTRIES,
-  type StatuteCountry,
-} from "@/lib/statute-route";
+import { isStatuteCountry, STATUTE_COUNTRIES } from "@/lib/statute-route";
 
 type StatuteSearchProps = {
+  /** The jurisdiction the page is scoped to, as its route segment. */
   country: string;
   maxLength: number;
-  onCountryChange: (country: StatuteCountry) => void;
   onQueryChange: (value: string) => void;
   /** Submitted: open what the entry names, when it names one thing. */
   onSubmit: () => void;
@@ -21,48 +16,28 @@ type StatuteSearchProps = {
 
 /**
  * The statutes browser's instance of the shared public-law box: an act
- * number, an alias or a title, scoped by the jurisdiction pill. `OZ` is a
- * different act in each jurisdiction, so the chat prompt carries the scope.
+ * number, an alias or a title. It leads the page the way the case-law box
+ * does; the jurisdiction is chosen once, in the top bar. `OZ` is a different
+ * act in each jurisdiction, so the chat prompt carries the scope.
  */
 export const StatuteSearch = ({
   country,
   maxLength,
-  onCountryChange,
   onQueryChange,
   onSubmit,
   query,
 }: StatuteSearchProps) => {
   const t = useTranslations();
   const format = useFormatter();
-  const countryName = (segment: string): string => {
-    const region = isStatuteCountry(segment)
-      ? STATUTE_COUNTRIES[segment].region
-      : segment.toUpperCase();
-    return format.displayName(region, { type: "region" });
-  };
 
   return (
     <PublicLawSearch
       askPrompt={(entry) =>
         t("statutes.searchAskPrompt", {
-          country: countryName(country),
+          country: statuteCountryName(format, country),
           query: entry,
         })
       }
-      countryPicker={{
-        countries: Object.keys(STATUTE_COUNTRIES)
-          .filter(isPublicStatuteCountry)
-          .map((segment) => ({
-            label: countryName(segment),
-            value: segment,
-          })),
-        country,
-        onCountryChange: (value) => {
-          if (isPublicStatuteCountry(value)) {
-            onCountryChange(value);
-          }
-        },
-      }}
       maxLength={maxLength}
       onQueryChange={onQueryChange}
       onSubmit={onSubmit}
@@ -72,3 +47,19 @@ export const StatuteSearch = ({
     />
   );
 };
+
+/**
+ * A statute jurisdiction as a reader names it, from its route segment. One
+ * helper, because the box and the top-bar menu have to say the same country
+ * the same way.
+ */
+export const statuteCountryName = (
+  format: ReturnType<typeof useFormatter>,
+  segment: string,
+): string =>
+  format.displayName(
+    isStatuteCountry(segment)
+      ? STATUTE_COUNTRIES[segment].region
+      : segment.toUpperCase(),
+    { type: "region" },
+  );

@@ -4251,9 +4251,16 @@ type Messages = {
     "summaryPlaceholder": "What does this change?";
   };
   "statutes": {
+    "amendedTimes": "{count, plural, =0 {Not amended} one {Amended once} other {Amended # times}}";
     "asOf": "Text in force on";
     "backToList": "All statutes";
     "citingDecisionsFilterPlaceholder": "Filter loaded decisions";
+    "columns": {
+      "act": "Act";
+      "amendments": "Amendments";
+      "firstVersion": "First version";
+      "lastAmended": "Last amended";
+    };
     "diffInserted": "Inserted:";
     "diffRemoved": "Deleted:";
     "emptyDocument": "This version has no text available.";
@@ -4278,7 +4285,6 @@ type Messages = {
     "provisionHistoryUnavailable": "This provision's history could not be loaded.";
     "provisionPromptSubject": "{provision} of {statute} ({eli}), in the wording in force since {date}";
     "provisionPromptSubjectUndated": "{provision} of {statute} ({eli})";
-    "recentlyAmended": "Recently amended";
     "resolvedAlias": "Recognized as {label}";
     "searchAskPrompt": "{query} (legislation of {country})";
     "searchLabel": "Search statutes";
@@ -4287,6 +4293,7 @@ type Messages = {
     "status": {
       "current": "In force";
       "draft": "Proposed";
+      "ended": "No longer in force";
       "future": "Future";
       "historical": "Superseded";
       "repealed": "Repealed";

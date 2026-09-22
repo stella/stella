@@ -1,4 +1,5 @@
 import { useNavigate, useRouterState } from "@tanstack/react-router";
+import { panic } from "better-result";
 import { GlobeIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -18,9 +19,14 @@ import {
 } from "@/features/case-law/case-law-jurisdiction";
 import { caseLawCountryName } from "@/features/case-law/components/case-law-search";
 import { countryScopedLawRoute } from "@/features/case-law/country-scope.logic";
-import type { CountryScopedLawRoute } from "@/features/case-law/country-scope.logic";
+import { statuteCountryName } from "@/features/statutes/components/statute-search";
 import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
+import {
+  isPublicStatuteCountry,
+  STATUTE_COUNTRIES,
+  toStatuteCountrySegment,
+} from "@/lib/statute-route";
 
 /**
  * The jurisdiction the reader is in, in the title row.
@@ -37,14 +43,22 @@ export const TopBarCountry = () => {
   const scoped = useRouterState({
     select: (state) => countryScopedLawRoute(state.matches.at(-1)?.routeId),
   });
-  if (scoped === null) {
-    return null;
+  switch (scoped) {
+    case null:
+      return null;
+    case "home":
+    case "cases":
+      return <TopBarCaseLawCountry route={scoped} />;
+    case "statutes":
+      return <TopBarStatuteCountry />;
+    default:
+      scoped satisfies never;
+      return panic(`Unhandled scoped law route: ${String(scoped)}`);
   }
-  return <TopBarCountryFor route={scoped} />;
 };
 
-const TopBarCountryFor = ({ route }: { route: CountryScopedLawRoute }) => {
-  const t = useTranslations();
+/** The home and the case-law list: scoped by `?country=`. */
+const TopBarCaseLawCountry = ({ route }: { route: "home" | "cases" }) => {
   const format = useFormatter();
   const navigate = useNavigate();
   // Read from the location rather than a route-scoped hook: this renders in
@@ -52,11 +66,6 @@ const TopBarCountryFor = ({ route }: { route: CountryScopedLawRoute }) => {
   const country = useRouterState({
     select: (state) => state.location.search.country,
   });
-  const options = PUBLIC_CASE_LAW_COUNTRIES.map((code) => ({
-    label: caseLawCountryName(format, code),
-    value: toCaseLawCountryParam(code),
-  }));
-  const current = options.find((option) => option.value === country);
 
   const switchTo = (next: string) => {
     if (route === "home") {
@@ -83,6 +92,83 @@ const TopBarCountryFor = ({ route }: { route: CountryScopedLawRoute }) => {
   };
 
   return (
+    <CountryMenu
+      country={country}
+      onCountryChange={switchTo}
+      options={PUBLIC_CASE_LAW_COUNTRIES.map((code) => ({
+        label: caseLawCountryName(format, code),
+        value: toCaseLawCountryParam(code),
+      }))}
+    />
+  );
+};
+
+/** The statute list: scoped by its `$country` segment. */
+const TopBarStatuteCountry = () => {
+  const format = useFormatter();
+  const navigate = useNavigate();
+  const country = useRouterState({
+    select: (state) => {
+      const params: unknown = state.matches.at(-1)?.params;
+      const segment =
+        typeof params === "object" && params !== null && "country" in params
+          ? params.country
+          : null;
+      return toStatuteCountrySegment(
+        typeof segment === "string" ? segment : null,
+      );
+    },
+  });
+
+  const switchTo = (next: string) => {
+    // A kind of act is spelled in the other jurisdiction's language, so the
+    // type filter stays behind; the entry and the status carry over.
+    detached(
+      navigate({
+        to: "/law/$country/statutes",
+        params: { country: next },
+        search: (previous) => ({
+          ...previous,
+          page: undefined,
+          type: undefined,
+        }),
+        replace: true,
+      }),
+      "statutes.switch-country",
+    );
+  };
+
+  return (
+    <CountryMenu
+      country={country}
+      onCountryChange={switchTo}
+      options={Object.keys(STATUTE_COUNTRIES)
+        .filter(isPublicStatuteCountry)
+        .map((segment) => ({
+          label: statuteCountryName(format, segment),
+          value: segment,
+        }))}
+    />
+  );
+};
+
+type CountryMenuProps = {
+  /** The value the route carries now, if it carries one. */
+  country: string | undefined;
+  onCountryChange: (country: string) => void;
+  options: readonly { label: string; value: string }[];
+};
+
+/** One menu for every scoped screen, so the control reads the same on each. */
+const CountryMenu = ({
+  country,
+  onCountryChange,
+  options,
+}: CountryMenuProps) => {
+  const t = useTranslations();
+  const current = options.find((option) => option.value === country);
+
+  return (
     <Menu>
       <MenuTrigger
         render={
@@ -101,7 +187,7 @@ const TopBarCountryFor = ({ route }: { route: CountryScopedLawRoute }) => {
         <MenuRadioGroup
           onValueChange={(value: unknown) => {
             if (typeof value === "string" && value !== country) {
-              switchTo(value);
+              onCountryChange(value);
             }
           }}
           value={country}

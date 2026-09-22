@@ -4248,9 +4248,16 @@
     "summaryPlaceholder": "Kas keičiasi?"
   },
   "statutes": {
+    "amendedTimes": "{count, plural, =0 {Nekeistas} one {Pakeistas # kartą} few {Pakeistas # kartus} many {Pakeistas # karto} other {Pakeistas # kartų}}",
     "asOf": "Tekstas, galiojęs",
     "backToList": "Visi teisės aktai",
     "citingDecisionsFilterPlaceholder": "Filtruoti įkeltus sprendimus",
+    "columns": {
+      "act": "Teisės aktas",
+      "amendments": "Pakeitimai",
+      "firstVersion": "Pirmoji redakcija",
+      "lastAmended": "Paskutinį kartą pakeista"
+    },
     "diffInserted": "Įterpta:",
     "diffRemoved": "Išbraukta:",
     "emptyDocument": "Ši redakcija neturi teksto.",
@@ -4275,7 +4282,6 @@
     "provisionHistoryUnavailable": "Nepavyko įkelti šios nuostatos istorijos.",
     "provisionPromptSubject": "{statute} ({eli}) {provision}, redakcija, galiojanti nuo {date}",
     "provisionPromptSubjectUndated": "{statute} ({eli}) {provision}",
-    "recentlyAmended": "Neseniai pakeisti",
     "resolvedAlias": "Atpažinta kaip {label}",
     "searchAskPrompt": "{query} ({country} teisės aktai)",
     "searchLabel": "Ieškoti teisės aktų",
@@ -4284,6 +4290,7 @@
     "status": {
       "current": "Galiojantis",
       "draft": "Projektinis",
+      "ended": "Nebegalioja",
       "future": "Būsimas",
       "historical": "Pakeistas",
       "repealed": "Panaikintas"

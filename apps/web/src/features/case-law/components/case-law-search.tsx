@@ -48,7 +48,6 @@ export const CaseLawSearch = ({
       onQueryChange={onQueryChange}
       onSubmit={onSubmit}
       placeholder={t("caseLaw.searchPlaceholder")}
-      prominence="lead"
       query={query}
       searchLabel={t("caseLaw.searchLabel")}
     />
