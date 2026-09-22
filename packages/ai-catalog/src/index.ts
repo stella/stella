@@ -183,10 +183,10 @@ const GPT_56_OPENROUTER_MODEL_IDS = Object.values(GPT_56_MODEL_IDS).map(
  */
 export const BYOK_DEFAULT_MODELS = {
   google: {
-    fast: "gemini-3.7-flash",
-    chat: "gemini-3.7-flash",
-    reasoning: "gemini-3.7-flash",
-    pdf: "gemini-3.7-flash",
+    fast: "gemini-3.8-flash",
+    chat: "gemini-3.8-flash",
+    reasoning: "gemini-3.8-flash",
+    pdf: "gemini-3.8-flash",
   },
   openrouter: {
     fast: GPT_56_MODEL_IDS.luna.openrouter,
@@ -195,16 +195,16 @@ export const BYOK_DEFAULT_MODELS = {
     pdf: GPT_56_MODEL_IDS.terra.openrouter,
   },
   openai: {
-    fast: "gpt-5.4-nano",
-    chat: "gpt-5.4-mini",
-    reasoning: "gpt-5.4",
-    pdf: "gpt-5.4",
+    fast: GPT_56_MODEL_IDS.luna.openai,
+    chat: GPT_56_MODEL_IDS.terra.openai,
+    reasoning: GPT_56_MODEL_IDS.terra.openai,
+    pdf: GPT_56_MODEL_IDS.terra.openai,
   },
   anthropic: {
-    fast: "claude-opus-5",
-    chat: "claude-opus-4-8",
-    reasoning: "claude-opus-5",
-    pdf: "claude-opus-4-8",
+    fast: "claude-opus-5-5",
+    chat: "claude-opus-5-5",
+    reasoning: "claude-opus-5-5",
+    pdf: "claude-opus-5-5",
   },
   bedrock: {
     fast: "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
@@ -228,10 +228,10 @@ export const BYOK_DEFAULT_MODELS = {
 export const DEFAULT_MODELS = {
   ...BYOK_DEFAULT_MODELS,
   azure_foundry: {
-    fast: "gpt-5.4-nano",
-    chat: "gpt-5.4-mini",
-    reasoning: "gpt-5.4",
-    pdf: "gpt-5.4",
+    fast: GPT_56_MODEL_IDS.luna.openai,
+    chat: GPT_56_MODEL_IDS.terra.openai,
+    reasoning: GPT_56_MODEL_IDS.terra.openai,
+    pdf: GPT_56_MODEL_IDS.terra.openai,
   },
   openai_compatible: {
     fast: "default",
@@ -271,6 +271,7 @@ export const BYOK_MODEL_OPTIONS = {
     "claude-sonnet-5",
     "claude-fable-5-1",
     "claude-fable-5",
+    "claude-opus-5-5",
     "claude-opus-5",
     "claude-opus-4-8",
     "claude-opus-4-7",
@@ -388,6 +389,10 @@ export const MODEL_DISPLAY_METADATA = {
   },
   "claude-fable-5": {
     displayName: "Claude Fable 5",
+    iconProvider: "anthropic",
+  },
+  "claude-opus-5-5": {
+    displayName: "Claude Opus 5.5",
     iconProvider: "anthropic",
   },
   "claude-opus-5": {
@@ -696,6 +701,7 @@ export const ANTHROPIC_ADAPTIVE_THINKING_MODELS = [
   "claude-opus-4-8",
   "claude-fable-5",
   "claude-fable-5-1",
+  "claude-opus-5-5",
 ] as const;
 
 /**
@@ -897,6 +903,7 @@ export const MODEL_STREAMING_TOOL_USE = {
   "claude-sonnet-5": "supported",
   "claude-fable-5-1": "supported",
   "claude-fable-5": "supported",
+  "claude-opus-5-5": "supported",
   "claude-opus-5": "supported",
   "claude-opus-4-8": "supported",
   "claude-opus-4-7": "supported",
@@ -1084,8 +1091,8 @@ export const CONTEXT_WINDOW_TOKENS = {
   "gpt-5.6": 922_000,
   "gpt-5.6-luna": 922_000,
   "gpt-5.6-terra": 922_000,
-  // Anthropic Claude: 200K through Claude 4; Sonnet 5, Opus 5, and Fable 5.1
-  // expose 1M.
+  // Anthropic Claude: 200K through Claude 4; Sonnet 5, Opus 5, Opus 5.5, and
+  // Fable 5.1 expose 1M.
   "claude-haiku-4-5-20251001": 200_000,
   "claude-sonnet-4-6": 200_000,
   "claude-sonnet-5": 1_000_000,
@@ -1093,6 +1100,7 @@ export const CONTEXT_WINDOW_TOKENS = {
   "claude-opus-4-7": 200_000,
   "claude-opus-4-8": 200_000,
   "claude-opus-5": 1_000_000,
+  "claude-opus-5-5": 1_000_000,
   "claude-fable-5": 200_000,
   "claude-fable-5-1": 1_000_000,
   // Mistral: 128K across the offered text/vision models.

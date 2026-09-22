@@ -212,6 +212,14 @@ export const MODEL_RATES = {
     cachedInputPerMTok: 100_000,
     cachedWriteInputPerMTok: 1_250_000,
   },
+  // models.dev: anthropic:claude-opus-5-5
+  "claude-opus-5-5": {
+    kind: "flat",
+    inputPerMTok: 400_000,
+    outputPerMTok: 2_000_000,
+    cachedInputPerMTok: 20_000,
+    cachedWriteInputPerMTok: 500_000,
+  },
   // models.dev: anthropic:claude-opus-5
   "claude-opus-5": {
     kind: "flat",
