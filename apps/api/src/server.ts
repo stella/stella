@@ -1,4 +1,5 @@
 import cors from "@elysia/cors";
+import { panic } from "better-result";
 import { Elysia } from "elysia";
 import type { Context } from "elysia";
 
@@ -163,6 +164,10 @@ import { setSecurityHeaders } from "@/api/lib/security-headers";
 import { startSse, stopSse } from "@/api/lib/sse";
 import { clearByokAdapterCache } from "@/api/lib/tanstack-ai-models";
 import { isUploadRateLimitedPath } from "@/api/lib/upload-rate-limit";
+import {
+  API_SHUTDOWN_OUTCOME,
+  shutdownApiServices,
+} from "@/api/server-shutdown";
 
 const HEALTH_PATHS = new Set(["/health", "/live", "/ready", "/started"]);
 const DEFAULT_API_PORT = 3001;
@@ -798,9 +803,10 @@ const startServer = async (): Promise<void> => {
   // exists and has to observe it once it does.
   const scheduler: { loop?: ReturnType<typeof startSchedulerLoop> } = {};
 
-  // Graceful shutdown: stop accepting HTTP requests, then drain the BullMQ
-  // workers on SIGTERM/SIGINT (deploy, container stop, or a local
-  // `bun --watch` restart) so an in-flight job is not abandoned mid-write.
+  // Graceful shutdown: stop accepting HTTP requests, close long-lived SSE
+  // streams, then drain the BullMQ workers on SIGTERM/SIGINT (deploy,
+  // container stop, or a local `bun --watch` restart) so an in-flight job is
+  // not abandoned mid-write.
   // An abandoned job strands its workflow lock and leaves cells stuck
   // `pending` until the next boot reconciles them; draining avoids creating
   // that orphan in the common case. Worker draining is bounded so a slow job
@@ -813,22 +819,40 @@ const startServer = async (): Promise<void> => {
     }
     shuttingDown = true;
     logger.info("api.shutdown_started", { signal });
-    await api.stop().catch((error: unknown) => {
-      logger.error("api.stop_failed", {
-        "error.type": errorTag(error),
-      });
+    const outcome = await shutdownApiServices({
+      closeBackgroundWorkers: backgroundWorkers.close,
+      // Undefined when the signal beat scheduler registration; there is
+      // nothing claimed to drain.
+      drainScheduler: scheduler.loop?.drained,
+      onHttpStopError: (error) => {
+        logger.error("api.stop_failed", {
+          "error.type": errorTag(error),
+        });
+      },
+      stopHttp: async () => {
+        await api.stop();
+      },
+      // Stop claiming new jobs before draining, so a tick in flight finishes
+      // and releases its lease rather than leaving it to expire.
+      stopScheduler: () => scheduler.loop?.stop(),
+      stopSse,
+      timeout: Bun.sleep(WORKER_SHUTDOWN_TIMEOUT_MS),
     });
-    stopSse();
-    // Stop claiming new jobs before draining, so a tick in flight finishes
-    // and releases its lease rather than leaving it to expire. Undefined when
-    // the signal beat registration; there is nothing claimed to drain.
-    scheduler.loop?.stop();
-    await Promise.race([
-      Promise.allSettled([scheduler.loop?.drained, backgroundWorkers.close()]),
-      Bun.sleep(WORKER_SHUTDOWN_TIMEOUT_MS),
-    ]);
-    logger.info("api.shutdown_complete", { signal });
-    process.exit(0);
+    switch (outcome) {
+      case API_SHUTDOWN_OUTCOME.drained:
+        logger.info("api.shutdown_complete", { signal });
+        return process.exit(0);
+      case API_SHUTDOWN_OUTCOME.failed:
+        logger.error("api.shutdown_failed", { signal });
+        return process.exit(1);
+      case API_SHUTDOWN_OUTCOME.timedOut:
+        logger.warn("api.shutdown_timed_out", { signal });
+        return process.exit(1);
+      default: {
+        outcome satisfies never;
+        return panic(`Unhandled API shutdown outcome: ${String(outcome)}`);
+      }
+    }
   };
   process.once("SIGTERM", () => {
     detached(shutdownWorkers("SIGTERM"), "server.shutdown");
