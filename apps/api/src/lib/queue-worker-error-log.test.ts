@@ -149,14 +149,12 @@ describe("createQueueWorkerErrorLogger", () => {
   test("grades a trailing flush by the episode it summarizes, not by when it runs", async () => {
     const log = createQueueWorkerErrorLogger("file_derivative.worker_error");
 
-    log(withCode(TRANSIENT));
-    at(60_000);
-    log(withCode(TRANSIENT));
+    streamTransients(log, { fromMs: 0, toMs: 120_000, everyMs: 60_000 });
     // Last failure just inside the grace, with the flush scheduled a few ms
     // out; the clock then moves past the grace while nothing is reported.
-    at(119_990);
+    at(179_990);
     log(withCode(TRANSIENT));
-    at(130_000);
+    at(190_000);
 
     await Bun.sleep(50);
 
@@ -164,8 +162,9 @@ describe("createQueueWorkerErrorLogger", () => {
       "WARN",
       "WARN",
       "WARN",
+      "WARN",
     ]);
-    expect(logs.records.at(2)?.attributes?.["episodeAgeMs"]).toBe("119990");
+    expect(logs.records.at(3)?.attributes?.["episodeAgeMs"]).toBe("179990");
   });
 
   test("does not flush an interval that recorded nothing", async () => {
@@ -186,24 +185,25 @@ describe("createQueueWorkerErrorLogger", () => {
   test("escalates to an error once the episode outlasts the grace", () => {
     const log = createQueueWorkerErrorLogger("file_derivative.worker_error");
 
-    streamTransients(log, { fromMs: 0, toMs: 150_000 });
+    streamTransients(log, { fromMs: 0, toMs: 210_000 });
 
-    // One line per interval: the onset, one still inside the grace, and one
+    // One line per interval: the onset, two still inside the grace, and one
     // past it, which is the line the error-rate signal is built on.
     expect(logs.records.map((record) => record.severityText)).toEqual([
+      "WARN",
       "WARN",
       "WARN",
       "ERROR",
     ]);
     expect(
       logs.records.map((record) => record.attributes?.["episodeAgeMs"]),
-    ).toEqual(["0", "60000", "120000"]);
+    ).toEqual(["0", "60000", "120000", "180000"]);
   });
 
   test("starts a fresh grace window after the worker goes quiet", () => {
     const log = createQueueWorkerErrorLogger("file_derivative.worker_error");
 
-    streamTransients(log, { fromMs: 0, toMs: 150_000 });
+    streamTransients(log, { fromMs: 0, toMs: 210_000 });
     expect(logs.at("ERROR")).toHaveLength(1);
 
     // Quiet for longer than the log interval: the worker was polling

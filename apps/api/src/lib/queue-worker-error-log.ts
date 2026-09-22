@@ -19,20 +19,21 @@ import {
  * expected operational transient rather than a defect (`redis-client.ts`), so
  * the tally, not the occurrence, is the signal. Severity grades the episode by
  * how long it has lasted: reports inside the grace window below are WARN,
- * because a Redis instance being replaced fails every poll on every worker for
- * a minute or two and then heals itself; an episode still reporting past the
- * grace is ERROR and crosses the error-rate signal as before. The tally
+ * because a Redis instance being replaced fails every poll on every worker
+ * until it comes back and then heals itself; an episode still reporting past
+ * the grace is ERROR and crosses the error-rate signal as before. The tally
  * semantics are unchanged at either severity.
  */
 const TRANSIENT_LOG_INTERVAL_MS = 60 * 1000;
 
 /**
  * How long a transient episode may last before its reports count as errors.
- * The window has to cover a self-healing replacement (one to three minutes of
- * failed polls) without turning it into an error-rate signal; the price is
- * that a genuine outage is graded ERROR this much after it starts.
+ * A replacement has been observed taking three minutes of failed polls
+ * including the reconnect, so the window covers it and such an episode stays
+ * WARN end to end; anything still reporting beyond it is treated as an outage.
+ * The price is that a genuine outage is graded ERROR this much after it starts.
  */
-const TRANSIENT_GRACE_MS = 120 * 1000;
+const TRANSIENT_GRACE_MS = 180 * 1000;
 
 const isSuppressibleRedisError = (error: unknown): boolean =>
   isTransientRedisConnectionError(error) || isRecoverableRedisPollError(error);
