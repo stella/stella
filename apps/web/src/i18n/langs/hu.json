@@ -953,7 +953,6 @@
     "packPartial": "{installed} telepítve, {failed} sikertelen",
     "removed": "Ez az eszköz már nem érhető el.",
     "sectionOthers": "Egyéb",
-    "sectionRecommended": "Ajánlott",
     "settings": {
       "packTitle": "Ajánlott csomag"
     },
@@ -1160,8 +1159,10 @@
       "label": "Szimulált AI"
     },
     "modelSelector": {
+      "allModels": "Összes modell ({count, number})",
       "autoDescription": "Automatikusan választja ki a modellt és a gondolkodási szintet.",
       "autoLabel": "Automatikus",
+      "belowFrontier": "A legjobb kompromisszumok alatt",
       "effortHelpDescription": "Meghatározza, mennyi gondolkodást használjon a modell válaszadás előtt. A magasabb szintek segíthetnek az összetett feladatoknál, de általában több időt vesznek igénybe. A pont a szolgáltató alapértelmezett szintjét jelöli ennél a modellnél.",
       "effortHelpLabel": "A gondolkodási szintről",
       "effortLabel": "Gondolkodási szint",
@@ -1175,6 +1176,10 @@
         "providerDefault": "Alapértelmezett",
         "xhigh": "Nagyon magas"
       },
+      "newModel": "Új",
+      "premiumCost": "Szokatlanul magas költség",
+      "recommendedHelpDescription": "Nincs más elérhető modell, amely egyszerre olcsóbb és jobbra értékelt. Az értékeléshez még túl új modellek „Új” jelölést kapnak. Minőség: <link>LMArena {benchmark}</link> ({licence}); költség: listaárak.",
+      "recommendedHelpLabel": "Az ajánlott modellekről",
       "selectionLabel": "{model} | {effort}",
       "title": "Csevegési modell kiválasztása",
       "viaProvider": "a(z) {provider} szolgáltatáson keresztül"
@@ -1732,6 +1737,7 @@
     "properties": "Tulajdonságok",
     "queued": "Sorba állítva",
     "reason": "Ok",
+    "recommended": "Ajánlott",
     "reconnecting": "Újracsatlakozás…",
     "reference": "Hivatkozás",
     "refresh": "Frissítés",

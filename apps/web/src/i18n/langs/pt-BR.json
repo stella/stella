@@ -953,7 +953,6 @@
     "packPartial": "{installed} instaladas, {failed} com falha",
     "removed": "Esta ferramenta não está mais disponível.",
     "sectionOthers": "Outros",
-    "sectionRecommended": "Recomendados",
     "settings": {
       "packTitle": "Pacote recomendado"
     },
@@ -1160,8 +1159,10 @@
       "label": "IA simulada"
     },
     "modelSelector": {
+      "allModels": "Todos os modelos ({count, number})",
       "autoDescription": "Escolhe automaticamente o modelo e o nível de raciocínio.",
       "autoLabel": "Automático",
+      "belowFrontier": "Abaixo dos melhores equilíbrios",
       "effortHelpDescription": "Controla quanto raciocínio o modelo usa antes de responder. Níveis mais altos podem ajudar em tarefas complexas, mas geralmente levam mais tempo. O ponto marca o nível padrão do provedor para este modelo.",
       "effortHelpLabel": "Sobre o nível de raciocínio",
       "effortLabel": "Nível de raciocínio",
@@ -1175,6 +1176,10 @@
         "providerDefault": "Padrão",
         "xhigh": "Muito alto"
       },
+      "newModel": "Novo",
+      "premiumCost": "Custo incomumente alto",
+      "recommendedHelpDescription": "Nenhum outro modelo disponível é ao mesmo tempo mais barato e mais bem avaliado. Modelos novos demais para ter avaliação aparecem como novos. Qualidade: <link>{benchmark} da LMArena</link> ({licence}); custo: preços de tabela.",
+      "recommendedHelpLabel": "Sobre os modelos recomendados",
       "selectionLabel": "{model} | {effort}",
       "title": "Selecionar modelo de chat",
       "viaProvider": "pelo provedor {provider}"
@@ -1732,6 +1737,7 @@
     "properties": "Propriedades",
     "queued": "Na fila",
     "reason": "Motivo",
+    "recommended": "Recomendados",
     "reconnecting": "Reconectando…",
     "reference": "Referência",
     "refresh": "Atualizar",

@@ -26,7 +26,9 @@
   "type": "module",
   "sideEffects": false,
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./benchmark-frontier": "./src/benchmark-frontier.ts",
+    "./benchmarks": "./src/benchmarks.ts"
   },
   "publishConfig": {
     "access": "public"
@@ -34,6 +36,7 @@
   "scripts": {
     "clean": "git clean -xdf dist .cache .turbo node_modules",
     "build": "tsdown",
+    "gen:benchmarks": "bun ../scripts/src/model-catalog-benchmarks-gen.ts",
     "gen:capabilities": "bun ../scripts/src/model-catalog-capabilities-gen.ts",
     "gen:rates": "bun ../scripts/src/model-catalog-rates-gen.ts",
     "pack:dry-run": "bun pm pack --dry-run",
@@ -55,6 +58,7 @@
     "@tanstack/ai-mistral": "catalog:",
     "@tanstack/ai-openrouter": "catalog:",
     "bun-types": "catalog:",
+    "fast-check": "catalog:",
     "tsdown": "catalog:"
   }
 }

@@ -956,7 +956,6 @@ type Messages = {
     "packPartial": "Installed {installed}, {failed} failed";
     "removed": "This tool is no longer available.";
     "sectionOthers": "Others";
-    "sectionRecommended": "Recommended";
     "settings": {
       "packTitle": "Recommended pack";
     };
@@ -1163,8 +1162,10 @@ type Messages = {
       "label": "Mock AI";
     };
     "modelSelector": {
+      "allModels": "All models ({count, number})";
       "autoDescription": "Automatically chooses the model and effort.";
       "autoLabel": "Auto";
+      "belowFrontier": "Below the best trade-offs";
       "effortHelpDescription": "Controls how much reasoning the model uses before answering. Higher levels can help with complex work but usually take longer. The dot marks the provider's default for this model.";
       "effortHelpLabel": "About reasoning effort";
       "effortLabel": "Reasoning effort";
@@ -1178,6 +1179,10 @@ type Messages = {
         "providerDefault": "Default";
         "xhigh": "Extra high";
       };
+      "newModel": "New";
+      "premiumCost": "Unusually high cost";
+      "recommendedHelpDescription": "No other model you can use is both cheaper and rated higher. Models too new to be rated are marked New. Quality: <link>{benchmark} by LMArena</link> ({licence}); cost: list prices.";
+      "recommendedHelpLabel": "About recommended models";
       "selectionLabel": "{model} | {effort}";
       "title": "Select chat model";
       "viaProvider": "via {provider}";
@@ -1735,6 +1740,7 @@ type Messages = {
     "properties": "Properties";
     "queued": "Queued";
     "reason": "Reason";
+    "recommended": "Recommended";
     "reconnecting": "Reconnecting…";
     "reference": "Reference";
     "refresh": "Refresh";

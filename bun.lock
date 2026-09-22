@@ -526,6 +526,7 @@
         "@tanstack/ai-mistral": "catalog:",
         "@tanstack/ai-openrouter": "catalog:",
         "bun-types": "catalog:",
+        "fast-check": "catalog:",
         "tsdown": "catalog:",
       },
     },
