@@ -1,7 +1,7 @@
 import { Fragment, useState } from "react";
 import type { ReactNode } from "react";
 
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { copyToClipboard } from "@stll/clipboard";
@@ -12,11 +12,17 @@ import type {
   Inline,
   ParagraphListDepth,
 } from "@stll/legal-ast/document-ast";
+import {
+  ReviewDiffDeletion,
+  ReviewDiffInsertion,
+} from "@stll/ui/review-diff-text";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
 import { SEARCH_MARK_CLASS_NAME } from "@/components/legal-reader/query-marks";
 import type {
+  ReaderMark,
+  ReaderMarkRange,
   SearchMatchRange,
   SearchPiece,
 } from "@/components/legal-reader/reader-search";
@@ -26,6 +32,7 @@ import {
 } from "@/components/legal-reader/source-link-policy";
 import type { SourceLinkPolicy } from "@/components/legal-reader/source-link-policy";
 import Tooltip from "@/components/tooltip";
+import type { TranslationKey } from "@/i18n/types";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { normalizeOptionalArray } from "@/lib/arrays";
 import { detached } from "@/lib/detached";
@@ -40,10 +47,10 @@ import "./reader.css";
  * headings, inline runs and search highlighting.
  */
 
-export const rangesForPiece = (
-  rangesByPieceId: Record<string, SearchMatchRange[]>,
+export const rangesForPiece = <Range extends ReaderMarkRange>(
+  rangesByPieceId: Record<string, Range[]>,
   pieceId: string,
-): SearchMatchRange[] => {
+): Range[] => {
   const ranges = rangesByPieceId[pieceId];
   return normalizeOptionalArray(ranges);
 };
@@ -72,7 +79,7 @@ type HighlightContext = {
   activeMatchIndex: number;
   anchors: TextAnchor[];
   pieceId: string;
-  ranges: SearchMatchRange[];
+  ranges: ReaderMarkRange[];
   /**
    * Which of the source document's own hyperlinks reach the page; see
    * `source-link-policy.tsx`. Carried on the context rather than read per
@@ -125,6 +132,76 @@ export const getTableCellPieceId = ({
  */
 const ACTIVE_MATCH_RING = "ring-warning ring-1";
 
+type DiffMarkType = Exclude<ReaderMark["type"], "search">;
+
+/** What a screen reader hears before a changed run: sighted readers see the
+ * strike or the wash, and neither is spoken. */
+const DIFF_MARK_LABEL_KEYS = {
+  deleted: "statutes.diffRemoved",
+  inserted: "statutes.diffInserted",
+} as const satisfies Record<DiffMarkType, TranslationKey>;
+
+const DiffMarkLabel = ({ type }: { type: DiffMarkType }) => {
+  const t = useTranslations();
+
+  return <span className="sr-only">{t(DIFF_MARK_LABEL_KEYS[type])}</span>;
+};
+
+type RenderMarkOptions = {
+  activeMatchIndex: number;
+  /** This slice opens the range rather than continuing it. */
+  isRangeStart: boolean;
+  key: string;
+  range: ReaderMarkRange;
+  text: string;
+};
+
+/**
+ * One marked slice. Search matches wear the query mark; a comparison's
+ * changes wear the product's one track-changes language, so a statute diff
+ * reads the same as every other diff.
+ */
+const renderMark = ({
+  activeMatchIndex,
+  isRangeStart,
+  key,
+  range,
+  text,
+}: RenderMarkOptions): React.JSX.Element => {
+  switch (range.type) {
+    case "search":
+      return (
+        <mark
+          className={cn(
+            SEARCH_MARK_CLASS_NAME,
+            range.matchIndex === activeMatchIndex && ACTIVE_MATCH_RING,
+          )}
+          data-reader-match-index={range.matchIndex}
+          key={key}
+        >
+          {text}
+        </mark>
+      );
+    case "inserted":
+      return (
+        <ReviewDiffInsertion key={key}>
+          {isRangeStart && <DiffMarkLabel type={range.type} />}
+          {text}
+        </ReviewDiffInsertion>
+      );
+    case "deleted":
+      return (
+        <ReviewDiffDeletion key={key}>
+          {isRangeStart && <DiffMarkLabel type={range.type} />}
+          {text}
+        </ReviewDiffDeletion>
+      );
+    default:
+      range satisfies never;
+      return panic("Unhandled reader mark");
+  }
+};
+
 const renderHighlightedSlice = ({
   activeMatchIndex,
   pieceId,
@@ -134,7 +211,7 @@ const renderHighlightedSlice = ({
 }: {
   activeMatchIndex: number;
   pieceId: string;
-  ranges: SearchMatchRange[];
+  ranges: ReaderMarkRange[];
   segmentStart: number;
   text: string;
 }): SynchronousNode => {
@@ -158,15 +235,16 @@ const renderHighlightedSlice = ({
       children.push(text.slice(cursor - segmentStart, localStart));
     }
 
-    const isActive = range.matchIndex === activeMatchIndex;
     children.push(
-      <mark
-        className={cn(SEARCH_MARK_CLASS_NAME, isActive && ACTIVE_MATCH_RING)}
-        data-reader-match-index={range.matchIndex}
-        key={`${pieceId}-${range.matchIndex}-${localStart}`}
-      >
-        {text.slice(localStart, localEnd)}
-      </mark>,
+      renderMark({
+        activeMatchIndex,
+        // A range cut by an inline boundary is drawn as several marks; the
+        // label is read once, before the first of them.
+        isRangeStart: range.start >= segmentStart,
+        key: `${pieceId}-${range.type}-${localStart}`,
+        range,
+        text: text.slice(localStart, localEnd),
+      }),
     );
     cursor = segmentStart + localEnd;
   }
@@ -197,7 +275,7 @@ const renderTextSegment = ({
   anchors: TextAnchor[];
   anonymized?: boolean | undefined;
   pieceId: string;
-  ranges: SearchMatchRange[];
+  ranges: ReaderMarkRange[];
   segmentStart: number;
   text: string;
 }): SynchronousNode => {
@@ -617,7 +695,7 @@ export const InlineContent = ({
   initialOffset?: number | undefined;
   inlines: Inline[];
   pieceId: string;
-  ranges: SearchMatchRange[];
+  ranges: ReaderMarkRange[];
 }) => {
   const sourceLinks = useSourceLinkPolicy();
   const offset: OffsetRef = { value: initialOffset };
@@ -651,7 +729,7 @@ export const HighlightedText = ({
   activeMatchIndex: number;
   className?: string | undefined;
   pieceId: string;
-  ranges: SearchMatchRange[];
+  ranges: ReaderMarkRange[];
   /** Offset of this slice within the complete search piece. */
   segmentStart?: number | undefined;
   text: string;
@@ -953,7 +1031,7 @@ export const BlockRenderer = ({
    * and every footnote paragraph is treated as its own first part.
    */
   noteHead?: boolean | undefined;
-  rangesByPieceId: Record<string, SearchMatchRange[]>;
+  rangesByPieceId: Record<string, ReaderMarkRange[]>;
   variant: ReaderVariant;
 }) => {
   const documentAnchorProps = {
@@ -1247,7 +1325,7 @@ export const FulltextFallback = ({
 }: {
   activeMatchIndex: number;
   anchorsByPieceId?: Record<string, TextAnchor[]> | undefined;
-  rangesByPieceId: Record<string, SearchMatchRange[]>;
+  rangesByPieceId: Record<string, ReaderMarkRange[]>;
   text: string;
 }) => {
   const paragraphs = text.split(/\n{2,}/u);

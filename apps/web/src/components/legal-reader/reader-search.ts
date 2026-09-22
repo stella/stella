@@ -14,11 +14,20 @@ export type SearchPiece = {
   text: string;
 };
 
-export type SearchMatchRange = {
-  end: number;
-  matchIndex: number;
-  start: number;
-};
+/**
+ * What a marked span of a reader's text means. A search match carries its
+ * index so the find bar can step to it; a comparison marks what one version
+ * added or removed.
+ */
+export type ReaderMark =
+  | { type: "search"; matchIndex: number }
+  | { type: "inserted" }
+  | { type: "deleted" };
+
+/** A marked span of one piece's plain text, as offsets into it. */
+export type ReaderMarkRange = ReaderMark & { end: number; start: number };
+
+export type SearchMatchRange = Extract<ReaderMarkRange, { type: "search" }>;
 
 export type SearchResults = {
   matchCount: number;
@@ -207,7 +216,8 @@ export const buildSearchResults = ({
 
       if (originalStart !== undefined && originalEnd !== undefined) {
         const existingRanges = rangesByPieceId[piece.id];
-        const range = {
+        const range: SearchMatchRange = {
+          type: "search",
           start: originalStart,
           end: originalEnd,
           matchIndex: matchCount,
