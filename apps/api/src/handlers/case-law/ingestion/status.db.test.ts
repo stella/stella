@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
+import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import { authRelationsPart } from "@/api/db/auth-schema";
@@ -62,7 +63,15 @@ beforeAll(async () => {
   db = connect(client);
 
   await db.insert(caseLawSources).values([
-    { id: busyId, adapterKey: ADAPTER_KEYS.CZ_REGIONAL, name: "busy source" },
+    {
+      id: busyId,
+      adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
+      name: "busy source",
+      // Deliberately behind the three rows below: the report must carry the
+      // counted figure, not recount.
+      storedTotal: 2,
+      storedTotalAsOf: minutesAgo(90),
+    },
     { id: quietId, adapterKey: ADAPTER_KEYS.CZ_NS, name: "quiet source" },
   ]);
 
@@ -173,8 +182,10 @@ test("per-source figures stay with their own source", async () => {
   const busy = status.sources.find((source) => source.name === "busy source");
   const quiet = status.sources.find((source) => source.name === "quiet source");
 
-  expect(busy?.totalDecisions).toBe(3);
-  expect(quiet?.totalDecisions).toBe(1);
+  expect(busy?.totalDecisions).toBe(2);
+  expect(busy?.totalDecisionsAsOf).toBe(minutesAgo(90).toISOString());
+  expect(quiet?.totalDecisions).toBeNull();
+  expect(quiet?.totalDecisionsAsOf).toBeNull();
 
   expect(busy?.insertedLastHour).toBe(5);
   expect(busy?.inserted24h).toBe(12);
@@ -184,9 +195,21 @@ test("per-source figures stay with their own source", async () => {
   expect(busy?.failures24h).toBe(3);
   expect(quiet?.failures24h).toBe(1);
 
-  expect(status.totalDecisions).toBe(4);
+  // One source uncounted: no fleet total rather than a short one.
+  expect(status.totalDecisions).toBeNull();
   expect(status.totalEvents).toBe(3);
   expect(status.failures24h).toBe(4);
+});
+
+test("the fleet total is the sum once every source is counted", async () => {
+  await db
+    .update(caseLawSources)
+    .set({ storedTotal: 1, storedTotalAsOf: minutesAgo(5) })
+    .where(eq(caseLawSources.id, quietId));
+
+  const status = await getIngestionStatus(scopedDb);
+
+  expect(status.totalDecisions).toBe(3);
 });
 
 test("the last event is the source's own newest run", async () => {

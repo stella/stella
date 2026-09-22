@@ -121,11 +121,12 @@ export const SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS = 6 * 60 * 60 * 1000;
  * How long the count itself may run before it is abandoned.
  *
  * Generous, because this is the ingestion connection and the count is the
- * point; bounded, because a source whose index has gone cold must not hold
- * the connection open behind the next cycle. Exceeding it leaves the previous
- * figure standing.
+ * point, and sized so the largest source's count fits with headroom; bounded,
+ * because a source whose index has gone cold must not hold the connection
+ * open behind the next cycle. Exceeding it leaves the previous figure
+ * standing.
  */
-const STORED_TOTAL_STATEMENT_TIMEOUT = "30s";
+const STORED_TOTAL_STATEMENT_TIMEOUT = "120s";
 
 /** What one refresh attempt did. */
 export type StoredTotalRefresh =

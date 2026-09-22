@@ -7,7 +7,6 @@ import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   caseLawCoverageSlices,
-  caseLawDecisions,
   caseLawIngestionEvents,
   caseLawIngestionFailures,
   caseLawReconciliationItems,
@@ -61,7 +60,14 @@ type SourceStatus = {
   name: string;
   enabled: boolean;
   syncCursor: string | null;
-  totalDecisions: number;
+  /**
+   * Decisions held, as last counted by the ingestion pipeline
+   * (`ingestion/source-totals.ts`), and when. Null until a source has been
+   * counted; the two move together. Counting here instead would scan the
+   * whole corpus on every read.
+   */
+  totalDecisions: number | null;
+  totalDecisionsAsOf: string | null;
   /**
    * What the publisher reports holding, when that was observed, and where
    * the number came from. Null until the source has been measured; the three
@@ -92,7 +98,8 @@ type SourceStatus = {
 
 type IngestionStatus = {
   sources: SourceStatus[];
-  totalDecisions: number;
+  /** Sum of the per-source counts; null while any source is uncounted. */
+  totalDecisions: number | null;
   totalEvents: number;
   failures24h: number;
 };
@@ -106,7 +113,6 @@ const TOP_ERROR_TYPES_PER_SOURCE = 3;
  * figures it had before: nothing, rather than a hole.
  */
 type SourceAggregate = {
-  decisions: number;
   insertedLastHour: number;
   inserted24h: number;
   failures24h: number;
@@ -123,7 +129,6 @@ type SourceAggregate = {
 type SourceAggregates = Map<string, SourceAggregate>;
 
 const emptyAggregate = (): SourceAggregate => ({
-  decisions: 0,
   insertedLastHour: 0,
   inserted24h: 0,
   failures24h: 0,
@@ -171,12 +176,6 @@ const readSourceAggregates = async ({
   if (sourceIds.length === 0) {
     return new Map();
   }
-
-  const decisionRows = await db
-    .select({ sourceId: caseLawDecisions.sourceId, total: count() })
-    .from(caseLawDecisions)
-    .where(inArray(caseLawDecisions.sourceId, sourceIds))
-    .groupBy(caseLawDecisions.sourceId);
 
   // Both cutoffs are cast in SQL so the comparison happens at the column's own
   // precision rather than at the millisecond a JS Date carries.
@@ -295,9 +294,6 @@ const readSourceAggregates = async ({
     sourceIds.map((sourceId) => [sourceId, emptyAggregate()]),
   );
 
-  for (const row of decisionRows) {
-    requireAggregate(aggregates, row.sourceId).decisions = row.total;
-  }
   for (const row of insertedRows) {
     const aggregate = requireAggregate(aggregates, row.sourceId);
     aggregate.insertedLastHour = row.lastHour;
@@ -361,6 +357,8 @@ export const getIngestionStatus = async (
             name: caseLawSources.name,
             syncCursor: caseLawSources.syncCursor,
             enabled: caseLawSources.enabled,
+            storedTotal: caseLawSources.storedTotal,
+            storedTotalAsOf: caseLawSources.storedTotalAsOf,
             reportedTotal: caseLawSources.reportedTotal,
             reportedTotalAsOf: caseLawSources.reportedTotalAsOf,
             reportedTotalOrigin: caseLawSources.reportedTotalOrigin,
@@ -409,7 +407,8 @@ export const getIngestionStatus = async (
         name: source.name,
         enabled: source.enabled,
         syncCursor: source.syncCursor,
-        totalDecisions: aggregate.decisions,
+        totalDecisions: source.storedTotal,
+        totalDecisionsAsOf: source.storedTotalAsOf?.toISOString() ?? null,
         reportedTotal: source.reportedTotal,
         reportedTotalAsOf: source.reportedTotalAsOf?.toISOString() ?? null,
         reportedTotalOrigin: source.reportedTotalOrigin,
@@ -422,9 +421,12 @@ export const getIngestionStatus = async (
       });
     }
 
-    const [totalDecisions] = await db
-      .select({ total: count() })
-      .from(caseLawDecisions);
+    const storedTotals = sources.map((source) => source.storedTotal);
+    const totalDecisions = storedTotals.every(
+      (total): total is number => total !== null,
+    )
+      ? storedTotals.reduce((sum, total) => sum + total, 0)
+      : null;
 
     const [totalEvents] = await db
       .select({ total: count() })
@@ -437,7 +439,7 @@ export const getIngestionStatus = async (
 
     return {
       sources: sourceStatuses,
-      totalDecisions: totalDecisions?.total ?? 0,
+      totalDecisions,
       totalEvents: totalEvents?.total ?? 0,
       failures24h: totalFailures?.total ?? 0,
     };
