@@ -1,9 +1,14 @@
 # Manual Changelog Notes
 
 Add one Markdown file per stable release and commit it together with the
-matching `VERSION` bump. The file may be blank for minor releases with no
-handwritten notes; the landing site still uses its presence to generate
-release-specific link preview pages and version-only fallback images.
+matching `VERSION` bump. The landing site uses it to generate release-specific
+link preview pages and version-only fallback images.
+
+A stable release is either a maintenance release or shows what changed.
+`bun run release:maintenance` writes a note headed `# Maintenance release`;
+every other stable release note must embed at least one screenshot or video
+(see the example below). `scripts/check-release-changelog.sh` refuses the
+release pull request and the tag otherwise.
 
 Prereleases (`vX.Y.Z-rc.N`, `vX.Y.Z-beta.N`, `vX.Y.Z-alpha.N`) stay off the
 public changelog page. Their generated GitHub release notes are enough.
@@ -14,7 +19,7 @@ docs/changelog/vX.Y.Z.md
 
 ```bash
 printf "X.Y.Z\n" > VERSION
-touch docs/changelog/vX.Y.Z.md
+$EDITOR docs/changelog/vX.Y.Z.md
 git add VERSION docs/changelog/vX.Y.Z.md
 git commit -m "chore: release vX.Y.Z"
 ```

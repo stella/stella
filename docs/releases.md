@@ -55,8 +55,9 @@ should lag the release that stopped using the old data.
 3. Run `bun run marketing:stale`; if anything is stale, `bun run
 marketing:reshoot` re-records only the stale captures (see
    `apps/landing/public/media/products/README.md`, "Reshooting on release").
-4. In one commit, bump `VERSION` and optionally add the matching manual
-   changelog note:
+4. In one commit, bump `VERSION` and add the matching changelog note. A
+   release other than a maintenance release (`bun run release:maintenance`)
+   must embed a screenshot or video in it; see `docs/changelog/README.md`:
 
    ```bash
    printf "X.Y.Z\n" > VERSION

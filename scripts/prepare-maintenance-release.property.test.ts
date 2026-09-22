@@ -495,6 +495,19 @@ describe("maintenance release preparation", () => {
     ).toBe(
       "# Maintenance release\n\nStella includes reliability and maintenance improvements.\n",
     );
+    // The release guard exempts this changelog from the media requirement by
+    // its heading; the generated file must keep satisfying it.
+    const guard = Bun.spawnSync(
+      [
+        "bash",
+        nodePath.join(import.meta.dirname, "check-release-changelog.sh"),
+        "--version",
+        "1.2.4",
+      ],
+      { cwd: root },
+    );
+    expect(guard.stderr.toString()).toBe("");
+    expect(guard.exitCode).toBe(0);
     const releaseDates: unknown = JSON.parse(
       readFileSync(
         nodePath.join(

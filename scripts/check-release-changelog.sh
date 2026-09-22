@@ -84,9 +84,33 @@ changelog_file="docs/changelog/v${version}.md"
 if [[ ! -f "$changelog_file" ]]; then
   cat >&2 <<EOF
 ::error file=VERSION::VERSION was bumped to $version, but $changelog_file is missing.
-Create the file even for minor releases with no handwritten notes; it may be blank. The landing site uses it to generate release-specific link preview pages and version-only fallback images.
+Add a note with a screenshot or video, or cut a release without user-facing change with \`bun run release:maintenance\`. The landing site uses the file to generate release-specific link preview pages and version-only fallback images.
 EOF
   exit 1
 fi
 
-echo "Found $changelog_file for VERSION $version."
+# A release that ships user-facing change shows it. `bun run
+# release:maintenance` writes this heading; every other stable release must
+# embed an image or a video in a form the landing changelog renders (see
+# apps/landing/src/lib/changelog-markdown.ts).
+maintenance_heading="# Maintenance release"
+first_line="$(head -n 1 "$changelog_file" | tr -d '\r' | sed -E 's/[[:space:]]+$//')"
+if [[ "$first_line" == "$maintenance_heading" ]]; then
+  echo "Found $changelog_file for maintenance release $version."
+  exit 0
+fi
+
+# Mirrors the renderer's patterns: a whole-line image, or a whole-line video
+# with a single- or double-quoted src (validate_changelog_media above already
+# requires `controls` on every video).
+image_pattern='^[[:space:]]*!\[[^]]*\]\(https://[^)[:space:]]+\)[[:space:]]*$'
+video_pattern="^[[:space:]]*<video[[:space:]][^>]*src=[\"']https://[^\"']+[\"'][^>]*></video>[[:space:]]*$"
+media_pattern="$image_pattern|$video_pattern"
+if ! grep -Eq "$media_pattern" "$changelog_file"; then
+  cat >&2 <<EOF
+::error file=$changelog_file::$version is not a maintenance release, so $changelog_file must embed a screenshot (![alt](https://...)) or a video (<video controls src="https://..."></video>). A release without user-facing change is cut with \`bun run release:maintenance\`.
+EOF
+  exit 1
+fi
+
+echo "Found $changelog_file with media for VERSION $version."
