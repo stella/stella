@@ -1,8 +1,11 @@
 import { useState } from "react";
 
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { diffWordSegments } from "@stll/folio-core/ai-edits";
+import type { WordDiffSegment } from "@stll/folio-core/ai-edits";
 import {
   parseDocumentAst,
   resolveDocumentHeadingAnchor,
@@ -16,11 +19,9 @@ import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
 
 import {
-  diffProvisionText,
   resolveSelectedVersion,
   selectChangedVersions,
 } from "@/features/statutes/provision-diff";
-import type { ProvisionDiffSegment } from "@/features/statutes/provision-diff";
 import { provisionHistoryOptions } from "@/features/statutes/queries/provision-history";
 import { statuteOptions } from "@/features/statutes/queries/statutes";
 import {
@@ -178,7 +179,7 @@ const ProvisionDiff = ({ after, before }: ProvisionDiffProps) => {
 
   return (
     <p className="text-sm leading-6 whitespace-pre-wrap">
-      {withOffsets(diffProvisionText(before, after)).map(
+      {withOffsets(diffWordSegments(before, after)).map(
         ({ offset, segment }) => (
           <ProvisionDiffRun key={offset} segment={segment} />
         ),
@@ -189,16 +190,14 @@ const ProvisionDiff = ({ after, before }: ProvisionDiffProps) => {
 
 type OffsetSegment = {
   offset: number;
-  segment: ProvisionDiffSegment;
+  segment: WordDiffSegment;
 };
 
 /**
  * Segments carry no identity of their own, but their position in the
  * concatenated text is unique and stable for a given pair of wordings.
  */
-const withOffsets = (
-  segments: readonly ProvisionDiffSegment[],
-): OffsetSegment[] => {
+const withOffsets = (segments: readonly WordDiffSegment[]): OffsetSegment[] => {
   const positioned: OffsetSegment[] = [];
   let offset = 0;
 
@@ -210,26 +209,28 @@ const withOffsets = (
   return positioned;
 };
 
-const ProvisionDiffRun = ({ segment }: { segment: ProvisionDiffSegment }) => {
+const ProvisionDiffRun = ({ segment }: { segment: WordDiffSegment }) => {
   const t = useTranslations();
 
-  if (segment.kind === "inserted") {
-    return (
-      <ReviewDiffInsertion>
-        <span className="sr-only">{t("statutes.diffInserted")}</span>
-        {segment.text}
-      </ReviewDiffInsertion>
-    );
+  switch (segment.type) {
+    case "ins":
+      return (
+        <ReviewDiffInsertion>
+          <span className="sr-only">{t("statutes.diffInserted")}</span>
+          {segment.text}
+        </ReviewDiffInsertion>
+      );
+    case "del":
+      return (
+        <ReviewDiffDeletion>
+          <span className="sr-only">{t("statutes.diffRemoved")}</span>
+          {segment.text}
+        </ReviewDiffDeletion>
+      );
+    case "equal":
+      return <span>{segment.text}</span>;
+    default:
+      segment.type satisfies never;
+      return panic("Unhandled provision diff segment");
   }
-
-  if (segment.kind === "removed") {
-    return (
-      <ReviewDiffDeletion>
-        <span className="sr-only">{t("statutes.diffRemoved")}</span>
-        {segment.text}
-      </ReviewDiffDeletion>
-    );
-  }
-
-  return <span>{segment.text}</span>;
 };
