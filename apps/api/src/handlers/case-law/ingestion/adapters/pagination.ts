@@ -12,6 +12,8 @@ import * as v from "valibot";
 
 import { ADAPTER_TIMEOUT } from "@/api/handlers/case-law/consts";
 import type {
+  DecisionSupplement,
+  IngestionItem,
   IngestionResult,
   SyncPage,
 } from "@/api/handlers/case-law/ingestion/adapter";
@@ -194,14 +196,14 @@ type PagePaginationOptions<TResponse> = PageWalkDeclaration & {
    */
   listTimeoutMs?: number | undefined;
   /**
-   * Transform a single raw item into an IngestionResult.
+   * Transform a single raw item into a decision, or a supplement to one.
    * May perform secondary fetches (detail pages, fulltext).
    * Return null to skip the item.
    */
   parseItem: (
     item: unknown,
     signal?: AbortSignal,
-  ) => Promise<IngestionResult | null>;
+  ) => Promise<IngestionItem | null>;
   /**
    * Max parallel parseItem calls within a single page.
    * Defaults to 1 (serial). Raise for adapters whose
@@ -602,6 +604,7 @@ const materialiseConfiguredWalks = ({
 
 type ParsedPageItems = {
   decisions: IngestionResult[];
+  supplements: DecisionSupplement[];
   itemsSkipped: number;
   processedThroughIndex: number;
 };
@@ -624,6 +627,7 @@ const parsePageItems = async ({
   signal,
 }: ParsePageItemsOptions): Promise<ParsedPageItems> => {
   const decisions: IngestionResult[] = [];
+  const supplements: DecisionSupplement[] = [];
   let itemsSkipped = 0;
   let processedThroughIndex = 0;
   const chunkSize = Math.max(1, itemConcurrency ?? 1);
@@ -643,8 +647,19 @@ const parsePageItems = async ({
     }
     for (const result of results) {
       if (result.status === "fulfilled") {
-        if (result.value) {
-          decisions.push(result.value);
+        const item = result.value;
+        switch (item?.type) {
+          case undefined:
+            break;
+          case "decision":
+            decisions.push(item.decision);
+            break;
+          case "supplement":
+            supplements.push(item.supplement);
+            break;
+          default:
+            item satisfies never;
+            return panic(`Unhandled ingestion item: ${String(item)}`);
         }
       } else {
         // A poison item is isolated from the rest of the page. The skip is
@@ -662,7 +677,7 @@ const parsePageItems = async ({
       total: items.length,
     });
   }
-  return { decisions, itemsSkipped, processedThroughIndex };
+  return { decisions, supplements, itemsSkipped, processedThroughIndex };
 };
 
 const resolveNextCursor = ({
@@ -920,7 +935,8 @@ export const createPagePaginatedFetch = <TResponse>(
           parseItem: opts.parseItem,
           signal,
         });
-        const { decisions, itemsSkipped, processedThroughIndex } = parsedItems;
+        const { decisions, supplements, itemsSkipped, processedThroughIndex } =
+          parsedItems;
 
         const totalMs = Math.round(performance.now() - fetchT0);
         logger.info("case_law.ingestion.page_completed", {
@@ -929,6 +945,7 @@ export const createPagePaginatedFetch = <TResponse>(
           offset,
           skippedOffsetItems: itemsAlreadyFetched,
           decisions: decisions.length,
+          supplements: supplements.length,
           items: items.length,
           skipped: itemsSkipped,
           totalMs,
@@ -996,7 +1013,12 @@ export const createPagePaginatedFetch = <TResponse>(
           nextCursor = encodeTraversalCursor(successor, 0);
         }
 
-        return Result.ok({ decisions, nextCursor, sourceUrl: url });
+        return Result.ok({
+          decisions,
+          ...(supplements.length === 0 ? {} : { supplements }),
+          nextCursor,
+          sourceUrl: url,
+        });
       },
       catch: adapterCatch(opts.adapterKey, cursor),
     });

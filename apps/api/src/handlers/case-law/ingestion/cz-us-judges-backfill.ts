@@ -32,7 +32,10 @@ import {
   encodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
 } from "@/api/handlers/case-law/ingestion/adapter";
-import type { StoredRawReparseOutcome } from "@/api/handlers/case-law/ingestion/adapter";
+import type {
+  StoredRawReader,
+  StoredRawReparseOutcome,
+} from "@/api/handlers/case-law/ingestion/adapter";
 import {
   CZ_US_RECORD_CARD_METADATA_KEY,
   CZ_US_RECORD_CARD_STATE,
@@ -48,7 +51,6 @@ import {
   DECISION_REFRESH,
   processDecision,
 } from "@/api/handlers/case-law/ingestion/pipeline";
-import type { StoredRawReader } from "@/api/handlers/case-law/ingestion/replay";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { decodeSourceRawEnvelope } from "@/api/lib/legal-search/ingestion-types";

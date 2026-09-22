@@ -5,7 +5,7 @@ import * as v from "valibot";
 
 import { propertyConfig } from "@stll/property-testing";
 
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
+import type { IngestionItem } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
@@ -33,15 +33,18 @@ type TestResponse = { results: TestItem[]; total: number };
 const makeFixture = (items: TestItem[], total: number) =>
   JSON.stringify({ results: items, total });
 
-const itemToDecision = (item: TestItem): IngestionResult => ({
-  caseNumber: `CASE-${item.id}`,
-  court: "Test Court",
-  country: "TST",
-  language: "en",
-  textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-  metadata: {},
-  documentAst: {},
-  rawHash: `hash-${item.id}`,
+const itemToDecision = (item: TestItem): IngestionItem => ({
+  type: "decision",
+  decision: {
+    caseNumber: `CASE-${item.id}`,
+    court: "Test Court",
+    country: "TST",
+    language: "en",
+    textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+    metadata: {},
+    documentAst: {},
+    rawHash: `hash-${item.id}`,
+  },
 });
 
 const createTestFetch = (opts?: {

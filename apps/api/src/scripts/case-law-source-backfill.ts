@@ -17,7 +17,7 @@ import { eq } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawSources } from "@/api/db/schema";
-import type { StoredRawReader } from "@/api/handlers/case-law/ingestion/replay";
+import type { StoredRawReader } from "@/api/handlers/case-law/ingestion/adapter";
 import type { SafeId } from "@/api/lib/branded-types";
 import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";

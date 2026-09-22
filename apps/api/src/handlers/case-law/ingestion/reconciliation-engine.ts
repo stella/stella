@@ -40,6 +40,7 @@ import {
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   caseLawCoverageSlices,
+  caseLawDecisionSupplements,
   caseLawDecisions,
   caseLawSources,
   RECONCILIATION_ITEM_STATUS,
@@ -53,6 +54,8 @@ import {
   allocateSourceObservationOrder,
   PROCESS_DECISION_STATUS,
   processDecision,
+  processSupplement,
+  readStoredRawFromS3,
 } from "@/api/handlers/case-law/ingestion/pipeline";
 import type {
   FailedSliceCandidate,
@@ -84,6 +87,7 @@ import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-
 import type {
   ListingIdentity,
   ReconciliationListingItem,
+  SourceAdapter,
   SourceReconciliation,
 } from "@/api/lib/legal-search/ingestion-types";
 import {
@@ -292,6 +296,12 @@ export type ReconciliationWorkUnitOptions = {
   adapterKey: string;
   sourceId: SafeId<"caseLawSource">;
   reconciliation: SourceReconciliation;
+  /**
+   * The adapter's replay of a stored payload. A listed supplement is placed
+   * by writing its judgment again from the judgment's stored payload, so a
+   * source whose listing yields supplements needs it.
+   */
+  reparseStoredRaw: SourceAdapter["reparseStoredRaw"];
   scopedDb: ScopedDb;
   now: () => Date;
   /** Gap between two document fetches; the loop's politeness contract. */
@@ -351,7 +361,12 @@ type HeldDocumentIdsOptions = {
   requireDetail: boolean;
 };
 
-/** Which of these publisher document ids this source already has rows for. */
+/**
+ * Which of these publisher document ids this source already holds: as a
+ * decision row, or as a supplement a judgment's document takes in. A merged
+ * supplement has no row of its own, and reading it as missing would re-walk
+ * its slice forever.
+ */
 const selectHeldDocumentIds = async (
   scopedDb: ScopedDb,
   { documentIds, requireDetail, sourceId }: HeldDocumentIdsOptions,
@@ -359,23 +374,41 @@ const selectHeldDocumentIds = async (
   if (documentIds.length === 0) {
     return [];
   }
-  const rows = await scopedDb(
-    async (tx) =>
-      await tx
-        .select({ sourceDocumentId: caseLawDecisions.sourceDocumentId })
-        .from(caseLawDecisions)
-        .where(
-          and(
-            eq(caseLawDecisions.sourceId, sourceId),
-            inArray(caseLawDecisions.sourceDocumentId, [...documentIds]),
-            detailCondition(requireDetail),
-          ),
-        )
-        .limit(documentIds.length),
-  );
-  return rows.flatMap((row) =>
-    row.sourceDocumentId === null ? [] : [row.sourceDocumentId],
-  );
+  const { decisions, supplements } = await scopedDb(async (tx) => ({
+    decisions: await tx
+      .select({ sourceDocumentId: caseLawDecisions.sourceDocumentId })
+      .from(caseLawDecisions)
+      .where(
+        and(
+          eq(caseLawDecisions.sourceId, sourceId),
+          inArray(caseLawDecisions.sourceDocumentId, [...documentIds]),
+          detailCondition(requireDetail),
+        ),
+      )
+      .limit(documentIds.length),
+    supplements: await tx
+      .select({
+        sourceDocumentId: caseLawDecisionSupplements.sourceDocumentId,
+      })
+      .from(caseLawDecisionSupplements)
+      .where(
+        and(
+          eq(caseLawDecisionSupplements.sourceId, sourceId),
+          inArray(caseLawDecisionSupplements.sourceDocumentId, [
+            ...documentIds,
+          ]),
+        ),
+      )
+      .limit(documentIds.length),
+  }));
+  return [
+    ...new Set([
+      ...decisions.flatMap((row) =>
+        row.sourceDocumentId === null ? [] : [row.sourceDocumentId],
+      ),
+      ...supplements.map((row) => row.sourceDocumentId),
+    ]),
+  ];
 };
 
 type HeldCaseNumbersOptions = {
@@ -814,6 +847,7 @@ type IngestItemOptions = {
   lease: CaseLawSourceIngestionLease;
   now: Date;
   reconciliation: SourceReconciliation;
+  reparseStoredRaw: SourceAdapter["reparseStoredRaw"];
   scopedDb: ScopedDb;
   slice: string;
   sourceId: SafeId<"caseLawSource">;
@@ -834,6 +868,7 @@ const ingestListedItem = async ({
   lease,
   now,
   reconciliation,
+  reparseStoredRaw,
   scopedDb,
   slice,
   sourceId,
@@ -908,6 +943,40 @@ const ingestListedItem = async ({
         });
         return;
       }
+      case "built-supplement": {
+        if (reparseStoredRaw === undefined) {
+          panic(
+            `Adapter ${adapterKey} lists supplements but cannot rebuild the judgments they join`,
+          );
+        }
+        const nextObservationOrder = async (): Promise<bigint> => {
+          await lease.beforeDatabaseMark();
+          return await allocateSourceObservationOrder({
+            leaseToken: lease.leaseToken,
+            scopedDb,
+            sourceId,
+          });
+        };
+        const placed = await processSupplement({
+          supplement: built.supplement,
+          sourceId,
+          scopedDb,
+          observedAt: now,
+          nextObservationOrder,
+          reparseStoredRaw,
+          readStoredRaw: readStoredRawFromS3,
+        });
+        if (placed.status === PROCESS_DECISION_STATUS.RETRYABLE) {
+          await park(`retryable:${placed.reason}`);
+          return;
+        }
+        summary.written += 1;
+        await resolveReconciliationItem(scopedDb, {
+          sourceId,
+          identityKey: item.identityKey,
+        });
+        return;
+      }
       default: {
         built satisfies never;
         panic(
@@ -952,6 +1021,7 @@ type WalkSliceOptions = {
   now: () => Date;
   reason: SliceWalkReason;
   reconciliation: SourceReconciliation;
+  reparseStoredRaw: SourceAdapter["reparseStoredRaw"];
   scopedDb: ScopedDb;
   slice: string;
   sleep: (ms: number) => Promise<void>;
@@ -974,6 +1044,7 @@ const walkSlice = async ({
   now,
   reason,
   reconciliation,
+  reparseStoredRaw,
   scopedDb,
   slice,
   sleep,
@@ -1056,6 +1127,7 @@ const walkSlice = async ({
       lease,
       now: now(),
       reconciliation,
+      reparseStoredRaw,
       scopedDb,
       slice,
       sourceId,
@@ -1093,6 +1165,7 @@ type RetryParkedOptions = {
   lease: CaseLawSourceIngestionLease;
   now: () => Date;
   reconciliation: SourceReconciliation;
+  reparseStoredRaw: SourceAdapter["reparseStoredRaw"];
   scopedDb: ScopedDb;
   sleep: (ms: number) => Promise<void>;
   sourceId: SafeId<"caseLawSource">;
@@ -1113,6 +1186,7 @@ const retryParkedItems = async ({
   lease,
   now,
   reconciliation,
+  reparseStoredRaw,
   scopedDb,
   sleep,
   sourceId,
@@ -1175,6 +1249,7 @@ const retryParkedItems = async ({
       lease,
       now: now(),
       reconciliation,
+      reparseStoredRaw,
       scopedDb,
       slice: item.slice,
       sourceId,
@@ -1197,6 +1272,7 @@ export const runReconciliationWorkUnit = async ({
   fetchDelayMs,
   now,
   reconciliation: adapterReconciliation,
+  reparseStoredRaw,
   scopedDb,
   sleep,
   sliceIngestBudget = DEFAULT_SLICE_INGEST_BUDGET,
@@ -1372,6 +1448,7 @@ export const runReconciliationWorkUnit = async ({
             lease,
             now,
             reconciliation,
+            reparseStoredRaw,
             scopedDb,
             sleep,
             sourceId,
@@ -1388,6 +1465,7 @@ export const runReconciliationWorkUnit = async ({
             now,
             reason: unit.reason,
             reconciliation,
+            reparseStoredRaw,
             scopedDb,
             slice: unit.slice,
             sleep,

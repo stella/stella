@@ -237,7 +237,9 @@ describe("a stored record reaches the targets the inventory declares", () => {
       TRANSFERRED_FILE_DOCKET,
     );
     if (outcome.type !== "parsed") {
-      throw new Error(`the stored record did not re-parse: ${outcome.detail}`);
+      throw new Error(
+        `the stored record did not re-parse: ${outcome.type === "rejected" ? outcome.detail : outcome.type}`,
+      );
     }
     const { metadata } = outcome.result;
 
@@ -257,7 +259,9 @@ describe("a stored record reaches the targets the inventory declares", () => {
       TRANSFERRED_FILE_DOCKET,
     );
     if (outcome.type !== "parsed") {
-      throw new Error(`the stored record did not re-parse: ${outcome.detail}`);
+      throw new Error(
+        `the stored record did not re-parse: ${outcome.type === "rejected" ? outcome.detail : outcome.type}`,
+      );
     }
     const { metadata } = outcome.result;
 
@@ -284,7 +288,9 @@ describe("a stored record reaches the targets the inventory declares", () => {
       TRANSFERRED_FILE_DOCKET,
     );
     if (outcome.type !== "parsed") {
-      throw new Error(`the stored record did not re-parse: ${outcome.detail}`);
+      throw new Error(
+        `the stored record did not re-parse: ${outcome.type === "rejected" ? outcome.detail : outcome.type}`,
+      );
     }
 
     expect(outcome.result.sourceRawContentType).toBe(

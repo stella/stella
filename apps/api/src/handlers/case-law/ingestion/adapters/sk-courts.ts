@@ -1562,5 +1562,8 @@ const backfillPage = createPagePaginatedFetch<SkApiResponse>({
     total: toOptionalValue(data.numFound),
   }),
 
-  parseItem: parseItemWithDetail,
+  parseItem: async (item, signal) => {
+    const decision = await parseItemWithDetail(item, signal);
+    return decision === null ? null : { type: "decision", decision };
+  },
 });

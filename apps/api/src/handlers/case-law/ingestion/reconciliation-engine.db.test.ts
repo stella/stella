@@ -379,6 +379,7 @@ const runUnitWith = async ({
     adapterKey: "engine-fixture",
     sourceId,
     reconciliation,
+    reparseStoredRaw: undefined,
     scopedDb,
     now,
     fetchDelayMs: 0,

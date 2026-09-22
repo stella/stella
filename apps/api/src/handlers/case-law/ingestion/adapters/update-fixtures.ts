@@ -118,6 +118,11 @@ const updateAdapter = async (
       }),
       page: {
         decisions: page.decisions,
+        // A page's supplements are part of what it served; a recording that
+        // kept only its decisions would drop them from every replay.
+        ...(page.supplements === undefined
+          ? {}
+          : { supplements: page.supplements }),
         nextCursor: page.nextCursor,
       },
     };

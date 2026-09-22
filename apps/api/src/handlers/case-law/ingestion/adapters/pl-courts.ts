@@ -28,6 +28,7 @@ import {
 import type {
   DecisionJudgeInput,
   EmptyAst,
+  IngestionItem,
   IngestionResult,
   ListingIdentity,
   ReconciliationBuildOutcome,
@@ -69,6 +70,7 @@ import {
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
+import { DECISION_SUPPLEMENT_KIND } from "@/api/lib/legal-search/decision-supplement-kind";
 import { logger } from "@/api/lib/observability/logger";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -361,13 +363,50 @@ const COURT_TYPE_MAP: Record<string, string> = {
   NATIONAL_APPEAL_CHAMBER: "Krajowa Izba Odwoławcza",
 };
 
-const JUDGMENT_TYPE_MAP: Record<string, string> = {
+/** SAOS's `judgmentType` enum, and the local term each is stored under. */
+const SAOS_JUDGMENT_TYPE = {
   SENTENCE: "wyrok",
   DECISION: "postanowienie",
   RESOLUTION: "uchwała",
   REASONS: "uzasadnienie",
   REGULATION: "zarządzenie",
-};
+} as const;
+
+const JUDGMENT_TYPE_MAP: Record<string, string> = SAOS_JUDGMENT_TYPE;
+
+/**
+ * The `judgmentType` SAOS gives the written reasons of a ruling when it
+ * publishes them apart from it, as a document with an id of its own.
+ */
+const SAOS_REASONS_JUDGMENT_TYPE =
+  "REASONS" satisfies keyof typeof SAOS_JUDGMENT_TYPE;
+
+/**
+ * The rulings written reasons can belong to. A `zarządzenie` is an order of
+ * the presiding judge and carries no reasons of its own.
+ */
+export const PL_COURTS_RULING_DECISION_TYPES = [
+  SAOS_JUDGMENT_TYPE.SENTENCE,
+  SAOS_JUDGMENT_TYPE.DECISION,
+  SAOS_JUDGMENT_TYPE.RESOLUTION,
+] as const;
+
+/**
+ * The decision type a reasons document is stored under while the corpus
+ * holds no ruling it belongs to: reasons published without the operative
+ * part ("sentencja") they explain. Not `uzasadnienie`, which reads as a kind
+ * of ruling beside `wyrok` and `postanowienie`; the row is the reasons of a
+ * ruling this corpus does not hold.
+ */
+export const PL_COURTS_STANDALONE_REASONS_DECISION_TYPE =
+  "uzasadnienie bez sentencji";
+
+/**
+ * The type every reasons document was stored under while this adapter wrote
+ * them as decisions; what the supplement fold selects to fold.
+ */
+export const PL_COURTS_PRE_SUPPLEMENT_REASONS_DECISION_TYPE =
+  SAOS_JUDGMENT_TYPE.REASONS;
 
 type SaosJudge = {
   name: string;
@@ -1172,10 +1211,15 @@ export const buildPlDecision = ({
 
   const saosId = detailOrListing(item.id, dumpItem.id);
   const content = item.textContent ?? dumpItem.textContent;
-  const decisionType = normalizeDecisionType(
-    item.judgmentType ?? dumpItem.judgmentType,
-    content,
-  );
+  const judgmentType = item.judgmentType ?? dumpItem.judgmentType;
+  // What the document is, which is what its parser titles it by.
+  const decisionType = normalizeDecisionType(judgmentType, content);
+  // What a row holding this document alone is: a reasons document is one
+  // only while no ruling holds it, and is typed as such.
+  const storedDecisionType =
+    judgmentType === SAOS_REASONS_JUDGMENT_TYPE
+      ? PL_COURTS_STANDALONE_REASONS_DECISION_TYPE
+      : decisionType;
   const upstreamId = detailOrListing(
     item.source?.judgmentId,
     dumpItem.source?.judgmentId,
@@ -1274,7 +1318,7 @@ export const buildPlDecision = ({
     country: ADAPTER_MANIFESTS[ADAPTER_KEYS.PL_COURTS].country,
     language: "pl",
     decisionDate,
-    decisionType,
+    decisionType: storedDecisionType,
     fulltext,
     sourceDocumentId: plCourtsSourceDocumentId(saosId),
     sourceUrl: publicSourceUrl(saosId),
@@ -1292,7 +1336,7 @@ export const buildPlDecision = ({
       caseNumber,
       court: courtName,
       decisionDate,
-      decisionType,
+      decisionType: storedDecisionType,
       saosId,
       href: detailOrListing(item.href, dumpItem.href),
       courtType: detailOrListing(item.courtType, dumpItem.courtType),
@@ -1356,6 +1400,50 @@ export const buildPlDecision = ({
 };
 
 /**
+ * Build what one listing item and its detail are: a decision, or the written
+ * reasons of one.
+ *
+ * SAOS publishes the reasons of a ruling as a judgment of its own with
+ * `judgmentType: REASONS`, under its own id and, where they were written
+ * later, its own date. It states no link to the ruling: the two share the
+ * court, the docket and, in the deciding court's own id, everything up to
+ * the date (`…_IV_Ka_000095_2018_Uz_2018-03-22_001` is the ruling,
+ * `…_002` its reasons). So the reasons are a supplement to the ruling under
+ * their court and docket whose date is at or before theirs.
+ *
+ * An item with no SAOS id has no identity a supplement can be kept under,
+ * and stays a decision.
+ */
+export const buildPlItem = (
+  options: BuildPlDecisionOptions,
+): IngestionItem | null => {
+  const decision = buildPlDecision(options);
+  if (decision === null) {
+    return null;
+  }
+  const { sourceDocumentId } = decision;
+  const judgmentType =
+    options.detail?.judgmentType ?? options.listingItem.judgmentType;
+  if (
+    judgmentType !== SAOS_REASONS_JUDGMENT_TYPE ||
+    sourceDocumentId === undefined
+  ) {
+    return { type: "decision", decision };
+  }
+  return {
+    type: "supplement",
+    supplement: {
+      kind: DECISION_SUPPLEMENT_KIND.REASONS,
+      target: {
+        decisionTypes: PL_COURTS_RULING_DECISION_TYPES,
+        latestDecisionDate: decision.decisionDate,
+      },
+      document: { ...decision, sourceDocumentId },
+    },
+  };
+};
+
+/**
  * The responses read for one decision, under the names the envelope gives
  * them: the listing row as the publisher served it, and the per-judgment
  * record where one came back.
@@ -1372,14 +1460,14 @@ const rawPartsOf = (
 const parseItemWithDetail = async (
   raw: unknown,
   signal?: AbortSignal,
-): Promise<IngestionResult | null> => {
+): Promise<IngestionItem | null> => {
   if (!isRecord(raw)) {
     return null;
   }
 
   const listingItem = normalizeSaosDumpItem(raw);
   const fetched = await fetchDetailForItem(listingItem, signal);
-  return buildPlDecision({
+  return buildPlItem({
     listingItem,
     detail: fetched.type === "detail" ? fetched.detail : null,
     rawParts: rawPartsOf(RAW_PART.LISTING_DUMP, raw, fetched),
@@ -1573,14 +1661,24 @@ const buildPlCourtsFromPayload = async (
       return { type: "detail-unavailable" };
     case "listing-only":
     case "detail": {
-      const decision = buildPlDecision({
+      const built = buildPlItem({
         listingItem,
         detail: fetched.type === "detail" ? fetched.detail : null,
         rawParts: rawPartsOf(RAW_PART.LISTING_SEARCH, payload, fetched),
       });
-      return decision === null
-        ? { type: "unkeyable" }
-        : { type: "built", decision };
+      if (built === null) {
+        return { type: "unkeyable" };
+      }
+      switch (built.type) {
+        case "decision":
+          return { type: "built", decision: built.decision };
+        case "supplement":
+          return { type: "built-supplement", supplement: built.supplement };
+        default: {
+          built satisfies never;
+          return panic(`Unhandled pl-courts item: ${JSON.stringify(built)}`);
+        }
+      }
     }
     default: {
       fetched satisfies never;
@@ -1698,18 +1796,20 @@ const reparseStoredRaw = (
   }
 
   const detailRecord = readSaosRecord(parts[RAW_PART.DETAIL]);
-  const decision = buildPlDecision({
+  const built = buildPlItem({
     listingItem: normalizeSaosDumpItem(listingRecord),
     detail: detailRecord === null ? null : normalizeSaosDumpItem(detailRecord),
     rawParts: parts,
   });
-  if (decision === null) {
+  if (built === null) {
     return {
       type: "rejected",
       rejection: STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA,
       detail: `the stored payload for ${stored.caseNumber} states no docket and court to key on`,
     };
   }
+  const decision =
+    built.type === "decision" ? built.decision : built.supplement.document;
   if (decision.caseNumber !== stored.caseNumber) {
     return {
       type: "rejected",
@@ -1717,7 +1817,16 @@ const reparseStoredRaw = (
       detail: `stored payload states ${decision.caseNumber}`,
     };
   }
-  return { type: "parsed", result: decision };
+  switch (built.type) {
+    case "decision":
+      return { type: "parsed", result: built.decision };
+    case "supplement":
+      return { type: "supplement", supplement: built.supplement };
+    default: {
+      built satisfies never;
+      return panic(`Unhandled pl-courts item: ${JSON.stringify(built)}`);
+    }
+  }
 };
 
 // ── Source fields ──────────────────────────────────────

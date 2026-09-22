@@ -613,6 +613,27 @@ the one time-valid holder whose court matches. Three things to hold to:
   one while the negative test passed. Assemble long patterns from named
   fragments so each part reads on its own.
 
+### 24. A document that explains another decision is a supplement
+
+SAOS publishes the written reasons of a ruling (`judgmentType: REASONS`)
+under an id of its own. Stored as a decision, the reasons stand beside their
+ruling: a second search hit, a second holder of the docket that leaves
+citations of the ruling ambiguous, and citations the ruling makes that the
+ruling never carries.
+
+An adapter emits such a document as a `DecisionSupplement`, naming its
+judgment by what the publisher states: the court, docket and language it
+shares, the decision types it can explain, and its own date as the latest the
+judgment can carry. Where several rulings fit, it is not guessed.
+
+The pipeline composes supplements into the judgment's document on every
+write of the judgment (`supplement-composition.ts`), and the stored hash
+covers both, so re-ingesting either is a fixed point. A supplement that
+arrives before its judgment stays readable as a decision of its own, typed as
+what it is, and is absorbed when the judgment's write composes it: never
+deleted, since rows outside the ingestion role's view reference decisions.
+`supplement-fold.ts` folds the rows stored before supplements existed.
+
 ## DocumentAst Conventions
 
 ```typescript
