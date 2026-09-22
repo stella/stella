@@ -76,8 +76,8 @@ type ExtractedCitation = {
 
 /**
  * Patterns for recognizing case law citations in Czech, Slovak, Polish,
- * and CJEU decision texts. Covers common reference formats used in
- * judicial practice.
+ * Hungarian and CJEU decision texts. Covers common reference formats used
+ * in judicial practice.
  *
  * Based on analysis of 770K citation instances in the CzCDC corpus
  * (Harasta, Masaryk University), cross-checked against the SAOS public
@@ -100,6 +100,12 @@ type ExtractedCitation = {
  *    spaced ("C- 303/20", "C -679/18") but must be present.
  *  - Slovak "R NN/YYYY" reporter citations: needs proximity anchoring to
  *    the citing court to avoid collisions; future work.
+ *  - Hungarian dockets without the document number ("Pfv.20.123/2019."):
+ *    the corpus keys a Hungarian decision by the document, so a file-level
+ *    reference has nothing to resolve to, and the trailing "/N" is also what
+ *    keeps the shape apart from prose.
+ *  - Pre-2012 Hungarian collegium statements cited by bare number ("PK 32.",
+ *    "GK 34."): no year, so the number names nothing outside its series.
  */
 
 /**
@@ -148,6 +154,237 @@ const CASE_NUMBER_BODY_COMMA = String.raw`(?<caseNumber>\d{1,3}\s{0,3}\p{L}{1,6}
 const US_MARK_SOURCE = String.raw`[ÚU]\p{Mn}*S`;
 
 const CZECH_REPORTER_CITATION_SOURCE = String.raw`[čc]\.\s*\d{1,5}\/\d{4}\s+Sb\.\s*(?:rozh\.\s*(?:tr|ob)\.?|NSS|NS)`;
+
+const CZECH_REPORTER_CITATION_RE = new RegExp(
+  `^${CZECH_REPORTER_CITATION_SOURCE}$`,
+  "iu",
+);
+
+/**
+ * A Hungarian court docket as the courts print it: an optional Arabic panel
+ * number, the registry letters with their dot, an optional Roman panel
+ * numeral, the register number (typeset with a thousands dot by the courts,
+ * without it by the publisher's listing), the filing year, and the document
+ * number within the file: `Pfv.III.20.123/2019/5`, `5.Gf.40.014/2023/15`,
+ * `Pfv. 20.187/2017/12`, `Mfv.10043/2022/5`.
+ *
+ * The dot after the registry and the `/year/document` tail are what no
+ * Czech, Slovak, Polish or CJEU number has: those courts put a space or a
+ * slash between registry and number and end on the year or on a dash-joined
+ * sheet. The registry is title-case, which keeps out an all-caps agency
+ * acronym and the `GK.34` collegium series the listing also carries.
+ */
+const HU_DOCKET_SOURCE = String.raw`(?:\d{1,3}\.\s?)?\p{Lu}\p{Ll}{0,4}\.\s?(?:[IVXLC]{1,5}\.\s?)?(?:\d{1,3}\.\d{3}|\d{1,6})\/\d{4}\/\d{1,4}`;
+
+/**
+ * The same docket read for its parts, over a string that is only a docket.
+ * Case-insensitive because it also reads stored case numbers and keys, which
+ * are lowercased.
+ */
+const HU_DOCKET_PARTS_RE =
+  /^(?:\d{1,3}\.\s?)?(?<registry>\p{L}{1,5})\.\s?(?:[IVXLC]{1,5}\.\s?)?(?<register>\d{1,3}\.\d{3}|\d{1,6})\/(?<year>\d{4})\/(?<document>\d{1,4})\.?$/iu;
+
+/**
+ * The official date a Hungarian designation may carry after its number, the
+ * month in Roman numerals: `(V. 30.)`, `(II.27.)`.
+ */
+const HU_DESIGNATION_DATE_SOURCE = String.raw`(?:\([IVX]{1,4}\.\s?\d{1,2}\.\s?\)\s?)?`;
+
+/**
+ * Hungarian published-decision series: Bírósági Határozatok (`BH 2019.123.`),
+ * the elvi határozatok and döntések (`EBH 2018.G.3.`, `EBD 2016.M.12.`), the
+ * Bírósági Döntések Tára (`BDT 2019.4012.`), the Közigazgatási és Gazdasági
+ * Döntvénytár (`KGD 2020.15.`) and Ítélőtáblai Határozatok (`ÍH 2018.45.`).
+ * An issue number or a legal-area letter may sit between the year and the
+ * entry (`BH 2020.7.201`). The listing stores EBH and EBD entries as case
+ * numbers, dotted, with or without a closing dot (`EBH.2018.K.17.`,
+ * `EBH.2015.K.38`), and once with a doubled dot (`EBH..2013.K.32.`).
+ */
+const HU_REPORTER_CITATION_SOURCE = String.raw`(?<![\p{L}\d])(?:EBH|EBD|BDT|KGD|BH|ÍH)[\s.]{0,2}\d{4}\.\s?(?:(?:[A-Z]|\d{1,2})\.\s?)?\d{1,5}(?!\d)`;
+
+/** The same entry read for its parts; case-insensitive so a key reads back. */
+const HU_REPORTER_PARTS_RE =
+  /^(?<series>EBH|EBD|BDT|KGD|BH|ÍH)[\s.]{0,2}(?<year>\d{4})\.\s?(?:(?<part>[A-Z]|\d{1,2})\.\s?)?(?<entry>\d{1,5})\.?$/iu;
+
+/**
+ * The fields a Kúria uniformity decision is issued in, by the word the long
+ * form uses and the abbreviation the short form uses. The hyphenated field is
+ * keyed on its ASCII-hyphen spelling; the key is read after dashes are folded,
+ * with the same class the pattern accepts, so every field the pattern reads
+ * has an entry here.
+ */
+const HU_UNIFORMITY_FIELDS = {
+  polgári: "PJE",
+  büntető: "BJE",
+  közigazgatási: "KJE",
+  munkaügyi: "MJE",
+  gazdasági: "GJE",
+  "közigazgatási-munkaügyi": "KMJE",
+} as const satisfies Record<string, string>;
+
+const HU_UNIFORMITY_ABBREVIATION_SOURCE = String.raw`KMPJE|KMJE|KPJE|PJE|BJE|KJE|MJE|GJE`;
+
+/**
+ * A uniformity decision (jogegységi határozat), short or long:
+ * `1/2019. PJE`, `2/2020. KMPJE`, `4/2021. Polgári jogegységi határozat`.
+ * The number is only unique within its field, so a long form that names no
+ * field ("a jogegységi határozat") is not a citation.
+ */
+const HU_UNIFORMITY_SOURCE = String.raw`(?<![\p{L}\d\/.])(?<number>\d{1,3})\/(?<year>\d{4})\.\s?${HU_DESIGNATION_DATE_SOURCE}(?:(?<abbreviation>${HU_UNIFORMITY_ABBREVIATION_SOURCE})(?!\p{L})|(?<field>[Kk]özigazgatási[${DECISION_DASH_CLASS_SOURCE}][Mm]unkaügyi|[Pp]olgári|[Bb]üntető|[Kk]özigazgatási|[Mm]unkaügyi|[Gg]azdasági)\s+jogegységi\s+határozat)`;
+
+/** The same decision with the series first: `PJE 4/2021`. */
+const HU_UNIFORMITY_SERIES_FIRST_SOURCE = String.raw`(?<![\p{L}\d])(?<abbreviation>${HU_UNIFORMITY_ABBREVIATION_SOURCE})\s+(?<number>\d{1,3})\/(?<year>\d{4})(?!\d)`;
+
+const HU_OPINION_COLLEGIUM_SOURCE = String.raw`KMK|KJK|PK|GK|BK|MK|KK`;
+
+/** A collegium opinion (kollégiumi vélemény): `1/2014. PK vélemény`. */
+const HU_OPINION_SOURCE = String.raw`(?<![\p{L}\d\/.])(?<number>\d{1,3})\/(?<year>\d{4})\.\s?${HU_DESIGNATION_DATE_SOURCE}(?<collegium>${HU_OPINION_COLLEGIUM_SOURCE})\s+vélemény`;
+
+/** The same opinion with the series first: `PK vélemény 1/2014`. */
+const HU_OPINION_SERIES_FIRST_SOURCE = String.raw`(?<![\p{L}\d])(?<collegium>${HU_OPINION_COLLEGIUM_SOURCE})\s+vélemény\s+(?<number>\d{1,3})\/(?<year>\d{4})(?!\d)`;
+
+/**
+ * A uniformity decision or opinion as the listing stores it: `4.2008.BJE`,
+ * `1.2019.KMPJE`, `2.2009.PK`. Case-insensitive, so a key reads back.
+ */
+const HU_SERIES_STORED_RE = new RegExp(
+  String.raw`^(?<number>\d{1,3})\.(?<year>\d{4})\.(?<series>${HU_UNIFORMITY_ABBREVIATION_SOURCE}|${HU_OPINION_COLLEGIUM_SOURCE})\.?$`,
+  "iu",
+);
+
+/**
+ * A Constitutional Court decision or order:
+ * `3123/2019. (V. 30.) AB határozat`, `12/2020. AB végzés`. The court numbers
+ * both in one yearly sequence, so number and year name the document and the
+ * key drops the date and the type word. A ministerial decree shares the
+ * number-date shape (`9/2006. (II.27.) IM rendelet`); the `AB` mark is what
+ * tells them apart.
+ */
+const HU_CONSTITUTIONAL_SOURCE = String.raw`(?<![\p{L}\d\/.])(?<number>\d{1,4})\/(?<year>\d{4})\.\s?${HU_DESIGNATION_DATE_SOURCE}AB\s+(?:határozat|végzés)`;
+
+// Read over a whole citation text, which each extraction pattern ends where
+// the designation ends.
+const HU_UNIFORMITY_RE = new RegExp(`^${HU_UNIFORMITY_SOURCE}$`, "u");
+const HU_UNIFORMITY_SERIES_FIRST_RE = new RegExp(
+  `^${HU_UNIFORMITY_SERIES_FIRST_SOURCE}$`,
+  "u",
+);
+const HU_OPINION_RE = new RegExp(`^${HU_OPINION_SOURCE}$`, "u");
+const HU_OPINION_SERIES_FIRST_RE = new RegExp(
+  `^${HU_OPINION_SERIES_FIRST_SOURCE}$`,
+  "u",
+);
+const HU_CONSTITUTIONAL_RE = new RegExp(`^${HU_CONSTITUTIONAL_SOURCE}$`, "u");
+
+type RegExpGroups = Partial<Record<string, string>>;
+
+/** A named group the matched pattern cannot have left empty. */
+const requiredGroup = (groups: RegExpGroups, name: string): string =>
+  groups[name] ?? panic(`Matched Hungarian citation has no ${name}`);
+
+const isHungarianUniformityField = (
+  field: string,
+): field is keyof typeof HU_UNIFORMITY_FIELDS =>
+  Object.hasOwn(HU_UNIFORMITY_FIELDS, field);
+
+const uniformityAbbreviation = (groups: RegExpGroups): string => {
+  const abbreviation = groups["abbreviation"];
+  if (abbreviation !== undefined) {
+    return abbreviation;
+  }
+  const field = requiredGroup(groups, "field").toLocaleLowerCase("hu-HU");
+  return isHungarianUniformityField(field)
+    ? HU_UNIFORMITY_FIELDS[field]
+    : panic(`Unmapped Hungarian uniformity field: ${field}`);
+};
+
+/**
+ * The key of a Hungarian series designation — a uniformity decision, an
+ * opinion, or a reporter entry — or null for text that is none of them.
+ *
+ * One key per document, in the listing's own dotted spelling lowercased,
+ * because the listing stores these as case numbers and `citation_key` holds
+ * them that way: `4.2021.pje` for `4/2021. PJE`, `PJE 4/2021`,
+ * `4/2021. Polgári jogegységi határozat` and the stored `4.2021.PJE`;
+ * `1.2014.pk` for `1/2014. PK vélemény`, `PK vélemény 1/2014` and the stored
+ * `1.2014.PK`; `ebh.2018.k.17` for `EBH 2018.K.17.`, `EBH2018. K.17.` and the
+ * stored `EBH.2018.K.17.` or `EBH.2018.K.17`. The reporter key drops the
+ * closing dot, which the listing writes on some rows and not on others, and
+ * keeps every part apart with one dot so `BH 2019.19` and `BH 2019.1.9` stay
+ * two entries. Every key reads back as itself.
+ */
+const hungarianSeriesKey = (text: string): string | null => {
+  const stored = HU_SERIES_STORED_RE.exec(text)?.groups;
+  if (stored !== undefined) {
+    return `${requiredGroup(stored, "number")}.${requiredGroup(stored, "year")}.${requiredGroup(stored, "series")}`.toLowerCase();
+  }
+  const uniformity =
+    HU_UNIFORMITY_RE.exec(text)?.groups ??
+    HU_UNIFORMITY_SERIES_FIRST_RE.exec(text)?.groups;
+  if (uniformity !== undefined) {
+    return `${requiredGroup(uniformity, "number")}.${requiredGroup(uniformity, "year")}.${uniformityAbbreviation(uniformity)}`.toLowerCase();
+  }
+  const opinion =
+    HU_OPINION_RE.exec(text)?.groups ??
+    HU_OPINION_SERIES_FIRST_RE.exec(text)?.groups;
+  if (opinion !== undefined) {
+    return `${requiredGroup(opinion, "number")}.${requiredGroup(opinion, "year")}.${requiredGroup(opinion, "collegium")}`.toLowerCase();
+  }
+  const reporter = HU_REPORTER_PARTS_RE.exec(text)?.groups;
+  if (reporter !== undefined) {
+    const part = reporter["part"];
+    return [
+      requiredGroup(reporter, "series"),
+      requiredGroup(reporter, "year"),
+      ...(part === undefined ? [] : [part]),
+      requiredGroup(reporter, "entry"),
+    ]
+      .join(".")
+      .toLowerCase();
+  }
+  return null;
+};
+
+/**
+ * A Constitutional Court decision in one spelling, for the reporter-citation
+ * normalization, or null for text that is not one. The corpus stores no
+ * Constitutional Court decisions, so there is no stored spelling to meet.
+ */
+const hungarianConstitutionalDesignation = (value: string): string | null => {
+  const groups = HU_CONSTITUTIONAL_RE.exec(
+    normalizeDashes(value.normalize("NFC")).replace(/\s+/gu, " ").trim(),
+  )?.groups;
+  return groups === undefined
+    ? null
+    : `${requiredGroup(groups, "number")}/${requiredGroup(groups, "year")}. AB`;
+};
+
+/**
+ * What a citation is, read as Hungarian: a court docket and its registry, or
+ * a published designation (a reporter entry, a uniformity decision, an
+ * opinion, a Constitutional Court decision). Null for text that is neither.
+ */
+type HungarianCitationForm =
+  | { type: "docket"; registry: string }
+  | { type: "published" };
+
+export const hungarianCitationForm = (
+  citationText: string,
+): HungarianCitationForm | null => {
+  const text = normalizeDashes(citationText.normalize("NFC"))
+    .replace(/\s+/gu, " ")
+    .trim();
+  if (
+    hungarianSeriesKey(text) !== null ||
+    hungarianConstitutionalDesignation(text) !== null
+  ) {
+    return { type: "published" };
+  }
+  const registry = HU_DOCKET_PARTS_RE.exec(text)?.groups?.["registry"];
+  return registry === undefined
+    ? null
+    : { type: "docket", registry: registry.toLocaleLowerCase("hu-HU") };
+};
 
 // Shared "sygn." lead-in, covering every registrar spelling seen in the
 // corpus: title-case "Sygn." at the start of a document header vs.
@@ -483,6 +720,24 @@ const CITATION_PATTERNS: RegExp[] = [
   // the symbol at the tail phantom-duplicates as a second citation.
   /\b[IVX]{1,4}(?:\s{1,3}(?:[A-Z]{2,5}|[A-Z]{1,4}[az])|[A-Z])\s+\d{1,6}\/\d{2,4}\b/gu,
 
+  // Hungarian court docket: "Pfv.III.20.123/2019/5", "5.Gf.40.014/2023/15".
+  // No leading letter, digit or dot, so the match starts at the panel number
+  // when there is one rather than at the registry after it. Nothing may follow
+  // the document number that would make it part of a longer token: a
+  // prosecutor's file shares the shape and adds a dashed suffix
+  // ("Bf.90/2009/1-I.").
+  new RegExp(
+    String.raw`(?<![\p{L}\d.])(?<caseNumber>${HU_DOCKET_SOURCE})(?![${CITATION_DASH_CLASS}\d/])`,
+    "gu",
+  ),
+
+  new RegExp(HU_REPORTER_CITATION_SOURCE, "gu"),
+  new RegExp(HU_UNIFORMITY_SOURCE, "gu"),
+  new RegExp(HU_UNIFORMITY_SERIES_FIRST_SOURCE, "gu"),
+  new RegExp(HU_OPINION_SOURCE, "gu"),
+  new RegExp(HU_OPINION_SERIES_FIRST_SOURCE, "gu"),
+  new RegExp(HU_CONSTITUTIONAL_SOURCE, "gu"),
+
   // Neutral citations: bracketed year, one to three court/division tokens,
   // then the decision number (for example "[2024] Example Court 12"). The
   // bracketed year and final number keep this narrower than an ordinary
@@ -616,6 +871,23 @@ const POLISH_LETTERS_DOCKET_RE =
   /^(?<letters>[A-Za-z]{1,5})\s?(?<docket>\d.*)$/u;
 
 /**
+ * A Hungarian docket's key: registry, register number, year and document,
+ * in the spelling the publisher's listing stores as the case number
+ * (`Gfv.30091/2025/4`).
+ *
+ * The panel number, the panel numeral and the thousands dot are how the
+ * courts print the same number (`Gfv.VI.30.091/2025/4`): the listing drops
+ * them, so they are not part of the file's identity, and a key that kept them
+ * would miss every decision whose citation spells the docket the way the
+ * courts do. The key of a listed case number is the lowercased case number
+ * itself, which is what `citation_key` and the case-number identifier rows
+ * already hold. The document number stays: the listing keys each decision by
+ * it, and it is what tells the decisions of one file apart.
+ */
+const hungarianDocketKey = (parts: RegExpGroups): string =>
+  `${requiredGroup(parts, "registry")}.${requiredGroup(parts, "register").replace(".", "")}/${requiredGroup(parts, "year")}/${requiredGroup(parts, "document")}`.toLowerCase();
+
+/**
  * Collapse spelling variants that would otherwise fracture one real
  * citation into several dedup keys:
  *  - soft hyphens (U+00AD) and NBSP (U+00A0), both seen in the corpus
@@ -646,10 +918,16 @@ const POLISH_LETTERS_DOCKET_RE =
  *    citation ("II.ÚS/251/04", "II.ÚS 251/04", "II. ÚS 251/04", and the
  *    diacritic-dropped "III.US 364/2017" all fold to one key);
  *  - the join between two consolidated docket numbers, comma- or
- *    slash-separated ("36 Co 52,53/2023" vs "36 Co 52/53/2023").
+ *    slash-separated ("36 Co 52,53/2023" vs "36 Co 52/53/2023");
+ *  - a Hungarian docket's panel number, panel numeral and thousands dot
+ *    ("5.Pf.III.20.123/2019/4" vs "Pf.20123/2019/4"); see
+ *    `hungarianDocketKey`;
+ *  - the spellings of one Hungarian uniformity decision, opinion or reporter
+ *    entry ("4/2021. PJE" vs "4.2021.PJE", "EBH 2018.K.17." vs
+ *    "EBH.2018.K.17"); see `hungarianSeriesKey`.
  */
 const canonicalizeDedupKey = (text: string): string => {
-  const cleaned = normalizeDashes(text)
+  const spaced = normalizeDashes(text)
     // One key per case, whatever normalization form the publisher served:
     // a decomposed "Ú" is the same letter as a precomposed one, and only
     // the key folds it -- `citationText` stays verbatim so the reader can
@@ -661,6 +939,20 @@ const canonicalizeDedupKey = (text: string): string => {
     .replace(/\s{0,4}-\s{0,4}/gu, "-") // collapse whitespace around a hyphen
     .replace(/\s{0,4}\/\s{0,4}/gu, "/") // collapse whitespace around a slash
     .replace(/,\s{0,3}/gu, ",") // "52, 53/2023" -> "52,53/2023"
+    .trim();
+
+  // Read before the registry dot is stripped below: in a Hungarian docket
+  // that dot is the separator ("Pfv. 20.187/2017/12").
+  const hungarian = HU_DOCKET_PARTS_RE.exec(spaced)?.groups;
+  if (hungarian !== undefined) {
+    return hungarianDocketKey(hungarian);
+  }
+  const hungarianSeries = hungarianSeriesKey(spaced);
+  if (hungarianSeries !== null) {
+    return hungarianSeries;
+  }
+
+  const cleaned = spaced
     .replace(/(\p{L})\.(?=[\s/]|$)/gu, "$1") // "Spr." / "K." -> "Spr" / "K"
     .trim();
 
@@ -923,8 +1215,14 @@ export const normalizeDecisionIdentifier = (
       return bareCitationKey(identifier.value);
     case DECISION_IDENTIFIER_TYPES.ECLI:
     case DECISION_IDENTIFIER_TYPES.NEUTRAL_CITATION:
-    case DECISION_IDENTIFIER_TYPES.REPORTER_CITATION:
       return normalizeStructuredDecisionIdentifier(identifier);
+    case DECISION_IDENTIFIER_TYPES.REPORTER_CITATION:
+      return normalizeStructuredDecisionIdentifier({
+        type: identifier.type,
+        value:
+          hungarianConstitutionalDesignation(identifier.value) ??
+          identifier.value,
+      });
     default: {
       identifier satisfies never;
       return panic(`Unhandled decision identifier: ${String(identifier)}`);
@@ -978,6 +1276,12 @@ export const decisionIdentifierTypeOfCitation = (
   if (/\bSb\.\s*(?:rozh\.|NSS|NS)/iu.test(citationText)) {
     return DECISION_IDENTIFIER_TYPES.REPORTER_CITATION;
   }
+  // Hungarian uniformity decisions, opinions and reporter entries stay case
+  // numbers: the listing stores them as case numbers, and that is the
+  // identifier type a citation of one has to join.
+  if (hungarianConstitutionalDesignation(citationText) !== null) {
+    return DECISION_IDENTIFIER_TYPES.REPORTER_CITATION;
+  }
   return DECISION_IDENTIFIER_TYPES.CASE_NUMBER;
 };
 
@@ -1026,6 +1330,11 @@ const COLLECTION_AFTER_DOCKET = new RegExp(
  * that is the span the reader sees and what the passage anchors on; the
  * collection number becomes the identity, because it names exactly one
  * decision where a docket names a whole file.
+ *
+ * Czech collections only. A Hungarian docket already names one decision (its
+ * document number), and the only Hungarian reporter-type citation, a
+ * Constitutional Court decision, is never the same decision as a court docket
+ * beside it.
  */
 const mergeCollectionCitations = ({
   byKey,
@@ -1038,7 +1347,8 @@ const mergeCollectionCitations = ({
 }): void => {
   for (const [reporterKey, reporter] of byKey) {
     if (
-      reporter.identifierType !== DECISION_IDENTIFIER_TYPES.REPORTER_CITATION
+      reporter.identifierType !== DECISION_IDENTIFIER_TYPES.REPORTER_CITATION ||
+      !CZECH_REPORTER_CITATION_RE.test(reporter.identifierValue)
     ) {
       continue;
     }

@@ -13,15 +13,44 @@
  * Keyset-paginated by id and idempotent: it can stop anywhere and resume, and
  * re-running only touches rows still missing a key.
  *
- *   bun apps/api/src/scripts/backfill-citation-keys.ts
+ * `--recanonicalize` walks every row instead and rewrites each key the current
+ * `citationKeyOf` spells differently, which is what a change to the key rule
+ * needs: stored keys otherwise keep the old spelling, and the exact-identity
+ * lookup and the legacy resolver bridge compare against them.
+ *
+ *   bun apps/api/src/scripts/backfill-citation-keys.ts [--recanonicalize]
  */
 
+import { panic } from "better-result";
 import { sql } from "drizzle-orm";
 
-import { reopenCitationsForKeys } from "@/api/handlers/case-law/citation-resolution";
+import {
+  lockCitationGraph,
+  reopenCitationsForKeys,
+} from "@/api/handlers/case-law/citation-resolution";
+import { CITATION_RESOLUTION_STATUS } from "@/api/handlers/case-law/citation-resolution-status";
 import { citationKeyOf } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane";
 import { isRecord } from "@/api/lib/type-guards";
+
+const RECANONICALIZE_FLAG = "--recanonicalize";
+
+/** Which rows a pass rewrites: those with no key, or every stale one. */
+const KEY_SCOPE = {
+  MISSING: "missing",
+  STALE: "stale",
+} as const;
+
+type KeyScope = (typeof KEY_SCOPE)[keyof typeof KEY_SCOPE];
+
+const args = process.argv.slice(2);
+const unsupported = args.filter((argument) => argument !== RECANONICALIZE_FLAG);
+if (unsupported.length > 0) {
+  panic(`Unsupported argument: ${unsupported.join(" ")}`);
+}
+const scope: KeyScope = args.includes(RECANONICALIZE_FLAG)
+  ? KEY_SCOPE.STALE
+  : KEY_SCOPE.MISSING;
 
 // Hold the maintenance lane before the first statement: operator passes over
 // the case-law tables serialize here instead of deadlocking on row locks.
@@ -51,13 +80,14 @@ const backfillTable = async (
 ): Promise<BackfillTotals> => {
   const totals: BackfillTotals = { seen: 0, keyed: 0 };
   let after: string | null = null;
+  const missingOnly = scope === KEY_SCOPE.MISSING;
 
   while (true) {
     // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- keyset page per iteration; the page is the batch
     const result: unknown = await rootDb.execute(
-      sql`SELECT id, ${sql.raw(sourceColumn)} AS text
+      sql`SELECT id, ${sql.raw(sourceColumn)} AS text, citation_key AS stored
             FROM ${sql.raw(table)}
-           WHERE citation_key IS NULL
+           WHERE ${missingOnly ? sql`citation_key IS NULL` : sql`TRUE`}
              ${after === null ? sql`` : sql`AND id > ${after}`}
            ORDER BY id
            LIMIT ${BATCH}`,
@@ -66,7 +96,13 @@ const backfillTable = async (
       isRecord(row) &&
       typeof row["id"] === "string" &&
       typeof row["text"] === "string"
-        ? [{ id: row["id"], key: citationKeyOf(row["text"]) }]
+        ? [
+            {
+              id: row["id"],
+              key: citationKeyOf(row["text"]),
+              stored: typeof row["stored"] === "string" ? row["stored"] : null,
+            },
+          ]
         : [],
     );
 
@@ -74,7 +110,9 @@ const backfillTable = async (
       return totals;
     }
 
-    const keyed = rows.filter(({ key }) => key !== null);
+    const keyed = rows.filter(({ key, stored }) =>
+      missingOnly ? key !== null : key !== stored,
+    );
     if (keyed.length > 0) {
       const values = sql.join(
         keyed.map(({ id, key }) => sql`(${id}::uuid, ${key}::varchar)`),
@@ -82,29 +120,55 @@ const backfillTable = async (
       );
       // One transaction, because giving a decision a key is the same event the
       // ingestion pipeline announces and it has to be announced the same way.
-      // `reopenCitationsForKeys` takes the citation graph's advisory lock, so
-      // the write and its announcement are serialized against the standing
-      // walk: without that, a resolver batch holding a pre-key snapshot can
-      // commit `unmatched` after this statement has already decided there was
-      // nothing to reopen, and the row stays terminal forever.
+      // The citation graph's advisory lock is taken before any row is written,
+      // the order the resolver takes it in, so the write and its announcement
+      // are serialized against the standing walk: without that, a resolver
+      // batch holding a pre-key snapshot can wait on this statement's row
+      // locks and then commit a target or an `unmatched` read off the old key
+      // over the reset, and the row stays settled forever. The maintenance
+      // lane held above serializes operator passes only, not the resolver.
       //
-      // Only for decisions. A citation gaining a key was `pending` all along —
-      // it was excluded from the walk by having no key, and now it is not.
+      // A citation gaining a key was `pending` all along — it was excluded
+      // from the walk by having no key, and now it is not. A citation whose
+      // key changes spelling was settled against the old one, so it goes back
+      // to `pending`; a decision's rekeying reopens the citations of both its
+      // old and its new key.
       // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- bounded batch per iteration under the graph lock
       await rootDb.transaction(async (tx) => {
-        await tx.execute(
-          sql`WITH v(id, key) AS (VALUES ${values})
-              UPDATE ${sql.raw(table)} AS t
-                 SET citation_key = v.key
-                FROM v
-               WHERE t.id = v.id`,
-        );
+        await lockCitationGraph(tx);
         if (table === "case_law_decisions") {
+          await tx.execute(
+            sql`WITH v(id, key) AS (VALUES ${values})
+                UPDATE case_law_decisions AS t
+                   SET citation_key = v.key
+                  FROM v
+                 WHERE t.id = v.id`,
+          );
           await reopenCitationsForKeys(
             tx,
-            keyed.flatMap(({ key }) => (key === null ? [] : [key])),
+            keyed.flatMap(({ key, stored }) =>
+              [key, stored].filter((value) => value !== null),
+            ),
           );
+          return;
         }
+        await tx.execute(
+          missingOnly
+            ? sql`WITH v(id, key) AS (VALUES ${values})
+                  UPDATE case_law_citations AS t
+                     SET citation_key = v.key
+                    FROM v
+                   WHERE t.id = v.id`
+            : sql`WITH v(id, key) AS (VALUES ${values})
+                  UPDATE case_law_citations AS t
+                     SET citation_key = v.key,
+                         resolution_status = ${CITATION_RESOLUTION_STATUS.PENDING},
+                         cited_decision_id = NULL,
+                         resolution_rule_id = NULL,
+                         resolution_attempted_at = NULL
+                    FROM v
+                   WHERE t.id = v.id`,
+        );
       });
     }
 
@@ -115,7 +179,7 @@ const backfillTable = async (
   }
 };
 
-console.log("=== Backfilling citation keys ===");
+console.log(`=== Backfilling citation keys (${scope}) ===`);
 const decisions = await backfillTable("case_law_decisions", "case_number");
 const citations = await backfillTable("case_law_citations", "citation_text");
 console.log(

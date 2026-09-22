@@ -315,6 +315,50 @@ test("an identifier rewrite reconciles the decision's projection", async () => {
   expect(reconciledEpoch).toBeGreaterThan(seededEpoch ?? 0n);
 });
 
+test("a completed backfill re-derives identifiers a key rule change moved", async () => {
+  // Production state before the Hungarian reporter key: the listed case
+  // number keyed verbatim, closing dot included. The current rule keys it
+  // without, so a completed receipt must not stand over the stale row.
+  const reporterDecisionId = createSafeId<"caseLawDecision">();
+  await db.insert(caseLawDecisions).values({
+    id: reporterDecisionId,
+    sourceId,
+    caseNumber: "EBH.2015.K.38.",
+    court: "Kúria",
+    country: "HUN",
+    language: "hu",
+    slug: `reporter-${reporterDecisionId}`,
+    languageGroupKey: `reporter-${reporterDecisionId}`,
+    metadata: {},
+  });
+  await db.insert(caseLawDecisionIdentifiers).values({
+    decisionId: reporterDecisionId,
+    type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+    value: "EBH.2015.K.38.",
+    normalizedValue: "ebh.2015.k.38.",
+  });
+
+  const repaired = await runDecisionIdentifierBackfill(rootDb(), {
+    batchSize: 10,
+  });
+
+  expect(repaired.verification.gaps.decisionIdentifierMismatches).toBe(0);
+  expect(
+    await db
+      .select({
+        type: caseLawDecisionIdentifiers.type,
+        normalizedValue: caseLawDecisionIdentifiers.normalizedValue,
+      })
+      .from(caseLawDecisionIdentifiers)
+      .where(eq(caseLawDecisionIdentifiers.decisionId, reporterDecisionId)),
+  ).toEqual([
+    {
+      type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+      normalizedValue: "ebh.2015.k.38",
+    },
+  ]);
+});
+
 test("rejects a batch that could exceed PostgreSQL's bind-parameter limit", async () => {
   expect(MAX_DECISION_IDENTIFIER_BACKFILL_BATCH_SIZE).toBe(500);
   const outcome: unknown = await runDecisionIdentifierBackfill(rootDb(), {
