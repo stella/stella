@@ -237,6 +237,36 @@ describe("extractCitations", () => {
     expect(citations[0]?.citationText).toBe("C–128/22");
   });
 
+  test("extracts CJEU case numbers whose year is written out in full", () => {
+    // Verbatim from a Slovak decision on working-time law, which cites the
+    // Court of Justice with the four-digit year national courts commonly
+    // write rather than the Court's own two-digit form. Both spellings
+    // appear in one paragraph, and the spaced-hyphen variant is the same
+    // OCR spacing the hyphen tests above cover.
+    const text =
+      "K pojmu pracovného času poukázal na rozsudok vo veci C- 610/2017 " +
+      "zo dňa 19.11.2019. K judikátu C-254/2018 uviedol, že sa jedná o " +
+      "rozhodnutie vo veci Francúzskej republiky";
+    const texts = extractCitations([{ index: 0, text }]).map(
+      (c) => c.citationText,
+    );
+    expect(texts).toContain("C- 610/2017");
+    expect(texts).toContain("C-254/2018");
+  });
+
+  test("keeps the two-digit CJEU year unambiguous against a longer number", () => {
+    // The year block is a pair, not a 2-4 range: a three- or five-digit
+    // trailing number is not a year, and the trailing-digit guard rejects
+    // the match outright rather than letting it capture a shortened
+    // prefix of itself ("C-254/201", "C-254/2018" from "C-254/20185").
+    expect(
+      extractCitations([{ index: 0, text: "vo veci C-254/201 uviedol" }]),
+    ).toHaveLength(0);
+    expect(
+      extractCitations([{ index: 0, text: "vo veci C-254/20185 uviedol" }]),
+    ).toHaveLength(0);
+  });
+
   test("does not capture a CJEU citation across an over-long whitespace run around the separator", () => {
     // The whitespace around the CJEU separator is bounded (0-3
     // characters) so a stray OCR whitespace run never leaks into the

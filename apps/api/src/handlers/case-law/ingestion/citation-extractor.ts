@@ -364,9 +364,16 @@ const CITATION_PATTERNS: RegExp[] = [
   // run does not leak into the stored citation text. The separator itself
   // is never dropped: a bare "C679/18" would collide with the Czech civil
   // "C" registry ("21 C 1234/2020"), so it is intentionally out of scope
-  // (see the module-level exclusion list).
+  // (see the module-level exclusion list). The year is two or four digits:
+  // the Court numbers its own cases with a two-digit year ("C-254/18"), but
+  // national courts routinely write the year out when citing them ("C-
+  // 610/2017", "C-254/2018"), and a two-digit-only year drops those
+  // citations entirely rather than truncating them -- the trailing
+  // digit guard rejects the whole match once a third digit follows. Three-
+  // and five-digit years stay unmatched (the optional block is a pair, not
+  // a range), so a longer number cannot match a shortened prefix of itself.
   new RegExp(
-    String.raw`\b(?<caseNumber>[CTF]\s{0,3}[${CITATION_DASH_CLASS}]\s{0,3}\d{1,4}\/\d{2})(?!\d)`,
+    String.raw`\b(?<caseNumber>[CTF]\s{0,3}[${CITATION_DASH_CLASS}]\s{0,3}\d{1,4}\/\d{2}(?:\d{2})?)(?!\d)`,
     "gu",
   ),
 
