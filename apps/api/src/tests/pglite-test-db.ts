@@ -77,6 +77,31 @@ export const CASE_LAW_ANALYSIS_WRITER_UPDATE_COLUMNS = {
 } as const;
 
 /**
+ * Every column of `case_law_sources` the ingestion role may write. The table
+ * is otherwise migration-managed, so the role holds UPDATE column by column
+ * and each column here matches a grant in a committed migration
+ * (`pglite-role-grants.test.ts` holds the two to agreement).
+ *
+ * One list, used to write the GRANT and to state what the role ends up with:
+ * a second hand-kept copy is how `stored_total` reached production with a
+ * reader grant and no writer.
+ */
+export const CASE_LAW_SOURCE_INGESTION_UPDATE_COLUMNS = [
+  "sync_cursor",
+  "last_sync_at",
+  "updated_at",
+  "observation_order",
+  "checkpoint_observation_order",
+  "ingestion_lease_token",
+  "ingestion_lease_expires_at",
+  "reported_total",
+  "reported_total_as_of",
+  "reported_total_origin",
+  "stored_total",
+  "stored_total_as_of",
+] as const;
+
+/**
  * Execute a read callback under the same role used by the external public-law
  * database. Writes in the surrounding test setup stay on the owner handle;
  * this role change is local to the callback's transaction.
@@ -221,13 +246,7 @@ export const ROLE_GRANT_STATEMENTS = [
       TO stella_ingestion
   `,
   `
-    GRANT UPDATE (
-      sync_cursor,
-      last_sync_at,
-      updated_at,
-      observation_order,
-      checkpoint_observation_order
-    )
+    GRANT UPDATE (${CASE_LAW_SOURCE_INGESTION_UPDATE_COLUMNS.join(", ")})
       ON TABLE "case_law_sources"
       TO stella_ingestion
   `,
